@@ -10,11 +10,11 @@
     <div class="header-right">
         <div class="dropdown" x-data="{ open: false }">
             <button class="header-user" @click="open = !open">
-                <div class="user-avatar">A</div>
-                <span class="user-name">Admin</span>
+                <div class="user-avatar">{{if .Data}}{{slice .Data.Name 0 1}}{{else}}A{{end}}</div>
+                <span class="user-name">{{if .Data}}{{.Data.Name}}{{else}}Admin{{end}}</span>
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
             </button>
-            <div class="dropdown-menu" :class="{ 'show': open }" @click.away="open = false">
+            <div class="dropdown-menu" :class="{ 'show': open }" @click.outside="open = false">
                 <a href="/admin/profile" class="dropdown-item">Profile</a>
                 <a href="/admin/settings" class="dropdown-item">Settings</a>
                 <div class="dropdown-divider"></div>

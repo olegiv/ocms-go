@@ -13,10 +13,12 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
 
 	"ocms-go/internal/config"
+	"ocms-go/internal/handler"
+	"ocms-go/internal/middleware"
 	"ocms-go/internal/render"
 	"ocms-go/internal/session"
 	"ocms-go/internal/store"
@@ -107,11 +109,14 @@ func run() error {
 	r := chi.NewRouter()
 
 	// Middleware
-	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
+	r.Use(chimw.RequestID)
+	r.Use(chimw.RealIP)
+	r.Use(chimw.Logger)
+	r.Use(chimw.Recoverer)
 	r.Use(sessionManager.LoadAndSave)
+
+	// Initialize handlers
+	authHandler := handler.NewAuthHandler(db, renderer, sessionManager)
 
 	// Routes
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -119,6 +124,12 @@ func run() error {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "oCMS is running")
 	})
+
+	// Auth routes (public)
+	r.Get("/login", authHandler.LoginForm)
+	r.Post("/login", authHandler.Login)
+	r.Get("/logout", authHandler.Logout)
+	r.Post("/logout", authHandler.Logout)
 
 	// Session test routes (development only)
 	if cfg.IsDevelopment() {
@@ -143,14 +154,21 @@ func run() error {
 		})
 	}
 
-	// Admin routes
-	r.Get("/admin", func(w http.ResponseWriter, req *http.Request) {
-		if err := renderer.Render(w, req, "admin/dashboard", render.TemplateData{
-			Title: "Dashboard",
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	// Admin routes (protected)
+	r.Route("/admin", func(r chi.Router) {
+		r.Use(middleware.Auth(sessionManager))
+		r.Use(middleware.LoadUser(sessionManager, db))
+
+		r.Get("/", func(w http.ResponseWriter, req *http.Request) {
+			user := middleware.GetUser(req)
+			if err := renderer.Render(w, req, "admin/dashboard", render.TemplateData{
+				Title: "Dashboard",
+				Data:  user,
+			}); err != nil {
+				slog.Error("render error", "error", err)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			}
+		})
 	})
 
 	// Static file serving

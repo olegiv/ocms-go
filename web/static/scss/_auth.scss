@@ -1,0 +1,153 @@
+// Auth page styles
+
+.auth-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: $spacing-4;
+    background: linear-gradient(135deg, $gray-100 0%, $gray-200 100%);
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 400px;
+    padding: $spacing-8;
+    background: $white;
+    border-radius: $radius-xl;
+    box-shadow: $shadow-lg;
+}
+
+.auth-header {
+    text-align: center;
+    margin-bottom: $spacing-8;
+}
+
+.auth-title {
+    font-size: $font-size-3xl;
+    font-weight: $font-weight-bold;
+    color: $primary;
+    margin-bottom: $spacing-2;
+}
+
+.auth-subtitle {
+    font-size: $font-size-base;
+    color: $gray-500;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-5;
+}
+
+// Form elements
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-2;
+}
+
+.form-label {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $gray-700;
+}
+
+.form-input {
+    width: 100%;
+    padding: $spacing-3 $spacing-4;
+    font-size: $font-size-base;
+    line-height: $line-height-normal;
+    color: $gray-900;
+    background: $white;
+    border: 1px solid $gray-300;
+    border-radius: $radius-md;
+    transition: border-color $transition-fast, box-shadow $transition-fast;
+
+    &::placeholder {
+        color: $gray-400;
+    }
+
+    &:focus {
+        outline: none;
+        border-color: $primary;
+        box-shadow: 0 0 0 3px rgba($primary, 0.1);
+    }
+
+    &:disabled {
+        background: $gray-100;
+        cursor: not-allowed;
+    }
+}
+
+.form-error {
+    font-size: $font-size-sm;
+    color: $error;
+}
+
+// Buttons
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: $spacing-3 $spacing-5;
+    font-size: $font-size-base;
+    font-weight: $font-weight-medium;
+    line-height: $line-height-normal;
+    text-decoration: none;
+    border: none;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: background-color $transition-fast, transform $transition-fast;
+
+    &:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    &:active:not(:disabled) {
+        transform: scale(0.98);
+    }
+}
+
+.btn-primary {
+    color: $white;
+    background-color: $primary;
+
+    &:hover:not(:disabled) {
+        background-color: $primary-dark;
+    }
+}
+
+.btn-secondary {
+    color: $gray-700;
+    background-color: $gray-200;
+
+    &:hover:not(:disabled) {
+        background-color: $gray-300;
+    }
+}
+
+.btn-danger {
+    color: $white;
+    background-color: $error;
+
+    &:hover:not(:disabled) {
+        background-color: darken($error, 10%);
+    }
+}
+
+.btn-block {
+    width: 100%;
+}
+
+.btn-sm {
+    padding: $spacing-2 $spacing-3;
+    font-size: $font-size-sm;
+}
+
+.btn-lg {
+    padding: $spacing-4 $spacing-6;
+    font-size: $font-size-lg;
+}

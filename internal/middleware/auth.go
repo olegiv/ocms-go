@@ -1,0 +1,91 @@
+package middleware
+
+import (
+	"context"
+	"database/sql"
+	"net/http"
+
+	"github.com/alexedwards/scs/v2"
+
+	"ocms-go/internal/store"
+)
+
+// ContextKey is a type for context keys to avoid collisions.
+type ContextKey string
+
+// Context keys for user data.
+const (
+	ContextKeyUser ContextKey = "user"
+)
+
+// SessionKeyUserID is the session key for storing the authenticated user ID.
+const SessionKeyUserID = "user_id"
+
+// Auth creates middleware that requires authentication.
+// It checks for a valid user session and redirects to login if not authenticated.
+func Auth(sm *scs.SessionManager) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Check if user is authenticated
+			userID := sm.GetInt64(r.Context(), SessionKeyUserID)
+			if userID == 0 {
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// LoadUser creates middleware that loads the current user into the request context.
+// This should be used after Auth middleware.
+func LoadUser(sm *scs.SessionManager, db *sql.DB) func(http.Handler) http.Handler {
+	queries := store.New(db)
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			userID := sm.GetInt64(r.Context(), SessionKeyUserID)
+			if userID == 0 {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Load user from database
+			user, err := queries.GetUserByID(r.Context(), userID)
+			if err != nil {
+				// User not found or error - clear session and redirect to login
+				_ = sm.Destroy(r.Context())
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				return
+			}
+
+			// Add user to context
+			ctx := context.WithValue(r.Context(), ContextKeyUser, user)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// GetUser retrieves the current user from the request context.
+// Returns nil if no user is in context.
+func GetUser(r *http.Request) *store.User {
+	user, ok := r.Context().Value(ContextKeyUser).(store.User)
+	if !ok {
+		return nil
+	}
+	return &user
+}
+
+// RequireAdmin creates middleware that requires admin role.
+// This should be used after LoadUser middleware.
+func RequireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := GetUser(r)
+		if user == nil || user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
