@@ -1,4 +1,4 @@
-.PHONY: run stop build test clean
+.PHONY: run stop build test clean migrate-up migrate-down migrate-status migrate-create
 
 # Development server
 run:
@@ -20,3 +20,20 @@ test:
 # Clean build artifacts
 clean:
 	rm -rf bin/ data/*.db
+
+# Database migrations (using goose CLI)
+MIGRATIONS_DIR := internal/store/migrations
+DB_PATH := ./data/ocms.db
+
+migrate-up:
+	goose -dir $(MIGRATIONS_DIR) sqlite3 $(DB_PATH) up
+
+migrate-down:
+	goose -dir $(MIGRATIONS_DIR) sqlite3 $(DB_PATH) down
+
+migrate-status:
+	goose -dir $(MIGRATIONS_DIR) sqlite3 $(DB_PATH) status
+
+migrate-create:
+	@read -p "Migration name: " name; \
+	goose -dir $(MIGRATIONS_DIR) create $$name sql

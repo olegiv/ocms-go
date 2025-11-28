@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"ocms-go/internal/config"
+	"ocms-go/internal/store"
 )
 
 func main() {
@@ -49,6 +51,27 @@ func run() error {
 		Level: logLevel,
 	}))
 	slog.SetDefault(logger)
+
+	// Ensure data directory exists
+	dbDir := filepath.Dir(cfg.DBPath)
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		return fmt.Errorf("creating data directory: %w", err)
+	}
+
+	// Initialize database
+	slog.Info("initializing database", "path", cfg.DBPath)
+	db, err := store.NewDB(cfg.DBPath)
+	if err != nil {
+		return fmt.Errorf("initializing database: %w", err)
+	}
+	defer db.Close()
+
+	// Run migrations
+	slog.Info("running database migrations")
+	if err := store.Migrate(db); err != nil {
+		return fmt.Errorf("running migrations: %w", err)
+	}
+	slog.Info("database ready")
 
 	// Create router
 	r := chi.NewRouter()
