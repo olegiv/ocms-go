@@ -77,6 +77,12 @@ func run() error {
 	}
 	slog.Info("database ready")
 
+	// Seed default data
+	ctx := context.Background()
+	if err := store.Seed(ctx, db); err != nil {
+		return fmt.Errorf("seeding database: %w", err)
+	}
+
 	// Initialize session manager
 	sessionManager := session.New(db, cfg.IsDevelopment())
 	slog.Info("session manager initialized")
