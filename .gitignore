@@ -1,0 +1,19 @@
+/data/*.db
+/web/static/dist/
+.env
+/bin/
+*.log
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Local Claude settings (as per CLAUDE.md instructions)
+.claude/settings.local.json
