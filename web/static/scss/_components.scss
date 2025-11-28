@@ -1,0 +1,304 @@
+// Buttons
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-2;
+  padding: $spacing-2 $spacing-4;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  line-height: $line-height-normal;
+  border-radius: $radius-md;
+  transition: all $transition-fast;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.btn-primary {
+  background-color: $primary;
+  color: $white;
+
+  &:hover:not(:disabled) {
+    background-color: $primary-dark;
+  }
+}
+
+.btn-secondary {
+  background-color: $gray-200;
+  color: $gray-700;
+
+  &:hover:not(:disabled) {
+    background-color: $gray-300;
+  }
+}
+
+.btn-danger {
+  background-color: $error;
+  color: $white;
+
+  &:hover:not(:disabled) {
+    background-color: darken($error, 10%);
+  }
+}
+
+.btn-sm {
+  padding: $spacing-1 $spacing-3;
+  font-size: $font-size-xs;
+}
+
+.btn-lg {
+  padding: $spacing-3 $spacing-6;
+  font-size: $font-size-base;
+}
+
+// Forms
+.form-group {
+  margin-bottom: $spacing-4;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: $spacing-1;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $gray-700;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  padding: $spacing-2 $spacing-3;
+  font-size: $font-size-base;
+  border: 1px solid $gray-300;
+  border-radius: $radius-md;
+  background-color: $white;
+  transition: border-color $transition-fast, box-shadow $transition-fast;
+
+  &:focus {
+    outline: none;
+    border-color: $primary;
+    box-shadow: 0 0 0 3px rgba($primary, 0.1);
+  }
+
+  &::placeholder {
+    color: $gray-400;
+  }
+
+  &:disabled {
+    background-color: $gray-100;
+    cursor: not-allowed;
+  }
+}
+
+.form-textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.form-error {
+  margin-top: $spacing-1;
+  font-size: $font-size-sm;
+  color: $error;
+}
+
+.form-hint {
+  margin-top: $spacing-1;
+  font-size: $font-size-sm;
+  color: $gray-500;
+}
+
+// Alerts
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-3;
+  padding: $spacing-4;
+  border-radius: $radius-md;
+  margin-bottom: $spacing-4;
+}
+
+.alert-info {
+  background-color: rgba($info, 0.1);
+  border: 1px solid rgba($info, 0.2);
+  color: darken($info, 20%);
+}
+
+.alert-success {
+  background-color: rgba($success, 0.1);
+  border: 1px solid rgba($success, 0.2);
+  color: darken($success, 20%);
+}
+
+.alert-warning {
+  background-color: rgba($warning, 0.1);
+  border: 1px solid rgba($warning, 0.2);
+  color: darken($warning, 20%);
+}
+
+.alert-error {
+  background-color: rgba($error, 0.1);
+  border: 1px solid rgba($error, 0.2);
+  color: darken($error, 20%);
+}
+
+.alert-message {
+  flex: 1;
+}
+
+.alert-close {
+  padding: 0;
+  font-size: $font-size-xl;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.5;
+  transition: opacity $transition-fast;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+// Tables
+.table {
+  width: 100%;
+  background-color: $white;
+  border-radius: $radius-lg;
+  overflow: hidden;
+  box-shadow: $shadow-sm;
+}
+
+.table th,
+.table td {
+  padding: $spacing-3 $spacing-4;
+  text-align: left;
+  border-bottom: 1px solid $gray-200;
+}
+
+.table th {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $gray-600;
+  background-color: $gray-50;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.table tr:hover td {
+  background-color: $gray-50;
+}
+
+// Cards
+.card {
+  background-color: $white;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-sm;
+  overflow: hidden;
+}
+
+.card-header {
+  padding: $spacing-4 $spacing-6;
+  border-bottom: 1px solid $gray-200;
+}
+
+.card-title {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $gray-900;
+}
+
+.card-body {
+  padding: $spacing-6;
+}
+
+.card-footer {
+  padding: $spacing-4 $spacing-6;
+  border-top: 1px solid $gray-200;
+  background-color: $gray-50;
+}
+
+// Badges
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: $spacing-1 $spacing-2;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  border-radius: $radius-full;
+}
+
+.badge-primary {
+  background-color: rgba($primary, 0.1);
+  color: $primary-dark;
+}
+
+.badge-success {
+  background-color: rgba($success, 0.1);
+  color: darken($success, 15%);
+}
+
+.badge-warning {
+  background-color: rgba($warning, 0.1);
+  color: darken($warning, 15%);
+}
+
+.badge-error {
+  background-color: rgba($error, 0.1);
+  color: darken($error, 10%);
+}
+
+// Dropdown
+.dropdown {
+  position: relative;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 50;
+  min-width: 160px;
+  padding: $spacing-2 0;
+  margin-top: $spacing-1;
+  background-color: $white;
+  border-radius: $radius-md;
+  box-shadow: $shadow-lg;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px);
+  transition: all $transition-fast;
+
+  &.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+}
+
+.dropdown-item {
+  display: block;
+  width: 100%;
+  padding: $spacing-2 $spacing-4;
+  font-size: $font-size-sm;
+  color: $gray-700;
+  text-align: left;
+
+  &:hover {
+    background-color: $gray-100;
+    color: $gray-900;
+  }
+}
+
+.dropdown-divider {
+  height: 1px;
+  margin: $spacing-2 0;
+  background-color: $gray-200;
+}

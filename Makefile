@@ -1,6 +1,14 @@
-.PHONY: run stop build test clean migrate-up migrate-down migrate-status migrate-create
+.PHONY: run stop build test clean migrate-up migrate-down migrate-status migrate-create assets dev
 
-# Development server
+# Build assets (SCSS to CSS)
+assets:
+	./scripts/build-assets.sh
+
+# Development server with asset build
+dev: assets
+	go run ./cmd/ocms
+
+# Development server (without asset build)
 run:
 	go run ./cmd/ocms
 

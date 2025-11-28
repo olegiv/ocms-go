@@ -1,12 +1,21 @@
 {{define "body"}}
-<div class="admin-layout">
-    {{template "nav" .}}
-    <main class="admin-main">
-        {{template "alert" .}}
-        {{block "content" .}}{{end}}
-    </main>
-    <footer class="admin-footer">
-        <p>&copy; {{.CurrentYear}} oCMS. All rights reserved.</p>
-    </footer>
+<div class="admin-layout" x-data="{ sidebarOpen: false }">
+    <!-- Sidebar overlay for mobile -->
+    <div class="sidebar-overlay" :class="{ 'show': sidebarOpen }" @click="sidebarOpen = false"></div>
+
+    <!-- Sidebar -->
+    {{template "sidebar" .}}
+
+    <!-- Main wrapper -->
+    <div class="admin-wrapper">
+        <!-- Header -->
+        {{template "header" .}}
+
+        <!-- Main content -->
+        <main class="admin-main">
+            {{template "alert" .}}
+            {{block "content" .}}{{end}}
+        </main>
+    </div>
 </div>
 {{end}}

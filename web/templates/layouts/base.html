@@ -5,11 +5,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{if .Title}}{{.Title}} - {{end}}oCMS</title>
-    <link rel="stylesheet" href="/static/dist/style.css">
+    <link rel="stylesheet" href="/static/dist/main.css">
     {{block "head" .}}{{end}}
 </head>
 <body>
     {{block "body" .}}{{end}}
+
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+    <!-- Alpine.js -->
+    <script defer src="https://unpkg.com/alpinejs@3.14.8/dist/cdn.min.js"></script>
     {{block "scripts" .}}{{end}}
 </body>
 </html>

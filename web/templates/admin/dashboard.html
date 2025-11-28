@@ -1,21 +1,27 @@
 {{define "content"}}
-<div class="dashboard">
-    <h1>Dashboard</h1>
-    <p>Welcome to oCMS admin panel.</p>
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-description">Welcome to oCMS admin panel.</p>
+    </div>
+</div>
 
-    <div class="dashboard-stats">
-        <div class="stat-card">
-            <h3>Pages</h3>
-            <p class="stat-value">0</p>
-        </div>
-        <div class="stat-card">
-            <h3>Users</h3>
-            <p class="stat-value">0</p>
-        </div>
-        <div class="stat-card">
-            <h3>Published</h3>
-            <p class="stat-value">0</p>
-        </div>
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">Total Pages</div>
+        <div class="stat-value">0</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Published</div>
+        <div class="stat-value">0</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Draft</div>
+        <div class="stat-value">0</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Users</div>
+        <div class="stat-value">0</div>
     </div>
 </div>
 {{end}}
