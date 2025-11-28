@@ -6,7 +6,7 @@ run:
 
 # Stop development server
 stop:
-	@lsof -ti:8080 | xargs -r kill -9 2>/dev/null || true
+	@lsof -ti:8080 -sTCP:LISTEN | xargs -r kill -9 2>/dev/null || true
 	@echo "Server stopped"
 
 # Build production binary
