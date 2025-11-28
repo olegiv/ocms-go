@@ -1,4 +1,4 @@
-/data/*.db
+/data/
 /web/static/dist/
 .env
 /bin/
