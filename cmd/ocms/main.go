@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -16,8 +17,10 @@ import (
 	"github.com/joho/godotenv"
 
 	"ocms-go/internal/config"
+	"ocms-go/internal/render"
 	"ocms-go/internal/session"
 	"ocms-go/internal/store"
+	"ocms-go/web"
 )
 
 func main() {
@@ -78,6 +81,22 @@ func run() error {
 	sessionManager := session.New(db, cfg.IsDevelopment())
 	slog.Info("session manager initialized")
 
+	// Initialize template renderer
+	templatesFS, err := fs.Sub(web.Templates, "templates")
+	if err != nil {
+		return fmt.Errorf("getting templates fs: %w", err)
+	}
+
+	renderer, err := render.New(render.Config{
+		TemplatesFS:    templatesFS,
+		SessionManager: sessionManager,
+		IsDev:          cfg.IsDevelopment(),
+	})
+	if err != nil {
+		return fmt.Errorf("initializing renderer: %w", err)
+	}
+	slog.Info("template renderer initialized")
+
 	// Create router
 	r := chi.NewRouter()
 
@@ -117,6 +136,23 @@ func run() error {
 			}
 		})
 	}
+
+	// Admin routes
+	r.Get("/admin", func(w http.ResponseWriter, req *http.Request) {
+		if err := renderer.Render(w, req, "admin/dashboard", render.TemplateData{
+			Title: "Dashboard",
+		}); err != nil {
+			slog.Error("render error", "error", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+	})
+
+	// Static file serving
+	staticFS, err := fs.Sub(web.Static, "static/dist")
+	if err != nil {
+		return fmt.Errorf("getting static fs: %w", err)
+	}
+	r.Handle("/static/dist/*", http.StripPrefix("/static/dist/", http.FileServer(http.FS(staticFS))))
 
 	// Create server
 	srv := &http.Server{

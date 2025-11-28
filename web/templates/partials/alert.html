@@ -1,0 +1,8 @@
+{{define "alert"}}
+{{if .Flash}}
+<div class="alert alert-{{.FlashType}}">
+    <span class="alert-message">{{.Flash}}</span>
+    <button type="button" class="alert-close" onclick="this.parentElement.remove()">&times;</button>
+</div>
+{{end}}
+{{end}}
