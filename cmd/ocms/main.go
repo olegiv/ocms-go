@@ -16,6 +16,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"ocms-go/internal/config"
+	"ocms-go/internal/session"
 	"ocms-go/internal/store"
 )
 
@@ -73,6 +74,10 @@ func run() error {
 	}
 	slog.Info("database ready")
 
+	// Initialize session manager
+	sessionManager := session.New(db, cfg.IsDevelopment())
+	slog.Info("session manager initialized")
+
 	// Create router
 	r := chi.NewRouter()
 
@@ -81,6 +86,7 @@ func run() error {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(sessionManager.LoadAndSave)
 
 	// Routes
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -88,6 +94,29 @@ func run() error {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "oCMS is running")
 	})
+
+	// Session test routes (development only)
+	if cfg.IsDevelopment() {
+		r.Get("/session/set", func(w http.ResponseWriter, r *http.Request) {
+			value := r.URL.Query().Get("value")
+			if value == "" {
+				value = "test-value"
+			}
+			sessionManager.Put(r.Context(), "test_key", value)
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			fmt.Fprintf(w, "Session value set: %s\n", value)
+		})
+
+		r.Get("/session/get", func(w http.ResponseWriter, r *http.Request) {
+			value := sessionManager.GetString(r.Context(), "test_key")
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			if value == "" {
+				fmt.Fprintln(w, "No session value found")
+			} else {
+				fmt.Fprintf(w, "Session value: %s\n", value)
+			}
+		})
+	}
 
 	// Create server
 	srv := &http.Server{
