@@ -39,6 +39,40 @@ type Event struct {
 	CreatedAt time.Time     `json:"created_at"`
 }
 
+type MediaFolder struct {
+	ID        int64         `json:"id"`
+	Name      string        `json:"name"`
+	ParentID  sql.NullInt64 `json:"parent_id"`
+	Position  int64         `json:"position"`
+	CreatedAt time.Time     `json:"created_at"`
+}
+
+type MediaVariant struct {
+	ID        int64     `json:"id"`
+	MediaID   int64     `json:"media_id"`
+	Type      string    `json:"type"`
+	Width     int64     `json:"width"`
+	Height    int64     `json:"height"`
+	Size      int64     `json:"size"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type Medium struct {
+	ID         int64          `json:"id"`
+	Uuid       string         `json:"uuid"`
+	Filename   string         `json:"filename"`
+	MimeType   string         `json:"mime_type"`
+	Size       int64          `json:"size"`
+	Width      sql.NullInt64  `json:"width"`
+	Height     sql.NullInt64  `json:"height"`
+	Alt        sql.NullString `json:"alt"`
+	Caption    sql.NullString `json:"caption"`
+	FolderID   sql.NullInt64  `json:"folder_id"`
+	UploadedBy int64          `json:"uploaded_by"`
+	CreatedAt  time.Time      `json:"created_at"`
+	UpdatedAt  time.Time      `json:"updated_at"`
+}
+
 type Page struct {
 	ID          int64        `json:"id"`
 	Title       string       `json:"title"`

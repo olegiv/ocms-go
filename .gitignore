@@ -1,5 +1,6 @@
 /data/
 /web/static/dist/
+/uploads/
 .env
 /bin/
 *.log
