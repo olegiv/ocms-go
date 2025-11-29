@@ -45,6 +45,23 @@
   }
 }
 
+.btn-outline {
+  background-color: transparent;
+  border: 1px solid $gray-300;
+  color: $gray-700;
+
+  &:hover:not(:disabled) {
+    background-color: $gray-100;
+    border-color: $gray-400;
+  }
+
+  &.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+}
+
 .btn-sm {
   padding: $spacing-1 $spacing-3;
   font-size: $font-size-xs;
@@ -53,6 +70,10 @@
 .btn-lg {
   padding: $spacing-3 $spacing-6;
   font-size: $font-size-base;
+}
+
+.btn-block {
+  width: 100%;
 }
 
 // Forms
@@ -110,6 +131,62 @@
   margin-top: $spacing-1;
   font-size: $font-size-sm;
   color: $gray-500;
+}
+
+.form-input.is-invalid,
+.form-select.is-invalid,
+.form-textarea.is-invalid {
+  border-color: $error;
+
+  &:focus {
+    border-color: $error;
+    box-shadow: 0 0 0 3px rgba($error, 0.1);
+  }
+}
+
+.required {
+  color: $error;
+}
+
+.form-grid {
+  display: grid;
+  gap: $spacing-4;
+  grid-template-columns: 1fr;
+
+  @media (min-width: $breakpoint-md) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.form-group-full {
+  grid-column: 1 / -1;
+}
+
+.form-divider {
+  border: none;
+  border-top: 1px solid $gray-200;
+  margin: $spacing-4 0;
+}
+
+.form-section-title {
+  font-size: $font-size-base;
+  font-weight: $font-weight-semibold;
+  color: $gray-900;
+  margin: 0 0 $spacing-2;
+}
+
+.form-help {
+  font-size: $font-size-sm;
+  color: $gray-500;
+  margin: 0;
+}
+
+.form-actions {
+  display: flex;
+  gap: $spacing-3;
+  margin-top: $spacing-6;
+  padding-top: $spacing-6;
+  border-top: 1px solid $gray-200;
 }
 
 // Alerts
@@ -301,4 +378,71 @@
   height: 1px;
   margin: $spacing-2 0;
   background-color: $gray-200;
+}
+
+// Badge secondary
+.badge-secondary {
+  background-color: $gray-100;
+  color: $gray-600;
+}
+
+// Table enhancements
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-muted {
+  color: $gray-400;
+}
+
+// User cell in tables
+.user-cell {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+}
+
+.user-avatar-sm {
+  width: 32px;
+  height: 32px;
+  border-radius: $radius-full;
+  background-color: $primary;
+  color: $white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  flex-shrink: 0;
+}
+
+// Action buttons
+.action-buttons {
+  display: flex;
+  gap: $spacing-2;
+  justify-content: flex-end;
+}
+
+// Pagination
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: $spacing-4;
+}
+
+.pagination-info {
+  font-size: $font-size-sm;
+  color: $gray-500;
+}
+
+.pagination-controls {
+  display: flex;
+  gap: $spacing-2;
 }

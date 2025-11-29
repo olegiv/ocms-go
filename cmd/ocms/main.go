@@ -118,6 +118,7 @@ func run() error {
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(db, renderer, sessionManager)
 	adminHandler := handler.NewAdminHandler(db, renderer, sessionManager)
+	usersHandler := handler.NewUsersHandler(db, renderer, sessionManager)
 
 	// Routes
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -161,6 +162,12 @@ func run() error {
 		r.Use(middleware.LoadUser(sessionManager, db))
 
 		r.Get("/", adminHandler.Dashboard)
+
+		// User management routes
+		r.Get("/users", usersHandler.List)
+		r.Get("/users/new", usersHandler.NewForm)
+		r.Post("/users", usersHandler.Create)
+		r.Get("/users/{id}", usersHandler.EditForm)
 	})
 
 	// Static file serving
