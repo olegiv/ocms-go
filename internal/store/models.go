@@ -9,6 +9,17 @@ import (
 	"time"
 )
 
+type Category struct {
+	ID          int64          `json:"id"`
+	Name        string         `json:"name"`
+	Slug        string         `json:"slug"`
+	Description sql.NullString `json:"description"`
+	ParentID    sql.NullInt64  `json:"parent_id"`
+	Position    int64          `json:"position"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+}
+
 type Config struct {
 	Key         string        `json:"key"`
 	Value       string        `json:"value"`
@@ -38,6 +49,11 @@ type Page struct {
 	CreatedAt   time.Time    `json:"created_at"`
 	UpdatedAt   time.Time    `json:"updated_at"`
 	PublishedAt sql.NullTime `json:"published_at"`
+}
+
+type PageCategory struct {
+	PageID     int64 `json:"page_id"`
+	CategoryID int64 `json:"category_id"`
 }
 
 type PageTag struct {
