@@ -217,6 +217,48 @@ func (q *Queries) GetPageVersion(ctx context.Context, id int64) (PageVersion, er
 	return i, err
 }
 
+const getPageVersionWithUser = `-- name: GetPageVersionWithUser :one
+SELECT
+    pv.id,
+    pv.page_id,
+    pv.title,
+    pv.body,
+    pv.changed_by,
+    pv.created_at,
+    u.name as changed_by_name,
+    u.email as changed_by_email
+FROM page_versions pv
+JOIN users u ON pv.changed_by = u.id
+WHERE pv.id = ?
+`
+
+type GetPageVersionWithUserRow struct {
+	ID             int64     `json:"id"`
+	PageID         int64     `json:"page_id"`
+	Title          string    `json:"title"`
+	Body           string    `json:"body"`
+	ChangedBy      int64     `json:"changed_by"`
+	CreatedAt      time.Time `json:"created_at"`
+	ChangedByName  string    `json:"changed_by_name"`
+	ChangedByEmail string    `json:"changed_by_email"`
+}
+
+func (q *Queries) GetPageVersionWithUser(ctx context.Context, id int64) (GetPageVersionWithUserRow, error) {
+	row := q.db.QueryRowContext(ctx, getPageVersionWithUser, id)
+	var i GetPageVersionWithUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.PageID,
+		&i.Title,
+		&i.Body,
+		&i.ChangedBy,
+		&i.CreatedAt,
+		&i.ChangedByName,
+		&i.ChangedByEmail,
+	)
+	return i, err
+}
+
 const listPageVersions = `-- name: ListPageVersions :many
 SELECT id, page_id, title, body, changed_by, created_at FROM page_versions WHERE page_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
@@ -243,6 +285,72 @@ func (q *Queries) ListPageVersions(ctx context.Context, arg ListPageVersionsPara
 			&i.Body,
 			&i.ChangedBy,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPageVersionsWithUser = `-- name: ListPageVersionsWithUser :many
+SELECT
+    pv.id,
+    pv.page_id,
+    pv.title,
+    pv.body,
+    pv.changed_by,
+    pv.created_at,
+    u.name as changed_by_name,
+    u.email as changed_by_email
+FROM page_versions pv
+JOIN users u ON pv.changed_by = u.id
+WHERE pv.page_id = ?
+ORDER BY pv.created_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListPageVersionsWithUserParams struct {
+	PageID int64 `json:"page_id"`
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+type ListPageVersionsWithUserRow struct {
+	ID             int64     `json:"id"`
+	PageID         int64     `json:"page_id"`
+	Title          string    `json:"title"`
+	Body           string    `json:"body"`
+	ChangedBy      int64     `json:"changed_by"`
+	CreatedAt      time.Time `json:"created_at"`
+	ChangedByName  string    `json:"changed_by_name"`
+	ChangedByEmail string    `json:"changed_by_email"`
+}
+
+func (q *Queries) ListPageVersionsWithUser(ctx context.Context, arg ListPageVersionsWithUserParams) ([]ListPageVersionsWithUserRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPageVersionsWithUser, arg.PageID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPageVersionsWithUserRow{}
+	for rows.Next() {
+		var i ListPageVersionsWithUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PageID,
+			&i.Title,
+			&i.Body,
+			&i.ChangedBy,
+			&i.CreatedAt,
+			&i.ChangedByName,
+			&i.ChangedByEmail,
 		); err != nil {
 			return nil, err
 		}

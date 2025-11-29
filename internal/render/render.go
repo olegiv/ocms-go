@@ -142,6 +142,9 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		"safe": func(s string) template.HTML {
 			return template.HTML(s)
 		},
+		"safeHTML": func(s string) template.HTML {
+			return template.HTML(s)
+		},
 		"add": func(a, b int) int {
 			return a + b
 		},

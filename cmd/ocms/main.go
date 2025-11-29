@@ -182,6 +182,8 @@ func run() error {
 		r.Post("/pages/{id}", pagesHandler.Update) // HTML forms can't send PUT
 		r.Delete("/pages/{id}", pagesHandler.Delete)
 		r.Post("/pages/{id}/publish", pagesHandler.TogglePublish)
+		r.Get("/pages/{id}/versions", pagesHandler.Versions)
+		r.Post("/pages/{id}/versions/{versionId}/restore", pagesHandler.RestoreVersion)
 	})
 
 	// Static file serving

@@ -1,0 +1,190 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Version History</h1>
+        <p class="page-description">
+            <a href="/admin/pages/{{.Data.Page.ID}}" class="text-link">{{.Data.Page.Title}}</a>
+            &mdash; {{.Data.TotalCount}} version{{if ne .Data.TotalCount 1}}s{{end}}
+        </p>
+    </div>
+    <div class="page-actions">
+        <a href="/admin/pages/{{.Data.Page.ID}}" class="btn btn-outline">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+            Back to Page
+        </a>
+    </div>
+</div>
+
+{{if .Data.Versions}}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Version</th>
+                    <th>Title</th>
+                    <th>Changed By</th>
+                    <th>Date</th>
+                    <th class="text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range $index, $version := .Data.Versions}}
+                <tr>
+                    <td>
+                        <span class="badge badge-info">#{{.ID}}</span>
+                    </td>
+                    <td>
+                        <span class="version-title">{{.Title}}</span>
+                    </td>
+                    <td>
+                        <span class="user-name">{{.ChangedByName}}</span>
+                    </td>
+                    <td>{{formatDateTime .CreatedAt}}</td>
+                    <td class="text-right">
+                        <div class="action-buttons">
+                            <div x-data="{ showPreview: false, showConfirm: false }" class="version-actions">
+                                <!-- Preview Button -->
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-outline"
+                                    title="Preview"
+                                    @click="showPreview = true"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                </button>
+
+                                <!-- Restore Button -->
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-primary"
+                                    title="Restore this version"
+                                    @click="showConfirm = true"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                                </button>
+
+                                <!-- Preview Modal -->
+                                <div
+                                    class="modal-overlay"
+                                    x-show="showPreview"
+                                    x-cloak
+                                    @click.self="showPreview = false"
+                                    x-transition:enter="modal-enter"
+                                    x-transition:leave="modal-leave"
+                                >
+                                    <div class="modal modal-lg" @click.stop>
+                                        <div class="modal-header">
+                                            <h3 class="modal-title">Version #{{.ID}} Preview</h3>
+                                            <button type="button" class="modal-close" @click="showPreview = false">&times;</button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <div class="version-preview">
+                                                <div class="version-meta">
+                                                    <strong>Title:</strong> {{.Title}}<br>
+                                                    <strong>Changed by:</strong> {{.ChangedByName}}<br>
+                                                    <strong>Date:</strong> {{formatDateTime .CreatedAt}}
+                                                </div>
+                                                <div class="version-content">
+                                                    <strong>Content:</strong>
+                                                    <div class="content-preview">
+                                                        {{if .Body}}
+                                                        {{safeHTML .Body}}
+                                                        {{else}}
+                                                        <em class="text-muted">No content</em>
+                                                        {{end}}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-outline" @click="showPreview = false">Close</button>
+                                            <form action="/admin/pages/{{$.Data.Page.ID}}/versions/{{.ID}}/restore" method="POST" class="inline-form">
+                                                <button type="submit" class="btn btn-primary">Restore This Version</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Restore Confirmation Modal -->
+                                <div
+                                    class="modal-overlay"
+                                    x-show="showConfirm"
+                                    x-cloak
+                                    @click.self="showConfirm = false"
+                                    x-transition:enter="modal-enter"
+                                    x-transition:leave="modal-leave"
+                                >
+                                    <div class="modal" @click.stop>
+                                        <div class="modal-header">
+                                            <h3 class="modal-title">Restore Version</h3>
+                                            <button type="button" class="modal-close" @click="showConfirm = false">&times;</button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p>Are you sure you want to restore version <strong>#{{.ID}}</strong>?</p>
+                                            <p class="text-muted">This will update the page content to match this version. A new version will be created to record this change.</p>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-outline" @click="showConfirm = false">Cancel</button>
+                                            <form action="/admin/pages/{{$.Data.Page.ID}}/versions/{{.ID}}/restore" method="POST" class="inline-form">
+                                                <button type="submit" class="btn btn-primary">Restore Version</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+
+    {{if or .Data.HasPrev .Data.HasNext}}
+    <div class="card-footer">
+        <div class="pagination">
+            <div class="pagination-info">
+                Page {{.Data.CurrentPage}} of {{.Data.TotalPages}}
+            </div>
+            <div class="pagination-controls">
+                {{if .Data.HasPrev}}
+                <a href="/admin/pages/{{.Data.Page.ID}}/versions?page={{.Data.PrevPage}}" class="btn btn-sm btn-outline">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    Previous
+                </a>
+                {{else}}
+                <span class="btn btn-sm btn-outline disabled">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    Previous
+                </span>
+                {{end}}
+
+                {{if .Data.HasNext}}
+                <a href="/admin/pages/{{.Data.Page.ID}}/versions?page={{.Data.NextPage}}" class="btn btn-sm btn-outline">
+                    Next
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </a>
+                {{else}}
+                <span class="btn btn-sm btn-outline disabled">
+                    Next
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </span>
+                {{end}}
+            </div>
+        </div>
+    </div>
+    {{end}}
+</div>
+{{else}}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>
+            <p>No version history</p>
+            <span class="empty-hint">Version history will appear here as you make changes to the page.</span>
+        </div>
+    </div>
+</div>
+{{end}}
+{{end}}

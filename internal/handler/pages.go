@@ -599,3 +599,197 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 	h.renderer.SetFlash(r, message, "success")
 	http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
 }
+
+// VersionsPerPage is the number of versions to display per page.
+const VersionsPerPage = 20
+
+// PageVersionsData holds data for the page versions template.
+type PageVersionsData struct {
+	Page        store.Page
+	Versions    []store.ListPageVersionsWithUserRow
+	CurrentPage int
+	TotalPages  int
+	TotalCount  int64
+	HasPrev     bool
+	HasNext     bool
+	PrevPage    int
+	NextPage    int
+}
+
+// Versions handles GET /admin/pages/{id}/versions - displays version history.
+func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+
+	// Get page ID from URL
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		h.renderer.SetFlash(r, "Invalid page ID", "error")
+		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		return
+	}
+
+	// Get page from database
+	page, err := h.queries.GetPageByID(r.Context(), id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			h.renderer.SetFlash(r, "Page not found", "error")
+		} else {
+			slog.Error("failed to get page", "error", err, "page_id", id)
+			h.renderer.SetFlash(r, "Error loading page", "error")
+		}
+		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		return
+	}
+
+	// Get page number from query string
+	pageStr := r.URL.Query().Get("page")
+	pageNum := 1
+	if pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			pageNum = p
+		}
+	}
+
+	// Get total count
+	totalCount, err := h.queries.CountPageVersions(r.Context(), id)
+	if err != nil {
+		slog.Error("failed to count page versions", "error", err, "page_id", id)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Calculate pagination
+	totalPages := int((totalCount + VersionsPerPage - 1) / VersionsPerPage)
+	if totalPages < 1 {
+		totalPages = 1
+	}
+	if pageNum > totalPages {
+		pageNum = totalPages
+	}
+
+	offset := int64((pageNum - 1) * VersionsPerPage)
+
+	// Fetch versions for current page
+	versions, err := h.queries.ListPageVersionsWithUser(r.Context(), store.ListPageVersionsWithUserParams{
+		PageID: id,
+		Limit:  VersionsPerPage,
+		Offset: offset,
+	})
+	if err != nil {
+		slog.Error("failed to list page versions", "error", err, "page_id", id)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	data := PageVersionsData{
+		Page:        page,
+		Versions:    versions,
+		CurrentPage: pageNum,
+		TotalPages:  totalPages,
+		TotalCount:  totalCount,
+		HasPrev:     pageNum > 1,
+		HasNext:     pageNum < totalPages,
+		PrevPage:    pageNum - 1,
+		NextPage:    pageNum + 1,
+	}
+
+	if err := h.renderer.Render(w, r, "admin/pages_versions", render.TemplateData{
+		Title: fmt.Sprintf("Version History - %s", page.Title),
+		User:  user,
+		Data:  data,
+	}); err != nil {
+		slog.Error("render error", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+// RestoreVersion handles POST /admin/pages/{id}/versions/{versionId}/restore - restores a version.
+func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+
+	// Get page ID from URL
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		h.renderer.SetFlash(r, "Invalid page ID", "error")
+		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		return
+	}
+
+	// Get version ID from URL
+	versionIdStr := chi.URLParam(r, "versionId")
+	versionId, err := strconv.ParseInt(versionIdStr, 10, 64)
+	if err != nil {
+		h.renderer.SetFlash(r, "Invalid version ID", "error")
+		http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d/versions", id), http.StatusSeeOther)
+		return
+	}
+
+	// Get page to verify it exists
+	page, err := h.queries.GetPageByID(r.Context(), id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			h.renderer.SetFlash(r, "Page not found", "error")
+		} else {
+			slog.Error("failed to get page", "error", err, "page_id", id)
+			h.renderer.SetFlash(r, "Error loading page", "error")
+		}
+		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		return
+	}
+
+	// Get version to restore
+	version, err := h.queries.GetPageVersionWithUser(r.Context(), versionId)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			h.renderer.SetFlash(r, "Version not found", "error")
+		} else {
+			slog.Error("failed to get page version", "error", err, "version_id", versionId)
+			h.renderer.SetFlash(r, "Error loading version", "error")
+		}
+		http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d/versions", id), http.StatusSeeOther)
+		return
+	}
+
+	// Verify version belongs to this page
+	if version.PageID != id {
+		h.renderer.SetFlash(r, "Version does not belong to this page", "error")
+		http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d/versions", id), http.StatusSeeOther)
+		return
+	}
+
+	// Update page with version content
+	now := time.Now()
+	_, err = h.queries.UpdatePage(r.Context(), store.UpdatePageParams{
+		ID:        id,
+		Title:     version.Title,
+		Slug:      page.Slug, // Keep the current slug
+		Body:      version.Body,
+		Status:    page.Status, // Keep the current status
+		UpdatedAt: now,
+	})
+	if err != nil {
+		slog.Error("failed to restore page version", "error", err, "page_id", id, "version_id", versionId)
+		h.renderer.SetFlash(r, "Error restoring version", "error")
+		http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d/versions", id), http.StatusSeeOther)
+		return
+	}
+
+	// Create new version to record the restore
+	_, err = h.queries.CreatePageVersion(r.Context(), store.CreatePageVersionParams{
+		PageID:    id,
+		Title:     version.Title,
+		Body:      version.Body,
+		ChangedBy: user.ID,
+		CreatedAt: now,
+	})
+	if err != nil {
+		slog.Error("failed to create page version after restore", "error", err, "page_id", id)
+		// Don't fail the request - page was restored
+	}
+
+	slog.Info("page version restored", "page_id", id, "version_id", versionId, "restored_by", user.ID)
+	h.renderer.SetFlash(r, "Version restored successfully", "success")
+	http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", id), http.StatusSeeOther)
+}

@@ -69,3 +69,33 @@ SELECT * FROM page_versions WHERE page_id = ? ORDER BY created_at DESC LIMIT 1;
 
 -- name: DeletePageVersions :exec
 DELETE FROM page_versions WHERE page_id = ?;
+
+-- name: ListPageVersionsWithUser :many
+SELECT
+    pv.id,
+    pv.page_id,
+    pv.title,
+    pv.body,
+    pv.changed_by,
+    pv.created_at,
+    u.name as changed_by_name,
+    u.email as changed_by_email
+FROM page_versions pv
+JOIN users u ON pv.changed_by = u.id
+WHERE pv.page_id = ?
+ORDER BY pv.created_at DESC
+LIMIT ? OFFSET ?;
+
+-- name: GetPageVersionWithUser :one
+SELECT
+    pv.id,
+    pv.page_id,
+    pv.title,
+    pv.body,
+    pv.changed_by,
+    pv.created_at,
+    u.name as changed_by_name,
+    u.email as changed_by_email
+FROM page_versions pv
+JOIN users u ON pv.changed_by = u.id
+WHERE pv.id = ?;

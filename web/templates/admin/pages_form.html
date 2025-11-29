@@ -5,6 +5,12 @@
         <p class="page-description">{{if .Data.IsEdit}}Update page content and settings{{else}}Create a new page for your site{{end}}</p>
     </div>
     <div class="page-actions">
+        {{if .Data.IsEdit}}
+        <a href="/admin/pages/{{.Data.Page.ID}}/versions" class="btn btn-outline">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>
+            Version History
+        </a>
+        {{end}}
         <a href="/admin/pages" class="btn btn-outline">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
             Back to Pages
