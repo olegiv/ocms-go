@@ -74,15 +74,16 @@ type Medium struct {
 }
 
 type Page struct {
-	ID          int64        `json:"id"`
-	Title       string       `json:"title"`
-	Slug        string       `json:"slug"`
-	Body        string       `json:"body"`
-	Status      string       `json:"status"`
-	AuthorID    int64        `json:"author_id"`
-	CreatedAt   time.Time    `json:"created_at"`
-	UpdatedAt   time.Time    `json:"updated_at"`
-	PublishedAt sql.NullTime `json:"published_at"`
+	ID              int64         `json:"id"`
+	Title           string        `json:"title"`
+	Slug            string        `json:"slug"`
+	Body            string        `json:"body"`
+	Status          string        `json:"status"`
+	AuthorID        int64         `json:"author_id"`
+	CreatedAt       time.Time     `json:"created_at"`
+	UpdatedAt       time.Time     `json:"updated_at"`
+	PublishedAt     sql.NullTime  `json:"published_at"`
+	FeaturedImageID sql.NullInt64 `json:"featured_image_id"`
 }
 
 type PageCategory struct {

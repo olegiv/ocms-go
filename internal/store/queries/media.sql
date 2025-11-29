@@ -41,6 +41,9 @@ SELECT COUNT(*) FROM media WHERE folder_id = ?;
 -- name: CountMediaInRootFolder :one
 SELECT COUNT(*) FROM media WHERE folder_id IS NULL;
 
+-- name: CountMediaByType :one
+SELECT COUNT(*) FROM media WHERE mime_type LIKE ?;
+
 -- name: CreateMediaVariant :one
 INSERT INTO media_variants (media_id, type, width, height, size, created_at)
 VALUES (?, ?, ?, ?, ?, ?)

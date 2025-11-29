@@ -550,3 +550,28 @@
 .empty-state-action {
   margin-top: $spacing-6;
 }
+
+// Page list thumbnails
+.page-image-cell {
+  width: 50px;
+  padding: $spacing-2 !important;
+}
+
+.page-thumbnail {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: $radius-sm;
+  border: 1px solid $gray-200;
+}
+
+.page-thumbnail-placeholder {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: $gray-100;
+  border-radius: $radius-sm;
+  color: $gray-400;
+}

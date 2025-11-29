@@ -2,6 +2,7 @@ package handler
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -915,6 +916,135 @@ func (h *MediaHandler) MoveMedia(w http.ResponseWriter, r *http.Request) {
 
 	h.renderer.SetFlash(r, "Media moved successfully", "success")
 	http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
+}
+
+// API handles GET /admin/media/api - returns media items as JSON for the media picker.
+func (h *MediaHandler) API(w http.ResponseWriter, r *http.Request) {
+	// Get page number
+	pageStr := r.URL.Query().Get("page")
+	page := 1
+	if pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+
+	// Get limit
+	limitStr := r.URL.Query().Get("limit")
+	limit := 12
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 50 {
+			limit = l
+		}
+	}
+
+	// Get type filter (image or document)
+	typeFilter := r.URL.Query().Get("type")
+
+	// Get search query
+	search := strings.TrimSpace(r.URL.Query().Get("q"))
+
+	// Get total count and items based on filters
+	var totalCount int64
+	var mediaList []store.Medium
+	var err error
+
+	offset := int64((page - 1) * limit)
+
+	if search != "" {
+		mediaList, err = h.queries.SearchMedia(r.Context(), store.SearchMediaParams{
+			Filename: "%" + search + "%",
+			Alt:      sql.NullString{String: "%" + search + "%", Valid: true},
+			Limit:    int64(limit),
+		})
+		// For search, total is approximated by result count
+		totalCount = int64(len(mediaList))
+	} else if typeFilter == "image" {
+		totalCount, err = h.queries.CountMediaByType(r.Context(), "image/%")
+		if err == nil {
+			mediaList, err = h.queries.ListMediaByType(r.Context(), store.ListMediaByTypeParams{
+				MimeType: "image/%",
+				Limit:    int64(limit),
+				Offset:   offset,
+			})
+		}
+	} else if typeFilter == "document" {
+		totalCount, err = h.queries.CountMediaByType(r.Context(), "application/%")
+		if err == nil {
+			mediaList, err = h.queries.ListMediaByType(r.Context(), store.ListMediaByTypeParams{
+				MimeType: "application/%",
+				Limit:    int64(limit),
+				Offset:   offset,
+			})
+		}
+	} else {
+		totalCount, err = h.queries.CountMedia(r.Context())
+		if err == nil {
+			mediaList, err = h.queries.ListMedia(r.Context(), store.ListMediaParams{
+				Limit:  int64(limit),
+				Offset: offset,
+			})
+		}
+	}
+
+	if err != nil {
+		slog.Error("failed to fetch media for API", "error", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"Internal server error"}`))
+		return
+	}
+
+	// Calculate total pages
+	totalPages := int((totalCount + int64(limit) - 1) / int64(limit))
+	if totalPages < 1 {
+		totalPages = 1
+	}
+
+	// Build response
+	type MediaAPIItem struct {
+		ID        int64  `json:"id"`
+		Filename  string `json:"filename"`
+		Filepath  string `json:"filepath"`
+		Thumbnail string `json:"thumbnail,omitempty"`
+		Mimetype  string `json:"mimetype"`
+		Size      int64  `json:"size"`
+	}
+
+	type APIResponse struct {
+		Items      []MediaAPIItem `json:"items"`
+		TotalCount int64          `json:"totalCount"`
+		TotalPages int            `json:"totalPages"`
+		Page       int            `json:"page"`
+	}
+
+	items := make([]MediaAPIItem, len(mediaList))
+	for i, m := range mediaList {
+		item := MediaAPIItem{
+			ID:       m.ID,
+			Filename: m.Filename,
+			Filepath: fmt.Sprintf("/uploads/originals/%s/%s", m.Uuid, m.Filename),
+			Mimetype: m.MimeType,
+			Size:     m.Size,
+		}
+		// Add thumbnail path for images
+		if strings.HasPrefix(m.MimeType, "image/") {
+			item.Thumbnail = fmt.Sprintf("/uploads/thumbnail/%s/%s", m.Uuid, m.Filename)
+		}
+		items[i] = item
+	}
+
+	response := APIResponse{
+		Items:      items,
+		TotalCount: totalCount,
+		TotalPages: totalPages,
+		Page:       page,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		slog.Error("failed to encode media API response", "error", err)
+	}
 }
 
 // Helper functions

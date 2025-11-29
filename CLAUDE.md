@@ -89,3 +89,29 @@ cmd/ocms/main.go
 ## Default Credentials
 
 On first run, seeds admin user: `admin@example.com` / `changeme`
+
+## Testing Requirements
+
+**IMPORTANT**: Before reporting any fix as complete, you MUST:
+
+1. **Run the server** and verify changes with actual HTTP requests using curl
+2. **Test affected endpoints** - don't just build and run unit tests
+3. **Verify expected responses** - check HTTP status codes and response content
+
+Example testing workflow:
+```bash
+# Start server in background
+OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! timeout 30 go run ./cmd/ocms &
+
+# Wait for server to start
+sleep 2
+
+# Test endpoints with curl
+curl -I http://localhost:8080/uploads/originals/{uuid}/{filename}
+curl -s http://localhost:8080/admin/media/api | jq .
+
+# Kill server when done
+pkill -f "go run ./cmd/ocms" || true
+```
+
+Never tell the user to "restart the server and test" - always run the tests yourself first.

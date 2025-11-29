@@ -48,20 +48,21 @@ func NewPagesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 
 // PagesListData holds data for the pages list template.
 type PagesListData struct {
-	Pages          []store.Page
-	PageTags       map[int64][]store.Tag      // Map of page ID to tags
-	PageCategories map[int64][]store.Category // Map of page ID to categories
-	CurrentPage    int
-	TotalPages     int
-	TotalCount     int64
-	HasPrev        bool
-	HasNext        bool
-	PrevPage       int
-	NextPage       int
-	StatusFilter   string
-	CategoryFilter int64
-	AllCategories  []PageCategoryNode // For category filter dropdown
-	Statuses       []string
+	Pages              []store.Page
+	PageTags           map[int64][]store.Tag        // Map of page ID to tags
+	PageCategories     map[int64][]store.Category   // Map of page ID to categories
+	PageFeaturedImages map[int64]*FeaturedImageData // Map of page ID to featured image
+	CurrentPage        int
+	TotalPages         int
+	TotalCount         int64
+	HasPrev            bool
+	HasNext            bool
+	PrevPage           int
+	NextPage           int
+	StatusFilter       string
+	CategoryFilter     int64
+	AllCategories      []PageCategoryNode // For category filter dropdown
+	Statuses           []string
 }
 
 // List handles GET /admin/pages - displays a paginated list of pages.
@@ -170,6 +171,24 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		pageCategories[p.ID] = categories
 	}
 
+	// Fetch featured images for all displayed pages
+	pageFeaturedImages := make(map[int64]*FeaturedImageData)
+	for _, p := range pages {
+		if p.FeaturedImageID.Valid {
+			media, err := h.queries.GetMediaByID(r.Context(), p.FeaturedImageID.Int64)
+			if err != nil {
+				slog.Error("failed to get featured image for page", "error", err, "page_id", p.ID, "media_id", p.FeaturedImageID.Int64)
+				continue
+			}
+			pageFeaturedImages[p.ID] = &FeaturedImageData{
+				ID:       media.ID,
+				Filename: media.Filename,
+				Filepath: fmt.Sprintf("/uploads/originals/%s/%s", media.Uuid, media.Filename),
+				Mimetype: media.MimeType,
+			}
+		}
+	}
+
 	// Load all categories for filter dropdown
 	allCategories, err := h.queries.ListCategories(r.Context())
 	if err != nil {
@@ -179,20 +198,21 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	categoryTree := buildPageCategoryTree(allCategories, nil, 0)
 
 	data := PagesListData{
-		Pages:          pages,
-		PageTags:       pageTags,
-		PageCategories: pageCategories,
-		CurrentPage:    page,
-		TotalPages:     totalPages,
-		TotalCount:     totalCount,
-		HasPrev:        page > 1,
-		HasNext:        page < totalPages,
-		PrevPage:       page - 1,
-		NextPage:       page + 1,
-		StatusFilter:   statusFilter,
-		CategoryFilter: categoryFilter,
-		AllCategories:  categoryTree,
-		Statuses:       ValidPageStatuses,
+		Pages:              pages,
+		PageTags:           pageTags,
+		PageCategories:     pageCategories,
+		PageFeaturedImages: pageFeaturedImages,
+		CurrentPage:        page,
+		TotalPages:         totalPages,
+		TotalCount:         totalCount,
+		HasPrev:            page > 1,
+		HasNext:            page < totalPages,
+		PrevPage:           page - 1,
+		NextPage:           page + 1,
+		StatusFilter:       statusFilter,
+		CategoryFilter:     categoryFilter,
+		AllCategories:      categoryTree,
+		Statuses:           ValidPageStatuses,
 	}
 
 	if err := h.renderer.Render(w, r, "admin/pages_list", render.TemplateData{
@@ -211,12 +231,21 @@ type PageCategoryNode struct {
 	Depth    int
 }
 
+// FeaturedImageData holds featured image data for the template.
+type FeaturedImageData struct {
+	ID       int64
+	Filename string
+	Filepath string
+	Mimetype string
+}
+
 // PageFormData holds data for the page form template.
 type PageFormData struct {
 	Page          *store.Page
 	Tags          []store.Tag
 	Categories    []store.Category   // Selected categories for the page
 	AllCategories []PageCategoryNode // All categories for selection (with tree structure)
+	FeaturedImage *FeaturedImageData
 	Statuses      []string
 	Errors        map[string]string
 	FormValues    map[string]string
@@ -295,13 +324,23 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	slug := strings.TrimSpace(r.FormValue("slug"))
 	body := r.FormValue("body")
 	status := r.FormValue("status")
+	featuredImageIDStr := r.FormValue("featured_image_id")
+
+	// Parse featured image ID
+	var featuredImageID sql.NullInt64
+	if featuredImageIDStr != "" {
+		if imgID, err := strconv.ParseInt(featuredImageIDStr, 10, 64); err == nil && imgID > 0 {
+			featuredImageID = sql.NullInt64{Int64: imgID, Valid: true}
+		}
+	}
 
 	// Store form values for re-rendering on error
 	formValues := map[string]string{
-		"title":  title,
-		"slug":   slug,
-		"body":   body,
-		"status": status,
+		"title":             title,
+		"slug":              slug,
+		"body":              body,
+		"status":            status,
+		"featured_image_id": featuredImageIDStr,
 	}
 
 	// Validate
@@ -366,13 +405,14 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Create page
 	now := time.Now()
 	newPage, err := h.queries.CreatePage(r.Context(), store.CreatePageParams{
-		Title:     title,
-		Slug:      slug,
-		Body:      body,
-		Status:    status,
-		AuthorID:  user.ID,
-		CreatedAt: now,
-		UpdatedAt: now,
+		Title:           title,
+		Slug:            slug,
+		Body:            body,
+		Status:          status,
+		AuthorID:        user.ID,
+		FeaturedImageID: featuredImageID,
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	})
 	if err != nil {
 		slog.Error("failed to create page", "error", err)
@@ -489,11 +529,30 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	}
 	categoryTree := buildPageCategoryTree(allCategories, nil, 0)
 
+	// Load featured image if set
+	var featuredImage *FeaturedImageData
+	if page.FeaturedImageID.Valid {
+		media, err := h.queries.GetMediaByID(r.Context(), page.FeaturedImageID.Int64)
+		if err != nil {
+			if err != sql.ErrNoRows {
+				slog.Error("failed to get featured image", "error", err, "media_id", page.FeaturedImageID.Int64)
+			}
+		} else {
+			featuredImage = &FeaturedImageData{
+				ID:       media.ID,
+				Filename: media.Filename,
+				Filepath: fmt.Sprintf("/uploads/originals/%s/%s", media.Uuid, media.Filename),
+				Mimetype: media.MimeType,
+			}
+		}
+	}
+
 	data := PageFormData{
 		Page:          &page,
 		Tags:          tags,
 		Categories:    categories,
 		AllCategories: categoryTree,
+		FeaturedImage: featuredImage,
 		Statuses:      ValidPageStatuses,
 		Errors:        make(map[string]string),
 		FormValues:    make(map[string]string),
@@ -547,13 +606,23 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	slug := strings.TrimSpace(r.FormValue("slug"))
 	body := r.FormValue("body")
 	status := r.FormValue("status")
+	featuredImageIDStr := r.FormValue("featured_image_id")
+
+	// Parse featured image ID
+	var featuredImageID sql.NullInt64
+	if featuredImageIDStr != "" {
+		if imgID, err := strconv.ParseInt(featuredImageIDStr, 10, 64); err == nil && imgID > 0 {
+			featuredImageID = sql.NullInt64{Int64: imgID, Valid: true}
+		}
+	}
 
 	// Store form values for re-rendering on error
 	formValues := map[string]string{
-		"title":  title,
-		"slug":   slug,
-		"body":   body,
-		"status": status,
+		"title":             title,
+		"slug":              slug,
+		"body":              body,
+		"status":            status,
+		"featured_image_id": featuredImageIDStr,
 	}
 
 	// Validate
@@ -622,12 +691,13 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Update page
 	now := time.Now()
 	updatedPage, err := h.queries.UpdatePage(r.Context(), store.UpdatePageParams{
-		ID:        id,
-		Title:     title,
-		Slug:      slug,
-		Body:      body,
-		Status:    status,
-		UpdatedAt: now,
+		ID:              id,
+		Title:           title,
+		Slug:            slug,
+		Body:            body,
+		Status:          status,
+		FeaturedImageID: featuredImageID,
+		UpdatedAt:       now,
 	})
 	if err != nil {
 		slog.Error("failed to update page", "error", err, "page_id", id)

@@ -1,0 +1,515 @@
+{{define "media_picker"}}
+<div class="media-picker" x-data="mediaPicker()" x-init="init()"
+     data-initial-image='{{if .Data.FeaturedImage}}{"id":{{.Data.FeaturedImage.ID}},"filename":"{{.Data.FeaturedImage.Filename}}","filepath":"{{.Data.FeaturedImage.Filepath}}","mimetype":"{{.Data.FeaturedImage.Mimetype}}"}{{else}}null{{end}}'>
+    <label class="form-label">Featured Image</label>
+
+    <!-- Preview Area -->
+    <div class="media-picker-preview">
+        <template x-if="selectedImage">
+            <div class="media-picker-selected">
+                <div class="media-preview-container">
+                    <template x-if="isImageType(selectedImage.mimetype)">
+                        <img :src="selectedImage.filepath" :alt="selectedImage.filename" class="media-preview-img">
+                    </template>
+                    <template x-if="!isImageType(selectedImage.mimetype)">
+                        <div class="media-preview-file">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
+                            <span x-text="selectedImage.filename" class="media-preview-filename"></span>
+                        </div>
+                    </template>
+                </div>
+                <div class="media-picker-actions">
+                    <button type="button" class="btn btn-sm btn-outline" @click="openPicker()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                        Change
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline btn-danger" @click="clearImage()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                        Remove
+                    </button>
+                </div>
+                <input type="hidden" name="featured_image_id" :value="selectedImage.id">
+            </div>
+        </template>
+        <template x-if="!selectedImage">
+            <div class="media-picker-empty" @click="openPicker()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                <span>Click to select an image</span>
+            </div>
+        </template>
+    </div>
+
+    <span class="form-hint">Select an image from the media library</span>
+
+    <!-- Media Picker Modal -->
+    <div class="media-picker-modal" x-show="showModal" x-cloak @keydown.escape.window="closeModal()">
+        <div class="media-picker-overlay" @click="closeModal()"></div>
+        <div class="media-picker-dialog">
+            <div class="media-picker-header">
+                <h3>Select Media</h3>
+                <button type="button" class="media-picker-close" @click="closeModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            </div>
+
+            <!-- Search and Filter -->
+            <div class="media-picker-toolbar">
+                <div class="media-picker-search">
+                    <input type="text" placeholder="Search media..." x-model="searchQuery" @input.debounce.300ms="loadMedia()" class="form-input">
+                </div>
+                <div class="media-picker-filter">
+                    <select x-model="filterType" @change="loadMedia()" class="form-select">
+                        <option value="">All Types</option>
+                        <option value="image">Images</option>
+                        <option value="document">Documents</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Media Grid -->
+            <div class="media-picker-content">
+                <template x-if="loading">
+                    <div class="media-picker-loading">
+                        <div class="spinner"></div>
+                        <span>Loading media...</span>
+                    </div>
+                </template>
+                <template x-if="!loading && mediaItems.length === 0">
+                    <div class="media-picker-empty-state">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                        <p>No media found</p>
+                        <a href="/admin/media/upload" class="btn btn-primary btn-sm">Upload Media</a>
+                    </div>
+                </template>
+                <template x-if="!loading && mediaItems.length > 0">
+                    <div class="media-picker-grid">
+                        <template x-for="item in mediaItems" :key="item.id">
+                            <div class="media-picker-item"
+                                 :class="{ 'is-selected': tempSelected && tempSelected.id === item.id }"
+                                 @click="selectItem(item)">
+                                <div class="media-picker-item-preview">
+                                    <template x-if="isImageType(item.mimetype)">
+                                        <img :src="item.thumbnail || item.filepath" :alt="item.filename">
+                                    </template>
+                                    <template x-if="!isImageType(item.mimetype)">
+                                        <div class="media-picker-item-file">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div class="media-picker-item-info">
+                                    <span class="media-picker-item-name" x-text="item.filename"></span>
+                                </div>
+                                <div class="media-picker-item-check" x-show="tempSelected && tempSelected.id === item.id">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Pagination -->
+            <template x-if="totalPages > 1">
+                <div class="media-picker-pagination">
+                    <button type="button" class="btn btn-sm btn-outline" :disabled="currentPage <= 1" @click="prevPage()">
+                        Previous
+                    </button>
+                    <span class="media-picker-page-info">Page <span x-text="currentPage"></span> of <span x-text="totalPages"></span></span>
+                    <button type="button" class="btn btn-sm btn-outline" :disabled="currentPage >= totalPages" @click="nextPage()">
+                        Next
+                    </button>
+                </div>
+            </template>
+
+            <!-- Footer Actions -->
+            <div class="media-picker-footer">
+                <button type="button" class="btn btn-outline" @click="closeModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" :disabled="!tempSelected" @click="confirmSelection()">
+                    Select Image
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.media-picker {
+    margin-bottom: 1.5rem;
+}
+
+.media-picker-preview {
+    margin-bottom: 0.5rem;
+}
+
+.media-picker-selected {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--color-bg-alt, #f9fafb);
+    border: 1px solid var(--color-border, #e5e7eb);
+    border-radius: 0.5rem;
+}
+
+.media-preview-container {
+    flex-shrink: 0;
+    width: 120px;
+    height: 120px;
+    border-radius: 0.375rem;
+    overflow: hidden;
+    background: var(--color-bg, #fff);
+    border: 1px solid var(--color-border, #e5e7eb);
+}
+
+.media-preview-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.media-preview-file {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    color: var(--color-text-muted, #6b7280);
+}
+
+.media-preview-filename {
+    font-size: 0.75rem;
+    text-align: center;
+    word-break: break-all;
+    padding: 0 0.5rem;
+}
+
+.media-picker-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.media-picker-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 2rem;
+    background: var(--color-bg-alt, #f9fafb);
+    border: 2px dashed var(--color-border, #e5e7eb);
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--color-text-muted, #6b7280);
+}
+
+.media-picker-empty:hover {
+    border-color: var(--color-primary, #4f46e5);
+    background: var(--color-primary-light, #e0e7ff);
+}
+
+/* Modal Styles */
+.media-picker-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.media-picker-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.media-picker-dialog {
+    position: relative;
+    width: 100%;
+    max-width: 900px;
+    max-height: 90vh;
+    background: var(--color-bg, #fff);
+    border-radius: 0.75rem;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+}
+
+.media-picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--color-border, #e5e7eb);
+}
+
+.media-picker-header h3 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+}
+
+.media-picker-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem;
+    background: transparent;
+    border: none;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    color: var(--color-text-muted, #6b7280);
+    transition: all 0.15s;
+}
+
+.media-picker-close:hover {
+    background: var(--color-bg-alt, #f3f4f6);
+    color: var(--color-text, #111827);
+}
+
+.media-picker-toolbar {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--color-border, #e5e7eb);
+}
+
+.media-picker-search {
+    flex: 1;
+}
+
+.media-picker-filter {
+    width: 150px;
+}
+
+.media-picker-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem 1.5rem;
+    min-height: 300px;
+    max-height: 400px;
+}
+
+.media-picker-loading,
+.media-picker-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    height: 100%;
+    min-height: 200px;
+    color: var(--color-text-muted, #6b7280);
+}
+
+.media-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 1rem;
+}
+
+.media-picker-item {
+    position: relative;
+    background: var(--color-bg-alt, #f9fafb);
+    border: 2px solid var(--color-border, #e5e7eb);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.media-picker-item:hover {
+    border-color: var(--color-primary, #4f46e5);
+}
+
+.media-picker-item.is-selected {
+    border-color: var(--color-primary, #4f46e5);
+    box-shadow: 0 0 0 2px var(--color-primary-light, #c7d2fe);
+}
+
+.media-picker-item-preview {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg, #fff);
+}
+
+.media-picker-item-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.media-picker-item-file {
+    color: var(--color-text-muted, #6b7280);
+}
+
+.media-picker-item-info {
+    padding: 0.5rem;
+    border-top: 1px solid var(--color-border, #e5e7eb);
+}
+
+.media-picker-item-name {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--color-text-muted, #6b7280);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.media-picker-item-check {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    width: 24px;
+    height: 24px;
+    background: var(--color-primary, #4f46e5);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.media-picker-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--color-border, #e5e7eb);
+}
+
+.media-picker-page-info {
+    font-size: 0.875rem;
+    color: var(--color-text-muted, #6b7280);
+}
+
+.media-picker-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--color-border, #e5e7eb);
+}
+
+.spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--color-border, #e5e7eb);
+    border-top-color: var(--color-primary, #4f46e5);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+</style>
+
+<script>
+function mediaPicker() {
+    return {
+        selectedImage: null,
+        tempSelected: null,
+        showModal: false,
+        loading: false,
+        mediaItems: [],
+        searchQuery: '',
+        filterType: '',
+        currentPage: 1,
+        totalPages: 1,
+        perPage: 12,
+
+        init() {
+            const container = this.$el;
+            const initialImage = container.dataset.initialImage;
+            if (initialImage && initialImage !== 'null') {
+                try {
+                    this.selectedImage = JSON.parse(initialImage);
+                } catch (e) {
+                    console.error('Failed to parse initial image:', e);
+                }
+            }
+        },
+
+        isImageType(mimetype) {
+            return mimetype && mimetype.startsWith('image/');
+        },
+
+        openPicker() {
+            this.showModal = true;
+            this.tempSelected = this.selectedImage;
+            this.loadMedia();
+        },
+
+        closeModal() {
+            this.showModal = false;
+            this.tempSelected = null;
+        },
+
+        selectItem(item) {
+            this.tempSelected = item;
+        },
+
+        confirmSelection() {
+            this.selectedImage = this.tempSelected;
+            this.closeModal();
+        },
+
+        clearImage() {
+            this.selectedImage = null;
+        },
+
+        async loadMedia() {
+            this.loading = true;
+            try {
+                let url = `/admin/media/api?page=${this.currentPage}&limit=${this.perPage}`;
+                if (this.searchQuery) {
+                    url += `&q=${encodeURIComponent(this.searchQuery)}`;
+                }
+                if (this.filterType) {
+                    url += `&type=${encodeURIComponent(this.filterType)}`;
+                }
+
+                const response = await fetch(url);
+                if (response.ok) {
+                    const data = await response.json();
+                    this.mediaItems = data.items || [];
+                    this.totalPages = data.totalPages || 1;
+                } else {
+                    this.mediaItems = [];
+                }
+            } catch (e) {
+                console.error('Failed to load media:', e);
+                this.mediaItems = [];
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        prevPage() {
+            if (this.currentPage > 1) {
+                this.currentPage--;
+                this.loadMedia();
+            }
+        },
+
+        nextPage() {
+            if (this.currentPage < this.totalPages) {
+                this.currentPage++;
+                this.loadMedia();
+            }
+        }
+    }
+}
+</script>
+{{end}}

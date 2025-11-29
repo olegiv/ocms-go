@@ -220,6 +220,7 @@ func run() error {
 
 		// Media library routes
 		r.Get("/media", mediaHandler.Library)
+		r.Get("/media/api", mediaHandler.API) // JSON API for media picker
 		r.Get("/media/upload", mediaHandler.UploadForm)
 		r.Post("/media/upload", mediaHandler.Upload)
 		r.Get("/media/{id}", mediaHandler.EditForm)

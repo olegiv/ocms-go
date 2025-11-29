@@ -22,6 +22,17 @@ func (q *Queries) CountMedia(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countMediaByType = `-- name: CountMediaByType :one
+SELECT COUNT(*) FROM media WHERE mime_type LIKE ?
+`
+
+func (q *Queries) CountMediaByType(ctx context.Context, mimeType string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countMediaByType, mimeType)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countMediaFolders = `-- name: CountMediaFolders :one
 SELECT COUNT(*) FROM media_folders
 `

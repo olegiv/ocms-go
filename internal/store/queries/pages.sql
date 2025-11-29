@@ -1,6 +1,6 @@
 -- name: CreatePage :one
-INSERT INTO pages (title, slug, body, status, author_id, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO pages (title, slug, body, status, author_id, featured_image_id, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetPageByID :one
@@ -17,7 +17,7 @@ SELECT * FROM pages WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?;
 
 -- name: UpdatePage :one
 UPDATE pages
-SET title = ?, slug = ?, body = ?, status = ?, updated_at = ?
+SET title = ?, slug = ?, body = ?, status = ?, featured_image_id = ?, updated_at = ?
 WHERE id = ?
 RETURNING *;
 
@@ -99,3 +99,16 @@ SELECT
 FROM page_versions pv
 JOIN users u ON pv.changed_by = u.id
 WHERE pv.id = ?;
+
+-- Featured image queries
+
+-- name: GetFeaturedImageForPage :one
+SELECT m.* FROM media m
+INNER JOIN pages p ON p.featured_image_id = m.id
+WHERE p.id = ?;
+
+-- name: UpdatePageFeaturedImage :exec
+UPDATE pages SET featured_image_id = ?, updated_at = ? WHERE id = ?;
+
+-- name: ClearPageFeaturedImage :exec
+UPDATE pages SET featured_image_id = NULL, updated_at = ? WHERE id = ?;
