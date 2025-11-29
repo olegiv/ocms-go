@@ -12,21 +12,34 @@
     </div>
 </div>
 
-<!-- Status Filter -->
+<!-- Filters -->
 <div class="filter-bar">
     <div class="filter-group">
         <label class="filter-label">Status:</label>
         <div class="filter-buttons">
-            <a href="/admin/pages" class="btn btn-sm {{if eq .Data.StatusFilter ""}}btn-primary{{else}}btn-outline{{end}}">
+            <a href="/admin/pages{{if gt .Data.CategoryFilter 0}}?category={{.Data.CategoryFilter}}{{end}}" class="btn btn-sm {{if eq .Data.StatusFilter ""}}btn-primary{{else}}btn-outline{{end}}">
                 All
             </a>
             {{range .Data.Statuses}}
-            <a href="/admin/pages?status={{.}}" class="btn btn-sm {{if eq $.Data.StatusFilter .}}btn-primary{{else}}btn-outline{{end}}">
+            <a href="/admin/pages?status={{.}}{{if gt $.Data.CategoryFilter 0}}&category={{$.Data.CategoryFilter}}{{end}}" class="btn btn-sm {{if eq $.Data.StatusFilter .}}btn-primary{{else}}btn-outline{{end}}">
                 {{if eq . "draft"}}Draft{{else if eq . "published"}}Published{{else}}{{.}}{{end}}
             </a>
             {{end}}
         </div>
     </div>
+    {{if .Data.AllCategories}}
+    <div class="filter-group">
+        <label class="filter-label">Category:</label>
+        <select class="form-select form-select-sm" onchange="window.location.href=this.value">
+            <option value="/admin/pages{{if .Data.StatusFilter}}?status={{.Data.StatusFilter}}{{end}}">All Categories</option>
+            {{range .Data.AllCategories}}
+            <option value="/admin/pages?category={{.Category.ID}}{{if $.Data.StatusFilter}}&status={{$.Data.StatusFilter}}{{end}}" {{if eq $.Data.CategoryFilter .Category.ID}}selected{{end}}>
+                {{if gt .Depth 0}}{{repeat "— " .Depth}}{{end}}{{.Category.Name}}
+            </option>
+            {{end}}
+        </select>
+    </div>
+    {{end}}
 </div>
 
 {{if .Data.Pages}}
@@ -37,6 +50,7 @@
                 <tr>
                     <th>Title</th>
                     <th>Tags</th>
+                    <th>Categories</th>
                     <th>Slug</th>
                     <th>Status</th>
                     <th>Updated</th>
@@ -55,6 +69,18 @@
                         <div class="tag-list">
                             {{range $tags}}
                             <span class="tag-badge-sm">{{.Name}}</span>
+                            {{end}}
+                        </div>
+                        {{else}}
+                        <span class="text-muted">—</span>
+                        {{end}}
+                    </td>
+                    <td>
+                        {{$categories := index $.Data.PageCategories .ID}}
+                        {{if $categories}}
+                        <div class="category-list">
+                            {{range $categories}}
+                            <span class="category-badge-sm">{{.Name}}</span>
                             {{end}}
                         </div>
                         {{else}}
@@ -144,7 +170,7 @@
             </div>
             <div class="pagination-controls">
                 {{if .Data.HasPrev}}
-                <a href="/admin/pages?page={{.Data.PrevPage}}{{if .Data.StatusFilter}}&status={{.Data.StatusFilter}}{{end}}" class="btn btn-sm btn-outline">
+                <a href="/admin/pages?page={{.Data.PrevPage}}{{if .Data.StatusFilter}}&status={{.Data.StatusFilter}}{{end}}{{if gt .Data.CategoryFilter 0}}&category={{.Data.CategoryFilter}}{{end}}" class="btn btn-sm btn-outline">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
                     Previous
                 </a>
@@ -156,7 +182,7 @@
                 {{end}}
 
                 {{if .Data.HasNext}}
-                <a href="/admin/pages?page={{.Data.NextPage}}{{if .Data.StatusFilter}}&status={{.Data.StatusFilter}}{{end}}" class="btn btn-sm btn-outline">
+                <a href="/admin/pages?page={{.Data.NextPage}}{{if .Data.StatusFilter}}&status={{.Data.StatusFilter}}{{end}}{{if gt .Data.CategoryFilter 0}}&category={{.Data.CategoryFilter}}{{end}}" class="btn btn-sm btn-outline">
                     Next
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
                 </a>

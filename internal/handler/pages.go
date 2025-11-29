@@ -48,17 +48,20 @@ func NewPagesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 
 // PagesListData holds data for the pages list template.
 type PagesListData struct {
-	Pages        []store.Page
-	PageTags     map[int64][]store.Tag // Map of page ID to tags
-	CurrentPage  int
-	TotalPages   int
-	TotalCount   int64
-	HasPrev      bool
-	HasNext      bool
-	PrevPage     int
-	NextPage     int
-	StatusFilter string
-	Statuses     []string
+	Pages          []store.Page
+	PageTags       map[int64][]store.Tag      // Map of page ID to tags
+	PageCategories map[int64][]store.Category // Map of page ID to categories
+	CurrentPage    int
+	TotalPages     int
+	TotalCount     int64
+	HasPrev        bool
+	HasNext        bool
+	PrevPage       int
+	NextPage       int
+	StatusFilter   string
+	CategoryFilter int64
+	AllCategories  []PageCategoryNode // For category filter dropdown
+	Statuses       []string
 }
 
 // List handles GET /admin/pages - displays a paginated list of pages.
@@ -80,12 +83,24 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		statusFilter = ""
 	}
 
+	// Get category filter from query string
+	var categoryFilter int64
+	categoryFilterStr := r.URL.Query().Get("category")
+	if categoryFilterStr != "" {
+		if cid, err := strconv.ParseInt(categoryFilterStr, 10, 64); err == nil && cid > 0 {
+			categoryFilter = cid
+		}
+	}
+
 	var totalCount int64
 	var pages []store.Page
 	var err error
 
 	// Get total count based on filter
-	if statusFilter != "" && statusFilter != "all" {
+	// Note: Category filter takes precedence over status filter
+	if categoryFilter > 0 {
+		totalCount, err = h.queries.CountPagesByCategory(r.Context(), categoryFilter)
+	} else if statusFilter != "" && statusFilter != "all" {
 		totalCount, err = h.queries.CountPagesByStatus(r.Context(), statusFilter)
 	} else {
 		totalCount, err = h.queries.CountPages(r.Context())
@@ -108,7 +123,14 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	offset := int64((page - 1) * PagesPerPage)
 
 	// Fetch pages for current page
-	if statusFilter != "" && statusFilter != "all" {
+	// Note: Category filter takes precedence over status filter
+	if categoryFilter > 0 {
+		pages, err = h.queries.ListPagesByCategory(r.Context(), store.ListPagesByCategoryParams{
+			CategoryID: categoryFilter,
+			Limit:      PagesPerPage,
+			Offset:     offset,
+		})
+	} else if statusFilter != "" && statusFilter != "all" {
 		pages, err = h.queries.ListPagesByStatus(r.Context(), store.ListPagesByStatusParams{
 			Status: statusFilter,
 			Limit:  PagesPerPage,
@@ -137,18 +159,40 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		pageTags[p.ID] = tags
 	}
 
+	// Fetch categories for all displayed pages
+	pageCategories := make(map[int64][]store.Category)
+	for _, p := range pages {
+		categories, err := h.queries.GetCategoriesForPage(r.Context(), p.ID)
+		if err != nil {
+			slog.Error("failed to get categories for page", "error", err, "page_id", p.ID)
+			continue
+		}
+		pageCategories[p.ID] = categories
+	}
+
+	// Load all categories for filter dropdown
+	allCategories, err := h.queries.ListCategories(r.Context())
+	if err != nil {
+		slog.Error("failed to list categories for filter", "error", err)
+		allCategories = []store.Category{}
+	}
+	categoryTree := buildPageCategoryTree(allCategories, nil, 0)
+
 	data := PagesListData{
-		Pages:        pages,
-		PageTags:     pageTags,
-		CurrentPage:  page,
-		TotalPages:   totalPages,
-		TotalCount:   totalCount,
-		HasPrev:      page > 1,
-		HasNext:      page < totalPages,
-		PrevPage:     page - 1,
-		NextPage:     page + 1,
-		StatusFilter: statusFilter,
-		Statuses:     ValidPageStatuses,
+		Pages:          pages,
+		PageTags:       pageTags,
+		PageCategories: pageCategories,
+		CurrentPage:    page,
+		TotalPages:     totalPages,
+		TotalCount:     totalCount,
+		HasPrev:        page > 1,
+		HasNext:        page < totalPages,
+		PrevPage:       page - 1,
+		NextPage:       page + 1,
+		StatusFilter:   statusFilter,
+		CategoryFilter: categoryFilter,
+		AllCategories:  categoryTree,
+		Statuses:       ValidPageStatuses,
 	}
 
 	if err := h.renderer.Render(w, r, "admin/pages_list", render.TemplateData{
@@ -161,25 +205,69 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// PageCategoryNode represents a category with depth for tree display.
+type PageCategoryNode struct {
+	Category store.Category
+	Depth    int
+}
+
 // PageFormData holds data for the page form template.
 type PageFormData struct {
-	Page       *store.Page
-	Tags       []store.Tag
-	Statuses   []string
-	Errors     map[string]string
-	FormValues map[string]string
-	IsEdit     bool
+	Page          *store.Page
+	Tags          []store.Tag
+	Categories    []store.Category   // Selected categories for the page
+	AllCategories []PageCategoryNode // All categories for selection (with tree structure)
+	Statuses      []string
+	Errors        map[string]string
+	FormValues    map[string]string
+	IsEdit        bool
+}
+
+// buildPageCategoryTree builds a flat list with depth for display.
+func buildPageCategoryTree(categories []store.Category, parentID *int64, depth int) []PageCategoryNode {
+	var nodes []PageCategoryNode
+
+	for _, cat := range categories {
+		var catParentID *int64
+		if cat.ParentID.Valid {
+			catParentID = &cat.ParentID.Int64
+		}
+
+		parentMatch := (parentID == nil && catParentID == nil) ||
+			(parentID != nil && catParentID != nil && *parentID == *catParentID)
+
+		if parentMatch {
+			nodes = append(nodes, PageCategoryNode{
+				Category: cat,
+				Depth:    depth,
+			})
+			// Recursively add children
+			children := buildPageCategoryTree(categories, &cat.ID, depth+1)
+			nodes = append(nodes, children...)
+		}
+	}
+
+	return nodes
 }
 
 // NewForm handles GET /admin/pages/new - displays the new page form.
 func (h *PagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 
+	// Load all categories for the selector
+	allCategories, err := h.queries.ListCategories(r.Context())
+	if err != nil {
+		slog.Error("failed to list categories", "error", err)
+		allCategories = []store.Category{}
+	}
+	categoryTree := buildPageCategoryTree(allCategories, nil, 0)
+
 	data := PageFormData{
-		Statuses:   ValidPageStatuses,
-		Errors:     make(map[string]string),
-		FormValues: make(map[string]string),
-		IsEdit:     false,
+		AllCategories: categoryTree,
+		Statuses:      ValidPageStatuses,
+		Errors:        make(map[string]string),
+		FormValues:    make(map[string]string),
+		IsEdit:        false,
 	}
 
 	if err := h.renderer.Render(w, r, "admin/pages_form", render.TemplateData{
@@ -322,6 +410,22 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Save categories
+	categoryIDs := r.Form["categories[]"]
+	for _, categoryIDStr := range categoryIDs {
+		categoryID, err := strconv.ParseInt(categoryIDStr, 10, 64)
+		if err != nil {
+			continue
+		}
+		err = h.queries.AddCategoryToPage(r.Context(), store.AddCategoryToPageParams{
+			PageID:     newPage.ID,
+			CategoryID: categoryID,
+		})
+		if err != nil {
+			slog.Error("failed to add category to page", "error", err, "page_id", newPage.ID, "category_id", categoryID)
+		}
+	}
+
 	slog.Info("page created", "page_id", newPage.ID, "slug", newPage.Slug, "created_by", user.ID)
 	h.renderer.SetFlash(r, "Page created successfully", "success")
 	http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
@@ -370,13 +474,30 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		tags = []store.Tag{} // Continue with empty tags on error
 	}
 
+	// Get categories for this page
+	categories, err := h.queries.GetCategoriesForPage(r.Context(), id)
+	if err != nil {
+		slog.Error("failed to get categories for page", "error", err, "page_id", id)
+		categories = []store.Category{}
+	}
+
+	// Load all categories for the selector
+	allCategories, err := h.queries.ListCategories(r.Context())
+	if err != nil {
+		slog.Error("failed to list categories", "error", err)
+		allCategories = []store.Category{}
+	}
+	categoryTree := buildPageCategoryTree(allCategories, nil, 0)
+
 	data := PageFormData{
-		Page:       &page,
-		Tags:       tags,
-		Statuses:   ValidPageStatuses,
-		Errors:     make(map[string]string),
-		FormValues: make(map[string]string),
-		IsEdit:     true,
+		Page:          &page,
+		Tags:          tags,
+		Categories:    categories,
+		AllCategories: categoryTree,
+		Statuses:      ValidPageStatuses,
+		Errors:        make(map[string]string),
+		FormValues:    make(map[string]string),
+		IsEdit:        true,
 	}
 
 	if err := h.renderer.Render(w, r, "admin/pages_form", render.TemplateData{
@@ -548,6 +669,27 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			slog.Error("failed to add tag to page", "error", err, "page_id", id, "tag_id", tagID)
+		}
+	}
+
+	// Update categories - clear existing and add new
+	err = h.queries.ClearPageCategories(r.Context(), id)
+	if err != nil {
+		slog.Error("failed to clear page categories", "error", err, "page_id", id)
+	}
+
+	categoryIDs := r.Form["categories[]"]
+	for _, categoryIDStr := range categoryIDs {
+		categoryID, err := strconv.ParseInt(categoryIDStr, 10, 64)
+		if err != nil {
+			continue
+		}
+		err = h.queries.AddCategoryToPage(r.Context(), store.AddCategoryToPageParams{
+			PageID:     id,
+			CategoryID: categoryID,
+		})
+		if err != nil {
+			slog.Error("failed to add category to page", "error", err, "page_id", id, "category_id", categoryID)
 		}
 	}
 

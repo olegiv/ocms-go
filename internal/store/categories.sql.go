@@ -72,6 +72,19 @@ func (q *Queries) CountCategories(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countPagesByCategory = `-- name: CountPagesByCategory :one
+SELECT COUNT(DISTINCT p.id) FROM pages p
+INNER JOIN page_categories pc ON pc.page_id = p.id
+WHERE pc.category_id = ?
+`
+
+func (q *Queries) CountPagesByCategory(ctx context.Context, categoryID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPagesByCategory, categoryID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createCategory = `-- name: CreateCategory :one
 INSERT INTO categories (name, slug, description, parent_id, position, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -393,6 +406,53 @@ func (q *Queries) ListChildCategories(ctx context.Context, parentID sql.NullInt6
 			&i.Position,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPagesByCategory = `-- name: ListPagesByCategory :many
+SELECT DISTINCT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at FROM pages p
+INNER JOIN page_categories pc ON pc.page_id = p.id
+WHERE pc.category_id = ?
+ORDER BY p.updated_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListPagesByCategoryParams struct {
+	CategoryID int64 `json:"category_id"`
+	Limit      int64 `json:"limit"`
+	Offset     int64 `json:"offset"`
+}
+
+func (q *Queries) ListPagesByCategory(ctx context.Context, arg ListPagesByCategoryParams) ([]Page, error) {
+	rows, err := q.db.QueryContext(ctx, listPagesByCategory, arg.CategoryID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Page{}
+	for rows.Next() {
+		var i Page
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Slug,
+			&i.Body,
+			&i.Status,
+			&i.AuthorID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PublishedAt,
 		); err != nil {
 			return nil, err
 		}

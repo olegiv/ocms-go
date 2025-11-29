@@ -1,0 +1,161 @@
+{{define "category_selector"}}
+<div class="category-selector" x-data="categorySelector()" data-initial-categories='{{if .Data.Categories}}{{toJSON .Data.Categories}}{{else}}[]{{end}}'>
+    <label class="form-label">Categories</label>
+
+    {{if .Data.AllCategories}}
+    <div class="category-tree">
+        {{range .Data.AllCategories}}
+        <div class="category-item" style="padding-left: {{multiply .Depth 20}}px;">
+            <label class="category-checkbox">
+                <input
+                    type="checkbox"
+                    name="categories[]"
+                    value="{{.Category.ID}}"
+                    :checked="isSelected({{.Category.ID}})"
+                    @change="toggleCategory({{.Category.ID}})"
+                >
+                <span class="checkbox-indicator"></span>
+                <span class="category-name">{{.Category.Name}}</span>
+                {{if .Category.Description.Valid}}
+                <span class="category-desc">{{truncate .Category.Description.String 30}}</span>
+                {{end}}
+            </label>
+        </div>
+        {{end}}
+    </div>
+    {{else}}
+    <div class="category-empty">
+        <p>No categories available.</p>
+        <a href="/admin/categories/new" class="btn btn-sm btn-outline">Create Category</a>
+    </div>
+    {{end}}
+
+    <span class="form-hint">Select one or more categories for this page</span>
+</div>
+
+<style>
+.category-selector {
+    margin-bottom: 1.5rem;
+}
+
+.category-tree {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--color-border, #e5e7eb);
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background: var(--color-bg, #fff);
+}
+
+.category-item {
+    padding: 0.25rem 0;
+}
+
+.category-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.category-checkbox input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.checkbox-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--color-border, #d1d5db);
+    border-radius: 0.25rem;
+    background: var(--color-bg, #fff);
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+
+.category-checkbox input[type="checkbox"]:checked + .checkbox-indicator {
+    background: var(--color-primary, #4f46e5);
+    border-color: var(--color-primary, #4f46e5);
+}
+
+.category-checkbox input[type="checkbox"]:checked + .checkbox-indicator::after {
+    content: '';
+    width: 5px;
+    height: 9px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    margin-bottom: 2px;
+}
+
+.category-checkbox input[type="checkbox"]:focus + .checkbox-indicator {
+    box-shadow: 0 0 0 2px var(--color-primary-light, #e0e7ff);
+}
+
+.category-checkbox:hover .checkbox-indicator {
+    border-color: var(--color-primary, #4f46e5);
+}
+
+.category-name {
+    font-weight: 500;
+    color: var(--color-text, #1f2937);
+}
+
+.category-desc {
+    color: var(--color-text-muted, #6b7280);
+    font-size: 0.75rem;
+    margin-left: auto;
+}
+
+.category-empty {
+    text-align: center;
+    padding: 1.5rem;
+    color: var(--color-text-muted, #6b7280);
+}
+
+.category-empty p {
+    margin-bottom: 0.75rem;
+}
+</style>
+
+<script>
+function categorySelector() {
+    return {
+        selectedCategories: [],
+
+        init() {
+            // Load initial categories from data attribute
+            const container = this.$el;
+            const initialCategories = container.dataset.initialCategories;
+            if (initialCategories) {
+                try {
+                    const cats = JSON.parse(initialCategories);
+                    this.selectedCategories = cats.map(c => c.id);
+                } catch (e) {
+                    console.error('Failed to parse initial categories:', e);
+                }
+            }
+        },
+
+        isSelected(categoryId) {
+            return this.selectedCategories.includes(categoryId);
+        },
+
+        toggleCategory(categoryId) {
+            if (this.isSelected(categoryId)) {
+                this.selectedCategories = this.selectedCategories.filter(id => id !== categoryId);
+            } else {
+                this.selectedCategories.push(categoryId);
+            }
+        }
+    }
+}
+</script>
+{{end}}

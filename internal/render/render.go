@@ -182,6 +182,9 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		"multiply": func(a, b int) int {
 			return a * b
 		},
+		"repeat": func(s string, n int) string {
+			return strings.Repeat(s, n)
+		},
 		"seq": func(start, end int) []int {
 			var result []int
 			for i := start; i <= end; i++ {

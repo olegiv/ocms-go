@@ -85,3 +85,15 @@ WITH RECURSIVE descendants AS (
     INNER JOIN descendants d ON c.parent_id = d.id
 )
 SELECT id FROM descendants;
+
+-- name: ListPagesByCategory :many
+SELECT DISTINCT p.* FROM pages p
+INNER JOIN page_categories pc ON pc.page_id = p.id
+WHERE pc.category_id = ?
+ORDER BY p.updated_at DESC
+LIMIT ? OFFSET ?;
+
+-- name: CountPagesByCategory :one
+SELECT COUNT(DISTINCT p.id) FROM pages p
+INNER JOIN page_categories pc ON pc.page_id = p.id
+WHERE pc.category_id = ?;

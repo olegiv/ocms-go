@@ -1332,3 +1332,24 @@
   border-radius: $radius-full;
   white-space: nowrap;
 }
+
+// CATEGORY BADGES (for pages list)
+// =============================================================================
+
+.category-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-1;
+}
+
+.category-badge-sm {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px $spacing-2;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  color: darken($success, 25%);
+  background-color: rgba($success, 0.15);
+  border-radius: $radius-full;
+  white-space: nowrap;
+}
