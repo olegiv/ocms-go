@@ -98,6 +98,7 @@ func run() error {
 	renderer, err := render.New(render.Config{
 		TemplatesFS:    templatesFS,
 		SessionManager: sessionManager,
+		DB:             db,
 		IsDev:          cfg.IsDevelopment(),
 	})
 	if err != nil {

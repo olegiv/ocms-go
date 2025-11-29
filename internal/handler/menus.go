@@ -396,6 +396,12 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Invalidate menu cache (both old and new slug in case slug changed)
+	h.renderer.InvalidateMenuCache(menu.Slug)
+	if slug != menu.Slug {
+		h.renderer.InvalidateMenuCache(slug)
+	}
+
 	slog.Info("menu updated", "menu_id", id, "updated_by", user.ID)
 	h.renderer.SetFlash(r, "Menu updated successfully", "success")
 	http.Redirect(w, r, fmt.Sprintf("/admin/menus/%d", id), http.StatusSeeOther)
@@ -434,6 +440,9 @@ func (h *MenusHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Invalidate menu cache
+	h.renderer.InvalidateMenuCache(menu.Slug)
+
 	user := middleware.GetUser(r)
 	slog.Info("menu deleted", "menu_id", id, "slug", menu.Slug, "deleted_by", user.ID)
 
@@ -465,8 +474,8 @@ func (h *MenusHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify menu exists
-	_, err = h.queries.GetMenuByID(r.Context(), menuID)
+	// Verify menu exists and get slug for cache invalidation
+	menu, err := h.queries.GetMenuByID(r.Context(), menuID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "Menu not found", http.StatusNotFound)
@@ -539,6 +548,9 @@ func (h *MenusHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Invalidate menu cache
+	h.renderer.InvalidateMenuCache(menu.Slug)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
@@ -587,6 +599,13 @@ func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get menu for cache invalidation
+	menu, err := h.queries.GetMenuByID(r.Context(), menuID)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
 	var req UpdateItemRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -629,6 +648,9 @@ func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Invalidate menu cache
+	h.renderer.InvalidateMenuCache(menu.Slug)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
@@ -667,12 +689,22 @@ func (h *MenusHandler) DeleteItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get menu for cache invalidation
+	menu, err := h.queries.GetMenuByID(r.Context(), menuID)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
 	err = h.queries.DeleteMenuItem(r.Context(), itemID)
 	if err != nil {
 		slog.Error("failed to delete menu item", "error", err)
 		http.Error(w, "Error deleting menu item", http.StatusInternalServerError)
 		return
 	}
+
+	// Invalidate menu cache
+	h.renderer.InvalidateMenuCache(menu.Slug)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -698,6 +730,17 @@ func (h *MenusHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 	menuID, err := strconv.ParseInt(menuIDStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid menu ID", http.StatusBadRequest)
+		return
+	}
+
+	// Get menu for cache invalidation
+	menu, err := h.queries.GetMenuByID(r.Context(), menuID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Menu not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -752,6 +795,9 @@ func (h *MenusHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	// Invalidate menu cache
+	h.renderer.InvalidateMenuCache(menu.Slug)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{

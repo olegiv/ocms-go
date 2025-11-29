@@ -1,0 +1,86 @@
+{{/* Menu rendering partial - displays navigation menus with nested support */}}
+
+{{/* Main menu template - call with: {{template "menu" (dict "items" (getMenu "main") "currentPath" .CurrentPath "class" "nav-menu")}} */}}
+{{define "menu"}}
+{{if .items}}
+<nav class="{{if .class}}{{.class}}{{else}}site-nav{{end}}">
+    <ul class="menu">
+        {{range .items}}
+        {{template "menuItem" (dict "item" . "currentPath" $.currentPath "depth" 0)}}
+        {{end}}
+    </ul>
+</nav>
+{{end}}
+{{end}}
+
+{{/* Recursive menu item template */}}
+{{define "menuItem"}}
+{{$item := .item}}
+{{$currentPath := .currentPath}}
+{{$depth := .depth}}
+{{$hasChildren := gt (len $item.Children) 0}}
+{{$isActive := eq $item.URL $currentPath}}
+<li class="menu-item{{if $hasChildren}} has-children{{end}}{{if $isActive}} active{{end}}{{if $item.CSSClass}} {{$item.CSSClass}}{{end}}">
+    <a href="{{$item.URL}}"{{if eq $item.Target "_blank"}} target="_blank" rel="noopener noreferrer"{{else if ne $item.Target "_self"}} target="{{$item.Target}}"{{end}}{{if $isActive}} aria-current="page"{{end}}>
+        {{$item.Title}}
+    </a>
+    {{if $hasChildren}}
+    <ul class="submenu">
+        {{range $item.Children}}
+        {{template "menuItem" (dict "item" . "currentPath" $currentPath "depth" (add $depth 1))}}
+        {{end}}
+    </ul>
+    {{end}}
+</li>
+{{end}}
+
+{{/* Inline menu for footer - renders items horizontally without nested structure */}}
+{{define "menuInline"}}
+{{if .items}}
+<nav class="{{if .class}}{{.class}}{{else}}footer-nav{{end}}">
+    <ul class="menu-inline">
+        {{range .items}}
+        {{$isActive := eq .URL $.currentPath}}
+        <li{{if $isActive}} class="active"{{end}}>
+            <a href="{{.URL}}"{{if eq .Target "_blank"}} target="_blank" rel="noopener noreferrer"{{else if ne .Target "_self"}} target="{{.Target}}"{{end}}{{if $isActive}} aria-current="page"{{end}}>
+                {{.Title}}
+            </a>
+        </li>
+        {{end}}
+    </ul>
+</nav>
+{{end}}
+{{end}}
+
+{{/* Simple list menu for sidebars */}}
+{{define "menuList"}}
+{{if .items}}
+<nav class="{{if .class}}{{.class}}{{else}}sidebar-nav{{end}}">
+    <ul class="menu-list">
+        {{range .items}}
+        {{template "menuListItem" (dict "item" . "currentPath" $.currentPath "depth" 0)}}
+        {{end}}
+    </ul>
+</nav>
+{{end}}
+{{end}}
+
+{{define "menuListItem"}}
+{{$item := .item}}
+{{$currentPath := .currentPath}}
+{{$depth := .depth}}
+{{$hasChildren := gt (len $item.Children) 0}}
+{{$isActive := eq $item.URL $currentPath}}
+<li class="menu-list-item depth-{{$depth}}{{if $isActive}} active{{end}}{{if $item.CSSClass}} {{$item.CSSClass}}{{end}}">
+    <a href="{{$item.URL}}"{{if eq $item.Target "_blank"}} target="_blank" rel="noopener noreferrer"{{else if ne $item.Target "_self"}} target="{{.Target}}"{{end}}{{if $isActive}} aria-current="page"{{end}}>
+        {{$item.Title}}
+    </a>
+    {{if $hasChildren}}
+    <ul class="menu-list-children">
+        {{range $item.Children}}
+        {{template "menuListItem" (dict "item" . "currentPath" $currentPath "depth" (add $depth 1))}}
+        {{end}}
+    </ul>
+    {{end}}
+</li>
+{{end}}

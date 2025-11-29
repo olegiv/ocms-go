@@ -4,6 +4,7 @@ package render
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -16,12 +17,14 @@ import (
 	"github.com/alexedwards/scs/v2"
 
 	"ocms-go/internal/middleware"
+	"ocms-go/internal/service"
 )
 
 // Renderer handles template rendering with caching.
 type Renderer struct {
 	templates      map[string]*template.Template
 	sessionManager *scs.SessionManager
+	menuService    *service.MenuService
 	isDev          bool
 }
 
@@ -29,14 +32,21 @@ type Renderer struct {
 type Config struct {
 	TemplatesFS    fs.FS
 	SessionManager *scs.SessionManager
+	DB             *sql.DB
 	IsDev          bool
 }
 
 // New creates a new Renderer with parsed templates.
 func New(cfg Config) (*Renderer, error) {
+	var menuSvc *service.MenuService
+	if cfg.DB != nil {
+		menuSvc = service.NewMenuService(cfg.DB)
+	}
+
 	r := &Renderer{
 		templates:      make(map[string]*template.Template),
 		sessionManager: cfg.SessionManager,
+		menuService:    menuSvc,
 		isDev:          cfg.IsDev,
 	}
 
@@ -220,6 +230,26 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		"safeURL": func(s string) template.URL {
 			return template.URL(s)
 		},
+		"getMenu": func(slug string) []service.MenuItem {
+			if r.menuService == nil {
+				return nil
+			}
+			return r.menuService.GetMenu(slug)
+		},
+		"dict": func(values ...any) map[string]any {
+			if len(values)%2 != 0 {
+				return nil
+			}
+			dict := make(map[string]any, len(values)/2)
+			for i := 0; i < len(values); i += 2 {
+				key, ok := values[i].(string)
+				if !ok {
+					continue
+				}
+				dict[key] = values[i+1]
+			}
+			return dict
+		},
 	}
 }
 
@@ -241,6 +271,7 @@ type TemplateData struct {
 	CSRFToken   string
 	SiteName    string       // Site name from config
 	Breadcrumbs []Breadcrumb // Breadcrumb navigation
+	CurrentPath string       // Current request path for active link detection
 }
 
 // Render renders a template with the given data.
@@ -252,6 +283,7 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 
 	// Add default data
 	data.CurrentYear = time.Now().Year()
+	data.CurrentPath = req.URL.Path
 
 	// Get site name from context if not already set
 	if data.SiteName == "" {
@@ -316,4 +348,11 @@ func (r *Renderer) RenderForbidden(w http.ResponseWriter, req *http.Request) {
 // RenderInternalError renders a 500 Internal Server Error page.
 func (r *Renderer) RenderInternalError(w http.ResponseWriter, req *http.Request) {
 	r.RenderError(w, req, http.StatusInternalServerError, "Internal Server Error")
+}
+
+// InvalidateMenuCache clears the cached menu by slug, or all menus if slug is empty.
+func (r *Renderer) InvalidateMenuCache(slug string) {
+	if r.menuService != nil {
+		r.menuService.InvalidateCache(slug)
+	}
 }
