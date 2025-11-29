@@ -40,6 +40,11 @@ type Page struct {
 	PublishedAt sql.NullTime `json:"published_at"`
 }
 
+type PageTag struct {
+	PageID int64 `json:"page_id"`
+	TagID  int64 `json:"tag_id"`
+}
+
 type PageVersion struct {
 	ID        int64     `json:"id"`
 	PageID    int64     `json:"page_id"`
@@ -53,6 +58,14 @@ type Session struct {
 	Token  string    `json:"token"`
 	Data   []byte    `json:"data"`
 	Expiry time.Time `json:"expiry"`
+}
+
+type Tag struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Slug      string    `json:"slug"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type User struct {
