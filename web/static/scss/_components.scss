@@ -883,3 +883,55 @@
   color: $gray-600;
   line-height: 1.5;
 }
+
+// Filter form for events
+.card-filters {
+  margin-bottom: $spacing-4;
+}
+
+.filter-form {
+  display: flex;
+  align-items: flex-end;
+  gap: $spacing-4;
+  flex-wrap: wrap;
+}
+
+.filter-actions {
+  display: flex;
+  gap: $spacing-2;
+}
+
+.form-select-sm {
+  padding: $spacing-1 $spacing-3;
+  font-size: $font-size-sm;
+  min-width: 140px;
+}
+
+// Event badge danger variant
+.badge-danger {
+  background-color: rgba($error, 0.1);
+  color: darken($error, 10%);
+}
+
+// Event time styling
+.event-time {
+  font-family: $font-family-mono;
+  font-size: $font-size-sm;
+  color: $gray-600;
+  white-space: nowrap;
+}
+
+// Event message styling
+.event-message {
+  max-width: 400px;
+  word-break: break-word;
+}
+
+// Event row level highlighting
+.event-row.event-level-error {
+  background-color: rgba($error, 0.03);
+}
+
+.event-row.event-level-warning {
+  background-color: rgba($warning, 0.03);
+}

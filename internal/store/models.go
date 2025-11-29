@@ -18,6 +18,16 @@ type Config struct {
 	UpdatedBy   sql.NullInt64 `json:"updated_by"`
 }
 
+type Event struct {
+	ID        int64         `json:"id"`
+	Level     string        `json:"level"`
+	Category  string        `json:"category"`
+	Message   string        `json:"message"`
+	UserID    sql.NullInt64 `json:"user_id"`
+	Metadata  string        `json:"metadata"`
+	CreatedAt time.Time     `json:"created_at"`
+}
+
 type Page struct {
 	ID          int64        `json:"id"`
 	Title       string       `json:"title"`

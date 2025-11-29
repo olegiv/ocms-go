@@ -8,7 +8,9 @@ import (
 	"github.com/alexedwards/scs/v2"
 
 	"ocms-go/internal/auth"
+	"ocms-go/internal/model"
 	"ocms-go/internal/render"
+	"ocms-go/internal/service"
 	"ocms-go/internal/store"
 )
 
@@ -20,6 +22,7 @@ type AuthHandler struct {
 	queries        *store.Queries
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
+	eventService   *service.EventService
 }
 
 // NewAuthHandler creates a new AuthHandler.
@@ -28,6 +31,7 @@ func NewAuthHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManage
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
+		eventService:   service.NewEventService(db),
 	}
 }
 
@@ -65,6 +69,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == sql.ErrNoRows {
 			slog.Debug("login attempt for non-existent user", "email", email)
+			h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login failed: user not found", nil, map[string]any{"email": email})
 		} else {
 			slog.Error("database error during login", "error", err)
 		}
@@ -84,6 +89,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	if !valid {
 		slog.Debug("invalid password attempt", "email", email)
+		h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login failed: invalid password", &user.ID, map[string]any{"email": email})
 		h.renderer.SetFlash(r, "Invalid email or password", "error")
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
@@ -100,6 +106,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	h.sessionManager.Put(r.Context(), SessionKeyUserID, user.ID)
 
 	slog.Info("user logged in", "user_id", user.ID, "email", user.Email)
+	h.eventService.LogAuthEvent(r.Context(), model.EventLevelInfo, "User logged in", &user.ID, map[string]any{"email": user.Email})
 
 	h.renderer.SetFlash(r, "Welcome back, "+user.Name+"!", "success")
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -109,6 +116,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	// Get user ID for logging before destroying session
 	userID := h.sessionManager.GetInt64(r.Context(), SessionKeyUserID)
+
+	// Log the event before destroying session
+	if userID > 0 {
+		h.eventService.LogAuthEvent(r.Context(), model.EventLevelInfo, "User logged out", &userID, nil)
+	}
 
 	// Destroy the session
 	if err := h.sessionManager.Destroy(r.Context()); err != nil {

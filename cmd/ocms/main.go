@@ -121,6 +121,7 @@ func run() error {
 	usersHandler := handler.NewUsersHandler(db, renderer, sessionManager)
 	pagesHandler := handler.NewPagesHandler(db, renderer, sessionManager)
 	configHandler := handler.NewConfigHandler(db, renderer, sessionManager)
+	eventsHandler := handler.NewEventsHandler(db, renderer, sessionManager)
 
 	// Routes
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -191,6 +192,9 @@ func run() error {
 		r.Get("/config", configHandler.List)
 		r.Put("/config", configHandler.Update)
 		r.Post("/config", configHandler.Update) // HTML forms can't send PUT
+
+		// Events log route
+		r.Get("/events", eventsHandler.List)
 	})
 
 	// Static file serving

@@ -1,0 +1,133 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Event Log</h1>
+        <p class="page-description">View system events and activity ({{.Data.TotalEvents}} total)</p>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card card-filters">
+    <div class="filter-bar">
+        <form method="get" action="/admin/events" class="filter-form">
+            <div class="filter-group">
+                <label for="level" class="filter-label">Level</label>
+                <select name="level" id="level" class="form-select form-select-sm">
+                    <option value="">All Levels</option>
+                    {{range .Data.Levels}}
+                    <option value="{{.}}" {{if eq . $.Data.Level}}selected{{end}}>{{.}}</option>
+                    {{end}}
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="category" class="filter-label">Category</label>
+                <select name="category" id="category" class="form-select form-select-sm">
+                    <option value="">All Categories</option>
+                    {{range .Data.Categories}}
+                    <option value="{{.}}" {{if eq . $.Data.Category}}selected{{end}}>{{.}}</option>
+                    {{end}}
+                </select>
+            </div>
+            <div class="filter-actions">
+                <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+                {{if or .Data.Level .Data.Category}}
+                <a href="/admin/events" class="btn btn-sm btn-outline">Clear</a>
+                {{end}}
+            </div>
+        </form>
+    </div>
+</div>
+
+{{if .Data.Events}}
+<div class="card" id="events-table">
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Level</th>
+                    <th>Category</th>
+                    <th>Message</th>
+                    <th>User</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Data.Events}}
+                <tr class="event-row event-level-{{.Level}}">
+                    <td class="event-time">{{.CreatedAt}}</td>
+                    <td>
+                        <span class="badge badge-{{if eq .Level "error"}}danger{{else if eq .Level "warning"}}warning{{else}}info{{end}}">
+                            {{.Level}}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge badge-secondary">{{.Category}}</span>
+                    </td>
+                    <td class="event-message">{{.Message}}</td>
+                    <td>
+                        {{if .UserName}}
+                            <span class="text-muted">{{.UserName}}</span>
+                        {{else}}
+                            <span class="text-muted">System</span>
+                        {{end}}
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+
+    {{if or .Data.HasPrev .Data.HasNext}}
+    <div class="card-footer">
+        <div class="pagination">
+            <div class="pagination-info">
+                Page {{.Data.CurrentPage}} of {{.Data.TotalPages}}
+            </div>
+            <div class="pagination-controls">
+                {{if .Data.HasPrev}}
+                <a href="/admin/events?page={{.Data.PrevPage}}{{if .Data.Level}}&level={{.Data.Level}}{{end}}{{if .Data.Category}}&category={{.Data.Category}}{{end}}" class="btn btn-sm btn-outline">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    Previous
+                </a>
+                {{else}}
+                <span class="btn btn-sm btn-outline disabled">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    Previous
+                </span>
+                {{end}}
+
+                {{if .Data.HasNext}}
+                <a href="/admin/events?page={{.Data.NextPage}}{{if .Data.Level}}&level={{.Data.Level}}{{end}}{{if .Data.Category}}&category={{.Data.Category}}{{end}}" class="btn btn-sm btn-outline">
+                    Next
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </a>
+                {{else}}
+                <span class="btn btn-sm btn-outline disabled">
+                    Next
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </span>
+                {{end}}
+            </div>
+        </div>
+    </div>
+    {{end}}
+</div>
+{{else}}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            <p>No events found</p>
+            {{if or .Data.Level .Data.Category}}
+            <span class="empty-hint">Try clearing your filters to see all events.</span>
+            <div class="empty-state-action">
+                <a href="/admin/events" class="btn btn-primary">Clear Filters</a>
+            </div>
+            {{else}}
+            <span class="empty-hint">Events will appear here as the system logs activity.</span>
+            {{end}}
+        </div>
+    </div>
+</div>
+{{end}}
+{{end}}
