@@ -38,9 +38,12 @@ func Seed(ctx context.Context, db *sql.DB) error {
 	// Check if admin user already exists
 	_, err := queries.GetUserByEmail(ctx, DefaultAdminEmail)
 	if err == nil {
-		slog.Info("admin user already exists, skipping seed")
-		// Still seed config if needed
-		return seedConfig(ctx, queries)
+		slog.Info("admin user already exists, skipping user seed")
+		// Still seed config and menus if needed
+		if err := seedConfig(ctx, queries); err != nil {
+			return err
+		}
+		return seedMenus(ctx, queries)
 	}
 	if err != sql.ErrNoRows {
 		return fmt.Errorf("checking for admin user: %w", err)
@@ -77,6 +80,11 @@ func Seed(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 
+	// Seed default menus
+	if err := seedMenus(ctx, queries); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -109,5 +117,44 @@ func seedConfig(ctx context.Context, queries *Queries) error {
 	}
 
 	slog.Info("seeded default config values", "count", len(DefaultConfig))
+	return nil
+}
+
+// DefaultMenus holds default menu definitions.
+var DefaultMenus = []struct {
+	Name string
+	Slug string
+}{
+	{Name: "Main Menu", Slug: model.MenuMain},
+	{Name: "Footer Menu", Slug: model.MenuFooter},
+}
+
+// seedMenus creates default menus.
+func seedMenus(ctx context.Context, queries *Queries) error {
+	// Check if any menus exist
+	count, err := queries.CountMenus(ctx)
+	if err != nil {
+		return fmt.Errorf("counting menus: %w", err)
+	}
+
+	if count > 0 {
+		slog.Info("menus already exist, skipping seed")
+		return nil
+	}
+
+	now := time.Now()
+	for _, menu := range DefaultMenus {
+		_, err := queries.CreateMenu(ctx, CreateMenuParams{
+			Name:      menu.Name,
+			Slug:      menu.Slug,
+			CreatedAt: now,
+			UpdatedAt: now,
+		})
+		if err != nil {
+			return fmt.Errorf("seeding menu %s: %w", menu.Slug, err)
+		}
+	}
+
+	slog.Info("seeded default menus", "count", len(DefaultMenus))
 	return nil
 }

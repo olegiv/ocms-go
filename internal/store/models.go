@@ -73,6 +73,29 @@ type Medium struct {
 	UpdatedAt  time.Time      `json:"updated_at"`
 }
 
+type Menu struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Slug      string    `json:"slug"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type MenuItem struct {
+	ID        int64          `json:"id"`
+	MenuID    int64          `json:"menu_id"`
+	ParentID  sql.NullInt64  `json:"parent_id"`
+	Title     string         `json:"title"`
+	Url       sql.NullString `json:"url"`
+	Target    sql.NullString `json:"target"`
+	PageID    sql.NullInt64  `json:"page_id"`
+	Position  int64          `json:"position"`
+	CssClass  sql.NullString `json:"css_class"`
+	IsActive  bool           `json:"is_active"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+}
+
 type Page struct {
 	ID              int64         `json:"id"`
 	Title           string        `json:"title"`
