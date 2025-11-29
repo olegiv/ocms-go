@@ -386,6 +386,11 @@
   color: $gray-600;
 }
 
+.badge-info {
+  background-color: rgba($info, 0.1);
+  color: $info;
+}
+
 // Table enhancements
 .table-responsive {
   overflow-x: auto;
@@ -445,4 +450,91 @@
 .pagination-controls {
   display: flex;
   gap: $spacing-2;
+}
+
+// Delete action wrapper
+.delete-action {
+  display: inline-block;
+  position: relative;
+}
+
+// Modal
+[x-cloak] {
+  display: none !important;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba($black, 0.5);
+  padding: $spacing-4;
+}
+
+.modal {
+  background-color: $white;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-xl;
+  max-width: 400px;
+  width: 100%;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-4 $spacing-5;
+  border-bottom: 1px solid $gray-200;
+}
+
+.modal-title {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $gray-900;
+  margin: 0;
+}
+
+.modal-close {
+  padding: $spacing-1;
+  font-size: $font-size-2xl;
+  line-height: 1;
+  color: $gray-400;
+  cursor: pointer;
+
+  &:hover {
+    color: $gray-600;
+  }
+}
+
+.modal-body {
+  padding: $spacing-5;
+
+  p {
+    margin: 0 0 $spacing-2;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: $spacing-3;
+  padding: $spacing-4 $spacing-5;
+  border-top: 1px solid $gray-200;
+  background-color: $gray-50;
+}
+
+// Modal transitions
+.modal-enter {
+  transition: opacity 0.2s ease-out;
+}
+
+.modal-leave {
+  transition: opacity 0.15s ease-in;
 }

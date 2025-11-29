@@ -29,3 +29,6 @@ DELETE FROM users WHERE id = ?;
 
 -- name: CountUsers :one
 SELECT COUNT(*) FROM users;
+
+-- name: CountUsersByRole :one
+SELECT COUNT(*) FROM users WHERE role = ?;

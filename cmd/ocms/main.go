@@ -168,6 +168,9 @@ func run() error {
 		r.Get("/users/new", usersHandler.NewForm)
 		r.Post("/users", usersHandler.Create)
 		r.Get("/users/{id}", usersHandler.EditForm)
+		r.Put("/users/{id}", usersHandler.Update)
+		r.Post("/users/{id}", usersHandler.Update) // HTML forms can't send PUT
+		r.Delete("/users/{id}", usersHandler.Delete)
 	})
 
 	// Static file serving

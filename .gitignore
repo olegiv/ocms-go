@@ -17,3 +17,5 @@ Thumbs.db
 
 # Local Claude settings (as per CLAUDE.md instructions)
 .claude/settings.local.json
+
+/cookies.txt

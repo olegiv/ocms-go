@@ -13,7 +13,7 @@
 </div>
 
 {{if .Data.Users}}
-<div class="card">
+<div class="card" id="users-table">
     <div class="table-responsive">
         <table class="table">
             <thead>
@@ -27,12 +27,16 @@
                 </tr>
             </thead>
             <tbody>
+                {{$currentUserID := .Data.CurrentUserID}}
                 {{range .Data.Users}}
-                <tr>
+                <tr id="user-row-{{.ID}}">
                     <td>
                         <div class="user-cell">
                             <div class="user-avatar-sm">{{slice .Name 0 1}}</div>
                             <span>{{.Name}}</span>
+                            {{if eq .ID $currentUserID}}
+                            <span class="badge badge-info">You</span>
+                            {{end}}
                         </div>
                     </td>
                     <td>{{.Email}}</td>
@@ -54,6 +58,52 @@
                             <a href="/admin/users/{{.ID}}" class="btn btn-sm btn-outline" title="Edit">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                             </a>
+                            {{if ne .ID $currentUserID}}
+                            <div x-data="{ showConfirm: false }" class="delete-action">
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-danger"
+                                    title="Delete"
+                                    @click="showConfirm = true"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                                </button>
+
+                                <!-- Delete Confirmation Modal -->
+                                <div
+                                    class="modal-overlay"
+                                    x-show="showConfirm"
+                                    x-cloak
+                                    @click.self="showConfirm = false"
+                                    x-transition:enter="modal-enter"
+                                    x-transition:leave="modal-leave"
+                                >
+                                    <div class="modal" @click.stop>
+                                        <div class="modal-header">
+                                            <h3 class="modal-title">Delete User</h3>
+                                            <button type="button" class="modal-close" @click="showConfirm = false">&times;</button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p>Are you sure you want to delete <strong>{{.Name}}</strong>?</p>
+                                            <p class="text-muted">This action cannot be undone.</p>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-outline" @click="showConfirm = false">Cancel</button>
+                                            <button
+                                                type="button"
+                                                class="btn btn-danger"
+                                                hx-delete="/admin/users/{{.ID}}"
+                                                hx-target="#user-row-{{.ID}}"
+                                                hx-swap="outerHTML"
+                                                @click="showConfirm = false"
+                                            >
+                                                Delete User
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {{end}}
                         </div>
                     </td>
                 </tr>

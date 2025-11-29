@@ -49,14 +49,15 @@ func NewUsersHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 
 // UsersListData holds data for the users list template.
 type UsersListData struct {
-	Users       []store.User
-	CurrentPage int
-	TotalPages  int
-	TotalUsers  int64
-	HasPrev     bool
-	HasNext     bool
-	PrevPage    int
-	NextPage    int
+	Users         []store.User
+	CurrentUserID int64
+	CurrentPage   int
+	TotalPages    int
+	TotalUsers    int64
+	HasPrev       bool
+	HasNext       bool
+	PrevPage      int
+	NextPage      int
 }
 
 // List handles GET /admin/users - displays a paginated list of users.
@@ -103,14 +104,15 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := UsersListData{
-		Users:       users,
-		CurrentPage: page,
-		TotalPages:  totalPages,
-		TotalUsers:  totalUsers,
-		HasPrev:     page > 1,
-		HasNext:     page < totalPages,
-		PrevPage:    page - 1,
-		NextPage:    page + 1,
+		Users:         users,
+		CurrentUserID: user.ID,
+		CurrentPage:   page,
+		TotalPages:    totalPages,
+		TotalUsers:    totalUsers,
+		HasPrev:       page > 1,
+		HasNext:       page < totalPages,
+		PrevPage:      page - 1,
+		NextPage:      page + 1,
 	}
 
 	if err := h.renderer.Render(w, r, "admin/users_list", render.TemplateData{
@@ -316,6 +318,244 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
+}
+
+// Update handles PUT /admin/users/{id} - updates an existing user.
+func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
+	currentUser := middleware.GetUser(r)
+
+	// Get user ID from URL
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		h.renderer.SetFlash(r, "Invalid user ID", "error")
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+		return
+	}
+
+	// Fetch the user being edited
+	editUser, err := h.queries.GetUserByID(r.Context(), id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			h.renderer.SetFlash(r, "User not found", "error")
+		} else {
+			slog.Error("failed to get user", "error", err)
+			h.renderer.SetFlash(r, "Error loading user", "error")
+		}
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		h.renderer.SetFlash(r, "Invalid form data", "error")
+		http.Redirect(w, r, "/admin/users/"+idStr, http.StatusSeeOther)
+		return
+	}
+
+	// Get form values
+	email := strings.TrimSpace(r.FormValue("email"))
+	name := strings.TrimSpace(r.FormValue("name"))
+	password := r.FormValue("password")
+	passwordConfirm := r.FormValue("password_confirm")
+	role := r.FormValue("role")
+
+	// Store form values for re-rendering on error
+	formValues := map[string]string{
+		"email": email,
+		"name":  name,
+		"role":  role,
+	}
+
+	// Validate
+	errors := make(map[string]string)
+
+	// Email validation
+	if email == "" {
+		errors["email"] = "Email is required"
+	} else if _, err := mail.ParseAddress(email); err != nil {
+		errors["email"] = "Invalid email format"
+	} else if email != editUser.Email {
+		// Check if email already exists (only if changed)
+		_, err := h.queries.GetUserByEmail(r.Context(), email)
+		if err == nil {
+			errors["email"] = "Email already exists"
+		} else if err != sql.ErrNoRows {
+			slog.Error("database error checking email", "error", err)
+			errors["email"] = "Error checking email"
+		}
+	}
+
+	// Name validation
+	if name == "" {
+		errors["name"] = "Name is required"
+	} else if len(name) < 2 {
+		errors["name"] = "Name must be at least 2 characters"
+	}
+
+	// Password validation (optional on edit)
+	if password != "" {
+		if len(password) < 8 {
+			errors["password"] = "Password must be at least 8 characters"
+		} else if password != passwordConfirm {
+			errors["password_confirm"] = "Passwords do not match"
+		}
+	}
+
+	// Role validation
+	if role == "" {
+		errors["role"] = "Role is required"
+	} else if !isValidRole(role) {
+		errors["role"] = "Invalid role"
+	}
+
+	// Business rule: Cannot demote yourself from admin if you're the last admin
+	if currentUser.ID == id && editUser.Role == RoleAdmin && role != RoleAdmin {
+		adminCount, err := h.queries.CountUsersByRole(r.Context(), RoleAdmin)
+		if err != nil {
+			slog.Error("failed to count admins", "error", err)
+			errors["role"] = "Error checking admin count"
+		} else if adminCount <= 1 {
+			errors["role"] = "Cannot demote the last admin"
+		}
+	}
+
+	// If there are validation errors, re-render the form
+	if len(errors) > 0 {
+		data := UserFormData{
+			User:       &editUser,
+			Roles:      ValidRoles,
+			Errors:     errors,
+			FormValues: formValues,
+			IsEdit:     true,
+		}
+
+		if err := h.renderer.Render(w, r, "admin/users_form", render.TemplateData{
+			Title: "Edit User",
+			User:  currentUser,
+			Data:  data,
+		}); err != nil {
+			slog.Error("render error", "error", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Update user
+	now := time.Now()
+	_, err = h.queries.UpdateUser(r.Context(), store.UpdateUserParams{
+		Email:     email,
+		Role:      role,
+		Name:      name,
+		UpdatedAt: now,
+		ID:        id,
+	})
+	if err != nil {
+		slog.Error("failed to update user", "error", err)
+		h.renderer.SetFlash(r, "Error updating user", "error")
+		http.Redirect(w, r, "/admin/users/"+idStr, http.StatusSeeOther)
+		return
+	}
+
+	// Update password if provided
+	if password != "" {
+		passwordHash, err := auth.HashPassword(password)
+		if err != nil {
+			slog.Error("failed to hash password", "error", err)
+			h.renderer.SetFlash(r, "User updated but password change failed", "warning")
+			http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+			return
+		}
+
+		err = h.queries.UpdateUserPassword(r.Context(), store.UpdateUserPasswordParams{
+			PasswordHash: passwordHash,
+			UpdatedAt:    now,
+			ID:           id,
+		})
+		if err != nil {
+			slog.Error("failed to update password", "error", err)
+			h.renderer.SetFlash(r, "User updated but password change failed", "warning")
+			http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+			return
+		}
+	}
+
+	slog.Info("user updated", "user_id", id, "updated_by", currentUser.ID)
+	h.renderer.SetFlash(r, "User updated successfully", "success")
+	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+}
+
+// Delete handles DELETE /admin/users/{id} - deletes a user.
+func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	currentUser := middleware.GetUser(r)
+
+	// Get user ID from URL
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		h.sendDeleteError(w, "Invalid user ID")
+		return
+	}
+
+	// Business rule: Cannot delete yourself
+	if currentUser.ID == id {
+		h.sendDeleteError(w, "Cannot delete your own account")
+		return
+	}
+
+	// Fetch the user being deleted
+	deleteUser, err := h.queries.GetUserByID(r.Context(), id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			h.sendDeleteError(w, "User not found")
+		} else {
+			slog.Error("failed to get user", "error", err)
+			h.sendDeleteError(w, "Error loading user")
+		}
+		return
+	}
+
+	// Business rule: Cannot delete the last admin
+	if deleteUser.Role == RoleAdmin {
+		adminCount, err := h.queries.CountUsersByRole(r.Context(), RoleAdmin)
+		if err != nil {
+			slog.Error("failed to count admins", "error", err)
+			h.sendDeleteError(w, "Error checking admin count")
+			return
+		}
+		if adminCount <= 1 {
+			h.sendDeleteError(w, "Cannot delete the last admin")
+			return
+		}
+	}
+
+	// Delete user
+	err = h.queries.DeleteUser(r.Context(), id)
+	if err != nil {
+		slog.Error("failed to delete user", "error", err)
+		h.sendDeleteError(w, "Error deleting user")
+		return
+	}
+
+	slog.Info("user deleted", "user_id", id, "email", deleteUser.Email, "deleted_by", currentUser.ID)
+
+	// Check if this is an HTMX request
+	if r.Header.Get("HX-Request") == "true" {
+		// Return empty response for HTMX to remove the row
+		w.Header().Set("HX-Trigger", `{"showToast": "User deleted successfully"}`)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Regular request - redirect with flash message
+	h.renderer.SetFlash(r, "User deleted successfully", "success")
+	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+}
+
+// sendDeleteError sends an error response for delete operations.
+func (h *UsersHandler) sendDeleteError(w http.ResponseWriter, message string) {
+	w.Header().Set("HX-Reswap", "none")
+	w.Header().Set("HX-Trigger", `{"showToast": "`+message+`", "toastType": "error"}`)
+	w.WriteHeader(http.StatusBadRequest)
 }
 
 // isValidRole checks if a role is valid.
