@@ -15,7 +15,8 @@ type ContextKey string
 
 // Context keys for user data.
 const (
-	ContextKeyUser ContextKey = "user"
+	ContextKeyUser     ContextKey = "user"
+	ContextKeySiteName ContextKey = "site_name"
 )
 
 // SessionKeyUserID is the session key for storing the authenticated user ID.
@@ -88,4 +89,34 @@ func RequireAdmin(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// LoadSiteConfig creates middleware that loads site configuration (like site_name) into context.
+func LoadSiteConfig(db *sql.DB) func(http.Handler) http.Handler {
+	queries := store.New(db)
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Try to get site_name from config
+			siteName := "oCMS" // default fallback
+			cfg, err := queries.GetConfig(r.Context(), "site_name")
+			if err == nil && cfg.Value != "" {
+				siteName = cfg.Value
+			}
+
+			// Add site name to context
+			ctx := context.WithValue(r.Context(), ContextKeySiteName, siteName)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// GetSiteName retrieves the site name from the request context.
+// Returns "oCMS" as default if not found.
+func GetSiteName(r *http.Request) string {
+	siteName, ok := r.Context().Value(ContextKeySiteName).(string)
+	if !ok || siteName == "" {
+		return "oCMS"
+	}
+	return siteName
 }

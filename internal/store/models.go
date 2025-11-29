@@ -9,6 +9,15 @@ import (
 	"time"
 )
 
+type Config struct {
+	Key         string        `json:"key"`
+	Value       string        `json:"value"`
+	Type        string        `json:"type"`
+	Description string        `json:"description"`
+	UpdatedAt   time.Time     `json:"updated_at"`
+	UpdatedBy   sql.NullInt64 `json:"updated_by"`
+}
+
 type Page struct {
 	ID          int64        `json:"id"`
 	Title       string       `json:"title"`

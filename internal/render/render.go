@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/alexedwards/scs/v2"
+
+	"ocms-go/internal/middleware"
 )
 
 // Renderer handles template rendering with caching.
@@ -170,6 +172,7 @@ type TemplateData struct {
 	FlashType   string
 	CurrentYear int
 	CSRFToken   string
+	SiteName    string // Site name from config
 }
 
 // Render renders a template with the given data.
@@ -181,6 +184,11 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 
 	// Add default data
 	data.CurrentYear = time.Now().Year()
+
+	// Get site name from context if not already set
+	if data.SiteName == "" {
+		data.SiteName = middleware.GetSiteName(req)
+	}
 
 	// Get flash message from session
 	if r.sessionManager != nil {

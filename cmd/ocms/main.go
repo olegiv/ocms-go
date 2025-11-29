@@ -120,6 +120,7 @@ func run() error {
 	adminHandler := handler.NewAdminHandler(db, renderer, sessionManager)
 	usersHandler := handler.NewUsersHandler(db, renderer, sessionManager)
 	pagesHandler := handler.NewPagesHandler(db, renderer, sessionManager)
+	configHandler := handler.NewConfigHandler(db, renderer, sessionManager)
 
 	// Routes
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -161,6 +162,7 @@ func run() error {
 	r.Route("/admin", func(r chi.Router) {
 		r.Use(middleware.Auth(sessionManager))
 		r.Use(middleware.LoadUser(sessionManager, db))
+		r.Use(middleware.LoadSiteConfig(db))
 
 		r.Get("/", adminHandler.Dashboard)
 
@@ -184,6 +186,11 @@ func run() error {
 		r.Post("/pages/{id}/publish", pagesHandler.TogglePublish)
 		r.Get("/pages/{id}/versions", pagesHandler.Versions)
 		r.Post("/pages/{id}/versions/{versionId}/restore", pagesHandler.RestoreVersion)
+
+		// Configuration routes
+		r.Get("/config", configHandler.List)
+		r.Put("/config", configHandler.Update)
+		r.Post("/config", configHandler.Update) // HTML forms can't send PUT
 	})
 
 	// Static file serving
