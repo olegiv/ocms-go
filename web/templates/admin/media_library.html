@@ -1,0 +1,191 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Media Library</h1>
+        <p class="page-description">Manage your media files ({{.Data.TotalCount}} total)</p>
+    </div>
+    <div class="page-actions">
+        <a href="/admin/media/upload" class="btn btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+            Upload
+        </a>
+    </div>
+</div>
+
+<!-- Filters & Search -->
+<div class="filter-bar">
+    <div class="filter-group">
+        <label class="filter-label">Type:</label>
+        <div class="filter-buttons">
+            <a href="/admin/media{{if .Data.Search}}?q={{.Data.Search}}{{end}}" class="btn btn-sm {{if eq .Data.Filter "all"}}btn-primary{{else}}btn-outline{{end}}">
+                All
+            </a>
+            <a href="/admin/media?filter=images{{if .Data.Search}}&q={{.Data.Search}}{{end}}" class="btn btn-sm {{if eq .Data.Filter "images"}}btn-primary{{else}}btn-outline{{end}}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                Images
+            </a>
+            <a href="/admin/media?filter=documents{{if .Data.Search}}&q={{.Data.Search}}{{end}}" class="btn btn-sm {{if eq .Data.Filter "documents"}}btn-primary{{else}}btn-outline{{end}}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+                Documents
+            </a>
+            <a href="/admin/media?filter=videos{{if .Data.Search}}&q={{.Data.Search}}{{end}}" class="btn btn-sm {{if eq .Data.Filter "videos"}}btn-primary{{else}}btn-outline{{end}}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
+                Videos
+            </a>
+        </div>
+    </div>
+    <div class="filter-group search-group">
+        <form action="/admin/media" method="GET" class="search-form">
+            {{if ne .Data.Filter "all"}}
+            <input type="hidden" name="filter" value="{{.Data.Filter}}">
+            {{end}}
+            <div class="search-input-wrapper">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                <input type="text" name="q" value="{{.Data.Search}}" placeholder="Search files..." class="form-input search-input">
+                {{if .Data.Search}}
+                <a href="/admin/media{{if ne .Data.Filter "all"}}?filter={{.Data.Filter}}{{end}}" class="search-clear" title="Clear search">&times;</a>
+                {{end}}
+            </div>
+            <button type="submit" class="btn btn-sm btn-outline">Search</button>
+        </form>
+    </div>
+</div>
+
+{{if .Data.Media}}
+<div class="card">
+    <div class="media-grid">
+        {{range .Data.Media}}
+        <div class="media-item" id="media-item-{{.ID}}" x-data="{ showConfirm: false }">
+            <a href="/admin/media/{{.ID}}" class="media-preview">
+                {{if .IsImage}}
+                    {{if .ThumbnailURL}}
+                    <img src="{{.ThumbnailURL}}" alt="{{.Alt.String}}" loading="lazy">
+                    {{else}}
+                    <img src="{{.OriginalURL}}" alt="{{.Alt.String}}" loading="lazy">
+                    {{end}}
+                {{else}}
+                <div class="media-icon">
+                    {{if eq .TypeIcon "video"}}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
+                    {{else if eq .TypeIcon "file-text"}}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+                    {{else}}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
+                    {{end}}
+                </div>
+                {{end}}
+            </a>
+            <div class="media-info">
+                <span class="media-filename" title="{{.Filename}}">{{.Filename}}</span>
+                <span class="media-meta">{{formatBytes .Size}}</span>
+            </div>
+            <div class="media-actions">
+                <a href="/admin/media/{{.ID}}" class="btn btn-sm btn-outline" title="Edit">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                </a>
+                <a href="{{.OriginalURL}}" class="btn btn-sm btn-outline" title="Download" download>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                </a>
+                <button
+                    type="button"
+                    class="btn btn-sm btn-danger"
+                    title="Delete"
+                    @click="showConfirm = true"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                </button>
+            </div>
+
+            <!-- Delete Confirmation Modal -->
+            <div
+                class="modal-overlay"
+                x-show="showConfirm"
+                x-cloak
+                @click.self="showConfirm = false"
+                x-transition:enter="modal-enter"
+                x-transition:leave="modal-leave"
+            >
+                <div class="modal" @click.stop>
+                    <div class="modal-header">
+                        <h3 class="modal-title">Delete Media</h3>
+                        <button type="button" class="modal-close" @click="showConfirm = false">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Are you sure you want to delete <strong>{{.Filename}}</strong>?</p>
+                        <p class="text-muted">This action cannot be undone. The file and all its variants will be permanently removed.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline" @click="showConfirm = false">Cancel</button>
+                        <button
+                            type="button"
+                            class="btn btn-danger"
+                            hx-delete="/admin/media/{{.ID}}"
+                            hx-target="#media-item-{{.ID}}"
+                            hx-swap="outerHTML"
+                            @click="showConfirm = false"
+                        >
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {{end}}
+    </div>
+
+    {{if or .Data.HasPrev .Data.HasNext}}
+    <div class="card-footer">
+        <div class="pagination">
+            <div class="pagination-info">
+                Page {{.Data.CurrentPage}} of {{.Data.TotalPages}}
+            </div>
+            <div class="pagination-controls">
+                {{if .Data.HasPrev}}
+                <a href="/admin/media?page={{.Data.PrevPage}}{{if ne .Data.Filter "all"}}&filter={{.Data.Filter}}{{end}}{{if .Data.Search}}&q={{.Data.Search}}{{end}}" class="btn btn-sm btn-outline">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    Previous
+                </a>
+                {{else}}
+                <span class="btn btn-sm btn-outline disabled">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    Previous
+                </span>
+                {{end}}
+
+                {{if .Data.HasNext}}
+                <a href="/admin/media?page={{.Data.NextPage}}{{if ne .Data.Filter "all"}}&filter={{.Data.Filter}}{{end}}{{if .Data.Search}}&q={{.Data.Search}}{{end}}" class="btn btn-sm btn-outline">
+                    Next
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </a>
+                {{else}}
+                <span class="btn btn-sm btn-outline disabled">
+                    Next
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </span>
+                {{end}}
+            </div>
+        </div>
+    </div>
+    {{end}}
+</div>
+{{else}}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+            <p>No media files found</p>
+            {{if .Data.Search}}
+            <span class="empty-hint">No files match "{{.Data.Search}}". Try a different search term.</span>
+            {{else if ne .Data.Filter "all"}}
+            <span class="empty-hint">No {{.Data.Filter}} found. Try changing the filter or upload new files.</span>
+            {{else}}
+            <span class="empty-hint">Upload your first file to get started.</span>
+            {{end}}
+            <div class="empty-state-action">
+                <a href="/admin/media/upload" class="btn btn-primary">Upload Files</a>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+{{end}}

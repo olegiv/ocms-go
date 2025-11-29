@@ -123,6 +123,7 @@ func run() error {
 	configHandler := handler.NewConfigHandler(db, renderer, sessionManager)
 	eventsHandler := handler.NewEventsHandler(db, renderer, sessionManager)
 	taxonomyHandler := handler.NewTaxonomyHandler(db, renderer, sessionManager)
+	mediaHandler := handler.NewMediaHandler(db, renderer, sessionManager, "./uploads")
 
 	// Routes
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -216,6 +217,15 @@ func run() error {
 		r.Put("/categories/{id}", taxonomyHandler.UpdateCategory)
 		r.Post("/categories/{id}", taxonomyHandler.UpdateCategory) // HTML forms can't send PUT
 		r.Delete("/categories/{id}", taxonomyHandler.DeleteCategory)
+
+		// Media library routes
+		r.Get("/media", mediaHandler.Library)
+		r.Get("/media/upload", mediaHandler.UploadForm)
+		r.Post("/media/upload", mediaHandler.Upload)
+		r.Get("/media/{id}", mediaHandler.EditForm)
+		r.Put("/media/{id}", mediaHandler.Update)
+		r.Post("/media/{id}", mediaHandler.Update) // HTML forms can't send PUT
+		r.Delete("/media/{id}", mediaHandler.Delete)
 	})
 
 	// Static file serving
@@ -224,6 +234,10 @@ func run() error {
 		return fmt.Errorf("getting static fs: %w", err)
 	}
 	r.Handle("/static/dist/*", http.StripPrefix("/static/dist/", http.FileServer(http.FS(staticFS))))
+
+	// Serve uploaded media files from ./uploads directory
+	uploadsDir := http.Dir("./uploads")
+	r.Handle("/uploads/*", http.StripPrefix("/uploads/", http.FileServer(uploadsDir)))
 
 	// 404 Not Found handler
 	r.NotFound(func(w http.ResponseWriter, req *http.Request) {

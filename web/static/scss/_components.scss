@@ -1353,3 +1353,510 @@
   border-radius: $radius-full;
   white-space: nowrap;
 }
+
+// =============================================================================
+// MEDIA LIBRARY
+// =============================================================================
+
+// Media grid layout
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: $spacing-4;
+  padding: $spacing-4;
+}
+
+// Individual media item card
+.media-item {
+  position: relative;
+  background-color: $white;
+  border: 1px solid $gray-200;
+  border-radius: $radius-md;
+  overflow: hidden;
+  transition: all $transition-fast;
+
+  &:hover {
+    border-color: $primary;
+    box-shadow: $shadow-md;
+
+    .media-item-overlay {
+      opacity: 1;
+    }
+  }
+}
+
+.media-item-preview {
+  position: relative;
+  aspect-ratio: 1;
+  background-color: $gray-100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .media-item-icon {
+    color: $gray-400;
+  }
+}
+
+.media-item-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba($black, 0.7) 0%, transparent 50%);
+  opacity: 0;
+  transition: opacity $transition-fast;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: $spacing-3;
+}
+
+.media-item-actions {
+  display: flex;
+  gap: $spacing-2;
+
+  .btn {
+    padding: $spacing-1 $spacing-2;
+    font-size: $font-size-xs;
+  }
+}
+
+.media-item-info {
+  padding: $spacing-3;
+  border-top: 1px solid $gray-100;
+}
+
+.media-item-name {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $gray-900;
+  margin: 0 0 $spacing-1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.media-item-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: $font-size-xs;
+  color: $gray-500;
+}
+
+// Media empty state
+.media-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: $spacing-12;
+  color: $gray-500;
+
+  svg {
+    margin-bottom: $spacing-4;
+    color: $gray-300;
+  }
+
+  p {
+    margin: 0 0 $spacing-2;
+    font-size: $font-size-lg;
+    color: $gray-700;
+  }
+}
+
+.media-empty-hint {
+  display: block;
+  font-size: $font-size-sm;
+  color: $gray-500;
+  margin-bottom: $spacing-4;
+}
+
+// =============================================================================
+// MEDIA UPLOAD
+// =============================================================================
+
+.upload-dropzone {
+  border: 2px dashed $gray-300;
+  border-radius: $radius-lg;
+  padding: $spacing-8;
+  text-align: center;
+  cursor: pointer;
+  transition: all $transition-fast;
+  background-color: $gray-50;
+
+  &:hover {
+    border-color: $primary;
+    background-color: rgba($primary, 0.02);
+  }
+
+  &.dragover {
+    border-color: $primary;
+    background-color: rgba($primary, 0.05);
+    border-style: solid;
+  }
+
+  &.has-files {
+    padding: $spacing-4;
+  }
+}
+
+.upload-input {
+  display: none;
+}
+
+.upload-placeholder {
+  svg {
+    color: $gray-400;
+    margin-bottom: $spacing-4;
+  }
+}
+
+.upload-text {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-medium;
+  color: $gray-700;
+  margin: 0 0 $spacing-1;
+}
+
+.upload-hint {
+  font-size: $font-size-sm;
+  color: $gray-500;
+  margin: 0 0 $spacing-3;
+}
+
+.upload-formats {
+  font-size: $font-size-xs;
+  color: $gray-400;
+  margin: 0;
+}
+
+// File preview list in upload form
+.upload-files-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: $spacing-3;
+}
+
+.upload-file-item {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  padding: $spacing-3;
+  background-color: $white;
+  border: 1px solid $gray-200;
+  border-radius: $radius-md;
+
+  &.error {
+    border-color: $error;
+    background-color: rgba($error, 0.02);
+  }
+
+  &.success {
+    border-color: $success;
+    background-color: rgba($success, 0.02);
+  }
+}
+
+.upload-file-preview {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: $radius-sm;
+  overflow: hidden;
+  background-color: $gray-100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.upload-file-icon {
+  color: $gray-400;
+}
+
+.upload-file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.upload-file-name {
+  display: block;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $gray-900;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.upload-file-size {
+  display: block;
+  font-size: $font-size-xs;
+  color: $gray-500;
+}
+
+.upload-file-error {
+  display: block;
+  font-size: $font-size-xs;
+  color: $error;
+}
+
+.upload-file-remove {
+  flex-shrink: 0;
+  padding: $spacing-1;
+  color: $gray-400;
+  cursor: pointer;
+  border-radius: $radius-sm;
+  transition: all $transition-fast;
+
+  &:hover {
+    color: $error;
+    background-color: rgba($error, 0.1);
+  }
+}
+
+// Upload progress bar
+.upload-progress {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  margin-top: $spacing-4;
+  padding: $spacing-3;
+  background-color: $gray-50;
+  border-radius: $radius-md;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 8px;
+  background-color: $gray-200;
+  border-radius: $radius-full;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: $primary;
+  border-radius: $radius-full;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $gray-700;
+  min-width: 40px;
+  text-align: right;
+}
+
+// =============================================================================
+// MEDIA EDIT PAGE
+// =============================================================================
+
+.media-edit-layout {
+  display: grid;
+  gap: $spacing-6;
+  grid-template-columns: 1fr;
+  margin-bottom: $spacing-6;
+
+  @media (min-width: $breakpoint-md) {
+    grid-template-columns: 350px 1fr;
+  }
+}
+
+.media-preview-panel {
+  .card-body {
+    padding: 0;
+  }
+}
+
+.media-preview-container {
+  aspect-ratio: 1;
+  background-color: $gray-100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.media-preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.media-preview-icon {
+  color: $gray-400;
+}
+
+.media-details {
+  padding: $spacing-4;
+  border-bottom: 1px solid $gray-200;
+}
+
+.media-detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: $spacing-2 0;
+  font-size: $font-size-sm;
+
+  &:not(:last-child) {
+    border-bottom: 1px solid $gray-100;
+  }
+}
+
+.media-detail-label {
+  color: $gray-500;
+}
+
+.media-detail-value {
+  color: $gray-900;
+  font-weight: $font-weight-medium;
+  text-align: right;
+
+  code {
+    font-size: $font-size-xs;
+  }
+}
+
+// Media variants list
+.media-variants {
+  padding: $spacing-4;
+  border-bottom: 1px solid $gray-200;
+
+  h4 {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: $gray-700;
+    margin: 0 0 $spacing-3;
+  }
+}
+
+.variant-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: $spacing-2 0;
+    font-size: $font-size-sm;
+    border-bottom: 1px solid $gray-100;
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+}
+
+.variant-type {
+  font-weight: $font-weight-medium;
+  color: $gray-700;
+  text-transform: capitalize;
+}
+
+.variant-size {
+  color: $gray-500;
+  font-family: $font-family-mono;
+  font-size: $font-size-xs;
+}
+
+.variant-filesize {
+  color: $gray-400;
+  font-size: $font-size-xs;
+}
+
+// Media actions panel (in preview sidebar)
+.media-actions-panel {
+  padding: $spacing-4;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+}
+
+.media-form-panel {
+  .card-body {
+    padding: $spacing-6;
+  }
+}
+
+// Danger zone (for delete section)
+.danger-zone {
+  border: 1px solid rgba($error, 0.3);
+  background-color: rgba($error, 0.02);
+
+  .card-body {
+    padding: $spacing-6;
+  }
+}
+
+.danger-title {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $error;
+  margin: 0 0 $spacing-2;
+}
+
+.danger-description {
+  font-size: $font-size-sm;
+  color: $gray-600;
+  margin: 0 0 $spacing-4;
+}
+
+// Filter type badges
+.filter-type-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-1;
+  padding: $spacing-1 $spacing-3;
+  font-size: $font-size-sm;
+  color: $gray-600;
+  background-color: $white;
+  border: 1px solid $gray-300;
+  border-radius: $radius-full;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover {
+    border-color: $gray-400;
+    background-color: $gray-50;
+  }
+
+  &.active {
+    color: $primary;
+    border-color: $primary;
+    background-color: rgba($primary, 0.05);
+  }
+}
+
+// Search input in filter bar
+.filter-search {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 300px;
+  margin-left: auto;
+
+  .form-input {
+    padding-left: $spacing-10;
+    height: 36px;
+  }
+}
+
+.search-icon {
+  position: absolute;
+  left: $spacing-3;
+  color: $gray-400;
+  pointer-events: none;
+}
