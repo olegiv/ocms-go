@@ -179,6 +179,9 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		"sub": func(a, b int) int {
 			return a - b
 		},
+		"multiply": func(a, b int) int {
+			return a * b
+		},
 		"seq": func(start, end int) []int {
 			var result []int
 			for i := start; i <= end; i++ {

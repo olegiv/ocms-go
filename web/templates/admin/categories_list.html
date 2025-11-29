@@ -1,0 +1,131 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Categories</h1>
+        <p class="page-description">Organize your content with hierarchical categories ({{.Data.TotalCount}} total)</p>
+    </div>
+    <div class="page-actions">
+        <a href="/admin/categories/new" class="btn btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" x2="12" y1="11" y2="17"/><line x1="9" x2="15" y1="14" y2="14"/></svg>
+            New Category
+        </a>
+    </div>
+</div>
+
+{{if .Data.Categories}}
+<div class="card" id="categories-table">
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Slug</th>
+                    <th>Description</th>
+                    <th>Usage</th>
+                    <th class="text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Data.Categories}}
+                <tr id="category-row-{{.Category.ID}}">
+                    <td>
+                        <a href="/admin/categories/{{.Category.ID}}" class="category-name-link" style="padding-left: {{multiply .Depth 20}}px;">
+                            {{if gt .Depth 0}}
+                            <span class="tree-indicator">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+                            </span>
+                            {{end}}
+                            {{.Category.Name}}
+                        </a>
+                    </td>
+                    <td>
+                        <code class="slug-code">{{.Category.Slug}}</code>
+                    </td>
+                    <td class="text-muted">
+                        {{if .Category.Description.Valid}}
+                            {{truncate .Category.Description.String 50}}
+                        {{else}}
+                            -
+                        {{end}}
+                    </td>
+                    <td>
+                        <span class="badge badge-info">{{.UsageCount}} {{if eq .UsageCount 1}}page{{else}}pages{{end}}</span>
+                    </td>
+                    <td class="text-right">
+                        <div class="action-buttons">
+                            <a href="/admin/categories/{{.Category.ID}}" class="btn btn-sm btn-outline" title="Edit">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                            </a>
+                            <div x-data="{ showConfirm: false }" class="delete-action">
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-danger"
+                                    title="Delete"
+                                    @click="showConfirm = true"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                                </button>
+
+                                <!-- Delete Confirmation Modal -->
+                                <div
+                                    class="modal-overlay"
+                                    x-show="showConfirm"
+                                    x-cloak
+                                    @click.self="showConfirm = false"
+                                    x-transition:enter="modal-enter"
+                                    x-transition:leave="modal-leave"
+                                >
+                                    <div class="modal" @click.stop>
+                                        <div class="modal-header">
+                                            <h3 class="modal-title">Delete Category</h3>
+                                            <button type="button" class="modal-close" @click="showConfirm = false">&times;</button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p>Are you sure you want to delete <strong>{{.Category.Name}}</strong>?</p>
+                                            {{if gt .UsageCount 0}}
+                                            <p class="text-warning">This category is used by {{.UsageCount}} {{if eq .UsageCount 1}}page{{else}}pages{{end}}. The category will be removed from those pages.</p>
+                                            {{end}}
+                                            {{if .Children}}
+                                            <p class="text-warning">This category has subcategories. They will become root-level categories.</p>
+                                            {{end}}
+                                            <p class="text-muted">This action cannot be undone.</p>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-outline" @click="showConfirm = false">Cancel</button>
+                                            <button
+                                                type="button"
+                                                class="btn btn-danger"
+                                                hx-delete="/admin/categories/{{.Category.ID}}"
+                                                hx-target="#category-row-{{.Category.ID}}"
+                                                hx-swap="outerHTML"
+                                                @click="showConfirm = false"
+                                            >
+                                                Delete Category
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{else}}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <p>No categories found</p>
+            <span class="empty-hint">Create your first category to organize your content hierarchically.</span>
+            <div class="empty-state-action">
+                <a href="/admin/categories/new" class="btn btn-primary">New Category</a>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+{{end}}

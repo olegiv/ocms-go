@@ -206,6 +206,16 @@ func run() error {
 		r.Put("/tags/{id}", taxonomyHandler.UpdateTag)
 		r.Post("/tags/{id}", taxonomyHandler.UpdateTag) // HTML forms can't send PUT
 		r.Delete("/tags/{id}", taxonomyHandler.DeleteTag)
+
+		// Category management routes
+		r.Get("/categories", taxonomyHandler.ListCategories)
+		r.Get("/categories/new", taxonomyHandler.NewCategoryForm)
+		r.Post("/categories", taxonomyHandler.CreateCategory)
+		r.Get("/categories/search", taxonomyHandler.SearchCategories)
+		r.Get("/categories/{id}", taxonomyHandler.EditCategoryForm)
+		r.Put("/categories/{id}", taxonomyHandler.UpdateCategory)
+		r.Post("/categories/{id}", taxonomyHandler.UpdateCategory) // HTML forms can't send PUT
+		r.Delete("/categories/{id}", taxonomyHandler.DeleteCategory)
 	})
 
 	// Static file serving
