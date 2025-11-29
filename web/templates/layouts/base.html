@@ -15,6 +15,89 @@
     <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
     <!-- Alpine.js -->
     <script defer src="https://unpkg.com/alpinejs@3.14.8/dist/cdn.min.js"></script>
+
+    <!-- Keyboard shortcuts and HTMX loading indicators -->
+    <script>
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Ctrl+S or Cmd+S to save forms
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                const form = document.querySelector('form[data-saveable], form.saveable-form');
+                if (form) {
+                    e.preventDefault();
+                    const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.click();
+                    } else {
+                        form.submit();
+                    }
+                }
+            }
+
+            // Escape to close modals
+            if (e.key === 'Escape') {
+                const modal = document.querySelector('.modal.active, [x-data*="modal"][x-show="true"]');
+                if (modal) {
+                    e.preventDefault();
+                    const closeBtn = modal.querySelector('.modal-close, [x-on\\:click*="close"]');
+                    if (closeBtn) closeBtn.click();
+                }
+            }
+        });
+
+        // HTMX loading state handlers
+        document.body.addEventListener('htmx:beforeRequest', function(e) {
+            // Add loading class to buttons
+            const trigger = e.detail.elt;
+            if (trigger.tagName === 'BUTTON' || trigger.classList.contains('btn')) {
+                trigger.classList.add('btn-loading');
+            }
+        });
+
+        document.body.addEventListener('htmx:afterRequest', function(e) {
+            // Remove loading class from buttons
+            const trigger = e.detail.elt;
+            if (trigger.tagName === 'BUTTON' || trigger.classList.contains('btn')) {
+                trigger.classList.remove('btn-loading');
+            }
+        });
+
+        // Form validation helpers
+        function showFieldError(input, message) {
+            const group = input.closest('.form-group');
+            if (group) {
+                group.classList.add('has-error');
+                group.classList.remove('has-success');
+
+                // Remove existing error
+                const existing = group.querySelector('.form-error');
+                if (existing) existing.remove();
+
+                // Add error message
+                const error = document.createElement('div');
+                error.className = 'form-error';
+                error.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>' + message;
+                input.parentNode.insertBefore(error, input.nextSibling);
+            }
+        }
+
+        function clearFieldError(input) {
+            const group = input.closest('.form-group');
+            if (group) {
+                group.classList.remove('has-error');
+                const error = group.querySelector('.form-error');
+                if (error) error.remove();
+            }
+        }
+
+        function showFieldSuccess(input) {
+            const group = input.closest('.form-group');
+            if (group) {
+                group.classList.remove('has-error');
+                group.classList.add('has-success');
+            }
+        }
+    </script>
     {{block "scripts" .}}{{end}}
 </body>
 </html>

@@ -1,8 +1,25 @@
 {{define "alert"}}
 {{if .Flash}}
-<div class="alert alert-{{.FlashType}}">
-    <span class="alert-message">{{.Flash}}</span>
-    <button type="button" class="alert-close" onclick="this.parentElement.remove()">&times;</button>
+<div class="alert-container">
+    <div class="alert alert-{{.FlashType}} alert-animated"
+         x-data="{
+             show: true,
+             dismissing: false,
+             autoDismissTime: 5000,
+             dismiss() {
+                 this.dismissing = true;
+                 setTimeout(() => { this.show = false; }, 300);
+             }
+         }"
+         x-show="show"
+         x-init="setTimeout(() => dismiss(), autoDismissTime)"
+         :class="{ 'alert-dismissing': dismissing }"
+         @mouseenter="$el.querySelector('.alert-progress').style.animationPlayState = 'paused'"
+         @mouseleave="$el.querySelector('.alert-progress').style.animationPlayState = 'running'">
+        <span class="alert-message">{{.Flash}}</span>
+        <button type="button" class="alert-close" @click="dismiss()">&times;</button>
+        <div class="alert-progress" :style="'animation-duration: ' + autoDismissTime + 'ms'"></div>
+    </div>
 </div>
 {{end}}
 {{end}}

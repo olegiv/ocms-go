@@ -1,0 +1,13 @@
+{{define "content"}}
+<div class="error-page">
+    <div class="error-content">
+        <div class="error-code">404</div>
+        <h1 class="error-title">Page Not Found</h1>
+        <p class="error-message">The page you're looking for doesn't exist or has been moved.</p>
+        <div class="error-actions">
+            <a href="/admin" class="btn btn-primary">Go to Dashboard</a>
+            <button type="button" class="btn btn-outline" onclick="history.back()">Go Back</button>
+        </div>
+    </div>
+</div>
+{{end}}

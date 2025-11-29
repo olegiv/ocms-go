@@ -1,0 +1,13 @@
+{{define "content"}}
+<div class="error-page">
+    <div class="error-content">
+        <div class="error-code">403</div>
+        <h1 class="error-title">Access Denied</h1>
+        <p class="error-message">You don't have permission to access this resource.</p>
+        <div class="error-actions">
+            <a href="/admin" class="btn btn-primary">Go to Dashboard</a>
+            <button type="button" class="btn btn-outline" onclick="history.back()">Go Back</button>
+        </div>
+    </div>
+</div>
+{{end}}

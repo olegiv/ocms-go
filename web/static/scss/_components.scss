@@ -935,3 +935,378 @@
 .event-row.event-level-warning {
   background-color: rgba($warning, 0.03);
 }
+
+// =============================================================================
+// ERROR PAGES
+// =============================================================================
+
+.error-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: $spacing-8;
+}
+
+.error-content {
+  text-align: center;
+  max-width: 500px;
+}
+
+.error-code {
+  font-size: 8rem;
+  font-weight: $font-weight-bold;
+  line-height: 1;
+  color: $primary;
+  margin-bottom: $spacing-4;
+  text-shadow: 2px 2px 0 rgba($primary, 0.1);
+}
+
+.error-title {
+  font-size: $font-size-2xl;
+  font-weight: $font-weight-semibold;
+  color: $gray-900;
+  margin-bottom: $spacing-3;
+}
+
+.error-message {
+  font-size: $font-size-lg;
+  color: $gray-600;
+  margin-bottom: $spacing-6;
+  line-height: 1.6;
+}
+
+.error-actions {
+  display: flex;
+  gap: $spacing-3;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+// =============================================================================
+// IMPROVED FLASH MESSAGES (Auto-dismiss)
+// =============================================================================
+
+.alert-container {
+  position: fixed;
+  top: $spacing-4;
+  right: $spacing-4;
+  z-index: 1000;
+  max-width: 400px;
+  width: 100%;
+}
+
+.alert-animated {
+  animation: slideInRight 0.3s ease-out;
+
+  &.alert-dismissing {
+    animation: slideOutRight 0.3s ease-in forwards;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+// Progress bar for auto-dismiss timer
+.alert-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 0 0 $radius-md $radius-md;
+  animation: shrinkWidth linear forwards;
+}
+
+@keyframes shrinkWidth {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+// =============================================================================
+// HTMX LOADING INDICATORS
+// =============================================================================
+
+.htmx-indicator {
+  display: none;
+}
+
+.htmx-request .htmx-indicator {
+  display: inline-block;
+}
+
+.htmx-request.htmx-indicator {
+  display: inline-block;
+}
+
+// Loading spinner
+.loading-spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba($primary, 0.3);
+  border-top-color: $primary;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.loading-spinner-sm {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-width: 1.5px;
+}
+
+.loading-spinner-lg {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-width: 3px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// Button loading state
+.btn-loading {
+  position: relative;
+  color: transparent !important;
+  pointer-events: none;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 1rem;
+    height: 1rem;
+    margin: -0.5rem 0 0 -0.5rem;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+}
+
+// Page loading overlay
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+
+  &.active {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+// Table row loading
+.table-row-loading {
+  position: relative;
+  opacity: 0.6;
+  pointer-events: none;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    animation: shimmer 1.5s infinite;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+// =============================================================================
+// BREADCRUMBS
+// =============================================================================
+
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  padding: $spacing-3 0;
+  font-size: $font-size-sm;
+  color: $gray-600;
+  margin-bottom: $spacing-4;
+}
+
+.breadcrumb-item {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+
+  a {
+    color: $gray-600;
+    text-decoration: none;
+    transition: color 0.2s;
+
+    &:hover {
+      color: $primary;
+    }
+  }
+
+  &.active {
+    color: $gray-900;
+    font-weight: $font-weight-medium;
+  }
+}
+
+.breadcrumb-separator {
+  color: $gray-400;
+  font-size: $font-size-xs;
+}
+
+// =============================================================================
+// FORM VALIDATION IMPROVEMENTS
+// =============================================================================
+
+.form-group {
+  margin-bottom: $spacing-4;
+
+  &.has-error {
+    .form-control {
+      border-color: $error;
+
+      &:focus {
+        box-shadow: 0 0 0 3px rgba($error, 0.1);
+      }
+    }
+
+    .form-label {
+      color: $error;
+    }
+  }
+
+  &.has-success {
+    .form-control {
+      border-color: $success;
+
+      &:focus {
+        box-shadow: 0 0 0 3px rgba($success, 0.1);
+      }
+    }
+  }
+}
+
+.form-error {
+  display: flex;
+  align-items: center;
+  gap: $spacing-1;
+  margin-top: $spacing-1;
+  font-size: $font-size-sm;
+  color: $error;
+
+  svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+}
+
+.form-hint {
+  margin-top: $spacing-1;
+  font-size: $font-size-sm;
+  color: $gray-500;
+}
+
+.form-control-icon {
+  position: relative;
+
+  .form-control {
+    padding-right: $spacing-10;
+  }
+
+  .input-icon {
+    position: absolute;
+    right: $spacing-3;
+    top: 50%;
+    transform: translateY(-50%);
+    color: $gray-400;
+    pointer-events: none;
+  }
+
+  &.has-error .input-icon {
+    color: $error;
+  }
+
+  &.has-success .input-icon {
+    color: $success;
+  }
+}
+
+// =============================================================================
+// KEYBOARD SHORTCUT HINTS
+// =============================================================================
+
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  padding: $spacing-1 $spacing-2;
+  font-family: $font-family-mono;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  color: $gray-700;
+  background-color: $gray-100;
+  border: 1px solid $gray-300;
+  border-radius: $radius-sm;
+  box-shadow: 0 1px 0 $gray-300;
+}
+
+.shortcut-hint {
+  display: flex;
+  align-items: center;
+  gap: $spacing-1;
+  font-size: $font-size-sm;
+  color: $gray-500;
+
+  .kbd {
+    font-size: 10px;
+  }
+}

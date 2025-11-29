@@ -204,6 +204,11 @@ func run() error {
 	}
 	r.Handle("/static/dist/*", http.StripPrefix("/static/dist/", http.FileServer(http.FS(staticFS))))
 
+	// 404 Not Found handler
+	r.NotFound(func(w http.ResponseWriter, req *http.Request) {
+		renderer.RenderNotFound(w, req)
+	})
+
 	// Create server
 	srv := &http.Server{
 		Addr:         cfg.ServerAddr(),

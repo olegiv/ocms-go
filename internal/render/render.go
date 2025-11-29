@@ -104,6 +104,29 @@ func (r *Renderer) parseTemplates(templatesFS fs.FS) error {
 		r.templates[name] = tmpl
 	}
 
+	// Parse error templates with admin layout
+	errorTemplates, err := r.getTemplateFiles(templatesFS, "errors")
+	if err != nil {
+		return fmt.Errorf("getting error templates: %w", err)
+	}
+
+	for _, tmplPath := range errorTemplates {
+		name := filepath.Base(tmplPath)
+		name = strings.TrimSuffix(name, ".html")
+		name = "errors/" + name
+
+		files := []string{baseLayout, adminLayout}
+		files = append(files, partials...)
+		files = append(files, tmplPath)
+
+		tmpl, err := template.New("").Funcs(r.templateFuncs()).ParseFS(templatesFS, files...)
+		if err != nil {
+			return fmt.Errorf("parsing template %s: %w", name, err)
+		}
+
+		r.templates[name] = tmpl
+	}
+
 	return nil
 }
 
@@ -163,6 +186,13 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 	}
 }
 
+// Breadcrumb represents a single breadcrumb item.
+type Breadcrumb struct {
+	Label  string
+	URL    string
+	Active bool
+}
+
 // TemplateData holds data passed to templates.
 type TemplateData struct {
 	Title       string
@@ -172,7 +202,8 @@ type TemplateData struct {
 	FlashType   string
 	CurrentYear int
 	CSRFToken   string
-	SiteName    string // Site name from config
+	SiteName    string       // Site name from config
+	Breadcrumbs []Breadcrumb // Breadcrumb navigation
 }
 
 // Render renders a template with the given data.
@@ -218,4 +249,34 @@ func (r *Renderer) SetFlash(req *http.Request, message, flashType string) {
 		r.sessionManager.Put(req.Context(), "flash", message)
 		r.sessionManager.Put(req.Context(), "flash_type", flashType)
 	}
+}
+
+// RenderError renders an error page with the specified status code.
+func (r *Renderer) RenderError(w http.ResponseWriter, req *http.Request, statusCode int, title string) {
+	templateName := fmt.Sprintf("errors/%d", statusCode)
+
+	// Check if template exists, fallback to 500 if not
+	if _, ok := r.templates[templateName]; !ok {
+		templateName = "errors/500"
+	}
+
+	w.WriteHeader(statusCode)
+	r.Render(w, req, templateName, TemplateData{
+		Title: title,
+	})
+}
+
+// RenderNotFound renders a 404 Not Found page.
+func (r *Renderer) RenderNotFound(w http.ResponseWriter, req *http.Request) {
+	r.RenderError(w, req, http.StatusNotFound, "Page Not Found")
+}
+
+// RenderForbidden renders a 403 Forbidden page.
+func (r *Renderer) RenderForbidden(w http.ResponseWriter, req *http.Request) {
+	r.RenderError(w, req, http.StatusForbidden, "Access Denied")
+}
+
+// RenderInternalError renders a 500 Internal Server Error page.
+func (r *Renderer) RenderInternalError(w http.ResponseWriter, req *http.Request) {
+	r.RenderError(w, req, http.StatusInternalServerError, "Internal Server Error")
 }
