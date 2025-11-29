@@ -1,0 +1,306 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{if .Data.IsEdit}}Edit Page{{else}}New Page{{end}}</h1>
+        <p class="page-description">{{if .Data.IsEdit}}Update page content and settings{{else}}Create a new page for your site{{end}}</p>
+    </div>
+    <div class="page-actions">
+        <a href="/admin/pages" class="btn btn-outline">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            Back to Pages
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <form
+        method="POST"
+        action="{{if .Data.IsEdit}}/admin/pages/{{.Data.Page.ID}}{{else}}/admin/pages{{end}}"
+        class="card-body"
+        x-data="pageForm()"
+    >
+        {{if .Data.IsEdit}}
+        <input type="hidden" name="_method" value="PUT">
+        {{end}}
+
+        <div class="form-grid">
+            <!-- Title -->
+            <div class="form-group form-group-full">
+                <label for="title" class="form-label">
+                    Title <span class="required">*</span>
+                </label>
+                <input
+                    type="text"
+                    id="title"
+                    name="title"
+                    class="form-input {{if .Data.Errors.title}}is-invalid{{end}}"
+                    value="{{if .Data.FormValues.title}}{{.Data.FormValues.title}}{{else if .Data.Page}}{{.Data.Page.Title}}{{end}}"
+                    placeholder="Enter page title"
+                    required
+                    @input="generateSlug($event.target.value)"
+                >
+                {{if .Data.Errors.title}}
+                <span class="form-error">{{.Data.Errors.title}}</span>
+                {{end}}
+            </div>
+
+            <!-- Slug -->
+            <div class="form-group">
+                <label for="slug" class="form-label">
+                    Slug <span class="required">*</span>
+                </label>
+                <div class="input-with-prefix">
+                    <span class="input-prefix">/</span>
+                    <input
+                        type="text"
+                        id="slug"
+                        name="slug"
+                        class="form-input {{if .Data.Errors.slug}}is-invalid{{end}}"
+                        value="{{if .Data.FormValues.slug}}{{.Data.FormValues.slug}}{{else if .Data.Page}}{{.Data.Page.Slug}}{{end}}"
+                        placeholder="page-slug"
+                        x-model="slug"
+                        @input="slugEdited = true"
+                    >
+                </div>
+                {{if .Data.Errors.slug}}
+                <span class="form-error">{{.Data.Errors.slug}}</span>
+                {{else}}
+                <span class="form-hint">URL-friendly identifier for the page</span>
+                {{end}}
+            </div>
+
+            <!-- Status -->
+            <div class="form-group">
+                <label for="status" class="form-label">Status</label>
+                <select
+                    id="status"
+                    name="status"
+                    class="form-select {{if .Data.Errors.status}}is-invalid{{end}}"
+                >
+                    {{$currentStatus := ""}}
+                    {{if .Data.FormValues.status}}
+                        {{$currentStatus = .Data.FormValues.status}}
+                    {{else if .Data.Page}}
+                        {{$currentStatus = .Data.Page.Status}}
+                    {{else}}
+                        {{$currentStatus = "draft"}}
+                    {{end}}
+                    {{range .Data.Statuses}}
+                    <option value="{{.}}" {{if eq . $currentStatus}}selected{{end}}>
+                        {{if eq . "draft"}}Draft{{else if eq . "published"}}Published{{else}}{{.}}{{end}}
+                    </option>
+                    {{end}}
+                </select>
+                {{if .Data.Errors.status}}
+                <span class="form-error">{{.Data.Errors.status}}</span>
+                {{end}}
+            </div>
+
+            <!-- Body (TipTap Editor) -->
+            <div class="form-group form-group-full">
+                <label class="form-label">Content</label>
+                <div class="editor-container">
+                    <!-- Editor Toolbar -->
+                    <div class="editor-toolbar" id="editor-toolbar">
+                        <button type="button" class="toolbar-btn" data-action="bold" title="Bold (Ctrl+B)">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8"/></svg>
+                        </button>
+                        <button type="button" class="toolbar-btn" data-action="italic" title="Italic (Ctrl+I)">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" x2="10" y1="4" y2="4"/><line x1="14" x2="5" y1="20" y2="20"/><line x1="15" x2="9" y1="4" y2="20"/></svg>
+                        </button>
+                        <span class="toolbar-divider"></span>
+                        <button type="button" class="toolbar-btn" data-action="heading1" title="Heading 1">
+                            H1
+                        </button>
+                        <button type="button" class="toolbar-btn" data-action="heading2" title="Heading 2">
+                            H2
+                        </button>
+                        <button type="button" class="toolbar-btn" data-action="heading3" title="Heading 3">
+                            H3
+                        </button>
+                        <span class="toolbar-divider"></span>
+                        <button type="button" class="toolbar-btn" data-action="bulletList" title="Bullet List">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+                        </button>
+                        <button type="button" class="toolbar-btn" data-action="orderedList" title="Numbered List">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" x2="21" y1="6" y2="6"/><line x1="10" x2="21" y1="12" y2="12"/><line x1="10" x2="21" y1="18" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>
+                        </button>
+                        <span class="toolbar-divider"></span>
+                        <button type="button" class="toolbar-btn" data-action="link" title="Add Link">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                        </button>
+                        <button type="button" class="toolbar-btn" data-action="blockquote" title="Quote">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V21c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"/></svg>
+                        </button>
+                        <span class="toolbar-divider"></span>
+                        <button type="button" class="toolbar-btn" data-action="undo" title="Undo (Ctrl+Z)">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+                        </button>
+                        <button type="button" class="toolbar-btn" data-action="redo" title="Redo (Ctrl+Y)">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/></svg>
+                        </button>
+                    </div>
+                    <!-- Editor Content Area -->
+                    <div id="editor" class="editor-content"></div>
+                </div>
+                <input type="hidden" name="body" id="body-input" value="{{if .Data.FormValues.body}}{{.Data.FormValues.body}}{{else if .Data.Page}}{{.Data.Page.Body}}{{end}}">
+                {{if .Data.Errors.body}}
+                <span class="form-error">{{.Data.Errors.body}}</span>
+                {{end}}
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <a href="/admin/pages" class="btn btn-outline">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                {{if .Data.IsEdit}}Update Page{{else}}Create Page{{end}}
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- TipTap Editor Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/@tiptap/core@2.1.13/dist/index.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tiptap/starter-kit@2.1.13/dist/index.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tiptap/extension-link@2.1.13/dist/index.umd.min.js"></script>
+
+<script>
+// Initialize TipTap Editor
+document.addEventListener('DOMContentLoaded', function() {
+    const { Editor } = window.TiptapCore;
+    const StarterKit = window.TiptapStarterKit.StarterKit;
+    const Link = window.TiptapExtensionLink.Link;
+
+    const initialContent = document.getElementById('body-input').value || '<p></p>';
+
+    const editor = new Editor({
+        element: document.getElementById('editor'),
+        extensions: [
+            StarterKit,
+            Link.configure({
+                openOnClick: false,
+                HTMLAttributes: {
+                    rel: 'noopener noreferrer',
+                    target: '_blank',
+                },
+            }),
+        ],
+        content: initialContent,
+        editorProps: {
+            attributes: {
+                class: 'prose',
+            },
+        },
+        onUpdate: ({ editor }) => {
+            document.getElementById('body-input').value = editor.getHTML();
+        },
+    });
+
+    // Toolbar button handlers
+    document.querySelectorAll('.toolbar-btn').forEach(button => {
+        button.addEventListener('click', () => {
+            const action = button.dataset.action;
+
+            switch(action) {
+                case 'bold':
+                    editor.chain().focus().toggleBold().run();
+                    break;
+                case 'italic':
+                    editor.chain().focus().toggleItalic().run();
+                    break;
+                case 'heading1':
+                    editor.chain().focus().toggleHeading({ level: 1 }).run();
+                    break;
+                case 'heading2':
+                    editor.chain().focus().toggleHeading({ level: 2 }).run();
+                    break;
+                case 'heading3':
+                    editor.chain().focus().toggleHeading({ level: 3 }).run();
+                    break;
+                case 'bulletList':
+                    editor.chain().focus().toggleBulletList().run();
+                    break;
+                case 'orderedList':
+                    editor.chain().focus().toggleOrderedList().run();
+                    break;
+                case 'link':
+                    const url = prompt('Enter URL:');
+                    if (url) {
+                        editor.chain().focus().setLink({ href: url }).run();
+                    }
+                    break;
+                case 'blockquote':
+                    editor.chain().focus().toggleBlockquote().run();
+                    break;
+                case 'undo':
+                    editor.chain().focus().undo().run();
+                    break;
+                case 'redo':
+                    editor.chain().focus().redo().run();
+                    break;
+            }
+        });
+    });
+
+    // Update toolbar button active states
+    editor.on('selectionUpdate', () => {
+        document.querySelectorAll('.toolbar-btn').forEach(button => {
+            const action = button.dataset.action;
+            let isActive = false;
+
+            switch(action) {
+                case 'bold':
+                    isActive = editor.isActive('bold');
+                    break;
+                case 'italic':
+                    isActive = editor.isActive('italic');
+                    break;
+                case 'heading1':
+                    isActive = editor.isActive('heading', { level: 1 });
+                    break;
+                case 'heading2':
+                    isActive = editor.isActive('heading', { level: 2 });
+                    break;
+                case 'heading3':
+                    isActive = editor.isActive('heading', { level: 3 });
+                    break;
+                case 'bulletList':
+                    isActive = editor.isActive('bulletList');
+                    break;
+                case 'orderedList':
+                    isActive = editor.isActive('orderedList');
+                    break;
+                case 'link':
+                    isActive = editor.isActive('link');
+                    break;
+                case 'blockquote':
+                    isActive = editor.isActive('blockquote');
+                    break;
+            }
+
+            button.classList.toggle('active', isActive);
+        });
+    });
+});
+
+// Alpine.js page form component
+function pageForm() {
+    return {
+        slug: '{{if .Data.FormValues.slug}}{{.Data.FormValues.slug}}{{else if .Data.Page}}{{.Data.Page.Slug}}{{end}}',
+        slugEdited: {{if .Data.IsEdit}}true{{else}}false{{end}},
+
+        generateSlug(title) {
+            if (this.slugEdited) return;
+
+            // Simple slugify function
+            this.slug = title
+                .toLowerCase()
+                .trim()
+                .replace(/[^\w\s-]/g, '')
+                .replace(/[\s_-]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+        }
+    };
+}
+</script>
+{{end}}

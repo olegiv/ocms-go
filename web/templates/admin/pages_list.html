@@ -1,0 +1,172 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Pages</h1>
+        <p class="page-description">Manage your CMS pages ({{.Data.TotalCount}} total)</p>
+    </div>
+    <div class="page-actions">
+        <a href="/admin/pages/new" class="btn btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><line x1="12" x2="12" y1="11" y2="17"/><line x1="9" x2="15" y1="14" y2="14"/></svg>
+            New Page
+        </a>
+    </div>
+</div>
+
+<!-- Status Filter -->
+<div class="filter-bar">
+    <div class="filter-group">
+        <label class="filter-label">Status:</label>
+        <div class="filter-buttons">
+            <a href="/admin/pages" class="btn btn-sm {{if eq .Data.StatusFilter ""}}btn-primary{{else}}btn-outline{{end}}">
+                All
+            </a>
+            {{range .Data.Statuses}}
+            <a href="/admin/pages?status={{.}}" class="btn btn-sm {{if eq $.Data.StatusFilter .}}btn-primary{{else}}btn-outline{{end}}">
+                {{if eq . "draft"}}Draft{{else if eq . "published"}}Published{{else}}{{.}}{{end}}
+            </a>
+            {{end}}
+        </div>
+    </div>
+</div>
+
+{{if .Data.Pages}}
+<div class="card" id="pages-table">
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Slug</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Updated</th>
+                    <th class="text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Data.Pages}}
+                <tr id="page-row-{{.ID}}">
+                    <td>
+                        <a href="/admin/pages/{{.ID}}" class="page-title-link">{{.Title}}</a>
+                    </td>
+                    <td>
+                        <code class="slug-code">/{{.Slug}}</code>
+                    </td>
+                    <td>
+                        <span class="badge badge-{{if eq .Status "published"}}success{{else}}warning{{end}}">
+                            {{.Status}}
+                        </span>
+                    </td>
+                    <td>{{formatDate .CreatedAt}}</td>
+                    <td>{{formatDateTime .UpdatedAt}}</td>
+                    <td class="text-right">
+                        <div class="action-buttons">
+                            <a href="/admin/pages/{{.ID}}" class="btn btn-sm btn-outline" title="Edit">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                            </a>
+                            <div x-data="{ showConfirm: false }" class="delete-action">
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-danger"
+                                    title="Delete"
+                                    @click="showConfirm = true"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                                </button>
+
+                                <!-- Delete Confirmation Modal -->
+                                <div
+                                    class="modal-overlay"
+                                    x-show="showConfirm"
+                                    x-cloak
+                                    @click.self="showConfirm = false"
+                                    x-transition:enter="modal-enter"
+                                    x-transition:leave="modal-leave"
+                                >
+                                    <div class="modal" @click.stop>
+                                        <div class="modal-header">
+                                            <h3 class="modal-title">Delete Page</h3>
+                                            <button type="button" class="modal-close" @click="showConfirm = false">&times;</button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p>Are you sure you want to delete <strong>{{.Title}}</strong>?</p>
+                                            <p class="text-muted">This action cannot be undone. All versions will also be deleted.</p>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-outline" @click="showConfirm = false">Cancel</button>
+                                            <button
+                                                type="button"
+                                                class="btn btn-danger"
+                                                hx-delete="/admin/pages/{{.ID}}"
+                                                hx-target="#page-row-{{.ID}}"
+                                                hx-swap="outerHTML"
+                                                @click="showConfirm = false"
+                                            >
+                                                Delete Page
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+
+    {{if or .Data.HasPrev .Data.HasNext}}
+    <div class="card-footer">
+        <div class="pagination">
+            <div class="pagination-info">
+                Page {{.Data.CurrentPage}} of {{.Data.TotalPages}}
+            </div>
+            <div class="pagination-controls">
+                {{if .Data.HasPrev}}
+                <a href="/admin/pages?page={{.Data.PrevPage}}{{if .Data.StatusFilter}}&status={{.Data.StatusFilter}}{{end}}" class="btn btn-sm btn-outline">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    Previous
+                </a>
+                {{else}}
+                <span class="btn btn-sm btn-outline disabled">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    Previous
+                </span>
+                {{end}}
+
+                {{if .Data.HasNext}}
+                <a href="/admin/pages?page={{.Data.NextPage}}{{if .Data.StatusFilter}}&status={{.Data.StatusFilter}}{{end}}" class="btn btn-sm btn-outline">
+                    Next
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </a>
+                {{else}}
+                <span class="btn btn-sm btn-outline disabled">
+                    Next
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </span>
+                {{end}}
+            </div>
+        </div>
+    </div>
+    {{end}}
+</div>
+{{else}}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
+            <p>No pages found</p>
+            {{if .Data.StatusFilter}}
+            <span class="empty-hint">No {{.Data.StatusFilter}} pages. Try changing the filter or create a new page.</span>
+            {{else}}
+            <span class="empty-hint">Create your first page to get started.</span>
+            {{end}}
+            <div class="empty-state-action">
+                <a href="/admin/pages/new" class="btn btn-primary">New Page</a>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+{{end}}

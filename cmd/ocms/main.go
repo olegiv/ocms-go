@@ -119,6 +119,7 @@ func run() error {
 	authHandler := handler.NewAuthHandler(db, renderer, sessionManager)
 	adminHandler := handler.NewAdminHandler(db, renderer, sessionManager)
 	usersHandler := handler.NewUsersHandler(db, renderer, sessionManager)
+	pagesHandler := handler.NewPagesHandler(db, renderer, sessionManager)
 
 	// Routes
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -171,6 +172,11 @@ func run() error {
 		r.Put("/users/{id}", usersHandler.Update)
 		r.Post("/users/{id}", usersHandler.Update) // HTML forms can't send PUT
 		r.Delete("/users/{id}", usersHandler.Delete)
+
+		// Page management routes
+		r.Get("/pages", pagesHandler.List)
+		r.Get("/pages/new", pagesHandler.NewForm)
+		r.Post("/pages", pagesHandler.Create)
 	})
 
 	// Static file serving
