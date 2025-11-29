@@ -226,6 +226,13 @@ func run() error {
 		r.Put("/media/{id}", mediaHandler.Update)
 		r.Post("/media/{id}", mediaHandler.Update) // HTML forms can't send PUT
 		r.Delete("/media/{id}", mediaHandler.Delete)
+		r.Post("/media/{id}/move", mediaHandler.MoveMedia)
+
+		// Media folders
+		r.Post("/media/folders", mediaHandler.CreateFolder)
+		r.Put("/media/folders/{id}", mediaHandler.UpdateFolder)
+		r.Post("/media/folders/{id}", mediaHandler.UpdateFolder) // HTML forms can't send PUT
+		r.Delete("/media/folders/{id}", mediaHandler.DeleteFolder)
 	})
 
 	// Static file serving

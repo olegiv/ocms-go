@@ -583,6 +583,340 @@ func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
 }
 
+// FolderTree represents a folder with its children and media count for nested display.
+type FolderTree struct {
+	store.MediaFolder
+	Children   []FolderTree
+	MediaCount int64
+}
+
+// BuildFolderTree builds a hierarchical tree from a flat list of folders.
+func BuildFolderTree(folders []store.MediaFolder, mediaCounts map[int64]int64) []FolderTree {
+	// Map of folder ID to children
+	childMap := make(map[int64][]store.MediaFolder)
+	var roots []store.MediaFolder
+
+	for _, f := range folders {
+		if f.ParentID.Valid {
+			childMap[f.ParentID.Int64] = append(childMap[f.ParentID.Int64], f)
+		} else {
+			roots = append(roots, f)
+		}
+	}
+
+	// Recursive builder
+	var buildTree func(folder store.MediaFolder) FolderTree
+	buildTree = func(folder store.MediaFolder) FolderTree {
+		tree := FolderTree{
+			MediaFolder: folder,
+			MediaCount:  mediaCounts[folder.ID],
+		}
+		for _, child := range childMap[folder.ID] {
+			tree.Children = append(tree.Children, buildTree(child))
+		}
+		return tree
+	}
+
+	result := make([]FolderTree, len(roots))
+	for i, root := range roots {
+		result[i] = buildTree(root)
+	}
+	return result
+}
+
+// CreateFolder handles POST /admin/media/folders - creates a new folder.
+func (h *MediaHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		http.Error(w, "Folder name is required", http.StatusBadRequest)
+		return
+	}
+
+	// Parse parent ID
+	var parentID sql.NullInt64
+	parentIDStr := r.FormValue("parent_id")
+	if parentIDStr != "" && parentIDStr != "0" {
+		if pid, err := strconv.ParseInt(parentIDStr, 10, 64); err == nil {
+			parentID = sql.NullInt64{Int64: pid, Valid: true}
+		}
+	}
+
+	// Get position (count of siblings + 1)
+	var position int64
+	if parentID.Valid {
+		siblings, _ := h.queries.ListChildMediaFolders(r.Context(), parentID)
+		position = int64(len(siblings))
+	} else {
+		siblings, _ := h.queries.ListRootMediaFolders(r.Context())
+		position = int64(len(siblings))
+	}
+
+	// Create folder
+	folder, err := h.queries.CreateMediaFolder(r.Context(), store.CreateMediaFolderParams{
+		Name:      name,
+		ParentID:  parentID,
+		Position:  position,
+		CreatedAt: time.Now(),
+	})
+	if err != nil {
+		slog.Error("failed to create folder", "error", err)
+		http.Error(w, "Error creating folder", http.StatusInternalServerError)
+		return
+	}
+
+	user := middleware.GetUser(r)
+	slog.Info("folder created", "folder_id", folder.ID, "name", folder.Name, "created_by", user.ID)
+
+	// For HTMX requests, return the new folder item HTML
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Trigger", "folderCreated")
+		w.WriteHeader(http.StatusOK)
+		// Return folder list item HTML
+		html := fmt.Sprintf(`<li class="folder-item" data-folder-id="%d">
+			<a href="/admin/media?folder=%d" class="folder-link">
+				<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+				<span class="folder-name">%s</span>
+				<span class="folder-count">0</span>
+			</a>
+		</li>`, folder.ID, folder.ID, folder.Name)
+		w.Write([]byte(html))
+		return
+	}
+
+	h.renderer.SetFlash(r, "Folder created successfully", "success")
+	http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
+}
+
+// UpdateFolder handles PUT /admin/media/folders/{id} - renames or moves a folder.
+func (h *MediaHandler) UpdateFolder(w http.ResponseWriter, r *http.Request) {
+	// Get folder ID from URL
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid folder ID", http.StatusBadRequest)
+		return
+	}
+
+	// Get existing folder
+	folder, err := h.queries.GetMediaFolderByID(r.Context(), id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Folder not found", http.StatusNotFound)
+		} else {
+			slog.Error("failed to get folder", "error", err, "folder_id", id)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	// Get form values (use existing values as defaults)
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		name = folder.Name
+	}
+
+	// Parse parent ID
+	parentID := folder.ParentID
+	if parentIDStr := r.FormValue("parent_id"); parentIDStr != "" {
+		if parentIDStr == "0" {
+			parentID = sql.NullInt64{Valid: false}
+		} else if pid, err := strconv.ParseInt(parentIDStr, 10, 64); err == nil {
+			// Prevent setting parent to self
+			if pid == id {
+				http.Error(w, "Cannot move folder into itself", http.StatusBadRequest)
+				return
+			}
+			parentID = sql.NullInt64{Int64: pid, Valid: true}
+		}
+	}
+
+	// Parse position (keep existing if not provided)
+	position := folder.Position
+	if posStr := r.FormValue("position"); posStr != "" {
+		if pos, err := strconv.ParseInt(posStr, 10, 64); err == nil {
+			position = pos
+		}
+	}
+
+	// Update folder
+	_, err = h.queries.UpdateMediaFolder(r.Context(), store.UpdateMediaFolderParams{
+		ID:       id,
+		Name:     name,
+		ParentID: parentID,
+		Position: position,
+	})
+	if err != nil {
+		slog.Error("failed to update folder", "error", err, "folder_id", id)
+		http.Error(w, "Error updating folder", http.StatusInternalServerError)
+		return
+	}
+
+	user := middleware.GetUser(r)
+	slog.Info("folder updated", "folder_id", id, "name", name, "updated_by", user.ID)
+
+	// For HTMX requests, return success
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Trigger", "folderUpdated")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(name))
+		return
+	}
+
+	h.renderer.SetFlash(r, "Folder updated successfully", "success")
+	http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
+}
+
+// DeleteFolder handles DELETE /admin/media/folders/{id} - deletes a folder.
+func (h *MediaHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
+	// Get folder ID from URL
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid folder ID", http.StatusBadRequest)
+		return
+	}
+
+	// Check if folder exists
+	folder, err := h.queries.GetMediaFolderByID(r.Context(), id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Folder not found", http.StatusNotFound)
+		} else {
+			slog.Error("failed to get folder", "error", err, "folder_id", id)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Check for child folders
+	children, err := h.queries.ListChildMediaFolders(r.Context(), sql.NullInt64{Int64: id, Valid: true})
+	if err != nil {
+		slog.Error("failed to check child folders", "error", err, "folder_id", id)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	if len(children) > 0 {
+		http.Error(w, "Cannot delete folder with subfolders", http.StatusBadRequest)
+		return
+	}
+
+	// Check for media in folder
+	mediaCount, err := h.queries.CountMediaInFolder(r.Context(), sql.NullInt64{Int64: id, Valid: true})
+	if err != nil {
+		slog.Error("failed to count media in folder", "error", err, "folder_id", id)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	if mediaCount > 0 {
+		http.Error(w, "Cannot delete folder with media. Move or delete the media first.", http.StatusBadRequest)
+		return
+	}
+
+	// Delete folder
+	err = h.queries.DeleteMediaFolder(r.Context(), id)
+	if err != nil {
+		slog.Error("failed to delete folder", "error", err, "folder_id", id)
+		http.Error(w, "Error deleting folder", http.StatusInternalServerError)
+		return
+	}
+
+	user := middleware.GetUser(r)
+	slog.Info("folder deleted", "folder_id", id, "name", folder.Name, "deleted_by", user.ID)
+
+	// For HTMX requests, return empty response
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Trigger", "folderDeleted")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	h.renderer.SetFlash(r, "Folder deleted successfully", "success")
+	http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
+}
+
+// MoveMedia handles POST /admin/media/{id}/move - moves media to a different folder.
+func (h *MediaHandler) MoveMedia(w http.ResponseWriter, r *http.Request) {
+	// Get media ID from URL
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid media ID", http.StatusBadRequest)
+		return
+	}
+
+	// Verify media exists
+	_, err = h.queries.GetMediaByID(r.Context(), id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Media not found", http.StatusNotFound)
+		} else {
+			slog.Error("failed to get media", "error", err, "media_id", id)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	// Parse folder ID (0 or empty means root/uncategorized)
+	var folderID sql.NullInt64
+	folderIDStr := r.FormValue("folder_id")
+	if folderIDStr != "" && folderIDStr != "0" {
+		if fid, err := strconv.ParseInt(folderIDStr, 10, 64); err == nil {
+			// Verify folder exists
+			_, err := h.queries.GetMediaFolderByID(r.Context(), fid)
+			if err != nil {
+				if err == sql.ErrNoRows {
+					http.Error(w, "Folder not found", http.StatusNotFound)
+				} else {
+					slog.Error("failed to get folder", "error", err, "folder_id", fid)
+					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				}
+				return
+			}
+			folderID = sql.NullInt64{Int64: fid, Valid: true}
+		}
+	}
+
+	// Move media to folder
+	err = h.queries.MoveMediaToFolder(r.Context(), store.MoveMediaToFolderParams{
+		ID:        id,
+		FolderID:  folderID,
+		UpdatedAt: time.Now(),
+	})
+	if err != nil {
+		slog.Error("failed to move media", "error", err, "media_id", id)
+		http.Error(w, "Error moving media", http.StatusInternalServerError)
+		return
+	}
+
+	user := middleware.GetUser(r)
+	slog.Info("media moved", "media_id", id, "folder_id", folderID, "moved_by", user.ID)
+
+	// For HTMX requests, return success
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Trigger", "mediaMoved")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	h.renderer.SetFlash(r, "Media moved successfully", "success")
+	http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
+}
+
 // Helper functions
 
 func isImageMime(mimeType string) bool {

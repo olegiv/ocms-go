@@ -211,6 +211,15 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			}
 			return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 		},
+		"deref": func(p *int64) int64 {
+			if p == nil {
+				return 0
+			}
+			return *p
+		},
+		"safeURL": func(s string) template.URL {
+			return template.URL(s)
+		},
 	}
 }
 
