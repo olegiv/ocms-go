@@ -219,6 +219,10 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		Title: "Pages",
 		User:  user,
 		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Pages", URL: "/admin/pages", Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -303,6 +307,11 @@ func (h *PagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 		Title: "New Page",
 		User:  user,
 		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Pages", URL: "/admin/pages"},
+			{Label: "New Page", URL: "/admin/pages/new", Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -395,6 +404,11 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 			Title: "New Page",
 			User:  user,
 			Data:  data,
+			Breadcrumbs: []render.Breadcrumb{
+				{Label: "Dashboard", URL: "/admin"},
+				{Label: "Pages", URL: "/admin/pages"},
+				{Label: "New Page", URL: "/admin/pages/new", Active: true},
+			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -563,6 +577,11 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		Title: "Edit Page",
 		User:  user,
 		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Pages", URL: "/admin/pages"},
+			{Label: page.Title, URL: fmt.Sprintf("/admin/pages/%d", page.ID), Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -681,6 +700,11 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 			Title: "Edit Page",
 			User:  user,
 			Data:  data,
+			Breadcrumbs: []render.Breadcrumb{
+				{Label: "Dashboard", URL: "/admin"},
+				{Label: "Pages", URL: "/admin/pages"},
+				{Label: existingPage.Title, URL: fmt.Sprintf("/admin/pages/%d", id), Active: true},
+			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -969,6 +993,12 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 		Title: fmt.Sprintf("Version History - %s", page.Title),
 		User:  user,
 		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Pages", URL: "/admin/pages"},
+			{Label: page.Title, URL: fmt.Sprintf("/admin/pages/%d", page.ID)},
+			{Label: "Versions", URL: fmt.Sprintf("/admin/pages/%d/versions", page.ID), Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)

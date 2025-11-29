@@ -1,18 +1,21 @@
 {{define "breadcrumbs"}}
 {{if .Breadcrumbs}}
 <nav class="breadcrumbs" aria-label="Breadcrumb">
-    {{range $i, $crumb := .Breadcrumbs}}
-    <span class="breadcrumb-item{{if $crumb.Active}} active{{end}}">
-        {{if $crumb.Active}}
-            {{$crumb.Label}}
-        {{else}}
-            <a href="{{$crumb.URL}}">{{$crumb.Label}}</a>
+    <ol class="breadcrumb-list" itemscope itemtype="https://schema.org/BreadcrumbList">
+        {{range $i, $crumb := .Breadcrumbs}}
+        <li class="breadcrumb-item{{if $crumb.Active}} active{{end}}" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+            {{if $crumb.Active}}
+                <span itemprop="name">{{$crumb.Label}}</span>
+            {{else}}
+                <a href="{{$crumb.URL}}" itemprop="item">
+                    <span itemprop="name">{{$crumb.Label}}</span>
+                </a>
+                <span class="breadcrumb-separator" aria-hidden="true">/</span>
+            {{end}}
+            <meta itemprop="position" content="{{add $i 1}}" />
+        </li>
         {{end}}
-    </span>
-    {{if not $crumb.Active}}
-    <span class="breadcrumb-separator">/</span>
-    {{end}}
-    {{end}}
+    </ol>
 </nav>
 {{end}}
 {{end}}

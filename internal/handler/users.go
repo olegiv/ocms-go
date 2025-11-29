@@ -2,6 +2,7 @@ package handler
 
 import (
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/mail"
@@ -119,6 +120,10 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 		Title: "Users",
 		User:  user,
 		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Users", URL: "/admin/users", Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -149,6 +154,11 @@ func (h *UsersHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 		Title: "New User",
 		User:  user,
 		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Users", URL: "/admin/users"},
+			{Label: "New User", URL: "/admin/users/new", Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -234,6 +244,11 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 			Title: "New User",
 			User:  user,
 			Data:  data,
+			Breadcrumbs: []render.Breadcrumb{
+				{Label: "Dashboard", URL: "/admin"},
+				{Label: "Users", URL: "/admin/users"},
+				{Label: "New User", URL: "/admin/users/new", Active: true},
+			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -314,6 +329,11 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		Title: "Edit User",
 		User:  currentUser,
 		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Users", URL: "/admin/users"},
+			{Label: editUser.Name, URL: fmt.Sprintf("/admin/users/%d", editUser.ID), Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -433,6 +453,11 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 			Title: "Edit User",
 			User:  currentUser,
 			Data:  data,
+			Breadcrumbs: []render.Breadcrumb{
+				{Label: "Dashboard", URL: "/admin"},
+				{Label: "Users", URL: "/admin/users"},
+				{Label: editUser.Name, URL: fmt.Sprintf("/admin/users/%d", id), Active: true},
+			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)

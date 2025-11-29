@@ -63,6 +63,9 @@ func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		Title: "Dashboard",
 		User:  user,
 		Data:  stats,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin", Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)

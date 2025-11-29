@@ -108,6 +108,10 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 		Title: "Tags",
 		User:  user,
 		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Tags", URL: "/admin/tags", Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -136,6 +140,11 @@ func (h *TaxonomyHandler) NewTagForm(w http.ResponseWriter, r *http.Request) {
 		Title: "New Tag",
 		User:  user,
 		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Tags", URL: "/admin/tags"},
+			{Label: "New Tag", URL: "/admin/tags/new", Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -205,6 +214,11 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 			Title: "New Tag",
 			User:  user,
 			Data:  data,
+			Breadcrumbs: []render.Breadcrumb{
+				{Label: "Dashboard", URL: "/admin"},
+				{Label: "Tags", URL: "/admin/tags"},
+				{Label: "New Tag", URL: "/admin/tags/new", Active: true},
+			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -269,6 +283,11 @@ func (h *TaxonomyHandler) EditTagForm(w http.ResponseWriter, r *http.Request) {
 		Title: "Edit Tag",
 		User:  user,
 		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Tags", URL: "/admin/tags"},
+			{Label: tag.Name, URL: fmt.Sprintf("/admin/tags/%d", tag.ID), Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -364,6 +383,11 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 			Title: "Edit Tag",
 			User:  user,
 			Data:  data,
+			Breadcrumbs: []render.Breadcrumb{
+				{Label: "Dashboard", URL: "/admin"},
+				{Label: "Tags", URL: "/admin/tags"},
+				{Label: existingTag.Name, URL: fmt.Sprintf("/admin/tags/%d", id), Active: true},
+			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -594,6 +618,10 @@ func (h *TaxonomyHandler) ListCategories(w http.ResponseWriter, r *http.Request)
 		Title: "Categories",
 		User:  user,
 		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Categories", URL: "/admin/categories", Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -634,6 +662,11 @@ func (h *TaxonomyHandler) NewCategoryForm(w http.ResponseWriter, r *http.Request
 		Title: "New Category",
 		User:  user,
 		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Categories", URL: "/admin/categories"},
+			{Label: "New Category", URL: "/admin/categories/new", Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -721,6 +754,11 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 			Title: "New Category",
 			User:  user,
 			Data:  data,
+			Breadcrumbs: []render.Breadcrumb{
+				{Label: "Dashboard", URL: "/admin"},
+				{Label: "Categories", URL: "/admin/categories"},
+				{Label: "New Category", URL: "/admin/categories/new", Active: true},
+			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -815,6 +853,11 @@ func (h *TaxonomyHandler) EditCategoryForm(w http.ResponseWriter, r *http.Reques
 		Title: "Edit Category",
 		User:  user,
 		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Categories", URL: "/admin/categories"},
+			{Label: category.Name, URL: fmt.Sprintf("/admin/categories/%d", category.ID), Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -960,6 +1003,11 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 			Title: "Edit Category",
 			User:  user,
 			Data:  data,
+			Breadcrumbs: []render.Breadcrumb{
+				{Label: "Dashboard", URL: "/admin"},
+				{Label: "Categories", URL: "/admin/categories"},
+				{Label: existingCategory.Name, URL: fmt.Sprintf("/admin/categories/%d", id), Active: true},
+			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)

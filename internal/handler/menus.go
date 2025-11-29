@@ -60,6 +60,10 @@ func (h *MenusHandler) List(w http.ResponseWriter, r *http.Request) {
 		Title: "Menus",
 		User:  user,
 		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Menus", URL: "/admin/menus", Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -132,6 +136,11 @@ func (h *MenusHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 		Title: "New Menu",
 		User:  user,
 		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Menus", URL: "/admin/menus"},
+			{Label: "New Menu", URL: "/admin/menus/new", Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -197,6 +206,11 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 			Title: "New Menu",
 			User:  user,
 			Data:  data,
+			Breadcrumbs: []render.Breadcrumb{
+				{Label: "Dashboard", URL: "/admin"},
+				{Label: "Menus", URL: "/admin/menus"},
+				{Label: "New Menu", URL: "/admin/menus/new", Active: true},
+			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -281,6 +295,11 @@ func (h *MenusHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		Title: fmt.Sprintf("Edit Menu - %s", menu.Name),
 		User:  user,
 		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Menus", URL: "/admin/menus"},
+			{Label: menu.Name, URL: fmt.Sprintf("/admin/menus/%d", menu.ID), Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -375,6 +394,11 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 			Title: fmt.Sprintf("Edit Menu - %s", menu.Name),
 			User:  user,
 			Data:  data,
+			Breadcrumbs: []render.Breadcrumb{
+				{Label: "Dashboard", URL: "/admin"},
+				{Label: "Menus", URL: "/admin/menus"},
+				{Label: menu.Name, URL: fmt.Sprintf("/admin/menus/%d", menu.ID), Active: true},
+			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)

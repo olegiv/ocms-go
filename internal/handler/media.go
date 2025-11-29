@@ -204,6 +204,10 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 		Title: "Media Library",
 		User:  user,
 		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Media", URL: "/admin/media", Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -238,6 +242,11 @@ func (h *MediaHandler) UploadForm(w http.ResponseWriter, r *http.Request) {
 		Title: "Upload Media",
 		User:  user,
 		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Media", URL: "/admin/media"},
+			{Label: "Upload", URL: "/admin/media/upload", Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -423,6 +432,11 @@ func (h *MediaHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		Title: "Edit Media",
 		User:  user,
 		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Media", URL: "/admin/media"},
+			{Label: media.Filename, URL: fmt.Sprintf("/admin/media/%d", media.ID), Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -511,6 +525,11 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 			Title: "Edit Media",
 			User:  user,
 			Data:  data,
+			Breadcrumbs: []render.Breadcrumb{
+				{Label: "Dashboard", URL: "/admin"},
+				{Label: "Media", URL: "/admin/media"},
+				{Label: media.Filename, URL: fmt.Sprintf("/admin/media/%d", id), Active: true},
+			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
