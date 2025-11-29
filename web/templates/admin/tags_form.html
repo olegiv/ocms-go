@@ -1,0 +1,105 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{if .Data.IsEdit}}Edit Tag{{else}}New Tag{{end}}</h1>
+        <p class="page-description">{{if .Data.IsEdit}}Update tag details{{else}}Create a new tag for organizing content{{end}}</p>
+    </div>
+    <div class="page-actions">
+        <a href="/admin/tags" class="btn btn-outline">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            Back to Tags
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <form
+        method="POST"
+        action="{{if .Data.IsEdit}}/admin/tags/{{.Data.Tag.ID}}{{else}}/admin/tags{{end}}"
+        class="card-body"
+        x-data="tagForm()"
+    >
+        {{if .Data.IsEdit}}
+        <input type="hidden" name="_method" value="PUT">
+        {{end}}
+
+        <div class="form-grid">
+            <!-- Name -->
+            <div class="form-group">
+                <label for="name" class="form-label">
+                    Name <span class="required">*</span>
+                </label>
+                <input
+                    type="text"
+                    id="name"
+                    name="name"
+                    class="form-input {{if .Data.Errors.name}}is-invalid{{end}}"
+                    value="{{if .Data.FormValues.name}}{{.Data.FormValues.name}}{{else if .Data.Tag}}{{.Data.Tag.Name}}{{end}}"
+                    placeholder="Enter tag name"
+                    required
+                    @input="generateSlug($event.target.value)"
+                >
+                {{if .Data.Errors.name}}
+                <span class="form-error">{{.Data.Errors.name}}</span>
+                {{else}}
+                <span class="form-hint">Display name for this tag</span>
+                {{end}}
+            </div>
+
+            <!-- Slug -->
+            <div class="form-group">
+                <label for="slug" class="form-label">
+                    Slug <span class="required">*</span>
+                </label>
+                <input
+                    type="text"
+                    id="slug"
+                    name="slug"
+                    class="form-input {{if .Data.Errors.slug}}is-invalid{{end}}"
+                    value="{{if .Data.FormValues.slug}}{{.Data.FormValues.slug}}{{else if .Data.Tag}}{{.Data.Tag.Slug}}{{end}}"
+                    placeholder="tag-slug"
+                    x-model="slug"
+                    @input="slugEdited = true"
+                >
+                {{if .Data.Errors.slug}}
+                <span class="form-error">{{.Data.Errors.slug}}</span>
+                {{else}}
+                <span class="form-hint">URL-friendly identifier (auto-generated from name)</span>
+                {{end}}
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                {{if .Data.IsEdit}}
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Update Tag
+                {{else}}
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>
+                Create Tag
+                {{end}}
+            </button>
+            <a href="/admin/tags" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+function tagForm() {
+    return {
+        slug: '{{if .Data.FormValues.slug}}{{.Data.FormValues.slug}}{{else if .Data.Tag}}{{.Data.Tag.Slug}}{{end}}',
+        slugEdited: {{if .Data.IsEdit}}true{{else}}false{{end}},
+        generateSlug(value) {
+            if (!this.slugEdited) {
+                this.slug = value
+                    .toLowerCase()
+                    .trim()
+                    .replace(/[^\w\s-]/g, '')
+                    .replace(/[\s_-]+/g, '-')
+                    .replace(/^-+|-+$/g, '');
+            }
+        }
+    }
+}
+</script>
+{{end}}

@@ -122,6 +122,7 @@ func run() error {
 	pagesHandler := handler.NewPagesHandler(db, renderer, sessionManager)
 	configHandler := handler.NewConfigHandler(db, renderer, sessionManager)
 	eventsHandler := handler.NewEventsHandler(db, renderer, sessionManager)
+	taxonomyHandler := handler.NewTaxonomyHandler(db, renderer, sessionManager)
 
 	// Routes
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -195,6 +196,16 @@ func run() error {
 
 		// Events log route
 		r.Get("/events", eventsHandler.List)
+
+		// Tag management routes
+		r.Get("/tags", taxonomyHandler.ListTags)
+		r.Get("/tags/new", taxonomyHandler.NewTagForm)
+		r.Post("/tags", taxonomyHandler.CreateTag)
+		r.Get("/tags/search", taxonomyHandler.SearchTags)
+		r.Get("/tags/{id}", taxonomyHandler.EditTagForm)
+		r.Put("/tags/{id}", taxonomyHandler.UpdateTag)
+		r.Post("/tags/{id}", taxonomyHandler.UpdateTag) // HTML forms can't send PUT
+		r.Delete("/tags/{id}", taxonomyHandler.DeleteTag)
 	})
 
 	// Static file serving
