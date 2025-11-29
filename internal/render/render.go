@@ -162,6 +162,7 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 type TemplateData struct {
 	Title       string
 	Data        any
+	User        any // Current authenticated user (available in all admin templates)
 	Flash       string
 	FlashType   string
 	CurrentYear int

@@ -117,6 +117,7 @@ func run() error {
 
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(db, renderer, sessionManager)
+	adminHandler := handler.NewAdminHandler(db, renderer, sessionManager)
 
 	// Routes
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -159,16 +160,7 @@ func run() error {
 		r.Use(middleware.Auth(sessionManager))
 		r.Use(middleware.LoadUser(sessionManager, db))
 
-		r.Get("/", func(w http.ResponseWriter, req *http.Request) {
-			user := middleware.GetUser(req)
-			if err := renderer.Render(w, req, "admin/dashboard", render.TemplateData{
-				Title: "Dashboard",
-				Data:  user,
-			}); err != nil {
-				slog.Error("render error", "error", err)
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			}
-		})
+		r.Get("/", adminHandler.Dashboard)
 	})
 
 	// Static file serving
