@@ -2,6 +2,7 @@ package handler
 
 import (
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/alexedwards/scs/v2"
+	"github.com/go-chi/chi/v5"
 
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/render"
@@ -303,4 +305,297 @@ func isValidPageStatus(status string) bool {
 		}
 	}
 	return false
+}
+
+// EditForm handles GET /admin/pages/{id} - displays the edit page form.
+func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+
+	// Get page ID from URL
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		h.renderer.SetFlash(r, "Invalid page ID", "error")
+		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		return
+	}
+
+	// Get page from database
+	page, err := h.queries.GetPageByID(r.Context(), id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			h.renderer.SetFlash(r, "Page not found", "error")
+		} else {
+			slog.Error("failed to get page", "error", err, "page_id", id)
+			h.renderer.SetFlash(r, "Error loading page", "error")
+		}
+		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		return
+	}
+
+	data := PageFormData{
+		Page:       &page,
+		Statuses:   ValidPageStatuses,
+		Errors:     make(map[string]string),
+		FormValues: make(map[string]string),
+		IsEdit:     true,
+	}
+
+	if err := h.renderer.Render(w, r, "admin/pages_form", render.TemplateData{
+		Title: "Edit Page",
+		User:  user,
+		Data:  data,
+	}); err != nil {
+		slog.Error("render error", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+// Update handles PUT /admin/pages/{id} - updates an existing page.
+func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+
+	// Get page ID from URL
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		h.renderer.SetFlash(r, "Invalid page ID", "error")
+		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		return
+	}
+
+	// Get existing page
+	existingPage, err := h.queries.GetPageByID(r.Context(), id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			h.renderer.SetFlash(r, "Page not found", "error")
+		} else {
+			slog.Error("failed to get page", "error", err, "page_id", id)
+			h.renderer.SetFlash(r, "Error loading page", "error")
+		}
+		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		h.renderer.SetFlash(r, "Invalid form data", "error")
+		http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", id), http.StatusSeeOther)
+		return
+	}
+
+	// Get form values
+	title := strings.TrimSpace(r.FormValue("title"))
+	slug := strings.TrimSpace(r.FormValue("slug"))
+	body := r.FormValue("body")
+	status := r.FormValue("status")
+
+	// Store form values for re-rendering on error
+	formValues := map[string]string{
+		"title":  title,
+		"slug":   slug,
+		"body":   body,
+		"status": status,
+	}
+
+	// Validate
+	errors := make(map[string]string)
+
+	// Title validation
+	if title == "" {
+		errors["title"] = "Title is required"
+	} else if len(title) < 2 {
+		errors["title"] = "Title must be at least 2 characters"
+	}
+
+	// Slug validation
+	if slug == "" {
+		slug = util.Slugify(title)
+		formValues["slug"] = slug
+	}
+
+	if slug == "" {
+		errors["slug"] = "Slug is required"
+	} else if !util.IsValidSlug(slug) {
+		errors["slug"] = "Invalid slug format (use lowercase letters, numbers, and hyphens)"
+	} else if slug != existingPage.Slug {
+		// Only check for uniqueness if slug changed
+		exists, err := h.queries.SlugExistsExcluding(r.Context(), store.SlugExistsExcludingParams{
+			Slug: slug,
+			ID:   id,
+		})
+		if err != nil {
+			slog.Error("database error checking slug", "error", err)
+			errors["slug"] = "Error checking slug"
+		} else if exists != 0 {
+			errors["slug"] = "Slug already exists"
+		}
+	}
+
+	// Status validation
+	if status == "" {
+		status = existingPage.Status
+		formValues["status"] = status
+	} else if !isValidPageStatus(status) {
+		errors["status"] = "Invalid status"
+	}
+
+	// If there are validation errors, re-render the form
+	if len(errors) > 0 {
+		data := PageFormData{
+			Page:       &existingPage,
+			Statuses:   ValidPageStatuses,
+			Errors:     errors,
+			FormValues: formValues,
+			IsEdit:     true,
+		}
+
+		if err := h.renderer.Render(w, r, "admin/pages_form", render.TemplateData{
+			Title: "Edit Page",
+			User:  user,
+			Data:  data,
+		}); err != nil {
+			slog.Error("render error", "error", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Update page
+	now := time.Now()
+	updatedPage, err := h.queries.UpdatePage(r.Context(), store.UpdatePageParams{
+		ID:        id,
+		Title:     title,
+		Slug:      slug,
+		Body:      body,
+		Status:    status,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		slog.Error("failed to update page", "error", err, "page_id", id)
+		h.renderer.SetFlash(r, "Error updating page", "error")
+		http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", id), http.StatusSeeOther)
+		return
+	}
+
+	// Create new version (only if title or body changed)
+	if title != existingPage.Title || body != existingPage.Body {
+		_, err = h.queries.CreatePageVersion(r.Context(), store.CreatePageVersionParams{
+			PageID:    id,
+			Title:     title,
+			Body:      body,
+			ChangedBy: user.ID,
+			CreatedAt: now,
+		})
+		if err != nil {
+			slog.Error("failed to create page version", "error", err, "page_id", id)
+			// Don't fail the request - page was updated
+		}
+	}
+
+	slog.Info("page updated", "page_id", updatedPage.ID, "slug", updatedPage.Slug, "updated_by", user.ID)
+	h.renderer.SetFlash(r, "Page updated successfully", "success")
+	http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+}
+
+// Delete handles DELETE /admin/pages/{id} - deletes a page.
+func (h *PagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	// Get page ID from URL
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid page ID", http.StatusBadRequest)
+		return
+	}
+
+	// Get page to verify it exists and for logging
+	page, err := h.queries.GetPageByID(r.Context(), id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Page not found", http.StatusNotFound)
+		} else {
+			slog.Error("failed to get page", "error", err, "page_id", id)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Delete the page (versions are cascade deleted by FK constraint)
+	err = h.queries.DeletePage(r.Context(), id)
+	if err != nil {
+		slog.Error("failed to delete page", "error", err, "page_id", id)
+		http.Error(w, "Error deleting page", http.StatusInternalServerError)
+		return
+	}
+
+	user := middleware.GetUser(r)
+	slog.Info("page deleted", "page_id", id, "slug", page.Slug, "deleted_by", user.ID)
+
+	// For HTMX requests, return empty response (row removed)
+	if r.Header.Get("HX-Request") == "true" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// For regular requests, redirect
+	h.renderer.SetFlash(r, "Page deleted successfully", "success")
+	http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+}
+
+// TogglePublish handles POST /admin/pages/{id}/publish - toggles publish status.
+func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+
+	// Get page ID from URL
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		h.renderer.SetFlash(r, "Invalid page ID", "error")
+		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		return
+	}
+
+	// Get existing page
+	page, err := h.queries.GetPageByID(r.Context(), id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			h.renderer.SetFlash(r, "Page not found", "error")
+		} else {
+			slog.Error("failed to get page", "error", err, "page_id", id)
+			h.renderer.SetFlash(r, "Error loading page", "error")
+		}
+		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		return
+	}
+
+	now := time.Now()
+	var message string
+
+	if page.Status == PageStatusPublished {
+		// Unpublish
+		_, err = h.queries.UnpublishPage(r.Context(), store.UnpublishPageParams{
+			ID:        id,
+			UpdatedAt: now,
+		})
+		message = "Page unpublished successfully"
+		slog.Info("page unpublished", "page_id", id, "slug", page.Slug, "unpublished_by", user.ID)
+	} else {
+		// Publish
+		_, err = h.queries.PublishPage(r.Context(), store.PublishPageParams{
+			ID:          id,
+			UpdatedAt:   now,
+			PublishedAt: sql.NullTime{Time: now, Valid: true},
+		})
+		message = "Page published successfully"
+		slog.Info("page published", "page_id", id, "slug", page.Slug, "published_by", user.ID)
+	}
+
+	if err != nil {
+		slog.Error("failed to toggle publish status", "error", err, "page_id", id)
+		h.renderer.SetFlash(r, "Error updating page status", "error")
+		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		return
+	}
+
+	h.renderer.SetFlash(r, message, "success")
+	http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
 }

@@ -177,6 +177,11 @@ func run() error {
 		r.Get("/pages", pagesHandler.List)
 		r.Get("/pages/new", pagesHandler.NewForm)
 		r.Post("/pages", pagesHandler.Create)
+		r.Get("/pages/{id}", pagesHandler.EditForm)
+		r.Put("/pages/{id}", pagesHandler.Update)
+		r.Post("/pages/{id}", pagesHandler.Update) // HTML forms can't send PUT
+		r.Delete("/pages/{id}", pagesHandler.Delete)
+		r.Post("/pages/{id}/publish", pagesHandler.TogglePublish)
 	})
 
 	// Static file serving
