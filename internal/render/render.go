@@ -1,3 +1,5 @@
+// Package render provides HTML template rendering with layout support,
+// flash message handling, and helper functions for the admin interface.
 package render
 
 import (

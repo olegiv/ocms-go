@@ -1,3 +1,5 @@
+// Package middleware provides HTTP middleware for authentication,
+// authorization, and request context handling.
 package middleware
 
 import (

@@ -1,3 +1,5 @@
+// Package session provides HTTP session management using SCS with SQLite storage.
+// Sessions are used for user authentication and flash messages.
 package session
 
 import (

@@ -1,3 +1,5 @@
+// Package model defines domain models and types used throughout the application
+// including User, Page, Event, and configuration structures.
 package model
 
 import (

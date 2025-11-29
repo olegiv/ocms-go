@@ -1,3 +1,5 @@
+// Package handler implements HTTP handlers for the admin interface,
+// including user management, page editing, configuration, and authentication.
 package handler
 
 import (

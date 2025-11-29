@@ -1,3 +1,5 @@
+// Package service provides business logic and service layer functionality
+// including event logging for audit trails.
 package service
 
 import (

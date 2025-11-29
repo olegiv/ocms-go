@@ -1,3 +1,5 @@
+// Package util provides general-purpose utility functions including
+// URL slug generation and validation with Unicode normalization support.
 package util
 
 import (

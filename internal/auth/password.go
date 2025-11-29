@@ -1,3 +1,5 @@
+// Package auth provides password hashing and verification utilities
+// using the argon2id algorithm for secure credential storage.
 package auth
 
 import (
