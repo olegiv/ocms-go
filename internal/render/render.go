@@ -192,12 +192,12 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			}
 			return result
 		},
-		"toJSON": func(v any) string {
+		"toJSON": func(v any) template.JS {
 			b, err := json.Marshal(v)
 			if err != nil {
-				return "[]"
+				return template.JS("[]")
 			}
-			return string(b)
+			return template.JS(b)
 		},
 		"formatBytes": func(bytes int64) string {
 			const unit = 1024

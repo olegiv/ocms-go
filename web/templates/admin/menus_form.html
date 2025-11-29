@@ -1,0 +1,525 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{if .Data.IsEdit}}Edit Menu{{else}}New Menu{{end}}</h1>
+        <p class="page-description">{{if .Data.IsEdit}}Manage menu items and structure{{else}}Create a new navigation menu{{end}}</p>
+    </div>
+    <div class="page-actions">
+        <a href="/admin/menus" class="btn btn-outline">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            Back to Menus
+        </a>
+    </div>
+</div>
+
+<!-- Menu Settings Card -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h3 class="card-title">Menu Settings</h3>
+    </div>
+    <form
+        method="POST"
+        action="{{if .Data.IsEdit}}/admin/menus/{{.Data.Menu.ID}}{{else}}/admin/menus{{end}}"
+        class="card-body"
+    >
+        {{if .Data.IsEdit}}
+        <input type="hidden" name="_method" value="PUT">
+        {{end}}
+
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="name" class="form-label">
+                    Name <span class="required">*</span>
+                </label>
+                <input
+                    type="text"
+                    id="name"
+                    name="name"
+                    class="form-input {{if .Data.Errors.name}}is-invalid{{end}}"
+                    value="{{if .Data.FormValues.name}}{{.Data.FormValues.name}}{{else if .Data.Menu}}{{.Data.Menu.Name}}{{end}}"
+                    placeholder="e.g., Main Menu"
+                    required
+                >
+                {{if .Data.Errors.name}}
+                <span class="form-error">{{.Data.Errors.name}}</span>
+                {{end}}
+            </div>
+
+            <div class="form-group">
+                <label for="slug" class="form-label">
+                    Slug <span class="required">*</span>
+                </label>
+                <input
+                    type="text"
+                    id="slug"
+                    name="slug"
+                    class="form-input {{if .Data.Errors.slug}}is-invalid{{end}}"
+                    value="{{if .Data.FormValues.slug}}{{.Data.FormValues.slug}}{{else if .Data.Menu}}{{.Data.Menu.Slug}}{{end}}"
+                    placeholder="e.g., main-menu"
+                >
+                {{if .Data.Errors.slug}}
+                <span class="form-error">{{.Data.Errors.slug}}</span>
+                {{else}}
+                <span class="form-hint">Used to identify the menu in templates</span>
+                {{end}}
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                {{if .Data.IsEdit}}Save Settings{{else}}Create Menu{{end}}
+            </button>
+        </div>
+    </form>
+</div>
+
+{{if .Data.IsEdit}}
+<!-- Menu Builder -->
+<div class="menu-builder" x-data="menuBuilder()">
+    <div class="menu-builder-grid">
+        <!-- Left Panel: Add Items -->
+        <div class="menu-builder-panel">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Add Menu Items</h3>
+                </div>
+                <div class="card-body">
+                    <!-- Add Custom Link -->
+                    <div class="menu-add-section">
+                        <h4 class="menu-add-title">Custom Link</h4>
+                        <div class="form-group">
+                            <label class="form-label">Title</label>
+                            <input type="text" class="form-input" x-model="customLink.title" placeholder="Link text">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">URL</label>
+                            <input type="text" class="form-input" x-model="customLink.url" placeholder="https://...">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Target</label>
+                            <select class="form-select" x-model="customLink.target">
+                                {{range .Data.Targets}}
+                                <option value="{{.}}">{{.}}</option>
+                                {{end}}
+                            </select>
+                        </div>
+                        <button type="button" class="btn btn-primary btn-sm" @click="addCustomLink()" :disabled="!customLink.title || !customLink.url">
+                            Add to Menu
+                        </button>
+                    </div>
+
+                    <!-- Add Pages -->
+                    {{if .Data.Pages}}
+                    <div class="menu-add-section">
+                        <h4 class="menu-add-title">Pages</h4>
+                        <div class="menu-pages-list">
+                            {{range .Data.Pages}}
+                            <div class="menu-page-item">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" :checked="isPageSelected({{.ID}})" @change="togglePage({{.ID}}, '{{.Title}}', '{{.Slug}}')">
+                                    <span>{{.Title}}</span>
+                                </label>
+                            </div>
+                            {{end}}
+                        </div>
+                        <button type="button" class="btn btn-primary btn-sm" @click="addSelectedPages()" :disabled="selectedPages.length === 0">
+                            Add Selected to Menu
+                        </button>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Menu Structure -->
+        <div class="menu-builder-panel menu-builder-main">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Menu Structure</h3>
+                    <span class="text-muted" x-show="hasChanges">Unsaved changes</span>
+                </div>
+                <div class="card-body">
+                    <template x-if="items.length === 0">
+                        <div class="menu-empty-state">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="18" y2="18"/></svg>
+                            <p>No menu items yet. Add items from the left panel.</p>
+                        </div>
+                    </template>
+
+                    <div id="menu-items" class="menu-items-container">
+                        <template x-for="(item, index) in items" :key="item.id || item.tempId">
+                            <div class="menu-item" :data-id="item.id || item.tempId">
+                                <div class="menu-item-header">
+                                    <div class="menu-item-handle">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+                                    </div>
+                                    <div class="menu-item-info">
+                                        <span class="menu-item-title" x-text="item.title"></span>
+                                        <span class="menu-item-type" x-text="item.page_id ? 'Page' : 'Custom Link'"></span>
+                                    </div>
+                                    <div class="menu-item-actions">
+                                        <button type="button" class="btn btn-sm btn-icon" @click="editItem(item)" title="Edit">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-icon btn-danger" @click="deleteItem(item, index)" title="Delete">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                <!-- Nested children -->
+                                <div class="menu-item-children" x-show="item.children && item.children.length > 0">
+                                    <template x-for="(child, childIndex) in item.children" :key="child.id || child.tempId">
+                                        <div class="menu-item menu-item-nested" :data-id="child.id || child.tempId">
+                                            <div class="menu-item-header">
+                                                <div class="menu-item-handle">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+                                                </div>
+                                                <div class="menu-item-info">
+                                                    <span class="menu-item-title" x-text="child.title"></span>
+                                                    <span class="menu-item-type" x-text="child.page_id ? 'Page' : 'Custom Link'"></span>
+                                                </div>
+                                                <div class="menu-item-actions">
+                                                    <button type="button" class="btn btn-sm btn-icon" @click="editItem(child)" title="Edit">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                                                    </button>
+                                                    <button type="button" class="btn btn-sm btn-icon btn-danger" @click="deleteChildItem(item, childIndex)" title="Delete">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <div class="menu-builder-actions" x-show="hasChanges">
+                        <button type="button" class="btn btn-primary" @click="saveOrder()" :disabled="saving">
+                            <span x-show="!saving">Save Order</span>
+                            <span x-show="saving">Saving...</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Item Modal -->
+    <template x-if="editingItem">
+        <div class="modal-overlay" x-show="editingItem" x-cloak @click.self="editingItem = null">
+            <div class="modal" @click.stop>
+                <div class="modal-header">
+                    <h3 class="modal-title">Edit Menu Item</h3>
+                    <button type="button" class="modal-close" @click="editingItem = null">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Title</label>
+                        <input type="text" class="form-input" x-model="editingItem.title">
+                    </div>
+                    <div class="form-group" x-show="!editingItem.page_id">
+                        <label class="form-label">URL</label>
+                        <input type="text" class="form-input" x-model="editingItem.url">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Target</label>
+                        <select class="form-select" x-model="editingItem.target">
+                            {{range .Data.Targets}}
+                            <option value="{{.}}">{{.}}</option>
+                            {{end}}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">CSS Class</label>
+                        <input type="text" class="form-input" x-model="editingItem.css_class" placeholder="Optional CSS class">
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" x-model="editingItem.is_active">
+                            <span>Active</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" @click="editingItem = null">Cancel</button>
+                    <button type="button" class="btn btn-primary" @click="saveItem()">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </template>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script>
+function menuBuilder() {
+    return {
+        menuId: {{.Data.Menu.ID}},
+        items: [],
+        customLink: { title: '', url: '', target: '_self' },
+        selectedPages: [],
+        editingItem: null,
+        hasChanges: false,
+        saving: false,
+        tempIdCounter: 0,
+
+        init() {
+            // Load existing items from server data
+            this.items = this.parseItems({{toJSON .Data.Items}});
+
+            // Initialize Sortable after DOM is ready
+            this.$nextTick(() => {
+                this.initSortable();
+            });
+        },
+
+        parseItems(serverItems) {
+            if (!serverItems) return [];
+            return serverItems.map(node => ({
+                id: node.Item.id,
+                title: node.Item.title,
+                url: node.Item.url?.String || node.Item.url || '',
+                target: node.Item.target?.String || node.Item.target || '_self',
+                page_id: node.Item.page_id?.Valid ? node.Item.page_id.Int64 : null,
+                css_class: node.Item.css_class?.String || node.Item.css_class || '',
+                is_active: node.Item.is_active,
+                children: node.Children ? this.parseItems(node.Children) : []
+            }));
+        },
+
+        initSortable() {
+            const container = document.getElementById('menu-items');
+            if (!container) return;
+
+            new Sortable(container, {
+                animation: 150,
+                handle: '.menu-item-handle',
+                ghostClass: 'menu-item-ghost',
+                onEnd: () => {
+                    this.hasChanges = true;
+                    this.updateItemsFromDOM();
+                }
+            });
+        },
+
+        updateItemsFromDOM() {
+            const container = document.getElementById('menu-items');
+            const newOrder = [];
+            container.querySelectorAll(':scope > .menu-item').forEach(el => {
+                const id = el.dataset.id;
+                const item = this.findItemById(id);
+                if (item) {
+                    newOrder.push(item);
+                }
+            });
+            this.items = newOrder;
+        },
+
+        findItemById(id) {
+            const numId = parseInt(id);
+            for (const item of this.items) {
+                if (item.id === numId || item.tempId === id) return item;
+                if (item.children) {
+                    for (const child of item.children) {
+                        if (child.id === numId || child.tempId === id) return child;
+                    }
+                }
+            }
+            return null;
+        },
+
+        isPageSelected(pageId) {
+            return this.selectedPages.some(p => p.id === pageId);
+        },
+
+        togglePage(pageId, title, slug) {
+            const index = this.selectedPages.findIndex(p => p.id === pageId);
+            if (index === -1) {
+                this.selectedPages.push({ id: pageId, title: title, slug: slug });
+            } else {
+                this.selectedPages.splice(index, 1);
+            }
+        },
+
+        async addCustomLink() {
+            if (!this.customLink.title || !this.customLink.url) return;
+
+            try {
+                const response = await fetch(`/admin/menus/${this.menuId}/items`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: this.customLink.title,
+                        url: this.customLink.url,
+                        target: this.customLink.target
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const item = data.item;
+                    this.items.push({
+                        id: item.id,
+                        title: item.title,
+                        url: item.url?.String || item.url || '',
+                        target: item.target?.String || item.target || '_self',
+                        page_id: item.page_id?.Valid ? item.page_id.Int64 : null,
+                        css_class: item.css_class?.String || item.css_class || '',
+                        is_active: item.is_active,
+                        children: []
+                    });
+                    this.customLink = { title: '', url: '', target: '_self' };
+                }
+            } catch (e) {
+                console.error('Failed to add custom link:', e);
+            }
+        },
+
+        async addSelectedPages() {
+            for (const page of this.selectedPages) {
+                try {
+                    const response = await fetch(`/admin/menus/${this.menuId}/items`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            title: page.title,
+                            page_id: page.id
+                        })
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        const item = data.item;
+                        this.items.push({
+                            id: item.id,
+                            title: item.title,
+                            url: item.url?.String || item.url || '',
+                            target: item.target?.String || item.target || '_self',
+                            page_id: item.page_id?.Valid ? item.page_id.Int64 : null,
+                            css_class: item.css_class?.String || item.css_class || '',
+                            is_active: item.is_active,
+                            children: []
+                        });
+                    }
+                } catch (e) {
+                    console.error('Failed to add page:', e);
+                }
+            }
+            this.selectedPages = [];
+        },
+
+        editItem(item) {
+            this.editingItem = { ...item };
+        },
+
+        async saveItem() {
+            if (!this.editingItem || !this.editingItem.id) return;
+
+            try {
+                const response = await fetch(`/admin/menus/${this.menuId}/items/${this.editingItem.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: this.editingItem.title,
+                        url: this.editingItem.url,
+                        target: this.editingItem.target,
+                        css_class: this.editingItem.css_class,
+                        is_active: this.editingItem.is_active,
+                        page_id: this.editingItem.page_id
+                    })
+                });
+
+                if (response.ok) {
+                    // Update local item
+                    const updateItem = (items) => {
+                        for (let i = 0; i < items.length; i++) {
+                            if (items[i].id === this.editingItem.id) {
+                                items[i] = { ...items[i], ...this.editingItem };
+                                return true;
+                            }
+                            if (items[i].children && updateItem(items[i].children)) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    };
+                    updateItem(this.items);
+                    this.editingItem = null;
+                }
+            } catch (e) {
+                console.error('Failed to save item:', e);
+            }
+        },
+
+        async deleteItem(item, index) {
+            if (!confirm('Are you sure you want to delete this menu item?')) return;
+
+            if (item.id) {
+                try {
+                    const response = await fetch(`/admin/menus/${this.menuId}/items/${item.id}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (response.ok) {
+                        this.items.splice(index, 1);
+                    }
+                } catch (e) {
+                    console.error('Failed to delete item:', e);
+                }
+            } else {
+                this.items.splice(index, 1);
+            }
+        },
+
+        async deleteChildItem(parent, childIndex) {
+            if (!confirm('Are you sure you want to delete this menu item?')) return;
+
+            const child = parent.children[childIndex];
+            if (child.id) {
+                try {
+                    const response = await fetch(`/admin/menus/${this.menuId}/items/${child.id}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (response.ok) {
+                        parent.children.splice(childIndex, 1);
+                    }
+                } catch (e) {
+                    console.error('Failed to delete child item:', e);
+                }
+            } else {
+                parent.children.splice(childIndex, 1);
+            }
+        },
+
+        async saveOrder() {
+            this.saving = true;
+
+            const buildTree = (items) => {
+                return items.map(item => ({
+                    id: item.id,
+                    children: item.children ? buildTree(item.children) : []
+                }));
+            };
+
+            try {
+                const response = await fetch(`/admin/menus/${this.menuId}/reorder`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: buildTree(this.items) })
+                });
+
+                if (response.ok) {
+                    this.hasChanges = false;
+                }
+            } catch (e) {
+                console.error('Failed to save order:', e);
+            } finally {
+                this.saving = false;
+            }
+        }
+    };
+}
+</script>
+{{end}}
+{{end}}

@@ -124,6 +124,7 @@ func run() error {
 	eventsHandler := handler.NewEventsHandler(db, renderer, sessionManager)
 	taxonomyHandler := handler.NewTaxonomyHandler(db, renderer, sessionManager)
 	mediaHandler := handler.NewMediaHandler(db, renderer, sessionManager, "./uploads")
+	menusHandler := handler.NewMenusHandler(db, renderer, sessionManager)
 
 	// Routes
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -234,6 +235,19 @@ func run() error {
 		r.Put("/media/folders/{id}", mediaHandler.UpdateFolder)
 		r.Post("/media/folders/{id}", mediaHandler.UpdateFolder) // HTML forms can't send PUT
 		r.Delete("/media/folders/{id}", mediaHandler.DeleteFolder)
+
+		// Menu management routes
+		r.Get("/menus", menusHandler.List)
+		r.Get("/menus/new", menusHandler.NewForm)
+		r.Post("/menus", menusHandler.Create)
+		r.Get("/menus/{id}", menusHandler.EditForm)
+		r.Put("/menus/{id}", menusHandler.Update)
+		r.Post("/menus/{id}", menusHandler.Update) // HTML forms can't send PUT
+		r.Delete("/menus/{id}", menusHandler.Delete)
+		r.Post("/menus/{id}/items", menusHandler.AddItem)
+		r.Put("/menus/{id}/items/{itemId}", menusHandler.UpdateItem)
+		r.Delete("/menus/{id}/items/{itemId}", menusHandler.DeleteItem)
+		r.Post("/menus/{id}/reorder", menusHandler.Reorder)
 	})
 
 	// Static file serving
