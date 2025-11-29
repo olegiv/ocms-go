@@ -36,9 +36,9 @@
             <thead>
                 <tr>
                     <th>Title</th>
+                    <th>Tags</th>
                     <th>Slug</th>
                     <th>Status</th>
-                    <th>Created</th>
                     <th>Updated</th>
                     <th class="text-right">Actions</th>
                 </tr>
@@ -50,6 +50,18 @@
                         <a href="/admin/pages/{{.ID}}" class="page-title-link">{{.Title}}</a>
                     </td>
                     <td>
+                        {{$tags := index $.Data.PageTags .ID}}
+                        {{if $tags}}
+                        <div class="tag-list">
+                            {{range $tags}}
+                            <span class="tag-badge-sm">{{.Name}}</span>
+                            {{end}}
+                        </div>
+                        {{else}}
+                        <span class="text-muted">—</span>
+                        {{end}}
+                    </td>
+                    <td>
                         <code class="slug-code">/{{.Slug}}</code>
                     </td>
                     <td>
@@ -57,7 +69,6 @@
                             {{.Status}}
                         </span>
                     </td>
-                    <td>{{formatDate .CreatedAt}}</td>
                     <td>{{formatDateTime .UpdatedAt}}</td>
                     <td class="text-right">
                         <div class="action-buttons">

@@ -49,6 +49,7 @@ func NewPagesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 // PagesListData holds data for the pages list template.
 type PagesListData struct {
 	Pages        []store.Page
+	PageTags     map[int64][]store.Tag // Map of page ID to tags
 	CurrentPage  int
 	TotalPages   int
 	TotalCount   int64
@@ -125,8 +126,20 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch tags for all displayed pages
+	pageTags := make(map[int64][]store.Tag)
+	for _, p := range pages {
+		tags, err := h.queries.GetTagsForPage(r.Context(), p.ID)
+		if err != nil {
+			slog.Error("failed to get tags for page", "error", err, "page_id", p.ID)
+			continue
+		}
+		pageTags[p.ID] = tags
+	}
+
 	data := PagesListData{
 		Pages:        pages,
+		PageTags:     pageTags,
 		CurrentPage:  page,
 		TotalPages:   totalPages,
 		TotalCount:   totalCount,
@@ -151,6 +164,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 // PageFormData holds data for the page form template.
 type PageFormData struct {
 	Page       *store.Page
+	Tags       []store.Tag
 	Statuses   []string
 	Errors     map[string]string
 	FormValues map[string]string
@@ -292,6 +306,22 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		// Page was created but version failed - log but don't fail the request
 	}
 
+	// Save tags
+	tagIDs := r.Form["tags[]"]
+	for _, tagIDStr := range tagIDs {
+		tagID, err := strconv.ParseInt(tagIDStr, 10, 64)
+		if err != nil {
+			continue
+		}
+		err = h.queries.AddTagToPage(r.Context(), store.AddTagToPageParams{
+			PageID: newPage.ID,
+			TagID:  tagID,
+		})
+		if err != nil {
+			slog.Error("failed to add tag to page", "error", err, "page_id", newPage.ID, "tag_id", tagID)
+		}
+	}
+
 	slog.Info("page created", "page_id", newPage.ID, "slug", newPage.Slug, "created_by", user.ID)
 	h.renderer.SetFlash(r, "Page created successfully", "success")
 	http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
@@ -333,8 +363,16 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get tags for this page
+	tags, err := h.queries.GetTagsForPage(r.Context(), id)
+	if err != nil {
+		slog.Error("failed to get tags for page", "error", err, "page_id", id)
+		tags = []store.Tag{} // Continue with empty tags on error
+	}
+
 	data := PageFormData{
 		Page:       &page,
+		Tags:       tags,
 		Statuses:   ValidPageStatuses,
 		Errors:     make(map[string]string),
 		FormValues: make(map[string]string),
@@ -489,6 +527,27 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			slog.Error("failed to create page version", "error", err, "page_id", id)
 			// Don't fail the request - page was updated
+		}
+	}
+
+	// Update tags - clear existing and add new
+	err = h.queries.ClearPageTags(r.Context(), id)
+	if err != nil {
+		slog.Error("failed to clear page tags", "error", err, "page_id", id)
+	}
+
+	tagIDs := r.Form["tags[]"]
+	for _, tagIDStr := range tagIDs {
+		tagID, err := strconv.ParseInt(tagIDStr, 10, 64)
+		if err != nil {
+			continue
+		}
+		err = h.queries.AddTagToPage(r.Context(), store.AddTagToPageParams{
+			PageID: id,
+			TagID:  tagID,
+		})
+		if err != nil {
+			slog.Error("failed to add tag to page", "error", err, "page_id", id, "tag_id", tagID)
 		}
 	}
 

@@ -1,0 +1,302 @@
+{{define "tag_selector"}}
+<div class="tag-selector" x-data="tagSelector()" x-init="init()" data-initial-tags='{{if .Data.Tags}}{{toJSON .Data.Tags}}{{else}}[]{{end}}'>
+    <label class="form-label">Tags</label>
+
+    <!-- Selected Tags Display -->
+    <div class="selected-tags">
+        <template x-for="tag in selectedTags" :key="tag.id">
+            <span class="tag-badge">
+                <span x-text="tag.name"></span>
+                <button type="button" class="tag-remove" @click="removeTag(tag.id)" title="Remove tag">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+                <input type="hidden" name="tags[]" :value="tag.id">
+            </span>
+        </template>
+    </div>
+
+    <!-- Tag Search Input -->
+    <div class="tag-search-container">
+        <input
+            type="text"
+            class="form-input tag-search-input"
+            placeholder="Search or create tags..."
+            x-model="searchQuery"
+            @input.debounce.300ms="searchTags()"
+            @focus="showDropdown = true"
+            @keydown.escape="showDropdown = false"
+            @keydown.enter.prevent="selectFirstOrCreate()"
+        >
+
+        <!-- Dropdown Results -->
+        <div class="tag-dropdown" x-show="showDropdown && (searchResults.length > 0 || searchQuery.length > 0)" x-cloak @click.outside="showDropdown = false">
+            <template x-if="searchResults.length > 0">
+                <div>
+                    <template x-for="tag in searchResults" :key="tag.id">
+                        <button
+                            type="button"
+                            class="tag-option"
+                            @click="addTag(tag)"
+                            :class="{ 'is-selected': isSelected(tag.id) }"
+                        >
+                            <span x-text="tag.name"></span>
+                            <span class="tag-slug" x-text="tag.slug"></span>
+                            <template x-if="isSelected(tag.id)">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            </template>
+                        </button>
+                    </template>
+                </div>
+            </template>
+            <template x-if="searchQuery.length > 1 && !exactMatchExists()">
+                <button type="button" class="tag-option tag-create" @click="createAndAddTag()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                    Create "<span x-text="searchQuery"></span>"
+                </button>
+            </template>
+            <template x-if="searchResults.length === 0 && searchQuery.length <= 1">
+                <div class="tag-no-results">Type to search tags...</div>
+            </template>
+        </div>
+    </div>
+
+    <span class="form-hint">Select existing tags or create new ones</span>
+</div>
+
+<style>
+.tag-selector {
+    margin-bottom: 1.5rem;
+}
+
+.selected-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    min-height: 32px;
+}
+
+.tag-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    background: var(--color-primary-light, #e0e7ff);
+    color: var(--color-primary, #4f46e5);
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.tag-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.125rem;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    color: inherit;
+    opacity: 0.7;
+    transition: opacity 0.15s;
+}
+
+.tag-remove:hover {
+    opacity: 1;
+    background: rgba(0,0,0,0.1);
+}
+
+.tag-search-container {
+    position: relative;
+}
+
+.tag-search-input {
+    width: 100%;
+}
+
+.tag-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    background: var(--color-bg, #fff);
+    border: 1px solid var(--color-border, #e5e7eb);
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 0.25rem;
+}
+
+.tag-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.625rem 0.75rem;
+    background: transparent;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.tag-option:hover {
+    background: var(--color-bg-hover, #f3f4f6);
+}
+
+.tag-option.is-selected {
+    background: var(--color-primary-light, #e0e7ff);
+}
+
+.tag-option .tag-slug {
+    color: var(--color-text-muted, #6b7280);
+    font-size: 0.75rem;
+    margin-left: auto;
+}
+
+.tag-create {
+    color: var(--color-primary, #4f46e5);
+    font-weight: 500;
+}
+
+.tag-create svg {
+    flex-shrink: 0;
+}
+
+.tag-no-results {
+    padding: 0.75rem;
+    color: var(--color-text-muted, #6b7280);
+    font-size: 0.875rem;
+    text-align: center;
+}
+</style>
+
+<script>
+function tagSelector() {
+    return {
+        selectedTags: [],
+        searchQuery: '',
+        searchResults: [],
+        showDropdown: false,
+        allTags: [],
+
+        init() {
+            // Load initial tags from data attribute or hidden inputs
+            const container = this.$el;
+            const initialTags = container.dataset.initialTags;
+            if (initialTags) {
+                try {
+                    this.selectedTags = JSON.parse(initialTags);
+                } catch (e) {
+                    console.error('Failed to parse initial tags:', e);
+                }
+            }
+
+            // Load all tags for initial display
+            this.loadAllTags();
+        },
+
+        async loadAllTags() {
+            try {
+                const response = await fetch('/admin/tags/search');
+                if (response.ok) {
+                    this.allTags = await response.json();
+                }
+            } catch (e) {
+                console.error('Failed to load tags:', e);
+            }
+        },
+
+        async searchTags() {
+            if (this.searchQuery.length === 0) {
+                this.searchResults = this.allTags.slice(0, 10);
+                return;
+            }
+
+            try {
+                const response = await fetch(`/admin/tags/search?q=${encodeURIComponent(this.searchQuery)}`);
+                if (response.ok) {
+                    this.searchResults = await response.json();
+                }
+            } catch (e) {
+                console.error('Failed to search tags:', e);
+                this.searchResults = [];
+            }
+        },
+
+        addTag(tag) {
+            if (!this.isSelected(tag.id)) {
+                this.selectedTags.push(tag);
+            }
+            this.searchQuery = '';
+            this.searchResults = this.allTags.slice(0, 10);
+        },
+
+        removeTag(tagId) {
+            this.selectedTags = this.selectedTags.filter(t => t.id !== tagId);
+        },
+
+        isSelected(tagId) {
+            return this.selectedTags.some(t => t.id === tagId);
+        },
+
+        exactMatchExists() {
+            const query = this.searchQuery.toLowerCase().trim();
+            return this.searchResults.some(t => t.name.toLowerCase() === query);
+        },
+
+        async createAndAddTag() {
+            const name = this.searchQuery.trim();
+            if (name.length < 2) return;
+
+            try {
+                const formData = new FormData();
+                formData.append('name', name);
+                formData.append('slug', this.slugify(name));
+
+                const response = await fetch('/admin/tags', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+
+                // After creating, search for the tag to get its ID
+                const searchResponse = await fetch(`/admin/tags/search?q=${encodeURIComponent(name)}`);
+                if (searchResponse.ok) {
+                    const tags = await searchResponse.json();
+                    const newTag = tags.find(t => t.name.toLowerCase() === name.toLowerCase());
+                    if (newTag) {
+                        this.addTag(newTag);
+                        this.allTags.push(newTag);
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to create tag:', e);
+            }
+        },
+
+        selectFirstOrCreate() {
+            if (this.searchResults.length > 0 && !this.isSelected(this.searchResults[0].id)) {
+                this.addTag(this.searchResults[0]);
+            } else if (this.searchQuery.length > 1 && !this.exactMatchExists()) {
+                this.createAndAddTag();
+            }
+        },
+
+        slugify(text) {
+            return text
+                .toLowerCase()
+                .trim()
+                .replace(/[^\w\s-]/g, '')
+                .replace(/[\s_-]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+        }
+    }
+}
+</script>
+{{end}}

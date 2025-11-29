@@ -4,6 +4,7 @@ package render
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -184,6 +185,13 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 				result = append(result, i)
 			}
 			return result
+		},
+		"toJSON": func(v any) string {
+			b, err := json.Marshal(v)
+			if err != nil {
+				return "[]"
+			}
+			return string(b)
 		},
 	}
 }

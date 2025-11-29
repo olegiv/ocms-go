@@ -1310,3 +1310,25 @@
     font-size: 10px;
   }
 }
+
+// =============================================================================
+// TAG BADGES (for pages list)
+// =============================================================================
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-1;
+}
+
+.tag-badge-sm {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px $spacing-2;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  color: $primary-dark;
+  background-color: rgba($primary, 0.1);
+  border-radius: $radius-full;
+  white-space: nowrap;
+}

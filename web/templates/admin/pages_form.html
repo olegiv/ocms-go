@@ -154,6 +154,11 @@
                 <span class="form-error">{{.Data.Errors.body}}</span>
                 {{end}}
             </div>
+
+            <!-- Tags -->
+            <div class="form-group form-group-full">
+                {{template "tag_selector" .}}
+            </div>
         </div>
 
         <div class="form-actions">
