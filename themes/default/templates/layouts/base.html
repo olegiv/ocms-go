@@ -9,19 +9,28 @@
     {{if .MetaDescription}}<meta name="description" content="{{.MetaDescription}}">{{end}}
     {{if .MetaKeywords}}<meta name="keywords" content="{{.MetaKeywords}}">{{end}}
     {{if .Canonical}}<link rel="canonical" href="{{.Canonical}}">{{end}}
+    {{if .Robots}}<meta name="robots" content="{{.Robots}}">{{end}}
 
     {{/* Open Graph */}}
-    <meta property="og:type" content="{{if .Page}}article{{else}}website{{end}}">
+    <meta property="og:type" content="{{if .OGType}}{{.OGType}}{{else if .Page}}article{{else}}website{{end}}">
     <meta property="og:title" content="{{if .Title}}{{.Title}}{{else}}{{.SiteName}}{{end}}">
     {{if .MetaDescription}}<meta property="og:description" content="{{.MetaDescription}}">{{end}}
     {{if .SiteURL}}<meta property="og:url" content="{{.SiteURL}}{{.RequestURI}}">{{end}}
-    {{if .FeaturedImage}}<meta property="og:image" content="{{.FeaturedImage}}">{{end}}
+    {{if .OGImage}}<meta property="og:image" content="{{.OGImage}}">{{else if .FeaturedImage}}<meta property="og:image" content="{{.FeaturedImage}}">{{end}}
+    <meta property="og:site_name" content="{{.SiteName}}">
 
     {{/* Twitter Card */}}
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{if .Title}}{{.Title}}{{else}}{{.SiteName}}{{end}}">
     {{if .MetaDescription}}<meta name="twitter:description" content="{{.MetaDescription}}">{{end}}
-    {{if .FeaturedImage}}<meta name="twitter:image" content="{{.FeaturedImage}}">{{end}}
+    {{if .OGImage}}<meta name="twitter:image" content="{{.OGImage}}">{{else if .FeaturedImage}}<meta name="twitter:image" content="{{.FeaturedImage}}">{{end}}
+
+    {{/* JSON-LD Structured Data */}}
+    {{if .JSONLD}}
+    <script type="application/ld+json">
+{{.JSONLD}}
+    </script>
+    {{end}}
 
     <title>{{if .Title}}{{.Title}} - {{end}}{{.SiteName}}</title>
 

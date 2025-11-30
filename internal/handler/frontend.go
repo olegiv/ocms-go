@@ -16,6 +16,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"ocms-go/internal/seo"
 	"ocms-go/internal/service"
 	"ocms-go/internal/store"
 	"ocms-go/internal/theme"
@@ -41,6 +42,14 @@ type PageView struct {
 	Category             *CategoryView
 	Categories           []CategoryView
 	Tags                 []TagView
+	// SEO fields
+	MetaTitle       string
+	MetaDescription string
+	MetaKeywords    string
+	OGImage         string
+	NoIndex         bool
+	NoFollow        bool
+	CanonicalURL    string
 }
 
 // AuthorView represents an author for template rendering.
@@ -110,6 +119,10 @@ type BaseTemplateData struct {
 	MetaKeywords    string
 	Canonical       string
 	FeaturedImage   string
+	Robots          string      // Robots directive (index,follow / noindex,nofollow)
+	OGImage         string      // Open Graph image (absolute URL)
+	OGType          string      // Open Graph type (website, article)
+	JSONLD          template.JS // JSON-LD structured data
 
 	// Site info
 	SiteName    string
@@ -403,11 +416,52 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get base template data
+	// Get base template data first (for site info)
 	base := h.getBaseTemplateData(r, pageView.Title, pageView.Excerpt)
+
+	// Build SEO meta with fallbacks
+	siteConfig := &seo.SiteConfig{
+		SiteName:        base.SiteName,
+		SiteURL:         base.SiteURL,
+		SiteDescription: base.Site.Description,
+	}
+
+	var authorName string
+	if pageView.Author != nil {
+		authorName = pageView.Author.Name
+	}
+
+	pageData := &seo.PageData{
+		Title:           pageView.Title,
+		Body:            string(pageView.Body),
+		Slug:            pageView.Slug,
+		MetaTitle:       pageView.MetaTitle,
+		MetaDescription: pageView.MetaDescription,
+		MetaKeywords:    pageView.MetaKeywords,
+		OGImageURL:      pageView.OGImage,
+		FeaturedImage:   pageView.FeaturedImage,
+		NoIndex:         pageView.NoIndex,
+		NoFollow:        pageView.NoFollow,
+		CanonicalURL:    pageView.CanonicalURL,
+		PublishedAt:     pageView.PublishedAt,
+		AuthorName:      authorName,
+	}
+
+	meta := seo.BuildMeta(pageData, siteConfig)
+
+	// Apply SEO meta with fallbacks to base template data
+	base.Title = meta.Title
+	base.MetaDescription = meta.Description
+	base.MetaKeywords = meta.Keywords
+	base.Canonical = meta.Canonical
 	base.FeaturedImage = pageView.FeaturedImage
-	base.Canonical = base.SiteURL + "/" + slug
+	base.Robots = meta.Robots
+	base.OGImage = meta.OGImage
+	base.OGType = meta.OGType
 	base.BodyClass = "single-page"
+
+	// Build JSON-LD structured data
+	base.JSONLD = seo.BuildArticleSchema(pageData, siteConfig, page.UpdatedAt)
 
 	data := PageData{
 		BaseTemplateData: base,
@@ -726,6 +780,24 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page) PageView
 				URL:  "/tag/" + t.Slug,
 			}
 		}
+	}
+
+	// Populate SEO fields
+	pv.MetaTitle = p.MetaTitle
+	pv.MetaDescription = p.MetaDescription
+	pv.MetaKeywords = p.MetaKeywords
+	pv.NoIndex = p.NoIndex != 0
+	pv.NoFollow = p.NoFollow != 0
+	pv.CanonicalURL = p.CanonicalUrl
+
+	// Get OG image (from og_image_id or fall back to featured_image)
+	if p.OgImageID.Valid {
+		ogMedia, err := h.queries.GetMediaByID(ctx, p.OgImageID.Int64)
+		if err == nil {
+			pv.OGImage = fmt.Sprintf("/uploads/%s/%s", ogMedia.Uuid, ogMedia.Filename)
+		}
+	} else if pv.FeaturedImage != "" {
+		pv.OGImage = pv.FeaturedImage
 	}
 
 	return pv
