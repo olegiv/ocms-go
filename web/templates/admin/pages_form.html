@@ -337,128 +337,124 @@
 </div>
 
 <!-- TipTap Editor Scripts -->
-<script src="https://cdn.jsdelivr.net/npm/@tiptap/core@2.1.13/dist/index.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tiptap/starter-kit@2.1.13/dist/index.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tiptap/extension-link@2.1.13/dist/index.umd.min.js"></script>
+<script type="module">
+import { Editor } from 'https://esm.sh/@tiptap/core@2.1.13';
+import StarterKit from 'https://esm.sh/@tiptap/starter-kit@2.1.13';
+import Link from 'https://esm.sh/@tiptap/extension-link@2.1.13';
 
-<script>
-// Initialize TipTap Editor
-document.addEventListener('DOMContentLoaded', function() {
-    const { Editor } = window.TiptapCore;
-    const StarterKit = window.TiptapStarterKit.StarterKit;
-    const Link = window.TiptapExtensionLink.Link;
+const initialContent = document.getElementById('body-input').value || '<p></p>';
 
-    const initialContent = document.getElementById('body-input').value || '<p></p>';
-
-    const editor = new Editor({
-        element: document.getElementById('editor'),
-        extensions: [
-            StarterKit,
-            Link.configure({
-                openOnClick: false,
-                HTMLAttributes: {
-                    rel: 'noopener noreferrer',
-                    target: '_blank',
-                },
-            }),
-        ],
-        content: initialContent,
-        editorProps: {
-            attributes: {
-                class: 'prose',
+const editor = new Editor({
+    element: document.getElementById('editor'),
+    extensions: [
+        StarterKit,
+        Link.configure({
+            openOnClick: false,
+            HTMLAttributes: {
+                rel: 'noopener noreferrer',
+                target: '_blank',
             },
+        }),
+    ],
+    content: initialContent,
+    editorProps: {
+        attributes: {
+            class: 'prose',
         },
-        onUpdate: ({ editor }) => {
-            document.getElementById('body-input').value = editor.getHTML();
-        },
-    });
+    },
+    onUpdate: ({ editor }) => {
+        document.getElementById('body-input').value = editor.getHTML();
+    },
+});
 
-    // Toolbar button handlers
-    document.querySelectorAll('.toolbar-btn').forEach(button => {
-        button.addEventListener('click', () => {
-            const action = button.dataset.action;
+// Toolbar button handlers
+document.querySelectorAll('.toolbar-btn').forEach(button => {
+    button.addEventListener('click', () => {
+        const action = button.dataset.action;
 
-            switch(action) {
-                case 'bold':
-                    editor.chain().focus().toggleBold().run();
-                    break;
-                case 'italic':
-                    editor.chain().focus().toggleItalic().run();
-                    break;
-                case 'heading1':
-                    editor.chain().focus().toggleHeading({ level: 1 }).run();
-                    break;
-                case 'heading2':
-                    editor.chain().focus().toggleHeading({ level: 2 }).run();
-                    break;
-                case 'heading3':
-                    editor.chain().focus().toggleHeading({ level: 3 }).run();
-                    break;
-                case 'bulletList':
-                    editor.chain().focus().toggleBulletList().run();
-                    break;
-                case 'orderedList':
-                    editor.chain().focus().toggleOrderedList().run();
-                    break;
-                case 'link':
-                    const url = prompt('Enter URL:');
-                    if (url) {
-                        editor.chain().focus().setLink({ href: url }).run();
-                    }
-                    break;
-                case 'blockquote':
-                    editor.chain().focus().toggleBlockquote().run();
-                    break;
-                case 'undo':
-                    editor.chain().focus().undo().run();
-                    break;
-                case 'redo':
-                    editor.chain().focus().redo().run();
-                    break;
-            }
-        });
-    });
-
-    // Update toolbar button active states
-    editor.on('selectionUpdate', () => {
-        document.querySelectorAll('.toolbar-btn').forEach(button => {
-            const action = button.dataset.action;
-            let isActive = false;
-
-            switch(action) {
-                case 'bold':
-                    isActive = editor.isActive('bold');
-                    break;
-                case 'italic':
-                    isActive = editor.isActive('italic');
-                    break;
-                case 'heading1':
-                    isActive = editor.isActive('heading', { level: 1 });
-                    break;
-                case 'heading2':
-                    isActive = editor.isActive('heading', { level: 2 });
-                    break;
-                case 'heading3':
-                    isActive = editor.isActive('heading', { level: 3 });
-                    break;
-                case 'bulletList':
-                    isActive = editor.isActive('bulletList');
-                    break;
-                case 'orderedList':
-                    isActive = editor.isActive('orderedList');
-                    break;
-                case 'link':
-                    isActive = editor.isActive('link');
-                    break;
-                case 'blockquote':
-                    isActive = editor.isActive('blockquote');
-                    break;
-            }
-
-            button.classList.toggle('active', isActive);
-        });
+        switch(action) {
+            case 'bold':
+                editor.chain().focus().toggleBold().run();
+                break;
+            case 'italic':
+                editor.chain().focus().toggleItalic().run();
+                break;
+            case 'heading1':
+                editor.chain().focus().toggleHeading({ level: 1 }).run();
+                break;
+            case 'heading2':
+                editor.chain().focus().toggleHeading({ level: 2 }).run();
+                break;
+            case 'heading3':
+                editor.chain().focus().toggleHeading({ level: 3 }).run();
+                break;
+            case 'bulletList':
+                editor.chain().focus().toggleBulletList().run();
+                break;
+            case 'orderedList':
+                editor.chain().focus().toggleOrderedList().run();
+                break;
+            case 'link':
+                const url = prompt('Enter URL:');
+                if (url) {
+                    editor.chain().focus().setLink({ href: url }).run();
+                }
+                break;
+            case 'blockquote':
+                editor.chain().focus().toggleBlockquote().run();
+                break;
+            case 'undo':
+                editor.chain().focus().undo().run();
+                break;
+            case 'redo':
+                editor.chain().focus().redo().run();
+                break;
+        }
     });
 });
+
+// Update toolbar button active states
+editor.on('selectionUpdate', () => {
+    document.querySelectorAll('.toolbar-btn').forEach(button => {
+        const action = button.dataset.action;
+        let isActive = false;
+
+        switch(action) {
+            case 'bold':
+                isActive = editor.isActive('bold');
+                break;
+            case 'italic':
+                isActive = editor.isActive('italic');
+                break;
+            case 'heading1':
+                isActive = editor.isActive('heading', { level: 1 });
+                break;
+            case 'heading2':
+                isActive = editor.isActive('heading', { level: 2 });
+                break;
+            case 'heading3':
+                isActive = editor.isActive('heading', { level: 3 });
+                break;
+            case 'bulletList':
+                isActive = editor.isActive('bulletList');
+                break;
+            case 'orderedList':
+                isActive = editor.isActive('orderedList');
+                break;
+            case 'link':
+                isActive = editor.isActive('link');
+                break;
+            case 'blockquote':
+                isActive = editor.isActive('blockquote');
+                break;
+        }
+
+        button.classList.toggle('active', isActive);
+    });
+});
+</script>
+
+<script>
 
 // Alpine.js page form component
 function pageForm() {
