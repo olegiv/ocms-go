@@ -194,11 +194,13 @@ func run() error {
 	// Create router
 	r := chi.NewRouter()
 
-	// Middleware
+	// Middleware stack
 	r.Use(chimw.RequestID)
 	r.Use(chimw.RealIP)
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
+	r.Use(chimw.Compress(5))                    // Gzip compression with level 5
+	r.Use(middleware.Timeout(30 * time.Second)) // 30 second request timeout
 	r.Use(sessionManager.LoadAndSave)
 
 	// Initialize handlers
@@ -227,6 +229,12 @@ func run() error {
 		return fmt.Errorf("initializing api docs handler: %w", err)
 	}
 	apiKeysHandler := handler.NewAPIKeysHandler(db, renderer, sessionManager)
+	healthHandler := handler.NewHealthHandler(db, "./uploads")
+
+	// Health check routes (should be early, before session middleware for some endpoints)
+	r.Get("/health", healthHandler.Health)
+	r.Get("/health/live", healthHandler.Liveness)
+	r.Get("/health/ready", healthHandler.Readiness)
 
 	// Public frontend routes
 	r.Get("/", frontendHandler.Home)
@@ -499,7 +507,7 @@ func run() error {
 	uploadsHandler := middleware.StaticCache(604800)(http.StripPrefix("/uploads/", http.FileServer(uploadsDir)))
 	r.Handle("/uploads/*", uploadsHandler)
 
-	// Serve theme static files
+	// Serve theme static files with caching (1 month = 2592000 seconds)
 	r.Get("/themes/{themeName}/static/*", func(w http.ResponseWriter, r *http.Request) {
 		themeName := chi.URLParam(r, "themeName")
 		thm, err := themeManager.GetTheme(themeName)
@@ -507,6 +515,8 @@ func run() error {
 			http.NotFound(w, r)
 			return
 		}
+		// Add cache headers for theme static files
+		w.Header().Set("Cache-Control", "public, max-age=2592000")
 		// Strip the prefix to get the file path
 		path := r.URL.Path
 		prefix := fmt.Sprintf("/themes/%s/static/", themeName)
@@ -526,13 +536,15 @@ func run() error {
 		frontendHandler.NotFound(w, req)
 	})
 
-	// Create server
+	// Create server with appropriate timeouts
 	srv := &http.Server{
-		Addr:         cfg.ServerAddr(),
-		Handler:      r,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:              cfg.ServerAddr(),
+		Handler:           r,
+		ReadTimeout:       15 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      60 * time.Second, // Longer to allow for large uploads and slow connections
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20, // 1MB max header size
 	}
 
 	// Start server in goroutine
