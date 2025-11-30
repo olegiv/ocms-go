@@ -185,9 +185,23 @@ func (r *Renderer) getTemplateFiles(templatesFS fs.FS, dir string) ([]string, er
 	return files, nil
 }
 
+// TemplateFuncs returns custom template functions for external use.
+func (r *Renderer) TemplateFuncs() template.FuncMap {
+	return r.templateFuncs()
+}
+
 // templateFuncs returns custom template functions.
 func (r *Renderer) templateFuncs() template.FuncMap {
 	return template.FuncMap{
+		"lower": func(s string) string {
+			return strings.ToLower(s)
+		},
+		"upper": func(s string) string {
+			return strings.ToUpper(s)
+		},
+		"now": func() time.Time {
+			return time.Now()
+		},
 		"formatDate": func(t time.Time) string {
 			return t.Format("Jan 2, 2006")
 		},

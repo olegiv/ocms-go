@@ -1,0 +1,38 @@
+{{if .Pagination}}
+<nav class="dev-pagination" aria-label="Page navigation">
+    <div class="dev-pagination-info">
+        <span class="dev-comment">// </span>
+        <span>Page {{.Pagination.CurrentPage}} of {{.Pagination.TotalPages}}</span>
+    </div>
+
+    <ul class="dev-pagination-list">
+        {{if .Pagination.HasPrev}}
+        <li class="dev-pagination-item">
+            <a href="{{.Pagination.PrevURL}}" class="dev-pagination-link dev-pagination-prev">
+                <span class="dev-arrow">&lt;</span> prev
+            </a>
+        </li>
+        {{end}}
+
+        {{range .Pagination.Pages}}
+        <li class="dev-pagination-item">
+            {{if .IsCurrent}}
+            <span class="dev-pagination-link dev-pagination-current">{{.Number}}</span>
+            {{else if .IsEllipsis}}
+            <span class="dev-pagination-ellipsis">...</span>
+            {{else}}
+            <a href="{{.URL}}" class="dev-pagination-link">{{.Number}}</a>
+            {{end}}
+        </li>
+        {{end}}
+
+        {{if .Pagination.HasNext}}
+        <li class="dev-pagination-item">
+            <a href="{{.Pagination.NextURL}}" class="dev-pagination-link dev-pagination-next">
+                next <span class="dev-arrow">&gt;</span>
+            </a>
+        </li>
+        {{end}}
+    </ul>
+</nav>
+{{end}}

@@ -1,0 +1,45 @@
+<header class="dev-header">
+    <div class="dev-container">
+        <div class="dev-header-inner">
+            <a href="/" class="dev-logo">
+                <span class="dev-logo-bracket">{</span>
+                <span class="dev-logo-text">{{.SiteName}}</span>
+                <span class="dev-logo-bracket">}</span>
+            </a>
+
+            <button class="dev-menu-toggle" id="menu-toggle" aria-label="Toggle menu">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+
+            <nav class="dev-nav" id="main-nav">
+                {{if .Navigation}}
+                <ul class="dev-nav-list">
+                    {{range .Navigation}}
+                    <li class="dev-nav-item{{if .IsActive}} active{{end}}">
+                        <a href="{{.URL}}" class="dev-nav-link" {{if eq .Target "_blank"}}target="_blank" rel="noopener"{{end}}>
+                            {{.Title}}
+                        </a>
+                    </li>
+                    {{end}}
+                </ul>
+                {{end}}
+
+                {{if .ShowSearch}}
+                <form action="/search" method="GET" class="dev-search">
+                    <input type="text" name="q" placeholder="Search..." class="dev-search-input" aria-label="Search" value="{{.SearchQuery}}">
+                    <button type="submit" class="dev-search-btn" aria-label="Submit search">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                    </button>
+                </form>
+                {{end}}
+            </nav>
+        </div>
+    </div>
+</header>

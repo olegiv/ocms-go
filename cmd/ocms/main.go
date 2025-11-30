@@ -109,6 +109,7 @@ func run() error {
 
 	// Initialize theme manager
 	themeManager := theme.NewManager(cfg.ThemesDir, logger)
+	themeManager.SetFuncMap(renderer.TemplateFuncs())
 	if err := themeManager.LoadThemes(); err != nil {
 		slog.Warn("failed to load themes", "error", err)
 	}
@@ -151,13 +152,13 @@ func run() error {
 	menusHandler := handler.NewMenusHandler(db, renderer, sessionManager)
 	formsHandler := handler.NewFormsHandler(db, renderer, sessionManager)
 	themesHandler := handler.NewThemesHandler(db, renderer, sessionManager, themeManager)
+	frontendHandler := handler.NewFrontendHandler(db, themeManager, logger)
 
-	// Routes
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "oCMS is running")
-	})
+	// Public frontend routes
+	r.Get("/", frontendHandler.Home)
+	r.Get("/search", frontendHandler.Search)
+	r.Get("/category/{slug}", frontendHandler.Category)
+	r.Get("/tag/{slug}", frontendHandler.Tag)
 
 	// Auth routes (public)
 	r.Get("/login", authHandler.LoginForm)
@@ -332,9 +333,13 @@ func run() error {
 		http.ServeFile(w, r, filePath)
 	})
 
-	// 404 Not Found handler
+	// Page by slug route (catches all unmatched single-level paths)
+	// This should be registered last to catch pages by slug
+	r.Get("/{slug}", frontendHandler.Page)
+
+	// 404 Not Found handler - use frontend theme's 404
 	r.NotFound(func(w http.ResponseWriter, req *http.Request) {
-		renderer.RenderNotFound(w, req)
+		frontendHandler.NotFound(w, req)
 	})
 
 	// Create server

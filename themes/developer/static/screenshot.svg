@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 250" width="400" height="250">
+  <!-- Background -->
+  <rect width="400" height="250" fill="#0d1117"/>
+
+  <!-- Header -->
+  <rect x="0" y="0" width="400" height="40" fill="#161b22"/>
+  <line x1="0" y1="40" x2="400" y2="40" stroke="#30363d" stroke-width="1"/>
+
+  <!-- Logo with brackets -->
+  <text x="20" y="26" font-family="monospace" font-size="14" fill="#10b981">{</text>
+  <text x="28" y="26" font-family="monospace" font-size="14" fill="#f0f6fc">Dev</text>
+  <text x="53" y="26" font-family="monospace" font-size="14" fill="#10b981">}</text>
+
+  <!-- Nav links -->
+  <text x="90" y="26" font-family="monospace" font-size="10" fill="#c9d1d9">Home</text>
+  <text x="130" y="26" font-family="monospace" font-size="10" fill="#c9d1d9">Blog</text>
+  <text x="165" y="26" font-family="monospace" font-size="10" fill="#c9d1d9">About</text>
+
+  <!-- Search box -->
+  <rect x="300" y="12" width="85" height="18" rx="3" fill="#21262d" stroke="#30363d"/>
+  <text x="310" y="24" font-family="monospace" font-size="9" fill="#8b949e">Search...</text>
+
+  <!-- Terminal Hero Section -->
+  <rect x="20" y="55" width="360" height="70" rx="6" fill="#161b22" stroke="#30363d"/>
+
+  <!-- Terminal dots -->
+  <circle cx="34" cy="68" r="4" fill="#f85149"/>
+  <circle cx="48" cy="68" r="4" fill="#d29922"/>
+  <circle cx="62" cy="68" r="4" fill="#3fb950"/>
+  <text x="320" y="72" font-family="monospace" font-size="8" fill="#8b949e">~/dev</text>
+
+  <!-- Terminal content -->
+  <text x="30" y="90" font-family="monospace" font-size="10" fill="#10b981">$</text>
+  <text x="42" y="90" font-family="monospace" font-size="10" fill="#c9d1d9">cat welcome.txt</text>
+  <text x="30" y="108" font-family="monospace" font-size="14" font-weight="bold" fill="#f0f6fc">Welcome to DevBlog</text>
+
+  <!-- Section Title -->
+  <text x="20" y="150" font-family="monospace" font-size="11" fill="#6e7681">// </text>
+  <text x="36" y="150" font-family="monospace" font-size="11" fill="#f0f6fc">Recent Posts</text>
+  <line x1="20" y1="158" x2="280" y2="158" stroke="#30363d" stroke-width="1"/>
+
+  <!-- Post Card 1 -->
+  <rect x="20" y="168" width="170" height="65" rx="4" fill="#161b22" stroke="#30363d"/>
+  <rect x="24" y="172" width="162" height="30" rx="2" fill="#21262d"/>
+  <text x="30" y="216" font-family="monospace" font-size="9" fill="#f0f6fc">Building APIs</text>
+  <text x="30" y="228" font-family="monospace" font-size="7" fill="#8b949e">/* 2024-01-15 */</text>
+
+  <!-- Post Card 2 -->
+  <rect x="200" y="168" width="90" height="65" rx="4" fill="#161b22" stroke="#30363d"/>
+  <rect x="204" y="172" width="82" height="30" rx="2" fill="#21262d"/>
+  <text x="208" y="216" font-family="monospace" font-size="9" fill="#f0f6fc">Go Tips</text>
+  <text x="208" y="228" font-family="monospace" font-size="7" fill="#10b981">#golang</text>
+
+  <!-- Sidebar -->
+  <rect x="300" y="140" width="85" height="95" rx="4" fill="#161b22" stroke="#30363d"/>
+  <text x="310" y="156" font-family="monospace" font-size="8" fill="#6e7681">// </text>
+  <text x="322" y="156" font-family="monospace" font-size="8" fill="#f0f6fc">Tags</text>
+  <text x="310" y="172" font-family="monospace" font-size="8" fill="#10b981">#go</text>
+  <text x="330" y="172" font-family="monospace" font-size="8" fill="#10b981">#rust</text>
+  <text x="310" y="186" font-family="monospace" font-size="8" fill="#10b981">#web</text>
+  <text x="335" y="186" font-family="monospace" font-size="8" fill="#10b981">#api</text>
+  <line x1="310" y1="198" x2="375" y2="198" stroke="#30363d" stroke-width="1"/>
+  <text x="310" y="212" font-family="monospace" font-size="8" fill="#6e7681">// </text>
+  <text x="322" y="212" font-family="monospace" font-size="8" fill="#f0f6fc">Recent</text>
+  <text x="310" y="226" font-family="monospace" font-size="7" fill="#8b949e">> Post 1</text>
+
+  <!-- Accent color bar at bottom -->
+  <rect x="0" y="248" width="400" height="2" fill="#10b981"/>
+</svg>

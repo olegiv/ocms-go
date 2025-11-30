@@ -1,0 +1,96 @@
+{{define "content"}}
+<div class="dev-page-layout">
+    <div class="dev-archive-page">
+        <header class="dev-archive-header">
+            <div class="dev-terminal-line">
+                <span class="dev-prompt">$</span>
+                <span class="dev-command">grep -r "#{{.Tag.Name}}" ./posts</span>
+            </div>
+            <span class="dev-archive-label">tag</span>
+            <h1 class="dev-archive-title">#{{.Tag.Name}}</h1>
+            {{if .Tag.Description}}
+            <p class="dev-archive-description">{{.Tag.Description}}</p>
+            {{end}}
+            {{if .PageCount}}
+            <p class="dev-archive-count">
+                <span class="dev-comment">// </span>{{.PageCount}} {{if eq .PageCount 1}}match{{else}}matches{{end}}
+            </p>
+            {{end}}
+        </header>
+
+        {{if .Pages}}
+        <div class="dev-posts-list">
+            {{range .Pages}}
+            <article class="dev-post-item">
+                {{if .FeaturedImage}}
+                <div class="dev-post-image">
+                    <a href="{{.URL}}">
+                        <img src="{{.FeaturedImage}}" alt="{{.Title}}" loading="lazy">
+                    </a>
+                </div>
+                {{end}}
+                <div class="dev-post-content">
+                    {{if .Category}}
+                    <span class="dev-post-category">
+                        <a href="/category/{{.Category.Slug}}">{{.Category.Name}}</a>
+                    </span>
+                    {{end}}
+                    <h2 class="dev-post-title">
+                        <a href="{{.URL}}">{{.Title}}</a>
+                    </h2>
+                    {{if .Excerpt}}
+                    <p class="dev-post-excerpt">{{.Excerpt}}</p>
+                    {{end}}
+                    <div class="dev-post-meta">
+                        {{if .PublishedAt}}
+                        <time datetime="{{.PublishedAt}}" class="dev-meta-item">
+                            {{.PublishedAtFormatted}}
+                        </time>
+                        {{end}}
+                        {{if .Author}}
+                        <span class="dev-meta-item">@{{.Author}}</span>
+                        {{end}}
+                    </div>
+                </div>
+            </article>
+            {{end}}
+        </div>
+
+        {{template "pagination.html" .}}
+
+        {{else}}
+        <div class="dev-no-results">
+            <div class="dev-terminal">
+                <div class="dev-terminal-header">
+                    <span class="dev-terminal-dot red"></span>
+                    <span class="dev-terminal-dot yellow"></span>
+                    <span class="dev-terminal-dot green"></span>
+                </div>
+                <div class="dev-terminal-body">
+                    <p class="dev-output">No matches found for this tag.</p>
+                    <a href="/" class="dev-btn dev-btn-secondary">
+                        <span class="dev-arrow">&gt;</span> cd ~
+                    </a>
+                </div>
+            </div>
+        </div>
+        {{end}}
+
+        {{/* Related Tags */}}
+        {{if .RelatedTags}}
+        <section class="dev-related-tags">
+            <h3 class="dev-section-title">
+                <span class="dev-comment">// </span>Related Tags
+            </h3>
+            <div class="dev-tag-cloud">
+                {{range .RelatedTags}}
+                <a href="/tag/{{.Slug}}" class="dev-tag">#{{.Name}}</a>
+                {{end}}
+            </div>
+        </section>
+        {{end}}
+    </div>
+
+    {{template "sidebar.html" .}}
+</div>
+{{end}}

@@ -1,0 +1,87 @@
+{{define "content"}}
+<div class="dev-page-layout">
+    <div class="dev-list-page">
+        <header class="dev-list-header">
+            <div class="dev-terminal-line">
+                <span class="dev-prompt">$</span>
+                <span class="dev-command">ls -la {{if .Title}}{{.Title | lower}}{{else}}posts{{end}}/</span>
+            </div>
+            <h1 class="dev-list-title">{{if .Title}}{{.Title}}{{else}}All Posts{{end}}</h1>
+            {{if .Description}}
+            <p class="dev-list-description">{{.Description}}</p>
+            {{end}}
+        </header>
+
+        {{if .Pages}}
+        <div class="dev-posts-list">
+            {{range .Pages}}
+            <article class="dev-post-item">
+                {{if .FeaturedImage}}
+                <div class="dev-post-image">
+                    <a href="{{.URL}}">
+                        <img src="{{.FeaturedImage}}" alt="{{.Title}}" loading="lazy">
+                    </a>
+                </div>
+                {{end}}
+                <div class="dev-post-content">
+                    {{if .Category}}
+                    <span class="dev-post-category">
+                        <a href="/category/{{.Category.Slug}}">{{.Category.Name}}</a>
+                    </span>
+                    {{end}}
+                    <h2 class="dev-post-title">
+                        <a href="{{.URL}}">{{.Title}}</a>
+                    </h2>
+                    {{if .Excerpt}}
+                    <p class="dev-post-excerpt">{{.Excerpt}}</p>
+                    {{end}}
+                    <div class="dev-post-meta">
+                        {{if .PublishedAt}}
+                        <time datetime="{{.PublishedAt}}" class="dev-meta-item">
+                            {{.PublishedAtFormatted}}
+                        </time>
+                        {{end}}
+                        {{if .Author}}
+                        <span class="dev-meta-item">@{{.Author}}</span>
+                        {{end}}
+                        {{if .ReadingTime}}
+                        <span class="dev-meta-item">~{{.ReadingTime}} min</span>
+                        {{end}}
+                    </div>
+                    {{if .Tags}}
+                    <div class="dev-post-tags">
+                        {{range .Tags}}
+                        <a href="/tag/{{.Slug}}" class="dev-tag">#{{.Name}}</a>
+                        {{end}}
+                    </div>
+                    {{end}}
+                </div>
+            </article>
+            {{end}}
+        </div>
+
+        {{template "pagination.html" .}}
+
+        {{else}}
+        <div class="dev-no-results">
+            <div class="dev-terminal">
+                <div class="dev-terminal-header">
+                    <span class="dev-terminal-dot red"></span>
+                    <span class="dev-terminal-dot yellow"></span>
+                    <span class="dev-terminal-dot green"></span>
+                </div>
+                <div class="dev-terminal-body">
+                    <div class="dev-terminal-line">
+                        <span class="dev-prompt">$</span>
+                        <span class="dev-command">find . -type f -name "*.md"</span>
+                    </div>
+                    <p class="dev-output">No posts found.</p>
+                </div>
+            </div>
+        </div>
+        {{end}}
+    </div>
+
+    {{template "sidebar.html" .}}
+</div>
+{{end}}

@@ -1,0 +1,38 @@
+{
+    "name": "Developer",
+    "version": "1.0.0",
+    "author": "oCMS",
+    "description": "Dark theme for developers and technical blogs",
+    "screenshot": "screenshot.svg",
+    "templates": {
+        "home": "pages/home.html",
+        "page": "pages/page.html",
+        "list": "pages/list.html",
+        "404": "pages/404.html",
+        "category": "pages/category.html",
+        "tag": "pages/tag.html",
+        "search": "pages/search.html"
+    },
+    "settings": [
+        {
+            "key": "accent_color",
+            "label": "Accent Color",
+            "type": "color",
+            "default": "#10b981"
+        },
+        {
+            "key": "code_theme",
+            "label": "Code Highlighting Theme",
+            "type": "select",
+            "default": "monokai",
+            "options": ["monokai", "github-dark", "dracula", "nord"]
+        },
+        {
+            "key": "show_line_numbers",
+            "label": "Show Line Numbers in Code",
+            "type": "select",
+            "default": "yes",
+            "options": ["yes", "no"]
+        }
+    ]
+}

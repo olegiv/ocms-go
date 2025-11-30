@@ -58,6 +58,43 @@ func (q *Queries) CountPagesByStatus(ctx context.Context, status string) (int64,
 	return count, err
 }
 
+const countPublishedPages = `-- name: CountPublishedPages :one
+SELECT COUNT(*) FROM pages WHERE status = 'published'
+`
+
+func (q *Queries) CountPublishedPages(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPublishedPages)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countPublishedPagesByCategory = `-- name: CountPublishedPagesByCategory :one
+SELECT COUNT(DISTINCT p.id) FROM pages p
+INNER JOIN page_categories pc ON pc.page_id = p.id
+WHERE pc.category_id = ? AND p.status = 'published'
+`
+
+func (q *Queries) CountPublishedPagesByCategory(ctx context.Context, categoryID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPublishedPagesByCategory, categoryID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countPublishedPagesForTag = `-- name: CountPublishedPagesForTag :one
+SELECT COUNT(*) FROM pages p
+INNER JOIN page_tags pt ON pt.page_id = p.id
+WHERE pt.tag_id = ? AND p.status = 'published'
+`
+
+func (q *Queries) CountPublishedPagesForTag(ctx context.Context, tagID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPublishedPagesForTag, tagID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createPage = `-- name: CreatePage :one
 INSERT INTO pages (title, slug, body, status, author_id, featured_image_id, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -203,6 +240,25 @@ func (q *Queries) GetLatestPageVersion(ctx context.Context, pageID int64) (PageV
 	return i, err
 }
 
+const getPageAuthor = `-- name: GetPageAuthor :one
+SELECT u.id, u.name, u.email FROM users u
+INNER JOIN pages p ON p.author_id = u.id
+WHERE p.id = ?
+`
+
+type GetPageAuthorRow struct {
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+func (q *Queries) GetPageAuthor(ctx context.Context, id int64) (GetPageAuthorRow, error) {
+	row := q.db.QueryRowContext(ctx, getPageAuthor, id)
+	var i GetPageAuthorRow
+	err := row.Scan(&i.ID, &i.Name, &i.Email)
+	return i, err
+}
+
 const getPageByID = `-- name: GetPageByID :one
 SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id FROM pages WHERE id = ?
 `
@@ -303,6 +359,28 @@ func (q *Queries) GetPageVersionWithUser(ctx context.Context, id int64) (GetPage
 		&i.CreatedAt,
 		&i.ChangedByName,
 		&i.ChangedByEmail,
+	)
+	return i, err
+}
+
+const getPublishedPageBySlug = `-- name: GetPublishedPageBySlug :one
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id FROM pages WHERE slug = ? AND status = 'published'
+`
+
+func (q *Queries) GetPublishedPageBySlug(ctx context.Context, slug string) (Page, error) {
+	row := q.db.QueryRowContext(ctx, getPublishedPageBySlug, slug)
+	var i Page
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Slug,
+		&i.Body,
+		&i.Status,
+		&i.AuthorID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PublishedAt,
+		&i.FeaturedImageID,
 	)
 	return i, err
 }
@@ -468,6 +546,147 @@ type ListPagesByStatusParams struct {
 
 func (q *Queries) ListPagesByStatus(ctx context.Context, arg ListPagesByStatusParams) ([]Page, error) {
 	rows, err := q.db.QueryContext(ctx, listPagesByStatus, arg.Status, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Page{}
+	for rows.Next() {
+		var i Page
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Slug,
+			&i.Body,
+			&i.Status,
+			&i.AuthorID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PublishedAt,
+			&i.FeaturedImageID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublishedPages = `-- name: ListPublishedPages :many
+
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id FROM pages WHERE status = 'published' ORDER BY published_at DESC LIMIT ? OFFSET ?
+`
+
+type ListPublishedPagesParams struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+// Frontend queries for public pages
+func (q *Queries) ListPublishedPages(ctx context.Context, arg ListPublishedPagesParams) ([]Page, error) {
+	rows, err := q.db.QueryContext(ctx, listPublishedPages, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Page{}
+	for rows.Next() {
+		var i Page
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Slug,
+			&i.Body,
+			&i.Status,
+			&i.AuthorID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PublishedAt,
+			&i.FeaturedImageID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublishedPagesByCategory = `-- name: ListPublishedPagesByCategory :many
+SELECT DISTINCT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id FROM pages p
+INNER JOIN page_categories pc ON pc.page_id = p.id
+WHERE pc.category_id = ? AND p.status = 'published'
+ORDER BY p.published_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListPublishedPagesByCategoryParams struct {
+	CategoryID int64 `json:"category_id"`
+	Limit      int64 `json:"limit"`
+	Offset     int64 `json:"offset"`
+}
+
+func (q *Queries) ListPublishedPagesByCategory(ctx context.Context, arg ListPublishedPagesByCategoryParams) ([]Page, error) {
+	rows, err := q.db.QueryContext(ctx, listPublishedPagesByCategory, arg.CategoryID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Page{}
+	for rows.Next() {
+		var i Page
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Slug,
+			&i.Body,
+			&i.Status,
+			&i.AuthorID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PublishedAt,
+			&i.FeaturedImageID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublishedPagesForTag = `-- name: ListPublishedPagesForTag :many
+SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id FROM pages p
+INNER JOIN page_tags pt ON pt.page_id = p.id
+WHERE pt.tag_id = ? AND p.status = 'published'
+ORDER BY p.published_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListPublishedPagesForTagParams struct {
+	TagID  int64 `json:"tag_id"`
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+func (q *Queries) ListPublishedPagesForTag(ctx context.Context, arg ListPublishedPagesForTagParams) ([]Page, error) {
+	rows, err := q.db.QueryContext(ctx, listPublishedPagesForTag, arg.TagID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

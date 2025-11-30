@@ -1,0 +1,50 @@
+<aside class="dev-sidebar">
+    {{if .Categories}}
+    <div class="dev-sidebar-widget">
+        <h3 class="dev-widget-title">
+            <span class="dev-comment">// </span>Categories
+        </h3>
+        <ul class="dev-category-list">
+            {{range .Categories}}
+            <li class="dev-category-item">
+                <a href="/category/{{.Slug}}" class="dev-category-link">
+                    <span class="dev-arrow">&gt;</span> {{.Name}}
+                    {{if .PageCount}}<span class="dev-count">({{.PageCount}})</span>{{end}}
+                </a>
+            </li>
+            {{end}}
+        </ul>
+    </div>
+    {{end}}
+
+    {{if .Tags}}
+    <div class="dev-sidebar-widget">
+        <h3 class="dev-widget-title">
+            <span class="dev-comment">// </span>Tags
+        </h3>
+        <div class="dev-tag-cloud">
+            {{range .Tags}}
+            <a href="/tag/{{.Slug}}" class="dev-tag">
+                #{{.Name}}
+            </a>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+
+    {{if .RecentPages}}
+    <div class="dev-sidebar-widget">
+        <h3 class="dev-widget-title">
+            <span class="dev-comment">// </span>Recent Posts
+        </h3>
+        <ul class="dev-recent-list">
+            {{range .RecentPages}}
+            <li class="dev-recent-item">
+                <a href="/{{.Slug}}" class="dev-recent-link">{{.Title}}</a>
+                <time class="dev-recent-date">{{formatDate .CreatedAt}}</time>
+            </li>
+            {{end}}
+        </ul>
+    </div>
+    {{end}}
+</aside>

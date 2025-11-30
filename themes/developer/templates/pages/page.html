@@ -1,0 +1,119 @@
+{{define "content"}}
+<div class="dev-page-layout">
+    <article class="dev-article">
+        <header class="dev-article-header">
+            <div class="dev-file-path">
+                <span class="dev-comment">// </span>
+                <span class="dev-path">{{if .Page.Category}}/{{.Page.Category.Slug}}{{end}}/{{.Page.Slug}}</span>
+            </div>
+            <h1 class="dev-article-title">{{.Page.Title}}</h1>
+            {{if .Page.Excerpt}}
+            <p class="dev-article-excerpt">{{.Page.Excerpt}}</p>
+            {{end}}
+            <div class="dev-article-meta">
+                {{if .Page.PublishedAt}}
+                <span class="dev-meta-item">
+                    <span class="dev-comment">/*</span> {{formatDate .Page.PublishedAt}} <span class="dev-comment">*/</span>
+                </span>
+                {{end}}
+                {{if .Page.Author}}
+                <span class="dev-meta-item">@{{.Page.Author.Name}}</span>
+                {{end}}
+                {{if .Page.ReadingTime}}
+                <span class="dev-meta-item">~{{.Page.ReadingTime}} min read</span>
+                {{end}}
+            </div>
+        </header>
+
+        {{if .Page.FeaturedImage}}
+        <div class="dev-article-image">
+            <img src="{{.Page.FeaturedImage}}" alt="{{.Page.Title}}">
+        </div>
+        {{end}}
+
+        <div class="dev-article-body dev-prose">
+            {{.Page.Body}}
+        </div>
+
+        {{/* Tags and Category */}}
+        {{if or .Page.Category .Page.Tags}}
+        <footer class="dev-article-footer">
+            {{if .Page.Category}}
+            <div class="dev-article-category">
+                <span class="dev-label">category:</span>
+                <a href="/category/{{.Page.Category.Slug}}" class="dev-category-link">
+                    {{.Page.Category.Name}}
+                </a>
+            </div>
+            {{end}}
+
+            {{if .Page.Tags}}
+            <div class="dev-article-tags">
+                <span class="dev-label">tags:</span>
+                <div class="dev-tags">
+                    {{range .Page.Tags}}
+                    <a href="/tag/{{.Slug}}" class="dev-tag">#{{.Name}}</a>
+                    {{end}}
+                </div>
+            </div>
+            {{end}}
+        </footer>
+        {{end}}
+
+        {{/* Author Box */}}
+        {{if .ShowAuthorBox}}
+        {{if .Page.Author}}
+        <div class="dev-author-box">
+            <div class="dev-author-header">
+                <span class="dev-comment">/**</span>
+            </div>
+            <div class="dev-author-content">
+                {{if .Page.Author.Avatar}}
+                <img src="{{.Page.Author.Avatar}}" alt="{{.Page.Author.Name}}" class="dev-author-avatar">
+                {{end}}
+                <div class="dev-author-info">
+                    <span class="dev-author-prefix">* @author</span>
+                    <h4 class="dev-author-name">{{.Page.Author.Name}}</h4>
+                    {{if .Page.Author.Bio}}
+                    <p class="dev-author-bio">* {{.Page.Author.Bio}}</p>
+                    {{end}}
+                </div>
+            </div>
+            <div class="dev-author-footer">
+                <span class="dev-comment">*/</span>
+            </div>
+        </div>
+        {{end}}
+        {{end}}
+
+        {{/* Related Posts */}}
+        {{if .RelatedPages}}
+        <section class="dev-related">
+            <h3 class="dev-section-title">
+                <span class="dev-comment">// </span>Related Posts
+            </h3>
+            <div class="dev-grid dev-grid-3">
+                {{range .RelatedPages}}
+                <article class="dev-card dev-card-sm">
+                    {{if .FeaturedImage}}
+                    <div class="dev-card-image">
+                        <a href="{{.URL}}">
+                            <img src="{{.FeaturedImage}}" alt="{{.Title}}" loading="lazy">
+                        </a>
+                    </div>
+                    {{end}}
+                    <div class="dev-card-body">
+                        <h4 class="dev-card-title">
+                            <a href="{{.URL}}">{{.Title}}</a>
+                        </h4>
+                    </div>
+                </article>
+                {{end}}
+            </div>
+        </section>
+        {{end}}
+    </article>
+
+    {{template "sidebar.html" .}}
+</div>
+{{end}}

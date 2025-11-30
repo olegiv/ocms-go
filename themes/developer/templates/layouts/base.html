@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+    <!-- SEO Meta Tags -->
+    <title>{{if .Title}}{{.Title}} - {{end}}{{.SiteName}}</title>
+    {{if .MetaDescription}}<meta name="description" content="{{.MetaDescription}}">{{end}}
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="{{if .Page}}article{{else}}website{{end}}">
+    <meta property="og:title" content="{{if .Title}}{{.Title}}{{else}}{{.SiteName}}{{end}}">
+    <meta property="og:site_name" content="{{.SiteName}}">
+    {{if .SiteURL}}<meta property="og:url" content="{{.SiteURL}}{{.RequestURI}}">{{end}}
+    {{if .FeaturedImage}}<meta property="og:image" content="{{.FeaturedImage}}">{{end}}
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{if .Title}}{{.Title}}{{else}}{{.SiteName}}{{end}}">
+    {{if .MetaDescription}}<meta name="twitter:description" content="{{.MetaDescription}}">{{end}}
+
+    <!-- Canonical URL -->
+    {{if .Canonical}}<link rel="canonical" href="{{.Canonical}}">{{end}}
+
+    <!-- Theme CSS -->
+    <link rel="stylesheet" href="/themes/developer/static/css/theme.css">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/themes/developer/static/favicon.svg">
+
+    {{block "head" .}}{{end}}
+</head>
+<body class="{{if .BodyClass}}{{.BodyClass}}{{end}}">
+    <div class="dev-layout">
+        {{template "header.html" .}}
+
+        <main class="dev-main">
+            <div class="dev-container">
+                {{template "content" .}}
+            </div>
+        </main>
+
+        {{template "footer.html" .}}
+    </div>
+
+    <!-- Theme JavaScript -->
+    <script src="/themes/developer/static/js/theme.js"></script>
+    {{block "scripts" .}}{{end}}
+</body>
+</html>

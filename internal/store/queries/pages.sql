@@ -112,3 +112,43 @@ UPDATE pages SET featured_image_id = ?, updated_at = ? WHERE id = ?;
 
 -- name: ClearPageFeaturedImage :exec
 UPDATE pages SET featured_image_id = NULL, updated_at = ? WHERE id = ?;
+
+-- Frontend queries for public pages
+
+-- name: ListPublishedPages :many
+SELECT * FROM pages WHERE status = 'published' ORDER BY published_at DESC LIMIT ? OFFSET ?;
+
+-- name: CountPublishedPages :one
+SELECT COUNT(*) FROM pages WHERE status = 'published';
+
+-- name: GetPublishedPageBySlug :one
+SELECT * FROM pages WHERE slug = ? AND status = 'published';
+
+-- name: ListPublishedPagesByCategory :many
+SELECT DISTINCT p.* FROM pages p
+INNER JOIN page_categories pc ON pc.page_id = p.id
+WHERE pc.category_id = ? AND p.status = 'published'
+ORDER BY p.published_at DESC
+LIMIT ? OFFSET ?;
+
+-- name: CountPublishedPagesByCategory :one
+SELECT COUNT(DISTINCT p.id) FROM pages p
+INNER JOIN page_categories pc ON pc.page_id = p.id
+WHERE pc.category_id = ? AND p.status = 'published';
+
+-- name: ListPublishedPagesForTag :many
+SELECT p.* FROM pages p
+INNER JOIN page_tags pt ON pt.page_id = p.id
+WHERE pt.tag_id = ? AND p.status = 'published'
+ORDER BY p.published_at DESC
+LIMIT ? OFFSET ?;
+
+-- name: CountPublishedPagesForTag :one
+SELECT COUNT(*) FROM pages p
+INNER JOIN page_tags pt ON pt.page_id = p.id
+WHERE pt.tag_id = ? AND p.status = 'published';
+
+-- name: GetPageAuthor :one
+SELECT u.id, u.name, u.email FROM users u
+INNER JOIN pages p ON p.author_id = u.id
+WHERE p.id = ?;

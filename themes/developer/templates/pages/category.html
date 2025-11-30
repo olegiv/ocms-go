@@ -1,0 +1,102 @@
+{{define "content"}}
+<div class="dev-page-layout">
+    <div class="dev-archive-page">
+        <header class="dev-archive-header">
+            <div class="dev-terminal-line">
+                <span class="dev-prompt">$</span>
+                <span class="dev-command">cd /categories/{{.Category.Slug}}</span>
+            </div>
+            <span class="dev-archive-label">category</span>
+            <h1 class="dev-archive-title">{{.Category.Name}}</h1>
+            {{if .Category.Description}}
+            <p class="dev-archive-description">{{.Category.Description}}</p>
+            {{end}}
+            {{if .PageCount}}
+            <p class="dev-archive-count">
+                <span class="dev-comment">// </span>{{.PageCount}} {{if eq .PageCount 1}}file{{else}}files{{end}}
+            </p>
+            {{end}}
+        </header>
+
+        {{if .Pages}}
+        <div class="dev-posts-list">
+            {{range .Pages}}
+            <article class="dev-post-item">
+                {{if .FeaturedImage}}
+                <div class="dev-post-image">
+                    <a href="{{.URL}}">
+                        <img src="{{.FeaturedImage}}" alt="{{.Title}}" loading="lazy">
+                    </a>
+                </div>
+                {{end}}
+                <div class="dev-post-content">
+                    <h2 class="dev-post-title">
+                        <a href="{{.URL}}">{{.Title}}</a>
+                    </h2>
+                    {{if .Excerpt}}
+                    <p class="dev-post-excerpt">{{.Excerpt}}</p>
+                    {{end}}
+                    <div class="dev-post-meta">
+                        {{if .PublishedAt}}
+                        <time datetime="{{.PublishedAt}}" class="dev-meta-item">
+                            {{.PublishedAtFormatted}}
+                        </time>
+                        {{end}}
+                        {{if .Author}}
+                        <span class="dev-meta-item">@{{.Author}}</span>
+                        {{end}}
+                    </div>
+                    {{if .Tags}}
+                    <div class="dev-post-tags">
+                        {{range .Tags}}
+                        <a href="/tag/{{.Slug}}" class="dev-tag">#{{.Name}}</a>
+                        {{end}}
+                    </div>
+                    {{end}}
+                </div>
+            </article>
+            {{end}}
+        </div>
+
+        {{template "pagination.html" .}}
+
+        {{else}}
+        <div class="dev-no-results">
+            <div class="dev-terminal">
+                <div class="dev-terminal-header">
+                    <span class="dev-terminal-dot red"></span>
+                    <span class="dev-terminal-dot yellow"></span>
+                    <span class="dev-terminal-dot green"></span>
+                </div>
+                <div class="dev-terminal-body">
+                    <p class="dev-output">No files in this directory.</p>
+                    <a href="/" class="dev-btn dev-btn-secondary">
+                        <span class="dev-arrow">&gt;</span> cd ~
+                    </a>
+                </div>
+            </div>
+        </div>
+        {{end}}
+
+        {{/* Subcategories */}}
+        {{if .Subcategories}}
+        <section class="dev-subcategories">
+            <h3 class="dev-section-title">
+                <span class="dev-comment">// </span>Subdirectories
+            </h3>
+            <ul class="dev-subcategory-list">
+                {{range .Subcategories}}
+                <li class="dev-subcategory-item">
+                    <span class="dev-folder-icon">📁</span>
+                    <a href="/category/{{.Slug}}">{{.Name}}/</a>
+                    {{if .Count}}<span class="dev-count">({{.Count}})</span>{{end}}
+                </li>
+                {{end}}
+            </ul>
+        </section>
+        {{end}}
+    </div>
+
+    {{template "sidebar.html" .}}
+</div>
+{{end}}

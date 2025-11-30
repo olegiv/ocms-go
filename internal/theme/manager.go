@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -107,6 +107,8 @@ func (m *Manager) loadTheme(name, path string) (*Theme, error) {
 }
 
 // parseTemplates parses all HTML templates in the templates directory.
+// Each page template is parsed together with layouts and partials to create
+// a complete template set that can be rendered independently.
 func (m *Manager) parseTemplates(templatesPath string) (*template.Template, error) {
 	// Check if templates directory exists
 	if _, err := os.Stat(templatesPath); os.IsNotExist(err) {
@@ -117,43 +119,88 @@ func (m *Manager) parseTemplates(templatesPath string) (*template.Template, erro
 	// Create root template with function map
 	tmpl := template.New("").Funcs(m.funcMap)
 
-	// Walk templates directory and parse all .html files
-	err := filepath.WalkDir(templatesPath, func(path string, d fs.DirEntry, err error) error {
+	// First, collect all layout and partial templates
+	var layoutFiles []string
+	var partialFiles []string
+
+	// Get layouts
+	layoutDir := filepath.Join(templatesPath, "layouts")
+	if entries, err := os.ReadDir(layoutDir); err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".html" {
+				layoutFiles = append(layoutFiles, filepath.Join(layoutDir, entry.Name()))
+			}
+		}
+	}
+
+	// Get partials
+	partialDir := filepath.Join(templatesPath, "partials")
+	if entries, err := os.ReadDir(partialDir); err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".html" {
+				partialFiles = append(partialFiles, filepath.Join(partialDir, entry.Name()))
+			}
+		}
+	}
+
+	// Parse layouts and partials into the root template
+	for _, f := range layoutFiles {
+		relPath, _ := filepath.Rel(templatesPath, f)
+		content, err := os.ReadFile(f)
 		if err != nil {
-			return err
+			return nil, fmt.Errorf("reading layout %s: %w", relPath, err)
 		}
-
-		if d.IsDir() {
-			return nil
+		if _, err := tmpl.New(relPath).Parse(string(content)); err != nil {
+			return nil, fmt.Errorf("parsing layout %s: %w", relPath, err)
 		}
+	}
 
-		if filepath.Ext(path) != ".html" {
-			return nil
-		}
-
-		// Get relative path for template name
-		relPath, err := filepath.Rel(templatesPath, path)
+	for _, f := range partialFiles {
+		relPath, _ := filepath.Rel(templatesPath, f)
+		content, err := os.ReadFile(f)
 		if err != nil {
-			return err
+			return nil, fmt.Errorf("reading partial %s: %w", relPath, err)
 		}
-
-		// Read and parse template
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("reading template %s: %w", relPath, err)
+		// Parse partials with just the filename (e.g., "header.html") for {{template "header.html" .}}
+		filename := filepath.Base(f)
+		if _, err := tmpl.New(filename).Parse(string(content)); err != nil {
+			return nil, fmt.Errorf("parsing partial %s: %w", relPath, err)
 		}
+	}
 
-		// Parse with the relative path as the name
-		_, err = tmpl.New(relPath).Parse(string(content))
-		if err != nil {
-			return fmt.Errorf("parsing template %s: %w", relPath, err)
+	// Now parse each page template as a separate named template
+	// Each page template will be named like "pages/home" and will have its "content" block
+	pageDir := filepath.Join(templatesPath, "pages")
+	if entries, err := os.ReadDir(pageDir); err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() || filepath.Ext(entry.Name()) != ".html" {
+				continue
+			}
+
+			pagePath := filepath.Join(pageDir, entry.Name())
+			content, err := os.ReadFile(pagePath)
+			if err != nil {
+				return nil, fmt.Errorf("reading page %s: %w", entry.Name(), err)
+			}
+
+			// Create a unique template name for each page's content
+			// e.g., "pages/home.html" -> "content_home"
+			baseName := strings.TrimSuffix(entry.Name(), ".html")
+			contentName := "content_" + baseName
+
+			// Wrap the content definition with a unique name
+			wrappedContent := strings.Replace(
+				string(content),
+				`{{define "content"}}`,
+				fmt.Sprintf(`{{define "%s"}}`, contentName),
+				1,
+			)
+
+			relPath := "pages/" + entry.Name()
+			if _, err := tmpl.New(relPath).Parse(wrappedContent); err != nil {
+				return nil, fmt.Errorf("parsing page %s: %w", relPath, err)
+			}
 		}
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
 	}
 
 	return tmpl, nil

@@ -2,8 +2,11 @@
 package theme
 
 import (
+	"bytes"
+	"fmt"
 	"html/template"
 	"io"
+	"strings"
 )
 
 // ThemeConfig represents the configuration loaded from theme.json.
@@ -60,6 +63,77 @@ func (t *Theme) GetTemplate(name string) string {
 // Render executes a template with the given data.
 func (t *Theme) Render(w io.Writer, templateName string, data any) error {
 	return t.Templates.ExecuteTemplate(w, templateName, data)
+}
+
+// RenderPage renders a page template within the base layout.
+// It handles the template composition by:
+// 1. Getting the content block for the specific page
+// 2. Injecting it into the base layout
+// 3. Executing the combined template
+func (t *Theme) RenderPage(w io.Writer, pageName string, data any) error {
+	// Get the base layout
+	baseLayout := t.Templates.Lookup("layouts/base.html")
+	if baseLayout == nil {
+		return fmt.Errorf("base layout not found")
+	}
+
+	// Determine the content template name
+	// pageName is like "home", "page", "list", "404", "category", "tag", "search"
+	contentName := "content_" + pageName
+
+	// Check if the content template exists
+	contentTmpl := t.Templates.Lookup(contentName)
+	if contentTmpl == nil {
+		// Try with the page path
+		pagePath := "pages/" + pageName + ".html"
+		contentTmpl = t.Templates.Lookup(pagePath)
+		if contentTmpl == nil {
+			return fmt.Errorf("content template not found: %s", contentName)
+		}
+	}
+
+	// Clone the template to avoid modifying the original
+	clone, err := t.Templates.Clone()
+	if err != nil {
+		return fmt.Errorf("cloning template: %w", err)
+	}
+
+	// Add the "content" template that points to our specific page's content
+	// This allows {{template "content" .}} in base.html to work
+	contentDef := fmt.Sprintf(`{{define "content"}}{{template "%s" .}}{{end}}`, contentName)
+	if _, err := clone.Parse(contentDef); err != nil {
+		return fmt.Errorf("parsing content definition: %w", err)
+	}
+
+	// Execute the base layout which will include the content
+	return clone.ExecuteTemplate(w, "layouts/base.html", data)
+}
+
+// RenderContent renders just the content portion (for AJAX/partial rendering).
+func (t *Theme) RenderContent(w io.Writer, pageName string, data any) error {
+	contentName := "content_" + pageName
+	contentTmpl := t.Templates.Lookup(contentName)
+	if contentTmpl == nil {
+		return fmt.Errorf("content template not found: %s", contentName)
+	}
+
+	// Render just the content block
+	var buf bytes.Buffer
+	if err := t.Templates.ExecuteTemplate(&buf, contentName, data); err != nil {
+		return err
+	}
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+// GetContentTemplateName returns the content template name for a given page.
+func (t *Theme) GetContentTemplateName(pageName string) string {
+	// Convert template path to content name
+	// "pages/home.html" -> "content_home"
+	// "home" -> "content_home"
+	baseName := strings.TrimPrefix(pageName, "pages/")
+	baseName = strings.TrimSuffix(baseName, ".html")
+	return "content_" + baseName
 }
 
 // HasSetting returns true if the theme has a setting with the given key.

@@ -1,0 +1,135 @@
+{{define "content"}}
+<div class="dev-page-layout">
+    <div class="dev-search-page">
+        <header class="dev-search-header">
+            <h1 class="dev-search-title">
+                <span class="dev-comment">// </span>Search
+            </h1>
+            <form action="/search" method="get" class="dev-search-form">
+                <div class="dev-search-input-wrapper">
+                    <span class="dev-prompt">$</span>
+                    <span class="dev-grep">grep -ri "</span>
+                    <input type="search" name="q" value="{{.SearchQuery}}" placeholder="query" class="dev-search-input" autofocus>
+                    <span class="dev-grep">" ./content</span>
+                </div>
+                <button type="submit" class="dev-btn dev-btn-primary">Execute</button>
+            </form>
+        </header>
+
+        {{if .SearchQuery}}
+        <div class="dev-search-results">
+            {{if .Pages}}
+            <div class="dev-results-header">
+                <span class="dev-comment">// </span>
+                Found <strong>{{.ResultCount}}</strong> {{if eq .ResultCount 1}}result{{else}}results{{end}} for "<code>{{.SearchQuery}}</code>"
+            </div>
+
+            <div class="dev-posts-list">
+                {{range .Pages}}
+                <article class="dev-post-item dev-search-result">
+                    {{if .FeaturedImage}}
+                    <div class="dev-post-image">
+                        <a href="{{.URL}}">
+                            <img src="{{.FeaturedImage}}" alt="{{.Title}}" loading="lazy">
+                        </a>
+                    </div>
+                    {{end}}
+                    <div class="dev-post-content">
+                        {{if .Category}}
+                        <span class="dev-post-category">
+                            <a href="/category/{{.Category.Slug}}">{{.Category.Name}}</a>
+                        </span>
+                        {{end}}
+                        <h2 class="dev-post-title">
+                            <a href="{{.URL}}">{{.Title}}</a>
+                        </h2>
+                        {{if .Highlight}}
+                        <p class="dev-search-highlight">{{.Highlight}}</p>
+                        {{else if .Excerpt}}
+                        <p class="dev-post-excerpt">{{.Excerpt}}</p>
+                        {{end}}
+                        <div class="dev-post-meta">
+                            {{if .PublishedAt}}
+                            <time datetime="{{.PublishedAt}}" class="dev-meta-item">
+                                {{.PublishedAtFormatted}}
+                            </time>
+                            {{end}}
+                            <span class="dev-meta-item dev-post-type">{{.Type}}</span>
+                        </div>
+                    </div>
+                </article>
+                {{end}}
+            </div>
+
+            {{template "pagination.html" .}}
+
+            {{else}}
+            <div class="dev-no-results">
+                <div class="dev-terminal">
+                    <div class="dev-terminal-header">
+                        <span class="dev-terminal-dot red"></span>
+                        <span class="dev-terminal-dot yellow"></span>
+                        <span class="dev-terminal-dot green"></span>
+                    </div>
+                    <div class="dev-terminal-body">
+                        <div class="dev-terminal-line">
+                            <span class="dev-prompt">$</span>
+                            <span class="dev-command">grep -ri "{{.SearchQuery}}" ./content</span>
+                        </div>
+                        <p class="dev-output dev-error">No matches found.</p>
+                    </div>
+                </div>
+                <div class="dev-search-suggestions">
+                    <h3>
+                        <span class="dev-comment">// </span>Debugging tips:
+                    </h3>
+                    <ul class="dev-suggestions-list">
+                        <li><span class="dev-arrow">&gt;</span> Check your regex pattern</li>
+                        <li><span class="dev-arrow">&gt;</span> Try different keywords</li>
+                        <li><span class="dev-arrow">&gt;</span> Use broader search terms</li>
+                    </ul>
+                </div>
+            </div>
+            {{end}}
+        </div>
+        {{else}}
+        <div class="dev-search-intro">
+            <div class="dev-terminal">
+                <div class="dev-terminal-header">
+                    <span class="dev-terminal-dot red"></span>
+                    <span class="dev-terminal-dot yellow"></span>
+                    <span class="dev-terminal-dot green"></span>
+                    <span class="dev-terminal-title">search.sh</span>
+                </div>
+                <div class="dev-terminal-body">
+                    <p class="dev-output">Enter a search query above to grep through the content.</p>
+                    <div class="dev-terminal-line">
+                        <span class="dev-prompt">$</span>
+                        <span class="dev-blink">_</span>
+                    </div>
+                </div>
+            </div>
+
+            {{if .PopularSearches}}
+            <div class="dev-popular-searches">
+                <h3>
+                    <span class="dev-comment">// </span>Popular queries:
+                </h3>
+                <ul class="dev-query-list">
+                    {{range .PopularSearches}}
+                    <li>
+                        <a href="/search?q={{.}}" class="dev-query-link">
+                            <span class="dev-prompt">$</span> grep "{{.}}"
+                        </a>
+                    </li>
+                    {{end}}
+                </ul>
+            </div>
+            {{end}}
+        </div>
+        {{end}}
+    </div>
+
+    {{template "sidebar.html" .}}
+</div>
+{{end}}

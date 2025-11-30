@@ -1,0 +1,69 @@
+{{define "content"}}
+<div class="dev-error-page">
+    <div class="dev-terminal dev-terminal-error">
+        <div class="dev-terminal-header">
+            <span class="dev-terminal-dot red"></span>
+            <span class="dev-terminal-dot yellow"></span>
+            <span class="dev-terminal-dot green"></span>
+            <span class="dev-terminal-title">error.log</span>
+        </div>
+        <div class="dev-terminal-body">
+            <div class="dev-terminal-line">
+                <span class="dev-prompt">$</span>
+                <span class="dev-command">cat requested_page</span>
+            </div>
+            <div class="dev-error-output">
+                <pre class="dev-error-code">
+Error: ENOENT: no such file or directory
+    at Object.openSync (fs.js:498:3)
+    at ReadFileContext.read (internal/fs.js:42:19)
+
+<span class="dev-error-highlight">404</span> - Page Not Found
+                </pre>
+            </div>
+            <div class="dev-terminal-line">
+                <span class="dev-prompt">$</span>
+                <span class="dev-blink">_</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="dev-error-content">
+        <h1 class="dev-error-title">
+            <span class="dev-comment">// </span>Page Not Found
+        </h1>
+        <p class="dev-error-message">
+            The file you're looking for doesn't exist or has been moved to /dev/null.
+        </p>
+
+        <div class="dev-error-actions">
+            <a href="/" class="dev-btn dev-btn-primary">
+                <span class="dev-arrow">&gt;</span> cd ~
+            </a>
+            {{if .ShowSearch}}
+            <span class="dev-or">||</span>
+            <form action="/search" method="get" class="dev-inline-search">
+                <input type="search" name="q" placeholder="grep -r 'query'" class="dev-search-input">
+                <button type="submit" class="dev-btn dev-btn-secondary">find</button>
+            </form>
+            {{end}}
+        </div>
+    </div>
+
+    {{if .SuggestedPages}}
+    <div class="dev-suggestions">
+        <h3 class="dev-section-title">
+            <span class="dev-comment">// </span>Did you mean:
+        </h3>
+        <ul class="dev-suggestions-list">
+            {{range .SuggestedPages}}
+            <li>
+                <span class="dev-arrow">&gt;</span>
+                <a href="{{.URL}}">{{.Title}}</a>
+            </li>
+            {{end}}
+        </ul>
+    </div>
+    {{end}}
+</div>
+{{end}}

@@ -1,0 +1,127 @@
+{{define "content"}}
+<div class="dev-home">
+    {{/* Terminal-style Hero */}}
+    {{if .HeroEnabled}}
+    <section class="dev-hero">
+        <div class="dev-terminal">
+            <div class="dev-terminal-header">
+                <span class="dev-terminal-dot red"></span>
+                <span class="dev-terminal-dot yellow"></span>
+                <span class="dev-terminal-dot green"></span>
+                <span class="dev-terminal-title">~/{{.SiteName | lower}}</span>
+            </div>
+            <div class="dev-terminal-body">
+                <div class="dev-terminal-line">
+                    <span class="dev-prompt">$</span>
+                    <span class="dev-command">cat welcome.txt</span>
+                </div>
+                <h1 class="dev-hero-title">{{if .HeroTitle}}{{.HeroTitle}}{{else}}{{.SiteName}}{{end}}</h1>
+                {{if .HeroSubtitle}}
+                <p class="dev-hero-subtitle">{{.HeroSubtitle}}</p>
+                {{end}}
+                {{if .HeroCTA}}
+                <div class="dev-terminal-line">
+                    <span class="dev-prompt">$</span>
+                    <a href="{{.HeroCTAURL}}" class="dev-btn dev-btn-primary">{{.HeroCTA}} <span class="dev-cursor">_</span></a>
+                </div>
+                {{end}}
+            </div>
+        </div>
+    </section>
+    {{end}}
+
+    {{/* Featured Content */}}
+    {{if .FeaturedPages}}
+    <section class="dev-section">
+        <h2 class="dev-section-title">
+            <span class="dev-comment">// </span>Featured
+        </h2>
+        <div class="dev-grid dev-grid-3">
+            {{range .FeaturedPages}}
+            <article class="dev-card">
+                {{if .FeaturedImage}}
+                <div class="dev-card-image">
+                    <a href="{{.URL}}">
+                        <img src="{{.FeaturedImage}}" alt="{{.Title}}" loading="lazy">
+                    </a>
+                </div>
+                {{end}}
+                <div class="dev-card-body">
+                    <h3 class="dev-card-title">
+                        <a href="{{.URL}}">{{.Title}}</a>
+                    </h3>
+                    {{if .Excerpt}}
+                    <p class="dev-card-excerpt">{{.Excerpt}}</p>
+                    {{end}}
+                    <a href="{{.URL}}" class="dev-read-more">
+                        <span class="dev-arrow">&gt;</span> read_more()
+                    </a>
+                </div>
+            </article>
+            {{end}}
+        </div>
+    </section>
+    {{end}}
+
+    {{/* Recent Posts */}}
+    {{if .RecentPages}}
+    <section class="dev-section">
+        <h2 class="dev-section-title">
+            <span class="dev-comment">// </span>Recent Posts
+        </h2>
+        <div class="dev-posts-list">
+            {{range .RecentPages}}
+            <article class="dev-post-item">
+                {{if .FeaturedImage}}
+                <div class="dev-post-image">
+                    <a href="{{.URL}}">
+                        <img src="{{.FeaturedImage}}" alt="{{.Title}}" loading="lazy">
+                    </a>
+                </div>
+                {{end}}
+                <div class="dev-post-content">
+                    {{if .Category}}
+                    <span class="dev-post-category">
+                        <a href="/category/{{.Category.Slug}}">{{.Category.Name}}</a>
+                    </span>
+                    {{end}}
+                    <h3 class="dev-post-title">
+                        <a href="{{.URL}}">{{.Title}}</a>
+                    </h3>
+                    {{if .Excerpt}}
+                    <p class="dev-post-excerpt">{{.Excerpt}}</p>
+                    {{end}}
+                    <div class="dev-post-meta">
+                        {{if .PublishedAt}}
+                        <time datetime="{{.PublishedAt}}" class="dev-meta-item">
+                            <span class="dev-comment">/*</span> {{.PublishedAtFormatted}} <span class="dev-comment">*/</span>
+                        </time>
+                        {{end}}
+                        {{if .Author}}
+                        <span class="dev-meta-item dev-author">@{{.Author}}</span>
+                        {{end}}
+                    </div>
+                </div>
+            </article>
+            {{end}}
+        </div>
+        {{if .ShowAllPostsLink}}
+        <div class="dev-section-footer">
+            <a href="/blog" class="dev-btn dev-btn-secondary">
+                <span class="dev-arrow">&gt;</span> ls -la /blog
+            </a>
+        </div>
+        {{end}}
+    </section>
+    {{end}}
+
+    {{/* Static Content */}}
+    {{if .Page}}
+    <section class="dev-section dev-content-section">
+        <div class="dev-prose">
+            {{.Page.Body}}
+        </div>
+    </section>
+    {{end}}
+</div>
+{{end}}
