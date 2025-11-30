@@ -875,6 +875,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		NoFollow:        noFollow,
 		CanonicalUrl:    canonicalURL,
 		ScheduledAt:     scheduledAt,
+		LanguageID:      existingPage.LanguageID,
 		UpdatedAt:       now,
 	})
 	if err != nil {
@@ -1231,6 +1232,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		NoFollow:        page.NoFollow,
 		CanonicalUrl:    page.CanonicalUrl,
 		ScheduledAt:     page.ScheduledAt, // Keep scheduling intact
+		LanguageID:      page.LanguageID,  // Keep language intact
 		UpdatedAt:       now,
 	})
 	if err != nil {

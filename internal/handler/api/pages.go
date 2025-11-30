@@ -642,6 +642,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		NoIndex:         existing.NoIndex,
 		NoFollow:        existing.NoFollow,
 		ScheduledAt:     existing.ScheduledAt,
+		LanguageID:      existing.LanguageID,
 		UpdatedAt:       time.Now(),
 	}
 

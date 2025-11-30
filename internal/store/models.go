@@ -181,6 +181,7 @@ type Page struct {
 	NoFollow        int64         `json:"no_follow"`
 	CanonicalUrl    string        `json:"canonical_url"`
 	ScheduledAt     sql.NullTime  `json:"scheduled_at"`
+	LanguageID      sql.NullInt64 `json:"language_id"`
 }
 
 type PageCategory struct {
@@ -222,6 +223,15 @@ type Tag struct {
 	Slug      string    `json:"slug"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type Translation struct {
+	ID            int64     `json:"id"`
+	EntityType    string    `json:"entity_type"`
+	EntityID      int64     `json:"entity_id"`
+	LanguageID    int64     `json:"language_id"`
+	TranslationID int64     `json:"translation_id"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 type User struct {

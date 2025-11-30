@@ -61,6 +61,22 @@ func (q *Queries) CountPages(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countPagesByLanguageAndStatus = `-- name: CountPagesByLanguageAndStatus :one
+SELECT COUNT(*) FROM pages WHERE language_id = ? AND status = ?
+`
+
+type CountPagesByLanguageAndStatusParams struct {
+	LanguageID sql.NullInt64 `json:"language_id"`
+	Status     string        `json:"status"`
+}
+
+func (q *Queries) CountPagesByLanguageAndStatus(ctx context.Context, arg CountPagesByLanguageAndStatusParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPagesByLanguageAndStatus, arg.LanguageID, arg.Status)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countPagesByStatus = `-- name: CountPagesByStatus :one
 SELECT COUNT(*) FROM pages WHERE status = ?
 `
@@ -138,6 +154,30 @@ func (q *Queries) CountSearchPages(ctx context.Context, arg CountSearchPagesPara
 	return count, err
 }
 
+const countSearchPagesByLanguage = `-- name: CountSearchPagesByLanguage :one
+SELECT COUNT(*) FROM pages
+WHERE language_id = ? AND (title LIKE ? OR body LIKE ? OR slug LIKE ?)
+`
+
+type CountSearchPagesByLanguageParams struct {
+	LanguageID sql.NullInt64 `json:"language_id"`
+	Title      string        `json:"title"`
+	Body       string        `json:"body"`
+	Slug       string        `json:"slug"`
+}
+
+func (q *Queries) CountSearchPagesByLanguage(ctx context.Context, arg CountSearchPagesByLanguageParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSearchPagesByLanguage,
+		arg.LanguageID,
+		arg.Title,
+		arg.Body,
+		arg.Slug,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countSearchPagesByStatus = `-- name: CountSearchPagesByStatus :one
 SELECT COUNT(*) FROM pages
 WHERE status = ? AND (title LIKE ? OR body LIKE ? OR slug LIKE ?)
@@ -163,9 +203,9 @@ func (q *Queries) CountSearchPagesByStatus(ctx context.Context, arg CountSearchP
 }
 
 const createPage = `-- name: CreatePage :one
-INSERT INTO pages (title, slug, body, status, author_id, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at
+INSERT INTO pages (title, slug, body, status, author_id, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id
 `
 
 type CreatePageParams struct {
@@ -183,6 +223,7 @@ type CreatePageParams struct {
 	NoFollow        int64         `json:"no_follow"`
 	CanonicalUrl    string        `json:"canonical_url"`
 	ScheduledAt     sql.NullTime  `json:"scheduled_at"`
+	LanguageID      sql.NullInt64 `json:"language_id"`
 	CreatedAt       time.Time     `json:"created_at"`
 	UpdatedAt       time.Time     `json:"updated_at"`
 }
@@ -203,6 +244,7 @@ func (q *Queries) CreatePage(ctx context.Context, arg CreatePageParams) (Page, e
 		arg.NoFollow,
 		arg.CanonicalUrl,
 		arg.ScheduledAt,
+		arg.LanguageID,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -226,6 +268,7 @@ func (q *Queries) CreatePage(ctx context.Context, arg CreatePageParams) (Page, e
 		&i.NoFollow,
 		&i.CanonicalUrl,
 		&i.ScheduledAt,
+		&i.LanguageID,
 	)
 	return i, err
 }
@@ -380,7 +423,7 @@ func (q *Queries) GetPageAuthor(ctx context.Context, id int64) (GetPageAuthorRow
 }
 
 const getPageByID = `-- name: GetPageByID :one
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at FROM pages WHERE id = ?
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id FROM pages WHERE id = ?
 `
 
 func (q *Queries) GetPageByID(ctx context.Context, id int64) (Page, error) {
@@ -405,12 +448,13 @@ func (q *Queries) GetPageByID(ctx context.Context, id int64) (Page, error) {
 		&i.NoFollow,
 		&i.CanonicalUrl,
 		&i.ScheduledAt,
+		&i.LanguageID,
 	)
 	return i, err
 }
 
 const getPageBySlug = `-- name: GetPageBySlug :one
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at FROM pages WHERE slug = ?
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id FROM pages WHERE slug = ?
 `
 
 func (q *Queries) GetPageBySlug(ctx context.Context, slug string) (Page, error) {
@@ -435,6 +479,7 @@ func (q *Queries) GetPageBySlug(ctx context.Context, slug string) (Page, error) 
 		&i.NoFollow,
 		&i.CanonicalUrl,
 		&i.ScheduledAt,
+		&i.LanguageID,
 	)
 	return i, err
 }
@@ -500,7 +545,7 @@ func (q *Queries) GetPageVersionWithUser(ctx context.Context, id int64) (GetPage
 }
 
 const getPublishedPageBySlug = `-- name: GetPublishedPageBySlug :one
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at FROM pages WHERE slug = ? AND status = 'published'
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id FROM pages WHERE slug = ? AND status = 'published'
 `
 
 func (q *Queries) GetPublishedPageBySlug(ctx context.Context, slug string) (Page, error) {
@@ -525,13 +570,51 @@ func (q *Queries) GetPublishedPageBySlug(ctx context.Context, slug string) (Page
 		&i.NoFollow,
 		&i.CanonicalUrl,
 		&i.ScheduledAt,
+		&i.LanguageID,
+	)
+	return i, err
+}
+
+const getPublishedPageBySlugAndLanguage = `-- name: GetPublishedPageBySlugAndLanguage :one
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id FROM pages
+WHERE slug = ? AND language_id = ? AND status = 'published'
+`
+
+type GetPublishedPageBySlugAndLanguageParams struct {
+	Slug       string        `json:"slug"`
+	LanguageID sql.NullInt64 `json:"language_id"`
+}
+
+func (q *Queries) GetPublishedPageBySlugAndLanguage(ctx context.Context, arg GetPublishedPageBySlugAndLanguageParams) (Page, error) {
+	row := q.db.QueryRowContext(ctx, getPublishedPageBySlugAndLanguage, arg.Slug, arg.LanguageID)
+	var i Page
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Slug,
+		&i.Body,
+		&i.Status,
+		&i.AuthorID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PublishedAt,
+		&i.FeaturedImageID,
+		&i.MetaTitle,
+		&i.MetaDescription,
+		&i.MetaKeywords,
+		&i.OgImageID,
+		&i.NoIndex,
+		&i.NoFollow,
+		&i.CanonicalUrl,
+		&i.ScheduledAt,
+		&i.LanguageID,
 	)
 	return i, err
 }
 
 const getScheduledPagesForPublishing = `-- name: GetScheduledPagesForPublishing :many
 
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at FROM pages
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id FROM pages
 WHERE scheduled_at IS NOT NULL AND scheduled_at <= ? AND status = 'draft'
 ORDER BY scheduled_at ASC
 `
@@ -565,6 +648,7 @@ func (q *Queries) GetScheduledPagesForPublishing(ctx context.Context, scheduledA
 			&i.NoFollow,
 			&i.CanonicalUrl,
 			&i.ScheduledAt,
+			&i.LanguageID,
 		); err != nil {
 			return nil, err
 		}
@@ -686,7 +770,7 @@ func (q *Queries) ListPageVersionsWithUser(ctx context.Context, arg ListPageVers
 }
 
 const listPages = `-- name: ListPages :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at FROM pages ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id FROM pages ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type ListPagesParams struct {
@@ -722,6 +806,69 @@ func (q *Queries) ListPages(ctx context.Context, arg ListPagesParams) ([]Page, e
 			&i.NoFollow,
 			&i.CanonicalUrl,
 			&i.ScheduledAt,
+			&i.LanguageID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPagesByLanguageAndStatus = `-- name: ListPagesByLanguageAndStatus :many
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id FROM pages
+WHERE language_id = ? AND status = ?
+ORDER BY created_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListPagesByLanguageAndStatusParams struct {
+	LanguageID sql.NullInt64 `json:"language_id"`
+	Status     string        `json:"status"`
+	Limit      int64         `json:"limit"`
+	Offset     int64         `json:"offset"`
+}
+
+func (q *Queries) ListPagesByLanguageAndStatus(ctx context.Context, arg ListPagesByLanguageAndStatusParams) ([]Page, error) {
+	rows, err := q.db.QueryContext(ctx, listPagesByLanguageAndStatus,
+		arg.LanguageID,
+		arg.Status,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Page{}
+	for rows.Next() {
+		var i Page
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Slug,
+			&i.Body,
+			&i.Status,
+			&i.AuthorID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PublishedAt,
+			&i.FeaturedImageID,
+			&i.MetaTitle,
+			&i.MetaDescription,
+			&i.MetaKeywords,
+			&i.OgImageID,
+			&i.NoIndex,
+			&i.NoFollow,
+			&i.CanonicalUrl,
+			&i.ScheduledAt,
+			&i.LanguageID,
 		); err != nil {
 			return nil, err
 		}
@@ -737,7 +884,7 @@ func (q *Queries) ListPages(ctx context.Context, arg ListPagesParams) ([]Page, e
 }
 
 const listPagesByStatus = `-- name: ListPagesByStatus :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at FROM pages WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id FROM pages WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type ListPagesByStatusParams struct {
@@ -774,6 +921,187 @@ func (q *Queries) ListPagesByStatus(ctx context.Context, arg ListPagesByStatusPa
 			&i.NoFollow,
 			&i.CanonicalUrl,
 			&i.ScheduledAt,
+			&i.LanguageID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPagesByStatusWithLanguage = `-- name: ListPagesByStatusWithLanguage :many
+SELECT
+    p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_id,
+    l.code as language_code,
+    l.name as language_name,
+    l.native_name as language_native_name
+FROM pages p
+LEFT JOIN languages l ON l.id = p.language_id
+WHERE p.status = ?
+ORDER BY p.created_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListPagesByStatusWithLanguageParams struct {
+	Status string `json:"status"`
+	Limit  int64  `json:"limit"`
+	Offset int64  `json:"offset"`
+}
+
+type ListPagesByStatusWithLanguageRow struct {
+	ID                 int64          `json:"id"`
+	Title              string         `json:"title"`
+	Slug               string         `json:"slug"`
+	Body               string         `json:"body"`
+	Status             string         `json:"status"`
+	AuthorID           int64          `json:"author_id"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
+	PublishedAt        sql.NullTime   `json:"published_at"`
+	FeaturedImageID    sql.NullInt64  `json:"featured_image_id"`
+	MetaTitle          string         `json:"meta_title"`
+	MetaDescription    string         `json:"meta_description"`
+	MetaKeywords       string         `json:"meta_keywords"`
+	OgImageID          sql.NullInt64  `json:"og_image_id"`
+	NoIndex            int64          `json:"no_index"`
+	NoFollow           int64          `json:"no_follow"`
+	CanonicalUrl       string         `json:"canonical_url"`
+	ScheduledAt        sql.NullTime   `json:"scheduled_at"`
+	LanguageID         sql.NullInt64  `json:"language_id"`
+	LanguageCode       sql.NullString `json:"language_code"`
+	LanguageName       sql.NullString `json:"language_name"`
+	LanguageNativeName sql.NullString `json:"language_native_name"`
+}
+
+func (q *Queries) ListPagesByStatusWithLanguage(ctx context.Context, arg ListPagesByStatusWithLanguageParams) ([]ListPagesByStatusWithLanguageRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPagesByStatusWithLanguage, arg.Status, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPagesByStatusWithLanguageRow{}
+	for rows.Next() {
+		var i ListPagesByStatusWithLanguageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Slug,
+			&i.Body,
+			&i.Status,
+			&i.AuthorID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PublishedAt,
+			&i.FeaturedImageID,
+			&i.MetaTitle,
+			&i.MetaDescription,
+			&i.MetaKeywords,
+			&i.OgImageID,
+			&i.NoIndex,
+			&i.NoFollow,
+			&i.CanonicalUrl,
+			&i.ScheduledAt,
+			&i.LanguageID,
+			&i.LanguageCode,
+			&i.LanguageName,
+			&i.LanguageNativeName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPagesWithLanguage = `-- name: ListPagesWithLanguage :many
+
+SELECT
+    p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_id,
+    l.code as language_code,
+    l.name as language_name,
+    l.native_name as language_native_name
+FROM pages p
+LEFT JOIN languages l ON l.id = p.language_id
+ORDER BY p.created_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListPagesWithLanguageParams struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+type ListPagesWithLanguageRow struct {
+	ID                 int64          `json:"id"`
+	Title              string         `json:"title"`
+	Slug               string         `json:"slug"`
+	Body               string         `json:"body"`
+	Status             string         `json:"status"`
+	AuthorID           int64          `json:"author_id"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
+	PublishedAt        sql.NullTime   `json:"published_at"`
+	FeaturedImageID    sql.NullInt64  `json:"featured_image_id"`
+	MetaTitle          string         `json:"meta_title"`
+	MetaDescription    string         `json:"meta_description"`
+	MetaKeywords       string         `json:"meta_keywords"`
+	OgImageID          sql.NullInt64  `json:"og_image_id"`
+	NoIndex            int64          `json:"no_index"`
+	NoFollow           int64          `json:"no_follow"`
+	CanonicalUrl       string         `json:"canonical_url"`
+	ScheduledAt        sql.NullTime   `json:"scheduled_at"`
+	LanguageID         sql.NullInt64  `json:"language_id"`
+	LanguageCode       sql.NullString `json:"language_code"`
+	LanguageName       sql.NullString `json:"language_name"`
+	LanguageNativeName sql.NullString `json:"language_native_name"`
+}
+
+// Language-related page queries
+func (q *Queries) ListPagesWithLanguage(ctx context.Context, arg ListPagesWithLanguageParams) ([]ListPagesWithLanguageRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPagesWithLanguage, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPagesWithLanguageRow{}
+	for rows.Next() {
+		var i ListPagesWithLanguageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Slug,
+			&i.Body,
+			&i.Status,
+			&i.AuthorID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PublishedAt,
+			&i.FeaturedImageID,
+			&i.MetaTitle,
+			&i.MetaDescription,
+			&i.MetaKeywords,
+			&i.OgImageID,
+			&i.NoIndex,
+			&i.NoFollow,
+			&i.CanonicalUrl,
+			&i.ScheduledAt,
+			&i.LanguageID,
+			&i.LanguageCode,
+			&i.LanguageName,
+			&i.LanguageNativeName,
 		); err != nil {
 			return nil, err
 		}
@@ -790,7 +1118,7 @@ func (q *Queries) ListPagesByStatus(ctx context.Context, arg ListPagesByStatusPa
 
 const listPublishedPages = `-- name: ListPublishedPages :many
 
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at FROM pages WHERE status = 'published' ORDER BY published_at DESC LIMIT ? OFFSET ?
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id FROM pages WHERE status = 'published' ORDER BY published_at DESC LIMIT ? OFFSET ?
 `
 
 type ListPublishedPagesParams struct {
@@ -827,6 +1155,7 @@ func (q *Queries) ListPublishedPages(ctx context.Context, arg ListPublishedPages
 			&i.NoFollow,
 			&i.CanonicalUrl,
 			&i.ScheduledAt,
+			&i.LanguageID,
 		); err != nil {
 			return nil, err
 		}
@@ -842,7 +1171,7 @@ func (q *Queries) ListPublishedPages(ctx context.Context, arg ListPublishedPages
 }
 
 const listPublishedPagesByCategory = `-- name: ListPublishedPagesByCategory :many
-SELECT DISTINCT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at FROM pages p
+SELECT DISTINCT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_id FROM pages p
 INNER JOIN page_categories pc ON pc.page_id = p.id
 WHERE pc.category_id = ? AND p.status = 'published'
 ORDER BY p.published_at DESC
@@ -883,6 +1212,7 @@ func (q *Queries) ListPublishedPagesByCategory(ctx context.Context, arg ListPubl
 			&i.NoFollow,
 			&i.CanonicalUrl,
 			&i.ScheduledAt,
+			&i.LanguageID,
 		); err != nil {
 			return nil, err
 		}
@@ -939,7 +1269,7 @@ func (q *Queries) ListPublishedPagesForSitemap(ctx context.Context) ([]ListPubli
 }
 
 const listPublishedPagesForTag = `-- name: ListPublishedPagesForTag :many
-SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at FROM pages p
+SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_id FROM pages p
 INNER JOIN page_tags pt ON pt.page_id = p.id
 WHERE pt.tag_id = ? AND p.status = 'published'
 ORDER BY p.published_at DESC
@@ -980,6 +1310,7 @@ func (q *Queries) ListPublishedPagesForTag(ctx context.Context, arg ListPublishe
 			&i.NoFollow,
 			&i.CanonicalUrl,
 			&i.ScheduledAt,
+			&i.LanguageID,
 		); err != nil {
 			return nil, err
 		}
@@ -995,7 +1326,7 @@ func (q *Queries) ListPublishedPagesForTag(ctx context.Context, arg ListPublishe
 }
 
 const listScheduledPages = `-- name: ListScheduledPages :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at FROM pages WHERE scheduled_at IS NOT NULL AND status = 'draft' ORDER BY scheduled_at ASC LIMIT ? OFFSET ?
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id FROM pages WHERE scheduled_at IS NOT NULL AND status = 'draft' ORDER BY scheduled_at ASC LIMIT ? OFFSET ?
 `
 
 type ListScheduledPagesParams struct {
@@ -1031,6 +1362,7 @@ func (q *Queries) ListScheduledPages(ctx context.Context, arg ListScheduledPages
 			&i.NoFollow,
 			&i.CanonicalUrl,
 			&i.ScheduledAt,
+			&i.LanguageID,
 		); err != nil {
 			return nil, err
 		}
@@ -1049,7 +1381,7 @@ const publishPage = `-- name: PublishPage :one
 UPDATE pages
 SET status = 'published', published_at = ?, updated_at = ?
 WHERE id = ?
-RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at
+RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id
 `
 
 type PublishPageParams struct {
@@ -1080,6 +1412,7 @@ func (q *Queries) PublishPage(ctx context.Context, arg PublishPageParams) (Page,
 		&i.NoFollow,
 		&i.CanonicalUrl,
 		&i.ScheduledAt,
+		&i.LanguageID,
 	)
 	return i, err
 }
@@ -1088,7 +1421,7 @@ const publishScheduledPage = `-- name: PublishScheduledPage :one
 UPDATE pages
 SET status = 'published', published_at = ?, scheduled_at = NULL, updated_at = ?
 WHERE id = ?
-RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at
+RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id
 `
 
 type PublishScheduledPageParams struct {
@@ -1119,13 +1452,14 @@ func (q *Queries) PublishScheduledPage(ctx context.Context, arg PublishScheduled
 		&i.NoFollow,
 		&i.CanonicalUrl,
 		&i.ScheduledAt,
+		&i.LanguageID,
 	)
 	return i, err
 }
 
 const searchPages = `-- name: SearchPages :many
 
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at FROM pages
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id FROM pages
 WHERE title LIKE ? OR body LIKE ? OR slug LIKE ?
 ORDER BY updated_at DESC
 LIMIT ? OFFSET ?
@@ -1174,6 +1508,73 @@ func (q *Queries) SearchPages(ctx context.Context, arg SearchPagesParams) ([]Pag
 			&i.NoFollow,
 			&i.CanonicalUrl,
 			&i.ScheduledAt,
+			&i.LanguageID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchPagesByLanguage = `-- name: SearchPagesByLanguage :many
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id FROM pages
+WHERE language_id = ? AND (title LIKE ? OR body LIKE ? OR slug LIKE ?)
+ORDER BY updated_at DESC
+LIMIT ? OFFSET ?
+`
+
+type SearchPagesByLanguageParams struct {
+	LanguageID sql.NullInt64 `json:"language_id"`
+	Title      string        `json:"title"`
+	Body       string        `json:"body"`
+	Slug       string        `json:"slug"`
+	Limit      int64         `json:"limit"`
+	Offset     int64         `json:"offset"`
+}
+
+func (q *Queries) SearchPagesByLanguage(ctx context.Context, arg SearchPagesByLanguageParams) ([]Page, error) {
+	rows, err := q.db.QueryContext(ctx, searchPagesByLanguage,
+		arg.LanguageID,
+		arg.Title,
+		arg.Body,
+		arg.Slug,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Page{}
+	for rows.Next() {
+		var i Page
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Slug,
+			&i.Body,
+			&i.Status,
+			&i.AuthorID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PublishedAt,
+			&i.FeaturedImageID,
+			&i.MetaTitle,
+			&i.MetaDescription,
+			&i.MetaKeywords,
+			&i.OgImageID,
+			&i.NoIndex,
+			&i.NoFollow,
+			&i.CanonicalUrl,
+			&i.ScheduledAt,
+			&i.LanguageID,
 		); err != nil {
 			return nil, err
 		}
@@ -1189,7 +1590,7 @@ func (q *Queries) SearchPages(ctx context.Context, arg SearchPagesParams) ([]Pag
 }
 
 const searchPagesByStatus = `-- name: SearchPagesByStatus :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at FROM pages
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id FROM pages
 WHERE status = ? AND (title LIKE ? OR body LIKE ? OR slug LIKE ?)
 ORDER BY updated_at DESC
 LIMIT ? OFFSET ?
@@ -1239,6 +1640,105 @@ func (q *Queries) SearchPagesByStatus(ctx context.Context, arg SearchPagesByStat
 			&i.NoFollow,
 			&i.CanonicalUrl,
 			&i.ScheduledAt,
+			&i.LanguageID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchPagesWithLanguage = `-- name: SearchPagesWithLanguage :many
+SELECT
+    p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_id,
+    l.code as language_code,
+    l.name as language_name,
+    l.native_name as language_native_name
+FROM pages p
+LEFT JOIN languages l ON l.id = p.language_id
+WHERE p.title LIKE ? OR p.body LIKE ? OR p.slug LIKE ?
+ORDER BY p.updated_at DESC
+LIMIT ? OFFSET ?
+`
+
+type SearchPagesWithLanguageParams struct {
+	Title  string `json:"title"`
+	Body   string `json:"body"`
+	Slug   string `json:"slug"`
+	Limit  int64  `json:"limit"`
+	Offset int64  `json:"offset"`
+}
+
+type SearchPagesWithLanguageRow struct {
+	ID                 int64          `json:"id"`
+	Title              string         `json:"title"`
+	Slug               string         `json:"slug"`
+	Body               string         `json:"body"`
+	Status             string         `json:"status"`
+	AuthorID           int64          `json:"author_id"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
+	PublishedAt        sql.NullTime   `json:"published_at"`
+	FeaturedImageID    sql.NullInt64  `json:"featured_image_id"`
+	MetaTitle          string         `json:"meta_title"`
+	MetaDescription    string         `json:"meta_description"`
+	MetaKeywords       string         `json:"meta_keywords"`
+	OgImageID          sql.NullInt64  `json:"og_image_id"`
+	NoIndex            int64          `json:"no_index"`
+	NoFollow           int64          `json:"no_follow"`
+	CanonicalUrl       string         `json:"canonical_url"`
+	ScheduledAt        sql.NullTime   `json:"scheduled_at"`
+	LanguageID         sql.NullInt64  `json:"language_id"`
+	LanguageCode       sql.NullString `json:"language_code"`
+	LanguageName       sql.NullString `json:"language_name"`
+	LanguageNativeName sql.NullString `json:"language_native_name"`
+}
+
+func (q *Queries) SearchPagesWithLanguage(ctx context.Context, arg SearchPagesWithLanguageParams) ([]SearchPagesWithLanguageRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchPagesWithLanguage,
+		arg.Title,
+		arg.Body,
+		arg.Slug,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchPagesWithLanguageRow{}
+	for rows.Next() {
+		var i SearchPagesWithLanguageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Slug,
+			&i.Body,
+			&i.Status,
+			&i.AuthorID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PublishedAt,
+			&i.FeaturedImageID,
+			&i.MetaTitle,
+			&i.MetaDescription,
+			&i.MetaKeywords,
+			&i.OgImageID,
+			&i.NoIndex,
+			&i.NoFollow,
+			&i.CanonicalUrl,
+			&i.ScheduledAt,
+			&i.LanguageID,
+			&i.LanguageCode,
+			&i.LanguageName,
+			&i.LanguageNativeName,
 		); err != nil {
 			return nil, err
 		}
@@ -1284,7 +1784,7 @@ const unpublishPage = `-- name: UnpublishPage :one
 UPDATE pages
 SET status = 'draft', published_at = NULL, updated_at = ?
 WHERE id = ?
-RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at
+RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id
 `
 
 type UnpublishPageParams struct {
@@ -1314,15 +1814,16 @@ func (q *Queries) UnpublishPage(ctx context.Context, arg UnpublishPageParams) (P
 		&i.NoFollow,
 		&i.CanonicalUrl,
 		&i.ScheduledAt,
+		&i.LanguageID,
 	)
 	return i, err
 }
 
 const updatePage = `-- name: UpdatePage :one
 UPDATE pages
-SET title = ?, slug = ?, body = ?, status = ?, featured_image_id = ?, meta_title = ?, meta_description = ?, meta_keywords = ?, og_image_id = ?, no_index = ?, no_follow = ?, canonical_url = ?, scheduled_at = ?, updated_at = ?
+SET title = ?, slug = ?, body = ?, status = ?, featured_image_id = ?, meta_title = ?, meta_description = ?, meta_keywords = ?, og_image_id = ?, no_index = ?, no_follow = ?, canonical_url = ?, scheduled_at = ?, language_id = ?, updated_at = ?
 WHERE id = ?
-RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at
+RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id
 `
 
 type UpdatePageParams struct {
@@ -1339,6 +1840,7 @@ type UpdatePageParams struct {
 	NoFollow        int64         `json:"no_follow"`
 	CanonicalUrl    string        `json:"canonical_url"`
 	ScheduledAt     sql.NullTime  `json:"scheduled_at"`
+	LanguageID      sql.NullInt64 `json:"language_id"`
 	UpdatedAt       time.Time     `json:"updated_at"`
 	ID              int64         `json:"id"`
 }
@@ -1358,6 +1860,7 @@ func (q *Queries) UpdatePage(ctx context.Context, arg UpdatePageParams) (Page, e
 		arg.NoFollow,
 		arg.CanonicalUrl,
 		arg.ScheduledAt,
+		arg.LanguageID,
 		arg.UpdatedAt,
 		arg.ID,
 	)
@@ -1381,6 +1884,7 @@ func (q *Queries) UpdatePage(ctx context.Context, arg UpdatePageParams) (Page, e
 		&i.NoFollow,
 		&i.CanonicalUrl,
 		&i.ScheduledAt,
+		&i.LanguageID,
 	)
 	return i, err
 }
