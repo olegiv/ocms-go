@@ -237,13 +237,27 @@ func run() error {
 	r.Get("/health/live", healthHandler.Liveness)
 	r.Get("/health/ready", healthHandler.Readiness)
 
-	// Public frontend routes
-	r.Get("/", frontendHandler.Home)
-	r.Get("/sitemap.xml", frontendHandler.Sitemap)
-	r.Get("/robots.txt", frontendHandler.Robots)
-	r.Get("/search", frontendHandler.Search)
-	r.Get("/category/{slug}", frontendHandler.Category)
-	r.Get("/tag/{slug}", frontendHandler.Tag)
+	// Public frontend routes (with language detection middleware)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.Language(db))
+
+		// Default language routes (no prefix)
+		r.Get("/", frontendHandler.Home)
+		r.Get("/sitemap.xml", frontendHandler.Sitemap)
+		r.Get("/robots.txt", frontendHandler.Robots)
+		r.Get("/search", frontendHandler.Search)
+		r.Get("/category/{slug}", frontendHandler.Category)
+		r.Get("/tag/{slug}", frontendHandler.Tag)
+
+		// Language-prefixed routes (e.g., /ru/, /ru/page-slug)
+		r.Route("/{lang:[a-z]{2}}", func(r chi.Router) {
+			r.Get("/", frontendHandler.Home)
+			r.Get("/search", frontendHandler.Search)
+			r.Get("/category/{slug}", frontendHandler.Category)
+			r.Get("/tag/{slug}", frontendHandler.Tag)
+			r.Get("/{slug}", frontendHandler.Page)
+		})
+	})
 
 	// Auth routes (public)
 	r.Get("/login", authHandler.LoginForm)
@@ -541,7 +555,11 @@ func run() error {
 
 	// Page by slug route (catches all unmatched single-level paths)
 	// This should be registered last to catch pages by slug
-	r.Get("/{slug}", frontendHandler.Page)
+	// Uses language middleware to detect language from cookie/Accept-Language
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.Language(db))
+		r.Get("/{slug}", frontendHandler.Page)
+	})
 
 	// 404 Not Found handler - use frontend theme's 404
 	r.NotFound(func(w http.ResponseWriter, req *http.Request) {

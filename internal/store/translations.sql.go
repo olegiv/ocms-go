@@ -183,6 +183,101 @@ func (q *Queries) GetAllTranslationsOfEntity(ctx context.Context, arg GetAllTran
 	return items, nil
 }
 
+const getPageAvailableTranslations = `-- name: GetPageAvailableTranslations :many
+SELECT
+    l.id as language_id,
+    l.code as language_code,
+    l.name as language_name,
+    l.native_name as language_native_name,
+    l.direction as language_direction,
+    l.is_default as is_default,
+    COALESCE(p.id, 0) as page_id,
+    COALESCE(p.slug, '') as page_slug,
+    COALESCE(p.title, '') as page_title
+FROM languages l
+LEFT JOIN (
+    -- Get pages that are translations of the source page
+    SELECT p.id, p.slug, p.title, t.language_id
+    FROM pages p
+    INNER JOIN translations t ON t.translation_id = p.id
+    WHERE t.entity_type = 'page' AND t.entity_id = ? AND p.status = 'published'
+    UNION
+    -- Get the source page itself
+    SELECT p.id, p.slug, p.title, p.language_id
+    FROM pages p
+    WHERE p.id = ? AND p.status = 'published'
+    UNION
+    -- Get pages where current page is a translation (sibling translations)
+    SELECT p2.id, p2.slug, p2.title, p2.language_id
+    FROM translations t
+    INNER JOIN pages p2 ON (p2.id = t.entity_id OR p2.id = t.translation_id)
+    WHERE t.entity_type = 'page'
+    AND (t.entity_id = ? OR t.translation_id = ?)
+    AND p2.status = 'published'
+) p ON p.language_id = l.id
+WHERE l.is_active = 1
+ORDER BY l.position ASC
+`
+
+type GetPageAvailableTranslationsParams struct {
+	EntityID      int64 `json:"entity_id"`
+	ID            int64 `json:"id"`
+	EntityID_2    int64 `json:"entity_id_2"`
+	TranslationID int64 `json:"translation_id"`
+}
+
+type GetPageAvailableTranslationsRow struct {
+	LanguageID         int64  `json:"language_id"`
+	LanguageCode       string `json:"language_code"`
+	LanguageName       string `json:"language_name"`
+	LanguageNativeName string `json:"language_native_name"`
+	LanguageDirection  string `json:"language_direction"`
+	IsDefault          bool   `json:"is_default"`
+	PageID             int64  `json:"page_id"`
+	PageSlug           string `json:"page_slug"`
+	PageTitle          string `json:"page_title"`
+}
+
+// Get all available translations for a page (for language switcher)
+// Returns the page itself plus all its translations with language info and page slugs
+func (q *Queries) GetPageAvailableTranslations(ctx context.Context, arg GetPageAvailableTranslationsParams) ([]GetPageAvailableTranslationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getPageAvailableTranslations,
+		arg.EntityID,
+		arg.ID,
+		arg.EntityID_2,
+		arg.TranslationID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetPageAvailableTranslationsRow{}
+	for rows.Next() {
+		var i GetPageAvailableTranslationsRow
+		if err := rows.Scan(
+			&i.LanguageID,
+			&i.LanguageCode,
+			&i.LanguageName,
+			&i.LanguageNativeName,
+			&i.LanguageDirection,
+			&i.IsDefault,
+			&i.PageID,
+			&i.PageSlug,
+			&i.PageTitle,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getPageByLanguageFromTranslation = `-- name: GetPageByLanguageFromTranslation :one
 
 SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_id FROM pages p
@@ -385,6 +480,79 @@ func (q *Queries) GetPageWithLanguage(ctx context.Context, id int64) (GetPageWit
 		&i.LanguageName,
 		&i.LanguageNativeName,
 		&i.LanguageDirection,
+	)
+	return i, err
+}
+
+const getPublishedPageWithLanguageBySlug = `-- name: GetPublishedPageWithLanguageBySlug :one
+SELECT
+    p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_id,
+    COALESCE(l.code, '') as language_code,
+    COALESCE(l.name, '') as language_name,
+    COALESCE(l.native_name, '') as language_native_name,
+    COALESCE(l.direction, 'ltr') as language_direction,
+    COALESCE(l.is_default, 1) as language_is_default
+FROM pages p
+LEFT JOIN languages l ON l.id = p.language_id
+WHERE p.slug = ? AND p.status = 'published'
+`
+
+type GetPublishedPageWithLanguageBySlugRow struct {
+	ID                 int64         `json:"id"`
+	Title              string        `json:"title"`
+	Slug               string        `json:"slug"`
+	Body               string        `json:"body"`
+	Status             string        `json:"status"`
+	AuthorID           int64         `json:"author_id"`
+	CreatedAt          time.Time     `json:"created_at"`
+	UpdatedAt          time.Time     `json:"updated_at"`
+	PublishedAt        sql.NullTime  `json:"published_at"`
+	FeaturedImageID    sql.NullInt64 `json:"featured_image_id"`
+	MetaTitle          string        `json:"meta_title"`
+	MetaDescription    string        `json:"meta_description"`
+	MetaKeywords       string        `json:"meta_keywords"`
+	OgImageID          sql.NullInt64 `json:"og_image_id"`
+	NoIndex            int64         `json:"no_index"`
+	NoFollow           int64         `json:"no_follow"`
+	CanonicalUrl       string        `json:"canonical_url"`
+	ScheduledAt        sql.NullTime  `json:"scheduled_at"`
+	LanguageID         sql.NullInt64 `json:"language_id"`
+	LanguageCode       string        `json:"language_code"`
+	LanguageName       string        `json:"language_name"`
+	LanguageNativeName string        `json:"language_native_name"`
+	LanguageDirection  string        `json:"language_direction"`
+	LanguageIsDefault  bool          `json:"language_is_default"`
+}
+
+// Get page with language info by slug
+func (q *Queries) GetPublishedPageWithLanguageBySlug(ctx context.Context, slug string) (GetPublishedPageWithLanguageBySlugRow, error) {
+	row := q.db.QueryRowContext(ctx, getPublishedPageWithLanguageBySlug, slug)
+	var i GetPublishedPageWithLanguageBySlugRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Slug,
+		&i.Body,
+		&i.Status,
+		&i.AuthorID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PublishedAt,
+		&i.FeaturedImageID,
+		&i.MetaTitle,
+		&i.MetaDescription,
+		&i.MetaKeywords,
+		&i.OgImageID,
+		&i.NoIndex,
+		&i.NoFollow,
+		&i.CanonicalUrl,
+		&i.ScheduledAt,
+		&i.LanguageID,
+		&i.LanguageCode,
+		&i.LanguageName,
+		&i.LanguageNativeName,
+		&i.LanguageDirection,
+		&i.LanguageIsDefault,
 	)
 	return i, err
 }

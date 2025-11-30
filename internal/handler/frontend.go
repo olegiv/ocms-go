@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"ocms-go/internal/cache"
+	"ocms-go/internal/middleware"
 	"ocms-go/internal/seo"
 	"ocms-go/internal/service"
 	"ocms-go/internal/store"
@@ -165,6 +166,15 @@ type BaseTemplateData struct {
 
 	// Widgets - map of widget area ID to widgets
 	Widgets map[string][]service.WidgetView
+
+	// Language support
+	CurrentLanguage    *LanguageView     // Current language for the request
+	Languages          []LanguageView    // All active languages
+	Translations       []TranslationLink // Available translations for current page
+	HrefLangs          []HrefLangLink    // hreflang links for SEO
+	LangCode           string            // Current language code (shortcut)
+	LangDirection      string            // Current language direction (ltr/rtl)
+	ShowLanguagePicker bool              // Whether to show language picker
 }
 
 // FooterWidget represents a widget in the footer area.
@@ -178,6 +188,31 @@ type SocialLink struct {
 	Name string
 	URL  string
 	Icon template.HTML
+}
+
+// LanguageView represents a language for template rendering.
+type LanguageView struct {
+	ID         int64
+	Code       string
+	Name       string
+	NativeName string
+	Direction  string
+	IsDefault  bool
+	IsCurrent  bool
+}
+
+// TranslationLink represents a translation for the language switcher.
+type TranslationLink struct {
+	Language  LanguageView
+	URL       string // Full URL to the translated page
+	PageTitle string // Title of the translated page
+	HasPage   bool   // Whether a translation exists for this language
+}
+
+// HrefLangLink represents an hreflang link for SEO.
+type HrefLangLink struct {
+	Lang string // Language code (e.g., "en", "ru", "x-default")
+	Href string // Full URL
 }
 
 // MenuItem represents a menu item for templates.
@@ -365,6 +400,16 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 		featuredPages = recentPageViews
 	}
 
+	// Set language cookie if detected from URL
+	if langInfo := middleware.GetLanguage(r); langInfo != nil {
+		middleware.SetLanguageCookie(w, langInfo.Code)
+	}
+
+	// Build homepage translations for language switcher
+	if base.ShowLanguagePicker {
+		base.Translations = h.getHomepageTranslations(base.LangCode, base.Languages)
+	}
+
 	data := HomeData{
 		BaseTemplateData: base,
 		FeaturedPages:    featuredPages,
@@ -467,6 +512,18 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 
 	// Build JSON-LD structured data
 	base.JSONLD = seo.BuildArticleSchema(pageData, siteConfig, page.UpdatedAt)
+
+	// Get translations for language switcher and hreflang
+	if base.ShowLanguagePicker {
+		translations, hrefLangs := h.getPageTranslations(ctx, page.ID, base.LangCode, base.SiteURL)
+		base.Translations = translations
+		base.HrefLangs = hrefLangs
+	}
+
+	// Set language cookie if detected from URL
+	if langInfo := middleware.GetLanguage(r); langInfo != nil {
+		middleware.SetLanguageCookie(w, langInfo.Code)
+	}
 
 	data := PageData{
 		BaseTemplateData: base,
@@ -1166,6 +1223,43 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		data.Widgets = h.widgetService.GetAllWidgetsForTheme(ctx, activeTheme.Name)
 	}
 
+	// Load language info from middleware context
+	if langInfo := middleware.GetLanguage(r); langInfo != nil {
+		data.CurrentLanguage = &LanguageView{
+			ID:         langInfo.ID,
+			Code:       langInfo.Code,
+			Name:       langInfo.Name,
+			NativeName: langInfo.NativeName,
+			Direction:  langInfo.Direction,
+			IsDefault:  langInfo.IsDefault,
+			IsCurrent:  true,
+		}
+		data.LangCode = langInfo.Code
+		data.LangDirection = langInfo.Direction
+		if data.LangDirection == "" {
+			data.LangDirection = "ltr"
+		}
+	}
+
+	// Load all active languages for language picker
+	activeLanguages, err := h.queries.ListActiveLanguages(ctx)
+	if err == nil && len(activeLanguages) > 1 {
+		data.ShowLanguagePicker = true
+		data.Languages = make([]LanguageView, 0, len(activeLanguages))
+		for _, lang := range activeLanguages {
+			lv := LanguageView{
+				ID:         lang.ID,
+				Code:       lang.Code,
+				Name:       lang.Name,
+				NativeName: lang.NativeName,
+				Direction:  lang.Direction,
+				IsDefault:  lang.IsDefault,
+				IsCurrent:  data.LangCode == lang.Code,
+			}
+			data.Languages = append(data.Languages, lv)
+		}
+	}
+
 	return data
 }
 
@@ -1193,6 +1287,115 @@ func (h *FrontendHandler) menuItemsToView(items []service.MenuItem, currentPath 
 		result = append(result, mi)
 	}
 	return result
+}
+
+// getPageTranslations returns translation links for a page for the language switcher.
+func (h *FrontendHandler) getPageTranslations(ctx context.Context, pageID int64, currentLangCode, siteURL string) ([]TranslationLink, []HrefLangLink) {
+	translations, err := h.queries.GetPageAvailableTranslations(ctx, store.GetPageAvailableTranslationsParams{
+		EntityID:      pageID,
+		ID:            pageID,
+		EntityID_2:    pageID,
+		TranslationID: pageID,
+	})
+	if err != nil {
+		h.logger.Error("failed to get page translations", "pageID", pageID, "error", err)
+		return nil, nil
+	}
+
+	var links []TranslationLink
+	var hrefLangs []HrefLangLink
+	var defaultLangURL string
+
+	for _, t := range translations {
+		lv := LanguageView{
+			ID:         t.LanguageID,
+			Code:       t.LanguageCode,
+			Name:       t.LanguageName,
+			NativeName: t.LanguageNativeName,
+			Direction:  t.LanguageDirection,
+			IsDefault:  t.IsDefault,
+			IsCurrent:  t.LanguageCode == currentLangCode,
+		}
+
+		hasPage := t.PageID != 0 && t.PageSlug != ""
+
+		// Build URL
+		var url string
+		if hasPage {
+			if lv.IsDefault {
+				// Default language uses root URL
+				url = "/" + t.PageSlug
+			} else {
+				// Non-default language uses language prefix
+				url = "/" + t.LanguageCode + "/" + t.PageSlug
+			}
+		} else {
+			// No translation - link to homepage in that language
+			if lv.IsDefault {
+				url = "/"
+			} else {
+				url = "/" + t.LanguageCode + "/"
+			}
+		}
+
+		links = append(links, TranslationLink{
+			Language:  lv,
+			URL:       url,
+			PageTitle: t.PageTitle,
+			HasPage:   hasPage,
+		})
+
+		// Build hreflang link
+		if hasPage && siteURL != "" {
+			fullURL := strings.TrimRight(siteURL, "/") + url
+			hrefLangs = append(hrefLangs, HrefLangLink{
+				Lang: t.LanguageCode,
+				Href: fullURL,
+			})
+			if lv.IsDefault {
+				defaultLangURL = fullURL
+			}
+		}
+	}
+
+	// Add x-default hreflang (points to default language version)
+	if defaultLangURL != "" {
+		hrefLangs = append(hrefLangs, HrefLangLink{
+			Lang: "x-default",
+			Href: defaultLangURL,
+		})
+	}
+
+	return links, hrefLangs
+}
+
+// getHomepageTranslations returns translation links for the homepage.
+func (h *FrontendHandler) getHomepageTranslations(currentLangCode string, languages []LanguageView) []TranslationLink {
+	links := make([]TranslationLink, 0, len(languages))
+	for _, lang := range languages {
+		var url string
+		if lang.IsDefault {
+			url = "/"
+		} else {
+			url = "/" + lang.Code + "/"
+		}
+
+		links = append(links, TranslationLink{
+			Language: LanguageView{
+				ID:         lang.ID,
+				Code:       lang.Code,
+				Name:       lang.Name,
+				NativeName: lang.NativeName,
+				Direction:  lang.Direction,
+				IsDefault:  lang.IsDefault,
+				IsCurrent:  lang.Code == currentLangCode,
+			},
+			URL:       url,
+			PageTitle: "",
+			HasPage:   true,
+		})
+	}
+	return links
 }
 
 // getPageNum extracts page number from request query params.

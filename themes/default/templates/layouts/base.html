@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{if .LangCode}}{{.LangCode}}{{else}}en{{end}}" {{if .LangDirection}}dir="{{.LangDirection}}"{{end}}>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,6 +10,11 @@
     {{if .MetaKeywords}}<meta name="keywords" content="{{.MetaKeywords}}">{{end}}
     {{if .Canonical}}<link rel="canonical" href="{{.Canonical}}">{{end}}
     {{if .Robots}}<meta name="robots" content="{{.Robots}}">{{end}}
+
+    {{/* hreflang links for multi-language SEO */}}
+    {{range .HrefLangs}}
+    <link rel="alternate" hreflang="{{.Lang}}" href="{{.Href}}">
+    {{end}}
 
     {{/* Open Graph */}}
     <meta property="og:type" content="{{if .OGType}}{{.OGType}}{{else if .Page}}article{{else}}website{{end}}">
