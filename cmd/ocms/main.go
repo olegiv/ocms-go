@@ -18,6 +18,7 @@ import (
 
 	"ocms-go/internal/config"
 	"ocms-go/internal/handler"
+	"ocms-go/internal/handler/api"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/module"
 	"ocms-go/internal/render"
@@ -203,6 +204,7 @@ func run() error {
 	widgetsHandler := handler.NewWidgetsHandler(db, renderer, sessionManager, themeManager)
 	modulesHandler := handler.NewModulesHandler(db, renderer, sessionManager, moduleRegistry, hookRegistry)
 	frontendHandler := handler.NewFrontendHandler(db, themeManager, logger)
+	apiHandler := api.NewHandler(db)
 
 	// Public frontend routes
 	r.Get("/", frontendHandler.Home)
@@ -369,6 +371,38 @@ func run() error {
 		// Register module admin routes
 		moduleRegistry.AdminRouteAll(r)
 	})
+
+	// REST API v1 routes
+	r.Route("/api/v1", func(r chi.Router) {
+		// Global rate limiting for API (100 requests per second with burst of 200)
+		apiRateLimiter := middleware.NewGlobalRateLimiter(100, 200)
+		r.Use(apiRateLimiter.Middleware())
+
+		// Public endpoints (no authentication required)
+		r.Get("/status", apiHandler.Status)
+
+		// Protected endpoints (API key required)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.APIKeyAuth(db))
+			r.Use(middleware.APIRateLimit(10, 20)) // 10 requests per second per API key
+
+			// Auth info endpoint
+			r.Get("/auth", apiHandler.AuthInfo)
+
+			// Pages endpoints (to be implemented in iteration 18)
+			// r.Get("/pages", ...) - public
+			// r.Post("/pages", ...) - requires pages:write
+
+			// Media endpoints (to be implemented in iteration 19)
+			// r.Get("/media", ...) - public
+			// r.Post("/media", ...) - requires media:write
+
+			// Taxonomy endpoints (to be implemented in iteration 20)
+			// r.Get("/tags", ...) - public
+			// r.Get("/categories", ...) - public
+		})
+	})
+	slog.Info("REST API v1 mounted at /api/v1")
 
 	// Public form routes (no authentication required, but session needed for CSRF)
 	r.Get("/forms/{slug}", formsHandler.Show)

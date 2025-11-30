@@ -9,6 +9,20 @@ import (
 	"time"
 )
 
+type ApiKey struct {
+	ID          int64        `json:"id"`
+	Name        string       `json:"name"`
+	KeyHash     string       `json:"key_hash"`
+	KeyPrefix   string       `json:"key_prefix"`
+	Permissions string       `json:"permissions"`
+	LastUsedAt  sql.NullTime `json:"last_used_at"`
+	ExpiresAt   sql.NullTime `json:"expires_at"`
+	IsActive    bool         `json:"is_active"`
+	CreatedBy   int64        `json:"created_by"`
+	CreatedAt   time.Time    `json:"created_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
+}
+
 type Category struct {
 	ID          int64          `json:"id"`
 	Name        string         `json:"name"`
