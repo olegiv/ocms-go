@@ -1,0 +1,163 @@
+{{define "content"}}
+<div class="page-header">
+    <h1 class="page-title">Submissions - {{.Data.Form.Name}}</h1>
+    <div class="page-actions">
+        {{if .Data.Submissions}}
+        <form action="/admin/forms/{{.Data.Form.ID}}/submissions/export" method="POST" style="display: inline;">
+            <button type="submit" class="btn btn-secondary">Export CSV</button>
+        </form>
+        {{end}}
+        <a href="/admin/forms/{{.Data.Form.ID}}" class="btn btn-outline">Back to Form</a>
+    </div>
+</div>
+
+<div class="stats-bar">
+    <div class="stat">
+        <span class="stat-value">{{.Data.TotalCount}}</span>
+        <span class="stat-label">Total Submissions</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value">{{.Data.UnreadCount}}</span>
+        <span class="stat-label">Unread</span>
+    </div>
+</div>
+
+{{if .Data.Submissions}}
+<div class="table-container">
+    <table class="table">
+        <thead>
+            <tr>
+                <th style="width: 60px;">ID</th>
+                <th>Preview</th>
+                <th style="width: 160px;">Submitted</th>
+                <th style="width: 120px;">IP Address</th>
+                <th style="width: 80px;">Status</th>
+                <th style="width: 150px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Data.Submissions}}
+            <tr{{if not .Submission.IsRead}} class="unread"{{end}}>
+                <td>
+                    <a href="/admin/forms/{{$.Data.Form.ID}}/submissions/{{.Submission.ID}}" class="link-primary">
+                        #{{.Submission.ID}}
+                    </a>
+                </td>
+                <td>
+                    <a href="/admin/forms/{{$.Data.Form.ID}}/submissions/{{.Submission.ID}}" class="submission-preview">
+                        {{if .Preview}}{{.Preview}}{{else}}<em>No preview available</em>{{end}}
+                    </a>
+                </td>
+                <td>{{formatDateTime .Submission.CreatedAt}}</td>
+                <td>
+                    {{if .Submission.IpAddress.Valid}}
+                    <code>{{.Submission.IpAddress.String}}</code>
+                    {{else}}
+                    <span class="text-muted">-</span>
+                    {{end}}
+                </td>
+                <td>
+                    {{if .Submission.IsRead}}
+                    <span class="badge badge-secondary">Read</span>
+                    {{else}}
+                    <span class="badge badge-primary">New</span>
+                    {{end}}
+                </td>
+                <td>
+                    <div class="btn-group">
+                        <a href="/admin/forms/{{$.Data.Form.ID}}/submissions/{{.Submission.ID}}" class="btn btn-sm btn-secondary">View</a>
+                        <button type="button"
+                                class="btn btn-sm btn-danger"
+                                hx-delete="/admin/forms/{{$.Data.Form.ID}}/submissions/{{.Submission.ID}}"
+                                hx-confirm="Are you sure you want to delete this submission?"
+                                hx-target="closest tr"
+                                hx-swap="outerHTML">
+                            Delete
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+
+{{if gt .Data.TotalPages 1}}
+<div class="pagination">
+    {{if gt .Data.Page 1}}
+    <a href="/admin/forms/{{.Data.Form.ID}}/submissions?page={{sub .Data.Page 1}}" class="btn btn-sm btn-outline">Previous</a>
+    {{end}}
+
+    <span class="pagination-info">Page {{.Data.Page}} of {{.Data.TotalPages}}</span>
+
+    {{if lt .Data.Page .Data.TotalPages}}
+    <a href="/admin/forms/{{.Data.Form.ID}}/submissions?page={{add .Data.Page 1}}" class="btn btn-sm btn-outline">Next</a>
+    {{end}}
+</div>
+{{end}}
+
+{{else}}
+<div class="empty-state">
+    <h3>No submissions yet</h3>
+    <p>When visitors submit this form, their responses will appear here.</p>
+    <a href="/forms/{{.Data.Form.Slug}}" class="btn btn-primary" target="_blank">View Form</a>
+</div>
+{{end}}
+
+<style>
+.stats-bar {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+}
+
+.stat {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+tr.unread {
+    background-color: rgba(79, 70, 229, 0.05);
+}
+
+tr.unread td:first-child {
+    border-left: 3px solid var(--primary-color);
+}
+
+.submission-preview {
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.submission-preview:hover {
+    color: var(--primary-color);
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.pagination-info {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+</style>
+{{end}}

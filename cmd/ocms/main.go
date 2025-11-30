@@ -263,6 +263,12 @@ func run() error {
 		r.Put("/forms/{id}/fields/{fieldId}", formsHandler.UpdateField)
 		r.Delete("/forms/{id}/fields/{fieldId}", formsHandler.DeleteField)
 		r.Post("/forms/{id}/fields/reorder", formsHandler.ReorderFields)
+
+		// Form submissions routes
+		r.Get("/forms/{id}/submissions", formsHandler.Submissions)
+		r.Get("/forms/{id}/submissions/{subId}", formsHandler.ViewSubmission)
+		r.Delete("/forms/{id}/submissions/{subId}", formsHandler.DeleteSubmission)
+		r.Post("/forms/{id}/submissions/export", formsHandler.ExportSubmissions)
 	})
 
 	// Public form routes (no authentication required, but session needed for CSRF)

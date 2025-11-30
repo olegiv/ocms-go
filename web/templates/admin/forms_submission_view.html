@@ -1,0 +1,205 @@
+{{define "content"}}
+<div class="page-header">
+    <h1 class="page-title">Submission #{{.Data.Submission.ID}}</h1>
+    <div class="page-actions">
+        <button type="button"
+                class="btn btn-danger"
+                hx-delete="/admin/forms/{{.Data.Form.ID}}/submissions/{{.Data.Submission.ID}}"
+                hx-confirm="Are you sure you want to delete this submission?"
+                hx-redirect="/admin/forms/{{.Data.Form.ID}}/submissions">
+            Delete
+        </button>
+        <a href="/admin/forms/{{.Data.Form.ID}}/submissions" class="btn btn-outline">Back to Submissions</a>
+    </div>
+</div>
+
+<div class="submission-detail">
+    <div class="submission-meta">
+        <div class="meta-item">
+            <span class="meta-label">Form</span>
+            <span class="meta-value">
+                <a href="/admin/forms/{{.Data.Form.ID}}">{{.Data.Form.Name}}</a>
+            </span>
+        </div>
+        <div class="meta-item">
+            <span class="meta-label">Submitted</span>
+            <span class="meta-value">{{formatDateTime .Data.Submission.CreatedAt}}</span>
+        </div>
+        <div class="meta-item">
+            <span class="meta-label">IP Address</span>
+            <span class="meta-value">
+                {{if .Data.Submission.IpAddress.Valid}}
+                <code>{{.Data.Submission.IpAddress.String}}</code>
+                {{else}}
+                <span class="text-muted">Unknown</span>
+                {{end}}
+            </span>
+        </div>
+        <div class="meta-item">
+            <span class="meta-label">User Agent</span>
+            <span class="meta-value user-agent">
+                {{if .Data.Submission.UserAgent.Valid}}
+                {{.Data.Submission.UserAgent.String}}
+                {{else}}
+                <span class="text-muted">Unknown</span>
+                {{end}}
+            </span>
+        </div>
+    </div>
+
+    <div class="submission-data">
+        <h2>Submitted Data</h2>
+        <div class="data-table">
+            {{range .Data.Fields}}
+            <div class="data-row">
+                <div class="data-label">{{.Label}}</div>
+                <div class="data-value">
+                    {{$val := index $.Data.Data .Name}}
+                    {{if $val}}
+                        {{if eq .Type "textarea"}}
+                        <pre class="data-pre">{{$val}}</pre>
+                        {{else if eq .Type "email"}}
+                        <a href="mailto:{{$val}}">{{$val}}</a>
+                        {{else}}
+                        {{$val}}
+                        {{end}}
+                    {{else}}
+                    <span class="text-muted">-</span>
+                    {{end}}
+                </div>
+            </div>
+            {{end}}
+        </div>
+    </div>
+
+    <div class="submission-raw">
+        <h3>Raw JSON Data</h3>
+        <pre class="json-data">{{.Data.Submission.Data}}</pre>
+    </div>
+</div>
+
+<style>
+.submission-detail {
+    max-width: 800px;
+}
+
+.submission-meta {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    padding: 1.5rem;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    margin-bottom: 2rem;
+}
+
+.meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.meta-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+}
+
+.meta-value {
+    color: var(--text-primary);
+}
+
+.meta-value.user-agent {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    word-break: break-all;
+}
+
+.submission-data {
+    margin-bottom: 2rem;
+}
+
+.submission-data h2 {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+}
+
+.data-table {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.data-row {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.data-row:last-child {
+    border-bottom: none;
+}
+
+.data-label {
+    padding: 1rem;
+    font-weight: 500;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border-right: 1px solid var(--border-color);
+}
+
+.data-value {
+    padding: 1rem;
+    color: var(--text-primary);
+    word-break: break-word;
+}
+
+.data-pre {
+    margin: 0;
+    white-space: pre-wrap;
+    font-family: inherit;
+    font-size: inherit;
+}
+
+.submission-raw {
+    margin-top: 2rem;
+}
+
+.submission-raw h3 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-secondary);
+}
+
+.json-data {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+    overflow-x: auto;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+@media (max-width: 640px) {
+    .submission-meta {
+        grid-template-columns: 1fr;
+    }
+
+    .data-row {
+        grid-template-columns: 1fr;
+    }
+
+    .data-label {
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+    }
+}
+</style>
+{{end}}

@@ -1111,3 +1111,401 @@ func getClientIP(r *http.Request) string {
 	}
 	return host
 }
+
+// ===== Submission Management Handlers =====
+
+// SubmissionListItem represents a submission with parsed data for display.
+type SubmissionListItem struct {
+	Submission store.FormSubmission
+	Data       map[string]interface{}
+	Preview    string
+}
+
+// SubmissionsListData holds data for the submissions list template.
+type SubmissionsListData struct {
+	Form        store.Form
+	Fields      []store.FormField
+	Submissions []SubmissionListItem
+	TotalCount  int64
+	UnreadCount int64
+	Page        int
+	PerPage     int
+	TotalPages  int
+}
+
+// Submissions handles GET /admin/forms/{id}/submissions - lists form submissions.
+func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+
+	idStr := chi.URLParam(r, "id")
+	formID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		h.renderer.SetFlash(r, "Invalid form ID", "error")
+		http.Redirect(w, r, "/admin/forms", http.StatusSeeOther)
+		return
+	}
+
+	form, err := h.queries.GetFormByID(r.Context(), formID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			h.renderer.SetFlash(r, "Form not found", "error")
+		} else {
+			slog.Error("failed to get form", "error", err, "form_id", formID)
+			h.renderer.SetFlash(r, "Error loading form", "error")
+		}
+		http.Redirect(w, r, "/admin/forms", http.StatusSeeOther)
+		return
+	}
+
+	// Pagination
+	page := 1
+	if p := r.URL.Query().Get("page"); p != "" {
+		if pInt, err := strconv.Atoi(p); err == nil && pInt > 0 {
+			page = pInt
+		}
+	}
+	perPage := 20
+	offset := (page - 1) * perPage
+
+	// Get fields for display
+	fields, err := h.queries.GetFormFields(r.Context(), formID)
+	if err != nil {
+		slog.Error("failed to get form fields", "error", err, "form_id", formID)
+		fields = []store.FormField{}
+	}
+
+	// Get submissions
+	submissions, err := h.queries.GetFormSubmissions(r.Context(), store.GetFormSubmissionsParams{
+		FormID: formID,
+		Limit:  int64(perPage),
+		Offset: int64(offset),
+	})
+	if err != nil {
+		slog.Error("failed to get submissions", "error", err, "form_id", formID)
+		submissions = []store.FormSubmission{}
+	}
+
+	// Parse submission data and create preview
+	submissionItems := make([]SubmissionListItem, len(submissions))
+	for i, sub := range submissions {
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(sub.Data), &data); err != nil {
+			data = make(map[string]interface{})
+		}
+
+		// Create preview from first few fields
+		preview := ""
+		for j, field := range fields {
+			if j >= 2 {
+				break
+			}
+			if val, ok := data[field.Name]; ok {
+				if preview != "" {
+					preview += " | "
+				}
+				valStr := fmt.Sprintf("%v", val)
+				if len(valStr) > 30 {
+					valStr = valStr[:30] + "..."
+				}
+				preview += valStr
+			}
+		}
+
+		submissionItems[i] = SubmissionListItem{
+			Submission: sub,
+			Data:       data,
+			Preview:    preview,
+		}
+	}
+
+	// Get counts
+	totalCount, _ := h.queries.CountFormSubmissions(r.Context(), formID)
+	unreadCount, _ := h.queries.CountUnreadSubmissions(r.Context(), formID)
+	totalPages := int(totalCount) / perPage
+	if int(totalCount)%perPage > 0 {
+		totalPages++
+	}
+
+	data := SubmissionsListData{
+		Form:        form,
+		Fields:      fields,
+		Submissions: submissionItems,
+		TotalCount:  totalCount,
+		UnreadCount: unreadCount,
+		Page:        page,
+		PerPage:     perPage,
+		TotalPages:  totalPages,
+	}
+
+	if err := h.renderer.Render(w, r, "admin/forms_submissions", render.TemplateData{
+		Title: fmt.Sprintf("Submissions - %s", form.Name),
+		User:  user,
+		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Forms", URL: "/admin/forms"},
+			{Label: form.Name, URL: fmt.Sprintf("/admin/forms/%d", form.ID)},
+			{Label: "Submissions", URL: fmt.Sprintf("/admin/forms/%d/submissions", form.ID), Active: true},
+		},
+	}); err != nil {
+		slog.Error("render error", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+// SubmissionViewData holds data for viewing a single submission.
+type SubmissionViewData struct {
+	Form       store.Form
+	Fields     []store.FormField
+	Submission store.FormSubmission
+	Data       map[string]interface{}
+}
+
+// ViewSubmission handles GET /admin/forms/{id}/submissions/{subId} - views a submission.
+func (h *FormsHandler) ViewSubmission(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+
+	formIDStr := chi.URLParam(r, "id")
+	formID, err := strconv.ParseInt(formIDStr, 10, 64)
+	if err != nil {
+		h.renderer.SetFlash(r, "Invalid form ID", "error")
+		http.Redirect(w, r, "/admin/forms", http.StatusSeeOther)
+		return
+	}
+
+	subIDStr := chi.URLParam(r, "subId")
+	subID, err := strconv.ParseInt(subIDStr, 10, 64)
+	if err != nil {
+		h.renderer.SetFlash(r, "Invalid submission ID", "error")
+		http.Redirect(w, r, fmt.Sprintf("/admin/forms/%d/submissions", formID), http.StatusSeeOther)
+		return
+	}
+
+	form, err := h.queries.GetFormByID(r.Context(), formID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			h.renderer.SetFlash(r, "Form not found", "error")
+		} else {
+			slog.Error("failed to get form", "error", err, "form_id", formID)
+			h.renderer.SetFlash(r, "Error loading form", "error")
+		}
+		http.Redirect(w, r, "/admin/forms", http.StatusSeeOther)
+		return
+	}
+
+	submission, err := h.queries.GetFormSubmissionByID(r.Context(), subID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			h.renderer.SetFlash(r, "Submission not found", "error")
+		} else {
+			slog.Error("failed to get submission", "error", err, "sub_id", subID)
+			h.renderer.SetFlash(r, "Error loading submission", "error")
+		}
+		http.Redirect(w, r, fmt.Sprintf("/admin/forms/%d/submissions", formID), http.StatusSeeOther)
+		return
+	}
+
+	// Verify submission belongs to this form
+	if submission.FormID != formID {
+		h.renderer.SetFlash(r, "Submission not found", "error")
+		http.Redirect(w, r, fmt.Sprintf("/admin/forms/%d/submissions", formID), http.StatusSeeOther)
+		return
+	}
+
+	// Mark as read if not already
+	if !submission.IsRead {
+		if err := h.queries.MarkSubmissionRead(r.Context(), subID); err != nil {
+			slog.Error("failed to mark submission as read", "error", err, "sub_id", subID)
+		}
+		submission.IsRead = true
+	}
+
+	// Get fields for display
+	fields, err := h.queries.GetFormFields(r.Context(), formID)
+	if err != nil {
+		slog.Error("failed to get form fields", "error", err, "form_id", formID)
+		fields = []store.FormField{}
+	}
+
+	// Parse submission data
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(submission.Data), &data); err != nil {
+		data = make(map[string]interface{})
+	}
+
+	viewData := SubmissionViewData{
+		Form:       form,
+		Fields:     fields,
+		Submission: submission,
+		Data:       data,
+	}
+
+	if err := h.renderer.Render(w, r, "admin/forms_submission_view", render.TemplateData{
+		Title: fmt.Sprintf("Submission #%d - %s", submission.ID, form.Name),
+		User:  user,
+		Data:  viewData,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: "Dashboard", URL: "/admin"},
+			{Label: "Forms", URL: "/admin/forms"},
+			{Label: form.Name, URL: fmt.Sprintf("/admin/forms/%d", form.ID)},
+			{Label: "Submissions", URL: fmt.Sprintf("/admin/forms/%d/submissions", form.ID)},
+			{Label: fmt.Sprintf("#%d", submission.ID), URL: fmt.Sprintf("/admin/forms/%d/submissions/%d", form.ID, submission.ID), Active: true},
+		},
+	}); err != nil {
+		slog.Error("render error", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+// DeleteSubmission handles DELETE /admin/forms/{id}/submissions/{subId} - deletes a submission.
+func (h *FormsHandler) DeleteSubmission(w http.ResponseWriter, r *http.Request) {
+	formIDStr := chi.URLParam(r, "id")
+	formID, err := strconv.ParseInt(formIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid form ID", http.StatusBadRequest)
+		return
+	}
+
+	subIDStr := chi.URLParam(r, "subId")
+	subID, err := strconv.ParseInt(subIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid submission ID", http.StatusBadRequest)
+		return
+	}
+
+	submission, err := h.queries.GetFormSubmissionByID(r.Context(), subID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Submission not found", http.StatusNotFound)
+		} else {
+			slog.Error("failed to get submission", "error", err, "sub_id", subID)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Verify submission belongs to this form
+	if submission.FormID != formID {
+		http.Error(w, "Submission not found", http.StatusNotFound)
+		return
+	}
+
+	err = h.queries.DeleteFormSubmission(r.Context(), subID)
+	if err != nil {
+		slog.Error("failed to delete submission", "error", err, "sub_id", subID)
+		http.Error(w, "Error deleting submission", http.StatusInternalServerError)
+		return
+	}
+
+	user := middleware.GetUser(r)
+	slog.Info("submission deleted", "sub_id", subID, "form_id", formID, "deleted_by", user.ID)
+
+	if r.Header.Get("HX-Request") == "true" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	h.renderer.SetFlash(r, "Submission deleted successfully", "success")
+	http.Redirect(w, r, fmt.Sprintf("/admin/forms/%d/submissions", formID), http.StatusSeeOther)
+}
+
+// ExportSubmissions handles POST /admin/forms/{id}/submissions/export - exports submissions as CSV.
+func (h *FormsHandler) ExportSubmissions(w http.ResponseWriter, r *http.Request) {
+	formIDStr := chi.URLParam(r, "id")
+	formID, err := strconv.ParseInt(formIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid form ID", http.StatusBadRequest)
+		return
+	}
+
+	form, err := h.queries.GetFormByID(r.Context(), formID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Form not found", http.StatusNotFound)
+		} else {
+			slog.Error("failed to get form", "error", err, "form_id", formID)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Get all fields
+	fields, err := h.queries.GetFormFields(r.Context(), formID)
+	if err != nil {
+		slog.Error("failed to get form fields", "error", err, "form_id", formID)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Get all submissions (no pagination for export)
+	submissions, err := h.queries.GetFormSubmissions(r.Context(), store.GetFormSubmissionsParams{
+		FormID: formID,
+		Limit:  100000, // Large limit to get all
+		Offset: 0,
+	})
+	if err != nil {
+		slog.Error("failed to get submissions", "error", err, "form_id", formID)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Build CSV
+	var csvBuilder strings.Builder
+
+	// Header row
+	headers := []string{"ID", "Submitted At", "IP Address", "Read"}
+	for _, field := range fields {
+		headers = append(headers, field.Label)
+	}
+	csvBuilder.WriteString(escapeCSVRow(headers))
+	csvBuilder.WriteString("\n")
+
+	// Data rows
+	for _, sub := range submissions {
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(sub.Data), &data); err != nil {
+			data = make(map[string]interface{})
+		}
+
+		row := []string{
+			fmt.Sprintf("%d", sub.ID),
+			sub.CreatedAt.Format("2006-01-02 15:04:05"),
+			sub.IpAddress.String,
+			fmt.Sprintf("%t", sub.IsRead),
+		}
+
+		for _, field := range fields {
+			val := ""
+			if v, ok := data[field.Name]; ok {
+				val = fmt.Sprintf("%v", v)
+			}
+			row = append(row, val)
+		}
+
+		csvBuilder.WriteString(escapeCSVRow(row))
+		csvBuilder.WriteString("\n")
+	}
+
+	// Set headers for CSV download
+	filename := fmt.Sprintf("%s-submissions-%s.csv", form.Slug, time.Now().Format("2006-01-02"))
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	w.Write([]byte(csvBuilder.String()))
+
+	slog.Info("submissions exported", "form_id", formID, "count", len(submissions))
+}
+
+// escapeCSVRow escapes a row of CSV values.
+func escapeCSVRow(values []string) string {
+	escaped := make([]string, len(values))
+	for i, v := range values {
+		// Escape double quotes by doubling them
+		v = strings.ReplaceAll(v, "\"", "\"\"")
+		// Wrap in quotes if contains comma, newline, or quotes
+		if strings.ContainsAny(v, ",\"\n\r") {
+			v = "\"" + v + "\""
+		}
+		escaped[i] = v
+	}
+	return strings.Join(escaped, ",")
+}
