@@ -1,0 +1,385 @@
+{{define "content"}}
+{{if .Data.GeneratedKey}}
+<!-- Success page showing the generated API key -->
+<div class="page-header">
+    <div>
+        <h1 class="page-title">API Key Created</h1>
+        <p class="page-description">Your new API key has been generated</p>
+    </div>
+    <div class="page-actions">
+        <a href="/admin/api-keys" class="btn btn-outline">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            Back to API Keys
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="alert alert-warning" style="margin-bottom: 1.5rem;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+            <div>
+                <strong>Important:</strong> Copy your API key now. You won't be able to see it again!
+            </div>
+        </div>
+
+        <div class="api-key-display">
+            <label class="form-label">Your API Key</label>
+            <div class="key-container" x-data="{ copied: false }">
+                <input type="text"
+                    class="form-input key-input"
+                    value="{{.Data.GeneratedKey}}"
+                    readonly
+                    id="generated-key"
+                >
+                <button type="button"
+                    class="btn btn-primary copy-btn"
+                    @click="navigator.clipboard.writeText(document.getElementById('generated-key').value); copied = true; setTimeout(() => copied = false, 2000)"
+                >
+                    <span x-show="!copied">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                        Copy
+                    </span>
+                    <span x-show="copied" x-cloak>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                        Copied!
+                    </span>
+                </button>
+            </div>
+        </div>
+
+        <div class="key-details">
+            <div class="detail-row">
+                <span class="detail-label">Name:</span>
+                <span class="detail-value">{{.Data.APIKey.Name}}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Key Prefix:</span>
+                <span class="detail-value"><code>{{.Data.APIKey.KeyPrefix}}...</code></span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Permissions:</span>
+                <span class="detail-value">
+                    {{$perms := parseJSON .Data.APIKey.Permissions}}
+                    {{range $perms}}
+                    <span class="badge badge-outline">{{.}}</span>
+                    {{end}}
+                </span>
+            </div>
+            {{if .Data.APIKey.ExpiresAt.Valid}}
+            <div class="detail-row">
+                <span class="detail-label">Expires:</span>
+                <span class="detail-value">{{formatDate .Data.APIKey.ExpiresAt.Time}}</span>
+            </div>
+            {{end}}
+        </div>
+
+        <div class="form-actions" style="margin-top: 2rem;">
+            <a href="/admin/api-keys" class="btn btn-primary">Done</a>
+            <a href="/admin/api-keys/new" class="btn btn-outline">Create Another</a>
+        </div>
+    </div>
+</div>
+
+<style>
+.api-key-display {
+    margin-bottom: 1.5rem;
+}
+
+.key-container {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.key-input {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    flex: 1;
+}
+
+.copy-btn {
+    white-space: nowrap;
+}
+
+.key-details {
+    background: var(--bg-muted);
+    padding: 1rem;
+    border-radius: 8px;
+}
+
+.detail-row {
+    display: flex;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.detail-row:last-child {
+    border-bottom: none;
+}
+
+.detail-label {
+    font-weight: 500;
+    width: 120px;
+    flex-shrink: 0;
+}
+
+.detail-value {
+    flex: 1;
+}
+
+.detail-value .badge {
+    margin-right: 0.25rem;
+}
+
+.badge-outline {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+}
+</style>
+
+{{else}}
+<!-- Create/Edit form -->
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{if .Data.IsEdit}}Edit API Key{{else}}New API Key{{end}}</h1>
+        <p class="page-description">{{if .Data.IsEdit}}Update API key settings{{else}}Create a new API authentication key{{end}}</p>
+    </div>
+    <div class="page-actions">
+        <a href="/admin/api-keys" class="btn btn-outline">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            Back to API Keys
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="{{if .Data.IsEdit}}/admin/api-keys/{{.Data.APIKey.ID}}{{else}}/admin/api-keys{{end}}" class="form">
+            {{if .Data.IsEdit}}
+            <input type="hidden" name="_method" value="PUT">
+            {{end}}
+
+            <div class="form-group">
+                <label for="name" class="form-label">Name <span class="required">*</span></label>
+                <input
+                    type="text"
+                    id="name"
+                    name="name"
+                    class="form-input{{if index .Data.Errors "name"}} is-invalid{{end}}"
+                    value="{{index .Data.FormValues "name"}}"
+                    placeholder="e.g., Mobile App, CI/CD Pipeline, External Service"
+                    required
+                    autofocus
+                >
+                {{if index .Data.Errors "name"}}
+                <span class="form-error">{{index .Data.Errors "name"}}</span>
+                {{else}}
+                <span class="form-hint">A descriptive name to identify this API key</span>
+                {{end}}
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Permissions <span class="required">*</span></label>
+                {{if index .Data.Errors "permissions"}}
+                <span class="form-error" style="display: block; margin-bottom: 0.5rem;">{{index .Data.Errors "permissions"}}</span>
+                {{end}}
+
+                <div class="permissions-grid">
+                    {{$existingPerms := ""}}
+                    {{if .Data.IsEdit}}
+                        {{$existingPerms = .Data.APIKey.Permissions}}
+                    {{end}}
+
+                    <div class="permission-group">
+                        <h4 class="permission-group-title">Pages</h4>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="permissions" value="pages:read"
+                                {{if contains $existingPerms "pages:read"}}checked{{end}}>
+                            <span class="checkbox-text">
+                                <strong>pages:read</strong>
+                                <small>Read published pages</small>
+                            </span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="permissions" value="pages:write"
+                                {{if contains $existingPerms "pages:write"}}checked{{end}}>
+                            <span class="checkbox-text">
+                                <strong>pages:write</strong>
+                                <small>Create, update, delete pages</small>
+                            </span>
+                        </label>
+                    </div>
+
+                    <div class="permission-group">
+                        <h4 class="permission-group-title">Media</h4>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="permissions" value="media:read"
+                                {{if contains $existingPerms "media:read"}}checked{{end}}>
+                            <span class="checkbox-text">
+                                <strong>media:read</strong>
+                                <small>List and view media files</small>
+                            </span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="permissions" value="media:write"
+                                {{if contains $existingPerms "media:write"}}checked{{end}}>
+                            <span class="checkbox-text">
+                                <strong>media:write</strong>
+                                <small>Upload and delete media</small>
+                            </span>
+                        </label>
+                    </div>
+
+                    <div class="permission-group">
+                        <h4 class="permission-group-title">Taxonomy</h4>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="permissions" value="taxonomy:read"
+                                {{if contains $existingPerms "taxonomy:read"}}checked{{end}}>
+                            <span class="checkbox-text">
+                                <strong>taxonomy:read</strong>
+                                <small>List tags and categories</small>
+                            </span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="permissions" value="taxonomy:write"
+                                {{if contains $existingPerms "taxonomy:write"}}checked{{end}}>
+                            <span class="checkbox-text">
+                                <strong>taxonomy:write</strong>
+                                <small>Create, update, delete tags/categories</small>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="expires_at" class="form-label">Expiration Date</label>
+                <input
+                    type="date"
+                    id="expires_at"
+                    name="expires_at"
+                    class="form-input{{if index .Data.Errors "expires_at"}} is-invalid{{end}}"
+                    value="{{index .Data.FormValues "expires_at"}}"
+                    min="{{formatDate now}}"
+                >
+                {{if index .Data.Errors "expires_at"}}
+                <span class="form-error">{{index .Data.Errors "expires_at"}}</span>
+                {{else}}
+                <span class="form-hint">Leave empty for no expiration</span>
+                {{end}}
+            </div>
+
+            {{if .Data.IsEdit}}
+            <div class="form-group">
+                <label class="form-label">Status</label>
+                <label class="checkbox-label">
+                    <input type="checkbox" name="is_active" value="on"
+                        {{if .Data.APIKey.IsActive}}checked{{end}}>
+                    <span class="checkbox-text">
+                        <strong>Active</strong>
+                        <small>Uncheck to revoke this API key</small>
+                    </span>
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Key Information</label>
+                <div class="key-info-box">
+                    <div class="info-row">
+                        <span class="info-label">Key Prefix:</span>
+                        <code>{{.Data.APIKey.KeyPrefix}}...</code>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Created:</span>
+                        <span>{{formatDateTime .Data.APIKey.CreatedAt}}</span>
+                    </div>
+                    {{if .Data.APIKey.LastUsedAt.Valid}}
+                    <div class="info-row">
+                        <span class="info-label">Last Used:</span>
+                        <span>{{formatDateTime .Data.APIKey.LastUsedAt.Time}}</span>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+            {{end}}
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    {{if .Data.IsEdit}}Update API Key{{else}}Create API Key{{end}}
+                </button>
+                <a href="/admin/api-keys" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.permissions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+.permission-group {
+    background: var(--bg-muted);
+    padding: 1rem;
+    border-radius: 8px;
+}
+
+.permission-group-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+    margin-top: 0.25rem;
+}
+
+.checkbox-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.checkbox-text strong {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+}
+
+.checkbox-text small {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.key-info-box {
+    background: var(--bg-muted);
+    padding: 1rem;
+    border-radius: 8px;
+}
+
+.info-row {
+    display: flex;
+    padding: 0.375rem 0;
+}
+
+.info-label {
+    font-weight: 500;
+    width: 100px;
+    flex-shrink: 0;
+}
+</style>
+{{end}}
+{{end}}

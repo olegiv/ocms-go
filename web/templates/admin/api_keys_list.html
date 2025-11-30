@@ -1,0 +1,235 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">API Keys</h1>
+        <p class="page-description">Manage REST API authentication keys ({{.Data.TotalKeys}} total)</p>
+    </div>
+    <div class="page-actions">
+        <a href="/admin/api-keys/new" class="btn btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            Create API Key
+        </a>
+    </div>
+</div>
+
+{{if .Data.APIKeys}}
+<div class="card" id="api-keys-table">
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Key Prefix</th>
+                    <th>Permissions</th>
+                    <th>Status</th>
+                    <th>Last Used</th>
+                    <th>Expires</th>
+                    <th class="text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Data.APIKeys}}
+                <tr id="api-key-row-{{.ID}}">
+                    <td>
+                        <strong>{{.Name}}</strong>
+                    </td>
+                    <td>
+                        <code class="key-prefix">{{.KeyPrefix}}...</code>
+                    </td>
+                    <td>
+                        <div class="permission-badges">
+                            {{$perms := parseJSON .Permissions}}
+                            {{range $perms}}
+                            <span class="badge badge-outline badge-sm">{{.}}</span>
+                            {{end}}
+                            {{if not $perms}}
+                            <span class="text-muted">None</span>
+                            {{end}}
+                        </div>
+                    </td>
+                    <td>
+                        {{if .IsActive}}
+                            {{if and .ExpiresAt.Valid (lt .ExpiresAt.Time now)}}
+                            <span class="badge badge-warning">Expired</span>
+                            {{else}}
+                            <span class="badge badge-success">Active</span>
+                            {{end}}
+                        {{else}}
+                        <span class="badge badge-secondary">Revoked</span>
+                        {{end}}
+                    </td>
+                    <td>
+                        {{if .LastUsedAt.Valid}}
+                            {{formatDateTime .LastUsedAt.Time}}
+                        {{else}}
+                            <span class="text-muted">Never</span>
+                        {{end}}
+                    </td>
+                    <td>
+                        {{if .ExpiresAt.Valid}}
+                            {{formatDate .ExpiresAt.Time}}
+                        {{else}}
+                            <span class="text-muted">Never</span>
+                        {{end}}
+                    </td>
+                    <td class="text-right">
+                        <div class="action-buttons">
+                            <a href="/admin/api-keys/{{.ID}}" class="btn btn-sm btn-outline" title="Edit">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                            </a>
+                            {{if .IsActive}}
+                            <div x-data="{ showConfirm: false }" class="delete-action">
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-danger"
+                                    title="Revoke"
+                                    @click="showConfirm = true"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" x2="19.07" y1="4.93" y2="19.07"/></svg>
+                                </button>
+
+                                <!-- Revoke Confirmation Modal -->
+                                <div
+                                    class="modal-overlay"
+                                    x-show="showConfirm"
+                                    x-cloak
+                                    @click.self="showConfirm = false"
+                                    x-transition:enter="modal-enter"
+                                    x-transition:leave="modal-leave"
+                                >
+                                    <div class="modal" @click.stop>
+                                        <div class="modal-header">
+                                            <h3 class="modal-title">Revoke API Key</h3>
+                                            <button type="button" class="modal-close" @click="showConfirm = false">&times;</button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p>Are you sure you want to revoke <strong>{{.Name}}</strong>?</p>
+                                            <p class="text-muted">Applications using this key will no longer be able to access the API.</p>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-outline" @click="showConfirm = false">Cancel</button>
+                                            <button
+                                                type="button"
+                                                class="btn btn-danger"
+                                                hx-delete="/admin/api-keys/{{.ID}}"
+                                                hx-target="#api-key-row-{{.ID}}"
+                                                hx-swap="outerHTML"
+                                                @click="showConfirm = false"
+                                            >
+                                                Revoke Key
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {{end}}
+                        </div>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+
+    {{if or .Data.HasPrev .Data.HasNext}}
+    <div class="card-footer">
+        <div class="pagination">
+            <div class="pagination-info">
+                Page {{.Data.CurrentPage}} of {{.Data.TotalPages}}
+            </div>
+            <div class="pagination-controls">
+                {{if .Data.HasPrev}}
+                <a href="/admin/api-keys?page={{.Data.PrevPage}}" class="btn btn-sm btn-outline">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    Previous
+                </a>
+                {{else}}
+                <span class="btn btn-sm btn-outline disabled">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    Previous
+                </span>
+                {{end}}
+
+                {{if .Data.HasNext}}
+                <a href="/admin/api-keys?page={{.Data.NextPage}}" class="btn btn-sm btn-outline">
+                    Next
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </a>
+                {{else}}
+                <span class="btn btn-sm btn-outline disabled">
+                    Next
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </span>
+                {{end}}
+            </div>
+        </div>
+    </div>
+    {{end}}
+</div>
+{{else}}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            <p>No API keys found</p>
+            <span class="empty-hint">Create an API key to enable REST API access.</span>
+            <div class="empty-state-action">
+                <a href="/admin/api-keys/new" class="btn btn-primary">Create API Key</a>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+
+<div class="card" style="margin-top: 1.5rem;">
+    <div class="card-header">
+        <h3 class="card-title">API Usage</h3>
+    </div>
+    <div class="card-body">
+        <p>Use your API key in the <code>Authorization</code> header:</p>
+        <pre class="code-block"><code>Authorization: Bearer YOUR_API_KEY</code></pre>
+        <p style="margin-top: 1rem;">API Base URL: <code>/api/v1/</code></p>
+        <p>
+            <a href="/api/v1/status" target="_blank" class="btn btn-sm btn-outline">Check API Status</a>
+        </p>
+    </div>
+</div>
+
+<style>
+.key-prefix {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    background: var(--bg-muted);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+}
+
+.permission-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.badge-outline {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+}
+
+.badge-sm {
+    font-size: 0.7rem;
+    padding: 0.125rem 0.375rem;
+}
+
+.code-block {
+    background: var(--bg-muted);
+    padding: 1rem;
+    border-radius: 8px;
+    overflow-x: auto;
+}
+
+.code-block code {
+    font-family: var(--font-mono);
+}
+</style>
+{{end}}

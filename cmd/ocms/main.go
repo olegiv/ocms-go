@@ -205,6 +205,7 @@ func run() error {
 	modulesHandler := handler.NewModulesHandler(db, renderer, sessionManager, moduleRegistry, hookRegistry)
 	frontendHandler := handler.NewFrontendHandler(db, themeManager, logger)
 	apiHandler := api.NewHandler(db)
+	apiKeysHandler := handler.NewAPIKeysHandler(db, renderer, sessionManager)
 
 	// Public frontend routes
 	r.Get("/", frontendHandler.Home)
@@ -367,6 +368,15 @@ func run() error {
 
 		// Module management routes
 		r.Get("/modules", modulesHandler.List)
+
+		// API key management routes
+		r.Get("/api-keys", apiKeysHandler.List)
+		r.Get("/api-keys/new", apiKeysHandler.NewForm)
+		r.Post("/api-keys", apiKeysHandler.Create)
+		r.Get("/api-keys/{id}", apiKeysHandler.EditForm)
+		r.Put("/api-keys/{id}", apiKeysHandler.Update)
+		r.Post("/api-keys/{id}", apiKeysHandler.Update) // HTML forms can't send PUT
+		r.Delete("/api-keys/{id}", apiKeysHandler.Delete)
 
 		// Register module admin routes
 		moduleRegistry.AdminRouteAll(r)
