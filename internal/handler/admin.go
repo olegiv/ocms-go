@@ -9,6 +9,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/render"
 	"ocms-go/internal/store"
@@ -146,4 +147,29 @@ func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
+}
+
+// SetLanguage changes the admin UI language preference.
+// POST /admin/language
+func (h *AdminHandler) SetLanguage(w http.ResponseWriter, r *http.Request) {
+	lang := r.FormValue("lang")
+	if lang == "" {
+		lang = "en"
+	}
+
+	// Validate the language code
+	if !i18n.IsSupported(lang) {
+		lang = "en"
+	}
+
+	// Set the language preference in session
+	h.renderer.SetAdminLang(r, lang)
+
+	// Redirect back to the referring page, or dashboard if not available
+	referer := r.Header.Get("Referer")
+	if referer == "" {
+		referer = "/admin"
+	}
+
+	http.Redirect(w, r, referer, http.StatusSeeOther)
 }

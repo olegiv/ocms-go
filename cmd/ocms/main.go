@@ -20,6 +20,7 @@ import (
 	"ocms-go/internal/config"
 	"ocms-go/internal/handler"
 	"ocms-go/internal/handler/api"
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/module"
 	"ocms-go/internal/render"
@@ -64,6 +65,12 @@ func run() error {
 		Level: logLevel,
 	}))
 	slog.SetDefault(logger)
+
+	// Initialize i18n system for admin UI localization
+	if err := i18n.Init(logger); err != nil {
+		return fmt.Errorf("initializing i18n: %w", err)
+	}
+	slog.Info("i18n system initialized", "languages", i18n.SupportedLanguages)
 
 	// Ensure data directory exists
 	dbDir := filepath.Dir(cfg.DBPath)
@@ -295,6 +302,7 @@ func run() error {
 		r.Use(middleware.LoadSiteConfig(db, cacheManager))
 
 		r.Get("/", adminHandler.Dashboard)
+		r.Post("/language", adminHandler.SetLanguage)
 
 		// User management routes
 		r.Get("/users", usersHandler.List)

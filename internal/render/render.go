@@ -18,9 +18,16 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/service"
 )
+
+// SessionKeyAdminLang is the session key for storing admin UI language preference.
+const SessionKeyAdminLang = "admin_lang"
+
+// DefaultAdminLang is the default admin UI language.
+const DefaultAdminLang = "en"
 
 // Renderer handles template rendering with caching.
 type Renderer struct {
@@ -347,6 +354,25 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			}
 			return "/admin/pages?" + params.Encode()
 		},
+		// T translates a message key to the specified language.
+		// Usage in templates: {{T .AdminLang "btn.save"}}
+		// With arguments: {{T .AdminLang "msg.deleted" "Page"}}
+		"T": func(lang string, key string, args ...any) string {
+			return i18n.T(lang, key, args...)
+		},
+		// adminLangOptions returns the list of supported admin UI languages.
+		"adminLangOptions": func() []struct {
+			Code string
+			Name string
+		} {
+			return []struct {
+				Code string
+				Name string
+			}{
+				{"en", "English"},
+				{"ru", "Русский"},
+			}
+		},
 	}
 }
 
@@ -369,6 +395,7 @@ type TemplateData struct {
 	SiteName    string       // Site name from config
 	Breadcrumbs []Breadcrumb // Breadcrumb navigation
 	CurrentPath string       // Current request path for active link detection
+	AdminLang   string       // Admin UI language code (en, ru, etc.)
 }
 
 // Render renders a template with the given data.
@@ -385,6 +412,14 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 	// Get site name from context if not already set
 	if data.SiteName == "" {
 		data.SiteName = middleware.GetSiteName(req)
+	}
+
+	// Get admin language from session if not already set
+	if data.AdminLang == "" && r.sessionManager != nil {
+		data.AdminLang = r.sessionManager.GetString(req.Context(), SessionKeyAdminLang)
+	}
+	if data.AdminLang == "" {
+		data.AdminLang = DefaultAdminLang
 	}
 
 	// Get flash message from session
@@ -459,4 +494,21 @@ func (r *Renderer) InvalidateMenuCache(slug string) {
 	if r.menuService != nil {
 		r.menuService.InvalidateCache(slug)
 	}
+}
+
+// SetAdminLang sets the admin UI language preference in the session.
+func (r *Renderer) SetAdminLang(req *http.Request, lang string) {
+	if r.sessionManager != nil && i18n.IsSupported(lang) {
+		r.sessionManager.Put(req.Context(), SessionKeyAdminLang, lang)
+	}
+}
+
+// GetAdminLang gets the admin UI language preference from the session.
+func (r *Renderer) GetAdminLang(req *http.Request) string {
+	if r.sessionManager != nil {
+		if lang := r.sessionManager.GetString(req.Context(), SessionKeyAdminLang); lang != "" {
+			return lang
+		}
+	}
+	return DefaultAdminLang
 }
