@@ -1,6 +1,9 @@
 -- name: GetConfig :one
 SELECT * FROM config WHERE key = ?;
 
+-- name: GetConfigByKey :one
+SELECT * FROM config WHERE key = ?;
+
 -- name: ListConfig :many
 SELECT * FROM config ORDER BY key;
 

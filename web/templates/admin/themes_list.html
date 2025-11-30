@@ -1,0 +1,175 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Themes</h1>
+        <p class="page-description">Manage your site's appearance</p>
+    </div>
+</div>
+
+{{if .Data.Themes}}
+<div class="themes-grid">
+    {{range .Data.Themes}}
+    <div class="theme-card {{if .IsActive}}active{{end}}">
+        <div class="theme-preview">
+            {{if .Config.Screenshot}}
+            <img src="/themes/{{.Name}}/static/{{.Config.Screenshot}}" alt="{{.Config.Name}} preview">
+            {{else}}
+            <div class="theme-preview-placeholder">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                    <rect width="18" height="18" x="3" y="3" rx="2"/>
+                    <path d="M3 9h18"/>
+                    <path d="M9 21V9"/>
+                </svg>
+            </div>
+            {{end}}
+            {{if .IsActive}}
+            <span class="theme-badge active-badge">Active</span>
+            {{end}}
+        </div>
+        <div class="theme-info">
+            <h3 class="theme-name">{{.Config.Name}}</h3>
+            <p class="theme-version">Version {{.Config.Version}}</p>
+            {{if .Config.Author}}
+            <p class="theme-author">by {{.Config.Author}}</p>
+            {{end}}
+            {{if .Config.Description}}
+            <p class="theme-description">{{.Config.Description}}</p>
+            {{end}}
+        </div>
+        <div class="theme-actions">
+            {{if not .IsActive}}
+            <form method="POST" action="/admin/themes/activate" class="inline-form">
+                <input type="hidden" name="theme" value="{{.Name}}">
+                <button type="submit" class="btn btn-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                    Activate
+                </button>
+            </form>
+            {{end}}
+            {{if .Config.Settings}}
+            <a href="/admin/themes/{{.Name}}/settings" class="btn {{if .IsActive}}btn-primary{{else}}btn-secondary{{end}}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                Settings
+            </a>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+</div>
+{{else}}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="18" height="18" x="3" y="3" rx="2"/>
+                <path d="M3 9h18"/>
+                <path d="M9 21V9"/>
+            </svg>
+            <p>No themes found</p>
+            <span class="empty-hint">Create a theme directory in ./themes with a theme.json file.</span>
+        </div>
+    </div>
+</div>
+{{end}}
+
+<style>
+.themes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.theme-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.theme-card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.theme-card.active {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 1px var(--primary-color);
+}
+
+.theme-preview {
+    position: relative;
+    aspect-ratio: 16/10;
+    background: var(--bg-secondary);
+    overflow: hidden;
+}
+
+.theme-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.theme-preview-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+}
+
+.theme-badge {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.active-badge {
+    background: var(--success-color);
+    color: white;
+}
+
+.theme-info {
+    padding: 1rem 1.25rem;
+}
+
+.theme-name {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem 0;
+}
+
+.theme-version {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.theme-author {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin: 0 0 0.5rem 0;
+}
+
+.theme-description {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin: 0.5rem 0 0 0;
+    line-height: 1.5;
+}
+
+.theme-actions {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0 1.25rem 1.25rem 1.25rem;
+}
+
+.inline-form {
+    display: inline;
+}
+</style>
+{{end}}

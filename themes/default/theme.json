@@ -3,7 +3,7 @@
     "version": "1.0.0",
     "author": "oCMS",
     "description": "Clean, minimal default theme for oCMS",
-    "screenshot": "screenshot.png",
+    "screenshot": "screenshot.svg",
     "templates": {
         "home": "pages/home.html",
         "page": "pages/page.html",

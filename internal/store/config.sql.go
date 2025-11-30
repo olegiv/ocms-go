@@ -49,6 +49,24 @@ func (q *Queries) GetConfig(ctx context.Context, key string) (Config, error) {
 	return i, err
 }
 
+const getConfigByKey = `-- name: GetConfigByKey :one
+SELECT "key", value, type, description, updated_at, updated_by FROM config WHERE key = ?
+`
+
+func (q *Queries) GetConfigByKey(ctx context.Context, key string) (Config, error) {
+	row := q.db.QueryRowContext(ctx, getConfigByKey, key)
+	var i Config
+	err := row.Scan(
+		&i.Key,
+		&i.Value,
+		&i.Type,
+		&i.Description,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+	)
+	return i, err
+}
+
 const listConfig = `-- name: ListConfig :many
 SELECT "key", value, type, description, updated_at, updated_by FROM config ORDER BY key
 `

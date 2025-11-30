@@ -150,6 +150,7 @@ func run() error {
 	mediaHandler := handler.NewMediaHandler(db, renderer, sessionManager, "./uploads")
 	menusHandler := handler.NewMenusHandler(db, renderer, sessionManager)
 	formsHandler := handler.NewFormsHandler(db, renderer, sessionManager)
+	themesHandler := handler.NewThemesHandler(db, renderer, sessionManager, themeManager)
 
 	// Routes
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -292,6 +293,13 @@ func run() error {
 		r.Get("/forms/{id}/submissions/{subId}", formsHandler.ViewSubmission)
 		r.Delete("/forms/{id}/submissions/{subId}", formsHandler.DeleteSubmission)
 		r.Post("/forms/{id}/submissions/export", formsHandler.ExportSubmissions)
+
+		// Theme management routes
+		r.Get("/themes", themesHandler.List)
+		r.Post("/themes/activate", themesHandler.Activate)
+		r.Get("/themes/{name}/settings", themesHandler.Settings)
+		r.Put("/themes/{name}/settings", themesHandler.SaveSettings)
+		r.Post("/themes/{name}/settings", themesHandler.SaveSettings) // HTML forms can't send PUT
 	})
 
 	// Public form routes (no authentication required, but session needed for CSRF)

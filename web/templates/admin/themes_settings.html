@@ -1,0 +1,199 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{.Data.Theme.Config.Name}} Settings</h1>
+        <p class="page-description">Customize your theme appearance</p>
+    </div>
+    <div class="page-actions">
+        <a href="/admin/themes" class="btn btn-secondary">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+            Back to Themes
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Theme Settings</h2>
+        {{if .Data.Theme.IsActive}}
+        <span class="badge badge-success">Active Theme</span>
+        {{end}}
+    </div>
+    <form method="POST" action="/admin/themes/{{.Data.Theme.Name}}/settings" class="card-body">
+        <input type="hidden" name="_method" value="PUT">
+
+        {{if .Data.Theme.Config.Settings}}
+        <div class="settings-grid">
+            {{range .Data.Theme.Config.Settings}}
+            <div class="form-group">
+                <label for="{{.Key}}" class="form-label">{{.Label}}</label>
+
+                {{if eq .Type "color"}}
+                <div class="color-input-wrapper">
+                    <input
+                        type="color"
+                        id="{{.Key}}"
+                        name="{{.Key}}"
+                        class="color-input"
+                        value="{{index $.Data.Settings .Key}}"
+                    >
+                    <input
+                        type="text"
+                        class="form-input color-text-input"
+                        value="{{index $.Data.Settings .Key}}"
+                        readonly
+                    >
+                </div>
+
+                {{else if eq .Type "select"}}
+                <select
+                    id="{{.Key}}"
+                    name="{{.Key}}"
+                    class="form-select {{if index $.Data.Errors .Key}}is-invalid{{end}}"
+                >
+                    {{$currentValue := index $.Data.Settings .Key}}
+                    {{range .Options}}
+                    <option value="{{.}}" {{if eq . $currentValue}}selected{{end}}>{{.}}</option>
+                    {{end}}
+                </select>
+
+                {{else if eq .Type "image"}}
+                <div class="image-input-wrapper">
+                    <input
+                        type="text"
+                        id="{{.Key}}"
+                        name="{{.Key}}"
+                        class="form-input {{if index $.Data.Errors .Key}}is-invalid{{end}}"
+                        value="{{index $.Data.Settings .Key}}"
+                        placeholder="Enter image URL or path"
+                    >
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="openMediaPicker('{{.Key}}')">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                        Browse
+                    </button>
+                </div>
+
+                {{else}}
+                <input
+                    type="text"
+                    id="{{.Key}}"
+                    name="{{.Key}}"
+                    class="form-input {{if index $.Data.Errors .Key}}is-invalid{{end}}"
+                    value="{{index $.Data.Settings .Key}}"
+                >
+                {{end}}
+
+                {{if index $.Data.Errors .Key}}
+                <span class="form-error">{{index $.Data.Errors .Key}}</span>
+                {{end}}
+            </div>
+            {{end}}
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Save Settings
+            </button>
+            <a href="/admin/themes" class="btn btn-secondary">Cancel</a>
+        </div>
+
+        {{else}}
+        <div class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            <p>No configurable settings</p>
+            <span class="empty-hint">This theme does not have any configurable settings.</span>
+        </div>
+        {{end}}
+    </form>
+</div>
+
+<style>
+.settings-grid {
+    display: grid;
+    gap: 1.5rem;
+    max-width: 600px;
+}
+
+.color-input-wrapper {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.color-input {
+    width: 50px;
+    height: 38px;
+    padding: 2px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+}
+
+.color-input::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.color-input::-webkit-color-swatch {
+    border: none;
+    border-radius: calc(var(--radius-md) - 2px);
+}
+
+.color-text-input {
+    flex: 1;
+    font-family: var(--font-mono);
+}
+
+.image-input-wrapper {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.image-input-wrapper .form-input {
+    flex: 1;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: var(--radius-full);
+}
+
+.badge-success {
+    background: var(--success-light);
+    color: var(--success-color);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+}
+</style>
+
+<script>
+// Sync color input with text display
+document.querySelectorAll('.color-input').forEach(function(colorInput) {
+    const textInput = colorInput.nextElementSibling;
+    colorInput.addEventListener('input', function() {
+        textInput.value = this.value;
+    });
+});
+
+// Media picker placeholder (would integrate with actual media library)
+function openMediaPicker(fieldId) {
+    alert('Media picker integration coming soon. Enter URL manually for now.');
+}
+</script>
+{{end}}
