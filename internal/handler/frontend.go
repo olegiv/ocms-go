@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -128,6 +129,10 @@ type BaseTemplateData struct {
 
 	// Site data
 	Site SiteData
+
+	// Theme settings - key-value pairs from theme configuration
+	ThemeSettings map[string]string
+	CustomCSS     string
 
 	// Menus - MainMenu/FooterMenu for code, Navigation/FooterNav for templates
 	MainMenu   []MenuItem
@@ -782,9 +787,25 @@ func (h *FrontendHandler) getSiteData(ctx context.Context) SiteData {
 		site.URL = cfg.Value
 	}
 
-	// Get active theme config
+	// Get active theme config and load theme settings
 	if activeTheme := h.themeManager.GetActiveTheme(); activeTheme != nil {
 		site.Theme = &activeTheme.Config
+
+		// Load theme settings from config table
+		configKey := "theme_settings_" + activeTheme.Name
+		if cfg, err := h.queries.GetConfigByKey(ctx, configKey); err == nil {
+			var settings map[string]string
+			if err := json.Unmarshal([]byte(cfg.Value), &settings); err == nil {
+				site.Settings = settings
+			}
+		}
+
+		// Fill in defaults for any missing settings
+		for _, setting := range activeTheme.Config.Settings {
+			if _, ok := site.Settings[setting.Key]; !ok {
+				site.Settings[setting.Key] = setting.Default
+			}
+		}
 	}
 
 	return site
@@ -805,6 +826,7 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		CurrentPath:     r.URL.Path,
 		Year:            site.CurrentYear,
 		Site:            site,
+		ThemeSettings:   site.Settings,
 		ShowSearch:      true,
 		SearchQuery:     r.URL.Query().Get("q"),
 	}
@@ -812,6 +834,11 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 	// Get site logo from config
 	if cfg, err := h.queries.GetConfigByKey(ctx, "site_logo"); err == nil && cfg.Value != "" {
 		data.SiteLogo = cfg.Value
+	}
+
+	// Load custom CSS from config
+	if cfg, err := h.queries.GetConfigByKey(ctx, "custom_css"); err == nil && cfg.Value != "" {
+		data.CustomCSS = cfg.Value
 	}
 
 	// Load menus by slug

@@ -31,6 +31,21 @@
     {{/* Theme Styles */}}
     <link rel="stylesheet" href="/themes/default/static/css/theme.css">
 
+    {{/* Theme Settings CSS Variables */}}
+    {{if .ThemeSettings}}
+    <style>
+        :root {
+            {{if index .ThemeSettings "primary_color"}}--primary-color: {{index .ThemeSettings "primary_color"}};{{end}}
+            {{if index .ThemeSettings "primary_color"}}--link-color: {{index .ThemeSettings "primary_color"}};{{end}}
+        }
+    </style>
+    {{end}}
+
+    {{/* Custom CSS */}}
+    {{if .CustomCSS}}
+    <style>{{.CustomCSS | safeHTML}}</style>
+    {{end}}
+
     {{/* Additional head content */}}
     {{block "head" .}}{{end}}
 </head>

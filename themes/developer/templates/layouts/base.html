@@ -27,6 +27,21 @@
     <!-- Theme CSS -->
     <link rel="stylesheet" href="/themes/developer/static/css/theme.css">
 
+    <!-- Theme Settings CSS Variables -->
+    {{if .ThemeSettings}}
+    <style>
+        :root {
+            {{if index .ThemeSettings "accent_color"}}--dev-accent: {{index .ThemeSettings "accent_color"}};{{end}}
+            {{if index .ThemeSettings "accent_color"}}--dev-link: {{index .ThemeSettings "accent_color"}};{{end}}
+        }
+    </style>
+    {{end}}
+
+    <!-- Custom CSS -->
+    {{if .CustomCSS}}
+    <style>{{.CustomCSS | safeHTML}}</style>
+    {{end}}
+
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/themes/developer/static/favicon.svg">
 
