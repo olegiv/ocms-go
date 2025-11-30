@@ -273,6 +273,7 @@ type FrontendHandler struct {
 	themeManager  *theme.Manager
 	menuService   *service.MenuService
 	widgetService *service.WidgetService
+	searchService *service.SearchService
 	logger        *slog.Logger
 }
 
@@ -284,6 +285,7 @@ func NewFrontendHandler(db *sql.DB, themeManager *theme.Manager, logger *slog.Lo
 		themeManager:  themeManager,
 		menuService:   service.NewMenuService(db),
 		widgetService: service.NewWidgetService(db),
+		searchService: service.NewSearchService(db),
 		logger:        logger,
 	}
 }
@@ -618,7 +620,7 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 	h.render(w, r, "tag", data)
 }
 
-// Search handles search results display.
+// Search handles search results display using FTS5 full-text search.
 func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	query := r.URL.Query().Get("q")
@@ -641,52 +643,54 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 	perPage := 10
 	offset := (page - 1) * perPage
 
-	// Simple search - search in title and body
-	// For now, use LIKE queries until FTS5 is set up in a later iteration
-	searchPattern := "%" + query + "%"
-
-	// Get all published pages and filter (simple approach for now)
-	allPages, err := h.queries.ListPublishedPages(ctx, store.ListPublishedPagesParams{
-		Limit:  1000, // Get all for searching
-		Offset: 0,
+	// Use FTS5 search service
+	searchResults, total, err := h.searchService.SearchPublishedPages(ctx, service.SearchParams{
+		Query:  query,
+		Limit:  perPage,
+		Offset: offset,
 	})
 	if err != nil {
-		h.logger.Error("failed to search pages", "error", err)
+		h.logger.Error("failed to search pages", "query", query, "error", err)
 		h.renderError(w, r, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
-	// Filter pages that match the query
-	var matchedPages []store.Page
-	lowerQuery := strings.ToLower(query)
-	for _, p := range allPages {
-		if strings.Contains(strings.ToLower(p.Title), lowerQuery) ||
-			strings.Contains(strings.ToLower(p.Body), lowerQuery) {
-			matchedPages = append(matchedPages, p)
+	// Convert search results to PageViews
+	pageViews := make([]PageView, 0, len(searchResults))
+	for _, sr := range searchResults {
+		pv := PageView{
+			ID:        sr.ID,
+			Title:     sr.Title,
+			Slug:      sr.Slug,
+			Body:      template.HTML(sr.Body),
+			Excerpt:   sr.Excerpt,
+			Highlight: sr.Highlight,
+			URL:       "/" + sr.Slug,
+			Status:    sr.Status,
+			Type:      "page",
+			CreatedAt: sr.CreatedAt,
+			UpdatedAt: sr.UpdatedAt,
 		}
+
+		// Set published date
+		if sr.PublishedAt.Valid {
+			t := sr.PublishedAt.Time
+			pv.PublishedAt = &t
+			pv.PublishedAtFormatted = t.Format("Jan 2, 2006")
+		}
+
+		// Get featured image
+		if sr.FeaturedImageID.Valid {
+			media, err := h.queries.GetMediaByID(ctx, sr.FeaturedImageID.Int64)
+			if err == nil {
+				pv.FeaturedImage = fmt.Sprintf("/uploads/%s/%s", media.Uuid, media.Filename)
+			}
+		}
+
+		pageViews = append(pageViews, pv)
 	}
 
-	// Apply pagination to matched results
-	total := len(matchedPages)
-	start := offset
-	end := offset + perPage
-	if start > total {
-		start = total
-	}
-	if end > total {
-		end = total
-	}
-	paginatedPages := matchedPages[start:end]
-
-	// Convert to PageViews
-	pageViews := make([]PageView, 0, len(paginatedPages))
-	for _, p := range paginatedPages {
-		pageViews = append(pageViews, h.pageToView(ctx, p))
-	}
-
-	pagination := h.buildPagination(page, total, perPage, fmt.Sprintf("/search?q=%s", query))
-
-	_ = searchPattern // Will be used when FTS5 is implemented
+	pagination := h.buildPagination(page, int(total), perPage, fmt.Sprintf("/search?q=%s", query))
 
 	// Get base template data
 	title := fmt.Sprintf("Search: %s", query)
@@ -698,7 +702,7 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 		Query:            query,
 		Pages:            pageViews,
 		Pagination:       pagination,
-		ResultCount:      total,
+		ResultCount:      int(total),
 	}
 
 	h.render(w, r, "search", data)
