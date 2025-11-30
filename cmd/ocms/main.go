@@ -205,6 +205,14 @@ func run() error {
 	modulesHandler := handler.NewModulesHandler(db, renderer, sessionManager, moduleRegistry, hookRegistry)
 	frontendHandler := handler.NewFrontendHandler(db, themeManager, logger)
 	apiHandler := api.NewHandler(db)
+	apiDocsHandler, err := api.NewDocsHandler(api.DocsConfig{
+		DB:         db,
+		TemplateFS: templatesFS,
+		IsDev:      cfg.IsDevelopment(),
+	})
+	if err != nil {
+		return fmt.Errorf("initializing api docs handler: %w", err)
+	}
 	apiKeysHandler := handler.NewAPIKeysHandler(db, renderer, sessionManager)
 
 	// Public frontend routes
@@ -390,6 +398,7 @@ func run() error {
 
 		// Public endpoints (no authentication required)
 		r.Get("/status", apiHandler.Status)
+		r.Get("/docs", apiDocsHandler.ServeDocs)
 
 		// Pages - public read endpoints (optional auth for enhanced access)
 		r.Group(func(r chi.Router) {

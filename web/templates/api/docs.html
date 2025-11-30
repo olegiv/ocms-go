@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.SiteName}} - API Documentation</title>
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --text-color: #1e293b;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --code-bg: #f1f5f9;
+            --primary-color: #3b82f6;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --sidebar-width: 280px;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #0f172a;
+                --text-color: #e2e8f0;
+                --text-muted: #94a3b8;
+                --border-color: #334155;
+                --code-bg: #1e293b;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        .docs-layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .docs-sidebar {
+            width: var(--sidebar-width);
+            background: var(--bg-color);
+            border-right: 1px solid var(--border-color);
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            padding: 1.5rem 0;
+        }
+
+        .sidebar-header {
+            padding: 0 1.5rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .sidebar-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-color);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .sidebar-version {
+            background: var(--primary-color);
+            color: white;
+            font-size: 0.75rem;
+            padding: 0.125rem 0.5rem;
+            border-radius: 9999px;
+            font-weight: 500;
+        }
+
+        .sidebar-nav {
+            padding: 1rem 0;
+        }
+
+        .nav-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .nav-section-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            padding: 0 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: block;
+            padding: 0.5rem 1.5rem;
+            color: var(--text-color);
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: background 0.15s;
+        }
+
+        .nav-link:hover {
+            background: var(--code-bg);
+        }
+
+        .nav-link.active {
+            background: var(--code-bg);
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+
+        /* Main content */
+        .docs-main {
+            margin-left: var(--sidebar-width);
+            flex: 1;
+            padding: 2rem 3rem;
+            max-width: 900px;
+        }
+
+        h1, h2, h3, h4 {
+            color: var(--text-color);
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        h1 { font-size: 2rem; margin-top: 0; }
+        h2 { font-size: 1.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; }
+        h3 { font-size: 1.25rem; }
+        h4 { font-size: 1rem; }
+
+        p {
+            margin-bottom: 1rem;
+            color: var(--text-muted);
+        }
+
+        a {
+            color: var(--primary-color);
+        }
+
+        /* Code */
+        code {
+            font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+            font-size: 0.875em;
+            background: var(--code-bg);
+            padding: 0.125rem 0.375rem;
+            border-radius: 4px;
+        }
+
+        pre {
+            background: var(--code-bg);
+            padding: 1rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+        }
+
+        pre code {
+            padding: 0;
+            background: none;
+        }
+
+        /* Endpoint cards */
+        .endpoint {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+
+        .endpoint-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem;
+            background: var(--code-bg);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .method {
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .method-get { background: #dbeafe; color: #1d4ed8; }
+        .method-post { background: #d1fae5; color: #059669; }
+        .method-put { background: #fef3c7; color: #d97706; }
+        .method-delete { background: #fee2e2; color: #dc2626; }
+
+        .endpoint-path {
+            font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .endpoint-auth {
+            margin-left: auto;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .endpoint-auth .required {
+            color: var(--danger-color);
+        }
+
+        .endpoint-auth .optional {
+            color: var(--warning-color);
+        }
+
+        .endpoint-body {
+            padding: 1rem;
+        }
+
+        .endpoint-description {
+            margin-bottom: 1rem;
+        }
+
+        /* Parameters table */
+        .params-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+        }
+
+        .params-table th,
+        .params-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .params-table th {
+            font-weight: 600;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+
+        .param-name {
+            font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+            font-weight: 500;
+        }
+
+        .param-required {
+            color: var(--danger-color);
+            font-size: 0.75rem;
+        }
+
+        .param-type {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Response examples */
+        .response-section {
+            margin-top: 1rem;
+        }
+
+        .response-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Badges */
+        .badge {
+            font-size: 0.75rem;
+            padding: 0.125rem 0.5rem;
+            border-radius: 9999px;
+            font-weight: 500;
+        }
+
+        .badge-primary { background: var(--primary-color); color: white; }
+        .badge-success { background: var(--success-color); color: white; }
+        .badge-warning { background: var(--warning-color); color: white; }
+
+        /* Info boxes */
+        .info-box {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border-left: 4px solid;
+        }
+
+        .info-box.info {
+            background: #dbeafe;
+            border-color: var(--primary-color);
+        }
+
+        .info-box.warning {
+            background: #fef3c7;
+            border-color: var(--warning-color);
+        }
+
+        .info-box-title {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .info-box p {
+            margin: 0;
+            font-size: 0.875rem;
+        }
+
+        /* Section */
+        section {
+            margin-bottom: 3rem;
+            scroll-margin-top: 2rem;
+        }
+
+        /* Mobile responsiveness */
+        @media (max-width: 768px) {
+            .docs-sidebar {
+                display: none;
+            }
+
+            .docs-main {
+                margin-left: 0;
+                padding: 1.5rem;
+            }
+        }
+
+        /* Back link */
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.875rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .back-link:hover {
+            color: var(--primary-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="docs-layout">
+        <!-- Sidebar Navigation -->
+        <nav class="docs-sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">
+                    API Reference
+                    <span class="sidebar-version">v1</span>
+                </div>
+            </div>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Getting Started</div>
+                    <a href="#overview" class="nav-link">Overview</a>
+                    <a href="#authentication" class="nav-link">Authentication</a>
+                    <a href="#rate-limiting" class="nav-link">Rate Limiting</a>
+                    <a href="#responses" class="nav-link">Response Format</a>
+                    <a href="#errors" class="nav-link">Error Handling</a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Endpoints</div>
+                    <a href="#status" class="nav-link">Status</a>
+                    <a href="#pages" class="nav-link">Pages</a>
+                    <a href="#media" class="nav-link">Media</a>
+                    <a href="#tags" class="nav-link">Tags</a>
+                    <a href="#categories" class="nav-link">Categories</a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="docs-main">
+            <a href="/admin/api-keys" class="back-link">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                Back to Admin
+            </a>
+
+            <h1>{{.SiteName}} REST API</h1>
+            <p>Complete reference for the {{.SiteName}} REST API. Build integrations, automate content management, and access your data programmatically.</p>
+
+            <!-- Overview -->
+            <section id="overview">
+                <h2>Overview</h2>
+                <p>The API is organized around REST principles. It uses standard HTTP methods, returns JSON-encoded responses, and uses standard HTTP response codes.</p>
+
+                <div class="info-box info">
+                    <div class="info-box-title">Base URL</div>
+                    <p><code>{{.BaseURL}}/api/v1</code></p>
+                </div>
+
+                <h4>Available Resources</h4>
+                <ul>
+                    <li><strong>Pages</strong> - Content pages with SEO metadata, categories, and tags</li>
+                    <li><strong>Media</strong> - Images, documents, and other uploaded files</li>
+                    <li><strong>Tags</strong> - Content tags for organizing pages</li>
+                    <li><strong>Categories</strong> - Hierarchical content categories</li>
+                </ul>
+            </section>
+
+            <!-- Authentication -->
+            <section id="authentication">
+                <h2>Authentication</h2>
+                <p>The API uses API keys for authentication. Include your API key in the <code>Authorization</code> header of your requests.</p>
+
+                <pre><code>Authorization: Bearer YOUR_API_KEY</code></pre>
+
+                <div class="info-box warning">
+                    <div class="info-box-title">Important</div>
+                    <p>Keep your API keys secure. Do not share them publicly or commit them to version control. If a key is compromised, revoke it immediately in the admin panel.</p>
+                </div>
+
+                <h4>Permission Scopes</h4>
+                <p>API keys can have the following permissions:</p>
+                <table class="params-table">
+                    <thead>
+                        <tr>
+                            <th>Permission</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>pages:write</code></td>
+                            <td>Create, update, and delete pages</td>
+                        </tr>
+                        <tr>
+                            <td><code>media:write</code></td>
+                            <td>Upload, update, and delete media files</td>
+                        </tr>
+                        <tr>
+                            <td><code>taxonomy:write</code></td>
+                            <td>Create, update, and delete tags and categories</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4>Public vs Protected Endpoints</h4>
+                <p>Read endpoints (GET) for published content are generally public. Write endpoints (POST, PUT, DELETE) require authentication with appropriate permissions.</p>
+            </section>
+
+            <!-- Rate Limiting -->
+            <section id="rate-limiting">
+                <h2>Rate Limiting</h2>
+                <p>To ensure fair usage, the API implements rate limiting:</p>
+                <ul>
+                    <li><strong>Global limit:</strong> 100 requests per second (burst: 200)</li>
+                    <li><strong>Per-key limit:</strong> 10 requests per second per API key (burst: 20)</li>
+                </ul>
+                <p>When rate limited, requests return a <code>429 Too Many Requests</code> response.</p>
+            </section>
+
+            <!-- Response Format -->
+            <section id="responses">
+                <h2>Response Format</h2>
+                <p>All responses are JSON-encoded and follow a consistent structure.</p>
+
+                <h4>Success Response</h4>
+                <pre><code>{
+    "data": { ... },
+    "meta": {
+        "total": 100,
+        "page": 1,
+        "per_page": 20,
+        "pages": 5
+    }
+}</code></pre>
+
+                <h4>Single Resource</h4>
+                <pre><code>{
+    "data": {
+        "id": 1,
+        "title": "My Page",
+        ...
+    }
+}</code></pre>
+
+                <h4>Response Codes</h4>
+                <table class="params-table">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><code>200</code></td><td>Success - Request completed successfully</td></tr>
+                        <tr><td><code>201</code></td><td>Created - Resource created successfully</td></tr>
+                        <tr><td><code>204</code></td><td>No Content - Resource deleted successfully</td></tr>
+                        <tr><td><code>400</code></td><td>Bad Request - Invalid parameters</td></tr>
+                        <tr><td><code>401</code></td><td>Unauthorized - Missing or invalid API key</td></tr>
+                        <tr><td><code>403</code></td><td>Forbidden - Missing required permission</td></tr>
+                        <tr><td><code>404</code></td><td>Not Found - Resource not found</td></tr>
+                        <tr><td><code>422</code></td><td>Unprocessable Entity - Validation errors</td></tr>
+                        <tr><td><code>429</code></td><td>Too Many Requests - Rate limit exceeded</td></tr>
+                        <tr><td><code>500</code></td><td>Internal Server Error</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Errors -->
+            <section id="errors">
+                <h2>Error Handling</h2>
+                <p>Error responses include a code, message, and optional field-specific details.</p>
+
+                <pre><code>{
+    "error": {
+        "code": "validation_error",
+        "message": "Validation failed",
+        "details": {
+            "title": "Title is required",
+            "slug": "Slug already exists"
+        }
+    }
+}</code></pre>
+
+                <h4>Error Codes</h4>
+                <table class="params-table">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><code>bad_request</code></td><td>Invalid input data</td></tr>
+                        <tr><td><code>unauthorized</code></td><td>Authentication required</td></tr>
+                        <tr><td><code>forbidden</code></td><td>Insufficient permissions</td></tr>
+                        <tr><td><code>not_found</code></td><td>Resource not found</td></tr>
+                        <tr><td><code>validation_error</code></td><td>Field validation failed</td></tr>
+                        <tr><td><code>conflict</code></td><td>Business logic conflict</td></tr>
+                        <tr><td><code>rate_limited</code></td><td>Rate limit exceeded</td></tr>
+                        <tr><td><code>internal_error</code></td><td>Server error</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Status Endpoint -->
+            <section id="status">
+                <h2>Status</h2>
+                <p>Check API availability and version.</p>
+
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/v1/status</span>
+                        <span class="endpoint-auth">Public</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">Returns the current API status and version.</p>
+                        <div class="response-section">
+                            <div class="response-title">Response</div>
+                            <pre><code>{
+    "data": {
+        "status": "ok",
+        "version": "v1"
+    }
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/v1/auth</span>
+                        <span class="endpoint-auth"><span class="required">Auth Required</span></span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">Returns information about the authenticated API key.</p>
+                        <div class="response-section">
+                            <div class="response-title">Response</div>
+                            <pre><code>{
+    "data": {
+        "key_prefix": "ocms_abc1",
+        "name": "My API Key",
+        "permissions": ["pages:write", "media:write"]
+    }
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Pages Endpoints -->
+            <section id="pages">
+                <h2>Pages</h2>
+                <p>Manage content pages with SEO metadata, categories, and tags.</p>
+
+                <!-- List Pages -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/v1/pages</span>
+                        <span class="endpoint-auth"><span class="optional">Auth Optional</span></span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">List pages. Public requests only see published pages. Authenticated requests can filter by status.</p>
+
+                        <h4>Query Parameters</h4>
+                        <table class="params-table">
+                            <thead>
+                                <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td class="param-name">status</td><td class="param-type">string</td><td><code>draft</code> or <code>published</code> (auth required for draft)</td></tr>
+                                <tr><td class="param-name">category</td><td class="param-type">integer</td><td>Filter by category ID</td></tr>
+                                <tr><td class="param-name">tag</td><td class="param-type">integer</td><td>Filter by tag ID</td></tr>
+                                <tr><td class="param-name">page</td><td class="param-type">integer</td><td>Page number (default: 1)</td></tr>
+                                <tr><td class="param-name">per_page</td><td class="param-type">integer</td><td>Items per page (default: 20, max: 100)</td></tr>
+                                <tr><td class="param-name">sort</td><td class="param-type">string</td><td><code>created_at</code>, <code>updated_at</code>, <code>published_at</code>, <code>title</code></td></tr>
+                                <tr><td class="param-name">order</td><td class="param-type">string</td><td><code>asc</code> or <code>desc</code> (default: desc)</td></tr>
+                                <tr><td class="param-name">include</td><td class="param-type">string</td><td>Comma-separated: <code>author</code>, <code>categories</code>, <code>tags</code></td></tr>
+                            </tbody>
+                        </table>
+
+                        <div class="response-section">
+                            <div class="response-title">Example Response</div>
+                            <pre><code>{
+    "data": [
+        {
+            "id": 1,
+            "title": "Welcome to our site",
+            "slug": "welcome",
+            "body": "Content here...",
+            "status": "published",
+            "author_id": 1,
+            "created_at": "2024-01-01T12:00:00Z",
+            "updated_at": "2024-01-01T12:00:00Z",
+            "published_at": "2024-01-01T12:00:00Z",
+            "featured_image_id": null,
+            "meta_title": "Welcome",
+            "meta_description": "Welcome to our site",
+            "author": {
+                "id": 1,
+                "name": "Admin",
+                "email": "admin@example.com"
+            },
+            "categories": [],
+            "tags": []
+        }
+    ],
+    "meta": {
+        "total": 10,
+        "page": 1,
+        "per_page": 20,
+        "pages": 1
+    }
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Get Page by ID -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/v1/pages/{id}</span>
+                        <span class="endpoint-auth"><span class="optional">Auth Optional</span></span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">Get a single page by ID. Public requests only see published pages.</p>
+
+                        <h4>Path Parameters</h4>
+                        <table class="params-table">
+                            <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td class="param-name">id <span class="param-required">required</span></td><td class="param-type">integer</td><td>Page ID</td></tr>
+                            </tbody>
+                        </table>
+
+                        <h4>Query Parameters</h4>
+                        <table class="params-table">
+                            <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td class="param-name">include</td><td class="param-type">string</td><td>Comma-separated: <code>author</code>, <code>categories</code>, <code>tags</code></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Get Page by Slug -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/v1/pages/slug/{slug}</span>
+                        <span class="endpoint-auth"><span class="optional">Auth Optional</span></span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">Get a single page by slug. Useful for fetching pages by their URL-friendly identifier.</p>
+
+                        <h4>Path Parameters</h4>
+                        <table class="params-table">
+                            <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td class="param-name">slug <span class="param-required">required</span></td><td class="param-type">string</td><td>Page slug (e.g., "about-us")</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Create Page -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-post">POST</span>
+                        <span class="endpoint-path">/api/v1/pages</span>
+                        <span class="endpoint-auth"><span class="required">Auth Required</span> <code>pages:write</code></span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">Create a new page.</p>
+
+                        <h4>Request Body</h4>
+                        <table class="params-table">
+                            <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td class="param-name">title <span class="param-required">required</span></td><td class="param-type">string</td><td>Page title</td></tr>
+                                <tr><td class="param-name">slug <span class="param-required">required</span></td><td class="param-type">string</td><td>URL slug (must be unique)</td></tr>
+                                <tr><td class="param-name">body</td><td class="param-type">string</td><td>Page content (HTML/Markdown)</td></tr>
+                                <tr><td class="param-name">status</td><td class="param-type">string</td><td><code>draft</code> or <code>published</code> (default: draft)</td></tr>
+                                <tr><td class="param-name">featured_image_id</td><td class="param-type">integer</td><td>Media ID for featured image</td></tr>
+                                <tr><td class="param-name">meta_title</td><td class="param-type">string</td><td>SEO title (recommended ~60 chars)</td></tr>
+                                <tr><td class="param-name">meta_description</td><td class="param-type">string</td><td>SEO description (recommended ~160 chars)</td></tr>
+                                <tr><td class="param-name">meta_keywords</td><td class="param-type">string</td><td>Meta keywords</td></tr>
+                                <tr><td class="param-name">og_image_id</td><td class="param-type">integer</td><td>Media ID for Open Graph image</td></tr>
+                                <tr><td class="param-name">no_index</td><td class="param-type">boolean</td><td>Exclude from search engines</td></tr>
+                                <tr><td class="param-name">no_follow</td><td class="param-type">boolean</td><td>Don't follow links</td></tr>
+                                <tr><td class="param-name">canonical_url</td><td class="param-type">string</td><td>Custom canonical URL</td></tr>
+                                <tr><td class="param-name">scheduled_at</td><td class="param-type">string</td><td>ISO 8601 datetime for scheduled publishing</td></tr>
+                                <tr><td class="param-name">category_ids</td><td class="param-type">array</td><td>Array of category IDs</td></tr>
+                                <tr><td class="param-name">tag_ids</td><td class="param-type">array</td><td>Array of tag IDs</td></tr>
+                            </tbody>
+                        </table>
+
+                        <div class="response-section">
+                            <div class="response-title">Example Request</div>
+                            <pre><code>{
+    "title": "New Blog Post",
+    "slug": "new-blog-post",
+    "body": "&lt;p&gt;This is my new post...&lt;/p&gt;",
+    "status": "draft",
+    "meta_title": "New Blog Post | My Site",
+    "meta_description": "A great new blog post about...",
+    "category_ids": [1, 2],
+    "tag_ids": [5, 8, 12]
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Update Page -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-put">PUT</span>
+                        <span class="endpoint-path">/api/v1/pages/{id}</span>
+                        <span class="endpoint-auth"><span class="required">Auth Required</span> <code>pages:write</code></span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">Update an existing page. All fields are optional - only provided fields are updated.</p>
+
+                        <h4>Path Parameters</h4>
+                        <table class="params-table">
+                            <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td class="param-name">id <span class="param-required">required</span></td><td class="param-type">integer</td><td>Page ID</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Delete Page -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-delete">DELETE</span>
+                        <span class="endpoint-path">/api/v1/pages/{id}</span>
+                        <span class="endpoint-auth"><span class="required">Auth Required</span> <code>pages:write</code></span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">Delete a page. This action is permanent.</p>
+
+                        <h4>Path Parameters</h4>
+                        <table class="params-table">
+                            <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td class="param-name">id <span class="param-required">required</span></td><td class="param-type">integer</td><td>Page ID</td></tr>
+                            </tbody>
+                        </table>
+
+                        <div class="response-section">
+                            <div class="response-title">Response</div>
+                            <p>Returns <code>204 No Content</code> on success.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Media Endpoints -->
+            <section id="media">
+                <h2>Media</h2>
+                <p>Upload and manage media files including images, documents, and other files.</p>
+
+                <!-- List Media -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/v1/media</span>
+                        <span class="endpoint-auth"><span class="optional">Auth Optional</span></span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">List media files with optional filtering.</p>
+
+                        <h4>Query Parameters</h4>
+                        <table class="params-table">
+                            <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td class="param-name">type</td><td class="param-type">string</td><td>Filter by type: <code>image</code>, <code>document</code>, <code>video</code></td></tr>
+                                <tr><td class="param-name">folder</td><td class="param-type">integer</td><td>Filter by folder ID</td></tr>
+                                <tr><td class="param-name">search</td><td class="param-type">string</td><td>Search filename or alt text</td></tr>
+                                <tr><td class="param-name">page</td><td class="param-type">integer</td><td>Page number (default: 1)</td></tr>
+                                <tr><td class="param-name">per_page</td><td class="param-type">integer</td><td>Items per page (default: 20, max: 100)</td></tr>
+                                <tr><td class="param-name">include</td><td class="param-type">string</td><td>Comma-separated: <code>variants</code>, <code>folder</code></td></tr>
+                            </tbody>
+                        </table>
+
+                        <div class="response-section">
+                            <div class="response-title">Example Response</div>
+                            <pre><code>{
+    "data": [
+        {
+            "id": 1,
+            "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            "filename": "hero-image.jpg",
+            "original_name": "Hero Image.jpg",
+            "mime_type": "image/jpeg",
+            "size": 245678,
+            "width": 1920,
+            "height": 1080,
+            "alt": "Hero banner image",
+            "caption": "Our main hero image",
+            "url": "/uploads/originals/a1b2c3d4.../hero-image.jpg",
+            "created_at": "2024-01-01T12:00:00Z",
+            "variants": [
+                {
+                    "name": "thumbnail",
+                    "url": "/uploads/thumbnails/a1b2c3d4.../hero-image.jpg",
+                    "width": 150,
+                    "height": 150
+                }
+            ]
+        }
+    ],
+    "meta": {
+        "total": 50,
+        "page": 1,
+        "per_page": 20,
+        "pages": 3
+    }
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Get Media -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/v1/media/{id}</span>
+                        <span class="endpoint-auth"><span class="optional">Auth Optional</span></span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">Get a single media item by ID with all metadata and variants.</p>
+
+                        <h4>Path Parameters</h4>
+                        <table class="params-table">
+                            <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td class="param-name">id <span class="param-required">required</span></td><td class="param-type">integer</td><td>Media ID</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Upload Media -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-post">POST</span>
+                        <span class="endpoint-path">/api/v1/media</span>
+                        <span class="endpoint-auth"><span class="required">Auth Required</span> <code>media:write</code></span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">Upload one or more media files. Use <code>multipart/form-data</code> encoding.</p>
+
+                        <h4>Form Fields</h4>
+                        <table class="params-table">
+                            <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td class="param-name">file / files / files[] <span class="param-required">required</span></td><td class="param-type">file</td><td>File(s) to upload</td></tr>
+                                <tr><td class="param-name">folder_id</td><td class="param-type">integer</td><td>Optional folder ID</td></tr>
+                            </tbody>
+                        </table>
+
+                        <div class="response-section">
+                            <div class="response-title">Example (cURL)</div>
+                            <pre><code>curl -X POST {{.BaseURL}}/api/v1/media \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -F "file=@/path/to/image.jpg" \
+  -F "folder_id=1"</code></pre>
+                        </div>
+
+                        <div class="response-section">
+                            <div class="response-title">Batch Upload Response</div>
+                            <pre><code>{
+    "data": {
+        "uploaded": [
+            { "id": 1, "filename": "image1.jpg", ... }
+        ],
+        "failed": [
+            { "filename": "invalid.exe", "error": "File type not allowed" }
+        ],
+        "total_uploaded": 1,
+        "total_failed": 1
+    }
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Update Media -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-put">PUT</span>
+                        <span class="endpoint-path">/api/v1/media/{id}</span>
+                        <span class="endpoint-auth"><span class="required">Auth Required</span> <code>media:write</code></span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">Update media metadata (filename, alt text, caption, folder).</p>
+
+                        <h4>Request Body</h4>
+                        <table class="params-table">
+                            <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td class="param-name">filename</td><td class="param-type">string</td><td>New filename</td></tr>
+                                <tr><td class="param-name">alt</td><td class="param-type">string</td><td>Alt text for images</td></tr>
+                                <tr><td class="param-name">caption</td><td class="param-type">string</td><td>Caption text</td></tr>
+                                <tr><td class="param-name">folder_id</td><td class="param-type">integer</td><td>Move to folder (null for root)</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Delete Media -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-delete">DELETE</span>
+                        <span class="endpoint-path">/api/v1/media/{id}</span>
+                        <span class="endpoint-auth"><span class="required">Auth Required</span> <code>media:write</code></span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">Delete a media file and all its variants. This action is permanent.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tags Endpoints -->
+            <section id="tags">
+                <h2>Tags</h2>
+                <p>Manage content tags for organizing pages.</p>
+
+                <!-- List Tags -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/v1/tags</span>
+                        <span class="endpoint-auth">Public</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">List all tags with page counts.</p>
+
+                        <h4>Query Parameters</h4>
+                        <table class="params-table">
+                            <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td class="param-name">page</td><td class="param-type">integer</td><td>Page number</td></tr>
+                                <tr><td class="param-name">per_page</td><td class="param-type">integer</td><td>Items per page (max: 100)</td></tr>
+                            </tbody>
+                        </table>
+
+                        <div class="response-section">
+                            <div class="response-title">Example Response</div>
+                            <pre><code>{
+    "data": [
+        {
+            "id": 1,
+            "name": "Technology",
+            "slug": "technology",
+            "page_count": 15,
+            "created_at": "2024-01-01T12:00:00Z"
+        }
+    ],
+    "meta": {
+        "total": 10,
+        "page": 1,
+        "per_page": 20,
+        "pages": 1
+    }
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Get Tag -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/v1/tags/{id}</span>
+                        <span class="endpoint-auth">Public</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">Get a single tag by ID.</p>
+                    </div>
+                </div>
+
+                <!-- Create Tag -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-post">POST</span>
+                        <span class="endpoint-path">/api/v1/tags</span>
+                        <span class="endpoint-auth"><span class="required">Auth Required</span> <code>taxonomy:write</code></span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">Create a new tag.</p>
+
+                        <h4>Request Body</h4>
+                        <table class="params-table">
+                            <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td class="param-name">name <span class="param-required">required</span></td><td class="param-type">string</td><td>Tag name</td></tr>
+                                <tr><td class="param-name">slug <span class="param-required">required</span></td><td class="param-type">string</td><td>URL slug (must be unique)</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Update Tag -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-put">PUT</span>
+                        <span class="endpoint-path">/api/v1/tags/{id}</span>
+                        <span class="endpoint-auth"><span class="required">Auth Required</span> <code>taxonomy:write</code></span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">Update an existing tag.</p>
+                    </div>
+                </div>
+
+                <!-- Delete Tag -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-delete">DELETE</span>
+                        <span class="endpoint-path">/api/v1/tags/{id}</span>
+                        <span class="endpoint-auth"><span class="required">Auth Required</span> <code>taxonomy:write</code></span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">Delete a tag. Pages tagged with this tag will have the association removed.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Categories Endpoints -->
+            <section id="categories">
+                <h2>Categories</h2>
+                <p>Manage hierarchical content categories. Categories support nesting with parent-child relationships.</p>
+
+                <!-- List Categories -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/v1/categories</span>
+                        <span class="endpoint-auth">Public</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">List all categories. Returns a nested tree structure by default.</p>
+
+                        <h4>Query Parameters</h4>
+                        <table class="params-table">
+                            <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td class="param-name">flat</td><td class="param-type">boolean</td><td>Set to <code>true</code> for a flat list instead of nested tree</td></tr>
+                            </tbody>
+                        </table>
+
+                        <div class="response-section">
+                            <div class="response-title">Example Response (Nested Tree)</div>
+                            <pre><code>{
+    "data": [
+        {
+            "id": 1,
+            "name": "Technology",
+            "slug": "technology",
+            "description": "Tech-related posts",
+            "parent_id": null,
+            "position": 0,
+            "page_count": 10,
+            "children": [
+                {
+                    "id": 2,
+                    "name": "Web Development",
+                    "slug": "web-development",
+                    "parent_id": 1,
+                    "page_count": 5,
+                    "children": []
+                }
+            ]
+        }
+    ]
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Get Category -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/v1/categories/{id}</span>
+                        <span class="endpoint-auth">Public</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">Get a single category with its immediate children.</p>
+                    </div>
+                </div>
+
+                <!-- Create Category -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-post">POST</span>
+                        <span class="endpoint-path">/api/v1/categories</span>
+                        <span class="endpoint-auth"><span class="required">Auth Required</span> <code>taxonomy:write</code></span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">Create a new category.</p>
+
+                        <h4>Request Body</h4>
+                        <table class="params-table">
+                            <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td class="param-name">name <span class="param-required">required</span></td><td class="param-type">string</td><td>Category name</td></tr>
+                                <tr><td class="param-name">slug <span class="param-required">required</span></td><td class="param-type">string</td><td>URL slug (must be unique)</td></tr>
+                                <tr><td class="param-name">description</td><td class="param-type">string</td><td>Category description</td></tr>
+                                <tr><td class="param-name">parent_id</td><td class="param-type">integer</td><td>Parent category ID (null for root)</td></tr>
+                                <tr><td class="param-name">position</td><td class="param-type">integer</td><td>Sort order (default: 0)</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Update Category -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-put">PUT</span>
+                        <span class="endpoint-path">/api/v1/categories/{id}</span>
+                        <span class="endpoint-auth"><span class="required">Auth Required</span> <code>taxonomy:write</code></span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">Update an existing category. Cannot set a category as its own parent or create circular references.</p>
+                    </div>
+                </div>
+
+                <!-- Delete Category -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method method-delete">DELETE</span>
+                        <span class="endpoint-path">/api/v1/categories/{id}</span>
+                        <span class="endpoint-auth"><span class="required">Auth Required</span> <code>taxonomy:write</code></span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p class="endpoint-description">Delete a category. Cannot delete categories that have child categories - delete children first.</p>
+
+                        <div class="info-box warning">
+                            <div class="info-box-title">Note</div>
+                            <p>Categories with children cannot be deleted. Move or delete child categories first.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <footer style="margin-top: 4rem; padding-top: 2rem; border-top: 1px solid var(--border-color); color: var(--text-muted); font-size: 0.875rem;">
+                <p>Generated for {{.SiteName}} REST API v1</p>
+            </footer>
+        </main>
+    </div>
+
+    <script>
+        // Simple smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth' });
+                    // Update URL hash
+                    history.pushState(null, null, this.getAttribute('href'));
+                }
+            });
+        });
+
+        // Highlight current section in sidebar
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    document.querySelectorAll('.nav-link').forEach(link => {
+                        link.classList.remove('active');
+                        if (link.getAttribute('href') === '#' + entry.target.id) {
+                            link.classList.add('active');
+                        }
+                    });
+                }
+            });
+        }, { rootMargin: '-20% 0px -70% 0px' });
+
+        document.querySelectorAll('section[id]').forEach(section => {
+            observer.observe(section);
+        });
+    </script>
+</body>
+</html>
