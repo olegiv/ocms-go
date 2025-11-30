@@ -1,8 +1,75 @@
 {{define "content"}}
-<article class="page">
-    <h1>{{.Page.Title}}</h1>
-    <div class="page-content">
+<article class="page single-page">
+    <header class="page-header">
+        <h1 class="page-title">{{.Page.Title}}</h1>
+        {{if .Page.Excerpt}}
+        <p class="page-excerpt">{{.Page.Excerpt}}</p>
+        {{end}}
+    </header>
+
+    {{if .Page.FeaturedImage}}
+    <div class="page-featured-image">
+        <img src="{{.Page.FeaturedImage}}" alt="{{.Page.Title}}">
+    </div>
+    {{end}}
+
+    <div class="page-content prose">
         {{.Page.Body}}
     </div>
+
+    {{/* Page Meta */}}
+    {{if or .Page.Category .Page.Tags}}
+    <footer class="page-footer">
+        {{if .Page.Category}}
+        <div class="page-category">
+            <span class="label">Category:</span>
+            <a href="/category/{{.Page.Category.Slug}}">{{.Page.Category.Name}}</a>
+        </div>
+        {{end}}
+
+        {{if .Page.Tags}}
+        <div class="page-tags">
+            <span class="label">Tags:</span>
+            {{range .Page.Tags}}
+            <a href="/tag/{{.Slug}}" class="tag">{{.Name}}</a>
+            {{end}}
+        </div>
+        {{end}}
+    </footer>
+    {{end}}
+
+    {{/* Author Box */}}
+    {{if .ShowAuthorBox}}
+    {{if .Page.Author}}
+    <div class="author-box">
+        {{if .Page.Author.Avatar}}
+        <img src="{{.Page.Author.Avatar}}" alt="{{.Page.Author.Name}}" class="author-avatar">
+        {{end}}
+        <div class="author-info">
+            <h4 class="author-name">{{.Page.Author.Name}}</h4>
+            {{if .Page.Author.Bio}}<p class="author-bio">{{.Page.Author.Bio}}</p>{{end}}
+        </div>
+    </div>
+    {{end}}
+    {{end}}
+
+    {{/* Related Posts */}}
+    {{if .RelatedPages}}
+    <section class="related-posts">
+        <h3>Related Posts</h3>
+        <div class="related-grid">
+            {{range .RelatedPages}}
+            <article class="related-card">
+                {{if .FeaturedImage}}
+                <div class="card-image">
+                    <a href="{{.URL}}"><img src="{{.FeaturedImage}}" alt="{{.Title}}"></a>
+                </div>
+                {{end}}
+                <h4><a href="{{.URL}}">{{.Title}}</a></h4>
+            </article>
+            {{end}}
+        </div>
+    </section>
+    {{end}}
 </article>
 {{end}}

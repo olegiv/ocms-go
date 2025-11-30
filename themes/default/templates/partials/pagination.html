@@ -1,0 +1,74 @@
+{{define "pagination.html"}}
+{{if .Pagination}}
+<nav class="pagination" aria-label="Page navigation">
+    <ul class="pagination-list">
+        {{/* Previous Page */}}
+        {{if .Pagination.HasPrev}}
+        <li class="pagination-item pagination-prev">
+            <a href="{{.Pagination.PrevURL}}" aria-label="Previous page">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+                <span>Previous</span>
+            </a>
+        </li>
+        {{else}}
+        <li class="pagination-item pagination-prev disabled">
+            <span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+                <span>Previous</span>
+            </span>
+        </li>
+        {{end}}
+
+        {{/* Page Numbers */}}
+        {{range .Pagination.Pages}}
+        {{if .IsCurrent}}
+        <li class="pagination-item active">
+            <span aria-current="page">{{.Number}}</span>
+        </li>
+        {{else if .IsEllipsis}}
+        <li class="pagination-item ellipsis">
+            <span>&hellip;</span>
+        </li>
+        {{else}}
+        <li class="pagination-item">
+            <a href="{{.URL}}">{{.Number}}</a>
+        </li>
+        {{end}}
+        {{end}}
+
+        {{/* Next Page */}}
+        {{if .Pagination.HasNext}}
+        <li class="pagination-item pagination-next">
+            <a href="{{.Pagination.NextURL}}" aria-label="Next page">
+                <span>Next</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+            </a>
+        </li>
+        {{else}}
+        <li class="pagination-item pagination-next disabled">
+            <span>
+                <span>Next</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+            </span>
+        </li>
+        {{end}}
+    </ul>
+
+    {{/* Page Info */}}
+    {{if .Pagination.TotalPages}}
+    <p class="pagination-info">
+        Page {{.Pagination.CurrentPage}} of {{.Pagination.TotalPages}}
+        {{if .Pagination.TotalItems}}({{.Pagination.TotalItems}} items){{end}}
+    </p>
+    {{end}}
+</nav>
+{{end}}
+{{end}}

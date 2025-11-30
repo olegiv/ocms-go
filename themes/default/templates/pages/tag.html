@@ -1,0 +1,71 @@
+{{define "content"}}
+<div class="archive-page tag-archive">
+    <header class="archive-header">
+        <span class="archive-label">Tag</span>
+        <h1 class="archive-title">#{{.Tag.Name}}</h1>
+        {{if .Tag.Description}}
+        <p class="archive-description">{{.Tag.Description}}</p>
+        {{end}}
+        {{if .PageCount}}
+        <p class="archive-count">{{.PageCount}} {{if eq .PageCount 1}}post{{else}}posts{{end}}</p>
+        {{end}}
+    </header>
+
+    {{if .Pages}}
+    <div class="posts-list">
+        {{range .Pages}}
+        <article class="post-item">
+            {{if .FeaturedImage}}
+            <div class="post-thumbnail">
+                <a href="{{.URL}}">
+                    <img src="{{.FeaturedImage}}" alt="{{.Title}}">
+                </a>
+            </div>
+            {{end}}
+            <div class="post-content">
+                {{if .Category}}
+                <span class="post-category">
+                    <a href="/category/{{.Category.Slug}}">{{.Category.Name}}</a>
+                </span>
+                {{end}}
+                <h2 class="post-title">
+                    <a href="{{.URL}}">{{.Title}}</a>
+                </h2>
+                {{if .Excerpt}}
+                <p class="post-excerpt">{{.Excerpt}}</p>
+                {{end}}
+                <div class="post-meta">
+                    {{if .PublishedAt}}
+                    <time datetime="{{.PublishedAt}}">{{.PublishedAtFormatted}}</time>
+                    {{end}}
+                    {{if .Author}}
+                    <span class="author">by {{.Author}}</span>
+                    {{end}}
+                </div>
+            </div>
+        </article>
+        {{end}}
+    </div>
+
+    {{template "pagination.html" .}}
+
+    {{else}}
+    <div class="no-posts">
+        <p>No posts found with this tag.</p>
+        <a href="/" class="btn btn-secondary">Go Home</a>
+    </div>
+    {{end}}
+
+    {{/* Related Tags */}}
+    {{if .RelatedTags}}
+    <section class="related-tags">
+        <h3>Related Tags</h3>
+        <div class="tag-cloud">
+            {{range .RelatedTags}}
+            <a href="/tag/{{.Slug}}" class="tag">{{.Name}}</a>
+            {{end}}
+        </div>
+    </section>
+    {{end}}
+</div>
+{{end}}

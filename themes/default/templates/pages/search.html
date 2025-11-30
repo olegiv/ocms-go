@@ -1,0 +1,86 @@
+{{define "content"}}
+<div class="search-page">
+    <header class="search-header">
+        <h1 class="search-title">Search</h1>
+        <form action="/search" method="get" class="search-form large">
+            <input type="search" name="q" value="{{.SearchQuery}}" placeholder="Search..." autofocus>
+            <button type="submit" class="btn btn-primary">Search</button>
+        </form>
+    </header>
+
+    {{if .SearchQuery}}
+    <div class="search-results">
+        {{if .Pages}}
+        <p class="results-count">
+            Found {{.ResultCount}} {{if eq .ResultCount 1}}result{{else}}results{{end}} for "{{.SearchQuery}}"
+        </p>
+
+        <div class="posts-list">
+            {{range .Pages}}
+            <article class="post-item search-result">
+                {{if .FeaturedImage}}
+                <div class="post-thumbnail">
+                    <a href="{{.URL}}">
+                        <img src="{{.FeaturedImage}}" alt="{{.Title}}">
+                    </a>
+                </div>
+                {{end}}
+                <div class="post-content">
+                    {{if .Category}}
+                    <span class="post-category">
+                        <a href="/category/{{.Category.Slug}}">{{.Category.Name}}</a>
+                    </span>
+                    {{end}}
+                    <h2 class="post-title">
+                        <a href="{{.URL}}">{{.Title}}</a>
+                    </h2>
+                    {{if .Highlight}}
+                    <p class="search-highlight">{{.Highlight}}</p>
+                    {{else if .Excerpt}}
+                    <p class="post-excerpt">{{.Excerpt}}</p>
+                    {{end}}
+                    <div class="post-meta">
+                        {{if .PublishedAt}}
+                        <time datetime="{{.PublishedAt}}">{{.PublishedAtFormatted}}</time>
+                        {{end}}
+                        <span class="post-type">{{.Type}}</span>
+                    </div>
+                </div>
+            </article>
+            {{end}}
+        </div>
+
+        {{template "pagination.html" .}}
+
+        {{else}}
+        <div class="no-results">
+            <p>No results found for "{{.SearchQuery}}"</p>
+            <div class="search-suggestions">
+                <h3>Suggestions:</h3>
+                <ul>
+                    <li>Check your spelling</li>
+                    <li>Try different keywords</li>
+                    <li>Use more general terms</li>
+                </ul>
+            </div>
+        </div>
+        {{end}}
+    </div>
+    {{else}}
+    <div class="search-intro">
+        <p>Enter a search term above to find content.</p>
+
+        {{if .PopularSearches}}
+        <div class="popular-searches">
+            <h3>Popular Searches:</h3>
+            <ul>
+                {{range .PopularSearches}}
+                <li><a href="/search?q={{.}}">{{.}}</a></li>
+                {{end}}
+            </ul>
+        </div>
+        {{end}}
+    </div>
+    {{end}}
+</div>
+{{end}}

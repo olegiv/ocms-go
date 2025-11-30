@@ -1,0 +1,76 @@
+{{define "content"}}
+<div class="archive-page category-archive">
+    <header class="archive-header">
+        <span class="archive-label">Category</span>
+        <h1 class="archive-title">{{.Category.Name}}</h1>
+        {{if .Category.Description}}
+        <p class="archive-description">{{.Category.Description}}</p>
+        {{end}}
+        {{if .PageCount}}
+        <p class="archive-count">{{.PageCount}} {{if eq .PageCount 1}}post{{else}}posts{{end}}</p>
+        {{end}}
+    </header>
+
+    {{if .Pages}}
+    <div class="posts-list">
+        {{range .Pages}}
+        <article class="post-item">
+            {{if .FeaturedImage}}
+            <div class="post-thumbnail">
+                <a href="{{.URL}}">
+                    <img src="{{.FeaturedImage}}" alt="{{.Title}}">
+                </a>
+            </div>
+            {{end}}
+            <div class="post-content">
+                <h2 class="post-title">
+                    <a href="{{.URL}}">{{.Title}}</a>
+                </h2>
+                {{if .Excerpt}}
+                <p class="post-excerpt">{{.Excerpt}}</p>
+                {{end}}
+                <div class="post-meta">
+                    {{if .PublishedAt}}
+                    <time datetime="{{.PublishedAt}}">{{.PublishedAtFormatted}}</time>
+                    {{end}}
+                    {{if .Author}}
+                    <span class="author">by {{.Author}}</span>
+                    {{end}}
+                </div>
+                {{if .Tags}}
+                <div class="post-tags">
+                    {{range .Tags}}
+                    <a href="/tag/{{.Slug}}" class="tag">{{.Name}}</a>
+                    {{end}}
+                </div>
+                {{end}}
+            </div>
+        </article>
+        {{end}}
+    </div>
+
+    {{template "pagination.html" .}}
+
+    {{else}}
+    <div class="no-posts">
+        <p>No posts found in this category.</p>
+        <a href="/" class="btn btn-secondary">Go Home</a>
+    </div>
+    {{end}}
+
+    {{/* Subcategories */}}
+    {{if .Subcategories}}
+    <section class="subcategories">
+        <h3>Subcategories</h3>
+        <ul class="subcategory-list">
+            {{range .Subcategories}}
+            <li>
+                <a href="/category/{{.Slug}}">{{.Name}}</a>
+                {{if .Count}}<span class="count">({{.Count}})</span>{{end}}
+            </li>
+            {{end}}
+        </ul>
+    </section>
+    {{end}}
+</div>
+{{end}}

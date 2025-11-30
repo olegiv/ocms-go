@@ -1,0 +1,89 @@
+{{define "content"}}
+<div class="home-page">
+    {{/* Hero Section */}}
+    {{if .HeroEnabled}}
+    <section class="hero">
+        <div class="hero-content">
+            <h1 class="hero-title">{{if .HeroTitle}}{{.HeroTitle}}{{else}}{{.SiteName}}{{end}}</h1>
+            {{if .HeroSubtitle}}<p class="hero-subtitle">{{.HeroSubtitle}}</p>{{end}}
+            {{if .HeroCTA}}
+            <a href="{{.HeroCTAURL}}" class="btn btn-primary">{{.HeroCTA}}</a>
+            {{end}}
+        </div>
+        {{if .HeroImage}}
+        <div class="hero-image">
+            <img src="{{.HeroImage}}" alt="">
+        </div>
+        {{end}}
+    </section>
+    {{end}}
+
+    {{/* Featured Content */}}
+    {{if .FeaturedPages}}
+    <section class="featured-section">
+        <h2 class="section-title">Featured</h2>
+        <div class="featured-grid">
+            {{range .FeaturedPages}}
+            <article class="featured-card">
+                {{if .FeaturedImage}}
+                <div class="card-image">
+                    <a href="{{.URL}}">
+                        <img src="{{.FeaturedImage}}" alt="{{.Title}}">
+                    </a>
+                </div>
+                {{end}}
+                <div class="card-content">
+                    <h3><a href="{{.URL}}">{{.Title}}</a></h3>
+                    {{if .Excerpt}}<p class="excerpt">{{.Excerpt}}</p>{{end}}
+                    <a href="{{.URL}}" class="read-more">Read more</a>
+                </div>
+            </article>
+            {{end}}
+        </div>
+    </section>
+    {{end}}
+
+    {{/* Recent Posts */}}
+    {{if .RecentPages}}
+    <section class="recent-section">
+        <h2 class="section-title">Recent Posts</h2>
+        <div class="posts-grid">
+            {{range .RecentPages}}
+            <article class="post-card">
+                {{if .FeaturedImage}}
+                <div class="card-image">
+                    <a href="{{.URL}}">
+                        <img src="{{.FeaturedImage}}" alt="{{.Title}}">
+                    </a>
+                </div>
+                {{end}}
+                <div class="card-content">
+                    {{if .Category}}
+                    <span class="post-category"><a href="/category/{{.Category.Slug}}">{{.Category.Name}}</a></span>
+                    {{end}}
+                    <h3><a href="{{.URL}}">{{.Title}}</a></h3>
+                    {{if .Excerpt}}<p class="excerpt">{{.Excerpt}}</p>{{end}}
+                    <div class="post-meta">
+                        {{if .PublishedAt}}<time datetime="{{.PublishedAt}}">{{.PublishedAtFormatted}}</time>{{end}}
+                        {{if .Author}}<span class="author">by {{.Author}}</span>{{end}}
+                    </div>
+                </div>
+            </article>
+            {{end}}
+        </div>
+        {{if .ShowAllPostsLink}}
+        <div class="section-footer">
+            <a href="/blog" class="btn btn-secondary">View All Posts</a>
+        </div>
+        {{end}}
+    </section>
+    {{end}}
+
+    {{/* Static Content */}}
+    {{if .Page}}
+    <section class="home-content">
+        {{.Page.Body}}
+    </section>
+    {{end}}
+</div>
+{{end}}

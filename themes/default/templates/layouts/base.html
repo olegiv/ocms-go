@@ -3,15 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{.Title}} - {{.SiteName}}</title>
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+    {{/* SEO Meta Tags */}}
+    {{if .MetaDescription}}<meta name="description" content="{{.MetaDescription}}">{{end}}
+    {{if .MetaKeywords}}<meta name="keywords" content="{{.MetaKeywords}}">{{end}}
+    {{if .Canonical}}<link rel="canonical" href="{{.Canonical}}">{{end}}
+
+    {{/* Open Graph */}}
+    <meta property="og:type" content="{{if .Page}}article{{else}}website{{end}}">
+    <meta property="og:title" content="{{if .Title}}{{.Title}}{{else}}{{.SiteName}}{{end}}">
+    {{if .MetaDescription}}<meta property="og:description" content="{{.MetaDescription}}">{{end}}
+    {{if .SiteURL}}<meta property="og:url" content="{{.SiteURL}}{{.RequestURI}}">{{end}}
+    {{if .FeaturedImage}}<meta property="og:image" content="{{.FeaturedImage}}">{{end}}
+
+    {{/* Twitter Card */}}
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{if .Title}}{{.Title}}{{else}}{{.SiteName}}{{end}}">
+    {{if .MetaDescription}}<meta name="twitter:description" content="{{.MetaDescription}}">{{end}}
+    {{if .FeaturedImage}}<meta name="twitter:image" content="{{.FeaturedImage}}">{{end}}
+
+    <title>{{if .Title}}{{.Title}} - {{end}}{{.SiteName}}</title>
+
+    {{/* Favicon */}}
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+
+    {{/* Theme Styles */}}
     <link rel="stylesheet" href="/themes/default/static/css/theme.css">
+
+    {{/* Additional head content */}}
+    {{block "head" .}}{{end}}
 </head>
-<body>
+<body class="{{if .BodyClass}}{{.BodyClass}}{{end}}">
     {{template "header.html" .}}
-    <main>
-        {{template "content" .}}
+
+    <main class="site-main">
+        <div class="container">
+            {{if .ShowSidebar}}
+            <div class="content-wrapper with-sidebar">
+                <div class="content-main">
+                    {{template "content" .}}
+                </div>
+                <aside class="content-sidebar">
+                    {{template "sidebar.html" .}}
+                </aside>
+            </div>
+            {{else}}
+            <div class="content-wrapper">
+                <div class="content-main full-width">
+                    {{template "content" .}}
+                </div>
+            </div>
+            {{end}}
+        </div>
     </main>
+
     {{template "footer.html" .}}
+
+    {{/* Theme Scripts */}}
     <script src="/themes/default/static/js/theme.js"></script>
+
+    {{/* Additional scripts */}}
+    {{block "scripts" .}}{{end}}
 </body>
 </html>

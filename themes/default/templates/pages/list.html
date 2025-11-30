@@ -1,0 +1,64 @@
+{{define "content"}}
+<div class="list-page">
+    <header class="list-header">
+        <h1 class="list-title">{{if .Title}}{{.Title}}{{else}}All Posts{{end}}</h1>
+        {{if .Description}}
+        <p class="list-description">{{.Description}}</p>
+        {{end}}
+    </header>
+
+    {{if .Pages}}
+    <div class="posts-list">
+        {{range .Pages}}
+        <article class="post-item">
+            {{if .FeaturedImage}}
+            <div class="post-thumbnail">
+                <a href="{{.URL}}">
+                    <img src="{{.FeaturedImage}}" alt="{{.Title}}">
+                </a>
+            </div>
+            {{end}}
+            <div class="post-content">
+                {{if .Category}}
+                <span class="post-category">
+                    <a href="/category/{{.Category.Slug}}">{{.Category.Name}}</a>
+                </span>
+                {{end}}
+                <h2 class="post-title">
+                    <a href="{{.URL}}">{{.Title}}</a>
+                </h2>
+                {{if .Excerpt}}
+                <p class="post-excerpt">{{.Excerpt}}</p>
+                {{end}}
+                <div class="post-meta">
+                    {{if .PublishedAt}}
+                    <time datetime="{{.PublishedAt}}">{{.PublishedAtFormatted}}</time>
+                    {{end}}
+                    {{if .Author}}
+                    <span class="author">by {{.Author}}</span>
+                    {{end}}
+                    {{if .ReadingTime}}
+                    <span class="reading-time">{{.ReadingTime}} min read</span>
+                    {{end}}
+                </div>
+                {{if .Tags}}
+                <div class="post-tags">
+                    {{range .Tags}}
+                    <a href="/tag/{{.Slug}}" class="tag">{{.Name}}</a>
+                    {{end}}
+                </div>
+                {{end}}
+            </div>
+        </article>
+        {{end}}
+    </div>
+
+    {{template "pagination.html" .}}
+
+    {{else}}
+    <div class="no-posts">
+        <p>No posts found.</p>
+    </div>
+    {{end}}
+</div>
+{{end}}

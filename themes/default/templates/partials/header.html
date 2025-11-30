@@ -1,10 +1,58 @@
 {{define "header.html"}}
 <header class="site-header">
     <div class="container">
-        <a href="/" class="site-logo">{{.SiteName}}</a>
-        <nav class="site-nav">
-            <!-- Navigation will be rendered here -->
-        </nav>
+        <div class="header-inner">
+            <div class="site-branding">
+                {{if .SiteLogo}}
+                <a href="/" class="site-logo">
+                    <img src="{{.SiteLogo}}" alt="{{.SiteName}}">
+                </a>
+                {{else}}
+                <a href="/" class="site-title">{{.SiteName}}</a>
+                {{end}}
+                {{if .SiteTagline}}
+                <p class="site-tagline">{{.SiteTagline}}</p>
+                {{end}}
+            </div>
+
+            <button class="mobile-menu-toggle" aria-label="Toggle menu" aria-expanded="false">
+                <span class="hamburger"></span>
+            </button>
+
+            <nav class="site-nav" aria-label="Main navigation">
+                <ul class="nav-menu">
+                    <li class="nav-item{{if eq .CurrentPath "/"}} active{{end}}">
+                        <a href="/">Home</a>
+                    </li>
+                    {{range .Navigation}}
+                    <li class="nav-item{{if eq $.CurrentPath .URL}} active{{end}}">
+                        <a href="{{.URL}}">{{.Title}}</a>
+                        {{if .Children}}
+                        <ul class="sub-menu">
+                            {{range .Children}}
+                            <li><a href="{{.URL}}">{{.Title}}</a></li>
+                            {{end}}
+                        </ul>
+                        {{end}}
+                    </li>
+                    {{end}}
+                </ul>
+            </nav>
+
+            {{if .ShowSearch}}
+            <div class="header-search">
+                <form action="/search" method="get" class="search-form">
+                    <input type="search" name="q" placeholder="Search..." aria-label="Search" value="{{.SearchQuery}}">
+                    <button type="submit" aria-label="Submit search">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                    </button>
+                </form>
+            </div>
+            {{end}}
+        </div>
     </div>
 </header>
 {{end}}

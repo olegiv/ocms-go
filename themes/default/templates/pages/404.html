@@ -1,0 +1,32 @@
+{{define "content"}}
+<div class="error-page error-404">
+    <div class="error-content">
+        <h1 class="error-code">404</h1>
+        <h2 class="error-title">Page Not Found</h2>
+        <p class="error-message">
+            Sorry, the page you're looking for doesn't exist or has been moved.
+        </p>
+        <div class="error-actions">
+            <a href="/" class="btn btn-primary">Go Home</a>
+            {{if .ShowSearch}}
+            <span class="or">or</span>
+            <form action="/search" method="get" class="search-form inline">
+                <input type="search" name="q" placeholder="Search...">
+                <button type="submit" class="btn btn-secondary">Search</button>
+            </form>
+            {{end}}
+        </div>
+    </div>
+
+    {{if .SuggestedPages}}
+    <div class="suggested-pages">
+        <h3>You might be looking for:</h3>
+        <ul>
+            {{range .SuggestedPages}}
+            <li><a href="{{.URL}}">{{.Title}}</a></li>
+            {{end}}
+        </ul>
+    </div>
+    {{end}}
+</div>
+{{end}}

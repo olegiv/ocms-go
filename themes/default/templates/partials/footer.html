@@ -1,7 +1,48 @@
 {{define "footer.html"}}
 <footer class="site-footer">
     <div class="container">
-        <p>{{.FooterText}}</p>
+        <div class="footer-inner">
+            {{if .FooterWidgets}}
+            <div class="footer-widgets">
+                {{range .FooterWidgets}}
+                <div class="footer-widget">
+                    {{if .Title}}<h4>{{.Title}}</h4>{{end}}
+                    {{.Content}}
+                </div>
+                {{end}}
+            </div>
+            {{end}}
+
+            <div class="footer-bottom">
+                <div class="footer-copyright">
+                    {{if .FooterText}}
+                    <p>{{.FooterText}}</p>
+                    {{else}}
+                    <p>&copy; {{.Year}} {{.SiteName}}. All rights reserved.</p>
+                    {{end}}
+                </div>
+
+                {{if .FooterNav}}
+                <nav class="footer-nav" aria-label="Footer navigation">
+                    <ul>
+                        {{range .FooterNav}}
+                        <li><a href="{{.URL}}">{{.Title}}</a></li>
+                        {{end}}
+                    </ul>
+                </nav>
+                {{end}}
+
+                {{if .SocialLinks}}
+                <div class="social-links">
+                    {{range .SocialLinks}}
+                    <a href="{{.URL}}" target="_blank" rel="noopener noreferrer" aria-label="{{.Name}}">
+                        {{.Icon}}
+                    </a>
+                    {{end}}
+                </div>
+                {{end}}
+            </div>
+        </div>
     </div>
 </footer>
 {{end}}

@@ -1,0 +1,66 @@
+{{define "sidebar.html"}}
+<div class="sidebar">
+    {{/* Search Widget */}}
+    {{if .ShowSearch}}
+    <div class="widget widget-search">
+        <h3 class="widget-title">Search</h3>
+        <form action="/search" method="get" class="search-form">
+            <input type="search" name="q" placeholder="Search..." value="{{.SearchQuery}}">
+            <button type="submit">Search</button>
+        </form>
+    </div>
+    {{end}}
+
+    {{/* Categories Widget */}}
+    {{if .Categories}}
+    <div class="widget widget-categories">
+        <h3 class="widget-title">Categories</h3>
+        <ul class="category-list">
+            {{range .Categories}}
+            <li>
+                <a href="/category/{{.Slug}}">{{.Name}}</a>
+                {{if .Count}}<span class="count">({{.Count}})</span>{{end}}
+            </li>
+            {{end}}
+        </ul>
+    </div>
+    {{end}}
+
+    {{/* Tags Widget */}}
+    {{if .Tags}}
+    <div class="widget widget-tags">
+        <h3 class="widget-title">Tags</h3>
+        <div class="tag-cloud">
+            {{range .Tags}}
+            <a href="/tag/{{.Slug}}" class="tag">{{.Name}}</a>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+
+    {{/* Recent Posts Widget */}}
+    {{if .RecentPosts}}
+    <div class="widget widget-recent-posts">
+        <h3 class="widget-title">Recent Posts</h3>
+        <ul class="recent-posts-list">
+            {{range .RecentPosts}}
+            <li>
+                <a href="{{.URL}}">{{.Title}}</a>
+                {{if .Date}}<span class="post-date">{{.Date}}</span>{{end}}
+            </li>
+            {{end}}
+        </ul>
+    </div>
+    {{end}}
+
+    {{/* Custom Widgets */}}
+    {{range .SidebarWidgets}}
+    <div class="widget widget-custom">
+        {{if .Title}}<h3 class="widget-title">{{.Title}}</h3>{{end}}
+        <div class="widget-content">
+            {{.Content}}
+        </div>
+    </div>
+    {{end}}
+</div>
+{{end}}
