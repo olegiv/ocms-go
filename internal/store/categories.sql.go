@@ -454,7 +454,7 @@ func (q *Queries) ListChildCategories(ctx context.Context, parentID sql.NullInt6
 }
 
 const listPagesByCategory = `-- name: ListPagesByCategory :many
-SELECT DISTINCT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url FROM pages p
+SELECT DISTINCT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at FROM pages p
 INNER JOIN page_categories pc ON pc.page_id = p.id
 WHERE pc.category_id = ?
 ORDER BY p.updated_at DESC
@@ -494,6 +494,7 @@ func (q *Queries) ListPagesByCategory(ctx context.Context, arg ListPagesByCatego
 			&i.NoIndex,
 			&i.NoFollow,
 			&i.CanonicalUrl,
+			&i.ScheduledAt,
 		); err != nil {
 			return nil, err
 		}

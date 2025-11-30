@@ -153,6 +153,7 @@ type Page struct {
 	NoIndex         int64         `json:"no_index"`
 	NoFollow        int64         `json:"no_follow"`
 	CanonicalUrl    string        `json:"canonical_url"`
+	ScheduledAt     sql.NullTime  `json:"scheduled_at"`
 }
 
 type PageCategory struct {

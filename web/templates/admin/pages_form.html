@@ -172,7 +172,7 @@
 
             <!-- SEO Settings Section -->
             <div class="form-group form-group-full">
-                <details class="collapsible-section" x-data="{ open: {{if or .Data.Page.MetaTitle .Data.Page.MetaDescription .Data.FormValues.meta_title .Data.FormValues.meta_description}}true{{else}}false{{end}} }" :open="open">
+                <details class="collapsible-section" x-data="{ open: {{if or .Data.FormValues.meta_title .Data.FormValues.meta_description (and .Data.Page .Data.Page.MetaTitle) (and .Data.Page .Data.Page.MetaDescription)}}true{{else}}false{{end}} }" :open="open">
                     <summary class="collapsible-header" @click.prevent="open = !open">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                         <span>SEO Settings</span>
@@ -278,6 +278,48 @@
                                         <span class="checkbox-hint">Prevent search engines from following links on this page</span>
                                     </div>
                                 </label>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+            </div>
+
+            <!-- Scheduling Section -->
+            <div class="form-group form-group-full">
+                <details class="collapsible-section" x-data="{ open: {{if or .Data.FormValues.scheduled_at (and .Data.Page .Data.Page.ScheduledAt.Valid)}}true{{else}}false{{end}} }" :open="open">
+                    <summary class="collapsible-header" @click.prevent="open = !open">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                        <span>Schedule Publishing</span>
+                        {{if and .Data.Page .Data.Page.ScheduledAt.Valid}}
+                        <span class="badge badge-info" style="margin-left: 8px;">Scheduled</span>
+                        {{end}}
+                    </summary>
+                    <div class="collapsible-content">
+                        <div class="form-group">
+                            <label for="scheduled_at" class="form-label">Publish Date & Time</label>
+                            <input
+                                type="datetime-local"
+                                id="scheduled_at"
+                                name="scheduled_at"
+                                class="form-input"
+                                value="{{if .Data.FormValues.scheduled_at}}{{.Data.FormValues.scheduled_at}}{{else if and .Data.Page .Data.Page.ScheduledAt.Valid}}{{.Data.Page.ScheduledAt.Time.Format "2006-01-02T15:04"}}{{end}}"
+                            >
+                            <span class="form-hint">
+                                Leave empty to publish immediately when status is set to Published.
+                                {{if and .Data.Page .Data.Page.ScheduledAt.Valid}}
+                                <br><strong>Currently scheduled for:</strong> {{.Data.Page.ScheduledAt.Time.Format "Jan 02, 2006 at 3:04 PM"}}
+                                {{end}}
+                            </span>
+                        </div>
+                        <div class="alert alert-info" style="margin-top: 12px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                            <div>
+                                <strong>How scheduling works:</strong>
+                                <ul style="margin: 4px 0 0 16px; padding: 0;">
+                                    <li>Set the page status to "Draft" and choose a future date/time</li>
+                                    <li>The page will automatically be published at the scheduled time</li>
+                                    <li>Clear the date to cancel scheduling</li>
+                                </ul>
                             </div>
                         </div>
                     </div>

@@ -80,7 +80,8 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	// Get status filter from query string
 	statusFilter := r.URL.Query().Get("status")
-	if statusFilter != "" && statusFilter != "all" && !isValidPageStatus(statusFilter) {
+	// Allow "scheduled" as a special filter in addition to regular statuses
+	if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" && !isValidPageStatus(statusFilter) {
 		statusFilter = ""
 	}
 
@@ -101,6 +102,8 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Note: Category filter takes precedence over status filter
 	if categoryFilter > 0 {
 		totalCount, err = h.queries.CountPagesByCategory(r.Context(), categoryFilter)
+	} else if statusFilter == "scheduled" {
+		totalCount, err = h.queries.CountScheduledPages(r.Context())
 	} else if statusFilter != "" && statusFilter != "all" {
 		totalCount, err = h.queries.CountPagesByStatus(r.Context(), statusFilter)
 	} else {
@@ -130,6 +133,11 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 			CategoryID: categoryFilter,
 			Limit:      PagesPerPage,
 			Offset:     offset,
+		})
+	} else if statusFilter == "scheduled" {
+		pages, err = h.queries.ListScheduledPages(r.Context(), store.ListScheduledPagesParams{
+			Limit:  PagesPerPage,
+			Offset: offset,
 		})
 	} else if statusFilter != "" && statusFilter != "all" {
 		pages, err = h.queries.ListPagesByStatus(r.Context(), store.ListPagesByStatusParams{
@@ -370,6 +378,15 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		noFollow = 1
 	}
 
+	// Parse scheduled_at for scheduled publishing
+	scheduledAtStr := strings.TrimSpace(r.FormValue("scheduled_at"))
+	var scheduledAt sql.NullTime
+	if scheduledAtStr != "" {
+		if t, err := time.Parse("2006-01-02T15:04", scheduledAtStr); err == nil {
+			scheduledAt = sql.NullTime{Time: t, Valid: true}
+		}
+	}
+
 	// Store form values for re-rendering on error
 	formValues := map[string]string{
 		"title":             title,
@@ -384,6 +401,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		"no_index":          noIndexStr,
 		"no_follow":         noFollowStr,
 		"canonical_url":     canonicalURL,
+		"scheduled_at":      scheduledAtStr,
 	}
 
 	// Validate
@@ -466,6 +484,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		NoIndex:         noIndex,
 		NoFollow:        noFollow,
 		CanonicalUrl:    canonicalURL,
+		ScheduledAt:     scheduledAt,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	})
@@ -703,6 +722,15 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		noFollow = 1
 	}
 
+	// Parse scheduled_at for scheduled publishing
+	scheduledAtStr := strings.TrimSpace(r.FormValue("scheduled_at"))
+	var scheduledAt sql.NullTime
+	if scheduledAtStr != "" {
+		if t, err := time.Parse("2006-01-02T15:04", scheduledAtStr); err == nil {
+			scheduledAt = sql.NullTime{Time: t, Valid: true}
+		}
+	}
+
 	// Store form values for re-rendering on error
 	formValues := map[string]string{
 		"title":             title,
@@ -717,6 +745,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		"no_index":          noIndexStr,
 		"no_follow":         noFollowStr,
 		"canonical_url":     canonicalURL,
+		"scheduled_at":      scheduledAtStr,
 	}
 
 	// Validate
@@ -803,6 +832,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		NoIndex:         noIndex,
 		NoFollow:        noFollow,
 		CanonicalUrl:    canonicalURL,
+		ScheduledAt:     scheduledAt,
 		UpdatedAt:       now,
 	})
 	if err != nil {
@@ -1142,7 +1172,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update page with version content (keeping SEO fields intact)
+	// Update page with version content (keeping SEO fields and scheduling intact)
 	now := time.Now()
 	_, err = h.queries.UpdatePage(r.Context(), store.UpdatePageParams{
 		ID:              id,
@@ -1158,6 +1188,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		NoIndex:         page.NoIndex,
 		NoFollow:        page.NoFollow,
 		CanonicalUrl:    page.CanonicalUrl,
+		ScheduledAt:     page.ScheduledAt, // Keep scheduling intact
 		UpdatedAt:       now,
 	})
 	if err != nil {

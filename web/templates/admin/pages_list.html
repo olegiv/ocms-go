@@ -25,6 +25,10 @@
                 {{if eq . "draft"}}Draft{{else if eq . "published"}}Published{{else}}{{.}}{{end}}
             </a>
             {{end}}
+            <a href="/admin/pages?status=scheduled{{if gt .Data.CategoryFilter 0}}&category={{.Data.CategoryFilter}}{{end}}" class="btn btn-sm {{if eq .Data.StatusFilter "scheduled"}}btn-primary{{else}}btn-outline{{end}}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Scheduled
+            </a>
         </div>
     </div>
     {{if .Data.AllCategories}}
@@ -102,9 +106,16 @@
                         <code class="slug-code">/{{.Slug}}</code>
                     </td>
                     <td>
+                        {{if and (eq .Status "draft") .ScheduledAt.Valid}}
+                        <span class="badge badge-info" title="Scheduled for {{.ScheduledAt.Time.Format "Jan 02, 2006 at 3:04 PM"}}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            Scheduled
+                        </span>
+                        {{else}}
                         <span class="badge badge-{{if eq .Status "published"}}success{{else}}warning{{end}}">
                             {{.Status}}
                         </span>
+                        {{end}}
                     </td>
                     <td>{{formatDateTime .UpdatedAt}}</td>
                     <td class="text-right">

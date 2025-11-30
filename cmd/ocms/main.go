@@ -20,6 +20,7 @@ import (
 	"ocms-go/internal/handler"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/render"
+	"ocms-go/internal/scheduler"
 	"ocms-go/internal/session"
 	"ocms-go/internal/store"
 	"ocms-go/internal/theme"
@@ -129,6 +130,13 @@ func run() error {
 		}
 	}
 	slog.Info("theme manager initialized", "themes", themeManager.ThemeCount())
+
+	// Initialize and start scheduler
+	sched := scheduler.New(db, logger)
+	if err := sched.Start(); err != nil {
+		return fmt.Errorf("starting scheduler: %w", err)
+	}
+	defer sched.Stop()
 
 	// Create router
 	r := chi.NewRouter()

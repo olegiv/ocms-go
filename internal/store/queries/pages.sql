@@ -1,6 +1,6 @@
 -- name: CreatePage :one
-INSERT INTO pages (title, slug, body, status, author_id, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO pages (title, slug, body, status, author_id, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetPageByID :one
@@ -17,7 +17,7 @@ SELECT * FROM pages WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?;
 
 -- name: UpdatePage :one
 UPDATE pages
-SET title = ?, slug = ?, body = ?, status = ?, featured_image_id = ?, meta_title = ?, meta_description = ?, meta_keywords = ?, og_image_id = ?, no_index = ?, no_follow = ?, canonical_url = ?, updated_at = ?
+SET title = ?, slug = ?, body = ?, status = ?, featured_image_id = ?, meta_title = ?, meta_description = ?, meta_keywords = ?, og_image_id = ?, no_index = ?, no_follow = ?, canonical_url = ?, scheduled_at = ?, updated_at = ?
 WHERE id = ?
 RETURNING *;
 
@@ -164,3 +164,25 @@ WHERE p.id = ?;
 SELECT id, slug, updated_at, no_index FROM pages
 WHERE status = 'published' AND no_index = 0
 ORDER BY updated_at DESC;
+
+-- Scheduled publishing queries
+
+-- name: GetScheduledPagesForPublishing :many
+SELECT * FROM pages
+WHERE scheduled_at IS NOT NULL AND scheduled_at <= ? AND status = 'draft'
+ORDER BY scheduled_at ASC;
+
+-- name: PublishScheduledPage :one
+UPDATE pages
+SET status = 'published', published_at = ?, scheduled_at = NULL, updated_at = ?
+WHERE id = ?
+RETURNING *;
+
+-- name: ClearPageScheduledAt :exec
+UPDATE pages SET scheduled_at = NULL, updated_at = ? WHERE id = ?;
+
+-- name: CountScheduledPages :one
+SELECT COUNT(*) FROM pages WHERE scheduled_at IS NOT NULL AND status = 'draft';
+
+-- name: ListScheduledPages :many
+SELECT * FROM pages WHERE scheduled_at IS NOT NULL AND status = 'draft' ORDER BY scheduled_at ASC LIMIT ? OFFSET ?;
