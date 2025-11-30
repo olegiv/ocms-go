@@ -33,5 +33,27 @@
             "type": "text",
             "default": "Powered by oCMS"
         }
+    ],
+    "widget_areas": [
+        {
+            "id": "sidebar",
+            "name": "Sidebar",
+            "description": "Widgets displayed in the sidebar"
+        },
+        {
+            "id": "footer-1",
+            "name": "Footer Column 1",
+            "description": "First footer widget area"
+        },
+        {
+            "id": "footer-2",
+            "name": "Footer Column 2",
+            "description": "Second footer widget area"
+        },
+        {
+            "id": "footer-3",
+            "name": "Footer Column 3",
+            "description": "Third footer widget area"
+        }
     ]
 }

@@ -152,6 +152,7 @@ func run() error {
 	menusHandler := handler.NewMenusHandler(db, renderer, sessionManager)
 	formsHandler := handler.NewFormsHandler(db, renderer, sessionManager)
 	themesHandler := handler.NewThemesHandler(db, renderer, sessionManager, themeManager)
+	widgetsHandler := handler.NewWidgetsHandler(db, renderer, sessionManager, themeManager)
 	frontendHandler := handler.NewFrontendHandler(db, themeManager, logger)
 
 	// Public frontend routes
@@ -301,6 +302,15 @@ func run() error {
 		r.Get("/themes/{name}/settings", themesHandler.Settings)
 		r.Put("/themes/{name}/settings", themesHandler.SaveSettings)
 		r.Post("/themes/{name}/settings", themesHandler.SaveSettings) // HTML forms can't send PUT
+
+		// Widget management routes
+		r.Get("/widgets", widgetsHandler.List)
+		r.Post("/widgets", widgetsHandler.Create)
+		r.Get("/widgets/{id}", widgetsHandler.GetWidget)
+		r.Put("/widgets/{id}", widgetsHandler.Update)
+		r.Delete("/widgets/{id}", widgetsHandler.Delete)
+		r.Post("/widgets/{id}/move", widgetsHandler.MoveWidget)
+		r.Post("/widgets/reorder", widgetsHandler.Reorder)
 	})
 
 	// Public form routes (no authentication required, but session needed for CSRF)

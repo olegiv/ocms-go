@@ -2,12 +2,42 @@
 <footer class="site-footer">
     <div class="container">
         <div class="footer-inner">
-            {{if .FooterWidgets}}
+            {{/* Dynamic footer widgets from admin */}}
+            {{if .Widgets}}
             <div class="footer-widgets">
-                {{range .FooterWidgets}}
-                <div class="footer-widget">
-                    {{if .Title}}<h4>{{.Title}}</h4>{{end}}
-                    {{.Content}}
+                {{/* Footer Column 1 */}}
+                {{with index .Widgets "footer-1"}}
+                <div class="footer-column">
+                    {{range .}}
+                    <div class="footer-widget widget-{{.Type}}">
+                        {{if .Title}}<h4>{{.Title}}</h4>{{end}}
+                        {{.Content}}
+                    </div>
+                    {{end}}
+                </div>
+                {{end}}
+
+                {{/* Footer Column 2 */}}
+                {{with index .Widgets "footer-2"}}
+                <div class="footer-column">
+                    {{range .}}
+                    <div class="footer-widget widget-{{.Type}}">
+                        {{if .Title}}<h4>{{.Title}}</h4>{{end}}
+                        {{.Content}}
+                    </div>
+                    {{end}}
+                </div>
+                {{end}}
+
+                {{/* Footer Column 3 */}}
+                {{with index .Widgets "footer-3"}}
+                <div class="footer-column">
+                    {{range .}}
+                    <div class="footer-widget widget-{{.Type}}">
+                        {{if .Title}}<h4>{{.Title}}</h4>{{end}}
+                        {{.Content}}
+                    </div>
+                    {{end}}
                 </div>
                 {{end}}
             </div>

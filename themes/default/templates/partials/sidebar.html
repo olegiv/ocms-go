@@ -53,14 +53,18 @@
     </div>
     {{end}}
 
-    {{/* Custom Widgets */}}
-    {{range .SidebarWidgets}}
-    <div class="widget widget-custom">
+    {{/* Dynamic Widgets from Admin */}}
+    {{if .Widgets}}
+    {{with index .Widgets "sidebar"}}
+    {{range .}}
+    <div class="widget widget-{{.Type}}">
         {{if .Title}}<h3 class="widget-title">{{.Title}}</h3>{{end}}
         <div class="widget-content">
             {{.Content}}
         </div>
     </div>
+    {{end}}
+    {{end}}
     {{end}}
 </div>
 {{end}}

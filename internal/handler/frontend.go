@@ -148,6 +148,9 @@ type BaseTemplateData struct {
 	// Search
 	ShowSearch  bool
 	SearchQuery string
+
+	// Widgets - map of widget area ID to widgets
+	Widgets map[string][]service.WidgetView
 }
 
 // FooterWidget represents a widget in the footer area.
@@ -252,21 +255,23 @@ type NotFoundData struct {
 
 // FrontendHandler handles public frontend routes.
 type FrontendHandler struct {
-	db           *sql.DB
-	queries      *store.Queries
-	themeManager *theme.Manager
-	menuService  *service.MenuService
-	logger       *slog.Logger
+	db            *sql.DB
+	queries       *store.Queries
+	themeManager  *theme.Manager
+	menuService   *service.MenuService
+	widgetService *service.WidgetService
+	logger        *slog.Logger
 }
 
 // NewFrontendHandler creates a new FrontendHandler.
 func NewFrontendHandler(db *sql.DB, themeManager *theme.Manager, logger *slog.Logger) *FrontendHandler {
 	return &FrontendHandler{
-		db:           db,
-		queries:      store.New(db),
-		themeManager: themeManager,
-		menuService:  service.NewMenuService(db),
-		logger:       logger,
+		db:            db,
+		queries:       store.New(db),
+		themeManager:  themeManager,
+		menuService:   service.NewMenuService(db),
+		widgetService: service.NewWidgetService(db),
+		logger:        logger,
 	}
 }
 
@@ -847,6 +852,11 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 	// Navigation/FooterNav are aliases for MainMenu/FooterMenu (for template compatibility)
 	data.Navigation = data.MainMenu
 	data.FooterNav = data.FooterMenu
+
+	// Load widgets for the active theme
+	if activeTheme := h.themeManager.GetActiveTheme(); activeTheme != nil {
+		data.Widgets = h.widgetService.GetAllWidgetsForTheme(ctx, activeTheme.Name)
+	}
 
 	return data
 }

@@ -191,3 +191,17 @@ type User struct {
 	UpdatedAt    time.Time    `json:"updated_at"`
 	LastLoginAt  sql.NullTime `json:"last_login_at"`
 }
+
+type Widget struct {
+	ID         int64          `json:"id"`
+	Theme      string         `json:"theme"`
+	Area       string         `json:"area"`
+	WidgetType string         `json:"widget_type"`
+	Title      sql.NullString `json:"title"`
+	Content    sql.NullString `json:"content"`
+	Settings   sql.NullString `json:"settings"`
+	Position   int64          `json:"position"`
+	IsActive   int64          `json:"is_active"`
+	CreatedAt  time.Time      `json:"created_at"`
+	UpdatedAt  time.Time      `json:"updated_at"`
+}

@@ -18,6 +18,7 @@ type ThemeConfig struct {
 	Screenshot  string            `json:"screenshot"`
 	Templates   map[string]string `json:"templates"`
 	Settings    []ThemeSetting    `json:"settings"`
+	WidgetAreas []WidgetArea      `json:"widget_areas,omitempty"`
 }
 
 // ThemeSetting represents a configurable option for a theme.
@@ -27,6 +28,13 @@ type ThemeSetting struct {
 	Type    string   `json:"type"` // text, color, image, select
 	Default string   `json:"default"`
 	Options []string `json:"options,omitempty"`
+}
+
+// WidgetArea represents a location in the theme where widgets can be placed.
+type WidgetArea struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
 }
 
 // Theme represents a loaded theme with its templates and configuration.

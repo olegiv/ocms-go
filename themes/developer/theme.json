@@ -34,5 +34,17 @@
             "default": "yes",
             "options": ["yes", "no"]
         }
+    ],
+    "widget_areas": [
+        {
+            "id": "sidebar",
+            "name": "Sidebar",
+            "description": "Widgets displayed in the sidebar"
+        },
+        {
+            "id": "footer",
+            "name": "Footer",
+            "description": "Widgets displayed in the footer area"
+        }
     ]
 }
