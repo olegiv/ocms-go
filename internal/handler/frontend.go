@@ -784,6 +784,45 @@ func (h *FrontendHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
 	w.Write(xmlContent)
 }
 
+// Robots generates and serves the robots.txt file.
+func (h *FrontendHandler) Robots(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get site URL from config
+	siteURL := ""
+	if cfg, err := h.queries.GetConfigByKey(ctx, "site_url"); err == nil && cfg.Value != "" {
+		siteURL = cfg.Value
+	}
+	if siteURL == "" {
+		// Fallback to request host
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		siteURL = scheme + "://" + r.Host
+	}
+
+	// Check for robots_disallow_all config (for staging sites)
+	disallowAll := false
+	if cfg, err := h.queries.GetConfigByKey(ctx, "robots_disallow_all"); err == nil {
+		disallowAll = cfg.Value == "1" || cfg.Value == "true"
+	}
+
+	// Get extra robots.txt rules from config
+	extraRules := ""
+	if cfg, err := h.queries.GetConfigByKey(ctx, "robots_txt_extra"); err == nil {
+		extraRules = cfg.Value
+	}
+
+	// Build robots.txt
+	robotsContent := seo.GenerateRobots(siteURL, disallowAll, extraRules)
+
+	// Send response
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=86400") // Cache for 24 hours
+	w.Write([]byte(robotsContent))
+}
+
 // pageToView converts a store.Page to a PageView with computed fields.
 func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page) PageView {
 	pv := PageView{
