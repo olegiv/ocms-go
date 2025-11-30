@@ -21,15 +21,15 @@
         </form>
 
         <!-- User Dropdown -->
-        <div class="dropdown" x-data="{ open: false }">
-            <button class="header-user" @click="open = !open">
+        <div class="user-dropdown">
+            <div class="header-user">
                 <div class="user-avatar">{{if .User}}{{slice .User.Name 0 1}}{{else}}A{{end}}</div>
                 <span class="user-name">{{if .User}}{{.User.Name}}{{else}}Admin{{end}}</span>
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-            </button>
-            <div class="dropdown-menu dropdown-menu-end" :class="{ 'show': open }" @click.outside="open = false">
-                <a href="/admin/profile" class="dropdown-item">{{T .AdminLang "nav.profile"}}</a>
-                <a href="/admin/settings" class="dropdown-item">{{T .AdminLang "nav.settings"}}</a>
+                <svg class="dropdown-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
+            <div class="user-dropdown-menu">
+                <a href="/admin/users/{{if .User}}{{.User.ID}}{{end}}" class="dropdown-item">{{T .AdminLang "nav.profile"}}</a>
+                <a href="/admin/config" class="dropdown-item">{{T .AdminLang "nav.settings"}}</a>
                 <div class="dropdown-divider"></div>
                 <a href="/logout" class="dropdown-item">{{T .AdminLang "nav.logout"}}</a>
             </div>
