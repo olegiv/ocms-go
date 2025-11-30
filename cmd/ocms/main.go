@@ -399,6 +399,13 @@ func run() error {
 			r.Get("/pages/slug/{slug}", apiHandler.GetPageBySlug)
 		})
 
+		// Media - public read endpoints (optional auth for enhanced access)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.OptionalAPIKeyAuth(db))
+			r.Get("/media", apiHandler.ListMedia)
+			r.Get("/media/{id}", apiHandler.GetMedia)
+		})
+
 		// Protected endpoints (API key required)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.APIKeyAuth(db))
@@ -415,9 +422,13 @@ func run() error {
 				r.Delete("/pages/{id}", apiHandler.DeletePage)
 			})
 
-			// Media endpoints (to be implemented in iteration 19)
-			// r.Get("/media", ...) - public
-			// r.Post("/media", ...) - requires media:write
+			// Media - write endpoints (requires media:write permission)
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission("media:write"))
+				r.Post("/media", apiHandler.UploadMedia)
+				r.Put("/media/{id}", apiHandler.UpdateMedia)
+				r.Delete("/media/{id}", apiHandler.DeleteMedia)
+			})
 
 			// Taxonomy endpoints (to be implemented in iteration 20)
 			// r.Get("/tags", ...) - public
