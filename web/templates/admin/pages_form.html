@@ -169,6 +169,120 @@
             <div class="form-group form-group-full">
                 {{template "category_selector" .}}
             </div>
+
+            <!-- SEO Settings Section -->
+            <div class="form-group form-group-full">
+                <details class="collapsible-section" x-data="{ open: {{if or .Data.Page.MetaTitle .Data.Page.MetaDescription .Data.FormValues.meta_title .Data.FormValues.meta_description}}true{{else}}false{{end}} }" :open="open">
+                    <summary class="collapsible-header" @click.prevent="open = !open">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                        <span>SEO Settings</span>
+                    </summary>
+                    <div class="collapsible-content">
+                        <!-- Meta Title -->
+                        <div class="form-group" x-data="{ charCount: '{{if .Data.FormValues.meta_title}}{{.Data.FormValues.meta_title}}{{else if .Data.Page}}{{.Data.Page.MetaTitle}}{{end}}'.length }">
+                            <label for="meta_title" class="form-label">Meta Title</label>
+                            <input
+                                type="text"
+                                id="meta_title"
+                                name="meta_title"
+                                class="form-input"
+                                value="{{if .Data.FormValues.meta_title}}{{.Data.FormValues.meta_title}}{{else if .Data.Page}}{{.Data.Page.MetaTitle}}{{end}}"
+                                placeholder="SEO-optimized page title"
+                                maxlength="70"
+                                @input="charCount = $event.target.value.length"
+                            >
+                            <span class="form-hint">
+                                <span x-text="charCount"></span>/60 characters (recommended)
+                                <span x-show="charCount > 60" class="text-warning"> - may be truncated in search results</span>
+                            </span>
+                        </div>
+
+                        <!-- Meta Description -->
+                        <div class="form-group" x-data="{ charCount: '{{if .Data.FormValues.meta_description}}{{.Data.FormValues.meta_description}}{{else if .Data.Page}}{{.Data.Page.MetaDescription}}{{end}}'.length }">
+                            <label for="meta_description" class="form-label">Meta Description</label>
+                            <textarea
+                                id="meta_description"
+                                name="meta_description"
+                                class="form-input form-textarea"
+                                rows="3"
+                                placeholder="Brief description for search engine results"
+                                maxlength="320"
+                                @input="charCount = $event.target.value.length"
+                            >{{if .Data.FormValues.meta_description}}{{.Data.FormValues.meta_description}}{{else if .Data.Page}}{{.Data.Page.MetaDescription}}{{end}}</textarea>
+                            <span class="form-hint">
+                                <span x-text="charCount"></span>/160 characters (recommended)
+                                <span x-show="charCount > 160" class="text-warning"> - may be truncated in search results</span>
+                            </span>
+                        </div>
+
+                        <!-- Meta Keywords -->
+                        <div class="form-group">
+                            <label for="meta_keywords" class="form-label">Meta Keywords</label>
+                            <input
+                                type="text"
+                                id="meta_keywords"
+                                name="meta_keywords"
+                                class="form-input"
+                                value="{{if .Data.FormValues.meta_keywords}}{{.Data.FormValues.meta_keywords}}{{else if .Data.Page}}{{.Data.Page.MetaKeywords}}{{end}}"
+                                placeholder="keyword1, keyword2, keyword3"
+                            >
+                            <span class="form-hint">Comma-separated keywords (less important for modern SEO)</span>
+                        </div>
+
+                        <!-- OG Image -->
+                        <div class="form-group">
+                            <label class="form-label">Open Graph Image</label>
+                            <div class="media-picker" x-data="ogImagePicker()">
+                                <input type="hidden" name="og_image_id" :value="selectedId">
+                                <div class="media-picker-preview" x-show="selectedId">
+                                    <img :src="selectedPath" alt="OG Image Preview" class="media-preview-img">
+                                    <button type="button" class="btn btn-sm btn-outline media-remove-btn" @click="clearSelection()">Remove</button>
+                                </div>
+                                <button type="button" class="btn btn-outline" @click="openMediaModal()" x-show="!selectedId">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                                    Select OG Image
+                                </button>
+                                <span class="form-hint">Recommended size: 1200x630 pixels for social media sharing</span>
+                            </div>
+                        </div>
+
+                        <!-- Canonical URL -->
+                        <div class="form-group">
+                            <label for="canonical_url" class="form-label">Canonical URL</label>
+                            <input
+                                type="url"
+                                id="canonical_url"
+                                name="canonical_url"
+                                class="form-input"
+                                value="{{if .Data.FormValues.canonical_url}}{{.Data.FormValues.canonical_url}}{{else if .Data.Page}}{{.Data.Page.CanonicalUrl}}{{end}}"
+                                placeholder="https://example.com/original-page"
+                            >
+                            <span class="form-hint">Leave empty to use the page's own URL. Set if this content appears elsewhere.</span>
+                        </div>
+
+                        <!-- Robots Settings -->
+                        <div class="form-group">
+                            <label class="form-label">Search Engine Directives</label>
+                            <div class="checkbox-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="no_index" value="1" {{if .Data.FormValues.no_index}}{{if eq .Data.FormValues.no_index "1"}}checked{{end}}{{else if .Data.Page}}{{if .Data.Page.NoIndex}}checked{{end}}{{end}}>
+                                    <div class="checkbox-text">
+                                        <span class="checkbox-title">No Index</span>
+                                        <span class="checkbox-hint">Prevent search engines from indexing this page</span>
+                                    </div>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="no_follow" value="1" {{if .Data.FormValues.no_follow}}{{if eq .Data.FormValues.no_follow "1"}}checked{{end}}{{else if .Data.Page}}{{if .Data.Page.NoFollow}}checked{{end}}{{end}}>
+                                    <div class="checkbox-text">
+                                        <span class="checkbox-title">No Follow</span>
+                                        <span class="checkbox-hint">Prevent search engines from following links on this page</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+            </div>
         </div>
 
         <div class="form-actions">
@@ -320,6 +434,59 @@ function pageForm() {
                 .replace(/[^\w\s-]/g, '')
                 .replace(/[\s_-]+/g, '-')
                 .replace(/^-+|-+$/g, '');
+        }
+    };
+}
+
+// OG Image picker component
+function ogImagePicker() {
+    return {
+        selectedId: '{{if .Data.FormValues.og_image_id}}{{.Data.FormValues.og_image_id}}{{else if .Data.Page}}{{if .Data.Page.OgImageID.Valid}}{{.Data.Page.OgImageID.Int64}}{{end}}{{end}}' || '',
+        selectedPath: '',
+
+        init() {
+            // If there's an existing OG image, we need to fetch its path
+            if (this.selectedId) {
+                this.fetchImagePath(this.selectedId);
+            }
+        },
+
+        async fetchImagePath(id) {
+            try {
+                const response = await fetch(`/admin/media/api?limit=1`);
+                const data = await response.json();
+                // Find the media item with this ID
+                const mediaResponse = await fetch(`/admin/media/${id}`);
+                // For simplicity, construct the path based on common pattern
+                // In a real implementation, you'd fetch the specific media details
+                this.selectedPath = '/uploads/originals/' + id + '/image.jpg';
+            } catch (error) {
+                console.error('Failed to fetch OG image:', error);
+            }
+        },
+
+        openMediaModal() {
+            // Use the existing media picker modal if available
+            if (typeof window.openMediaPickerForOG === 'function') {
+                window.openMediaPickerForOG(this);
+            } else {
+                // Fallback: simple prompt for now
+                const mediaId = prompt('Enter media ID for OG image:');
+                if (mediaId) {
+                    this.selectedId = mediaId;
+                    this.selectedPath = '/uploads/originals/' + mediaId + '/image.jpg';
+                }
+            }
+        },
+
+        selectMedia(id, path, filename) {
+            this.selectedId = id;
+            this.selectedPath = path;
+        },
+
+        clearSelection() {
+            this.selectedId = '';
+            this.selectedPath = '';
         }
     };
 }

@@ -63,8 +63,8 @@ table {
   width: 100%;
 }
 
-// Remove default form styling
-input, textarea, select {
+// Remove default form styling (except checkboxes and radios)
+input:not([type="checkbox"]):not([type="radio"]), textarea, select {
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;

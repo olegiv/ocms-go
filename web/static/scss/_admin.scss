@@ -795,3 +795,105 @@
   margin: 0 $spacing-1;
   color: $gray-400;
 }
+
+// Collapsible Section (for SEO settings)
+.collapsible-section {
+  border: 1px solid $gray-200;
+  border-radius: $radius-md;
+  background: $gray-50;
+}
+
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  padding: $spacing-3 $spacing-4;
+  font-weight: $font-weight-medium;
+  color: $gray-700;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  svg {
+    transition: transform $transition-fast;
+  }
+
+  &:hover {
+    color: $gray-900;
+    background: $gray-100;
+  }
+}
+
+.collapsible-section[open] > .collapsible-header svg {
+  transform: rotate(90deg);
+}
+
+.collapsible-content {
+  padding: $spacing-4;
+  padding-top: 0;
+  border-top: 1px solid $gray-200;
+  margin-top: $spacing-3;
+  padding-top: $spacing-4;
+  background: $white;
+  border-radius: 0 0 $radius-md $radius-md;
+
+  .form-group {
+    margin-bottom: $spacing-4;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+}
+
+// Checkbox Group (for SEO directives)
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-3;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-2;
+  cursor: pointer;
+
+  input[type="checkbox"] {
+    appearance: auto !important;
+    -webkit-appearance: checkbox !important;
+    -moz-appearance: checkbox !important;
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+    cursor: pointer;
+    accent-color: $primary;
+  }
+}
+
+.checkbox-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.checkbox-title {
+  font-weight: $font-weight-medium;
+  color: $gray-800;
+}
+
+.checkbox-hint {
+  font-size: $font-size-sm;
+  color: $gray-500;
+  font-weight: normal;
+}
+
+// Warning text color for character counters
+.text-warning {
+  color: $warning;
+}

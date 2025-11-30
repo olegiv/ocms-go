@@ -98,7 +98,7 @@ func (q *Queries) DeleteTag(ctx context.Context, id int64) error {
 }
 
 const getPagesForTag = `-- name: GetPagesForTag :many
-SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id FROM pages p
+SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url FROM pages p
 INNER JOIN page_tags pt ON pt.page_id = p.id
 WHERE pt.tag_id = ?
 ORDER BY p.created_at DESC
@@ -131,6 +131,13 @@ func (q *Queries) GetPagesForTag(ctx context.Context, arg GetPagesForTagParams) 
 			&i.UpdatedAt,
 			&i.PublishedAt,
 			&i.FeaturedImageID,
+			&i.MetaTitle,
+			&i.MetaDescription,
+			&i.MetaKeywords,
+			&i.OgImageID,
+			&i.NoIndex,
+			&i.NoFollow,
+			&i.CanonicalUrl,
 		); err != nil {
 			return nil, err
 		}

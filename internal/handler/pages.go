@@ -335,12 +335,39 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	status := r.FormValue("status")
 	featuredImageIDStr := r.FormValue("featured_image_id")
 
+	// Get SEO form values
+	metaTitle := strings.TrimSpace(r.FormValue("meta_title"))
+	metaDescription := strings.TrimSpace(r.FormValue("meta_description"))
+	metaKeywords := strings.TrimSpace(r.FormValue("meta_keywords"))
+	ogImageIDStr := r.FormValue("og_image_id")
+	noIndexStr := r.FormValue("no_index")
+	noFollowStr := r.FormValue("no_follow")
+	canonicalURL := strings.TrimSpace(r.FormValue("canonical_url"))
+
 	// Parse featured image ID
 	var featuredImageID sql.NullInt64
 	if featuredImageIDStr != "" {
 		if imgID, err := strconv.ParseInt(featuredImageIDStr, 10, 64); err == nil && imgID > 0 {
 			featuredImageID = sql.NullInt64{Int64: imgID, Valid: true}
 		}
+	}
+
+	// Parse OG image ID
+	var ogImageID sql.NullInt64
+	if ogImageIDStr != "" {
+		if imgID, err := strconv.ParseInt(ogImageIDStr, 10, 64); err == nil && imgID > 0 {
+			ogImageID = sql.NullInt64{Int64: imgID, Valid: true}
+		}
+	}
+
+	// Parse boolean SEO fields (checkboxes)
+	var noIndex int64
+	if noIndexStr == "1" || noIndexStr == "on" {
+		noIndex = 1
+	}
+	var noFollow int64
+	if noFollowStr == "1" || noFollowStr == "on" {
+		noFollow = 1
 	}
 
 	// Store form values for re-rendering on error
@@ -350,6 +377,13 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		"body":              body,
 		"status":            status,
 		"featured_image_id": featuredImageIDStr,
+		"meta_title":        metaTitle,
+		"meta_description":  metaDescription,
+		"meta_keywords":     metaKeywords,
+		"og_image_id":       ogImageIDStr,
+		"no_index":          noIndexStr,
+		"no_follow":         noFollowStr,
+		"canonical_url":     canonicalURL,
 	}
 
 	// Validate
@@ -425,6 +459,13 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Status:          status,
 		AuthorID:        user.ID,
 		FeaturedImageID: featuredImageID,
+		MetaTitle:       metaTitle,
+		MetaDescription: metaDescription,
+		MetaKeywords:    metaKeywords,
+		OgImageID:       ogImageID,
+		NoIndex:         noIndex,
+		NoFollow:        noFollow,
+		CanonicalUrl:    canonicalURL,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	})
@@ -627,12 +668,39 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	status := r.FormValue("status")
 	featuredImageIDStr := r.FormValue("featured_image_id")
 
+	// Get SEO form values
+	metaTitle := strings.TrimSpace(r.FormValue("meta_title"))
+	metaDescription := strings.TrimSpace(r.FormValue("meta_description"))
+	metaKeywords := strings.TrimSpace(r.FormValue("meta_keywords"))
+	ogImageIDStr := r.FormValue("og_image_id")
+	noIndexStr := r.FormValue("no_index")
+	noFollowStr := r.FormValue("no_follow")
+	canonicalURL := strings.TrimSpace(r.FormValue("canonical_url"))
+
 	// Parse featured image ID
 	var featuredImageID sql.NullInt64
 	if featuredImageIDStr != "" {
 		if imgID, err := strconv.ParseInt(featuredImageIDStr, 10, 64); err == nil && imgID > 0 {
 			featuredImageID = sql.NullInt64{Int64: imgID, Valid: true}
 		}
+	}
+
+	// Parse OG image ID
+	var ogImageID sql.NullInt64
+	if ogImageIDStr != "" {
+		if imgID, err := strconv.ParseInt(ogImageIDStr, 10, 64); err == nil && imgID > 0 {
+			ogImageID = sql.NullInt64{Int64: imgID, Valid: true}
+		}
+	}
+
+	// Parse boolean SEO fields (checkboxes)
+	var noIndex int64
+	if noIndexStr == "1" || noIndexStr == "on" {
+		noIndex = 1
+	}
+	var noFollow int64
+	if noFollowStr == "1" || noFollowStr == "on" {
+		noFollow = 1
 	}
 
 	// Store form values for re-rendering on error
@@ -642,6 +710,13 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		"body":              body,
 		"status":            status,
 		"featured_image_id": featuredImageIDStr,
+		"meta_title":        metaTitle,
+		"meta_description":  metaDescription,
+		"meta_keywords":     metaKeywords,
+		"og_image_id":       ogImageIDStr,
+		"no_index":          noIndexStr,
+		"no_follow":         noFollowStr,
+		"canonical_url":     canonicalURL,
 	}
 
 	// Validate
@@ -721,6 +796,13 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Body:            body,
 		Status:          status,
 		FeaturedImageID: featuredImageID,
+		MetaTitle:       metaTitle,
+		MetaDescription: metaDescription,
+		MetaKeywords:    metaKeywords,
+		OgImageID:       ogImageID,
+		NoIndex:         noIndex,
+		NoFollow:        noFollow,
+		CanonicalUrl:    canonicalURL,
 		UpdatedAt:       now,
 	})
 	if err != nil {
@@ -1060,15 +1142,23 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update page with version content
+	// Update page with version content (keeping SEO fields intact)
 	now := time.Now()
 	_, err = h.queries.UpdatePage(r.Context(), store.UpdatePageParams{
-		ID:        id,
-		Title:     version.Title,
-		Slug:      page.Slug, // Keep the current slug
-		Body:      version.Body,
-		Status:    page.Status, // Keep the current status
-		UpdatedAt: now,
+		ID:              id,
+		Title:           version.Title,
+		Slug:            page.Slug, // Keep the current slug
+		Body:            version.Body,
+		Status:          page.Status, // Keep the current status
+		FeaturedImageID: page.FeaturedImageID,
+		MetaTitle:       page.MetaTitle,
+		MetaDescription: page.MetaDescription,
+		MetaKeywords:    page.MetaKeywords,
+		OgImageID:       page.OgImageID,
+		NoIndex:         page.NoIndex,
+		NoFollow:        page.NoFollow,
+		CanonicalUrl:    page.CanonicalUrl,
+		UpdatedAt:       now,
 	})
 	if err != nil {
 		slog.Error("failed to restore page version", "error", err, "page_id", id, "version_id", versionId)

@@ -1,6 +1,6 @@
 -- name: CreatePage :one
-INSERT INTO pages (title, slug, body, status, author_id, featured_image_id, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO pages (title, slug, body, status, author_id, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetPageByID :one
@@ -17,7 +17,7 @@ SELECT * FROM pages WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?;
 
 -- name: UpdatePage :one
 UPDATE pages
-SET title = ?, slug = ?, body = ?, status = ?, featured_image_id = ?, updated_at = ?
+SET title = ?, slug = ?, body = ?, status = ?, featured_image_id = ?, meta_title = ?, meta_description = ?, meta_keywords = ?, og_image_id = ?, no_index = ?, no_follow = ?, canonical_url = ?, updated_at = ?
 WHERE id = ?
 RETURNING *;
 
@@ -152,3 +152,15 @@ WHERE pt.tag_id = ? AND p.status = 'published';
 SELECT u.id, u.name, u.email FROM users u
 INNER JOIN pages p ON p.author_id = u.id
 WHERE p.id = ?;
+
+-- SEO OG image query
+
+-- name: GetOGImageForPage :one
+SELECT m.* FROM media m
+INNER JOIN pages p ON p.og_image_id = m.id
+WHERE p.id = ?;
+
+-- name: ListPublishedPagesForSitemap :many
+SELECT id, slug, updated_at, no_index FROM pages
+WHERE status = 'published' AND no_index = 0
+ORDER BY updated_at DESC;

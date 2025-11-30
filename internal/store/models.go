@@ -146,6 +146,13 @@ type Page struct {
 	UpdatedAt       time.Time     `json:"updated_at"`
 	PublishedAt     sql.NullTime  `json:"published_at"`
 	FeaturedImageID sql.NullInt64 `json:"featured_image_id"`
+	MetaTitle       string        `json:"meta_title"`
+	MetaDescription string        `json:"meta_description"`
+	MetaKeywords    string        `json:"meta_keywords"`
+	OgImageID       sql.NullInt64 `json:"og_image_id"`
+	NoIndex         int64         `json:"no_index"`
+	NoFollow        int64         `json:"no_follow"`
+	CanonicalUrl    string        `json:"canonical_url"`
 }
 
 type PageCategory struct {
