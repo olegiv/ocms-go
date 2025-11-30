@@ -22,6 +22,7 @@ import (
 	"ocms-go/internal/render"
 	"ocms-go/internal/session"
 	"ocms-go/internal/store"
+	"ocms-go/internal/theme"
 	"ocms-go/web"
 )
 
@@ -105,6 +106,28 @@ func run() error {
 		return fmt.Errorf("initializing renderer: %w", err)
 	}
 	slog.Info("template renderer initialized")
+
+	// Initialize theme manager
+	themeManager := theme.NewManager(cfg.ThemesDir, logger)
+	if err := themeManager.LoadThemes(); err != nil {
+		slog.Warn("failed to load themes", "error", err)
+	}
+
+	// Set active theme
+	if themeManager.HasTheme(cfg.ActiveTheme) {
+		if err := themeManager.SetActiveTheme(cfg.ActiveTheme); err != nil {
+			slog.Warn("failed to set active theme", "theme", cfg.ActiveTheme, "error", err)
+		}
+	} else if themeManager.ThemeCount() > 0 {
+		// Fall back to first available theme
+		themes := themeManager.ListThemesWithActive()
+		if len(themes) > 0 {
+			if err := themeManager.SetActiveTheme(themes[0].Name); err != nil {
+				slog.Warn("failed to set fallback theme", "error", err)
+			}
+		}
+	}
+	slog.Info("theme manager initialized", "themes", themeManager.ThemeCount())
 
 	// Create router
 	r := chi.NewRouter()
@@ -285,6 +308,21 @@ func run() error {
 	// Serve uploaded media files from ./uploads directory
 	uploadsDir := http.Dir("./uploads")
 	r.Handle("/uploads/*", http.StripPrefix("/uploads/", http.FileServer(uploadsDir)))
+
+	// Serve theme static files
+	r.Get("/themes/{themeName}/static/*", func(w http.ResponseWriter, r *http.Request) {
+		themeName := chi.URLParam(r, "themeName")
+		thm, err := themeManager.GetTheme(themeName)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		// Strip the prefix to get the file path
+		path := r.URL.Path
+		prefix := fmt.Sprintf("/themes/%s/static/", themeName)
+		filePath := filepath.Join(thm.StaticPath, path[len(prefix):])
+		http.ServeFile(w, r, filePath)
+	})
 
 	// 404 Not Found handler
 	r.NotFound(func(w http.ResponseWriter, req *http.Request) {

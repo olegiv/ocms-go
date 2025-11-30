@@ -755,3 +755,489 @@ func TestPublishPage(t *testing.T) {
 		t.Error("PublishedAt should be valid after publishing")
 	}
 }
+
+// Phase 2 Tests
+
+// Tag CRUD Tests
+
+func TestCreateTag(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	q := New(db)
+
+	now := time.Now()
+	tag, err := q.CreateTag(ctx, CreateTagParams{
+		Name:      "Test Tag",
+		Slug:      "test-tag",
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateTag: %v", err)
+	}
+
+	if tag.ID == 0 {
+		t.Error("tag.ID should not be 0")
+	}
+	if tag.Name != "Test Tag" {
+		t.Errorf("Name = %q, want %q", tag.Name, "Test Tag")
+	}
+	if tag.Slug != "test-tag" {
+		t.Errorf("Slug = %q, want %q", tag.Slug, "test-tag")
+	}
+}
+
+func TestGetTagBySlug(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	q := New(db)
+
+	now := time.Now()
+	created, err := q.CreateTag(ctx, CreateTagParams{
+		Name:      "Find Tag",
+		Slug:      "find-tag",
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateTag: %v", err)
+	}
+
+	found, err := q.GetTagBySlug(ctx, "find-tag")
+	if err != nil {
+		t.Fatalf("GetTagBySlug: %v", err)
+	}
+
+	if found.ID != created.ID {
+		t.Errorf("ID = %d, want %d", found.ID, created.ID)
+	}
+}
+
+func TestPageTagAssociation(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	q := New(db)
+
+	now := time.Now()
+
+	// Create user
+	user, _ := q.CreateUser(ctx, CreateUserParams{
+		Email:        "author@example.com",
+		PasswordHash: "hash",
+		Role:         "admin",
+		Name:         "Author",
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+
+	// Create page
+	page, _ := q.CreatePage(ctx, CreatePageParams{
+		Title:     "Tagged Page",
+		Slug:      "tagged-page",
+		Body:      "<p>Content</p>",
+		Status:    "published",
+		AuthorID:  user.ID,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+
+	// Create tags
+	tag1, _ := q.CreateTag(ctx, CreateTagParams{Name: "Tag 1", Slug: "tag-1", CreatedAt: now, UpdatedAt: now})
+	tag2, _ := q.CreateTag(ctx, CreateTagParams{Name: "Tag 2", Slug: "tag-2", CreatedAt: now, UpdatedAt: now})
+
+	// Add tags to page
+	err := q.AddTagToPage(ctx, AddTagToPageParams{PageID: page.ID, TagID: tag1.ID})
+	if err != nil {
+		t.Fatalf("AddTagToPage: %v", err)
+	}
+	err = q.AddTagToPage(ctx, AddTagToPageParams{PageID: page.ID, TagID: tag2.ID})
+	if err != nil {
+		t.Fatalf("AddTagToPage: %v", err)
+	}
+
+	// Get tags for page
+	tags, err := q.GetTagsForPage(ctx, page.ID)
+	if err != nil {
+		t.Fatalf("GetTagsForPage: %v", err)
+	}
+
+	if len(tags) != 2 {
+		t.Errorf("len(tags) = %d, want 2", len(tags))
+	}
+}
+
+// Category CRUD Tests
+
+func TestCreateCategory(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	q := New(db)
+
+	now := time.Now()
+	cat, err := q.CreateCategory(ctx, CreateCategoryParams{
+		Name:        "Test Category",
+		Slug:        "test-category",
+		Description: sql.NullString{String: "A test category", Valid: true},
+		ParentID:    sql.NullInt64{Valid: false},
+		Position:    0,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	})
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+
+	if cat.ID == 0 {
+		t.Error("cat.ID should not be 0")
+	}
+	if cat.Name != "Test Category" {
+		t.Errorf("Name = %q, want %q", cat.Name, "Test Category")
+	}
+}
+
+func TestCategoryHierarchy(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	q := New(db)
+
+	now := time.Now()
+
+	// Create parent category
+	parent, err := q.CreateCategory(ctx, CreateCategoryParams{
+		Name:      "Parent",
+		Slug:      "parent",
+		Position:  0,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateCategory parent: %v", err)
+	}
+
+	// Create child category
+	child, err := q.CreateCategory(ctx, CreateCategoryParams{
+		Name:      "Child",
+		Slug:      "child",
+		ParentID:  sql.NullInt64{Int64: parent.ID, Valid: true},
+		Position:  0,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateCategory child: %v", err)
+	}
+
+	// List children
+	children, err := q.ListChildCategories(ctx, sql.NullInt64{Int64: parent.ID, Valid: true})
+	if err != nil {
+		t.Fatalf("ListChildCategories: %v", err)
+	}
+
+	if len(children) != 1 {
+		t.Errorf("len(children) = %d, want 1", len(children))
+	}
+	if children[0].ID != child.ID {
+		t.Errorf("child.ID = %d, want %d", children[0].ID, child.ID)
+	}
+}
+
+// Menu CRUD Tests
+
+func TestCreateMenu(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	q := New(db)
+
+	now := time.Now()
+	menu, err := q.CreateMenu(ctx, CreateMenuParams{
+		Name:      "Main Menu",
+		Slug:      "main",
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateMenu: %v", err)
+	}
+
+	if menu.ID == 0 {
+		t.Error("menu.ID should not be 0")
+	}
+	if menu.Name != "Main Menu" {
+		t.Errorf("Name = %q, want %q", menu.Name, "Main Menu")
+	}
+}
+
+func TestMenuItems(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	q := New(db)
+
+	now := time.Now()
+
+	// Create menu
+	menu, _ := q.CreateMenu(ctx, CreateMenuParams{
+		Name:      "Test Menu",
+		Slug:      "test-menu",
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+
+	// Create menu items
+	item1, err := q.CreateMenuItem(ctx, CreateMenuItemParams{
+		MenuID:    menu.ID,
+		Title:     "Home",
+		Url:       sql.NullString{String: "/", Valid: true},
+		Target:    sql.NullString{String: "_self", Valid: true},
+		Position:  0,
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateMenuItem: %v", err)
+	}
+
+	item2, err := q.CreateMenuItem(ctx, CreateMenuItemParams{
+		MenuID:    menu.ID,
+		Title:     "About",
+		Url:       sql.NullString{String: "/about", Valid: true},
+		Target:    sql.NullString{String: "_self", Valid: true},
+		Position:  1,
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateMenuItem: %v", err)
+	}
+
+	// List menu items
+	items, err := q.ListMenuItems(ctx, menu.ID)
+	if err != nil {
+		t.Fatalf("ListMenuItems: %v", err)
+	}
+
+	if len(items) != 2 {
+		t.Errorf("len(items) = %d, want 2", len(items))
+	}
+	if items[0].ID != item1.ID {
+		t.Errorf("first item ID = %d, want %d", items[0].ID, item1.ID)
+	}
+	if items[1].ID != item2.ID {
+		t.Errorf("second item ID = %d, want %d", items[1].ID, item2.ID)
+	}
+}
+
+// Form CRUD Tests
+
+func TestCreateForm(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	q := New(db)
+
+	now := time.Now()
+	form, err := q.CreateForm(ctx, CreateFormParams{
+		Name:           "Contact Form",
+		Slug:           "contact",
+		Title:          "Contact Us",
+		Description:    sql.NullString{String: "Get in touch", Valid: true},
+		SuccessMessage: sql.NullString{String: "Thank you!", Valid: true},
+		EmailTo:        sql.NullString{String: "test@example.com", Valid: true},
+		IsActive:       true,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	})
+	if err != nil {
+		t.Fatalf("CreateForm: %v", err)
+	}
+
+	if form.ID == 0 {
+		t.Error("form.ID should not be 0")
+	}
+	if form.Name != "Contact Form" {
+		t.Errorf("Name = %q, want %q", form.Name, "Contact Form")
+	}
+}
+
+func TestFormFields(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	q := New(db)
+
+	now := time.Now()
+
+	// Create form
+	form, _ := q.CreateForm(ctx, CreateFormParams{
+		Name:      "Test Form",
+		Slug:      "test-form",
+		Title:     "Test",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+
+	// Create fields
+	_, err := q.CreateFormField(ctx, CreateFormFieldParams{
+		FormID:     form.ID,
+		Type:       "text",
+		Name:       "name",
+		Label:      "Your Name",
+		IsRequired: true,
+		Position:   0,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	})
+	if err != nil {
+		t.Fatalf("CreateFormField: %v", err)
+	}
+
+	_, err = q.CreateFormField(ctx, CreateFormFieldParams{
+		FormID:     form.ID,
+		Type:       "email",
+		Name:       "email",
+		Label:      "Your Email",
+		IsRequired: true,
+		Position:   1,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	})
+	if err != nil {
+		t.Fatalf("CreateFormField: %v", err)
+	}
+
+	// Get fields
+	fields, err := q.GetFormFields(ctx, form.ID)
+	if err != nil {
+		t.Fatalf("GetFormFields: %v", err)
+	}
+
+	if len(fields) != 2 {
+		t.Errorf("len(fields) = %d, want 2", len(fields))
+	}
+}
+
+func TestFormSubmission(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	q := New(db)
+
+	now := time.Now()
+
+	// Create form
+	form, _ := q.CreateForm(ctx, CreateFormParams{
+		Name:      "Submission Test",
+		Slug:      "submission-test",
+		Title:     "Test",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+
+	// Create submission
+	sub, err := q.CreateFormSubmission(ctx, CreateFormSubmissionParams{
+		FormID:    form.ID,
+		Data:      `{"name":"John","email":"john@example.com"}`,
+		IpAddress: sql.NullString{String: "127.0.0.1", Valid: true},
+		UserAgent: sql.NullString{String: "Mozilla/5.0", Valid: true},
+		IsRead:    false,
+		CreatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateFormSubmission: %v", err)
+	}
+
+	if sub.ID == 0 {
+		t.Error("sub.ID should not be 0")
+	}
+	if sub.IsRead {
+		t.Error("IsRead should be false initially")
+	}
+
+	// Mark as read
+	err = q.MarkSubmissionRead(ctx, sub.ID)
+	if err != nil {
+		t.Fatalf("MarkSubmissionRead: %v", err)
+	}
+
+	// Verify read status
+	found, err := q.GetFormSubmissionByID(ctx, sub.ID)
+	if err != nil {
+		t.Fatalf("GetFormSubmissionByID: %v", err)
+	}
+	if !found.IsRead {
+		t.Error("IsRead should be true after marking")
+	}
+}
+
+func TestCountUnreadSubmissions(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	q := New(db)
+
+	now := time.Now()
+
+	// Create form
+	form, _ := q.CreateForm(ctx, CreateFormParams{
+		Name:      "Count Test",
+		Slug:      "count-test",
+		Title:     "Test",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+
+	// Create submissions
+	for i := 0; i < 3; i++ {
+		_, err := q.CreateFormSubmission(ctx, CreateFormSubmissionParams{
+			FormID:    form.ID,
+			Data:      `{"test":"data"}`,
+			IsRead:    false,
+			CreatedAt: now,
+		})
+		if err != nil {
+			t.Fatalf("CreateFormSubmission: %v", err)
+		}
+	}
+
+	// Count unread
+	count, err := q.CountUnreadSubmissions(ctx, form.ID)
+	if err != nil {
+		t.Fatalf("CountUnreadSubmissions: %v", err)
+	}
+
+	if count != 3 {
+		t.Errorf("count = %d, want 3", count)
+	}
+
+	// Count all unread
+	allCount, err := q.CountAllUnreadSubmissions(ctx)
+	if err != nil {
+		t.Fatalf("CountAllUnreadSubmissions: %v", err)
+	}
+
+	if allCount != 3 {
+		t.Errorf("allCount = %d, want 3", allCount)
+	}
+}

@@ -14,6 +14,8 @@ type Config struct {
 	ServerPort    int    `env:"OCMS_SERVER_PORT" envDefault:"8080"`
 	Env           string `env:"OCMS_ENV" envDefault:"development"`
 	LogLevel      string `env:"OCMS_LOG_LEVEL" envDefault:"info"`
+	ThemesDir     string `env:"OCMS_THEMES_DIR" envDefault:"./themes"`
+	ActiveTheme   string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`
 }
 
 // IsDevelopment returns true if the application is running in development mode.

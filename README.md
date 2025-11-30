@@ -4,11 +4,36 @@ A lightweight content management system built with Go, featuring a modern admin 
 
 ## Features
 
+### Content Management
 - **Page Management**: Create, edit, publish, and version pages with a rich content editor
+- **Media Library**: Upload and manage images, documents, and videos with automatic image processing
+  - Automatic thumbnail and variant generation
+  - Folder organization
+  - Featured image support for pages
+- **Menu Builder**: Create navigation menus with drag-and-drop ordering
+  - Hierarchical menu structures
+  - Link to pages or external URLs
+  - Multiple menu locations
+
+### Taxonomy
+- **Categories**: Organize content with hierarchical categories
+- **Tags**: Add flat taxonomy tags to pages
+
+### Forms
+- **Form Builder**: Create contact forms, surveys, and data collection forms
+  - Multiple field types (text, email, textarea, select, checkbox, radio)
+  - Form submissions management
+  - Read/unread status tracking
+  - Email notifications
+
+### Administration
 - **User Management**: Role-based access control (admin/editor)
 - **Authentication**: Secure session-based authentication with argon2id password hashing
 - **Event Logging**: Comprehensive audit trail for all actions
 - **Admin Dashboard**: Modern responsive UI with HTMX and Alpine.js
+  - Statistics overview
+  - Recent submissions widget
+  - Quick actions
 - **SQLite Database**: Zero-configuration embedded database with migrations
 
 ## Prerequisites
@@ -18,6 +43,24 @@ A lightweight content management system built with Go, featuring a modern admin 
 - [templ](https://templ.guide/) for type-safe HTML templates
 - [goose](https://github.com/pressly/goose) for database migrations
 - [Dart Sass](https://sass-lang.com/dart-sass) for SCSS compilation
+- [libvips](https://www.libvips.org/) for image processing (required for media library)
+
+### Installing libvips
+
+**macOS:**
+```bash
+brew install vips
+```
+
+**Ubuntu/Debian:**
+```bash
+sudo apt-get install libvips-dev
+```
+
+**Fedora:**
+```bash
+sudo dnf install vips-devel
+```
 
 ## Installation
 
@@ -109,24 +152,26 @@ ocms-go/
 │   ├── auth/           # Password hashing utilities
 │   ├── config/         # Configuration loading
 │   ├── handler/        # HTTP handlers
+│   ├── imaging/        # Image processing (thumbnails, variants)
 │   ├── middleware/     # HTTP middleware
 │   ├── model/          # Domain models
 │   ├── render/         # Template rendering
-│   ├── service/        # Business logic
+│   ├── service/        # Business logic (media, menus, forms)
 │   ├── session/        # Session management
 │   ├── store/          # Database layer (sqlc generated)
 │   │   ├── migrations/ # Goose SQL migrations
 │   │   └── queries/    # sqlc query definitions
-│   └── util/           # Utility functions
+│   └── util/           # Utility functions (slug generation)
 ├── web/
 │   ├── static/         # Static assets (CSS, JS)
 │   │   └── scss/       # SCSS source files
-│   └── templates/      # Templ templates
+│   └── templates/      # HTML templates
 │       ├── admin/      # Admin panel templates
 │       ├── auth/       # Login/logout templates
 │       ├── errors/     # Error pages (404, 403, 500)
 │       ├── layouts/    # Base layouts
 │       └── partials/   # Reusable components
+├── uploads/            # Media uploads directory
 ├── scripts/            # Build scripts
 ├── Makefile            # Development commands
 └── sqlc.yaml           # sqlc configuration

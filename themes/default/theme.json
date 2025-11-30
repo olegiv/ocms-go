@@ -1,0 +1,37 @@
+{
+    "name": "Default",
+    "version": "1.0.0",
+    "author": "oCMS",
+    "description": "Clean, minimal default theme for oCMS",
+    "screenshot": "screenshot.png",
+    "templates": {
+        "home": "pages/home.html",
+        "page": "pages/page.html",
+        "list": "pages/list.html",
+        "404": "pages/404.html",
+        "category": "pages/category.html",
+        "tag": "pages/tag.html",
+        "search": "pages/search.html"
+    },
+    "settings": [
+        {
+            "key": "primary_color",
+            "label": "Primary Color",
+            "type": "color",
+            "default": "#3b82f6"
+        },
+        {
+            "key": "show_sidebar",
+            "label": "Show Sidebar",
+            "type": "select",
+            "default": "yes",
+            "options": ["yes", "no"]
+        },
+        {
+            "key": "footer_text",
+            "label": "Footer Text",
+            "type": "text",
+            "default": "Powered by oCMS"
+        }
+    ]
+}
