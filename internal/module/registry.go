@@ -1,0 +1,291 @@
+package module
+
+import (
+	"database/sql"
+	"fmt"
+	"html/template"
+	"log/slog"
+	"sync"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+)
+
+// Registry manages module registration and lifecycle.
+type Registry struct {
+	modules map[string]Module
+	order   []string // initialization order
+	ctx     *ModuleContext
+	logger  *slog.Logger
+	mu      sync.RWMutex
+}
+
+// NewRegistry creates a new module registry.
+func NewRegistry(logger *slog.Logger) *Registry {
+	return &Registry{
+		modules: make(map[string]Module),
+		order:   make([]string, 0),
+		logger:  logger,
+	}
+}
+
+// Register adds a module to the registry.
+// Modules are registered in the order they are added.
+func (r *Registry) Register(m Module) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	name := m.Name()
+	if _, exists := r.modules[name]; exists {
+		return fmt.Errorf("module %q already registered", name)
+	}
+
+	r.modules[name] = m
+	r.order = append(r.order, name)
+	r.logger.Info("module registered", "name", name, "version", m.Version())
+
+	return nil
+}
+
+// Get returns a module by name.
+func (r *Registry) Get(name string) (Module, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	m, ok := r.modules[name]
+	return m, ok
+}
+
+// List returns all registered modules in registration order.
+func (r *Registry) List() []Module {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	modules := make([]Module, 0, len(r.order))
+	for _, name := range r.order {
+		if m, ok := r.modules[name]; ok {
+			modules = append(modules, m)
+		}
+	}
+	return modules
+}
+
+// InitAll initializes all registered modules.
+// Modules are initialized in registration order.
+// Dependencies are checked before initialization.
+func (r *Registry) InitAll(ctx *ModuleContext) error {
+	r.mu.Lock()
+	r.ctx = ctx
+	r.mu.Unlock()
+
+	// First, verify all dependencies are met
+	if err := r.checkDependencies(); err != nil {
+		return err
+	}
+
+	// Then, run migrations for all modules
+	if err := r.runAllMigrations(ctx.DB); err != nil {
+		return err
+	}
+
+	// Finally, initialize modules in order
+	for _, name := range r.order {
+		m := r.modules[name]
+		r.logger.Info("initializing module", "name", name)
+
+		if err := m.Init(ctx); err != nil {
+			return fmt.Errorf("initializing module %q: %w", name, err)
+		}
+
+		r.logger.Info("module initialized", "name", name)
+	}
+
+	return nil
+}
+
+// checkDependencies verifies that all module dependencies are registered.
+func (r *Registry) checkDependencies() error {
+	for _, name := range r.order {
+		m := r.modules[name]
+		for _, dep := range m.Dependencies() {
+			if _, ok := r.modules[dep]; !ok {
+				return fmt.Errorf("module %q depends on %q which is not registered", name, dep)
+			}
+		}
+	}
+	return nil
+}
+
+// runAllMigrations runs migrations for all modules.
+func (r *Registry) runAllMigrations(db *sql.DB) error {
+	// First, ensure the module_migrations table exists
+	if err := r.ensureMigrationsTable(db); err != nil {
+		return fmt.Errorf("ensuring migrations table: %w", err)
+	}
+
+	// Run migrations for each module
+	for _, name := range r.order {
+		m := r.modules[name]
+		migrations := m.Migrations()
+		if len(migrations) == 0 {
+			continue
+		}
+
+		r.logger.Info("running module migrations", "module", name, "count", len(migrations))
+
+		for _, mig := range migrations {
+			applied, err := r.isMigrationApplied(db, name, mig.Version)
+			if err != nil {
+				return fmt.Errorf("checking migration status for %s v%d: %w", name, mig.Version, err)
+			}
+
+			if applied {
+				continue
+			}
+
+			r.logger.Info("applying migration", "module", name, "version", mig.Version, "description", mig.Description)
+
+			if err := mig.Up(db); err != nil {
+				return fmt.Errorf("running migration %s v%d: %w", name, mig.Version, err)
+			}
+
+			if err := r.recordMigration(db, name, mig.Version); err != nil {
+				return fmt.Errorf("recording migration %s v%d: %w", name, mig.Version, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// ensureMigrationsTable creates the module_migrations table if it doesn't exist.
+func (r *Registry) ensureMigrationsTable(db *sql.DB) error {
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS module_migrations (
+			module TEXT NOT NULL,
+			version INTEGER NOT NULL,
+			applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (module, version)
+		)
+	`)
+	return err
+}
+
+// isMigrationApplied checks if a migration has already been applied.
+func (r *Registry) isMigrationApplied(db *sql.DB, module string, version int64) (bool, error) {
+	var count int
+	err := db.QueryRow(
+		"SELECT COUNT(*) FROM module_migrations WHERE module = ? AND version = ?",
+		module, version,
+	).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// recordMigration records that a migration has been applied.
+func (r *Registry) recordMigration(db *sql.DB, module string, version int64) error {
+	_, err := db.Exec(
+		"INSERT INTO module_migrations (module, version, applied_at) VALUES (?, ?, ?)",
+		module, version, time.Now(),
+	)
+	return err
+}
+
+// ShutdownAll shuts down all modules in reverse order.
+func (r *Registry) ShutdownAll() error {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var errs []error
+
+	// Shutdown in reverse order
+	for i := len(r.order) - 1; i >= 0; i-- {
+		name := r.order[i]
+		m := r.modules[name]
+
+		r.logger.Info("shutting down module", "name", name)
+
+		if err := m.Shutdown(); err != nil {
+			errs = append(errs, fmt.Errorf("shutting down module %q: %w", name, err))
+			r.logger.Error("module shutdown error", "name", name, "error", err)
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("%d module(s) failed to shutdown: %v", len(errs), errs)
+	}
+
+	return nil
+}
+
+// RouteAll registers all module public routes.
+func (r *Registry) RouteAll(router chi.Router) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, name := range r.order {
+		m := r.modules[name]
+		m.RegisterRoutes(router)
+	}
+}
+
+// AdminRouteAll registers all module admin routes.
+func (r *Registry) AdminRouteAll(router chi.Router) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, name := range r.order {
+		m := r.modules[name]
+		m.RegisterAdminRoutes(router)
+	}
+}
+
+// AllTemplateFuncs returns combined template functions from all modules.
+func (r *Registry) AllTemplateFuncs() template.FuncMap {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	funcs := make(template.FuncMap)
+	for _, name := range r.order {
+		m := r.modules[name]
+		for k, v := range m.TemplateFuncs() {
+			funcs[k] = v
+		}
+	}
+	return funcs
+}
+
+// ModuleInfo contains information about a registered module.
+type ModuleInfo struct {
+	Name        string
+	Version     string
+	Description string
+	Initialized bool
+}
+
+// ListInfo returns information about all registered modules.
+func (r *Registry) ListInfo() []ModuleInfo {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	infos := make([]ModuleInfo, 0, len(r.order))
+	for _, name := range r.order {
+		m := r.modules[name]
+		infos = append(infos, ModuleInfo{
+			Name:        m.Name(),
+			Version:     m.Version(),
+			Description: m.Description(),
+			Initialized: r.ctx != nil,
+		})
+	}
+	return infos
+}
+
+// Count returns the number of registered modules.
+func (r *Registry) Count() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.modules)
+}

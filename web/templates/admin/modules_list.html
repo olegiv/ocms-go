@@ -1,0 +1,230 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Modules</h1>
+        <p class="page-description">View registered modules and hooks</p>
+    </div>
+</div>
+
+<div class="modules-section">
+    <h2>Registered Modules</h2>
+    {{if .Data.Modules}}
+    <div class="modules-grid">
+        {{range .Data.Modules}}
+        <div class="module-card">
+            <div class="module-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                </svg>
+            </div>
+            <div class="module-info">
+                <h3 class="module-name">{{.Name}}</h3>
+                <p class="module-version">v{{.Version}}</p>
+                <p class="module-description">{{.Description}}</p>
+            </div>
+            <div class="module-status">
+                {{if .Initialized}}
+                <span class="badge badge-success">Active</span>
+                {{else}}
+                <span class="badge badge-warning">Pending</span>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+    </div>
+    {{else}}
+    <div class="card">
+        <div class="card-body">
+            <div class="empty-state">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                </svg>
+                <p>No modules registered</p>
+                <span class="empty-hint">Modules can be registered in main.go to extend oCMS functionality.</span>
+            </div>
+        </div>
+    </div>
+    {{end}}
+</div>
+
+<div class="hooks-section">
+    <h2>Registered Hooks</h2>
+    {{if .Data.Hooks}}
+    <div class="card">
+        <div class="card-body">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Hook Name</th>
+                        <th>Handlers</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Data.Hooks}}
+                    <tr>
+                        <td><code>{{.Name}}</code></td>
+                        <td>
+                            {{if .Handlers}}
+                            <ul class="hook-handlers">
+                                {{range .Handlers}}
+                                <li>
+                                    <span class="handler-name">{{.Name}}</span>
+                                    <span class="handler-module">({{.Module}})</span>
+                                    <span class="handler-priority">priority: {{.Priority}}</span>
+                                </li>
+                                {{end}}
+                            </ul>
+                            {{else}}
+                            <span class="text-muted">No handlers</span>
+                            {{end}}
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {{else}}
+    <div class="card">
+        <div class="card-body">
+            <div class="empty-state">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                </svg>
+                <p>No hooks registered</p>
+                <span class="empty-hint">Modules can register hook handlers to extend functionality.</span>
+            </div>
+        </div>
+    </div>
+    {{end}}
+</div>
+
+<style>
+.modules-section,
+.hooks-section {
+    margin-bottom: 2rem;
+}
+
+.modules-section h2,
+.hooks-section h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+}
+
+.modules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+}
+
+.module-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    transition: box-shadow 0.2s;
+}
+
+.module-card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.module-icon {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    color: var(--primary-color);
+}
+
+.module-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.module-name {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem 0;
+}
+
+.module-version {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin: 0 0 0.5rem 0;
+}
+
+.module-description {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin: 0;
+    line-height: 1.4;
+}
+
+.module-status {
+    flex-shrink: 0;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+}
+
+.badge-success {
+    background: var(--success-bg);
+    color: var(--success-color);
+}
+
+.badge-warning {
+    background: var(--warning-bg);
+    color: var(--warning-color);
+}
+
+.hook-handlers {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.hook-handlers li {
+    padding: 0.25rem 0;
+    font-size: 0.875rem;
+}
+
+.handler-name {
+    font-weight: 500;
+}
+
+.handler-module {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.handler-priority {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin-left: 0.5rem;
+}
+
+code {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    padding: 0.125rem 0.375rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+}
+</style>
+{{end}}

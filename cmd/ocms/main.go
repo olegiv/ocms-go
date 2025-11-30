@@ -19,8 +19,10 @@ import (
 	"ocms-go/internal/config"
 	"ocms-go/internal/handler"
 	"ocms-go/internal/middleware"
+	"ocms-go/internal/module"
 	"ocms-go/internal/render"
 	"ocms-go/internal/scheduler"
+	"ocms-go/internal/service"
 	"ocms-go/internal/session"
 	"ocms-go/internal/store"
 	"ocms-go/internal/theme"
@@ -138,6 +140,40 @@ func run() error {
 	}
 	defer sched.Stop()
 
+	// Initialize hook registry
+	hookRegistry := module.NewHookRegistry(logger)
+
+	// Initialize event service for modules
+	eventService := service.NewEventService(db)
+
+	// Initialize module registry
+	moduleRegistry := module.NewRegistry(logger)
+
+	// Create module context
+	moduleCtx := &module.ModuleContext{
+		DB:     db,
+		Store:  store.New(db),
+		Logger: logger,
+		Config: cfg,
+		Render: renderer,
+		Events: eventService,
+		Hooks:  hookRegistry,
+	}
+
+	// Register modules here (example: moduleRegistry.Register(example.New()))
+	// Modules should be registered before InitAll is called
+
+	// Initialize all registered modules
+	if err := moduleRegistry.InitAll(moduleCtx); err != nil {
+		return fmt.Errorf("initializing modules: %w", err)
+	}
+	defer func() {
+		if err := moduleRegistry.ShutdownAll(); err != nil {
+			slog.Error("error shutting down modules", "error", err)
+		}
+	}()
+	slog.Info("module system initialized", "modules", moduleRegistry.Count())
+
 	// Create router
 	r := chi.NewRouter()
 
@@ -161,6 +197,7 @@ func run() error {
 	formsHandler := handler.NewFormsHandler(db, renderer, sessionManager)
 	themesHandler := handler.NewThemesHandler(db, renderer, sessionManager, themeManager)
 	widgetsHandler := handler.NewWidgetsHandler(db, renderer, sessionManager, themeManager)
+	modulesHandler := handler.NewModulesHandler(db, renderer, sessionManager, moduleRegistry, hookRegistry)
 	frontendHandler := handler.NewFrontendHandler(db, themeManager, logger)
 
 	// Public frontend routes
@@ -321,6 +358,12 @@ func run() error {
 		r.Delete("/widgets/{id}", widgetsHandler.Delete)
 		r.Post("/widgets/{id}/move", widgetsHandler.MoveWidget)
 		r.Post("/widgets/reorder", widgetsHandler.Reorder)
+
+		// Module management routes
+		r.Get("/modules", modulesHandler.List)
+
+		// Register module admin routes
+		moduleRegistry.AdminRouteAll(r)
 	})
 
 	// Public form routes (no authentication required, but session needed for CSRF)
@@ -356,6 +399,9 @@ func run() error {
 		filePath := filepath.Join(thm.StaticPath, path[len(prefix):])
 		http.ServeFile(w, r, filePath)
 	})
+
+	// Register module public routes
+	moduleRegistry.RouteAll(r)
 
 	// Page by slug route (catches all unmatched single-level paths)
 	// This should be registered last to catch pages by slug
