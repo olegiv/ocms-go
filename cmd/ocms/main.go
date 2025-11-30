@@ -26,6 +26,7 @@ import (
 	"ocms-go/internal/session"
 	"ocms-go/internal/store"
 	"ocms-go/internal/theme"
+	"ocms-go/modules/example"
 	"ocms-go/web"
 )
 
@@ -160,8 +161,11 @@ func run() error {
 		Hooks:  hookRegistry,
 	}
 
-	// Register modules here (example: moduleRegistry.Register(example.New()))
+	// Register modules
 	// Modules should be registered before InitAll is called
+	if err := moduleRegistry.Register(example.New()); err != nil {
+		return fmt.Errorf("registering example module: %w", err)
+	}
 
 	// Initialize all registered modules
 	if err := moduleRegistry.InitAll(moduleCtx); err != nil {
