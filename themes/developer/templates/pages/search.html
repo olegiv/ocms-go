@@ -44,7 +44,7 @@
                             <a href="{{.URL}}">{{.Title}}</a>
                         </h2>
                         {{if .Highlight}}
-                        <p class="dev-search-highlight">{{.Highlight}}</p>
+                        <p class="dev-search-highlight">{{safeHTML .Highlight}}</p>
                         {{else if .Excerpt}}
                         <p class="dev-post-excerpt">{{.Excerpt}}</p>
                         {{end}}

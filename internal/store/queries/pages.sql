@@ -186,3 +186,25 @@ SELECT COUNT(*) FROM pages WHERE scheduled_at IS NOT NULL AND status = 'draft';
 
 -- name: ListScheduledPages :many
 SELECT * FROM pages WHERE scheduled_at IS NOT NULL AND status = 'draft' ORDER BY scheduled_at ASC LIMIT ? OFFSET ?;
+
+-- Admin search queries (using LIKE for searching all pages regardless of status)
+
+-- name: SearchPages :many
+SELECT * FROM pages
+WHERE title LIKE ? OR body LIKE ? OR slug LIKE ?
+ORDER BY updated_at DESC
+LIMIT ? OFFSET ?;
+
+-- name: CountSearchPages :one
+SELECT COUNT(*) FROM pages
+WHERE title LIKE ? OR body LIKE ? OR slug LIKE ?;
+
+-- name: SearchPagesByStatus :many
+SELECT * FROM pages
+WHERE status = ? AND (title LIKE ? OR body LIKE ? OR slug LIKE ?)
+ORDER BY updated_at DESC
+LIMIT ? OFFSET ?;
+
+-- name: CountSearchPagesByStatus :one
+SELECT COUNT(*) FROM pages
+WHERE status = ? AND (title LIKE ? OR body LIKE ? OR slug LIKE ?);

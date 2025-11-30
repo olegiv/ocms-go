@@ -61,6 +61,7 @@ type PagesListData struct {
 	NextPage           int
 	StatusFilter       string
 	CategoryFilter     int64
+	SearchFilter       string             // Search query filter
 	AllCategories      []PageCategoryNode // For category filter dropdown
 	Statuses           []string
 }
@@ -94,13 +95,34 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Get search filter from query string
+	searchFilter := strings.TrimSpace(r.URL.Query().Get("search"))
+
 	var totalCount int64
 	var pages []store.Page
 	var err error
 
-	// Get total count based on filter
-	// Note: Category filter takes precedence over status filter
-	if categoryFilter > 0 {
+	// Create search pattern for LIKE queries
+	searchPattern := "%" + searchFilter + "%"
+
+	// Get total count based on filters
+	// Priority: search > category > status > all
+	if searchFilter != "" {
+		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
+			totalCount, err = h.queries.CountSearchPagesByStatus(r.Context(), store.CountSearchPagesByStatusParams{
+				Status: statusFilter,
+				Title:  searchPattern,
+				Body:   searchPattern,
+				Slug:   searchPattern,
+			})
+		} else {
+			totalCount, err = h.queries.CountSearchPages(r.Context(), store.CountSearchPagesParams{
+				Title: searchPattern,
+				Body:  searchPattern,
+				Slug:  searchPattern,
+			})
+		}
+	} else if categoryFilter > 0 {
 		totalCount, err = h.queries.CountPagesByCategory(r.Context(), categoryFilter)
 	} else if statusFilter == "scheduled" {
 		totalCount, err = h.queries.CountScheduledPages(r.Context())
@@ -127,8 +149,27 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	offset := int64((page - 1) * PagesPerPage)
 
 	// Fetch pages for current page
-	// Note: Category filter takes precedence over status filter
-	if categoryFilter > 0 {
+	// Priority: search > category > status > all
+	if searchFilter != "" {
+		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
+			pages, err = h.queries.SearchPagesByStatus(r.Context(), store.SearchPagesByStatusParams{
+				Status: statusFilter,
+				Title:  searchPattern,
+				Body:   searchPattern,
+				Slug:   searchPattern,
+				Limit:  PagesPerPage,
+				Offset: offset,
+			})
+		} else {
+			pages, err = h.queries.SearchPages(r.Context(), store.SearchPagesParams{
+				Title:  searchPattern,
+				Body:   searchPattern,
+				Slug:   searchPattern,
+				Limit:  PagesPerPage,
+				Offset: offset,
+			})
+		}
+	} else if categoryFilter > 0 {
 		pages, err = h.queries.ListPagesByCategory(r.Context(), store.ListPagesByCategoryParams{
 			CategoryID: categoryFilter,
 			Limit:      PagesPerPage,
@@ -219,6 +260,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		NextPage:           page + 1,
 		StatusFilter:       statusFilter,
 		CategoryFilter:     categoryFilter,
+		SearchFilter:       searchFilter,
 		AllCategories:      categoryTree,
 		Statuses:           ValidPageStatuses,
 	}

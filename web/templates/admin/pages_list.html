@@ -17,15 +17,15 @@
     <div class="filter-group">
         <label class="filter-label">Status:</label>
         <div class="filter-buttons">
-            <a href="/admin/pages{{if gt .Data.CategoryFilter 0}}?category={{.Data.CategoryFilter}}{{end}}" class="btn btn-sm {{if eq .Data.StatusFilter ""}}btn-primary{{else}}btn-outline{{end}}">
+            <a href="{{pagesListURL "" .Data.CategoryFilter .Data.SearchFilter 0}}" class="btn btn-sm {{if eq .Data.StatusFilter ""}}btn-primary{{else}}btn-outline{{end}}">
                 All
             </a>
             {{range .Data.Statuses}}
-            <a href="/admin/pages?status={{.}}{{if gt $.Data.CategoryFilter 0}}&category={{$.Data.CategoryFilter}}{{end}}" class="btn btn-sm {{if eq $.Data.StatusFilter .}}btn-primary{{else}}btn-outline{{end}}">
+            <a href="{{pagesListURL . $.Data.CategoryFilter $.Data.SearchFilter 0}}" class="btn btn-sm {{if eq $.Data.StatusFilter .}}btn-primary{{else}}btn-outline{{end}}">
                 {{if eq . "draft"}}Draft{{else if eq . "published"}}Published{{else}}{{.}}{{end}}
             </a>
             {{end}}
-            <a href="/admin/pages?status=scheduled{{if gt .Data.CategoryFilter 0}}&category={{.Data.CategoryFilter}}{{end}}" class="btn btn-sm {{if eq .Data.StatusFilter "scheduled"}}btn-primary{{else}}btn-outline{{end}}">
+            <a href="{{pagesListURL "scheduled" .Data.CategoryFilter .Data.SearchFilter 0}}" class="btn btn-sm {{if eq .Data.StatusFilter "scheduled"}}btn-primary{{else}}btn-outline{{end}}">
                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 Scheduled
             </a>
@@ -35,16 +35,40 @@
     <div class="filter-group">
         <label class="filter-label">Category:</label>
         <select class="form-select form-select-sm" onchange="window.location.href=this.value">
-            <option value="/admin/pages{{if .Data.StatusFilter}}?status={{.Data.StatusFilter}}{{end}}">All Categories</option>
+            <option value="{{pagesListURL .Data.StatusFilter 0 .Data.SearchFilter 0}}">All Categories</option>
             {{range .Data.AllCategories}}
-            <option value="/admin/pages?category={{.Category.ID}}{{if $.Data.StatusFilter}}&status={{$.Data.StatusFilter}}{{end}}" {{if eq $.Data.CategoryFilter .Category.ID}}selected{{end}}>
+            <option value="{{pagesListURL $.Data.StatusFilter .Category.ID $.Data.SearchFilter 0}}" {{if eq $.Data.CategoryFilter .Category.ID}}selected{{end}}>
                 {{if gt .Depth 0}}{{repeat "— " .Depth}}{{end}}{{.Category.Name}}
             </option>
             {{end}}
         </select>
     </div>
     {{end}}
+    <div class="filter-group filter-group-search">
+        <form action="/admin/pages" method="get" class="search-form">
+            {{if .Data.StatusFilter}}<input type="hidden" name="status" value="{{.Data.StatusFilter}}">{{end}}
+            {{if gt .Data.CategoryFilter 0}}<input type="hidden" name="category" value="{{.Data.CategoryFilter}}">{{end}}
+            <div class="search-input-wrapper">
+                <input type="text" name="search" value="{{.Data.SearchFilter}}" placeholder="Search pages..." class="form-control form-control-sm" aria-label="Search pages">
+                <button type="submit" class="btn btn-sm btn-outline search-btn" title="Search">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                </button>
+                {{if .Data.SearchFilter}}
+                <a href="{{pagesListURL .Data.StatusFilter .Data.CategoryFilter "" 0}}" class="btn btn-sm btn-outline clear-search-btn" title="Clear search">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </a>
+                {{end}}
+            </div>
+        </form>
+    </div>
 </div>
+
+{{if .Data.SearchFilter}}
+<div class="search-results-info">
+    <p>Found <strong>{{.Data.TotalCount}}</strong> {{if eq .Data.TotalCount 1}}page{{else}}pages{{end}} matching "<strong>{{.Data.SearchFilter}}</strong>"
+    {{if .Data.StatusFilter}} in <strong>{{.Data.StatusFilter}}</strong> pages{{end}}</p>
+</div>
+{{end}}
 
 {{if .Data.Pages}}
 <div class="card" id="pages-table">
@@ -192,7 +216,7 @@
             </div>
             <div class="pagination-controls">
                 {{if .Data.HasPrev}}
-                <a href="/admin/pages?page={{.Data.PrevPage}}{{if .Data.StatusFilter}}&status={{.Data.StatusFilter}}{{end}}{{if gt .Data.CategoryFilter 0}}&category={{.Data.CategoryFilter}}{{end}}" class="btn btn-sm btn-outline">
+                <a href="{{pagesListURL .Data.StatusFilter .Data.CategoryFilter .Data.SearchFilter .Data.PrevPage}}" class="btn btn-sm btn-outline">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
                     Previous
                 </a>
@@ -204,7 +228,7 @@
                 {{end}}
 
                 {{if .Data.HasNext}}
-                <a href="/admin/pages?page={{.Data.NextPage}}{{if .Data.StatusFilter}}&status={{.Data.StatusFilter}}{{end}}{{if gt .Data.CategoryFilter 0}}&category={{.Data.CategoryFilter}}{{end}}" class="btn btn-sm btn-outline">
+                <a href="{{pagesListURL .Data.StatusFilter .Data.CategoryFilter .Data.SearchFilter .Data.NextPage}}" class="btn btn-sm btn-outline">
                     Next
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
                 </a>

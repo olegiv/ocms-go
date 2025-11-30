@@ -658,13 +658,16 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 	// Convert search results to PageViews
 	pageViews := make([]PageView, 0, len(searchResults))
 	for _, sr := range searchResults {
+		// Clean highlight by stripping HTML but preserving <mark> tags
+		cleanHighlight := h.stripHTMLPreserveMark(sr.Highlight)
+
 		pv := PageView{
 			ID:        sr.ID,
 			Title:     sr.Title,
 			Slug:      sr.Slug,
 			Body:      template.HTML(sr.Body),
 			Excerpt:   sr.Excerpt,
-			Highlight: sr.Highlight,
+			Highlight: cleanHighlight,
 			URL:       "/" + sr.Slug,
 			Status:    sr.Status,
 			Type:      "page",
@@ -956,6 +959,70 @@ func (h *FrontendHandler) generateExcerpt(html string, maxLen int) string {
 	}
 
 	return truncated + "..."
+}
+
+// stripHTMLPreserveMark strips HTML tags from a string but preserves <mark> and </mark> tags.
+// Block-level elements (h1-h6, p, div, br, li) produce newlines when stripped.
+// This is used for search result highlights where we want plain text with highlighted terms.
+func (h *FrontendHandler) stripHTMLPreserveMark(s string) string {
+	// Block-level tags that should produce newlines
+	blockTags := []string{"</h1>", "</h2>", "</h3>", "</h4>", "</h5>", "</h6>", "</p>", "</div>", "</li>", "</tr>", "<br>", "<br/>", "<br />"}
+
+	var result strings.Builder
+	i := 0
+	for i < len(s) {
+		if s[i] == '<' {
+			// Check if it's a <mark> or </mark> tag
+			if i+6 <= len(s) && strings.ToLower(s[i:i+6]) == "<mark>" {
+				result.WriteString("<mark>")
+				i += 6
+				continue
+			}
+			if i+7 <= len(s) && strings.ToLower(s[i:i+7]) == "</mark>" {
+				result.WriteString("</mark>")
+				i += 7
+				continue
+			}
+
+			// Check if it's a block-level closing tag that should produce a newline
+			foundBlock := false
+			for _, blockTag := range blockTags {
+				if i+len(blockTag) <= len(s) && strings.ToLower(s[i:i+len(blockTag)]) == blockTag {
+					result.WriteString("\n")
+					i += len(blockTag)
+					foundBlock = true
+					break
+				}
+			}
+			if foundBlock {
+				continue
+			}
+
+			// Skip other HTML tags
+			for i < len(s) && s[i] != '>' {
+				i++
+			}
+			if i < len(s) {
+				i++ // skip the '>'
+			}
+		} else {
+			result.WriteByte(s[i])
+			i++
+		}
+	}
+
+	// Process the text: trim each line and remove empty lines
+	text := result.String()
+	lines := strings.Split(text, "\n")
+	var cleanLines []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" {
+			cleanLines = append(cleanLines, trimmed)
+		}
+	}
+	// Join with <br> for HTML rendering
+	return strings.Join(cleanLines, "<br>")
 }
 
 // getSiteData returns site-wide data for templates.

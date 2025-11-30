@@ -10,6 +10,7 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -299,6 +300,27 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		},
 		"contains": func(s, substr string) bool {
 			return strings.Contains(s, substr)
+		},
+		// pagesListURL builds a URL for admin pages list with proper encoding.
+		// Parameters: status (string), category (int64), search (string), page (int)
+		"pagesListURL": func(status string, category int64, search string, page int) string {
+			params := url.Values{}
+			if status != "" {
+				params.Set("status", status)
+			}
+			if category > 0 {
+				params.Set("category", fmt.Sprintf("%d", category))
+			}
+			if search != "" {
+				params.Set("search", search)
+			}
+			if page > 1 {
+				params.Set("page", fmt.Sprintf("%d", page))
+			}
+			if len(params) == 0 {
+				return "/admin/pages"
+			}
+			return "/admin/pages?" + params.Encode()
 		},
 	}
 }

@@ -175,6 +175,14 @@ type PageVersion struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type PagesFt struct {
+	Title           string `json:"title"`
+	Body            string `json:"body"`
+	MetaTitle       string `json:"meta_title"`
+	MetaDescription string `json:"meta_description"`
+	MetaKeywords    string `json:"meta_keywords"`
+}
+
 type Session struct {
 	Token  string    `json:"token"`
 	Data   []byte    `json:"data"`

@@ -120,6 +120,48 @@ func (q *Queries) CountScheduledPages(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countSearchPages = `-- name: CountSearchPages :one
+SELECT COUNT(*) FROM pages
+WHERE title LIKE ? OR body LIKE ? OR slug LIKE ?
+`
+
+type CountSearchPagesParams struct {
+	Title string `json:"title"`
+	Body  string `json:"body"`
+	Slug  string `json:"slug"`
+}
+
+func (q *Queries) CountSearchPages(ctx context.Context, arg CountSearchPagesParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSearchPages, arg.Title, arg.Body, arg.Slug)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSearchPagesByStatus = `-- name: CountSearchPagesByStatus :one
+SELECT COUNT(*) FROM pages
+WHERE status = ? AND (title LIKE ? OR body LIKE ? OR slug LIKE ?)
+`
+
+type CountSearchPagesByStatusParams struct {
+	Status string `json:"status"`
+	Title  string `json:"title"`
+	Body   string `json:"body"`
+	Slug   string `json:"slug"`
+}
+
+func (q *Queries) CountSearchPagesByStatus(ctx context.Context, arg CountSearchPagesByStatusParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSearchPagesByStatus,
+		arg.Status,
+		arg.Title,
+		arg.Body,
+		arg.Slug,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createPage = `-- name: CreatePage :one
 INSERT INTO pages (title, slug, body, status, author_id, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1079,6 +1121,136 @@ func (q *Queries) PublishScheduledPage(ctx context.Context, arg PublishScheduled
 		&i.ScheduledAt,
 	)
 	return i, err
+}
+
+const searchPages = `-- name: SearchPages :many
+
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at FROM pages
+WHERE title LIKE ? OR body LIKE ? OR slug LIKE ?
+ORDER BY updated_at DESC
+LIMIT ? OFFSET ?
+`
+
+type SearchPagesParams struct {
+	Title  string `json:"title"`
+	Body   string `json:"body"`
+	Slug   string `json:"slug"`
+	Limit  int64  `json:"limit"`
+	Offset int64  `json:"offset"`
+}
+
+// Admin search queries (using LIKE for searching all pages regardless of status)
+func (q *Queries) SearchPages(ctx context.Context, arg SearchPagesParams) ([]Page, error) {
+	rows, err := q.db.QueryContext(ctx, searchPages,
+		arg.Title,
+		arg.Body,
+		arg.Slug,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Page{}
+	for rows.Next() {
+		var i Page
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Slug,
+			&i.Body,
+			&i.Status,
+			&i.AuthorID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PublishedAt,
+			&i.FeaturedImageID,
+			&i.MetaTitle,
+			&i.MetaDescription,
+			&i.MetaKeywords,
+			&i.OgImageID,
+			&i.NoIndex,
+			&i.NoFollow,
+			&i.CanonicalUrl,
+			&i.ScheduledAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchPagesByStatus = `-- name: SearchPagesByStatus :many
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at FROM pages
+WHERE status = ? AND (title LIKE ? OR body LIKE ? OR slug LIKE ?)
+ORDER BY updated_at DESC
+LIMIT ? OFFSET ?
+`
+
+type SearchPagesByStatusParams struct {
+	Status string `json:"status"`
+	Title  string `json:"title"`
+	Body   string `json:"body"`
+	Slug   string `json:"slug"`
+	Limit  int64  `json:"limit"`
+	Offset int64  `json:"offset"`
+}
+
+func (q *Queries) SearchPagesByStatus(ctx context.Context, arg SearchPagesByStatusParams) ([]Page, error) {
+	rows, err := q.db.QueryContext(ctx, searchPagesByStatus,
+		arg.Status,
+		arg.Title,
+		arg.Body,
+		arg.Slug,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Page{}
+	for rows.Next() {
+		var i Page
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Slug,
+			&i.Body,
+			&i.Status,
+			&i.AuthorID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PublishedAt,
+			&i.FeaturedImageID,
+			&i.MetaTitle,
+			&i.MetaDescription,
+			&i.MetaKeywords,
+			&i.OgImageID,
+			&i.NoIndex,
+			&i.NoFollow,
+			&i.CanonicalUrl,
+			&i.ScheduledAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const slugExists = `-- name: SlugExists :one
