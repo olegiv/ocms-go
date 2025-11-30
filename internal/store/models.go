@@ -92,6 +92,19 @@ type FormSubmission struct {
 	CreatedAt time.Time      `json:"created_at"`
 }
 
+type Language struct {
+	ID         int64     `json:"id"`
+	Code       string    `json:"code"`
+	Name       string    `json:"name"`
+	NativeName string    `json:"native_name"`
+	IsDefault  bool      `json:"is_default"`
+	IsActive   bool      `json:"is_active"`
+	Direction  string    `json:"direction"`
+	Position   int64     `json:"position"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
 type MediaFolder struct {
 	ID        int64         `json:"id"`
 	Name      string        `json:"name"`
