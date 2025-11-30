@@ -322,11 +322,15 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("getting static fs: %w", err)
 	}
-	r.Handle("/static/dist/*", http.StripPrefix("/static/dist/", http.FileServer(http.FS(staticFS))))
+	// Static assets: cache for 1 year (31536000 seconds)
+	staticHandler := middleware.StaticCache(31536000)(http.StripPrefix("/static/dist/", http.FileServer(http.FS(staticFS))))
+	r.Handle("/static/dist/*", staticHandler)
 
 	// Serve uploaded media files from ./uploads directory
+	// Uploads: cache for 1 week (604800 seconds)
 	uploadsDir := http.Dir("./uploads")
-	r.Handle("/uploads/*", http.StripPrefix("/uploads/", http.FileServer(uploadsDir)))
+	uploadsHandler := middleware.StaticCache(604800)(http.StripPrefix("/uploads/", http.FileServer(uploadsDir)))
+	r.Handle("/uploads/*", uploadsHandler)
 
 	// Serve theme static files
 	r.Get("/themes/{themeName}/static/*", func(w http.ResponseWriter, r *http.Request) {

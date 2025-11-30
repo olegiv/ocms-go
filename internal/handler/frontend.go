@@ -979,8 +979,22 @@ func (h *FrontendHandler) render(w http.ResponseWriter, r *http.Request, templat
 func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request) {
 	base := h.getBaseTemplateData(r, "Page Not Found", "")
 	base.BodyClass = "error-404"
+
+	// Get suggested pages (5 most recent published)
+	var suggestedPages []PageView
+	pages, err := h.queries.ListPublishedPages(r.Context(), store.ListPublishedPagesParams{
+		Limit:  5,
+		Offset: 0,
+	})
+	if err == nil {
+		for _, p := range pages {
+			suggestedPages = append(suggestedPages, h.pageToView(r.Context(), p))
+		}
+	}
+
 	data := NotFoundData{
 		BaseTemplateData: base,
+		SuggestedPages:   suggestedPages,
 	}
 	w.WriteHeader(http.StatusNotFound)
 	h.render(w, r, "404", data)
@@ -988,14 +1002,27 @@ func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request)
 
 // renderError renders an error page.
 func (h *FrontendHandler) renderError(w http.ResponseWriter, r *http.Request, statusCode int, message string) {
+	// Try to render using theme's 404 template for 404 errors
+	if statusCode == http.StatusNotFound {
+		h.renderNotFound(w, r)
+		return
+	}
+
+	// For other errors, use simple HTML (safer if template system is broken)
 	w.WriteHeader(statusCode)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<!DOCTYPE html>
-<html>
-<head><title>Error</title></head>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Error %d</title>
+<style>body{font-family:system-ui,sans-serif;max-width:600px;margin:100px auto;padding:20px;text-align:center}h1{color:#dc3545}</style>
+</head>
 <body>
 <h1>%d - %s</h1>
 <p>An error occurred while processing your request.</p>
+<p><a href="/">Return to homepage</a></p>
 </body>
-</html>`, statusCode, message)
+</html>`, statusCode, statusCode, message)
 }
