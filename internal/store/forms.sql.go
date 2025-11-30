@@ -399,6 +399,61 @@ func (q *Queries) GetFormSubmissions(ctx context.Context, arg GetFormSubmissions
 	return items, nil
 }
 
+const getRecentSubmissionsWithForm = `-- name: GetRecentSubmissionsWithForm :many
+SELECT
+    fs.id, fs.form_id, fs.data, fs.ip_address, fs.user_agent, fs.is_read, fs.created_at,
+    f.name as form_name, f.slug as form_slug
+FROM form_submissions fs
+JOIN forms f ON f.id = fs.form_id
+ORDER BY fs.created_at DESC
+LIMIT ?
+`
+
+type GetRecentSubmissionsWithFormRow struct {
+	ID        int64          `json:"id"`
+	FormID    int64          `json:"form_id"`
+	Data      string         `json:"data"`
+	IpAddress sql.NullString `json:"ip_address"`
+	UserAgent sql.NullString `json:"user_agent"`
+	IsRead    bool           `json:"is_read"`
+	CreatedAt time.Time      `json:"created_at"`
+	FormName  string         `json:"form_name"`
+	FormSlug  string         `json:"form_slug"`
+}
+
+func (q *Queries) GetRecentSubmissionsWithForm(ctx context.Context, limit int64) ([]GetRecentSubmissionsWithFormRow, error) {
+	rows, err := q.db.QueryContext(ctx, getRecentSubmissionsWithForm, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetRecentSubmissionsWithFormRow{}
+	for rows.Next() {
+		var i GetRecentSubmissionsWithFormRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FormID,
+			&i.Data,
+			&i.IpAddress,
+			&i.UserAgent,
+			&i.IsRead,
+			&i.CreatedAt,
+			&i.FormName,
+			&i.FormSlug,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listForms = `-- name: ListForms :many
 SELECT id, name, slug, title, description, success_message, email_to, is_active, created_at, updated_at FROM forms ORDER BY name ASC LIMIT ? OFFSET ?
 `

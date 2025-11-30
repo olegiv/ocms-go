@@ -70,3 +70,12 @@ UPDATE form_submissions SET is_read = 1 WHERE id = ?;
 
 -- name: DeleteFormSubmission :exec
 DELETE FROM form_submissions WHERE id = ?;
+
+-- name: GetRecentSubmissionsWithForm :many
+SELECT
+    fs.id, fs.form_id, fs.data, fs.ip_address, fs.user_agent, fs.is_read, fs.created_at,
+    f.name as form_name, f.slug as form_slug
+FROM form_submissions fs
+JOIN forms f ON f.id = fs.form_id
+ORDER BY fs.created_at DESC
+LIMIT ?;

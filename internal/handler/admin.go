@@ -16,10 +16,29 @@ import (
 
 // DashboardStats holds the statistics displayed on the dashboard.
 type DashboardStats struct {
-	TotalPages     int64
-	PublishedPages int64
-	DraftPages     int64
-	TotalUsers     int64
+	TotalPages        int64
+	PublishedPages    int64
+	DraftPages        int64
+	TotalUsers        int64
+	TotalMedia        int64
+	TotalForms        int64
+	UnreadSubmissions int64
+}
+
+// RecentSubmission represents a recent form submission for dashboard display.
+type RecentSubmission struct {
+	ID        int64
+	FormID    int64
+	FormName  string
+	FormSlug  string
+	IsRead    bool
+	CreatedAt string
+}
+
+// DashboardData holds all dashboard data including stats and recent items.
+type DashboardData struct {
+	Stats             DashboardStats
+	RecentSubmissions []RecentSubmission
 }
 
 // AdminHandler handles admin routes.
@@ -41,28 +60,85 @@ func NewAdminHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 // Dashboard renders the admin dashboard with stats and recent activity.
 func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	ctx := r.Context()
 
 	// Fetch stats
 	stats := DashboardStats{}
 
 	// Get user count
-	userCount, err := h.queries.CountUsers(r.Context())
-	if err != nil {
+	if userCount, err := h.queries.CountUsers(ctx); err != nil {
 		slog.Error("failed to count users", "error", err)
 	} else {
 		stats.TotalUsers = userCount
 	}
 
-	// Page stats will be 0 until pages are implemented in Iteration 11
-	// TODO: Add page stats once pages are implemented
-	stats.TotalPages = 0
-	stats.PublishedPages = 0
-	stats.DraftPages = 0
+	// Get page counts
+	if totalPages, err := h.queries.CountPages(ctx); err != nil {
+		slog.Error("failed to count pages", "error", err)
+	} else {
+		stats.TotalPages = totalPages
+	}
+
+	if publishedPages, err := h.queries.CountPagesByStatus(ctx, "published"); err != nil {
+		slog.Error("failed to count published pages", "error", err)
+	} else {
+		stats.PublishedPages = publishedPages
+	}
+
+	if draftPages, err := h.queries.CountPagesByStatus(ctx, "draft"); err != nil {
+		slog.Error("failed to count draft pages", "error", err)
+	} else {
+		stats.DraftPages = draftPages
+	}
+
+	// Get media count
+	if mediaCount, err := h.queries.CountMedia(ctx); err != nil {
+		slog.Error("failed to count media", "error", err)
+	} else {
+		stats.TotalMedia = mediaCount
+	}
+
+	// Get forms count
+	if formsCount, err := h.queries.CountForms(ctx); err != nil {
+		slog.Error("failed to count forms", "error", err)
+	} else {
+		stats.TotalForms = formsCount
+	}
+
+	// Get unread submissions count
+	if unreadCount, err := h.queries.CountAllUnreadSubmissions(ctx); err != nil {
+		slog.Error("failed to count unread submissions", "error", err)
+	} else {
+		stats.UnreadSubmissions = unreadCount
+	}
+
+	// Get recent form submissions
+	var recentSubmissions []RecentSubmission
+	if submissions, err := h.queries.GetRecentSubmissionsWithForm(ctx, 5); err != nil {
+		slog.Error("failed to get recent submissions", "error", err)
+	} else {
+		for _, s := range submissions {
+			recentSubmissions = append(recentSubmissions, RecentSubmission{
+				ID:        s.ID,
+				FormID:    s.FormID,
+				FormName:  s.FormName,
+				FormSlug:  s.FormSlug,
+				IsRead:    s.IsRead,
+				CreatedAt: s.CreatedAt.Format("Jan 2, 2006 3:04 PM"),
+			})
+		}
+	}
+
+	// Build dashboard data
+	dashboardData := DashboardData{
+		Stats:             stats,
+		RecentSubmissions: recentSubmissions,
+	}
 
 	if err := h.renderer.Render(w, r, "admin/dashboard", render.TemplateData{
 		Title: "Dashboard",
 		User:  user,
-		Data:  stats,
+		Data:  dashboardData,
 		Breadcrumbs: []render.Breadcrumb{
 			{Label: "Dashboard", URL: "/admin", Active: true},
 		},
