@@ -1,0 +1,71 @@
+{{define "content"}}
+<div class="page-header">
+    <h1 class="page-title">Forms</h1>
+    <div class="page-actions">
+        <a href="/admin/forms/new" class="btn btn-primary">New Form</a>
+    </div>
+</div>
+
+{{if .Data.Forms}}
+<div class="table-container">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Title</th>
+                <th>Slug</th>
+                <th>Submissions</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Data.Forms}}
+            <tr>
+                <td>
+                    <a href="/admin/forms/{{.Form.ID}}" class="link-primary">{{.Form.Name}}</a>
+                </td>
+                <td>{{.Form.Title}}</td>
+                <td><code>{{.Form.Slug}}</code></td>
+                <td>
+                    <a href="/admin/forms/{{.Form.ID}}/submissions" class="link-secondary">
+                        {{.SubmissionCount}} submission{{if ne .SubmissionCount 1}}s{{end}}
+                        {{if gt .UnreadCount 0}}
+                        <span class="badge badge-primary">{{.UnreadCount}} new</span>
+                        {{end}}
+                    </a>
+                </td>
+                <td>
+                    {{if .Form.IsActive}}
+                    <span class="badge badge-success">Active</span>
+                    {{else}}
+                    <span class="badge badge-secondary">Inactive</span>
+                    {{end}}
+                </td>
+                <td>
+                    <div class="btn-group">
+                        <a href="/admin/forms/{{.Form.ID}}" class="btn btn-sm btn-secondary">Edit</a>
+                        <a href="/forms/{{.Form.Slug}}" class="btn btn-sm btn-outline" target="_blank">Preview</a>
+                        <button type="button"
+                                class="btn btn-sm btn-danger"
+                                hx-delete="/admin/forms/{{.Form.ID}}"
+                                hx-confirm="Are you sure you want to delete this form? All submissions will also be deleted."
+                                hx-target="closest tr"
+                                hx-swap="outerHTML">
+                            Delete
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{else}}
+<div class="empty-state">
+    <h3>No forms yet</h3>
+    <p>Create your first form to start collecting submissions.</p>
+    <a href="/admin/forms/new" class="btn btn-primary">Create Form</a>
+</div>
+{{end}}
+{{end}}

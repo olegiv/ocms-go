@@ -126,6 +126,7 @@ func run() error {
 	taxonomyHandler := handler.NewTaxonomyHandler(db, renderer, sessionManager)
 	mediaHandler := handler.NewMediaHandler(db, renderer, sessionManager, "./uploads")
 	menusHandler := handler.NewMenusHandler(db, renderer, sessionManager)
+	formsHandler := handler.NewFormsHandler(db, renderer, sessionManager)
 
 	// Routes
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -249,6 +250,19 @@ func run() error {
 		r.Put("/menus/{id}/items/{itemId}", menusHandler.UpdateItem)
 		r.Delete("/menus/{id}/items/{itemId}", menusHandler.DeleteItem)
 		r.Post("/menus/{id}/reorder", menusHandler.Reorder)
+
+		// Form management routes
+		r.Get("/forms", formsHandler.List)
+		r.Get("/forms/new", formsHandler.NewForm)
+		r.Post("/forms", formsHandler.Create)
+		r.Get("/forms/{id}", formsHandler.EditForm)
+		r.Put("/forms/{id}", formsHandler.Update)
+		r.Post("/forms/{id}", formsHandler.Update) // HTML forms can't send PUT
+		r.Delete("/forms/{id}", formsHandler.Delete)
+		r.Post("/forms/{id}/fields", formsHandler.AddField)
+		r.Put("/forms/{id}/fields/{fieldId}", formsHandler.UpdateField)
+		r.Delete("/forms/{id}/fields/{fieldId}", formsHandler.DeleteField)
+		r.Post("/forms/{id}/fields/reorder", formsHandler.ReorderFields)
 	})
 
 	// Static file serving
