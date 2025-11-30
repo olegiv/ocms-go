@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/mail"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -786,4 +788,326 @@ func (h *FormsHandler) ReorderFields(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 	})
+}
+
+// ===== Public Form Handlers =====
+
+// PublicFormData holds data for the public form template.
+type PublicFormData struct {
+	Form      store.Form
+	Fields    []store.FormField
+	Errors    map[string]string
+	Values    map[string]string
+	Success   bool
+	CSRFToken string
+	SiteName  string
+}
+
+// Show handles GET /forms/{slug} - displays a public form.
+func (h *FormsHandler) Show(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+
+	form, err := h.queries.GetFormBySlug(r.Context(), slug)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			h.renderer.RenderNotFound(w, r)
+		} else {
+			slog.Error("failed to get form", "error", err, "slug", slug)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Check if form is active
+	if !form.IsActive {
+		h.renderer.RenderNotFound(w, r)
+		return
+	}
+
+	fields, err := h.queries.GetFormFields(r.Context(), form.ID)
+	if err != nil {
+		slog.Error("failed to get form fields", "error", err, "form_id", form.ID)
+		fields = []store.FormField{}
+	}
+
+	// Generate CSRF token
+	csrfToken := h.sessionManager.Token(r.Context())
+
+	// Get site name from config
+	siteName := "oCMS"
+	if siteConfig, err := h.queries.GetConfig(r.Context(), "site_name"); err == nil {
+		if siteConfig.Value != "" {
+			siteName = siteConfig.Value
+		}
+	}
+
+	data := PublicFormData{
+		Form:      form,
+		Fields:    fields,
+		Errors:    make(map[string]string),
+		Values:    make(map[string]string),
+		Success:   false,
+		CSRFToken: csrfToken,
+		SiteName:  siteName,
+	}
+
+	if err := h.renderer.Render(w, r, "public/form", render.TemplateData{
+		Title: form.Title,
+		Data:  data,
+	}); err != nil {
+		slog.Error("render error", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+// Submit handles POST /forms/{slug} - processes form submission.
+func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+
+	form, err := h.queries.GetFormBySlug(r.Context(), slug)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			h.renderer.RenderNotFound(w, r)
+		} else {
+			slog.Error("failed to get form", "error", err, "slug", slug)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Check if form is active
+	if !form.IsActive {
+		h.renderer.RenderNotFound(w, r)
+		return
+	}
+
+	fields, err := h.queries.GetFormFields(r.Context(), form.ID)
+	if err != nil {
+		slog.Error("failed to get form fields", "error", err, "form_id", form.ID)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Parse the form data
+	if err := r.ParseForm(); err != nil {
+		slog.Error("failed to parse form", "error", err)
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	// Check honeypot field (spam protection)
+	honeypot := r.FormValue("_website")
+	if honeypot != "" {
+		// Bot detected, silently pretend success
+		slog.Info("honeypot triggered", "form_slug", slug, "ip", r.RemoteAddr)
+		h.renderFormSuccess(w, r, form, fields)
+		return
+	}
+
+	// Validate CSRF token
+	csrfToken := r.FormValue("_csrf")
+	if csrfToken == "" || csrfToken != h.sessionManager.Token(r.Context()) {
+		slog.Warn("invalid CSRF token", "form_slug", slug, "ip", r.RemoteAddr)
+		// Don't reveal it's a CSRF issue, just show generic error
+		h.renderFormWithErrors(w, r, form, fields, map[string]string{"_form": "Session expired. Please try again."}, r.Form)
+		return
+	}
+
+	// Collect values and validate
+	values := make(map[string]string)
+	errors := make(map[string]string)
+
+	for _, field := range fields {
+		value := strings.TrimSpace(r.FormValue(field.Name))
+		values[field.Name] = value
+
+		// Required validation
+		if field.IsRequired && value == "" {
+			errors[field.Name] = fmt.Sprintf("%s is required", field.Label)
+			continue
+		}
+
+		// Skip further validation if empty and not required
+		if value == "" {
+			continue
+		}
+
+		// Type-specific validation
+		switch field.Type {
+		case model.FieldTypeEmail:
+			if !isValidEmail(value) {
+				errors[field.Name] = "Please enter a valid email address"
+			}
+		case model.FieldTypeNumber:
+			if _, err := strconv.ParseFloat(value, 64); err != nil {
+				errors[field.Name] = "Please enter a valid number"
+			}
+		case model.FieldTypeDate:
+			if !isValidDate(value) {
+				errors[field.Name] = "Please enter a valid date"
+			}
+		}
+
+		// Custom validation from field's validation JSON
+		if field.Validation.Valid && field.Validation.String != "" && field.Validation.String != "{}" {
+			var validation map[string]interface{}
+			if err := json.Unmarshal([]byte(field.Validation.String), &validation); err == nil {
+				if minLen, ok := validation["minLength"].(float64); ok && len(value) < int(minLen) {
+					errors[field.Name] = fmt.Sprintf("%s must be at least %d characters", field.Label, int(minLen))
+				}
+				if maxLen, ok := validation["maxLength"].(float64); ok && len(value) > int(maxLen) {
+					errors[field.Name] = fmt.Sprintf("%s must be no more than %d characters", field.Label, int(maxLen))
+				}
+				if pattern, ok := validation["pattern"].(string); ok && pattern != "" {
+					if matched, _ := regexp.MatchString(pattern, value); !matched {
+						errors[field.Name] = fmt.Sprintf("%s is not in the correct format", field.Label)
+					}
+				}
+			}
+		}
+	}
+
+	// If there are validation errors, re-render the form
+	if len(errors) > 0 {
+		h.renderFormWithErrors(w, r, form, fields, errors, r.Form)
+		return
+	}
+
+	// Serialize form data as JSON
+	dataJSON, err := json.Marshal(values)
+	if err != nil {
+		slog.Error("failed to marshal form data", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Save submission
+	_, err = h.queries.CreateFormSubmission(r.Context(), store.CreateFormSubmissionParams{
+		FormID:    form.ID,
+		Data:      string(dataJSON),
+		IpAddress: sql.NullString{String: getClientIP(r), Valid: true},
+		UserAgent: sql.NullString{String: r.UserAgent(), Valid: true},
+		IsRead:    false,
+		CreatedAt: time.Now(),
+	})
+	if err != nil {
+		slog.Error("failed to save form submission", "error", err, "form_id", form.ID)
+		h.renderFormWithErrors(w, r, form, fields, map[string]string{"_form": "Failed to save submission. Please try again."}, r.Form)
+		return
+	}
+
+	slog.Info("form submission saved", "form_id", form.ID, "form_slug", slug)
+
+	// TODO: Send notification email if configured
+	// if form.EmailTo.Valid && form.EmailTo.String != "" {
+	//     sendNotificationEmail(form, values)
+	// }
+
+	// Render success
+	h.renderFormSuccess(w, r, form, fields)
+}
+
+// renderFormWithErrors renders the form with validation errors.
+func (h *FormsHandler) renderFormWithErrors(w http.ResponseWriter, r *http.Request, form store.Form, fields []store.FormField, errors map[string]string, formData map[string][]string) {
+	values := make(map[string]string)
+	for key, vals := range formData {
+		if len(vals) > 0 {
+			values[key] = vals[0]
+		}
+	}
+
+	csrfToken := h.sessionManager.Token(r.Context())
+
+	siteName := "oCMS"
+	if siteConfig, err := h.queries.GetConfig(r.Context(), "site_name"); err == nil {
+		if siteConfig.Value != "" {
+			siteName = siteConfig.Value
+		}
+	}
+
+	data := PublicFormData{
+		Form:      form,
+		Fields:    fields,
+		Errors:    errors,
+		Values:    values,
+		Success:   false,
+		CSRFToken: csrfToken,
+		SiteName:  siteName,
+	}
+
+	if err := h.renderer.Render(w, r, "public/form", render.TemplateData{
+		Title: form.Title,
+		Data:  data,
+	}); err != nil {
+		slog.Error("render error", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+// renderFormSuccess renders the form success page.
+func (h *FormsHandler) renderFormSuccess(w http.ResponseWriter, r *http.Request, form store.Form, fields []store.FormField) {
+	siteName := "oCMS"
+	if siteConfig, err := h.queries.GetConfig(r.Context(), "site_name"); err == nil {
+		if siteConfig.Value != "" {
+			siteName = siteConfig.Value
+		}
+	}
+
+	data := PublicFormData{
+		Form:     form,
+		Fields:   fields,
+		Success:  true,
+		SiteName: siteName,
+	}
+
+	if err := h.renderer.Render(w, r, "public/form", render.TemplateData{
+		Title: form.Title,
+		Data:  data,
+	}); err != nil {
+		slog.Error("render error", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+// isValidEmail checks if the email is valid.
+func isValidEmail(email string) bool {
+	_, err := mail.ParseAddress(email)
+	return err == nil
+}
+
+// isValidDate checks if the date is valid (YYYY-MM-DD format).
+func isValidDate(date string) bool {
+	matched, _ := regexp.MatchString(`^\d{4}-\d{2}-\d{2}$`, date)
+	if !matched {
+		return false
+	}
+	_, err := time.Parse("2006-01-02", date)
+	return err == nil
+}
+
+// getClientIP extracts the client IP from the request.
+func getClientIP(r *http.Request) string {
+	// Check X-Forwarded-For header
+	xff := r.Header.Get("X-Forwarded-For")
+	if xff != "" {
+		// Take the first IP in the list
+		parts := strings.Split(xff, ",")
+		if len(parts) > 0 {
+			return strings.TrimSpace(parts[0])
+		}
+	}
+
+	// Check X-Real-IP header
+	xrip := r.Header.Get("X-Real-IP")
+	if xrip != "" {
+		return xrip
+	}
+
+	// Fall back to RemoteAddr
+	host := r.RemoteAddr
+	// Remove port if present
+	if idx := strings.LastIndex(host, ":"); idx != -1 {
+		host = host[:idx]
+	}
+	return host
 }

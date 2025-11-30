@@ -140,6 +140,29 @@ func (r *Renderer) parseTemplates(templatesFS fs.FS) error {
 		r.templates[name] = tmpl
 	}
 
+	// Parse public templates (standalone, with their own body)
+	publicTemplates, err := r.getTemplateFiles(templatesFS, "public")
+	if err != nil {
+		return fmt.Errorf("getting public templates: %w", err)
+	}
+
+	for _, tmplPath := range publicTemplates {
+		name := filepath.Base(tmplPath)
+		name = strings.TrimSuffix(name, ".html")
+		name = "public/" + name
+
+		// Public templates define their own "body" template that is self-contained
+		files := []string{tmplPath}
+		files = append(files, partials...)
+
+		tmpl, err := template.New("").Funcs(r.templateFuncs()).ParseFS(templatesFS, files...)
+		if err != nil {
+			return fmt.Errorf("parsing template %s: %w", name, err)
+		}
+
+		r.templates[name] = tmpl
+	}
+
 	return nil
 }
 
@@ -250,6 +273,19 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			}
 			return dict
 		},
+		"parseJSON": func(s string) []string {
+			if s == "" || s == "[]" {
+				return []string{}
+			}
+			var result []string
+			if err := json.Unmarshal([]byte(s), &result); err != nil {
+				return []string{}
+			}
+			return result
+		},
+		"contains": func(s, substr string) bool {
+			return strings.Contains(s, substr)
+		},
 	}
 }
 
@@ -303,7 +339,14 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 
 	// Render to buffer first to catch errors
 	buf := new(bytes.Buffer)
-	if err := tmpl.ExecuteTemplate(buf, "base", data); err != nil {
+
+	// Public templates use "body" instead of "base"
+	templateName := "base"
+	if strings.HasPrefix(name, "public/") {
+		templateName = "body"
+	}
+
+	if err := tmpl.ExecuteTemplate(buf, templateName, data); err != nil {
 		return fmt.Errorf("executing template %s: %w", name, err)
 	}
 

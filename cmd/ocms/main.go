@@ -265,6 +265,10 @@ func run() error {
 		r.Post("/forms/{id}/fields/reorder", formsHandler.ReorderFields)
 	})
 
+	// Public form routes (no authentication required, but session needed for CSRF)
+	r.Get("/forms/{slug}", formsHandler.Show)
+	r.Post("/forms/{slug}", formsHandler.Submit)
+
 	// Static file serving
 	staticFS, err := fs.Sub(web.Static, "static/dist")
 	if err != nil {
