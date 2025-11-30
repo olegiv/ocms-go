@@ -97,3 +97,6 @@ LIMIT ? OFFSET ?;
 SELECT COUNT(DISTINCT p.id) FROM pages p
 INNER JOIN page_categories pc ON pc.page_id = p.id
 WHERE pc.category_id = ?;
+
+-- name: ListCategoriesForSitemap :many
+SELECT id, slug, updated_at FROM categories ORDER BY updated_at DESC;

@@ -346,6 +346,39 @@ func (q *Queries) ListTags(ctx context.Context, arg ListTagsParams) ([]Tag, erro
 	return items, nil
 }
 
+const listTagsForSitemap = `-- name: ListTagsForSitemap :many
+SELECT id, slug, updated_at FROM tags ORDER BY updated_at DESC
+`
+
+type ListTagsForSitemapRow struct {
+	ID        int64     `json:"id"`
+	Slug      string    `json:"slug"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (q *Queries) ListTagsForSitemap(ctx context.Context) ([]ListTagsForSitemapRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTagsForSitemap)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTagsForSitemapRow{}
+	for rows.Next() {
+		var i ListTagsForSitemapRow
+		if err := rows.Scan(&i.ID, &i.Slug, &i.UpdatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const removeTagFromPage = `-- name: RemoveTagFromPage :exec
 DELETE FROM page_tags WHERE page_id = ? AND tag_id = ?
 `

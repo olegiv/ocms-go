@@ -709,6 +709,81 @@ func (h *FrontendHandler) NotFound(w http.ResponseWriter, r *http.Request) {
 	h.renderNotFound(w, r)
 }
 
+// Sitemap generates and serves the sitemap.xml file.
+func (h *FrontendHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get site URL from config
+	siteURL := ""
+	if cfg, err := h.queries.GetConfigByKey(ctx, "site_url"); err == nil && cfg.Value != "" {
+		siteURL = cfg.Value
+	}
+	if siteURL == "" {
+		// Fallback to request host
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		siteURL = scheme + "://" + r.Host
+	}
+
+	// Build sitemap
+	builder := seo.NewSitemapBuilder(siteURL)
+	builder.AddHomepage()
+
+	// Add published pages (excluding noindex pages)
+	pages, err := h.queries.ListPublishedPagesForSitemap(ctx)
+	if err != nil {
+		h.logger.Error("failed to get pages for sitemap", "error", err)
+	} else {
+		for _, p := range pages {
+			builder.AddPage(seo.SitemapPage{
+				Slug:      p.Slug,
+				UpdatedAt: p.UpdatedAt,
+			})
+		}
+	}
+
+	// Add categories
+	categories, err := h.queries.ListCategoriesForSitemap(ctx)
+	if err != nil {
+		h.logger.Error("failed to get categories for sitemap", "error", err)
+	} else {
+		for _, c := range categories {
+			builder.AddCategory(seo.SitemapCategory{
+				Slug:      c.Slug,
+				UpdatedAt: c.UpdatedAt,
+			})
+		}
+	}
+
+	// Add tags
+	tags, err := h.queries.ListTagsForSitemap(ctx)
+	if err != nil {
+		h.logger.Error("failed to get tags for sitemap", "error", err)
+	} else {
+		for _, t := range tags {
+			builder.AddTag(seo.SitemapTag{
+				Slug:      t.Slug,
+				UpdatedAt: t.UpdatedAt,
+			})
+		}
+	}
+
+	// Generate XML
+	xmlContent, err := builder.Build()
+	if err != nil {
+		h.logger.Error("failed to generate sitemap", "error", err)
+		http.Error(w, "Failed to generate sitemap", http.StatusInternalServerError)
+		return
+	}
+
+	// Send response
+	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=3600") // Cache for 1 hour
+	w.Write(xmlContent)
+}
+
 // pageToView converts a store.Page to a PageView with computed fields.
 func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page) PageView {
 	pv := PageView{

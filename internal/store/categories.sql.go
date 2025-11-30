@@ -384,6 +384,39 @@ func (q *Queries) ListCategories(ctx context.Context) ([]Category, error) {
 	return items, nil
 }
 
+const listCategoriesForSitemap = `-- name: ListCategoriesForSitemap :many
+SELECT id, slug, updated_at FROM categories ORDER BY updated_at DESC
+`
+
+type ListCategoriesForSitemapRow struct {
+	ID        int64     `json:"id"`
+	Slug      string    `json:"slug"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (q *Queries) ListCategoriesForSitemap(ctx context.Context) ([]ListCategoriesForSitemapRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCategoriesForSitemap)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCategoriesForSitemapRow{}
+	for rows.Next() {
+		var i ListCategoriesForSitemapRow
+		if err := rows.Scan(&i.ID, &i.Slug, &i.UpdatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listChildCategories = `-- name: ListChildCategories :many
 SELECT id, name, slug, description, parent_id, position, created_at, updated_at FROM categories WHERE parent_id = ? ORDER BY position ASC, name ASC
 `

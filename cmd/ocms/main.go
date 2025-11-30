@@ -157,6 +157,7 @@ func run() error {
 
 	// Public frontend routes
 	r.Get("/", frontendHandler.Home)
+	r.Get("/sitemap.xml", frontendHandler.Sitemap)
 	r.Get("/search", frontendHandler.Search)
 	r.Get("/category/{slug}", frontendHandler.Category)
 	r.Get("/tag/{slug}", frontendHandler.Tag)

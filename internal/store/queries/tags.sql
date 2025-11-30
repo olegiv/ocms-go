@@ -69,3 +69,6 @@ LEFT JOIN page_tags pt ON pt.tag_id = t.id
 GROUP BY t.id
 ORDER BY t.name ASC
 LIMIT ? OFFSET ?;
+
+-- name: ListTagsForSitemap :many
+SELECT id, slug, updated_at FROM tags ORDER BY updated_at DESC;
