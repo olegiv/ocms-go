@@ -406,6 +406,14 @@ func run() error {
 			r.Get("/media/{id}", apiHandler.GetMedia)
 		})
 
+		// Tags - public read endpoints
+		r.Get("/tags", apiHandler.ListTags)
+		r.Get("/tags/{id}", apiHandler.GetTag)
+
+		// Categories - public read endpoints
+		r.Get("/categories", apiHandler.ListCategories)
+		r.Get("/categories/{id}", apiHandler.GetCategory)
+
 		// Protected endpoints (API key required)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.APIKeyAuth(db))
@@ -430,9 +438,16 @@ func run() error {
 				r.Delete("/media/{id}", apiHandler.DeleteMedia)
 			})
 
-			// Taxonomy endpoints (to be implemented in iteration 20)
-			// r.Get("/tags", ...) - public
-			// r.Get("/categories", ...) - public
+			// Taxonomy - write endpoints (requires taxonomy:write permission)
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission("taxonomy:write"))
+				r.Post("/tags", apiHandler.CreateTag)
+				r.Put("/tags/{id}", apiHandler.UpdateTag)
+				r.Delete("/tags/{id}", apiHandler.DeleteTag)
+				r.Post("/categories", apiHandler.CreateCategory)
+				r.Put("/categories/{id}", apiHandler.UpdateCategory)
+				r.Delete("/categories/{id}", apiHandler.DeleteCategory)
+			})
 		})
 	})
 	slog.Info("REST API v1 mounted at /api/v1")
