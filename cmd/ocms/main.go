@@ -312,6 +312,7 @@ func run() error {
 		r.Post("/pages/{id}/publish", pagesHandler.TogglePublish)
 		r.Get("/pages/{id}/versions", pagesHandler.Versions)
 		r.Post("/pages/{id}/versions/{versionId}/restore", pagesHandler.RestoreVersion)
+		r.Post("/pages/{id}/translate/{langCode}", pagesHandler.Translate)
 
 		// Configuration routes
 		r.Get("/config", configHandler.List)

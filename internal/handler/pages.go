@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"ocms-go/internal/middleware"
+	"ocms-go/internal/model"
 	"ocms-go/internal/render"
 	"ocms-go/internal/store"
 	"ocms-go/internal/util"
@@ -52,6 +53,7 @@ type PagesListData struct {
 	PageTags           map[int64][]store.Tag        // Map of page ID to tags
 	PageCategories     map[int64][]store.Category   // Map of page ID to categories
 	PageFeaturedImages map[int64]*FeaturedImageData // Map of page ID to featured image
+	PageLanguages      map[int64]*store.Language    // Map of page ID to language
 	CurrentPage        int
 	TotalPages         int
 	TotalCount         int64
@@ -61,8 +63,10 @@ type PagesListData struct {
 	NextPage           int
 	StatusFilter       string
 	CategoryFilter     int64
+	LanguageFilter     int64              // Language filter
 	SearchFilter       string             // Search query filter
 	AllCategories      []PageCategoryNode // For category filter dropdown
+	AllLanguages       []store.Language   // All active languages for filter dropdown
 	Statuses           []string
 }
 
@@ -98,6 +102,15 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Get search filter from query string
 	searchFilter := strings.TrimSpace(r.URL.Query().Get("search"))
 
+	// Get language filter from query string
+	var languageFilter int64
+	languageFilterStr := r.URL.Query().Get("language")
+	if languageFilterStr != "" {
+		if lid, err := strconv.ParseInt(languageFilterStr, 10, 64); err == nil && lid > 0 {
+			languageFilter = lid
+		}
+	}
+
 	var totalCount int64
 	var pages []store.Page
 	var err error
@@ -106,9 +119,16 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	searchPattern := "%" + searchFilter + "%"
 
 	// Get total count based on filters
-	// Priority: search > category > status > all
+	// Priority: search > language > category > status > all
 	if searchFilter != "" {
-		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
+		if languageFilter > 0 {
+			totalCount, err = h.queries.CountSearchPagesByLanguage(r.Context(), store.CountSearchPagesByLanguageParams{
+				LanguageID: sql.NullInt64{Int64: languageFilter, Valid: true},
+				Title:      searchPattern,
+				Body:       searchPattern,
+				Slug:       searchPattern,
+			})
+		} else if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
 			totalCount, err = h.queries.CountSearchPagesByStatus(r.Context(), store.CountSearchPagesByStatusParams{
 				Status: statusFilter,
 				Title:  searchPattern,
@@ -121,6 +141,15 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 				Body:  searchPattern,
 				Slug:  searchPattern,
 			})
+		}
+	} else if languageFilter > 0 {
+		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
+			totalCount, err = h.queries.CountPagesByLanguageAndStatus(r.Context(), store.CountPagesByLanguageAndStatusParams{
+				LanguageID: sql.NullInt64{Int64: languageFilter, Valid: true},
+				Status:     statusFilter,
+			})
+		} else {
+			totalCount, err = h.queries.CountPagesByLanguage(r.Context(), sql.NullInt64{Int64: languageFilter, Valid: true})
 		}
 	} else if categoryFilter > 0 {
 		totalCount, err = h.queries.CountPagesByCategory(r.Context(), categoryFilter)
@@ -149,9 +178,18 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	offset := int64((page - 1) * PagesPerPage)
 
 	// Fetch pages for current page
-	// Priority: search > category > status > all
+	// Priority: search > language > category > status > all
 	if searchFilter != "" {
-		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
+		if languageFilter > 0 {
+			pages, err = h.queries.SearchPagesByLanguage(r.Context(), store.SearchPagesByLanguageParams{
+				LanguageID: sql.NullInt64{Int64: languageFilter, Valid: true},
+				Title:      searchPattern,
+				Body:       searchPattern,
+				Slug:       searchPattern,
+				Limit:      PagesPerPage,
+				Offset:     offset,
+			})
+		} else if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
 			pages, err = h.queries.SearchPagesByStatus(r.Context(), store.SearchPagesByStatusParams{
 				Status: statusFilter,
 				Title:  searchPattern,
@@ -167,6 +205,21 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 				Slug:   searchPattern,
 				Limit:  PagesPerPage,
 				Offset: offset,
+			})
+		}
+	} else if languageFilter > 0 {
+		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
+			pages, err = h.queries.ListPagesByLanguageAndStatus(r.Context(), store.ListPagesByLanguageAndStatusParams{
+				LanguageID: sql.NullInt64{Int64: languageFilter, Valid: true},
+				Status:     statusFilter,
+				Limit:      PagesPerPage,
+				Offset:     offset,
+			})
+		} else {
+			pages, err = h.queries.ListPagesByLanguage(r.Context(), store.ListPagesByLanguageParams{
+				LanguageID: sql.NullInt64{Int64: languageFilter, Valid: true},
+				Limit:      PagesPerPage,
+				Offset:     offset,
 			})
 		}
 	} else if categoryFilter > 0 {
@@ -238,6 +291,21 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Fetch languages for all displayed pages
+	pageLanguages := make(map[int64]*store.Language)
+	for _, p := range pages {
+		if p.LanguageID.Valid {
+			lang, err := h.queries.GetLanguageByID(r.Context(), p.LanguageID.Int64)
+			if err != nil {
+				if err != sql.ErrNoRows {
+					slog.Error("failed to get language for page", "error", err, "page_id", p.ID, "language_id", p.LanguageID.Int64)
+				}
+				continue
+			}
+			pageLanguages[p.ID] = &lang
+		}
+	}
+
 	// Load all categories for filter dropdown
 	allCategories, err := h.queries.ListCategories(r.Context())
 	if err != nil {
@@ -246,11 +314,19 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	categoryTree := buildPageCategoryTree(allCategories, nil, 0)
 
+	// Load all active languages for filter dropdown
+	allLanguages, err := h.queries.ListActiveLanguages(r.Context())
+	if err != nil {
+		slog.Error("failed to list languages for filter", "error", err)
+		allLanguages = []store.Language{}
+	}
+
 	data := PagesListData{
 		Pages:              pages,
 		PageTags:           pageTags,
 		PageCategories:     pageCategories,
 		PageFeaturedImages: pageFeaturedImages,
+		PageLanguages:      pageLanguages,
 		CurrentPage:        page,
 		TotalPages:         totalPages,
 		TotalCount:         totalCount,
@@ -260,8 +336,10 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		NextPage:           page + 1,
 		StatusFilter:       statusFilter,
 		CategoryFilter:     categoryFilter,
+		LanguageFilter:     languageFilter,
 		SearchFilter:       searchFilter,
 		AllCategories:      categoryTree,
+		AllLanguages:       allLanguages,
 		Statuses:           ValidPageStatuses,
 	}
 
@@ -304,6 +382,17 @@ type PageFormData struct {
 	Errors        map[string]string
 	FormValues    map[string]string
 	IsEdit        bool
+	// Language and translation support
+	Language         *store.Language       // Current page language
+	AllLanguages     []store.Language      // All active languages for selection
+	Translations     []PageTranslationInfo // Existing translations
+	MissingLanguages []store.Language      // Languages without translations
+}
+
+// PageTranslationInfo holds information about a page translation.
+type PageTranslationInfo struct {
+	Language store.Language
+	Page     store.Page
 }
 
 // buildPageCategoryTree builds a flat list with depth for display.
@@ -345,8 +434,24 @@ func (h *PagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	}
 	categoryTree := buildPageCategoryTree(allCategories, nil, 0)
 
+	// Load all active languages for selection
+	allLanguages, err := h.queries.ListActiveLanguages(r.Context())
+	if err != nil {
+		slog.Error("failed to list languages", "error", err)
+		allLanguages = []store.Language{}
+	}
+
+	// Get default language
+	var defaultLanguage *store.Language
+	defaultLang, err := h.queries.GetDefaultLanguage(r.Context())
+	if err == nil {
+		defaultLanguage = &defaultLang
+	}
+
 	data := PageFormData{
 		AllCategories: categoryTree,
+		AllLanguages:  allLanguages,
+		Language:      defaultLanguage,
 		Statuses:      ValidPageStatuses,
 		Errors:        make(map[string]string),
 		FormValues:    make(map[string]string),
@@ -429,6 +534,21 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Parse language_id
+	languageIDStr := r.FormValue("language_id")
+	var languageID sql.NullInt64
+	if languageIDStr != "" {
+		if lid, err := strconv.ParseInt(languageIDStr, 10, 64); err == nil && lid > 0 {
+			languageID = sql.NullInt64{Int64: lid, Valid: true}
+		}
+	} else {
+		// Default to the default language if not specified
+		defaultLang, err := h.queries.GetDefaultLanguage(r.Context())
+		if err == nil {
+			languageID = sql.NullInt64{Int64: defaultLang.ID, Valid: true}
+		}
+	}
+
 	// Store form values for re-rendering on error
 	formValues := map[string]string{
 		"title":             title,
@@ -444,6 +564,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		"no_follow":         noFollowStr,
 		"canonical_url":     canonicalURL,
 		"scheduled_at":      scheduledAtStr,
+		"language_id":       languageIDStr,
 	}
 
 	// Validate
@@ -487,11 +608,15 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// If there are validation errors, re-render the form
 	if len(errors) > 0 {
+		// Load languages for re-rendering
+		allLanguages, _ := h.queries.ListActiveLanguages(r.Context())
+
 		data := PageFormData{
-			Statuses:   ValidPageStatuses,
-			Errors:     errors,
-			FormValues: formValues,
-			IsEdit:     false,
+			AllLanguages: allLanguages,
+			Statuses:     ValidPageStatuses,
+			Errors:       errors,
+			FormValues:   formValues,
+			IsEdit:       false,
 		}
 
 		if err := h.renderer.Render(w, r, "admin/pages_form", render.TemplateData{
@@ -527,6 +652,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		NoFollow:        noFollow,
 		CanonicalUrl:    canonicalURL,
 		ScheduledAt:     scheduledAt,
+		LanguageID:      languageID,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	})
@@ -663,16 +789,76 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Load all active languages
+	allLanguages, err := h.queries.ListActiveLanguages(r.Context())
+	if err != nil {
+		slog.Error("failed to list languages", "error", err)
+		allLanguages = []store.Language{}
+	}
+
+	// Load current page's language
+	var pageLanguage *store.Language
+	if page.LanguageID.Valid {
+		lang, err := h.queries.GetLanguageByID(r.Context(), page.LanguageID.Int64)
+		if err == nil {
+			pageLanguage = &lang
+		}
+	}
+
+	// Load translations for this page
+	var translations []PageTranslationInfo
+	var missingLanguages []store.Language
+
+	translationLinks, err := h.queries.GetTranslationsForEntity(r.Context(), store.GetTranslationsForEntityParams{
+		EntityType: model.EntityTypePage,
+		EntityID:   id,
+	})
+	if err != nil && err != sql.ErrNoRows {
+		slog.Error("failed to get translations for page", "error", err, "page_id", id)
+	}
+
+	// Build translations list and find missing languages
+	translatedLangIDs := make(map[int64]bool)
+	if pageLanguage != nil {
+		translatedLangIDs[pageLanguage.ID] = true // Current page's language is "taken"
+	}
+
+	for _, tl := range translationLinks {
+		translatedLangIDs[tl.LanguageID] = true
+		// Get the translated page
+		translatedPage, err := h.queries.GetPageByID(r.Context(), tl.TranslationID)
+		if err == nil {
+			lang, err := h.queries.GetLanguageByID(r.Context(), tl.LanguageID)
+			if err == nil {
+				translations = append(translations, PageTranslationInfo{
+					Language: lang,
+					Page:     translatedPage,
+				})
+			}
+		}
+	}
+
+	// Find languages that don't have translations yet
+	for _, lang := range allLanguages {
+		if !translatedLangIDs[lang.ID] {
+			missingLanguages = append(missingLanguages, lang)
+		}
+	}
+
 	data := PageFormData{
-		Page:          &page,
-		Tags:          tags,
-		Categories:    categories,
-		AllCategories: categoryTree,
-		FeaturedImage: featuredImage,
-		Statuses:      ValidPageStatuses,
-		Errors:        make(map[string]string),
-		FormValues:    make(map[string]string),
-		IsEdit:        true,
+		Page:             &page,
+		Tags:             tags,
+		Categories:       categories,
+		AllCategories:    categoryTree,
+		FeaturedImage:    featuredImage,
+		AllLanguages:     allLanguages,
+		Language:         pageLanguage,
+		Translations:     translations,
+		MissingLanguages: missingLanguages,
+		Statuses:         ValidPageStatuses,
+		Errors:           make(map[string]string),
+		FormValues:       make(map[string]string),
+		IsEdit:           true,
 	}
 
 	if err := h.renderer.Render(w, r, "admin/pages_form", render.TemplateData{
@@ -1258,4 +1444,147 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 	slog.Info("page version restored", "page_id", id, "version_id", versionId, "restored_by", user.ID)
 	h.renderer.SetFlash(r, "Version restored successfully", "success")
 	http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", id), http.StatusSeeOther)
+}
+
+// Translate handles POST /admin/pages/{id}/translate/{langCode} - creates a translation.
+func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+
+	// Get page ID from URL
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		h.renderer.SetFlash(r, "Invalid page ID", "error")
+		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		return
+	}
+
+	// Get language code from URL
+	langCode := chi.URLParam(r, "langCode")
+	if langCode == "" {
+		h.renderer.SetFlash(r, "Language code is required", "error")
+		http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", id), http.StatusSeeOther)
+		return
+	}
+
+	// Get source page
+	sourcePage, err := h.queries.GetPageByID(r.Context(), id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			h.renderer.SetFlash(r, "Page not found", "error")
+		} else {
+			slog.Error("failed to get page", "error", err, "page_id", id)
+			h.renderer.SetFlash(r, "Error loading page", "error")
+		}
+		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		return
+	}
+
+	// Get target language
+	targetLang, err := h.queries.GetLanguageByCode(r.Context(), langCode)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			h.renderer.SetFlash(r, "Language not found", "error")
+		} else {
+			slog.Error("failed to get language", "error", err, "lang_code", langCode)
+			h.renderer.SetFlash(r, "Error loading language", "error")
+		}
+		http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", id), http.StatusSeeOther)
+		return
+	}
+
+	// Check if translation already exists
+	existingTranslation, err := h.queries.GetTranslation(r.Context(), store.GetTranslationParams{
+		EntityType: model.EntityTypePage,
+		EntityID:   id,
+		LanguageID: targetLang.ID,
+	})
+	if err == nil && existingTranslation.ID > 0 {
+		// Translation already exists, redirect to it
+		h.renderer.SetFlash(r, "Translation already exists", "info")
+		http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", existingTranslation.TranslationID), http.StatusSeeOther)
+		return
+	}
+
+	// Generate a unique slug for the translated page
+	baseSlug := sourcePage.Slug + "-" + langCode
+	translatedSlug := baseSlug
+	counter := 1
+	for {
+		exists, err := h.queries.SlugExists(r.Context(), translatedSlug)
+		if err != nil {
+			slog.Error("database error checking slug", "error", err)
+			h.renderer.SetFlash(r, "Error creating translation", "error")
+			http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", id), http.StatusSeeOther)
+			return
+		}
+		if exists == 0 {
+			break
+		}
+		counter++
+		translatedSlug = fmt.Sprintf("%s-%d", baseSlug, counter)
+	}
+
+	// Create the translated page with same title but empty body
+	now := time.Now()
+	translatedPage, err := h.queries.CreatePage(r.Context(), store.CreatePageParams{
+		Title:           sourcePage.Title, // Keep same title (user will translate)
+		Slug:            translatedSlug,
+		Body:            "",              // Empty body for translation
+		Status:          PageStatusDraft, // Always start as draft
+		AuthorID:        user.ID,
+		FeaturedImageID: sourcePage.FeaturedImageID,
+		MetaTitle:       "",
+		MetaDescription: "",
+		MetaKeywords:    "",
+		OgImageID:       sql.NullInt64{},
+		NoIndex:         0,
+		NoFollow:        0,
+		CanonicalUrl:    "",
+		ScheduledAt:     sql.NullTime{},
+		LanguageID:      sql.NullInt64{Int64: targetLang.ID, Valid: true},
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	})
+	if err != nil {
+		slog.Error("failed to create translated page", "error", err)
+		h.renderer.SetFlash(r, "Error creating translation", "error")
+		http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", id), http.StatusSeeOther)
+		return
+	}
+
+	// Create initial version for the translated page
+	_, err = h.queries.CreatePageVersion(r.Context(), store.CreatePageVersionParams{
+		PageID:    translatedPage.ID,
+		Title:     translatedPage.Title,
+		Body:      translatedPage.Body,
+		ChangedBy: user.ID,
+		CreatedAt: now,
+	})
+	if err != nil {
+		slog.Error("failed to create page version for translation", "error", err)
+		// Don't fail - page was created
+	}
+
+	// Create translation link from source to translated page
+	_, err = h.queries.CreateTranslation(r.Context(), store.CreateTranslationParams{
+		EntityType:    model.EntityTypePage,
+		EntityID:      id,
+		LanguageID:    targetLang.ID,
+		TranslationID: translatedPage.ID,
+		CreatedAt:     now,
+	})
+	if err != nil {
+		slog.Error("failed to create translation link", "error", err)
+		// Page was created, so we should still redirect to it
+	}
+
+	slog.Info("page translation created",
+		"source_page_id", id,
+		"translated_page_id", translatedPage.ID,
+		"language", langCode,
+		"created_by", user.ID)
+
+	h.renderer.SetFlash(r, fmt.Sprintf("Translation created for %s. Please translate the content.", targetLang.Name), "success")
+	http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", translatedPage.ID), http.StatusSeeOther)
 }

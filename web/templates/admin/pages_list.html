@@ -44,6 +44,19 @@
         </select>
     </div>
     {{end}}
+    {{if gt (len .Data.AllLanguages) 1}}
+    <div class="filter-group">
+        <label class="filter-label">Language:</label>
+        <select class="form-select form-select-sm" onchange="window.location.href=this.value">
+            <option value="/admin/pages?{{if .Data.StatusFilter}}status={{.Data.StatusFilter}}&{{end}}{{if gt .Data.CategoryFilter 0}}category={{.Data.CategoryFilter}}&{{end}}{{if .Data.SearchFilter}}search={{.Data.SearchFilter}}{{end}}">All Languages</option>
+            {{range .Data.AllLanguages}}
+            <option value="/admin/pages?{{if $.Data.StatusFilter}}status={{$.Data.StatusFilter}}&{{end}}{{if gt $.Data.CategoryFilter 0}}category={{$.Data.CategoryFilter}}&{{end}}language={{.ID}}{{if $.Data.SearchFilter}}&search={{$.Data.SearchFilter}}{{end}}" {{if eq $.Data.LanguageFilter .ID}}selected{{end}}>
+                {{.Name}} ({{.Code}})
+            </option>
+            {{end}}
+        </select>
+    </div>
+    {{end}}
     <div class="filter-group filter-group-search">
         <form action="/admin/pages" method="get" class="search-form">
             {{if .Data.StatusFilter}}<input type="hidden" name="status" value="{{.Data.StatusFilter}}">{{end}}
@@ -100,6 +113,10 @@
                         {{end}}
                     </td>
                     <td>
+                        {{$lang := index $.Data.PageLanguages .ID}}
+                        {{if $lang}}
+                        <span class="language-badge" title="{{$lang.Name}}">{{$lang.Code}}</span>
+                        {{end}}
                         <a href="/admin/pages/{{.ID}}" class="page-title-link">{{.Title}}</a>
                     </td>
                     <td>

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -300,6 +301,30 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		},
 		"contains": func(s, substr string) bool {
 			return strings.Contains(s, substr)
+		},
+		"int64": func(v any) int64 {
+			switch val := v.(type) {
+			case int:
+				return int64(val)
+			case int32:
+				return int64(val)
+			case int64:
+				return val
+			case float64:
+				return int64(val)
+			case string:
+				i, _ := strconv.ParseInt(val, 10, 64)
+				return i
+			default:
+				return 0
+			}
+		},
+		"atoi": func(s string) int64 {
+			if s == "" {
+				return 0
+			}
+			i, _ := strconv.ParseInt(s, 10, 64)
+			return i
 		},
 		// pagesListURL builds a URL for admin pages list with proper encoding.
 		// Parameters: status (string), category (int64), search (string), page (int)

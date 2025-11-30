@@ -897,3 +897,138 @@
 .text-warning {
   color: $warning;
 }
+
+// Translations Panel
+.translations-panel {
+  background-color: $gray-50;
+  border: 1px solid $gray-200;
+  border-radius: $radius-md;
+  padding: $spacing-4;
+}
+
+.translations-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $spacing-4;
+  padding-bottom: $spacing-3;
+  border-bottom: 1px solid $gray-200;
+}
+
+.translations-title {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  font-size: $font-size-base;
+  font-weight: $font-weight-semibold;
+  color: $gray-800;
+  margin: 0;
+
+  svg {
+    color: $primary;
+  }
+}
+
+.current-language-badge {
+  font-size: $font-size-sm;
+  color: $gray-600;
+  background-color: $white;
+  padding: $spacing-1 $spacing-2;
+  border-radius: $radius-md;
+  border: 1px solid $gray-200;
+}
+
+.translations-subtitle {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $gray-600;
+  margin: 0 0 $spacing-2 0;
+}
+
+.translations-list {
+  margin-bottom: $spacing-4;
+}
+
+.translation-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-2 $spacing-3;
+  background-color: $white;
+  border: 1px solid $gray-200;
+  border-radius: $radius-md;
+  margin-bottom: $spacing-2;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.translation-info {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+}
+
+.translation-lang-badge {
+  display: inline-block;
+  padding: $spacing-1 $spacing-2;
+  background-color: $gray-100;
+  color: $gray-700;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-bold;
+  text-transform: uppercase;
+  border-radius: $radius-md;
+}
+
+.translation-link {
+  color: $gray-800;
+  text-decoration: none;
+
+  &:hover {
+    color: $primary;
+    text-decoration: underline;
+  }
+}
+
+.translation-status {
+  margin-left: $spacing-2;
+}
+
+.translations-add {
+  padding-top: $spacing-3;
+  border-top: 1px solid $gray-200;
+}
+
+.translation-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-2;
+}
+
+.translation-add-btn {
+  display: flex;
+  align-items: center;
+  gap: $spacing-1;
+}
+
+.translations-empty {
+  font-size: $font-size-sm;
+  color: $gray-500;
+  margin: 0;
+  text-align: center;
+  padding: $spacing-2;
+}
+
+// Language badge for page list
+.language-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  background-color: $gray-100;
+  color: $gray-700;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  text-transform: uppercase;
+  border-radius: $radius-md;
+  margin-right: $spacing-2;
+}
