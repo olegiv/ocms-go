@@ -219,6 +219,7 @@ func run() error {
 	modulesHandler := handler.NewModulesHandler(db, renderer, sessionManager, moduleRegistry, hookRegistry)
 	frontendHandler := handler.NewFrontendHandler(db, themeManager, cacheManager, logger)
 	cacheHandler := handler.NewCacheHandler(renderer, sessionManager, cacheManager)
+	languagesHandler := handler.NewLanguagesHandler(db, renderer, sessionManager)
 	apiHandler := api.NewHandler(db)
 	apiDocsHandler, err := api.NewDocsHandler(api.DocsConfig{
 		DB:         db,
@@ -289,6 +290,16 @@ func run() error {
 		r.Put("/users/{id}", usersHandler.Update)
 		r.Post("/users/{id}", usersHandler.Update) // HTML forms can't send PUT
 		r.Delete("/users/{id}", usersHandler.Delete)
+
+		// Language management routes
+		r.Get("/languages", languagesHandler.List)
+		r.Get("/languages/new", languagesHandler.NewForm)
+		r.Post("/languages", languagesHandler.Create)
+		r.Get("/languages/{id}", languagesHandler.EditForm)
+		r.Put("/languages/{id}", languagesHandler.Update)
+		r.Post("/languages/{id}", languagesHandler.Update) // HTML forms can't send PUT
+		r.Delete("/languages/{id}", languagesHandler.Delete)
+		r.Post("/languages/{id}/default", languagesHandler.SetDefault)
 
 		// Page management routes
 		r.Get("/pages", pagesHandler.List)
