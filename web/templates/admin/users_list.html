@@ -1,13 +1,13 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1 class="page-title">Users</h1>
-        <p class="page-description">Manage your CMS users ({{.Data.TotalUsers}} total)</p>
+        <h1 class="page-title">{{T .AdminLang "users.title"}}</h1>
+        <p class="page-description">{{T .AdminLang "users.description" .Data.TotalUsers}}</p>
     </div>
     <div class="page-actions">
         <a href="/admin/users/new" class="btn btn-primary">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>
-            Add User
+            {{T .AdminLang "users.add_user"}}
         </a>
     </div>
 </div>
@@ -18,12 +18,12 @@
         <table class="table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Created</th>
-                    <th>Last Login</th>
-                    <th class="text-right">Actions</th>
+                    <th>{{T .AdminLang "label.name"}}</th>
+                    <th>{{T .AdminLang "label.email"}}</th>
+                    <th>{{T .AdminLang "label.role"}}</th>
+                    <th>{{T .AdminLang "label.created_at"}}</th>
+                    <th>{{T .AdminLang "users.last_login"}}</th>
+                    <th class="text-right">{{T .AdminLang "label.actions"}}</th>
                 </tr>
             </thead>
             <tbody>
@@ -35,14 +35,14 @@
                             <div class="user-avatar-sm">{{slice .Name 0 1}}</div>
                             <span>{{.Name}}</span>
                             {{if eq .ID $currentUserID}}
-                            <span class="badge badge-info">You</span>
+                            <span class="badge badge-info">{{T $.AdminLang "users.you"}}</span>
                             {{end}}
                         </div>
                     </td>
                     <td>{{.Email}}</td>
                     <td>
                         <span class="badge badge-{{if eq .Role "admin"}}primary{{else if eq .Role "editor"}}success{{else}}secondary{{end}}">
-                            {{.Role}}
+                            {{if eq .Role "admin"}}{{T $.AdminLang "role.admin"}}{{else if eq .Role "editor"}}{{T $.AdminLang "role.editor"}}{{else if eq .Role "author"}}{{T $.AdminLang "role.author"}}{{else}}{{.Role}}{{end}}
                         </span>
                     </td>
                     <td>{{formatDate .CreatedAt}}</td>
@@ -50,12 +50,12 @@
                         {{if .LastLoginAt.Valid}}
                             {{formatDateTime .LastLoginAt.Time}}
                         {{else}}
-                            <span class="text-muted">Never</span>
+                            <span class="text-muted">{{T $.AdminLang "users.never"}}</span>
                         {{end}}
                     </td>
                     <td class="text-right">
                         <div class="action-buttons">
-                            <a href="/admin/users/{{.ID}}" class="btn btn-sm btn-outline" title="Edit">
+                            <a href="/admin/users/{{.ID}}" class="btn btn-sm btn-outline" title="{{T $.AdminLang "btn.edit"}}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                             </a>
                             {{if ne .ID $currentUserID}}
@@ -63,7 +63,7 @@
                                 <button
                                     type="button"
                                     class="btn btn-sm btn-danger"
-                                    title="Delete"
+                                    title="{{T $.AdminLang "btn.delete"}}"
                                     @click="showConfirm = true"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
@@ -80,15 +80,15 @@
                                 >
                                     <div class="modal" @click.stop>
                                         <div class="modal-header">
-                                            <h3 class="modal-title">Delete User</h3>
+                                            <h3 class="modal-title">{{T $.AdminLang "users.delete_user"}}</h3>
                                             <button type="button" class="modal-close" @click="showConfirm = false">&times;</button>
                                         </div>
                                         <div class="modal-body">
-                                            <p>Are you sure you want to delete <strong>{{.Name}}</strong>?</p>
-                                            <p class="text-muted">This action cannot be undone.</p>
+                                            <p>{{T $.AdminLang "users.confirm_delete"}}</p>
+                                            <p class="text-muted">{{T $.AdminLang "users.delete_warning"}}</p>
                                         </div>
                                         <div class="modal-footer">
-                                            <button type="button" class="btn btn-outline" @click="showConfirm = false">Cancel</button>
+                                            <button type="button" class="btn btn-outline" @click="showConfirm = false">{{T $.AdminLang "btn.cancel"}}</button>
                                             <button
                                                 type="button"
                                                 class="btn btn-danger"
@@ -97,7 +97,7 @@
                                                 hx-swap="outerHTML"
                                                 @click="showConfirm = false"
                                             >
-                                                Delete User
+                                                {{T $.AdminLang "users.delete_user"}}
                                             </button>
                                         </div>
                                     </div>
@@ -116,29 +116,29 @@
     <div class="card-footer">
         <div class="pagination">
             <div class="pagination-info">
-                Page {{.Data.CurrentPage}} of {{.Data.TotalPages}}
+                {{T .AdminLang "pagination.page"}} {{.Data.CurrentPage}} {{T .AdminLang "pagination.of"}} {{.Data.TotalPages}}
             </div>
             <div class="pagination-controls">
                 {{if .Data.HasPrev}}
                 <a href="/admin/users?page={{.Data.PrevPage}}" class="btn btn-sm btn-outline">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-                    Previous
+                    {{T .AdminLang "pagination.previous"}}
                 </a>
                 {{else}}
                 <span class="btn btn-sm btn-outline disabled">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-                    Previous
+                    {{T .AdminLang "pagination.previous"}}
                 </span>
                 {{end}}
 
                 {{if .Data.HasNext}}
                 <a href="/admin/users?page={{.Data.NextPage}}" class="btn btn-sm btn-outline">
-                    Next
+                    {{T .AdminLang "pagination.next"}}
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
                 </a>
                 {{else}}
                 <span class="btn btn-sm btn-outline disabled">
-                    Next
+                    {{T .AdminLang "pagination.next"}}
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
                 </span>
                 {{end}}
@@ -152,10 +152,10 @@
     <div class="card-body">
         <div class="empty-state">
             <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            <p>No users found</p>
-            <span class="empty-hint">Create your first user to get started.</span>
+            <p>{{T .AdminLang "users.no_users"}}</p>
+            <span class="empty-hint">{{T .AdminLang "users.create_first_hint"}}</span>
             <div class="empty-state-action">
-                <a href="/admin/users/new" class="btn btn-primary">Add User</a>
+                <a href="/admin/users/new" class="btn btn-primary">{{T .AdminLang "users.add_user"}}</a>
             </div>
         </div>
     </div>

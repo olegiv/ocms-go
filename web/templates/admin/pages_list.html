@@ -1,13 +1,13 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1 class="page-title">Pages</h1>
-        <p class="page-description">Manage your CMS pages ({{.Data.TotalCount}} total)</p>
+        <h1 class="page-title">{{T .AdminLang "pages.title"}}</h1>
+        <p class="page-description">{{T .AdminLang "pages.total_count" .Data.TotalCount}}</p>
     </div>
     <div class="page-actions">
         <a href="/admin/pages/new" class="btn btn-primary">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><line x1="12" x2="12" y1="11" y2="17"/><line x1="9" x2="15" y1="14" y2="14"/></svg>
-            New Page
+            {{T .AdminLang "pages.new"}}
         </a>
     </div>
 </div>
@@ -15,27 +15,27 @@
 <!-- Filters -->
 <div class="filter-bar">
     <div class="filter-group">
-        <label class="filter-label">Status:</label>
+        <label class="filter-label">{{T .AdminLang "label.status"}}:</label>
         <div class="filter-buttons">
             <a href="{{pagesListURL "" .Data.CategoryFilter .Data.SearchFilter 0}}" class="btn btn-sm {{if eq .Data.StatusFilter ""}}btn-primary{{else}}btn-outline{{end}}">
-                All
+                {{T .AdminLang "label.all"}}
             </a>
             {{range .Data.Statuses}}
             <a href="{{pagesListURL . $.Data.CategoryFilter $.Data.SearchFilter 0}}" class="btn btn-sm {{if eq $.Data.StatusFilter .}}btn-primary{{else}}btn-outline{{end}}">
-                {{if eq . "draft"}}Draft{{else if eq . "published"}}Published{{else}}{{.}}{{end}}
+                {{if eq . "draft"}}{{T $.AdminLang "status.draft"}}{{else if eq . "published"}}{{T $.AdminLang "status.published"}}{{else}}{{.}}{{end}}
             </a>
             {{end}}
             <a href="{{pagesListURL "scheduled" .Data.CategoryFilter .Data.SearchFilter 0}}" class="btn btn-sm {{if eq .Data.StatusFilter "scheduled"}}btn-primary{{else}}btn-outline{{end}}">
                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                Scheduled
+                {{T .AdminLang "status.scheduled"}}
             </a>
         </div>
     </div>
     {{if .Data.AllCategories}}
     <div class="filter-group">
-        <label class="filter-label">Category:</label>
+        <label class="filter-label">{{T .AdminLang "label.category"}}:</label>
         <select class="form-select form-select-sm" onchange="window.location.href=this.value">
-            <option value="{{pagesListURL .Data.StatusFilter 0 .Data.SearchFilter 0}}">All Categories</option>
+            <option value="{{pagesListURL .Data.StatusFilter 0 .Data.SearchFilter 0}}">{{T .AdminLang "pages.all_categories"}}</option>
             {{range .Data.AllCategories}}
             <option value="{{pagesListURL $.Data.StatusFilter .Category.ID $.Data.SearchFilter 0}}" {{if eq $.Data.CategoryFilter .Category.ID}}selected{{end}}>
                 {{if gt .Depth 0}}{{repeat "— " .Depth}}{{end}}{{.Category.Name}}
@@ -46,9 +46,9 @@
     {{end}}
     {{if gt (len .Data.AllLanguages) 1}}
     <div class="filter-group">
-        <label class="filter-label">Language:</label>
+        <label class="filter-label">{{T .AdminLang "label.language"}}:</label>
         <select class="form-select form-select-sm" onchange="window.location.href=this.value">
-            <option value="/admin/pages?{{if .Data.StatusFilter}}status={{.Data.StatusFilter}}&{{end}}{{if gt .Data.CategoryFilter 0}}category={{.Data.CategoryFilter}}&{{end}}{{if .Data.SearchFilter}}search={{.Data.SearchFilter}}{{end}}">All Languages</option>
+            <option value="/admin/pages?{{if .Data.StatusFilter}}status={{.Data.StatusFilter}}&{{end}}{{if gt .Data.CategoryFilter 0}}category={{.Data.CategoryFilter}}&{{end}}{{if .Data.SearchFilter}}search={{.Data.SearchFilter}}{{end}}">{{T .AdminLang "pages.all_languages"}}</option>
             {{range .Data.AllLanguages}}
             <option value="/admin/pages?{{if $.Data.StatusFilter}}status={{$.Data.StatusFilter}}&{{end}}{{if gt $.Data.CategoryFilter 0}}category={{$.Data.CategoryFilter}}&{{end}}language={{.ID}}{{if $.Data.SearchFilter}}&search={{$.Data.SearchFilter}}{{end}}" {{if eq $.Data.LanguageFilter .ID}}selected{{end}}>
                 {{.Name}} ({{.Code}})
@@ -62,12 +62,12 @@
             {{if .Data.StatusFilter}}<input type="hidden" name="status" value="{{.Data.StatusFilter}}">{{end}}
             {{if gt .Data.CategoryFilter 0}}<input type="hidden" name="category" value="{{.Data.CategoryFilter}}">{{end}}
             <div class="search-input-wrapper">
-                <input type="text" name="search" value="{{.Data.SearchFilter}}" placeholder="Search pages..." class="form-control form-control-sm" aria-label="Search pages">
-                <button type="submit" class="btn btn-sm btn-outline search-btn" title="Search">
+                <input type="text" name="search" value="{{.Data.SearchFilter}}" placeholder="{{T .AdminLang "pages.search_placeholder"}}" class="form-control form-control-sm" aria-label="{{T .AdminLang "btn.search"}}">
+                <button type="submit" class="btn btn-sm btn-outline search-btn" title="{{T .AdminLang "btn.search"}}">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                 </button>
                 {{if .Data.SearchFilter}}
-                <a href="{{pagesListURL .Data.StatusFilter .Data.CategoryFilter "" 0}}" class="btn btn-sm btn-outline clear-search-btn" title="Clear search">
+                <a href="{{pagesListURL .Data.StatusFilter .Data.CategoryFilter "" 0}}" class="btn btn-sm btn-outline clear-search-btn" title="{{T .AdminLang "btn.clear"}}">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </a>
                 {{end}}
@@ -78,8 +78,7 @@
 
 {{if .Data.SearchFilter}}
 <div class="search-results-info">
-    <p>Found <strong>{{.Data.TotalCount}}</strong> {{if eq .Data.TotalCount 1}}page{{else}}pages{{end}} matching "<strong>{{.Data.SearchFilter}}</strong>"
-    {{if .Data.StatusFilter}} in <strong>{{.Data.StatusFilter}}</strong> pages{{end}}</p>
+    <p>{{T .AdminLang "pages.search_results" .Data.TotalCount .Data.SearchFilter}}</p>
 </div>
 {{end}}
 
@@ -89,14 +88,14 @@
         <table class="table">
             <thead>
                 <tr>
-                    <th style="width: 60px;">Image</th>
-                    <th>Title</th>
-                    <th>Tags</th>
-                    <th>Categories</th>
-                    <th>Slug</th>
-                    <th>Status</th>
-                    <th>Updated</th>
-                    <th class="text-right">Actions</th>
+                    <th style="width: 60px;">{{T .AdminLang "label.image"}}</th>
+                    <th>{{T .AdminLang "label.title"}}</th>
+                    <th>{{T .AdminLang "label.tags"}}</th>
+                    <th>{{T .AdminLang "label.categories"}}</th>
+                    <th>{{T .AdminLang "label.slug"}}</th>
+                    <th>{{T .AdminLang "label.status"}}</th>
+                    <th>{{T .AdminLang "label.updated_at"}}</th>
+                    <th class="text-right">{{T .AdminLang "label.actions"}}</th>
                 </tr>
             </thead>
             <tbody>
@@ -148,13 +147,13 @@
                     </td>
                     <td>
                         {{if and (eq .Status "draft") .ScheduledAt.Valid}}
-                        <span class="badge badge-info" title="Scheduled for {{.ScheduledAt.Time.Format "Jan 02, 2006 at 3:04 PM"}}">
+                        <span class="badge badge-info" title="{{T $.AdminLang "status.scheduled"}} {{.ScheduledAt.Time.Format "Jan 02, 2006 at 3:04 PM"}}">
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                            Scheduled
+                            {{T $.AdminLang "status.scheduled"}}
                         </span>
                         {{else}}
                         <span class="badge badge-{{if eq .Status "published"}}success{{else}}warning{{end}}">
-                            {{.Status}}
+                            {{if eq .Status "published"}}{{T $.AdminLang "status.published"}}{{else if eq .Status "draft"}}{{T $.AdminLang "status.draft"}}{{else}}{{.Status}}{{end}}
                         </span>
                         {{end}}
                     </td>
@@ -162,7 +161,7 @@
                     <td class="text-right">
                         <div class="action-buttons">
                             <form action="/admin/pages/{{.ID}}/publish" method="POST" class="inline-form">
-                                <button type="submit" class="btn btn-sm {{if eq .Status "published"}}btn-warning{{else}}btn-success{{end}}" title="{{if eq .Status "published"}}Unpublish{{else}}Publish{{end}}">
+                                <button type="submit" class="btn btn-sm {{if eq .Status "published"}}btn-warning{{else}}btn-success{{end}}" title="{{if eq .Status "published"}}{{T $.AdminLang "btn.unpublish"}}{{else}}{{T $.AdminLang "btn.publish"}}{{end}}">
                                     {{if eq .Status "published"}}
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" x2="23" y1="1" y2="23"/></svg>
                                     {{else}}
@@ -170,14 +169,14 @@
                                     {{end}}
                                 </button>
                             </form>
-                            <a href="/admin/pages/{{.ID}}" class="btn btn-sm btn-outline" title="Edit">
+                            <a href="/admin/pages/{{.ID}}" class="btn btn-sm btn-outline" title="{{T $.AdminLang "btn.edit"}}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                             </a>
                             <div x-data="{ showConfirm: false }" class="delete-action">
                                 <button
                                     type="button"
                                     class="btn btn-sm btn-danger"
-                                    title="Delete"
+                                    title="{{T $.AdminLang "btn.delete"}}"
                                     @click="showConfirm = true"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
@@ -194,15 +193,15 @@
                                 >
                                     <div class="modal" @click.stop>
                                         <div class="modal-header">
-                                            <h3 class="modal-title">Delete Page</h3>
+                                            <h3 class="modal-title">{{T $.AdminLang "pages.delete_page"}}</h3>
                                             <button type="button" class="modal-close" @click="showConfirm = false">&times;</button>
                                         </div>
                                         <div class="modal-body">
-                                            <p>Are you sure you want to delete <strong>{{.Title}}</strong>?</p>
-                                            <p class="text-muted">This action cannot be undone. All versions will also be deleted.</p>
+                                            <p>{{T $.AdminLang "pages.confirm_delete"}}</p>
+                                            <p class="text-muted">{{T $.AdminLang "pages.delete_warning"}}</p>
                                         </div>
                                         <div class="modal-footer">
-                                            <button type="button" class="btn btn-outline" @click="showConfirm = false">Cancel</button>
+                                            <button type="button" class="btn btn-outline" @click="showConfirm = false">{{T $.AdminLang "btn.cancel"}}</button>
                                             <button
                                                 type="button"
                                                 class="btn btn-danger"
@@ -211,7 +210,7 @@
                                                 hx-swap="outerHTML"
                                                 @click="showConfirm = false"
                                             >
-                                                Delete Page
+                                                {{T $.AdminLang "pages.delete_page"}}
                                             </button>
                                         </div>
                                     </div>
@@ -229,29 +228,29 @@
     <div class="card-footer">
         <div class="pagination">
             <div class="pagination-info">
-                Page {{.Data.CurrentPage}} of {{.Data.TotalPages}}
+                {{T .AdminLang "pagination.page"}} {{.Data.CurrentPage}} {{T .AdminLang "pagination.of"}} {{.Data.TotalPages}}
             </div>
             <div class="pagination-controls">
                 {{if .Data.HasPrev}}
                 <a href="{{pagesListURL .Data.StatusFilter .Data.CategoryFilter .Data.SearchFilter .Data.PrevPage}}" class="btn btn-sm btn-outline">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-                    Previous
+                    {{T .AdminLang "pagination.previous"}}
                 </a>
                 {{else}}
                 <span class="btn btn-sm btn-outline disabled">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-                    Previous
+                    {{T .AdminLang "pagination.previous"}}
                 </span>
                 {{end}}
 
                 {{if .Data.HasNext}}
                 <a href="{{pagesListURL .Data.StatusFilter .Data.CategoryFilter .Data.SearchFilter .Data.NextPage}}" class="btn btn-sm btn-outline">
-                    Next
+                    {{T .AdminLang "pagination.next"}}
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
                 </a>
                 {{else}}
                 <span class="btn btn-sm btn-outline disabled">
-                    Next
+                    {{T .AdminLang "pagination.next"}}
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
                 </span>
                 {{end}}
@@ -265,14 +264,14 @@
     <div class="card-body">
         <div class="empty-state">
             <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
-            <p>No pages found</p>
+            <p>{{T .AdminLang "pages.no_pages"}}</p>
             {{if .Data.StatusFilter}}
-            <span class="empty-hint">No {{.Data.StatusFilter}} pages. Try changing the filter or create a new page.</span>
+            <span class="empty-hint">{{T .AdminLang "pages.no_filter_results" .Data.StatusFilter}}</span>
             {{else}}
-            <span class="empty-hint">Create your first page to get started.</span>
+            <span class="empty-hint">{{T .AdminLang "pages.create_first_hint"}}</span>
             {{end}}
             <div class="empty-state-action">
-                <a href="/admin/pages/new" class="btn btn-primary">New Page</a>
+                <a href="/admin/pages/new" class="btn btn-primary">{{T .AdminLang "pages.new"}}</a>
             </div>
         </div>
     </div>

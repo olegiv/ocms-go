@@ -168,7 +168,76 @@
 .header-right {
   display: flex;
   align-items: center;
-  gap: $spacing-4;
+  gap: $spacing-3;
+}
+
+// Language selector (select-based)
+.lang-selector-form {
+  margin: 0;
+}
+
+.lang-selector {
+  display: flex;
+  align-items: center;
+  gap: $spacing-1;
+  padding: $spacing-1 $spacing-2;
+  color: $gray-600;
+  border-radius: $radius-md;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover {
+    color: $gray-900;
+    background-color: $gray-100;
+  }
+
+  svg {
+    flex-shrink: 0;
+  }
+}
+
+.lang-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background: transparent;
+  border: none;
+  padding: $spacing-1 $spacing-4 $spacing-1 $spacing-1;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: inherit;
+  cursor: pointer;
+  outline: none;
+  // Add dropdown arrow
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0 center;
+
+  option {
+    color: $gray-900;
+    background-color: $white;
+  }
+}
+
+.dropdown-menu-end {
+  right: 0;
+  left: auto;
+}
+
+.dropdown-header {
+  padding: $spacing-2 $spacing-4;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+  color: $gray-500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid $gray-100;
+}
+
+.dropdown-item.active {
+  background-color: rgba($primary, 0.1);
+  color: $primary;
+  font-weight: $font-weight-medium;
 }
 
 .header-user {
