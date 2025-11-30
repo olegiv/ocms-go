@@ -259,10 +259,21 @@ func (r *Registry) AllTemplateFuncs() template.FuncMap {
 
 // ModuleInfo contains information about a registered module.
 type ModuleInfo struct {
-	Name        string
-	Version     string
+	Name              string
+	Version           string
+	Description       string
+	Initialized       bool
+	MigrationCount    int  // Total number of migrations defined
+	MigrationsApplied int  // Number of migrations applied
+	MigrationsPending int  // Number of pending migrations
+	HasMigrations     bool // Whether the module has any migrations
+}
+
+// MigrationInfo contains information about a module migration.
+type MigrationInfo struct {
+	Version     int64
 	Description string
-	Initialized bool
+	Applied     bool
 }
 
 // ListInfo returns information about all registered modules.
@@ -273,14 +284,65 @@ func (r *Registry) ListInfo() []ModuleInfo {
 	infos := make([]ModuleInfo, 0, len(r.order))
 	for _, name := range r.order {
 		m := r.modules[name]
+		migrations := m.Migrations()
+		migrationCount := len(migrations)
+		appliedCount := 0
+
+		// Count applied migrations if we have a context with DB
+		if r.ctx != nil && r.ctx.DB != nil {
+			for _, mig := range migrations {
+				applied, err := r.isMigrationApplied(r.ctx.DB, name, mig.Version)
+				if err == nil && applied {
+					appliedCount++
+				}
+			}
+		}
+
 		infos = append(infos, ModuleInfo{
-			Name:        m.Name(),
-			Version:     m.Version(),
-			Description: m.Description(),
-			Initialized: r.ctx != nil,
+			Name:              m.Name(),
+			Version:           m.Version(),
+			Description:       m.Description(),
+			Initialized:       r.ctx != nil,
+			MigrationCount:    migrationCount,
+			MigrationsApplied: appliedCount,
+			MigrationsPending: migrationCount - appliedCount,
+			HasMigrations:     migrationCount > 0,
 		})
 	}
 	return infos
+}
+
+// GetMigrationInfo returns detailed migration information for a specific module.
+func (r *Registry) GetMigrationInfo(moduleName string) ([]MigrationInfo, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	m, ok := r.modules[moduleName]
+	if !ok {
+		return nil, fmt.Errorf("module %q not found", moduleName)
+	}
+
+	migrations := m.Migrations()
+	infos := make([]MigrationInfo, len(migrations))
+
+	for i, mig := range migrations {
+		applied := false
+		if r.ctx != nil && r.ctx.DB != nil {
+			var err error
+			applied, err = r.isMigrationApplied(r.ctx.DB, moduleName, mig.Version)
+			if err != nil {
+				r.logger.Warn("failed to check migration status", "module", moduleName, "version", mig.Version, "error", err)
+			}
+		}
+
+		infos[i] = MigrationInfo{
+			Version:     mig.Version,
+			Description: mig.Description,
+			Applied:     applied,
+		}
+	}
+
+	return infos, nil
 }
 
 // Count returns the number of registered modules.
