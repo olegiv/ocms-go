@@ -125,6 +125,75 @@ func GetAPIKey(r *http.Request) *store.ApiKey {
 	return &apiKey
 }
 
+// OptionalAPIKeyAuth creates middleware that optionally validates API key authentication.
+// Unlike APIKeyAuth, this middleware does not require authentication - it simply
+// adds the API key to context if a valid one is provided.
+func OptionalAPIKeyAuth(db *sql.DB) func(http.Handler) http.Handler {
+	queries := store.New(db)
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Get Authorization header
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "" {
+				// No auth header - continue without API key
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Expect "Bearer <key>" format
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+				// Invalid format - continue without API key
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			rawKey := parts[1]
+			if rawKey == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Hash the key and look it up
+			keyHash := model.HashAPIKey(rawKey)
+
+			apiKey, err := queries.GetAPIKeyByHash(r.Context(), keyHash)
+			if err != nil {
+				// Invalid key - continue without API key
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Check if key is active
+			if !apiKey.IsActive {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Check if key is expired
+			if apiKey.ExpiresAt.Valid && time.Now().After(apiKey.ExpiresAt.Time) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Update last used timestamp (fire and forget)
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				_ = queries.UpdateAPIKeyLastUsed(ctx, store.UpdateAPIKeyLastUsedParams{
+					LastUsedAt: sql.NullTime{Time: time.Now(), Valid: true},
+					ID:         apiKey.ID,
+				})
+			}()
+
+			// Add API key to context
+			ctx := context.WithValue(r.Context(), ContextKeyAPIKey, apiKey)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
 // RequirePermission creates middleware that requires a specific API permission.
 // This should be used after APIKeyAuth middleware.
 func RequirePermission(permission string) func(http.Handler) http.Handler {

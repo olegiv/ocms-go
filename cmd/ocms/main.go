@@ -391,6 +391,14 @@ func run() error {
 		// Public endpoints (no authentication required)
 		r.Get("/status", apiHandler.Status)
 
+		// Pages - public read endpoints (optional auth for enhanced access)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.OptionalAPIKeyAuth(db))
+			r.Get("/pages", apiHandler.ListPages)
+			r.Get("/pages/{id}", apiHandler.GetPage)
+			r.Get("/pages/slug/{slug}", apiHandler.GetPageBySlug)
+		})
+
 		// Protected endpoints (API key required)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.APIKeyAuth(db))
@@ -399,9 +407,13 @@ func run() error {
 			// Auth info endpoint
 			r.Get("/auth", apiHandler.AuthInfo)
 
-			// Pages endpoints (to be implemented in iteration 18)
-			// r.Get("/pages", ...) - public
-			// r.Post("/pages", ...) - requires pages:write
+			// Pages - write endpoints (requires pages:write permission)
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission("pages:write"))
+				r.Post("/pages", apiHandler.CreatePage)
+				r.Put("/pages/{id}", apiHandler.UpdatePage)
+				r.Delete("/pages/{id}", apiHandler.DeletePage)
+			})
 
 			// Media endpoints (to be implemented in iteration 19)
 			// r.Get("/media", ...) - public
