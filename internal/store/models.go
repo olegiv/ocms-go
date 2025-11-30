@@ -39,6 +39,45 @@ type Event struct {
 	CreatedAt time.Time     `json:"created_at"`
 }
 
+type Form struct {
+	ID             int64          `json:"id"`
+	Name           string         `json:"name"`
+	Slug           string         `json:"slug"`
+	Title          string         `json:"title"`
+	Description    sql.NullString `json:"description"`
+	SuccessMessage sql.NullString `json:"success_message"`
+	EmailTo        sql.NullString `json:"email_to"`
+	IsActive       bool           `json:"is_active"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+}
+
+type FormField struct {
+	ID          int64          `json:"id"`
+	FormID      int64          `json:"form_id"`
+	Type        string         `json:"type"`
+	Name        string         `json:"name"`
+	Label       string         `json:"label"`
+	Placeholder sql.NullString `json:"placeholder"`
+	HelpText    sql.NullString `json:"help_text"`
+	Options     sql.NullString `json:"options"`
+	Validation  sql.NullString `json:"validation"`
+	IsRequired  bool           `json:"is_required"`
+	Position    int64          `json:"position"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+}
+
+type FormSubmission struct {
+	ID        int64          `json:"id"`
+	FormID    int64          `json:"form_id"`
+	Data      string         `json:"data"`
+	IpAddress sql.NullString `json:"ip_address"`
+	UserAgent sql.NullString `json:"user_agent"`
+	IsRead    bool           `json:"is_read"`
+	CreatedAt time.Time      `json:"created_at"`
+}
+
 type MediaFolder struct {
 	ID        int64         `json:"id"`
 	Name      string        `json:"name"`
