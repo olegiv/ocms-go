@@ -63,17 +63,38 @@ templ generate           # Regenerate template Go code (if using templ)
 
 5. **Session Management**: Uses SCS with SQLite store. Session data accessed via context key `middleware.UserContextKey`.
 
+6. **API Middleware**: REST API routes use different middleware:
+   - `middleware.APIKeyAuth` - validates Bearer token
+   - `middleware.RequirePermission` - checks API key permissions
+   - `middleware.APIRateLimit` - per-key rate limiting
+
+7. **Theme System** (`internal/theme/`): Loads themes from `themes/` directory with templates and static assets.
+
+8. **Module System** (`internal/module/`): Extensible plugin architecture with lifecycle management and migrations.
+
+9. **Caching** (`internal/cache/`): In-memory cache with TTL for site config, menus, and sitemaps.
+
+10. **Scheduler** (`internal/scheduler/`): Cron-based task scheduler for scheduled publishing.
+
 ### Package Dependencies
 
 ```
 cmd/ocms/main.go
+    ├── internal/cache       (in-memory caching)
     ├── internal/config      (env var loading)
     ├── internal/handler     (HTTP handlers)
+    │   ├── api/             (REST API handlers)
     │   ├── internal/render  (template rendering)
     │   ├── internal/store   (sqlc database access)
     │   └── internal/service (business logic)
-    ├── internal/middleware  (auth, user loading)
+    ├── internal/middleware  (auth, API auth, rate limiting)
+    ├── internal/module      (module system, hooks)
+    ├── internal/scheduler   (cron scheduler)
+    ├── internal/seo         (sitemap, robots.txt, meta)
     ├── internal/session     (SCS session manager)
+    ├── internal/theme       (theme loading/rendering)
+    ├── modules/             (custom modules)
+    ├── themes/              (frontend themes)
     └── web                  (embedded templates/static)
 ```
 
@@ -85,10 +106,38 @@ cmd/ocms/main.go
 | `OCMS_DB_PATH` | No | `./data/ocms.db` | SQLite database path |
 | `OCMS_SERVER_PORT` | No | `8080` | Server port |
 | `OCMS_ENV` | No | `development` | Set to `production` for prod |
+| `OCMS_THEMES_DIR` | No | `./themes` | Directory containing themes |
+| `OCMS_ACTIVE_THEME` | No | `default` | Name of active theme |
+| `OCMS_API_RATE_LIMIT` | No | `100` | API requests per minute per key |
+| `OCMS_CACHE_TTL` | No | `3600` | Default cache TTL in seconds |
 
 ## Default Credentials
 
 On first run, seeds admin user: `admin@example.com` / `changeme`
+
+## Key Endpoints
+
+### Admin Routes
+- `/admin/` - Dashboard
+- `/admin/pages` - Page management
+- `/admin/media` - Media library
+- `/admin/themes` - Theme management
+- `/admin/modules` - Module list
+- `/admin/api-keys` - API key management
+- `/admin/cache` - Cache management
+
+### REST API
+- `GET /api/v1/pages` - List pages (public: published only)
+- `POST /api/v1/pages` - Create page (requires `pages:write`)
+- `GET /api/v1/media` - List media
+- `GET /api/v1/tags` - List tags
+- `GET /api/v1/categories` - List categories (tree)
+- `GET /api/v1/docs` - API documentation
+
+### SEO Routes
+- `/sitemap.xml` - Auto-generated sitemap
+- `/robots.txt` - Robots configuration
+- `/health` - Health check endpoint
 
 ## Testing Requirements
 
@@ -101,17 +150,43 @@ On first run, seeds admin user: `admin@example.com` / `changeme`
 Example testing workflow:
 ```bash
 # Start server in background
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! timeout 30 go run ./cmd/ocms &
+OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go run ./cmd/ocms &
 
 # Wait for server to start
-sleep 2
+sleep 3
 
-# Test endpoints with curl
-curl -I http://localhost:8080/uploads/originals/{uuid}/{filename}
-curl -s http://localhost:8080/admin/media/api | jq .
+# Test health endpoint
+curl -s http://localhost:8080/health
+
+# Test API endpoints
+curl -s http://localhost:8080/api/v1/pages
+curl -s http://localhost:8080/api/v1/tags
+curl -s http://localhost:8080/sitemap.xml
+
+# Test with API key authentication
+curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/api/v1/pages
 
 # Kill server when done
 pkill -f "go run ./cmd/ocms" || true
 ```
 
 Never tell the user to "restart the server and test" - always run the tests yourself first.
+
+## Testing Specific Components
+
+```bash
+# Test cache layer
+OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./internal/cache/...
+
+# Test theme system
+OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./internal/theme/...
+
+# Test module system
+OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./internal/module/...
+
+# Test API middleware
+OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./internal/middleware/...
+
+# Test API handlers
+OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./internal/handler/api/...
+```
