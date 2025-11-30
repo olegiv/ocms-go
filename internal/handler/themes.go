@@ -10,6 +10,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"ocms-go/internal/cache"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/render"
 	"ocms-go/internal/store"
@@ -22,15 +23,17 @@ type ThemesHandler struct {
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
 	themeManager   *theme.Manager
+	cacheManager   *cache.Manager
 }
 
 // NewThemesHandler creates a new ThemesHandler.
-func NewThemesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, tm *theme.Manager) *ThemesHandler {
+func NewThemesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, tm *theme.Manager, cm *cache.Manager) *ThemesHandler {
 	return &ThemesHandler{
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
 		themeManager:   tm,
+		cacheManager:   cm,
 	}
 }
 
@@ -117,6 +120,11 @@ func (h *ThemesHandler) Activate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("failed to save active theme to config", "error", err)
 		// Theme is still activated in memory, just not persisted
+	}
+
+	// Invalidate config cache (theme settings are cached with config)
+	if h.cacheManager != nil {
+		h.cacheManager.InvalidateConfig()
 	}
 
 	slog.Info("theme activated", "theme", themeName, "activated_by", user.ID)
@@ -229,6 +237,11 @@ func (h *ThemesHandler) SaveSettings(w http.ResponseWriter, r *http.Request) {
 		h.renderer.SetFlash(r, "Error saving settings", "error")
 		http.Redirect(w, r, "/admin/themes/"+themeName+"/settings", http.StatusSeeOther)
 		return
+	}
+
+	// Invalidate theme settings cache
+	if h.cacheManager != nil {
+		h.cacheManager.InvalidateThemeSettings()
 	}
 
 	slog.Info("theme settings saved", "theme", themeName, "saved_by", user.ID)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
+	"ocms-go/internal/cache"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/model"
 	"ocms-go/internal/render"
@@ -21,14 +22,16 @@ type ConfigHandler struct {
 	queries        *store.Queries
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
+	cacheManager   *cache.Manager
 }
 
 // NewConfigHandler creates a new ConfigHandler.
-func NewConfigHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager) *ConfigHandler {
+func NewConfigHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, cm *cache.Manager) *ConfigHandler {
 	return &ConfigHandler{
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
+		cacheManager:   cm,
 	}
 }
 
@@ -182,6 +185,11 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		}
 		return
+	}
+
+	// Invalidate config cache
+	if h.cacheManager != nil {
+		h.cacheManager.InvalidateConfig()
 	}
 
 	slog.Info("config updated", "updated_by", user.ID)

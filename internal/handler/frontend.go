@@ -16,6 +16,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"ocms-go/internal/cache"
 	"ocms-go/internal/seo"
 	"ocms-go/internal/service"
 	"ocms-go/internal/store"
@@ -274,11 +275,12 @@ type FrontendHandler struct {
 	menuService   *service.MenuService
 	widgetService *service.WidgetService
 	searchService *service.SearchService
+	cacheManager  *cache.Manager
 	logger        *slog.Logger
 }
 
 // NewFrontendHandler creates a new FrontendHandler.
-func NewFrontendHandler(db *sql.DB, themeManager *theme.Manager, logger *slog.Logger) *FrontendHandler {
+func NewFrontendHandler(db *sql.DB, themeManager *theme.Manager, cacheManager *cache.Manager, logger *slog.Logger) *FrontendHandler {
 	return &FrontendHandler{
 		db:            db,
 		queries:       store.New(db),
@@ -286,6 +288,7 @@ func NewFrontendHandler(db *sql.DB, themeManager *theme.Manager, logger *slog.Lo
 		menuService:   service.NewMenuService(db),
 		widgetService: service.NewWidgetService(db),
 		searchService: service.NewSearchService(db),
+		cacheManager:  cacheManager,
 		logger:        logger,
 	}
 }
@@ -720,9 +723,11 @@ func (h *FrontendHandler) NotFound(w http.ResponseWriter, r *http.Request) {
 func (h *FrontendHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Get site URL from config
+	// Get site URL from config (use cache if available)
 	siteURL := ""
-	if cfg, err := h.queries.GetConfigByKey(ctx, "site_url"); err == nil && cfg.Value != "" {
+	if h.cacheManager != nil {
+		siteURL, _ = h.cacheManager.GetConfig(ctx, "site_url")
+	} else if cfg, err := h.queries.GetConfigByKey(ctx, "site_url"); err == nil {
 		siteURL = cfg.Value
 	}
 	if siteURL == "" {
@@ -734,7 +739,31 @@ func (h *FrontendHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
 		siteURL = scheme + "://" + r.Host
 	}
 
-	// Build sitemap
+	// Get sitemap from cache (or generate it)
+	var xmlContent []byte
+	var err error
+
+	if h.cacheManager != nil {
+		xmlContent, err = h.cacheManager.GetSitemap(ctx, siteURL)
+	} else {
+		// Fallback: generate sitemap directly (no caching)
+		xmlContent, err = h.generateSitemap(ctx, siteURL)
+	}
+
+	if err != nil {
+		h.logger.Error("failed to generate sitemap", "error", err)
+		http.Error(w, "Failed to generate sitemap", http.StatusInternalServerError)
+		return
+	}
+
+	// Send response
+	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=3600") // Browser cache for 1 hour
+	w.Write(xmlContent)
+}
+
+// generateSitemap generates sitemap XML without caching.
+func (h *FrontendHandler) generateSitemap(ctx context.Context, siteURL string) ([]byte, error) {
 	builder := seo.NewSitemapBuilder(siteURL)
 	builder.AddHomepage()
 
@@ -777,27 +806,18 @@ func (h *FrontendHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Generate XML
-	xmlContent, err := builder.Build()
-	if err != nil {
-		h.logger.Error("failed to generate sitemap", "error", err)
-		http.Error(w, "Failed to generate sitemap", http.StatusInternalServerError)
-		return
-	}
-
-	// Send response
-	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
-	w.Header().Set("Cache-Control", "public, max-age=3600") // Cache for 1 hour
-	w.Write(xmlContent)
+	return builder.Build()
 }
 
 // Robots generates and serves the robots.txt file.
 func (h *FrontendHandler) Robots(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Get site URL from config
+	// Get site URL from config (use cache if available)
 	siteURL := ""
-	if cfg, err := h.queries.GetConfigByKey(ctx, "site_url"); err == nil && cfg.Value != "" {
+	if h.cacheManager != nil {
+		siteURL, _ = h.cacheManager.GetConfig(ctx, "site_url")
+	} else if cfg, err := h.queries.GetConfigByKey(ctx, "site_url"); err == nil {
 		siteURL = cfg.Value
 	}
 	if siteURL == "" {
@@ -811,13 +831,19 @@ func (h *FrontendHandler) Robots(w http.ResponseWriter, r *http.Request) {
 
 	// Check for robots_disallow_all config (for staging sites)
 	disallowAll := false
-	if cfg, err := h.queries.GetConfigByKey(ctx, "robots_disallow_all"); err == nil {
-		disallowAll = cfg.Value == "1" || cfg.Value == "true"
+	var disallowStr string
+	if h.cacheManager != nil {
+		disallowStr, _ = h.cacheManager.GetConfig(ctx, "robots_disallow_all")
+	} else if cfg, err := h.queries.GetConfigByKey(ctx, "robots_disallow_all"); err == nil {
+		disallowStr = cfg.Value
 	}
+	disallowAll = disallowStr == "1" || disallowStr == "true"
 
 	// Get extra robots.txt rules from config
 	extraRules := ""
-	if cfg, err := h.queries.GetConfigByKey(ctx, "robots_txt_extra"); err == nil {
+	if h.cacheManager != nil {
+		extraRules, _ = h.cacheManager.GetConfig(ctx, "robots_txt_extra")
+	} else if cfg, err := h.queries.GetConfigByKey(ctx, "robots_txt_extra"); err == nil {
 		extraRules = cfg.Value
 	}
 
@@ -1034,30 +1060,47 @@ func (h *FrontendHandler) getSiteData(ctx context.Context) SiteData {
 		Settings:    make(map[string]string),
 	}
 
-	// Get site name from config
-	if cfg, err := h.queries.GetConfigByKey(ctx, "site_name"); err == nil {
-		site.SiteName = cfg.Value
-	}
-
-	// Get site description from config
-	if cfg, err := h.queries.GetConfigByKey(ctx, "site_description"); err == nil {
-		site.Description = cfg.Value
-	}
-
-	// Get site URL from config
-	if cfg, err := h.queries.GetConfigByKey(ctx, "site_url"); err == nil {
-		site.URL = cfg.Value
+	// Get site config values from cache (single DB query on cache miss)
+	if h.cacheManager != nil {
+		if name, err := h.cacheManager.GetConfig(ctx, "site_name"); err == nil && name != "" {
+			site.SiteName = name
+		}
+		if desc, err := h.cacheManager.GetConfig(ctx, "site_description"); err == nil && desc != "" {
+			site.Description = desc
+		}
+		if url, err := h.cacheManager.GetConfig(ctx, "site_url"); err == nil && url != "" {
+			site.URL = url
+		}
+	} else {
+		// Fallback to direct DB queries if cache not available
+		if cfg, err := h.queries.GetConfigByKey(ctx, "site_name"); err == nil {
+			site.SiteName = cfg.Value
+		}
+		if cfg, err := h.queries.GetConfigByKey(ctx, "site_description"); err == nil {
+			site.Description = cfg.Value
+		}
+		if cfg, err := h.queries.GetConfigByKey(ctx, "site_url"); err == nil {
+			site.URL = cfg.Value
+		}
 	}
 
 	// Get active theme config and load theme settings
 	if activeTheme := h.themeManager.GetActiveTheme(); activeTheme != nil {
 		site.Theme = &activeTheme.Config
 
-		// Load theme settings from config table
+		// Load theme settings from cache
 		configKey := "theme_settings_" + activeTheme.Name
-		if cfg, err := h.queries.GetConfigByKey(ctx, configKey); err == nil {
+		var settingsJSON string
+		if h.cacheManager != nil {
+			settingsJSON, _ = h.cacheManager.GetConfig(ctx, configKey)
+		} else {
+			if cfg, err := h.queries.GetConfigByKey(ctx, configKey); err == nil {
+				settingsJSON = cfg.Value
+			}
+		}
+		if settingsJSON != "" {
 			var settings map[string]string
-			if err := json.Unmarshal([]byte(cfg.Value), &settings); err == nil {
+			if err := json.Unmarshal([]byte(settingsJSON), &settings); err == nil {
 				site.Settings = settings
 			}
 		}
@@ -1093,14 +1136,22 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		SearchQuery:     r.URL.Query().Get("q"),
 	}
 
-	// Get site logo from config
-	if cfg, err := h.queries.GetConfigByKey(ctx, "site_logo"); err == nil && cfg.Value != "" {
-		data.SiteLogo = cfg.Value
-	}
-
-	// Load custom CSS from config
-	if cfg, err := h.queries.GetConfigByKey(ctx, "custom_css"); err == nil && cfg.Value != "" {
-		data.CustomCSS = cfg.Value
+	// Get site logo and custom CSS from cache
+	if h.cacheManager != nil {
+		if logo, err := h.cacheManager.GetConfig(ctx, "site_logo"); err == nil && logo != "" {
+			data.SiteLogo = logo
+		}
+		if css, err := h.cacheManager.GetConfig(ctx, "custom_css"); err == nil && css != "" {
+			data.CustomCSS = css
+		}
+	} else {
+		// Fallback to direct DB queries if cache not available
+		if cfg, err := h.queries.GetConfigByKey(ctx, "site_logo"); err == nil && cfg.Value != "" {
+			data.SiteLogo = cfg.Value
+		}
+		if cfg, err := h.queries.GetConfigByKey(ctx, "custom_css"); err == nil && cfg.Value != "" {
+			data.CustomCSS = cfg.Value
+		}
 	}
 
 	// Load menus by slug

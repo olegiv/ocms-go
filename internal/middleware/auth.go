@@ -9,6 +9,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
+	"ocms-go/internal/cache"
 	"ocms-go/internal/store"
 )
 
@@ -94,16 +95,24 @@ func RequireAdmin(next http.Handler) http.Handler {
 }
 
 // LoadSiteConfig creates middleware that loads site configuration (like site_name) into context.
-func LoadSiteConfig(db *sql.DB) func(http.Handler) http.Handler {
+// If cacheManager is provided, it will be used for faster config lookups.
+func LoadSiteConfig(db *sql.DB, cacheManager *cache.Manager) func(http.Handler) http.Handler {
 	queries := store.New(db)
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Try to get site_name from config
+			// Try to get site_name from config (use cache if available)
 			siteName := "oCMS" // default fallback
-			cfg, err := queries.GetConfig(r.Context(), "site_name")
-			if err == nil && cfg.Value != "" {
-				siteName = cfg.Value
+
+			if cacheManager != nil {
+				if name, err := cacheManager.GetConfig(r.Context(), "site_name"); err == nil && name != "" {
+					siteName = name
+				}
+			} else {
+				cfg, err := queries.GetConfig(r.Context(), "site_name")
+				if err == nil && cfg.Value != "" {
+					siteName = cfg.Value
+				}
 			}
 
 			// Add site name to context

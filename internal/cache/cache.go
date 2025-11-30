@@ -1,0 +1,184 @@
+// Package cache provides an in-memory caching layer for oCMS.
+package cache
+
+import (
+	"sync"
+	"sync/atomic"
+	"time"
+)
+
+// Cache is a thread-safe in-memory cache with TTL support.
+type Cache struct {
+	data    sync.Map
+	ttl     time.Duration
+	stopCh  chan struct{}
+	stopped atomic.Bool
+
+	// Stats
+	hits   atomic.Int64
+	misses atomic.Int64
+	sets   atomic.Int64
+}
+
+// cacheEntry holds a cached value with its expiration time.
+type cacheEntry struct {
+	value     any
+	expiresAt time.Time
+}
+
+// Stats holds cache statistics.
+type Stats struct {
+	Hits    int64
+	Misses  int64
+	Sets    int64
+	Items   int
+	HitRate float64
+}
+
+// New creates a new cache with the specified TTL.
+func New(ttl time.Duration) *Cache {
+	return &Cache{
+		ttl:    ttl,
+		stopCh: make(chan struct{}),
+	}
+}
+
+// Get retrieves a value from the cache.
+// Returns the value and true if found and not expired, nil and false otherwise.
+func (c *Cache) Get(key string) (any, bool) {
+	val, ok := c.data.Load(key)
+	if !ok {
+		c.misses.Add(1)
+		return nil, false
+	}
+
+	entry := val.(*cacheEntry)
+	if time.Now().After(entry.expiresAt) {
+		// Entry expired, remove it
+		c.data.Delete(key)
+		c.misses.Add(1)
+		return nil, false
+	}
+
+	c.hits.Add(1)
+	return entry.value, true
+}
+
+// Set stores a value in the cache with the default TTL.
+func (c *Cache) Set(key string, value any) {
+	c.SetWithTTL(key, value, c.ttl)
+}
+
+// SetWithTTL stores a value in the cache with a custom TTL.
+func (c *Cache) SetWithTTL(key string, value any, ttl time.Duration) {
+	entry := &cacheEntry{
+		value:     value,
+		expiresAt: time.Now().Add(ttl),
+	}
+	c.data.Store(key, entry)
+	c.sets.Add(1)
+}
+
+// Delete removes a key from the cache.
+func (c *Cache) Delete(key string) {
+	c.data.Delete(key)
+}
+
+// DeleteByPrefix removes all keys starting with the given prefix.
+func (c *Cache) DeleteByPrefix(prefix string) {
+	c.data.Range(func(key, value any) bool {
+		k := key.(string)
+		if len(k) >= len(prefix) && k[:len(prefix)] == prefix {
+			c.data.Delete(key)
+		}
+		return true
+	})
+}
+
+// Clear removes all entries from the cache.
+func (c *Cache) Clear() {
+	c.data.Range(func(key, value any) bool {
+		c.data.Delete(key)
+		return true
+	})
+}
+
+// StartCleanup starts a background goroutine that periodically removes expired entries.
+func (c *Cache) StartCleanup(interval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				c.removeExpired()
+			case <-c.stopCh:
+				return
+			}
+		}
+	}()
+}
+
+// Stop stops the cleanup goroutine.
+func (c *Cache) Stop() {
+	if c.stopped.CompareAndSwap(false, true) {
+		close(c.stopCh)
+	}
+}
+
+// removeExpired removes all expired entries from the cache.
+func (c *Cache) removeExpired() {
+	now := time.Now()
+	c.data.Range(func(key, value any) bool {
+		entry := value.(*cacheEntry)
+		if now.After(entry.expiresAt) {
+			c.data.Delete(key)
+		}
+		return true
+	})
+}
+
+// Stats returns current cache statistics.
+func (c *Cache) Stats() Stats {
+	hits := c.hits.Load()
+	misses := c.misses.Load()
+	total := hits + misses
+
+	var hitRate float64
+	if total > 0 {
+		hitRate = float64(hits) / float64(total) * 100
+	}
+
+	// Count items
+	itemCount := 0
+	c.data.Range(func(key, value any) bool {
+		itemCount++
+		return true
+	})
+
+	return Stats{
+		Hits:    hits,
+		Misses:  misses,
+		Sets:    c.sets.Load(),
+		Items:   itemCount,
+		HitRate: hitRate,
+	}
+}
+
+// ResetStats resets the cache statistics.
+func (c *Cache) ResetStats() {
+	c.hits.Store(0)
+	c.misses.Store(0)
+	c.sets.Store(0)
+}
+
+// Keys returns all keys in the cache (including expired ones).
+func (c *Cache) Keys() []string {
+	var keys []string
+	c.data.Range(func(key, value any) bool {
+		keys = append(keys, key.(string))
+		return true
+	})
+	return keys
+}

@@ -16,6 +16,7 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
 
+	"ocms-go/internal/cache"
 	"ocms-go/internal/config"
 	"ocms-go/internal/handler"
 	"ocms-go/internal/handler/api"
@@ -135,6 +136,17 @@ func run() error {
 	}
 	slog.Info("theme manager initialized", "themes", themeManager.ThemeCount())
 
+	// Initialize cache manager
+	cacheManager := cache.NewManager(store.New(db))
+	cacheManager.Start()
+	defer cacheManager.Stop()
+
+	// Preload caches
+	if err := cacheManager.Config.Preload(ctx); err != nil {
+		slog.Warn("failed to preload config cache", "error", err)
+	}
+	slog.Info("cache manager initialized")
+
 	// Initialize and start scheduler
 	sched := scheduler.New(db, logger)
 	if err := sched.Start(); err != nil {
@@ -194,16 +206,17 @@ func run() error {
 	adminHandler := handler.NewAdminHandler(db, renderer, sessionManager)
 	usersHandler := handler.NewUsersHandler(db, renderer, sessionManager)
 	pagesHandler := handler.NewPagesHandler(db, renderer, sessionManager)
-	configHandler := handler.NewConfigHandler(db, renderer, sessionManager)
+	configHandler := handler.NewConfigHandler(db, renderer, sessionManager, cacheManager)
 	eventsHandler := handler.NewEventsHandler(db, renderer, sessionManager)
 	taxonomyHandler := handler.NewTaxonomyHandler(db, renderer, sessionManager)
 	mediaHandler := handler.NewMediaHandler(db, renderer, sessionManager, "./uploads")
 	menusHandler := handler.NewMenusHandler(db, renderer, sessionManager)
 	formsHandler := handler.NewFormsHandler(db, renderer, sessionManager)
-	themesHandler := handler.NewThemesHandler(db, renderer, sessionManager, themeManager)
+	themesHandler := handler.NewThemesHandler(db, renderer, sessionManager, themeManager, cacheManager)
 	widgetsHandler := handler.NewWidgetsHandler(db, renderer, sessionManager, themeManager)
 	modulesHandler := handler.NewModulesHandler(db, renderer, sessionManager, moduleRegistry, hookRegistry)
-	frontendHandler := handler.NewFrontendHandler(db, themeManager, logger)
+	frontendHandler := handler.NewFrontendHandler(db, themeManager, cacheManager, logger)
+	cacheHandler := handler.NewCacheHandler(renderer, sessionManager, cacheManager)
 	apiHandler := api.NewHandler(db)
 	apiDocsHandler, err := api.NewDocsHandler(api.DocsConfig{
 		DB:         db,
@@ -256,7 +269,7 @@ func run() error {
 	r.Route("/admin", func(r chi.Router) {
 		r.Use(middleware.Auth(sessionManager))
 		r.Use(middleware.LoadUser(sessionManager, db))
-		r.Use(middleware.LoadSiteConfig(db))
+		r.Use(middleware.LoadSiteConfig(db, cacheManager))
 
 		r.Get("/", adminHandler.Dashboard)
 
@@ -385,6 +398,12 @@ func run() error {
 		r.Put("/api-keys/{id}", apiKeysHandler.Update)
 		r.Post("/api-keys/{id}", apiKeysHandler.Update) // HTML forms can't send PUT
 		r.Delete("/api-keys/{id}", apiKeysHandler.Delete)
+
+		// Cache management routes
+		r.Get("/cache", cacheHandler.Stats)
+		r.Post("/cache/clear", cacheHandler.Clear)
+		r.Post("/cache/clear/config", cacheHandler.ClearConfig)
+		r.Post("/cache/clear/sitemap", cacheHandler.ClearSitemap)
 
 		// Register module admin routes
 		moduleRegistry.AdminRouteAll(r)

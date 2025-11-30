@@ -1,0 +1,208 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Cache Statistics</h1>
+        <p class="page-description">Monitor and manage cache performance</p>
+    </div>
+    <div class="page-actions">
+        <form method="POST" action="/admin/cache/clear" style="display: inline;">
+            <button type="submit" class="btn btn-danger" onclick="return confirm('Clear all caches? This may temporarily slow down the site.')">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                Clear All Caches
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Total Stats Summary -->
+<div class="stats-grid" style="margin-bottom: 1.5rem;">
+    <div class="stat-card">
+        <div class="stat-icon" style="background: var(--color-success-light); color: var(--color-success);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
+        <div class="stat-content">
+            <span class="stat-value">{{.Data.TotalStats.Hits}}</span>
+            <span class="stat-label">Cache Hits</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background: var(--color-warning-light); color: var(--color-warning);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </div>
+        <div class="stat-content">
+            <span class="stat-value">{{.Data.TotalStats.Misses}}</span>
+            <span class="stat-label">Cache Misses</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background: var(--color-primary-light); color: var(--color-primary);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        </div>
+        <div class="stat-content">
+            <span class="stat-value">{{printf "%.1f" .Data.TotalStats.HitRate}}%</span>
+            <span class="stat-label">Hit Rate</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background: var(--color-info-light); color: var(--color-info);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+        </div>
+        <div class="stat-content">
+            <span class="stat-value">{{.Data.TotalStats.Items}}</span>
+            <span class="stat-label">Cached Items</span>
+        </div>
+    </div>
+</div>
+
+<!-- Individual Cache Details -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Cache Details</h2>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Cache</th>
+                        <th>Items</th>
+                        <th>Hits</th>
+                        <th>Misses</th>
+                        <th>Hit Rate</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Data.Caches}}
+                    <tr>
+                        <td>
+                            <strong>{{.Name}}</strong>
+                            {{if eq .Type "sitemap"}}
+                                {{if .CachedAt}}
+                                <br><small class="text-muted">Cached: {{.CachedAt.Format "Jan 2, 15:04"}} ({{.Size}} bytes)</small>
+                                {{else}}
+                                <br><small class="text-muted">Not cached</small>
+                                {{end}}
+                            {{end}}
+                        </td>
+                        <td>{{.Stats.Items}}</td>
+                        <td>{{.Stats.Hits}}</td>
+                        <td>{{.Stats.Misses}}</td>
+                        <td>
+                            {{if gt .Stats.HitRate 80.0}}
+                            <span class="badge badge-success">{{printf "%.1f" .Stats.HitRate}}%</span>
+                            {{else if gt .Stats.HitRate 50.0}}
+                            <span class="badge badge-warning">{{printf "%.1f" .Stats.HitRate}}%</span>
+                            {{else}}
+                            <span class="badge badge-muted">{{printf "%.1f" .Stats.HitRate}}%</span>
+                            {{end}}
+                        </td>
+                        <td>
+                            {{if eq .Type "config"}}
+                            <form method="POST" action="/admin/cache/clear/config" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-outline" title="Clear config cache">Clear</button>
+                            </form>
+                            {{else if eq .Type "sitemap"}}
+                            <form method="POST" action="/admin/cache/clear/sitemap" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-outline" title="Clear sitemap cache">Clear</button>
+                            </form>
+                            {{end}}
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Cache Info -->
+<div class="card" style="margin-top: 1.5rem;">
+    <div class="card-header">
+        <h2 class="card-title">Cache Information</h2>
+    </div>
+    <div class="card-body">
+        <div class="info-grid">
+            <div class="info-item">
+                <h4>Site Configuration Cache</h4>
+                <p>Caches site-wide configuration values (site name, description, logo, etc.). Automatically invalidated when configuration is updated.</p>
+            </div>
+            <div class="info-item">
+                <h4>Sitemap Cache</h4>
+                <p>Caches the generated sitemap.xml. Regenerated hourly or when content changes. Reduces database queries for large sites.</p>
+            </div>
+            <div class="info-item">
+                <h4>General Cache</h4>
+                <p>Miscellaneous cached data with automatic expiration. Used for temporary data that benefits from caching.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.stat-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+}
+
+.stat-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius);
+}
+
+.stat-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.info-item h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.info-item p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+}
+
+.badge-muted {
+    background: var(--color-bg-muted);
+    color: var(--color-text-muted);
+}
+</style>
+{{end}}
