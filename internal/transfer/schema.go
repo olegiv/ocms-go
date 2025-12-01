@@ -227,3 +227,150 @@ func DefaultExportOptions() ExportOptions {
 		PageStatus:         "all",
 	}
 }
+
+// ConflictStrategy defines how to handle conflicts during import.
+type ConflictStrategy string
+
+const (
+	// ConflictSkip skips importing items that already exist.
+	ConflictSkip ConflictStrategy = "skip"
+	// ConflictOverwrite updates existing items with imported data.
+	ConflictOverwrite ConflictStrategy = "overwrite"
+	// ConflictRename creates a new item with a modified slug if one exists.
+	ConflictRename ConflictStrategy = "rename"
+)
+
+// ImportOptions configures what to import and how to handle conflicts.
+type ImportOptions struct {
+	DryRun           bool             `json:"dry_run"`
+	ConflictStrategy ConflictStrategy `json:"conflict_strategy"`
+	ImportUsers      bool             `json:"import_users"`
+	ImportPages      bool             `json:"import_pages"`
+	ImportCategories bool             `json:"import_categories"`
+	ImportTags       bool             `json:"import_tags"`
+	ImportMedia      bool             `json:"import_media"`
+	ImportMenus      bool             `json:"import_menus"`
+	ImportForms      bool             `json:"import_forms"`
+	ImportConfig     bool             `json:"import_config"`
+	ImportLanguages  bool             `json:"import_languages"`
+}
+
+// DefaultImportOptions returns options that import everything with skip strategy.
+func DefaultImportOptions() ImportOptions {
+	return ImportOptions{
+		DryRun:           false,
+		ConflictStrategy: ConflictSkip,
+		ImportUsers:      true,
+		ImportPages:      true,
+		ImportCategories: true,
+		ImportTags:       true,
+		ImportMedia:      true,
+		ImportMenus:      true,
+		ImportForms:      true,
+		ImportConfig:     true,
+		ImportLanguages:  true,
+	}
+}
+
+// ImportResult contains the results of an import operation.
+type ImportResult struct {
+	Success bool                 `json:"success"`
+	DryRun  bool                 `json:"dry_run"`
+	Created map[string]int       `json:"created"`
+	Updated map[string]int       `json:"updated"`
+	Skipped map[string]int       `json:"skipped"`
+	Errors  []ImportError        `json:"errors,omitempty"`
+	IDMaps  map[string]IDMapping `json:"-"` // Internal: maps old IDs to new IDs
+}
+
+// IDMapping maps old export IDs to new database IDs.
+type IDMapping map[int64]int64
+
+// NewImportResult creates a new ImportResult with initialized maps.
+func NewImportResult(dryRun bool) *ImportResult {
+	return &ImportResult{
+		Success: true,
+		DryRun:  dryRun,
+		Created: make(map[string]int),
+		Updated: make(map[string]int),
+		Skipped: make(map[string]int),
+		Errors:  []ImportError{},
+		IDMaps:  make(map[string]IDMapping),
+	}
+}
+
+// ImportError represents an error that occurred during import.
+type ImportError struct {
+	Entity  string `json:"entity"`
+	ID      string `json:"id"`
+	Message string `json:"message"`
+}
+
+// AddError adds an error to the import result.
+func (r *ImportResult) AddError(entity, id, message string) {
+	r.Errors = append(r.Errors, ImportError{
+		Entity:  entity,
+		ID:      id,
+		Message: message,
+	})
+	r.Success = false
+}
+
+// IncrementCreated increments the created count for an entity type.
+func (r *ImportResult) IncrementCreated(entity string) {
+	r.Created[entity]++
+}
+
+// IncrementUpdated increments the updated count for an entity type.
+func (r *ImportResult) IncrementUpdated(entity string) {
+	r.Updated[entity]++
+}
+
+// IncrementSkipped increments the skipped count for an entity type.
+func (r *ImportResult) IncrementSkipped(entity string) {
+	r.Skipped[entity]++
+}
+
+// GetIDMap returns the ID mapping for an entity type, creating one if needed.
+func (r *ImportResult) GetIDMap(entity string) IDMapping {
+	if r.IDMaps[entity] == nil {
+		r.IDMaps[entity] = make(IDMapping)
+	}
+	return r.IDMaps[entity]
+}
+
+// TotalCreated returns the total count of created items.
+func (r *ImportResult) TotalCreated() int {
+	total := 0
+	for _, count := range r.Created {
+		total += count
+	}
+	return total
+}
+
+// TotalUpdated returns the total count of updated items.
+func (r *ImportResult) TotalUpdated() int {
+	total := 0
+	for _, count := range r.Updated {
+		total += count
+	}
+	return total
+}
+
+// TotalSkipped returns the total count of skipped items.
+func (r *ImportResult) TotalSkipped() int {
+	total := 0
+	for _, count := range r.Skipped {
+		total += count
+	}
+	return total
+}
+
+// ValidationResult contains the results of validating an import file.
+type ValidationResult struct {
+	Valid     bool                `json:"valid"`
+	Version   string              `json:"version"`
+	Entities  map[string]int      `json:"entities"`
+	Conflicts map[string][]string `json:"conflicts,omitempty"`
+	Errors    []ImportError       `json:"errors,omitempty"`
+}
