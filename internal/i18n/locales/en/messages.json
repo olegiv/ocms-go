@@ -213,6 +213,16 @@
         {"id": "webhooks.error_message", "message": "Error Message", "translation": "Error Message"},
         {"id": "webhooks.next_retry", "message": "Next Retry", "translation": "Next Retry"},
         {"id": "webhooks.delivered_at", "message": "Delivered At", "translation": "Delivered At"},
+        {"id": "webhooks.health", "message": "Health", "translation": "Health"},
+        {"id": "webhooks.delivered", "message": "Delivered", "translation": "Delivered"},
+        {"id": "webhooks.last_success", "message": "Last Successful Delivery", "translation": "Last Successful Delivery"},
+        {"id": "webhooks.headers_sent", "message": "Headers Sent", "translation": "Headers Sent"},
+        {"id": "webhooks.timing_info", "message": "Timing Information", "translation": "Timing Information"},
+
+        {"id": "dashboard.webhook_health", "message": "Webhook Health", "translation": "Webhook Health"},
+        {"id": "dashboard.view_webhooks", "message": "View Webhooks", "translation": "View Webhooks"},
+        {"id": "dashboard.failed_deliveries_24h", "message": "failed deliveries in last 24h", "translation": "failed deliveries in last 24h"},
+        {"id": "dashboard.no_webhook_activity", "message": "No webhook activity in the last 24 hours", "translation": "No webhook activity in the last 24 hours"},
 
         {"id": "themes.title", "message": "Themes", "translation": "Themes"},
         {"id": "themes.active", "message": "Active Theme", "translation": "Active Theme"},

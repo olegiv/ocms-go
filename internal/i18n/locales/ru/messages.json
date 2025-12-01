@@ -339,6 +339,16 @@
         {"id": "webhooks.delete_warning", "message": "This action cannot be undone. All delivery history will also be deleted.", "translation": "Это действие необратимо. Вся история доставок также будет удалена."},
         {"id": "webhooks.delivered_count", "message": "delivered", "translation": "доставлено"},
         {"id": "webhooks.pending_count", "message": "pending", "translation": "ожидает"},
-        {"id": "webhooks.failed_count", "message": "failed", "translation": "ошибок"}
+        {"id": "webhooks.failed_count", "message": "failed", "translation": "ошибок"},
+        {"id": "webhooks.health", "message": "Health", "translation": "Состояние"},
+        {"id": "webhooks.delivered", "message": "Delivered", "translation": "Доставлено"},
+        {"id": "webhooks.last_success", "message": "Last Successful Delivery", "translation": "Последняя успешная доставка"},
+        {"id": "webhooks.headers_sent", "message": "Headers Sent", "translation": "Отправленные заголовки"},
+        {"id": "webhooks.timing_info", "message": "Timing Information", "translation": "Информация о времени"},
+
+        {"id": "dashboard.webhook_health", "message": "Webhook Health", "translation": "Состояние вебхуков"},
+        {"id": "dashboard.view_webhooks", "message": "View Webhooks", "translation": "Просмотр вебхуков"},
+        {"id": "dashboard.failed_deliveries_24h", "message": "failed deliveries in last 24h", "translation": "ошибок доставки за последние 24ч"},
+        {"id": "dashboard.no_webhook_activity", "message": "No webhook activity in the last 24 hours", "translation": "Нет активности вебхуков за последние 24 часа"}
     ]
 }

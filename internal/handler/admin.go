@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/alexedwards/scs/v2"
 
@@ -24,6 +25,10 @@ type DashboardStats struct {
 	TotalMedia        int64
 	TotalForms        int64
 	UnreadSubmissions int64
+	// Webhook stats
+	TotalWebhooks       int64
+	ActiveWebhooks      int64
+	FailedDeliveries24h int64
 }
 
 // RecentSubmission represents a recent form submission for dashboard display.
@@ -36,10 +41,31 @@ type RecentSubmission struct {
 	CreatedAt string
 }
 
+// WebhookHealthItem represents a webhook's health for dashboard display.
+type WebhookHealthItem struct {
+	ID           int64
+	Name         string
+	IsActive     bool
+	HealthStatus string // "green", "yellow", "red", "unknown"
+	SuccessRate  float64
+}
+
+// RecentFailedDelivery represents a recent failed webhook delivery.
+type RecentFailedDelivery struct {
+	ID          int64
+	WebhookID   int64
+	WebhookName string
+	Event       string
+	Status      string
+	CreatedAt   string
+}
+
 // DashboardData holds all dashboard data including stats and recent items.
 type DashboardData struct {
-	Stats             DashboardStats
-	RecentSubmissions []RecentSubmission
+	Stats                  DashboardStats
+	RecentSubmissions      []RecentSubmission
+	WebhookHealth          []WebhookHealthItem
+	RecentFailedDeliveries []RecentFailedDelivery
 }
 
 // AdminHandler handles admin routes.
@@ -130,10 +156,89 @@ func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Get webhook stats
+	if webhookCount, err := h.queries.CountWebhooks(ctx); err != nil {
+		slog.Error("failed to count webhooks", "error", err)
+	} else {
+		stats.TotalWebhooks = webhookCount
+	}
+
+	if activeWebhooks, err := h.queries.CountActiveWebhooks(ctx); err != nil {
+		slog.Error("failed to count active webhooks", "error", err)
+	} else {
+		stats.ActiveWebhooks = activeWebhooks
+	}
+
+	// Get webhook health summary
+	var webhookHealth []WebhookHealthItem
+	last24h := time.Now().Add(-24 * time.Hour)
+	if healthSummary, err := h.queries.GetWebhookHealthSummary(ctx, last24h); err != nil {
+		slog.Error("failed to get webhook health summary", "error", err)
+	} else {
+		for _, wh := range healthSummary {
+			delivered := int64(0)
+			if wh.DeliveredCount.Valid {
+				delivered = int64(wh.DeliveredCount.Float64)
+			}
+			dead := int64(0)
+			if wh.DeadCount.Valid {
+				dead = int64(wh.DeadCount.Float64)
+			}
+
+			// Calculate success rate
+			var successRate float64
+			if wh.TotalDeliveries > 0 {
+				successRate = float64(delivered) / float64(wh.TotalDeliveries) * 100
+			}
+
+			// Calculate health status
+			healthStatus := "unknown"
+			if wh.TotalDeliveries > 0 {
+				if successRate >= 95 {
+					healthStatus = "green"
+				} else if successRate >= 80 {
+					healthStatus = "yellow"
+				} else {
+					healthStatus = "red"
+				}
+			}
+
+			webhookHealth = append(webhookHealth, WebhookHealthItem{
+				ID:           wh.ID,
+				Name:         wh.Name,
+				IsActive:     wh.IsActive,
+				HealthStatus: healthStatus,
+				SuccessRate:  successRate,
+			})
+
+			// Count failed deliveries
+			stats.FailedDeliveries24h += dead
+		}
+	}
+
+	// Get recent failed deliveries
+	var recentFailedDeliveries []RecentFailedDelivery
+	if failedDeliveries, err := h.queries.GetRecentFailedDeliveriesWithWebhook(ctx, 5); err != nil {
+		slog.Error("failed to get recent failed deliveries", "error", err)
+	} else {
+		for _, d := range failedDeliveries {
+			recentFailedDeliveries = append(recentFailedDeliveries, RecentFailedDelivery{
+				ID:          d.ID,
+				WebhookID:   d.WebhookID,
+				WebhookName: d.WebhookName,
+				Event:       d.Event,
+				Status:      d.Status,
+				CreatedAt:   d.CreatedAt.Format("Jan 2, 2006 3:04 PM"),
+			})
+		}
+	}
+
 	// Build dashboard data
 	dashboardData := DashboardData{
-		Stats:             stats,
-		RecentSubmissions: recentSubmissions,
+		Stats:                  stats,
+		RecentSubmissions:      recentSubmissions,
+		WebhookHealth:          webhookHealth,
+		RecentFailedDeliveries: recentFailedDeliveries,
 	}
 
 	if err := h.renderer.Render(w, r, "admin/dashboard", render.TemplateData{

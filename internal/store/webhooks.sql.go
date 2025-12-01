@@ -195,6 +195,67 @@ func (q *Queries) GetDeliveryStats(ctx context.Context, webhookID int64) (GetDel
 	return i, err
 }
 
+const getDeliveryStatsLast24h = `-- name: GetDeliveryStatsLast24h :one
+SELECT
+    COUNT(*) as total,
+    SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) as delivered,
+    SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+    SUM(CASE WHEN status = 'dead' THEN 1 ELSE 0 END) as dead
+FROM webhook_deliveries
+WHERE webhook_id = ? AND created_at >= ?
+`
+
+type GetDeliveryStatsLast24hParams struct {
+	WebhookID int64     `json:"webhook_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type GetDeliveryStatsLast24hRow struct {
+	Total     int64           `json:"total"`
+	Delivered sql.NullFloat64 `json:"delivered"`
+	Pending   sql.NullFloat64 `json:"pending"`
+	Dead      sql.NullFloat64 `json:"dead"`
+}
+
+func (q *Queries) GetDeliveryStatsLast24h(ctx context.Context, arg GetDeliveryStatsLast24hParams) (GetDeliveryStatsLast24hRow, error) {
+	row := q.db.QueryRowContext(ctx, getDeliveryStatsLast24h, arg.WebhookID, arg.CreatedAt)
+	var i GetDeliveryStatsLast24hRow
+	err := row.Scan(
+		&i.Total,
+		&i.Delivered,
+		&i.Pending,
+		&i.Dead,
+	)
+	return i, err
+}
+
+const getLastSuccessfulDelivery = `-- name: GetLastSuccessfulDelivery :one
+SELECT id, webhook_id, event, payload, response_code, response_body, attempts, next_retry_at, delivered_at, status, error_message, created_at, updated_at FROM webhook_deliveries
+WHERE webhook_id = ? AND status = 'delivered'
+ORDER BY delivered_at DESC LIMIT 1
+`
+
+func (q *Queries) GetLastSuccessfulDelivery(ctx context.Context, webhookID int64) (WebhookDelivery, error) {
+	row := q.db.QueryRowContext(ctx, getLastSuccessfulDelivery, webhookID)
+	var i WebhookDelivery
+	err := row.Scan(
+		&i.ID,
+		&i.WebhookID,
+		&i.Event,
+		&i.Payload,
+		&i.ResponseCode,
+		&i.ResponseBody,
+		&i.Attempts,
+		&i.NextRetryAt,
+		&i.DeliveredAt,
+		&i.Status,
+		&i.ErrorMessage,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getPendingDeliveries = `-- name: GetPendingDeliveries :many
 SELECT id, webhook_id, event, payload, response_code, response_body, attempts, next_retry_at, delivered_at, status, error_message, created_at, updated_at FROM webhook_deliveries
 WHERE status = 'pending' AND (next_retry_at IS NULL OR next_retry_at <= ?)
@@ -328,6 +389,71 @@ func (q *Queries) GetRecentFailedDeliveries(ctx context.Context, limit int64) ([
 	return items, nil
 }
 
+const getRecentFailedDeliveriesWithWebhook = `-- name: GetRecentFailedDeliveriesWithWebhook :many
+SELECT
+    wd.id, wd.webhook_id, wd.event, wd.payload, wd.response_code, wd.response_body, wd.attempts, wd.next_retry_at, wd.delivered_at, wd.status, wd.error_message, wd.created_at, wd.updated_at,
+    w.name as webhook_name
+FROM webhook_deliveries wd
+INNER JOIN webhooks w ON w.id = wd.webhook_id
+WHERE wd.status IN ('dead', 'failed')
+ORDER BY wd.created_at DESC LIMIT ?
+`
+
+type GetRecentFailedDeliveriesWithWebhookRow struct {
+	ID           int64          `json:"id"`
+	WebhookID    int64          `json:"webhook_id"`
+	Event        string         `json:"event"`
+	Payload      string         `json:"payload"`
+	ResponseCode sql.NullInt64  `json:"response_code"`
+	ResponseBody sql.NullString `json:"response_body"`
+	Attempts     int64          `json:"attempts"`
+	NextRetryAt  sql.NullTime   `json:"next_retry_at"`
+	DeliveredAt  sql.NullTime   `json:"delivered_at"`
+	Status       string         `json:"status"`
+	ErrorMessage sql.NullString `json:"error_message"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	WebhookName  string         `json:"webhook_name"`
+}
+
+func (q *Queries) GetRecentFailedDeliveriesWithWebhook(ctx context.Context, limit int64) ([]GetRecentFailedDeliveriesWithWebhookRow, error) {
+	rows, err := q.db.QueryContext(ctx, getRecentFailedDeliveriesWithWebhook, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetRecentFailedDeliveriesWithWebhookRow{}
+	for rows.Next() {
+		var i GetRecentFailedDeliveriesWithWebhookRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WebhookID,
+			&i.Event,
+			&i.Payload,
+			&i.ResponseCode,
+			&i.ResponseBody,
+			&i.Attempts,
+			&i.NextRetryAt,
+			&i.DeliveredAt,
+			&i.Status,
+			&i.ErrorMessage,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.WebhookName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getWebhookByID = `-- name: GetWebhookByID :one
 SELECT id, name, url, secret, events, is_active, headers, created_by, created_at, updated_at FROM webhooks WHERE id = ?
 `
@@ -373,6 +499,62 @@ func (q *Queries) GetWebhookDelivery(ctx context.Context, id int64) (WebhookDeli
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getWebhookHealthSummary = `-- name: GetWebhookHealthSummary :many
+SELECT
+    w.id,
+    w.name,
+    w.is_active,
+    COUNT(wd.id) as total_deliveries,
+    SUM(CASE WHEN wd.status = 'delivered' THEN 1 ELSE 0 END) as delivered_count,
+    SUM(CASE WHEN wd.status = 'pending' THEN 1 ELSE 0 END) as pending_count,
+    SUM(CASE WHEN wd.status = 'dead' THEN 1 ELSE 0 END) as dead_count
+FROM webhooks w
+LEFT JOIN webhook_deliveries wd ON wd.webhook_id = w.id AND wd.created_at >= ?
+GROUP BY w.id
+ORDER BY w.name ASC
+`
+
+type GetWebhookHealthSummaryRow struct {
+	ID              int64           `json:"id"`
+	Name            string          `json:"name"`
+	IsActive        bool            `json:"is_active"`
+	TotalDeliveries int64           `json:"total_deliveries"`
+	DeliveredCount  sql.NullFloat64 `json:"delivered_count"`
+	PendingCount    sql.NullFloat64 `json:"pending_count"`
+	DeadCount       sql.NullFloat64 `json:"dead_count"`
+}
+
+func (q *Queries) GetWebhookHealthSummary(ctx context.Context, createdAt time.Time) ([]GetWebhookHealthSummaryRow, error) {
+	rows, err := q.db.QueryContext(ctx, getWebhookHealthSummary, createdAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetWebhookHealthSummaryRow{}
+	for rows.Next() {
+		var i GetWebhookHealthSummaryRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.IsActive,
+			&i.TotalDeliveries,
+			&i.DeliveredCount,
+			&i.PendingCount,
+			&i.DeadCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listActiveWebhooks = `-- name: ListActiveWebhooks :many

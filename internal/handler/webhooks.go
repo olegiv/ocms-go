@@ -50,11 +50,16 @@ type WebhooksListData struct {
 // WebhookWithStats includes webhook data and delivery stats.
 type WebhookWithStats struct {
 	store.Webhook
-	Events         []string
-	TotalDelivered int64
-	TotalPending   int64
-	TotalDead      int64
-	SuccessRate    float64
+	Events              []string
+	TotalDelivered      int64
+	TotalPending        int64
+	TotalDead           int64
+	SuccessRate         float64
+	HealthStatus        string // "green", "yellow", "red", "unknown"
+	Last24hDelivered    int64
+	Last24hTotal        int64
+	LastSuccessfulAt    *time.Time // nil if never delivered
+	LastSuccessfulEvent string     // event type of last successful delivery
 }
 
 // WebhookFormData holds data for the webhook form template.
@@ -101,8 +106,14 @@ func (h *WebhooksHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	// Build webhooks with stats
 	var webhooksWithStats []WebhookWithStats
+	last24h := time.Now().Add(-24 * time.Hour)
+
 	for _, wh := range webhooks {
 		stats, _ := h.queries.GetDeliveryStats(r.Context(), wh.ID)
+		stats24h, _ := h.queries.GetDeliveryStatsLast24h(r.Context(), store.GetDeliveryStatsLast24hParams{
+			WebhookID: wh.ID,
+			CreatedAt: last24h,
+		})
 
 		// Parse events
 		var events []string
@@ -133,13 +144,37 @@ func (h *WebhooksHandler) List(w http.ResponseWriter, r *http.Request) {
 			delivered = int64(stats.Delivered.Float64)
 		}
 
+		// Get last 24h stats
+		last24hDelivered := int64(0)
+		if stats24h.Delivered.Valid {
+			last24hDelivered = int64(stats24h.Delivered.Float64)
+		}
+
+		// Calculate health status based on success rate
+		healthStatus := calculateHealthStatus(successRate, stats.Total)
+
+		// Get last successful delivery
+		var lastSuccessfulAt *time.Time
+		var lastSuccessfulEvent string
+		if lastDelivery, err := h.queries.GetLastSuccessfulDelivery(r.Context(), wh.ID); err == nil {
+			if lastDelivery.DeliveredAt.Valid {
+				lastSuccessfulAt = &lastDelivery.DeliveredAt.Time
+			}
+			lastSuccessfulEvent = lastDelivery.Event
+		}
+
 		webhooksWithStats = append(webhooksWithStats, WebhookWithStats{
-			Webhook:        wh,
-			Events:         events,
-			TotalDelivered: delivered,
-			TotalPending:   pending,
-			TotalDead:      dead,
-			SuccessRate:    successRate,
+			Webhook:             wh,
+			Events:              events,
+			TotalDelivered:      delivered,
+			TotalPending:        pending,
+			TotalDead:           dead,
+			SuccessRate:         successRate,
+			HealthStatus:        healthStatus,
+			Last24hDelivered:    last24hDelivered,
+			Last24hTotal:        stats24h.Total,
+			LastSuccessfulAt:    lastSuccessfulAt,
+			LastSuccessfulEvent: lastSuccessfulEvent,
 		})
 	}
 
@@ -768,4 +803,22 @@ func (h *WebhooksHandler) sendDeleteError(w http.ResponseWriter, message string)
 	w.Header().Set("HX-Reswap", "none")
 	w.Header().Set("HX-Trigger", `{"showToast": "`+message+`", "toastType": "error"}`)
 	w.WriteHeader(http.StatusBadRequest)
+}
+
+// calculateHealthStatus determines the health status based on success rate.
+// Green: > 95% success rate
+// Yellow: 80-95% success rate
+// Red: < 80% success rate
+// Unknown: No deliveries yet
+func calculateHealthStatus(successRate float64, totalDeliveries int64) string {
+	if totalDeliveries == 0 {
+		return "unknown"
+	}
+	if successRate >= 95 {
+		return "green"
+	}
+	if successRate >= 80 {
+		return "yellow"
+	}
+	return "red"
 }

@@ -97,3 +97,40 @@ FROM webhook_deliveries WHERE webhook_id = ?;
 UPDATE webhook_deliveries
 SET status = 'pending', attempts = 0, next_retry_at = NULL, error_message = '', updated_at = ?
 WHERE id = ?;
+
+-- name: GetDeliveryStatsLast24h :one
+SELECT
+    COUNT(*) as total,
+    SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) as delivered,
+    SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+    SUM(CASE WHEN status = 'dead' THEN 1 ELSE 0 END) as dead
+FROM webhook_deliveries
+WHERE webhook_id = ? AND created_at >= ?;
+
+-- name: GetLastSuccessfulDelivery :one
+SELECT * FROM webhook_deliveries
+WHERE webhook_id = ? AND status = 'delivered'
+ORDER BY delivered_at DESC LIMIT 1;
+
+-- name: GetWebhookHealthSummary :many
+SELECT
+    w.id,
+    w.name,
+    w.is_active,
+    COUNT(wd.id) as total_deliveries,
+    SUM(CASE WHEN wd.status = 'delivered' THEN 1 ELSE 0 END) as delivered_count,
+    SUM(CASE WHEN wd.status = 'pending' THEN 1 ELSE 0 END) as pending_count,
+    SUM(CASE WHEN wd.status = 'dead' THEN 1 ELSE 0 END) as dead_count
+FROM webhooks w
+LEFT JOIN webhook_deliveries wd ON wd.webhook_id = w.id AND wd.created_at >= ?
+GROUP BY w.id
+ORDER BY w.name ASC;
+
+-- name: GetRecentFailedDeliveriesWithWebhook :many
+SELECT
+    wd.*,
+    w.name as webhook_name
+FROM webhook_deliveries wd
+INNER JOIN webhooks w ON w.id = wd.webhook_id
+WHERE wd.status IN ('dead', 'failed')
+ORDER BY wd.created_at DESC LIMIT ?;

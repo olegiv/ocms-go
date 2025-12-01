@@ -33,9 +33,9 @@
                     <th class="text-right">{{T .AdminLang "webhooks.actions"}}</th>
                 </tr>
             </thead>
-            <tbody>
                 {{range .Data.Deliveries}}
-                <tr x-data="{ showPayload: false }">
+                <tbody x-data="{ showPayload: false }">
+                <tr>
                     <td>
                         <code>#{{.ID}}</code>
                     </td>
@@ -64,8 +64,8 @@
                         {{else}}
                         <span class="text-muted">-</span>
                         {{end}}
-                        {{if .ErrorMessage}}
-                        <span class="error-message" title="{{.ErrorMessage}}">
+                        {{if and .ErrorMessage.Valid .ErrorMessage.String}}
+                        <span class="error-message" title="{{.ErrorMessage.String}}">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                         </span>
                         {{end}}
@@ -95,35 +95,58 @@
                                 <h5>{{T $.AdminLang "webhooks.payload"}}</h5>
                                 <pre class="payload-content">{{prettyJSON .Payload}}</pre>
                             </div>
-                            {{if .ResponseBody}}
+                            {{if .ResponseBody.Valid}}
                             <div class="payload-section">
                                 <h5>{{T $.AdminLang "webhooks.response_body"}}</h5>
-                                <pre class="payload-content">{{.ResponseBody}}</pre>
+                                <pre class="payload-content">{{truncate .ResponseBody.String 10000}}</pre>
                             </div>
                             {{end}}
-                            {{if .ErrorMessage}}
+                            {{if .ErrorMessage.Valid}}
                             <div class="payload-section error">
                                 <h5>{{T $.AdminLang "webhooks.error_message"}}</h5>
-                                <pre class="payload-content">{{.ErrorMessage}}</pre>
+                                <pre class="payload-content">{{.ErrorMessage.String}}</pre>
                             </div>
                             {{end}}
-                            {{if .NextRetryAt.Valid}}
                             <div class="payload-section">
-                                <h5>{{T $.AdminLang "webhooks.next_retry"}}</h5>
-                                <p>{{formatDateTime .NextRetryAt.Time}}</p>
+                                <h5>{{T $.AdminLang "webhooks.headers_sent"}}</h5>
+                                <div class="headers-list">
+                                    <div class="header-item"><code>Content-Type</code>: application/json</div>
+                                    <div class="header-item"><code>User-Agent</code>: oCMS/1.0</div>
+                                    <div class="header-item"><code>X-Webhook-Signature</code>: (HMAC-SHA256)</div>
+                                    <div class="header-item"><code>X-Webhook-Event</code>: {{.Event}}</div>
+                                    <div class="header-item"><code>X-Delivery-ID</code>: {{.ID}}</div>
+                                </div>
                             </div>
-                            {{end}}
-                            {{if .DeliveredAt.Valid}}
-                            <div class="payload-section">
-                                <h5>{{T $.AdminLang "webhooks.delivered_at"}}</h5>
-                                <p>{{formatDateTime .DeliveredAt.Time}}</p>
+                            <div class="payload-section timing">
+                                <h5>{{T $.AdminLang "webhooks.timing_info"}}</h5>
+                                <div class="timing-grid">
+                                    <div class="timing-item">
+                                        <span class="timing-label">{{T $.AdminLang "webhooks.created"}}</span>
+                                        <span class="timing-value">{{formatDateTime .CreatedAt}}</span>
+                                    </div>
+                                    {{if .DeliveredAt.Valid}}
+                                    <div class="timing-item">
+                                        <span class="timing-label">{{T $.AdminLang "webhooks.delivered_at"}}</span>
+                                        <span class="timing-value">{{formatDateTime .DeliveredAt.Time}}</span>
+                                    </div>
+                                    {{end}}
+                                    {{if .NextRetryAt.Valid}}
+                                    <div class="timing-item">
+                                        <span class="timing-label">{{T $.AdminLang "webhooks.next_retry"}}</span>
+                                        <span class="timing-value">{{formatDateTime .NextRetryAt.Time}}</span>
+                                    </div>
+                                    {{end}}
+                                    <div class="timing-item">
+                                        <span class="timing-label">{{T $.AdminLang "webhooks.updated"}}</span>
+                                        <span class="timing-value">{{formatDateTime .UpdatedAt}}</span>
+                                    </div>
+                                </div>
                             </div>
-                            {{end}}
                         </div>
                     </td>
                 </tr>
+                </tbody>
                 {{end}}
-            </tbody>
         </table>
     </div>
 
@@ -263,6 +286,54 @@
 .payload-section.error .payload-content {
     background: rgba(239, 68, 68, 0.1);
     color: #ef4444;
+}
+
+.payload-section.timing {
+    background: var(--bg-secondary);
+}
+
+.headers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.header-item {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.header-item code {
+    font-size: 0.7rem;
+    background: var(--bg-muted);
+    padding: 0.125rem 0.25rem;
+    border-radius: 3px;
+    color: var(--text-primary);
+}
+
+.timing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.75rem;
+}
+
+.timing-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.timing-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+}
+
+.timing-value {
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    font-weight: 500;
 }
 </style>
 {{end}}

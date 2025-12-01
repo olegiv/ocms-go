@@ -56,20 +56,23 @@
                     </td>
                     <td>
                         <div class="stats-display">
+                            <div class="health-indicator health-{{.HealthStatus}}" title="{{T $.AdminLang "webhooks.health"}}: {{printf "%.1f" .SuccessRate}}%">
+                                <span class="health-dot"></span>
+                            </div>
                             {{if gt .TotalDelivered 0}}
-                            <span class="stat stat-success" title="Delivered">
+                            <span class="stat stat-success" title="{{T $.AdminLang "webhooks.delivered"}}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
                                 {{.TotalDelivered}}
                             </span>
                             {{end}}
                             {{if gt .TotalPending 0}}
-                            <span class="stat stat-warning" title="Pending">
+                            <span class="stat stat-warning" title="{{T $.AdminLang "webhooks.status_pending"}}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                                 {{.TotalPending}}
                             </span>
                             {{end}}
                             {{if gt .TotalDead 0}}
-                            <span class="stat stat-danger" title="Failed">
+                            <span class="stat stat-danger" title="{{T $.AdminLang "webhooks.status_dead"}}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" x2="9" y1="9" y2="15"/><line x1="9" x2="15" y1="9" y2="15"/></svg>
                                 {{.TotalDead}}
                             </span>
@@ -78,6 +81,11 @@
                             <span class="text-muted">{{T $.AdminLang "webhooks.no_deliveries"}}</span>
                             {{end}}
                         </div>
+                        {{if .LastSuccessfulAt}}
+                        <div class="last-success" title="{{T $.AdminLang "webhooks.last_success"}}">
+                            <small class="text-muted">{{formatDateTime .LastSuccessfulAt}}</small>
+                        </div>
+                        {{end}}
                     </td>
                     <td class="text-right">
                         <div class="action-buttons">
@@ -255,6 +263,43 @@
 .stat-danger {
     background: rgba(239, 68, 68, 0.1);
     color: #ef4444;
+}
+
+.health-indicator {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 0.5rem;
+}
+
+.health-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.health-green .health-dot {
+    background: #10b981;
+    box-shadow: 0 0 4px rgba(16, 185, 129, 0.4);
+}
+
+.health-yellow .health-dot {
+    background: #f59e0b;
+    box-shadow: 0 0 4px rgba(245, 158, 11, 0.4);
+}
+
+.health-red .health-dot {
+    background: #ef4444;
+    box-shadow: 0 0 4px rgba(239, 68, 68, 0.4);
+}
+
+.health-unknown .health-dot {
+    background: #9ca3af;
+}
+
+.last-success {
+    margin-top: 0.25rem;
+    font-size: 0.7rem;
 }
 
 .events-grid {

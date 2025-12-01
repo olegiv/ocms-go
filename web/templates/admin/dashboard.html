@@ -114,6 +114,45 @@
         </div>
     </div>
 
+    {{if gt .Data.Stats.TotalWebhooks 0}}
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">{{T .AdminLang "dashboard.webhook_health"}}</h2>
+            <a href="/admin/webhooks" class="btn btn-sm btn-outline">{{T .AdminLang "dashboard.view_webhooks"}}</a>
+        </div>
+        <div class="card-body">
+            {{if .Data.WebhookHealth}}
+            <div class="webhook-health-list">
+                {{range .Data.WebhookHealth}}
+                <div class="webhook-health-item">
+                    <div class="webhook-health-info">
+                        <div class="webhook-health-indicator health-{{.HealthStatus}}" title="{{printf "%.1f" .SuccessRate}}%">
+                            <span class="health-dot"></span>
+                        </div>
+                        <span class="webhook-name">{{.Name}}</span>
+                        {{if not .IsActive}}
+                        <span class="badge badge-secondary badge-sm">{{T $.AdminLang "webhooks.inactive"}}</span>
+                        {{end}}
+                    </div>
+                    <span class="webhook-rate text-muted">{{printf "%.0f" .SuccessRate}}%</span>
+                </div>
+                {{end}}
+            </div>
+            {{if gt .Data.Stats.FailedDeliveries24h 0}}
+            <div class="webhook-alert">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span>{{.Data.Stats.FailedDeliveries24h}} {{T .AdminLang "dashboard.failed_deliveries_24h"}}</span>
+            </div>
+            {{end}}
+            {{else}}
+            <div class="empty-state-sm">
+                <p class="text-muted">{{T .AdminLang "dashboard.no_webhook_activity"}}</p>
+            </div>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+
     <div class="card">
         <div class="card-header">
             <h2 class="card-title">{{T .AdminLang "dashboard.quick_actions"}}</h2>
@@ -227,6 +266,90 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+}
+
+/* Webhook Health Widget */
+.webhook-health-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.webhook-health-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    border-radius: 6px;
+    background: var(--bg-secondary);
+}
+
+.webhook-health-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.webhook-health-indicator {
+    display: inline-flex;
+    align-items: center;
+}
+
+.health-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.health-green .health-dot {
+    background: #10b981;
+    box-shadow: 0 0 4px rgba(16, 185, 129, 0.4);
+}
+
+.health-yellow .health-dot {
+    background: #f59e0b;
+    box-shadow: 0 0 4px rgba(245, 158, 11, 0.4);
+}
+
+.health-red .health-dot {
+    background: #ef4444;
+    box-shadow: 0 0 4px rgba(239, 68, 68, 0.4);
+}
+
+.health-unknown .health-dot {
+    background: #9ca3af;
+}
+
+.webhook-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.webhook-rate {
+    font-size: 0.75rem;
+}
+
+.webhook-alert {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    padding: 0.5rem;
+    background: rgba(239, 68, 68, 0.1);
+    border-radius: 6px;
+    color: #ef4444;
+    font-size: 0.8rem;
+}
+
+.empty-state-sm {
+    text-align: center;
+    padding: 1rem;
+}
+
+.badge-sm {
+    font-size: 0.65rem;
+    padding: 0.125rem 0.375rem;
 }
 </style>
 {{end}}
