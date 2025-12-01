@@ -16,6 +16,12 @@ type Config struct {
 	LogLevel      string `env:"OCMS_LOG_LEVEL" envDefault:"info"`
 	ThemesDir     string `env:"OCMS_THEMES_DIR" envDefault:"./themes"`
 	ActiveTheme   string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`
+
+	// Cache configuration
+	RedisURL     string `env:"OCMS_REDIS_URL"`                         // Optional Redis URL for distributed caching
+	CachePrefix  string `env:"OCMS_CACHE_PREFIX" envDefault:"ocms:"`   // Redis key prefix
+	CacheTTL     int    `env:"OCMS_CACHE_TTL" envDefault:"3600"`       // Default cache TTL in seconds
+	CacheMaxSize int    `env:"OCMS_CACHE_MAX_SIZE" envDefault:"10000"` // Max memory cache entries
 }
 
 // IsDevelopment returns true if the application is running in development mode.
@@ -26,6 +32,11 @@ func (c Config) IsDevelopment() bool {
 // ServerAddr returns the full server address in host:port format.
 func (c Config) ServerAddr() string {
 	return fmt.Sprintf("%s:%d", c.ServerHost, c.ServerPort)
+}
+
+// UseRedisCache returns true if Redis caching is configured.
+func (c Config) UseRedisCache() bool {
+	return c.RedisURL != ""
 }
 
 // Load parses environment variables and returns a Config struct.

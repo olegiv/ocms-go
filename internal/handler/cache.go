@@ -33,7 +33,7 @@ func NewCacheHandler(renderer *render.Renderer, sm *scs.SessionManager, cm *cach
 
 // CacheStatsData holds data for the cache stats template.
 type CacheStatsData struct {
-	Caches     []cache.CacheStats
+	Caches     []cache.ManagerCacheStats
 	TotalStats cache.Stats
 }
 

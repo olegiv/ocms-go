@@ -13,13 +13,16 @@ type CacheType string
 
 // Cache types.
 const (
-	CacheTypeConfig  CacheType = "config"
-	CacheTypeSitemap CacheType = "sitemap"
-	CacheTypeGeneral CacheType = "general"
+	CacheTypeConfig   CacheType = "config"
+	CacheTypeSitemap  CacheType = "sitemap"
+	CacheTypeGeneral  CacheType = "general"
+	CacheTypeMenu     CacheType = "menu"
+	CacheTypeLanguage CacheType = "language"
 )
 
-// CacheStats holds statistics for a specific cache.
-type CacheStats struct {
+// ManagerCacheStats holds statistics for a specific cache in the manager.
+// This is different from CacheStats in interface.go which is for the Cacher interface.
+type ManagerCacheStats struct {
 	Name     string
 	Type     CacheType
 	Stats    Stats
@@ -29,9 +32,11 @@ type CacheStats struct {
 
 // Manager manages all cache instances and provides a unified interface.
 type Manager struct {
-	Config  *ConfigCache
-	Sitemap *SitemapCache
-	General *Cache // for misc cached data
+	Config   *ConfigCache
+	Sitemap  *SitemapCache
+	Menus    *MenuCache
+	Language *LanguageCache
+	General  *Cache // for misc cached data
 
 	// Theme settings cache key prefix
 	ThemeSettingsPrefix string
@@ -42,6 +47,8 @@ func NewManager(queries *store.Queries) *Manager {
 	return &Manager{
 		Config:              NewConfigCache(queries),
 		Sitemap:             NewSitemapCache(queries, time.Hour),
+		Menus:               NewMenuCache(queries),
+		Language:            NewLanguageCache(queries),
 		General:             New(5 * time.Minute),
 		ThemeSettingsPrefix: "theme_settings_",
 	}
@@ -62,11 +69,15 @@ func (m *Manager) Stop() {
 func (m *Manager) ClearAll() {
 	m.Config.Invalidate()
 	m.Sitemap.Invalidate()
+	m.Menus.Invalidate()
+	m.Language.Invalidate()
 	m.General.Clear()
 
 	// Reset statistics for all caches
 	m.Config.ResetStats()
 	m.Sitemap.ResetStats()
+	m.Menus.ResetStats()
+	m.Language.ResetStats()
 	m.General.ResetStats()
 
 	slog.Info("cache stats reset")
@@ -94,9 +105,21 @@ func (m *Manager) InvalidateContent() {
 	m.Sitemap.Invalidate()
 }
 
+// InvalidateMenus invalidates the menus cache.
+// Call this when menus or menu items are created/updated/deleted.
+func (m *Manager) InvalidateMenus() {
+	m.Menus.Invalidate()
+}
+
+// InvalidateLanguages invalidates the language cache.
+// Call this when languages are created/updated/deleted.
+func (m *Manager) InvalidateLanguages() {
+	m.Language.Invalidate()
+}
+
 // AllStats returns statistics for all caches.
-func (m *Manager) AllStats() []CacheStats {
-	stats := []CacheStats{
+func (m *Manager) AllStats() []ManagerCacheStats {
+	stats := []ManagerCacheStats{
 		{
 			Name:  "Site Configuration",
 			Type:  CacheTypeConfig,
@@ -106,6 +129,16 @@ func (m *Manager) AllStats() []CacheStats {
 			Name:  "Sitemap",
 			Type:  CacheTypeSitemap,
 			Stats: m.Sitemap.Stats(),
+		},
+		{
+			Name:  "Menus",
+			Type:  CacheTypeMenu,
+			Stats: m.Menus.Stats(),
+		},
+		{
+			Name:  "Languages",
+			Type:  CacheTypeLanguage,
+			Stats: m.Language.Stats(),
 		},
 		{
 			Name:  "General Cache",
@@ -128,13 +161,15 @@ func (m *Manager) AllStats() []CacheStats {
 func (m *Manager) TotalStats() Stats {
 	configStats := m.Config.Stats()
 	sitemapStats := m.Sitemap.Stats()
+	menuStats := m.Menus.Stats()
+	languageStats := m.Language.Stats()
 	generalStats := m.General.Stats()
 
 	total := Stats{
-		Hits:   configStats.Hits + sitemapStats.Hits + generalStats.Hits,
-		Misses: configStats.Misses + sitemapStats.Misses + generalStats.Misses,
-		Sets:   configStats.Sets + sitemapStats.Sets + generalStats.Sets,
-		Items:  configStats.Items + sitemapStats.Items + generalStats.Items,
+		Hits:   configStats.Hits + sitemapStats.Hits + menuStats.Hits + languageStats.Hits + generalStats.Hits,
+		Misses: configStats.Misses + sitemapStats.Misses + menuStats.Misses + languageStats.Misses + generalStats.Misses,
+		Sets:   configStats.Sets + sitemapStats.Sets + menuStats.Sets + languageStats.Sets + generalStats.Sets,
+		Items:  configStats.Items + sitemapStats.Items + menuStats.Items + languageStats.Items + generalStats.Items,
 	}
 
 	totalRequests := total.Hits + total.Misses
@@ -157,12 +192,22 @@ func (m *Manager) Preload(ctx context.Context, siteURL string) error {
 		return err
 	}
 
+	// Preload menus
+	if err := m.Menus.Preload(ctx); err != nil {
+		slog.Warn("failed to preload menus cache", "error", err)
+	}
+
+	// Preload languages
+	if err := m.Language.Preload(ctx); err != nil {
+		slog.Warn("failed to preload language cache", "error", err)
+	}
+
 	// Preload sitemap (optional, can be slow for large sites)
 	if siteURL != "" {
 		_, err := m.Sitemap.Get(ctx, siteURL)
 		if err != nil {
 			// Non-fatal, sitemap will be generated on first request
-			return nil
+			slog.Warn("failed to preload sitemap cache", "error", err)
 		}
 	}
 
@@ -177,4 +222,24 @@ func (m *Manager) GetConfig(ctx context.Context, key string) (string, error) {
 // GetSitemap is a convenience method to get the sitemap XML.
 func (m *Manager) GetSitemap(ctx context.Context, siteURL string) ([]byte, error) {
 	return m.Sitemap.Get(ctx, siteURL)
+}
+
+// GetMenu is a convenience method to get a menu by slug.
+func (m *Manager) GetMenu(ctx context.Context, slug string) (*MenuWithItems, error) {
+	return m.Menus.Get(ctx, slug)
+}
+
+// GetActiveLanguages is a convenience method to get all active languages.
+func (m *Manager) GetActiveLanguages(ctx context.Context) ([]store.Language, error) {
+	return m.Language.GetActive(ctx)
+}
+
+// GetDefaultLanguage is a convenience method to get the default language.
+func (m *Manager) GetDefaultLanguage(ctx context.Context) (*store.Language, error) {
+	return m.Language.GetDefault(ctx)
+}
+
+// GetLanguageByCode is a convenience method to get a language by its code.
+func (m *Manager) GetLanguageByCode(ctx context.Context, code string) (*store.Language, error) {
+	return m.Language.GetByCode(ctx, code)
 }
