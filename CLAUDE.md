@@ -72,7 +72,7 @@ templ generate           # Regenerate template Go code (if using templ)
 
 8. **Module System** (`internal/module/`): Extensible plugin architecture with lifecycle management and migrations.
 
-9. **Caching** (`internal/cache/`): In-memory cache with TTL for site config, menus, and sitemaps.
+9. **Caching** (`internal/cache/`): Supports both in-memory and Redis caching with automatic fallback. Caches site config, menus, languages, and sitemaps. Set `OCMS_REDIS_URL` for distributed caching across multiple instances.
 
 10. **Scheduler** (`internal/scheduler/`): Cron-based task scheduler for scheduled publishing.
 
@@ -80,7 +80,7 @@ templ generate           # Regenerate template Go code (if using templ)
 
 ```
 cmd/ocms/main.go
-    ├── internal/cache       (in-memory caching)
+    ├── internal/cache       (in-memory + Redis caching)
     ├── internal/config      (env var loading)
     ├── internal/handler     (HTTP handlers)
     │   ├── api/             (REST API handlers)
@@ -109,7 +109,10 @@ cmd/ocms/main.go
 | `OCMS_THEMES_DIR` | No | `./themes` | Directory containing themes |
 | `OCMS_ACTIVE_THEME` | No | `default` | Name of active theme |
 | `OCMS_API_RATE_LIMIT` | No | `100` | API requests per minute per key |
+| `OCMS_REDIS_URL` | No | - | Redis URL for distributed cache (e.g., `redis://localhost:6379/0`) |
+| `OCMS_CACHE_PREFIX` | No | `ocms:` | Key prefix for Redis cache entries |
 | `OCMS_CACHE_TTL` | No | `3600` | Default cache TTL in seconds |
+| `OCMS_CACHE_MAX_SIZE` | No | `10000` | Max entries for in-memory cache |
 
 ## Default Credentials
 

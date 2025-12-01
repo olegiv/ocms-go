@@ -144,8 +144,20 @@ func run() error {
 	}
 	slog.Info("theme manager initialized", "themes", themeManager.ThemeCount())
 
-	// Initialize cache manager
-	cacheManager := cache.NewManager(store.New(db))
+	// Initialize cache manager with config
+	cacheConfig := cache.CacheConfig{
+		Type:             "memory",
+		RedisURL:         cfg.RedisURL,
+		Prefix:           cfg.CachePrefix,
+		DefaultTTL:       time.Duration(cfg.CacheTTL) * time.Second,
+		MaxSize:          cfg.CacheMaxSize,
+		CleanupInterval:  time.Minute,
+		FallbackToMemory: true,
+	}
+	if cfg.UseRedisCache() {
+		cacheConfig.Type = "redis"
+	}
+	cacheManager := cache.NewManagerWithConfig(store.New(db), cacheConfig)
 	cacheManager.Start()
 	defer cacheManager.Stop()
 
@@ -153,7 +165,13 @@ func run() error {
 	if err := cacheManager.Config.Preload(ctx); err != nil {
 		slog.Warn("failed to preload config cache", "error", err)
 	}
-	slog.Info("cache manager initialized")
+	if cacheManager.IsRedis() {
+		slog.Info("cache manager initialized", "backend", "redis", "url", cfg.RedisURL)
+	} else if cacheManager.Info().IsFallback {
+		slog.Warn("cache manager initialized", "backend", "memory", "note", "Redis unavailable, using fallback")
+	} else {
+		slog.Info("cache manager initialized", "backend", "memory")
+	}
 
 	// Initialize and start scheduler
 	sched := scheduler.New(db, logger)

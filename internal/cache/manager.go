@@ -30,6 +30,13 @@ type ManagerCacheStats struct {
 	Size     int        // size in bytes (for sitemap)
 }
 
+// ManagerInfo holds information about the cache manager configuration.
+type ManagerInfo struct {
+	BackendType CacheBackendType // The distributed cache backend type
+	IsFallback  bool             // True if fell back to memory due to Redis failure
+	RedisURL    string           // Redis URL if using Redis (masked for security)
+}
+
 // Manager manages all cache instances and provides a unified interface.
 type Manager struct {
 	Config   *ConfigCache
@@ -38,11 +45,17 @@ type Manager struct {
 	Language *LanguageCache
 	General  *Cache // for misc cached data
 
+	// Distributed cache (optional, nil if only using memory cache)
+	Distributed Cacher
+
 	// Theme settings cache key prefix
 	ThemeSettingsPrefix string
+
+	// Info about the cache configuration
+	info ManagerInfo
 }
 
-// NewManager creates a new cache manager.
+// NewManager creates a new cache manager with default memory cache.
 func NewManager(queries *store.Queries) *Manager {
 	return &Manager{
 		Config:              NewConfigCache(queries),
@@ -51,7 +64,49 @@ func NewManager(queries *store.Queries) *Manager {
 		Language:            NewLanguageCache(queries),
 		General:             New(5 * time.Minute),
 		ThemeSettingsPrefix: "theme_settings_",
+		info: ManagerInfo{
+			BackendType: CacheBackendMemory,
+			IsFallback:  false,
+		},
 	}
+}
+
+// NewManagerWithConfig creates a new cache manager with optional distributed cache.
+func NewManagerWithConfig(queries *store.Queries, cfg CacheConfig) *Manager {
+	m := NewManager(queries)
+
+	// Try to create distributed cache if Redis is configured
+	if cfg.Type == "redis" && cfg.RedisURL != "" {
+		result, err := NewCacheWithInfo(cfg)
+		if err == nil {
+			m.Distributed = result.Cache
+			m.info.BackendType = result.BackendType
+			m.info.IsFallback = result.IsFallback
+			m.info.RedisURL = maskRedisURL(cfg.RedisURL)
+		} else {
+			slog.Warn("failed to create distributed cache", "error", err)
+			m.info.BackendType = CacheBackendMemory
+			m.info.IsFallback = true
+		}
+	}
+
+	return m
+}
+
+// maskRedisURL masks the password in a Redis URL for security.
+func maskRedisURL(url string) string {
+	// Simple masking - hide password if present
+	// Format: redis://[:password@]host:port/db
+	if len(url) > 10 {
+		// Find @ symbol which indicates credentials
+		for i := 8; i < len(url); i++ {
+			if url[i] == '@' {
+				// Found credentials, mask everything between :// and @
+				return url[:8] + "***@" + url[i+1:]
+			}
+		}
+	}
+	return url
 }
 
 // Start starts background cleanup tasks.
@@ -60,9 +115,39 @@ func (m *Manager) Start() {
 	m.General.StartCleanup(time.Minute)
 }
 
-// Stop stops all background tasks.
+// Stop stops all background tasks and closes distributed cache.
 func (m *Manager) Stop() {
 	m.General.Stop()
+	if m.Distributed != nil {
+		if err := m.Distributed.Close(); err != nil {
+			slog.Warn("failed to close distributed cache", "error", err)
+		}
+	}
+}
+
+// Info returns information about the cache manager configuration.
+func (m *Manager) Info() ManagerInfo {
+	return m.info
+}
+
+// IsRedis returns true if using Redis as the distributed cache backend.
+func (m *Manager) IsRedis() bool {
+	return m.info.BackendType == CacheBackendRedis
+}
+
+// HealthCheck performs a health check on the cache system.
+// Returns nil if healthy, error otherwise.
+func (m *Manager) HealthCheck(ctx context.Context) error {
+	if m.Distributed == nil {
+		return nil // Memory-only cache is always "healthy"
+	}
+
+	// For Redis, ping the server
+	if redisCache, ok := m.Distributed.(*RedisCache); ok {
+		return redisCache.Ping(ctx)
+	}
+
+	return nil
 }
 
 // ClearAll clears all caches and resets statistics.
@@ -72,6 +157,18 @@ func (m *Manager) ClearAll() {
 	m.Menus.Invalidate()
 	m.Language.Invalidate()
 	m.General.Clear()
+
+	// Clear distributed cache if present
+	if m.Distributed != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := m.Distributed.Clear(ctx); err != nil {
+			slog.Warn("failed to clear distributed cache", "error", err)
+		}
+		if sp, ok := m.Distributed.(StatsProvider); ok {
+			sp.ResetStats()
+		}
+	}
 
 	// Reset statistics for all caches
 	m.Config.ResetStats()

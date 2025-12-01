@@ -33,8 +33,11 @@ func NewCacheHandler(renderer *render.Renderer, sm *scs.SessionManager, cm *cach
 
 // CacheStatsData holds data for the cache stats template.
 type CacheStatsData struct {
-	Caches     []cache.ManagerCacheStats
-	TotalStats cache.Stats
+	Caches      []cache.ManagerCacheStats
+	TotalStats  cache.Stats
+	Info        cache.ManagerInfo
+	IsRedis     bool
+	HealthError string // Non-empty if health check failed
 }
 
 // Stats handles GET /admin/cache - displays cache statistics.
@@ -50,6 +53,13 @@ func (h *CacheHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	data := CacheStatsData{
 		Caches:     h.cacheManager.AllStats(),
 		TotalStats: h.cacheManager.TotalStats(),
+		Info:       h.cacheManager.Info(),
+		IsRedis:    h.cacheManager.IsRedis(),
+	}
+
+	// Perform health check
+	if err := h.cacheManager.HealthCheck(r.Context()); err != nil {
+		data.HealthError = err.Error()
 	}
 
 	if err := h.renderer.Render(w, r, "admin/cache_stats", render.TemplateData{
