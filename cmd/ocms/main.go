@@ -263,6 +263,7 @@ func run() error {
 	}
 	apiKeysHandler := handler.NewAPIKeysHandler(db, renderer, sessionManager)
 	webhooksHandler := handler.NewWebhooksHandler(db, renderer, sessionManager)
+	importExportHandler := handler.NewImportExportHandler(db, renderer, sessionManager)
 	healthHandler := handler.NewHealthHandler(db, "./uploads")
 
 	// Set webhook dispatcher on handlers that dispatch events
@@ -490,6 +491,10 @@ func run() error {
 		r.Post("/cache/clear", cacheHandler.Clear)
 		r.Post("/cache/clear/config", cacheHandler.ClearConfig)
 		r.Post("/cache/clear/sitemap", cacheHandler.ClearSitemap)
+
+		// Import/Export routes
+		r.Get("/export", importExportHandler.ExportForm)
+		r.Post("/export", importExportHandler.Export)
 
 		// Register module admin routes
 		moduleRegistry.AdminRouteAll(r)
