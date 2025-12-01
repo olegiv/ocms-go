@@ -69,6 +69,14 @@ func NewDispatcher(db *sql.DB, logger *slog.Logger, cfg Config) *Dispatcher {
 	}
 }
 
+// Retry worker configuration
+const (
+	RetryInterval     = 30 * time.Second    // How often to check for pending deliveries
+	RetryBatchSize    = 50                  // Max number of pending deliveries to process per batch
+	CleanupInterval   = 24 * time.Hour      // How often to clean up old deliveries
+	DeliveryRetention = 30 * 24 * time.Hour // How long to keep delivered/dead entries (30 days)
+)
+
 // Start starts the dispatcher workers.
 func (d *Dispatcher) Start(ctx context.Context) {
 	d.mu.Lock()
@@ -86,6 +94,14 @@ func (d *Dispatcher) Start(ctx context.Context) {
 		d.wg.Add(1)
 		go d.worker(ctx, i)
 	}
+
+	// Start retry worker
+	d.wg.Add(1)
+	go d.retryWorker(ctx)
+
+	// Start cleanup worker
+	d.wg.Add(1)
+	go d.cleanupWorker(ctx)
 }
 
 // Stop stops the dispatcher and waits for workers to finish.
@@ -122,14 +138,137 @@ func (d *Dispatcher) worker(ctx context.Context, id int) {
 				"worker_id", id,
 				"delivery_id", delivery.DeliveryID,
 				"event", delivery.Event)
-			// Delivery processing will be implemented in Iteration 11
-			// For now, we just log the queued delivery
-			d.logger.Info("delivery queued for processing",
-				"delivery_id", delivery.DeliveryID,
-				"webhook_id", delivery.WebhookID,
-				"event", delivery.Event)
+			// Process the delivery (HTTP POST with retry logic)
+			d.processDelivery(ctx, delivery)
 		}
 	}
+}
+
+// retryWorker periodically checks for pending deliveries that are ready for retry.
+func (d *Dispatcher) retryWorker(ctx context.Context) {
+	defer d.wg.Done()
+	d.logger.Debug("webhook retry worker started")
+
+	ticker := time.NewTicker(RetryInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-d.done:
+			d.logger.Debug("webhook retry worker stopping")
+			return
+		case <-ctx.Done():
+			d.logger.Debug("webhook retry worker context cancelled")
+			return
+		case <-ticker.C:
+			d.processRetries(ctx)
+		}
+	}
+}
+
+// processRetries fetches and processes pending deliveries that are ready for retry.
+func (d *Dispatcher) processRetries(ctx context.Context) {
+	now := time.Now()
+
+	// Fetch pending deliveries that are ready for retry
+	deliveries, err := d.queries.GetPendingDeliveries(ctx, store.GetPendingDeliveriesParams{
+		NextRetryAt: sql.NullTime{Time: now, Valid: true},
+		Limit:       RetryBatchSize,
+	})
+	if err != nil {
+		d.logger.Error("failed to get pending deliveries", "error", err)
+		return
+	}
+
+	if len(deliveries) == 0 {
+		return
+	}
+
+	d.logger.Debug("processing pending deliveries", "count", len(deliveries))
+
+	for _, delivery := range deliveries {
+		// Get the webhook to get URL, secret, and headers
+		webhook, err := d.queries.GetWebhookByID(ctx, delivery.WebhookID)
+		if err != nil {
+			d.logger.Error("failed to get webhook for retry",
+				"error", err,
+				"webhook_id", delivery.WebhookID,
+				"delivery_id", delivery.ID)
+			continue
+		}
+
+		// Check if webhook is still active
+		if !webhook.IsActive {
+			d.logger.Debug("skipping retry for inactive webhook",
+				"webhook_id", webhook.ID,
+				"delivery_id", delivery.ID)
+			// Mark as dead since webhook is disabled
+			_ = d.queries.UpdateDeliveryDead(ctx, store.UpdateDeliveryDeadParams{
+				ErrorMessage: sql.NullString{String: "webhook disabled", Valid: true},
+				UpdatedAt:    now,
+				ID:           delivery.ID,
+			})
+			continue
+		}
+
+		whModel := webhookToModel(webhook)
+
+		// Queue for processing
+		qd := &QueuedDelivery{
+			DeliveryID: delivery.ID,
+			WebhookID:  delivery.WebhookID,
+			Event:      delivery.Event,
+			Payload:    []byte(delivery.Payload),
+			URL:        webhook.Url,
+			Secret:     webhook.Secret,
+			Headers:    whModel.GetHeaders(),
+		}
+
+		select {
+		case d.queue <- qd:
+			d.logger.Debug("pending delivery queued for retry", "delivery_id", delivery.ID)
+		default:
+			d.logger.Warn("delivery queue full, skipping retry", "delivery_id", delivery.ID)
+		}
+	}
+}
+
+// cleanupWorker periodically cleans up old delivered and dead deliveries.
+func (d *Dispatcher) cleanupWorker(ctx context.Context) {
+	defer d.wg.Done()
+	d.logger.Debug("webhook cleanup worker started")
+
+	// Run cleanup once on startup
+	d.cleanupOldDeliveries(ctx)
+
+	ticker := time.NewTicker(CleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-d.done:
+			d.logger.Debug("webhook cleanup worker stopping")
+			return
+		case <-ctx.Done():
+			d.logger.Debug("webhook cleanup worker context cancelled")
+			return
+		case <-ticker.C:
+			d.cleanupOldDeliveries(ctx)
+		}
+	}
+}
+
+// cleanupOldDeliveries removes old delivered and dead delivery records.
+func (d *Dispatcher) cleanupOldDeliveries(ctx context.Context) {
+	cutoff := time.Now().Add(-DeliveryRetention)
+
+	err := d.queries.DeleteOldDeliveries(ctx, cutoff)
+	if err != nil {
+		d.logger.Error("failed to cleanup old deliveries", "error", err)
+		return
+	}
+
+	d.logger.Debug("old deliveries cleaned up", "older_than", cutoff.Format(time.RFC3339))
 }
 
 // Dispatch dispatches an event to all subscribed webhooks.
