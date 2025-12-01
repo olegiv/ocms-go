@@ -308,8 +308,39 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			}
 			return result
 		},
-		"contains": func(s, substr string) bool {
-			return strings.Contains(s, substr)
+		"contains": func(collection, element any) bool {
+			// Handle string slice
+			if slice, ok := collection.([]string); ok {
+				if elem, ok := element.(string); ok {
+					for _, s := range slice {
+						if s == elem {
+							return true
+						}
+					}
+				}
+				return false
+			}
+			// Handle string contains substring
+			if s, ok := collection.(string); ok {
+				if substr, ok := element.(string); ok {
+					return strings.Contains(s, substr)
+				}
+			}
+			return false
+		},
+		"hasPrefix": func(s, prefix string) bool {
+			return strings.HasPrefix(s, prefix)
+		},
+		"prettyJSON": func(s string) string {
+			var data any
+			if err := json.Unmarshal([]byte(s), &data); err != nil {
+				return s
+			}
+			pretty, err := json.MarshalIndent(data, "", "  ")
+			if err != nil {
+				return s
+			}
+			return string(pretty)
 		},
 		"int64": func(v any) int64 {
 			switch val := v.(type) {

@@ -1,0 +1,268 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{T .AdminLang "webhooks.deliveries_title"}}</h1>
+        <p class="page-description">{{.Data.Webhook.Name}} - {{.Data.TotalCount}} {{T .AdminLang "webhooks.deliveries"}}</p>
+    </div>
+    <div class="page-actions">
+        <a href="/admin/webhooks/{{.Data.Webhook.ID}}" class="btn btn-outline">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+            {{T .AdminLang "webhooks.edit"}}
+        </a>
+        <form method="POST" action="/admin/webhooks/{{.Data.Webhook.ID}}/test" style="display: inline;">
+            <button type="submit" class="btn btn-primary">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                {{T .AdminLang "webhooks.send_test"}}
+            </button>
+        </form>
+    </div>
+</div>
+
+{{if .Data.Deliveries}}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>{{T .AdminLang "webhooks.delivery_id"}}</th>
+                    <th>{{T .AdminLang "webhooks.event"}}</th>
+                    <th>{{T .AdminLang "webhooks.status"}}</th>
+                    <th>{{T .AdminLang "webhooks.attempts"}}</th>
+                    <th>{{T .AdminLang "webhooks.response"}}</th>
+                    <th>{{T .AdminLang "webhooks.created"}}</th>
+                    <th class="text-right">{{T .AdminLang "webhooks.actions"}}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Data.Deliveries}}
+                <tr x-data="{ showPayload: false }">
+                    <td>
+                        <code>#{{.ID}}</code>
+                    </td>
+                    <td>
+                        <span class="badge badge-outline">{{.Event}}</span>
+                    </td>
+                    <td>
+                        {{if eq .Status "delivered"}}
+                        <span class="badge badge-success">{{T $.AdminLang "webhooks.status_delivered"}}</span>
+                        {{else if eq .Status "pending"}}
+                        <span class="badge badge-warning">{{T $.AdminLang "webhooks.status_pending"}}</span>
+                        {{else if eq .Status "dead"}}
+                        <span class="badge badge-danger">{{T $.AdminLang "webhooks.status_dead"}}</span>
+                        {{else}}
+                        <span class="badge badge-secondary">{{.Status}}</span>
+                        {{end}}
+                    </td>
+                    <td>
+                        {{.Attempts}}
+                    </td>
+                    <td>
+                        {{if .ResponseCode.Valid}}
+                        <span class="response-code {{if and (ge .ResponseCode.Int64 200) (lt .ResponseCode.Int64 300)}}response-success{{else}}response-error{{end}}">
+                            {{.ResponseCode.Int64}}
+                        </span>
+                        {{else}}
+                        <span class="text-muted">-</span>
+                        {{end}}
+                        {{if .ErrorMessage}}
+                        <span class="error-message" title="{{.ErrorMessage}}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        </span>
+                        {{end}}
+                    </td>
+                    <td>
+                        {{formatDateTime .CreatedAt}}
+                    </td>
+                    <td class="text-right">
+                        <div class="action-buttons">
+                            <button type="button" class="btn btn-sm btn-outline" @click="showPayload = !showPayload" title="{{T $.AdminLang "webhooks.view_payload"}}">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                            {{if or (eq .Status "dead") (eq .Status "failed")}}
+                            <form method="POST" action="/admin/webhooks/{{$.Data.Webhook.ID}}/deliveries/{{.ID}}/retry" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-outline" title="{{T $.AdminLang "webhooks.retry"}}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+                                </button>
+                            </form>
+                            {{end}}
+                        </div>
+                    </td>
+                </tr>
+                <tr x-show="showPayload" x-cloak class="payload-row">
+                    <td colspan="7">
+                        <div class="payload-container">
+                            <div class="payload-section">
+                                <h5>{{T $.AdminLang "webhooks.payload"}}</h5>
+                                <pre class="payload-content">{{prettyJSON .Payload}}</pre>
+                            </div>
+                            {{if .ResponseBody}}
+                            <div class="payload-section">
+                                <h5>{{T $.AdminLang "webhooks.response_body"}}</h5>
+                                <pre class="payload-content">{{.ResponseBody}}</pre>
+                            </div>
+                            {{end}}
+                            {{if .ErrorMessage}}
+                            <div class="payload-section error">
+                                <h5>{{T $.AdminLang "webhooks.error_message"}}</h5>
+                                <pre class="payload-content">{{.ErrorMessage}}</pre>
+                            </div>
+                            {{end}}
+                            {{if .NextRetryAt.Valid}}
+                            <div class="payload-section">
+                                <h5>{{T $.AdminLang "webhooks.next_retry"}}</h5>
+                                <p>{{formatDateTime .NextRetryAt.Time}}</p>
+                            </div>
+                            {{end}}
+                            {{if .DeliveredAt.Valid}}
+                            <div class="payload-section">
+                                <h5>{{T $.AdminLang "webhooks.delivered_at"}}</h5>
+                                <p>{{formatDateTime .DeliveredAt.Time}}</p>
+                            </div>
+                            {{end}}
+                        </div>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+
+    {{if or .Data.HasPrev .Data.HasNext}}
+    <div class="card-footer">
+        <div class="pagination">
+            <div class="pagination-info">
+                {{T .AdminLang "pagination.page"}} {{.Data.CurrentPage}} {{T .AdminLang "pagination.of"}} {{.Data.TotalPages}}
+            </div>
+            <div class="pagination-controls">
+                {{if .Data.HasPrev}}
+                <a href="/admin/webhooks/{{.Data.Webhook.ID}}/deliveries?page={{.Data.PrevPage}}" class="btn btn-sm btn-outline">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    {{T .AdminLang "pagination.previous"}}
+                </a>
+                {{else}}
+                <span class="btn btn-sm btn-outline disabled">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    {{T .AdminLang "pagination.previous"}}
+                </span>
+                {{end}}
+
+                {{if .Data.HasNext}}
+                <a href="/admin/webhooks/{{.Data.Webhook.ID}}/deliveries?page={{.Data.NextPage}}" class="btn btn-sm btn-outline">
+                    {{T .AdminLang "pagination.next"}}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </a>
+                {{else}}
+                <span class="btn btn-sm btn-outline disabled">
+                    {{T .AdminLang "pagination.next"}}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </span>
+                {{end}}
+            </div>
+        </div>
+    </div>
+    {{end}}
+</div>
+{{else}}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            <p>{{T .AdminLang "webhooks.no_deliveries"}}</p>
+            <span class="empty-hint">{{T .AdminLang "webhooks.no_deliveries_hint"}}</span>
+            <div class="empty-state-action">
+                <form method="POST" action="/admin/webhooks/{{.Data.Webhook.ID}}/test">
+                    <button type="submit" class="btn btn-primary">{{T .AdminLang "webhooks.send_test"}}</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+
+<style>
+.badge-outline {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+}
+
+.response-code {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    padding: 0.125rem 0.375rem;
+    border-radius: 4px;
+}
+
+.response-success {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+}
+
+.response-error {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.error-message {
+    color: #ef4444;
+    cursor: help;
+    vertical-align: middle;
+    margin-left: 0.25rem;
+}
+
+.payload-row {
+    background: var(--bg-muted);
+}
+
+.payload-row td {
+    padding: 0 !important;
+}
+
+.payload-container {
+    padding: 1rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1rem;
+}
+
+.payload-section {
+    background: var(--bg);
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.payload-section.error {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.05);
+}
+
+.payload-section h5 {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+}
+
+.payload-content {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    background: var(--bg-muted);
+    padding: 0.75rem;
+    border-radius: 4px;
+    overflow-x: auto;
+    max-height: 200px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 0;
+}
+
+.payload-section.error .payload-content {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+</style>
+{{end}}

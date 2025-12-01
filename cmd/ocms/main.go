@@ -237,6 +237,7 @@ func run() error {
 		return fmt.Errorf("initializing api docs handler: %w", err)
 	}
 	apiKeysHandler := handler.NewAPIKeysHandler(db, renderer, sessionManager)
+	webhooksHandler := handler.NewWebhooksHandler(db, renderer, sessionManager)
 	healthHandler := handler.NewHealthHandler(db, "./uploads")
 
 	// Health check routes (should be early, before session middleware for some endpoints)
@@ -440,6 +441,18 @@ func run() error {
 		r.Put("/api-keys/{id}", apiKeysHandler.Update)
 		r.Post("/api-keys/{id}", apiKeysHandler.Update) // HTML forms can't send PUT
 		r.Delete("/api-keys/{id}", apiKeysHandler.Delete)
+
+		// Webhook management routes
+		r.Get("/webhooks", webhooksHandler.List)
+		r.Get("/webhooks/new", webhooksHandler.NewForm)
+		r.Post("/webhooks", webhooksHandler.Create)
+		r.Get("/webhooks/{id}", webhooksHandler.EditForm)
+		r.Put("/webhooks/{id}", webhooksHandler.Update)
+		r.Post("/webhooks/{id}", webhooksHandler.Update) // HTML forms can't send PUT
+		r.Delete("/webhooks/{id}", webhooksHandler.Delete)
+		r.Get("/webhooks/{id}/deliveries", webhooksHandler.Deliveries)
+		r.Post("/webhooks/{id}/test", webhooksHandler.Test)
+		r.Post("/webhooks/{id}/deliveries/{did}/retry", webhooksHandler.RetryDelivery)
 
 		// Cache management routes
 		r.Get("/cache", cacheHandler.Stats)
