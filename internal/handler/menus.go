@@ -38,22 +38,31 @@ func NewMenusHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 
 // MenusListData holds data for the menus list template.
 type MenusListData struct {
-	Menus []store.Menu
+	Menus     []store.ListMenusWithLanguageRow
+	Languages []store.Language
 }
 
 // List handles GET /admin/menus - displays a list of menus.
 func (h *MenusHandler) List(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 
-	menus, err := h.queries.ListMenus(r.Context())
+	menus, err := h.queries.ListMenusWithLanguage(r.Context())
 	if err != nil {
 		slog.Error("failed to list menus", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
+	// Get languages for filter/display
+	languages, err := h.queries.ListActiveLanguages(r.Context())
+	if err != nil {
+		slog.Error("failed to list languages", "error", err)
+		languages = []store.Language{}
+	}
+
 	data := MenusListData{
-		Menus: menus,
+		Menus:     menus,
+		Languages: languages,
 	}
 
 	if err := h.renderer.Render(w, r, "admin/menus_list", render.TemplateData{
@@ -83,6 +92,7 @@ type MenuFormData struct {
 	Items      []MenuItemNode
 	Pages      []store.Page // Available pages to add
 	Targets    []string
+	Languages  []store.Language
 	Errors     map[string]string
 	FormValues map[string]string
 	IsEdit     bool
@@ -125,10 +135,29 @@ func buildMenuTree(items []store.ListMenuItemsWithPageRow, parentID sql.NullInt6
 func (h *MenusHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 
+	// Get languages for selector
+	languages, err := h.queries.ListActiveLanguages(r.Context())
+	if err != nil {
+		slog.Error("failed to list languages", "error", err)
+		languages = []store.Language{}
+	}
+
+	// Get default language for pre-selection
+	defaultLang, err := h.queries.GetDefaultLanguage(r.Context())
+	if err != nil {
+		slog.Error("failed to get default language", "error", err)
+	}
+
+	formValues := make(map[string]string)
+	if defaultLang.ID > 0 {
+		formValues["language_id"] = fmt.Sprintf("%d", defaultLang.ID)
+	}
+
 	data := MenuFormData{
 		Targets:    model.ValidTargets,
+		Languages:  languages,
 		Errors:     make(map[string]string),
-		FormValues: make(map[string]string),
+		FormValues: formValues,
 		IsEdit:     false,
 	}
 
@@ -159,13 +188,26 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	name := strings.TrimSpace(r.FormValue("name"))
 	slug := strings.TrimSpace(r.FormValue("slug"))
+	languageIDStr := r.FormValue("language_id")
 
 	formValues := map[string]string{
-		"name": name,
-		"slug": slug,
+		"name":        name,
+		"slug":        slug,
+		"language_id": languageIDStr,
 	}
 
 	errors := make(map[string]string)
+
+	// Parse language_id
+	var languageID sql.NullInt64
+	if languageIDStr != "" {
+		langID, err := strconv.ParseInt(languageIDStr, 10, 64)
+		if err != nil {
+			errors["language_id"] = "Invalid language"
+		} else {
+			languageID = sql.NullInt64{Int64: langID, Valid: true}
+		}
+	}
 
 	// Validate name
 	if name == "" {
@@ -184,19 +226,27 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 		errors["slug"] = "Slug is required"
 	} else if !util.IsValidSlug(slug) {
 		errors["slug"] = "Invalid slug format"
-	} else {
-		exists, err := h.queries.MenuSlugExists(r.Context(), slug)
+	} else if languageID.Valid {
+		// Check slug uniqueness within the same language
+		exists, err := h.queries.MenuSlugExistsForLanguage(r.Context(), store.MenuSlugExistsForLanguageParams{
+			Slug:       slug,
+			LanguageID: languageID,
+		})
 		if err != nil {
 			slog.Error("database error checking slug", "error", err)
 			errors["slug"] = "Error checking slug"
 		} else if exists != 0 {
-			errors["slug"] = "Slug already exists"
+			errors["slug"] = "Slug already exists for this language"
 		}
 	}
 
 	if len(errors) > 0 {
+		// Get languages for re-render
+		languages, _ := h.queries.ListActiveLanguages(r.Context())
+
 		data := MenuFormData{
 			Targets:    model.ValidTargets,
+			Languages:  languages,
 			Errors:     errors,
 			FormValues: formValues,
 			IsEdit:     false,
@@ -220,10 +270,11 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	menu, err := h.queries.CreateMenu(r.Context(), store.CreateMenuParams{
-		Name:      name,
-		Slug:      slug,
-		CreatedAt: now,
-		UpdatedAt: now,
+		Name:       name,
+		Slug:       slug,
+		LanguageID: languageID,
+		CreatedAt:  now,
+		UpdatedAt:  now,
 	})
 	if err != nil {
 		slog.Error("failed to create menu", "error", err)
@@ -281,11 +332,19 @@ func (h *MenusHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		pages = []store.Page{}
 	}
 
+	// Get languages for selector
+	languages, err := h.queries.ListActiveLanguages(r.Context())
+	if err != nil {
+		slog.Error("failed to list languages", "error", err)
+		languages = []store.Language{}
+	}
+
 	data := MenuFormData{
 		Menu:       &menu,
 		Items:      tree,
 		Pages:      pages,
 		Targets:    model.ValidTargets,
+		Languages:  languages,
 		Errors:     make(map[string]string),
 		FormValues: make(map[string]string),
 		IsEdit:     true,
@@ -338,13 +397,26 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	name := strings.TrimSpace(r.FormValue("name"))
 	slug := strings.TrimSpace(r.FormValue("slug"))
+	languageIDStr := r.FormValue("language_id")
 
 	formValues := map[string]string{
-		"name": name,
-		"slug": slug,
+		"name":        name,
+		"slug":        slug,
+		"language_id": languageIDStr,
 	}
 
 	errors := make(map[string]string)
+
+	// Parse language_id
+	var languageID sql.NullInt64
+	if languageIDStr != "" {
+		langID, err := strconv.ParseInt(languageIDStr, 10, 64)
+		if err != nil {
+			errors["language_id"] = "Invalid language"
+		} else {
+			languageID = sql.NullInt64{Int64: langID, Valid: true}
+		}
+	}
 
 	if name == "" {
 		errors["name"] = "Name is required"
@@ -361,16 +433,18 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 		errors["slug"] = "Slug is required"
 	} else if !util.IsValidSlug(slug) {
 		errors["slug"] = "Invalid slug format"
-	} else if slug != menu.Slug {
-		exists, err := h.queries.MenuSlugExistsExcluding(r.Context(), store.MenuSlugExistsExcludingParams{
-			Slug: slug,
-			ID:   id,
+	} else if slug != menu.Slug || languageID != menu.LanguageID {
+		// Check slug uniqueness within the same language (excluding current menu)
+		exists, err := h.queries.MenuSlugExistsForLanguageExcluding(r.Context(), store.MenuSlugExistsForLanguageExcludingParams{
+			Slug:       slug,
+			LanguageID: languageID,
+			ID:         id,
 		})
 		if err != nil {
 			slog.Error("database error checking slug", "error", err)
 			errors["slug"] = "Error checking slug"
 		} else if exists != 0 {
-			errors["slug"] = "Slug already exists"
+			errors["slug"] = "Slug already exists for this language"
 		}
 	}
 
@@ -379,12 +453,14 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 		items, _ := h.queries.ListMenuItemsWithPage(r.Context(), id)
 		tree := buildMenuTree(items, sql.NullInt64{Valid: false})
 		pages, _ := h.queries.ListPages(r.Context(), store.ListPagesParams{Limit: 1000, Offset: 0})
+		languages, _ := h.queries.ListActiveLanguages(r.Context())
 
 		data := MenuFormData{
 			Menu:       &menu,
 			Items:      tree,
 			Pages:      pages,
 			Targets:    model.ValidTargets,
+			Languages:  languages,
 			Errors:     errors,
 			FormValues: formValues,
 			IsEdit:     true,
@@ -408,10 +484,11 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	_, err = h.queries.UpdateMenu(r.Context(), store.UpdateMenuParams{
-		ID:        id,
-		Name:      name,
-		Slug:      slug,
-		UpdatedAt: now,
+		ID:         id,
+		Name:       name,
+		Slug:       slug,
+		LanguageID: languageID,
+		UpdatedAt:  now,
 	})
 	if err != nil {
 		slog.Error("failed to update menu", "error", err, "menu_id", id)

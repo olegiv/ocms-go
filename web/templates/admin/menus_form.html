@@ -63,6 +63,34 @@
                 <span class="form-hint">Used to identify the menu in templates</span>
                 {{end}}
             </div>
+
+            <div class="form-group">
+                <label for="language_id" class="form-label">
+                    Language
+                </label>
+                <select
+                    id="language_id"
+                    name="language_id"
+                    class="form-select {{if .Data.Errors.language_id}}is-invalid{{end}}"
+                >
+                    {{$currentLangID := ""}}
+                    {{if .Data.FormValues.language_id}}
+                        {{$currentLangID = .Data.FormValues.language_id}}
+                    {{else if and .Data.Menu .Data.Menu.LanguageID.Valid}}
+                        {{$currentLangID = printf "%d" .Data.Menu.LanguageID.Int64}}
+                    {{end}}
+                    {{range .Data.Languages}}
+                    <option value="{{.ID}}" {{if eq (printf "%d" .ID) $currentLangID}}selected{{end}}>
+                        {{.NativeName}} ({{.Code}})
+                    </option>
+                    {{end}}
+                </select>
+                {{if .Data.Errors.language_id}}
+                <span class="form-error">{{.Data.Errors.language_id}}</span>
+                {{else}}
+                <span class="form-hint">Create separate menus for each language</span>
+                {{end}}
+            </div>
         </div>
 
         <div class="form-actions">

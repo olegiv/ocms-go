@@ -34,22 +34,24 @@ func (q *Queries) CountMenus(ctx context.Context) (int64, error) {
 }
 
 const createMenu = `-- name: CreateMenu :one
-INSERT INTO menus (name, slug, created_at, updated_at)
-VALUES (?, ?, ?, ?)
-RETURNING id, name, slug, created_at, updated_at
+INSERT INTO menus (name, slug, language_id, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, name, slug, created_at, updated_at, language_id
 `
 
 type CreateMenuParams struct {
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Name       string        `json:"name"`
+	Slug       string        `json:"slug"`
+	LanguageID sql.NullInt64 `json:"language_id"`
+	CreatedAt  time.Time     `json:"created_at"`
+	UpdatedAt  time.Time     `json:"updated_at"`
 }
 
 func (q *Queries) CreateMenu(ctx context.Context, arg CreateMenuParams) (Menu, error) {
 	row := q.db.QueryRowContext(ctx, createMenu,
 		arg.Name,
 		arg.Slug,
+		arg.LanguageID,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -60,6 +62,7 @@ func (q *Queries) CreateMenu(ctx context.Context, arg CreateMenuParams) (Menu, e
 		&i.Slug,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LanguageID,
 	)
 	return i, err
 }
@@ -162,7 +165,7 @@ func (q *Queries) GetMaxMenuItemPosition(ctx context.Context, arg GetMaxMenuItem
 }
 
 const getMenuByID = `-- name: GetMenuByID :one
-SELECT id, name, slug, created_at, updated_at FROM menus WHERE id = ?
+SELECT id, name, slug, created_at, updated_at, language_id FROM menus WHERE id = ?
 `
 
 func (q *Queries) GetMenuByID(ctx context.Context, id int64) (Menu, error) {
@@ -174,12 +177,13 @@ func (q *Queries) GetMenuByID(ctx context.Context, id int64) (Menu, error) {
 		&i.Slug,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LanguageID,
 	)
 	return i, err
 }
 
 const getMenuBySlug = `-- name: GetMenuBySlug :one
-SELECT id, name, slug, created_at, updated_at FROM menus WHERE slug = ?
+SELECT id, name, slug, created_at, updated_at, language_id FROM menus WHERE slug = ?
 `
 
 func (q *Queries) GetMenuBySlug(ctx context.Context, slug string) (Menu, error) {
@@ -191,6 +195,117 @@ func (q *Queries) GetMenuBySlug(ctx context.Context, slug string) (Menu, error) 
 		&i.Slug,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LanguageID,
+	)
+	return i, err
+}
+
+const getMenuBySlugAndLanguage = `-- name: GetMenuBySlugAndLanguage :one
+SELECT m.id, m.name, m.slug, m.created_at, m.updated_at, m.language_id, l.code as language_code
+FROM menus m
+LEFT JOIN languages l ON m.language_id = l.id
+WHERE m.slug = ? AND m.language_id = ?
+`
+
+type GetMenuBySlugAndLanguageParams struct {
+	Slug       string        `json:"slug"`
+	LanguageID sql.NullInt64 `json:"language_id"`
+}
+
+type GetMenuBySlugAndLanguageRow struct {
+	ID           int64          `json:"id"`
+	Name         string         `json:"name"`
+	Slug         string         `json:"slug"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	LanguageID   sql.NullInt64  `json:"language_id"`
+	LanguageCode sql.NullString `json:"language_code"`
+}
+
+func (q *Queries) GetMenuBySlugAndLanguage(ctx context.Context, arg GetMenuBySlugAndLanguageParams) (GetMenuBySlugAndLanguageRow, error) {
+	row := q.db.QueryRowContext(ctx, getMenuBySlugAndLanguage, arg.Slug, arg.LanguageID)
+	var i GetMenuBySlugAndLanguageRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LanguageID,
+		&i.LanguageCode,
+	)
+	return i, err
+}
+
+const getMenuBySlugWithLanguage = `-- name: GetMenuBySlugWithLanguage :one
+SELECT m.id, m.name, m.slug, m.created_at, m.updated_at, m.language_id, l.code as language_code, l.name as language_name
+FROM menus m
+LEFT JOIN languages l ON m.language_id = l.id
+WHERE m.slug = ?
+`
+
+type GetMenuBySlugWithLanguageRow struct {
+	ID           int64          `json:"id"`
+	Name         string         `json:"name"`
+	Slug         string         `json:"slug"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	LanguageID   sql.NullInt64  `json:"language_id"`
+	LanguageCode sql.NullString `json:"language_code"`
+	LanguageName sql.NullString `json:"language_name"`
+}
+
+func (q *Queries) GetMenuBySlugWithLanguage(ctx context.Context, slug string) (GetMenuBySlugWithLanguageRow, error) {
+	row := q.db.QueryRowContext(ctx, getMenuBySlugWithLanguage, slug)
+	var i GetMenuBySlugWithLanguageRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LanguageID,
+		&i.LanguageCode,
+		&i.LanguageName,
+	)
+	return i, err
+}
+
+const getMenuForLanguageOrDefault = `-- name: GetMenuForLanguageOrDefault :one
+SELECT m.id, m.name, m.slug, m.created_at, m.updated_at, m.language_id, l.code as language_code
+FROM menus m
+LEFT JOIN languages l ON m.language_id = l.id
+WHERE m.slug = ? AND (m.language_id = ? OR l.is_default = 1)
+ORDER BY CASE WHEN m.language_id = ? THEN 0 ELSE 1 END
+LIMIT 1
+`
+
+type GetMenuForLanguageOrDefaultParams struct {
+	Slug       string        `json:"slug"`
+	LanguageID sql.NullInt64 `json:"language_id"`
+}
+
+type GetMenuForLanguageOrDefaultRow struct {
+	ID           int64          `json:"id"`
+	Name         string         `json:"name"`
+	Slug         string         `json:"slug"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	LanguageID   sql.NullInt64  `json:"language_id"`
+	LanguageCode sql.NullString `json:"language_code"`
+}
+
+func (q *Queries) GetMenuForLanguageOrDefault(ctx context.Context, arg GetMenuForLanguageOrDefaultParams) (GetMenuForLanguageOrDefaultRow, error) {
+	row := q.db.QueryRowContext(ctx, getMenuForLanguageOrDefault, arg.Slug, arg.LanguageID)
+	var i GetMenuForLanguageOrDefaultRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LanguageID,
+		&i.LanguageCode,
 	)
 	return i, err
 }
@@ -368,7 +483,7 @@ func (q *Queries) ListMenuItemsWithPage(ctx context.Context, menuID int64) ([]Li
 }
 
 const listMenus = `-- name: ListMenus :many
-SELECT id, name, slug, created_at, updated_at FROM menus ORDER BY name ASC
+SELECT id, name, slug, created_at, updated_at, language_id FROM menus ORDER BY name ASC
 `
 
 func (q *Queries) ListMenus(ctx context.Context) ([]Menu, error) {
@@ -386,6 +501,114 @@ func (q *Queries) ListMenus(ctx context.Context) ([]Menu, error) {
 			&i.Slug,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.LanguageID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMenusByLanguage = `-- name: ListMenusByLanguage :many
+
+SELECT m.id, m.name, m.slug, m.created_at, m.updated_at, m.language_id, l.code as language_code, l.name as language_name, l.native_name as language_native_name
+FROM menus m
+LEFT JOIN languages l ON m.language_id = l.id
+WHERE m.language_id = ?
+ORDER BY m.name ASC
+`
+
+type ListMenusByLanguageRow struct {
+	ID                 int64          `json:"id"`
+	Name               string         `json:"name"`
+	Slug               string         `json:"slug"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
+	LanguageID         sql.NullInt64  `json:"language_id"`
+	LanguageCode       sql.NullString `json:"language_code"`
+	LanguageName       sql.NullString `json:"language_name"`
+	LanguageNativeName sql.NullString `json:"language_native_name"`
+}
+
+// Language-specific menu queries
+func (q *Queries) ListMenusByLanguage(ctx context.Context, languageID sql.NullInt64) ([]ListMenusByLanguageRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMenusByLanguage, languageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMenusByLanguageRow{}
+	for rows.Next() {
+		var i ListMenusByLanguageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.LanguageID,
+			&i.LanguageCode,
+			&i.LanguageName,
+			&i.LanguageNativeName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMenusWithLanguage = `-- name: ListMenusWithLanguage :many
+SELECT m.id, m.name, m.slug, m.created_at, m.updated_at, m.language_id, l.code as language_code, l.name as language_name, l.native_name as language_native_name
+FROM menus m
+LEFT JOIN languages l ON m.language_id = l.id
+ORDER BY m.name ASC
+`
+
+type ListMenusWithLanguageRow struct {
+	ID                 int64          `json:"id"`
+	Name               string         `json:"name"`
+	Slug               string         `json:"slug"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
+	LanguageID         sql.NullInt64  `json:"language_id"`
+	LanguageCode       sql.NullString `json:"language_code"`
+	LanguageName       sql.NullString `json:"language_name"`
+	LanguageNativeName sql.NullString `json:"language_native_name"`
+}
+
+func (q *Queries) ListMenusWithLanguage(ctx context.Context) ([]ListMenusWithLanguageRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMenusWithLanguage)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMenusWithLanguageRow{}
+	for rows.Next() {
+		var i ListMenusWithLanguageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.LanguageID,
+			&i.LanguageCode,
+			&i.LanguageName,
+			&i.LanguageNativeName,
 		); err != nil {
 			return nil, err
 		}
@@ -467,23 +690,58 @@ func (q *Queries) MenuSlugExistsExcluding(ctx context.Context, arg MenuSlugExist
 	return column_1, err
 }
 
+const menuSlugExistsForLanguage = `-- name: MenuSlugExistsForLanguage :one
+SELECT EXISTS(SELECT 1 FROM menus WHERE slug = ? AND language_id = ?)
+`
+
+type MenuSlugExistsForLanguageParams struct {
+	Slug       string        `json:"slug"`
+	LanguageID sql.NullInt64 `json:"language_id"`
+}
+
+func (q *Queries) MenuSlugExistsForLanguage(ctx context.Context, arg MenuSlugExistsForLanguageParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, menuSlugExistsForLanguage, arg.Slug, arg.LanguageID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const menuSlugExistsForLanguageExcluding = `-- name: MenuSlugExistsForLanguageExcluding :one
+SELECT EXISTS(SELECT 1 FROM menus WHERE slug = ? AND language_id = ? AND id != ?)
+`
+
+type MenuSlugExistsForLanguageExcludingParams struct {
+	Slug       string        `json:"slug"`
+	LanguageID sql.NullInt64 `json:"language_id"`
+	ID         int64         `json:"id"`
+}
+
+func (q *Queries) MenuSlugExistsForLanguageExcluding(ctx context.Context, arg MenuSlugExistsForLanguageExcludingParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, menuSlugExistsForLanguageExcluding, arg.Slug, arg.LanguageID, arg.ID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const updateMenu = `-- name: UpdateMenu :one
-UPDATE menus SET name = ?, slug = ?, updated_at = ?
+UPDATE menus SET name = ?, slug = ?, language_id = ?, updated_at = ?
 WHERE id = ?
-RETURNING id, name, slug, created_at, updated_at
+RETURNING id, name, slug, created_at, updated_at, language_id
 `
 
 type UpdateMenuParams struct {
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	UpdatedAt time.Time `json:"updated_at"`
-	ID        int64     `json:"id"`
+	Name       string        `json:"name"`
+	Slug       string        `json:"slug"`
+	LanguageID sql.NullInt64 `json:"language_id"`
+	UpdatedAt  time.Time     `json:"updated_at"`
+	ID         int64         `json:"id"`
 }
 
 func (q *Queries) UpdateMenu(ctx context.Context, arg UpdateMenuParams) (Menu, error) {
 	row := q.db.QueryRowContext(ctx, updateMenu,
 		arg.Name,
 		arg.Slug,
+		arg.LanguageID,
 		arg.UpdatedAt,
 		arg.ID,
 	)
@@ -494,6 +752,7 @@ func (q *Queries) UpdateMenu(ctx context.Context, arg UpdateMenuParams) (Menu, e
 		&i.Slug,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LanguageID,
 	)
 	return i, err
 }

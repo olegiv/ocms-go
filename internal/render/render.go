@@ -284,6 +284,14 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			}
 			return r.menuService.GetMenu(slug)
 		},
+		// getMenuForLanguage returns menu items for a specific language with fallback.
+		// Usage in templates: {{range getMenuForLanguage "main" "ru"}}...{{end}}
+		"getMenuForLanguage": func(slug string, langCode string) []service.MenuItem {
+			if r.menuService == nil {
+				return nil
+			}
+			return r.menuService.GetMenuForLanguage(slug, langCode)
+		},
 		"dict": func(values ...any) map[string]any {
 			if len(values)%2 != 0 {
 				return nil

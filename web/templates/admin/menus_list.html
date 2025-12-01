@@ -20,6 +20,7 @@
                 <tr>
                     <th>Name</th>
                     <th>Slug</th>
+                    <th>Language</th>
                     <th>Updated</th>
                     <th class="text-right">Actions</th>
                 </tr>
@@ -35,6 +36,13 @@
                     </td>
                     <td>
                         <code class="slug-code">{{.Slug}}</code>
+                    </td>
+                    <td>
+                        {{if .LanguageCode.Valid}}
+                        <span class="badge badge-outline" title="{{.LanguageName.String}}">{{.LanguageCode.String}}</span>
+                        {{else}}
+                        <span class="badge badge-muted">—</span>
+                        {{end}}
                     </td>
                     <td>{{formatDate .UpdatedAt}}</td>
                     <td class="text-right">

@@ -1,6 +1,6 @@
 -- name: CreateMenu :one
-INSERT INTO menus (name, slug, created_at, updated_at)
-VALUES (?, ?, ?, ?)
+INSERT INTO menus (name, slug, language_id, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetMenuByID :one
@@ -13,7 +13,7 @@ SELECT * FROM menus WHERE slug = ?;
 SELECT * FROM menus ORDER BY name ASC;
 
 -- name: UpdateMenu :one
-UPDATE menus SET name = ?, slug = ?, updated_at = ?
+UPDATE menus SET name = ?, slug = ?, language_id = ?, updated_at = ?
 WHERE id = ?
 RETURNING *;
 
@@ -28,6 +28,12 @@ SELECT EXISTS(SELECT 1 FROM menus WHERE slug = ?);
 
 -- name: MenuSlugExistsExcluding :one
 SELECT EXISTS(SELECT 1 FROM menus WHERE slug = ? AND id != ?);
+
+-- name: MenuSlugExistsForLanguage :one
+SELECT EXISTS(SELECT 1 FROM menus WHERE slug = ? AND language_id = ?);
+
+-- name: MenuSlugExistsForLanguageExcluding :one
+SELECT EXISTS(SELECT 1 FROM menus WHERE slug = ? AND language_id = ? AND id != ?);
 
 -- Menu Item queries
 
@@ -80,3 +86,38 @@ FROM menu_items mi
 LEFT JOIN pages p ON mi.page_id = p.id
 WHERE mi.menu_id = ?
 ORDER BY mi.position ASC;
+
+-- Language-specific menu queries
+
+-- name: ListMenusByLanguage :many
+SELECT m.*, l.code as language_code, l.name as language_name, l.native_name as language_native_name
+FROM menus m
+LEFT JOIN languages l ON m.language_id = l.id
+WHERE m.language_id = ?
+ORDER BY m.name ASC;
+
+-- name: ListMenusWithLanguage :many
+SELECT m.*, l.code as language_code, l.name as language_name, l.native_name as language_native_name
+FROM menus m
+LEFT JOIN languages l ON m.language_id = l.id
+ORDER BY m.name ASC;
+
+-- name: GetMenuBySlugAndLanguage :one
+SELECT m.*, l.code as language_code
+FROM menus m
+LEFT JOIN languages l ON m.language_id = l.id
+WHERE m.slug = ? AND m.language_id = ?;
+
+-- name: GetMenuBySlugWithLanguage :one
+SELECT m.*, l.code as language_code, l.name as language_name
+FROM menus m
+LEFT JOIN languages l ON m.language_id = l.id
+WHERE m.slug = ?;
+
+-- name: GetMenuForLanguageOrDefault :one
+SELECT m.*, l.code as language_code
+FROM menus m
+LEFT JOIN languages l ON m.language_id = l.id
+WHERE m.slug = ? AND (m.language_id = ? OR l.is_default = 1)
+ORDER BY CASE WHEN m.language_id = ? THEN 0 ELSE 1 END
+LIMIT 1;

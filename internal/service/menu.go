@@ -4,6 +4,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"sync"
 	"time"
 
@@ -47,6 +48,7 @@ func NewMenuService(db *sql.DB) *MenuService {
 }
 
 // GetMenu fetches a menu by slug with caching.
+// This is the basic method that returns any menu with the given slug.
 func (s *MenuService) GetMenu(slug string) []MenuItem {
 	// Check cache
 	if cached, ok := s.cache.Load(slug); ok {
@@ -75,6 +77,179 @@ func (s *MenuService) GetMenu(slug string) []MenuItem {
 
 	// Cache the result
 	s.cache.Store(slug, cachedMenu{
+		items:  menuItems,
+		expiry: time.Now().Add(s.cacheTTL),
+	})
+
+	return menuItems
+}
+
+// GetMenuForLanguage fetches a menu by slug for a specific language.
+// It first tries to find a menu with the given slug and language,
+// then falls back to the default language menu if not found.
+func (s *MenuService) GetMenuForLanguage(slug string, langCode string) []MenuItem {
+	ctx := context.Background()
+
+	// Build cache key that includes language
+	cacheKey := fmt.Sprintf("%s:%s", slug, langCode)
+
+	// Check cache
+	if cached, ok := s.cache.Load(cacheKey); ok {
+		cm := cached.(cachedMenu)
+		if time.Now().Before(cm.expiry) {
+			return cm.items
+		}
+		// Cache expired, delete it
+		s.cache.Delete(cacheKey)
+	}
+
+	// Get the language by code
+	lang, err := s.queries.GetLanguageByCode(ctx, langCode)
+	if err != nil {
+		// Language not found, try default
+		lang, err = s.queries.GetDefaultLanguage(ctx)
+		if err != nil {
+			// No default language, fall back to basic GetMenu
+			return s.GetMenu(slug)
+		}
+	}
+
+	// Try to get menu for specific language first
+	menu, err := s.queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
+		Slug:       slug,
+		LanguageID: sql.NullInt64{Int64: lang.ID, Valid: true},
+	})
+	if err != nil {
+		// Menu not found for this language, try default language
+		defaultLang, err := s.queries.GetDefaultLanguage(ctx)
+		if err != nil {
+			return nil
+		}
+
+		if defaultLang.ID != lang.ID {
+			// Try with default language
+			menu, err = s.queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
+				Slug:       slug,
+				LanguageID: sql.NullInt64{Int64: defaultLang.ID, Valid: true},
+			})
+			if err != nil {
+				// Still not found, try without language filter as last resort
+				basicMenu, err := s.queries.GetMenuBySlug(ctx, slug)
+				if err != nil {
+					return nil
+				}
+				menu = store.GetMenuBySlugAndLanguageRow{
+					ID:        basicMenu.ID,
+					Name:      basicMenu.Name,
+					Slug:      basicMenu.Slug,
+					CreatedAt: basicMenu.CreatedAt,
+					UpdatedAt: basicMenu.UpdatedAt,
+				}
+			}
+		} else {
+			// Already tried with default language, try basic lookup
+			basicMenu, err := s.queries.GetMenuBySlug(ctx, slug)
+			if err != nil {
+				return nil
+			}
+			menu = store.GetMenuBySlugAndLanguageRow{
+				ID:        basicMenu.ID,
+				Name:      basicMenu.Name,
+				Slug:      basicMenu.Slug,
+				CreatedAt: basicMenu.CreatedAt,
+				UpdatedAt: basicMenu.UpdatedAt,
+			}
+		}
+	}
+
+	items, err := s.queries.ListMenuItemsWithPage(ctx, menu.ID)
+	if err != nil {
+		return nil
+	}
+
+	// Build tree structure
+	menuItems := s.buildMenuTree(items)
+
+	// Cache the result with language key
+	s.cache.Store(cacheKey, cachedMenu{
+		items:  menuItems,
+		expiry: time.Now().Add(s.cacheTTL),
+	})
+
+	return menuItems
+}
+
+// GetMenuForLanguageID fetches a menu by slug for a specific language ID.
+// This is useful when you have the language ID already (e.g., from a page).
+func (s *MenuService) GetMenuForLanguageID(slug string, langID int64) []MenuItem {
+	ctx := context.Background()
+
+	// Build cache key that includes language ID
+	cacheKey := fmt.Sprintf("%s:id:%d", slug, langID)
+
+	// Check cache
+	if cached, ok := s.cache.Load(cacheKey); ok {
+		cm := cached.(cachedMenu)
+		if time.Now().Before(cm.expiry) {
+			return cm.items
+		}
+		s.cache.Delete(cacheKey)
+	}
+
+	// Try to get menu for specific language first
+	menu, err := s.queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
+		Slug:       slug,
+		LanguageID: sql.NullInt64{Int64: langID, Valid: true},
+	})
+	if err != nil {
+		// Menu not found for this language, try default language
+		defaultLang, err := s.queries.GetDefaultLanguage(ctx)
+		if err != nil {
+			return nil
+		}
+
+		if defaultLang.ID != langID {
+			menu, err = s.queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
+				Slug:       slug,
+				LanguageID: sql.NullInt64{Int64: defaultLang.ID, Valid: true},
+			})
+			if err != nil {
+				// Fall back to basic lookup
+				basicMenu, err := s.queries.GetMenuBySlug(ctx, slug)
+				if err != nil {
+					return nil
+				}
+				menu = store.GetMenuBySlugAndLanguageRow{
+					ID:        basicMenu.ID,
+					Name:      basicMenu.Name,
+					Slug:      basicMenu.Slug,
+					CreatedAt: basicMenu.CreatedAt,
+					UpdatedAt: basicMenu.UpdatedAt,
+				}
+			}
+		} else {
+			basicMenu, err := s.queries.GetMenuBySlug(ctx, slug)
+			if err != nil {
+				return nil
+			}
+			menu = store.GetMenuBySlugAndLanguageRow{
+				ID:        basicMenu.ID,
+				Name:      basicMenu.Name,
+				Slug:      basicMenu.Slug,
+				CreatedAt: basicMenu.CreatedAt,
+				UpdatedAt: basicMenu.UpdatedAt,
+			}
+		}
+	}
+
+	items, err := s.queries.ListMenuItemsWithPage(ctx, menu.ID)
+	if err != nil {
+		return nil
+	}
+
+	menuItems := s.buildMenuTree(items)
+
+	s.cache.Store(cacheKey, cachedMenu{
 		items:  menuItems,
 		expiry: time.Now().Add(s.cacheTTL),
 	})
