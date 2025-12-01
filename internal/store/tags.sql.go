@@ -7,6 +7,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
@@ -58,22 +59,24 @@ func (q *Queries) CountTags(ctx context.Context) (int64, error) {
 }
 
 const createTag = `-- name: CreateTag :one
-INSERT INTO tags (name, slug, created_at, updated_at)
-VALUES (?, ?, ?, ?)
-RETURNING id, name, slug, created_at, updated_at
+INSERT INTO tags (name, slug, language_id, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, name, slug, created_at, updated_at, language_id
 `
 
 type CreateTagParams struct {
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Name       string        `json:"name"`
+	Slug       string        `json:"slug"`
+	LanguageID sql.NullInt64 `json:"language_id"`
+	CreatedAt  time.Time     `json:"created_at"`
+	UpdatedAt  time.Time     `json:"updated_at"`
 }
 
 func (q *Queries) CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error) {
 	row := q.db.QueryRowContext(ctx, createTag,
 		arg.Name,
 		arg.Slug,
+		arg.LanguageID,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -84,6 +87,7 @@ func (q *Queries) CreateTag(ctx context.Context, arg CreateTagParams) (Tag, erro
 		&i.Slug,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LanguageID,
 	)
 	return i, err
 }
@@ -154,8 +158,101 @@ func (q *Queries) GetPagesForTag(ctx context.Context, arg GetPagesForTagParams) 
 	return items, nil
 }
 
+const getTagAvailableTranslations = `-- name: GetTagAvailableTranslations :many
+SELECT
+    l.id as language_id,
+    l.code as language_code,
+    l.name as language_name,
+    l.native_name as language_native_name,
+    l.direction as language_direction,
+    l.is_default as is_default,
+    COALESCE(t.id, 0) as tag_id,
+    COALESCE(t.slug, '') as tag_slug,
+    COALESCE(t.name, '') as tag_name
+FROM languages l
+LEFT JOIN (
+    -- Get tags that are translations of the source tag
+    SELECT t.id, t.slug, t.name, tr.language_id
+    FROM tags t
+    INNER JOIN translations tr ON tr.translation_id = t.id
+    WHERE tr.entity_type = 'tag' AND tr.entity_id = ?
+    UNION
+    -- Get the source tag itself
+    SELECT t.id, t.slug, t.name, t.language_id
+    FROM tags t
+    WHERE t.id = ?
+    UNION
+    -- Get tags where current tag is a translation (sibling translations)
+    SELECT t2.id, t2.slug, t2.name, t2.language_id
+    FROM translations tr
+    INNER JOIN tags t2 ON (t2.id = tr.entity_id OR t2.id = tr.translation_id)
+    WHERE tr.entity_type = 'tag'
+    AND (tr.entity_id = ? OR tr.translation_id = ?)
+) t ON t.language_id = l.id
+WHERE l.is_active = 1
+ORDER BY l.position ASC
+`
+
+type GetTagAvailableTranslationsParams struct {
+	EntityID      int64 `json:"entity_id"`
+	ID            int64 `json:"id"`
+	EntityID_2    int64 `json:"entity_id_2"`
+	TranslationID int64 `json:"translation_id"`
+}
+
+type GetTagAvailableTranslationsRow struct {
+	LanguageID         int64  `json:"language_id"`
+	LanguageCode       string `json:"language_code"`
+	LanguageName       string `json:"language_name"`
+	LanguageNativeName string `json:"language_native_name"`
+	LanguageDirection  string `json:"language_direction"`
+	IsDefault          bool   `json:"is_default"`
+	TagID              int64  `json:"tag_id"`
+	TagSlug            string `json:"tag_slug"`
+	TagName            string `json:"tag_name"`
+}
+
+// Get all available translations for a tag (for language switcher)
+func (q *Queries) GetTagAvailableTranslations(ctx context.Context, arg GetTagAvailableTranslationsParams) ([]GetTagAvailableTranslationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTagAvailableTranslations,
+		arg.EntityID,
+		arg.ID,
+		arg.EntityID_2,
+		arg.TranslationID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetTagAvailableTranslationsRow{}
+	for rows.Next() {
+		var i GetTagAvailableTranslationsRow
+		if err := rows.Scan(
+			&i.LanguageID,
+			&i.LanguageCode,
+			&i.LanguageName,
+			&i.LanguageNativeName,
+			&i.LanguageDirection,
+			&i.IsDefault,
+			&i.TagID,
+			&i.TagSlug,
+			&i.TagName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTagByID = `-- name: GetTagByID :one
-SELECT id, name, slug, created_at, updated_at FROM tags WHERE id = ?
+SELECT id, name, slug, created_at, updated_at, language_id FROM tags WHERE id = ?
 `
 
 func (q *Queries) GetTagByID(ctx context.Context, id int64) (Tag, error) {
@@ -167,12 +264,13 @@ func (q *Queries) GetTagByID(ctx context.Context, id int64) (Tag, error) {
 		&i.Slug,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LanguageID,
 	)
 	return i, err
 }
 
 const getTagBySlug = `-- name: GetTagBySlug :one
-SELECT id, name, slug, created_at, updated_at FROM tags WHERE slug = ?
+SELECT id, name, slug, created_at, updated_at, language_id FROM tags WHERE slug = ?
 `
 
 func (q *Queries) GetTagBySlug(ctx context.Context, slug string) (Tag, error) {
@@ -184,6 +282,7 @@ func (q *Queries) GetTagBySlug(ctx context.Context, slug string) (Tag, error) {
 		&i.Slug,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LanguageID,
 	)
 	return i, err
 }
@@ -241,8 +340,117 @@ func (q *Queries) GetTagUsageCounts(ctx context.Context, arg GetTagUsageCountsPa
 	return items, nil
 }
 
+const getTagUsageCountsWithLanguage = `-- name: GetTagUsageCountsWithLanguage :many
+SELECT
+    t.id, t.name, t.slug, t.language_id, t.created_at, t.updated_at,
+    COUNT(pt.page_id) as usage_count,
+    COALESCE(l.code, '') as language_code,
+    COALESCE(l.name, '') as language_name
+FROM tags t
+LEFT JOIN page_tags pt ON pt.tag_id = t.id
+LEFT JOIN languages l ON l.id = t.language_id
+GROUP BY t.id
+ORDER BY t.name ASC
+LIMIT ? OFFSET ?
+`
+
+type GetTagUsageCountsWithLanguageParams struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+type GetTagUsageCountsWithLanguageRow struct {
+	ID           int64         `json:"id"`
+	Name         string        `json:"name"`
+	Slug         string        `json:"slug"`
+	LanguageID   sql.NullInt64 `json:"language_id"`
+	CreatedAt    time.Time     `json:"created_at"`
+	UpdatedAt    time.Time     `json:"updated_at"`
+	UsageCount   int64         `json:"usage_count"`
+	LanguageCode string        `json:"language_code"`
+	LanguageName string        `json:"language_name"`
+}
+
+func (q *Queries) GetTagUsageCountsWithLanguage(ctx context.Context, arg GetTagUsageCountsWithLanguageParams) ([]GetTagUsageCountsWithLanguageRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTagUsageCountsWithLanguage, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetTagUsageCountsWithLanguageRow{}
+	for rows.Next() {
+		var i GetTagUsageCountsWithLanguageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.LanguageID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.UsageCount,
+			&i.LanguageCode,
+			&i.LanguageName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTagWithLanguage = `-- name: GetTagWithLanguage :one
+
+SELECT
+    t.id, t.name, t.slug, t.created_at, t.updated_at, t.language_id,
+    COALESCE(l.code, '') as language_code,
+    COALESCE(l.name, '') as language_name,
+    COALESCE(l.native_name, '') as language_native_name,
+    COALESCE(l.direction, 'ltr') as language_direction
+FROM tags t
+LEFT JOIN languages l ON l.id = t.language_id
+WHERE t.id = ?
+`
+
+type GetTagWithLanguageRow struct {
+	ID                 int64         `json:"id"`
+	Name               string        `json:"name"`
+	Slug               string        `json:"slug"`
+	CreatedAt          time.Time     `json:"created_at"`
+	UpdatedAt          time.Time     `json:"updated_at"`
+	LanguageID         sql.NullInt64 `json:"language_id"`
+	LanguageCode       string        `json:"language_code"`
+	LanguageName       string        `json:"language_name"`
+	LanguageNativeName string        `json:"language_native_name"`
+	LanguageDirection  string        `json:"language_direction"`
+}
+
+// Language-specific tag queries
+func (q *Queries) GetTagWithLanguage(ctx context.Context, id int64) (GetTagWithLanguageRow, error) {
+	row := q.db.QueryRowContext(ctx, getTagWithLanguage, id)
+	var i GetTagWithLanguageRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LanguageID,
+		&i.LanguageCode,
+		&i.LanguageName,
+		&i.LanguageNativeName,
+		&i.LanguageDirection,
+	)
+	return i, err
+}
+
 const getTagsForPage = `-- name: GetTagsForPage :many
-SELECT t.id, t.name, t.slug, t.created_at, t.updated_at FROM tags t
+SELECT t.id, t.name, t.slug, t.created_at, t.updated_at, t.language_id FROM tags t
 INNER JOIN page_tags pt ON pt.tag_id = t.id
 WHERE pt.page_id = ?
 ORDER BY t.name ASC
@@ -263,6 +471,7 @@ func (q *Queries) GetTagsForPage(ctx context.Context, pageID int64) ([]Tag, erro
 			&i.Slug,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.LanguageID,
 		); err != nil {
 			return nil, err
 		}
@@ -278,7 +487,7 @@ func (q *Queries) GetTagsForPage(ctx context.Context, pageID int64) ([]Tag, erro
 }
 
 const listAllTags = `-- name: ListAllTags :many
-SELECT id, name, slug, created_at, updated_at FROM tags ORDER BY name ASC
+SELECT id, name, slug, created_at, updated_at, language_id FROM tags ORDER BY name ASC
 `
 
 func (q *Queries) ListAllTags(ctx context.Context) ([]Tag, error) {
@@ -296,6 +505,7 @@ func (q *Queries) ListAllTags(ctx context.Context) ([]Tag, error) {
 			&i.Slug,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.LanguageID,
 		); err != nil {
 			return nil, err
 		}
@@ -311,7 +521,7 @@ func (q *Queries) ListAllTags(ctx context.Context) ([]Tag, error) {
 }
 
 const listTags = `-- name: ListTags :many
-SELECT id, name, slug, created_at, updated_at FROM tags ORDER BY name ASC LIMIT ? OFFSET ?
+SELECT id, name, slug, created_at, updated_at, language_id FROM tags ORDER BY name ASC LIMIT ? OFFSET ?
 `
 
 type ListTagsParams struct {
@@ -334,6 +544,43 @@ func (q *Queries) ListTags(ctx context.Context, arg ListTagsParams) ([]Tag, erro
 			&i.Slug,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.LanguageID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTagsByLanguage = `-- name: ListTagsByLanguage :many
+SELECT id, name, slug, created_at, updated_at, language_id FROM tags
+WHERE language_id = ?
+ORDER BY name ASC
+`
+
+func (q *Queries) ListTagsByLanguage(ctx context.Context, languageID sql.NullInt64) ([]Tag, error) {
+	rows, err := q.db.QueryContext(ctx, listTagsByLanguage, languageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Tag{}
+	for rows.Next() {
+		var i Tag
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.LanguageID,
 		); err != nil {
 			return nil, err
 		}
@@ -381,6 +628,59 @@ func (q *Queries) ListTagsForSitemap(ctx context.Context) ([]ListTagsForSitemapR
 	return items, nil
 }
 
+const listTagsWithLanguage = `-- name: ListTagsWithLanguage :many
+SELECT
+    t.id, t.name, t.slug, t.created_at, t.updated_at, t.language_id,
+    COALESCE(l.code, '') as language_code,
+    COALESCE(l.name, '') as language_name
+FROM tags t
+LEFT JOIN languages l ON l.id = t.language_id
+ORDER BY t.name ASC
+`
+
+type ListTagsWithLanguageRow struct {
+	ID           int64         `json:"id"`
+	Name         string        `json:"name"`
+	Slug         string        `json:"slug"`
+	CreatedAt    time.Time     `json:"created_at"`
+	UpdatedAt    time.Time     `json:"updated_at"`
+	LanguageID   sql.NullInt64 `json:"language_id"`
+	LanguageCode string        `json:"language_code"`
+	LanguageName string        `json:"language_name"`
+}
+
+func (q *Queries) ListTagsWithLanguage(ctx context.Context) ([]ListTagsWithLanguageRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTagsWithLanguage)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTagsWithLanguageRow{}
+	for rows.Next() {
+		var i ListTagsWithLanguageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.LanguageID,
+			&i.LanguageCode,
+			&i.LanguageName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const removeTagFromPage = `-- name: RemoveTagFromPage :exec
 DELETE FROM page_tags WHERE page_id = ? AND tag_id = ?
 `
@@ -396,7 +696,7 @@ func (q *Queries) RemoveTagFromPage(ctx context.Context, arg RemoveTagFromPagePa
 }
 
 const searchTags = `-- name: SearchTags :many
-SELECT id, name, slug, created_at, updated_at FROM tags WHERE name LIKE ? ORDER BY name ASC LIMIT ?
+SELECT id, name, slug, created_at, updated_at, language_id FROM tags WHERE name LIKE ? ORDER BY name ASC LIMIT ?
 `
 
 type SearchTagsParams struct {
@@ -419,6 +719,7 @@ func (q *Queries) SearchTags(ctx context.Context, arg SearchTagsParams) ([]Tag, 
 			&i.Slug,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.LanguageID,
 		); err != nil {
 			return nil, err
 		}
@@ -460,23 +761,58 @@ func (q *Queries) TagSlugExistsExcluding(ctx context.Context, arg TagSlugExistsE
 	return column_1, err
 }
 
+const tagSlugExistsExcludingForLanguage = `-- name: TagSlugExistsExcludingForLanguage :one
+SELECT EXISTS(SELECT 1 FROM tags WHERE slug = ? AND id != ? AND language_id = ?)
+`
+
+type TagSlugExistsExcludingForLanguageParams struct {
+	Slug       string        `json:"slug"`
+	ID         int64         `json:"id"`
+	LanguageID sql.NullInt64 `json:"language_id"`
+}
+
+func (q *Queries) TagSlugExistsExcludingForLanguage(ctx context.Context, arg TagSlugExistsExcludingForLanguageParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, tagSlugExistsExcludingForLanguage, arg.Slug, arg.ID, arg.LanguageID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const tagSlugExistsForLanguage = `-- name: TagSlugExistsForLanguage :one
+SELECT EXISTS(SELECT 1 FROM tags WHERE slug = ? AND language_id = ?)
+`
+
+type TagSlugExistsForLanguageParams struct {
+	Slug       string        `json:"slug"`
+	LanguageID sql.NullInt64 `json:"language_id"`
+}
+
+func (q *Queries) TagSlugExistsForLanguage(ctx context.Context, arg TagSlugExistsForLanguageParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, tagSlugExistsForLanguage, arg.Slug, arg.LanguageID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const updateTag = `-- name: UpdateTag :one
-UPDATE tags SET name = ?, slug = ?, updated_at = ?
+UPDATE tags SET name = ?, slug = ?, language_id = ?, updated_at = ?
 WHERE id = ?
-RETURNING id, name, slug, created_at, updated_at
+RETURNING id, name, slug, created_at, updated_at, language_id
 `
 
 type UpdateTagParams struct {
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	UpdatedAt time.Time `json:"updated_at"`
-	ID        int64     `json:"id"`
+	Name       string        `json:"name"`
+	Slug       string        `json:"slug"`
+	LanguageID sql.NullInt64 `json:"language_id"`
+	UpdatedAt  time.Time     `json:"updated_at"`
+	ID         int64         `json:"id"`
 }
 
 func (q *Queries) UpdateTag(ctx context.Context, arg UpdateTagParams) (Tag, error) {
 	row := q.db.QueryRowContext(ctx, updateTag,
 		arg.Name,
 		arg.Slug,
+		arg.LanguageID,
 		arg.UpdatedAt,
 		arg.ID,
 	)
@@ -487,6 +823,22 @@ func (q *Queries) UpdateTag(ctx context.Context, arg UpdateTagParams) (Tag, erro
 		&i.Slug,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LanguageID,
 	)
 	return i, err
+}
+
+const updateTagLanguage = `-- name: UpdateTagLanguage :exec
+UPDATE tags SET language_id = ?, updated_at = ? WHERE id = ?
+`
+
+type UpdateTagLanguageParams struct {
+	LanguageID sql.NullInt64 `json:"language_id"`
+	UpdatedAt  time.Time     `json:"updated_at"`
+	ID         int64         `json:"id"`
+}
+
+func (q *Queries) UpdateTagLanguage(ctx context.Context, arg UpdateTagLanguageParams) error {
+	_, err := q.db.ExecContext(ctx, updateTagLanguage, arg.LanguageID, arg.UpdatedAt, arg.ID)
+	return err
 }

@@ -386,6 +386,7 @@ func run() error {
 		r.Put("/tags/{id}", taxonomyHandler.UpdateTag)
 		r.Post("/tags/{id}", taxonomyHandler.UpdateTag) // HTML forms can't send PUT
 		r.Delete("/tags/{id}", taxonomyHandler.DeleteTag)
+		r.Post("/tags/{id}/translate/{langCode}", taxonomyHandler.TranslateTag)
 
 		// Category management routes
 		r.Get("/categories", taxonomyHandler.ListCategories)
@@ -396,6 +397,7 @@ func run() error {
 		r.Put("/categories/{id}", taxonomyHandler.UpdateCategory)
 		r.Post("/categories/{id}", taxonomyHandler.UpdateCategory) // HTML forms can't send PUT
 		r.Delete("/categories/{id}", taxonomyHandler.DeleteCategory)
+		r.Post("/categories/{id}/translate/{langCode}", taxonomyHandler.TranslateCategory)
 
 		// Media library routes
 		r.Get("/media", mediaHandler.Library)

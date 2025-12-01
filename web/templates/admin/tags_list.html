@@ -20,6 +20,7 @@
                 <tr>
                     <th>{{T .AdminLang "label.name"}}</th>
                     <th>{{T .AdminLang "label.slug"}}</th>
+                    <th>{{T .AdminLang "label.language"}}</th>
                     <th>{{T .AdminLang "nav.pages"}}</th>
                     <th>{{T .AdminLang "label.created_at"}}</th>
                     <th class="text-right">{{T .AdminLang "label.actions"}}</th>
@@ -33,6 +34,13 @@
                     </td>
                     <td>
                         <code class="slug-code">{{.Slug}}</code>
+                    </td>
+                    <td>
+                        {{if .LanguageCode}}
+                        <span class="badge badge-outline" title="{{.LanguageName}}">{{.LanguageCode}}</span>
+                        {{else}}
+                        <span class="text-muted">-</span>
+                        {{end}}
                     </td>
                     <td>
                         <span class="badge badge-info">{{T $.AdminLang "tags.page_count" .UsageCount}}</span>
