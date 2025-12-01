@@ -495,6 +495,9 @@ func run() error {
 		// Import/Export routes
 		r.Get("/export", importExportHandler.ExportForm)
 		r.Post("/export", importExportHandler.Export)
+		r.Get("/import", importExportHandler.ImportForm)
+		r.Post("/import/validate", importExportHandler.ImportValidate)
+		r.Post("/import", importExportHandler.Import)
 
 		// Register module admin routes
 		moduleRegistry.AdminRouteAll(r)

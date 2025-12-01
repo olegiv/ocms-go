@@ -1,0 +1,779 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{T .AdminLang "import.title"}}</h1>
+        <p class="page-description">{{T .AdminLang "import.description"}}</p>
+    </div>
+</div>
+
+{{/* Step 1: File Upload */}}
+{{if and (not .Data.ValidationResult) (not .Data.ImportResult)}}
+<div class="card">
+    <form method="POST" action="/admin/import/validate" enctype="multipart/form-data" class="card-body">
+        <div class="import-upload-section">
+            <div class="upload-area" id="upload-area">
+                <input type="file" id="import_file" name="import_file" accept=".json" class="upload-input">
+                <div class="upload-content" id="upload-content">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                    <p class="upload-text">{{T .AdminLang "import.drop_file"}}</p>
+                    <p class="upload-hint">{{T .AdminLang "import.file_hint"}}</p>
+                </div>
+                <div class="upload-selected" id="upload-selected" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <p class="upload-text" id="selected-filename"></p>
+                    <p class="upload-hint">Click to change file</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="import-info">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            <p>{{T .AdminLang "import.info"}}</p>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                {{T .AdminLang "import.validate"}}
+            </button>
+        </div>
+    </form>
+</div>
+{{end}}
+
+{{/* Step 2: Validation Results & Import Options */}}
+{{if and .Data.ValidationResult (not .Data.ImportResult)}}
+<div class="card">
+    <div class="card-body">
+        {{if .Data.ValidationResult.Valid}}
+        <div class="validation-success">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            <span>{{T .AdminLang "import.validation_success"}}</span>
+        </div>
+        {{else}}
+        <div class="validation-error">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" x2="9" y1="9" y2="15"/><line x1="9" x2="15" y1="9" y2="15"/></svg>
+            <span>{{T .AdminLang "import.validation_error"}}</span>
+        </div>
+        {{end}}
+
+        <h3 class="section-title">{{T .AdminLang "import.found_entities"}}</h3>
+        <div class="entity-summary">
+            {{range $entity, $count := .Data.ValidationResult.Entities}}
+            {{if gt $count 0}}
+            <div class="entity-item">
+                <span class="entity-name">{{$entity}}</span>
+                <span class="entity-count">{{$count}}</span>
+            </div>
+            {{end}}
+            {{end}}
+        </div>
+
+        {{if .Data.ValidationResult.Conflicts}}
+        <h3 class="section-title">{{T .AdminLang "import.conflicts"}}</h3>
+        <div class="conflicts-section">
+            {{range $entity, $slugs := .Data.ValidationResult.Conflicts}}
+            <div class="conflict-group">
+                <h4 class="conflict-entity">{{$entity}}</h4>
+                <ul class="conflict-list">
+                    {{range $slugs}}
+                    <li>{{.}}</li>
+                    {{end}}
+                </ul>
+            </div>
+            {{end}}
+        </div>
+        {{end}}
+
+        {{if .Data.ValidationResult.Errors}}
+        <h3 class="section-title">{{T .AdminLang "import.validation_errors"}}</h3>
+        <div class="errors-section">
+            {{range .Data.ValidationResult.Errors}}
+            <div class="error-item">
+                <strong>{{.Entity}}:</strong> {{.Message}}
+            </div>
+            {{end}}
+        </div>
+        {{end}}
+    </div>
+</div>
+
+{{if .Data.ValidationResult.Valid}}
+<div class="card">
+    <form method="POST" action="/admin/import" class="card-body">
+        <h3 class="section-title">{{T .AdminLang "import.options"}}</h3>
+
+        <div class="import-sections">
+            <!-- Conflict Strategy -->
+            <div class="import-section">
+                <h4 class="import-section-title">{{T .AdminLang "import.conflict_strategy"}}</h4>
+                <div class="form-group">
+                    <select name="conflict_strategy" class="form-select">
+                        {{range .Data.ConflictStrategies}}
+                        <option value="{{.Value}}">{{.Label}} - {{.Description}}</option>
+                        {{end}}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Content Section -->
+            <div class="import-section">
+                <h4 class="import-section-title">{{T .AdminLang "import.content_section"}}</h4>
+                <div class="import-options">
+                    {{if .Data.UploadedData.Pages}}
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="import_pages" name="import_pages" value="on" checked class="checkbox-input">
+                        <label for="import_pages" class="checkbox-label">
+                            <strong>{{T .AdminLang "import.pages"}}</strong>
+                            <span class="checkbox-hint">{{T .AdminLang "import.pages_hint"}}</span>
+                        </label>
+                    </div>
+                    {{end}}
+
+                    {{if .Data.UploadedData.Categories}}
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="import_categories" name="import_categories" value="on" checked class="checkbox-input">
+                        <label for="import_categories" class="checkbox-label">
+                            <strong>{{T .AdminLang "import.categories"}}</strong>
+                            <span class="checkbox-hint">{{T .AdminLang "import.categories_hint"}}</span>
+                        </label>
+                    </div>
+                    {{end}}
+
+                    {{if .Data.UploadedData.Tags}}
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="import_tags" name="import_tags" value="on" checked class="checkbox-input">
+                        <label for="import_tags" class="checkbox-label">
+                            <strong>{{T .AdminLang "import.tags"}}</strong>
+                            <span class="checkbox-hint">{{T .AdminLang "import.tags_hint"}}</span>
+                        </label>
+                    </div>
+                    {{end}}
+
+                    {{if .Data.UploadedData.Media}}
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="import_media" name="import_media" value="on" checked class="checkbox-input">
+                        <label for="import_media" class="checkbox-label">
+                            <strong>{{T .AdminLang "import.media"}}</strong>
+                            <span class="checkbox-hint">{{T .AdminLang "import.media_hint"}}</span>
+                        </label>
+                    </div>
+                    {{end}}
+
+                    {{if .Data.UploadedData.Menus}}
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="import_menus" name="import_menus" value="on" checked class="checkbox-input">
+                        <label for="import_menus" class="checkbox-label">
+                            <strong>{{T .AdminLang "import.menus"}}</strong>
+                            <span class="checkbox-hint">{{T .AdminLang "import.menus_hint"}}</span>
+                        </label>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+
+            <!-- Forms Section -->
+            {{if .Data.UploadedData.Forms}}
+            <div class="import-section">
+                <h4 class="import-section-title">{{T .AdminLang "import.forms_section"}}</h4>
+                <div class="import-options">
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="import_forms" name="import_forms" value="on" checked class="checkbox-input">
+                        <label for="import_forms" class="checkbox-label">
+                            <strong>{{T .AdminLang "import.forms"}}</strong>
+                            <span class="checkbox-hint">{{T .AdminLang "import.forms_hint"}}</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            {{end}}
+
+            <!-- System Section -->
+            <div class="import-section">
+                <h4 class="import-section-title">{{T .AdminLang "import.system_section"}}</h4>
+                <div class="import-options">
+                    {{if .Data.UploadedData.Users}}
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="import_users" name="import_users" value="on" checked class="checkbox-input">
+                        <label for="import_users" class="checkbox-label">
+                            <strong>{{T .AdminLang "import.users"}}</strong>
+                            <span class="checkbox-hint">{{T .AdminLang "import.users_hint"}}</span>
+                        </label>
+                    </div>
+                    {{end}}
+
+                    {{if .Data.UploadedData.Languages}}
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="import_languages" name="import_languages" value="on" checked class="checkbox-input">
+                        <label for="import_languages" class="checkbox-label">
+                            <strong>{{T .AdminLang "import.languages"}}</strong>
+                            <span class="checkbox-hint">{{T .AdminLang "import.languages_hint"}}</span>
+                        </label>
+                    </div>
+                    {{end}}
+
+                    {{if .Data.UploadedData.Config}}
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="import_config" name="import_config" value="on" checked class="checkbox-input">
+                        <label for="import_config" class="checkbox-label">
+                            <strong>{{T .AdminLang "import.config"}}</strong>
+                            <span class="checkbox-hint">{{T .AdminLang "import.config_hint"}}</span>
+                        </label>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+
+            <!-- Dry Run Option -->
+            <div class="import-section">
+                <h4 class="import-section-title">{{T .AdminLang "import.advanced"}}</h4>
+                <div class="import-options">
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="dry_run" name="dry_run" value="on" class="checkbox-input">
+                        <label for="dry_run" class="checkbox-label">
+                            <strong>{{T .AdminLang "import.dry_run"}}</strong>
+                            <span class="checkbox-hint">{{T .AdminLang "import.dry_run_hint"}}</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <a href="/admin/import" class="btn btn-secondary">
+                {{T .AdminLang "btn.cancel"}}
+            </a>
+            <button type="submit" class="btn btn-primary">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                {{T .AdminLang "import.start_import"}}
+            </button>
+        </div>
+    </form>
+</div>
+{{end}}
+{{end}}
+
+{{/* Step 3: Import Results */}}
+{{if .Data.ImportResult}}
+<div class="card">
+    <div class="card-body">
+        {{if .Data.ImportResult.Success}}
+        <div class="import-success">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            <div>
+                {{if .Data.ImportResult.DryRun}}
+                <h3>{{T .AdminLang "import.dry_run_complete"}}</h3>
+                <p>{{T .AdminLang "import.dry_run_note"}}</p>
+                {{else}}
+                <h3>{{T .AdminLang "import.success"}}</h3>
+                {{end}}
+            </div>
+        </div>
+        {{else}}
+        <div class="import-failure">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" x2="9" y1="9" y2="15"/><line x1="9" x2="15" y1="9" y2="15"/></svg>
+            <div>
+                <h3>{{T .AdminLang "import.failed"}}</h3>
+                <p>{{T .AdminLang "import.errors_occurred"}}</p>
+            </div>
+        </div>
+        {{end}}
+
+        <h3 class="section-title">{{T .AdminLang "import.summary"}}</h3>
+        <div class="results-grid">
+            <div class="result-card result-created">
+                <span class="result-count">{{.Data.ImportResult.TotalCreated}}</span>
+                <span class="result-label">{{T .AdminLang "import.created"}}</span>
+            </div>
+            <div class="result-card result-updated">
+                <span class="result-count">{{.Data.ImportResult.TotalUpdated}}</span>
+                <span class="result-label">{{T .AdminLang "import.updated"}}</span>
+            </div>
+            <div class="result-card result-skipped">
+                <span class="result-count">{{.Data.ImportResult.TotalSkipped}}</span>
+                <span class="result-label">{{T .AdminLang "import.skipped"}}</span>
+            </div>
+        </div>
+
+        {{if .Data.ImportResult.Created}}
+        <h4 class="subsection-title">{{T .AdminLang "import.details_created"}}</h4>
+        <div class="details-grid">
+            {{range $entity, $count := .Data.ImportResult.Created}}
+            {{if gt $count 0}}
+            <div class="detail-item">
+                <span class="detail-entity">{{$entity}}</span>
+                <span class="detail-count">{{$count}}</span>
+            </div>
+            {{end}}
+            {{end}}
+        </div>
+        {{end}}
+
+        {{if .Data.ImportResult.Updated}}
+        <h4 class="subsection-title">{{T .AdminLang "import.details_updated"}}</h4>
+        <div class="details-grid">
+            {{range $entity, $count := .Data.ImportResult.Updated}}
+            {{if gt $count 0}}
+            <div class="detail-item">
+                <span class="detail-entity">{{$entity}}</span>
+                <span class="detail-count">{{$count}}</span>
+            </div>
+            {{end}}
+            {{end}}
+        </div>
+        {{end}}
+
+        {{if .Data.ImportResult.Skipped}}
+        <h4 class="subsection-title">{{T .AdminLang "import.details_skipped"}}</h4>
+        <div class="details-grid">
+            {{range $entity, $count := .Data.ImportResult.Skipped}}
+            {{if gt $count 0}}
+            <div class="detail-item">
+                <span class="detail-entity">{{$entity}}</span>
+                <span class="detail-count">{{$count}}</span>
+            </div>
+            {{end}}
+            {{end}}
+        </div>
+        {{end}}
+
+        {{if .Data.ImportResult.Errors}}
+        <h4 class="subsection-title errors-title">{{T .AdminLang "import.errors"}}</h4>
+        <div class="errors-list">
+            {{range .Data.ImportResult.Errors}}
+            <div class="error-item">
+                <strong>{{.Entity}} ({{.ID}}):</strong> {{.Message}}
+            </div>
+            {{end}}
+        </div>
+        {{end}}
+
+        <div class="form-actions">
+            <a href="/admin/import" class="btn btn-primary">
+                {{T .AdminLang "import.import_another"}}
+            </a>
+        </div>
+    </div>
+</div>
+{{end}}
+
+<style>
+.import-upload-section {
+    margin-bottom: 1.5rem;
+}
+
+.upload-area {
+    position: relative;
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 3rem 2rem;
+    text-align: center;
+    transition: border-color 0.2s, background-color 0.2s;
+    cursor: pointer;
+}
+
+.upload-area:hover,
+.upload-area.dragover {
+    border-color: var(--primary);
+    background-color: var(--bg-muted);
+}
+
+.upload-input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 2;
+}
+
+.upload-content,
+.upload-selected {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+.upload-selected {
+    color: var(--success-text, #155724);
+}
+
+.upload-selected svg {
+    color: var(--success-text, #155724);
+}
+
+.upload-area.has-file {
+    border-color: var(--success-text, #155724);
+    background-color: var(--success-bg, #d4edda);
+}
+
+.upload-text {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.upload-hint {
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+.import-info {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: var(--bg-muted);
+    border-radius: var(--radius-md);
+    margin-bottom: 1.5rem;
+    color: var(--text-secondary);
+}
+
+.import-info svg {
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+}
+
+.import-info p {
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+.validation-success,
+.validation-error {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 1.5rem;
+    font-weight: 500;
+}
+
+.validation-success {
+    background: var(--success-bg, #d4edda);
+    color: var(--success-text, #155724);
+}
+
+.validation-error {
+    background: var(--error-bg, #f8d7da);
+    color: var(--error-text, #721c24);
+}
+
+.section-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 1.5rem 0 1rem;
+    color: var(--text-primary);
+}
+
+.entity-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.75rem;
+}
+
+.entity-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: var(--bg-muted);
+    border-radius: var(--radius-md);
+}
+
+.entity-name {
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.entity-count {
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.conflicts-section {
+    background: var(--warning-bg, #fff3cd);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+}
+
+.conflict-group {
+    margin-bottom: 1rem;
+}
+
+.conflict-group:last-child {
+    margin-bottom: 0;
+}
+
+.conflict-entity {
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem;
+    text-transform: capitalize;
+}
+
+.conflict-list {
+    margin: 0;
+    padding-left: 1.5rem;
+    font-size: 0.875rem;
+}
+
+.errors-section {
+    background: var(--error-bg, #f8d7da);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+}
+
+.error-item {
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+}
+
+.error-item:last-child {
+    margin-bottom: 0;
+}
+
+.import-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.import-section {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.5rem;
+}
+
+.import-section-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin: 0 0 1rem;
+    color: var(--text-primary);
+}
+
+.import-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.checkbox-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.checkbox-hint {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    font-weight: normal;
+}
+
+.import-success,
+.import-failure {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.5rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 1.5rem;
+}
+
+.import-success {
+    background: var(--success-bg, #d4edda);
+    color: var(--success-text, #155724);
+}
+
+.import-failure {
+    background: var(--error-bg, #f8d7da);
+    color: var(--error-text, #721c24);
+}
+
+.import-success h3,
+.import-failure h3 {
+    margin: 0 0 0.25rem;
+    font-size: 1.125rem;
+}
+
+.import-success p,
+.import-failure p {
+    margin: 0;
+    font-size: 0.875rem;
+    opacity: 0.9;
+}
+
+.results-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.result-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem;
+    border-radius: var(--radius-md);
+    text-align: center;
+}
+
+.result-created {
+    background: var(--success-bg, #d4edda);
+    color: var(--success-text, #155724);
+}
+
+.result-updated {
+    background: var(--info-bg, #cce5ff);
+    color: var(--info-text, #004085);
+}
+
+.result-skipped {
+    background: var(--bg-muted);
+    color: var(--text-secondary);
+}
+
+.result-count {
+    font-size: 2rem;
+    font-weight: 700;
+}
+
+.result-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-top: 0.25rem;
+}
+
+.subsection-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin: 1.5rem 0 0.75rem;
+    color: var(--text-secondary);
+}
+
+.errors-title {
+    color: var(--error-text, #721c24);
+}
+
+.details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.5rem;
+}
+
+.detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-muted);
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+}
+
+.detail-entity {
+    text-transform: capitalize;
+}
+
+.detail-count {
+    font-weight: 600;
+}
+
+.errors-list {
+    background: var(--error-bg, #f8d7da);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    justify-content: flex-end;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const uploadArea = document.getElementById('upload-area');
+    const uploadInput = document.getElementById('import_file');
+    const uploadContent = document.getElementById('upload-content');
+    const uploadSelected = document.getElementById('upload-selected');
+    const selectedFilename = document.getElementById('selected-filename');
+    const form = uploadInput ? uploadInput.closest('form') : null;
+
+    function showSelectedFile(filename) {
+        if (uploadContent && uploadSelected && selectedFilename) {
+            uploadContent.style.display = 'none';
+            uploadSelected.style.display = 'flex';
+            selectedFilename.textContent = filename;
+            uploadArea.classList.add('has-file');
+        }
+    }
+
+    function showError() {
+        uploadArea.classList.add('error');
+        uploadArea.style.borderColor = 'var(--error-text, #dc3545)';
+        setTimeout(() => {
+            uploadArea.classList.remove('error');
+            uploadArea.style.borderColor = '';
+        }, 2000);
+    }
+
+    if (uploadArea && uploadInput) {
+        // Click handler - trigger file input when clicking the upload area
+        uploadArea.addEventListener('click', function(e) {
+            if (e.target !== uploadInput) {
+                uploadInput.click();
+            }
+        });
+
+        // File selection handler
+        uploadInput.addEventListener('change', function() {
+            if (uploadInput.files && uploadInput.files.length > 0) {
+                showSelectedFile(uploadInput.files[0].name);
+            }
+        });
+
+        // Form validation
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                if (!uploadInput.files || uploadInput.files.length === 0) {
+                    e.preventDefault();
+                    showError();
+                    uploadInput.click();
+                }
+            });
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, function(e) {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, function(e) {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+            });
+        });
+
+        uploadArea.addEventListener('drop', function(e) {
+            const files = e.dataTransfer.files;
+            if (files.length) {
+                uploadInput.files = files;
+                showSelectedFile(files[0].name);
+            }
+        });
+    }
+});
+</script>
+{{end}}
