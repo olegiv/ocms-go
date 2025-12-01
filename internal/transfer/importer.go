@@ -1,6 +1,8 @@
 package transfer
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -9,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -20,18 +23,25 @@ import (
 
 // Importer handles importing CMS content from JSON format.
 type Importer struct {
-	store  *store.Queries
-	db     *sql.DB
-	logger *slog.Logger
+	store     *store.Queries
+	db        *sql.DB
+	logger    *slog.Logger
+	uploadDir string
 }
 
 // NewImporter creates a new Importer instance.
 func NewImporter(queries *store.Queries, db *sql.DB, logger *slog.Logger) *Importer {
 	return &Importer{
-		store:  queries,
-		db:     db,
-		logger: logger,
+		store:     queries,
+		db:        db,
+		logger:    logger,
+		uploadDir: "./uploads",
 	}
+}
+
+// SetUploadDir sets the upload directory for media files.
+func (i *Importer) SetUploadDir(dir string) {
+	i.uploadDir = dir
 }
 
 // Import performs the import operation based on the provided options.
@@ -50,7 +60,7 @@ func (i *Importer) Import(ctx context.Context, data *ExportData, opts ImportOpti
 
 	// If dry run, just validate and count entities
 	if opts.DryRun {
-		i.countEntities(data, opts, result)
+		i.countEntities(ctx, data, opts, result)
 		return result, nil
 	}
 
@@ -209,6 +219,225 @@ func (i *Importer) ImportFromFile(ctx context.Context, path string, opts ImportO
 	defer f.Close()
 
 	return i.ImportFromReader(ctx, f, opts)
+}
+
+// ImportFromZip imports from a zip archive containing export.json and media files.
+func (i *Importer) ImportFromZip(ctx context.Context, zipReader *zip.Reader, opts ImportOptions) (*ImportResult, error) {
+	// Find and read export.json
+	var exportData ExportData
+	exportFound := false
+
+	for _, f := range zipReader.File {
+		if f.Name == "export.json" {
+			rc, err := f.Open()
+			if err != nil {
+				return nil, fmt.Errorf("failed to open export.json: %w", err)
+			}
+			defer rc.Close()
+
+			decoder := json.NewDecoder(rc)
+			if err := decoder.Decode(&exportData); err != nil {
+				return nil, fmt.Errorf("failed to parse export.json: %w", err)
+			}
+			exportFound = true
+			break
+		}
+	}
+
+	if !exportFound {
+		return nil, errors.New("export.json not found in zip archive")
+	}
+
+	// If importing media files, extract them first (before the transaction)
+	var mediaFileMap map[string]string // maps FilePath in JSON to extracted path
+	if opts.ImportMediaFiles && !opts.DryRun {
+		var err error
+		mediaFileMap, err = i.extractMediaFiles(zipReader)
+		if err != nil {
+			return nil, fmt.Errorf("failed to extract media files: %w", err)
+		}
+	}
+
+	// Perform the regular import
+	result, err := i.Import(ctx, &exportData, opts)
+	if err != nil {
+		// Clean up extracted files on failure
+		if mediaFileMap != nil {
+			for _, path := range mediaFileMap {
+				_ = os.RemoveAll(filepath.Dir(path))
+			}
+		}
+		return result, err
+	}
+
+	return result, nil
+}
+
+// ImportFromZipFile imports from a zip file path.
+func (i *Importer) ImportFromZipFile(ctx context.Context, path string, opts ImportOptions) (*ImportResult, error) {
+	zipReader, err := zip.OpenReader(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open zip file: %w", err)
+	}
+	defer zipReader.Close()
+
+	return i.ImportFromZip(ctx, &zipReader.Reader, opts)
+}
+
+// ImportFromZipBytes imports from zip archive bytes (useful for HTTP uploads).
+func (i *Importer) ImportFromZipBytes(ctx context.Context, data []byte, opts ImportOptions) (*ImportResult, error) {
+	reader := bytes.NewReader(data)
+	zipReader, err := zip.NewReader(reader, int64(len(data)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read zip data: %w", err)
+	}
+
+	return i.ImportFromZip(ctx, zipReader, opts)
+}
+
+// extractMediaFiles extracts media files from the zip to the uploads directory.
+func (i *Importer) extractMediaFiles(zipReader *zip.Reader) (map[string]string, error) {
+	mediaFileMap := make(map[string]string)
+
+	for _, f := range zipReader.File {
+		// Check if this is a media file (in media/ directory)
+		if !strings.HasPrefix(f.Name, "media/") {
+			continue
+		}
+
+		// Skip directories
+		if f.FileInfo().IsDir() {
+			continue
+		}
+
+		// Extract the file
+		extractedPath, err := i.extractMediaFile(f)
+		if err != nil {
+			i.logger.Warn("failed to extract media file", "file", f.Name, "error", err)
+			continue
+		}
+
+		mediaFileMap[f.Name] = extractedPath
+	}
+
+	return mediaFileMap, nil
+}
+
+// extractMediaFile extracts a single media file from the zip.
+func (i *Importer) extractMediaFile(f *zip.File) (string, error) {
+	// Parse the path: media/{type}/{uuid}/{filename}
+	parts := strings.Split(f.Name, "/")
+	if len(parts) < 4 {
+		return "", fmt.Errorf("invalid media path: %s", f.Name)
+	}
+
+	// Construct destination path
+	// f.Name example: media/originals/{uuid}/{filename}
+	// Destination: {uploadDir}/{type}/{uuid}/{filename}
+	mediaType := parts[1] // "originals", "thumbnail", etc.
+	uuid := parts[2]      // UUID
+	filename := parts[3]  // filename
+
+	destDir := filepath.Join(i.uploadDir, mediaType, uuid)
+	destPath := filepath.Join(destDir, filename)
+
+	// Create directory structure
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// Open zip file
+	rc, err := f.Open()
+	if err != nil {
+		return "", fmt.Errorf("failed to open zip entry: %w", err)
+	}
+	defer rc.Close()
+
+	// Create destination file
+	destFile, err := os.Create(destPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to create destination file: %w", err)
+	}
+	defer destFile.Close()
+
+	// Copy content
+	if _, err := io.Copy(destFile, rc); err != nil {
+		return "", fmt.Errorf("failed to copy file content: %w", err)
+	}
+
+	return destPath, nil
+}
+
+// ValidateZipFile validates a zip import file and returns information about its contents.
+func (i *Importer) ValidateZipFile(ctx context.Context, path string) (*ValidationResult, error) {
+	zipReader, err := zip.OpenReader(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open zip file: %w", err)
+	}
+	defer zipReader.Close()
+
+	return i.ValidateZip(ctx, &zipReader.Reader)
+}
+
+// ValidateZip validates a zip archive and returns information about its contents.
+func (i *Importer) ValidateZip(ctx context.Context, zipReader *zip.Reader) (*ValidationResult, error) {
+	// Find and read export.json
+	for _, f := range zipReader.File {
+		if f.Name == "export.json" {
+			rc, err := f.Open()
+			if err != nil {
+				return &ValidationResult{
+					Valid:  false,
+					Errors: []ImportError{{Entity: "zip", ID: "", Message: "failed to open export.json: " + err.Error()}},
+				}, nil
+			}
+			defer rc.Close()
+
+			var data ExportData
+			decoder := json.NewDecoder(rc)
+			if err := decoder.Decode(&data); err != nil {
+				return &ValidationResult{
+					Valid:  false,
+					Errors: []ImportError{{Entity: "json", ID: "", Message: err.Error()}},
+				}, nil
+			}
+
+			result, err := i.ValidateData(ctx, &data)
+			if err != nil {
+				return nil, err
+			}
+
+			// Add media file count
+			mediaCount := 0
+			for _, mf := range zipReader.File {
+				if strings.HasPrefix(mf.Name, "media/") && !mf.FileInfo().IsDir() {
+					mediaCount++
+				}
+			}
+			result.Entities["media_files"] = mediaCount
+
+			return result, nil
+		}
+	}
+
+	return &ValidationResult{
+		Valid:  false,
+		Errors: []ImportError{{Entity: "zip", ID: "", Message: "export.json not found in zip archive"}},
+	}, nil
+}
+
+// ValidateZipBytes validates zip data and returns information about its contents.
+func (i *Importer) ValidateZipBytes(ctx context.Context, data []byte) (*ValidationResult, error) {
+	reader := bytes.NewReader(data)
+	zipReader, err := zip.NewReader(reader, int64(len(data)))
+	if err != nil {
+		return &ValidationResult{
+			Valid:  false,
+			Errors: []ImportError{{Entity: "zip", ID: "", Message: "failed to read zip data: " + err.Error()}},
+		}, nil
+	}
+
+	return i.ValidateZip(ctx, zipReader)
 }
 
 // Validate validates the import data without making changes.
@@ -493,33 +722,142 @@ func (i *Importer) ValidateData(ctx context.Context, data *ExportData) (*Validat
 }
 
 // countEntities counts entities that would be imported (for dry run).
-func (i *Importer) countEntities(data *ExportData, opts ImportOptions, result *ImportResult) {
+// It checks existing entities to properly categorize as created, updated, or skipped.
+func (i *Importer) countEntities(ctx context.Context, data *ExportData, opts ImportOptions, result *ImportResult) {
 	if opts.ImportLanguages {
-		result.Created["languages"] = len(data.Languages)
+		for _, lang := range data.Languages {
+			exists, _ := i.store.LanguageCodeExists(ctx, lang.Code)
+			if exists != 0 {
+				switch opts.ConflictStrategy {
+				case ConflictSkip:
+					result.IncrementSkipped("languages")
+				case ConflictOverwrite:
+					result.IncrementUpdated("languages")
+				}
+			} else {
+				result.IncrementCreated("languages")
+			}
+		}
 	}
 	if opts.ImportUsers {
-		result.Created["users"] = len(data.Users)
+		for _, user := range data.Users {
+			_, err := i.store.GetUserByEmail(ctx, user.Email)
+			if err == nil {
+				switch opts.ConflictStrategy {
+				case ConflictSkip:
+					result.IncrementSkipped("users")
+				case ConflictOverwrite:
+					result.IncrementUpdated("users")
+				}
+			} else {
+				result.IncrementCreated("users")
+			}
+		}
 	}
 	if opts.ImportCategories {
-		result.Created["categories"] = len(data.Categories)
+		for _, cat := range data.Categories {
+			_, err := i.store.GetCategoryBySlug(ctx, cat.Slug)
+			if err == nil {
+				switch opts.ConflictStrategy {
+				case ConflictSkip:
+					result.IncrementSkipped("categories")
+				case ConflictOverwrite:
+					result.IncrementUpdated("categories")
+				}
+			} else {
+				result.IncrementCreated("categories")
+			}
+		}
 	}
 	if opts.ImportTags {
-		result.Created["tags"] = len(data.Tags)
+		for _, tag := range data.Tags {
+			_, err := i.store.GetTagBySlug(ctx, tag.Slug)
+			if err == nil {
+				switch opts.ConflictStrategy {
+				case ConflictSkip:
+					result.IncrementSkipped("tags")
+				case ConflictOverwrite:
+					result.IncrementUpdated("tags")
+				}
+			} else {
+				result.IncrementCreated("tags")
+			}
+		}
 	}
 	if opts.ImportPages {
-		result.Created["pages"] = len(data.Pages)
+		for _, page := range data.Pages {
+			_, err := i.store.GetPageBySlug(ctx, page.Slug)
+			if err == nil {
+				switch opts.ConflictStrategy {
+				case ConflictSkip:
+					result.IncrementSkipped("pages")
+				case ConflictOverwrite:
+					result.IncrementUpdated("pages")
+				}
+			} else {
+				result.IncrementCreated("pages")
+			}
+		}
 	}
 	if opts.ImportMedia {
-		result.Created["media"] = len(data.Media)
+		for _, media := range data.Media {
+			_, err := i.store.GetMediaByUUID(ctx, media.UUID)
+			if err == nil {
+				switch opts.ConflictStrategy {
+				case ConflictSkip:
+					result.IncrementSkipped("media")
+				case ConflictOverwrite:
+					result.IncrementUpdated("media")
+				}
+			} else {
+				result.IncrementCreated("media")
+			}
+		}
 	}
 	if opts.ImportMenus {
-		result.Created["menus"] = len(data.Menus)
+		for _, menu := range data.Menus {
+			_, err := i.store.GetMenuBySlug(ctx, menu.Slug)
+			if err == nil {
+				switch opts.ConflictStrategy {
+				case ConflictSkip:
+					result.IncrementSkipped("menus")
+				case ConflictOverwrite:
+					result.IncrementUpdated("menus")
+				}
+			} else {
+				result.IncrementCreated("menus")
+			}
+		}
 	}
 	if opts.ImportForms {
-		result.Created["forms"] = len(data.Forms)
+		for _, form := range data.Forms {
+			_, err := i.store.GetFormBySlug(ctx, form.Slug)
+			if err == nil {
+				switch opts.ConflictStrategy {
+				case ConflictSkip:
+					result.IncrementSkipped("forms")
+				case ConflictOverwrite:
+					result.IncrementUpdated("forms")
+				}
+			} else {
+				result.IncrementCreated("forms")
+			}
+		}
 	}
 	if opts.ImportConfig {
-		result.Created["config"] = len(data.Config)
+		for key := range data.Config {
+			_, err := i.store.GetConfigByKey(ctx, key)
+			if err == nil {
+				switch opts.ConflictStrategy {
+				case ConflictSkip:
+					result.IncrementSkipped("config")
+				case ConflictOverwrite:
+					result.IncrementUpdated("config")
+				}
+			} else {
+				result.IncrementCreated("config")
+			}
+		}
 	}
 }
 

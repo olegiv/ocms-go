@@ -12,16 +12,16 @@
     <form method="POST" action="/admin/import/validate" enctype="multipart/form-data" class="card-body">
         <div class="import-upload-section">
             <div class="upload-area" id="upload-area">
-                <input type="file" id="import_file" name="import_file" accept=".json" class="upload-input">
+                <input type="file" id="import_file" name="import_file" accept=".json,.zip" class="upload-input">
                 <div class="upload-content" id="upload-content">
                     <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
                     <p class="upload-text">{{T .AdminLang "import.drop_file"}}</p>
-                    <p class="upload-hint">{{T .AdminLang "import.file_hint"}}</p>
+                    <p class="upload-hint">{{T .AdminLang "import.file_hint_extended"}}</p>
                 </div>
                 <div class="upload-selected" id="upload-selected" style="display: none;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
                     <p class="upload-text" id="selected-filename"></p>
-                    <p class="upload-hint">Click to change file</p>
+                    <p class="upload-hint">{{T .AdminLang "import.click_to_change"}}</p>
                 </div>
             </div>
         </div>
@@ -54,6 +54,16 @@
         <div class="validation-error">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" x2="9" y1="9" y2="15"/><line x1="9" x2="15" y1="9" y2="15"/></svg>
             <span>{{T .AdminLang "import.validation_error"}}</span>
+        </div>
+        {{end}}
+
+        {{if .Data.IsZipFile}}
+        <div class="zip-file-notice">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+            <span>{{T .AdminLang "import.zip_file_detected"}}</span>
+            {{if .Data.HasMediaFiles}}
+            <span class="media-files-badge">{{T .AdminLang "import.contains_media_files"}}</span>
+            {{end}}
         </div>
         {{end}}
 
@@ -156,6 +166,16 @@
                         <label for="import_media" class="checkbox-label">
                             <strong>{{T .AdminLang "import.media"}}</strong>
                             <span class="checkbox-hint">{{T .AdminLang "import.media_hint"}}</span>
+                        </label>
+                    </div>
+                    {{end}}
+
+                    {{if .Data.HasMediaFiles}}
+                    <div class="form-checkbox" style="margin-left: 2rem;">
+                        <input type="checkbox" id="import_media_files" name="import_media_files" value="on" checked class="checkbox-input">
+                        <label for="import_media_files" class="checkbox-label">
+                            <strong>{{T .AdminLang "import.media_files"}}</strong>
+                            <span class="checkbox-hint">{{T .AdminLang "import.media_files_hint"}}</span>
                         </label>
                     </div>
                     {{end}}
@@ -462,6 +482,28 @@
 .validation-error {
     background: var(--error-bg, #f8d7da);
     color: var(--error-text, #721c24);
+}
+
+.zip-file-notice {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--info-bg, #cce5ff);
+    color: var(--info-text, #004085);
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+.media-files-badge {
+    background: var(--primary);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    margin-left: auto;
 }
 
 .section-title {

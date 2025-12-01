@@ -1,12 +1,15 @@
 package transfer
 
 import (
+	"archive/zip"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"time"
 
 	"ocms-go/internal/store"
@@ -14,16 +17,23 @@ import (
 
 // Exporter handles exporting CMS content to JSON format.
 type Exporter struct {
-	store  *store.Queries
-	logger *slog.Logger
+	store     *store.Queries
+	logger    *slog.Logger
+	uploadDir string
 }
 
 // NewExporter creates a new Exporter instance.
 func NewExporter(queries *store.Queries, logger *slog.Logger) *Exporter {
 	return &Exporter{
-		store:  queries,
-		logger: logger,
+		store:     queries,
+		logger:    logger,
+		uploadDir: "./uploads",
 	}
+}
+
+// SetUploadDir sets the upload directory for media files.
+func (e *Exporter) SetUploadDir(dir string) {
+	e.uploadDir = dir
 }
 
 // Export generates an ExportData structure based on the provided options.
@@ -152,6 +162,119 @@ func (e *Exporter) ExportToFile(ctx context.Context, opts ExportOptions, path st
 	defer f.Close()
 
 	return e.ExportToWriter(ctx, opts, f)
+}
+
+// ExportWithMedia creates a zip archive containing export.json and media files.
+func (e *Exporter) ExportWithMedia(ctx context.Context, opts ExportOptions, w io.Writer) error {
+	// Generate export data
+	data, err := e.Export(ctx, opts)
+	if err != nil {
+		return fmt.Errorf("failed to generate export: %w", err)
+	}
+
+	// Create zip writer
+	zipWriter := zip.NewWriter(w)
+	defer zipWriter.Close()
+
+	// Add media files if requested
+	if opts.IncludeMediaFiles && len(data.Media) > 0 {
+		for i := range data.Media {
+			mediaItem := &data.Media[i]
+			if err := e.addMediaToZip(ctx, zipWriter, mediaItem); err != nil {
+				e.logger.Warn("failed to add media to zip", "uuid", mediaItem.UUID, "error", err)
+				// Continue with other media items
+			}
+		}
+	}
+
+	// Write export.json to zip
+	jsonWriter, err := zipWriter.Create("export.json")
+	if err != nil {
+		return fmt.Errorf("failed to create export.json in zip: %w", err)
+	}
+
+	encoder := json.NewEncoder(jsonWriter)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(data); err != nil {
+		return fmt.Errorf("failed to write export.json: %w", err)
+	}
+
+	return nil
+}
+
+// ExportWithMediaToFile creates a zip archive file containing export.json and media files.
+func (e *Exporter) ExportWithMediaToFile(ctx context.Context, opts ExportOptions, path string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer f.Close()
+
+	return e.ExportWithMedia(ctx, opts, f)
+}
+
+// addMediaToZip adds a media file and its variants to the zip archive.
+func (e *Exporter) addMediaToZip(ctx context.Context, zipWriter *zip.Writer, media *ExportMedia) error {
+	// Add original file
+	originalPath := filepath.Join(e.uploadDir, "originals", media.UUID, media.Filename)
+	zipPath := filepath.Join("media", "originals", media.UUID, media.Filename)
+
+	if err := e.addFileToZip(zipWriter, originalPath, zipPath); err != nil {
+		return fmt.Errorf("failed to add original: %w", err)
+	}
+	media.FilePath = zipPath
+
+	// Add variants
+	for i := range media.Variants {
+		variant := &media.Variants[i]
+		variantPath := filepath.Join(e.uploadDir, variant.Type, media.UUID, media.Filename)
+		variantZipPath := filepath.Join("media", variant.Type, media.UUID, media.Filename)
+
+		if err := e.addFileToZip(zipWriter, variantPath, variantZipPath); err != nil {
+			e.logger.Warn("failed to add variant", "type", variant.Type, "uuid", media.UUID, "error", err)
+			continue
+		}
+		variant.FilePath = variantZipPath
+	}
+
+	return nil
+}
+
+// addFileToZip adds a single file to the zip archive.
+func (e *Exporter) addFileToZip(zipWriter *zip.Writer, srcPath, zipPath string) error {
+	// Open source file
+	srcFile, err := os.Open(srcPath)
+	if err != nil {
+		return fmt.Errorf("failed to open source file %s: %w", srcPath, err)
+	}
+	defer srcFile.Close()
+
+	// Get file info for header
+	info, err := srcFile.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to stat file: %w", err)
+	}
+
+	// Create header
+	header, err := zip.FileInfoHeader(info)
+	if err != nil {
+		return fmt.Errorf("failed to create file header: %w", err)
+	}
+	header.Name = zipPath
+	header.Method = zip.Deflate
+
+	// Create file in zip
+	writer, err := zipWriter.CreateHeader(header)
+	if err != nil {
+		return fmt.Errorf("failed to create zip entry: %w", err)
+	}
+
+	// Copy file content
+	if _, err := io.Copy(writer, srcFile); err != nil {
+		return fmt.Errorf("failed to write file content: %w", err)
+	}
+
+	return nil
 }
 
 // exportConfig exports site configuration.

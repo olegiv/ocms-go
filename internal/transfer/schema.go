@@ -123,15 +123,17 @@ type ExportMedia struct {
 	FolderPath string          `json:"folder_path,omitempty"`
 	UploadedBy string          `json:"uploaded_by"`
 	Variants   []ExportVariant `json:"variants,omitempty"`
+	FilePath   string          `json:"file_path,omitempty"` // Path within zip archive (e.g., "media/originals/{uuid}/{filename}")
 	CreatedAt  time.Time       `json:"created_at"`
 }
 
 // ExportVariant represents a media variant (thumbnail, etc.).
 type ExportVariant struct {
-	Type   string `json:"type"`
-	Width  int64  `json:"width"`
-	Height int64  `json:"height"`
-	Size   int64  `json:"size"`
+	Type     string `json:"type"`
+	Width    int64  `json:"width"`
+	Height   int64  `json:"height"`
+	Size     int64  `json:"size"`
+	FilePath string `json:"file_path,omitempty"` // Path within zip archive
 }
 
 // ExportMenu represents a navigation menu.
@@ -203,6 +205,7 @@ type ExportOptions struct {
 	IncludeCategories  bool   `json:"include_categories"`
 	IncludeTags        bool   `json:"include_tags"`
 	IncludeMedia       bool   `json:"include_media"`
+	IncludeMediaFiles  bool   `json:"include_media_files"` // Include actual media files (creates zip)
 	IncludeMenus       bool   `json:"include_menus"`
 	IncludeForms       bool   `json:"include_forms"`
 	IncludeSubmissions bool   `json:"include_submissions"`
@@ -249,6 +252,7 @@ type ImportOptions struct {
 	ImportCategories bool             `json:"import_categories"`
 	ImportTags       bool             `json:"import_tags"`
 	ImportMedia      bool             `json:"import_media"`
+	ImportMediaFiles bool             `json:"import_media_files"` // Copy media files from zip to uploads
 	ImportMenus      bool             `json:"import_menus"`
 	ImportForms      bool             `json:"import_forms"`
 	ImportConfig     bool             `json:"import_config"`

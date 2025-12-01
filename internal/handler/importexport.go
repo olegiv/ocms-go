@@ -1,7 +1,10 @@
 package handler
 
 import (
+	"archive/zip"
+	"bytes"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -78,6 +81,7 @@ func (h *ImportExportHandler) Export(w http.ResponseWriter, r *http.Request) {
 		IncludeCategories:  r.FormValue("include_categories") == "on",
 		IncludeTags:        r.FormValue("include_tags") == "on",
 		IncludeMedia:       r.FormValue("include_media") == "on",
+		IncludeMediaFiles:  r.FormValue("include_media_files") == "on",
 		IncludeMenus:       r.FormValue("include_menus") == "on",
 		IncludeForms:       r.FormValue("include_forms") == "on",
 		IncludeSubmissions: r.FormValue("include_submissions") == "on",
@@ -94,18 +98,35 @@ func (h *ImportExportHandler) Export(w http.ResponseWriter, r *http.Request) {
 	// Create exporter
 	exporter := transfer.NewExporter(h.queries, h.logger)
 
-	// Generate filename with current date
-	filename := fmt.Sprintf("ocms-export-%s.json", time.Now().Format("2006-01-02"))
+	// Check if we need to include media files (creates zip instead of JSON)
+	if opts.IncludeMediaFiles && opts.IncludeMedia {
+		// Generate zip filename with current date
+		filename := fmt.Sprintf("ocms-export-%s.zip", time.Now().Format("2006-01-02"))
 
-	// Set response headers for file download
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+		// Set response headers for zip download
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
 
-	// Export directly to response writer
-	if err := exporter.ExportToWriter(r.Context(), opts, w); err != nil {
-		h.logger.Error("export failed", "error", err)
-		http.Error(w, "Export failed", http.StatusInternalServerError)
-		return
+		// Export with media to zip
+		if err := exporter.ExportWithMedia(r.Context(), opts, w); err != nil {
+			h.logger.Error("export with media failed", "error", err)
+			http.Error(w, "Export failed", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		// Generate JSON filename with current date
+		filename := fmt.Sprintf("ocms-export-%s.json", time.Now().Format("2006-01-02"))
+
+		// Set response headers for JSON download
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+
+		// Export directly to response writer
+		if err := exporter.ExportToWriter(r.Context(), opts, w); err != nil {
+			h.logger.Error("export failed", "error", err)
+			http.Error(w, "Export failed", http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
@@ -115,6 +136,8 @@ type ImportFormData struct {
 	ValidationResult   *transfer.ValidationResult
 	ImportResult       *transfer.ImportResult
 	UploadedData       *transfer.ExportData
+	IsZipFile          bool // Whether the uploaded file is a zip archive
+	HasMediaFiles      bool // Whether the zip contains media files
 }
 
 // ConflictStrategyOption represents a conflict strategy for the dropdown.
@@ -154,8 +177,8 @@ func (h *ImportExportHandler) ImportForm(w http.ResponseWriter, r *http.Request)
 func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 
-	// Parse multipart form (max 50MB)
-	if err := r.ParseMultipartForm(50 << 20); err != nil {
+	// Parse multipart form (max 100MB for zip files with media)
+	if err := r.ParseMultipartForm(100 << 20); err != nil {
 		h.renderImportError(w, r, user, "Failed to parse form: "+err.Error())
 		return
 	}
@@ -169,8 +192,12 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 	defer file.Close()
 
 	// Check file extension
-	if header.Filename[len(header.Filename)-5:] != ".json" {
-		h.renderImportError(w, r, user, "Only JSON files are supported")
+	filename := header.Filename
+	isZipFile := len(filename) >= 4 && filename[len(filename)-4:] == ".zip"
+	isJSONFile := len(filename) >= 5 && filename[len(filename)-5:] == ".json"
+
+	if !isZipFile && !isJSONFile {
+		h.renderImportError(w, r, user, "Only JSON and ZIP files are supported")
 		return
 	}
 
@@ -181,24 +208,57 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Parse JSON
-	var exportData transfer.ExportData
-	if err := json.Unmarshal(content, &exportData); err != nil {
-		h.renderImportError(w, r, user, "Invalid JSON format: "+err.Error())
-		return
-	}
-
-	// Create importer and validate
+	// Create importer
 	importer := transfer.NewImporter(h.queries, h.db, h.logger)
-	validationResult, err := importer.ValidateData(r.Context(), &exportData)
-	if err != nil {
-		h.renderImportError(w, r, user, "Validation failed: "+err.Error())
-		return
+
+	var validationResult *transfer.ValidationResult
+	var exportData transfer.ExportData
+	var hasMediaFiles bool
+
+	if isZipFile {
+		// Validate zip file
+		validationResult, err = importer.ValidateZipBytes(r.Context(), content)
+		if err != nil {
+			h.renderImportError(w, r, user, "Validation failed: "+err.Error())
+			return
+		}
+
+		// Check if zip has media files
+		if mediaCount, ok := validationResult.Entities["media_files"]; ok {
+			hasMediaFiles = mediaCount > 0
+		}
+
+		// Extract export data from zip for display (re-read since validation closes readers)
+		exportData, err = h.extractExportDataFromZip(content)
+		if err != nil {
+			h.renderImportError(w, r, user, "Failed to extract data from zip: "+err.Error())
+			return
+		}
+	} else {
+		// Parse JSON
+		if err := json.Unmarshal(content, &exportData); err != nil {
+			h.renderImportError(w, r, user, "Invalid JSON format: "+err.Error())
+			return
+		}
+
+		// Validate JSON data
+		validationResult, err = importer.ValidateData(r.Context(), &exportData)
+		if err != nil {
+			h.renderImportError(w, r, user, "Validation failed: "+err.Error())
+			return
+		}
 	}
 
 	// Store validated data in session for the actual import
-	jsonData, _ := json.Marshal(exportData)
-	h.sessionManager.Put(r.Context(), "import_data", string(jsonData))
+	// For zip files, we store base64 encoded bytes; for JSON, we store the parsed data
+	if isZipFile {
+		h.sessionManager.Put(r.Context(), "import_zip_data", base64.StdEncoding.EncodeToString(content))
+		h.sessionManager.Put(r.Context(), "import_is_zip", true)
+	} else {
+		jsonData, _ := json.Marshal(exportData)
+		h.sessionManager.Put(r.Context(), "import_data", string(jsonData))
+		h.sessionManager.Put(r.Context(), "import_is_zip", false)
+	}
 
 	data := ImportFormData{
 		ConflictStrategies: []ConflictStrategyOption{
@@ -208,6 +268,8 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 		},
 		ValidationResult: validationResult,
 		UploadedData:     &exportData,
+		IsZipFile:        isZipFile,
+		HasMediaFiles:    hasMediaFiles,
 	}
 
 	if err := h.renderer.Render(w, r, "admin/import", render.TemplateData{
@@ -224,6 +286,35 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+// extractExportDataFromZip extracts the ExportData from a zip file bytes.
+func (h *ImportExportHandler) extractExportDataFromZip(zipData []byte) (transfer.ExportData, error) {
+	var data transfer.ExportData
+
+	reader := bytes.NewReader(zipData)
+	zipReader, err := zip.NewReader(reader, int64(len(zipData)))
+	if err != nil {
+		return data, fmt.Errorf("failed to read zip: %w", err)
+	}
+
+	for _, f := range zipReader.File {
+		if f.Name == "export.json" {
+			rc, err := f.Open()
+			if err != nil {
+				return data, fmt.Errorf("failed to open export.json: %w", err)
+			}
+			defer rc.Close()
+
+			decoder := json.NewDecoder(rc)
+			if err := decoder.Decode(&data); err != nil {
+				return data, fmt.Errorf("failed to decode export.json: %w", err)
+			}
+			return data, nil
+		}
+	}
+
+	return data, fmt.Errorf("export.json not found in zip")
+}
+
 // Import handles POST /admin/import - performs the actual import.
 func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
@@ -233,19 +324,8 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get stored data from session
-	jsonData := h.sessionManager.GetString(r.Context(), "import_data")
-	if jsonData == "" {
-		h.renderImportError(w, r, user, "No import data found. Please upload a file first.")
-		return
-	}
-
-	// Parse the stored data
-	var exportData transfer.ExportData
-	if err := json.Unmarshal([]byte(jsonData), &exportData); err != nil {
-		h.renderImportError(w, r, user, "Failed to parse stored data")
-		return
-	}
+	// Check if this is a zip import
+	isZip := h.sessionManager.GetBool(r.Context(), "import_is_zip")
 
 	// Build import options from form
 	opts := transfer.ImportOptions{
@@ -256,6 +336,7 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 		ImportCategories: r.FormValue("import_categories") == "on",
 		ImportTags:       r.FormValue("import_tags") == "on",
 		ImportMedia:      r.FormValue("import_media") == "on",
+		ImportMediaFiles: r.FormValue("import_media_files") == "on",
 		ImportMenus:      r.FormValue("import_menus") == "on",
 		ImportForms:      r.FormValue("import_forms") == "on",
 		ImportConfig:     r.FormValue("import_config") == "on",
@@ -267,17 +348,66 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 		opts.ConflictStrategy = transfer.ConflictSkip
 	}
 
-	// Create importer and perform import
+	// Create importer
 	importer := transfer.NewImporter(h.queries, h.db, h.logger)
-	result, err := importer.Import(r.Context(), &exportData, opts)
-	if err != nil {
-		h.logger.Error("import failed", "error", err)
-		h.renderImportError(w, r, user, "Import failed: "+err.Error())
-		return
+
+	var result *transfer.ImportResult
+	var err error
+
+	if isZip {
+		// Get stored zip data from session (base64 encoded)
+		zipDataB64 := h.sessionManager.GetString(r.Context(), "import_zip_data")
+		if zipDataB64 == "" {
+			h.renderImportError(w, r, user, "No import data found. Please upload a file first.")
+			return
+		}
+
+		// Decode base64
+		zipData, err := base64.StdEncoding.DecodeString(zipDataB64)
+		if err != nil {
+			h.renderImportError(w, r, user, "Failed to decode stored data")
+			return
+		}
+
+		// Perform zip import
+		result, err = importer.ImportFromZipBytes(r.Context(), zipData, opts)
+		if err != nil {
+			h.logger.Error("zip import failed", "error", err)
+			h.renderImportError(w, r, user, "Import failed: "+err.Error())
+			return
+		}
+
+		// Clear session data
+		h.sessionManager.Remove(r.Context(), "import_zip_data")
+	} else {
+		// Get stored JSON data from session
+		jsonData := h.sessionManager.GetString(r.Context(), "import_data")
+		if jsonData == "" {
+			h.renderImportError(w, r, user, "No import data found. Please upload a file first.")
+			return
+		}
+
+		// Parse the stored data
+		var exportData transfer.ExportData
+		if err := json.Unmarshal([]byte(jsonData), &exportData); err != nil {
+			h.renderImportError(w, r, user, "Failed to parse stored data")
+			return
+		}
+
+		// Perform JSON import
+		result, err = importer.Import(r.Context(), &exportData, opts)
+		if err != nil {
+			h.logger.Error("import failed", "error", err)
+			h.renderImportError(w, r, user, "Import failed: "+err.Error())
+			return
+		}
+
+		// Clear session data
+		h.sessionManager.Remove(r.Context(), "import_data")
 	}
 
-	// Clear session data
-	h.sessionManager.Remove(r.Context(), "import_data")
+	// Clear common session data
+	h.sessionManager.Remove(r.Context(), "import_is_zip")
 
 	data := ImportFormData{
 		ConflictStrategies: []ConflictStrategyOption{
