@@ -200,3 +200,35 @@ LEFT JOIN pages p ON p.language_id = l.id
 WHERE l.is_active = 1
 GROUP BY l.id, l.code, l.name, l.is_default
 ORDER BY l.is_default DESC, l.position ASC;
+
+-- Batch get translation counts for multiple entities (for page lists)
+-- Returns translation count per entity
+-- name: GetTranslationCountsBatch :many
+SELECT
+    entity_id,
+    COUNT(*) as translation_count
+FROM translations
+WHERE entity_type = ?
+GROUP BY entity_id;
+
+-- Batch get translations for multiple page IDs (for page list with translations indicator)
+-- name: GetTranslationsForPagesBatch :many
+SELECT
+    t.entity_id,
+    t.language_id,
+    t.translation_id,
+    l.code as language_code,
+    l.name as language_name
+FROM translations t
+INNER JOIN languages l ON l.id = t.language_id
+WHERE t.entity_type = 'page'
+ORDER BY t.entity_id, l.position;
+
+-- Get total translation statistics
+-- name: GetTranslationStats :one
+SELECT
+    COUNT(DISTINCT entity_id) as total_entities,
+    COUNT(*) as total_translations,
+    (SELECT COUNT(*) FROM translations WHERE entity_type = 'page') as page_translations,
+    (SELECT COUNT(*) FROM translations WHERE entity_type = 'category') as category_translations,
+    (SELECT COUNT(*) FROM translations WHERE entity_type = 'tag') as tag_translations;

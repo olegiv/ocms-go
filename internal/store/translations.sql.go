@@ -689,6 +689,45 @@ func (q *Queries) GetTranslationByID(ctx context.Context, id int64) (Translation
 	return i, err
 }
 
+const getTranslationCountsBatch = `-- name: GetTranslationCountsBatch :many
+SELECT
+    entity_id,
+    COUNT(*) as translation_count
+FROM translations
+WHERE entity_type = ?
+GROUP BY entity_id
+`
+
+type GetTranslationCountsBatchRow struct {
+	EntityID         int64 `json:"entity_id"`
+	TranslationCount int64 `json:"translation_count"`
+}
+
+// Batch get translation counts for multiple entities (for page lists)
+// Returns translation count per entity
+func (q *Queries) GetTranslationCountsBatch(ctx context.Context, entityType string) ([]GetTranslationCountsBatchRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTranslationCountsBatch, entityType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetTranslationCountsBatchRow{}
+	for rows.Next() {
+		var i GetTranslationCountsBatchRow
+		if err := rows.Scan(&i.EntityID, &i.TranslationCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTranslationCoverage = `-- name: GetTranslationCoverage :many
 SELECT
     l.id as language_id,
@@ -741,6 +780,37 @@ func (q *Queries) GetTranslationCoverage(ctx context.Context) ([]GetTranslationC
 	return items, nil
 }
 
+const getTranslationStats = `-- name: GetTranslationStats :one
+SELECT
+    COUNT(DISTINCT entity_id) as total_entities,
+    COUNT(*) as total_translations,
+    (SELECT COUNT(*) FROM translations WHERE entity_type = 'page') as page_translations,
+    (SELECT COUNT(*) FROM translations WHERE entity_type = 'category') as category_translations,
+    (SELECT COUNT(*) FROM translations WHERE entity_type = 'tag') as tag_translations
+`
+
+type GetTranslationStatsRow struct {
+	TotalEntities        int64 `json:"total_entities"`
+	TotalTranslations    int64 `json:"total_translations"`
+	PageTranslations     int64 `json:"page_translations"`
+	CategoryTranslations int64 `json:"category_translations"`
+	TagTranslations      int64 `json:"tag_translations"`
+}
+
+// Get total translation statistics
+func (q *Queries) GetTranslationStats(ctx context.Context) (GetTranslationStatsRow, error) {
+	row := q.db.QueryRowContext(ctx, getTranslationStats)
+	var i GetTranslationStatsRow
+	err := row.Scan(
+		&i.TotalEntities,
+		&i.TotalTranslations,
+		&i.PageTranslations,
+		&i.CategoryTranslations,
+		&i.TagTranslations,
+	)
+	return i, err
+}
+
 const getTranslationsForEntity = `-- name: GetTranslationsForEntity :many
 SELECT t.id, t.entity_type, t.entity_id, t.language_id, t.translation_id, t.created_at, l.code as language_code, l.name as language_name, l.native_name as language_native_name
 FROM translations t
@@ -785,6 +855,57 @@ func (q *Queries) GetTranslationsForEntity(ctx context.Context, arg GetTranslati
 			&i.LanguageCode,
 			&i.LanguageName,
 			&i.LanguageNativeName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTranslationsForPagesBatch = `-- name: GetTranslationsForPagesBatch :many
+SELECT
+    t.entity_id,
+    t.language_id,
+    t.translation_id,
+    l.code as language_code,
+    l.name as language_name
+FROM translations t
+INNER JOIN languages l ON l.id = t.language_id
+WHERE t.entity_type = 'page'
+ORDER BY t.entity_id, l.position
+`
+
+type GetTranslationsForPagesBatchRow struct {
+	EntityID      int64  `json:"entity_id"`
+	LanguageID    int64  `json:"language_id"`
+	TranslationID int64  `json:"translation_id"`
+	LanguageCode  string `json:"language_code"`
+	LanguageName  string `json:"language_name"`
+}
+
+// Batch get translations for multiple page IDs (for page list with translations indicator)
+func (q *Queries) GetTranslationsForPagesBatch(ctx context.Context) ([]GetTranslationsForPagesBatchRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTranslationsForPagesBatch)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetTranslationsForPagesBatchRow{}
+	for rows.Next() {
+		var i GetTranslationsForPagesBatchRow
+		if err := rows.Scan(
+			&i.EntityID,
+			&i.LanguageID,
+			&i.TranslationID,
+			&i.LanguageCode,
+			&i.LanguageName,
 		); err != nil {
 			return nil, err
 		}

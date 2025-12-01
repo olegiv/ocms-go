@@ -16,15 +16,17 @@ import (
 
 // Dispatcher handles webhook event dispatching and queuing.
 type Dispatcher struct {
-	db      *sql.DB
-	queries *store.Queries
-	logger  *slog.Logger
-	queue   chan *QueuedDelivery
-	workers int
-	wg      sync.WaitGroup
-	done    chan struct{}
-	mu      sync.RWMutex
-	running bool
+	db        *sql.DB
+	queries   *store.Queries
+	logger    *slog.Logger
+	queue     chan *QueuedDelivery
+	workers   int
+	wg        sync.WaitGroup
+	done      chan struct{}
+	mu        sync.RWMutex
+	running   bool
+	debouncer *Debouncer // Optional event debouncer for batching rapid-fire events
+	config    Config
 }
 
 // QueuedDelivery represents a delivery queued for processing.
@@ -40,13 +42,17 @@ type QueuedDelivery struct {
 
 // Config holds dispatcher configuration.
 type Config struct {
-	Workers int // Number of concurrent delivery workers
+	Workers        int            // Number of concurrent delivery workers
+	EnableDebounce bool           // Enable event debouncing
+	Debounce       DebounceConfig // Debounce configuration
 }
 
 // DefaultConfig returns default dispatcher configuration.
 func DefaultConfig() Config {
 	return Config{
-		Workers: 3,
+		Workers:        3,
+		EnableDebounce: true,
+		Debounce:       DefaultDebounceConfig(),
 	}
 }
 
@@ -59,14 +65,22 @@ func NewDispatcher(db *sql.DB, logger *slog.Logger, cfg Config) *Dispatcher {
 		logger = slog.Default()
 	}
 
-	return &Dispatcher{
+	d := &Dispatcher{
 		db:      db,
 		queries: store.New(db),
 		logger:  logger,
 		queue:   make(chan *QueuedDelivery, 100),
 		workers: cfg.Workers,
 		done:    make(chan struct{}),
+		config:  cfg,
 	}
+
+	// Initialize debouncer if enabled
+	if cfg.EnableDebounce {
+		d.debouncer = NewDebouncer(d, cfg.Debounce)
+	}
+
+	return d
 }
 
 // Retry worker configuration
@@ -115,6 +129,12 @@ func (d *Dispatcher) Stop() {
 	d.mu.Unlock()
 
 	d.logger.Info("stopping webhook dispatcher")
+
+	// Stop debouncer first to flush pending events
+	if d.debouncer != nil {
+		d.debouncer.Stop()
+	}
+
 	close(d.done)
 	d.wg.Wait()
 	d.logger.Info("webhook dispatcher stopped")
@@ -356,8 +376,27 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event *Event) error {
 }
 
 // DispatchEvent is a convenience method to dispatch an event with the given type and data.
+// If debouncing is enabled, events will be debounced; otherwise, they are dispatched immediately.
 func (d *Dispatcher) DispatchEvent(ctx context.Context, eventType string, data any) error {
+	event := NewEvent(eventType, data)
+	if d.debouncer != nil {
+		return d.debouncer.Dispatch(ctx, event)
+	}
+	return d.Dispatch(ctx, event)
+}
+
+// DispatchImmediate dispatches an event immediately, bypassing debouncing.
+// Use this for events that should never be debounced (e.g., delete events).
+func (d *Dispatcher) DispatchImmediate(ctx context.Context, eventType string, data any) error {
 	return d.Dispatch(ctx, NewEvent(eventType, data))
+}
+
+// DebounceStats returns debounce statistics if debouncing is enabled.
+func (d *Dispatcher) DebounceStats() (pending int, enabled bool) {
+	if d.debouncer != nil {
+		return d.debouncer.PendingCount(), true
+	}
+	return 0, false
 }
 
 // GenerateSignature generates an HMAC-SHA256 signature for the payload.

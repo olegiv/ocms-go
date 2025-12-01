@@ -13,11 +13,12 @@ type CacheType string
 
 // Cache types.
 const (
-	CacheTypeConfig   CacheType = "config"
-	CacheTypeSitemap  CacheType = "sitemap"
-	CacheTypeGeneral  CacheType = "general"
-	CacheTypeMenu     CacheType = "menu"
-	CacheTypeLanguage CacheType = "language"
+	CacheTypeConfig      CacheType = "config"
+	CacheTypeSitemap     CacheType = "sitemap"
+	CacheTypeGeneral     CacheType = "general"
+	CacheTypeMenu        CacheType = "menu"
+	CacheTypeLanguage    CacheType = "language"
+	CacheTypeTranslation CacheType = "translation"
 )
 
 // ManagerCacheStats holds statistics for a specific cache in the manager.
@@ -39,11 +40,12 @@ type ManagerInfo struct {
 
 // Manager manages all cache instances and provides a unified interface.
 type Manager struct {
-	Config   *ConfigCache
-	Sitemap  *SitemapCache
-	Menus    *MenuCache
-	Language *LanguageCache
-	General  *Cache // for misc cached data
+	Config      *ConfigCache
+	Sitemap     *SitemapCache
+	Menus       *MenuCache
+	Language    *LanguageCache
+	Translation *TranslationCache
+	General     *Cache // for misc cached data
 
 	// Distributed cache (optional, nil if only using memory cache)
 	Distributed Cacher
@@ -62,6 +64,7 @@ func NewManager(queries *store.Queries) *Manager {
 		Sitemap:             NewSitemapCache(queries, time.Hour),
 		Menus:               NewMenuCache(queries),
 		Language:            NewLanguageCache(queries),
+		Translation:         NewTranslationCache(queries),
 		General:             New(5 * time.Minute),
 		ThemeSettingsPrefix: "theme_settings_",
 		info: ManagerInfo{
@@ -156,6 +159,7 @@ func (m *Manager) ClearAll() {
 	m.Sitemap.Invalidate()
 	m.Menus.Invalidate()
 	m.Language.Invalidate()
+	m.Translation.Invalidate()
 	m.General.Clear()
 
 	// Clear distributed cache if present
@@ -175,6 +179,7 @@ func (m *Manager) ClearAll() {
 	m.Sitemap.ResetStats()
 	m.Menus.ResetStats()
 	m.Language.ResetStats()
+	m.Translation.ResetStats()
 	m.General.ResetStats()
 
 	slog.Info("cache stats reset")
@@ -214,6 +219,17 @@ func (m *Manager) InvalidateLanguages() {
 	m.Language.Invalidate()
 }
 
+// InvalidateTranslations invalidates the entire translation cache.
+// Call this when translations are created/updated/deleted.
+func (m *Manager) InvalidateTranslations() {
+	m.Translation.Invalidate()
+}
+
+// InvalidateTranslation invalidates translation cache for a specific entity.
+func (m *Manager) InvalidateTranslation(entityType string, entityID int64) {
+	m.Translation.InvalidateEntity(entityType, entityID)
+}
+
 // AllStats returns statistics for all caches.
 func (m *Manager) AllStats() []ManagerCacheStats {
 	stats := []ManagerCacheStats{
@@ -238,6 +254,11 @@ func (m *Manager) AllStats() []ManagerCacheStats {
 			Stats: m.Language.Stats(),
 		},
 		{
+			Name:  "Translations",
+			Type:  CacheTypeTranslation,
+			Stats: m.Translation.Stats(),
+		},
+		{
 			Name:  "General Cache",
 			Type:  CacheTypeGeneral,
 			Stats: m.General.Stats(),
@@ -260,13 +281,14 @@ func (m *Manager) TotalStats() Stats {
 	sitemapStats := m.Sitemap.Stats()
 	menuStats := m.Menus.Stats()
 	languageStats := m.Language.Stats()
+	translationStats := m.Translation.Stats()
 	generalStats := m.General.Stats()
 
 	total := Stats{
-		Hits:   configStats.Hits + sitemapStats.Hits + menuStats.Hits + languageStats.Hits + generalStats.Hits,
-		Misses: configStats.Misses + sitemapStats.Misses + menuStats.Misses + languageStats.Misses + generalStats.Misses,
-		Sets:   configStats.Sets + sitemapStats.Sets + menuStats.Sets + languageStats.Sets + generalStats.Sets,
-		Items:  configStats.Items + sitemapStats.Items + menuStats.Items + languageStats.Items + generalStats.Items,
+		Hits:   configStats.Hits + sitemapStats.Hits + menuStats.Hits + languageStats.Hits + translationStats.Hits + generalStats.Hits,
+		Misses: configStats.Misses + sitemapStats.Misses + menuStats.Misses + languageStats.Misses + translationStats.Misses + generalStats.Misses,
+		Sets:   configStats.Sets + sitemapStats.Sets + menuStats.Sets + languageStats.Sets + translationStats.Sets + generalStats.Sets,
+		Items:  configStats.Items + sitemapStats.Items + menuStats.Items + languageStats.Items + translationStats.Items + generalStats.Items,
 	}
 
 	totalRequests := total.Hits + total.Misses
@@ -339,4 +361,14 @@ func (m *Manager) GetDefaultLanguage(ctx context.Context) (*store.Language, erro
 // GetLanguageByCode is a convenience method to get a language by its code.
 func (m *Manager) GetLanguageByCode(ctx context.Context, code string) (*store.Language, error) {
 	return m.Language.GetByCode(ctx, code)
+}
+
+// GetTranslations is a convenience method to get translations for an entity.
+func (m *Manager) GetTranslations(ctx context.Context, entityType string, entityID int64) (TranslationMap, error) {
+	return m.Translation.Get(ctx, entityType, entityID)
+}
+
+// GetTranslationsBatch is a convenience method to get translations for multiple entities.
+func (m *Manager) GetTranslationsBatch(ctx context.Context, entityType string, entityIDs []int64) (map[int64]TranslationMap, error) {
+	return m.Translation.GetBatch(ctx, entityType, entityIDs)
 }
