@@ -245,6 +245,35 @@ type User struct {
 	LastLoginAt  sql.NullTime `json:"last_login_at"`
 }
 
+type Webhook struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Url       string    `json:"url"`
+	Secret    string    `json:"secret"`
+	Events    string    `json:"events"`
+	IsActive  bool      `json:"is_active"`
+	Headers   string    `json:"headers"`
+	CreatedBy int64     `json:"created_by"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type WebhookDelivery struct {
+	ID           int64          `json:"id"`
+	WebhookID    int64          `json:"webhook_id"`
+	Event        string         `json:"event"`
+	Payload      string         `json:"payload"`
+	ResponseCode sql.NullInt64  `json:"response_code"`
+	ResponseBody sql.NullString `json:"response_body"`
+	Attempts     int64          `json:"attempts"`
+	NextRetryAt  sql.NullTime   `json:"next_retry_at"`
+	DeliveredAt  sql.NullTime   `json:"delivered_at"`
+	Status       string         `json:"status"`
+	ErrorMessage sql.NullString `json:"error_message"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+}
+
 type Widget struct {
 	ID         int64          `json:"id"`
 	Theme      string         `json:"theme"`
