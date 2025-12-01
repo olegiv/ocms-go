@@ -10,6 +10,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
+	"ocms-go/internal/cache"
 	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/render"
@@ -29,6 +30,14 @@ type DashboardStats struct {
 	TotalWebhooks       int64
 	ActiveWebhooks      int64
 	FailedDeliveries24h int64
+	// Phase 4 additions
+	TotalLanguages   int64
+	ActiveLanguages  int64
+	CacheHitRate     float64
+	CacheHits        int64
+	CacheMisses      int64
+	CacheItems       int
+	CacheBackendType string // "memory" or "redis"
 }
 
 // RecentSubmission represents a recent form submission for dashboard display.
@@ -60,12 +69,22 @@ type RecentFailedDelivery struct {
 	CreatedAt   string
 }
 
+// TranslationCoverage represents translation coverage for a specific language.
+type TranslationCoverage struct {
+	LanguageID   int64
+	LanguageCode string
+	LanguageName string
+	TotalPages   int64
+	IsDefault    bool
+}
+
 // DashboardData holds all dashboard data including stats and recent items.
 type DashboardData struct {
 	Stats                  DashboardStats
 	RecentSubmissions      []RecentSubmission
 	WebhookHealth          []WebhookHealthItem
 	RecentFailedDeliveries []RecentFailedDelivery
+	TranslationCoverage    []TranslationCoverage
 }
 
 // AdminHandler handles admin routes.
@@ -73,14 +92,16 @@ type AdminHandler struct {
 	queries        *store.Queries
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
+	cacheManager   *cache.Manager
 }
 
 // NewAdminHandler creates a new AdminHandler.
-func NewAdminHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager) *AdminHandler {
+func NewAdminHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, cacheManager *cache.Manager) *AdminHandler {
 	return &AdminHandler{
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
+		cacheManager:   cacheManager,
 	}
 }
 
@@ -233,12 +254,56 @@ func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Get language counts
+	if langCount, err := h.queries.CountLanguages(ctx); err != nil {
+		slog.Error("failed to count languages", "error", err)
+	} else {
+		stats.TotalLanguages = langCount
+	}
+
+	if activeLangCount, err := h.queries.CountActiveLanguages(ctx); err != nil {
+		slog.Error("failed to count active languages", "error", err)
+	} else {
+		stats.ActiveLanguages = activeLangCount
+	}
+
+	// Get cache stats
+	if h.cacheManager != nil {
+		cacheStats := h.cacheManager.TotalStats()
+		stats.CacheHitRate = cacheStats.HitRate
+		stats.CacheHits = cacheStats.Hits
+		stats.CacheMisses = cacheStats.Misses
+		stats.CacheItems = cacheStats.Items
+		if h.cacheManager.IsRedis() {
+			stats.CacheBackendType = "redis"
+		} else {
+			stats.CacheBackendType = "memory"
+		}
+	}
+
+	// Get translation coverage
+	var translationCoverage []TranslationCoverage
+	if coverage, err := h.queries.GetTranslationCoverage(ctx); err != nil {
+		slog.Error("failed to get translation coverage", "error", err)
+	} else {
+		for _, c := range coverage {
+			translationCoverage = append(translationCoverage, TranslationCoverage{
+				LanguageID:   c.LanguageID,
+				LanguageCode: c.LanguageCode,
+				LanguageName: c.LanguageName,
+				TotalPages:   c.PageCount,
+				IsDefault:    c.IsDefault,
+			})
+		}
+	}
+
 	// Build dashboard data
 	dashboardData := DashboardData{
 		Stats:                  stats,
 		RecentSubmissions:      recentSubmissions,
 		WebhookHealth:          webhookHealth,
 		RecentFailedDeliveries: recentFailedDeliveries,
+		TranslationCoverage:    translationCoverage,
 	}
 
 	if err := h.renderer.Render(w, r, "admin/dashboard", render.TemplateData{

@@ -186,3 +186,17 @@ SELECT
 FROM pages p
 LEFT JOIN languages l ON l.id = p.language_id
 WHERE p.slug = ? AND p.status = 'published';
+
+-- Get page count per active language for translation coverage dashboard widget
+-- name: GetTranslationCoverage :many
+SELECT
+    l.id as language_id,
+    l.code as language_code,
+    l.name as language_name,
+    l.is_default as is_default,
+    COUNT(p.id) as page_count
+FROM languages l
+LEFT JOIN pages p ON p.language_id = l.id
+WHERE l.is_active = 1
+GROUP BY l.id, l.code, l.name, l.is_default
+ORDER BY l.is_default DESC, l.position ASC;

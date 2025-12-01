@@ -689,6 +689,58 @@ func (q *Queries) GetTranslationByID(ctx context.Context, id int64) (Translation
 	return i, err
 }
 
+const getTranslationCoverage = `-- name: GetTranslationCoverage :many
+SELECT
+    l.id as language_id,
+    l.code as language_code,
+    l.name as language_name,
+    l.is_default as is_default,
+    COUNT(p.id) as page_count
+FROM languages l
+LEFT JOIN pages p ON p.language_id = l.id
+WHERE l.is_active = 1
+GROUP BY l.id, l.code, l.name, l.is_default
+ORDER BY l.is_default DESC, l.position ASC
+`
+
+type GetTranslationCoverageRow struct {
+	LanguageID   int64  `json:"language_id"`
+	LanguageCode string `json:"language_code"`
+	LanguageName string `json:"language_name"`
+	IsDefault    bool   `json:"is_default"`
+	PageCount    int64  `json:"page_count"`
+}
+
+// Get page count per active language for translation coverage dashboard widget
+func (q *Queries) GetTranslationCoverage(ctx context.Context) ([]GetTranslationCoverageRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTranslationCoverage)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetTranslationCoverageRow{}
+	for rows.Next() {
+		var i GetTranslationCoverageRow
+		if err := rows.Scan(
+			&i.LanguageID,
+			&i.LanguageCode,
+			&i.LanguageName,
+			&i.IsDefault,
+			&i.PageCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTranslationsForEntity = `-- name: GetTranslationsForEntity :many
 SELECT t.id, t.entity_type, t.entity_id, t.language_id, t.translation_id, t.created_at, l.code as language_code, l.name as language_name, l.native_name as language_native_name
 FROM translations t

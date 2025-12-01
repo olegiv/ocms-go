@@ -81,6 +81,36 @@
     </div>
 </div>
 
+<div class="stats-grid stats-grid-tertiary">
+    <div class="stat-card">
+        <div class="stat-icon stat-icon-teal">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">{{T .AdminLang "dashboard.languages"}}</div>
+            <div class="stat-value">{{.Data.Stats.ActiveLanguages}}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon stat-icon-emerald">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 0 1 9-9"/></svg>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">{{T .AdminLang "dashboard.cache_hit_rate"}}</div>
+            <div class="stat-value">{{printf "%.0f" .Data.Stats.CacheHitRate}}%</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon stat-icon-rose">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">{{T .AdminLang "dashboard.cache_items"}}</div>
+            <div class="stat-value">{{.Data.Stats.CacheItems}}</div>
+        </div>
+    </div>
+</div>
+
 <div class="dashboard-grid">
     <div class="card">
         <div class="card-header">
@@ -179,6 +209,14 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>
                     <span>{{T .AdminLang "dashboard.add_user"}}</span>
                 </a>
+                <a href="/admin/export" class="quick-action">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                    <span>{{T .AdminLang "dashboard.export_content"}}</span>
+                </a>
+                <a href="/admin/import" class="quick-action">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                    <span>{{T .AdminLang "dashboard.import_content"}}</span>
+                </a>
                 <a href="/admin/config" class="quick-action">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
                     <span>{{T .AdminLang "nav.settings"}}</span>
@@ -186,16 +224,68 @@
             </div>
         </div>
     </div>
+
+    {{if gt (len .Data.TranslationCoverage) 1}}
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">{{T .AdminLang "dashboard.translation_coverage"}}</h2>
+            <a href="/admin/languages" class="btn btn-sm btn-outline">{{T .AdminLang "dashboard.manage_languages"}}</a>
+        </div>
+        <div class="card-body">
+            <div class="translation-coverage-list">
+                {{range .Data.TranslationCoverage}}
+                <div class="translation-coverage-item">
+                    <div class="translation-coverage-info">
+                        <span class="language-code">{{.LanguageCode}}</span>
+                        <span class="language-name">{{.LanguageName}}</span>
+                        {{if .IsDefault}}
+                        <span class="badge badge-primary badge-sm">{{T $.AdminLang "languages.default"}}</span>
+                        {{end}}
+                    </div>
+                    <span class="translation-count">{{.TotalPages}} {{T $.AdminLang "dashboard.pages_count"}}</span>
+                </div>
+                {{end}}
+            </div>
+        </div>
+    </div>
+    {{end}}
+
+    {{if .Data.RecentFailedDeliveries}}
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">{{T .AdminLang "dashboard.recent_failed_deliveries"}}</h2>
+            <a href="/admin/webhooks" class="btn btn-sm btn-outline">{{T .AdminLang "dashboard.view_webhooks"}}</a>
+        </div>
+        <div class="card-body">
+            <div class="failed-deliveries-list">
+                {{range .Data.RecentFailedDeliveries}}
+                <a href="/admin/webhooks/{{.WebhookID}}/deliveries" class="failed-delivery-item">
+                    <div class="failed-delivery-info">
+                        <span class="webhook-name">{{.WebhookName}}</span>
+                        <span class="event-type">{{.Event}}</span>
+                    </div>
+                    <div class="failed-delivery-meta">
+                        <span class="badge badge-danger badge-sm">{{.Status}}</span>
+                        <span class="delivery-time">{{.CreatedAt}}</span>
+                    </div>
+                </a>
+                {{end}}
+            </div>
+        </div>
+    </div>
+    {{end}}
 </div>
 
 <style>
-.stats-grid-secondary {
+.stats-grid-secondary,
+.stats-grid-tertiary {
     margin-top: 1rem;
     grid-template-columns: repeat(3, 1fr);
 }
 
 @media (max-width: 768px) {
-    .stats-grid-secondary {
+    .stats-grid-secondary,
+    .stats-grid-tertiary {
         grid-template-columns: 1fr;
     }
 }
@@ -350,6 +440,120 @@
 .badge-sm {
     font-size: 0.65rem;
     padding: 0.125rem 0.375rem;
+}
+
+/* Phase 4 additions */
+.stat-icon-teal {
+    background-color: rgba(20, 184, 166, 0.1);
+    color: #14b8a6;
+}
+
+.stat-icon-emerald {
+    background-color: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+}
+
+.stat-icon-rose {
+    background-color: rgba(244, 63, 94, 0.1);
+    color: #f43f5e;
+}
+
+/* Translation Coverage Widget */
+.translation-coverage-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.translation-coverage-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    border-radius: 6px;
+    background: var(--bg-secondary);
+}
+
+.translation-coverage-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.language-code {
+    font-family: monospace;
+    font-weight: 600;
+    padding: 0.125rem 0.375rem;
+    background: var(--bg-hover);
+    border-radius: 4px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+}
+
+.language-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.translation-count {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+/* Failed Deliveries Widget */
+.failed-deliveries-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.failed-delivery-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    text-decoration: none;
+    transition: background-color 0.15s;
+    border-left: 3px solid #ef4444;
+}
+
+.failed-delivery-item:hover {
+    background: var(--bg-hover);
+}
+
+.failed-delivery-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.failed-delivery-info .webhook-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.failed-delivery-info .event-type {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-family: monospace;
+}
+
+.failed-delivery-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.delivery-time {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.badge-danger {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
 }
 </style>
 {{end}}

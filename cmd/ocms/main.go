@@ -237,7 +237,7 @@ func run() error {
 
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(db, renderer, sessionManager)
-	adminHandler := handler.NewAdminHandler(db, renderer, sessionManager)
+	adminHandler := handler.NewAdminHandler(db, renderer, sessionManager, cacheManager)
 	usersHandler := handler.NewUsersHandler(db, renderer, sessionManager)
 	pagesHandler := handler.NewPagesHandler(db, renderer, sessionManager)
 	configHandler := handler.NewConfigHandler(db, renderer, sessionManager, cacheManager)
