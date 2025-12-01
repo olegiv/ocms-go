@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"ocms-go/internal/render"
 	"ocms-go/internal/service"
 	"ocms-go/internal/store"
+	"ocms-go/internal/webhook"
 )
 
 // MediaPerPage is the number of media items to display per page.
@@ -31,6 +33,7 @@ type MediaHandler struct {
 	sessionManager *scs.SessionManager
 	mediaService   *service.MediaService
 	uploadDir      string
+	dispatcher     *webhook.Dispatcher
 }
 
 // NewMediaHandler creates a new MediaHandler.
@@ -45,6 +48,34 @@ func NewMediaHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 		sessionManager: sm,
 		mediaService:   service.NewMediaService(db, uploadDir),
 		uploadDir:      uploadDir,
+	}
+}
+
+// SetDispatcher sets the webhook dispatcher for event dispatching.
+func (h *MediaHandler) SetDispatcher(d *webhook.Dispatcher) {
+	h.dispatcher = d
+}
+
+// dispatchMediaEvent dispatches a media-related webhook event.
+func (h *MediaHandler) dispatchMediaEvent(ctx context.Context, eventType string, media store.Medium) {
+	if h.dispatcher == nil {
+		return
+	}
+
+	data := webhook.MediaEventData{
+		ID:         media.ID,
+		UUID:       media.Uuid,
+		Filename:   media.Filename,
+		MimeType:   media.MimeType,
+		Size:       media.Size,
+		UploaderID: media.UploadedBy,
+	}
+
+	if err := h.dispatcher.DispatchEvent(ctx, eventType, data); err != nil {
+		slog.Error("failed to dispatch webhook event",
+			"error", err,
+			"event_type", eventType,
+			"media_id", media.ID)
 	}
 }
 
@@ -312,6 +343,9 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 		slog.Info("media uploaded", "media_id", result.Media.ID, "filename", result.Media.Filename, "uploaded_by", user.ID)
 
+		// Dispatch media.uploaded webhook event
+		h.dispatchMediaEvent(r.Context(), model.EventMediaUploaded, result.Media)
+
 		if r.Header.Get("HX-Request") == "true" {
 			// Return success HTML for HTMX
 			w.WriteHeader(http.StatusOK)
@@ -335,7 +369,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		_, err = h.mediaService.Upload(r.Context(), file, header, user.ID, folderID)
+		result, err := h.mediaService.Upload(r.Context(), file, header, user.ID, folderID)
 		file.Close()
 
 		if err != nil {
@@ -343,6 +377,9 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			errorCount++
 			continue
 		}
+
+		// Dispatch media.uploaded webhook event for each file
+		h.dispatchMediaEvent(r.Context(), model.EventMediaUploaded, result.Media)
 
 		uploadedCount++
 	}
@@ -591,6 +628,9 @@ func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	user := middleware.GetUser(r)
 	slog.Info("media deleted", "media_id", id, "filename", media.Filename, "deleted_by", user.ID)
+
+	// Dispatch media.deleted webhook event
+	h.dispatchMediaEvent(r.Context(), model.EventMediaDeleted, media)
 
 	// For HTMX requests, return empty response
 	if r.Header.Get("HX-Request") == "true" {

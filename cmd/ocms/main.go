@@ -29,6 +29,7 @@ import (
 	"ocms-go/internal/session"
 	"ocms-go/internal/store"
 	"ocms-go/internal/theme"
+	"ocms-go/internal/webhook"
 	"ocms-go/modules/example"
 	"ocms-go/web"
 )
@@ -161,6 +162,12 @@ func run() error {
 	}
 	defer sched.Stop()
 
+	// Initialize and start webhook dispatcher
+	webhookDispatcher := webhook.NewDispatcher(db, logger, webhook.DefaultConfig())
+	webhookDispatcher.Start(ctx)
+	defer webhookDispatcher.Stop()
+	slog.Info("webhook dispatcher initialized")
+
 	// Initialize hook registry
 	hookRegistry := module.NewHookRegistry(logger)
 
@@ -239,6 +246,12 @@ func run() error {
 	apiKeysHandler := handler.NewAPIKeysHandler(db, renderer, sessionManager)
 	webhooksHandler := handler.NewWebhooksHandler(db, renderer, sessionManager)
 	healthHandler := handler.NewHealthHandler(db, "./uploads")
+
+	// Set webhook dispatcher on handlers that dispatch events
+	pagesHandler.SetDispatcher(webhookDispatcher)
+	mediaHandler.SetDispatcher(webhookDispatcher)
+	usersHandler.SetDispatcher(webhookDispatcher)
+	formsHandler.SetDispatcher(webhookDispatcher)
 
 	// Health check routes (should be early, before session middleware for some endpoints)
 	r.Get("/health", healthHandler.Health)

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 	"ocms-go/internal/render"
 	"ocms-go/internal/store"
 	"ocms-go/internal/util"
+	"ocms-go/internal/webhook"
 )
 
 // FormsHandler handles form management routes.
@@ -27,6 +29,7 @@ type FormsHandler struct {
 	queries        *store.Queries
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
+	dispatcher     *webhook.Dispatcher
 }
 
 // NewFormsHandler creates a new FormsHandler.
@@ -35,6 +38,34 @@ func NewFormsHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
+	}
+}
+
+// SetDispatcher sets the webhook dispatcher for event dispatching.
+func (h *FormsHandler) SetDispatcher(d *webhook.Dispatcher) {
+	h.dispatcher = d
+}
+
+// dispatchFormEvent dispatches a form submission webhook event.
+func (h *FormsHandler) dispatchFormEvent(ctx context.Context, form store.Form, submissionID int64, data map[string]string) {
+	if h.dispatcher == nil {
+		return
+	}
+
+	eventData := webhook.FormEventData{
+		FormID:       form.ID,
+		FormName:     form.Name,
+		FormSlug:     form.Slug,
+		SubmissionID: submissionID,
+		Data:         data,
+		SubmittedAt:  time.Now(),
+	}
+
+	if err := h.dispatcher.DispatchEvent(ctx, model.EventFormSubmitted, eventData); err != nil {
+		slog.Error("failed to dispatch webhook event",
+			"error", err,
+			"event_type", model.EventFormSubmitted,
+			"form_id", form.ID)
 	}
 }
 
@@ -982,7 +1013,7 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Save submission
-	_, err = h.queries.CreateFormSubmission(r.Context(), store.CreateFormSubmissionParams{
+	submission, err := h.queries.CreateFormSubmission(r.Context(), store.CreateFormSubmissionParams{
 		FormID:    form.ID,
 		Data:      string(dataJSON),
 		IpAddress: sql.NullString{String: getClientIP(r), Valid: true},
@@ -997,6 +1028,9 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("form submission saved", "form_id", form.ID, "form_slug", slug)
+
+	// Dispatch form.submitted webhook event
+	h.dispatchFormEvent(r.Context(), form, submission.ID, values)
 
 	// TODO: Send notification email if configured
 	// if form.EmailTo.Valid && form.EmailTo.String != "" {

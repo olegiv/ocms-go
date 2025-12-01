@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -17,6 +18,7 @@ import (
 	"ocms-go/internal/render"
 	"ocms-go/internal/store"
 	"ocms-go/internal/util"
+	"ocms-go/internal/webhook"
 )
 
 // Page statuses
@@ -36,6 +38,7 @@ type PagesHandler struct {
 	queries        *store.Queries
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
+	dispatcher     *webhook.Dispatcher
 }
 
 // NewPagesHandler creates a new PagesHandler.
@@ -44,6 +47,47 @@ func NewPagesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
+	}
+}
+
+// SetDispatcher sets the webhook dispatcher for event dispatching.
+func (h *PagesHandler) SetDispatcher(d *webhook.Dispatcher) {
+	h.dispatcher = d
+}
+
+// dispatchPageEvent dispatches a page-related webhook event.
+func (h *PagesHandler) dispatchPageEvent(ctx context.Context, eventType string, page store.Page, authorEmail string) {
+	if h.dispatcher == nil {
+		return
+	}
+
+	var languageID *int64
+	if page.LanguageID.Valid {
+		languageID = &page.LanguageID.Int64
+	}
+
+	var publishedAt *string
+	if page.PublishedAt.Valid {
+		t := page.PublishedAt.Time.Format(time.RFC3339)
+		publishedAt = &t
+	}
+
+	data := webhook.PageEventData{
+		ID:          page.ID,
+		Title:       page.Title,
+		Slug:        page.Slug,
+		Status:      page.Status,
+		AuthorID:    page.AuthorID,
+		AuthorEmail: authorEmail,
+		LanguageID:  languageID,
+		PublishedAt: publishedAt,
+	}
+
+	if err := h.dispatcher.DispatchEvent(ctx, eventType, data); err != nil {
+		slog.Error("failed to dispatch webhook event",
+			"error", err,
+			"event_type", eventType,
+			"page_id", page.ID)
 	}
 }
 
@@ -709,6 +753,10 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("page created", "page_id", newPage.ID, "slug", newPage.Slug, "created_by", user.ID)
+
+	// Dispatch page.created webhook event
+	h.dispatchPageEvent(r.Context(), model.EventPageCreated, newPage, user.Email)
+
 	h.renderer.SetFlash(r, "Page created successfully", "success")
 	http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
 }
@@ -1129,6 +1177,10 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("page updated", "page_id", updatedPage.ID, "slug", updatedPage.Slug, "updated_by", user.ID)
+
+	// Dispatch page.updated webhook event
+	h.dispatchPageEvent(r.Context(), model.EventPageUpdated, updatedPage, user.Email)
+
 	h.renderer.SetFlash(r, "Page updated successfully", "success")
 	http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
 }
@@ -1165,6 +1217,9 @@ func (h *PagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	user := middleware.GetUser(r)
 	slog.Info("page deleted", "page_id", id, "slug", page.Slug, "deleted_by", user.ID)
+
+	// Dispatch page.deleted webhook event
+	h.dispatchPageEvent(r.Context(), model.EventPageDeleted, page, user.Email)
 
 	// For HTMX requests, return empty response (row removed)
 	if r.Header.Get("HX-Request") == "true" {
@@ -1205,6 +1260,7 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	var message string
+	var eventType string
 
 	if page.Status == PageStatusPublished {
 		// Unpublish
@@ -1213,6 +1269,7 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt: now,
 		})
 		message = "Page unpublished successfully"
+		eventType = model.EventPageUnpublished
 		slog.Info("page unpublished", "page_id", id, "slug", page.Slug, "unpublished_by", user.ID)
 	} else {
 		// Publish
@@ -1222,6 +1279,7 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 			PublishedAt: sql.NullTime{Time: now, Valid: true},
 		})
 		message = "Page published successfully"
+		eventType = model.EventPagePublished
 		slog.Info("page published", "page_id", id, "slug", page.Slug, "published_by", user.ID)
 	}
 
@@ -1230,6 +1288,12 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 		h.renderer.SetFlash(r, "Error updating page status", "error")
 		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
 		return
+	}
+
+	// Get updated page for webhook event
+	updatedPage, err := h.queries.GetPageByID(r.Context(), id)
+	if err == nil {
+		h.dispatchPageEvent(r.Context(), eventType, updatedPage, user.Email)
 	}
 
 	h.renderer.SetFlash(r, message, "success")

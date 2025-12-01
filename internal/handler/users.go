@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -15,8 +16,10 @@ import (
 
 	"ocms-go/internal/auth"
 	"ocms-go/internal/middleware"
+	"ocms-go/internal/model"
 	"ocms-go/internal/render"
 	"ocms-go/internal/store"
+	"ocms-go/internal/webhook"
 )
 
 // User roles
@@ -37,6 +40,7 @@ type UsersHandler struct {
 	queries        *store.Queries
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
+	dispatcher     *webhook.Dispatcher
 }
 
 // NewUsersHandler creates a new UsersHandler.
@@ -45,6 +49,32 @@ func NewUsersHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
+	}
+}
+
+// SetDispatcher sets the webhook dispatcher for event dispatching.
+func (h *UsersHandler) SetDispatcher(d *webhook.Dispatcher) {
+	h.dispatcher = d
+}
+
+// dispatchUserEvent dispatches a user-related webhook event.
+func (h *UsersHandler) dispatchUserEvent(ctx context.Context, eventType string, user store.User) {
+	if h.dispatcher == nil {
+		return
+	}
+
+	data := webhook.UserEventData{
+		ID:    user.ID,
+		Email: user.Email,
+		Name:  user.Name,
+		Role:  user.Role,
+	}
+
+	if err := h.dispatcher.DispatchEvent(ctx, eventType, data); err != nil {
+		slog.Error("failed to dispatch webhook event",
+			"error", err,
+			"event_type", eventType,
+			"user_id", user.ID)
 	}
 }
 
@@ -283,6 +313,10 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("user created", "user_id", newUser.ID, "email", newUser.Email, "created_by", user.ID)
+
+	// Dispatch user.created webhook event
+	h.dispatchUserEvent(r.Context(), model.EventUserCreated, newUser)
+
 	h.renderer.SetFlash(r, "User created successfully", "success")
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }
@@ -562,6 +596,9 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("user deleted", "user_id", id, "email", deleteUser.Email, "deleted_by", currentUser.ID)
+
+	// Dispatch user.deleted webhook event
+	h.dispatchUserEvent(r.Context(), model.EventUserDeleted, deleteUser)
 
 	// Check if this is an HTMX request
 	if r.Header.Get("HX-Request") == "true" {
