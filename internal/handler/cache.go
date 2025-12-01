@@ -8,7 +8,9 @@ import (
 
 	"ocms-go/internal/cache"
 	"ocms-go/internal/middleware"
+	"ocms-go/internal/model"
 	"ocms-go/internal/render"
+	"ocms-go/internal/service"
 )
 
 // CacheHandler handles cache management routes.
@@ -16,14 +18,16 @@ type CacheHandler struct {
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
 	cacheManager   *cache.Manager
+	eventService   *service.EventService
 }
 
 // NewCacheHandler creates a new CacheHandler.
-func NewCacheHandler(renderer *render.Renderer, sm *scs.SessionManager, cm *cache.Manager) *CacheHandler {
+func NewCacheHandler(renderer *render.Renderer, sm *scs.SessionManager, cm *cache.Manager, es *service.EventService) *CacheHandler {
 	return &CacheHandler{
 		renderer:       renderer,
 		sessionManager: sm,
 		cacheManager:   cm,
+		eventService:   es,
 	}
 }
 
@@ -75,6 +79,12 @@ func (h *CacheHandler) Clear(w http.ResponseWriter, r *http.Request) {
 	h.cacheManager.ClearAll()
 
 	slog.Info("cache cleared", "cleared_by", user.ID)
+
+	// Log to event log
+	if h.eventService != nil {
+		h.eventService.LogCacheEvent(r.Context(), model.EventLevelInfo, "All caches cleared", &user.ID, nil)
+	}
+
 	h.renderer.SetFlash(r, "All caches cleared successfully", "success")
 	http.Redirect(w, r, "/admin/cache", http.StatusSeeOther)
 }
@@ -92,6 +102,12 @@ func (h *CacheHandler) ClearConfig(w http.ResponseWriter, r *http.Request) {
 	h.cacheManager.InvalidateConfig()
 
 	slog.Info("config cache cleared", "cleared_by", user.ID)
+
+	// Log to event log
+	if h.eventService != nil {
+		h.eventService.LogCacheEvent(r.Context(), model.EventLevelInfo, "Configuration cache cleared", &user.ID, nil)
+	}
+
 	h.renderer.SetFlash(r, "Configuration cache cleared", "success")
 	http.Redirect(w, r, "/admin/cache", http.StatusSeeOther)
 }
@@ -109,6 +125,12 @@ func (h *CacheHandler) ClearSitemap(w http.ResponseWriter, r *http.Request) {
 	h.cacheManager.InvalidateSitemap()
 
 	slog.Info("sitemap cache cleared", "cleared_by", user.ID)
+
+	// Log to event log
+	if h.eventService != nil {
+		h.eventService.LogCacheEvent(r.Context(), model.EventLevelInfo, "Sitemap cache cleared", &user.ID, nil)
+	}
+
 	h.renderer.SetFlash(r, "Sitemap cache cleared", "success")
 	http.Redirect(w, r, "/admin/cache", http.StatusSeeOther)
 }

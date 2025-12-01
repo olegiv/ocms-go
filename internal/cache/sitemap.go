@@ -133,6 +133,11 @@ func (c *SitemapCache) Stats() Stats {
 	return stats
 }
 
+// ResetStats resets the cache statistics.
+func (c *SitemapCache) ResetStats() {
+	c.cache.ResetStats()
+}
+
 // IsCached returns true if the sitemap is currently cached.
 func (c *SitemapCache) IsCached() bool {
 	c.mu.RLock()

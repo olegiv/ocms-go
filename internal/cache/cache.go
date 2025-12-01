@@ -15,9 +15,10 @@ type Cache struct {
 	stopped atomic.Bool
 
 	// Stats
-	hits   atomic.Int64
-	misses atomic.Int64
-	sets   atomic.Int64
+	hits         atomic.Int64
+	misses       atomic.Int64
+	sets         atomic.Int64
+	statsResetAt atomic.Pointer[time.Time]
 }
 
 // cacheEntry holds a cached value with its expiration time.
@@ -33,6 +34,7 @@ type Stats struct {
 	Sets    int64
 	Items   int
 	HitRate float64
+	ResetAt *time.Time // when stats were last reset (nil if never reset)
 }
 
 // New creates a new cache with the specified TTL.
@@ -163,6 +165,7 @@ func (c *Cache) Stats() Stats {
 		Sets:    c.sets.Load(),
 		Items:   itemCount,
 		HitRate: hitRate,
+		ResetAt: c.statsResetAt.Load(),
 	}
 }
 
@@ -171,6 +174,8 @@ func (c *Cache) ResetStats() {
 	c.hits.Store(0)
 	c.misses.Store(0)
 	c.sets.Store(0)
+	now := time.Now()
+	c.statsResetAt.Store(&now)
 }
 
 // Keys returns all keys in the cache (including expired ones).

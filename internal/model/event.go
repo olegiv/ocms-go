@@ -19,6 +19,7 @@ const (
 	EventCategoryUser   = "user"
 	EventCategoryConfig = "config"
 	EventCategorySystem = "system"
+	EventCategoryCache  = "cache"
 )
 
 // Event represents a system event log entry.

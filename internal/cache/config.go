@@ -181,6 +181,11 @@ func (c *ConfigCache) Stats() Stats {
 	return stats
 }
 
+// ResetStats resets the cache statistics.
+func (c *ConfigCache) ResetStats() {
+	c.cache.ResetStats()
+}
+
 // Preload loads all config into cache.
 // Useful for warming up the cache on startup.
 func (c *ConfigCache) Preload(ctx context.Context) error {

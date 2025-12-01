@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"ocms-go/internal/store"
@@ -57,11 +58,18 @@ func (m *Manager) Stop() {
 	m.General.Stop()
 }
 
-// ClearAll clears all caches.
+// ClearAll clears all caches and resets statistics.
 func (m *Manager) ClearAll() {
 	m.Config.Invalidate()
 	m.Sitemap.Invalidate()
 	m.General.Clear()
+
+	// Reset statistics for all caches
+	m.Config.ResetStats()
+	m.Sitemap.ResetStats()
+	m.General.ResetStats()
+
+	slog.Info("cache stats reset")
 }
 
 // InvalidateConfig invalidates the config cache.
@@ -132,6 +140,11 @@ func (m *Manager) TotalStats() Stats {
 	totalRequests := total.Hits + total.Misses
 	if totalRequests > 0 {
 		total.HitRate = float64(total.Hits) / float64(totalRequests) * 100
+	}
+
+	// Use the most recent reset time from any cache
+	if configStats.ResetAt != nil {
+		total.ResetAt = configStats.ResetAt
 	}
 
 	return total

@@ -96,6 +96,11 @@ func (s *EventService) LogSystemEvent(ctx context.Context, level, message string
 	return s.LogEvent(ctx, level, model.EventCategorySystem, message, userID, metadata)
 }
 
+// LogCacheEvent logs a cache-related event.
+func (s *EventService) LogCacheEvent(ctx context.Context, level, message string, userID *int64, metadata map[string]any) error {
+	return s.LogEvent(ctx, level, model.EventCategoryCache, message, userID, metadata)
+}
+
 // DeleteOldEvents removes events older than the specified duration.
 func (s *EventService) DeleteOldEvents(ctx context.Context, olderThan time.Duration) error {
 	cutoff := time.Now().Add(-olderThan)
