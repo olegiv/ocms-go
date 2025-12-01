@@ -459,6 +459,11 @@ func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
+		if r.Header.Get("HX-Request") == "true" {
+			w.Header().Set("HX-Reswap", "none")
+			http.Error(w, "Invalid ID", http.StatusBadRequest)
+			return
+		}
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
 	}
@@ -466,9 +471,19 @@ func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	lang, err := h.queries.GetLanguageByID(r.Context(), id)
 	if err != nil {
 		if err == sql.ErrNoRows {
+			if r.Header.Get("HX-Request") == "true" {
+				w.Header().Set("HX-Reswap", "none")
+				http.Error(w, "Language not found", http.StatusNotFound)
+				return
+			}
 			http.NotFound(w, r)
 		} else {
-			slog.Error("failed to get language", "error", err)
+			slog.Error("failed to get language", "error", err, "language_id", id)
+			if r.Header.Get("HX-Request") == "true" {
+				w.Header().Set("HX-Reswap", "none")
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		}
 		return
@@ -476,14 +491,55 @@ func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	// Cannot delete default language
 	if lang.IsDefault {
-		h.renderer.SetFlash(r, "Cannot delete the default language", "error")
+		errMsg := "Cannot delete the default language"
+		slog.Warn("attempted to delete default language", "language_id", id, "code", lang.Code)
+		if r.Header.Get("HX-Request") == "true" {
+			w.Header().Set("HX-Reswap", "none")
+			http.Error(w, errMsg, http.StatusBadRequest)
+			return
+		}
+		h.renderer.SetFlash(r, errMsg, "error")
+		http.Redirect(w, r, "/admin/languages", http.StatusSeeOther)
+		return
+	}
+
+	// Check if there are pages linked to this language
+	pageCount, err := h.queries.CountPagesByLanguageID(r.Context(), sql.NullInt64{Int64: id, Valid: true})
+	if err != nil {
+		slog.Error("failed to count pages for language", "error", err, "language_id", id)
+		if r.Header.Get("HX-Request") == "true" {
+			w.Header().Set("HX-Reswap", "none")
+			http.Error(w, "Failed to check language usage", http.StatusInternalServerError)
+			return
+		}
+		h.renderer.SetFlash(r, "Failed to check language usage", "error")
+		http.Redirect(w, r, "/admin/languages", http.StatusSeeOther)
+		return
+	}
+
+	if pageCount > 0 {
+		errMsg := fmt.Sprintf("Cannot delete language: %d page(s) are using this language", pageCount)
+		slog.Warn("attempted to delete language with linked pages",
+			"language_id", id, "code", lang.Code, "page_count", pageCount)
+		if r.Header.Get("HX-Request") == "true" {
+			w.Header().Set("HX-Reswap", "none")
+			http.Error(w, errMsg, http.StatusConflict)
+			return
+		}
+		h.renderer.SetFlash(r, errMsg, "error")
 		http.Redirect(w, r, "/admin/languages", http.StatusSeeOther)
 		return
 	}
 
 	if err := h.queries.DeleteLanguage(r.Context(), id); err != nil {
-		slog.Error("failed to delete language", "error", err)
-		h.renderer.SetFlash(r, "Error deleting language", "error")
+		slog.Error("failed to delete language", "error", err, "language_id", id, "code", lang.Code)
+		errMsg := "Error deleting language"
+		if r.Header.Get("HX-Request") == "true" {
+			w.Header().Set("HX-Reswap", "none")
+			http.Error(w, errMsg, http.StatusInternalServerError)
+			return
+		}
+		h.renderer.SetFlash(r, errMsg, "error")
 		http.Redirect(w, r, "/admin/languages", http.StatusSeeOther)
 		return
 	}

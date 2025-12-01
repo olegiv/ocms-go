@@ -7,6 +7,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
@@ -36,6 +37,17 @@ SELECT COUNT(*) FROM languages
 
 func (q *Queries) CountLanguages(ctx context.Context) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countLanguages)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countPagesByLanguageID = `-- name: CountPagesByLanguageID :one
+SELECT COUNT(*) FROM pages WHERE language_id = ?
+`
+
+func (q *Queries) CountPagesByLanguageID(ctx context.Context, languageID sql.NullInt64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPagesByLanguageID, languageID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err

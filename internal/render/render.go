@@ -34,6 +34,7 @@ type Renderer struct {
 	templates      map[string]*template.Template
 	sessionManager *scs.SessionManager
 	menuService    *service.MenuService
+	db             *sql.DB
 	isDev          bool
 }
 
@@ -56,6 +57,7 @@ func New(cfg Config) (*Renderer, error) {
 		templates:      make(map[string]*template.Template),
 		sessionManager: cfg.SessionManager,
 		menuService:    menuSvc,
+		db:             cfg.DB,
 		isDev:          cfg.IsDev,
 	}
 
@@ -360,18 +362,66 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		"T": func(lang string, key string, args ...any) string {
 			return i18n.T(lang, key, args...)
 		},
-		// adminLangOptions returns the list of supported admin UI languages.
+		// adminLangOptions returns the list of admin UI languages.
+		// Only returns languages that are:
+		// 1. Active in the database
+		// 2. Supported by the i18n system (have locale files)
 		"adminLangOptions": func() []struct {
 			Code string
 			Name string
 		} {
-			return []struct {
+			// Fallback to all i18n supported languages if DB unavailable
+			if r.db == nil {
+				return []struct {
+					Code string
+					Name string
+				}{
+					{"en", "English"},
+				}
+			}
+
+			// Query active languages from database
+			rows, err := r.db.Query("SELECT code, native_name FROM languages WHERE is_active = 1 ORDER BY position ASC")
+			if err != nil {
+				return []struct {
+					Code string
+					Name string
+				}{
+					{"en", "English"},
+				}
+			}
+			defer rows.Close()
+
+			var options []struct {
 				Code string
 				Name string
-			}{
-				{"en", "English"},
-				{"ru", "Русский"},
 			}
+
+			for rows.Next() {
+				var code, name string
+				if err := rows.Scan(&code, &name); err != nil {
+					continue
+				}
+				// Only include if i18n supports this language
+				if i18n.IsSupported(code) {
+					options = append(options, struct {
+						Code string
+						Name string
+					}{code, name})
+				}
+			}
+
+			// Fallback to English if no matching languages found
+			if len(options) == 0 {
+				return []struct {
+					Code string
+					Name string
+				}{
+					{"en", "English"},
+				}
+			}
+
+			return options
 		},
 	}
 }
