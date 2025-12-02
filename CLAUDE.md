@@ -202,3 +202,4 @@ Additional documentation is available in the `docs/` directory:
 - `docs/webhooks.md` - Webhook configuration and event handling
 - `docs/import-export.md` - Content backup, export, and import guide
 - `docs/reverse-proxy.md` - Nginx, Apache, and Nginx Proxy Manager configuration
+- `docs/login-security.md` - Login protection, rate limiting, and account lockout

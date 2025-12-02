@@ -235,8 +235,16 @@ func run() error {
 	r.Use(middleware.Timeout(30 * time.Second)) // 30 second request timeout
 	r.Use(sessionManager.LoadAndSave)
 
+	// Initialize login protection
+	loginProtection := middleware.NewLoginProtection(middleware.DefaultLoginProtectionConfig())
+	slog.Info("login protection initialized",
+		"ip_rate_limit", "0.5 req/s",
+		"max_failed_attempts", 5,
+		"lockout_duration", "15m",
+	)
+
 	// Initialize handlers
-	authHandler := handler.NewAuthHandler(db, renderer, sessionManager)
+	authHandler := handler.NewAuthHandler(db, renderer, sessionManager, loginProtection)
 	adminHandler := handler.NewAdminHandler(db, renderer, sessionManager, cacheManager)
 	usersHandler := handler.NewUsersHandler(db, renderer, sessionManager)
 	pagesHandler := handler.NewPagesHandler(db, renderer, sessionManager)
@@ -299,9 +307,9 @@ func run() error {
 		})
 	})
 
-	// Auth routes (public)
+	// Auth routes (public, with rate limiting on login POST)
 	r.Get("/login", authHandler.LoginForm)
-	r.Post("/login", authHandler.Login)
+	r.With(loginProtection.Middleware()).Post("/login", authHandler.Login)
 	r.Get("/logout", authHandler.Logout)
 	r.Post("/logout", authHandler.Logout)
 

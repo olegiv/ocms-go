@@ -2,12 +2,15 @@ package handler
 
 import (
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/alexedwards/scs/v2"
 
 	"ocms-go/internal/auth"
+	"ocms-go/internal/middleware"
 	"ocms-go/internal/model"
 	"ocms-go/internal/render"
 	"ocms-go/internal/service"
@@ -19,19 +22,21 @@ const SessionKeyUserID = "user_id"
 
 // AuthHandler handles authentication routes.
 type AuthHandler struct {
-	queries        *store.Queries
-	renderer       *render.Renderer
-	sessionManager *scs.SessionManager
-	eventService   *service.EventService
+	queries         *store.Queries
+	renderer        *render.Renderer
+	sessionManager  *scs.SessionManager
+	eventService    *service.EventService
+	loginProtection *middleware.LoginProtection
 }
 
 // NewAuthHandler creates a new AuthHandler.
-func NewAuthHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager) *AuthHandler {
+func NewAuthHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, lp *middleware.LoginProtection) *AuthHandler {
 	return &AuthHandler{
-		queries:        store.New(db),
-		renderer:       renderer,
-		sessionManager: sm,
-		eventService:   service.NewEventService(db),
+		queries:         store.New(db),
+		renderer:        renderer,
+		sessionManager:  sm,
+		eventService:    service.NewEventService(db),
+		loginProtection: lp,
 	}
 }
 
@@ -64,6 +69,16 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if account is locked
+	if h.loginProtection != nil {
+		if locked, remaining := h.loginProtection.IsAccountLocked(email); locked {
+			h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login attempt on locked account", nil, map[string]any{"email": email})
+			h.renderer.SetFlash(r, fmt.Sprintf("Account is temporarily locked. Try again in %s.", formatDuration(remaining)), "error")
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+	}
+
 	// Find user by email
 	user, err := h.queries.GetUserByEmail(r.Context(), email)
 	if err != nil {
@@ -72,6 +87,20 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login failed: user not found", nil, map[string]any{"email": email})
 		} else {
 			slog.Error("database error during login", "error", err)
+		}
+		// Record failed attempt even for non-existent users to prevent enumeration
+		if h.loginProtection != nil {
+			if locked, lockDuration := h.loginProtection.RecordFailedAttempt(email); locked {
+				h.renderer.SetFlash(r, fmt.Sprintf("Too many failed attempts. Account locked for %s.", formatDuration(lockDuration)), "error")
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				return
+			}
+			remaining := h.loginProtection.GetRemainingAttempts(email)
+			if remaining <= 3 && remaining > 0 {
+				h.renderer.SetFlash(r, fmt.Sprintf("Invalid email or password. %d attempts remaining.", remaining), "error")
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				return
+			}
 		}
 		h.renderer.SetFlash(r, "Invalid email or password", "error")
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -90,9 +119,29 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if !valid {
 		slog.Debug("invalid password attempt", "email", email)
 		h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login failed: invalid password", &user.ID, map[string]any{"email": email})
+		// Record failed attempt
+		if h.loginProtection != nil {
+			if locked, lockDuration := h.loginProtection.RecordFailedAttempt(email); locked {
+				h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Account locked due to failed attempts", &user.ID, map[string]any{"email": email, "duration": lockDuration.String()})
+				h.renderer.SetFlash(r, fmt.Sprintf("Too many failed attempts. Account locked for %s.", formatDuration(lockDuration)), "error")
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				return
+			}
+			remaining := h.loginProtection.GetRemainingAttempts(email)
+			if remaining <= 3 && remaining > 0 {
+				h.renderer.SetFlash(r, fmt.Sprintf("Invalid email or password. %d attempts remaining.", remaining), "error")
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				return
+			}
+		}
 		h.renderer.SetFlash(r, "Invalid email or password", "error")
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
+	}
+
+	// Clear failed attempts on successful login
+	if h.loginProtection != nil {
+		h.loginProtection.RecordSuccessfulLogin(email)
 	}
 
 	// Regenerate session ID to prevent session fixation
@@ -109,7 +158,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	h.eventService.LogAuthEvent(r.Context(), model.EventLevelInfo, "User logged in", &user.ID, map[string]any{"email": user.Email})
 
 	h.renderer.SetFlash(r, "Welcome back, "+user.Name+"!", "success")
-	http.Redirect(w, r, "/login", http.StatusSeeOther)
+
+	// Redirect based on user role
+	if user.Role == "admin" {
+		http.Redirect(w, r, "/admin", http.StatusSeeOther)
+	} else {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	}
 }
 
 // Logout handles user logout.
@@ -131,4 +186,23 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 
 	h.renderer.SetFlash(r, "You have been logged out", "info")
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+// formatDuration formats a duration into a human-readable string.
+func formatDuration(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%d seconds", int(d.Seconds()))
+	}
+	if d < time.Hour {
+		mins := int(d.Minutes())
+		if mins == 1 {
+			return "1 minute"
+		}
+		return fmt.Sprintf("%d minutes", mins)
+	}
+	hours := int(d.Hours())
+	if hours == 1 {
+		return "1 hour"
+	}
+	return fmt.Sprintf("%d hours", hours)
 }
