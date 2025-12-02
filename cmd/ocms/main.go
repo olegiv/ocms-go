@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -85,7 +86,12 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("initializing database: %w", err)
 	}
-	defer db.Close()
+	defer func(db *sql.DB) {
+		err = db.Close()
+		if err != nil {
+			slog.Error("error closing database connection", "error", err)
+		}
+	}(db)
 
 	// Run migrations
 	slog.Info("running database migrations")
@@ -322,16 +328,16 @@ func run() error {
 			}
 			sessionManager.Put(r.Context(), "test_key", value)
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			fmt.Fprintf(w, "Session value set: %s\n", value)
+			_, _ = fmt.Fprintf(w, "Session value set: %s\n", value)
 		})
 
 		r.Get("/session/get", func(w http.ResponseWriter, r *http.Request) {
 			value := sessionManager.GetString(r.Context(), "test_key")
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			if value == "" {
-				fmt.Fprintln(w, "No session value found")
+				_, _ = fmt.Fprintln(w, "No session value found")
 			} else {
-				fmt.Fprintf(w, "Session value: %s\n", value)
+				_, _ = fmt.Fprintf(w, "Session value: %s\n", value)
 			}
 		})
 	}
@@ -597,7 +603,7 @@ func run() error {
 		}
 		w.Header().Set("Content-Type", "image/svg+xml")
 		w.Header().Set("Cache-Control", "public, max-age=31536000")
-		w.Write(data)
+		_, _ = w.Write(data)
 	})
 
 	// Static file serving
