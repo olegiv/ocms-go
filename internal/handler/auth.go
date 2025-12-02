@@ -144,6 +144,15 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		h.loginProtection.RecordSuccessfulLogin(email)
 	}
 
+	// Update last login timestamp
+	if err := h.queries.UpdateUserLastLogin(r.Context(), store.UpdateUserLastLoginParams{
+		LastLoginAt: sql.NullTime{Time: time.Now(), Valid: true},
+		ID:          user.ID,
+	}); err != nil {
+		slog.Error("failed to update last login time", "error", err, "user_id", user.ID)
+		// Don't block login on this error
+	}
+
 	// Regenerate session ID to prevent session fixation
 	if err := h.sessionManager.RenewToken(r.Context()); err != nil {
 		slog.Error("session renewal error", "error", err)
