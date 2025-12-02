@@ -171,6 +171,26 @@
   gap: $spacing-3;
 }
 
+// Header icon link (View Site)
+.header-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-1 $spacing-2;
+  color: $gray-600;
+  border-radius: $radius-md;
+  transition: all $transition-fast;
+
+  &:hover {
+    color: $gray-900;
+    background-color: $gray-100;
+  }
+
+  svg {
+    flex-shrink: 0;
+  }
+}
+
 // Language selector (select-based)
 .lang-selector-form {
   margin: 0;

@@ -49,6 +49,7 @@
         {"id": "dashboard.no_submissions", "message": "No form submissions yet", "translation": "No form submissions yet"},
         {"id": "dashboard.submissions_hint", "message": "Submissions will appear here when visitors submit your forms.", "translation": "Submissions will appear here when visitors submit your forms."},
         {"id": "dashboard.view_all_forms", "message": "View All Forms", "translation": "View All Forms"},
+        {"id": "dashboard.view_site", "message": "View Site", "translation": "View Site"},
         {"id": "dashboard.create_page", "message": "Create Page", "translation": "Create Page"},
         {"id": "dashboard.upload_media", "message": "Upload Media", "translation": "Upload Media"},
         {"id": "dashboard.create_form", "message": "Create Form", "translation": "Create Form"},

@@ -49,6 +49,7 @@
         {"id": "dashboard.no_submissions", "message": "No form submissions yet", "translation": "Заявки пока отсутствуют"},
         {"id": "dashboard.submissions_hint", "message": "Submissions will appear here when visitors submit your forms.", "translation": "Заявки появятся здесь, когда посетители заполнят ваши формы."},
         {"id": "dashboard.view_all_forms", "message": "View All Forms", "translation": "Все формы"},
+        {"id": "dashboard.view_site", "message": "View Site", "translation": "Перейти на сайт"},
         {"id": "dashboard.create_page", "message": "Create Page", "translation": "Создать страницу"},
         {"id": "dashboard.upload_media", "message": "Upload Media", "translation": "Загрузить медиа"},
         {"id": "dashboard.create_form", "message": "Create Form", "translation": "Создать форму"},
