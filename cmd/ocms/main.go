@@ -588,6 +588,18 @@ func run() error {
 	r.Get("/forms/{slug}", formsHandler.Show)
 	r.Post("/forms/{slug}", formsHandler.Submit)
 
+	// Favicon route - serve from embedded static files
+	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		data, err := web.Static.ReadFile("static/dist/favicon.svg")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "image/svg+xml")
+		w.Header().Set("Cache-Control", "public, max-age=31536000")
+		w.Write(data)
+	})
+
 	// Static file serving
 	staticFS, err := fs.Sub(web.Static, "static/dist")
 	if err != nil {
