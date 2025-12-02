@@ -193,3 +193,12 @@ OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./internal/middle
 # Test API handlers
 OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./internal/handler/api/...
 ```
+
+## Documentation
+
+Additional documentation is available in the `docs/` directory:
+
+- `docs/multi-language.md` - Multi-language content setup and translation workflow
+- `docs/webhooks.md` - Webhook configuration and event handling
+- `docs/import-export.md` - Content backup, export, and import guide
+- `docs/reverse-proxy.md` - Nginx, Apache, and Nginx Proxy Manager configuration

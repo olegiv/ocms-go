@@ -67,8 +67,36 @@ A lightweight content management system built with Go, featuring a modern admin 
 - **API Key Management**: Create and manage API keys
 - **SQLite Database**: Zero-configuration embedded database with migrations
 
+### Multi-Language Support
+- **Content Translation**: Translate pages, categories, and tags into multiple languages
+- **Language Management**: Configure site languages with ISO 639-1 codes
+- **Translation Linking**: Link content across languages for seamless switching
+- **Language Switcher**: Built-in frontend component for language navigation
+- **URL Prefixes**: Language-prefixed URLs (e.g., `/ru/about-us`)
+- **RTL Support**: Right-to-left language support
+- **Admin UI Localization**: Translatable admin interface (English + Russian included)
+
+### Webhooks
+- **Event System**: Trigger webhooks on content events (create, update, delete, publish)
+- **Delivery Tracking**: Monitor delivery status and response codes
+- **Retry Logic**: Exponential backoff retry for failed deliveries
+- **HMAC Signatures**: Secure payloads with HMAC-SHA256 signatures
+- **Custom Headers**: Add custom headers to webhook requests
+- **Dead Letter Queue**: Track permanently failed deliveries
+- **Event Debouncing**: Coalesce rapid-fire events to reduce webhook noise
+
+### Import/Export
+- **JSON Export**: Export site content to portable JSON format
+- **ZIP Export**: Include media files in export archives
+- **Selective Export**: Choose which content types to include
+- **JSON Import**: Import content from JSON files
+- **ZIP Import**: Restore media files from archives
+- **Conflict Resolution**: Skip, overwrite, or rename on conflicts
+- **Dry Run Mode**: Preview import changes before applying
+
 ### Performance
-- **In-Memory Caching**: Configurable cache layer for site config, menus, and more
+- **Multi-Level Caching**: In-memory and optional Redis caching
+- **Redis Support**: Distributed caching for multi-instance deployments
 - **Response Compression**: Gzip compression for HTML and JSON responses
 - **Graceful Shutdown**: Clean shutdown with request draining
 - **Health Check**: `/health` endpoint for monitoring
@@ -144,6 +172,11 @@ sudo dnf install vips-devel
 | `OCMS_ACTIVE_THEME` | Name of the active theme | `default` | No |
 | `OCMS_API_RATE_LIMIT` | API requests per minute per key | `100` | No |
 | `OCMS_CACHE_TTL` | Default cache TTL in seconds | `3600` | No |
+| `OCMS_REDIS_URL` | Redis URL for distributed caching | - | No |
+| `OCMS_CACHE_PREFIX` | Redis key prefix | `ocms:` | No |
+| `OCMS_CACHE_MAX_SIZE` | Max entries for in-memory cache | `10000` | No |
+| `OCMS_WEBHOOK_WORKERS` | Concurrent webhook delivery workers | `3` | No |
+| `OCMS_DEFAULT_LANGUAGE` | Default content language code | `en` | No |
 
 ## Development
 
@@ -189,12 +222,18 @@ Change these credentials immediately after first login.
 ```
 ocms-go/
 ├── cmd/ocms/             # Application entry point
+├── docs/                 # Documentation
+│   ├── multi-language.md # Multi-language guide
+│   ├── webhooks.md       # Webhooks configuration
+│   ├── import-export.md  # Import/export guide
+│   └── reverse-proxy.md  # Nginx/Apache/NPM setup
 ├── internal/
 │   ├── auth/             # Password hashing utilities
-│   ├── cache/            # In-memory caching layer
+│   ├── cache/            # Caching layer (memory + Redis)
 │   ├── config/           # Configuration loading
 │   ├── handler/          # HTTP handlers
 │   │   └── api/          # REST API handlers
+│   ├── i18n/             # Internationalization (admin UI)
 │   ├── imaging/          # Image processing (thumbnails, variants)
 │   ├── middleware/       # HTTP middleware (auth, API, rate limiting)
 │   ├── model/            # Domain models
@@ -208,7 +247,9 @@ ocms-go/
 │   │   ├── migrations/   # Goose SQL migrations
 │   │   └── queries/      # sqlc query definitions
 │   ├── theme/            # Theme loading and management
-│   └── util/             # Utility functions (slug generation)
+│   ├── transfer/         # Import/export functionality
+│   ├── util/             # Utility functions (slug generation)
+│   └── webhook/          # Webhook system
 ├── modules/              # Custom modules directory
 │   └── example/          # Example module implementation
 ├── themes/               # Theme directory
