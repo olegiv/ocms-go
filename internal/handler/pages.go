@@ -327,10 +327,11 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			pageFeaturedImages[p.ID] = &FeaturedImageData{
-				ID:       media.ID,
-				Filename: media.Filename,
-				Filepath: fmt.Sprintf("/uploads/originals/%s/%s", media.Uuid, media.Filename),
-				Mimetype: media.MimeType,
+				ID:        media.ID,
+				Filename:  media.Filename,
+				Filepath:  fmt.Sprintf("/uploads/originals/%s/%s", media.Uuid, media.Filename),
+				Thumbnail: fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename),
+				Mimetype:  media.MimeType,
 			}
 		}
 	}
@@ -409,10 +410,11 @@ type PageCategoryNode struct {
 
 // FeaturedImageData holds featured image data for the template.
 type FeaturedImageData struct {
-	ID       int64
-	Filename string
-	Filepath string
-	Mimetype string
+	ID        int64
+	Filename  string
+	Filepath  string
+	Thumbnail string
+	Mimetype  string
 }
 
 // PageFormData holds data for the page form template.
@@ -829,10 +831,11 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			featuredImage = &FeaturedImageData{
-				ID:       media.ID,
-				Filename: media.Filename,
-				Filepath: fmt.Sprintf("/uploads/originals/%s/%s", media.Uuid, media.Filename),
-				Mimetype: media.MimeType,
+				ID:        media.ID,
+				Filename:  media.Filename,
+				Filepath:  fmt.Sprintf("/uploads/originals/%s/%s", media.Uuid, media.Filename),
+				Thumbnail: fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename),
+				Mimetype:  media.MimeType,
 			}
 		}
 	}

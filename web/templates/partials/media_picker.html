@@ -1,6 +1,6 @@
 {{define "media_picker"}}
 <div class="media-picker" x-data="mediaPicker()" x-init="init()"
-     data-initial-image='{{if .Data.FeaturedImage}}{"id":{{.Data.FeaturedImage.ID}},"filename":"{{.Data.FeaturedImage.Filename}}","filepath":"{{.Data.FeaturedImage.Filepath}}","mimetype":"{{.Data.FeaturedImage.Mimetype}}"}{{else}}null{{end}}'>
+     data-initial-image='{{if .Data.FeaturedImage}}{"id":{{.Data.FeaturedImage.ID}},"filename":"{{.Data.FeaturedImage.Filename}}","filepath":"{{.Data.FeaturedImage.Filepath}}","thumbnail":"{{.Data.FeaturedImage.Thumbnail}}","mimetype":"{{.Data.FeaturedImage.Mimetype}}"}{{else}}null{{end}}'>
     <label class="form-label">Featured Image</label>
 
     <!-- Preview Area -->
@@ -9,7 +9,7 @@
             <div class="media-picker-selected">
                 <div class="media-preview-container">
                     <template x-if="isImageType(selectedImage.mimetype)">
-                        <img :src="selectedImage.filepath" :alt="selectedImage.filename" class="media-preview-img">
+                        <img :src="selectedImage.thumbnail || selectedImage.filepath" :alt="selectedImage.filename" class="media-preview-img">
                     </template>
                     <template x-if="!isImageType(selectedImage.mimetype)">
                         <div class="media-preview-file">
