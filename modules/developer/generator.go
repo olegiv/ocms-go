@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
+	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -92,6 +93,11 @@ func generateRandomCount() int {
 	return rand.Intn(16) + 5 // 5-20
 }
 
+// generateMenuItemCount returns a random number between 5 and 10 for menu items
+func generateMenuItemCount() int {
+	return rand.Intn(6) + 5 // 5-10
+}
+
 // randomElement returns a random element from a string slice
 func randomElement(slice []string) string {
 	return slice[rand.Intn(len(slice))]
@@ -124,7 +130,12 @@ func (m *Module) getTrackedItems(ctx context.Context, entityType string) ([]int6
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			log.Println("Failed to close rows:", err)
+		}
+	}(rows)
 
 	var ids []int64
 	for rows.Next() {
@@ -145,7 +156,12 @@ func (m *Module) getTrackedCounts(ctx context.Context) (map[string]int, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			log.Println("Failed to close rows:", err)
+		}
+	}(rows)
 
 	counts := make(map[string]int)
 	for rows.Next() {
@@ -477,10 +493,10 @@ func (m *Module) generateMedia(ctx context.Context, languages []store.Language, 
 		filename := fmt.Sprintf("placeholder-%d.jpg", i+1)
 
 		// Pick a random color
-		color := placeholderColors[rand.Intn(len(placeholderColors))]
+		placeholderColor := placeholderColors[rand.Intn(len(placeholderColors))]
 
 		// Create a placeholder image (800x600 colored rectangle)
-		imgData, err := createPlaceholderImage(800, 600, color.R, color.G, color.B)
+		imgData, err := createPlaceholderImage(800, 600, placeholderColor.R, placeholderColor.G, placeholderColor.B)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create placeholder image: %w", err)
 		}
@@ -508,7 +524,7 @@ func (m *Module) generateMedia(ctx context.Context, languages []store.Language, 
 		}
 
 		for _, v := range variants {
-			variantData, err := createPlaceholderImage(v.width, v.height, color.R, color.G, color.B)
+			variantData, err := createPlaceholderImage(v.width, v.height, placeholderColor.R, placeholderColor.G, placeholderColor.B)
 			if err != nil {
 				continue // Skip variant on error
 			}
@@ -525,7 +541,7 @@ func (m *Module) generateMedia(ctx context.Context, languages []store.Language, 
 
 		// Generate alt and caption
 		alt := fmt.Sprintf("Placeholder image %d", i+1)
-		caption := fmt.Sprintf("Generated placeholder image with %s color", getColorName(color.R, color.G, color.B))
+		caption := fmt.Sprintf("Generated placeholder image with %s color", getColorName(placeholderColor.R, placeholderColor.G, placeholderColor.B))
 		now := time.Now()
 
 		// Create media record
@@ -801,7 +817,7 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 
 // generateMenuItems creates random menu items in the Main Menu (ID=1) with nested structure pointing to pages
 func (m *Module) generateMenuItems(ctx context.Context, pageIDs []int64) ([]int64, error) {
-	count := generateRandomCount()
+	count := generateMenuItemCount() // 5-10 menu items
 	var menuItemIDs []int64
 	queries := store.New(m.ctx.DB)
 
@@ -977,19 +993,11 @@ func (m *Module) deleteAllGeneratedItems(ctx context.Context) error {
 func deleteMediaFiles(uploadDir, mediaUUID string) {
 	// Delete original
 	originalsDir := filepath.Join(uploadDir, "originals", mediaUUID)
-	os.RemoveAll(originalsDir)
+	_ = os.RemoveAll(originalsDir)
 
 	// Delete variants
 	for _, variant := range []string{"thumbnail", "medium", "large"} {
 		variantDir := filepath.Join(uploadDir, variant, mediaUUID)
-		os.RemoveAll(variantDir)
+		_ = os.RemoveAll(variantDir)
 	}
-}
-
-// min returns the smaller of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

@@ -12,7 +12,7 @@ This module is intended for **development and testing purposes only**. It helps 
 - Generate 5-20 random categories (nested hierarchy) with translations
 - Generate 5-20 placeholder images (colored rectangles)
 - Generate 5-20 published pages with tags, categories, and featured images
-- Generate 5-20 menu items in Main Menu (nested, linked to pages)
+- Generate 5-10 menu items in Main Menu (nested, linked to pages)
 - Automatic translations for all active languages
 - Track all generated items for bulk deletion
 - Clean up generated content with one click
@@ -54,7 +54,7 @@ Click **Generate Test Data** to create random content:
 2. **Categories (5-20)**: Nested structure with ~40% root, ~40% children, ~20% grandchildren
 3. **Images (5-20)**: Colored placeholder JPEGs (800x600) with variants
 4. **Pages (5-20)**: Published pages with Lorem Ipsum content, 1-3 tags, 1-2 categories, featured image
-5. **Menu Items (5-20)**: Items in Main Menu (ID=1), ~40% nested, linked to generated pages
+5. **Menu Items (5-10)**: Items in Main Menu (ID=1), ~40% nested, linked to generated pages
 
 Each item includes translations for all active languages. Translation names include language code suffix (e.g., "Technology (de)" for German).
 
