@@ -50,6 +50,10 @@ type Module interface {
 
 	// Migrations returns migrations for the module.
 	Migrations() []Migration
+
+	// AdminURL returns the admin dashboard URL for the module (e.g., "/admin/developer").
+	// Return empty string if module has no admin dashboard.
+	AdminURL() string
 }
 
 // Migration represents a database migration for a module.
@@ -110,6 +114,9 @@ func (m *BaseModule) TemplateFuncs() template.FuncMap { return nil }
 
 // Migrations returns module migrations (empty by default).
 func (m *BaseModule) Migrations() []Migration { return nil }
+
+// AdminURL returns the admin dashboard URL (empty by default).
+func (m *BaseModule) AdminURL() string { return "" }
 
 // Context returns the module context (for use by embedded modules).
 func (m *BaseModule) Context() *ModuleContext { return m.ctx }

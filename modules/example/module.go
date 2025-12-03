@@ -73,6 +73,11 @@ func (m *Module) TemplateFuncs() template.FuncMap {
 	}
 }
 
+// AdminURL returns the admin dashboard URL for the module.
+func (m *Module) AdminURL() string {
+	return "/admin/example"
+}
+
 // Migrations returns database migrations for the module.
 func (m *Module) Migrations() []module.Migration {
 	return []module.Migration{

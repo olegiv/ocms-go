@@ -43,6 +43,7 @@ func (m *mockModule) Shutdown() error                  { return m.shutdownErr }
 func (m *mockModule) RegisterRoutes(r chi.Router)      { m.routesCalled = true }
 func (m *mockModule) RegisterAdminRoutes(r chi.Router) { m.adminCalled = true }
 func (m *mockModule) TemplateFuncs() template.FuncMap  { return m.funcMap }
+func (m *mockModule) AdminURL() string                 { return "" }
 
 // errorModule returns an error on Init for testing error handling.
 type errorModule struct {

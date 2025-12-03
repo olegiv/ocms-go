@@ -263,10 +263,11 @@ type ModuleInfo struct {
 	Version           string
 	Description       string
 	Initialized       bool
-	MigrationCount    int  // Total number of migrations defined
-	MigrationsApplied int  // Number of migrations applied
-	MigrationsPending int  // Number of pending migrations
-	HasMigrations     bool // Whether the module has any migrations
+	MigrationCount    int    // Total number of migrations defined
+	MigrationsApplied int    // Number of migrations applied
+	MigrationsPending int    // Number of pending migrations
+	HasMigrations     bool   // Whether the module has any migrations
+	AdminURL          string // URL to module's admin dashboard (empty if none)
 }
 
 // MigrationInfo contains information about a module migration.
@@ -307,6 +308,7 @@ func (r *Registry) ListInfo() []ModuleInfo {
 			MigrationsApplied: appliedCount,
 			MigrationsPending: migrationCount - appliedCount,
 			HasMigrations:     migrationCount > 0,
+			AdminURL:          m.AdminURL(),
 		})
 	}
 	return infos
