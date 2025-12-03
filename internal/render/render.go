@@ -44,12 +44,15 @@ type Config struct {
 	SessionManager *scs.SessionManager
 	DB             *sql.DB
 	IsDev          bool
+	MenuService    *service.MenuService // Optional: shared menu service for cache consistency
 }
 
 // New creates a new Renderer with parsed templates.
 func New(cfg Config) (*Renderer, error) {
 	var menuSvc *service.MenuService
-	if cfg.DB != nil {
+	if cfg.MenuService != nil {
+		menuSvc = cfg.MenuService
+	} else if cfg.DB != nil {
 		menuSvc = service.NewMenuService(cfg.DB)
 	}
 
@@ -583,6 +586,11 @@ func (r *Renderer) InvalidateMenuCache(slug string) {
 	if r.menuService != nil {
 		r.menuService.InvalidateCache(slug)
 	}
+}
+
+// GetMenuService returns the menu service for sharing with other handlers.
+func (r *Renderer) GetMenuService() *service.MenuService {
+	return r.menuService
 }
 
 // SetAdminLang sets the admin UI language preference in the session.

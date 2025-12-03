@@ -315,12 +315,16 @@ type FrontendHandler struct {
 }
 
 // NewFrontendHandler creates a new FrontendHandler.
-func NewFrontendHandler(db *sql.DB, themeManager *theme.Manager, cacheManager *cache.Manager, logger *slog.Logger) *FrontendHandler {
+// If menuService is nil, a new one will be created. Pass a shared menuService for cache consistency.
+func NewFrontendHandler(db *sql.DB, themeManager *theme.Manager, cacheManager *cache.Manager, logger *slog.Logger, menuService *service.MenuService) *FrontendHandler {
+	if menuService == nil {
+		menuService = service.NewMenuService(db)
+	}
 	return &FrontendHandler{
 		db:            db,
 		queries:       store.New(db),
 		themeManager:  themeManager,
-		menuService:   service.NewMenuService(db),
+		menuService:   menuService,
 		widgetService: service.NewWidgetService(db),
 		searchService: service.NewSearchService(db),
 		cacheManager:  cacheManager,

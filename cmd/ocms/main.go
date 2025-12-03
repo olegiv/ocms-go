@@ -267,7 +267,7 @@ func run() error {
 	themesHandler := handler.NewThemesHandler(db, renderer, sessionManager, themeManager, cacheManager)
 	widgetsHandler := handler.NewWidgetsHandler(db, renderer, sessionManager, themeManager)
 	modulesHandler := handler.NewModulesHandler(db, renderer, sessionManager, moduleRegistry, hookRegistry)
-	frontendHandler := handler.NewFrontendHandler(db, themeManager, cacheManager, logger)
+	frontendHandler := handler.NewFrontendHandler(db, themeManager, cacheManager, logger, renderer.GetMenuService())
 	cacheHandler := handler.NewCacheHandler(renderer, sessionManager, cacheManager, eventService)
 	languagesHandler := handler.NewLanguagesHandler(db, renderer, sessionManager)
 	apiHandler := api.NewHandler(db)

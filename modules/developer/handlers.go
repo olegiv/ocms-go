@@ -118,6 +118,9 @@ func (m *Module) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	}
 	m.ctx.Logger.Info("generated menu items", "count", len(menuItemIDs))
 
+	// Invalidate menu cache after adding menu items
+	m.ctx.Render.InvalidateMenuCache("")
+
 	// Success message
 	msg := fmt.Sprintf("Successfully generated: %d tags, %d categories, %d images, %d pages, %d menu items (with translations for %d languages)",
 		len(tagIDs), len(catIDs), len(mediaIDs), len(pageIDs), len(menuItemIDs), len(languages))
@@ -137,6 +140,9 @@ func (m *Module) handleDelete(w http.ResponseWriter, r *http.Request) {
 		m.setFlashAndRedirect(w, r, "error", "Failed to delete generated items: "+err.Error())
 		return
 	}
+
+	// Invalidate menu cache after deleting menu items
+	m.ctx.Render.InvalidateMenuCache("")
 
 	m.ctx.Logger.Info("deleted all generated test data")
 	m.setFlashAndRedirect(w, r, "success", "Successfully deleted all generated test data")
