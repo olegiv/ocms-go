@@ -826,7 +826,7 @@ func (h *FrontendHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
 	// Send response
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=3600") // Browser cache for 1 hour
-	w.Write(xmlContent)
+	_, _ = w.Write(xmlContent)
 }
 
 // generateSitemap generates sitemap XML without caching.
@@ -920,7 +920,7 @@ func (h *FrontendHandler) Robots(w http.ResponseWriter, r *http.Request) {
 	// Send response
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=86400") // Cache for 24 hours
-	w.Write([]byte(robotsContent))
+	_, _ = w.Write([]byte(robotsContent))
 }
 
 // pageToView converts a store.Page to a PageView with computed fields.
@@ -1494,7 +1494,7 @@ func (h *FrontendHandler) render(w http.ResponseWriter, r *http.Request, templat
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	buf.WriteTo(w)
+	_, _ = buf.WriteTo(w)
 }
 
 // renderNotFound renders the 404 page.
@@ -1533,7 +1533,7 @@ func (h *FrontendHandler) renderError(w http.ResponseWriter, r *http.Request, st
 	// For other errors, use simple HTML (safer if template system is broken)
 	w.WriteHeader(statusCode)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, `<!DOCTYPE html>
+	_, _ = fmt.Fprintf(w, `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
