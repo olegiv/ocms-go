@@ -39,6 +39,7 @@ type PageView struct {
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
 	FeaturedImage        string
+	FeaturedImageLarge   string // Large variant for single page views
 	Highlight            string // Search result highlight
 	Author               *AuthorView
 	Category             *CategoryView
@@ -449,6 +450,11 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	// Convert to PageView
 	pageView := h.pageToView(ctx, page)
 
+	// Use large variant for single page featured image
+	if pageView.FeaturedImageLarge != "" {
+		pageView.FeaturedImage = pageView.FeaturedImageLarge
+	}
+
 	// Get related pages (same category)
 	var relatedPages []PageView
 	if pageView.Category != nil {
@@ -750,7 +756,7 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 		if sr.FeaturedImageID.Valid {
 			media, err := h.queries.GetMediaByID(ctx, sr.FeaturedImageID.Int64)
 			if err == nil {
-				pv.FeaturedImage = fmt.Sprintf("/uploads/%s/%s", media.Uuid, media.Filename)
+				pv.FeaturedImage = fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename)
 			}
 		}
 
@@ -941,11 +947,12 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page) PageView
 	// Generate excerpt from body (first 200 chars, strip HTML)
 	pv.Excerpt = h.generateExcerpt(p.Body, 200)
 
-	// Get featured image
+	// Get featured image (medium for listings - single page handlers can override to large)
 	if p.FeaturedImageID.Valid {
 		media, err := h.queries.GetMediaByID(ctx, p.FeaturedImageID.Int64)
 		if err == nil {
-			pv.FeaturedImage = fmt.Sprintf("/uploads/%s/%s", media.Uuid, media.Filename)
+			pv.FeaturedImage = fmt.Sprintf("/uploads/medium/%s/%s", media.Uuid, media.Filename)
+			pv.FeaturedImageLarge = fmt.Sprintf("/uploads/large/%s/%s", media.Uuid, media.Filename)
 		}
 	}
 
@@ -998,14 +1005,14 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page) PageView
 	pv.NoFollow = p.NoFollow != 0
 	pv.CanonicalURL = p.CanonicalUrl
 
-	// Get OG image (from og_image_id or fall back to featured_image)
+	// Get OG image (from og_image_id or fall back to featured_image large variant)
 	if p.OgImageID.Valid {
 		ogMedia, err := h.queries.GetMediaByID(ctx, p.OgImageID.Int64)
 		if err == nil {
-			pv.OGImage = fmt.Sprintf("/uploads/%s/%s", ogMedia.Uuid, ogMedia.Filename)
+			pv.OGImage = fmt.Sprintf("/uploads/large/%s/%s", ogMedia.Uuid, ogMedia.Filename)
 		}
-	} else if pv.FeaturedImage != "" {
-		pv.OGImage = pv.FeaturedImage
+	} else if pv.FeaturedImageLarge != "" {
+		pv.OGImage = pv.FeaturedImageLarge
 	}
 
 	return pv

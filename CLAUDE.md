@@ -198,6 +198,7 @@ OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./internal/handle
 
 Additional documentation is available in the `docs/` directory:
 
+- `docs/media.md` - Media library, image variants, and storage structure
 - `docs/multi-language.md` - Multi-language content setup and translation workflow
 - `docs/webhooks.md` - Webhook configuration and event handling
 - `docs/import-export.md` - Content backup, export, and import guide
