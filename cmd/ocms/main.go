@@ -31,6 +31,7 @@ import (
 	"ocms-go/internal/store"
 	"ocms-go/internal/theme"
 	"ocms-go/internal/webhook"
+	"ocms-go/modules/developer"
 	"ocms-go/modules/example"
 	"ocms-go/web"
 )
@@ -216,6 +217,9 @@ func run() error {
 	// Modules should be registered before InitAll is called
 	if err := moduleRegistry.Register(example.New()); err != nil {
 		return fmt.Errorf("registering example module: %w", err)
+	}
+	if err := moduleRegistry.Register(developer.New()); err != nil {
+		return fmt.Errorf("registering developer module: %w", err)
 	}
 
 	// Initialize all registered modules
