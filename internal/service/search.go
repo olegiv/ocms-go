@@ -88,9 +88,10 @@ func (s *SearchService) SearchPublishedPages(ctx context.Context, params SearchP
 	}
 
 	// Count total results
+	//goland:noinspection SqlResolve
 	countQuery := `
 		SELECT COUNT(*) FROM pages p
-		INNER JOIN pages_fts fts ON fts.rowid = p.id
+		INNER JOIN pages_fts ON pages_fts.rowid = p.id
 		WHERE pages_fts MATCH ? AND p.status = 'published'
 	`
 
@@ -111,6 +112,7 @@ func (s *SearchService) SearchPublishedPages(ctx context.Context, params SearchP
 	// Search with ranking and highlights
 	// bm25() provides relevance ranking (lower = more relevant)
 	// snippet() provides highlighted excerpts
+	//goland:noinspection SqlResolve
 	searchQuery := `
 		SELECT
 			p.id,
@@ -125,7 +127,7 @@ func (s *SearchService) SearchPublishedPages(ctx context.Context, params SearchP
 			bm25(pages_fts, 5.0, 1.0, 3.0, 2.0, 1.0) as rank,
 			snippet(pages_fts, 1, '<mark>', '</mark>', '...', 30) as highlight
 		FROM pages p
-		INNER JOIN pages_fts fts ON fts.rowid = p.id
+		INNER JOIN pages_fts ON pages_fts.rowid = p.id
 		WHERE pages_fts MATCH ? AND p.status = 'published'
 		ORDER BY rank
 		LIMIT ? OFFSET ?
@@ -238,12 +240,14 @@ func stripHTMLTags(s string) string {
 // This is useful after bulk operations or to ensure consistency.
 func (s *SearchService) RebuildIndex(ctx context.Context) error {
 	// Delete all entries
+	//goland:noinspection SqlResolve
 	_, err := s.db.ExecContext(ctx, `DELETE FROM pages_fts`)
 	if err != nil {
 		return err
 	}
 
 	// Rebuild from pages table
+	//goland:noinspection SqlResolve
 	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO pages_fts(rowid, title, body, meta_title, meta_description, meta_keywords)
 		SELECT id, title, body, COALESCE(meta_title, ''), COALESCE(meta_description, ''), COALESCE(meta_keywords, '')
