@@ -1,19 +1,19 @@
 // oCMS Main Stylesheet
 
 // Variables must come first
-@import 'variables';
+@use 'variables' as *;
 
 // Reset/normalize
-@import 'reset';
+@use 'reset';
 
 // Layout utilities
-@import 'layout';
+@use 'layout';
 
 // Components
-@import 'components';
+@use 'components';
 
 // Auth styles
-@import 'auth';
+@use 'auth';
 
 // Admin-specific styles
-@import 'admin';
+@use 'admin';

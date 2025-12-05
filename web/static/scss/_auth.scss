@@ -1,4 +1,6 @@
 // Auth page styles
+@use 'sass:color';
+@use 'variables' as *;
 
 .auth-container {
     display: flex;
@@ -134,7 +136,7 @@
     background-color: $error;
 
     &:hover:not(:disabled) {
-        background-color: darken($error, 10%);
+        background-color: color.adjust($error, $lightness: -10%);
     }
 }
 

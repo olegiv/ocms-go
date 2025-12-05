@@ -1,3 +1,7 @@
+// Components
+@use 'sass:color';
+@use 'variables' as *;
+
 // Buttons
 .btn {
   display: inline-flex;
@@ -46,7 +50,7 @@
   color: $white;
 
   &:hover:not(:disabled) {
-    background-color: darken($error, 10%);
+    background-color: color.adjust($error, $lightness: -10%);
   }
 }
 
@@ -207,25 +211,25 @@
 .alert-info {
   background-color: rgba($info, 0.1);
   border: 1px solid rgba($info, 0.2);
-  color: darken($info, 20%);
+  color: color.adjust($info, $lightness: -20%);
 }
 
 .alert-success {
   background-color: rgba($success, 0.1);
   border: 1px solid rgba($success, 0.2);
-  color: darken($success, 20%);
+  color: color.adjust($success, $lightness: -20%);
 }
 
 .alert-warning {
   background-color: rgba($warning, 0.1);
   border: 1px solid rgba($warning, 0.2);
-  color: darken($warning, 20%);
+  color: color.adjust($warning, $lightness: -20%);
 }
 
 .alert-error {
   background-color: rgba($error, 0.1);
   border: 1px solid rgba($error, 0.2);
-  color: darken($error, 20%);
+  color: color.adjust($error, $lightness: -20%);
 }
 
 .alert-message {
@@ -324,17 +328,17 @@
 
 .badge-success {
   background-color: rgba($success, 0.1);
-  color: darken($success, 15%);
+  color: color.adjust($success, $lightness: -15%);
 }
 
 .badge-warning {
   background-color: rgba($warning, 0.1);
-  color: darken($warning, 15%);
+  color: color.adjust($warning, $lightness: -15%);
 }
 
 .badge-error {
   background-color: rgba($error, 0.1);
-  color: darken($error, 10%);
+  color: color.adjust($error, $lightness: -10%);
 }
 
 // Dropdown
@@ -983,7 +987,7 @@
 // Event badge danger variant
 .badge-danger {
   background-color: rgba($error, 0.1);
-  color: darken($error, 10%);
+  color: color.adjust($error, $lightness: -10%);
 }
 
 // Event time styling
@@ -1421,7 +1425,7 @@
   padding: 2px $spacing-2;
   font-size: $font-size-xs;
   font-weight: $font-weight-medium;
-  color: darken($success, 25%);
+  color: color.adjust($success, $lightness: -25%);
   background-color: rgba($success, 0.15);
   border-radius: $radius-full;
   white-space: nowrap;
