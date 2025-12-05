@@ -1,4 +1,4 @@
-.PHONY: run stop build test clean migrate-up migrate-down migrate-status migrate-create assets dev
+make.PHONY: run stop restart build test clean migrate-up migrate-down migrate-status migrate-create assets dev
 
 # Build assets (SCSS to CSS)
 assets:
@@ -16,6 +16,9 @@ run:
 stop:
 	@lsof -ti:8080 -sTCP:LISTEN | xargs -r kill -9 2>/dev/null || true
 	@echo "Server stopped"
+
+# Restart development server
+restart: stop dev
 
 # Build production binary
 build:
