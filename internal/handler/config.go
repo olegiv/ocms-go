@@ -62,16 +62,20 @@ func (h *ConfigHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert to ConfigItem with labels
-	items := make([]ConfigItem, len(configs))
-	for i, cfg := range configs {
-		items[i] = ConfigItem{
+	// Convert to ConfigItem with labels, excluding keys managed elsewhere
+	items := make([]ConfigItem, 0, len(configs))
+	for _, cfg := range configs {
+		// Skip active_theme - managed in Themes settings
+		if cfg.Key == "active_theme" {
+			continue
+		}
+		items = append(items, ConfigItem{
 			Key:         cfg.Key,
 			Value:       cfg.Value,
 			Type:        cfg.Type,
 			Description: cfg.Description,
 			Label:       configKeyToLabel(cfg.Key),
-		}
+		})
 	}
 
 	data := ConfigFormData{
@@ -118,6 +122,11 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Update each config item
 	for _, cfg := range configs {
+		// Skip active_theme - managed in Themes settings
+		if cfg.Key == "active_theme" {
+			continue
+		}
+
 		value := r.FormValue(cfg.Key)
 
 		// Validate based on type
@@ -152,19 +161,23 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	if len(errors) > 0 {
 		// Re-render form with errors
-		items := make([]ConfigItem, len(configs))
-		for i, cfg := range configs {
+		items := make([]ConfigItem, 0, len(configs))
+		for _, cfg := range configs {
+			// Skip active_theme - managed in Themes settings
+			if cfg.Key == "active_theme" {
+				continue
+			}
 			value := r.FormValue(cfg.Key)
 			if cfg.Type == model.ConfigTypeBool && value == "" {
 				value = "false"
 			}
-			items[i] = ConfigItem{
+			items = append(items, ConfigItem{
 				Key:         cfg.Key,
 				Value:       value,
 				Type:        cfg.Type,
 				Description: cfg.Description,
 				Label:       configKeyToLabel(cfg.Key),
-			}
+			})
 		}
 
 		data := ConfigFormData{
