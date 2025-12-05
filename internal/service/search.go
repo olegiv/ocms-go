@@ -53,7 +53,9 @@ func (s *SearchService) escapeQuery(query string) string {
 	}
 
 	// Remove potentially problematic characters
-	re := regexp.MustCompile(`[^\w\s-]`)
+	// Use Unicode-aware character classes: \p{L} for letters, \p{N} for numbers
+	// This preserves non-ASCII characters (Cyrillic, Chinese, Arabic, etc.)
+	re := regexp.MustCompile(`[^\p{L}\p{N}\s_-]`)
 	query = re.ReplaceAllString(query, " ")
 
 	// Split into words and join with OR for broader matching

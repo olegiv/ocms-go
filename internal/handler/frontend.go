@@ -99,9 +99,10 @@ type Pagination struct {
 
 // PaginationPage represents a single page link in pagination.
 type PaginationPage struct {
-	Number    int
-	URL       string
-	IsCurrent bool
+	Number     int
+	URL        string
+	IsCurrent  bool
+	IsEllipsis bool
 }
 
 // SiteData holds site-wide data for templates.
