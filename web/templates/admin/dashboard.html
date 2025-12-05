@@ -1,3 +1,4 @@
+
 {{define "content"}}
 <div class="page-header">
     <div>
@@ -13,7 +14,7 @@
 </div>
 
 <div class="stats-grid">
-    <div class="stat-card">
+    <a href="/admin/pages" class="stat-card stat-card-link">
         <div class="stat-icon stat-icon-blue">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
         </div>
@@ -21,8 +22,8 @@
             <div class="stat-label">{{T .AdminLang "dashboard.total_pages"}}</div>
             <div class="stat-value">{{.Data.Stats.TotalPages}}</div>
         </div>
-    </div>
-    <div class="stat-card">
+    </a>
+    <a href="/admin/pages?status=published" class="stat-card stat-card-link">
         <div class="stat-icon stat-icon-green">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
         </div>
@@ -30,8 +31,8 @@
             <div class="stat-label">{{T .AdminLang "dashboard.published_pages"}}</div>
             <div class="stat-value">{{.Data.Stats.PublishedPages}}</div>
         </div>
-    </div>
-    <div class="stat-card">
+    </a>
+    <a href="/admin/pages?status=draft" class="stat-card stat-card-link">
         <div class="stat-icon stat-icon-yellow">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
         </div>
@@ -39,8 +40,8 @@
             <div class="stat-label">{{T .AdminLang "dashboard.draft_pages"}}</div>
             <div class="stat-value">{{.Data.Stats.DraftPages}}</div>
         </div>
-    </div>
-    <div class="stat-card">
+    </a>
+    <a href="/admin/users" class="stat-card stat-card-link">
         <div class="stat-icon stat-icon-purple">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         </div>
@@ -48,11 +49,11 @@
             <div class="stat-label">{{T .AdminLang "dashboard.total_users"}}</div>
             <div class="stat-value">{{.Data.Stats.TotalUsers}}</div>
         </div>
-    </div>
+    </a>
 </div>
 
 <div class="stats-grid stats-grid-secondary">
-    <div class="stat-card">
+    <a href="/admin/media" class="stat-card stat-card-link">
         <div class="stat-icon stat-icon-cyan">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
         </div>
@@ -60,8 +61,8 @@
             <div class="stat-label">{{T .AdminLang "dashboard.media_files"}}</div>
             <div class="stat-value">{{.Data.Stats.TotalMedia}}</div>
         </div>
-    </div>
-    <div class="stat-card">
+    </a>
+    <a href="/admin/forms" class="stat-card stat-card-link">
         <div class="stat-icon stat-icon-indigo">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
         </div>
@@ -69,8 +70,8 @@
             <div class="stat-label">{{T .AdminLang "dashboard.total_forms"}}</div>
             <div class="stat-value">{{.Data.Stats.TotalForms}}</div>
         </div>
-    </div>
-    <div class="stat-card{{if gt .Data.Stats.UnreadSubmissions 0}} stat-card-highlight{{end}}">
+    </a>
+    <a href="/admin/forms" class="stat-card stat-card-link{{if gt .Data.Stats.UnreadSubmissions 0}} stat-card-highlight{{end}}">
         <div class="stat-icon stat-icon-orange">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
         </div>
@@ -78,11 +79,11 @@
             <div class="stat-label">{{T .AdminLang "dashboard.unread_submissions"}}</div>
             <div class="stat-value">{{.Data.Stats.UnreadSubmissions}}</div>
         </div>
-    </div>
+    </a>
 </div>
 
 <div class="stats-grid stats-grid-tertiary">
-    <div class="stat-card">
+    <a href="/admin/languages" class="stat-card stat-card-link">
         <div class="stat-icon stat-icon-teal">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
         </div>
@@ -90,8 +91,8 @@
             <div class="stat-label">{{T .AdminLang "dashboard.languages"}}</div>
             <div class="stat-value">{{.Data.Stats.ActiveLanguages}}</div>
         </div>
-    </div>
-    <div class="stat-card">
+    </a>
+    <a href="/admin/cache" class="stat-card stat-card-link">
         <div class="stat-icon stat-icon-emerald">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 0 1 9-9"/></svg>
         </div>
@@ -99,8 +100,8 @@
             <div class="stat-label">{{T .AdminLang "dashboard.cache_hit_rate"}}</div>
             <div class="stat-value">{{printf "%.0f" .Data.Stats.CacheHitRate}}%</div>
         </div>
-    </div>
-    <div class="stat-card">
+    </a>
+    <a href="/admin/cache" class="stat-card stat-card-link">
         <div class="stat-icon stat-icon-rose">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
         </div>
@@ -108,7 +109,7 @@
             <div class="stat-label">{{T .AdminLang "dashboard.cache_items"}}</div>
             <div class="stat-value">{{.Data.Stats.CacheItems}}</div>
         </div>
-    </div>
+    </a>
 </div>
 
 <div class="dashboard-grid">
@@ -554,6 +555,22 @@
 .badge-danger {
     background-color: rgba(239, 68, 68, 0.1);
     color: #ef4444;
+}
+
+/* Stat card links */
+a.stat-card-link {
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+a.stat-card-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+a.stat-card-link:active {
+    transform: translateY(0);
 }
 </style>
 {{end}}
