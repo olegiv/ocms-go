@@ -16,6 +16,11 @@
     opacity: 0.5;
     cursor: not-allowed;
   }
+
+  svg {
+    flex-shrink: 0;
+    display: inline-block;
+  }
 }
 
 .btn-primary {
