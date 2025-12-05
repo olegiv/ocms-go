@@ -124,7 +124,7 @@ func (s *SearchService) SearchPublishedPages(ctx context.Context, params SearchP
 			p.created_at,
 			p.updated_at,
 			p.featured_image_id,
-			bm25(pages_fts, 5.0, 1.0, 3.0, 2.0, 1.0) as rank,
+			bm25(pages_fts) as rank,
 			snippet(pages_fts, 1, '<mark>', '</mark>', '...', 30) as highlight
 		FROM pages p
 		INNER JOIN pages_fts ON pages_fts.rowid = p.id
@@ -137,7 +137,9 @@ func (s *SearchService) SearchPublishedPages(ctx context.Context, params SearchP
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
 
 	var results []SearchResult
 	for rows.Next() {
@@ -304,7 +306,9 @@ func (s *SearchService) SearchAllPages(ctx context.Context, params SearchParams)
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
 
 	var results []SearchResult
 	for rows.Next() {
