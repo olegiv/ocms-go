@@ -116,7 +116,7 @@
                         {{if $lang}}
                         <span class="language-badge" title="{{$lang.Name}}">{{$lang.Code}}</span>
                         {{end}}
-                        <a href="/admin/pages/{{.ID}}" class="page-title-link">{{.Title}}</a>
+                        <a href="/{{.Slug}}" class="page-title-link" target="_blank">{{.Title}}</a>
                     </td>
                     <td>
                         {{$tags := index $.Data.PageTags .ID}}
