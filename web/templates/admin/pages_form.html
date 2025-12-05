@@ -241,9 +241,15 @@
                         <button type="button" class="toolbar-btn" data-action="redo" title="Redo (Ctrl+Y)">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/></svg>
                         </button>
+                        <span class="toolbar-divider"></span>
+                        <button type="button" class="toolbar-btn" data-action="source" id="source-toggle-btn" title="View/Edit HTML Source">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                        </button>
                     </div>
                     <!-- Editor Content Area -->
                     <div id="editor" class="editor-content"></div>
+                    <!-- Source HTML Editor -->
+                    <textarea id="source-editor" class="source-editor" style="display: none;"></textarea>
                 </div>
                 <input type="hidden" name="body" id="body-input" value="{{if .Data.FormValues.body}}{{.Data.FormValues.body}}{{else if .Data.Page}}{{.Data.Page.Body}}{{end}}">
                 {{if .Data.Errors.body}}
@@ -439,6 +445,10 @@ import StarterKit from 'https://esm.sh/@tiptap/starter-kit@2.1.13';
 import Link from 'https://esm.sh/@tiptap/extension-link@2.1.13';
 
 const initialContent = document.getElementById('body-input').value || '<p></p>';
+let isSourceMode = false;
+const sourceEditor = document.getElementById('source-editor');
+const editorElement = document.getElementById('editor');
+const sourceToggleBtn = document.getElementById('source-toggle-btn');
 
 const editor = new Editor({
     element: document.getElementById('editor'),
@@ -505,8 +515,46 @@ document.querySelectorAll('.toolbar-btn').forEach(button => {
             case 'redo':
                 editor.chain().focus().redo().run();
                 break;
+            case 'source':
+                toggleSourceMode();
+                break;
         }
     });
+});
+
+// Toggle between visual and source mode
+function toggleSourceMode() {
+    isSourceMode = !isSourceMode;
+
+    if (isSourceMode) {
+        // Switch to source mode: show textarea with current HTML
+        sourceEditor.value = editor.getHTML();
+        editorElement.style.display = 'none';
+        sourceEditor.style.display = 'block';
+        sourceToggleBtn.classList.add('active');
+        // Disable other toolbar buttons
+        document.querySelectorAll('.toolbar-btn:not([data-action="source"])').forEach(btn => {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+        });
+    } else {
+        // Switch to visual mode: update editor with textarea content
+        editor.commands.setContent(sourceEditor.value);
+        document.getElementById('body-input').value = sourceEditor.value;
+        sourceEditor.style.display = 'none';
+        editorElement.style.display = 'block';
+        sourceToggleBtn.classList.remove('active');
+        // Re-enable other toolbar buttons
+        document.querySelectorAll('.toolbar-btn:not([data-action="source"])').forEach(btn => {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+        });
+    }
+}
+
+// Sync source editor changes to hidden input
+sourceEditor.addEventListener('input', () => {
+    document.getElementById('body-input').value = sourceEditor.value;
 });
 
 // Update toolbar button active states

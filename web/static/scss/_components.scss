@@ -872,6 +872,25 @@
   }
 }
 
+// Source code editor for HTML
+.source-editor {
+  width: 100%;
+  min-height: 300px;
+  padding: $spacing-4;
+  border: none;
+  background-color: $white;
+  color: $gray-900;
+  font-family: $font-family-mono;
+  font-size: $font-size-sm;
+  line-height: 1.6;
+  resize: vertical;
+  box-sizing: border-box;
+
+  &:focus {
+    outline: none;
+  }
+}
+
 // Empty state enhancements
 .empty-state {
   text-align: center;
