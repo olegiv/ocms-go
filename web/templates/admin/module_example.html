@@ -1,8 +1,8 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1 class="page-title">Example Module</h1>
-        <p class="page-description">Demonstration of the oCMS module system</p>
+        <h1 class="page-title">{{T .AdminLang "example.title"}}</h1>
+        <p class="page-description">{{T .AdminLang "example.description"}}</p>
     </div>
     <div class="page-actions">
         <span class="badge badge-primary">v{{.Data.Version}}</span>
@@ -12,7 +12,7 @@
 <div class="module-info-card">
     <div class="card">
         <div class="card-body">
-            <h3>Module Features</h3>
+            <h3>{{T .AdminLang "example.features"}}</h3>
             <div class="features-grid">
                 <div class="feature-item">
                     <div class="feature-icon">
@@ -23,7 +23,7 @@
                         </svg>
                     </div>
                     <div class="feature-content">
-                        <h4>Public Route</h4>
+                        <h4>{{T .AdminLang "example.public_route"}}</h4>
                         <p><a href="/example" target="_blank">/example</a></p>
                     </div>
                 </div>
@@ -36,7 +36,7 @@
                         </svg>
                     </div>
                     <div class="feature-content">
-                        <h4>Admin Route</h4>
+                        <h4>{{T .AdminLang "example.admin_route"}}</h4>
                         <p>/admin/example</p>
                     </div>
                 </div>
@@ -48,7 +48,7 @@
                         </svg>
                     </div>
                     <div class="feature-content">
-                        <h4>Template Functions</h4>
+                        <h4>{{T .AdminLang "example.template_functions"}}</h4>
                         <p><code>exampleFunc</code>, <code>exampleVersion</code></p>
                     </div>
                 </div>
@@ -60,7 +60,7 @@
                         </svg>
                     </div>
                     <div class="feature-content">
-                        <h4>Hooks</h4>
+                        <h4>{{T .AdminLang "example.hooks"}}</h4>
                         <p><code>page.after_save</code>, <code>page.before_render</code></p>
                     </div>
                 </div>
@@ -71,8 +71,8 @@
 
 <div class="items-section">
     <div class="section-header">
-        <h2>Example Items</h2>
-        <p>This demonstrates how modules can have their own database tables and CRUD operations.</p>
+        <h2>{{T .AdminLang "example.items_title"}}</h2>
+        <p>{{T .AdminLang "example.items_description"}}</p>
     </div>
 
     <div class="card">
@@ -84,20 +84,20 @@
                         <input type="text"
                                name="name"
                                class="form-control"
-                               placeholder="Item name"
+                               placeholder="{{T .AdminLang "example.item_name"}}"
                                required>
                     </div>
                     <div class="form-group flex-grow">
                         <input type="text"
                                name="description"
                                class="form-control"
-                               placeholder="Description (optional)">
+                               placeholder="{{T .AdminLang "example.item_description"}}">
                     </div>
                     <button type="submit" class="btn btn-primary">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M12 5v14M5 12h14"/>
                         </svg>
-                        Add Item
+                        {{T .AdminLang "example.add_item"}}
                     </button>
                 </div>
             </form>
@@ -110,10 +110,10 @@
             <table class="table">
                 <thead>
                     <tr>
-                        <th>ID</th>
-                        <th>Name</th>
-                        <th>Description</th>
-                        <th>Created</th>
+                        <th>{{T .AdminLang "example.table_id"}}</th>
+                        <th>{{T .AdminLang "example.table_name"}}</th>
+                        <th>{{T .AdminLang "example.table_description"}}</th>
+                        <th>{{T .AdminLang "example.table_created"}}</th>
                         <th></th>
                     </tr>
                 </thead>
@@ -123,12 +123,12 @@
                         <td><code>{{.ID}}</code></td>
                         <td>{{.Name}}</td>
                         <td class="text-muted">{{if .Description}}{{.Description}}{{else}}-{{end}}</td>
-                        <td class="text-muted">{{.CreatedAt.Format "Jan 02, 2006 15:04"}}</td>
+                        <td class="text-muted">{{formatDateTimeLocale .CreatedAt $.AdminLang}}</td>
                         <td class="text-right">
                             <button type="button"
                                     class="btn btn-sm btn-danger delete-item"
                                     data-id="{{.ID}}"
-                                    title="Delete item">
+                                    title="{{T $.AdminLang "example.delete_item"}}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M3 6h18"/>
                                     <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
@@ -151,8 +151,8 @@
                     <path d="m3 9 2.45-4.9A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.8 1.1L21 9"/>
                     <path d="M12 3v6"/>
                 </svg>
-                <p>No items yet</p>
-                <span class="empty-hint">Add your first item using the form above.</span>
+                <p>{{T .AdminLang "example.no_items"}}</p>
+                <span class="empty-hint">{{T .AdminLang "example.no_items_hint"}}</span>
             </div>
         </div>
     </div>
@@ -276,11 +276,16 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    var i18n = {
+        confirmDelete: '{{T .AdminLang "example.confirm_delete"}}',
+        deleteFailed: '{{T .AdminLang "example.delete_failed"}}'
+    };
+
     // Handle delete button clicks
     document.querySelectorAll('.delete-item').forEach(function(btn) {
         btn.addEventListener('click', function() {
             const id = this.dataset.id;
-            if (confirm('Are you sure you want to delete this item?')) {
+            if (confirm(i18n.confirmDelete)) {
                 fetch('/admin/example/items/' + id, {
                     method: 'DELETE',
                     headers: {
@@ -290,11 +295,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (response.ok) {
                         window.location.reload();
                     } else {
-                        alert('Failed to delete item');
+                        alert(i18n.deleteFailed);
                     }
                 }).catch(function(err) {
                     console.error('Error:', err);
-                    alert('Failed to delete item');
+                    alert(i18n.deleteFailed);
                 });
             }
         });

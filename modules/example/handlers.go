@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/render"
 )
@@ -77,6 +78,7 @@ func (m *Module) handleExample(w http.ResponseWriter, r *http.Request) {
 // handleAdminExample handles GET /admin/example - admin route.
 func (m *Module) handleAdminExample(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := m.ctx.Render.GetAdminLang(r)
 
 	// Fetch items from the database
 	items, err := m.listItems()
@@ -95,13 +97,13 @@ func (m *Module) handleAdminExample(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := m.ctx.Render.Render(w, r, "admin/module_example", render.TemplateData{
-		Title: "Example Module",
+		Title: i18n.T(lang, "example.title"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Modules", URL: "/admin/modules"},
-			{Label: "Example Module", URL: "/admin/example", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
+			{Label: i18n.T(lang, "example.title"), URL: "/admin/example", Active: true},
 		},
 	}); err != nil {
 		m.ctx.Logger.Error("render error", "error", err)
