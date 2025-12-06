@@ -328,7 +328,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/admin/media/upload", http.StatusSeeOther)
 			return
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 
 		// Process single file
 		result, err := h.mediaService.Upload(r.Context(), file, header, userID, folderID)

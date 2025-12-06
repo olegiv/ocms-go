@@ -181,7 +181,7 @@ func (d *Dispatcher) attemptDelivery(ctx context.Context, delivery *QueuedDelive
 			ShouldRetry: true, // Network error, retry
 		}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read response body (limited to MaxResponseLen)
 	bodyReader := io.LimitReader(resp.Body, MaxResponseLen)

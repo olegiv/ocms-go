@@ -474,7 +474,7 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 					{"en", "English"},
 				}
 			}
-			defer rows.Close()
+			defer func() { _ = rows.Close() }()
 
 			var options []struct {
 				Code string

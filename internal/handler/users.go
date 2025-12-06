@@ -382,6 +382,10 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 // Update handles PUT /admin/users/{id} - updates an existing user.
 func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	currentUser := middleware.GetUser(r)
+	if currentUser == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	lang := h.renderer.GetAdminLang(r)
 
 	// Get user ID from URL
@@ -552,6 +556,10 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 // Delete handles DELETE /admin/users/{id} - deletes a user.
 func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	currentUser := middleware.GetUser(r)
+	if currentUser == nil {
+		h.sendDeleteError(w, "Unauthorized")
+		return
+	}
 
 	// Get user ID from URL
 	idStr := chi.URLParam(r, "id")

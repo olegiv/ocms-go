@@ -159,7 +159,7 @@ func (e *Exporter) ExportToFile(ctx context.Context, opts ExportOptions, path st
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	return e.ExportToWriter(ctx, opts, f)
 }
@@ -208,7 +208,7 @@ func (e *Exporter) ExportWithMediaToFile(ctx context.Context, opts ExportOptions
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	return e.ExportWithMedia(ctx, opts, f)
 }

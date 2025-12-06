@@ -69,7 +69,7 @@ func (i *Importer) Import(ctx context.Context, data *ExportData, opts ImportOpti
 	if err != nil {
 		return nil, fmt.Errorf("failed to start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Create queries with transaction
 	queries := i.store.WithTx(tx)
@@ -216,7 +216,7 @@ func (i *Importer) ImportFromFile(ctx context.Context, path string, opts ImportO
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	return i.ImportFromReader(ctx, f, opts)
 }
@@ -606,7 +606,7 @@ func (i *Importer) ValidateFile(ctx context.Context, path string) (*ValidationRe
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	return i.ValidateReader(ctx, f)
 }

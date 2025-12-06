@@ -53,6 +53,10 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 // handleGenerate handles POST /admin/developer/generate - generates test data
 func (m *Module) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	ctx := r.Context()
 
 	// Get all active languages
@@ -131,6 +135,10 @@ func (m *Module) handleGenerate(w http.ResponseWriter, r *http.Request) {
 // handleDelete handles POST /admin/developer/delete - deletes all generated data
 func (m *Module) handleDelete(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	ctx := r.Context()
 
 	m.ctx.Logger.Info("deleting all generated test data", "user", user.Email)

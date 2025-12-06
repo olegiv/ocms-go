@@ -193,7 +193,7 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 		h.renderImportError(w, r, user, "Please select a file to import")
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Check file extension
 	filename := header.Filename
