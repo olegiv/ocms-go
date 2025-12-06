@@ -170,7 +170,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	slog.Info("user logged in", "user_id", user.ID, "email", user.Email)
 	_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelInfo, "User logged in", &user.ID, map[string]any{"email": user.Email})
 
-	h.renderer.SetFlash(r, "Welcome back, "+user.Name+"!", "success")
+	h.renderer.SetFlash(r, i18n.T(lang, "auth.welcome_back", user.Name), "success")
 
 	// Redirect based on user role
 	if user.Role == "admin" {
@@ -197,7 +197,8 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("user logged out", "user_id", userID)
 
-	h.renderer.SetFlash(r, "You have been logged out", "info")
+	lang := middleware.GetAdminLang(r)
+	h.renderer.SetFlash(r, i18n.T(lang, "auth.logged_out"), "info")
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 

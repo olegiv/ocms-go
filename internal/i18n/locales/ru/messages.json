@@ -803,6 +803,8 @@
         {"id": "auth.too_many_attempts", "message": "Too many failed attempts. Account locked for %s.", "translation": "Слишком много неудачных попыток. Аккаунт заблокирован на %s."},
         {"id": "auth.attempts_remaining", "message": "Invalid email or password. %d attempts remaining.", "translation": "Неверный email или пароль. Осталось попыток: %d."},
         {"id": "auth.rate_limit", "message": "Too many requests. Please try again later.", "translation": "Слишком много запросов. Попробуйте позже."},
+        {"id": "auth.welcome_back", "message": "Welcome back, %s!", "translation": "С возвращением, %s!"},
+        {"id": "auth.logged_out", "message": "You have been logged out", "translation": "Вы вышли из системы"},
 
         {"id": "validation.required", "message": "Please fill out this field.", "translation": "Пожалуйста, заполните это поле."},
         {"id": "validation.email_invalid", "message": "Please enter a valid email address.", "translation": "Пожалуйста, введите корректный email адрес."},

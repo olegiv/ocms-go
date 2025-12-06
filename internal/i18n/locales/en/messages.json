@@ -895,6 +895,8 @@
         {"id": "auth.too_many_attempts", "message": "Too many failed attempts. Account locked for %s.", "translation": "Too many failed attempts. Account locked for %s."},
         {"id": "auth.attempts_remaining", "message": "Invalid email or password. %d attempts remaining.", "translation": "Invalid email or password. %d attempts remaining."},
         {"id": "auth.rate_limit", "message": "Too many requests. Please try again later.", "translation": "Too many requests. Please try again later."},
+        {"id": "auth.welcome_back", "message": "Welcome back, %s!", "translation": "Welcome back, %s!"},
+        {"id": "auth.logged_out", "message": "You have been logged out", "translation": "You have been logged out"},
 
         {"id": "validation.required", "message": "Please fill out this field.", "translation": "Please fill out this field."},
         {"id": "validation.email_invalid", "message": "Please enter a valid email address.", "translation": "Please enter a valid email address."},
