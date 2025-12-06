@@ -11,7 +11,7 @@
     {{if .Data.Modules}}
     <div class="modules-grid">
         {{range .Data.Modules}}
-        <div class="module-card">
+        <div class="module-card{{if not .Active}} module-inactive{{end}}" data-module="{{.Name}}">
             <div class="module-icon">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
@@ -38,7 +38,9 @@
                 {{end}}
                 {{if .AdminURL}}
                 <div class="module-actions">
-                    <a href="{{.AdminURL}}" class="btn btn-sm btn-secondary">
+                    <a href="{{.AdminURL}}"
+                       class="btn btn-sm btn-secondary module-dashboard-link{{if not .Active}} disabled{{end}}"
+                       {{if not .Active}}title="{{T $.AdminLang "modules.activate_to_access"}}"{{end}}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <rect width="7" height="9" x="3" y="3" rx="1"/>
                             <rect width="7" height="5" x="14" y="3" rx="1"/>
@@ -51,10 +53,17 @@
                 {{end}}
             </div>
             <div class="module-status">
-                {{if .Initialized}}
+                <label class="toggle-switch" title="{{if .Active}}{{T $.AdminLang "modules.click_to_deactivate"}}{{else}}{{T $.AdminLang "modules.click_to_activate"}}{{end}}">
+                    <input type="checkbox"
+                           class="module-active-toggle"
+                           data-module="{{.Name}}"
+                           {{if .Active}}checked{{end}}>
+                    <span class="toggle-slider"></span>
+                </label>
+                {{if .Active}}
                 <span class="badge badge-success">{{T $.AdminLang "modules.active"}}</span>
                 {{else}}
-                <span class="badge badge-warning">{{T $.AdminLang "modules.pending"}}</span>
+                <span class="badge badge-secondary">{{T $.AdminLang "modules.inactive"}}</span>
                 {{end}}
             </div>
         </div>
@@ -161,6 +170,26 @@
 
 .module-card:hover {
     box-shadow: var(--shadow-md);
+}
+
+.module-card.module-inactive {
+    opacity: 0.6;
+    background: var(--bg-secondary);
+}
+
+.module-card.module-inactive .module-icon {
+    opacity: 0.5;
+}
+
+.module-card.module-inactive .module-info {
+    opacity: 0.7;
+}
+
+a.module-dashboard-link.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+    text-decoration: none;
 }
 
 .module-icon {
@@ -295,5 +324,132 @@ code {
     background: var(--bg-secondary);
     border-radius: var(--radius-sm);
 }
+
+/* Toggle switch styles */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+    margin-right: 0.5rem;
+    cursor: pointer;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--border-color);
+    transition: 0.3s;
+    border-radius: 24px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+    background-color: var(--success-color, #22c55e);
+}
+
+input:checked + .toggle-slider:before {
+    transform: translateX(20px);
+}
+
+input:disabled + .toggle-slider {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.badge-secondary {
+    background: var(--border-color);
+    color: var(--text-muted);
+}
+
+.module-status {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.module-active-toggle').forEach(function(toggle) {
+        toggle.addEventListener('change', function() {
+            const moduleName = this.dataset.module;
+            const isActive = this.checked;
+            const moduleCard = this.closest('.module-card');
+            const badge = this.closest('.module-status').querySelector('.badge');
+            const dashboardLink = moduleCard.querySelector('.module-dashboard-link');
+
+            // Disable toggle during request
+            this.disabled = true;
+
+            fetch('/admin/modules/' + encodeURIComponent(moduleName) + '/toggle', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ active: isActive })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update badge
+                    if (data.active) {
+                        badge.className = 'badge badge-success';
+                        badge.textContent = '{{T .AdminLang "modules.active"}}';
+                        moduleCard.classList.remove('module-inactive');
+                        // Enable dashboard link
+                        if (dashboardLink) {
+                            dashboardLink.classList.remove('disabled');
+                            dashboardLink.removeAttribute('title');
+                        }
+                    } else {
+                        badge.className = 'badge badge-secondary';
+                        badge.textContent = '{{T .AdminLang "modules.inactive"}}';
+                        moduleCard.classList.add('module-inactive');
+                        // Disable dashboard link
+                        if (dashboardLink) {
+                            dashboardLink.classList.add('disabled');
+                            dashboardLink.setAttribute('title', '{{T .AdminLang "modules.activate_to_access"}}');
+                        }
+                    }
+                } else {
+                    // Revert toggle on error
+                    this.checked = !isActive;
+                    alert('Error: ' + (data.message || 'Failed to toggle module'));
+                }
+            })
+            .catch(error => {
+                // Revert toggle on error
+                this.checked = !isActive;
+                console.error('Error toggling module:', error);
+                alert('Error toggling module');
+            })
+            .finally(() => {
+                this.disabled = false;
+            });
+        });
+    });
+});
+</script>
 {{end}}

@@ -253,6 +253,10 @@ func run() error {
 			slog.Error("error shutting down modules", "error", err)
 		}
 	}()
+
+	// Set up hook registry to check module active status
+	hookRegistry.SetIsModuleActive(moduleRegistry.IsActive)
+
 	slog.Info("module system initialized", "modules", moduleRegistry.Count())
 
 	// Create router
@@ -506,6 +510,7 @@ func run() error {
 
 		// Module management routes
 		r.Get("/modules", modulesHandler.List)
+		r.Post("/modules/{name}/toggle", modulesHandler.ToggleActive)
 
 		// API key management routes
 		r.Get("/api-keys", apiKeysHandler.List)

@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"io/fs"
 	"log/slog"
+	"net/http"
 	"sync"
 	"time"
 
@@ -16,19 +17,21 @@ import (
 
 // Registry manages module registration and lifecycle.
 type Registry struct {
-	modules map[string]Module
-	order   []string // initialization order
-	ctx     *ModuleContext
-	logger  *slog.Logger
-	mu      sync.RWMutex
+	modules      map[string]Module
+	order        []string // initialization order
+	activeStatus map[string]bool
+	ctx          *ModuleContext
+	logger       *slog.Logger
+	mu           sync.RWMutex
 }
 
 // NewRegistry creates a new module registry.
 func NewRegistry(logger *slog.Logger) *Registry {
 	return &Registry{
-		modules: make(map[string]Module),
-		order:   make([]string, 0),
-		logger:  logger,
+		modules:      make(map[string]Module),
+		order:        make([]string, 0),
+		activeStatus: make(map[string]bool),
+		logger:       logger,
 	}
 }
 
@@ -91,10 +94,15 @@ func (r *Registry) InitAll(ctx *ModuleContext) error {
 		return err
 	}
 
+	// Load active status for all modules from database
+	if err := r.loadActiveStatus(ctx.DB); err != nil {
+		return fmt.Errorf("loading module active status: %w", err)
+	}
+
 	// Finally, initialize modules in order
 	for _, name := range r.order {
 		m := r.modules[name]
-		r.logger.Info("initializing module", "name", name)
+		r.logger.Info("initializing module", "name", name, "active", r.activeStatus[name])
 
 		if err := m.Init(ctx); err != nil {
 			return fmt.Errorf("initializing module %q: %w", name, err)
@@ -176,6 +184,18 @@ func (r *Registry) ensureMigrationsTable(db *sql.DB) error {
 			PRIMARY KEY (module, version)
 		)
 	`)
+	if err != nil {
+		return err
+	}
+
+	// Also ensure modules table exists for active status tracking
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS modules (
+			name TEXT PRIMARY KEY,
+			is_active BOOLEAN NOT NULL DEFAULT 1,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
 	return err
 }
 
@@ -199,6 +219,71 @@ func (r *Registry) recordMigration(db *sql.DB, module string, version int64) err
 		module, version, time.Now(),
 	)
 	return err
+}
+
+// loadActiveStatus loads the active status for all registered modules from the database.
+// Modules not in the database are considered active by default and will be inserted.
+func (r *Registry) loadActiveStatus(db *sql.DB) error {
+	for _, name := range r.order {
+		var isActive bool
+		err := db.QueryRow("SELECT is_active FROM modules WHERE name = ?", name).Scan(&isActive)
+		if err == sql.ErrNoRows {
+			// Module not in database, insert with active=true
+			_, err = db.Exec(
+				"INSERT INTO modules (name, is_active, updated_at) VALUES (?, 1, CURRENT_TIMESTAMP)",
+				name,
+			)
+			if err != nil {
+				return fmt.Errorf("inserting module %s: %w", name, err)
+			}
+			r.activeStatus[name] = true
+			r.logger.Debug("module registered in database", "module", name, "active", true)
+		} else if err != nil {
+			return fmt.Errorf("loading active status for module %s: %w", name, err)
+		} else {
+			r.activeStatus[name] = isActive
+			r.logger.Debug("loaded module active status", "module", name, "active", isActive)
+		}
+	}
+	return nil
+}
+
+// IsActive returns whether a module is active.
+func (r *Registry) IsActive(name string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	active, exists := r.activeStatus[name]
+	if !exists {
+		return true // Default to active if not tracked
+	}
+	return active
+}
+
+// SetActive sets a module's active status and persists it to the database.
+func (r *Registry) SetActive(name string, active bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.modules[name]; !exists {
+		return fmt.Errorf("module %q not registered", name)
+	}
+
+	if r.ctx == nil || r.ctx.DB == nil {
+		return fmt.Errorf("registry not initialized")
+	}
+
+	_, err := r.ctx.DB.Exec(
+		"UPDATE modules SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?",
+		active, name,
+	)
+	if err != nil {
+		return fmt.Errorf("updating module active status: %w", err)
+	}
+
+	r.activeStatus[name] = active
+	r.logger.Info("module active status changed", "module", name, "active", active)
+	return nil
 }
 
 // loadModuleTranslations loads translations from a module's embedded filesystem.
@@ -247,35 +332,75 @@ func (r *Registry) ShutdownAll() error {
 	return nil
 }
 
-// RouteAll registers all module public routes.
+// RouteAll registers all module public routes with active status middleware.
 func (r *Registry) RouteAll(router chi.Router) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	for _, name := range r.order {
 		m := r.modules[name]
-		m.RegisterRoutes(router)
+		moduleName := name // capture for closure
+
+		// Create a sub-router with middleware that checks active status
+		router.Group(func(subRouter chi.Router) {
+			subRouter.Use(r.moduleActiveMiddleware(moduleName, false))
+			m.RegisterRoutes(subRouter)
+		})
 	}
 }
 
-// AdminRouteAll registers all module admin routes.
+// AdminRouteAll registers all module admin routes with active status middleware.
 func (r *Registry) AdminRouteAll(router chi.Router) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	for _, name := range r.order {
 		m := r.modules[name]
-		m.RegisterAdminRoutes(router)
+		moduleName := name // capture for closure
+
+		// Create a sub-router with middleware that checks active status
+		router.Group(func(subRouter chi.Router) {
+			subRouter.Use(r.moduleActiveMiddleware(moduleName, true))
+			m.RegisterAdminRoutes(subRouter)
+		})
 	}
 }
 
-// AllTemplateFuncs returns combined template functions from all modules.
+// moduleActiveMiddleware returns middleware that checks if a module is active.
+// If not active, returns 404 for public routes or redirects to /admin/modules for admin routes.
+func (r *Registry) moduleActiveMiddleware(moduleName string, isAdmin bool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			if !r.IsActive(moduleName) {
+				r.logger.Debug("blocked request to inactive module",
+					"module", moduleName,
+					"path", req.URL.Path,
+					"isAdmin", isAdmin,
+				)
+				if isAdmin {
+					http.Redirect(w, req, "/admin/modules", http.StatusSeeOther)
+					return
+				}
+				http.NotFound(w, req)
+				return
+			}
+			next.ServeHTTP(w, req)
+		})
+	}
+}
+
+// AllTemplateFuncs returns combined template functions from all active modules.
 func (r *Registry) AllTemplateFuncs() template.FuncMap {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	funcs := make(template.FuncMap)
 	for _, name := range r.order {
+		// Default to active if not tracked (for testing or before InitAll)
+		active, exists := r.activeStatus[name]
+		if exists && !active {
+			continue
+		}
 		m := r.modules[name]
 		for k, v := range m.TemplateFuncs() {
 			funcs[k] = v
@@ -290,6 +415,7 @@ type ModuleInfo struct {
 	Version           string
 	Description       string
 	Initialized       bool
+	Active            bool   // Whether the module is active (routes/hooks enabled)
 	MigrationCount    int    // Total number of migrations defined
 	MigrationsApplied int    // Number of migrations applied
 	MigrationsPending int    // Number of pending migrations
@@ -326,11 +452,18 @@ func (r *Registry) ListInfo() []ModuleInfo {
 			}
 		}
 
+		// Default to active if not tracked
+		active, exists := r.activeStatus[name]
+		if !exists {
+			active = true
+		}
+
 		infos = append(infos, ModuleInfo{
 			Name:              m.Name(),
 			Version:           m.Version(),
 			Description:       m.Description(),
 			Initialized:       r.ctx != nil,
+			Active:            active,
 			MigrationCount:    migrationCount,
 			MigrationsApplied: appliedCount,
 			MigrationsPending: migrationCount - appliedCount,

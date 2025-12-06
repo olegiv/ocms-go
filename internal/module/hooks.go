@@ -63,19 +63,31 @@ type HookHandler struct {
 	Fn       HookFunc // The actual handler function
 }
 
+// IsModuleActiveFunc is a function that checks if a module is active.
+type IsModuleActiveFunc func(moduleName string) bool
+
 // HookRegistry manages hook registration and execution.
 type HookRegistry struct {
-	hooks  map[string][]HookHandler
-	logger *slog.Logger
-	mu     sync.RWMutex
+	hooks          map[string][]HookHandler
+	logger         *slog.Logger
+	isModuleActive IsModuleActiveFunc
+	mu             sync.RWMutex
 }
 
 // NewHookRegistry creates a new hook registry.
 func NewHookRegistry(logger *slog.Logger) *HookRegistry {
 	return &HookRegistry{
-		hooks:  make(map[string][]HookHandler),
-		logger: logger,
+		hooks:          make(map[string][]HookHandler),
+		logger:         logger,
+		isModuleActive: func(string) bool { return true }, // Default: all active
 	}
+}
+
+// SetIsModuleActive sets the callback function to check if a module is active.
+func (h *HookRegistry) SetIsModuleActive(fn IsModuleActiveFunc) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.isModuleActive = fn
 }
 
 // Register adds a hook handler for the given hook name.
@@ -115,11 +127,13 @@ func (h *HookRegistry) RegisterFunc(hookName, handlerName, moduleName string, fn
 
 // Call executes all handlers for the given hook name.
 // Handlers are executed in priority order (lower first).
+// Handlers from inactive modules are skipped.
 // The data is passed through each handler, allowing modification.
 // If any handler returns an error, execution stops and the error is returned.
 func (h *HookRegistry) Call(ctx context.Context, hookName string, data any) (any, error) {
 	h.mu.RLock()
 	handlers, exists := h.hooks[hookName]
+	isModuleActive := h.isModuleActive
 	h.mu.RUnlock()
 
 	if !exists || len(handlers) == 0 {
@@ -130,6 +144,16 @@ func (h *HookRegistry) Call(ctx context.Context, hookName string, data any) (any
 
 	currentData := data
 	for _, handler := range handlers {
+		// Skip handlers from inactive modules
+		if !isModuleActive(handler.Module) {
+			h.logger.Debug("skipping hook handler from inactive module",
+				"hook", hookName,
+				"handler", handler.Name,
+				"module", handler.Module,
+			)
+			continue
+		}
+
 		result, err := handler.Fn(ctx, currentData)
 		if err != nil {
 			h.logger.Error("hook handler error",

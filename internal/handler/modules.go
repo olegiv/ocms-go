@@ -2,10 +2,12 @@ package handler
 
 import (
 	"database/sql"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 
 	"github.com/alexedwards/scs/v2"
+	"github.com/go-chi/chi/v5"
 
 	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
@@ -65,4 +67,50 @@ func (h *ModulesHandler) List(w http.ResponseWriter, r *http.Request) {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
+}
+
+// ToggleActiveRequest represents the request body for toggling module active status.
+type ToggleActiveRequest struct {
+	Active bool `json:"active"`
+}
+
+// ToggleActiveResponse represents the response for toggling module active status.
+type ToggleActiveResponse struct {
+	Success bool   `json:"success"`
+	Active  bool   `json:"active"`
+	Message string `json:"message,omitempty"`
+}
+
+// ToggleActive handles POST /admin/modules/{name}/toggle - toggles module active status.
+func (h *ModulesHandler) ToggleActive(w http.ResponseWriter, r *http.Request) {
+	moduleName := chi.URLParam(r, "name")
+	if moduleName == "" {
+		http.Error(w, "Module name required", http.StatusBadRequest)
+		return
+	}
+
+	var req ToggleActiveRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.registry.SetActive(moduleName, req.Active); err != nil {
+		slog.Error("failed to toggle module active status", "module", moduleName, "error", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(ToggleActiveResponse{
+			Success: false,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	slog.Info("module active status toggled", "module", moduleName, "active", req.Active)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(ToggleActiveResponse{
+		Success: true,
+		Active:  req.Active,
+	})
 }

@@ -164,6 +164,12 @@ type MenuItem struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 }
 
+type Module struct {
+	Name      string    `json:"name"`
+	IsActive  bool      `json:"is_active"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type Page struct {
 	ID              int64         `json:"id"`
 	Title           string        `json:"title"`

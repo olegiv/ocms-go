@@ -474,6 +474,10 @@
         {"id": "modules.no_modules_hint", "message": "Modules can be registered in main.go to extend oCMS functionality.", "translation": "Модули могут быть зарегистрированы в main.go для расширения функциональности oCMS."},
         {"id": "modules.no_hooks", "message": "No hooks registered", "translation": "Хуки не зарегистрированы"},
         {"id": "modules.no_hooks_hint", "message": "Modules can register hook handlers to extend functionality.", "translation": "Модули могут регистрировать обработчики хуков для расширения функциональности."},
+        {"id": "modules.inactive", "message": "Inactive", "translation": "Неактивен"},
+        {"id": "modules.click_to_activate", "message": "Click to activate module", "translation": "Нажмите для активации модуля"},
+        {"id": "modules.click_to_deactivate", "message": "Click to deactivate module", "translation": "Нажмите для деактивации модуля"},
+        {"id": "modules.activate_to_access", "message": "Activate module to access dashboard", "translation": "Активируйте модуль для доступа к панели"},
 
         {"id": "users.title", "message": "Users", "translation": "Пользователи"},
         {"id": "users.description", "message": "Manage your CMS users (%d total)", "translation": "Управление пользователями CMS (всего %d)"},
