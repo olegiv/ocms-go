@@ -174,7 +174,7 @@ func (e *Exporter) ExportWithMedia(ctx context.Context, opts ExportOptions, w io
 
 	// Create zip writer
 	zipWriter := zip.NewWriter(w)
-	defer zipWriter.Close()
+	defer func() { _ = zipWriter.Close() }()
 
 	// Add media files if requested
 	if opts.IncludeMediaFiles && len(data.Media) > 0 {
@@ -247,7 +247,7 @@ func (e *Exporter) addFileToZip(zipWriter *zip.Writer, srcPath, zipPath string) 
 	if err != nil {
 		return fmt.Errorf("failed to open source file %s: %w", srcPath, err)
 	}
-	defer srcFile.Close()
+	defer func() { _ = srcFile.Close() }()
 
 	// Get file info for header
 	info, err := srcFile.Stat()

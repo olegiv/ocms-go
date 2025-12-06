@@ -235,7 +235,7 @@ func (s *MediaService) saveNonImageFile(file io.Reader, uuid, filename string) (
 	if err != nil {
 		return "", 0, fmt.Errorf("failed to create file: %w", err)
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	// Copy data
 	size, err := io.Copy(out, file)

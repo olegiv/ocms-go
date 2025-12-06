@@ -306,7 +306,7 @@ func (h *ImportExportHandler) extractExportDataFromZip(zipData []byte) (transfer
 			if err != nil {
 				return data, fmt.Errorf("failed to open export.json: %w", err)
 			}
-			defer rc.Close()
+			defer func() { _ = rc.Close() }()
 
 			decoder := json.NewDecoder(rc)
 			if err := decoder.Decode(&data); err != nil {

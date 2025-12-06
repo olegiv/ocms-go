@@ -233,7 +233,7 @@ func (i *Importer) ImportFromZip(ctx context.Context, zipReader *zip.Reader, opt
 			if err != nil {
 				return nil, fmt.Errorf("failed to open export.json: %w", err)
 			}
-			defer rc.Close()
+			defer func() { _ = rc.Close() }()
 
 			decoder := json.NewDecoder(rc)
 			if err := decoder.Decode(&exportData); err != nil {
@@ -279,7 +279,7 @@ func (i *Importer) ImportFromZipFile(ctx context.Context, path string, opts Impo
 	if err != nil {
 		return nil, fmt.Errorf("failed to open zip file: %w", err)
 	}
-	defer zipReader.Close()
+	defer func() { _ = zipReader.Close() }()
 
 	return i.ImportFromZip(ctx, &zipReader.Reader, opts)
 }
@@ -351,14 +351,14 @@ func (i *Importer) extractMediaFile(f *zip.File) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to open zip entry: %w", err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 
 	// Create destination file
 	destFile, err := os.Create(destPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to create destination file: %w", err)
 	}
-	defer destFile.Close()
+	defer func() { _ = destFile.Close() }()
 
 	// Copy content
 	if _, err := io.Copy(destFile, rc); err != nil {
@@ -374,7 +374,7 @@ func (i *Importer) ValidateZipFile(ctx context.Context, path string) (*Validatio
 	if err != nil {
 		return nil, fmt.Errorf("failed to open zip file: %w", err)
 	}
-	defer zipReader.Close()
+	defer func() { _ = zipReader.Close() }()
 
 	return i.ValidateZip(ctx, &zipReader.Reader)
 }
@@ -391,7 +391,7 @@ func (i *Importer) ValidateZip(ctx context.Context, zipReader *zip.Reader) (*Val
 					Errors: []ImportError{{Entity: "zip", ID: "", Message: "failed to open export.json: " + err.Error()}},
 				}, nil
 			}
-			defer rc.Close()
+			defer func() { _ = rc.Close() }()
 
 			var data ExportData
 			decoder := json.NewDecoder(rc)
