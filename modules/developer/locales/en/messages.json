@@ -24,6 +24,7 @@
         {"id": "developer.generate_detail_menu", "message": "5-20 menu items in Main Menu (nested, pointing to pages)", "translation": "5-20 menu items in Main Menu (nested, pointing to pages)"},
         {"id": "developer.generate_detail_translations", "message": "Translations for all active languages", "translation": "Translations for all active languages"},
         {"id": "developer.generate_button", "message": "Generate Test Data", "translation": "Generate Test Data"},
+        {"id": "developer.generate_confirm", "message": "Are you sure you want to generate test data? This will create random tags, categories, images, pages, and menu items.", "translation": "Are you sure you want to generate test data? This will create random tags, categories, images, pages, and menu items."},
         {"id": "developer.delete_title", "message": "Delete All Generated Data", "translation": "Delete All Generated Data"},
         {"id": "developer.delete_description", "message": "Removes all content created by this module", "translation": "Removes all content created by this module"},
         {"id": "developer.delete_detail_tags", "message": "Deletes all tracked tags and their translations", "translation": "Deletes all tracked tags and their translations"},

@@ -24,6 +24,7 @@
         {"id": "developer.generate_detail_menu", "message": "5-20 menu items in Main Menu (nested, pointing to pages)", "translation": "5-20 пунктов в главном меню (вложенных, ведущих на страницы)"},
         {"id": "developer.generate_detail_translations", "message": "Translations for all active languages", "translation": "Переводы для всех активных языков"},
         {"id": "developer.generate_button", "message": "Generate Test Data", "translation": "Сгенерировать данные"},
+        {"id": "developer.generate_confirm", "message": "Are you sure you want to generate test data? This will create random tags, categories, images, pages, and menu items.", "translation": "Вы уверены, что хотите сгенерировать тестовые данные? Будут созданы случайные теги, категории, изображения, страницы и пункты меню."},
         {"id": "developer.delete_title", "message": "Delete All Generated Data", "translation": "Удалить все сгенерированные данные"},
         {"id": "developer.delete_description", "message": "Removes all content created by this module", "translation": "Удаляет весь контент, созданный этим модулем"},
         {"id": "developer.delete_detail_tags", "message": "Deletes all tracked tags and their translations", "translation": "Удаляет все отслеживаемые теги и их переводы"},

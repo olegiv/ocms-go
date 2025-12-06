@@ -133,7 +133,7 @@
                     <li>{{T .AdminLang "developer.generate_detail_menu"}}</li>
                     <li>{{T .AdminLang "developer.generate_detail_translations"}}</li>
                 </ul>
-                <form method="POST" action="/admin/developer/generate" class="action-form">
+                <form method="POST" action="/admin/developer/generate" class="action-form" id="generate-form">
                     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
                     <button type="submit" class="btn btn-primary btn-lg">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -436,6 +436,15 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const generateForm = document.getElementById('generate-form');
+    if (generateForm) {
+        generateForm.addEventListener('submit', function(e) {
+            if (!confirm('{{T .AdminLang "developer.generate_confirm"}}')) {
+                e.preventDefault();
+            }
+        });
+    }
+
     const deleteForm = document.getElementById('delete-form');
     if (deleteForm) {
         deleteForm.addEventListener('submit', function(e) {
