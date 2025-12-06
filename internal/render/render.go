@@ -565,8 +565,15 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 	if data.AdminLang == "" && r.sessionManager != nil {
 		data.AdminLang = r.sessionManager.GetString(req.Context(), SessionKeyAdminLang)
 	}
+	// Fall back to browser's Accept-Language header
 	if data.AdminLang == "" {
-		data.AdminLang = DefaultAdminLang
+		if acceptLang := req.Header.Get("Accept-Language"); acceptLang != "" {
+			data.AdminLang = i18n.MatchLanguage(acceptLang)
+		}
+	}
+	// Fall back to database default language
+	if data.AdminLang == "" {
+		data.AdminLang = i18n.GetDefaultLanguage()
 	}
 
 	// Get flash message from session
@@ -662,7 +669,7 @@ func (r *Renderer) GetAdminLang(req *http.Request) string {
 			return lang
 		}
 	}
-	return DefaultAdminLang
+	return i18n.GetDefaultLanguage()
 }
 
 // formatDateForLocale formats a date according to the specified language.

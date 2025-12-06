@@ -796,6 +796,16 @@
         {"id": "auth.remember_me", "message": "Remember me", "translation": "Запомнить меня"},
         {"id": "auth.forgot_password", "message": "Forgot password?", "translation": "Забыли пароль?"},
         {"id": "auth.invalid_credentials", "message": "Invalid email or password", "translation": "Неверный email или пароль"},
+        {"id": "auth.password_placeholder", "message": "Enter your password", "translation": "Введите пароль"},
+        {"id": "auth.invalid_form_data", "message": "Invalid form data", "translation": "Неверные данные формы"},
+        {"id": "auth.email_password_required", "message": "Email and password are required", "translation": "Email и пароль обязательны"},
+        {"id": "auth.account_locked", "message": "Account is temporarily locked. Try again in %s.", "translation": "Аккаунт временно заблокирован. Попробуйте через %s."},
+        {"id": "auth.too_many_attempts", "message": "Too many failed attempts. Account locked for %s.", "translation": "Слишком много неудачных попыток. Аккаунт заблокирован на %s."},
+        {"id": "auth.attempts_remaining", "message": "Invalid email or password. %d attempts remaining.", "translation": "Неверный email или пароль. Осталось попыток: %d."},
+        {"id": "auth.rate_limit", "message": "Too many requests. Please try again later.", "translation": "Слишком много запросов. Попробуйте позже."},
+
+        {"id": "validation.required", "message": "Please fill out this field.", "translation": "Пожалуйста, заполните это поле."},
+        {"id": "validation.email_invalid", "message": "Please enter a valid email address.", "translation": "Пожалуйста, введите корректный email адрес."},
 
         {"id": "admin.language", "message": "Admin Language", "translation": "Язык интерфейса"},
         {"id": "admin.change_language", "message": "Change Language", "translation": "Сменить язык"},

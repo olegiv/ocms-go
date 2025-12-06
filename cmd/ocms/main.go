@@ -107,6 +107,27 @@ func run() error {
 		return fmt.Errorf("seeding database: %w", err)
 	}
 
+	// Update i18n from database settings
+	queries := store.New(db)
+
+	// Set active languages (only match against languages that are active in DB)
+	if activeLanguages, err := queries.ListActiveLanguages(ctx); err == nil {
+		var activeCodes []string
+		for _, lang := range activeLanguages {
+			activeCodes = append(activeCodes, lang.Code)
+		}
+		i18n.SetActiveLanguages(activeCodes)
+		slog.Info("i18n active languages set from database", "languages", activeCodes)
+	}
+
+	// Set default language
+	if defaultLang, err := queries.GetDefaultLanguage(ctx); err == nil {
+		if i18n.IsSupported(defaultLang.Code) {
+			i18n.SetDefaultLanguage(defaultLang.Code)
+			slog.Info("i18n default language set from database", "language", defaultLang.Code)
+		}
+	}
+
 	// Initialize session manager
 	sessionManager := session.New(db, cfg.IsDevelopment())
 	middleware.SetSessionManager(sessionManager)

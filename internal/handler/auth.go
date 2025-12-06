@@ -10,6 +10,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 
 	"ocms-go/internal/auth"
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/model"
 	"ocms-go/internal/render"
@@ -42,9 +43,10 @@ func NewAuthHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManage
 
 // LoginForm renders the login page.
 func (h *AuthHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
+	lang := middleware.GetAdminLang(r)
 	// If already logged in, just show login page (let user decide where to go)
 	if err := h.renderer.Render(w, r, "auth/login", render.TemplateData{
-		Title: "Login",
+		Title: i18n.T(lang, "auth.login"),
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -53,8 +55,10 @@ func (h *AuthHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
 
 // Login handles the login form submission.
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	lang := middleware.GetAdminLang(r)
+
 	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
+		h.renderer.SetFlash(r, i18n.T(lang, "auth.invalid_form_data"), "error")
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -64,7 +68,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	// Validate input
 	if email == "" || password == "" {
-		h.renderer.SetFlash(r, "Email and password are required", "error")
+		h.renderer.SetFlash(r, i18n.T(lang, "auth.email_password_required"), "error")
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -73,7 +77,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if h.loginProtection != nil {
 		if locked, remaining := h.loginProtection.IsAccountLocked(email); locked {
 			h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login attempt on locked account", nil, map[string]any{"email": email})
-			h.renderer.SetFlash(r, fmt.Sprintf("Account is temporarily locked. Try again in %s.", formatDuration(remaining)), "error")
+			h.renderer.SetFlash(r, i18n.T(lang, "auth.account_locked", formatDuration(remaining)), "error")
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
@@ -91,18 +95,18 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		// Record failed attempt even for non-existent users to prevent enumeration
 		if h.loginProtection != nil {
 			if locked, lockDuration := h.loginProtection.RecordFailedAttempt(email); locked {
-				h.renderer.SetFlash(r, fmt.Sprintf("Too many failed attempts. Account locked for %s.", formatDuration(lockDuration)), "error")
+				h.renderer.SetFlash(r, i18n.T(lang, "auth.too_many_attempts", formatDuration(lockDuration)), "error")
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
 				return
 			}
 			remaining := h.loginProtection.GetRemainingAttempts(email)
 			if remaining <= 3 && remaining > 0 {
-				h.renderer.SetFlash(r, fmt.Sprintf("Invalid email or password. %d attempts remaining.", remaining), "error")
+				h.renderer.SetFlash(r, i18n.T(lang, "auth.attempts_remaining", remaining), "error")
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
 				return
 			}
 		}
-		h.renderer.SetFlash(r, "Invalid email or password", "error")
+		h.renderer.SetFlash(r, i18n.T(lang, "auth.invalid_credentials"), "error")
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -111,7 +115,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	valid, err := auth.CheckPassword(password, user.PasswordHash)
 	if err != nil {
 		slog.Error("password check error", "error", err)
-		h.renderer.SetFlash(r, "Invalid email or password", "error")
+		h.renderer.SetFlash(r, i18n.T(lang, "auth.invalid_credentials"), "error")
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -123,18 +127,18 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		if h.loginProtection != nil {
 			if locked, lockDuration := h.loginProtection.RecordFailedAttempt(email); locked {
 				h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Account locked due to failed attempts", &user.ID, map[string]any{"email": email, "duration": lockDuration.String()})
-				h.renderer.SetFlash(r, fmt.Sprintf("Too many failed attempts. Account locked for %s.", formatDuration(lockDuration)), "error")
+				h.renderer.SetFlash(r, i18n.T(lang, "auth.too_many_attempts", formatDuration(lockDuration)), "error")
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
 				return
 			}
 			remaining := h.loginProtection.GetRemainingAttempts(email)
 			if remaining <= 3 && remaining > 0 {
-				h.renderer.SetFlash(r, fmt.Sprintf("Invalid email or password. %d attempts remaining.", remaining), "error")
+				h.renderer.SetFlash(r, i18n.T(lang, "auth.attempts_remaining", remaining), "error")
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
 				return
 			}
 		}
-		h.renderer.SetFlash(r, "Invalid email or password", "error")
+		h.renderer.SetFlash(r, i18n.T(lang, "auth.invalid_credentials"), "error")
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}

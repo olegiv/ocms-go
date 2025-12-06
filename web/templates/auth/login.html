@@ -3,14 +3,14 @@
     <div class="auth-card">
         <div class="auth-header">
             <h1 class="auth-title">oCMS</h1>
-            <p class="auth-subtitle">Sign in to your account</p>
+            <p class="auth-subtitle">{{T .AdminLang "auth.login_title"}}</p>
         </div>
 
         {{template "alert" .}}
 
         <form method="POST" action="/login" class="auth-form">
             <div class="form-group">
-                <label for="email" class="form-label">Email</label>
+                <label for="email" class="form-label">{{T .AdminLang "label.email"}}</label>
                 <input
                     type="email"
                     id="email"
@@ -19,25 +19,47 @@
                     placeholder="admin@example.com"
                     required
                     autofocus
+                    data-msg-required="{{T .AdminLang "validation.required"}}"
+                    data-msg-email="{{T .AdminLang "validation.email_invalid"}}"
                 >
             </div>
 
             <div class="form-group">
-                <label for="password" class="form-label">Password</label>
+                <label for="password" class="form-label">{{T .AdminLang "label.password"}}</label>
                 <input
                     type="password"
                     id="password"
                     name="password"
                     class="form-input"
-                    placeholder="Enter your password"
+                    placeholder="{{T .AdminLang "auth.password_placeholder"}}"
                     required
+                    data-msg-required="{{T .AdminLang "validation.required"}}"
                 >
             </div>
 
             <button type="submit" class="btn btn-primary btn-block">
-                Sign In
+                {{T .AdminLang "auth.login"}}
             </button>
         </form>
     </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const inputs = document.querySelectorAll('input[required]');
+    inputs.forEach(function(input) {
+        input.addEventListener('invalid', function(e) {
+            e.preventDefault();
+            if (input.validity.valueMissing) {
+                input.setCustomValidity(input.dataset.msgRequired || '');
+            } else if (input.validity.typeMismatch && input.type === 'email') {
+                input.setCustomValidity(input.dataset.msgEmail || '');
+            }
+            input.reportValidity();
+        });
+        input.addEventListener('input', function() {
+            input.setCustomValidity('');
+        });
+    });
+});
+</script>
 {{end}}

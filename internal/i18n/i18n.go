@@ -46,9 +46,18 @@ var SupportedLanguages = []string{"en", "ru"}
 
 // Init initializes the i18n system with the given logger.
 func Init(logger *slog.Logger) error {
+	return InitWithDefault(logger, "en")
+}
+
+// InitWithDefault initializes the i18n system with a custom default language.
+func InitWithDefault(logger *slog.Logger, defaultLang string) error {
+	// Validate default language is supported
+	if !contains(SupportedLanguages, defaultLang) {
+		defaultLang = "en" // Fallback to en if not supported
+	}
 	catalog = &Catalog{
 		translations: make(map[string]map[string]string),
-		defaultLang:  "en",
+		defaultLang:  defaultLang,
 		logger:       logger,
 	}
 
@@ -213,4 +222,60 @@ func TranslationCount(lang string) int {
 		return len(translations)
 	}
 	return 0
+}
+
+// GetDefaultLanguage returns the current default language for the i18n system.
+func GetDefaultLanguage() string {
+	if catalog == nil {
+		return "en"
+	}
+	return catalog.defaultLang
+}
+
+// SetDefaultLanguage changes the default language for the i18n system.
+// Only works if the language is supported.
+func SetDefaultLanguage(lang string) {
+	if catalog == nil || !IsSupported(lang) {
+		return
+	}
+	catalog.mu.Lock()
+	defer catalog.mu.Unlock()
+	catalog.defaultLang = lang
+}
+
+// SetActiveLanguages configures which languages are active for matching.
+// Only languages that are both supported by i18n AND in this list will be matched.
+// If empty, all supported languages are used.
+func SetActiveLanguages(activeCodes []string) {
+	if catalog == nil {
+		return
+	}
+	catalog.mu.Lock()
+	defer catalog.mu.Unlock()
+
+	// Filter to only include supported languages
+	var activeTags []language.Tag
+	for _, code := range activeCodes {
+		if IsSupported(code) {
+			activeTags = append(activeTags, language.MustParse(code))
+		}
+	}
+
+	// If no active languages match supported ones, use default only
+	if len(activeTags) == 0 {
+		activeTags = []language.Tag{language.MustParse(catalog.defaultLang)}
+	}
+
+	catalog.supported = activeTags
+	catalog.matcher = language.NewMatcher(activeTags)
+}
+
+// contains checks if a slice contains a string.
+func contains(slice []string, str string) bool {
+	for _, s := range slice {
+		if s == str {
+			return true
+		}
+	}
+	return false
 }

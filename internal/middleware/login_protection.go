@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"golang.org/x/time/rate"
+
+	"ocms-go/internal/i18n"
 )
 
 // LoginProtection provides combined IP rate limiting and account lockout protection.
@@ -284,7 +286,8 @@ func (lp *LoginProtection) Middleware() func(http.Handler) http.Handler {
 
 			if !lp.CheckIPRateLimit(ip) {
 				slog.Warn("login rate limit exceeded", "ip", ip)
-				http.Error(w, "Too many requests. Please try again later.", http.StatusTooManyRequests)
+				lang := GetAdminLang(r)
+				http.Error(w, i18n.T(lang, "auth.rate_limit"), http.StatusTooManyRequests)
 				return
 			}
 

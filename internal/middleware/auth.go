@@ -173,12 +173,19 @@ func SetSessionManager(sm *scs.SessionManager) {
 }
 
 // GetAdminLang retrieves the admin UI language preference from the session.
-// Returns "en" as default if not found.
+// Falls back to Accept-Language header, then database default language.
 func GetAdminLang(r *http.Request) string {
+	// First, check session for saved preference
 	if globalSessionManager != nil {
 		if lang := globalSessionManager.GetString(r.Context(), SessionKeyAdminLang); lang != "" && i18n.IsSupported(lang) {
 			return lang
 		}
 	}
-	return "en"
+	// Fall back to browser's Accept-Language header
+	if acceptLang := r.Header.Get("Accept-Language"); acceptLang != "" {
+		if lang := i18n.MatchLanguage(acceptLang); lang != "" {
+			return lang
+		}
+	}
+	return i18n.GetDefaultLanguage()
 }

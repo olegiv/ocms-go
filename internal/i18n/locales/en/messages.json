@@ -888,6 +888,16 @@
         {"id": "auth.remember_me", "message": "Remember me", "translation": "Remember me"},
         {"id": "auth.forgot_password", "message": "Forgot password?", "translation": "Forgot password?"},
         {"id": "auth.invalid_credentials", "message": "Invalid email or password", "translation": "Invalid email or password"},
+        {"id": "auth.password_placeholder", "message": "Enter your password", "translation": "Enter your password"},
+        {"id": "auth.invalid_form_data", "message": "Invalid form data", "translation": "Invalid form data"},
+        {"id": "auth.email_password_required", "message": "Email and password are required", "translation": "Email and password are required"},
+        {"id": "auth.account_locked", "message": "Account is temporarily locked. Try again in %s.", "translation": "Account is temporarily locked. Try again in %s."},
+        {"id": "auth.too_many_attempts", "message": "Too many failed attempts. Account locked for %s.", "translation": "Too many failed attempts. Account locked for %s."},
+        {"id": "auth.attempts_remaining", "message": "Invalid email or password. %d attempts remaining.", "translation": "Invalid email or password. %d attempts remaining."},
+        {"id": "auth.rate_limit", "message": "Too many requests. Please try again later.", "translation": "Too many requests. Please try again later."},
+
+        {"id": "validation.required", "message": "Please fill out this field.", "translation": "Please fill out this field."},
+        {"id": "validation.email_invalid", "message": "Please enter a valid email address.", "translation": "Please enter a valid email address."},
 
         {"id": "admin.language", "message": "Admin Language", "translation": "Admin Language"},
         {"id": "admin.change_language", "message": "Change Language", "translation": "Change Language"},
