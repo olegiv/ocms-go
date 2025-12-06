@@ -1,0 +1,42 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "oCMS i18n Translation File",
+    "description": "Schema for oCMS internationalization message files",
+    "type": "object",
+    "properties": {
+        "$schema": {
+            "type": "string",
+            "description": "Reference to the JSON schema"
+        },
+        "language": {
+            "type": "string",
+            "description": "ISO 639-1 language code (e.g., 'en', 'ru')",
+            "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+        },
+        "messages": {
+            "type": "array",
+            "description": "Array of translation messages",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Unique message identifier using dot notation"
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "Original message text (typically in English)"
+                    },
+                    "translation": {
+                        "type": "string",
+                        "description": "Translated message text"
+                    }
+                },
+                "required": ["id", "translation"],
+                "additionalProperties": false
+            }
+        }
+    },
+    "required": ["language", "messages"],
+    "additionalProperties": false
+}

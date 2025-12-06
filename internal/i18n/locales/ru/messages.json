@@ -1,4 +1,5 @@
 {
+    "$schema": "../../../../.schema/i18n-schema.json",
     "language": "ru",
     "messages": [
         {"id": "nav.dashboard", "message": "Dashboard", "translation": "Панель управления"},
