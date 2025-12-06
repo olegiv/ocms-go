@@ -1,11 +1,11 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1 class="page-title">Developer Tools</h1>
-        <p class="page-description">Generate random test data with translations for development and testing</p>
+        <h1 class="page-title">{{T .AdminLang "developer.title"}}</h1>
+        <p class="page-description">{{T .AdminLang "developer.description"}}</p>
     </div>
     <div class="page-actions">
-        <span class="badge badge-warning">Development Only</span>
+        <span class="badge badge-warning">{{T .AdminLang "developer.warning_badge"}}</span>
     </div>
 </div>
 
@@ -19,8 +19,8 @@
                     <path d="M12 17h.01"/>
                 </svg>
                 <div>
-                    <strong>Warning</strong>
-                    <p>This module is intended for development and testing purposes only. Do not use in production environments.</p>
+                    <strong>{{T .AdminLang "developer.warning_title"}}</strong>
+                    <p>{{T .AdminLang "developer.warning_text"}}</p>
                 </div>
             </div>
         </div>
@@ -29,7 +29,7 @@
 
 <div class="stats-section">
     <div class="section-header">
-        <h2>Generated Data Statistics</h2>
+        <h2>{{T .AdminLang "developer.stats_title"}}</h2>
     </div>
     <div class="stats-grid">
         <div class="stat-card">
@@ -41,7 +41,7 @@
             </div>
             <div class="stat-content">
                 <span class="stat-value">{{index .Data.Counts "tag"}}</span>
-                <span class="stat-label">Tags</span>
+                <span class="stat-label">{{T .AdminLang "developer.stat_tags"}}</span>
             </div>
         </div>
         <div class="stat-card">
@@ -52,7 +52,7 @@
             </div>
             <div class="stat-content">
                 <span class="stat-value">{{index .Data.Counts "category"}}</span>
-                <span class="stat-label">Categories</span>
+                <span class="stat-label">{{T .AdminLang "developer.stat_categories"}}</span>
             </div>
         </div>
         <div class="stat-card">
@@ -65,7 +65,7 @@
             </div>
             <div class="stat-content">
                 <span class="stat-value">{{index .Data.Counts "media"}}</span>
-                <span class="stat-label">Images</span>
+                <span class="stat-label">{{T .AdminLang "developer.stat_images"}}</span>
             </div>
         </div>
         <div class="stat-card">
@@ -77,7 +77,7 @@
             </div>
             <div class="stat-content">
                 <span class="stat-value">{{index .Data.Counts "page"}}</span>
-                <span class="stat-label">Pages</span>
+                <span class="stat-label">{{T .AdminLang "developer.stat_pages"}}</span>
             </div>
         </div>
         <div class="stat-card">
@@ -90,7 +90,7 @@
             </div>
             <div class="stat-content">
                 <span class="stat-value">{{index .Data.Counts "menu_item"}}</span>
-                <span class="stat-label">Menu Items</span>
+                <span class="stat-label">{{T .AdminLang "developer.stat_menu_items"}}</span>
             </div>
         </div>
     </div>
@@ -98,8 +98,8 @@
 
 <div class="actions-section">
     <div class="section-header">
-        <h2>Actions</h2>
-        <p>Generate or delete test data. Each action will affect all content types.</p>
+        <h2>{{T .AdminLang "developer.actions_title"}}</h2>
+        <p>{{T .AdminLang "developer.actions_description"}}</p>
     </div>
 
     <div class="action-cards">
@@ -121,17 +121,17 @@
                         </svg>
                     </div>
                     <div class="action-title">
-                        <h3>Generate Test Data</h3>
-                        <p>Creates random content with translations for all active languages</p>
+                        <h3>{{T .AdminLang "developer.generate_title"}}</h3>
+                        <p>{{T .AdminLang "developer.generate_description"}}</p>
                     </div>
                 </div>
                 <ul class="action-details">
-                    <li>5-20 random tags</li>
-                    <li>5-20 random categories (nested)</li>
-                    <li>5-20 placeholder images</li>
-                    <li>5-20 published pages with tags, categories, and images</li>
-                    <li>5-20 menu items in Main Menu (nested, pointing to pages)</li>
-                    <li>Translations for all active languages</li>
+                    <li>{{T .AdminLang "developer.generate_detail_tags"}}</li>
+                    <li>{{T .AdminLang "developer.generate_detail_categories"}}</li>
+                    <li>{{T .AdminLang "developer.generate_detail_images"}}</li>
+                    <li>{{T .AdminLang "developer.generate_detail_pages"}}</li>
+                    <li>{{T .AdminLang "developer.generate_detail_menu"}}</li>
+                    <li>{{T .AdminLang "developer.generate_detail_translations"}}</li>
                 </ul>
                 <form method="POST" action="/admin/developer/generate" class="action-form">
                     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
@@ -140,7 +140,7 @@
                             <path d="M5 12h14"/>
                             <path d="M12 5v14"/>
                         </svg>
-                        Generate Test Data
+                        {{T .AdminLang "developer.generate_button"}}
                     </button>
                 </form>
             </div>
@@ -159,17 +159,17 @@
                         </svg>
                     </div>
                     <div class="action-title">
-                        <h3>Delete All Generated Data</h3>
-                        <p>Removes all content created by this module</p>
+                        <h3>{{T .AdminLang "developer.delete_title"}}</h3>
+                        <p>{{T .AdminLang "developer.delete_description"}}</p>
                     </div>
                 </div>
                 <ul class="action-details">
-                    <li>Deletes all tracked tags and their translations</li>
-                    <li>Deletes all tracked categories and their translations</li>
-                    <li>Deletes all tracked images (including files)</li>
-                    <li>Deletes all tracked pages and their translations</li>
-                    <li>Deletes all tracked menu items from Main Menu</li>
-                    <li>Clears the tracking table</li>
+                    <li>{{T .AdminLang "developer.delete_detail_tags"}}</li>
+                    <li>{{T .AdminLang "developer.delete_detail_categories"}}</li>
+                    <li>{{T .AdminLang "developer.delete_detail_images"}}</li>
+                    <li>{{T .AdminLang "developer.delete_detail_pages"}}</li>
+                    <li>{{T .AdminLang "developer.delete_detail_menu"}}</li>
+                    <li>{{T .AdminLang "developer.delete_detail_tracking"}}</li>
                 </ul>
                 <form method="POST" action="/admin/developer/delete" class="action-form" id="delete-form">
                     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
@@ -178,7 +178,7 @@
                             <path d="M3 6h18"/>
                             <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
                         </svg>
-                        Delete All Generated Data
+                        {{T .AdminLang "developer.delete_button"}}
                     </button>
                 </form>
             </div>
@@ -439,7 +439,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const deleteForm = document.getElementById('delete-form');
     if (deleteForm) {
         deleteForm.addEventListener('submit', function(e) {
-            if (!confirm('Are you sure you want to delete all generated test data? This action cannot be undone.')) {
+            if (!confirm('{{T .AdminLang "developer.delete_confirm"}}')) {
                 e.preventDefault();
             }
         });

@@ -1,9 +1,9 @@
 package developer
 
 import (
-	"fmt"
 	"net/http"
 
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/render"
 	"ocms-go/internal/store"
@@ -18,6 +18,7 @@ type DashboardData struct {
 // handleDashboard handles GET /admin/developer - shows the developer dashboard
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := m.ctx.Render.GetAdminLang(r)
 
 	counts, err := m.getTrackedCounts(r.Context())
 	if err != nil {
@@ -36,13 +37,13 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := m.ctx.Render.Render(w, r, "admin/module_developer", render.TemplateData{
-		Title: "Developer Tools",
+		Title: i18n.T(lang, "developer.title"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Modules", URL: "/admin/modules"},
-			{Label: "Developer Tools", URL: "/admin/developer", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
+			{Label: i18n.T(lang, "developer.title"), URL: "/admin/developer", Active: true},
 		},
 	}); err != nil {
 		m.ctx.Logger.Error("render error", "error", err)
@@ -58,18 +59,19 @@ func (m *Module) handleGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
+	lang := m.ctx.Render.GetAdminLang(r)
 
 	// Get all active languages
 	queries := store.New(m.ctx.DB)
 	languages, err := queries.ListActiveLanguages(ctx)
 	if err != nil {
 		m.ctx.Logger.Error("failed to list languages", "error", err)
-		m.setFlashAndRedirect(w, r, "error", "Failed to get languages: "+err.Error())
+		m.setFlashAndRedirect(w, r, "error", i18n.T(lang, "developer.error_get_languages")+": "+err.Error())
 		return
 	}
 
 	if len(languages) == 0 {
-		m.setFlashAndRedirect(w, r, "error", "No active languages found. Please add at least one language.")
+		m.setFlashAndRedirect(w, r, "error", i18n.T(lang, "developer.error_no_languages"))
 		return
 	}
 
@@ -81,7 +83,7 @@ func (m *Module) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	tagIDs, err := m.generateTags(ctx, languages)
 	if err != nil {
 		m.ctx.Logger.Error("failed to generate tags", "error", err)
-		m.setFlashAndRedirect(w, r, "error", "Failed to generate tags: "+err.Error())
+		m.setFlashAndRedirect(w, r, "error", i18n.T(lang, "developer.error_generate_tags")+": "+err.Error())
 		return
 	}
 	m.ctx.Logger.Info("generated tags", "count", len(tagIDs))
@@ -90,7 +92,7 @@ func (m *Module) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	catIDs, err := m.generateCategories(ctx, languages)
 	if err != nil {
 		m.ctx.Logger.Error("failed to generate categories", "error", err)
-		m.setFlashAndRedirect(w, r, "error", "Failed to generate categories: "+err.Error())
+		m.setFlashAndRedirect(w, r, "error", i18n.T(lang, "developer.error_generate_categories")+": "+err.Error())
 		return
 	}
 	m.ctx.Logger.Info("generated categories", "count", len(catIDs))
@@ -99,7 +101,7 @@ func (m *Module) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	mediaIDs, err := m.generateMedia(ctx, languages, user.ID)
 	if err != nil {
 		m.ctx.Logger.Error("failed to generate media", "error", err)
-		m.setFlashAndRedirect(w, r, "error", "Failed to generate media: "+err.Error())
+		m.setFlashAndRedirect(w, r, "error", i18n.T(lang, "developer.error_generate_media")+": "+err.Error())
 		return
 	}
 	m.ctx.Logger.Info("generated media", "count", len(mediaIDs))
@@ -108,7 +110,7 @@ func (m *Module) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	pageIDs, err := m.generatePages(ctx, languages, tagIDs, catIDs, mediaIDs, user.ID)
 	if err != nil {
 		m.ctx.Logger.Error("failed to generate pages", "error", err)
-		m.setFlashAndRedirect(w, r, "error", "Failed to generate pages: "+err.Error())
+		m.setFlashAndRedirect(w, r, "error", i18n.T(lang, "developer.error_generate_pages")+": "+err.Error())
 		return
 	}
 	m.ctx.Logger.Info("generated pages", "count", len(pageIDs))
@@ -117,7 +119,7 @@ func (m *Module) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	menuItemIDs, err := m.generateMenuItems(ctx, pageIDs)
 	if err != nil {
 		m.ctx.Logger.Error("failed to generate menu items", "error", err)
-		m.setFlashAndRedirect(w, r, "error", "Failed to generate menu items: "+err.Error())
+		m.setFlashAndRedirect(w, r, "error", i18n.T(lang, "developer.error_generate_menu")+": "+err.Error())
 		return
 	}
 	m.ctx.Logger.Info("generated menu items", "count", len(menuItemIDs))
@@ -126,7 +128,7 @@ func (m *Module) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	m.ctx.Render.InvalidateMenuCache("")
 
 	// Success message
-	msg := fmt.Sprintf("Successfully generated: %d tags, %d categories, %d images, %d pages, %d menu items (with translations for %d languages)",
+	msg := i18n.T(lang, "developer.success_generate",
 		len(tagIDs), len(catIDs), len(mediaIDs), len(pageIDs), len(menuItemIDs), len(languages))
 
 	m.setFlashAndRedirect(w, r, "success", msg)
@@ -140,12 +142,13 @@ func (m *Module) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
+	lang := m.ctx.Render.GetAdminLang(r)
 
 	m.ctx.Logger.Info("deleting all generated test data", "user", user.Email)
 
 	if err := m.deleteAllGeneratedItems(ctx); err != nil {
 		m.ctx.Logger.Error("failed to delete generated items", "error", err)
-		m.setFlashAndRedirect(w, r, "error", "Failed to delete generated items: "+err.Error())
+		m.setFlashAndRedirect(w, r, "error", i18n.T(lang, "developer.error_delete")+": "+err.Error())
 		return
 	}
 
@@ -153,7 +156,7 @@ func (m *Module) handleDelete(w http.ResponseWriter, r *http.Request) {
 	m.ctx.Render.InvalidateMenuCache("")
 
 	m.ctx.Logger.Info("deleted all generated test data")
-	m.setFlashAndRedirect(w, r, "success", "Successfully deleted all generated test data")
+	m.setFlashAndRedirect(w, r, "success", i18n.T(lang, "developer.success_delete"))
 }
 
 // setFlashAndRedirect sets a flash message and redirects to the dashboard
