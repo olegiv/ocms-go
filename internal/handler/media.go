@@ -373,7 +373,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 
 		result, err := h.mediaService.Upload(r.Context(), file, header, userID, folderID)
-		file.Close()
+		_ = file.Close()
 
 		if err != nil {
 			slog.Error("failed to upload file", "error", err, "filename", header.Filename)

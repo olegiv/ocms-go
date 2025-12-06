@@ -442,11 +442,11 @@ func (i *Importer) ValidateZipBytes(ctx context.Context, data []byte) (*Validati
 
 // Validate validates the import data without making changes.
 func (i *Importer) Validate(data *ExportData) []ImportError {
-	var errors []ImportError
+	var importErrors []ImportError
 
 	// Check version
 	if data.Version == "" {
-		errors = append(errors, ImportError{
+		importErrors = append(importErrors, ImportError{
 			Entity:  "export",
 			ID:      "",
 			Message: "missing version field",
@@ -456,14 +456,14 @@ func (i *Importer) Validate(data *ExportData) []ImportError {
 	// Validate languages
 	for idx, lang := range data.Languages {
 		if lang.Code == "" {
-			errors = append(errors, ImportError{
+			importErrors = append(importErrors, ImportError{
 				Entity:  "language",
 				ID:      strconv.Itoa(idx),
 				Message: "missing language code",
 			})
 		}
 		if lang.Name == "" {
-			errors = append(errors, ImportError{
+			importErrors = append(importErrors, ImportError{
 				Entity:  "language",
 				ID:      lang.Code,
 				Message: "missing language name",
@@ -474,14 +474,14 @@ func (i *Importer) Validate(data *ExportData) []ImportError {
 	// Validate users
 	for idx, user := range data.Users {
 		if user.Email == "" {
-			errors = append(errors, ImportError{
+			importErrors = append(importErrors, ImportError{
 				Entity:  "user",
 				ID:      strconv.Itoa(idx),
 				Message: "missing user email",
 			})
 		}
 		if user.Role == "" {
-			errors = append(errors, ImportError{
+			importErrors = append(importErrors, ImportError{
 				Entity:  "user",
 				ID:      user.Email,
 				Message: "missing user role",
@@ -492,14 +492,14 @@ func (i *Importer) Validate(data *ExportData) []ImportError {
 	// Validate categories
 	for idx, cat := range data.Categories {
 		if cat.Slug == "" {
-			errors = append(errors, ImportError{
+			importErrors = append(importErrors, ImportError{
 				Entity:  "category",
 				ID:      strconv.Itoa(idx),
 				Message: "missing category slug",
 			})
 		}
 		if cat.Name == "" {
-			errors = append(errors, ImportError{
+			importErrors = append(importErrors, ImportError{
 				Entity:  "category",
 				ID:      cat.Slug,
 				Message: "missing category name",
@@ -510,14 +510,14 @@ func (i *Importer) Validate(data *ExportData) []ImportError {
 	// Validate tags
 	for idx, tag := range data.Tags {
 		if tag.Slug == "" {
-			errors = append(errors, ImportError{
+			importErrors = append(importErrors, ImportError{
 				Entity:  "tag",
 				ID:      strconv.Itoa(idx),
 				Message: "missing tag slug",
 			})
 		}
 		if tag.Name == "" {
-			errors = append(errors, ImportError{
+			importErrors = append(importErrors, ImportError{
 				Entity:  "tag",
 				ID:      tag.Slug,
 				Message: "missing tag name",
@@ -528,14 +528,14 @@ func (i *Importer) Validate(data *ExportData) []ImportError {
 	// Validate pages
 	for idx, page := range data.Pages {
 		if page.Slug == "" {
-			errors = append(errors, ImportError{
+			importErrors = append(importErrors, ImportError{
 				Entity:  "page",
 				ID:      strconv.Itoa(idx),
 				Message: "missing page slug",
 			})
 		}
 		if page.Title == "" {
-			errors = append(errors, ImportError{
+			importErrors = append(importErrors, ImportError{
 				Entity:  "page",
 				ID:      page.Slug,
 				Message: "missing page title",
@@ -546,14 +546,14 @@ func (i *Importer) Validate(data *ExportData) []ImportError {
 	// Validate media
 	for idx, media := range data.Media {
 		if media.UUID == "" {
-			errors = append(errors, ImportError{
+			importErrors = append(importErrors, ImportError{
 				Entity:  "media",
 				ID:      strconv.Itoa(idx),
 				Message: "missing media UUID",
 			})
 		}
 		if media.Filename == "" {
-			errors = append(errors, ImportError{
+			importErrors = append(importErrors, ImportError{
 				Entity:  "media",
 				ID:      media.UUID,
 				Message: "missing media filename",
@@ -564,14 +564,14 @@ func (i *Importer) Validate(data *ExportData) []ImportError {
 	// Validate menus
 	for idx, menu := range data.Menus {
 		if menu.Slug == "" {
-			errors = append(errors, ImportError{
+			importErrors = append(importErrors, ImportError{
 				Entity:  "menu",
 				ID:      strconv.Itoa(idx),
 				Message: "missing menu slug",
 			})
 		}
 		if menu.Name == "" {
-			errors = append(errors, ImportError{
+			importErrors = append(importErrors, ImportError{
 				Entity:  "menu",
 				ID:      menu.Slug,
 				Message: "missing menu name",
@@ -582,14 +582,14 @@ func (i *Importer) Validate(data *ExportData) []ImportError {
 	// Validate forms
 	for idx, form := range data.Forms {
 		if form.Slug == "" {
-			errors = append(errors, ImportError{
+			importErrors = append(importErrors, ImportError{
 				Entity:  "form",
 				ID:      strconv.Itoa(idx),
 				Message: "missing form slug",
 			})
 		}
 		if form.Name == "" {
-			errors = append(errors, ImportError{
+			importErrors = append(importErrors, ImportError{
 				Entity:  "form",
 				ID:      form.Slug,
 				Message: "missing form name",
@@ -597,7 +597,7 @@ func (i *Importer) Validate(data *ExportData) []ImportError {
 		}
 	}
 
-	return errors
+	return importErrors
 }
 
 // ValidateFile validates an import file and returns information about its contents.

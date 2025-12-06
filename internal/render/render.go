@@ -594,7 +594,7 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	buf.WriteTo(w)
+	_, _ = buf.WriteTo(w)
 	return nil
 }
 
@@ -616,7 +616,7 @@ func (r *Renderer) RenderError(w http.ResponseWriter, req *http.Request, statusC
 	}
 
 	w.WriteHeader(statusCode)
-	r.Render(w, req, templateName, TemplateData{
+	_ = r.Render(w, req, templateName, TemplateData{
 		Title: title,
 	})
 }
