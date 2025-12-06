@@ -475,7 +475,7 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("form updated", "form_id", id, "updated_by", user.ID)
+	slog.Info("form updated", "form_id", id, "updated_by", middleware.GetUserID(r))
 	h.renderer.SetFlash(r, "Form updated successfully", "success")
 	http.Redirect(w, r, fmt.Sprintf("/admin/forms/%d", id), http.StatusSeeOther)
 }
@@ -507,8 +507,7 @@ func (h *FormsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
-	slog.Info("form deleted", "form_id", id, "deleted_by", user.ID)
+	slog.Info("form deleted", "form_id", id, "deleted_by", middleware.GetUserID(r))
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.WriteHeader(http.StatusOK)
@@ -1439,8 +1438,7 @@ func (h *FormsHandler) DeleteSubmission(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	user := middleware.GetUser(r)
-	slog.Info("submission deleted", "sub_id", subID, "form_id", formID, "deleted_by", user.ID)
+	slog.Info("submission deleted", "sub_id", subID, "form_id", formID, "deleted_by", middleware.GetUserID(r))
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.WriteHeader(http.StatusOK)

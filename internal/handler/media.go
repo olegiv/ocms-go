@@ -344,7 +344,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		slog.Info("media uploaded", "media_id", result.Media.ID, "filename", result.Media.Filename, "uploaded_by", user.ID)
+		slog.Info("media uploaded", "media_id", result.Media.ID, "filename", result.Media.Filename, "uploaded_by", middleware.GetUserID(r))
 
 		// Dispatch media.uploaded webhook event
 		h.dispatchMediaEvent(r.Context(), model.EventMediaUploaded, result.Media)
@@ -387,7 +387,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		uploadedCount++
 	}
 
-	slog.Info("batch upload complete", "uploaded", uploadedCount, "errors", errorCount, "uploaded_by", user.ID)
+	slog.Info("batch upload complete", "uploaded", uploadedCount, "errors", errorCount, "uploaded_by", middleware.GetUserID(r))
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.WriteHeader(http.StatusOK)
@@ -596,7 +596,7 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("media updated", "media_id", id, "updated_by", user.ID)
+	slog.Info("media updated", "media_id", id, "updated_by", middleware.GetUserID(r))
 	h.renderer.SetFlash(r, "Media updated successfully", "success")
 	http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
 }
@@ -631,8 +631,7 @@ func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
-	slog.Info("media deleted", "media_id", id, "filename", media.Filename, "deleted_by", user.ID)
+	slog.Info("media deleted", "media_id", id, "filename", media.Filename, "deleted_by", middleware.GetUserID(r))
 
 	// Dispatch media.deleted webhook event
 	h.dispatchMediaEvent(r.Context(), model.EventMediaDeleted, media)
@@ -734,8 +733,7 @@ func (h *MediaHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
-	slog.Info("folder created", "folder_id", folder.ID, "name", folder.Name, "created_by", user.ID)
+	slog.Info("folder created", "folder_id", folder.ID, "name", folder.Name, "created_by", middleware.GetUserID(r))
 
 	// For HTMX requests, return the new folder item HTML
 	if r.Header.Get("HX-Request") == "true" {
@@ -826,8 +824,7 @@ func (h *MediaHandler) UpdateFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
-	slog.Info("folder updated", "folder_id", id, "name", name, "updated_by", user.ID)
+	slog.Info("folder updated", "folder_id", id, "name", name, "updated_by", middleware.GetUserID(r))
 
 	// For HTMX requests, return success
 	if r.Header.Get("HX-Request") == "true" {
@@ -895,8 +892,7 @@ func (h *MediaHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
-	slog.Info("folder deleted", "folder_id", id, "name", folder.Name, "deleted_by", user.ID)
+	slog.Info("folder deleted", "folder_id", id, "name", folder.Name, "deleted_by", middleware.GetUserID(r))
 
 	// For HTMX requests, return empty response
 	if r.Header.Get("HX-Request") == "true" {
@@ -968,8 +964,7 @@ func (h *MediaHandler) MoveMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
-	slog.Info("media moved", "media_id", id, "folder_id", folderID, "moved_by", user.ID)
+	slog.Info("media moved", "media_id", id, "folder_id", folderID, "moved_by", middleware.GetUserID(r))
 
 	// For HTMX requests, return success
 	if r.Header.Get("HX-Request") == "true" {

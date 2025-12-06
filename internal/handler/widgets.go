@@ -284,8 +284,7 @@ func (h *WidgetsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
-	slog.Info("widget deleted", "widget_id", id, "deleted_by", user.ID)
+	slog.Info("widget deleted", "widget_id", id, "deleted_by", middleware.GetUserID(r))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{

@@ -80,8 +80,6 @@ func (h *CacheHandler) Stats(w http.ResponseWriter, r *http.Request) {
 
 // Clear handles POST /admin/cache/clear - clears all caches.
 func (h *CacheHandler) Clear(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-
 	if h.cacheManager == nil {
 		h.renderer.SetFlash(r, "Cache system not initialized", "error")
 		http.Redirect(w, r, "/admin", http.StatusSeeOther)
@@ -90,11 +88,11 @@ func (h *CacheHandler) Clear(w http.ResponseWriter, r *http.Request) {
 
 	h.cacheManager.ClearAll()
 
-	slog.Info("cache cleared", "cleared_by", user.ID)
+	slog.Info("cache cleared", "cleared_by", middleware.GetUserID(r))
 
 	// Log to event log
 	if h.eventService != nil {
-		h.eventService.LogCacheEvent(r.Context(), model.EventLevelInfo, "All caches cleared", &user.ID, nil)
+		_ = h.eventService.LogCacheEvent(r.Context(), model.EventLevelInfo, "All caches cleared", middleware.GetUserIDPtr(r), nil)
 	}
 
 	h.renderer.SetFlash(r, "All caches cleared successfully", "success")
@@ -103,8 +101,6 @@ func (h *CacheHandler) Clear(w http.ResponseWriter, r *http.Request) {
 
 // ClearConfig handles POST /admin/cache/clear/config - clears config cache.
 func (h *CacheHandler) ClearConfig(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-
 	if h.cacheManager == nil {
 		h.renderer.SetFlash(r, "Cache system not initialized", "error")
 		http.Redirect(w, r, "/admin/cache", http.StatusSeeOther)
@@ -113,11 +109,11 @@ func (h *CacheHandler) ClearConfig(w http.ResponseWriter, r *http.Request) {
 
 	h.cacheManager.InvalidateConfig()
 
-	slog.Info("config cache cleared", "cleared_by", user.ID)
+	slog.Info("config cache cleared", "cleared_by", middleware.GetUserID(r))
 
 	// Log to event log
 	if h.eventService != nil {
-		h.eventService.LogCacheEvent(r.Context(), model.EventLevelInfo, "Configuration cache cleared", &user.ID, nil)
+		_ = h.eventService.LogCacheEvent(r.Context(), model.EventLevelInfo, "Configuration cache cleared", middleware.GetUserIDPtr(r), nil)
 	}
 
 	h.renderer.SetFlash(r, "Configuration cache cleared", "success")
@@ -126,8 +122,6 @@ func (h *CacheHandler) ClearConfig(w http.ResponseWriter, r *http.Request) {
 
 // ClearSitemap handles POST /admin/cache/clear/sitemap - clears sitemap cache.
 func (h *CacheHandler) ClearSitemap(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-
 	if h.cacheManager == nil {
 		h.renderer.SetFlash(r, "Cache system not initialized", "error")
 		http.Redirect(w, r, "/admin/cache", http.StatusSeeOther)
@@ -136,11 +130,11 @@ func (h *CacheHandler) ClearSitemap(w http.ResponseWriter, r *http.Request) {
 
 	h.cacheManager.InvalidateSitemap()
 
-	slog.Info("sitemap cache cleared", "cleared_by", user.ID)
+	slog.Info("sitemap cache cleared", "cleared_by", middleware.GetUserID(r))
 
 	// Log to event log
 	if h.eventService != nil {
-		h.eventService.LogCacheEvent(r.Context(), model.EventLevelInfo, "Sitemap cache cleared", &user.ID, nil)
+		_ = h.eventService.LogCacheEvent(r.Context(), model.EventLevelInfo, "Sitemap cache cleared", middleware.GetUserIDPtr(r), nil)
 	}
 
 	h.renderer.SetFlash(r, "Sitemap cache cleared", "success")

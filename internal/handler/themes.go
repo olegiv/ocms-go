@@ -129,7 +129,7 @@ func (h *ThemesHandler) Activate(w http.ResponseWriter, r *http.Request) {
 		h.cacheManager.InvalidateConfig()
 	}
 
-	slog.Info("theme activated", "theme", themeName, "activated_by", user.ID)
+	slog.Info("theme activated", "theme", themeName, "activated_by", middleware.GetUserID(r))
 	h.renderer.SetFlash(r, "Theme activated successfully", "success")
 	http.Redirect(w, r, "/admin/themes", http.StatusSeeOther)
 }
@@ -247,7 +247,7 @@ func (h *ThemesHandler) SaveSettings(w http.ResponseWriter, r *http.Request) {
 		h.cacheManager.InvalidateThemeSettings()
 	}
 
-	slog.Info("theme settings saved", "theme", themeName, "saved_by", user.ID)
+	slog.Info("theme settings saved", "theme", themeName, "saved_by", middleware.GetUserID(r))
 	h.renderer.SetFlash(r, "Theme settings saved successfully", "success")
 	http.Redirect(w, r, "/admin/themes/"+themeName+"/settings", http.StatusSeeOther)
 }

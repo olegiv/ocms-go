@@ -305,7 +305,7 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("tag created", "tag_id", newTag.ID, "slug", newTag.Slug, "created_by", user.ID)
+	slog.Info("tag created", "tag_id", newTag.ID, "slug", newTag.Slug, "created_by", middleware.GetUserID(r))
 	h.renderer.SetFlash(r, "Tag created successfully", "success")
 	http.Redirect(w, r, "/admin/tags", http.StatusSeeOther)
 }
@@ -549,7 +549,7 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("tag updated", "tag_id", updatedTag.ID, "slug", updatedTag.Slug, "updated_by", user.ID)
+	slog.Info("tag updated", "tag_id", updatedTag.ID, "slug", updatedTag.Slug, "updated_by", middleware.GetUserID(r))
 	h.renderer.SetFlash(r, "Tag updated successfully", "success")
 	http.Redirect(w, r, "/admin/tags", http.StatusSeeOther)
 }
@@ -584,8 +584,7 @@ func (h *TaxonomyHandler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
-	slog.Info("tag deleted", "tag_id", id, "slug", tag.Slug, "deleted_by", user.ID)
+	slog.Info("tag deleted", "tag_id", id, "slug", tag.Slug, "deleted_by", middleware.GetUserID(r))
 
 	// For HTMX requests, return empty response (row removed)
 	if r.Header.Get("HX-Request") == "true" {
@@ -633,8 +632,6 @@ func (h *TaxonomyHandler) SearchTags(w http.ResponseWriter, r *http.Request) {
 
 // TranslateTag handles POST /admin/tags/{id}/translate/{langCode} - creates a translation.
 func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-
 	// Get tag ID from URL
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -743,7 +740,7 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 		"source_tag_id", id,
 		"translated_tag_id", translatedTag.ID,
 		"language", langCode,
-		"created_by", user.ID)
+		"created_by", middleware.GetUserID(r))
 
 	h.renderer.SetFlash(r, fmt.Sprintf("Translation created for %s. Please translate the name.", targetLang.Name), "success")
 	http.Redirect(w, r, fmt.Sprintf("/admin/tags/%d", translatedTag.ID), http.StatusSeeOther)
@@ -1109,7 +1106,7 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	slog.Info("category created", "category_id", newCategory.ID, "slug", newCategory.Slug, "created_by", user.ID)
+	slog.Info("category created", "category_id", newCategory.ID, "slug", newCategory.Slug, "created_by", middleware.GetUserID(r))
 	h.renderer.SetFlash(r, "Category created successfully", "success")
 	http.Redirect(w, r, "/admin/categories", http.StatusSeeOther)
 }
@@ -1433,7 +1430,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	slog.Info("category updated", "category_id", updatedCategory.ID, "slug", updatedCategory.Slug, "updated_by", user.ID)
+	slog.Info("category updated", "category_id", updatedCategory.ID, "slug", updatedCategory.Slug, "updated_by", middleware.GetUserID(r))
 	h.renderer.SetFlash(r, "Category updated successfully", "success")
 	http.Redirect(w, r, "/admin/categories", http.StatusSeeOther)
 }
@@ -1468,8 +1465,7 @@ func (h *TaxonomyHandler) DeleteCategory(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	user := middleware.GetUser(r)
-	slog.Info("category deleted", "category_id", id, "slug", category.Slug, "deleted_by", user.ID)
+	slog.Info("category deleted", "category_id", id, "slug", category.Slug, "deleted_by", middleware.GetUserID(r))
 
 	// For HTMX requests, return empty response (row removed)
 	if r.Header.Get("HX-Request") == "true" {
@@ -1484,8 +1480,6 @@ func (h *TaxonomyHandler) DeleteCategory(w http.ResponseWriter, r *http.Request)
 
 // TranslateCategory handles POST /admin/categories/{id}/translate/{langCode} - creates a translation.
 func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-
 	// Get category ID from URL
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -1597,7 +1591,7 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 		"source_category_id", id,
 		"translated_category_id", translatedCategory.ID,
 		"language", langCode,
-		"created_by", user.ID)
+		"created_by", middleware.GetUserID(r))
 
 	h.renderer.SetFlash(r, fmt.Sprintf("Translation created for %s. Please translate the name.", targetLang.Name), "success")
 	http.Redirect(w, r, fmt.Sprintf("/admin/categories/%d", translatedCategory.ID), http.StatusSeeOther)

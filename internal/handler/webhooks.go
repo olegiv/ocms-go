@@ -361,7 +361,7 @@ func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("webhook created", "webhook_id", webhook.ID, "name", webhook.Name, "created_by", user.ID)
+	slog.Info("webhook created", "webhook_id", webhook.ID, "name", webhook.Name, "created_by", middleware.GetUserID(r))
 	h.renderer.SetFlash(r, "Webhook created successfully", "success")
 	http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
 }
@@ -567,15 +567,13 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("webhook updated", "webhook_id", id, "updated_by", user.ID)
+	slog.Info("webhook updated", "webhook_id", id, "updated_by", middleware.GetUserID(r))
 	h.renderer.SetFlash(r, "Webhook updated successfully", "success")
 	http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
 }
 
 // Delete handles DELETE /admin/webhooks/{id} - deletes a webhook.
 func (h *WebhooksHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -600,7 +598,7 @@ func (h *WebhooksHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("webhook deleted", "webhook_id", id, "name", webhook.Name, "deleted_by", user.ID)
+	slog.Info("webhook deleted", "webhook_id", id, "name", webhook.Name, "deleted_by", middleware.GetUserID(r))
 
 	// Check if this is an HTMX request
 	if r.Header.Get("HX-Request") == "true" {
@@ -762,15 +760,13 @@ func (h *WebhooksHandler) Test(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("test webhook created", "webhook_id", id, "triggered_by", user.ID)
+	slog.Info("test webhook created", "webhook_id", id, "triggered_by", middleware.GetUserID(r))
 	h.renderer.SetFlash(r, "Test event queued for delivery", "success")
 	http.Redirect(w, r, fmt.Sprintf("/admin/webhooks/%d/deliveries", id), http.StatusSeeOther)
 }
 
 // RetryDelivery handles POST /admin/webhooks/{id}/deliveries/{did}/retry - retries a delivery.
 func (h *WebhooksHandler) RetryDelivery(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-
 	webhookIDStr := chi.URLParam(r, "id")
 	webhookID, err := strconv.ParseInt(webhookIDStr, 10, 64)
 	if err != nil {
@@ -800,7 +796,7 @@ func (h *WebhooksHandler) RetryDelivery(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	slog.Info("delivery reset for retry", "delivery_id", deliveryID, "webhook_id", webhookID, "reset_by", user.ID)
+	slog.Info("delivery reset for retry", "delivery_id", deliveryID, "webhook_id", webhookID, "reset_by", middleware.GetUserID(r))
 	h.renderer.SetFlash(r, "Delivery queued for retry", "success")
 	http.Redirect(w, r, fmt.Sprintf("/admin/webhooks/%d/deliveries", webhookID), http.StatusSeeOther)
 }

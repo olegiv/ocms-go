@@ -287,7 +287,7 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("API key created", "key_id", apiKey.ID, "name", apiKey.Name, "created_by", user.ID)
+	slog.Info("API key created", "key_id", apiKey.ID, "name", apiKey.Name, "created_by", middleware.GetUserID(r))
 
 	// Render success page showing the generated key once
 	data := APIKeyFormData{
@@ -512,15 +512,13 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("API key updated", "key_id", id, "updated_by", user.ID)
+	slog.Info("API key updated", "key_id", id, "updated_by", middleware.GetUserID(r))
 	h.renderer.SetFlash(r, "API key updated successfully", "success")
 	http.Redirect(w, r, "/admin/api-keys", http.StatusSeeOther)
 }
 
 // Delete handles DELETE /admin/api-keys/{id} - deletes (deactivates) an API key.
 func (h *APIKeysHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-
 	// Get API key ID from URL
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -553,7 +551,7 @@ func (h *APIKeysHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("API key revoked", "key_id", id, "name", apiKey.Name, "revoked_by", user.ID)
+	slog.Info("API key revoked", "key_id", id, "name", apiKey.Name, "revoked_by", middleware.GetUserID(r))
 
 	// Check if this is an HTMX request
 	if r.Header.Get("HX-Request") == "true" {

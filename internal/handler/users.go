@@ -316,7 +316,7 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("user created", "user_id", newUser.ID, "email", newUser.Email, "created_by", user.ID)
+	slog.Info("user created", "user_id", newUser.ID, "email", newUser.Email, "created_by", middleware.GetUserID(r))
 
 	// Dispatch user.created webhook event
 	h.dispatchUserEvent(r.Context(), model.EventUserCreated, newUser)

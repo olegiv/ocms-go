@@ -509,7 +509,7 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 		h.renderer.InvalidateMenuCache(slug)
 	}
 
-	slog.Info("menu updated", "menu_id", id, "updated_by", user.ID)
+	slog.Info("menu updated", "menu_id", id, "updated_by", middleware.GetUserID(r))
 	h.renderer.SetFlash(r, "Menu updated successfully", "success")
 	http.Redirect(w, r, fmt.Sprintf("/admin/menus/%d", id), http.StatusSeeOther)
 }
@@ -550,8 +550,7 @@ func (h *MenusHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Invalidate menu cache
 	h.renderer.InvalidateMenuCache(menu.Slug)
 
-	user := middleware.GetUser(r)
-	slog.Info("menu deleted", "menu_id", id, "slug", menu.Slug, "deleted_by", user.ID)
+	slog.Info("menu deleted", "menu_id", id, "slug", menu.Slug, "deleted_by", middleware.GetUserID(r))
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.WriteHeader(http.StatusOK)

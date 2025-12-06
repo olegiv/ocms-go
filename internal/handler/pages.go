@@ -758,10 +758,10 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	slog.Info("page created", "page_id", newPage.ID, "slug", newPage.Slug, "created_by", user.ID)
+	slog.Info("page created", "page_id", newPage.ID, "slug", newPage.Slug, "created_by", middleware.GetUserID(r))
 
 	// Dispatch page.created webhook event
-	h.dispatchPageEvent(r.Context(), model.EventPageCreated, newPage, user.Email)
+	h.dispatchPageEvent(r.Context(), model.EventPageCreated, newPage, middleware.GetUserEmail(r))
 
 	h.renderer.SetFlash(r, "Page created successfully", "success")
 	http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
@@ -1185,10 +1185,10 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	slog.Info("page updated", "page_id", updatedPage.ID, "slug", updatedPage.Slug, "updated_by", user.ID)
+	slog.Info("page updated", "page_id", updatedPage.ID, "slug", updatedPage.Slug, "updated_by", middleware.GetUserID(r))
 
 	// Dispatch page.updated webhook event
-	h.dispatchPageEvent(r.Context(), model.EventPageUpdated, updatedPage, user.Email)
+	h.dispatchPageEvent(r.Context(), model.EventPageUpdated, updatedPage, middleware.GetUserEmail(r))
 
 	h.renderer.SetFlash(r, "Page updated successfully", "success")
 	http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
@@ -1224,11 +1224,10 @@ func (h *PagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
-	slog.Info("page deleted", "page_id", id, "slug", page.Slug, "deleted_by", user.ID)
+	slog.Info("page deleted", "page_id", id, "slug", page.Slug, "deleted_by", middleware.GetUserID(r))
 
 	// Dispatch page.deleted webhook event
-	h.dispatchPageEvent(r.Context(), model.EventPageDeleted, page, user.Email)
+	h.dispatchPageEvent(r.Context(), model.EventPageDeleted, page, middleware.GetUserEmail(r))
 
 	// For HTMX requests, return empty response (row removed)
 	if r.Header.Get("HX-Request") == "true" {
@@ -1243,8 +1242,6 @@ func (h *PagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // TogglePublish handles POST /admin/pages/{id}/publish - toggles publish status.
 func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-
 	// Get page ID from URL
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -1279,7 +1276,7 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 		})
 		message = "Page unpublished successfully"
 		eventType = model.EventPageUnpublished
-		slog.Info("page unpublished", "page_id", id, "slug", page.Slug, "unpublished_by", user.ID)
+		slog.Info("page unpublished", "page_id", id, "slug", page.Slug, "unpublished_by", middleware.GetUserID(r))
 	} else {
 		// Publish
 		_, err = h.queries.PublishPage(r.Context(), store.PublishPageParams{
@@ -1289,7 +1286,7 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 		})
 		message = "Page published successfully"
 		eventType = model.EventPagePublished
-		slog.Info("page published", "page_id", id, "slug", page.Slug, "published_by", user.ID)
+		slog.Info("page published", "page_id", id, "slug", page.Slug, "published_by", middleware.GetUserID(r))
 	}
 
 	if err != nil {
@@ -1302,7 +1299,7 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 	// Get updated page for webhook event
 	updatedPage, err := h.queries.GetPageByID(r.Context(), id)
 	if err == nil {
-		h.dispatchPageEvent(r.Context(), eventType, updatedPage, user.Email)
+		h.dispatchPageEvent(r.Context(), eventType, updatedPage, middleware.GetUserEmail(r))
 	}
 
 	h.renderer.SetFlash(r, message, "success")
@@ -1515,7 +1512,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		// Don't fail the request - page was restored
 	}
 
-	slog.Info("page version restored", "page_id", id, "version_id", versionId, "restored_by", user.ID)
+	slog.Info("page version restored", "page_id", id, "version_id", versionId, "restored_by", middleware.GetUserID(r))
 	h.renderer.SetFlash(r, "Version restored successfully", "success")
 	http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", id), http.StatusSeeOther)
 }

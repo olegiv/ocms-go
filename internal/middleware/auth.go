@@ -85,6 +85,33 @@ func GetUser(r *http.Request) *store.User {
 	return &user
 }
 
+// GetUserID returns the current user's ID from context, or 0 if not found.
+// Safe to use in logging where a zero-value is acceptable.
+func GetUserID(r *http.Request) int64 {
+	if user := GetUser(r); user != nil {
+		return user.ID
+	}
+	return 0
+}
+
+// GetUserIDPtr returns a pointer to the current user's ID from context, or nil if not found.
+// Useful for optional user ID parameters in event logging.
+func GetUserIDPtr(r *http.Request) *int64 {
+	if user := GetUser(r); user != nil {
+		id := user.ID
+		return &id
+	}
+	return nil
+}
+
+// GetUserEmail returns the current user's email from context, or empty string if not found.
+func GetUserEmail(r *http.Request) string {
+	if user := GetUser(r); user != nil {
+		return user.Email
+	}
+	return ""
+}
+
 // RequireAdmin creates middleware that requires admin role.
 // This should be used after LoadUser middleware.
 func RequireAdmin(next http.Handler) http.Handler {

@@ -208,7 +208,7 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 		h.cacheManager.InvalidateConfig()
 	}
 
-	slog.Info("config updated", "updated_by", user.ID)
+	slog.Info("config updated", "updated_by", middleware.GetUserID(r))
 	h.renderer.SetFlash(r, i18n.T(lang, "msg.config_saved"), "success")
 	http.Redirect(w, r, "/admin/config", http.StatusSeeOther)
 }
