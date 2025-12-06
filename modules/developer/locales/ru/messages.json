@@ -1,5 +1,5 @@
 {
-    "$schema": "../../../../../.schema/i18n-schema.json",
+    "$schema": "../../../../.schema/i18n-schema.json",
     "language": "ru",
     "messages": [
         {"id": "nav.developer", "message": "Developer Tools", "translation": "Инструменты разработчика"},
