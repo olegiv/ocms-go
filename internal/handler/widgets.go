@@ -189,7 +189,7 @@ func (h *WidgetsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	slog.Info("widget created", "widget_id", widget.ID, "theme", req.Theme, "area", req.Area)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"widget":  widget,
 	})
@@ -252,7 +252,7 @@ func (h *WidgetsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	slog.Info("widget updated", "widget_id", id)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"widget":  updatedWidget,
 	})
@@ -287,7 +287,7 @@ func (h *WidgetsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	slog.Info("widget deleted", "widget_id", id, "deleted_by", middleware.GetUserID(r))
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 	})
 }
@@ -321,7 +321,7 @@ func (h *WidgetsHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 	})
 }
@@ -346,7 +346,7 @@ func (h *WidgetsHandler) GetWidget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(widget)
+	_ = json.NewEncoder(w).Encode(widget)
 }
 
 // MoveWidgetRequest represents the JSON request for moving a widget to a different area.
@@ -418,7 +418,7 @@ func (h *WidgetsHandler) MoveWidget(w http.ResponseWriter, r *http.Request) {
 	slog.Info("widget moved", "widget_id", id, "new_area", req.Area)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"widget":  updatedWidget,
 	})

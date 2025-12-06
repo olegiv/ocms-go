@@ -98,14 +98,14 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}
 
-	json.NewEncoder(w).Encode(status)
+	_ = json.NewEncoder(w).Encode(status)
 }
 
 // Liveness handles GET /health/live - simple liveness check.
 func (h *HealthHandler) Liveness(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"status": "alive",
 	})
 }
@@ -119,12 +119,12 @@ func (h *HealthHandler) Readiness(w http.ResponseWriter, r *http.Request) {
 
 	if dbCheck.Status == "healthy" {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{
 			"status": "ready",
 		})
 	} else {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{
 			"status":  "not_ready",
 			"message": dbCheck.Message,
 		})

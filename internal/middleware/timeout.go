@@ -40,7 +40,7 @@ func Timeout(timeout time.Duration) func(http.Handler) http.Handler {
 				if !tw.wroteHeader {
 					w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 					w.WriteHeader(http.StatusServiceUnavailable)
-					w.Write([]byte("Request timeout"))
+					_, _ = w.Write([]byte("Request timeout"))
 				}
 			}
 		})

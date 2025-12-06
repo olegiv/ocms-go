@@ -613,7 +613,7 @@ func (h *FormsHandler) AddField(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"field":   field,
 	})
@@ -711,7 +711,7 @@ func (h *FormsHandler) UpdateField(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"field":   updatedField,
 	})
@@ -756,7 +756,7 @@ func (h *FormsHandler) DeleteField(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 	})
 }
@@ -821,7 +821,7 @@ func (h *FormsHandler) ReorderFields(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 	})
 }
@@ -1530,7 +1530,7 @@ func (h *FormsHandler) ExportSubmissions(w http.ResponseWriter, r *http.Request)
 	filename := fmt.Sprintf("%s-submissions-%s.csv", form.Slug, time.Now().Format("2006-01-02"))
 	w.Header().Set("Content-Type", "text/csv")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
-	w.Write([]byte(csvBuilder.String()))
+	_, _ = w.Write([]byte(csvBuilder.String()))
 
 	slog.Info("submissions exported", "form_id", formID, "count", len(submissions))
 }

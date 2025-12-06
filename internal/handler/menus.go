@@ -658,7 +658,7 @@ func (h *MenusHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 	h.renderer.InvalidateMenuCache(menu.Slug)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"item":    item,
 	})
@@ -758,7 +758,7 @@ func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 	h.renderer.InvalidateMenuCache(menu.Slug)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"item":    updatedItem,
 	})
@@ -813,7 +813,7 @@ func (h *MenusHandler) DeleteItem(w http.ResponseWriter, r *http.Request) {
 	h.renderer.InvalidateMenuCache(menu.Slug)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 	})
 }
@@ -906,7 +906,7 @@ func (h *MenusHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 	h.renderer.InvalidateMenuCache(menu.Slug)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 	})
 }

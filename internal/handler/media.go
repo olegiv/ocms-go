@@ -296,7 +296,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		slog.Error("failed to parse multipart form", "error", err)
 		if r.Header.Get("HX-Request") == "true" {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("File too large or invalid form"))
+			_, _ = w.Write([]byte("File too large or invalid form"))
 			return
 		}
 		h.renderer.SetFlash(r, "Error parsing upload", "error")
@@ -321,7 +321,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			if r.Header.Get("HX-Request") == "true" {
 				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte("No file uploaded"))
+				_, _ = w.Write([]byte("No file uploaded"))
 				return
 			}
 			h.renderer.SetFlash(r, "No file uploaded", "error")
@@ -336,7 +336,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			slog.Error("failed to upload file", "error", err, "filename", header.Filename)
 			if r.Header.Get("HX-Request") == "true" {
 				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(err.Error()))
+				_, _ = w.Write([]byte(err.Error()))
 				return
 			}
 			h.renderer.SetFlash(r, "Upload failed: "+err.Error(), "error")
@@ -352,7 +352,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("HX-Request") == "true" {
 			// Return success HTML for HTMX
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(fmt.Sprintf(`<div class="upload-success">Uploaded: %s</div>`, result.Media.Filename)))
+			_, _ = w.Write([]byte(fmt.Sprintf(`<div class="upload-success">Uploaded: %s</div>`, result.Media.Filename)))
 			return
 		}
 
@@ -391,7 +391,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(fmt.Sprintf(`<div class="upload-success">Uploaded %d files</div>`, uploadedCount)))
+		_, _ = w.Write([]byte(fmt.Sprintf(`<div class="upload-success">Uploaded %d files</div>`, uploadedCount)))
 		return
 	}
 
@@ -747,7 +747,7 @@ func (h *MediaHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 				<span class="folder-count">0</span>
 			</a>
 		</li>`, folder.ID, folder.ID, folder.Name)
-		w.Write([]byte(html))
+		_, _ = w.Write([]byte(html))
 		return
 	}
 
@@ -830,7 +830,7 @@ func (h *MediaHandler) UpdateFolder(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Trigger", "folderUpdated")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(name))
+		_, _ = w.Write([]byte(name))
 		return
 	}
 
@@ -1050,7 +1050,7 @@ func (h *MediaHandler) API(w http.ResponseWriter, r *http.Request) {
 		slog.Error("failed to fetch media for API", "error", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"error":"Internal server error"}`))
+		_, _ = w.Write([]byte(`{"error":"Internal server error"}`))
 		return
 	}
 

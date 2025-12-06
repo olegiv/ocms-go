@@ -67,7 +67,7 @@ func ETag() func(http.Handler) http.Handler {
 			// Only process successful responses
 			if ew.statusCode != http.StatusOK {
 				w.WriteHeader(ew.statusCode)
-				w.Write(ew.buf.Bytes())
+				_, _ = w.Write(ew.buf.Bytes())
 				return
 			}
 
@@ -89,7 +89,7 @@ func ETag() func(http.Handler) http.Handler {
 			// Set ETag header and write response
 			w.Header().Set("ETag", etag)
 			w.WriteHeader(ew.statusCode)
-			w.Write(ew.buf.Bytes())
+			_, _ = w.Write(ew.buf.Bytes())
 		})
 	}
 }

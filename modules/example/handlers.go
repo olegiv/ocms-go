@@ -25,7 +25,7 @@ type ExampleItem struct {
 func (m *Module) handleExample(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`<!DOCTYPE html>
+	_, _ = w.Write([]byte(`<!DOCTYPE html>
 <html>
 <head>
     <title>Example Module</title>
@@ -119,7 +119,7 @@ func (m *Module) handleListItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"items": items,
 		"total": len(items),
 	})
@@ -145,7 +145,7 @@ func (m *Module) handleCreateItem(w http.ResponseWriter, r *http.Request) {
 	// Check if this is an AJAX request
 	if r.Header.Get("Accept") == "application/json" {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(item)
+		_ = json.NewEncoder(w).Encode(item)
 		return
 	}
 
