@@ -289,7 +289,7 @@ func (h *MediaHandler) UploadForm(w http.ResponseWriter, r *http.Request) {
 
 // Upload handles POST /admin/media/upload - processes file upload.
 func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
+	userID := middleware.GetUserID(r)
 
 	// Parse multipart form with max memory
 	if err := r.ParseMultipartForm(service.MaxUploadSize); err != nil {
@@ -331,7 +331,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		defer file.Close()
 
 		// Process single file
-		result, err := h.mediaService.Upload(r.Context(), file, header, user.ID, folderID)
+		result, err := h.mediaService.Upload(r.Context(), file, header, userID, folderID)
 		if err != nil {
 			slog.Error("failed to upload file", "error", err, "filename", header.Filename)
 			if r.Header.Get("HX-Request") == "true" {
@@ -372,7 +372,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		result, err := h.mediaService.Upload(r.Context(), file, header, user.ID, folderID)
+		result, err := h.mediaService.Upload(r.Context(), file, header, userID, folderID)
 		file.Close()
 
 		if err != nil {

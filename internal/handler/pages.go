@@ -687,12 +687,13 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Create page
 	now := time.Now()
+	userID := middleware.GetUserID(r)
 	newPage, err := h.queries.CreatePage(r.Context(), store.CreatePageParams{
 		Title:           title,
 		Slug:            slug,
 		Body:            body,
 		Status:          status,
-		AuthorID:        user.ID,
+		AuthorID:        userID,
 		FeaturedImageID: featuredImageID,
 		MetaTitle:       metaTitle,
 		MetaDescription: metaDescription,
@@ -718,7 +719,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		PageID:    newPage.ID,
 		Title:     title,
 		Body:      body,
-		ChangedBy: user.ID,
+		ChangedBy: userID,
 		CreatedAt: now,
 	})
 	if err != nil {
@@ -1134,7 +1135,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 			PageID:    id,
 			Title:     title,
 			Body:      body,
-			ChangedBy: user.ID,
+			ChangedBy: middleware.GetUserID(r),
 			CreatedAt: now,
 		})
 		if err != nil {
@@ -1419,8 +1420,6 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 
 // RestoreVersion handles POST /admin/pages/{id}/versions/{versionId}/restore - restores a version.
 func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-
 	// Get page ID from URL
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -1504,7 +1503,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		PageID:    id,
 		Title:     version.Title,
 		Body:      version.Body,
-		ChangedBy: user.ID,
+		ChangedBy: middleware.GetUserID(r),
 		CreatedAt: now,
 	})
 	if err != nil {
@@ -1519,8 +1518,6 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 
 // Translate handles POST /admin/pages/{id}/translate/{langCode} - creates a translation.
 func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-
 	// Get page ID from URL
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -1598,12 +1595,13 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 
 	// Create the translated page with same title but empty body
 	now := time.Now()
+	userID := middleware.GetUserID(r)
 	translatedPage, err := h.queries.CreatePage(r.Context(), store.CreatePageParams{
 		Title:           sourcePage.Title, // Keep same title (user will translate)
 		Slug:            translatedSlug,
 		Body:            "",              // Empty body for translation
 		Status:          PageStatusDraft, // Always start as draft
-		AuthorID:        user.ID,
+		AuthorID:        userID,
 		FeaturedImageID: sourcePage.FeaturedImageID,
 		MetaTitle:       "",
 		MetaDescription: "",
@@ -1629,7 +1627,7 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		PageID:    translatedPage.ID,
 		Title:     translatedPage.Title,
 		Body:      translatedPage.Body,
-		ChangedBy: user.ID,
+		ChangedBy: userID,
 		CreatedAt: now,
 	})
 	if err != nil {
@@ -1654,7 +1652,7 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		"source_page_id", id,
 		"translated_page_id", translatedPage.ID,
 		"language", langCode,
-		"created_by", user.ID)
+		"created_by", userID)
 
 	h.renderer.SetFlash(r, fmt.Sprintf("Translation created for %s. Please translate the content.", targetLang.Name), "success")
 	http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", translatedPage.ID), http.StatusSeeOther)

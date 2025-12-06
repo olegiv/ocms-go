@@ -121,7 +121,8 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	errors := make(map[string]string)
 	now := time.Now()
-	updatedBy := sql.NullInt64{Int64: user.ID, Valid: true}
+	userID := middleware.GetUserID(r)
+	updatedBy := sql.NullInt64{Int64: userID, Valid: userID > 0}
 
 	// Update each config item
 	for _, cfg := range configs {

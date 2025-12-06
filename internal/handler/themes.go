@@ -77,8 +77,6 @@ func (h *ThemesHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Activate handles POST /admin/themes/activate - activates a theme.
 func (h *ThemesHandler) Activate(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-
 	if err := r.ParseForm(); err != nil {
 		h.renderer.SetFlash(r, "Invalid form data", "error")
 		http.Redirect(w, r, "/admin/themes", http.StatusSeeOther)
@@ -109,7 +107,8 @@ func (h *ThemesHandler) Activate(w http.ResponseWriter, r *http.Request) {
 
 	// Store the active theme in config
 	now := time.Now()
-	updatedBy := sql.NullInt64{Int64: user.ID, Valid: true}
+	userID := middleware.GetUserID(r)
+	updatedBy := sql.NullInt64{Int64: userID, Valid: userID > 0}
 
 	_, err := h.queries.UpsertConfig(r.Context(), store.UpsertConfigParams{
 		Key:         "active_theme",
@@ -188,7 +187,6 @@ func (h *ThemesHandler) Settings(w http.ResponseWriter, r *http.Request) {
 
 // SaveSettings handles PUT /admin/themes/{name}/settings - saves theme settings.
 func (h *ThemesHandler) SaveSettings(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	themeName := chi.URLParam(r, "name")
 
 	thm, err := h.themeManager.GetTheme(themeName)
@@ -224,7 +222,8 @@ func (h *ThemesHandler) SaveSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
-	updatedBy := sql.NullInt64{Int64: user.ID, Valid: true}
+	userID := middleware.GetUserID(r)
+	updatedBy := sql.NullInt64{Int64: userID, Valid: userID > 0}
 	configKey := "theme_settings_" + themeName
 
 	_, err = h.queries.UpsertConfig(r.Context(), store.UpsertConfigParams{

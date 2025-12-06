@@ -138,7 +138,7 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	data := UsersListData{
 		Users:         users,
-		CurrentUserID: user.ID,
+		CurrentUserID: middleware.GetUserID(r),
 		CurrentPage:   page,
 		TotalPages:    totalPages,
 		TotalUsers:    totalUsers,

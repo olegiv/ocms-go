@@ -276,7 +276,7 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Permissions: permissionsJSON,
 		ExpiresAt:   expiresAt,
 		IsActive:    true,
-		CreatedBy:   user.ID,
+		CreatedBy:   middleware.GetUserID(r),
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	})

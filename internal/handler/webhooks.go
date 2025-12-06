@@ -350,7 +350,7 @@ func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Events:    model.EventsToJSON(events),
 		IsActive:  isActive,
 		Headers:   model.HeadersToJSON(headers),
-		CreatedBy: user.ID,
+		CreatedBy: middleware.GetUserID(r),
 		CreatedAt: now,
 		UpdatedAt: now,
 	})
@@ -706,8 +706,6 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 
 // Test handles POST /admin/webhooks/{id}/test - sends a test event.
 func (h *WebhooksHandler) Test(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -736,8 +734,8 @@ func (h *WebhooksHandler) Test(w http.ResponseWriter, r *http.Request) {
 			"message":    "This is a test webhook delivery",
 			"webhook_id": webhook.ID,
 			"triggered_by": map[string]interface{}{
-				"user_id": user.ID,
-				"email":   user.Email,
+				"user_id": middleware.GetUserID(r),
+				"email":   middleware.GetUserEmail(r),
 			},
 		},
 	}
