@@ -5,12 +5,16 @@ package example
 import (
 	"context"
 	"database/sql"
+	"embed"
 	"html/template"
 
 	"github.com/go-chi/chi/v5"
 
 	"ocms-go/internal/module"
 )
+
+//go:embed locales
+var localesFS embed.FS
 
 // Module implements the module.Module interface.
 type Module struct {
@@ -76,6 +80,11 @@ func (m *Module) TemplateFuncs() template.FuncMap {
 // AdminURL returns the admin dashboard URL for the module.
 func (m *Module) AdminURL() string {
 	return "/admin/example"
+}
+
+// TranslationsFS returns the embedded filesystem containing module translations.
+func (m *Module) TranslationsFS() embed.FS {
+	return localesFS
 }
 
 // Migrations returns database migrations for the module.

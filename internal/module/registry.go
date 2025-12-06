@@ -4,11 +4,14 @@ import (
 	"database/sql"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"ocms-go/internal/i18n"
 )
 
 // Registry manages module registration and lifecycle.
@@ -95,6 +98,11 @@ func (r *Registry) InitAll(ctx *ModuleContext) error {
 
 		if err := m.Init(ctx); err != nil {
 			return fmt.Errorf("initializing module %q: %w", name, err)
+		}
+
+		// Load module translations
+		if err := r.loadModuleTranslations(m); err != nil {
+			r.logger.Warn("failed to load module translations", "module", name, "error", err)
 		}
 
 		r.logger.Info("module initialized", "name", name)
@@ -191,6 +199,25 @@ func (r *Registry) recordMigration(db *sql.DB, module string, version int64) err
 		module, version, time.Now(),
 	)
 	return err
+}
+
+// loadModuleTranslations loads translations from a module's embedded filesystem.
+func (r *Registry) loadModuleTranslations(m Module) error {
+	transFS := m.TranslationsFS()
+
+	// Check if the module has translations by trying to read the locales directory
+	_, err := fs.ReadDir(transFS, "locales")
+	if err != nil {
+		// No translations for this module
+		return nil
+	}
+
+	if err := i18n.LoadTranslationsFromFS(transFS, ""); err != nil {
+		return fmt.Errorf("loading translations for module %s: %w", m.Name(), err)
+	}
+
+	r.logger.Debug("loaded module translations", "module", m.Name())
+	return nil
 }
 
 // ShutdownAll shuts down all modules in reverse order.

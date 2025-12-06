@@ -270,6 +270,67 @@ func SetActiveLanguages(activeCodes []string) {
 	catalog.matcher = language.NewMatcher(activeTags)
 }
 
+// AddTranslations merges additional translations into the catalog for a language.
+// This is used by modules to register their own translations.
+func AddTranslations(lang string, translations map[string]string) {
+	if catalog == nil || len(translations) == 0 {
+		return
+	}
+
+	catalog.mu.Lock()
+	defer catalog.mu.Unlock()
+
+	// Initialize language map if not exists
+	if _, ok := catalog.translations[lang]; !ok {
+		catalog.translations[lang] = make(map[string]string)
+	}
+
+	// Merge translations (module translations can override core)
+	for key, value := range translations {
+		catalog.translations[lang][key] = value
+	}
+
+	if catalog.logger != nil {
+		catalog.logger.Debug("added module translations", "language", lang, "count", len(translations))
+	}
+}
+
+// LoadTranslationsFromFS loads translations from an embedded filesystem.
+// Expects structure: locales/{lang}/messages.json
+func LoadTranslationsFromFS(fs embed.FS, prefix string) error {
+	if catalog == nil {
+		return fmt.Errorf("i18n catalog not initialized")
+	}
+
+	for _, lang := range SupportedLanguages {
+		path := fmt.Sprintf("%s/locales/%s/messages.json", prefix, lang)
+		if prefix == "" {
+			path = fmt.Sprintf("locales/%s/messages.json", lang)
+		}
+
+		data, err := fs.ReadFile(path)
+		if err != nil {
+			// Skip if language file doesn't exist for this module
+			continue
+		}
+
+		var msgFile MessageFile
+		if err := json.Unmarshal(data, &msgFile); err != nil {
+			return fmt.Errorf("failed to parse %s: %w", path, err)
+		}
+
+		// Convert to map and add
+		translations := make(map[string]string)
+		for _, msg := range msgFile.Messages {
+			translations[msg.ID] = msg.Translation
+		}
+
+		AddTranslations(lang, translations)
+	}
+
+	return nil
+}
+
 // contains checks if a slice contains a string.
 func contains(slice []string, str string) bool {
 	for _, s := range slice {

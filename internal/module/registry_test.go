@@ -2,6 +2,7 @@ package module
 
 import (
 	"database/sql"
+	"embed"
 	"html/template"
 	"log/slog"
 	"os"
@@ -44,6 +45,7 @@ func (m *mockModule) RegisterRoutes(r chi.Router)      { m.routesCalled = true }
 func (m *mockModule) RegisterAdminRoutes(r chi.Router) { m.adminCalled = true }
 func (m *mockModule) TemplateFuncs() template.FuncMap  { return m.funcMap }
 func (m *mockModule) AdminURL() string                 { return "" }
+func (m *mockModule) TranslationsFS() embed.FS         { return embed.FS{} }
 
 // errorModule returns an error on Init for testing error handling.
 type errorModule struct {

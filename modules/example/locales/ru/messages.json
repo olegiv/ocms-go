@@ -1,0 +1,27 @@
+{
+    "language": "ru",
+    "messages": [
+        {"id": "nav.example_module", "message": "Example Module", "translation": "Пример модуля"},
+        {"id": "example.title", "message": "Example Module", "translation": "Пример модуля"},
+        {"id": "example.description", "message": "Demonstration of the oCMS module system", "translation": "Демонстрация системы модулей oCMS"},
+        {"id": "example.features", "message": "Module Features", "translation": "Возможности модуля"},
+        {"id": "example.public_route", "message": "Public Route", "translation": "Публичный маршрут"},
+        {"id": "example.admin_route", "message": "Admin Route", "translation": "Админ маршрут"},
+        {"id": "example.template_functions", "message": "Template Functions", "translation": "Функции шаблонов"},
+        {"id": "example.hooks", "message": "Hooks", "translation": "Хуки"},
+        {"id": "example.items_title", "message": "Example Items", "translation": "Примеры элементов"},
+        {"id": "example.items_description", "message": "This demonstrates how modules can have their own database tables and CRUD operations.", "translation": "Это демонстрирует, как модули могут иметь собственные таблицы базы данных и CRUD-операции."},
+        {"id": "example.item_name", "message": "Item name", "translation": "Название элемента"},
+        {"id": "example.item_description", "message": "Description (optional)", "translation": "Описание (необязательно)"},
+        {"id": "example.add_item", "message": "Add Item", "translation": "Добавить"},
+        {"id": "example.table_id", "message": "ID", "translation": "ID"},
+        {"id": "example.table_name", "message": "Name", "translation": "Название"},
+        {"id": "example.table_description", "message": "Description", "translation": "Описание"},
+        {"id": "example.table_created", "message": "Created", "translation": "Создано"},
+        {"id": "example.delete_item", "message": "Delete item", "translation": "Удалить элемент"},
+        {"id": "example.no_items", "message": "No items yet", "translation": "Пока нет элементов"},
+        {"id": "example.no_items_hint", "message": "Add your first item using the form above.", "translation": "Добавьте первый элемент с помощью формы выше."},
+        {"id": "example.confirm_delete", "message": "Are you sure you want to delete this item?", "translation": "Вы уверены, что хотите удалить этот элемент?"},
+        {"id": "example.delete_failed", "message": "Failed to delete item", "translation": "Не удалось удалить элемент"}
+    ]
+}

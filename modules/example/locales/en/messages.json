@@ -1,0 +1,27 @@
+{
+    "language": "en",
+    "messages": [
+        {"id": "nav.example_module", "message": "Example Module", "translation": "Example Module"},
+        {"id": "example.title", "message": "Example Module", "translation": "Example Module"},
+        {"id": "example.description", "message": "Demonstration of the oCMS module system", "translation": "Demonstration of the oCMS module system"},
+        {"id": "example.features", "message": "Module Features", "translation": "Module Features"},
+        {"id": "example.public_route", "message": "Public Route", "translation": "Public Route"},
+        {"id": "example.admin_route", "message": "Admin Route", "translation": "Admin Route"},
+        {"id": "example.template_functions", "message": "Template Functions", "translation": "Template Functions"},
+        {"id": "example.hooks", "message": "Hooks", "translation": "Hooks"},
+        {"id": "example.items_title", "message": "Example Items", "translation": "Example Items"},
+        {"id": "example.items_description", "message": "This demonstrates how modules can have their own database tables and CRUD operations.", "translation": "This demonstrates how modules can have their own database tables and CRUD operations."},
+        {"id": "example.item_name", "message": "Item name", "translation": "Item name"},
+        {"id": "example.item_description", "message": "Description (optional)", "translation": "Description (optional)"},
+        {"id": "example.add_item", "message": "Add Item", "translation": "Add Item"},
+        {"id": "example.table_id", "message": "ID", "translation": "ID"},
+        {"id": "example.table_name", "message": "Name", "translation": "Name"},
+        {"id": "example.table_description", "message": "Description", "translation": "Description"},
+        {"id": "example.table_created", "message": "Created", "translation": "Created"},
+        {"id": "example.delete_item", "message": "Delete item", "translation": "Delete item"},
+        {"id": "example.no_items", "message": "No items yet", "translation": "No items yet"},
+        {"id": "example.no_items_hint", "message": "Add your first item using the form above.", "translation": "Add your first item using the form above."},
+        {"id": "example.confirm_delete", "message": "Are you sure you want to delete this item?", "translation": "Are you sure you want to delete this item?"},
+        {"id": "example.delete_failed", "message": "Failed to delete item", "translation": "Failed to delete item"}
+    ]
+}

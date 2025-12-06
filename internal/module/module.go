@@ -5,6 +5,7 @@ package module
 
 import (
 	"database/sql"
+	"embed"
 	"html/template"
 	"log/slog"
 
@@ -54,6 +55,11 @@ type Module interface {
 	// AdminURL returns the admin dashboard URL for the module (e.g., "/admin/developer").
 	// Return empty string if module has no admin dashboard.
 	AdminURL() string
+
+	// TranslationsFS returns an embedded filesystem containing module translations.
+	// Expected structure: locales/{lang}/messages.json
+	// Return nil if module has no translations.
+	TranslationsFS() embed.FS
 }
 
 // Migration represents a database migration for a module.
@@ -117,6 +123,9 @@ func (m *BaseModule) Migrations() []Migration { return nil }
 
 // AdminURL returns the admin dashboard URL (empty by default).
 func (m *BaseModule) AdminURL() string { return "" }
+
+// TranslationsFS returns nil (no translations by default).
+func (m *BaseModule) TranslationsFS() embed.FS { return embed.FS{} }
 
 // Context returns the module context (for use by embedded modules).
 func (m *BaseModule) Context() *ModuleContext { return m.ctx }
