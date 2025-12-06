@@ -1,13 +1,13 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1 class="page-title">{{if .Data.IsEdit}}Edit Menu{{else}}New Menu{{end}}</h1>
-        <p class="page-description">{{if .Data.IsEdit}}Manage menu items and structure{{else}}Create a new navigation menu{{end}}</p>
+        <h1 class="page-title">{{if .Data.IsEdit}}{{T .AdminLang "menus.edit"}}{{else}}{{T .AdminLang "menus.new"}}{{end}}</h1>
+        <p class="page-description">{{if .Data.IsEdit}}{{T .AdminLang "menus.edit_description"}}{{else}}{{T .AdminLang "menus.new_description"}}{{end}}</p>
     </div>
     <div class="page-actions">
         <a href="/admin/menus" class="btn btn-outline">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-            Back to Menus
+            {{T .AdminLang "menus.back_to_menus"}}
         </a>
     </div>
 </div>
@@ -15,7 +15,7 @@
 <!-- Menu Settings Card -->
 <div class="card mb-4">
     <div class="card-header">
-        <h3 class="card-title">Menu Settings</h3>
+        <h3 class="card-title">{{T .AdminLang "menus.settings"}}</h3>
     </div>
     <form
         method="POST"
@@ -29,7 +29,7 @@
         <div class="form-grid">
             <div class="form-group">
                 <label for="name" class="form-label">
-                    Name <span class="required">*</span>
+                    {{T .AdminLang "label.name"}} <span class="required">*</span>
                 </label>
                 <input
                     type="text"
@@ -37,7 +37,7 @@
                     name="name"
                     class="form-input {{if .Data.Errors.name}}is-invalid{{end}}"
                     value="{{if .Data.FormValues.name}}{{.Data.FormValues.name}}{{else if .Data.Menu}}{{.Data.Menu.Name}}{{end}}"
-                    placeholder="e.g., Main Menu"
+                    placeholder="{{T .AdminLang "menus.name_placeholder"}}"
                     required
                 >
                 {{if .Data.Errors.name}}
@@ -47,7 +47,7 @@
 
             <div class="form-group">
                 <label for="slug" class="form-label">
-                    Slug <span class="required">*</span>
+                    {{T .AdminLang "label.slug"}} <span class="required">*</span>
                 </label>
                 <input
                     type="text"
@@ -55,18 +55,18 @@
                     name="slug"
                     class="form-input {{if .Data.Errors.slug}}is-invalid{{end}}"
                     value="{{if .Data.FormValues.slug}}{{.Data.FormValues.slug}}{{else if .Data.Menu}}{{.Data.Menu.Slug}}{{end}}"
-                    placeholder="e.g., main-menu"
+                    placeholder="{{T .AdminLang "menus.slug_placeholder"}}"
                 >
                 {{if .Data.Errors.slug}}
                 <span class="form-error">{{.Data.Errors.slug}}</span>
                 {{else}}
-                <span class="form-hint">Used to identify the menu in templates</span>
+                <span class="form-hint">{{T .AdminLang "menus.slug_hint"}}</span>
                 {{end}}
             </div>
 
             <div class="form-group">
                 <label for="language_id" class="form-label">
-                    Language
+                    {{T .AdminLang "label.language"}}
                 </label>
                 <select
                     id="language_id"
@@ -88,14 +88,14 @@
                 {{if .Data.Errors.language_id}}
                 <span class="form-error">{{.Data.Errors.language_id}}</span>
                 {{else}}
-                <span class="form-hint">Create separate menus for each language</span>
+                <span class="form-hint">{{T .AdminLang "menus.language_hint"}}</span>
                 {{end}}
             </div>
         </div>
 
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">
-                {{if .Data.IsEdit}}Save Settings{{else}}Create Menu{{end}}
+                {{if .Data.IsEdit}}{{T .AdminLang "menus.save_settings"}}{{else}}{{T .AdminLang "menus.create"}}{{end}}
             </button>
         </div>
     </form>
@@ -109,22 +109,22 @@
         <div class="menu-builder-panel">
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title">Add Menu Items</h3>
+                    <h3 class="card-title">{{T .AdminLang "menus.add_items"}}</h3>
                 </div>
                 <div class="card-body">
                     <!-- Add Custom Link -->
                     <div class="menu-add-section">
-                        <h4 class="menu-add-title">Custom Link</h4>
+                        <h4 class="menu-add-title">{{T .AdminLang "menus.custom_link"}}</h4>
                         <div class="form-group">
-                            <label class="form-label">Title</label>
-                            <input type="text" class="form-input" x-model="customLink.title" placeholder="Link text">
+                            <label class="form-label">{{T .AdminLang "label.title"}}</label>
+                            <input type="text" class="form-input" x-model="customLink.title" placeholder="{{T .AdminLang "menus.link_text"}}">
                         </div>
                         <div class="form-group">
                             <label class="form-label">URL</label>
                             <input type="text" class="form-input" x-model="customLink.url" placeholder="https://...">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Target</label>
+                            <label class="form-label">{{T .AdminLang "menus.target"}}</label>
                             <select class="form-select" x-model="customLink.target">
                                 {{range .Data.Targets}}
                                 <option value="{{.}}">{{.}}</option>
@@ -132,14 +132,14 @@
                             </select>
                         </div>
                         <button type="button" class="btn btn-primary btn-sm" @click="addCustomLink()" :disabled="!customLink.title || !customLink.url">
-                            Add to Menu
+                            {{T .AdminLang "menus.add_to_menu"}}
                         </button>
                     </div>
 
                     <!-- Add Pages -->
                     {{if .Data.Pages}}
                     <div class="menu-add-section">
-                        <h4 class="menu-add-title">Pages</h4>
+                        <h4 class="menu-add-title">{{T .AdminLang "pages.title"}}</h4>
                         <div class="menu-pages-list">
                             {{range .Data.Pages}}
                             <div class="menu-page-item">
@@ -151,7 +151,7 @@
                             {{end}}
                         </div>
                         <button type="button" class="btn btn-primary btn-sm" @click="addSelectedPages()" :disabled="selectedPages.length === 0">
-                            Add Selected to Menu
+                            {{T .AdminLang "menus.add_selected"}}
                         </button>
                     </div>
                     {{end}}
@@ -163,14 +163,14 @@
         <div class="menu-builder-panel menu-builder-main">
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title">Menu Structure</h3>
-                    <span class="text-muted" x-show="hasChanges">Unsaved changes</span>
+                    <h3 class="card-title">{{T .AdminLang "menus.structure"}}</h3>
+                    <span class="text-muted" x-show="hasChanges">{{T .AdminLang "menus.unsaved_changes"}}</span>
                 </div>
                 <div class="card-body">
                     <template x-if="items.length === 0">
                         <div class="menu-empty-state">
                             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="18" y2="18"/></svg>
-                            <p>No menu items yet. Add items from the left panel.</p>
+                            <p>{{T .AdminLang "menus.no_items"}}</p>
                         </div>
                     </template>
 
@@ -183,13 +183,13 @@
                                     </div>
                                     <div class="menu-item-info">
                                         <span class="menu-item-title" x-text="item.title"></span>
-                                        <span class="menu-item-type" x-text="item.page_id ? 'Page' : 'Custom Link'"></span>
+                                        <span class="menu-item-type" x-text="item.page_id ? '{{T .AdminLang "menus.item_page"}}' : '{{T .AdminLang "menus.item_custom"}}'"></span>
                                     </div>
                                     <div class="menu-item-actions">
-                                        <button type="button" class="btn btn-sm btn-icon" @click="editItem(item)" title="Edit">
+                                        <button type="button" class="btn btn-sm btn-icon" @click="editItem(item)" title="{{T .AdminLang "btn.edit"}}">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                                         </button>
-                                        <button type="button" class="btn btn-sm btn-icon btn-danger" @click="deleteItem(item, index)" title="Delete">
+                                        <button type="button" class="btn btn-sm btn-icon btn-danger" @click="deleteItem(item, index)" title="{{T .AdminLang "btn.delete"}}">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                                         </button>
                                     </div>
@@ -204,13 +204,13 @@
                                                 </div>
                                                 <div class="menu-item-info">
                                                     <span class="menu-item-title" x-text="child.title"></span>
-                                                    <span class="menu-item-type" x-text="child.page_id ? 'Page' : 'Custom Link'"></span>
+                                                    <span class="menu-item-type" x-text="child.page_id ? '{{T .AdminLang "menus.item_page"}}' : '{{T .AdminLang "menus.item_custom"}}'"></span>
                                                 </div>
                                                 <div class="menu-item-actions">
-                                                    <button type="button" class="btn btn-sm btn-icon" @click="editItem(child)" title="Edit">
+                                                    <button type="button" class="btn btn-sm btn-icon" @click="editItem(child)" title="{{T .AdminLang "btn.edit"}}">
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                                                     </button>
-                                                    <button type="button" class="btn btn-sm btn-icon btn-danger" @click="deleteChildItem(item, childIndex)" title="Delete">
+                                                    <button type="button" class="btn btn-sm btn-icon btn-danger" @click="deleteChildItem(item, childIndex)" title="{{T .AdminLang "btn.delete"}}">
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                                                     </button>
                                                 </div>
@@ -224,8 +224,8 @@
 
                     <div class="menu-builder-actions" x-show="hasChanges">
                         <button type="button" class="btn btn-primary" @click="saveOrder()" :disabled="saving">
-                            <span x-show="!saving">Save Order</span>
-                            <span x-show="saving">Saving...</span>
+                            <span x-show="!saving">{{T .AdminLang "menus.save_order"}}</span>
+                            <span x-show="saving">{{T .AdminLang "menus.saving"}}</span>
                         </button>
                     </div>
                 </div>
@@ -238,12 +238,12 @@
         <div class="modal-overlay" x-show="editingItem" x-cloak @click.self="editingItem = null">
             <div class="modal" @click.stop>
                 <div class="modal-header">
-                    <h3 class="modal-title">Edit Menu Item</h3>
+                    <h3 class="modal-title">{{T .AdminLang "menus.edit_item"}}</h3>
                     <button type="button" class="modal-close" @click="editingItem = null">&times;</button>
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
-                        <label class="form-label">Title</label>
+                        <label class="form-label">{{T .AdminLang "label.title"}}</label>
                         <input type="text" class="form-input" x-model="editingItem.title">
                     </div>
                     <div class="form-group" x-show="!editingItem.page_id">
@@ -251,7 +251,7 @@
                         <input type="text" class="form-input" x-model="editingItem.url">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Target</label>
+                        <label class="form-label">{{T .AdminLang "menus.target"}}</label>
                         <select class="form-select" x-model="editingItem.target">
                             {{range .Data.Targets}}
                             <option value="{{.}}">{{.}}</option>
@@ -259,19 +259,19 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">CSS Class</label>
-                        <input type="text" class="form-input" x-model="editingItem.css_class" placeholder="Optional CSS class">
+                        <label class="form-label">{{T .AdminLang "menus.css_class"}}</label>
+                        <input type="text" class="form-input" x-model="editingItem.css_class" placeholder="{{T .AdminLang "menus.css_class_placeholder"}}">
                     </div>
                     <div class="form-group">
                         <label class="checkbox-label">
                             <input type="checkbox" x-model="editingItem.is_active">
-                            <span>Active</span>
+                            <span>{{T .AdminLang "label.active"}}</span>
                         </label>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline" @click="editingItem = null">Cancel</button>
-                    <button type="button" class="btn btn-primary" @click="saveItem()">Save Changes</button>
+                    <button type="button" class="btn btn-outline" @click="editingItem = null">{{T .AdminLang "btn.cancel"}}</button>
+                    <button type="button" class="btn btn-primary" @click="saveItem()">{{T .AdminLang "btn.save_changes"}}</button>
                 </div>
             </div>
         </div>
@@ -480,7 +480,7 @@ function menuBuilder() {
         },
 
         async deleteItem(item, index) {
-            if (!confirm('Are you sure you want to delete this menu item?')) return;
+            if (!confirm('{{T .AdminLang "label.confirm_delete"}}')) return;
 
             if (item.id) {
                 try {
@@ -500,7 +500,7 @@ function menuBuilder() {
         },
 
         async deleteChildItem(parent, childIndex) {
-            if (!confirm('Are you sure you want to delete this menu item?')) return;
+            if (!confirm('{{T .AdminLang "label.confirm_delete"}}')) return;
 
             const child = parent.children[childIndex];
             if (child.id) {

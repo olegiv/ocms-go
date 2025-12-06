@@ -2,7 +2,7 @@
 <div class="page-header">
     <div>
         <h1 class="page-title">{{T .AdminLang "webhooks.title"}}</h1>
-        <p class="page-description">{{T .AdminLang "webhooks.description"}} ({{.Data.TotalWebhooks}} total)</p>
+        <p class="page-description">{{T .AdminLang "webhooks.description"}} ({{.Data.TotalWebhooks}} {{T .AdminLang "webhooks.total_count"}})</p>
     </div>
     <div class="page-actions">
         <a href="/admin/webhooks/new" class="btn btn-primary">
@@ -43,7 +43,7 @@
                             {{end}}
                             {{end}}
                             {{if gt (len .Events) 3}}
-                            <span class="badge badge-outline badge-sm">+{{sub (len .Events) 3}} more</span>
+                            <span class="badge badge-outline badge-sm">+{{sub (len .Events) 3}} {{T $.AdminLang "webhooks.more_events"}}</span>
                             {{end}}
                         </div>
                     </td>
@@ -176,28 +176,28 @@
         <h4 style="margin-top: 1rem; font-size: 0.875rem;">{{T .AdminLang "webhooks.available_events"}}</h4>
         <div class="events-grid">
             <div class="event-category">
-                <h5>Pages</h5>
+                <h5>{{T .AdminLang "webhooks.category_pages"}}</h5>
                 <ul>
-                    <li><code>page.created</code> - When a new page is created</li>
-                    <li><code>page.updated</code> - When a page is updated</li>
-                    <li><code>page.deleted</code> - When a page is deleted</li>
-                    <li><code>page.published</code> - When a page is published</li>
-                    <li><code>page.unpublished</code> - When a page is unpublished</li>
+                    <li><code>page.created</code> - {{T .AdminLang "webhooks.event_page_created"}}</li>
+                    <li><code>page.updated</code> - {{T .AdminLang "webhooks.event_page_updated"}}</li>
+                    <li><code>page.deleted</code> - {{T .AdminLang "webhooks.event_page_deleted"}}</li>
+                    <li><code>page.published</code> - {{T .AdminLang "webhooks.event_page_published"}}</li>
+                    <li><code>page.unpublished</code> - {{T .AdminLang "webhooks.event_page_unpublished"}}</li>
                 </ul>
             </div>
             <div class="event-category">
-                <h5>Media</h5>
+                <h5>{{T .AdminLang "webhooks.category_media"}}</h5>
                 <ul>
-                    <li><code>media.uploaded</code> - When media is uploaded</li>
-                    <li><code>media.deleted</code> - When media is deleted</li>
+                    <li><code>media.uploaded</code> - {{T .AdminLang "webhooks.event_media_uploaded"}}</li>
+                    <li><code>media.deleted</code> - {{T .AdminLang "webhooks.event_media_deleted"}}</li>
                 </ul>
             </div>
             <div class="event-category">
-                <h5>Other</h5>
+                <h5>{{T .AdminLang "webhooks.category_other"}}</h5>
                 <ul>
-                    <li><code>form.submitted</code> - When a form is submitted</li>
-                    <li><code>user.created</code> - When a user is created</li>
-                    <li><code>user.deleted</code> - When a user is deleted</li>
+                    <li><code>form.submitted</code> - {{T .AdminLang "webhooks.event_form_submitted"}}</li>
+                    <li><code>user.created</code> - {{T .AdminLang "webhooks.event_user_created"}}</li>
+                    <li><code>user.deleted</code> - {{T .AdminLang "webhooks.event_user_deleted"}}</li>
                 </ul>
             </div>
         </div>

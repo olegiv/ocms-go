@@ -13,6 +13,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/model"
 	"ocms-go/internal/render"
@@ -45,6 +46,7 @@ type MenusListData struct {
 // List handles GET /admin/menus - displays a list of menus.
 func (h *MenusHandler) List(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	menus, err := h.queries.ListMenusWithLanguage(r.Context())
 	if err != nil {
@@ -66,12 +68,12 @@ func (h *MenusHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/menus_list", render.TemplateData{
-		Title: "Menus",
+		Title: i18n.T(lang, "nav.menus"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Menus", URL: "/admin/menus", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.menus"), URL: "/admin/menus", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -134,6 +136,7 @@ func buildMenuTree(items []store.ListMenuItemsWithPageRow, parentID sql.NullInt6
 // NewForm handles GET /admin/menus/new - displays the new menu form.
 func (h *MenusHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	// Get languages for selector
 	languages, err := h.queries.ListActiveLanguages(r.Context())
@@ -162,13 +165,13 @@ func (h *MenusHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/menus_form", render.TemplateData{
-		Title: "New Menu",
+		Title: i18n.T(lang, "menus.new"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Menus", URL: "/admin/menus"},
-			{Label: "New Menu", URL: "/admin/menus/new", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.menus"), URL: "/admin/menus"},
+			{Label: i18n.T(lang, "menus.new"), URL: "/admin/menus/new", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -179,6 +182,7 @@ func (h *MenusHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 // Create handles POST /admin/menus - creates a new menu.
 func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	if err := r.ParseForm(); err != nil {
 		h.renderer.SetFlash(r, "Invalid form data", "error")
@@ -253,13 +257,13 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := h.renderer.Render(w, r, "admin/menus_form", render.TemplateData{
-			Title: "New Menu",
+			Title: i18n.T(lang, "menus.new"),
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: "Dashboard", URL: "/admin"},
-				{Label: "Menus", URL: "/admin/menus"},
-				{Label: "New Menu", URL: "/admin/menus/new", Active: true},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+				{Label: i18n.T(lang, "nav.menus"), URL: "/admin/menus"},
+				{Label: i18n.T(lang, "menus.new"), URL: "/admin/menus/new", Active: true},
 			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
@@ -291,6 +295,7 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 // EditForm handles GET /admin/menus/{id} - displays the menu builder.
 func (h *MenusHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -355,8 +360,8 @@ func (h *MenusHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Menus", URL: "/admin/menus"},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.menus"), URL: "/admin/menus"},
 			{Label: menu.Name, URL: fmt.Sprintf("/admin/menus/%d", menu.ID), Active: true},
 		},
 	}); err != nil {
@@ -368,6 +373,7 @@ func (h *MenusHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 // Update handles PUT /admin/menus/{id} - updates a menu.
 func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -471,8 +477,8 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: "Dashboard", URL: "/admin"},
-				{Label: "Menus", URL: "/admin/menus"},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+				{Label: i18n.T(lang, "nav.menus"), URL: "/admin/menus"},
 				{Label: menu.Name, URL: fmt.Sprintf("/admin/menus/%d", menu.ID), Active: true},
 			},
 		}); err != nil {

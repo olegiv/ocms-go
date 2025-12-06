@@ -1,7 +1,7 @@
 {{define "media_picker"}}
 <div class="media-picker" x-data="mediaPicker()" x-init="init()"
      data-initial-image='{{if .Data.FeaturedImage}}{"id":{{.Data.FeaturedImage.ID}},"filename":"{{.Data.FeaturedImage.Filename}}","filepath":"{{.Data.FeaturedImage.Filepath}}","thumbnail":"{{.Data.FeaturedImage.Thumbnail}}","mimetype":"{{.Data.FeaturedImage.Mimetype}}"}{{else}}null{{end}}'>
-    <label class="form-label">Featured Image</label>
+    <label class="form-label">{{T .AdminLang "media.featured_image"}}</label>
 
     <!-- Preview Area -->
     <div class="media-picker-preview">
@@ -21,11 +21,11 @@
                 <div class="media-picker-actions">
                     <button type="button" class="btn btn-sm btn-outline" @click="openPicker()">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-                        Change
+                        {{T .AdminLang "btn.change"}}
                     </button>
                     <button type="button" class="btn btn-sm btn-outline btn-danger" @click="clearImage()">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                        Remove
+                        {{T .AdminLang "btn.remove"}}
                     </button>
                 </div>
                 <input type="hidden" name="featured_image_id" :value="selectedImage.id">
@@ -34,19 +34,19 @@
         <template x-if="!selectedImage">
             <div class="media-picker-empty" @click="openPicker()">
                 <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-                <span>Click to select an image</span>
+                <span>{{T .AdminLang "media.click_to_select"}}</span>
             </div>
         </template>
     </div>
 
-    <span class="form-hint">Select an image from the media library</span>
+    <span class="form-hint">{{T .AdminLang "media.select_from_library"}}</span>
 
     <!-- Media Picker Modal -->
     <div class="media-picker-modal" x-show="showModal" x-cloak @keydown.escape.window="closeModal()">
         <div class="media-picker-overlay" @click="closeModal()"></div>
         <div class="media-picker-dialog">
             <div class="media-picker-header">
-                <h3>Select Media</h3>
+                <h3>{{T .AdminLang "media.select_media"}}</h3>
                 <button type="button" class="media-picker-close" @click="closeModal()">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                 </button>
@@ -55,13 +55,13 @@
             <!-- Search and Filter -->
             <div class="media-picker-toolbar">
                 <div class="media-picker-search">
-                    <input type="text" placeholder="Search media..." x-model="searchQuery" @input.debounce.300ms="loadMedia()" class="form-input">
+                    <input type="text" placeholder="{{T .AdminLang "media.search_media"}}" x-model="searchQuery" @input.debounce.300ms="loadMedia()" class="form-input">
                 </div>
                 <div class="media-picker-filter">
                     <select x-model="filterType" @change="loadMedia()" class="form-select">
-                        <option value="">All Types</option>
-                        <option value="image">Images</option>
-                        <option value="document">Documents</option>
+                        <option value="">{{T .AdminLang "media.all_types"}}</option>
+                        <option value="image">{{T .AdminLang "media.images"}}</option>
+                        <option value="document">{{T .AdminLang "media.documents"}}</option>
                     </select>
                 </div>
             </div>
@@ -71,14 +71,14 @@
                 <template x-if="loading">
                     <div class="media-picker-loading">
                         <div class="spinner"></div>
-                        <span>Loading media...</span>
+                        <span>{{T .AdminLang "media.loading"}}</span>
                     </div>
                 </template>
                 <template x-if="!loading && mediaItems.length === 0">
                     <div class="media-picker-empty-state">
                         <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-                        <p>No media found</p>
-                        <a href="/admin/media/upload" class="btn btn-primary btn-sm">Upload Media</a>
+                        <p>{{T .AdminLang "media.no_media"}}</p>
+                        <a href="/admin/media/upload" class="btn btn-primary btn-sm">{{T .AdminLang "media.upload"}}</a>
                     </div>
                 </template>
                 <template x-if="!loading && mediaItems.length > 0">
@@ -113,20 +113,20 @@
             <template x-if="totalPages > 1">
                 <div class="media-picker-pagination">
                     <button type="button" class="btn btn-sm btn-outline" :disabled="currentPage <= 1" @click="prevPage()">
-                        Previous
+                        {{T .AdminLang "pagination.previous"}}
                     </button>
-                    <span class="media-picker-page-info">Page <span x-text="currentPage"></span> of <span x-text="totalPages"></span></span>
+                    <span class="media-picker-page-info">{{T .AdminLang "pagination.page"}} <span x-text="currentPage"></span> {{T .AdminLang "pagination.of"}} <span x-text="totalPages"></span></span>
                     <button type="button" class="btn btn-sm btn-outline" :disabled="currentPage >= totalPages" @click="nextPage()">
-                        Next
+                        {{T .AdminLang "pagination.next"}}
                     </button>
                 </div>
             </template>
 
             <!-- Footer Actions -->
             <div class="media-picker-footer">
-                <button type="button" class="btn btn-outline" @click="closeModal()">Cancel</button>
+                <button type="button" class="btn btn-outline" @click="closeModal()">{{T .AdminLang "btn.cancel"}}</button>
                 <button type="button" class="btn btn-primary" :disabled="!tempSelected" @click="confirmSelection()">
-                    Select Image
+                    {{T .AdminLang "media.select_image"}}
                 </button>
             </div>
         </div>

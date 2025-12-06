@@ -1,6 +1,6 @@
 {{define "tag_selector"}}
 <div class="tag-selector" x-data="tagSelector()" x-init="init()" data-initial-tags='{{if .Data.Tags}}{{toJSON .Data.Tags}}{{else}}[]{{end}}'>
-    <label class="form-label">Tags</label>
+    <label class="form-label">{{T .AdminLang "tags.title"}}</label>
 
     <!-- Selected Tags Display -->
     <div class="selected-tags">
@@ -20,7 +20,7 @@
         <input
             type="text"
             class="form-input tag-search-input"
-            placeholder="Search or create tags..."
+            placeholder="{{T .AdminLang "tags.search_placeholder"}}"
             x-model="searchQuery"
             @input.debounce.300ms="searchTags()"
             @focus="showDropdown = true"
@@ -51,16 +51,16 @@
             <template x-if="searchQuery.length > 1 && !exactMatchExists()">
                 <button type="button" class="tag-option tag-create" @click="createAndAddTag()">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-                    Create "<span x-text="searchQuery"></span>"
+                    {{T .AdminLang "tags.create_new"}} "<span x-text="searchQuery"></span>"
                 </button>
             </template>
             <template x-if="searchResults.length === 0 && searchQuery.length <= 1">
-                <div class="tag-no-results">Type to search tags...</div>
+                <div class="tag-no-results">{{T .AdminLang "tags.type_to_search"}}</div>
             </template>
         </div>
     </div>
 
-    <span class="form-hint">Select existing tags or create new ones</span>
+    <span class="form-hint">{{T .AdminLang "tags.select_hint"}}</span>
 </div>
 
 <style>

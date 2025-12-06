@@ -13,6 +13,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/model"
 	"ocms-go/internal/render"
@@ -89,6 +90,7 @@ type WebhookDeliveriesData struct {
 // List handles GET /admin/webhooks - displays all webhooks.
 func (h *WebhooksHandler) List(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	webhooks, err := h.queries.ListWebhooks(r.Context())
 	if err != nil {
@@ -184,12 +186,12 @@ func (h *WebhooksHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/webhooks_list", render.TemplateData{
-		Title: "Webhooks",
+		Title: i18n.T(lang, "nav.webhooks"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Webhooks", URL: "/admin/webhooks", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.webhooks"), URL: "/admin/webhooks", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -200,6 +202,7 @@ func (h *WebhooksHandler) List(w http.ResponseWriter, r *http.Request) {
 // NewForm handles GET /admin/webhooks/new - displays the new webhook form.
 func (h *WebhooksHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	data := WebhookFormData{
 		Events:      model.AllWebhookEvents(),
@@ -211,13 +214,13 @@ func (h *WebhooksHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/webhooks_form", render.TemplateData{
-		Title: "New Webhook",
+		Title: i18n.T(lang, "webhooks.new"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Webhooks", URL: "/admin/webhooks"},
-			{Label: "New Webhook", URL: "/admin/webhooks/new", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.webhooks"), URL: "/admin/webhooks"},
+			{Label: i18n.T(lang, "webhooks.new"), URL: "/admin/webhooks/new", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -228,6 +231,7 @@ func (h *WebhooksHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 // Create handles POST /admin/webhooks - creates a new webhook.
 func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	if err := r.ParseForm(); err != nil {
 		h.renderer.SetFlash(r, "Invalid form data", "error")
@@ -322,13 +326,13 @@ func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := h.renderer.Render(w, r, "admin/webhooks_form", render.TemplateData{
-			Title: "New Webhook",
+			Title: i18n.T(lang, "webhooks.new"),
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: "Dashboard", URL: "/admin"},
-				{Label: "Webhooks", URL: "/admin/webhooks"},
-				{Label: "New Webhook", URL: "/admin/webhooks/new", Active: true},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+				{Label: i18n.T(lang, "nav.webhooks"), URL: "/admin/webhooks"},
+				{Label: i18n.T(lang, "webhooks.new"), URL: "/admin/webhooks/new", Active: true},
 			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
@@ -365,6 +369,7 @@ func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 // EditForm handles GET /admin/webhooks/{id} - displays the edit webhook form.
 func (h *WebhooksHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -418,12 +423,12 @@ func (h *WebhooksHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/webhooks_form", render.TemplateData{
-		Title: "Edit Webhook",
+		Title: webhook.Name,
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Webhooks", URL: "/admin/webhooks"},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.webhooks"), URL: "/admin/webhooks"},
 			{Label: webhook.Name, URL: fmt.Sprintf("/admin/webhooks/%d", id), Active: true},
 		},
 	}); err != nil {
@@ -435,6 +440,7 @@ func (h *WebhooksHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 // Update handles PUT /admin/webhooks/{id} - updates an existing webhook.
 func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -527,12 +533,12 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := h.renderer.Render(w, r, "admin/webhooks_form", render.TemplateData{
-			Title: "Edit Webhook",
+			Title: webhook.Name,
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: "Dashboard", URL: "/admin"},
-				{Label: "Webhooks", URL: "/admin/webhooks"},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+				{Label: i18n.T(lang, "nav.webhooks"), URL: "/admin/webhooks"},
 				{Label: webhook.Name, URL: fmt.Sprintf("/admin/webhooks/%d", id), Active: true},
 			},
 		}); err != nil {
@@ -610,6 +616,7 @@ func (h *WebhooksHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // Deliveries handles GET /admin/webhooks/{id}/deliveries - displays delivery history.
 func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -684,14 +691,14 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/webhooks_deliveries", render.TemplateData{
-		Title: "Webhook Deliveries",
+		Title: i18n.T(lang, "webhooks.deliveries_title"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Webhooks", URL: "/admin/webhooks"},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.webhooks"), URL: "/admin/webhooks"},
 			{Label: webhook.Name, URL: fmt.Sprintf("/admin/webhooks/%d", id)},
-			{Label: "Deliveries", URL: fmt.Sprintf("/admin/webhooks/%d/deliveries", id), Active: true},
+			{Label: i18n.T(lang, "webhooks.deliveries_title"), URL: fmt.Sprintf("/admin/webhooks/%d/deliveries", id), Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)

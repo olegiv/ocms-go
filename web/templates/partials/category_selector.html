@@ -1,6 +1,6 @@
 {{define "category_selector"}}
 <div class="category-selector" x-data="categorySelector()" data-initial-categories='{{if .Data.Categories}}{{toJSON .Data.Categories}}{{else}}[]{{end}}'>
-    <label class="form-label">Categories</label>
+    <label class="form-label">{{T .AdminLang "categories.title"}}</label>
 
     {{if .Data.AllCategories}}
     <div class="category-tree">
@@ -25,12 +25,12 @@
     </div>
     {{else}}
     <div class="category-empty">
-        <p>No categories available.</p>
-        <a href="/admin/categories/new" class="btn btn-sm btn-outline">Create Category</a>
+        <p>{{T .AdminLang "categories.no_available"}}</p>
+        <a href="/admin/categories/new" class="btn btn-sm btn-outline">{{T .AdminLang "categories.new"}}</a>
     </div>
     {{end}}
 
-    <span class="form-hint">Select one or more categories for this page</span>
+    <span class="form-hint">{{T .AdminLang "categories.select_hint"}}</span>
 </div>
 
 <style>

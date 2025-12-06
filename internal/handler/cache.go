@@ -7,6 +7,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 
 	"ocms-go/internal/cache"
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/model"
 	"ocms-go/internal/render"
@@ -43,6 +44,7 @@ type CacheStatsData struct {
 // Stats handles GET /admin/cache - displays cache statistics.
 func (h *CacheHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	if h.cacheManager == nil {
 		h.renderer.SetFlash(r, "Cache system not initialized", "error")
@@ -63,12 +65,12 @@ func (h *CacheHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/cache_stats", render.TemplateData{
-		Title: "Cache Statistics",
+		Title: i18n.T(lang, "nav.cache"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Cache", URL: "/admin/cache", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.cache"), URL: "/admin/cache", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)

@@ -1,13 +1,13 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1 class="page-title">Edit Media</h1>
-        <p class="page-description">Update media metadata</p>
+        <h1 class="page-title">{{T .AdminLang "media.edit_title"}}</h1>
+        <p class="page-description">{{T .AdminLang "media.edit_description"}}</p>
     </div>
     <div class="page-actions">
         <a href="/admin/media" class="btn btn-outline">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-            Back to Library
+            {{T .AdminLang "media.back_to_library"}}
         </a>
     </div>
 </div>
@@ -33,21 +33,21 @@
 
         <div class="media-details">
             <div class="media-detail-row">
-                <span class="media-detail-label">Type</span>
+                <span class="media-detail-label">{{T .AdminLang "media.type"}}</span>
                 <span class="media-detail-value">{{.Data.Media.MimeType}}</span>
             </div>
             <div class="media-detail-row">
-                <span class="media-detail-label">Size</span>
+                <span class="media-detail-label">{{T .AdminLang "label.size"}}</span>
                 <span class="media-detail-value">{{formatBytes .Data.Media.Size}}</span>
             </div>
             {{if .Data.Media.Width.Valid}}
             <div class="media-detail-row">
-                <span class="media-detail-label">Dimensions</span>
+                <span class="media-detail-label">{{T .AdminLang "media.dimensions"}}</span>
                 <span class="media-detail-value">{{.Data.Media.Width.Int64}} x {{.Data.Media.Height.Int64}} px</span>
             </div>
             {{end}}
             <div class="media-detail-row">
-                <span class="media-detail-label">Uploaded</span>
+                <span class="media-detail-label">{{T .AdminLang "media.uploaded"}}</span>
                 <span class="media-detail-value">{{formatDateTime .Data.Media.CreatedAt}}</span>
             </div>
             <div class="media-detail-row">
@@ -58,11 +58,11 @@
 
         {{if .Data.Variants}}
         <div class="media-variants">
-            <h4>Available Sizes</h4>
+            <h4>{{T .AdminLang "media.available_sizes"}}</h4>
             <ul class="variant-list">
                 {{range .Data.Variants}}
                 <li>
-                    <span class="variant-type">{{.Type}}</span>
+                    <span class="variant-type">{{if eq .Type "thumbnail"}}{{T $.AdminLang "media.variant_thumbnail"}}{{else if eq .Type "medium"}}{{T $.AdminLang "media.variant_medium"}}{{else if eq .Type "large"}}{{T $.AdminLang "media.variant_large"}}{{else}}{{.Type}}{{end}}</span>
                     <span class="variant-size">{{.Width}}x{{.Height}}</span>
                     <span class="variant-filesize">{{formatBytes .Size}}</span>
                 </li>
@@ -74,7 +74,7 @@
         <div class="media-actions-panel">
             <a href="{{.Data.Media.OriginalURL}}" class="btn btn-outline btn-block" download>
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                Download Original
+                {{T .AdminLang "media.download_original"}}
             </a>
             <button
                 type="button"
@@ -82,7 +82,7 @@
                 onclick="copyToClipboard('{{.Data.Media.OriginalURL}}')"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-                Copy URL
+                {{T .AdminLang "media.copy_url"}}
             </button>
         </div>
     </div>
@@ -94,7 +94,7 @@
                 <input type="hidden" name="_method" value="PUT">
 
                 <div class="form-group">
-                    <label for="filename" class="form-label">Filename <span class="required">*</span></label>
+                    <label for="filename" class="form-label">{{T .AdminLang "media.filename"}} <span class="required">*</span></label>
                     <input
                         type="text"
                         id="filename"
@@ -109,34 +109,34 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="alt" class="form-label">Alt Text</label>
+                    <label for="alt" class="form-label">{{T .AdminLang "media.alt_text"}}</label>
                     <input
                         type="text"
                         id="alt"
                         name="alt"
                         value="{{if .Data.FormValues.alt}}{{.Data.FormValues.alt}}{{else}}{{.Data.Media.Alt.String}}{{end}}"
                         class="form-input"
-                        placeholder="Describe this image for accessibility"
+                        placeholder="{{T .AdminLang "media.alt_placeholder"}}"
                     >
-                    <span class="form-hint">Used for screen readers and when the image cannot be displayed</span>
+                    <span class="form-hint">{{T .AdminLang "media.alt_hint"}}</span>
                 </div>
 
                 <div class="form-group">
-                    <label for="caption" class="form-label">Caption</label>
+                    <label for="caption" class="form-label">{{T .AdminLang "media.caption"}}</label>
                     <textarea
                         id="caption"
                         name="caption"
                         class="form-input"
                         rows="3"
-                        placeholder="Optional caption for this media"
+                        placeholder="{{T .AdminLang "media.caption_placeholder"}}"
                     >{{if .Data.FormValues.caption}}{{.Data.FormValues.caption}}{{else}}{{.Data.Media.Caption.String}}{{end}}</textarea>
                 </div>
 
                 {{if .Data.Folders}}
                 <div class="form-group">
-                    <label for="folder_id" class="form-label">Folder</label>
+                    <label for="folder_id" class="form-label">{{T .AdminLang "media.folder"}}</label>
                     <select id="folder_id" name="folder_id" class="form-select">
-                        <option value="">No folder</option>
+                        <option value="">{{T .AdminLang "media.no_folder"}}</option>
                         {{$currentFolder := .Data.Media.FolderID}}
                         {{range .Data.Folders}}
                         <option value="{{.ID}}" {{if and $currentFolder.Valid (eq $currentFolder.Int64 .ID)}}selected{{end}}>
@@ -148,8 +148,8 @@
                 {{end}}
 
                 <div class="form-actions">
-                    <a href="/admin/media" class="btn btn-outline">Cancel</a>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <a href="/admin/media" class="btn btn-outline">{{T .AdminLang "btn.cancel"}}</a>
+                    <button type="submit" class="btn btn-primary">{{T .AdminLang "media.save_changes"}}</button>
                 </div>
             </form>
         </div>
@@ -159,15 +159,15 @@
 <!-- Delete Section -->
 <div class="card danger-zone" x-data="{ showConfirm: false }">
     <div class="card-body">
-        <h3 class="danger-title">Danger Zone</h3>
-        <p class="danger-description">Once you delete this media, there is no going back. The file and all its variants will be permanently removed.</p>
+        <h3 class="danger-title">{{T .AdminLang "media.danger_zone"}}</h3>
+        <p class="danger-description">{{T .AdminLang "media.danger_description"}}</p>
         <button
             type="button"
             class="btn btn-danger"
             @click="showConfirm = true"
         >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
-            Delete Media
+            {{T .AdminLang "media.delete_media"}}
         </button>
 
         <!-- Delete Confirmation Modal -->
@@ -181,19 +181,19 @@
         >
             <div class="modal" @click.stop>
                 <div class="modal-header">
-                    <h3 class="modal-title">Delete Media</h3>
+                    <h3 class="modal-title">{{T .AdminLang "media.delete_media"}}</h3>
                     <button type="button" class="modal-close" @click="showConfirm = false">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <p>Are you sure you want to delete <strong>{{.Data.Media.Filename}}</strong>?</p>
-                    <p class="text-muted">This action cannot be undone. The file and all its variants will be permanently removed.</p>
+                    <p>{{T .AdminLang "media.confirm_delete_name"}} <strong>{{.Data.Media.Filename}}</strong>?</p>
+                    <p class="text-muted">{{T .AdminLang "media.delete_warning"}}</p>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline" @click="showConfirm = false">Cancel</button>
+                    <button type="button" class="btn btn-outline" @click="showConfirm = false">{{T .AdminLang "btn.cancel"}}</button>
                     <form action="/admin/media/{{.Data.Media.ID}}" method="POST" class="inline-form">
                         <input type="hidden" name="_method" value="DELETE">
                         <button type="submit" class="btn btn-danger">
-                            Delete Media
+                            {{T .AdminLang "media.delete_media"}}
                         </button>
                     </form>
                 </div>
@@ -205,9 +205,9 @@
 <script>
 function copyToClipboard(text) {
     navigator.clipboard.writeText(window.location.origin + text).then(function() {
-        alert('URL copied to clipboard!');
+        alert('{{T .AdminLang "media.url_copied"}}');
     }, function() {
-        alert('Failed to copy URL');
+        alert('{{T .AdminLang "media.url_copy_failed"}}');
     });
 }
 </script>

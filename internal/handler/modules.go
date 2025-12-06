@@ -7,6 +7,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/module"
 	"ocms-go/internal/render"
@@ -42,6 +43,7 @@ type ModulesListData struct {
 // List handles GET /admin/modules - displays registered modules.
 func (h *ModulesHandler) List(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	modules := h.registry.ListInfo()
 	hooks := h.hooks.ListHookInfo()
@@ -52,12 +54,12 @@ func (h *ModulesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/modules_list", render.TemplateData{
-		Title: "Modules",
+		Title: i18n.T(lang, "nav.modules"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Modules", URL: "/admin/modules", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)

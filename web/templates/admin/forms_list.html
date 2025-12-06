@@ -1,8 +1,8 @@
 {{define "content"}}
 <div class="page-header">
-    <h1 class="page-title">Forms</h1>
+    <h1 class="page-title">{{T .AdminLang "forms.title"}}</h1>
     <div class="page-actions">
-        <a href="/admin/forms/new" class="btn btn-primary">New Form</a>
+        <a href="/admin/forms/new" class="btn btn-primary">{{T .AdminLang "forms.new"}}</a>
     </div>
 </div>
 
@@ -11,12 +11,12 @@
     <table class="table">
         <thead>
             <tr>
-                <th>Name</th>
-                <th>Title</th>
-                <th>Slug</th>
-                <th>Submissions</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th>{{T .AdminLang "label.name"}}</th>
+                <th>{{T .AdminLang "label.title"}}</th>
+                <th>{{T .AdminLang "label.slug"}}</th>
+                <th>{{T .AdminLang "forms.submissions"}}</th>
+                <th>{{T .AdminLang "label.status"}}</th>
+                <th>{{T .AdminLang "label.actions"}}</th>
             </tr>
         </thead>
         <tbody>
@@ -29,30 +29,30 @@
                 <td><code>{{.Form.Slug}}</code></td>
                 <td>
                     <a href="/admin/forms/{{.Form.ID}}/submissions" class="link-secondary">
-                        {{.SubmissionCount}} submission{{if ne .SubmissionCount 1}}s{{end}}
+                        {{.SubmissionCount}} {{if ne .SubmissionCount 1}}{{T $.AdminLang "forms.submissions_plural"}}{{else}}{{T $.AdminLang "forms.submission"}}{{end}}
                         {{if gt .UnreadCount 0}}
-                        <span class="badge badge-primary">{{.UnreadCount}} new</span>
+                        <span class="badge badge-primary">{{.UnreadCount}} {{T $.AdminLang "forms.new_badge"}}</span>
                         {{end}}
                     </a>
                 </td>
                 <td>
                     {{if .Form.IsActive}}
-                    <span class="badge badge-success">Active</span>
+                    <span class="badge badge-success">{{T $.AdminLang "forms.active"}}</span>
                     {{else}}
-                    <span class="badge badge-secondary">Inactive</span>
+                    <span class="badge badge-secondary">{{T $.AdminLang "forms.inactive"}}</span>
                     {{end}}
                 </td>
                 <td>
                     <div class="btn-group">
-                        <a href="/admin/forms/{{.Form.ID}}" class="btn btn-sm btn-secondary">Edit</a>
-                        <a href="/forms/{{.Form.Slug}}" class="btn btn-sm btn-outline" target="_blank">Preview</a>
+                        <a href="/admin/forms/{{.Form.ID}}" class="btn btn-sm btn-secondary">{{T $.AdminLang "btn.edit"}}</a>
+                        <a href="/forms/{{.Form.Slug}}" class="btn btn-sm btn-outline" target="_blank">{{T $.AdminLang "forms.preview"}}</a>
                         <button type="button"
                                 class="btn btn-sm btn-danger"
                                 hx-delete="/admin/forms/{{.Form.ID}}"
-                                hx-confirm="Are you sure you want to delete this form? All submissions will also be deleted."
+                                hx-confirm="{{T $.AdminLang "forms.confirm_delete"}}"
                                 hx-target="closest tr"
                                 hx-swap="outerHTML">
-                            Delete
+                            {{T $.AdminLang "btn.delete"}}
                         </button>
                     </div>
                 </td>
@@ -63,9 +63,9 @@
 </div>
 {{else}}
 <div class="empty-state">
-    <h3>No forms yet</h3>
-    <p>Create your first form to start collecting submissions.</p>
-    <a href="/admin/forms/new" class="btn btn-primary">Create Form</a>
+    <h3>{{T .AdminLang "forms.no_forms"}}</h3>
+    <p>{{T .AdminLang "forms.no_forms_hint"}}</p>
+    <a href="/admin/forms/new" class="btn btn-primary">{{T .AdminLang "forms.create"}}</a>
 </div>
 {{end}}
 {{end}}

@@ -238,7 +238,7 @@
                 <div class="translation-coverage-item">
                     <div class="translation-coverage-info">
                         <span class="language-code">{{.LanguageCode}}</span>
-                        <span class="language-name">{{.LanguageName}}</span>
+                        <span class="language-name">{{TLang $.AdminLang .LanguageCode}}</span>
                         {{if .IsDefault}}
                         <span class="badge badge-primary badge-sm">{{T $.AdminLang "languages.default"}}</span>
                         {{end}}

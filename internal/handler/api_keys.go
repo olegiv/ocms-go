@@ -11,6 +11,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/model"
 	"ocms-go/internal/render"
@@ -51,6 +52,7 @@ type APIKeysListData struct {
 // List handles GET /admin/api-keys - displays a paginated list of API keys.
 func (h *APIKeysHandler) List(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	// Get page number from query string
 	pageStr := r.URL.Query().Get("page")
@@ -103,12 +105,12 @@ func (h *APIKeysHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/api_keys_list", render.TemplateData{
-		Title: "API Keys",
+		Title: i18n.T(lang, "api_keys.title"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "API Keys", URL: "/admin/api-keys", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.api_keys"), URL: "/admin/api-keys", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -129,6 +131,7 @@ type APIKeyFormData struct {
 // NewForm handles GET /admin/api-keys/new - displays the new API key form.
 func (h *APIKeysHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	data := APIKeyFormData{
 		Permissions: model.AllPermissions(),
@@ -138,13 +141,13 @@ func (h *APIKeysHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/api_keys_form", render.TemplateData{
-		Title: "New API Key",
+		Title: i18n.T(lang, "api_keys.new_key"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "API Keys", URL: "/admin/api-keys"},
-			{Label: "New API Key", URL: "/admin/api-keys/new", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.api_keys"), URL: "/admin/api-keys"},
+			{Label: i18n.T(lang, "api_keys.new_key"), URL: "/admin/api-keys/new", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -155,6 +158,7 @@ func (h *APIKeysHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 // Create handles POST /admin/api-keys - creates a new API key.
 func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	if err := r.ParseForm(); err != nil {
 		h.renderer.SetFlash(r, "Invalid form data", "error")
@@ -233,13 +237,13 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := h.renderer.Render(w, r, "admin/api_keys_form", render.TemplateData{
-			Title: "New API Key",
+			Title: i18n.T(lang, "api_keys.new_key"),
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: "Dashboard", URL: "/admin"},
-				{Label: "API Keys", URL: "/admin/api-keys"},
-				{Label: "New API Key", URL: "/admin/api-keys/new", Active: true},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+				{Label: i18n.T(lang, "nav.api_keys"), URL: "/admin/api-keys"},
+				{Label: i18n.T(lang, "api_keys.new_key"), URL: "/admin/api-keys/new", Active: true},
 			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
@@ -296,13 +300,13 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/api_keys_form", render.TemplateData{
-		Title: "API Key Created",
+		Title: i18n.T(lang, "api_keys.key_created"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "API Keys", URL: "/admin/api-keys"},
-			{Label: "New API Key", URL: "/admin/api-keys/new", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.api_keys"), URL: "/admin/api-keys"},
+			{Label: i18n.T(lang, "api_keys.new_key"), URL: "/admin/api-keys/new", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -313,6 +317,7 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 // EditForm handles GET /admin/api-keys/{id} - displays the edit API key form.
 func (h *APIKeysHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	// Get API key ID from URL
 	idStr := chi.URLParam(r, "id")
@@ -354,12 +359,12 @@ func (h *APIKeysHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/api_keys_form", render.TemplateData{
-		Title: "Edit API Key",
+		Title: i18n.T(lang, "api_keys.edit_key"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "API Keys", URL: "/admin/api-keys"},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.api_keys"), URL: "/admin/api-keys"},
 			{Label: apiKey.Name, URL: "/admin/api-keys/" + idStr, Active: true},
 		},
 	}); err != nil {
@@ -371,6 +376,7 @@ func (h *APIKeysHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 // Update handles PUT /admin/api-keys/{id} - updates an existing API key.
 func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	// Get API key ID from URL
 	idStr := chi.URLParam(r, "id")
@@ -471,12 +477,12 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := h.renderer.Render(w, r, "admin/api_keys_form", render.TemplateData{
-			Title: "Edit API Key",
+			Title: i18n.T(lang, "api_keys.edit_key"),
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: "Dashboard", URL: "/admin"},
-				{Label: "API Keys", URL: "/admin/api-keys"},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+				{Label: i18n.T(lang, "nav.api_keys"), URL: "/admin/api-keys"},
 				{Label: apiKey.Name, URL: "/admin/api-keys/" + idStr, Active: true},
 			},
 		}); err != nil {

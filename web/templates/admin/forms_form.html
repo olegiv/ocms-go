@@ -1,11 +1,11 @@
 {{define "content"}}
 <div class="page-header">
-    <h1 class="page-title">{{if .Data.IsEdit}}Edit Form{{else}}New Form{{end}}</h1>
+    <h1 class="page-title">{{if .Data.IsEdit}}{{T .AdminLang "forms.edit"}}{{else}}{{T .AdminLang "forms.new"}}{{end}}</h1>
     <div class="page-actions">
-        <a href="/admin/forms" class="btn btn-secondary">Back to Forms</a>
+        <a href="/admin/forms" class="btn btn-secondary">{{T .AdminLang "forms.back_to_forms"}}</a>
         {{if .Data.IsEdit}}
-        <a href="/admin/forms/{{.Data.Form.ID}}/submissions" class="btn btn-secondary">View Submissions</a>
-        <a href="/forms/{{.Data.Form.Slug}}" class="btn btn-outline" target="_blank">Preview</a>
+        <a href="/admin/forms/{{.Data.Form.ID}}/submissions" class="btn btn-secondary">{{T .AdminLang "forms.view_submissions"}}</a>
+        <a href="/forms/{{.Data.Form.Slug}}" class="btn btn-outline" target="_blank">{{T .AdminLang "forms.preview"}}</a>
         {{end}}
     </div>
 </div>
@@ -15,7 +15,7 @@
         <!-- Form Settings -->
         <div class="card">
             <div class="card-header">
-                <h3>Form Settings</h3>
+                <h3>{{T .AdminLang "forms.form_settings"}}</h3>
             </div>
             <div class="card-body">
                 <form method="POST" action="{{if .Data.IsEdit}}/admin/forms/{{.Data.Form.ID}}{{else}}/admin/forms{{end}}">
@@ -25,7 +25,7 @@
 
                     <div class="form-row">
                         <div class="form-group col-md-6">
-                            <label for="name" class="form-label">Internal Name *</label>
+                            <label for="name" class="form-label">{{T .AdminLang "forms.internal_name"}} *</label>
                             <input type="text"
                                    id="name"
                                    name="name"
@@ -35,11 +35,11 @@
                             {{if .Data.Errors.name}}
                             <div class="form-error">{{.Data.Errors.name}}</div>
                             {{end}}
-                            <small class="form-text">Used for internal reference only.</small>
+                            <small class="form-text">{{T .AdminLang "forms.internal_name_hint"}}</small>
                         </div>
 
                         <div class="form-group col-md-6">
-                            <label for="slug" class="form-label">Slug *</label>
+                            <label for="slug" class="form-label">{{T .AdminLang "label.slug"}} *</label>
                             <input type="text"
                                    id="slug"
                                    name="slug"
@@ -50,12 +50,12 @@
                             {{if .Data.Errors.slug}}
                             <div class="form-error">{{.Data.Errors.slug}}</div>
                             {{end}}
-                            <small class="form-text">URL-friendly identifier (e.g., contact-form).</small>
+                            <small class="form-text">{{T .AdminLang "forms.slug_hint"}}</small>
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label for="title" class="form-label">Display Title *</label>
+                        <label for="title" class="form-label">{{T .AdminLang "forms.display_title"}} *</label>
                         <input type="text"
                                id="title"
                                name="title"
@@ -65,36 +65,36 @@
                         {{if .Data.Errors.title}}
                         <div class="form-error">{{.Data.Errors.title}}</div>
                         {{end}}
-                        <small class="form-text">Shown to users when they view the form.</small>
+                        <small class="form-text">{{T .AdminLang "forms.display_title_hint"}}</small>
                     </div>
 
                     <div class="form-group">
-                        <label for="description" class="form-label">Description</label>
+                        <label for="description" class="form-label">{{T .AdminLang "label.description"}}</label>
                         <textarea id="description"
                                   name="description"
                                   class="form-input"
                                   rows="2">{{if .Data.IsEdit}}{{.Data.Form.Description.String}}{{else}}{{index .Data.FormValues "description"}}{{end}}</textarea>
-                        <small class="form-text">Optional intro text displayed above the form.</small>
+                        <small class="form-text">{{T .AdminLang "forms.description_hint"}}</small>
                     </div>
 
                     <div class="form-group">
-                        <label for="success_message" class="form-label">Success Message</label>
+                        <label for="success_message" class="form-label">{{T .AdminLang "forms.success_message"}}</label>
                         <textarea id="success_message"
                                   name="success_message"
                                   class="form-input"
-                                  rows="2">{{if .Data.IsEdit}}{{.Data.Form.SuccessMessage.String}}{{else}}{{or (index .Data.FormValues "success_message") "Thank you for your submission."}}{{end}}</textarea>
-                        <small class="form-text">Shown after successful submission.</small>
+                                  rows="2">{{if .Data.IsEdit}}{{.Data.Form.SuccessMessage.String}}{{else}}{{or (index .Data.FormValues "success_message") (T .AdminLang "forms.default_success")}}{{end}}</textarea>
+                        <small class="form-text">{{T .AdminLang "forms.success_message_hint"}}</small>
                     </div>
 
                     <div class="form-group">
-                        <label for="email_to" class="form-label">Notification Email</label>
+                        <label for="email_to" class="form-label">{{T .AdminLang "forms.notification_email"}}</label>
                         <input type="email"
                                id="email_to"
                                name="email_to"
                                class="form-input"
                                value="{{if .Data.IsEdit}}{{.Data.Form.EmailTo.String}}{{else}}{{index .Data.FormValues "email_to"}}{{end}}"
                                placeholder="admin@example.com">
-                        <small class="form-text">Optional email to receive submission notifications.</small>
+                        <small class="form-text">{{T .AdminLang "forms.notification_email_hint"}}</small>
                     </div>
 
                     <div class="form-group">
@@ -103,15 +103,15 @@
                                    name="is_active"
                                    value="true"
                                    {{if .Data.IsEdit}}{{if .Data.Form.IsActive}}checked{{end}}{{else}}{{if eq (index .Data.FormValues "is_active") "true"}}checked{{end}}{{end}}>
-                            <span>Form is active and accepts submissions</span>
+                            <span>{{T .AdminLang "forms.is_active"}}</span>
                         </label>
                     </div>
 
                     <div class="form-actions">
                         <button type="submit" class="btn btn-primary">
-                            {{if .Data.IsEdit}}Update Form{{else}}Create Form{{end}}
+                            {{if .Data.IsEdit}}{{T .AdminLang "forms.update_form"}}{{else}}{{T .AdminLang "forms.create_form"}}{{end}}
                         </button>
-                        <a href="/admin/forms" class="btn btn-secondary">Cancel</a>
+                        <a href="/admin/forms" class="btn btn-secondary">{{T .AdminLang "btn.cancel"}}</a>
                     </div>
                 </form>
             </div>
@@ -121,9 +121,9 @@
         <!-- Field Builder -->
         <div class="card mt-4">
             <div class="card-header">
-                <h3>Form Fields</h3>
+                <h3>{{T .AdminLang "forms.form_fields"}}</h3>
                 <button type="button" class="btn btn-primary btn-sm" onclick="openAddFieldModal()">
-                    Add Field
+                    {{T .AdminLang "forms.add_field"}}
                 </button>
             </div>
             <div class="card-body">
@@ -143,22 +143,22 @@
                             <div class="field-item-meta">
                                 <span class="badge badge-secondary">{{.Type}}</span>
                                 <code>{{.Name}}</code>
-                                {{if .IsRequired}}<span class="badge badge-primary">Required</span>{{end}}
+                                {{if .IsRequired}}<span class="badge badge-primary">{{T $.AdminLang "forms.required"}}</span>{{end}}
                             </div>
                         </div>
                         <div class="field-item-actions">
                             <button type="button" class="btn btn-sm btn-secondary" onclick="openEditFieldModal({{.ID}}, '{{.Type}}', '{{.Name}}', '{{.Label}}', '{{.Placeholder.String}}', '{{.HelpText.String}}', '{{.Options.String}}', '{{.Validation.String}}', {{.IsRequired}})">
-                                Edit
+                                {{T $.AdminLang "btn.edit"}}
                             </button>
                             <button type="button" class="btn btn-sm btn-danger" onclick="deleteField({{.ID}})">
-                                Delete
+                                {{T $.AdminLang "btn.delete"}}
                             </button>
                         </div>
                     </div>
                     {{end}}
                     {{else}}
                     <div class="empty-state" id="no-fields-message">
-                        <p>No fields added yet. Click "Add Field" to get started.</p>
+                        <p>{{T .AdminLang "forms.no_fields"}}</p>
                     </div>
                     {{end}}
                 </div>
@@ -174,7 +174,7 @@
     <div class="modal-backdrop" onclick="closeFieldModal()"></div>
     <div class="modal-content">
         <div class="modal-header">
-            <h3 id="field-modal-title">Add Field</h3>
+            <h3 id="field-modal-title">{{T .AdminLang "forms.add_field"}}</h3>
             <button type="button" class="modal-close" onclick="closeFieldModal()">&times;</button>
         </div>
         <div class="modal-body">
@@ -182,7 +182,7 @@
                 <input type="hidden" id="field-id" value="">
 
                 <div class="form-group">
-                    <label for="field-type" class="form-label">Field Type *</label>
+                    <label for="field-type" class="form-label">{{T .AdminLang "forms.field_type"}} *</label>
                     <select id="field-type" name="type" class="form-input" required onchange="toggleOptionsField()">
                         {{range .Data.FieldTypes}}
                         <option value="{{.}}">{{.}}</option>
@@ -191,44 +191,44 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="field-label" class="form-label">Label *</label>
+                    <label for="field-label" class="form-label">{{T .AdminLang "forms.field_label"}} *</label>
                     <input type="text" id="field-label" name="label" class="form-input" required>
                 </div>
 
                 <div class="form-group">
-                    <label for="field-name" class="form-label">Field Name</label>
+                    <label for="field-name" class="form-label">{{T .AdminLang "forms.field_name"}}</label>
                     <input type="text" id="field-name" name="name" class="form-input" placeholder="auto-generated">
-                    <small class="form-text">Internal name for form data (auto-generated from label if empty).</small>
+                    <small class="form-text">{{T .AdminLang "forms.field_name_hint"}}</small>
                 </div>
 
                 <div class="form-group">
-                    <label for="field-placeholder" class="form-label">Placeholder</label>
+                    <label for="field-placeholder" class="form-label">{{T .AdminLang "forms.field_placeholder"}}</label>
                     <input type="text" id="field-placeholder" name="placeholder" class="form-input">
                 </div>
 
                 <div class="form-group">
-                    <label for="field-help-text" class="form-label">Help Text</label>
+                    <label for="field-help-text" class="form-label">{{T .AdminLang "forms.field_help_text"}}</label>
                     <input type="text" id="field-help-text" name="help_text" class="form-input">
-                    <small class="form-text">Displayed below the field.</small>
+                    <small class="form-text">{{T .AdminLang "forms.field_help_hint"}}</small>
                 </div>
 
                 <div class="form-group" id="options-group" style="display: none;">
-                    <label for="field-options" class="form-label">Options (one per line)</label>
+                    <label for="field-options" class="form-label">{{T .AdminLang "forms.field_options"}}</label>
                     <textarea id="field-options" name="options" class="form-input" rows="4" placeholder="Option 1&#10;Option 2&#10;Option 3"></textarea>
-                    <small class="form-text">For select, radio, and checkbox fields.</small>
+                    <small class="form-text">{{T .AdminLang "forms.field_options_hint"}}</small>
                 </div>
 
                 <div class="form-group">
                     <label class="form-checkbox">
                         <input type="checkbox" id="field-required" name="is_required">
-                        <span>This field is required</span>
+                        <span>{{T .AdminLang "forms.field_required"}}</span>
                     </label>
                 </div>
             </form>
         </div>
         <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" onclick="closeFieldModal()">Cancel</button>
-            <button type="button" class="btn btn-primary" onclick="saveField()">Save Field</button>
+            <button type="button" class="btn btn-secondary" onclick="closeFieldModal()">{{T .AdminLang "btn.cancel"}}</button>
+            <button type="button" class="btn btn-primary" onclick="saveField()">{{T .AdminLang "forms.save_field"}}</button>
         </div>
     </div>
 </div>

@@ -109,6 +109,7 @@ func run() error {
 
 	// Initialize session manager
 	sessionManager := session.New(db, cfg.IsDevelopment())
+	middleware.SetSessionManager(sessionManager)
 	slog.Info("session manager initialized")
 
 	// Initialize template renderer

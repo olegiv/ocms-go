@@ -1,20 +1,20 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1 class="page-title">Cache Statistics</h1>
-        <p class="page-description">Monitor and manage cache performance</p>
+        <h1 class="page-title">{{T .AdminLang "cache.title"}}</h1>
+        <p class="page-description">{{T .AdminLang "cache.description"}}</p>
         {{if .Data.TotalStats.ResetAt}}
         <p class="page-description" style="font-size: 0.8rem; margin-top: 0.25rem;">
             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-            Stats reset at {{.Data.TotalStats.ResetAt.Format "Jan 2, 2006 15:04:05"}}
+            {{T .AdminLang "cache.stats_reset"}} {{.Data.TotalStats.ResetAt.Format "Jan 2, 2006 15:04:05"}}
         </p>
         {{end}}
     </div>
     <div class="page-actions">
         <form method="POST" action="/admin/cache/clear" style="display: inline;">
-            <button type="submit" class="btn btn-danger" onclick="return confirm('Clear all caches? This may temporarily slow down the site.')">
+            <button type="submit" class="btn btn-danger" onclick="return confirm('{{T .AdminLang "cache.clear_confirm"}}')">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                Clear All Caches
+                {{T .AdminLang "cache.clear_all"}}
             </button>
         </form>
     </div>
@@ -32,18 +32,18 @@
         </div>
         <div class="backend-content">
             <span class="backend-type">
-                {{if .Data.IsRedis}}Redis Cache{{else}}Memory Cache{{end}}
+                {{if .Data.IsRedis}}{{T .AdminLang "cache.redis_cache"}}{{else}}{{T .AdminLang "cache.memory_cache"}}{{end}}
                 {{if .Data.Info.IsFallback}}
-                <span class="badge badge-warning" style="margin-left: 0.5rem;">Fallback</span>
+                <span class="badge badge-warning" style="margin-left: 0.5rem;">{{T .AdminLang "cache.fallback"}}</span>
                 {{end}}
             </span>
             <span class="backend-status">
                 {{if .Data.HealthError}}
                 <span class="status-indicator status-error"></span>
-                Unhealthy: {{.Data.HealthError}}
+                {{T .AdminLang "cache.unhealthy"}}: {{.Data.HealthError}}
                 {{else}}
                 <span class="status-indicator status-healthy"></span>
-                Healthy
+                {{T .AdminLang "cache.healthy"}}
                 {{end}}
             </span>
             {{if and .Data.IsRedis .Data.Info.RedisURL}}
@@ -54,7 +54,7 @@
     {{if .Data.Info.IsFallback}}
     <div class="alert alert-warning" style="margin-top: 0.75rem;">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-        <span>Redis connection failed. Using in-memory cache as fallback. Check your Redis configuration.</span>
+        <span>{{T .AdminLang "cache.redis_failed"}}</span>
     </div>
     {{end}}
 </div>
@@ -67,7 +67,7 @@
         </div>
         <div class="stat-content">
             <span class="stat-value">{{.Data.TotalStats.Hits}}</span>
-            <span class="stat-label">Cache Hits</span>
+            <span class="stat-label">{{T .AdminLang "cache.hits"}}</span>
         </div>
     </div>
     <div class="stat-card">
@@ -76,7 +76,7 @@
         </div>
         <div class="stat-content">
             <span class="stat-value">{{.Data.TotalStats.Misses}}</span>
-            <span class="stat-label">Cache Misses</span>
+            <span class="stat-label">{{T .AdminLang "cache.misses"}}</span>
         </div>
     </div>
     <div class="stat-card">
@@ -85,7 +85,7 @@
         </div>
         <div class="stat-content">
             <span class="stat-value">{{printf "%.1f" .Data.TotalStats.HitRate}}%</span>
-            <span class="stat-label">Hit Rate</span>
+            <span class="stat-label">{{T .AdminLang "cache.hit_rate"}}</span>
         </div>
     </div>
     <div class="stat-card">
@@ -94,7 +94,7 @@
         </div>
         <div class="stat-content">
             <span class="stat-value">{{.Data.TotalStats.Items}}</span>
-            <span class="stat-label">Cached Items</span>
+            <span class="stat-label">{{T .AdminLang "cache.cached_items"}}</span>
         </div>
     </div>
 </div>
@@ -102,31 +102,31 @@
 <!-- Individual Cache Details -->
 <div class="card">
     <div class="card-header">
-        <h2 class="card-title">Cache Details</h2>
+        <h2 class="card-title">{{T .AdminLang "cache.details"}}</h2>
     </div>
     <div class="card-body">
         <div class="table-responsive">
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Cache</th>
-                        <th>Items</th>
-                        <th>Hits</th>
-                        <th>Misses</th>
-                        <th>Hit Rate</th>
-                        <th>Actions</th>
+                        <th>{{T .AdminLang "cache.cache_name"}}</th>
+                        <th>{{T .AdminLang "cache.items"}}</th>
+                        <th>{{T .AdminLang "cache.hits"}}</th>
+                        <th>{{T .AdminLang "cache.misses"}}</th>
+                        <th>{{T .AdminLang "cache.hit_rate"}}</th>
+                        <th>{{T .AdminLang "label.actions"}}</th>
                     </tr>
                 </thead>
                 <tbody>
                     {{range .Data.Caches}}
                     <tr>
                         <td>
-                            <strong>{{.Name}}</strong>
+                            <strong>{{if eq .Type "config"}}{{T $.AdminLang "cache.name_config"}}{{else if eq .Type "sitemap"}}{{T $.AdminLang "cache.name_sitemap"}}{{else if eq .Type "menu"}}{{T $.AdminLang "cache.name_menus"}}{{else if eq .Type "language"}}{{T $.AdminLang "cache.name_languages"}}{{else if eq .Type "translation"}}{{T $.AdminLang "cache.name_translations"}}{{else if eq .Type "general"}}{{T $.AdminLang "cache.name_general"}}{{else}}{{.Name}}{{end}}</strong>
                             {{if eq .Type "sitemap"}}
                                 {{if .CachedAt}}
-                                <br><small class="text-muted">Cached: {{.CachedAt.Format "Jan 2, 15:04"}} ({{.Size}} bytes)</small>
+                                <br><small class="text-muted">{{T $.AdminLang "cache.cached"}}: {{.CachedAt.Format "Jan 2, 15:04"}} ({{.Size}} {{T $.AdminLang "cache.bytes"}})</small>
                                 {{else}}
-                                <br><small class="text-muted">Not cached</small>
+                                <br><small class="text-muted">{{T $.AdminLang "cache.not_cached"}}</small>
                                 {{end}}
                             {{end}}
                         </td>
@@ -145,11 +145,11 @@
                         <td>
                             {{if eq .Type "config"}}
                             <form method="POST" action="/admin/cache/clear/config" style="display: inline;">
-                                <button type="submit" class="btn btn-sm btn-outline" title="Clear config cache">Clear</button>
+                                <button type="submit" class="btn btn-sm btn-outline" title="{{T $.AdminLang "cache.clear_config"}}">{{T $.AdminLang "cache.clear"}}</button>
                             </form>
                             {{else if eq .Type "sitemap"}}
                             <form method="POST" action="/admin/cache/clear/sitemap" style="display: inline;">
-                                <button type="submit" class="btn btn-sm btn-outline" title="Clear sitemap cache">Clear</button>
+                                <button type="submit" class="btn btn-sm btn-outline" title="{{T $.AdminLang "cache.clear_sitemap"}}">{{T $.AdminLang "cache.clear"}}</button>
                             </form>
                             {{end}}
                         </td>
@@ -164,32 +164,32 @@
 <!-- Cache Info -->
 <div class="card" style="margin-top: 1.5rem;">
     <div class="card-header">
-        <h2 class="card-title">Cache Information</h2>
+        <h2 class="card-title">{{T .AdminLang "cache.info_title"}}</h2>
     </div>
     <div class="card-body">
         <div class="info-grid">
             {{if .Data.IsRedis}}
             <div class="info-item">
-                <h4>Redis Distributed Cache</h4>
-                <p>Using Redis for distributed caching, enabling cache sharing across multiple application instances. Ideal for production deployments.</p>
+                <h4>{{T .AdminLang "cache.redis_distributed"}}</h4>
+                <p>{{T .AdminLang "cache.redis_description"}}</p>
             </div>
             {{else}}
             <div class="info-item">
-                <h4>In-Memory Cache</h4>
-                <p>Using local in-memory caching. Fast but not shared between application instances. Set OCMS_REDIS_URL to enable Redis.</p>
+                <h4>{{T .AdminLang "cache.memory_local"}}</h4>
+                <p>{{T .AdminLang "cache.memory_description"}}</p>
             </div>
             {{end}}
             <div class="info-item">
-                <h4>Site Configuration Cache</h4>
-                <p>Caches site-wide configuration values (site name, description, logo, etc.). Automatically invalidated when configuration is updated.</p>
+                <h4>{{T .AdminLang "cache.config_cache"}}</h4>
+                <p>{{T .AdminLang "cache.config_description"}}</p>
             </div>
             <div class="info-item">
-                <h4>Sitemap Cache</h4>
-                <p>Caches the generated sitemap.xml. Regenerated hourly or when content changes. Reduces database queries for large sites.</p>
+                <h4>{{T .AdminLang "cache.sitemap_cache"}}</h4>
+                <p>{{T .AdminLang "cache.sitemap_description"}}</p>
             </div>
             <div class="info-item">
-                <h4>Menus & Languages Cache</h4>
-                <p>Caches navigation menus and language configurations for fast frontend rendering. Automatically invalidated when updated.</p>
+                <h4>{{T .AdminLang "cache.menus_languages"}}</h4>
+                <p>{{T .AdminLang "cache.menus_description"}}</p>
             </div>
         </div>
     </div>

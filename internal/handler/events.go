@@ -8,6 +8,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/model"
 	"ocms-go/internal/render"
@@ -64,6 +65,7 @@ type EventsListData struct {
 // List handles GET /admin/events - displays a paginated list of events.
 func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	// Get filter parameters
 	level := r.URL.Query().Get("level")
@@ -181,7 +183,7 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/events", render.TemplateData{
-		Title: "Event Log",
+		Title: i18n.T(lang, "events.title"),
 		User:  user,
 		Data:  data,
 	}); err != nil {

@@ -2,14 +2,14 @@
 <nav class="dev-pagination" aria-label="Page navigation">
     <div class="dev-pagination-info">
         <span class="dev-comment">// </span>
-        <span>Page {{.Pagination.CurrentPage}} of {{.Pagination.TotalPages}}</span>
+        <span>{{T $.LangCode "pagination.page"}} {{.Pagination.CurrentPage}} {{T $.LangCode "pagination.of"}} {{.Pagination.TotalPages}}</span>
     </div>
 
     <ul class="dev-pagination-list">
         {{if .Pagination.HasPrev}}
         <li class="dev-pagination-item">
             <a href="{{.Pagination.PrevURL}}" class="dev-pagination-link dev-pagination-prev">
-                <span class="dev-arrow">&lt;</span> prev
+                <span class="dev-arrow">&lt;</span> {{T $.LangCode "pagination.previous"}}
             </a>
         </li>
         {{end}}
@@ -29,7 +29,7 @@
         {{if .Pagination.HasNext}}
         <li class="dev-pagination-item">
             <a href="{{.Pagination.NextURL}}" class="dev-pagination-link dev-pagination-next">
-                next <span class="dev-arrow">&gt;</span>
+                {{T $.LangCode "pagination.next"}} <span class="dev-arrow">&gt;</span>
             </a>
         </li>
         {{end}}

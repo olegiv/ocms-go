@@ -10,6 +10,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 
 	"ocms-go/internal/cache"
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/store"
 )
 
@@ -22,8 +23,11 @@ const (
 	ContextKeySiteName ContextKey = "site_name"
 )
 
-// SessionKeyUserID is the session key for storing the authenticated user ID.
-const SessionKeyUserID = "user_id"
+// Session keys for storing user data and preferences.
+const (
+	SessionKeyUserID    = "user_id"
+	SessionKeyAdminLang = "admin_lang"
+)
 
 // Auth creates middleware that requires authentication.
 // It checks for a valid user session and redirects to login if not authenticated.
@@ -130,4 +134,24 @@ func GetSiteName(r *http.Request) string {
 		return "oCMS"
 	}
 	return siteName
+}
+
+// globalSessionManager is set by SetSessionManager and used by GetAdminLang.
+var globalSessionManager *scs.SessionManager
+
+// SetSessionManager sets the global session manager for admin language retrieval.
+// This should be called during application initialization.
+func SetSessionManager(sm *scs.SessionManager) {
+	globalSessionManager = sm
+}
+
+// GetAdminLang retrieves the admin UI language preference from the session.
+// Returns "en" as default if not found.
+func GetAdminLang(r *http.Request) string {
+	if globalSessionManager != nil {
+		if lang := globalSessionManager.GetString(r.Context(), SessionKeyAdminLang); lang != "" && i18n.IsSupported(lang) {
+			return lang
+		}
+	}
+	return "en"
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/model"
 	"ocms-go/internal/render"
@@ -117,6 +118,7 @@ type PagesListData struct {
 // List handles GET /admin/pages - displays a paginated list of pages.
 func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	// Get page number from query string
 	pageStr := r.URL.Query().Get("page")
@@ -389,12 +391,12 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/pages_list", render.TemplateData{
-		Title: "Pages",
+		Title: i18n.T(lang, "pages.title"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Pages", URL: "/admin/pages", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "pages.title"), URL: "/admin/pages", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -471,6 +473,7 @@ func buildPageCategoryTree(categories []store.Category, parentID *int64, depth i
 // NewForm handles GET /admin/pages/new - displays the new page form.
 func (h *PagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	// Load all categories for the selector
 	allCategories, err := h.queries.ListCategories(r.Context())
@@ -505,13 +508,13 @@ func (h *PagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/pages_form", render.TemplateData{
-		Title: "New Page",
+		Title: i18n.T(lang, "pages.new"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Pages", URL: "/admin/pages"},
-			{Label: "New Page", URL: "/admin/pages/new", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "pages.title"), URL: "/admin/pages"},
+			{Label: i18n.T(lang, "pages.new"), URL: "/admin/pages/new", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -522,6 +525,7 @@ func (h *PagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 // Create handles POST /admin/pages - creates a new page.
 func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	if err := r.ParseForm(); err != nil {
 		h.renderer.SetFlash(r, "Invalid form data", "error")
@@ -666,13 +670,13 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := h.renderer.Render(w, r, "admin/pages_form", render.TemplateData{
-			Title: "New Page",
+			Title: i18n.T(lang, "pages.new"),
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: "Dashboard", URL: "/admin"},
-				{Label: "Pages", URL: "/admin/pages"},
-				{Label: "New Page", URL: "/admin/pages/new", Active: true},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+				{Label: i18n.T(lang, "pages.title"), URL: "/admin/pages"},
+				{Label: i18n.T(lang, "pages.new"), URL: "/admin/pages/new", Active: true},
 			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
@@ -776,6 +780,7 @@ func isValidPageStatus(status string) bool {
 // EditForm handles GET /admin/pages/{id} - displays the edit page form.
 func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	adminLang := h.renderer.GetAdminLang(r)
 
 	// Get page ID from URL
 	idStr := chi.URLParam(r, "id")
@@ -913,12 +918,12 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/pages_form", render.TemplateData{
-		Title: "Edit Page",
+		Title: i18n.T(adminLang, "pages.edit"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Pages", URL: "/admin/pages"},
+			{Label: i18n.T(adminLang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(adminLang, "pages.title"), URL: "/admin/pages"},
 			{Label: page.Title, URL: fmt.Sprintf("/admin/pages/%d", page.ID), Active: true},
 		},
 	}); err != nil {
@@ -930,6 +935,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 // Update handles PUT /admin/pages/{id} - updates an existing page.
 func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	// Get page ID from URL
 	idStr := chi.URLParam(r, "id")
@@ -1080,12 +1086,12 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := h.renderer.Render(w, r, "admin/pages_form", render.TemplateData{
-			Title: "Edit Page",
+			Title: i18n.T(lang, "pages.edit"),
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: "Dashboard", URL: "/admin"},
-				{Label: "Pages", URL: "/admin/pages"},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+				{Label: i18n.T(lang, "pages.title"), URL: "/admin/pages"},
 				{Label: existingPage.Title, URL: fmt.Sprintf("/admin/pages/%d", id), Active: true},
 			},
 		}); err != nil {
@@ -1322,6 +1328,7 @@ type PageVersionsData struct {
 // Versions handles GET /admin/pages/{id}/versions - displays version history.
 func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	// Get page ID from URL
 	idStr := chi.URLParam(r, "id")
@@ -1398,14 +1405,14 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/pages_versions", render.TemplateData{
-		Title: fmt.Sprintf("Version History - %s", page.Title),
+		Title: fmt.Sprintf("%s - %s", i18n.T(lang, "versions.title"), page.Title),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Pages", URL: "/admin/pages"},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "pages.title"), URL: "/admin/pages"},
 			{Label: page.Title, URL: fmt.Sprintf("/admin/pages/%d", page.ID)},
-			{Label: "Versions", URL: fmt.Sprintf("/admin/pages/%d/versions", page.ID), Active: true},
+			{Label: i18n.T(lang, "versions.title"), URL: fmt.Sprintf("/admin/pages/%d/versions", page.ID), Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)

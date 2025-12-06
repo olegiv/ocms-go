@@ -1,8 +1,8 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1 class="page-title">Themes</h1>
-        <p class="page-description">Manage your site's appearance</p>
+        <h1 class="page-title">{{T .AdminLang "themes.title"}}</h1>
+        <p class="page-description">{{T .AdminLang "themes.description"}}</p>
     </div>
 </div>
 
@@ -23,14 +23,14 @@
             </div>
             {{end}}
             {{if .IsActive}}
-            <span class="theme-badge active-badge">Active</span>
+            <span class="theme-badge active-badge">{{T $.AdminLang "themes.active"}}</span>
             {{end}}
         </div>
         <div class="theme-info">
             <h3 class="theme-name">{{.Config.Name}}</h3>
-            <p class="theme-version">Version {{.Config.Version}}</p>
+            <p class="theme-version">{{T $.AdminLang "themes.version"}} {{.Config.Version}}</p>
             {{if .Config.Author}}
-            <p class="theme-author">by {{.Config.Author}}</p>
+            <p class="theme-author">{{T $.AdminLang "themes.author"}} {{.Config.Author}}</p>
             {{end}}
             {{if .Config.Description}}
             <p class="theme-description">{{.Config.Description}}</p>
@@ -42,14 +42,14 @@
                 <input type="hidden" name="theme" value="{{.Name}}">
                 <button type="submit" class="btn btn-primary">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-                    Activate
+                    {{T $.AdminLang "themes.activate"}}
                 </button>
             </form>
             {{end}}
             {{if .Config.Settings}}
             <a href="/admin/themes/{{.Name}}/settings" class="btn {{if .IsActive}}btn-primary{{else}}btn-secondary{{end}}">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-                Settings
+                {{T $.AdminLang "themes.settings"}}
             </a>
             {{end}}
         </div>
@@ -65,8 +65,8 @@
                 <path d="M3 9h18"/>
                 <path d="M9 21V9"/>
             </svg>
-            <p>No themes found</p>
-            <span class="empty-hint">Create a theme directory in ./themes with a theme.json file.</span>
+            <p>{{T .AdminLang "themes.no_themes"}}</p>
+            <span class="empty-hint">{{T .AdminLang "themes.no_themes_hint"}}</span>
         </div>
     </div>
 </div>

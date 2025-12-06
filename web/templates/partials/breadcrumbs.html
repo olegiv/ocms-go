@@ -1,6 +1,6 @@
 {{define "breadcrumbs"}}
 {{if .Breadcrumbs}}
-<nav class="breadcrumbs" aria-label="Breadcrumb">
+<nav class="breadcrumbs" aria-label="{{T .AdminLang "breadcrumb.aria_label"}}">
     <ol class="breadcrumb-list" itemscope itemtype="https://schema.org/BreadcrumbList">
         {{range $i, $crumb := .Breadcrumbs}}
         <li class="breadcrumb-item{{if $crumb.Active}} active{{end}}" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">

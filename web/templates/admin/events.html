@@ -1,8 +1,8 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1 class="page-title">Event Log</h1>
-        <p class="page-description">View system events and activity ({{.Data.TotalEvents}} total)</p>
+        <h1 class="page-title">{{T .AdminLang "events.title"}}</h1>
+        <p class="page-description">{{T .AdminLang "events.description"}} ({{.Data.TotalEvents}} {{T .AdminLang "label.total"}})</p>
     </div>
 </div>
 
@@ -11,27 +11,27 @@
     <div class="filter-bar">
         <form method="get" action="/admin/events" class="filter-form">
             <div class="filter-group">
-                <label for="level" class="filter-label">Level</label>
+                <label for="level" class="filter-label">{{T .AdminLang "events.level"}}</label>
                 <select name="level" id="level" class="form-select form-select-sm">
-                    <option value="">All Levels</option>
+                    <option value="">{{T .AdminLang "events.all_levels"}}</option>
                     {{range .Data.Levels}}
                     <option value="{{.}}" {{if eq . $.Data.Level}}selected{{end}}>{{.}}</option>
                     {{end}}
                 </select>
             </div>
             <div class="filter-group">
-                <label for="category" class="filter-label">Category</label>
+                <label for="category" class="filter-label">{{T .AdminLang "events.category"}}</label>
                 <select name="category" id="category" class="form-select form-select-sm">
-                    <option value="">All Categories</option>
+                    <option value="">{{T .AdminLang "events.all_categories"}}</option>
                     {{range .Data.Categories}}
                     <option value="{{.}}" {{if eq . $.Data.Category}}selected{{end}}>{{.}}</option>
                     {{end}}
                 </select>
             </div>
             <div class="filter-actions">
-                <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+                <button type="submit" class="btn btn-sm btn-primary">{{T .AdminLang "events.filter"}}</button>
                 {{if or .Data.Level .Data.Category}}
-                <a href="/admin/events" class="btn btn-sm btn-outline">Clear</a>
+                <a href="/admin/events" class="btn btn-sm btn-outline">{{T .AdminLang "events.clear"}}</a>
                 {{end}}
             </div>
         </form>
@@ -44,11 +44,11 @@
         <table class="table">
             <thead>
                 <tr>
-                    <th>Time</th>
-                    <th>Level</th>
-                    <th>Category</th>
-                    <th>Message</th>
-                    <th>User</th>
+                    <th>{{T .AdminLang "events.time"}}</th>
+                    <th>{{T .AdminLang "events.level"}}</th>
+                    <th>{{T .AdminLang "events.category"}}</th>
+                    <th>{{T .AdminLang "events.message"}}</th>
+                    <th>{{T .AdminLang "events.user"}}</th>
                 </tr>
             </thead>
             <tbody>
@@ -68,7 +68,7 @@
                         {{if .UserName}}
                             <span class="text-muted">{{.UserName}}</span>
                         {{else}}
-                            <span class="text-muted">System</span>
+                            <span class="text-muted">{{T $.AdminLang "events.system"}}</span>
                         {{end}}
                     </td>
                 </tr>
@@ -81,29 +81,29 @@
     <div class="card-footer">
         <div class="pagination">
             <div class="pagination-info">
-                Page {{.Data.CurrentPage}} of {{.Data.TotalPages}}
+                {{T .AdminLang "pagination.page"}} {{.Data.CurrentPage}} {{T .AdminLang "pagination.of"}} {{.Data.TotalPages}}
             </div>
             <div class="pagination-controls">
                 {{if .Data.HasPrev}}
                 <a href="/admin/events?page={{.Data.PrevPage}}{{if .Data.Level}}&level={{.Data.Level}}{{end}}{{if .Data.Category}}&category={{.Data.Category}}{{end}}" class="btn btn-sm btn-outline">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-                    Previous
+                    {{T .AdminLang "pagination.previous"}}
                 </a>
                 {{else}}
                 <span class="btn btn-sm btn-outline disabled">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-                    Previous
+                    {{T .AdminLang "pagination.previous"}}
                 </span>
                 {{end}}
 
                 {{if .Data.HasNext}}
                 <a href="/admin/events?page={{.Data.NextPage}}{{if .Data.Level}}&level={{.Data.Level}}{{end}}{{if .Data.Category}}&category={{.Data.Category}}{{end}}" class="btn btn-sm btn-outline">
-                    Next
+                    {{T .AdminLang "pagination.next"}}
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
                 </a>
                 {{else}}
                 <span class="btn btn-sm btn-outline disabled">
-                    Next
+                    {{T .AdminLang "pagination.next"}}
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
                 </span>
                 {{end}}
@@ -117,14 +117,14 @@
     <div class="card-body">
         <div class="empty-state">
             <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-            <p>No events found</p>
+            <p>{{T .AdminLang "events.no_events"}}</p>
             {{if or .Data.Level .Data.Category}}
-            <span class="empty-hint">Try clearing your filters to see all events.</span>
+            <span class="empty-hint">{{T .AdminLang "events.no_events_filter"}}</span>
             <div class="empty-state-action">
-                <a href="/admin/events" class="btn btn-primary">Clear Filters</a>
+                <a href="/admin/events" class="btn btn-primary">{{T .AdminLang "events.clear_filters"}}</a>
             </div>
             {{else}}
-            <span class="empty-hint">Events will appear here as the system logs activity.</span>
+            <span class="empty-hint">{{T .AdminLang "events.no_events_hint"}}</span>
             {{end}}
         </div>
     </div>

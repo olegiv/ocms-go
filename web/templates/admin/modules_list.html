@@ -1,13 +1,13 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1 class="page-title">Modules</h1>
-        <p class="page-description">View registered modules and hooks</p>
+        <h1 class="page-title">{{T .AdminLang "modules.title"}}</h1>
+        <p class="page-description">{{T .AdminLang "modules.description"}}</p>
     </div>
 </div>
 
 <div class="modules-section">
-    <h2>Registered Modules</h2>
+    <h2>{{T .AdminLang "modules.registered"}}</h2>
     {{if .Data.Modules}}
     <div class="modules-grid">
         {{range .Data.Modules}}
@@ -28,11 +28,11 @@
                         <path d="M3 5V19A9 3 0 0 0 21 19V5"></path>
                         <path d="M3 12A9 3 0 0 0 21 12"></path>
                     </svg>
-                    <span class="migrations-count">{{.MigrationsApplied}}/{{.MigrationCount}} migrations</span>
+                    <span class="migrations-count">{{.MigrationsApplied}}/{{.MigrationCount}} {{T $.AdminLang "modules.migrations"}}</span>
                     {{if gt .MigrationsPending 0}}
-                    <span class="badge badge-warning badge-sm">{{.MigrationsPending}} pending</span>
+                    <span class="badge badge-warning badge-sm">{{.MigrationsPending}} {{T $.AdminLang "modules.migrations_pending"}}</span>
                     {{else}}
-                    <span class="badge badge-info badge-sm">up to date</span>
+                    <span class="badge badge-info badge-sm">{{T $.AdminLang "modules.up_to_date"}}</span>
                     {{end}}
                 </div>
                 {{end}}
@@ -45,16 +45,16 @@
                             <rect width="7" height="9" x="14" y="12" rx="1"/>
                             <rect width="7" height="5" x="3" y="16" rx="1"/>
                         </svg>
-                        Dashboard
+                        {{T $.AdminLang "modules.dashboard"}}
                     </a>
                 </div>
                 {{end}}
             </div>
             <div class="module-status">
                 {{if .Initialized}}
-                <span class="badge badge-success">Active</span>
+                <span class="badge badge-success">{{T $.AdminLang "modules.active"}}</span>
                 {{else}}
-                <span class="badge badge-warning">Pending</span>
+                <span class="badge badge-warning">{{T $.AdminLang "modules.pending"}}</span>
                 {{end}}
             </div>
         </div>
@@ -67,8 +67,8 @@
                 <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
                     <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
                 </svg>
-                <p>No modules registered</p>
-                <span class="empty-hint">Modules can be registered in main.go to extend oCMS functionality.</span>
+                <p>{{T .AdminLang "modules.no_modules"}}</p>
+                <span class="empty-hint">{{T .AdminLang "modules.no_modules_hint"}}</span>
             </div>
         </div>
     </div>
@@ -76,15 +76,15 @@
 </div>
 
 <div class="hooks-section">
-    <h2>Registered Hooks</h2>
+    <h2>{{T .AdminLang "modules.hooks"}}</h2>
     {{if .Data.Hooks}}
     <div class="card">
         <div class="card-body">
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Hook Name</th>
-                        <th>Handlers</th>
+                        <th>{{T .AdminLang "modules.hook_name"}}</th>
+                        <th>{{T .AdminLang "modules.handlers"}}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -98,12 +98,12 @@
                                 <li>
                                     <span class="handler-name">{{.Name}}</span>
                                     <span class="handler-module">({{.Module}})</span>
-                                    <span class="handler-priority">priority: {{.Priority}}</span>
+                                    <span class="handler-priority">{{T $.AdminLang "modules.priority"}}: {{.Priority}}</span>
                                 </li>
                                 {{end}}
                             </ul>
                             {{else}}
-                            <span class="text-muted">No handlers</span>
+                            <span class="text-muted">{{T $.AdminLang "modules.no_handlers"}}</span>
                             {{end}}
                         </td>
                     </tr>
@@ -120,8 +120,8 @@
                     <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
                     <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
                 </svg>
-                <p>No hooks registered</p>
-                <span class="empty-hint">Modules can register hook handlers to extend functionality.</span>
+                <p>{{T .AdminLang "modules.no_hooks"}}</p>
+                <span class="empty-hint">{{T .AdminLang "modules.no_hooks_hint"}}</span>
             </div>
         </div>
     </div>

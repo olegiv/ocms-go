@@ -1,54 +1,54 @@
 {{define "content"}}
 <div class="page-header">
-    <h1 class="page-title">Submission #{{.Data.Submission.ID}}</h1>
+    <h1 class="page-title">{{T .AdminLang "forms.submission_title"}} #{{.Data.Submission.ID}}</h1>
     <div class="page-actions">
         <button type="button"
                 class="btn btn-danger"
                 hx-delete="/admin/forms/{{.Data.Form.ID}}/submissions/{{.Data.Submission.ID}}"
-                hx-confirm="Are you sure you want to delete this submission?"
+                hx-confirm="{{T .AdminLang "forms.confirm_delete_submission"}}"
                 hx-redirect="/admin/forms/{{.Data.Form.ID}}/submissions">
-            Delete
+            {{T .AdminLang "btn.delete"}}
         </button>
-        <a href="/admin/forms/{{.Data.Form.ID}}/submissions" class="btn btn-outline">Back to Submissions</a>
+        <a href="/admin/forms/{{.Data.Form.ID}}/submissions" class="btn btn-outline">{{T .AdminLang "forms.back_to_submissions"}}</a>
     </div>
 </div>
 
 <div class="submission-detail">
     <div class="submission-meta">
         <div class="meta-item">
-            <span class="meta-label">Form</span>
+            <span class="meta-label">{{T .AdminLang "forms.form"}}</span>
             <span class="meta-value">
                 <a href="/admin/forms/{{.Data.Form.ID}}">{{.Data.Form.Name}}</a>
             </span>
         </div>
         <div class="meta-item">
-            <span class="meta-label">Submitted</span>
+            <span class="meta-label">{{T .AdminLang "forms.submitted"}}</span>
             <span class="meta-value">{{formatDateTime .Data.Submission.CreatedAt}}</span>
         </div>
         <div class="meta-item">
-            <span class="meta-label">IP Address</span>
+            <span class="meta-label">{{T .AdminLang "forms.ip_address"}}</span>
             <span class="meta-value">
                 {{if .Data.Submission.IpAddress.Valid}}
                 <code>{{.Data.Submission.IpAddress.String}}</code>
                 {{else}}
-                <span class="text-muted">Unknown</span>
+                <span class="text-muted">{{T .AdminLang "forms.unknown"}}</span>
                 {{end}}
             </span>
         </div>
         <div class="meta-item">
-            <span class="meta-label">User Agent</span>
+            <span class="meta-label">{{T .AdminLang "forms.user_agent"}}</span>
             <span class="meta-value user-agent">
                 {{if .Data.Submission.UserAgent.Valid}}
                 {{.Data.Submission.UserAgent.String}}
                 {{else}}
-                <span class="text-muted">Unknown</span>
+                <span class="text-muted">{{T .AdminLang "forms.unknown"}}</span>
                 {{end}}
             </span>
         </div>
     </div>
 
     <div class="submission-data">
-        <h2>Submitted Data</h2>
+        <h2>{{T .AdminLang "forms.submitted_data"}}</h2>
         <div class="data-table">
             {{range .Data.Fields}}
             <div class="data-row">
@@ -73,7 +73,7 @@
     </div>
 
     <div class="submission-raw">
-        <h3>Raw JSON Data</h3>
+        <h3>{{T .AdminLang "forms.raw_json"}}</h3>
         <pre class="json-data">{{.Data.Submission.Data}}</pre>
     </div>
 </div>

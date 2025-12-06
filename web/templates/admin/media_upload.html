@@ -1,13 +1,13 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1 class="page-title">Upload Media</h1>
-        <p class="page-description">Upload images, documents, or videos</p>
+        <h1 class="page-title">{{T .AdminLang "media.upload_title"}}</h1>
+        <p class="page-description">{{T .AdminLang "media.upload_description"}}</p>
     </div>
     <div class="page-actions">
         <a href="/admin/media" class="btn btn-outline">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-            Back to Library
+            {{T .AdminLang "media.back_to_library"}}
         </a>
     </div>
 </div>
@@ -27,9 +27,9 @@
             <!-- Folder Selection -->
             {{if .Data.Folders}}
             <div class="form-group">
-                <label for="folder_id" class="form-label">Folder (optional)</label>
+                <label for="folder_id" class="form-label">{{T .AdminLang "media.folder_optional"}}</label>
                 <select id="folder_id" name="folder_id" class="form-select">
-                    <option value="">No folder</option>
+                    <option value="">{{T .AdminLang "media.no_folder"}}</option>
                     {{range .Data.Folders}}
                     <option value="{{.ID}}">{{.Name}}</option>
                     {{end}}
@@ -57,11 +57,11 @@
                 <template x-if="files.length === 0">
                     <div class="upload-placeholder">
                         <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-                        <p class="upload-text">Drag and drop files here</p>
-                        <p class="upload-hint">or click to browse</p>
+                        <p class="upload-text">{{T .AdminLang "media.drag_and_drop"}}</p>
+                        <p class="upload-hint">{{T .AdminLang "media.or_click_browse"}}</p>
                         <p class="upload-formats">
-                            Supported: JPG, PNG, GIF, WebP, PDF, MP4, WebM
-                            <br>Max size: {{formatBytes .Data.MaxSize}}
+                            {{T .AdminLang "media.supported_formats"}}
+                            <br>Max: {{formatBytes .Data.MaxSize}}
                         </p>
                     </div>
                 </template>
@@ -91,7 +91,7 @@
                                     type="button"
                                     class="upload-file-remove"
                                     @click.stop="removeFile(index)"
-                                    title="Remove"
+                                    title="{{T .AdminLang "btn.remove"}}"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                                 </button>
@@ -117,7 +117,7 @@
                     @click="clearFiles()"
                     x-show="files.length > 0"
                 >
-                    Clear All
+                    {{T .AdminLang "media.clear_all"}}
                 </button>
                 <button
                     type="submit"
@@ -128,11 +128,11 @@
                     <template x-if="!uploading">
                         <span>
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-                            Upload <span x-show="files.length > 0">(<span x-text="files.length"></span>)</span>
+                            {{T .AdminLang "btn.upload"}} <span x-show="files.length > 0">(<span x-text="files.length"></span>)</span>
                         </span>
                     </template>
                     <template x-if="uploading">
-                        <span>Uploading...</span>
+                        <span>{{T .AdminLang "media.uploading"}}</span>
                     </template>
                 </button>
             </div>

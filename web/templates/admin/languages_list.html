@@ -1,13 +1,13 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1 class="page-title">Languages</h1>
-        <p class="page-description">Manage content languages ({{.Data.TotalLanguages}} total)</p>
+        <h1 class="page-title">{{T .AdminLang "languages.title"}}</h1>
+        <p class="page-description">{{T .AdminLang "languages.description"}} ({{.Data.TotalLanguages}} {{T .AdminLang "label.total"}})</p>
     </div>
     <div class="page-actions">
         <a href="/admin/languages/new" class="btn btn-primary">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
-            Add Language
+            {{T .AdminLang "languages.add"}}
         </a>
     </div>
 </div>
@@ -18,13 +18,13 @@
         <table class="table">
             <thead>
                 <tr>
-                    <th>Code</th>
-                    <th>Name</th>
-                    <th>Native Name</th>
-                    <th>Direction</th>
-                    <th>Status</th>
-                    <th>Position</th>
-                    <th class="text-right">Actions</th>
+                    <th>{{T .AdminLang "languages.code"}}</th>
+                    <th>{{T .AdminLang "label.name"}}</th>
+                    <th>{{T .AdminLang "languages.native_name"}}</th>
+                    <th>{{T .AdminLang "languages.direction"}}</th>
+                    <th>{{T .AdminLang "label.status"}}</th>
+                    <th>{{T .AdminLang "languages.position"}}</th>
+                    <th class="text-right">{{T .AdminLang "label.actions"}}</th>
                 </tr>
             </thead>
             <tbody>
@@ -36,7 +36,7 @@
                     <td>
                         <span>{{.Name}}</span>
                         {{if .IsDefault}}
-                        <span class="badge badge-primary">Default</span>
+                        <span class="badge badge-primary">{{T $.AdminLang "languages.default"}}</span>
                         {{end}}
                     </td>
                     <td>{{.NativeName}}</td>
@@ -47,9 +47,9 @@
                     </td>
                     <td>
                         {{if .IsActive}}
-                        <span class="badge badge-success">Active</span>
+                        <span class="badge badge-success">{{T $.AdminLang "label.active"}}</span>
                         {{else}}
-                        <span class="badge badge-secondary">Inactive</span>
+                        <span class="badge badge-secondary">{{T $.AdminLang "label.inactive"}}</span>
                         {{end}}
                     </td>
                     <td>{{.Position}}</td>
@@ -57,12 +57,12 @@
                         <div class="action-buttons">
                             {{if not .IsDefault}}
                             <form method="POST" action="/admin/languages/{{.ID}}/default" style="display: inline;">
-                                <button type="submit" class="btn btn-sm btn-outline" title="Set as Default">
+                                <button type="submit" class="btn btn-sm btn-outline" title="{{T $.AdminLang "languages.set_default"}}">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                                 </button>
                             </form>
                             {{end}}
-                            <a href="/admin/languages/{{.ID}}" class="btn btn-sm btn-outline" title="Edit">
+                            <a href="/admin/languages/{{.ID}}" class="btn btn-sm btn-outline" title="{{T $.AdminLang "btn.edit"}}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                             </a>
                             {{if not .IsDefault}}
@@ -70,7 +70,7 @@
                                 <button
                                     type="button"
                                     class="btn btn-sm btn-danger"
-                                    title="Delete"
+                                    title="{{T $.AdminLang "btn.delete"}}"
                                     @click="showConfirm = true"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
@@ -87,15 +87,15 @@
                                 >
                                     <div class="modal" @click.stop>
                                         <div class="modal-header">
-                                            <h3 class="modal-title">Delete Language</h3>
+                                            <h3 class="modal-title">{{T $.AdminLang "languages.delete"}}</h3>
                                             <button type="button" class="modal-close" @click="showConfirm = false">&times;</button>
                                         </div>
                                         <div class="modal-body">
-                                            <p>Are you sure you want to delete <strong>{{.Name}} ({{.Code}})</strong>?</p>
-                                            <p class="text-muted">This action cannot be undone. Any content linked to this language may be affected.</p>
+                                            <p>{{T $.AdminLang "languages.confirm_delete"}} <strong>{{.Name}} ({{.Code}})</strong>?</p>
+                                            <p class="text-muted">{{T $.AdminLang "label.action_cannot_undone"}} {{T $.AdminLang "languages.delete_warning"}}</p>
                                         </div>
                                         <div class="modal-footer">
-                                            <button type="button" class="btn btn-outline" @click="showConfirm = false">Cancel</button>
+                                            <button type="button" class="btn btn-outline" @click="showConfirm = false">{{T $.AdminLang "btn.cancel"}}</button>
                                             <button
                                                 type="button"
                                                 class="btn btn-danger"
@@ -104,7 +104,7 @@
                                                 hx-swap="outerHTML"
                                                 @click="showConfirm = false"
                                             >
-                                                Delete Language
+                                                {{T $.AdminLang "languages.delete"}}
                                             </button>
                                         </div>
                                     </div>
@@ -124,10 +124,10 @@
     <div class="card-body">
         <div class="empty-state">
             <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-            <p>No languages configured</p>
-            <span class="empty-hint">Add your first language to enable multi-language content.</span>
+            <p>{{T .AdminLang "languages.no_languages"}}</p>
+            <span class="empty-hint">{{T .AdminLang "languages.no_languages_hint"}}</span>
             <div class="empty-state-action">
-                <a href="/admin/languages/new" class="btn btn-primary">Add Language</a>
+                <a href="/admin/languages/new" class="btn btn-primary">{{T .AdminLang "languages.add"}}</a>
             </div>
         </div>
     </div>

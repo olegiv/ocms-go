@@ -16,6 +16,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/model"
 	"ocms-go/internal/render"
@@ -84,6 +85,7 @@ type FormsListData struct {
 // List handles GET /admin/forms - displays a list of forms.
 func (h *FormsHandler) List(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	forms, err := h.queries.ListForms(r.Context(), store.ListFormsParams{
 		Limit:  1000,
@@ -112,12 +114,12 @@ func (h *FormsHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/forms_list", render.TemplateData{
-		Title: "Forms",
+		Title: i18n.T(lang, "nav.forms"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Forms", URL: "/admin/forms", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.forms"), URL: "/admin/forms", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -138,6 +140,7 @@ type FormFormData struct {
 // NewForm handles GET /admin/forms/new - displays the new form form.
 func (h *FormsHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	data := FormFormData{
 		FieldTypes: model.ValidFieldTypes(),
@@ -150,13 +153,13 @@ func (h *FormsHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/forms_form", render.TemplateData{
-		Title: "New Form",
+		Title: i18n.T(lang, "forms.new"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Forms", URL: "/admin/forms"},
-			{Label: "New Form", URL: "/admin/forms/new", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.forms"), URL: "/admin/forms"},
+			{Label: i18n.T(lang, "forms.new"), URL: "/admin/forms/new", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -167,6 +170,7 @@ func (h *FormsHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 // Create handles POST /admin/forms - creates a new form.
 func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	if err := r.ParseForm(); err != nil {
 		h.renderer.SetFlash(r, "Invalid form data", "error")
@@ -243,13 +247,13 @@ func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := h.renderer.Render(w, r, "admin/forms_form", render.TemplateData{
-			Title: "New Form",
+			Title: i18n.T(lang, "forms.new"),
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: "Dashboard", URL: "/admin"},
-				{Label: "Forms", URL: "/admin/forms"},
-				{Label: "New Form", URL: "/admin/forms/new", Active: true},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+				{Label: i18n.T(lang, "nav.forms"), URL: "/admin/forms"},
+				{Label: i18n.T(lang, "forms.new"), URL: "/admin/forms/new", Active: true},
 			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
@@ -285,6 +289,7 @@ func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 // EditForm handles GET /admin/forms/{id} - displays the form builder.
 func (h *FormsHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -326,8 +331,8 @@ func (h *FormsHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Forms", URL: "/admin/forms"},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.forms"), URL: "/admin/forms"},
 			{Label: form.Name, URL: fmt.Sprintf("/admin/forms/%d", form.ID), Active: true},
 		},
 	}); err != nil {
@@ -339,6 +344,7 @@ func (h *FormsHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 // Update handles PUT /admin/forms/{id} - updates a form.
 func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -439,8 +445,8 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: "Dashboard", URL: "/admin"},
-				{Label: "Forms", URL: "/admin/forms"},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+				{Label: i18n.T(lang, "nav.forms"), URL: "/admin/forms"},
 				{Label: form.Name, URL: fmt.Sprintf("/admin/forms/%d", form.ID), Active: true},
 			},
 		}); err != nil {
@@ -1170,6 +1176,7 @@ type SubmissionsListData struct {
 // Submissions handles GET /admin/forms/{id}/submissions - lists form submissions.
 func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	idStr := chi.URLParam(r, "id")
 	formID, err := strconv.ParseInt(idStr, 10, 64)
@@ -1276,10 +1283,10 @@ func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Forms", URL: "/admin/forms"},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.forms"), URL: "/admin/forms"},
 			{Label: form.Name, URL: fmt.Sprintf("/admin/forms/%d", form.ID)},
-			{Label: "Submissions", URL: fmt.Sprintf("/admin/forms/%d/submissions", form.ID), Active: true},
+			{Label: i18n.T(lang, "forms.submissions"), URL: fmt.Sprintf("/admin/forms/%d/submissions", form.ID), Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -1298,6 +1305,7 @@ type SubmissionViewData struct {
 // ViewSubmission handles GET /admin/forms/{id}/submissions/{subId} - views a submission.
 func (h *FormsHandler) ViewSubmission(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	formIDStr := chi.URLParam(r, "id")
 	formID, err := strconv.ParseInt(formIDStr, 10, 64)
@@ -1379,10 +1387,10 @@ func (h *FormsHandler) ViewSubmission(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  viewData,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Forms", URL: "/admin/forms"},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.forms"), URL: "/admin/forms"},
 			{Label: form.Name, URL: fmt.Sprintf("/admin/forms/%d", form.ID)},
-			{Label: "Submissions", URL: fmt.Sprintf("/admin/forms/%d/submissions", form.ID)},
+			{Label: i18n.T(lang, "forms.submissions"), URL: fmt.Sprintf("/admin/forms/%d/submissions", form.ID)},
 			{Label: fmt.Sprintf("#%d", submission.ID), URL: fmt.Sprintf("/admin/forms/%d/submissions/%d", form.ID, submission.ID), Active: true},
 		},
 	}); err != nil {

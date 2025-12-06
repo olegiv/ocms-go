@@ -109,6 +109,7 @@ func NewAdminHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	ctx := r.Context()
+	lang := h.renderer.GetAdminLang(r)
 
 	// Fetch stats
 	stats := DashboardStats{}
@@ -307,11 +308,11 @@ func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/dashboard", render.TemplateData{
-		Title: "Dashboard",
+		Title: i18n.T(lang, "nav.dashboard"),
 		User:  user,
 		Data:  dashboardData,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)

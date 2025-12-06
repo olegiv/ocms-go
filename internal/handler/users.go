@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"ocms-go/internal/auth"
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/model"
 	"ocms-go/internal/render"
@@ -94,6 +95,7 @@ type UsersListData struct {
 // List handles GET /admin/users - displays a paginated list of users.
 func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	// Get page number from query string
 	pageStr := r.URL.Query().Get("page")
@@ -147,12 +149,12 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/users_list", render.TemplateData{
-		Title: "Users",
+		Title: i18n.T(lang, "nav.users"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Users", URL: "/admin/users", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.users"), URL: "/admin/users", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -172,6 +174,7 @@ type UserFormData struct {
 // NewForm handles GET /admin/users/new - displays the new user form.
 func (h *UsersHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	data := UserFormData{
 		Roles:      ValidRoles,
@@ -181,13 +184,13 @@ func (h *UsersHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/users_form", render.TemplateData{
-		Title: "New User",
+		Title: i18n.T(lang, "users.new"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Users", URL: "/admin/users"},
-			{Label: "New User", URL: "/admin/users/new", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.users"), URL: "/admin/users"},
+			{Label: i18n.T(lang, "users.new"), URL: "/admin/users/new", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -198,6 +201,7 @@ func (h *UsersHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 // Create handles POST /admin/users - creates a new user.
 func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	if err := r.ParseForm(); err != nil {
 		h.renderer.SetFlash(r, "Invalid form data", "error")
@@ -271,13 +275,13 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := h.renderer.Render(w, r, "admin/users_form", render.TemplateData{
-			Title: "New User",
+			Title: i18n.T(lang, "users.new"),
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: "Dashboard", URL: "/admin"},
-				{Label: "Users", URL: "/admin/users"},
-				{Label: "New User", URL: "/admin/users/new", Active: true},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+				{Label: i18n.T(lang, "nav.users"), URL: "/admin/users"},
+				{Label: i18n.T(lang, "users.new"), URL: "/admin/users/new", Active: true},
 			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
@@ -324,6 +328,7 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 // EditForm handles GET /admin/users/{id} - displays the edit user form.
 func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	currentUser := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	// Get user ID from URL
 	idStr := chi.URLParam(r, "id")
@@ -360,12 +365,12 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/users_form", render.TemplateData{
-		Title: "Edit User",
+		Title: i18n.T(lang, "users.edit"),
 		User:  currentUser,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Users", URL: "/admin/users"},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.users"), URL: "/admin/users"},
 			{Label: editUser.Name, URL: fmt.Sprintf("/admin/users/%d", editUser.ID), Active: true},
 		},
 	}); err != nil {
@@ -377,6 +382,7 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 // Update handles PUT /admin/users/{id} - updates an existing user.
 func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	currentUser := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	// Get user ID from URL
 	idStr := chi.URLParam(r, "id")
@@ -484,12 +490,12 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := h.renderer.Render(w, r, "admin/users_form", render.TemplateData{
-			Title: "Edit User",
+			Title: i18n.T(lang, "users.edit"),
 			User:  currentUser,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: "Dashboard", URL: "/admin"},
-				{Label: "Users", URL: "/admin/users"},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+				{Label: i18n.T(lang, "nav.users"), URL: "/admin/users"},
 				{Label: editUser.Name, URL: fmt.Sprintf("/admin/users/%d", id), Active: true},
 			},
 		}); err != nil {

@@ -11,6 +11,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/render"
 	"ocms-go/internal/store"
@@ -70,6 +71,7 @@ type WidgetsListData struct {
 // List handles GET /admin/widgets - displays widget management page.
 func (h *WidgetsHandler) List(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	// Get active theme
 	activeTheme := h.themeManager.GetActiveTheme()
@@ -109,12 +111,12 @@ func (h *WidgetsHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/widgets_list", render.TemplateData{
-		Title: "Widgets",
+		Title: i18n.T(lang, "nav.widgets"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Widgets", URL: "/admin/widgets", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.widgets"), URL: "/admin/widgets", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)

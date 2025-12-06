@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"ocms-go/internal/cache"
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/render"
 	"ocms-go/internal/store"
@@ -52,6 +53,7 @@ type ThemeSettingsData struct {
 // List handles GET /admin/themes - displays available themes.
 func (h *ThemesHandler) List(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	themes := h.themeManager.ListThemesWithActive()
 
@@ -60,12 +62,12 @@ func (h *ThemesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/themes_list", render.TemplateData{
-		Title: "Themes",
+		Title: i18n.T(lang, "nav.themes"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Themes", URL: "/admin/themes", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.themes"), URL: "/admin/themes", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -135,6 +137,7 @@ func (h *ThemesHandler) Activate(w http.ResponseWriter, r *http.Request) {
 // Settings handles GET /admin/themes/{name}/settings - displays theme settings form.
 func (h *ThemesHandler) Settings(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 	themeName := chi.URLParam(r, "name")
 
 	thm, err := h.themeManager.GetTheme(themeName)
@@ -173,8 +176,8 @@ func (h *ThemesHandler) Settings(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Themes", URL: "/admin/themes"},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.themes"), URL: "/admin/themes"},
 			{Label: thm.Config.Name + " Settings", URL: "/admin/themes/" + themeName + "/settings", Active: true},
 		},
 	}); err != nil {

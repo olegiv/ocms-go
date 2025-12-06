@@ -1,13 +1,13 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1 class="page-title">Menus</h1>
-        <p class="page-description">Manage navigation menus for your site</p>
+        <h1 class="page-title">{{T .AdminLang "menus.title"}}</h1>
+        <p class="page-description">{{T .AdminLang "menus.description"}}</p>
     </div>
     <div class="page-actions">
         <a href="/admin/menus/new" class="btn btn-primary">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
-            New Menu
+            {{T .AdminLang "menus.new"}}
         </a>
     </div>
 </div>
@@ -18,11 +18,11 @@
         <table class="table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Slug</th>
-                    <th>Language</th>
-                    <th>Updated</th>
-                    <th class="text-right">Actions</th>
+                    <th>{{T .AdminLang "label.name"}}</th>
+                    <th>{{T .AdminLang "label.slug"}}</th>
+                    <th>{{T .AdminLang "label.language"}}</th>
+                    <th>{{T .AdminLang "label.updated"}}</th>
+                    <th class="text-right">{{T .AdminLang "label.actions"}}</th>
                 </tr>
             </thead>
             <tbody>
@@ -47,7 +47,7 @@
                     <td>{{formatDate .UpdatedAt}}</td>
                     <td class="text-right">
                         <div class="action-buttons">
-                            <a href="/admin/menus/{{.ID}}" class="btn btn-sm btn-outline" title="Edit Menu">
+                            <a href="/admin/menus/{{.ID}}" class="btn btn-sm btn-outline" title="{{T $.AdminLang "menus.edit"}}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                             </a>
                             {{if and (ne .Slug "main") (ne .Slug "footer")}}
@@ -55,7 +55,7 @@
                                 <button
                                     type="button"
                                     class="btn btn-sm btn-danger"
-                                    title="Delete"
+                                    title="{{T $.AdminLang "btn.delete"}}"
                                     @click="showConfirm = true"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
@@ -72,16 +72,16 @@
                                 >
                                     <div class="modal" @click.stop>
                                         <div class="modal-header">
-                                            <h3 class="modal-title">Delete Menu</h3>
+                                            <h3 class="modal-title">{{T $.AdminLang "menus.delete_menu"}}</h3>
                                             <button type="button" class="modal-close" @click="showConfirm = false">&times;</button>
                                         </div>
                                         <div class="modal-body">
-                                            <p>Are you sure you want to delete <strong>{{.Name}}</strong>?</p>
-                                            <p class="text-warning">All menu items will also be deleted.</p>
-                                            <p class="text-muted">This action cannot be undone.</p>
+                                            <p>{{T $.AdminLang "menus.confirm_delete"}} <strong>{{.Name}}</strong>?</p>
+                                            <p class="text-warning">{{T $.AdminLang "menus.items_deleted_warning"}}</p>
+                                            <p class="text-muted">{{T $.AdminLang "label.action_cannot_undone"}}</p>
                                         </div>
                                         <div class="modal-footer">
-                                            <button type="button" class="btn btn-outline" @click="showConfirm = false">Cancel</button>
+                                            <button type="button" class="btn btn-outline" @click="showConfirm = false">{{T $.AdminLang "btn.cancel"}}</button>
                                             <button
                                                 type="button"
                                                 class="btn btn-danger"
@@ -90,14 +90,14 @@
                                                 hx-swap="outerHTML"
                                                 @click="showConfirm = false"
                                             >
-                                                Delete Menu
+                                                {{T $.AdminLang "menus.delete_menu"}}
                                             </button>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             {{else}}
-                            <span class="badge badge-muted" title="Default menus cannot be deleted">Protected</span>
+                            <span class="badge badge-muted" title="{{T $.AdminLang "menus.protected"}}">{{T $.AdminLang "menus.protected"}}</span>
                             {{end}}
                         </div>
                     </td>
@@ -110,11 +110,11 @@
 {{else}}
 <div class="empty-state">
     <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="18" y2="18"/></svg>
-    <h3>No menus yet</h3>
-    <p>Create your first navigation menu to get started.</p>
+    <h3>{{T .AdminLang "menus.no_menus"}}</h3>
+    <p>{{T .AdminLang "menus.no_menus_hint"}}</p>
     <a href="/admin/menus/new" class="btn btn-primary">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
-        Create Menu
+        {{T .AdminLang "menus.create"}}
     </a>
 </div>
 {{end}}

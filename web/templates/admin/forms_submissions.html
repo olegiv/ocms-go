@@ -1,24 +1,24 @@
 {{define "content"}}
 <div class="page-header">
-    <h1 class="page-title">Submissions - {{.Data.Form.Name}}</h1>
+    <h1 class="page-title">{{T .AdminLang "forms.submissions"}} - {{.Data.Form.Name}}</h1>
     <div class="page-actions">
         {{if .Data.Submissions}}
         <form action="/admin/forms/{{.Data.Form.ID}}/submissions/export" method="POST" style="display: inline;">
-            <button type="submit" class="btn btn-secondary">Export CSV</button>
+            <button type="submit" class="btn btn-secondary">{{T .AdminLang "forms.export_csv"}}</button>
         </form>
         {{end}}
-        <a href="/admin/forms/{{.Data.Form.ID}}" class="btn btn-outline">Back to Form</a>
+        <a href="/admin/forms/{{.Data.Form.ID}}" class="btn btn-outline">{{T .AdminLang "forms.back_to_form"}}</a>
     </div>
 </div>
 
 <div class="stats-bar">
     <div class="stat">
         <span class="stat-value">{{.Data.TotalCount}}</span>
-        <span class="stat-label">Total Submissions</span>
+        <span class="stat-label">{{T .AdminLang "forms.total_submissions"}}</span>
     </div>
     <div class="stat">
         <span class="stat-value">{{.Data.UnreadCount}}</span>
-        <span class="stat-label">Unread</span>
+        <span class="stat-label">{{T .AdminLang "forms.unread"}}</span>
     </div>
 </div>
 
@@ -28,11 +28,11 @@
         <thead>
             <tr>
                 <th style="width: 60px;">ID</th>
-                <th>Preview</th>
-                <th style="width: 160px;">Submitted</th>
-                <th style="width: 120px;">IP Address</th>
-                <th style="width: 80px;">Status</th>
-                <th style="width: 150px;">Actions</th>
+                <th>{{T .AdminLang "forms.preview"}}</th>
+                <th style="width: 160px;">{{T .AdminLang "forms.submitted"}}</th>
+                <th style="width: 120px;">{{T .AdminLang "forms.ip_address"}}</th>
+                <th style="width: 80px;">{{T .AdminLang "label.status"}}</th>
+                <th style="width: 150px;">{{T .AdminLang "label.actions"}}</th>
             </tr>
         </thead>
         <tbody>
@@ -45,7 +45,7 @@
                 </td>
                 <td>
                     <a href="/admin/forms/{{$.Data.Form.ID}}/submissions/{{.Submission.ID}}" class="submission-preview">
-                        {{if .Preview}}{{.Preview}}{{else}}<em>No preview available</em>{{end}}
+                        {{if .Preview}}{{.Preview}}{{else}}<em>{{T $.AdminLang "forms.no_preview"}}</em>{{end}}
                     </a>
                 </td>
                 <td>{{formatDateTime .Submission.CreatedAt}}</td>
@@ -58,21 +58,21 @@
                 </td>
                 <td>
                     {{if .Submission.IsRead}}
-                    <span class="badge badge-secondary">Read</span>
+                    <span class="badge badge-secondary">{{T $.AdminLang "forms.status_read"}}</span>
                     {{else}}
-                    <span class="badge badge-primary">New</span>
+                    <span class="badge badge-primary">{{T $.AdminLang "forms.status_new"}}</span>
                     {{end}}
                 </td>
                 <td>
                     <div class="btn-group">
-                        <a href="/admin/forms/{{$.Data.Form.ID}}/submissions/{{.Submission.ID}}" class="btn btn-sm btn-secondary">View</a>
+                        <a href="/admin/forms/{{$.Data.Form.ID}}/submissions/{{.Submission.ID}}" class="btn btn-sm btn-secondary">{{T $.AdminLang "forms.view"}}</a>
                         <button type="button"
                                 class="btn btn-sm btn-danger"
                                 hx-delete="/admin/forms/{{$.Data.Form.ID}}/submissions/{{.Submission.ID}}"
-                                hx-confirm="Are you sure you want to delete this submission?"
+                                hx-confirm="{{T $.AdminLang "forms.confirm_delete_submission"}}"
                                 hx-target="closest tr"
                                 hx-swap="outerHTML">
-                            Delete
+                            {{T $.AdminLang "btn.delete"}}
                         </button>
                     </div>
                 </td>
@@ -85,22 +85,22 @@
 {{if gt .Data.TotalPages 1}}
 <div class="pagination">
     {{if gt .Data.Page 1}}
-    <a href="/admin/forms/{{.Data.Form.ID}}/submissions?page={{sub .Data.Page 1}}" class="btn btn-sm btn-outline">Previous</a>
+    <a href="/admin/forms/{{.Data.Form.ID}}/submissions?page={{sub .Data.Page 1}}" class="btn btn-sm btn-outline">{{T .AdminLang "pagination.previous"}}</a>
     {{end}}
 
-    <span class="pagination-info">Page {{.Data.Page}} of {{.Data.TotalPages}}</span>
+    <span class="pagination-info">{{T .AdminLang "pagination.page"}} {{.Data.Page}} {{T .AdminLang "pagination.of"}} {{.Data.TotalPages}}</span>
 
     {{if lt .Data.Page .Data.TotalPages}}
-    <a href="/admin/forms/{{.Data.Form.ID}}/submissions?page={{add .Data.Page 1}}" class="btn btn-sm btn-outline">Next</a>
+    <a href="/admin/forms/{{.Data.Form.ID}}/submissions?page={{add .Data.Page 1}}" class="btn btn-sm btn-outline">{{T .AdminLang "pagination.next"}}</a>
     {{end}}
 </div>
 {{end}}
 
 {{else}}
 <div class="empty-state">
-    <h3>No submissions yet</h3>
-    <p>When visitors submit this form, their responses will appear here.</p>
-    <a href="/forms/{{.Data.Form.Slug}}" class="btn btn-primary" target="_blank">View Form</a>
+    <h3>{{T .AdminLang "forms.no_submissions"}}</h3>
+    <p>{{T .AdminLang "forms.no_submissions_hint"}}</p>
+    <a href="/forms/{{.Data.Form.Slug}}" class="btn btn-primary" target="_blank">{{T .AdminLang "forms.view_form"}}</a>
 </div>
 {{end}}
 

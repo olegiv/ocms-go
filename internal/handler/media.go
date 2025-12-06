@@ -14,6 +14,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/model"
 	"ocms-go/internal/render"
@@ -107,6 +108,7 @@ type MediaLibraryData struct {
 // Library handles GET /admin/media - displays the media library.
 func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	// Get page number from query string
 	pageStr := r.URL.Query().Get("page")
@@ -232,12 +234,12 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/media_library", render.TemplateData{
-		Title: "Media Library",
+		Title: i18n.T(lang, "media.title"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Media", URL: "/admin/media", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.media"), URL: "/admin/media", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -255,6 +257,7 @@ type UploadFormData struct {
 // UploadForm handles GET /admin/media/upload - displays the upload form.
 func (h *MediaHandler) UploadForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	// Get folders
 	folders, err := h.queries.ListMediaFolders(r.Context())
@@ -270,13 +273,13 @@ func (h *MediaHandler) UploadForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/media_upload", render.TemplateData{
-		Title: "Upload Media",
+		Title: i18n.T(lang, "media.upload_title"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Media", URL: "/admin/media"},
-			{Label: "Upload", URL: "/admin/media/upload", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.media"), URL: "/admin/media"},
+			{Label: i18n.T(lang, "media.upload"), URL: "/admin/media/upload", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -412,6 +415,7 @@ type MediaEditData struct {
 // EditForm handles GET /admin/media/{id} - displays the edit form.
 func (h *MediaHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	// Get media ID from URL
 	idStr := chi.URLParam(r, "id")
@@ -466,12 +470,12 @@ func (h *MediaHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/media_edit", render.TemplateData{
-		Title: "Edit Media",
+		Title: i18n.T(lang, "media.edit_title"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Media", URL: "/admin/media"},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.media"), URL: "/admin/media"},
 			{Label: media.Filename, URL: fmt.Sprintf("/admin/media/%d", media.ID), Active: true},
 		},
 	}); err != nil {
@@ -483,6 +487,7 @@ func (h *MediaHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 // Update handles PUT /admin/media/{id} - updates media metadata.
 func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	// Get media ID from URL
 	idStr := chi.URLParam(r, "id")
@@ -559,12 +564,12 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := h.renderer.Render(w, r, "admin/media_edit", render.TemplateData{
-			Title: "Edit Media",
+			Title: i18n.T(lang, "media.edit_title"),
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: "Dashboard", URL: "/admin"},
-				{Label: "Media", URL: "/admin/media"},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+				{Label: i18n.T(lang, "nav.media"), URL: "/admin/media"},
 				{Label: media.Filename, URL: fmt.Sprintf("/admin/media/%d", id), Active: true},
 			},
 		}); err != nil {

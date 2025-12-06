@@ -222,6 +222,38 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		"formatDateTime": func(t time.Time) string {
 			return t.Format("Jan 2, 2006 3:04 PM")
 		},
+		// formatDateLocale formats a date according to the specified language.
+		// Usage: {{formatDateLocale .PublishedAt .LangCode}}
+		// Handles both time.Time and *time.Time (returns empty string for nil)
+		"formatDateLocale": func(t any, lang string) string {
+			switch v := t.(type) {
+			case time.Time:
+				return formatDateForLocale(v, lang)
+			case *time.Time:
+				if v == nil {
+					return ""
+				}
+				return formatDateForLocale(*v, lang)
+			default:
+				return ""
+			}
+		},
+		// formatDateTimeLocale formats a datetime according to the specified language.
+		// Usage: {{formatDateTimeLocale .UpdatedAt .AdminLang}}
+		// Handles both time.Time and *time.Time (returns empty string for nil)
+		"formatDateTimeLocale": func(t any, lang string) string {
+			switch v := t.(type) {
+			case time.Time:
+				return formatDateTimeForLocale(v, lang)
+			case *time.Time:
+				if v == nil {
+					return ""
+				}
+				return formatDateTimeForLocale(*v, lang)
+			default:
+				return ""
+			}
+		},
 		"truncate": func(s string, length int) string {
 			if len(s) <= length {
 				return s
@@ -404,6 +436,16 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		"T": func(lang string, key string, args ...any) string {
 			return i18n.T(lang, key, args...)
 		},
+		// TDefault translates a message key, falling back to a default value if not found.
+		// Usage in templates: {{TDefault .AdminLang "key" "Default Value"}}
+		"TDefault": func(lang string, key string, defaultVal string) string {
+			result := i18n.T(lang, key)
+			// If the key wasn't found, T returns the key itself
+			if result == key {
+				return defaultVal
+			}
+			return result
+		},
 		// adminLangOptions returns the list of admin UI languages.
 		// Only returns languages that are:
 		// 1. Active in the database
@@ -464,6 +506,19 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			}
 
 			return options
+		},
+		// TLang translates a language code to its localized name.
+		// Usage in templates: {{TLang .AdminLang .LanguageCode}}
+		// Falls back to the original code if no translation exists.
+		"TLang": func(adminLang string, langCode string) string {
+			translationKey := "language." + langCode
+			translated := i18n.T(adminLang, translationKey)
+			// If translation exists (different from key), return it
+			if translated != translationKey {
+				return translated
+			}
+			// Fallback to language code
+			return langCode
 		},
 	}
 }
@@ -608,4 +663,36 @@ func (r *Renderer) GetAdminLang(req *http.Request) string {
 		}
 	}
 	return DefaultAdminLang
+}
+
+// formatDateForLocale formats a date according to the specified language.
+func formatDateForLocale(t time.Time, lang string) string {
+	switch lang {
+	case "ru":
+		// Russian date format: "2 января 2006"
+		monthsRu := []string{
+			"января", "февраля", "марта", "апреля", "мая", "июня",
+			"июля", "августа", "сентября", "октября", "ноября", "декабря",
+		}
+		return fmt.Sprintf("%d %s %d", t.Day(), monthsRu[t.Month()-1], t.Year())
+	default:
+		// English date format: "Jan 2, 2006"
+		return t.Format("Jan 2, 2006")
+	}
+}
+
+// formatDateTimeForLocale formats a time.Time as a localized datetime string.
+func formatDateTimeForLocale(t time.Time, lang string) string {
+	switch lang {
+	case "ru":
+		// Russian datetime format: "2 января 2006, 15:04"
+		monthsRu := []string{
+			"января", "февраля", "марта", "апреля", "мая", "июня",
+			"июля", "августа", "сентября", "октября", "ноября", "декабря",
+		}
+		return fmt.Sprintf("%d %s %d, %02d:%02d", t.Day(), monthsRu[t.Month()-1], t.Year(), t.Hour(), t.Minute())
+	default:
+		// English datetime format: "Jan 2, 2006 3:04 PM"
+		return t.Format("Jan 2, 2006 3:04 PM")
+	}
 }

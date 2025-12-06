@@ -147,7 +147,7 @@
                     </td>
                     <td>
                         {{if and (eq .Status "draft") .ScheduledAt.Valid}}
-                        <span class="badge badge-info" title="{{T $.AdminLang "status.scheduled"}} {{.ScheduledAt.Time.Format "Jan 02, 2006 at 3:04 PM"}}">
+                        <span class="badge badge-info" title="{{T $.AdminLang "status.scheduled"}} {{formatDateTimeLocale .ScheduledAt.Time $.AdminLang}}">
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                             {{T $.AdminLang "status.scheduled"}}
                         </span>
@@ -157,7 +157,7 @@
                         </span>
                         {{end}}
                     </td>
-                    <td>{{formatDateTime .UpdatedAt}}</td>
+                    <td>{{formatDateTimeLocale .UpdatedAt $.AdminLang}}</td>
                     <td class="text-right">
                         <div class="action-buttons">
                             <form action="/admin/pages/{{.ID}}/publish" method="POST" class="inline-form">

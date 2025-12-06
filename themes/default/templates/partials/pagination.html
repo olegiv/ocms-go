@@ -5,11 +5,11 @@
         {{/* Previous Page */}}
         {{if .Pagination.HasPrev}}
         <li class="pagination-item pagination-prev">
-            <a href="{{.Pagination.PrevURL}}" aria-label="Previous page">
+            <a href="{{.Pagination.PrevURL}}" aria-label="{{T $.LangCode "pagination.previous"}}">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="15 18 9 12 15 6"></polyline>
                 </svg>
-                <span>Previous</span>
+                <span>{{T $.LangCode "pagination.previous"}}</span>
             </a>
         </li>
         {{else}}
@@ -18,7 +18,7 @@
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="15 18 9 12 15 6"></polyline>
                 </svg>
-                <span>Previous</span>
+                <span>{{T $.LangCode "pagination.previous"}}</span>
             </span>
         </li>
         {{end}}
@@ -43,8 +43,8 @@
         {{/* Next Page */}}
         {{if .Pagination.HasNext}}
         <li class="pagination-item pagination-next">
-            <a href="{{.Pagination.NextURL}}" aria-label="Next page">
-                <span>Next</span>
+            <a href="{{.Pagination.NextURL}}" aria-label="{{T $.LangCode "pagination.next"}}">
+                <span>{{T $.LangCode "pagination.next"}}</span>
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="9 18 15 12 9 6"></polyline>
                 </svg>
@@ -53,7 +53,7 @@
         {{else}}
         <li class="pagination-item pagination-next disabled">
             <span>
-                <span>Next</span>
+                <span>{{T $.LangCode "pagination.next"}}</span>
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="9 18 15 12 9 6"></polyline>
                 </svg>
@@ -65,8 +65,8 @@
     {{/* Page Info */}}
     {{if .Pagination.TotalPages}}
     <p class="pagination-info">
-        Page {{.Pagination.CurrentPage}} of {{.Pagination.TotalPages}}
-        {{if .Pagination.TotalItems}}({{.Pagination.TotalItems}} items){{end}}
+        {{T $.LangCode "pagination.page"}} {{.Pagination.CurrentPage}} {{T $.LangCode "pagination.of"}} {{.Pagination.TotalPages}}
+        {{if .Pagination.TotalItems}}({{.Pagination.TotalItems}} {{T $.LangCode "pagination.items"}}){{end}}
     </p>
     {{end}}
 </nav>

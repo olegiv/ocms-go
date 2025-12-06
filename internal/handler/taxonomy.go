@@ -13,6 +13,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/model"
 	"ocms-go/internal/render"
@@ -54,6 +55,7 @@ type TagsListData struct {
 // ListTags handles GET /admin/tags - displays a paginated list of tags.
 func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	// Get page number from query string
 	pageStr := r.URL.Query().Get("page")
@@ -106,12 +108,12 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/tags_list", render.TemplateData{
-		Title: "Tags",
+		Title: i18n.T(lang, "nav.tags"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Tags", URL: "/admin/tags", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.tags"), URL: "/admin/tags", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -140,6 +142,7 @@ type TagFormData struct {
 // NewTagForm handles GET /admin/tags/new - displays the new tag form.
 func (h *TaxonomyHandler) NewTagForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	// Load all active languages
 	allLanguages, err := h.queries.ListActiveLanguages(r.Context())
@@ -166,13 +169,13 @@ func (h *TaxonomyHandler) NewTagForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/tags_form", render.TemplateData{
-		Title: "New Tag",
+		Title: i18n.T(lang, "tags.new"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Tags", URL: "/admin/tags"},
-			{Label: "New Tag", URL: "/admin/tags/new", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.tags"), URL: "/admin/tags"},
+			{Label: i18n.T(lang, "tags.new"), URL: "/admin/tags/new", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -183,6 +186,7 @@ func (h *TaxonomyHandler) NewTagForm(w http.ResponseWriter, r *http.Request) {
 // CreateTag handles POST /admin/tags - creates a new tag.
 func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	if err := r.ParseForm(); err != nil {
 		h.renderer.SetFlash(r, "Invalid form data", "error")
@@ -270,13 +274,13 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := h.renderer.Render(w, r, "admin/tags_form", render.TemplateData{
-			Title: "New Tag",
+			Title: i18n.T(lang, "tags.new"),
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: "Dashboard", URL: "/admin"},
-				{Label: "Tags", URL: "/admin/tags"},
-				{Label: "New Tag", URL: "/admin/tags/new", Active: true},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+				{Label: i18n.T(lang, "nav.tags"), URL: "/admin/tags"},
+				{Label: i18n.T(lang, "tags.new"), URL: "/admin/tags/new", Active: true},
 			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
@@ -309,6 +313,7 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 // EditTagForm handles GET /admin/tags/{id} - displays the edit tag form.
 func (h *TaxonomyHandler) EditTagForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	// Get tag ID from URL
 	idStr := chi.URLParam(r, "id")
@@ -400,12 +405,12 @@ func (h *TaxonomyHandler) EditTagForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/tags_form", render.TemplateData{
-		Title: "Edit Tag",
+		Title: tag.Name,
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Tags", URL: "/admin/tags"},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.tags"), URL: "/admin/tags"},
 			{Label: tag.Name, URL: fmt.Sprintf("/admin/tags/%d", tag.ID), Active: true},
 		},
 	}); err != nil {
@@ -417,6 +422,7 @@ func (h *TaxonomyHandler) EditTagForm(w http.ResponseWriter, r *http.Request) {
 // UpdateTag handles PUT /admin/tags/{id} - updates an existing tag.
 func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	// Get tag ID from URL
 	idStr := chi.URLParam(r, "id")
@@ -512,12 +518,12 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := h.renderer.Render(w, r, "admin/tags_form", render.TemplateData{
-			Title: "Edit Tag",
+			Title: existingTag.Name,
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: "Dashboard", URL: "/admin"},
-				{Label: "Tags", URL: "/admin/tags"},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+				{Label: i18n.T(lang, "nav.tags"), URL: "/admin/tags"},
 				{Label: existingTag.Name, URL: fmt.Sprintf("/admin/tags/%d", id), Active: true},
 			},
 		}); err != nil {
@@ -845,6 +851,7 @@ func buildCategoryTreeWithUsage(categories []store.GetCategoryUsageCountsWithLan
 // ListCategories handles GET /admin/categories - displays category tree.
 func (h *TaxonomyHandler) ListCategories(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	// Get all categories with usage counts and language info
 	categories, err := h.queries.GetCategoryUsageCountsWithLanguage(r.Context())
@@ -871,12 +878,12 @@ func (h *TaxonomyHandler) ListCategories(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := h.renderer.Render(w, r, "admin/categories_list", render.TemplateData{
-		Title: "Categories",
+		Title: i18n.T(lang, "nav.categories"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Categories", URL: "/admin/categories", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.categories"), URL: "/admin/categories", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -907,6 +914,7 @@ type CategoryFormData struct {
 // NewCategoryForm handles GET /admin/categories/new - displays the new category form.
 func (h *TaxonomyHandler) NewCategoryForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	// Get all categories for parent selector
 	categories, err := h.queries.ListCategories(r.Context())
@@ -944,13 +952,13 @@ func (h *TaxonomyHandler) NewCategoryForm(w http.ResponseWriter, r *http.Request
 	}
 
 	if err := h.renderer.Render(w, r, "admin/categories_form", render.TemplateData{
-		Title: "New Category",
+		Title: i18n.T(lang, "categories.new"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Categories", URL: "/admin/categories"},
-			{Label: "New Category", URL: "/admin/categories/new", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.categories"), URL: "/admin/categories"},
+			{Label: i18n.T(lang, "categories.new"), URL: "/admin/categories/new", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -961,6 +969,7 @@ func (h *TaxonomyHandler) NewCategoryForm(w http.ResponseWriter, r *http.Request
 // CreateCategory handles POST /admin/categories - creates a new category.
 func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	if err := r.ParseForm(); err != nil {
 		h.renderer.SetFlash(r, "Invalid form data", "error")
@@ -1066,13 +1075,13 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 		}
 
 		if err := h.renderer.Render(w, r, "admin/categories_form", render.TemplateData{
-			Title: "New Category",
+			Title: i18n.T(lang, "categories.new"),
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: "Dashboard", URL: "/admin"},
-				{Label: "Categories", URL: "/admin/categories"},
-				{Label: "New Category", URL: "/admin/categories/new", Active: true},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+				{Label: i18n.T(lang, "nav.categories"), URL: "/admin/categories"},
+				{Label: i18n.T(lang, "categories.new"), URL: "/admin/categories/new", Active: true},
 			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
@@ -1108,6 +1117,7 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 // EditCategoryForm handles GET /admin/categories/{id} - displays the edit category form.
 func (h *TaxonomyHandler) EditCategoryForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	// Get category ID from URL
 	idStr := chi.URLParam(r, "id")
@@ -1226,12 +1236,12 @@ func (h *TaxonomyHandler) EditCategoryForm(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := h.renderer.Render(w, r, "admin/categories_form", render.TemplateData{
-		Title: "Edit Category",
+		Title: category.Name,
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Categories", URL: "/admin/categories"},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.categories"), URL: "/admin/categories"},
 			{Label: category.Name, URL: fmt.Sprintf("/admin/categories/%d", category.ID), Active: true},
 		},
 	}); err != nil {
@@ -1243,6 +1253,7 @@ func (h *TaxonomyHandler) EditCategoryForm(w http.ResponseWriter, r *http.Reques
 // UpdateCategory handles PUT /admin/categories/{id} - updates an existing category.
 func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	// Get category ID from URL
 	idStr := chi.URLParam(r, "id")
@@ -1388,12 +1399,12 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 		}
 
 		if err := h.renderer.Render(w, r, "admin/categories_form", render.TemplateData{
-			Title: "Edit Category",
+			Title: existingCategory.Name,
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: "Dashboard", URL: "/admin"},
-				{Label: "Categories", URL: "/admin/categories"},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+				{Label: i18n.T(lang, "nav.categories"), URL: "/admin/categories"},
 				{Label: existingCategory.Name, URL: fmt.Sprintf("/admin/categories/%d", id), Active: true},
 			},
 		}); err != nil {

@@ -1,13 +1,13 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1 class="page-title">{{if .Data.IsEdit}}Edit Language{{else}}New Language{{end}}</h1>
-        <p class="page-description">{{if .Data.IsEdit}}Update language settings{{else}}Add a new content language{{end}}</p>
+        <h1 class="page-title">{{if .Data.IsEdit}}{{T .AdminLang "languages.edit_language"}}{{else}}{{T .AdminLang "languages.new_language"}}{{end}}</h1>
+        <p class="page-description">{{if .Data.IsEdit}}{{T .AdminLang "languages.update_settings"}}{{else}}{{T .AdminLang "languages.add_new"}}{{end}}</p>
     </div>
     <div class="page-actions">
         <a href="/admin/languages" class="btn btn-outline">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-            Back to Languages
+            {{T .AdminLang "languages.back_to_languages"}}
         </a>
     </div>
 </div>
@@ -22,14 +22,14 @@
             <div class="form-grid">
                 {{if not .Data.IsEdit}}
                 <div class="form-group form-group-full">
-                    <label class="form-label">Quick Select Language</label>
-                    <p class="form-help">Select a common language to auto-fill the form, or enter custom values below.</p>
+                    <label class="form-label">{{T .AdminLang "languages.quick_select"}}</label>
+                    <p class="form-help">{{T .AdminLang "languages.quick_select_hint"}}</p>
                     <select
                         id="quick_select"
                         class="form-input form-select"
                         @change="selectLanguage($event.target.value)"
                     >
-                        <option value="">-- Select a language --</option>
+                        <option value="">{{T .AdminLang "languages.select_language"}}</option>
                         {{range .Data.CommonLanguages}}
                         <option value="{{.Code}}|{{.Name}}|{{.NativeName}}|{{.Direction}}">{{.Name}} ({{.Code}})</option>
                         {{end}}
@@ -42,7 +42,7 @@
                 {{end}}
 
                 <div class="form-group">
-                    <label for="code" class="form-label">Language Code <span class="required">*</span></label>
+                    <label for="code" class="form-label">{{T .AdminLang "languages.language_code"}} <span class="required">*</span></label>
                     <input
                         type="text"
                         id="code"
@@ -50,7 +50,7 @@
                         class="form-input{{if index .Data.Errors "code"}} is-invalid{{end}}"
                         value="{{index .Data.FormValues "code"}}"
                         x-model="code"
-                        placeholder="e.g., en, ru, de"
+                        placeholder="{{T .AdminLang "languages.code_placeholder"}}"
                         maxlength="5"
                         required
                         {{if .Data.IsEdit}}readonly{{else}}autofocus{{end}}
@@ -58,12 +58,12 @@
                     {{if index .Data.Errors "code"}}
                     <span class="form-error">{{index .Data.Errors "code"}}</span>
                     {{else}}
-                    <span class="form-hint">ISO 639-1 code (2-5 characters)</span>
+                    <span class="form-hint">{{T .AdminLang "languages.code_hint"}}</span>
                     {{end}}
                 </div>
 
                 <div class="form-group">
-                    <label for="name" class="form-label">Name <span class="required">*</span></label>
+                    <label for="name" class="form-label">{{T .AdminLang "label.name"}} <span class="required">*</span></label>
                     <input
                         type="text"
                         id="name"
@@ -71,18 +71,18 @@
                         class="form-input{{if index .Data.Errors "name"}} is-invalid{{end}}"
                         value="{{index .Data.FormValues "name"}}"
                         x-model="name"
-                        placeholder="e.g., English, Russian"
+                        placeholder="{{T .AdminLang "languages.name_placeholder"}}"
                         required
                     >
                     {{if index .Data.Errors "name"}}
                     <span class="form-error">{{index .Data.Errors "name"}}</span>
                     {{else}}
-                    <span class="form-hint">Display name in English</span>
+                    <span class="form-hint">{{T .AdminLang "languages.name_hint"}}</span>
                     {{end}}
                 </div>
 
                 <div class="form-group">
-                    <label for="native_name" class="form-label">Native Name <span class="required">*</span></label>
+                    <label for="native_name" class="form-label">{{T .AdminLang "languages.native_name"}} <span class="required">*</span></label>
                     <input
                         type="text"
                         id="native_name"
@@ -90,18 +90,18 @@
                         class="form-input{{if index .Data.Errors "native_name"}} is-invalid{{end}}"
                         value="{{index .Data.FormValues "native_name"}}"
                         x-model="nativeName"
-                        placeholder="e.g., English, Русский"
+                        placeholder="{{T .AdminLang "languages.native_placeholder"}}"
                         required
                     >
                     {{if index .Data.Errors "native_name"}}
                     <span class="form-error">{{index .Data.Errors "native_name"}}</span>
                     {{else}}
-                    <span class="form-hint">Name in the language itself</span>
+                    <span class="form-hint">{{T .AdminLang "languages.native_hint"}}</span>
                     {{end}}
                 </div>
 
                 <div class="form-group">
-                    <label for="direction" class="form-label">Text Direction <span class="required">*</span></label>
+                    <label for="direction" class="form-label">{{T .AdminLang "languages.text_direction"}} <span class="required">*</span></label>
                     <select
                         id="direction"
                         name="direction"
@@ -110,18 +110,18 @@
                         required
                     >
                         {{$currentDirection := index .Data.FormValues "direction"}}
-                        <option value="ltr"{{if or (eq $currentDirection "ltr") (eq $currentDirection "")}} selected{{end}}>LTR (Left-to-Right)</option>
-                        <option value="rtl"{{if eq $currentDirection "rtl"}} selected{{end}}>RTL (Right-to-Left)</option>
+                        <option value="ltr"{{if or (eq $currentDirection "ltr") (eq $currentDirection "")}} selected{{end}}>{{T .AdminLang "languages.ltr"}}</option>
+                        <option value="rtl"{{if eq $currentDirection "rtl"}} selected{{end}}>{{T .AdminLang "languages.rtl"}}</option>
                     </select>
                     {{if index .Data.Errors "direction"}}
                     <span class="form-error">{{index .Data.Errors "direction"}}</span>
                     {{else}}
-                    <span class="form-hint">RTL for Arabic, Hebrew, Persian, etc.</span>
+                    <span class="form-hint">{{T .AdminLang "languages.direction_hint"}}</span>
                     {{end}}
                 </div>
 
                 <div class="form-group">
-                    <label for="position" class="form-label">Position</label>
+                    <label for="position" class="form-label">{{T .AdminLang "languages.position"}}</label>
                     <input
                         type="number"
                         id="position"
@@ -134,12 +134,12 @@
                     {{if index .Data.Errors "position"}}
                     <span class="form-error">{{index .Data.Errors "position"}}</span>
                     {{else}}
-                    <span class="form-hint">Sort order in language switcher (lower = first)</span>
+                    <span class="form-hint">{{T .AdminLang "languages.position_hint"}}</span>
                     {{end}}
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Status</label>
+                    <label class="form-label">{{T .AdminLang "label.status"}}</label>
                     <div class="form-check">
                         <input
                             type="checkbox"
@@ -149,12 +149,12 @@
                             class="form-check-input"
                             {{if or (eq (index .Data.FormValues "is_active") "1") (not .Data.IsEdit)}}checked{{end}}
                         >
-                        <label for="is_active" class="form-check-label">Active</label>
+                        <label for="is_active" class="form-check-label">{{T .AdminLang "label.active"}}</label>
                     </div>
                     {{if index .Data.Errors "is_active"}}
                     <span class="form-error">{{index .Data.Errors "is_active"}}</span>
                     {{else}}
-                    <span class="form-hint">Only active languages are available for content</span>
+                    <span class="form-hint">{{T .AdminLang "languages.status_hint"}}</span>
                     {{end}}
                 </div>
             </div>
@@ -164,7 +164,7 @@
             <div class="form-group form-group-full">
                 <div class="alert alert-info">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-                    <span>This is the default language. To change the default, set another language as default from the languages list.</span>
+                    <span>{{T .AdminLang "languages.is_default_info"}}</span>
                 </div>
             </div>
             {{end}}
@@ -173,9 +173,9 @@
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                    {{if .Data.IsEdit}}Update Language{{else}}Create Language{{end}}
+                    {{if .Data.IsEdit}}{{T .AdminLang "languages.update"}}{{else}}{{T .AdminLang "languages.create"}}{{end}}
                 </button>
-                <a href="/admin/languages" class="btn btn-outline">Cancel</a>
+                <a href="/admin/languages" class="btn btn-outline">{{T .AdminLang "btn.cancel"}}</a>
             </div>
         </form>
     </div>

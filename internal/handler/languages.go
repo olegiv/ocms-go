@@ -11,6 +11,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/model"
 	"ocms-go/internal/render"
@@ -58,6 +59,7 @@ type LanguageFormData struct {
 // List displays all languages.
 func (h *LanguagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	languages, err := h.queries.ListLanguages(r.Context())
 	if err != nil {
@@ -79,12 +81,12 @@ func (h *LanguagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/languages_list", render.TemplateData{
-		Title: "Languages",
+		Title: i18n.T(lang, "nav.languages"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Languages", URL: "/admin/languages", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.languages"), URL: "/admin/languages", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -95,6 +97,7 @@ func (h *LanguagesHandler) List(w http.ResponseWriter, r *http.Request) {
 // NewForm displays the form to create a new language.
 func (h *LanguagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	data := LanguageFormData{
 		CommonLanguages: model.CommonLanguages,
@@ -104,13 +107,13 @@ func (h *LanguagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/languages_form", render.TemplateData{
-		Title: "New Language",
+		Title: i18n.T(lang, "languages.new"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Languages", URL: "/admin/languages"},
-			{Label: "New Language", URL: "/admin/languages/new", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.languages"), URL: "/admin/languages"},
+			{Label: i18n.T(lang, "languages.new"), URL: "/admin/languages/new", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -121,6 +124,7 @@ func (h *LanguagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 // Create handles creating a new language.
 func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	if err := r.ParseForm(); err != nil {
 		h.renderer.SetFlash(r, "Invalid form data", "error")
@@ -213,13 +217,13 @@ func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := h.renderer.Render(w, r, "admin/languages_form", render.TemplateData{
-			Title: "New Language",
+			Title: i18n.T(lang, "languages.new"),
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: "Dashboard", URL: "/admin"},
-				{Label: "Languages", URL: "/admin/languages"},
-				{Label: "New Language", URL: "/admin/languages/new", Active: true},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+				{Label: i18n.T(lang, "nav.languages"), URL: "/admin/languages"},
+				{Label: i18n.T(lang, "languages.new"), URL: "/admin/languages/new", Active: true},
 			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
@@ -255,6 +259,7 @@ func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 // EditForm displays the form to edit an existing language.
 func (h *LanguagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	adminLang := middleware.GetAdminLang(r)
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -293,13 +298,13 @@ func (h *LanguagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/languages_form", render.TemplateData{
-		Title: "Edit Language",
+		Title: i18n.T(adminLang, "languages.edit"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Languages", URL: "/admin/languages"},
-			{Label: "Edit Language", URL: fmt.Sprintf("/admin/languages/%d", id), Active: true},
+			{Label: i18n.T(adminLang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(adminLang, "nav.languages"), URL: "/admin/languages"},
+			{Label: i18n.T(adminLang, "languages.edit"), URL: fmt.Sprintf("/admin/languages/%d", id), Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -310,6 +315,7 @@ func (h *LanguagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 // Update handles updating an existing language.
 func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	adminLang := middleware.GetAdminLang(r)
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -415,13 +421,13 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := h.renderer.Render(w, r, "admin/languages_form", render.TemplateData{
-			Title: "Edit Language",
+			Title: i18n.T(adminLang, "languages.edit"),
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: "Dashboard", URL: "/admin"},
-				{Label: "Languages", URL: "/admin/languages"},
-				{Label: "Edit Language", URL: fmt.Sprintf("/admin/languages/%d", id), Active: true},
+				{Label: i18n.T(adminLang, "nav.dashboard"), URL: "/admin"},
+				{Label: i18n.T(adminLang, "nav.languages"), URL: "/admin/languages"},
+				{Label: i18n.T(adminLang, "languages.edit"), URL: fmt.Sprintf("/admin/languages/%d", id), Active: true},
 			},
 		}); err != nil {
 			slog.Error("render error", "error", err)

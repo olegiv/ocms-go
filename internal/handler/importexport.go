@@ -14,6 +14,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/render"
 	"ocms-go/internal/store"
@@ -48,18 +49,19 @@ type ExportFormData struct {
 // ExportForm handles GET /admin/export - displays the export form.
 func (h *ImportExportHandler) ExportForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	data := ExportFormData{
 		PageStatuses: []string{"all", "published", "draft"},
 	}
 
 	if err := h.renderer.Render(w, r, "admin/export", render.TemplateData{
-		Title: "Export Content",
+		Title: i18n.T(lang, "nav.export"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Export", URL: "/admin/export", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.export"), URL: "/admin/export", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -150,6 +152,7 @@ type ConflictStrategyOption struct {
 // ImportForm handles GET /admin/import - displays the import form.
 func (h *ImportExportHandler) ImportForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	data := ImportFormData{
 		ConflictStrategies: []ConflictStrategyOption{
@@ -160,12 +163,12 @@ func (h *ImportExportHandler) ImportForm(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := h.renderer.Render(w, r, "admin/import", render.TemplateData{
-		Title: "Import Content",
+		Title: i18n.T(lang, "nav.import"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Import", URL: "/admin/import", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.import"), URL: "/admin/import", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -176,6 +179,7 @@ func (h *ImportExportHandler) ImportForm(w http.ResponseWriter, r *http.Request)
 // ImportValidate handles POST /admin/import/validate - validates the uploaded file.
 func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	// Parse multipart form (max 100MB for zip files with media)
 	if err := r.ParseMultipartForm(100 << 20); err != nil {
@@ -273,12 +277,12 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 	}
 
 	if err := h.renderer.Render(w, r, "admin/import", render.TemplateData{
-		Title: "Import Content",
+		Title: i18n.T(lang, "nav.import"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Import", URL: "/admin/import", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.import"), URL: "/admin/import", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -318,6 +322,7 @@ func (h *ImportExportHandler) extractExportDataFromZip(zipData []byte) (transfer
 // Import handles POST /admin/import - performs the actual import.
 func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
 
 	if err := r.ParseForm(); err != nil {
 		h.renderImportError(w, r, user, "Invalid form data")
@@ -431,12 +436,12 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/import", render.TemplateData{
-		Title: "Import Content",
+		Title: i18n.T(lang, "nav.import"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Import", URL: "/admin/import", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.import"), URL: "/admin/import", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -446,6 +451,7 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 
 // renderImportError renders the import form with an error message.
 func (h *ImportExportHandler) renderImportError(w http.ResponseWriter, r *http.Request, user interface{}, errMsg string) {
+	lang := middleware.GetAdminLang(r)
 	h.sessionManager.Put(r.Context(), "flash_error", errMsg)
 
 	data := ImportFormData{
@@ -457,12 +463,12 @@ func (h *ImportExportHandler) renderImportError(w http.ResponseWriter, r *http.R
 	}
 
 	if err := h.renderer.Render(w, r, "admin/import", render.TemplateData{
-		Title: "Import Content",
+		Title: i18n.T(lang, "nav.import"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Import", URL: "/admin/import", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.import"), URL: "/admin/import", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)

@@ -11,6 +11,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 
 	"ocms-go/internal/cache"
+	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/model"
 	"ocms-go/internal/render"
@@ -53,6 +54,7 @@ type ConfigFormData struct {
 // List handles GET /admin/config - displays configuration settings.
 func (h *ConfigHandler) List(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	// Get all config items
 	configs, err := h.queries.ListConfig(r.Context())
@@ -73,8 +75,8 @@ func (h *ConfigHandler) List(w http.ResponseWriter, r *http.Request) {
 			Key:         cfg.Key,
 			Value:       cfg.Value,
 			Type:        cfg.Type,
-			Description: cfg.Description,
-			Label:       configKeyToLabel(cfg.Key),
+			Description: configKeyToDescription(cfg.Key, cfg.Description, lang),
+			Label:       configKeyToLabel(cfg.Key, lang),
 		})
 	}
 
@@ -84,12 +86,12 @@ func (h *ConfigHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.renderer.Render(w, r, "admin/config", render.TemplateData{
-		Title: "Site Configuration",
+		Title: i18n.T(lang, "config.title"),
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: "Dashboard", URL: "/admin"},
-			{Label: "Configuration", URL: "/admin/config", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "config.title"), URL: "/admin/config", Active: true},
 		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
@@ -100,9 +102,10 @@ func (h *ConfigHandler) List(w http.ResponseWriter, r *http.Request) {
 // Update handles PUT /admin/config - updates configuration values.
 func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
+		h.renderer.SetFlash(r, i18n.T(lang, "error.invalid_form"), "error")
 		http.Redirect(w, r, "/admin/config", http.StatusSeeOther)
 		return
 	}
@@ -111,7 +114,7 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 	configs, err := h.queries.ListConfig(r.Context())
 	if err != nil {
 		slog.Error("failed to list config", "error", err)
-		h.renderer.SetFlash(r, "Error loading configuration", "error")
+		h.renderer.SetFlash(r, i18n.T(lang, "error.loading_config"), "error")
 		http.Redirect(w, r, "/admin/config", http.StatusSeeOther)
 		return
 	}
@@ -133,7 +136,7 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 		if cfg.Type == model.ConfigTypeInt {
 			if value != "" {
 				if _, err := strconv.Atoi(value); err != nil {
-					errors[cfg.Key] = "Must be a valid number"
+					errors[cfg.Key] = i18n.T(lang, "error.invalid_number")
 					continue
 				}
 			}
@@ -155,7 +158,7 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			slog.Error("failed to update config", "key", cfg.Key, "error", err)
-			errors[cfg.Key] = "Error saving value"
+			errors[cfg.Key] = i18n.T(lang, "error.saving_value")
 		}
 	}
 
@@ -175,8 +178,8 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 				Key:         cfg.Key,
 				Value:       value,
 				Type:        cfg.Type,
-				Description: cfg.Description,
-				Label:       configKeyToLabel(cfg.Key),
+				Description: configKeyToDescription(cfg.Key, cfg.Description, lang),
+				Label:       configKeyToLabel(cfg.Key, lang),
 			})
 		}
 
@@ -186,12 +189,12 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := h.renderer.Render(w, r, "admin/config", render.TemplateData{
-			Title: "Site Configuration",
+			Title: i18n.T(lang, "config.title"),
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: "Dashboard", URL: "/admin"},
-				{Label: "Configuration", URL: "/admin/config", Active: true},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+				{Label: i18n.T(lang, "config.title"), URL: "/admin/config", Active: true},
 			},
 		}); err != nil {
 			slog.Error("render error", "error", err)
@@ -206,13 +209,23 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("config updated", "updated_by", user.ID)
-	h.renderer.SetFlash(r, "Configuration saved successfully", "success")
+	h.renderer.SetFlash(r, i18n.T(lang, "msg.config_saved"), "success")
 	http.Redirect(w, r, "/admin/config", http.StatusSeeOther)
 }
 
-// configKeyToLabel converts a config key to a human-readable label.
-func configKeyToLabel(key string) string {
-	// Replace underscores with spaces and capitalize each word
+// configKeyToLabel converts a config key to a translated label.
+// If no translation exists, generates a readable label from the key.
+func configKeyToLabel(key string, lang string) string {
+	// Try to get translation for this config key
+	translationKey := "config." + key
+	translated := i18n.T(lang, translationKey)
+
+	// If translation exists (different from key), return it
+	if translated != translationKey {
+		return translated
+	}
+
+	// Fallback: replace underscores with spaces and capitalize each word
 	words := strings.Split(key, "_")
 	for i, word := range words {
 		if len(word) > 0 {
@@ -220,4 +233,20 @@ func configKeyToLabel(key string) string {
 		}
 	}
 	return strings.Join(words, " ")
+}
+
+// configKeyToDescription returns a translated description for a config key.
+// Falls back to the database description if no translation exists.
+func configKeyToDescription(key string, dbDescription string, lang string) string {
+	// Try to get translation for this config key's hint
+	translationKey := "config." + key + "_hint"
+	translated := i18n.T(lang, translationKey)
+
+	// If translation exists (different from key), return it
+	if translated != translationKey {
+		return translated
+	}
+
+	// Fallback to database description
+	return dbDescription
 }
