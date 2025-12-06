@@ -10,23 +10,23 @@
     <nav class="sidebar-nav">
         <div class="nav-section">
             <div class="nav-section-title">{{T .AdminLang "nav.content"}}</div>
-            <a href="/admin" class="nav-link active">
+            <a href="/admin" class="nav-link{{if eq .CurrentPath "/admin"}} active{{end}}">
                 <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
                 <span>{{T .AdminLang "nav.dashboard"}}</span>
             </a>
-            <a href="/admin/pages" class="nav-link">
+            <a href="/admin/pages" class="nav-link{{if hasPrefix .CurrentPath "/admin/pages"}} active{{end}}">
                 <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
                 <span>{{T .AdminLang "nav.pages"}}</span>
             </a>
-            <a href="/admin/media" class="nav-link">
+            <a href="/admin/media" class="nav-link{{if hasPrefix .CurrentPath "/admin/media"}} active{{end}}">
                 <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
                 <span>{{T .AdminLang "nav.media"}}</span>
             </a>
-            <a href="/admin/menus" class="nav-link">
+            <a href="/admin/menus" class="nav-link{{if hasPrefix .CurrentPath "/admin/menus"}} active{{end}}">
                 <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="18" y2="18"/></svg>
                 <span>{{T .AdminLang "nav.menus"}}</span>
             </a>
-            <a href="/admin/forms" class="nav-link">
+            <a href="/admin/forms" class="nav-link{{if hasPrefix .CurrentPath "/admin/forms"}} active{{end}}">
                 <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                 <span>{{T .AdminLang "nav.forms"}}</span>
             </a>
@@ -34,11 +34,11 @@
 
         <div class="nav-section">
             <div class="nav-section-title">{{T .AdminLang "nav.taxonomy"}}</div>
-            <a href="/admin/categories" class="nav-link">
+            <a href="/admin/categories" class="nav-link{{if hasPrefix .CurrentPath "/admin/categories"}} active{{end}}">
                 <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                 <span>{{T .AdminLang "nav.categories"}}</span>
             </a>
-            <a href="/admin/tags" class="nav-link">
+            <a href="/admin/tags" class="nav-link{{if hasPrefix .CurrentPath "/admin/tags"}} active{{end}}">
                 <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>
                 <span>{{T .AdminLang "nav.tags"}}</span>
             </a>
@@ -46,15 +46,15 @@
 
         <div class="nav-section">
             <div class="nav-section-title">{{T .AdminLang "nav.admin"}}</div>
-            <a href="/admin/users" class="nav-link">
+            <a href="/admin/users" class="nav-link{{if hasPrefix .CurrentPath "/admin/users"}} active{{end}}">
                 <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 <span>{{T .AdminLang "nav.users"}}</span>
             </a>
-            <a href="/admin/api-keys" class="nav-link">
+            <a href="/admin/api-keys" class="nav-link{{if hasPrefix .CurrentPath "/admin/api-keys"}} active{{end}}">
                 <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
                 <span>{{T .AdminLang "nav.api_keys"}}</span>
             </a>
-            <a href="/admin/webhooks" class="nav-link">
+            <a href="/admin/webhooks" class="nav-link{{if hasPrefix .CurrentPath "/admin/webhooks"}} active{{end}}">
                 <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 16.98h-5.99c-1.1 0-1.95.94-2.48 1.9A4 4 0 0 1 2 17c.01-.7.2-1.4.57-2"/><path d="m6 17 3.13-5.78c.53-.97.1-2.18-.5-3.1a4 4 0 1 1 6.89-4.06"/><path d="m12 6 3.13 5.73C15.66 12.7 16.9 13 18 13a4 4 0 0 1 0 8"/></svg>
                 <span>{{T .AdminLang "nav.webhooks"}}</span>
             </a>
@@ -62,31 +62,31 @@
                 <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
                 <span>{{T .AdminLang "nav.api_docs"}}</span>
             </a>
-            <a href="/admin/events" class="nav-link">
+            <a href="/admin/events" class="nav-link{{if hasPrefix .CurrentPath "/admin/events"}} active{{end}}">
                 <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                 <span>{{T .AdminLang "nav.event_log"}}</span>
             </a>
-            <a href="/admin/themes" class="nav-link">
+            <a href="/admin/themes" class="nav-link{{if hasPrefix .CurrentPath "/admin/themes"}} active{{end}}">
                 <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
                 <span>{{T .AdminLang "nav.themes"}}</span>
             </a>
-            <a href="/admin/languages" class="nav-link">
+            <a href="/admin/languages" class="nav-link{{if hasPrefix .CurrentPath "/admin/languages"}} active{{end}}">
                 <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
                 <span>{{T .AdminLang "nav.languages"}}</span>
             </a>
-            <a href="/admin/config" class="nav-link">
+            <a href="/admin/config" class="nav-link{{if hasPrefix .CurrentPath "/admin/config"}} active{{end}}">
                 <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
                 <span>{{T .AdminLang "nav.settings"}}</span>
             </a>
-            <a href="/admin/cache" class="nav-link">
+            <a href="/admin/cache" class="nav-link{{if hasPrefix .CurrentPath "/admin/cache"}} active{{end}}">
                 <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>
                 <span>{{T .AdminLang "nav.cache"}}</span>
             </a>
-            <a href="/admin/export" class="nav-link">
+            <a href="/admin/export" class="nav-link{{if hasPrefix .CurrentPath "/admin/export"}} active{{end}}">
                 <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
                 <span>{{T .AdminLang "nav.export"}}</span>
             </a>
-            <a href="/admin/import" class="nav-link">
+            <a href="/admin/import" class="nav-link{{if hasPrefix .CurrentPath "/admin/import"}} active{{end}}">
                 <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
                 <span>{{T .AdminLang "nav.import"}}</span>
             </a>
@@ -94,11 +94,11 @@
 
         <div class="nav-section">
             <div class="nav-section-title">{{T .AdminLang "nav.modules"}}</div>
-            <a href="/admin/modules" class="nav-link">
+            <a href="/admin/modules" class="nav-link{{if eq .CurrentPath "/admin/modules"}} active{{end}}">
                 <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                 <span>{{T .AdminLang "nav.all_modules"}}</span>
             </a>
-            <a href="/admin/example" class="nav-link">
+            <a href="/admin/example" class="nav-link{{if hasPrefix .CurrentPath "/admin/example"}} active{{end}}">
                 <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z"/><path d="m3 9 2.45-4.9A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.8 1.1L21 9"/><path d="M12 3v6"/></svg>
                 <span>{{T .AdminLang "nav.example_module"}}</span>
             </a>
