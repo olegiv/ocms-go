@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"filippo.io/csrf/gorilla"
 	"github.com/alexedwards/scs/v2"
-	"github.com/gorilla/csrf"
 
 	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
@@ -589,7 +589,7 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 	data.CurrentYear = time.Now().Year()
 	data.CurrentPath = req.URL.Path
 
-	// Get CSRF token and field from gorilla/csrf
+	// Get CSRF token and field from the csrf library
 	// This will be empty if CSRF middleware is not applied (e.g., for API routes)
 	data.CSRFToken = csrf.Token(req)
 	data.CSRFField = csrf.TemplateField(req)

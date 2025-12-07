@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gorilla/csrf"
+	"filippo.io/csrf/gorilla"
 )
 
 func TestDefaultCSRFConfig_Development(t *testing.T) {
@@ -30,7 +30,7 @@ func TestDefaultCSRFConfig_Development(t *testing.T) {
 	}
 
 	// Check TrustedOrigins are host-only (not full URLs)
-	// This is critical for gorilla/csrf to work correctly
+	// This is critical for the csrf library to work correctly
 	if len(cfg.TrustedOrigins) != 2 {
 		t.Errorf("expected 2 TrustedOrigins in dev mode, got %d", len(cfg.TrustedOrigins))
 	}
@@ -143,7 +143,7 @@ func TestCSRFConfig_AuthKeyLength(t *testing.T) {
 }
 
 // Note: csrfErrorHandler cannot be tested in isolation because it calls
-// csrf.FailureReason(r) which requires the gorilla/csrf middleware context.
+// csrf.FailureReason(r) which requires the csrf middleware context.
 // The error handler is tested implicitly through integration tests.
 
 func TestCSRF_MiddlewareCreation(t *testing.T) {
@@ -206,7 +206,7 @@ func TestCSRF_WithDomain(t *testing.T) {
 }
 
 // TestTrustedOriginsFormat validates that TrustedOrigins use the correct format.
-// gorilla/csrf expects host:port format, NOT full URLs.
+// The csrf library expects host:port format, NOT full URLs.
 // Using full URLs (http://localhost:8080) causes "origin invalid" errors.
 func TestTrustedOriginsFormat(t *testing.T) {
 	authKey := []byte("12345678901234567890123456789012")

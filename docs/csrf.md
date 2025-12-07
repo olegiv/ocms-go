@@ -1,6 +1,6 @@
 # CSRF Protection
 
-oCMS implements Cross-Site Request Forgery (CSRF) protection using the `gorilla/csrf` library. This document explains how CSRF protection works and how to configure it.
+oCMS implements Cross-Site Request Forgery (CSRF) protection using the `filippo.io/csrf/gorilla` library (a secure drop-in replacement for `gorilla/csrf`). This document explains how CSRF protection works and how to configure it.
 
 ## Overview
 

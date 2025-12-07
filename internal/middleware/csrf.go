@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/gorilla/csrf"
+	"filippo.io/csrf/gorilla"
 )
 
 // CSRFConfig holds configuration for CSRF protection.
@@ -51,7 +51,7 @@ func DefaultCSRFConfig(authKey []byte, isDev bool) CSRFConfig {
 	}
 
 	// In development, trust localhost origins for easier testing
-	// Note: gorilla/csrf expects host-only values, not full URLs
+	// Note: csrf library expects host-only values, not full URLs
 	if isDev {
 		cfg.TrustedOrigins = []string{
 			"localhost:8080",
@@ -63,7 +63,7 @@ func DefaultCSRFConfig(authKey []byte, isDev bool) CSRFConfig {
 }
 
 // CSRF returns a middleware that provides CSRF protection.
-// It uses gorilla/csrf under the hood.
+// It uses filippo.io/csrf/gorilla under the hood.
 func CSRF(cfg CSRFConfig) func(http.Handler) http.Handler {
 	opts := []csrf.Option{
 		csrf.Path(cfg.Path),
@@ -98,7 +98,7 @@ func CSRF(cfg CSRFConfig) func(http.Handler) http.Handler {
 
 // csrfErrorHandler handles CSRF validation failures.
 func csrfErrorHandler(w http.ResponseWriter, r *http.Request) {
-	// Get the failure reason from gorilla/csrf
+	// Get the failure reason from the csrf library
 	reason := csrf.FailureReason(r)
 	slog.Error("CSRF validation failed",
 		"reason", reason.Error(),
