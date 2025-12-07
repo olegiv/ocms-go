@@ -141,9 +141,9 @@ func TestMemoryCache_Clear(t *testing.T) {
 	ctx := context.Background()
 
 	// Set multiple keys
-	cache.Set(ctx, "key1", []byte("value1"), 0)
-	cache.Set(ctx, "key2", []byte("value2"), 0)
-	cache.Set(ctx, "key3", []byte("value3"), 0)
+	_ = cache.Set(ctx, "key1", []byte("value1"), 0)
+	_ = cache.Set(ctx, "key2", []byte("value2"), 0)
+	_ = cache.Set(ctx, "key3", []byte("value3"), 0)
 
 	// Clear all
 	err := cache.Clear(ctx)
@@ -166,10 +166,10 @@ func TestMemoryCache_DeleteByPrefix(t *testing.T) {
 	ctx := context.Background()
 
 	// Set multiple keys with same prefix
-	cache.Set(ctx, "prefix:key1", []byte("value1"), 0)
-	cache.Set(ctx, "prefix:key2", []byte("value2"), 0)
-	cache.Set(ctx, "prefix:key3", []byte("value3"), 0)
-	cache.Set(ctx, "other:key", []byte("other"), 0)
+	_ = cache.Set(ctx, "prefix:key1", []byte("value1"), 0)
+	_ = cache.Set(ctx, "prefix:key2", []byte("value2"), 0)
+	_ = cache.Set(ctx, "prefix:key3", []byte("value3"), 0)
+	_ = cache.Set(ctx, "other:key", []byte("other"), 0)
 
 	// Delete by prefix
 	err := cache.DeleteByPrefix(ctx, "prefix:")
@@ -198,15 +198,15 @@ func TestMemoryCache_Stats(t *testing.T) {
 	ctx := context.Background()
 
 	// Set some values
-	cache.Set(ctx, "key1", []byte("value1"), 0)
-	cache.Set(ctx, "key2", []byte("value2"), 0)
+	_ = cache.Set(ctx, "key1", []byte("value1"), 0)
+	_ = cache.Set(ctx, "key2", []byte("value2"), 0)
 
 	// Hit
-	cache.Get(ctx, "key1")
-	cache.Get(ctx, "key1")
+	_, _ = cache.Get(ctx, "key1")
+	_, _ = cache.Get(ctx, "key1")
 
 	// Miss
-	cache.Get(ctx, "nonexistent")
+	_, _ = cache.Get(ctx, "nonexistent")
 
 	stats := cache.Stats()
 
@@ -252,7 +252,7 @@ func TestMemoryCache_ConcurrentAccess(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			for j := 0; j < numOperations; j++ {
-				cache.Set(ctx, "key", []byte("value"), 0)
+				_ = cache.Set(ctx, "key", []byte("value"), 0)
 			}
 		}(i)
 	}
@@ -263,7 +263,7 @@ func TestMemoryCache_ConcurrentAccess(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < numOperations; j++ {
-				cache.Get(ctx, "key")
+				_, _ = cache.Get(ctx, "key")
 			}
 		}()
 	}
@@ -317,7 +317,7 @@ func TestMemoryCache_Close(t *testing.T) {
 	})
 	ctx := context.Background()
 
-	cache.Set(ctx, "key", []byte("value"), 0)
+	_ = cache.Set(ctx, "key", []byte("value"), 0)
 
 	err := cache.Close()
 	if err != nil {

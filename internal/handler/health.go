@@ -102,7 +102,7 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 }
 
 // Liveness handles GET /health/live - simple liveness check.
-func (h *HealthHandler) Liveness(w http.ResponseWriter, r *http.Request) {
+func (h *HealthHandler) Liveness(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]string{
@@ -111,7 +111,7 @@ func (h *HealthHandler) Liveness(w http.ResponseWriter, r *http.Request) {
 }
 
 // Readiness handles GET /health/ready - checks if the service is ready to accept traffic.
-func (h *HealthHandler) Readiness(w http.ResponseWriter, r *http.Request) {
+func (h *HealthHandler) Readiness(w http.ResponseWriter, _ *http.Request) {
 	// Check database
 	dbCheck := h.checkDatabase()
 

@@ -87,35 +87,6 @@ func NewDBWithConfig(path string, cfg DBConfig) (*sql.DB, error) {
 	return db, nil
 }
 
-// DBStats returns current database connection pool statistics.
-type DBStats struct {
-	MaxOpenConnections int           `json:"max_open_connections"`
-	OpenConnections    int           `json:"open_connections"`
-	InUse              int           `json:"in_use"`
-	Idle               int           `json:"idle"`
-	WaitCount          int64         `json:"wait_count"`
-	WaitDuration       time.Duration `json:"wait_duration"`
-	MaxIdleClosed      int64         `json:"max_idle_closed"`
-	MaxIdleTimeClosed  int64         `json:"max_idle_time_closed"`
-	MaxLifetimeClosed  int64         `json:"max_lifetime_closed"`
-}
-
-// GetDBStats returns the current database connection pool statistics.
-func GetDBStats(db *sql.DB) DBStats {
-	stats := db.Stats()
-	return DBStats{
-		MaxOpenConnections: stats.MaxOpenConnections,
-		OpenConnections:    stats.OpenConnections,
-		InUse:              stats.InUse,
-		Idle:               stats.Idle,
-		WaitCount:          stats.WaitCount,
-		WaitDuration:       stats.WaitDuration,
-		MaxIdleClosed:      stats.MaxIdleClosed,
-		MaxIdleTimeClosed:  stats.MaxIdleTimeClosed,
-		MaxLifetimeClosed:  stats.MaxLifetimeClosed,
-	}
-}
-
 // Migrate runs all pending database migrations.
 func Migrate(db *sql.DB) error {
 	goose.SetBaseFS(migrations)

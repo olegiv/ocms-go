@@ -60,7 +60,7 @@ func (m *Module) Verify(response, remoteIP string) (*VerifyResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("captcha verification request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Parse response
 	var result VerifyResponse

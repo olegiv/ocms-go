@@ -58,7 +58,7 @@ func TestTypedCache_Delete(t *testing.T) {
 	ctx := context.Background()
 
 	user := &testUser{ID: 1, Name: "Alice", Email: "alice@example.com"}
-	cache.Set(ctx, "user:1", user)
+	_ = cache.Set(ctx, "user:1", user)
 
 	err := cache.Delete(ctx, "user:1")
 	if err != nil {
@@ -79,7 +79,7 @@ func TestTypedCache_Has(t *testing.T) {
 	ctx := context.Background()
 
 	user := &testUser{ID: 1, Name: "Alice", Email: "alice@example.com"}
-	cache.Set(ctx, "user:1", user)
+	_ = cache.Set(ctx, "user:1", user)
 
 	if !cache.Has(ctx, "user:1") {
 		t.Error("expected user:1 to exist")
@@ -188,8 +188,8 @@ func TestMultiTypedCache_GetMultiple(t *testing.T) {
 	ctx := context.Background()
 
 	// Set some users
-	cache.Set(ctx, "user:1", &testUser{ID: 1, Name: "Alice", Email: "alice@example.com"})
-	cache.Set(ctx, "user:2", &testUser{ID: 2, Name: "Bob", Email: "bob@example.com"})
+	_ = cache.Set(ctx, "user:1", &testUser{ID: 1, Name: "Alice", Email: "alice@example.com"})
+	_ = cache.Set(ctx, "user:2", &testUser{ID: 2, Name: "Bob", Email: "bob@example.com"})
 
 	// Get multiple
 	result := cache.GetMultiple(ctx, []string{"user:1", "user:2", "user:3"})
@@ -245,9 +245,9 @@ func TestMultiTypedCache_DeleteMultiple(t *testing.T) {
 	ctx := context.Background()
 
 	// Set some users
-	cache.Set(ctx, "user:1", &testUser{ID: 1, Name: "Alice", Email: "alice@example.com"})
-	cache.Set(ctx, "user:2", &testUser{ID: 2, Name: "Bob", Email: "bob@example.com"})
-	cache.Set(ctx, "user:3", &testUser{ID: 3, Name: "Charlie", Email: "charlie@example.com"})
+	_ = cache.Set(ctx, "user:1", &testUser{ID: 1, Name: "Alice", Email: "alice@example.com"})
+	_ = cache.Set(ctx, "user:2", &testUser{ID: 2, Name: "Bob", Email: "bob@example.com"})
+	_ = cache.Set(ctx, "user:3", &testUser{ID: 3, Name: "Charlie", Email: "charlie@example.com"})
 
 	// Delete multiple
 	err := cache.DeleteMultiple(ctx, []string{"user:1", "user:2"})

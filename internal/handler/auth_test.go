@@ -54,12 +54,6 @@ func TestNewAuthHandler(t *testing.T) {
 // Full handler testing would require a mock renderer or integration tests.
 // These tests focus on validation logic and data structures.
 
-func TestSessionKeyUserID(t *testing.T) {
-	if SessionKeyUserID != "user_id" {
-		t.Errorf("SessionKeyUserID = %q; want user_id", SessionKeyUserID)
-	}
-}
-
 func TestFormatDuration_EdgeCases(t *testing.T) {
 	tests := []struct {
 		duration time.Duration

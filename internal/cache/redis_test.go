@@ -318,7 +318,7 @@ func TestNewCacheWithInfo_Memory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewCacheWithInfo failed: %v", err)
 	}
-	defer result.Cache.Close()
+	defer func() { _ = result.Cache.Close() }()
 
 	if result.BackendType != CacheBackendMemory {
 		t.Errorf("BackendType = %s, want %s", result.BackendType, CacheBackendMemory)
@@ -341,7 +341,7 @@ func TestNewCacheWithInfo_RedisFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewCacheWithInfo should not error with fallback enabled: %v", err)
 	}
-	defer result.Cache.Close()
+	defer func() { _ = result.Cache.Close() }()
 
 	if result.BackendType != CacheBackendMemory {
 		t.Errorf("BackendType = %s, want %s (fallback)", result.BackendType, CacheBackendMemory)

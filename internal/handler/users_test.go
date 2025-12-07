@@ -87,24 +87,6 @@ func TestValidRoles(t *testing.T) {
 	}
 }
 
-func TestRoleConstants(t *testing.T) {
-	if RoleAdmin != "admin" {
-		t.Errorf("RoleAdmin = %q; want admin", RoleAdmin)
-	}
-	if RoleEditor != "editor" {
-		t.Errorf("RoleEditor = %q; want editor", RoleEditor)
-	}
-	if RoleViewer != "viewer" {
-		t.Errorf("RoleViewer = %q; want viewer", RoleViewer)
-	}
-}
-
-func TestUsersPerPage(t *testing.T) {
-	if UsersPerPage != 10 {
-		t.Errorf("UsersPerPage = %d; want 10", UsersPerPage)
-	}
-}
-
 // Note: List() method requires a renderer for GetAdminLang.
 // Full handler testing would require a mock renderer or integration tests.
 

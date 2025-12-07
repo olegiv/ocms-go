@@ -110,7 +110,7 @@ func (m *Module) Shutdown() error {
 }
 
 // RegisterRoutes registers public routes for the module.
-func (m *Module) RegisterRoutes(r chi.Router) {
+func (m *Module) RegisterRoutes(_ chi.Router) {
 	// No public routes for hCaptcha module
 }
 

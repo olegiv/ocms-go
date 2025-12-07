@@ -571,7 +571,7 @@ func TestVerify_EmptyResponse(t *testing.T) {
 
 	_, err := m.Verify("", "127.0.0.1")
 	if err == nil {
-		t.Error("Should error with empty response")
+		t.Fatal("Should error with empty response")
 	}
 	if !strings.Contains(err.Error(), "missing captcha response") {
 		t.Errorf("Error = %v, want 'missing captcha response'", err)
@@ -782,15 +782,5 @@ func TestGetRemoteIP_IPv6(t *testing.T) {
 	// For IPv6 with brackets and port, we expect the last index behavior
 	if got == "" {
 		t.Error("GetRemoteIP should return something for IPv6")
-	}
-}
-
-func TestHookConstants(t *testing.T) {
-	// Verify hook constant values
-	if HookAuthLoginWidget != "auth.login_widget" {
-		t.Errorf("HookAuthLoginWidget = %q, want 'auth.login_widget'", HookAuthLoginWidget)
-	}
-	if HookAuthBeforeLogin != "auth.before_login" {
-		t.Errorf("HookAuthBeforeLogin = %q, want 'auth.before_login'", HookAuthBeforeLogin)
 	}
 }

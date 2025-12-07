@@ -66,32 +66,18 @@ func CSRF(cfg CSRFConfig) func(http.Handler) http.Handler {
 func csrfErrorHandler(w http.ResponseWriter, r *http.Request) {
 	// Get the failure reason from the csrf library
 	reason := csrf.FailureReason(r)
+	reasonStr := "unknown"
+	if reason != nil {
+		reasonStr = reason.Error()
+	}
 	slog.Error("CSRF validation failed",
-		"reason", reason.Error(),
+		"reason", reasonStr,
 		"method", r.Method,
 		"path", r.URL.Path,
 		"origin", r.Header.Get("Origin"),
 		"sec_fetch_site", r.Header.Get("Sec-Fetch-Site"),
 	)
 	http.Error(w, "Forbidden - CSRF validation failed", http.StatusForbidden)
-}
-
-// CSRFToken returns an empty string.
-// Note: filippo.io/csrf/gorilla uses Fetch metadata headers for CSRF protection,
-// so tokens are no longer required. This function is kept for API compatibility.
-//
-// Deprecated: CSRF tokens are no longer needed with Fetch metadata-based protection.
-func CSRFToken(_ *http.Request) string {
-	return ""
-}
-
-// CSRFTemplateField returns an empty string.
-// Note: filippo.io/csrf/gorilla uses Fetch metadata headers for CSRF protection,
-// so hidden form fields are no longer required. This function is kept for API compatibility.
-//
-// Deprecated: CSRF template fields are no longer needed with Fetch metadata-based protection.
-func CSRFTemplateField(_ *http.Request) string {
-	return ""
 }
 
 // SkipCSRF returns a middleware that skips CSRF protection for specific paths.
