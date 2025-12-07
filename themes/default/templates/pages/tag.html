@@ -1,13 +1,13 @@
 {{define "content"}}
 <div class="archive-page tag-archive">
     <header class="archive-header">
-        <span class="archive-label">Tag</span>
+        <span class="archive-label">{{T $.LangCode "frontend.tag"}}</span>
         <h1 class="archive-title">#{{.Tag.Name}}</h1>
         {{if .Tag.Description}}
         <p class="archive-description">{{.Tag.Description}}</p>
         {{end}}
         {{if .PageCount}}
-        <p class="archive-count">{{.PageCount}} {{if eq .PageCount 1}}post{{else}}posts{{end}}</p>
+        <p class="archive-count">{{.PageCount}} {{if eq .PageCount 1}}{{T $.LangCode "frontend.post"}}{{else}}{{T $.LangCode "frontend.posts"}}{{end}}</p>
         {{end}}
     </header>
 
@@ -36,10 +36,10 @@
                 {{end}}
                 <div class="post-meta">
                     {{if .PublishedAt}}
-                    <time datetime="{{.PublishedAt}}">{{.PublishedAtFormatted}}</time>
+                    <time datetime="{{.PublishedAt}}">{{formatDateLocale .PublishedAt $.LangCode}}</time>
                     {{end}}
                     {{if .Author}}
-                    <span class="author">by {{.Author}}</span>
+                    <span class="author">{{T $.LangCode "frontend.by_author"}} {{.Author.Name}}</span>
                     {{end}}
                 </div>
             </div>
@@ -51,15 +51,15 @@
 
     {{else}}
     <div class="no-posts">
-        <p>No posts found with this tag.</p>
-        <a href="/" class="btn btn-secondary">Go Home</a>
+        <p>{{T $.LangCode "frontend.no_posts_tag"}}</p>
+        <a href="/" class="btn btn-secondary">{{T $.LangCode "frontend.go_home"}}</a>
     </div>
     {{end}}
 
     {{/* Related Tags */}}
     {{if .RelatedTags}}
     <section class="related-tags">
-        <h3>Related Tags</h3>
+        <h3>{{T $.LangCode "frontend.related_tags"}}</h3>
         <div class="tag-cloud">
             {{range .RelatedTags}}
             <a href="/tag/{{.Slug}}" class="tag">{{.Name}}</a>

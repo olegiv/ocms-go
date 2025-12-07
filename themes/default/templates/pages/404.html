@@ -2,17 +2,17 @@
 <div class="error-page error-404">
     <div class="error-content">
         <h1 class="error-code">404</h1>
-        <h2 class="error-title">Page Not Found</h2>
+        <h2 class="error-title">{{T .LangCode "frontend.page_not_found"}}</h2>
         <p class="error-message">
-            Sorry, the page you're looking for doesn't exist or has been moved.
+            {{T .LangCode "frontend.page_not_found_message"}}
         </p>
         <div class="error-actions">
-            <a href="/" class="btn btn-primary">Go Home</a>
+            <a href="/" class="btn btn-primary">{{T .LangCode "frontend.go_home"}}</a>
             {{if .ShowSearch}}
-            <span class="or">or</span>
+            <span class="or">{{T .LangCode "frontend.or"}}</span>
             <form action="/search" method="get" class="search-form inline">
-                <input type="search" name="q" placeholder="Search...">
-                <button type="submit" class="btn btn-secondary">Search</button>
+                <input type="search" name="q" placeholder="{{T .LangCode "search.placeholder"}}">
+                <button type="submit" class="btn btn-secondary">{{T .LangCode "search.button"}}</button>
             </form>
             {{end}}
         </div>
@@ -20,7 +20,7 @@
 
     {{if .SuggestedPages}}
     <div class="suggested-pages">
-        <h3>You might be looking for:</h3>
+        <h3>{{T .LangCode "frontend.you_might_be_looking_for"}}</h3>
         <ul>
             {{range .SuggestedPages}}
             <li><a href="{{.URL}}">{{.Title}}</a></li>

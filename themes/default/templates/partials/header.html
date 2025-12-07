@@ -22,7 +22,7 @@
             <nav class="site-nav" aria-label="Main navigation">
                 <ul class="nav-menu">
                     <li class="nav-item{{if eq .CurrentPath "/"}} active{{end}}">
-                        <a href="/">Home</a>
+                        <a href="/">{{T .LangCode "frontend.home"}}</a>
                     </li>
                     {{range .Navigation}}
                     <li class="nav-item{{if eq $.CurrentPath .URL}} active{{end}}">
@@ -42,7 +42,7 @@
             {{if .ShowSearch}}
             <div class="header-search">
                 <form action="/search" method="get" class="search-form">
-                    <input type="search" name="q" placeholder="Search..." aria-label="Search" value="{{.SearchQuery}}">
+                    <input type="search" name="q" placeholder="{{T .LangCode "search.placeholder"}}" aria-label="{{T .LangCode "search.title"}}" value="{{.SearchQuery}}">
                     <button type="submit" aria-label="Submit search">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="11" cy="11" r="8"></circle>

@@ -1,13 +1,13 @@
 {{define "content"}}
 <div class="archive-page category-archive">
     <header class="archive-header">
-        <span class="archive-label">Category</span>
+        <span class="archive-label">{{T $.LangCode "frontend.category"}}</span>
         <h1 class="archive-title">{{.Category.Name}}</h1>
         {{if .Category.Description}}
         <p class="archive-description">{{.Category.Description}}</p>
         {{end}}
         {{if .PageCount}}
-        <p class="archive-count">{{.PageCount}} {{if eq .PageCount 1}}post{{else}}posts{{end}}</p>
+        <p class="archive-count">{{.PageCount}} {{if eq .PageCount 1}}{{T $.LangCode "frontend.post"}}{{else}}{{T $.LangCode "frontend.posts"}}{{end}}</p>
         {{end}}
     </header>
 
@@ -31,10 +31,10 @@
                 {{end}}
                 <div class="post-meta">
                     {{if .PublishedAt}}
-                    <time datetime="{{.PublishedAt}}">{{.PublishedAtFormatted}}</time>
+                    <time datetime="{{.PublishedAt}}">{{formatDateLocale .PublishedAt $.LangCode}}</time>
                     {{end}}
                     {{if .Author}}
-                    <span class="author">by {{.Author}}</span>
+                    <span class="author">{{T $.LangCode "frontend.by_author"}} {{.Author.Name}}</span>
                     {{end}}
                 </div>
                 {{if .Tags}}
@@ -53,15 +53,15 @@
 
     {{else}}
     <div class="no-posts">
-        <p>No posts found in this category.</p>
-        <a href="/" class="btn btn-secondary">Go Home</a>
+        <p>{{T $.LangCode "frontend.no_posts_category"}}</p>
+        <a href="/" class="btn btn-secondary">{{T $.LangCode "frontend.go_home"}}</a>
     </div>
     {{end}}
 
     {{/* Subcategories */}}
     {{if .Subcategories}}
     <section class="subcategories">
-        <h3>Subcategories</h3>
+        <h3>{{T $.LangCode "frontend.subcategories"}}</h3>
         <ul class="subcategory-list">
             {{range .Subcategories}}
             <li>

@@ -21,7 +21,7 @@
     {{/* Featured Content */}}
     {{if .FeaturedPages}}
     <section class="featured-section">
-        <h2 class="section-title">Featured</h2>
+        <h2 class="section-title">{{T $.LangCode "frontend.featured"}}</h2>
         <div class="featured-grid">
             {{range .FeaturedPages}}
             <article class="featured-card">
@@ -35,7 +35,7 @@
                 <div class="card-content">
                     <h3><a href="{{.URL}}">{{.Title}}</a></h3>
                     {{if .Excerpt}}<p class="excerpt">{{.Excerpt}}</p>{{end}}
-                    <a href="{{.URL}}" class="read-more">Read more</a>
+                    <a href="{{.URL}}" class="read-more">{{T $.LangCode "frontend.read_more"}}</a>
                 </div>
             </article>
             {{end}}
@@ -46,7 +46,7 @@
     {{/* Recent Posts */}}
     {{if .RecentPages}}
     <section class="recent-section">
-        <h2 class="section-title">Recent Posts</h2>
+        <h2 class="section-title">{{T $.LangCode "frontend.recent_posts"}}</h2>
         <div class="posts-grid">
             {{range .RecentPages}}
             <article class="post-card">
@@ -64,8 +64,8 @@
                     <h3><a href="{{.URL}}">{{.Title}}</a></h3>
                     {{if .Excerpt}}<p class="excerpt">{{.Excerpt}}</p>{{end}}
                     <div class="post-meta">
-                        {{if .PublishedAt}}<time datetime="{{.PublishedAt}}">{{.PublishedAtFormatted}}</time>{{end}}
-                        {{if .Author}}<span class="author">by {{.Author}}</span>{{end}}
+                        {{if .PublishedAt}}<time datetime="{{.PublishedAt}}">{{formatDateLocale .PublishedAt $.LangCode}}</time>{{end}}
+                        {{if .Author}}<span class="author">{{T $.LangCode "frontend.by_author"}} {{.Author.Name}}</span>{{end}}
                     </div>
                 </div>
             </article>
@@ -73,7 +73,7 @@
         </div>
         {{if .ShowAllPostsLink}}
         <div class="section-footer">
-            <a href="/blog" class="btn btn-secondary">View All Posts</a>
+            <a href="/blog" class="btn btn-secondary">{{T $.LangCode "frontend.view_all_posts"}}</a>
         </div>
         {{end}}
     </section>
