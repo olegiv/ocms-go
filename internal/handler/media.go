@@ -647,47 +647,6 @@ func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
 }
 
-// FolderTree represents a folder with its children and media count for nested display.
-type FolderTree struct {
-	store.MediaFolder
-	Children   []FolderTree
-	MediaCount int64
-}
-
-// BuildFolderTree builds a hierarchical tree from a flat list of folders.
-func BuildFolderTree(folders []store.MediaFolder, mediaCounts map[int64]int64) []FolderTree {
-	// Map of folder ID to children
-	childMap := make(map[int64][]store.MediaFolder)
-	var roots []store.MediaFolder
-
-	for _, f := range folders {
-		if f.ParentID.Valid {
-			childMap[f.ParentID.Int64] = append(childMap[f.ParentID.Int64], f)
-		} else {
-			roots = append(roots, f)
-		}
-	}
-
-	// Recursive builder
-	var buildTree func(folder store.MediaFolder) FolderTree
-	buildTree = func(folder store.MediaFolder) FolderTree {
-		tree := FolderTree{
-			MediaFolder: folder,
-			MediaCount:  mediaCounts[folder.ID],
-		}
-		for _, child := range childMap[folder.ID] {
-			tree.Children = append(tree.Children, buildTree(child))
-		}
-		return tree
-	}
-
-	result := make([]FolderTree, len(roots))
-	for i, root := range roots {
-		result[i] = buildTree(root)
-	}
-	return result
-}
-
 // CreateFolder handles POST /admin/media/folders - creates a new folder.
 func (h *MediaHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {

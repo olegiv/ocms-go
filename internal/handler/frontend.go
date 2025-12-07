@@ -430,7 +430,7 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 		ShowAllPostsLink: len(recentPageViews) > 6,
 	}
 
-	h.render(w, r, "home", data)
+	h.render(w, "home", data)
 }
 
 // Page handles single page display.
@@ -545,7 +545,7 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 		ShowAuthorBox:    true,
 	}
 
-	h.render(w, r, "page", data)
+	h.render(w, "page", data)
 }
 
 // Category handles category archive display.
@@ -618,7 +618,7 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 		PageCount:        int(total),
 	}
 
-	h.render(w, r, "category", data)
+	h.render(w, "category", data)
 }
 
 // Tag handles tag archive display.
@@ -690,7 +690,7 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 		PageCount:        int(total),
 	}
 
-	h.render(w, r, "tag", data)
+	h.render(w, "tag", data)
 }
 
 // Blog handles the blog listing page displaying all published posts.
@@ -738,7 +738,7 @@ func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
 		Pagination:       pagination,
 	}
 
-	h.render(w, r, "list", data)
+	h.render(w, "list", data)
 }
 
 // Search handles search results display using FTS5 full-text search.
@@ -755,7 +755,7 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 			Query:            "",
 			Pages:            []PageView{},
 		}
-		h.render(w, r, "search", data)
+		h.render(w, "search", data)
 		return
 	}
 
@@ -829,7 +829,7 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 		ResultCount:      int(total),
 	}
 
-	h.render(w, r, "search", data)
+	h.render(w, "search", data)
 }
 
 // NotFound renders the 404 page.
@@ -1533,7 +1533,7 @@ func (h *FrontendHandler) buildPagination(currentPage, totalItems, perPage int, 
 }
 
 // render renders a template using the active theme.
-func (h *FrontendHandler) render(w http.ResponseWriter, r *http.Request, templateName string, data any) {
+func (h *FrontendHandler) render(w http.ResponseWriter, templateName string, data any) {
 	activeTheme := h.themeManager.GetActiveTheme()
 	if activeTheme == nil {
 		h.logger.Error("no active theme")
@@ -1575,7 +1575,7 @@ func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request)
 		SuggestedPages:   suggestedPages,
 	}
 	w.WriteHeader(http.StatusNotFound)
-	h.render(w, r, "404", data)
+	h.render(w, "404", data)
 }
 
 // renderError renders an error page.

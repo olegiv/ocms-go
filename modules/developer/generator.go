@@ -481,7 +481,7 @@ func (m *Module) createCategoryTranslations(ctx context.Context, queries *store.
 }
 
 // generateMedia creates random placeholder images
-func (m *Module) generateMedia(ctx context.Context, languages []store.Language, uploaderID int64) ([]int64, error) {
+func (m *Module) generateMedia(ctx context.Context, uploaderID int64) ([]int64, error) {
 	count := generateRandomCount()
 	var mediaIDs []int64
 	queries := store.New(m.ctx.DB)

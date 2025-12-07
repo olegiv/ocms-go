@@ -69,11 +69,6 @@ func (e *Exporter) Export(ctx context.Context, opts ExportOptions) (*ExportData,
 		e.logger.Warn("failed to build category map", "error", err)
 	}
 
-	tagMap, err := e.buildTagMap(ctx)
-	if err != nil {
-		e.logger.Warn("failed to build tag map", "error", err)
-	}
-
 	mediaMap, err := e.buildMediaMap(ctx)
 	if err != nil {
 		e.logger.Warn("failed to build media map", "error", err)
@@ -91,21 +86,21 @@ func (e *Exporter) Export(ctx context.Context, opts ExportOptions) (*ExportData,
 
 	// Export users
 	if opts.IncludeUsers {
-		if err := e.exportUsers(ctx, data, userMap); err != nil {
+		if err := e.exportUsers(ctx, data); err != nil {
 			e.logger.Warn("failed to export users", "error", err)
 		}
 	}
 
 	// Export categories
 	if opts.IncludeCategories {
-		if err := e.exportCategories(ctx, data, categoryMap, languageMap); err != nil {
+		if err := e.exportCategories(ctx, data, categoryMap); err != nil {
 			e.logger.Warn("failed to export categories", "error", err)
 		}
 	}
 
 	// Export tags
 	if opts.IncludeTags {
-		if err := e.exportTags(ctx, data, languageMap); err != nil {
+		if err := e.exportTags(ctx, data); err != nil {
 			e.logger.Warn("failed to export tags", "error", err)
 		}
 	}
@@ -119,14 +114,14 @@ func (e *Exporter) Export(ctx context.Context, opts ExportOptions) (*ExportData,
 
 	// Export pages
 	if opts.IncludePages {
-		if err := e.exportPages(ctx, data, opts, userMap, categoryMap, tagMap, mediaMap, languageMap); err != nil {
+		if err := e.exportPages(ctx, data, opts, userMap, mediaMap, languageMap); err != nil {
 			e.logger.Warn("failed to export pages", "error", err)
 		}
 	}
 
 	// Export menus
 	if opts.IncludeMenus {
-		if err := e.exportMenus(ctx, data, pageMap, languageMap); err != nil {
+		if err := e.exportMenus(ctx, data, pageMap); err != nil {
 			e.logger.Warn("failed to export menus", "error", err)
 		}
 	}
@@ -180,7 +175,7 @@ func (e *Exporter) ExportWithMedia(ctx context.Context, opts ExportOptions, w io
 	if opts.IncludeMediaFiles && len(data.Media) > 0 {
 		for i := range data.Media {
 			mediaItem := &data.Media[i]
-			if err := e.addMediaToZip(ctx, zipWriter, mediaItem); err != nil {
+			if err := e.addMediaToZip(zipWriter, mediaItem); err != nil {
 				e.logger.Warn("failed to add media to zip", "uuid", mediaItem.UUID, "error", err)
 				// Continue with other media items
 			}
@@ -214,7 +209,7 @@ func (e *Exporter) ExportWithMediaToFile(ctx context.Context, opts ExportOptions
 }
 
 // addMediaToZip adds a media file and its variants to the zip archive.
-func (e *Exporter) addMediaToZip(ctx context.Context, zipWriter *zip.Writer, media *ExportMedia) error {
+func (e *Exporter) addMediaToZip(zipWriter *zip.Writer, media *ExportMedia) error {
 	// Add original file
 	originalPath := filepath.Join(e.uploadDir, "originals", media.UUID, media.Filename)
 	zipPath := filepath.Join("media", "originals", media.UUID, media.Filename)
@@ -326,7 +321,7 @@ func (e *Exporter) exportLanguages(ctx context.Context, data *ExportData) error 
 }
 
 // exportUsers exports all users (without passwords).
-func (e *Exporter) exportUsers(ctx context.Context, data *ExportData, userMap map[int64]string) error {
+func (e *Exporter) exportUsers(ctx context.Context, data *ExportData) error {
 	// Use a reasonable limit for users
 	users, err := e.store.ListUsers(ctx, store.ListUsersParams{
 		Limit:  1000,
@@ -350,7 +345,7 @@ func (e *Exporter) exportUsers(ctx context.Context, data *ExportData, userMap ma
 }
 
 // exportCategories exports all categories with hierarchy.
-func (e *Exporter) exportCategories(ctx context.Context, data *ExportData, categoryMap map[int64]string, languageMap map[int64]string) error {
+func (e *Exporter) exportCategories(ctx context.Context, data *ExportData, categoryMap map[int64]string) error {
 	categories, err := e.store.ListCategories(ctx)
 	if err != nil {
 		return err
@@ -394,7 +389,7 @@ func (e *Exporter) exportCategories(ctx context.Context, data *ExportData, categ
 }
 
 // exportTags exports all tags.
-func (e *Exporter) exportTags(ctx context.Context, data *ExportData, languageMap map[int64]string) error {
+func (e *Exporter) exportTags(ctx context.Context, data *ExportData) error {
 	tags, err := e.store.ListAllTags(ctx)
 	if err != nil {
 		return err
@@ -498,8 +493,6 @@ func (e *Exporter) exportPages(
 	data *ExportData,
 	opts ExportOptions,
 	userMap map[int64]string,
-	categoryMap map[int64]string,
-	tagMap map[int64]string,
 	mediaMap map[int64]ExportMediaRef,
 	languageMap map[int64]string,
 ) error {
@@ -623,7 +616,7 @@ func (e *Exporter) exportPages(
 }
 
 // exportMenus exports all menus with their items.
-func (e *Exporter) exportMenus(ctx context.Context, data *ExportData, pageMap map[int64]string, languageMap map[int64]string) error {
+func (e *Exporter) exportMenus(ctx context.Context, data *ExportData, pageMap map[int64]string) error {
 	menus, err := e.store.ListMenus(ctx)
 	if err != nil {
 		return err

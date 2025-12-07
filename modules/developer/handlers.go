@@ -98,7 +98,7 @@ func (m *Module) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	m.ctx.Logger.Info("generated categories", "count", len(catIDs))
 
 	// Generate media
-	mediaIDs, err := m.generateMedia(ctx, languages, user.ID)
+	mediaIDs, err := m.generateMedia(ctx, user.ID)
 	if err != nil {
 		m.ctx.Logger.Error("failed to generate media", "error", err)
 		m.setFlashAndRedirect(w, r, "error", i18n.T(lang, "developer.error_generate_media")+": "+err.Error())

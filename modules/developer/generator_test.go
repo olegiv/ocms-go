@@ -472,10 +472,8 @@ func TestGenerateMedia(t *testing.T) {
 	q := store.New(db)
 	fixtures := createTestFixtures(t, db)
 
-	languages := []store.Language{fixtures.Language}
-
 	// Generate media
-	mediaIDs, err := m.generateMedia(ctx, languages, fixtures.User.ID)
+	mediaIDs, err := m.generateMedia(ctx, fixtures.User.ID)
 	if err != nil {
 		t.Fatalf("generateMedia: %v", err)
 	}
@@ -666,7 +664,7 @@ func TestDeleteAllGeneratedItems(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generateCategories: %v", err)
 	}
-	mediaIDs, err := m.generateMedia(ctx, languages, fixtures.User.ID)
+	mediaIDs, err := m.generateMedia(ctx, fixtures.User.ID)
 	if err != nil {
 		t.Fatalf("generateMedia: %v", err)
 	}

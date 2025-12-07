@@ -186,7 +186,7 @@ func (i *Importer) Import(ctx context.Context, data *ExportData, opts ImportOpti
 
 	// Import config
 	if opts.ImportConfig && len(data.Config) > 0 {
-		if err := i.importConfig(ctx, queries, data.Config, userMap, opts, result); err != nil {
+		if err := i.importConfig(ctx, queries, data.Config, userMap, result); err != nil {
 			return result, fmt.Errorf("failed to import config: %w", err)
 		}
 	}
@@ -1274,7 +1274,7 @@ func (i *Importer) importPages(
 				result.IncrementSkipped("pages")
 				continue
 			case ConflictOverwrite:
-				pageID, existsErr = i.updateExistingPage(ctx, queries, page, existing.ID, userMap, mediaMap, languageMap, now)
+				pageID, existsErr = i.updateExistingPage(ctx, queries, page, existing.ID, mediaMap, languageMap, now)
 				if existsErr != nil {
 					result.AddError("page", page.Slug, existsErr.Error())
 					continue
@@ -1340,7 +1340,6 @@ func (i *Importer) updateExistingPage(
 	queries *store.Queries,
 	page ExportPage,
 	existingID int64,
-	userMap map[string]int64,
 	mediaMap map[string]int64,
 	languageMap map[string]int64,
 	now time.Time,
@@ -1718,7 +1717,7 @@ func (i *Importer) importForms(ctx context.Context, queries *store.Queries, form
 	return nil
 }
 
-func (i *Importer) importConfig(ctx context.Context, queries *store.Queries, config map[string]string, userMap map[string]int64, opts ImportOptions, result *ImportResult) error {
+func (i *Importer) importConfig(ctx context.Context, queries *store.Queries, config map[string]string, userMap map[string]int64, result *ImportResult) error {
 	now := time.Now()
 
 	// Get a default user ID for the updated_by field
