@@ -34,6 +34,7 @@ import (
 	"ocms-go/modules/analytics"
 	"ocms-go/modules/developer"
 	"ocms-go/modules/example"
+	"ocms-go/modules/hcaptcha"
 	"ocms-go/web"
 )
 
@@ -247,6 +248,9 @@ func run() error {
 	if err := moduleRegistry.Register(analytics.New()); err != nil {
 		return fmt.Errorf("registering analytics module: %w", err)
 	}
+	if err := moduleRegistry.Register(hcaptcha.New()); err != nil {
+		return fmt.Errorf("registering hcaptcha module: %w", err)
+	}
 
 	// Initialize all registered modules
 	if err := moduleRegistry.InitAll(moduleCtx); err != nil {
@@ -265,6 +269,10 @@ func run() error {
 	moduleFuncs := moduleRegistry.AllTemplateFuncs()
 	if len(moduleFuncs) > 0 {
 		renderer.AddTemplateFuncs(moduleFuncs)
+		// Reload admin templates with new module functions
+		if err := renderer.ReloadTemplates(); err != nil {
+			slog.Warn("failed to reload admin templates with module funcs", "error", err)
+		}
 		themeManager.SetFuncMap(renderer.TemplateFuncs())
 		if err := themeManager.LoadThemes(); err != nil {
 			slog.Warn("failed to reload themes with module funcs", "error", err)
@@ -301,7 +309,7 @@ func run() error {
 	)
 
 	// Initialize handlers
-	authHandler := handler.NewAuthHandler(db, renderer, sessionManager, loginProtection)
+	authHandler := handler.NewAuthHandler(db, renderer, sessionManager, loginProtection, hookRegistry)
 	adminHandler := handler.NewAdminHandler(db, renderer, sessionManager, cacheManager)
 	usersHandler := handler.NewUsersHandler(db, renderer, sessionManager)
 	pagesHandler := handler.NewPagesHandler(db, renderer, sessionManager)

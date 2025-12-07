@@ -113,6 +113,8 @@ cmd/ocms/main.go
 | `OCMS_CACHE_PREFIX` | No | `ocms:` | Key prefix for Redis cache entries |
 | `OCMS_CACHE_TTL` | No | `3600` | Default cache TTL in seconds |
 | `OCMS_CACHE_MAX_SIZE` | No | `10000` | Max entries for in-memory cache |
+| `OCMS_HCAPTCHA_SITE_KEY` | No | - | hCaptcha site key (overrides database setting) |
+| `OCMS_HCAPTCHA_SECRET_KEY` | No | - | hCaptcha secret key (overrides database setting) |
 
 ## Default Credentials
 
@@ -128,6 +130,7 @@ On first run, seeds admin user: `admin@example.com` / `changeme`
 - `/admin/modules` - Module list
 - `/admin/api-keys` - API key management
 - `/admin/cache` - Cache management
+- `/admin/hcaptcha` - hCaptcha settings
 
 ### REST API
 - `GET /api/v1/pages` - List pages (public: published only)
@@ -205,3 +208,4 @@ Additional documentation is available in the `docs/` directory:
 - `docs/reverse-proxy.md` - Nginx, Apache, and Nginx Proxy Manager configuration
 - `docs/login-security.md` - Login protection, rate limiting, and account lockout
 - `docs/developer-module.md` - Developer module for test data generation and i18n
+- `docs/hcaptcha.md` - hCaptcha integration for bot protection on login

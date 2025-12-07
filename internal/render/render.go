@@ -34,6 +34,7 @@ type Renderer struct {
 	db             *sql.DB
 	isDev          bool
 	extraFuncs     template.FuncMap
+	templatesFS    fs.FS // Stored for reloading after adding module funcs
 }
 
 // Config holds renderer configuration.
@@ -60,6 +61,7 @@ func New(cfg Config) (*Renderer, error) {
 		menuService:    menuSvc,
 		db:             cfg.DB,
 		isDev:          cfg.IsDev,
+		templatesFS:    cfg.TemplatesFS,
 	}
 
 	if err := r.parseTemplates(cfg.TemplatesFS); err != nil {
@@ -98,7 +100,7 @@ func (r *Renderer) parseTemplates(templatesFS fs.FS) error {
 		files = append(files, partials...)
 		files = append(files, tmplPath)
 
-		tmpl, err := template.New("").Funcs(r.templateFuncs()).ParseFS(templatesFS, files...)
+		tmpl, err := template.New("").Funcs(r.TemplateFuncs()).ParseFS(templatesFS, files...)
 		if err != nil {
 			return fmt.Errorf("parsing template %s: %w", name, err)
 		}
@@ -121,7 +123,7 @@ func (r *Renderer) parseTemplates(templatesFS fs.FS) error {
 		files = append(files, partials...)
 		files = append(files, tmplPath)
 
-		tmpl, err := template.New("").Funcs(r.templateFuncs()).ParseFS(templatesFS, files...)
+		tmpl, err := template.New("").Funcs(r.TemplateFuncs()).ParseFS(templatesFS, files...)
 		if err != nil {
 			return fmt.Errorf("parsing template %s: %w", name, err)
 		}
@@ -144,7 +146,7 @@ func (r *Renderer) parseTemplates(templatesFS fs.FS) error {
 		files = append(files, partials...)
 		files = append(files, tmplPath)
 
-		tmpl, err := template.New("").Funcs(r.templateFuncs()).ParseFS(templatesFS, files...)
+		tmpl, err := template.New("").Funcs(r.TemplateFuncs()).ParseFS(templatesFS, files...)
 		if err != nil {
 			return fmt.Errorf("parsing template %s: %w", name, err)
 		}
@@ -167,7 +169,7 @@ func (r *Renderer) parseTemplates(templatesFS fs.FS) error {
 		files := []string{tmplPath}
 		files = append(files, partials...)
 
-		tmpl, err := template.New("").Funcs(r.templateFuncs()).ParseFS(templatesFS, files...)
+		tmpl, err := template.New("").Funcs(r.TemplateFuncs()).ParseFS(templatesFS, files...)
 		if err != nil {
 			return fmt.Errorf("parsing template %s: %w", name, err)
 		}
@@ -215,6 +217,15 @@ func (r *Renderer) AddTemplateFuncs(funcs template.FuncMap) {
 	for k, v := range funcs {
 		r.extraFuncs[k] = v
 	}
+}
+
+// ReloadTemplates re-parses all templates with the current template functions.
+// This should be called after adding module template functions.
+func (r *Renderer) ReloadTemplates() error {
+	if r.templatesFS == nil {
+		return fmt.Errorf("templatesFS is nil, cannot reload templates")
+	}
+	return r.parseTemplates(r.templatesFS)
 }
 
 // templateFuncs returns custom template functions.
@@ -532,6 +543,13 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			}
 			// Fallback to language code
 			return langCode
+		},
+		// Placeholder functions for hCaptcha module (will be overwritten if module is loaded)
+		"hcaptchaEnabled": func() bool {
+			return false
+		},
+		"hcaptchaWidget": func() template.HTML {
+			return ""
 		},
 	}
 }

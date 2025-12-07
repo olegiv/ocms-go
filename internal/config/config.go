@@ -22,6 +22,10 @@ type Config struct {
 	CachePrefix  string `env:"OCMS_CACHE_PREFIX" envDefault:"ocms:"`   // Redis key prefix
 	CacheTTL     int    `env:"OCMS_CACHE_TTL" envDefault:"3600"`       // Default cache TTL in seconds
 	CacheMaxSize int    `env:"OCMS_CACHE_MAX_SIZE" envDefault:"10000"` // Max memory cache entries
+
+	// hCaptcha configuration
+	HCaptchaSiteKey   string `env:"OCMS_HCAPTCHA_SITE_KEY"`   // hCaptcha site key
+	HCaptchaSecretKey string `env:"OCMS_HCAPTCHA_SECRET_KEY"` // hCaptcha secret key
 }
 
 // IsDevelopment returns true if the application is running in development mode.
@@ -37,6 +41,11 @@ func (c Config) ServerAddr() string {
 // UseRedisCache returns true if Redis caching is configured.
 func (c Config) UseRedisCache() bool {
 	return c.RedisURL != ""
+}
+
+// HCaptchaEnabled returns true if hCaptcha is configured.
+func (c Config) HCaptchaEnabled() bool {
+	return c.HCaptchaSiteKey != "" && c.HCaptchaSecretKey != ""
 }
 
 // Load parses environment variables and returns a Config struct.

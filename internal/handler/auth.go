@@ -13,9 +13,11 @@ import (
 	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/model"
+	"ocms-go/internal/module"
 	"ocms-go/internal/render"
 	"ocms-go/internal/service"
 	"ocms-go/internal/store"
+	"ocms-go/modules/hcaptcha"
 )
 
 // SessionKeyUserID is the session key for storing the authenticated user ID.
@@ -28,16 +30,18 @@ type AuthHandler struct {
 	sessionManager  *scs.SessionManager
 	eventService    *service.EventService
 	loginProtection *middleware.LoginProtection
+	hookRegistry    *module.HookRegistry
 }
 
 // NewAuthHandler creates a new AuthHandler.
-func NewAuthHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, lp *middleware.LoginProtection) *AuthHandler {
+func NewAuthHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, lp *middleware.LoginProtection, hr *module.HookRegistry) *AuthHandler {
 	return &AuthHandler{
 		queries:         store.New(db),
 		renderer:        renderer,
 		sessionManager:  sm,
 		eventService:    service.NewEventService(db),
 		loginProtection: lp,
+		hookRegistry:    hr,
 	}
 }
 
@@ -71,6 +75,32 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		h.renderer.SetFlash(r, i18n.T(lang, "auth.email_password_required"), "error")
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
+	}
+
+	// Verify hCaptcha if hook registry is available
+	if h.hookRegistry != nil && h.hookRegistry.HasHandlers(hcaptcha.HookAuthBeforeLogin) {
+		verifyReq := &hcaptcha.VerifyRequest{
+			Response: hcaptcha.GetResponseFromForm(r),
+			RemoteIP: hcaptcha.GetRemoteIP(r),
+		}
+
+		result, err := h.hookRegistry.Call(r.Context(), hcaptcha.HookAuthBeforeLogin, verifyReq)
+		if err != nil {
+			slog.Error("captcha hook error", "error", err)
+			h.renderer.SetFlash(r, i18n.T(lang, "hcaptcha.error_verification"), "error")
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+
+		if req, ok := result.(*hcaptcha.VerifyRequest); ok && !req.Verified {
+			errorMsg := i18n.T(lang, req.ErrorCode)
+			if errorMsg == req.ErrorCode {
+				errorMsg = req.Error
+			}
+			h.renderer.SetFlash(r, errorMsg, "error")
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
 	}
 
 	// Check if account is locked

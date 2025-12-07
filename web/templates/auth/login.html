@@ -37,6 +37,12 @@
                 >
             </div>
 
+            {{if hcaptchaEnabled}}
+            <div class="form-group captcha-group">
+                {{hcaptchaWidget}}
+            </div>
+            {{end}}
+
             <button type="submit" class="btn btn-primary btn-block">
                 {{T .AdminLang "auth.login"}}
             </button>
@@ -62,4 +68,11 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+<style>
+.captcha-group {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 1rem;
+}
+</style>
 {{end}}
