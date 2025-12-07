@@ -128,33 +128,6 @@ func Language(db *sql.DB) func(http.Handler) http.Handler {
 	}
 }
 
-// extractLangFromPath extracts language code from URL path if present.
-// Returns the language, the remaining path, and whether a language was found.
-// Example: /ru/about -> (Language{Code: "ru"}, "/about", true)
-// Example: /about -> (nil, "/about", false)
-func extractLangFromPath(path string, langMap map[string]store.Language) (store.Language, string, bool) {
-	// Remove leading slash and split
-	trimmed := strings.TrimPrefix(path, "/")
-	parts := strings.SplitN(trimmed, "/", 2)
-
-	if len(parts) == 0 || parts[0] == "" {
-		return store.Language{}, path, false
-	}
-
-	// Check if first part is a valid language code
-	code := strings.ToLower(parts[0])
-	if lang, ok := langMap[code]; ok {
-		// Build remaining path
-		remainingPath := "/"
-		if len(parts) > 1 {
-			remainingPath = "/" + parts[1]
-		}
-		return lang, remainingPath, true
-	}
-
-	return store.Language{}, path, false
-}
-
 // matchAcceptLanguage finds the best matching language from Accept-Language header.
 // Returns the matched language or nil if no match found.
 func matchAcceptLanguage(acceptLang string, langMap map[string]store.Language) *store.Language {

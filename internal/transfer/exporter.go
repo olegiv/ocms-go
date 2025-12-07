@@ -781,20 +781,6 @@ func (e *Exporter) buildCategoryMap(ctx context.Context) (map[int64]string, erro
 	return categoryMap, nil
 }
 
-// buildTagMap creates a map of tag ID to slug.
-func (e *Exporter) buildTagMap(ctx context.Context) (map[int64]string, error) {
-	tags, err := e.store.ListAllTags(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	tagMap := make(map[int64]string, len(tags))
-	for _, tag := range tags {
-		tagMap[tag.ID] = tag.Slug
-	}
-	return tagMap, nil
-}
-
 // buildMediaMap creates a map of media ID to media reference.
 func (e *Exporter) buildMediaMap(ctx context.Context) (map[int64]ExportMediaRef, error) {
 	media, err := e.store.ListMedia(ctx, store.ListMediaParams{

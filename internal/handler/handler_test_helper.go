@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -270,36 +269,4 @@ func assertStatus(t *testing.T, got, want int) {
 	if got != want {
 		t.Errorf("status = %d; want %d", got, want)
 	}
-}
-
-// assertContains checks if the response body contains the expected string.
-func assertContains(t *testing.T, body, want string) {
-	t.Helper()
-	if body == "" {
-		t.Error("response body is empty")
-		return
-	}
-	if !containsString(body, want) {
-		t.Errorf("response body does not contain %q", want)
-	}
-}
-
-// containsString checks if s contains substr.
-func containsString(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
-		(len(s) > 0 && len(substr) > 0 && findSubstring(s, substr)))
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
-
-// newTestRequest creates a new HTTP test request.
-func newTestRequest(method, path string) *http.Request {
-	return httptest.NewRequest(method, path, nil)
 }

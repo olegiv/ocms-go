@@ -47,14 +47,6 @@ func (m *mockModule) TemplateFuncs() template.FuncMap  { return m.funcMap }
 func (m *mockModule) AdminURL() string                 { return "" }
 func (m *mockModule) TranslationsFS() embed.FS         { return embed.FS{} }
 
-// errorModule returns an error on Init for testing error handling.
-type errorModule struct {
-	*mockModule
-	initErr error
-}
-
-func (m *errorModule) Init(ctx *ModuleContext) error { return m.initErr }
-
 func createTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("sqlite3", ":memory:")

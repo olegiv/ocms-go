@@ -107,13 +107,11 @@ func CompressSelective(level int, minSize int) func(http.Handler) http.Handler {
 // selectiveWriter buffers responses and only compresses if appropriate.
 type selectiveWriter struct {
 	http.ResponseWriter
-	request       *http.Request
-	level         int
-	minSize       int
-	buffer        []byte
-	gzipWriter    *gzip.Writer
-	headerWritten bool
-	statusCode    int
+	request    *http.Request
+	level      int
+	minSize    int
+	buffer     []byte
+	statusCode int
 }
 
 func (sw *selectiveWriter) WriteHeader(statusCode int) {
