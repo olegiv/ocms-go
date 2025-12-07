@@ -1,19 +1,25 @@
 # CSRF Protection
 
-oCMS implements Cross-Site Request Forgery (CSRF) protection using the `filippo.io/csrf/gorilla` library (a secure drop-in replacement for `gorilla/csrf`). This document explains how CSRF protection works and how to configure it.
+oCMS implements Cross-Site Request Forgery (CSRF) protection using the `filippo.io/csrf/gorilla` library. This modern library uses Fetch metadata headers instead of traditional cookie-based tokens, providing more reliable protection.
 
 ## Overview
 
-CSRF attacks exploit authenticated users by tricking them into submitting malicious requests. oCMS protects against this by requiring a valid CSRF token on all state-changing requests (POST, PUT, DELETE, PATCH).
+CSRF attacks exploit authenticated users by tricking them into submitting malicious requests. oCMS protects against this by validating Fetch metadata headers on all state-changing requests (POST, PUT, DELETE, PATCH).
 
 ## How It Works
 
-1. **Cookie**: When a user visits any page, a `_gorilla_csrf` cookie is set containing an encrypted token
-2. **Form Token**: Forms include a hidden `gorilla.csrf.Token` field with the token value
+The `filippo.io/csrf/gorilla` library uses **Fetch metadata headers** (specifically `Sec-Fetch-Site`) provided by modern browsers to determine request origin:
+
+1. **Fetch Metadata**: Browsers automatically include `Sec-Fetch-Site` header indicating whether the request is same-origin, same-site, cross-site, or none
+2. **Form Token**: Forms include a hidden `gorilla.csrf.Token` field for compatibility
 3. **Validation**: On form submission, the server validates that:
-   - The cookie is present and valid
-   - The form token matches the cookie token
-   - The request's Origin/Referer header matches trusted origins
+   - The `Sec-Fetch-Site` header indicates a same-origin or trusted request
+   - The request's Origin/Referer header matches trusted origins (for legacy browser fallback)
+
+This approach is more reliable than cookie-based CSRF protection because:
+- It doesn't depend on cookie settings (SameSite, Secure, etc.)
+- It's immune to cookie-related attacks and browser quirks
+- It's the [recommended method by browsers](https://web.dev/fetch-metadata/) for CSRF protection
 
 ## Configuration
 
@@ -22,15 +28,12 @@ CSRF protection is configured in `internal/middleware/csrf.go`:
 ```go
 type CSRFConfig struct {
     AuthKey        []byte           // 32-byte key for token encryption
-    Secure         bool             // Secure cookie flag (true in production)
-    Domain         string           // Cookie domain (empty = current domain)
-    Path           string           // Cookie path (default: "/")
-    MaxAge         int              // Cookie max age in seconds (default: 12 hours)
-    SameSite       csrf.SameSiteMode // SameSite attribute (default: Lax)
     ErrorHandler   http.Handler     // Custom error handler
     TrustedOrigins []string         // Allowed origins for cross-origin requests
 }
 ```
+
+Note: Cookie-related options (Secure, Domain, Path, MaxAge, SameSite) are no longer used since the library now relies on Fetch metadata headers instead of cookies.
 
 ### TrustedOrigins Format
 
@@ -52,12 +55,10 @@ TrustedOrigins: []string{
 ### Development vs Production
 
 In development mode (`OCMS_ENV=development`):
-- `Secure` cookie flag is disabled (allows HTTP)
 - `localhost:8080` and `127.0.0.1:8080` are trusted origins
 
 In production mode (`OCMS_ENV=production`):
-- `Secure` cookie flag is enabled (HTTPS only)
-- No default trusted origins (same-origin only)
+- No default trusted origins (same-origin requests only)
 
 ## Using CSRF Tokens in Templates
 
@@ -138,8 +139,8 @@ This error occurs when CSRF validation fails. Check the server logs for the spec
 
 - The CSRF auth key should be the same as the session secret (`OCMS_SESSION_SECRET`)
 - Minimum 32-byte key length is required
-- In production, always use HTTPS and enable the Secure cookie flag
-- The SameSite=Lax attribute provides additional protection against CSRF
+- In production, always use HTTPS
+- Modern browsers send Fetch metadata headers automatically, providing strong CSRF protection
 
 ## Testing CSRF Protection
 

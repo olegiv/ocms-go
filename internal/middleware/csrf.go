@@ -9,28 +9,12 @@ import (
 )
 
 // CSRFConfig holds configuration for CSRF protection.
+// Note: filippo.io/csrf/gorilla uses Fetch metadata headers instead of cookies,
+// so cookie-related options (Secure, Domain, Path, MaxAge, SameSite) are no longer used.
 type CSRFConfig struct {
 	// AuthKey is a 32-byte key used to authenticate the CSRF token.
 	// This should be the same as the session secret for simplicity.
 	AuthKey []byte
-
-	// Secure sets the Secure flag on the CSRF cookie.
-	// Should be true in production (HTTPS only).
-	Secure bool
-
-	// Domain sets the Domain attribute on the CSRF cookie.
-	// Leave empty to use the current domain.
-	Domain string
-
-	// Path sets the Path attribute on the CSRF cookie.
-	Path string
-
-	// MaxAge sets the MaxAge attribute on the CSRF cookie in seconds.
-	// Default is 12 hours.
-	MaxAge int
-
-	// SameSite sets the SameSite attribute on the CSRF cookie.
-	SameSite csrf.SameSiteMode
 
 	// ErrorHandler is called when CSRF validation fails.
 	ErrorHandler http.Handler
@@ -43,11 +27,7 @@ type CSRFConfig struct {
 // DefaultCSRFConfig returns a CSRFConfig with sensible defaults.
 func DefaultCSRFConfig(authKey []byte, isDev bool) CSRFConfig {
 	cfg := CSRFConfig{
-		AuthKey:  authKey,
-		Secure:   !isDev, // Secure only in production
-		Path:     "/",
-		MaxAge:   12 * 60 * 60, // 12 hours
-		SameSite: csrf.SameSiteLaxMode,
+		AuthKey: authKey,
 	}
 
 	// In development, trust localhost origins for easier testing
@@ -63,24 +43,10 @@ func DefaultCSRFConfig(authKey []byte, isDev bool) CSRFConfig {
 }
 
 // CSRF returns a middleware that provides CSRF protection.
-// It uses filippo.io/csrf/gorilla under the hood.
+// It uses filippo.io/csrf/gorilla under the hood, which uses Fetch metadata
+// headers instead of cookies for CSRF protection.
 func CSRF(cfg CSRFConfig) func(http.Handler) http.Handler {
-	opts := []csrf.Option{
-		csrf.Path(cfg.Path),
-		csrf.MaxAge(cfg.MaxAge),
-		csrf.SameSite(cfg.SameSite),
-		csrf.HttpOnly(true),
-	}
-
-	if cfg.Secure {
-		opts = append(opts, csrf.Secure(true))
-	} else {
-		opts = append(opts, csrf.Secure(false))
-	}
-
-	if cfg.Domain != "" {
-		opts = append(opts, csrf.Domain(cfg.Domain))
-	}
+	var opts []csrf.Option
 
 	if cfg.ErrorHandler != nil {
 		opts = append(opts, csrf.ErrorHandler(cfg.ErrorHandler))

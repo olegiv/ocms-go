@@ -4,29 +4,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"filippo.io/csrf/gorilla"
 )
 
 func TestDefaultCSRFConfig_Development(t *testing.T) {
 	authKey := []byte("12345678901234567890123456789012") // 32-byte key
 	cfg := DefaultCSRFConfig(authKey, true)               // isDev = true
 
-	// Check basic config
-	if cfg.Secure {
-		t.Error("expected Secure=false in development mode")
-	}
-
-	if cfg.Path != "/" {
-		t.Errorf("expected Path='/', got '%s'", cfg.Path)
-	}
-
-	if cfg.MaxAge != 12*60*60 {
-		t.Errorf("expected MaxAge=43200 (12 hours), got %d", cfg.MaxAge)
-	}
-
-	if cfg.SameSite != csrf.SameSiteLaxMode {
-		t.Errorf("expected SameSite=SameSiteLaxMode, got %v", cfg.SameSite)
+	// Check AuthKey is set
+	if len(cfg.AuthKey) != 32 {
+		t.Errorf("expected 32-byte AuthKey, got %d bytes", len(cfg.AuthKey))
 	}
 
 	// Check TrustedOrigins are host-only (not full URLs)
@@ -55,9 +41,9 @@ func TestDefaultCSRFConfig_Production(t *testing.T) {
 	authKey := []byte("12345678901234567890123456789012") // 32-byte key
 	cfg := DefaultCSRFConfig(authKey, false)              // isDev = false (production)
 
-	// Check Secure is true in production
-	if !cfg.Secure {
-		t.Error("expected Secure=true in production mode")
+	// Check AuthKey is set
+	if len(cfg.AuthKey) != 32 {
+		t.Errorf("expected 32-byte AuthKey, got %d bytes", len(cfg.AuthKey))
 	}
 
 	// Check no TrustedOrigins in production (stricter security)
@@ -190,19 +176,6 @@ func TestCSRF_WithCustomErrorHandler(t *testing.T) {
 	// triggering an actual CSRF failure, which requires cookies and tokens.
 	// The test above validates that the middleware accepts a custom handler.
 	_ = customCalled
-}
-
-func TestCSRF_WithDomain(t *testing.T) {
-	authKey := []byte("12345678901234567890123456789012")
-	cfg := DefaultCSRFConfig(authKey, true)
-	cfg.Domain = "example.com"
-
-	// Should not panic when creating middleware with domain
-	middleware := CSRF(cfg)
-
-	if middleware == nil {
-		t.Error("expected middleware to be non-nil with domain set")
-	}
 }
 
 // TestTrustedOriginsFormat validates that TrustedOrigins use the correct format.
