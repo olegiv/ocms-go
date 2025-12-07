@@ -9,45 +9,9 @@ import (
 
 // Predefined hook names for common events.
 const (
-	// Page hooks
-	HookPageBeforeCreate = "page.before_create"
-	HookPageAfterCreate  = "page.after_create"
-	HookPageBeforeSave   = "page.before_save"
+	// HookPageAfterSave Page hooks
 	HookPageAfterSave    = "page.after_save"
-	HookPageBeforeDelete = "page.before_delete"
-	HookPageAfterDelete  = "page.after_delete"
 	HookPageBeforeRender = "page.before_render"
-
-	// User hooks
-	HookUserBeforeCreate = "user.before_create"
-	HookUserAfterCreate  = "user.after_create"
-	HookUserBeforeSave   = "user.before_save"
-	HookUserAfterSave    = "user.after_save"
-	HookUserBeforeDelete = "user.before_delete"
-	HookUserAfterDelete  = "user.after_delete"
-
-	// Media hooks
-	HookMediaBeforeUpload = "media.before_upload"
-	HookMediaAfterUpload  = "media.after_upload"
-	HookMediaBeforeDelete = "media.before_delete"
-	HookMediaAfterDelete  = "media.after_delete"
-
-	// Auth hooks
-	HookAuthBeforeLogin  = "auth.before_login"
-	HookAuthAfterLogin   = "auth.after_login"
-	HookAuthBeforeLogout = "auth.before_logout"
-	HookAuthAfterLogout  = "auth.after_logout"
-
-	// Render hooks
-	HookRenderPage     = "render.page"
-	HookRenderTemplate = "render.template"
-
-	// Config hooks
-	HookConfigChanged = "config.changed"
-
-	// Module hooks
-	HookModuleInit     = "module.init"
-	HookModuleShutdown = "module.shutdown"
 )
 
 // HookFunc is a function that can be registered as a hook handler.

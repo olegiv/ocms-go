@@ -99,7 +99,7 @@ func (h *ModulesHandler) ToggleActive(w http.ResponseWriter, r *http.Request) {
 		slog.Error("failed to toggle module active status", "module", moduleName, "error", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ToggleActiveResponse{
+		_ = json.NewEncoder(w).Encode(ToggleActiveResponse{
 			Success: false,
 			Message: err.Error(),
 		})
@@ -109,7 +109,7 @@ func (h *ModulesHandler) ToggleActive(w http.ResponseWriter, r *http.Request) {
 	slog.Info("module active status toggled", "module", moduleName, "active", req.Active)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(ToggleActiveResponse{
+	_ = json.NewEncoder(w).Encode(ToggleActiveResponse{
 		Success: true,
 		Active:  req.Active,
 	})

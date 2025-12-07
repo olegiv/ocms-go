@@ -20,9 +20,6 @@ import (
 	"ocms-go/internal/store"
 )
 
-// WebhooksPerPage is the number of webhooks to display per page.
-const WebhooksPerPage = 20
-
 // DeliveriesPerPage is the number of deliveries to display per page.
 const DeliveriesPerPage = 25
 

@@ -21,7 +21,6 @@ import (
 // Upload limits
 const (
 	MaxUploadSize    = 20 * 1024 * 1024 // 20MB
-	DefaultQuality   = 85
 	DefaultUploadDir = "./uploads"
 )
 

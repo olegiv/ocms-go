@@ -9,16 +9,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alexedwards/scs/v2"
-	"github.com/go-chi/chi/v5"
 	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/model"
 	"ocms-go/internal/render"
 	"ocms-go/internal/store"
-)
 
-const LanguagesPerPage = 20
+	"github.com/alexedwards/scs/v2"
+	"github.com/go-chi/chi/v5"
+)
 
 // LanguagesHandler handles language management in admin.
 type LanguagesHandler struct {

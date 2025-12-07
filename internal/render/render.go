@@ -26,9 +26,6 @@ import (
 // SessionKeyAdminLang is the session key for storing admin UI language preference.
 const SessionKeyAdminLang = "admin_lang"
 
-// DefaultAdminLang is the default admin UI language.
-const DefaultAdminLang = "en"
-
 // Renderer handles template rendering with caching.
 type Renderer struct {
 	templates      map[string]*template.Template
@@ -465,7 +462,7 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			}
 
 			// Query active languages from database
-			rows, err := r.db.Query("SELECT code, native_name FROM languages WHERE is_active = 1 ORDER BY position ASC")
+			rows, err := r.db.Query("SELECT code, native_name FROM languages WHERE is_active = 1 ORDER BY position")
 			if err != nil {
 				return []struct {
 					Code string
