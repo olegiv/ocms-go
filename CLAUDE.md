@@ -212,3 +212,5 @@ Additional documentation is available in the `docs/` directory:
 - `docs/hcaptcha.md` - hCaptcha integration for bot protection on login
 - `docs/i18n.md` - Internationalization, translation file format, theme translations, and `TTheme` usage
 - `docs/csrf.md` - CSRF protection configuration, TrustedOrigins format, and troubleshooting
+
+Security audit documents are available in the `.audit/` directory (gitignored).
