@@ -34,9 +34,10 @@ type LanguageInfo struct {
 
 // Language creates middleware that detects and sets the current language.
 // Priority order:
-// 1. URL parameter {lang} from chi router (e.g., /ru/page-slug)
-// 2. For homepage only: Cookie preference, then Accept-Language header
-// 3. Default language (for all non-prefixed content pages)
+// 1. Query parameter ?lang=XX (explicit language switch, updates cookie)
+// 2. URL parameter {lang} from chi router (e.g., /ru/page-slug)
+// 3. For homepage only: Cookie preference, then Accept-Language header
+// 4. Default language (for all non-prefixed content pages)
 //
 // This ensures that /page-slug always shows in default language,
 // while /ru/page-slug shows in Russian, and the homepage uses user preference.
@@ -70,7 +71,21 @@ func Language(db *sql.DB) func(http.Handler) http.Handler {
 				langMap[strings.ToLower(lang.Code)] = lang
 			}
 
-			// 1. Check URL parameter {lang} from chi router (explicit language in URL)
+			// 1. Check query parameter ?lang=XX (explicit language switch)
+			// This takes highest priority and updates the cookie
+			queryLang := r.URL.Query().Get("lang")
+			if queryLang != "" {
+				code := strings.ToLower(queryLang)
+				if lang, ok := langMap[code]; ok {
+					// Update cookie to new language preference
+					SetLanguageCookie(w, lang.Code)
+					ctx = setLanguageContext(ctx, lang)
+					next.ServeHTTP(w, r.WithContext(ctx))
+					return
+				}
+			}
+
+			// 2. Check URL parameter {lang} from chi router (explicit language in URL)
 			langParam := chi.URLParam(r, "lang")
 			if langParam != "" {
 				code := strings.ToLower(langParam)
@@ -81,7 +96,7 @@ func Language(db *sql.DB) func(http.Handler) http.Handler {
 				}
 			}
 
-			// 2. For homepage only, check cookie and Accept-Language header
+			// 3. For homepage only, check cookie and Accept-Language header
 			// Non-prefixed content pages (/{slug}) should use default language
 			isHomepage := r.URL.Path == "/" || r.URL.Path == ""
 			if isHomepage {
@@ -106,7 +121,7 @@ func Language(db *sql.DB) func(http.Handler) http.Handler {
 				}
 			}
 
-			// 3. Fall back to default language
+			// 4. Fall back to default language
 			ctx = setLanguageContext(ctx, defaultLang)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

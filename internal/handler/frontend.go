@@ -1382,15 +1382,13 @@ func (h *FrontendHandler) getPageTranslations(ctx context.Context, pageID int64,
 }
 
 // getHomepageTranslations returns translation links for the homepage.
+// All language links use ?lang=XX to explicitly set the language preference cookie.
 func (h *FrontendHandler) getHomepageTranslations(currentLangCode string, languages []LanguageView) []TranslationLink {
 	links := make([]TranslationLink, 0, len(languages))
 	for _, lang := range languages {
-		var url string
-		if lang.IsDefault {
-			url = "/"
-		} else {
-			url = "/" + lang.Code + "/"
-		}
+		// Use ?lang= parameter for all languages to ensure cookie is set correctly
+		// This fixes the issue where clicking a language link didn't update the cookie
+		url := "/?lang=" + lang.Code
 
 		links = append(links, TranslationLink{
 			Language: LanguageView{
