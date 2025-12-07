@@ -60,10 +60,16 @@
     <style>{{.CustomCSS | safeHTML}}</style>
     {{end}}
 
+    {{/* Analytics tracking scripts (head) */}}
+    {{if analyticsHead}}{{analyticsHead}}{{end}}
+
     {{/* Additional head content */}}
     {{block "head" .}}{{end}}
 </head>
 <body class="{{if .BodyClass}}{{.BodyClass}}{{end}}">
+    {{/* Analytics tracking scripts (body - noscript fallbacks) */}}
+    {{if analyticsBody}}{{analyticsBody}}{{end}}
+
     {{template "header.html" .}}
 
     <main class="site-main">

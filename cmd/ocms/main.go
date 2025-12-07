@@ -31,6 +31,7 @@ import (
 	"ocms-go/internal/store"
 	"ocms-go/internal/theme"
 	"ocms-go/internal/webhook"
+	"ocms-go/modules/analytics"
 	"ocms-go/modules/developer"
 	"ocms-go/modules/example"
 	"ocms-go/web"
@@ -243,6 +244,9 @@ func run() error {
 	if err := moduleRegistry.Register(developer.New()); err != nil {
 		return fmt.Errorf("registering developer module: %w", err)
 	}
+	if err := moduleRegistry.Register(analytics.New()); err != nil {
+		return fmt.Errorf("registering analytics module: %w", err)
+	}
 
 	// Initialize all registered modules
 	if err := moduleRegistry.InitAll(moduleCtx); err != nil {
@@ -256,6 +260,23 @@ func run() error {
 
 	// Set up hook registry to check module active status
 	hookRegistry.SetIsModuleActive(moduleRegistry.IsActive)
+
+	// Add module template functions to renderer and reload themes
+	moduleFuncs := moduleRegistry.AllTemplateFuncs()
+	if len(moduleFuncs) > 0 {
+		renderer.AddTemplateFuncs(moduleFuncs)
+		themeManager.SetFuncMap(renderer.TemplateFuncs())
+		if err := themeManager.LoadThemes(); err != nil {
+			slog.Warn("failed to reload themes with module funcs", "error", err)
+		}
+		// Re-set active theme after reload
+		if themeManager.HasTheme(cfg.ActiveTheme) {
+			if err := themeManager.SetActiveTheme(cfg.ActiveTheme); err != nil {
+				slog.Warn("failed to set active theme after module init", "error", err)
+			}
+		}
+		slog.Info("themes reloaded with module template functions", "funcs", len(moduleFuncs))
+	}
 
 	slog.Info("module system initialized", "modules", moduleRegistry.Count())
 

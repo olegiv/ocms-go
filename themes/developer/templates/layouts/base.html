@@ -45,9 +45,15 @@
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/themes/developer/static/favicon.svg">
 
+    <!-- Analytics tracking scripts (head) -->
+    {{if analyticsHead}}{{analyticsHead}}{{end}}
+
     {{block "head" .}}{{end}}
 </head>
 <body class="{{if .BodyClass}}{{.BodyClass}}{{end}}">
+    <!-- Analytics tracking scripts (body - noscript fallbacks) -->
+    {{if analyticsBody}}{{analyticsBody}}{{end}}
+
     <div class="dev-layout">
         {{template "header.html" .}}
 

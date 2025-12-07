@@ -33,6 +33,7 @@ type Renderer struct {
 	menuService    *service.MenuService
 	db             *sql.DB
 	isDev          bool
+	extraFuncs     template.FuncMap
 }
 
 // Config holds renderer configuration.
@@ -198,7 +199,22 @@ func (r *Renderer) getTemplateFiles(templatesFS fs.FS, dir string) ([]string, er
 
 // TemplateFuncs returns custom template functions for external use.
 func (r *Renderer) TemplateFuncs() template.FuncMap {
-	return r.templateFuncs()
+	funcs := r.templateFuncs()
+	// Merge extra functions (from modules, etc.)
+	for k, v := range r.extraFuncs {
+		funcs[k] = v
+	}
+	return funcs
+}
+
+// AddTemplateFuncs adds additional template functions (e.g., from modules).
+func (r *Renderer) AddTemplateFuncs(funcs template.FuncMap) {
+	if r.extraFuncs == nil {
+		r.extraFuncs = make(template.FuncMap)
+	}
+	for k, v := range funcs {
+		r.extraFuncs[k] = v
+	}
 }
 
 // templateFuncs returns custom template functions.
