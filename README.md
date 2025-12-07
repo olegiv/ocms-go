@@ -39,6 +39,8 @@ A lightweight content management system built with Go, featuring a modern admin 
 - **Module Lifecycle**: Init, routes, admin routes, and shutdown hooks
 - **Module Migrations**: Modules can have their own database migrations
 - **Template Functions**: Modules can add custom template functions
+- **Active Status Toggle**: Enable/disable modules from admin UI without restart
+- **Module Translations**: Modules can embed their own i18n locale files
 
 ### REST API
 - **Full CRUD API**: Complete REST API for pages, media, tags, and categories
@@ -379,9 +381,15 @@ Create custom modules to extend functionality:
 package mymodule
 
 import (
+    "database/sql"
+    "embed"
+
     "ocms-go/internal/module"
     "github.com/go-chi/chi/v5"
 )
+
+//go:embed locales
+var localesFS embed.FS
 
 type MyModule struct {
     module.BaseModule
@@ -409,6 +417,11 @@ func (m *MyModule) Migrations() []module.Migration {
         },
     }
 }
+
+// TranslationsFS returns embedded locale files for i18n support
+func (m *MyModule) TranslationsFS() embed.FS {
+    return localesFS
+}
 ```
 
 Register the module in `main.go`:
@@ -416,6 +429,31 @@ Register the module in `main.go`:
 ```go
 moduleRegistry.Register(mymodule.New())
 ```
+
+### Module Translations
+
+Modules can embed their own translation files:
+
+```
+mymodule/
+├── module.go
+├── handlers.go
+└── locales/
+    ├── en/
+    │   └── messages.json
+    └── ru/
+        └── messages.json
+```
+
+Translation keys should be prefixed with the module name (e.g., `mymodule.title`).
+
+### Module Active Status
+
+Modules can be enabled/disabled from the admin UI at **Admin > Modules**. When a module is disabled:
+- Public routes return 404
+- Admin routes redirect to the modules list
+- Template functions are not registered
+- The module remains initialized but inactive
 
 ## Testing
 

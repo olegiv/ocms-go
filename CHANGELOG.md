@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### Module System Enhancements
+- Module active status management with toggle on/off functionality
+- Persist module active status to database across restarts
+- Middleware to block routes for inactive modules (404 for public, redirect for admin)
+- Skip inactive modules' template functions
+- Admin UI toggle switch for enabling/disabling modules
+
+#### Admin UI Localization (i18n)
+- Full i18n support for admin interface using embedded JSON locale files
+- English and Russian translations included
+- Language detection from Accept-Language header with database fallback
+- Translatable flash messages for authentication events
+- Dynamic module translation loading from embedded filesystems
+
+#### Module Translation Support
+- Modules can embed their own locale files in `locales/` directory
+- Automatic translation loading during module initialization
+- Developer module fully localized (English + Russian)
+- Example module with i18n demonstration
+
+#### Developer Module
+- Confirmation dialog before generating test data
+- i18n support for all UI text and messages
+
+#### Navigation
+- Conditional active state highlighting for sidebar navigation links
+
+### Changed
+- Refactored user retrieval in handlers to use `middleware.GetUserID` helpers
+- Improved error handling by explicitly handling encoding/writing errors
+- Suppressed resource cleanup errors using anonymous functions for consistency
+
 ## [0.3.0] - 2024-XX-XX
 
 ### Added

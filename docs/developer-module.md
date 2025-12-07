@@ -139,8 +139,56 @@ Menu items are created in the Main Menu (ID=1):
 modules/developer/
 ├── module.go       # Module definition, lifecycle, migrations
 ├── handlers.go     # HTTP handlers (dashboard, generate, delete)
-└── generator.go    # Random data generation and tracking logic
+├── generator.go    # Random data generation and tracking logic
+└── locales/        # Embedded i18n translations
+    ├── en/
+    │   └── messages.json
+    └── ru/
+        └── messages.json
 ```
+
+## Internationalization (i18n)
+
+The Developer module includes full i18n support with embedded translations:
+
+### Supported Languages
+- **English (en)**: Default language
+- **Russian (ru)**: Full translation
+
+### Translation Keys
+
+All translation keys are prefixed with `developer.`:
+
+| Key | Description |
+|-----|-------------|
+| `developer.title` | Page title |
+| `developer.description` | Module description |
+| `developer.warning` | Development-only warning |
+| `developer.stats.*` | Statistics labels |
+| `developer.btn.*` | Button labels |
+| `developer.confirm.*` | Confirmation dialog text |
+| `developer.flash.*` | Flash messages |
+
+### Adding Translations
+
+To add a new language, create a new directory under `locales/`:
+
+```
+locales/de/messages.json
+```
+
+The translation file follows this structure:
+
+```json
+{
+  "$schema": "../../../.schema/i18n-schema.json",
+  "developer.title": "Entwickler-Tools",
+  "developer.description": "Testdaten generieren...",
+  ...
+}
+```
+
+Translations are automatically loaded when the module initializes.
 
 ### Routes
 
@@ -197,12 +245,33 @@ If image files remain after deletion, check file permissions on the `./uploads` 
 3. **Check language setup**: Ensure languages are configured before generating content
 4. **Review generated content**: Use the admin interface to verify items were created correctly
 
+## Module Active Status
+
+The Developer module can be enabled or disabled from **Admin > Modules**:
+
+- **Active (default)**: All routes are accessible, module appears in sidebar
+- **Inactive**: Routes return 404 (public) or redirect to modules list (admin)
+
+The active status is persisted in the database and survives server restarts.
+
+### Disabling the Module
+
+1. Navigate to **Admin > Modules**
+2. Find "Developer Tools" in the list
+3. Toggle the switch to disable
+4. Module routes become inaccessible immediately
+
+### Re-enabling
+
+Toggle the switch back to enable. No server restart required.
+
 ## Security
 
 The module is protected by:
 
 - Admin authentication middleware
 - CSRF token validation on POST requests
+- Module active status toggle for quick disable
 - Module is designed for development environments only
 
 The warning badge and confirmation dialog remind users that this module should not be used in production.

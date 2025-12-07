@@ -70,7 +70,7 @@ templ generate           # Regenerate template Go code (if using templ)
 
 7. **Theme System** (`internal/theme/`): Loads themes from `themes/` directory with templates and static assets.
 
-8. **Module System** (`internal/module/`): Extensible plugin architecture with lifecycle management and migrations.
+8. **Module System** (`internal/module/`): Extensible plugin architecture with lifecycle management, migrations, active status toggle, and embedded i18n translations.
 
 9. **Caching** (`internal/cache/`): Supports both in-memory and Redis caching with automatic fallback. Caches site config, menus, languages, and sitemaps. Set `OCMS_REDIS_URL` for distributed caching across multiple instances.
 
@@ -204,3 +204,4 @@ Additional documentation is available in the `docs/` directory:
 - `docs/import-export.md` - Content backup, export, and import guide
 - `docs/reverse-proxy.md` - Nginx, Apache, and Nginx Proxy Manager configuration
 - `docs/login-security.md` - Login protection, rate limiting, and account lockout
+- `docs/developer-module.md` - Developer module for test data generation and i18n
