@@ -282,7 +282,7 @@ func TestTypedCache_ComplexType(t *testing.T) {
 	cache := NewTypedCache[complexType](memCache, time.Hour)
 	ctx := context.Background()
 
-	complex := &complexType{
+	complexVal := &complexType{
 		Users: []testUser{
 			{ID: 1, Name: "Alice", Email: "alice@example.com"},
 			{ID: 2, Name: "Bob", Email: "bob@example.com"},
@@ -291,7 +291,7 @@ func TestTypedCache_ComplexType(t *testing.T) {
 		Count:    42,
 	}
 
-	err := cache.Set(ctx, "complex", complex)
+	err := cache.Set(ctx, "complex", complexVal)
 	if err != nil {
 		t.Fatalf("Set failed: %v", err)
 	}
