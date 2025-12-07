@@ -112,19 +112,6 @@ func GetUserEmail(r *http.Request) string {
 	return ""
 }
 
-// RequireAdmin creates middleware that requires admin role.
-// This should be used after LoadUser middleware.
-func RequireAdmin(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user := GetUser(r)
-		if user == nil || user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
 // LoadSiteConfig creates middleware that loads site configuration (like site_name) into context.
 // If cacheManager is provided, it will be used for faster config lookups.
 func LoadSiteConfig(db *sql.DB, cacheManager *cache.Manager) func(http.Handler) http.Handler {

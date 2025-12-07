@@ -42,7 +42,7 @@ func TestExportWithMediaToZip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp upload dir: %v", err)
 	}
-	defer os.RemoveAll(uploadDir)
+	defer func() { _ = os.RemoveAll(uploadDir) }()
 
 	// Create test media file on disk
 	testMediaUUID := "550e8400-e29b-41d4-a716-446655440000"
@@ -186,7 +186,7 @@ func TestImportFromZip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp src upload dir: %v", err)
 	}
-	defer os.RemoveAll(srcUploadDir)
+	defer func() { _ = os.RemoveAll(srcUploadDir) }()
 
 	// Create test media file
 	testMediaUUID := "550e8400-e29b-41d4-a716-446655440001"
@@ -242,7 +242,7 @@ func TestImportFromZip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dst upload dir: %v", err)
 	}
-	defer os.RemoveAll(dstUploadDir)
+	defer func() { _ = os.RemoveAll(dstUploadDir) }()
 
 	// Import from zip
 	importer := NewImporter(dstQueries, dstDB, logger)

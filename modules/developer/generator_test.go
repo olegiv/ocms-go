@@ -455,7 +455,7 @@ func TestGenerateMedia(t *testing.T) {
 	if err != nil {
 		t.Fatalf("creating temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Change to temp dir for uploads
 	oldWd, err := os.Getwd()
@@ -637,7 +637,7 @@ func TestDeleteAllGeneratedItems(t *testing.T) {
 	if err != nil {
 		t.Fatalf("creating temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	oldWd, err := os.Getwd()
 	if err != nil {

@@ -99,7 +99,7 @@ func TestLoadThemes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(themesDir)
+	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	// Create test themes
 	config1 := ThemeConfig{
@@ -159,7 +159,7 @@ func TestSetActiveTheme(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(themesDir)
+	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	config := ThemeConfig{Name: "Test", Version: "1.0.0"}
 	createTestTheme(t, themesDir, "test", config)
@@ -202,7 +202,7 @@ func TestGetTheme(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(themesDir)
+	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	config := ThemeConfig{
 		Name:    "Get Test",
@@ -240,7 +240,7 @@ func TestListThemes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(themesDir)
+	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	createTestTheme(t, themesDir, "theme1", ThemeConfig{Name: "Theme 1", Version: "1.0.0"})
 	createTestTheme(t, themesDir, "theme2", ThemeConfig{Name: "Theme 2", Version: "2.0.0"})
@@ -263,7 +263,7 @@ func TestListThemesWithActive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(themesDir)
+	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	createTestTheme(t, themesDir, "active", ThemeConfig{Name: "Active Theme", Version: "1.0.0"})
 	createTestTheme(t, themesDir, "inactive", ThemeConfig{Name: "Inactive Theme", Version: "1.0.0"})
@@ -314,7 +314,7 @@ func TestReloadTheme(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(themesDir)
+	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	// Initial config
 	config := ThemeConfig{Name: "Original", Version: "1.0.0"}
@@ -357,7 +357,7 @@ func TestReloadActiveTheme(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(themesDir)
+	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	config := ThemeConfig{Name: "Active Reload", Version: "1.0.0"}
 	createTestTheme(t, themesDir, "active-reload", config)
@@ -396,7 +396,7 @@ func TestHasTheme(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(themesDir)
+	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	createTestTheme(t, themesDir, "exists", ThemeConfig{Name: "Exists", Version: "1.0.0"})
 
@@ -430,7 +430,7 @@ func TestSetFuncMap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(themesDir)
+	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	config := ThemeConfig{Name: "FuncMap Test", Version: "1.0.0"}
 	createTestTheme(t, themesDir, "funcmap", config)
@@ -460,7 +460,7 @@ func TestInvalidThemeJson(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(themesDir)
+	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	// Create theme with invalid JSON
 	themePath := filepath.Join(themesDir, "invalid")
@@ -489,7 +489,7 @@ func TestMissingThemeJson(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(themesDir)
+	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	// Create theme directory without theme.json
 	themePath := filepath.Join(themesDir, "missing")
@@ -515,7 +515,7 @@ func TestThemeWithSettings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(themesDir)
+	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	config := ThemeConfig{
 		Name:    "Settings Theme",
@@ -564,7 +564,7 @@ func TestThemeCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(themesDir)
+	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	m := NewManager(themesDir, logger)
@@ -691,7 +691,7 @@ func TestLoadThemeWithTranslations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(themesDir)
+	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	// Create theme with translations
 	translations := map[string]map[string]string{
@@ -748,7 +748,7 @@ func TestLoadThemeWithoutTranslations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(themesDir)
+	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	// Create theme without locales directory
 	createTestTheme(t, themesDir, "no-locales", ThemeConfig{Name: "No Locales Theme", Version: "1.0.0"})
@@ -782,7 +782,7 @@ func TestManagerTranslateWithFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(themesDir)
+	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	// Create theme with partial translations (only overrides some keys)
 	translations := map[string]map[string]string{
@@ -826,7 +826,7 @@ func TestManagerTranslateNoActiveTheme(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(themesDir)
+	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	m := NewManager(themesDir, logger)
 
@@ -866,7 +866,7 @@ func TestManagerTranslateWithArgs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(themesDir)
+	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	// Create theme with a translation containing format placeholder
 	translations := map[string]map[string]string{
@@ -897,7 +897,7 @@ func TestInvalidThemeLocaleJson(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(themesDir)
+	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	// Create theme first
 	createTestTheme(t, themesDir, "invalid-locale", ThemeConfig{Name: "Invalid Locale Theme", Version: "1.0.0"})

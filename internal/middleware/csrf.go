@@ -94,13 +94,6 @@ func CSRFTemplateField(_ *http.Request) string {
 	return ""
 }
 
-// CSRFHeaderName is the name of the HTTP header for CSRF tokens.
-// Note: This header is no longer used by filippo.io/csrf/gorilla as it uses
-// Fetch metadata headers for protection. Kept for backward compatibility.
-//
-// Deprecated: CSRF headers are no longer needed with Fetch metadata-based protection.
-const CSRFHeaderName = "X-CSRF-Token"
-
 // SkipCSRF returns a middleware that skips CSRF protection for specific paths.
 // This is useful for API endpoints that use token-based authentication.
 func SkipCSRF(paths ...string) func(http.Handler) http.Handler {

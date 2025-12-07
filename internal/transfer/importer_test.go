@@ -373,7 +373,7 @@ func TestImporter_Integration(t *testing.T) {
 	if err != nil {
 		t.Skip("sqlite3 not available")
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	importer := NewImporter(nil, db, nil)
 	assert.NotNil(t, importer)

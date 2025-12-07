@@ -108,7 +108,7 @@ func TestWriteAPIError(t *testing.T) {
 
 func TestAPIKeyAuth_MissingHeader(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	handler := APIKeyAuth(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -126,7 +126,7 @@ func TestAPIKeyAuth_MissingHeader(t *testing.T) {
 
 func TestAPIKeyAuth_InvalidFormat(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	handler := APIKeyAuth(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -154,7 +154,7 @@ func TestAPIKeyAuth_InvalidFormat(t *testing.T) {
 
 func TestAPIKeyAuth_InvalidKey(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	handler := APIKeyAuth(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -173,7 +173,7 @@ func TestAPIKeyAuth_InvalidKey(t *testing.T) {
 
 func TestAPIKeyAuth_InactiveKey(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	rawKey := insertTestAPIKey(t, db, "Inactive Key", []string{"pages:read"}, false, nil)
 
@@ -194,7 +194,7 @@ func TestAPIKeyAuth_InactiveKey(t *testing.T) {
 
 func TestAPIKeyAuth_ExpiredKey(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	expires := time.Now().Add(-1 * time.Hour) // Expired 1 hour ago
 	rawKey := insertTestAPIKey(t, db, "Expired Key", []string{"pages:read"}, true, &expires)
@@ -216,7 +216,7 @@ func TestAPIKeyAuth_ExpiredKey(t *testing.T) {
 
 func TestAPIKeyAuth_ValidKey(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	rawKey := insertTestAPIKey(t, db, "Valid Key", []string{"pages:read"}, true, nil)
 
@@ -247,7 +247,7 @@ func TestAPIKeyAuth_ValidKey(t *testing.T) {
 
 func TestAPIKeyAuth_ValidKeyWithFutureExpiry(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	expires := time.Now().Add(24 * time.Hour) // Expires in 24 hours
 	rawKey := insertTestAPIKey(t, db, "Future Expiry", []string{"pages:read"}, true, &expires)
@@ -278,7 +278,7 @@ func TestGetAPIKey_NoKey(t *testing.T) {
 
 func TestOptionalAPIKeyAuth_NoHeader(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	var handlerCalled bool
 	handler := OptionalAPIKeyAuth(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -305,7 +305,7 @@ func TestOptionalAPIKeyAuth_NoHeader(t *testing.T) {
 
 func TestOptionalAPIKeyAuth_InvalidKey(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	var handlerCalled bool
 	handler := OptionalAPIKeyAuth(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -329,7 +329,7 @@ func TestOptionalAPIKeyAuth_InvalidKey(t *testing.T) {
 
 func TestOptionalAPIKeyAuth_ValidKey(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	rawKey := insertTestAPIKey(t, db, "Optional Key", []string{"pages:read"}, true, nil)
 

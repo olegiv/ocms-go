@@ -179,7 +179,7 @@ func TestInitAll(t *testing.T) {
 	_ = r.Register(m2)
 
 	db := createTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := &ModuleContext{DB: db, Logger: logger}
 	err := r.InitAll(ctx)
@@ -207,7 +207,7 @@ func TestInitAllWithDependencies(t *testing.T) {
 	_ = r.Register(m2)
 
 	db := createTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := &ModuleContext{DB: db, Logger: logger}
 	err := r.InitAll(ctx)
@@ -226,7 +226,7 @@ func TestInitAllMissingDependency(t *testing.T) {
 	_ = r.Register(m)
 
 	db := createTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := &ModuleContext{DB: db, Logger: logger}
 	err := r.InitAll(ctx)
@@ -246,7 +246,7 @@ func TestShutdownAll(t *testing.T) {
 	_ = r.Register(m2)
 
 	db := createTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Initialize first
 	ctx := &ModuleContext{DB: db, Logger: logger}
@@ -334,7 +334,7 @@ func TestListInfo(t *testing.T) {
 	_ = r.Register(m)
 
 	db := createTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := &ModuleContext{DB: db, Logger: logger}
 	_ = r.InitAll(ctx)
@@ -384,7 +384,7 @@ func TestMigrations(t *testing.T) {
 	_ = r.Register(m)
 
 	db := createTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := &ModuleContext{DB: db, Logger: logger}
 	err := r.InitAll(ctx)
@@ -424,7 +424,7 @@ func TestMigrationNotRerun(t *testing.T) {
 	_ = r.Register(m)
 
 	db := createTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := &ModuleContext{DB: db, Logger: logger}
 
@@ -476,7 +476,7 @@ func TestGetMigrationInfo(t *testing.T) {
 	_ = r.Register(m)
 
 	db := createTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := &ModuleContext{DB: db, Logger: logger}
 	_ = r.InitAll(ctx)
@@ -576,7 +576,7 @@ func TestMultipleMigrations(t *testing.T) {
 	_ = r.Register(m)
 
 	db := createTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := &ModuleContext{DB: db, Logger: logger}
 	_ = r.InitAll(ctx)
@@ -601,7 +601,7 @@ func TestIsActive(t *testing.T) {
 	_ = r.Register(m)
 
 	db := createTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := &ModuleContext{DB: db, Logger: logger}
 	_ = r.InitAll(ctx)
@@ -633,7 +633,7 @@ func TestSetActive(t *testing.T) {
 	_ = r.Register(m)
 
 	db := createTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := &ModuleContext{DB: db, Logger: logger}
 	_ = r.InitAll(ctx)
@@ -669,7 +669,7 @@ func TestSetActiveNotRegistered(t *testing.T) {
 	r := NewRegistry(logger)
 
 	db := createTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Initialize with no modules
 	ctx := &ModuleContext{DB: db, Logger: logger}
@@ -701,7 +701,7 @@ func TestActiveStatusPersistence(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	db := createTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// First registry: register, init, and deactivate
 	r1 := NewRegistry(logger)
@@ -737,7 +737,7 @@ func TestAllTemplateFuncsSkipsInactive(t *testing.T) {
 	_ = r.Register(m2)
 
 	db := createTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := &ModuleContext{DB: db, Logger: logger}
 	_ = r.InitAll(ctx)
@@ -766,7 +766,7 @@ func TestListInfoShowsActiveStatus(t *testing.T) {
 	_ = r.Register(m2)
 
 	db := createTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := &ModuleContext{DB: db, Logger: logger}
 	_ = r.InitAll(ctx)

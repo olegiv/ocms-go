@@ -181,16 +181,6 @@ func GetLanguage(r *http.Request) *LanguageInfo {
 	return &info
 }
 
-// GetLanguageCode retrieves the current language code from the request context.
-// Returns empty string if no language is in context.
-func GetLanguageCode(r *http.Request) string {
-	code, ok := r.Context().Value(ContextKeyLanguageCode).(string)
-	if !ok {
-		return ""
-	}
-	return code
-}
-
 // SetLanguageCookie sets the language preference cookie.
 func SetLanguageCookie(w http.ResponseWriter, langCode string) {
 	cookie := &http.Cookie{

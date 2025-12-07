@@ -204,11 +204,6 @@ func IsSupported(lang string) bool {
 	return false
 }
 
-// GetCatalog returns the global catalog instance (for testing).
-func GetCatalog() *Catalog {
-	return catalog
-}
-
 // TranslationCount returns the number of translations loaded for a language.
 func TranslationCount(lang string) int {
 	if catalog == nil {

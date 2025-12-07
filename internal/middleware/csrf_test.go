@@ -111,13 +111,6 @@ func TestSkipCSRF_EmptyPaths(t *testing.T) {
 	}
 }
 
-func TestCSRFHeaderName(t *testing.T) {
-	// Verify the constant matches the expected header name
-	if CSRFHeaderName != "X-CSRF-Token" {
-		t.Errorf("expected CSRFHeaderName='X-CSRF-Token', got '%s'", CSRFHeaderName)
-	}
-}
-
 func TestCSRFConfig_AuthKeyLength(t *testing.T) {
 	// Test with exactly 32-byte key (recommended)
 	key32 := []byte("12345678901234567890123456789012")

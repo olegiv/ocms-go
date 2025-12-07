@@ -110,10 +110,10 @@ func (m *BaseModule) Init(ctx *ModuleContext) error {
 func (m *BaseModule) Shutdown() error { return nil }
 
 // RegisterRoutes registers public routes (no-op by default).
-func (m *BaseModule) RegisterRoutes(r chi.Router) {}
+func (m *BaseModule) RegisterRoutes(_ chi.Router) {}
 
 // RegisterAdminRoutes registers admin routes (no-op by default).
-func (m *BaseModule) RegisterAdminRoutes(r chi.Router) {}
+func (m *BaseModule) RegisterAdminRoutes(_ chi.Router) {}
 
 // TemplateFuncs returns template functions (empty by default).
 func (m *BaseModule) TemplateFuncs() template.FuncMap { return nil }
