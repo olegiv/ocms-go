@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"ocms-go/internal/i18n"
 )
 
 // createTestTheme creates a test theme in a temporary directory.
@@ -581,5 +583,349 @@ func TestThemeCount(t *testing.T) {
 
 	if m.ThemeCount() != 3 {
 		t.Errorf("expected 3 themes, got %d", m.ThemeCount())
+	}
+}
+
+// createTestThemeWithLocales creates a test theme with translation files.
+func createTestThemeWithLocales(t *testing.T, themesDir, themeName string, config ThemeConfig, translations map[string]map[string]string) string {
+	t.Helper()
+
+	// Create base theme first
+	themePath := createTestTheme(t, themesDir, themeName, config)
+
+	// Create locales directory and translation files
+	for lang, msgs := range translations {
+		localeDir := filepath.Join(themePath, "locales", lang)
+		if err := os.MkdirAll(localeDir, 0755); err != nil {
+			t.Fatalf("failed to create locale dir: %v", err)
+		}
+
+		// Build messages array for JSON
+		var messages []map[string]string
+		for id, translation := range msgs {
+			messages = append(messages, map[string]string{
+				"id":          id,
+				"message":     translation,
+				"translation": translation,
+			})
+		}
+
+		msgFile := map[string]any{
+			"language": lang,
+			"messages": messages,
+		}
+
+		data, err := json.Marshal(msgFile)
+		if err != nil {
+			t.Fatalf("failed to marshal locale: %v", err)
+		}
+
+		if err := os.WriteFile(filepath.Join(localeDir, "messages.json"), data, 0644); err != nil {
+			t.Fatalf("failed to write messages.json: %v", err)
+		}
+	}
+
+	return themePath
+}
+
+func TestThemeTranslate(t *testing.T) {
+	theme := &Theme{
+		Name: "test",
+		Translations: map[string]map[string]string{
+			"en": {
+				"frontend.read_more": "Continue reading",
+				"frontend.home":      "Home",
+			},
+			"ru": {
+				"frontend.read_more": "Продолжить чтение",
+			},
+		},
+	}
+
+	// Test existing translation
+	trans, ok := theme.Translate("en", "frontend.read_more")
+	if !ok {
+		t.Error("expected translation to be found")
+	}
+	if trans != "Continue reading" {
+		t.Errorf("expected 'Continue reading', got %s", trans)
+	}
+
+	// Test Russian translation
+	trans, ok = theme.Translate("ru", "frontend.read_more")
+	if !ok {
+		t.Error("expected Russian translation to be found")
+	}
+	if trans != "Продолжить чтение" {
+		t.Errorf("expected 'Продолжить чтение', got %s", trans)
+	}
+
+	// Test missing key
+	_, ok = theme.Translate("en", "nonexistent.key")
+	if ok {
+		t.Error("expected translation not to be found for nonexistent key")
+	}
+
+	// Test missing language
+	_, ok = theme.Translate("de", "frontend.read_more")
+	if ok {
+		t.Error("expected translation not to be found for unsupported language")
+	}
+
+	// Test nil translations
+	nilTheme := &Theme{Name: "nil"}
+	_, ok = nilTheme.Translate("en", "any.key")
+	if ok {
+		t.Error("expected translation not to be found for theme with nil translations")
+	}
+}
+
+func TestLoadThemeWithTranslations(t *testing.T) {
+	// Initialize i18n first (required for theme translations)
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	if err := i18n.Init(logger); err != nil {
+		t.Fatalf("failed to init i18n: %v", err)
+	}
+
+	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(themesDir)
+
+	// Create theme with translations
+	translations := map[string]map[string]string{
+		"en": {
+			"frontend.read_more": "Continue reading →",
+			"frontend.home":      "Home Page",
+		},
+		"ru": {
+			"frontend.read_more": "Продолжить →",
+		},
+	}
+	createTestThemeWithLocales(t, themesDir, "translated", ThemeConfig{Name: "Translated Theme", Version: "1.0.0"}, translations)
+
+	m := NewManager(themesDir, logger)
+	if err := m.LoadThemes(); err != nil {
+		t.Fatalf("failed to load themes: %v", err)
+	}
+
+	theme, err := m.GetTheme("translated")
+	if err != nil {
+		t.Fatalf("failed to get theme: %v", err)
+	}
+
+	// Verify translations were loaded
+	if theme.Translations == nil {
+		t.Fatal("expected translations to be loaded")
+	}
+
+	if len(theme.Translations) != 2 {
+		t.Errorf("expected 2 languages, got %d", len(theme.Translations))
+	}
+
+	// Check English translation
+	trans, ok := theme.Translate("en", "frontend.read_more")
+	if !ok {
+		t.Error("expected English translation to be found")
+	}
+	if trans != "Continue reading →" {
+		t.Errorf("expected 'Continue reading →', got %s", trans)
+	}
+
+	// Check Russian translation
+	trans, ok = theme.Translate("ru", "frontend.read_more")
+	if !ok {
+		t.Error("expected Russian translation to be found")
+	}
+	if trans != "Продолжить →" {
+		t.Errorf("expected 'Продолжить →', got %s", trans)
+	}
+}
+
+func TestLoadThemeWithoutTranslations(t *testing.T) {
+	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(themesDir)
+
+	// Create theme without locales directory
+	createTestTheme(t, themesDir, "no-locales", ThemeConfig{Name: "No Locales Theme", Version: "1.0.0"})
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	m := NewManager(themesDir, logger)
+
+	if err := m.LoadThemes(); err != nil {
+		t.Fatalf("failed to load themes: %v", err)
+	}
+
+	theme, err := m.GetTheme("no-locales")
+	if err != nil {
+		t.Fatalf("failed to get theme: %v", err)
+	}
+
+	// Theme should load successfully with nil translations
+	if theme.Translations != nil {
+		t.Error("expected translations to be nil for theme without locales")
+	}
+}
+
+func TestManagerTranslateWithFallback(t *testing.T) {
+	// Initialize i18n
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	if err := i18n.Init(logger); err != nil {
+		t.Fatalf("failed to init i18n: %v", err)
+	}
+
+	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(themesDir)
+
+	// Create theme with partial translations (only overrides some keys)
+	translations := map[string]map[string]string{
+		"en": {
+			"frontend.read_more": "Theme Override",
+		},
+	}
+	createTestThemeWithLocales(t, themesDir, "partial", ThemeConfig{Name: "Partial Theme", Version: "1.0.0"}, translations)
+
+	m := NewManager(themesDir, logger)
+	if err := m.LoadThemes(); err != nil {
+		t.Fatalf("failed to load themes: %v", err)
+	}
+
+	if err := m.SetActiveTheme("partial"); err != nil {
+		t.Fatalf("failed to set active theme: %v", err)
+	}
+
+	// Test theme-specific translation (should return theme override)
+	result := m.Translate("en", "frontend.read_more")
+	if result != "Theme Override" {
+		t.Errorf("expected 'Theme Override', got %s", result)
+	}
+
+	// Test global fallback (key not in theme translations)
+	// This should fall back to global i18n
+	result = m.Translate("en", "nav.dashboard")
+	if result != "Dashboard" {
+		t.Errorf("expected 'Dashboard' from global i18n, got %s", result)
+	}
+}
+
+func TestManagerTranslateNoActiveTheme(t *testing.T) {
+	// Initialize i18n
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	if err := i18n.Init(logger); err != nil {
+		t.Fatalf("failed to init i18n: %v", err)
+	}
+
+	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(themesDir)
+
+	m := NewManager(themesDir, logger)
+
+	// No active theme - should fall back to global i18n
+	result := m.Translate("en", "nav.dashboard")
+	if result != "Dashboard" {
+		t.Errorf("expected 'Dashboard' from global i18n, got %s", result)
+	}
+}
+
+func TestManagerTemplateFuncs(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	m := NewManager("/tmp/themes", logger)
+
+	funcs := m.TemplateFuncs()
+
+	// Verify TTheme function exists
+	ttheme, ok := funcs["TTheme"]
+	if !ok {
+		t.Fatal("expected TTheme function to be in TemplateFuncs")
+	}
+
+	// Verify it's callable
+	if ttheme == nil {
+		t.Error("expected TTheme to be non-nil")
+	}
+}
+
+func TestManagerTranslateWithArgs(t *testing.T) {
+	// Initialize i18n
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	if err := i18n.Init(logger); err != nil {
+		t.Fatalf("failed to init i18n: %v", err)
+	}
+
+	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(themesDir)
+
+	// Create theme with a translation containing format placeholder
+	translations := map[string]map[string]string{
+		"en": {
+			"greeting": "Hello, %s!",
+		},
+	}
+	createTestThemeWithLocales(t, themesDir, "args", ThemeConfig{Name: "Args Theme", Version: "1.0.0"}, translations)
+
+	m := NewManager(themesDir, logger)
+	if err := m.LoadThemes(); err != nil {
+		t.Fatalf("failed to load themes: %v", err)
+	}
+
+	if err := m.SetActiveTheme("args"); err != nil {
+		t.Fatalf("failed to set active theme: %v", err)
+	}
+
+	// Test translation with arguments
+	result := m.Translate("en", "greeting", "World")
+	if result != "Hello, World!" {
+		t.Errorf("expected 'Hello, World!', got %s", result)
+	}
+}
+
+func TestInvalidThemeLocaleJson(t *testing.T) {
+	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(themesDir)
+
+	// Create theme first
+	createTestTheme(t, themesDir, "invalid-locale", ThemeConfig{Name: "Invalid Locale Theme", Version: "1.0.0"})
+
+	// Create invalid locale file
+	localeDir := filepath.Join(themesDir, "invalid-locale", "locales", "en")
+	if err := os.MkdirAll(localeDir, 0755); err != nil {
+		t.Fatalf("failed to create locale dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(localeDir, "messages.json"), []byte("{invalid json}"), 0644); err != nil {
+		t.Fatalf("failed to write invalid messages.json: %v", err)
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	m := NewManager(themesDir, logger)
+
+	// Should load theme but skip invalid locale
+	if err := m.LoadThemes(); err != nil {
+		t.Fatalf("failed to load themes: %v", err)
+	}
+
+	theme, err := m.GetTheme("invalid-locale")
+	if err != nil {
+		t.Fatalf("failed to get theme: %v", err)
+	}
+
+	// Theme should be loaded with nil translations (invalid locale skipped)
+	if theme.Translations != nil && len(theme.Translations) > 0 {
+		t.Error("expected no translations loaded for theme with invalid locale")
 	}
 }

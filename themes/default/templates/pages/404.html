@@ -2,17 +2,17 @@
 <div class="error-page error-404">
     <div class="error-content">
         <h1 class="error-code">404</h1>
-        <h2 class="error-title">{{T .LangCode "frontend.page_not_found"}}</h2>
+        <h2 class="error-title">{{TTheme .LangCode "frontend.page_not_found"}}</h2>
         <p class="error-message">
-            {{T .LangCode "frontend.page_not_found_message"}}
+            {{TTheme .LangCode "frontend.page_not_found_message"}}
         </p>
         <div class="error-actions">
-            <a href="/" class="btn btn-primary">{{T .LangCode "frontend.go_home"}}</a>
+            <a href="/" class="btn btn-primary">{{TTheme .LangCode "frontend.go_home"}}</a>
             {{if .ShowSearch}}
-            <span class="or">{{T .LangCode "frontend.or"}}</span>
+            <span class="or">{{TTheme .LangCode "frontend.or"}}</span>
             <form action="/search" method="get" class="search-form inline">
-                <input type="search" name="q" placeholder="{{T .LangCode "search.placeholder"}}">
-                <button type="submit" class="btn btn-secondary">{{T .LangCode "search.button"}}</button>
+                <input type="search" name="q" placeholder="{{TTheme .LangCode "search.placeholder"}}">
+                <button type="submit" class="btn btn-secondary">{{TTheme .LangCode "search.button"}}</button>
             </form>
             {{end}}
         </div>
@@ -20,7 +20,7 @@
 
     {{if .SuggestedPages}}
     <div class="suggested-pages">
-        <h3>{{T .LangCode "frontend.you_might_be_looking_for"}}</h3>
+        <h3>{{TTheme .LangCode "frontend.you_might_be_looking_for"}}</h3>
         <ul>
             {{range .SuggestedPages}}
             <li><a href="{{.URL}}">{{.Title}}</a></li>

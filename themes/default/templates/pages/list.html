@@ -1,7 +1,7 @@
 {{define "content"}}
 <div class="list-page">
     <header class="list-header">
-        <h1 class="list-title">{{if .Title}}{{.Title}}{{else}}{{T $.LangCode "frontend.all_posts"}}{{end}}</h1>
+        <h1 class="list-title">{{if .Title}}{{.Title}}{{else}}{{TTheme $.LangCode "frontend.all_posts"}}{{end}}</h1>
         {{if .Description}}
         <p class="list-description">{{.Description}}</p>
         {{end}}
@@ -35,10 +35,10 @@
                     <time datetime="{{.PublishedAt}}">{{formatDateLocale .PublishedAt $.LangCode}}</time>
                     {{end}}
                     {{if .Author}}
-                    <span class="author">{{T $.LangCode "frontend.by_author"}} {{.Author.Name}}</span>
+                    <span class="author">{{TTheme $.LangCode "frontend.by_author"}} {{.Author.Name}}</span>
                     {{end}}
                     {{if .ReadingTime}}
-                    <span class="reading-time">{{.ReadingTime}} {{T $.LangCode "frontend.min_read"}}</span>
+                    <span class="reading-time">{{.ReadingTime}} {{TTheme $.LangCode "frontend.min_read"}}</span>
                     {{end}}
                 </div>
                 {{if .Tags}}
@@ -57,7 +57,7 @@
 
     {{else}}
     <div class="no-posts">
-        <p>{{T $.LangCode "frontend.no_posts"}}</p>
+        <p>{{TTheme $.LangCode "frontend.no_posts"}}</p>
     </div>
     {{end}}
 </div>

@@ -154,6 +154,11 @@ func run() error {
 
 	// Initialize theme manager
 	themeManager := theme.NewManager(cfg.ThemesDir, logger)
+
+	// Add theme manager's template functions (TTheme) to renderer
+	renderer.AddTemplateFuncs(themeManager.TemplateFuncs())
+
+	// Set combined funcMap for theme templates
 	themeManager.SetFuncMap(renderer.TemplateFuncs())
 	if err := themeManager.LoadThemes(); err != nil {
 		slog.Warn("failed to load themes", "error", err)

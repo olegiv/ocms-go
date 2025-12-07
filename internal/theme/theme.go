@@ -39,11 +39,12 @@ type WidgetArea struct {
 
 // Theme represents a loaded theme with its templates and configuration.
 type Theme struct {
-	Name       string             // directory name (used as identifier)
-	Path       string             // filesystem path to theme directory
-	Config     ThemeConfig        // parsed theme.json
-	Templates  *template.Template // parsed templates
-	StaticPath string             // path to static files
+	Name         string                       // directory name (used as identifier)
+	Path         string                       // filesystem path to theme directory
+	Config       ThemeConfig                  // parsed theme.json
+	Templates    *template.Template           // parsed templates
+	StaticPath   string                       // path to static files
+	Translations map[string]map[string]string // lang -> key -> translation (optional overrides)
 }
 
 // GetTemplate returns the template file path for a given template name.
@@ -142,6 +143,20 @@ func (t *Theme) GetContentTemplateName(pageName string) string {
 	baseName := strings.TrimPrefix(pageName, "pages/")
 	baseName = strings.TrimSuffix(baseName, ".html")
 	return "content_" + baseName
+}
+
+// Translate returns a translation for the given key in the specified language.
+// Returns empty string if no theme-specific translation exists (caller should fall back to global).
+func (t *Theme) Translate(lang, key string) (string, bool) {
+	if t.Translations == nil {
+		return "", false
+	}
+	if langMap, ok := t.Translations[lang]; ok {
+		if translation, ok := langMap[key]; ok {
+			return translation, true
+		}
+	}
+	return "", false
 }
 
 // HasSetting returns true if the theme has a setting with the given key.

@@ -3,7 +3,7 @@
     <div class="dev-search-page">
         <header class="dev-search-header">
             <h1 class="dev-search-title">
-                <span class="dev-comment">// </span>{{T .LangCode "search.title"}}
+                <span class="dev-comment">// </span>{{TTheme .LangCode "search.title"}}
             </h1>
             <form action="/search" method="get" class="dev-search-form">
                 <div class="dev-search-input-wrapper">
@@ -21,7 +21,7 @@
             {{if .Pages}}
             <div class="dev-results-header">
                 <span class="dev-comment">// </span>
-                {{if eq .ResultCount 1}}{{T .LangCode "search.result_count" .ResultCount}}{{else}}{{T .LangCode "search.results_count" .ResultCount}}{{end}} "<code>{{.SearchQuery}}</code>"
+                {{if eq .ResultCount 1}}{{TTheme .LangCode "search.result_count" .ResultCount}}{{else}}{{TTheme .LangCode "search.results_count" .ResultCount}}{{end}} "<code>{{.SearchQuery}}</code>"
             </div>
 
             <div class="dev-posts-list">
@@ -76,17 +76,17 @@
                             <span class="dev-prompt">$</span>
                             <span class="dev-command">grep -ri "{{.SearchQuery}}" ./content</span>
                         </div>
-                        <p class="dev-output dev-error">{{T $.LangCode "search.no_results"}} "{{.SearchQuery}}"</p>
+                        <p class="dev-output dev-error">{{TTheme $.LangCode "search.no_results"}} "{{.SearchQuery}}"</p>
                     </div>
                 </div>
                 <div class="dev-search-suggestions">
                     <h3>
-                        <span class="dev-comment">// </span>{{T $.LangCode "search.suggestions_title"}}
+                        <span class="dev-comment">// </span>{{TTheme $.LangCode "search.suggestions_title"}}
                     </h3>
                     <ul class="dev-suggestions-list">
-                        <li><span class="dev-arrow">&gt;</span> {{T $.LangCode "search.suggestion_spelling"}}</li>
-                        <li><span class="dev-arrow">&gt;</span> {{T $.LangCode "search.suggestion_keywords"}}</li>
-                        <li><span class="dev-arrow">&gt;</span> {{T $.LangCode "search.suggestion_general"}}</li>
+                        <li><span class="dev-arrow">&gt;</span> {{TTheme $.LangCode "search.suggestion_spelling"}}</li>
+                        <li><span class="dev-arrow">&gt;</span> {{TTheme $.LangCode "search.suggestion_keywords"}}</li>
+                        <li><span class="dev-arrow">&gt;</span> {{TTheme $.LangCode "search.suggestion_general"}}</li>
                     </ul>
                 </div>
             </div>
@@ -102,7 +102,7 @@
                     <span class="dev-terminal-title">search.sh</span>
                 </div>
                 <div class="dev-terminal-body">
-                    <p class="dev-output">{{T .LangCode "search.intro"}}</p>
+                    <p class="dev-output">{{TTheme .LangCode "search.intro"}}</p>
                     <div class="dev-terminal-line">
                         <span class="dev-prompt">$</span>
                         <span class="dev-blink">_</span>
@@ -113,7 +113,7 @@
             {{if .PopularSearches}}
             <div class="dev-popular-searches">
                 <h3>
-                    <span class="dev-comment">// </span>{{T .LangCode "search.popular_title"}}
+                    <span class="dev-comment">// </span>{{TTheme .LangCode "search.popular_title"}}
                 </h3>
                 <ul class="dev-query-list">
                     {{range .PopularSearches}}

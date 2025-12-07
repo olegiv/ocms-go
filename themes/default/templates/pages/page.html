@@ -22,14 +22,14 @@
     <footer class="page-footer">
         {{if .Page.Category}}
         <div class="page-category">
-            <span class="label">{{T $.LangCode "frontend.category_label"}}</span>
+            <span class="label">{{TTheme $.LangCode "frontend.category_label"}}</span>
             <a href="/category/{{.Page.Category.Slug}}">{{.Page.Category.Name}}</a>
         </div>
         {{end}}
 
         {{if .Page.Tags}}
         <div class="page-tags">
-            <span class="label">{{T $.LangCode "frontend.tags_label"}}</span>
+            <span class="label">{{TTheme $.LangCode "frontend.tags_label"}}</span>
             {{range .Page.Tags}}
             <a href="/tag/{{.Slug}}" class="tag">{{.Name}}</a>
             {{end}}
@@ -56,7 +56,7 @@
     {{/* Related Posts */}}
     {{if .RelatedPages}}
     <section class="related-posts">
-        <h3>{{T $.LangCode "frontend.related_posts"}}</h3>
+        <h3>{{TTheme $.LangCode "frontend.related_posts"}}</h3>
         <div class="related-grid">
             {{range .RelatedPages}}
             <article class="related-card">

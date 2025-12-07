@@ -68,7 +68,7 @@ templ generate           # Regenerate template Go code (if using templ)
    - `middleware.RequirePermission` - checks API key permissions
    - `middleware.APIRateLimit` - per-key rate limiting
 
-7. **Theme System** (`internal/theme/`): Loads themes from `themes/` directory with templates and static assets.
+7. **Theme System** (`internal/theme/`): Loads themes from `themes/` directory with templates, static assets, and optional locale overrides (`themes/{name}/locales/`). Use `TTheme` in theme templates for translations with theme→global fallback.
 
 8. **Module System** (`internal/module/`): Extensible plugin architecture with lifecycle management, migrations, active status toggle, and embedded i18n translations.
 
@@ -209,4 +209,4 @@ Additional documentation is available in the `docs/` directory:
 - `docs/login-security.md` - Login protection, rate limiting, and account lockout
 - `docs/developer-module.md` - Developer module for test data generation and i18n
 - `docs/hcaptcha.md` - hCaptcha integration for bot protection on login
-- `docs/i18n.md` - Internationalization and translation file format for modules
+- `docs/i18n.md` - Internationalization, translation file format, theme translations, and `TTheme` usage

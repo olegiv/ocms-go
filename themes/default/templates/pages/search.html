@@ -1,10 +1,10 @@
 {{define "content"}}
 <div class="search-page">
     <header class="search-header">
-        <h1 class="search-title">{{T .LangCode "search.title"}}</h1>
+        <h1 class="search-title">{{TTheme .LangCode "search.title"}}</h1>
         <form action="/search" method="get" class="search-form large">
-            <input type="search" name="q" value="{{.SearchQuery}}" placeholder="{{T .LangCode "search.placeholder"}}" autofocus>
-            <button type="submit" class="btn btn-primary">{{T .LangCode "search.button"}}</button>
+            <input type="search" name="q" value="{{.SearchQuery}}" placeholder="{{TTheme .LangCode "search.placeholder"}}" autofocus>
+            <button type="submit" class="btn btn-primary">{{TTheme .LangCode "search.button"}}</button>
         </form>
     </header>
 
@@ -12,7 +12,7 @@
     <div class="search-results">
         {{if .Pages}}
         <p class="results-count">
-            {{if eq .ResultCount 1}}{{T .LangCode "search.result_count" .ResultCount}}{{else}}{{T .LangCode "search.results_count" .ResultCount}}{{end}} "{{.SearchQuery}}"
+            {{if eq .ResultCount 1}}{{TTheme .LangCode "search.result_count" .ResultCount}}{{else}}{{TTheme .LangCode "search.results_count" .ResultCount}}{{end}} "{{.SearchQuery}}"
         </p>
 
         <div class="posts-list">
@@ -54,13 +54,13 @@
 
         {{else}}
         <div class="no-results">
-            <p>{{T $.LangCode "search.no_results"}} "{{.SearchQuery}}"</p>
+            <p>{{TTheme $.LangCode "search.no_results"}} "{{.SearchQuery}}"</p>
             <div class="search-suggestions">
-                <h3>{{T $.LangCode "search.suggestions_title"}}</h3>
+                <h3>{{TTheme $.LangCode "search.suggestions_title"}}</h3>
                 <ul>
-                    <li>{{T $.LangCode "search.suggestion_spelling"}}</li>
-                    <li>{{T $.LangCode "search.suggestion_keywords"}}</li>
-                    <li>{{T $.LangCode "search.suggestion_general"}}</li>
+                    <li>{{TTheme $.LangCode "search.suggestion_spelling"}}</li>
+                    <li>{{TTheme $.LangCode "search.suggestion_keywords"}}</li>
+                    <li>{{TTheme $.LangCode "search.suggestion_general"}}</li>
                 </ul>
             </div>
         </div>
@@ -68,11 +68,11 @@
     </div>
     {{else}}
     <div class="search-intro">
-        <p>{{T .LangCode "search.intro"}}</p>
+        <p>{{TTheme .LangCode "search.intro"}}</p>
 
         {{if .PopularSearches}}
         <div class="popular-searches">
-            <h3>{{T .LangCode "search.popular_title"}}</h3>
+            <h3>{{TTheme .LangCode "search.popular_title"}}</h3>
             <ul>
                 {{range .PopularSearches}}
                 <li><a href="/search?q={{.}}">{{.}}</a></li>

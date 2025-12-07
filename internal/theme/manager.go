@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"ocms-go/internal/i18n"
 )
 
 // Manager handles theme loading, switching, and rendering.
@@ -97,13 +99,62 @@ func (m *Manager) loadTheme(name, path string) (*Theme, error) {
 		return nil, fmt.Errorf("parsing templates: %w", err)
 	}
 
+	// Load theme-specific translations (optional)
+	translations := m.loadThemeTranslations(path)
+
 	return &Theme{
-		Name:       name,
-		Path:       path,
-		Config:     config,
-		Templates:  templates,
-		StaticPath: filepath.Join(path, "static"),
+		Name:         name,
+		Path:         path,
+		Config:       config,
+		Templates:    templates,
+		StaticPath:   filepath.Join(path, "static"),
+		Translations: translations,
 	}, nil
+}
+
+// loadThemeTranslations loads translations from the theme's locales directory.
+// Returns nil if no locales directory exists (translations are optional).
+// Structure: themes/{name}/locales/{lang}/messages.json
+func (m *Manager) loadThemeTranslations(themePath string) map[string]map[string]string {
+	localesPath := filepath.Join(themePath, "locales")
+
+	// Check if locales directory exists
+	if _, err := os.Stat(localesPath); os.IsNotExist(err) {
+		return nil
+	}
+
+	translations := make(map[string]map[string]string)
+
+	// Load translations for each supported language
+	for _, lang := range i18n.SupportedLanguages {
+		msgPath := filepath.Join(localesPath, lang, "messages.json")
+		data, err := os.ReadFile(msgPath)
+		if err != nil {
+			// Skip if language file doesn't exist for this theme
+			continue
+		}
+
+		var msgFile i18n.MessageFile
+		if err := json.Unmarshal(data, &msgFile); err != nil {
+			m.logger.Warn("failed to parse theme translations",
+				"path", msgPath, "error", err)
+			continue
+		}
+
+		translations[lang] = make(map[string]string)
+		for _, msg := range msgFile.Messages {
+			translations[lang][msg.ID] = msg.Translation
+		}
+
+		m.logger.Debug("loaded theme translations",
+			"theme", filepath.Base(themePath), "language", lang, "count", len(msgFile.Messages))
+	}
+
+	if len(translations) == 0 {
+		return nil
+	}
+
+	return translations
 }
 
 // parseTemplates parses all HTML templates in the templates directory.
@@ -316,4 +367,39 @@ func (m *Manager) ThemeCount() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return len(m.themes)
+}
+
+// Translate returns a translation for the given key, checking the active theme first,
+// then falling back to the global i18n catalog.
+// This is the recommended function for frontend templates.
+func (m *Manager) Translate(lang, key string, args ...any) string {
+	m.mu.RLock()
+	theme := m.activeTheme
+	m.mu.RUnlock()
+
+	// Check theme-specific translation first
+	if theme != nil {
+		if translation, ok := theme.Translate(lang, key); ok {
+			if len(args) > 0 {
+				return fmt.Sprintf(translation, args...)
+			}
+			return translation
+		}
+	}
+
+	// Fall back to global i18n
+	return i18n.T(lang, key, args...)
+}
+
+// TemplateFuncs returns template functions provided by the theme manager.
+// These should be merged with the renderer's template functions.
+func (m *Manager) TemplateFuncs() template.FuncMap {
+	return template.FuncMap{
+		// TTheme translates using theme-specific translations with global fallback.
+		// Usage in theme templates: {{TTheme .LangCode "frontend.read_more"}}
+		// With arguments: {{TTheme .LangCode "pagination.page_of" .Page .TotalPages}}
+		"TTheme": func(lang string, key string, args ...any) string {
+			return m.Translate(lang, key, args...)
+		},
+	}
 }

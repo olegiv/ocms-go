@@ -1,0 +1,8 @@
+{
+    "$schema": "../../../../../../.schema/i18n-schema.json",
+    "language": "en",
+    "messages": [
+        {"id": "frontend.read_more", "message": "Read more", "translation": "Continue reading →"},
+        {"id": "frontend.all_posts", "message": "All Posts", "translation": "Browse All Articles"}
+    ]
+}
