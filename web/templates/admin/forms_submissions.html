@@ -4,6 +4,7 @@
     <div class="page-actions">
         {{if .Data.Submissions}}
         <form action="/admin/forms/{{.Data.Form.ID}}/submissions/export" method="POST" style="display: inline;">
+            {{.CSRFField}}
             <button type="submit" class="btn btn-secondary">{{T .AdminLang "forms.export_csv"}}</button>
         </form>
         {{end}}

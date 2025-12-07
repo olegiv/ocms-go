@@ -91,6 +91,7 @@
     <div class="card media-form-panel">
         <div class="card-body">
             <form action="/admin/media/{{.Data.Media.ID}}" method="POST">
+                {{.CSRFField}}
                 <input type="hidden" name="_method" value="PUT">
 
                 <div class="form-group">
@@ -191,6 +192,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" @click="showConfirm = false">{{T .AdminLang "btn.cancel"}}</button>
                     <form action="/admin/media/{{.Data.Media.ID}}" method="POST" class="inline-form">
+                        {{.CSRFField}}
                         <input type="hidden" name="_method" value="DELETE">
                         <button type="submit" class="btn btn-danger">
                             {{T .AdminLang "media.delete_media"}}

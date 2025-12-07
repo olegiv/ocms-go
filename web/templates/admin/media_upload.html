@@ -24,6 +24,7 @@
             @dragleave.prevent="dragover = false"
             @drop.prevent="handleDrop($event)"
         >
+            {{.CSRFField}}
             <!-- Folder Selection -->
             {{if .Data.Folders}}
             <div class="form-group">

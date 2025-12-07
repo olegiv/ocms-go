@@ -28,8 +28,7 @@
         {{end}}
 
         <form method="POST" action="/forms/{{.Data.Form.Slug}}" class="public-form">
-            <!-- CSRF Token -->
-            <input type="hidden" name="_csrf" value="{{.Data.CSRFToken}}">
+            {{.CSRFField}}
 
             <!-- Honeypot field (hidden from real users, bots will fill it) -->
             <div style="position: absolute; left: -9999px;">

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/alexedwards/scs/v2"
+	"github.com/gorilla/csrf"
 
 	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
@@ -569,11 +570,12 @@ type TemplateData struct {
 	Flash       string
 	FlashType   string
 	CurrentYear int
-	CSRFToken   string
-	SiteName    string       // Site name from config
-	Breadcrumbs []Breadcrumb // Breadcrumb navigation
-	CurrentPath string       // Current request path for active link detection
-	AdminLang   string       // Admin UI language code (en, ru, etc.)
+	CSRFToken   string        // CSRF token value
+	CSRFField   template.HTML // Hidden input field with CSRF token
+	SiteName    string        // Site name from config
+	Breadcrumbs []Breadcrumb  // Breadcrumb navigation
+	CurrentPath string        // Current request path for active link detection
+	AdminLang   string        // Admin UI language code (en, ru, etc.)
 }
 
 // Render renders a template with the given data.
@@ -586,6 +588,11 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 	// Add default data
 	data.CurrentYear = time.Now().Year()
 	data.CurrentPath = req.URL.Path
+
+	// Get CSRF token and field from gorilla/csrf
+	// This will be empty if CSRF middleware is not applied (e.g., for API routes)
+	data.CSRFToken = csrf.Token(req)
+	data.CSRFField = csrf.TemplateField(req)
 
 	// Get site name from context if not already set
 	if data.SiteName == "" {

@@ -20,6 +20,7 @@
         {{end}}
     </div>
     <form method="POST" action="/admin/themes/{{.Data.Theme.Name}}/settings" class="card-body">
+        {{.CSRFField}}
         <input type="hidden" name="_method" value="PUT">
 
         {{if .Data.Theme.Config.Settings}}

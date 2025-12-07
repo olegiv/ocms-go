@@ -156,6 +156,7 @@
 <div class="card">
     <div class="card-body">
         <form method="POST" action="{{if .Data.IsEdit}}/admin/api-keys/{{.Data.APIKey.ID}}{{else}}/admin/api-keys{{end}}" class="form">
+            {{.CSRFField}}
             {{if .Data.IsEdit}}
             <input type="hidden" name="_method" value="PUT">
             {{end}}

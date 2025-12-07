@@ -305,6 +305,11 @@ func run() error {
 	r.Use(middleware.Timeout(30 * time.Second)) // 30 second request timeout
 	r.Use(sessionManager.LoadAndSave)
 
+	// CSRF protection middleware (applied globally, API routes will be exempted)
+	csrfConfig := middleware.DefaultCSRFConfig([]byte(cfg.SessionSecret), cfg.IsDevelopment())
+	csrfMiddleware := middleware.CSRF(csrfConfig)
+	slog.Info("CSRF protection initialized", "secure", !cfg.IsDevelopment())
+
 	// Initialize login protection
 	loginProtection := middleware.NewLoginProtection(middleware.DefaultLoginProtectionConfig())
 	slog.Info("login protection initialized",
@@ -380,11 +385,14 @@ func run() error {
 		})
 	})
 
-	// Auth routes (public, with rate limiting on login POST)
-	r.Get("/login", authHandler.LoginForm)
-	r.With(loginProtection.Middleware()).Post("/login", authHandler.Login)
-	r.Get("/logout", authHandler.Logout)
-	r.Post("/logout", authHandler.Logout)
+	// Auth routes (public, with CSRF and rate limiting on login POST)
+	r.Group(func(r chi.Router) {
+		r.Use(csrfMiddleware)
+		r.Get("/login", authHandler.LoginForm)
+		r.With(loginProtection.Middleware()).Post("/login", authHandler.Login)
+		r.Get("/logout", authHandler.Logout)
+		r.Post("/logout", authHandler.Logout)
+	})
 
 	// Session test routes (development only)
 	if cfg.IsDevelopment() {
@@ -409,8 +417,9 @@ func run() error {
 		})
 	}
 
-	// Admin routes (protected)
+	// Admin routes (protected with CSRF)
 	r.Route("/admin", func(r chi.Router) {
+		r.Use(csrfMiddleware)
 		r.Use(middleware.Auth(sessionManager))
 		r.Use(middleware.LoadUser(sessionManager, db))
 		r.Use(middleware.LoadSiteConfig(db, cacheManager))
@@ -658,9 +667,12 @@ func run() error {
 	})
 	slog.Info("REST API v1 mounted at /api/v1")
 
-	// Public form routes (no authentication required, but session needed for CSRF)
-	r.Get("/forms/{slug}", formsHandler.Show)
-	r.Post("/forms/{slug}", formsHandler.Submit)
+	// Public form routes (no authentication required, with CSRF protection)
+	r.Group(func(r chi.Router) {
+		r.Use(csrfMiddleware)
+		r.Get("/forms/{slug}", formsHandler.Show)
+		r.Post("/forms/{slug}", formsHandler.Submit)
+	})
 
 	// Favicon route - serve from embedded static files
 	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {

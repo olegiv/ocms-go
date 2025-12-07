@@ -9,6 +9,7 @@
         {{template "alert" .}}
 
         <form method="POST" action="/login" class="auth-form">
+            {{.CSRFField}}
             <div class="form-group">
                 <label for="email" class="form-label">{{T .AdminLang "label.email"}}</label>
                 <input

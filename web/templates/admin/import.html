@@ -10,6 +10,7 @@
 {{if and (not .Data.ValidationResult) (not .Data.ImportResult)}}
 <div class="card">
     <form method="POST" action="/admin/import/validate" enctype="multipart/form-data" class="card-body">
+        {{.CSRFField}}
         <div class="import-upload-section">
             <div class="upload-area" id="upload-area">
                 <input type="file" id="import_file" name="import_file" accept=".json,.zip" class="upload-input">
@@ -111,6 +112,7 @@
 {{if .Data.ValidationResult.Valid}}
 <div class="card">
     <form method="POST" action="/admin/import" class="card-body">
+        {{.CSRFField}}
         <h3 class="section-title">{{T .AdminLang "import.options"}}</h3>
 
         <div class="import-sections">

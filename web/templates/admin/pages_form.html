@@ -25,6 +25,7 @@
         class="card-body"
         x-data="pageForm()"
     >
+        {{.CSRFField}}
         {{if .Data.IsEdit}}
         <input type="hidden" name="_method" value="PUT">
         {{end}}

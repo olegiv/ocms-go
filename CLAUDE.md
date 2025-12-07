@@ -56,7 +56,8 @@ templ generate           # Regenerate template Go code (if using templ)
 
 3. **Handler Pattern**: Each handler struct (in `internal/handler/`) receives `*sql.DB`, `*render.Renderer`, and `*scs.SessionManager`. Handlers call `store.New(db)` to get sqlc queries.
 
-4. **Middleware Chain**: Protected routes use three middleware in order:
+4. **Middleware Chain**: Protected routes use middleware in order:
+   - `middleware.CSRF` - validates CSRF token on POST/PUT/DELETE requests
    - `middleware.Auth` - validates session
    - `middleware.LoadUser` - loads user into context
    - `middleware.LoadSiteConfig` - loads site config into context
@@ -210,3 +211,4 @@ Additional documentation is available in the `docs/` directory:
 - `docs/developer-module.md` - Developer module for test data generation and i18n
 - `docs/hcaptcha.md` - hCaptcha integration for bot protection on login
 - `docs/i18n.md` - Internationalization, translation file format, theme translations, and `TTheme` usage
+- `docs/csrf.md` - CSRF protection configuration, TrustedOrigins format, and troubleshooting

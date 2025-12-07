@@ -100,6 +100,7 @@
                                         <div class="modal-footer">
                                             <button type="button" class="btn btn-outline" @click="showPreview = false">{{T $.AdminLang "btn.close"}}</button>
                                             <form action="/admin/pages/{{$.Data.Page.ID}}/versions/{{.ID}}/restore" method="POST" class="inline-form">
+                                                {{$.CSRFField}}
                                                 <button type="submit" class="btn btn-primary">{{T $.AdminLang "versions.restore_this"}}</button>
                                             </form>
                                         </div>
@@ -127,6 +128,7 @@
                                         <div class="modal-footer">
                                             <button type="button" class="btn btn-outline" @click="showConfirm = false">{{T $.AdminLang "btn.cancel"}}</button>
                                             <form action="/admin/pages/{{$.Data.Page.ID}}/versions/{{.ID}}/restore" method="POST" class="inline-form">
+                                                {{$.CSRFField}}
                                                 <button type="submit" class="btn btn-primary">{{T $.AdminLang "versions.restore_version"}}</button>
                                             </form>
                                         </div>

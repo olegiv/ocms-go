@@ -134,7 +134,7 @@
                     <li>{{T .AdminLang "developer.generate_detail_translations"}}</li>
                 </ul>
                 <form method="POST" action="/admin/developer/generate" class="action-form" id="generate-form">
-                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    {{.CSRFField}}
                     <button type="submit" class="btn btn-primary btn-lg">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M5 12h14"/>
@@ -172,7 +172,7 @@
                     <li>{{T .AdminLang "developer.delete_detail_tracking"}}</li>
                 </ul>
                 <form method="POST" action="/admin/developer/delete" class="action-form" id="delete-form">
-                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    {{.CSRFField}}
                     <button type="submit" class="btn btn-danger btn-lg" {{if eq .Data.Total 0}}disabled{{end}}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M3 6h18"/>

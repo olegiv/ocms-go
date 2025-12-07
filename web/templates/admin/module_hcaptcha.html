@@ -7,7 +7,7 @@
 </div>
 
 <form method="POST" action="/admin/hcaptcha" class="hcaptcha-form">
-    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    {{.CSRFField}}
 
     <!-- Enable/Disable Card -->
     <div class="card hcaptcha-card">

@@ -7,7 +7,7 @@
 </div>
 
 <form method="POST" action="/admin/analytics" class="analytics-form">
-    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    {{.CSRFField}}
 
     <!-- Google Analytics 4 -->
     <div class="card analytics-card">
