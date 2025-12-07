@@ -8,8 +8,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/microcosm-cc/bluemonday"
+
 	"ocms-go/internal/store"
 )
+
+// htmlSanitizer provides a reusable HTML sanitization policy for widget content.
+// It uses bluemonday's UGCPolicy which allows safe HTML tags for user-generated content
+// while stripping potentially dangerous elements like <script>, event handlers, etc.
+var htmlSanitizer = bluemonday.UGCPolicy()
 
 // WidgetView represents a widget for template rendering.
 type WidgetView struct {
@@ -68,11 +75,13 @@ func (s *WidgetService) GetWidgetsForArea(ctx context.Context, theme, area strin
 
 	widgets := make([]WidgetView, 0, len(dbWidgets))
 	for _, w := range dbWidgets {
+		// Sanitize HTML content to prevent XSS attacks (SEC-003)
+		sanitizedContent := htmlSanitizer.Sanitize(w.Content.String)
 		widgets = append(widgets, WidgetView{
 			ID:       w.ID,
 			Type:     w.WidgetType,
 			Title:    w.Title.String,
-			Content:  template.HTML(w.Content.String),
+			Content:  template.HTML(sanitizedContent),
 			Settings: w.Settings.String,
 			IsActive: w.IsActive == 1,
 			Position: w.Position,
@@ -100,11 +109,13 @@ func (s *WidgetService) GetAllWidgetsForTheme(ctx context.Context, theme string)
 		if w.IsActive != 1 {
 			continue
 		}
+		// Sanitize HTML content to prevent XSS attacks (SEC-003)
+		sanitizedContent := htmlSanitizer.Sanitize(w.Content.String)
 		view := WidgetView{
 			ID:       w.ID,
 			Type:     w.WidgetType,
 			Title:    w.Title.String,
-			Content:  template.HTML(w.Content.String),
+			Content:  template.HTML(sanitizedContent),
 			Settings: w.Settings.String,
 			IsActive: true,
 			Position: w.Position,
