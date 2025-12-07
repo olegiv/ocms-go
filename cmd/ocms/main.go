@@ -318,6 +318,11 @@ func run() error {
 		"lockout_duration", "15m",
 	)
 
+	// Initialize public rate limiter for auth routes (defense-in-depth)
+	// 10 requests per second with burst of 20 per IP
+	publicRateLimiter := middleware.NewGlobalRateLimiter(10.0, 20)
+	slog.Info("public rate limiter initialized", "rate", "10 req/s", "burst", 20)
+
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(db, renderer, sessionManager, loginProtection, hookRegistry)
 	adminHandler := handler.NewAdminHandler(db, renderer, sessionManager, cacheManager)
@@ -385,8 +390,10 @@ func run() error {
 		})
 	})
 
-	// Auth routes (public, with CSRF and rate limiting on login POST)
+	// Auth routes (public, with CSRF and rate limiting)
+	// Defense-in-depth: publicRateLimiter (10 req/s) + loginProtection (0.5 req/s on POST + account lockout)
 	r.Group(func(r chi.Router) {
+		r.Use(publicRateLimiter.HTMLMiddleware())
 		r.Use(csrfMiddleware)
 		r.Get("/login", authHandler.LoginForm)
 		r.With(loginProtection.Middleware()).Post("/login", authHandler.Login)

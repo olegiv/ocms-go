@@ -376,7 +376,7 @@ func (rl *GlobalRateLimiter) getLimiter(ip string) *rate.Limiter {
 	return limiter
 }
 
-// Middleware returns the rate limiting middleware.
+// Middleware returns the rate limiting middleware for API routes (returns JSON errors).
 func (rl *GlobalRateLimiter) Middleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -392,6 +392,32 @@ func (rl *GlobalRateLimiter) Middleware() func(http.Handler) http.Handler {
 			limiter := rl.getLimiter(ip)
 			if !limiter.Allow() {
 				WriteAPIError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "Rate limit exceeded. Please slow down.", nil)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// HTMLMiddleware returns the rate limiting middleware for public routes (returns plain text errors).
+// This is suitable for login and other public HTML form endpoints.
+func (rl *GlobalRateLimiter) HTMLMiddleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Use X-Real-IP or RemoteAddr for rate limiting
+			ip := r.Header.Get("X-Real-IP")
+			if ip == "" {
+				ip = r.Header.Get("X-Forwarded-For")
+				if ip == "" {
+					ip = r.RemoteAddr
+				}
+			}
+
+			limiter := rl.getLimiter(ip)
+			if !limiter.Allow() {
+				slog.Warn("public rate limit exceeded", "ip", ip, "path", r.URL.Path)
+				http.Error(w, "Too many requests. Please wait a moment and try again.", http.StatusTooManyRequests)
 				return
 			}
 

@@ -690,3 +690,68 @@ func TestRequirePermission_EmptyArrayPermissions(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusForbidden, w.Code)
 	}
 }
+
+func TestGlobalRateLimiter_HTMLMiddleware(t *testing.T) {
+	rl := NewGlobalRateLimiter(2, 2)
+	handler := rl.HTMLMiddleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// First few requests should succeed
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest("GET", "/login", nil)
+		req.RemoteAddr = "192.168.1.100:12345"
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("request %d: expected status %d, got %d", i, http.StatusOK, w.Code)
+		}
+	}
+
+	// Next request should be rate limited with text response (not JSON)
+	req := httptest.NewRequest("GET", "/login", nil)
+	req.RemoteAddr = "192.168.1.100:12345"
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("expected status %d, got %d", http.StatusTooManyRequests, w.Code)
+	}
+
+	// Verify response is plain text, not JSON
+	body := w.Body.String()
+	if body == "" {
+		t.Error("expected non-empty response body")
+	}
+	// Should not be JSON (which starts with {)
+	if len(body) > 0 && body[0] == '{' {
+		t.Error("expected plain text response, got JSON")
+	}
+}
+
+func TestGlobalRateLimiter_HTMLMiddleware_DifferentIPs(t *testing.T) {
+	// Match the working test exactly: rate=1, burst=1
+	rl := NewGlobalRateLimiter(1, 1)
+	handler := rl.HTMLMiddleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// First IP exhausts its limit
+	req := httptest.NewRequest("GET", "/login", nil)
+	req.RemoteAddr = "192.168.1.1:12345"
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	// Second IP should still be able to make requests
+	req = httptest.NewRequest("GET", "/login", nil)
+	req.RemoteAddr = "192.168.1.2:12345"
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("second IP: expected status %d, got %d", http.StatusOK, w.Code)
+	}
+}
