@@ -209,3 +209,4 @@ Additional documentation is available in the `docs/` directory:
 - `docs/login-security.md` - Login protection, rate limiting, and account lockout
 - `docs/developer-module.md` - Developer module for test data generation and i18n
 - `docs/hcaptcha.md` - hCaptcha integration for bot protection on login
+- `docs/i18n.md` - Internationalization and translation file format for modules

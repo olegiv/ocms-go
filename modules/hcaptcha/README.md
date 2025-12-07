@@ -187,6 +187,8 @@ Translations are embedded and automatically loaded. Supported languages:
 
 Add new languages by creating `locales/{lang}/messages.json`.
 
+See [docs/i18n.md](../../docs/i18n.md) for the translation file format and guidelines.
+
 ## Module Active Status
 
 The module can be enabled/disabled from **Admin > Modules**:
