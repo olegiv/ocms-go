@@ -224,7 +224,7 @@ func (lp *LoginProtection) GetRemainingAttempts(email string) int {
 	}
 
 	// Check if window has passed
-	if time.Now().Sub(attempt.firstFailed) > lp.attemptWindow {
+	if time.Since(attempt.firstFailed) > lp.attemptWindow {
 		return lp.maxFailedAttempts
 	}
 

@@ -485,7 +485,7 @@ func TestDependencies(t *testing.T) {
 	m := New()
 
 	deps := m.Dependencies()
-	if deps != nil && len(deps) != 0 {
+	if len(deps) != 0 {
 		t.Errorf("Dependencies() = %v, want nil or empty", deps)
 	}
 }

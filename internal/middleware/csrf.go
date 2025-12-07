@@ -70,27 +70,35 @@ func csrfErrorHandler(w http.ResponseWriter, r *http.Request) {
 		"reason", reason.Error(),
 		"method", r.Method,
 		"path", r.URL.Path,
-		"has_cookie", r.Header.Get("Cookie") != "",
-		"form_token_present", r.FormValue("gorilla.csrf.Token") != "",
-		"header_token_present", r.Header.Get("X-CSRF-Token") != "",
+		"origin", r.Header.Get("Origin"),
+		"sec_fetch_site", r.Header.Get("Sec-Fetch-Site"),
 	)
-	http.Error(w, "Forbidden - CSRF token invalid or missing", http.StatusForbidden)
+	http.Error(w, "Forbidden - CSRF validation failed", http.StatusForbidden)
 }
 
-// CSRFToken returns the CSRF token for the current request.
-// This should be called from handlers to get the token to pass to templates.
-func CSRFToken(r *http.Request) string {
-	return csrf.Token(r)
+// CSRFToken returns an empty string.
+// Note: filippo.io/csrf/gorilla uses Fetch metadata headers for CSRF protection,
+// so tokens are no longer required. This function is kept for API compatibility.
+//
+// Deprecated: CSRF tokens are no longer needed with Fetch metadata-based protection.
+func CSRFToken(_ *http.Request) string {
+	return ""
 }
 
-// CSRFTemplateField returns a hidden input field with the CSRF token.
-// This can be used directly in templates.
-func CSRFTemplateField(r *http.Request) string {
-	return string(csrf.TemplateField(r))
+// CSRFTemplateField returns an empty string.
+// Note: filippo.io/csrf/gorilla uses Fetch metadata headers for CSRF protection,
+// so hidden form fields are no longer required. This function is kept for API compatibility.
+//
+// Deprecated: CSRF template fields are no longer needed with Fetch metadata-based protection.
+func CSRFTemplateField(_ *http.Request) string {
+	return ""
 }
 
-// CSRFHeaderName returns the name of the HTTP header that contains the CSRF token.
-// Useful for AJAX requests.
+// CSRFHeaderName is the name of the HTTP header for CSRF tokens.
+// Note: This header is no longer used by filippo.io/csrf/gorilla as it uses
+// Fetch metadata headers for protection. Kept for backward compatibility.
+//
+// Deprecated: CSRF headers are no longer needed with Fetch metadata-based protection.
 const CSRFHeaderName = "X-CSRF-Token"
 
 // SkipCSRF returns a middleware that skips CSRF protection for specific paths.

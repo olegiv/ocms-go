@@ -262,10 +262,8 @@ func (i *Importer) ImportFromZip(ctx context.Context, zipReader *zip.Reader, opt
 	result, err := i.Import(ctx, &exportData, opts)
 	if err != nil {
 		// Clean up extracted files on failure
-		if mediaFileMap != nil {
-			for _, path := range mediaFileMap {
-				_ = os.RemoveAll(filepath.Dir(path))
-			}
+		for _, path := range mediaFileMap {
+			_ = os.RemoveAll(filepath.Dir(path))
 		}
 		return result, err
 	}

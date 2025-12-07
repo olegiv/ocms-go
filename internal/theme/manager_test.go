@@ -925,7 +925,7 @@ func TestInvalidThemeLocaleJson(t *testing.T) {
 	}
 
 	// Theme should be loaded with nil translations (invalid locale skipped)
-	if theme.Translations != nil && len(theme.Translations) > 0 {
+	if len(theme.Translations) > 0 {
 		t.Error("expected no translations loaded for theme with invalid locale")
 	}
 }

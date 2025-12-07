@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"filippo.io/csrf/gorilla"
 	"github.com/alexedwards/scs/v2"
 
 	"ocms-go/internal/i18n"
@@ -589,10 +588,11 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 	data.CurrentYear = time.Now().Year()
 	data.CurrentPath = req.URL.Path
 
-	// Get CSRF token and field from the csrf library
-	// This will be empty if CSRF middleware is not applied (e.g., for API routes)
-	data.CSRFToken = csrf.Token(req)
-	data.CSRFField = csrf.TemplateField(req)
+	// CSRF token and field are no longer needed with filippo.io/csrf/gorilla
+	// as it uses Fetch metadata headers for protection instead of tokens.
+	// These fields are kept empty for backward compatibility with templates.
+	data.CSRFToken = ""
+	data.CSRFField = ""
 
 	// Get site name from context if not already set
 	if data.SiteName == "" {

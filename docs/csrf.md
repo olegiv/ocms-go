@@ -60,37 +60,31 @@ In development mode (`OCMS_ENV=development`):
 In production mode (`OCMS_ENV=production`):
 - No default trusted origins (same-origin requests only)
 
-## Using CSRF Tokens in Templates
+## Template Fields (Legacy)
 
-The CSRF token is automatically available in templates via the `CSRFField` function:
+The `CSRFField` and `CSRFToken` template variables are kept for backward compatibility but now output empty strings. Since the library uses Fetch metadata headers for protection, hidden form fields are no longer required.
+
+Existing templates with `{{ .CSRFField }}` will continue to work - they simply output nothing:
 
 ```html
 <form method="POST" action="/login">
-    {{ CSRFField }}
+    {{.CSRFField}}  <!-- No longer needed, outputs empty string -->
     <input type="email" name="email" required>
     <input type="password" name="password" required>
     <button type="submit">Login</button>
 </form>
 ```
 
-This outputs:
-```html
-<input type="hidden" name="gorilla.csrf.Token" value="...">
-```
-
 ## AJAX Requests
 
-For AJAX requests, include the CSRF token in the `X-CSRF-Token` header:
+AJAX requests from the same origin work automatically without needing to include any CSRF tokens. The browser's Fetch metadata headers provide the necessary protection.
 
 ```javascript
-// Get token from meta tag or form field
-const token = document.querySelector('input[name="gorilla.csrf.Token"]').value;
-
+// No CSRF token needed - Fetch metadata headers handle protection
 fetch('/api/endpoint', {
     method: 'POST',
     headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-Token': token
+        'Content-Type': 'application/json'
     },
     body: JSON.stringify(data)
 });
@@ -110,30 +104,27 @@ r.Route("/api", func(r chi.Router) {
 
 ## Troubleshooting
 
-### "Forbidden - CSRF token invalid or missing"
+### "Forbidden - CSRF validation failed"
 
 This error occurs when CSRF validation fails. Check the server logs for the specific reason:
 
 | Error Reason | Cause | Solution |
 |--------------|-------|----------|
-| `referer not supplied` | No Referer header on POST | Browser should send this automatically |
+| `Sec-Fetch-Site cross-site` | Request from different site | Ensure request is from same origin |
 | `origin invalid` | Origin header doesn't match trusted origins | Check TrustedOrigins uses host:port format |
-| `token invalid` | Token doesn't match or is expired | Ensure form includes `{{ CSRFField }}` |
-| `token missing` | No token in form or header | Add CSRF token to form/request |
+| `referer not supplied` | No Referer header (legacy browser) | Use a modern browser |
 
 ### Debugging CSRF Issues
 
-1. Check server logs for the `reason` field in CSRF errors
-2. Verify the `_gorilla_csrf` cookie is being set
-3. Ensure the form includes the hidden token field
-4. For AJAX, check the `X-CSRF-Token` header is present
+1. Check server logs for the `reason`, `origin`, and `sec_fetch_site` fields
+2. Verify the browser supports Fetch metadata headers (all modern browsers do)
+3. Check that the request originates from the same site
 
 ### Common Mistakes
 
 1. **Using full URLs in TrustedOrigins**: Use `localhost:8080`, not `http://localhost:8080`
-2. **Missing form token**: Ensure `{{ CSRFField }}` is in every POST form
-3. **Cookie not set**: Check if cookies are being blocked by browser settings
-4. **HTTPS mismatch**: In production, ensure both site and requests use HTTPS
+2. **Cross-origin requests without TrustedOrigins**: Add the origin to TrustedOrigins if legitimate
+3. **HTTPS mismatch**: In production, ensure both site and requests use HTTPS
 
 ## Security Considerations
 
@@ -145,21 +136,19 @@ This error occurs when CSRF validation fails. Check the server logs for the spec
 ## Testing CSRF Protection
 
 ```bash
-# Test that CSRF is enforced (should return 403)
+# Test that CSRF is enforced (should return 403 for cross-site requests)
 curl -X POST http://localhost:8080/login \
   -d "email=test@test.com&password=test"
 
-# Test with valid CSRF token (should succeed)
-# First get the login page and extract token
-curl -c cookies.txt http://localhost:8080/login > form.html
-TOKEN=$(grep -oP 'name="gorilla.csrf.Token" value="\K[^"]+' form.html)
-
-# Then submit with token and cookie
-curl -b cookies.txt \
+# Test with proper headers (simulating same-origin request)
+# Note: curl doesn't send Sec-Fetch-Site, so use Referer/Origin for testing
+curl -X POST http://localhost:8080/login \
+  -H "Origin: http://localhost:8080" \
   -H "Referer: http://localhost:8080/login" \
-  -d "email=admin@example.com&password=changeme&gorilla.csrf.Token=$TOKEN" \
-  http://localhost:8080/login
+  -d "email=admin@example.com&password=changeme"
 ```
+
+Note: Real browsers automatically include `Sec-Fetch-Site` headers which the library uses for validation. curl doesn't include these headers, so the library falls back to Origin/Referer validation.
 
 ## Related Documentation
 
