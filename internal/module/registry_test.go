@@ -600,3 +600,204 @@ func TestMultipleMigrations(t *testing.T) {
 		}
 	}
 }
+
+func TestIsActive(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	r := NewRegistry(logger)
+
+	m := newMockModule("active-test", "1.0.0")
+	_ = r.Register(m)
+
+	db := createTestDB(t)
+	defer db.Close()
+
+	ctx := &ModuleContext{DB: db, Logger: logger}
+	_ = r.InitAll(ctx)
+
+	// Modules should be active by default after init
+	if !r.IsActive("active-test") {
+		t.Error("expected module to be active by default")
+	}
+}
+
+func TestIsActiveDefault(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	r := NewRegistry(logger)
+
+	m := newMockModule("untracked", "1.0.0")
+	_ = r.Register(m)
+
+	// Without calling InitAll, the module should still default to active
+	if !r.IsActive("untracked") {
+		t.Error("expected untracked module to default to active")
+	}
+}
+
+func TestSetActive(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	r := NewRegistry(logger)
+
+	m := newMockModule("toggle", "1.0.0")
+	_ = r.Register(m)
+
+	db := createTestDB(t)
+	defer db.Close()
+
+	ctx := &ModuleContext{DB: db, Logger: logger}
+	_ = r.InitAll(ctx)
+
+	// Should be active by default
+	if !r.IsActive("toggle") {
+		t.Error("expected module to be active initially")
+	}
+
+	// Deactivate
+	err := r.SetActive("toggle", false)
+	if err != nil {
+		t.Errorf("unexpected error setting active to false: %v", err)
+	}
+
+	if r.IsActive("toggle") {
+		t.Error("expected module to be inactive after SetActive(false)")
+	}
+
+	// Reactivate
+	err = r.SetActive("toggle", true)
+	if err != nil {
+		t.Errorf("unexpected error setting active to true: %v", err)
+	}
+
+	if !r.IsActive("toggle") {
+		t.Error("expected module to be active after SetActive(true)")
+	}
+}
+
+func TestSetActiveNotRegistered(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	r := NewRegistry(logger)
+
+	db := createTestDB(t)
+	defer db.Close()
+
+	// Initialize with no modules
+	ctx := &ModuleContext{DB: db, Logger: logger}
+	r.mu.Lock()
+	r.ctx = ctx
+	r.mu.Unlock()
+
+	err := r.SetActive("nonexistent", false)
+	if err == nil {
+		t.Error("expected error for unregistered module")
+	}
+}
+
+func TestSetActiveNotInitialized(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	r := NewRegistry(logger)
+
+	m := newMockModule("uninit", "1.0.0")
+	_ = r.Register(m)
+
+	// Don't call InitAll - registry has no context
+	err := r.SetActive("uninit", false)
+	if err == nil {
+		t.Error("expected error when registry not initialized")
+	}
+}
+
+func TestActiveStatusPersistence(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	db := createTestDB(t)
+	defer db.Close()
+
+	// First registry: register, init, and deactivate
+	r1 := NewRegistry(logger)
+	m1 := newMockModule("persist", "1.0.0")
+	_ = r1.Register(m1)
+
+	ctx := &ModuleContext{DB: db, Logger: logger}
+	_ = r1.InitAll(ctx)
+	_ = r1.SetActive("persist", false)
+
+	// Second registry: should load inactive status from DB
+	r2 := NewRegistry(logger)
+	m2 := newMockModule("persist", "1.0.0")
+	_ = r2.Register(m2)
+	_ = r2.InitAll(ctx)
+
+	if r2.IsActive("persist") {
+		t.Error("expected module to remain inactive after reload")
+	}
+}
+
+func TestAllTemplateFuncsSkipsInactive(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	r := NewRegistry(logger)
+
+	m1 := newMockModule("active-mod", "1.0.0")
+	m1.funcMap = template.FuncMap{"activeFunc": func() string { return "active" }}
+
+	m2 := newMockModule("inactive-mod", "1.0.0")
+	m2.funcMap = template.FuncMap{"inactiveFunc": func() string { return "inactive" }}
+
+	_ = r.Register(m1)
+	_ = r.Register(m2)
+
+	db := createTestDB(t)
+	defer db.Close()
+
+	ctx := &ModuleContext{DB: db, Logger: logger}
+	_ = r.InitAll(ctx)
+
+	// Deactivate second module
+	_ = r.SetActive("inactive-mod", false)
+
+	funcs := r.AllTemplateFuncs()
+
+	if _, ok := funcs["activeFunc"]; !ok {
+		t.Error("expected activeFunc from active module")
+	}
+	if _, ok := funcs["inactiveFunc"]; ok {
+		t.Error("expected inactiveFunc to be excluded from inactive module")
+	}
+}
+
+func TestListInfoShowsActiveStatus(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	r := NewRegistry(logger)
+
+	m1 := newMockModule("status-active", "1.0.0")
+	m2 := newMockModule("status-inactive", "1.0.0")
+
+	_ = r.Register(m1)
+	_ = r.Register(m2)
+
+	db := createTestDB(t)
+	defer db.Close()
+
+	ctx := &ModuleContext{DB: db, Logger: logger}
+	_ = r.InitAll(ctx)
+
+	// Deactivate second module
+	_ = r.SetActive("status-inactive", false)
+
+	infos := r.ListInfo()
+	if len(infos) != 2 {
+		t.Fatalf("expected 2 infos, got %d", len(infos))
+	}
+
+	// Find modules by name and check active status
+	for _, info := range infos {
+		switch info.Name {
+		case "status-active":
+			if !info.Active {
+				t.Error("expected status-active to be active")
+			}
+		case "status-inactive":
+			if info.Active {
+				t.Error("expected status-inactive to be inactive")
+			}
+		}
+	}
+}
