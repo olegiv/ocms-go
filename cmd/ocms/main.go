@@ -359,13 +359,16 @@ func run() error {
 		r.Get("/sitemap.xml", frontendHandler.Sitemap)
 		r.Get("/robots.txt", frontendHandler.Robots)
 		r.Get("/search", frontendHandler.Search)
+		r.Get("/blog", frontendHandler.Blog)
 		r.Get("/category/{slug}", frontendHandler.Category)
 		r.Get("/tag/{slug}", frontendHandler.Tag)
+		r.Get("/{slug}", frontendHandler.Page) // Must be last - catch-all for page slugs
 
 		// Language-prefixed routes (e.g., /ru/, /ru/page-slug)
 		r.Route("/{lang:[a-z]{2}}", func(r chi.Router) {
 			r.Get("/", frontendHandler.Home)
 			r.Get("/search", frontendHandler.Search)
+			r.Get("/blog", frontendHandler.Blog)
 			r.Get("/category/{slug}", frontendHandler.Category)
 			r.Get("/tag/{slug}", frontendHandler.Tag)
 			r.Get("/{slug}", frontendHandler.Page)

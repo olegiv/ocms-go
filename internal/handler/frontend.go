@@ -40,6 +40,7 @@ type PageView struct {
 	UpdatedAt            time.Time
 	FeaturedImage        string
 	FeaturedImageLarge   string // Large variant for single page views
+	ReadingTime          int    // Estimated reading time in minutes
 	Highlight            string // Search result highlight
 	Author               *AuthorView
 	Category             *CategoryView
@@ -254,8 +255,9 @@ type PageData struct {
 // ListData holds data for list templates (blog, archives).
 type ListData struct {
 	BaseTemplateData
-	Pages      []PageView
-	Pagination Pagination
+	Pages       []PageView
+	Pagination  Pagination
+	Description string // Optional description for list pages (blog, archives, etc.)
 }
 
 // SubcategoryView represents a subcategory with page count for template rendering.
@@ -691,6 +693,54 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 	h.render(w, r, "tag", data)
 }
 
+// Blog handles the blog listing page displaying all published posts.
+func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Pagination
+	page := h.getPageNum(r)
+	perPage := 10
+	offset := (page - 1) * perPage
+
+	// Get published pages
+	pages, err := h.queries.ListPublishedPages(ctx, store.ListPublishedPagesParams{
+		Limit:  int64(perPage),
+		Offset: int64(offset),
+	})
+	if err != nil {
+		h.logger.Error("failed to get blog pages", "error", err)
+		h.renderError(w, r, http.StatusInternalServerError, "Internal Server Error")
+		return
+	}
+
+	// Get total count
+	total, err := h.queries.CountPublishedPages(ctx)
+	if err != nil {
+		h.logger.Error("failed to count blog pages", "error", err)
+		total = 0
+	}
+
+	// Convert to PageViews
+	pageViews := make([]PageView, 0, len(pages))
+	for _, p := range pages {
+		pageViews = append(pageViews, h.pageToView(ctx, p))
+	}
+
+	pagination := h.buildPagination(page, int(total), perPage, "/blog")
+
+	// Get base template data
+	base := h.getBaseTemplateData(r, "Blog", "")
+	base.BodyClass = "archive blog"
+
+	data := ListData{
+		BaseTemplateData: base,
+		Pages:            pageViews,
+		Pagination:       pagination,
+	}
+
+	h.render(w, r, "list", data)
+}
+
 // Search handles search results display using FTS5 full-text search.
 func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -947,6 +997,13 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page) PageView
 
 	// Generate excerpt from body (first 200 chars, strip HTML)
 	pv.Excerpt = h.generateExcerpt(p.Body, 200)
+
+	// Calculate reading time (approximately 200 words per minute)
+	wordCount := len(strings.Fields(h.generateExcerpt(p.Body, len(p.Body))))
+	pv.ReadingTime = (wordCount + 199) / 200 // Round up
+	if pv.ReadingTime < 1 {
+		pv.ReadingTime = 1
+	}
 
 	// Get featured image (medium for listings - single page handlers can override to large)
 	if p.FeaturedImageID.Valid {
