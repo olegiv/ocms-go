@@ -4,6 +4,7 @@
 .env
 /bin/
 *.log
+.audit
 
 # IDE specific files
 .idea/
