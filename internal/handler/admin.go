@@ -4,6 +4,7 @@ package handler
 
 import (
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -78,6 +79,18 @@ type TranslationCoverage struct {
 	IsDefault    bool
 }
 
+// ActivityItem represents a recent activity event for dashboard display.
+type ActivityItem struct {
+	ID        int64
+	Level     string // info, warning, error
+	Category  string // auth, page, user, config, system, cache
+	Message   string
+	UserName  string
+	UserEmail string
+	CreatedAt string
+	TimeAgo   string
+}
+
 // DashboardData holds all dashboard data including stats and recent items.
 type DashboardData struct {
 	Stats                  DashboardStats
@@ -85,6 +98,7 @@ type DashboardData struct {
 	WebhookHealth          []WebhookHealthItem
 	RecentFailedDeliveries []RecentFailedDelivery
 	TranslationCoverage    []TranslationCoverage
+	RecentActivity         []ActivityItem
 }
 
 // AdminHandler handles admin routes.
@@ -298,6 +312,36 @@ func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Get recent activity
+	var recentActivity []ActivityItem
+	if events, err := h.queries.ListEventsWithUser(ctx, store.ListEventsWithUserParams{
+		Limit:  10,
+		Offset: 0,
+	}); err != nil {
+		slog.Error("failed to get recent activity", "error", err)
+	} else {
+		for _, e := range events {
+			userName := ""
+			if e.UserName.Valid {
+				userName = e.UserName.String
+			}
+			userEmail := ""
+			if e.UserEmail.Valid {
+				userEmail = e.UserEmail.String
+			}
+			recentActivity = append(recentActivity, ActivityItem{
+				ID:        e.ID,
+				Level:     e.Level,
+				Category:  e.Category,
+				Message:   e.Message,
+				UserName:  userName,
+				UserEmail: userEmail,
+				CreatedAt: e.CreatedAt.Format("Jan 2, 2006 3:04 PM"),
+				TimeAgo:   formatTimeAgo(e.CreatedAt),
+			})
+		}
+	}
+
 	// Build dashboard data
 	dashboardData := DashboardData{
 		Stats:                  stats,
@@ -305,6 +349,7 @@ func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		WebhookHealth:          webhookHealth,
 		RecentFailedDeliveries: recentFailedDeliveries,
 		TranslationCoverage:    translationCoverage,
+		RecentActivity:         recentActivity,
 	}
 
 	if err := h.renderer.Render(w, r, "admin/dashboard", render.TemplateData{
@@ -343,4 +388,34 @@ func (h *AdminHandler) SetLanguage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, referer, http.StatusSeeOther)
+}
+
+// formatTimeAgo returns a human-readable relative time string.
+func formatTimeAgo(t time.Time) string {
+	now := time.Now()
+	diff := now.Sub(t)
+
+	switch {
+	case diff < time.Minute:
+		return "just now"
+	case diff < time.Hour:
+		mins := int(diff.Minutes())
+		if mins == 1 {
+			return "1 minute ago"
+		}
+		return fmt.Sprintf("%d minutes ago", mins)
+	case diff < 24*time.Hour:
+		hours := int(diff.Hours())
+		if hours == 1 {
+			return "1 hour ago"
+		}
+		return fmt.Sprintf("%d hours ago", hours)
+	case diff < 48*time.Hour:
+		return "yesterday"
+	case diff < 7*24*time.Hour:
+		days := int(diff.Hours() / 24)
+		return fmt.Sprintf("%d days ago", days)
+	default:
+		return t.Format("Jan 2, 2006")
+	}
 }

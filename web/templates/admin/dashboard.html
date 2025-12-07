@@ -115,6 +115,58 @@
 <div class="dashboard-grid">
     <div class="card">
         <div class="card-header">
+            <h2 class="card-title">{{T .AdminLang "dashboard.recent_activity"}}</h2>
+            {{if .Data.RecentActivity}}
+            <a href="/admin/events" class="btn btn-sm btn-outline">{{T .AdminLang "dashboard.view_all_events"}}</a>
+            {{end}}
+        </div>
+        <div class="card-body">
+            {{if .Data.RecentActivity}}
+            <div class="activity-timeline">
+                {{range .Data.RecentActivity}}
+                <div class="activity-item activity-level-{{.Level}}">
+                    <div class="activity-icon activity-icon-{{.Category}}">
+                        {{if eq .Category "auth"}}
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        {{else if eq .Category "page"}}
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
+                        {{else if eq .Category "user"}}
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        {{else if eq .Category "config"}}
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                        {{else if eq .Category "cache"}}
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+                        {{else}}
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                        {{end}}
+                    </div>
+                    <div class="activity-content">
+                        <div class="activity-message">{{.Message}}</div>
+                        <div class="activity-meta">
+                            {{if .UserName}}
+                            <span class="activity-user">{{.UserName}}</span>
+                            {{else}}
+                            <span class="activity-user activity-system">{{T $.AdminLang "dashboard.system_action"}}</span>
+                            {{end}}
+                            <span class="activity-time" title="{{.CreatedAt}}">{{.TimeAgo}}</span>
+                        </div>
+                    </div>
+                    <span class="activity-badge badge-{{.Level}}">{{T $.AdminLang (printf "activity.category.%s" .Category)}}</span>
+                </div>
+                {{end}}
+            </div>
+            {{else}}
+            <div class="empty-state">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/><path d="m15 5 3 3"/></svg>
+                <p>{{T .AdminLang "dashboard.no_activity"}}</p>
+                <span class="empty-hint">{{T .AdminLang "dashboard.activity_hint"}}</span>
+            </div>
+            {{end}}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
             <h2 class="card-title">{{T .AdminLang "dashboard.recent_submissions"}}</h2>
             {{if .Data.RecentSubmissions}}
             <a href="/admin/forms" class="btn btn-sm btn-outline">{{T .AdminLang "dashboard.view_all_forms"}}</a>
@@ -571,6 +623,164 @@ a.stat-card-link:hover {
 
 a.stat-card-link:active {
     transform: translateY(0);
+}
+
+/* Activity Timeline Widget */
+.activity-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.activity-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border-left: 3px solid var(--border-color);
+    background: var(--bg-secondary);
+    margin-bottom: 0.5rem;
+    border-radius: 0 6px 6px 0;
+    transition: background-color 0.15s;
+}
+
+.activity-item:hover {
+    background: var(--bg-hover);
+}
+
+.activity-item:last-child {
+    margin-bottom: 0;
+}
+
+.activity-level-info {
+    border-left-color: #3b82f6;
+}
+
+.activity-level-warning {
+    border-left-color: #f59e0b;
+}
+
+.activity-level-error {
+    border-left-color: #ef4444;
+}
+
+.activity-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    flex-shrink: 0;
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+}
+
+.activity-icon-auth {
+    background-color: rgba(139, 92, 246, 0.1);
+    color: #8b5cf6;
+}
+
+.activity-icon-page {
+    background-color: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+}
+
+.activity-icon-user {
+    background-color: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+}
+
+.activity-icon-config {
+    background-color: rgba(249, 115, 22, 0.1);
+    color: #f97316;
+}
+
+.activity-icon-system {
+    background-color: rgba(107, 114, 128, 0.1);
+    color: #6b7280;
+}
+
+.activity-icon-cache {
+    background-color: rgba(6, 182, 212, 0.1);
+    color: #06b6d4;
+}
+
+.activity-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.activity-message {
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.activity-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.activity-user {
+    font-weight: 500;
+}
+
+.activity-system {
+    font-style: italic;
+    color: var(--text-muted);
+}
+
+.activity-time {
+    color: var(--text-muted);
+}
+
+.activity-meta .activity-user::after {
+    content: "·";
+    margin-left: 0.5rem;
+    color: var(--text-muted);
+}
+
+.activity-badge {
+    font-size: 0.65rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    flex-shrink: 0;
+    align-self: flex-start;
+}
+
+.badge-info {
+    background-color: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+}
+
+.badge-warning {
+    background-color: rgba(245, 158, 11, 0.1);
+    color: #d97706;
+}
+
+.badge-error {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+}
+
+@media (max-width: 640px) {
+    .activity-item {
+        flex-wrap: wrap;
+    }
+
+    .activity-badge {
+        margin-left: calc(32px + 0.75rem);
+        margin-top: 0.5rem;
+    }
 }
 </style>
 {{end}}
