@@ -24,5 +24,13 @@ func New(db *sql.DB, isDev bool) *scs.SessionManager {
 	sm.Cookie.SameSite = http.SameSiteLaxMode
 	sm.Cookie.Secure = !isDev // Secure cookies in production only
 
+	// Production hardening: Use __Host- prefix
+	// This requires Secure=true, Path=/, and no Domain attribute
+	// Prevents subdomain and path-based cookie attacks
+	if !isDev {
+		sm.Cookie.Name = "__Host-session"
+		sm.Cookie.Path = "/"
+	}
+
 	return sm
 }
