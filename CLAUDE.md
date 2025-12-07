@@ -57,6 +57,7 @@ templ generate           # Regenerate template Go code (if using templ)
 3. **Handler Pattern**: Each handler struct (in `internal/handler/`) receives `*sql.DB`, `*render.Renderer`, and `*scs.SessionManager`. Handlers call `store.New(db)` to get sqlc queries.
 
 4. **Middleware Chain**: Protected routes use middleware in order:
+   - `middleware.SecurityHeaders` - adds CSP, HSTS, X-Frame-Options, etc.
    - `middleware.CSRF` - validates CSRF token on POST/PUT/DELETE requests
    - `middleware.Auth` - validates session
    - `middleware.LoadUser` - loads user into context

@@ -303,6 +303,15 @@ func run() error {
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.Compress(5))                    // Gzip compression with level 5
 	r.Use(middleware.Timeout(30 * time.Second)) // 30 second request timeout
+
+	// Security headers middleware (CSP, HSTS, X-Frame-Options, etc.)
+	securityConfig := middleware.DefaultSecurityHeadersConfig(cfg.IsDevelopment())
+	r.Use(middleware.SecurityHeaders(securityConfig))
+	slog.Info("security headers middleware initialized",
+		"hsts", !cfg.IsDevelopment(),
+		"x_frame_options", "SAMEORIGIN",
+	)
+
 	r.Use(sessionManager.LoadAndSave)
 
 	// CSRF protection middleware (applied globally, API routes will be exempted)
