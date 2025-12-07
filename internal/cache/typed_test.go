@@ -15,7 +15,7 @@ type testUser struct {
 
 func TestTypedCache_BasicOperations(t *testing.T) {
 	memCache := NewSimpleMemoryCache(time.Hour)
-	defer memCache.Close()
+	defer func() { _ = memCache.Close() }()
 
 	cache := NewTypedCache[testUser](memCache, time.Hour)
 	ctx := context.Background()
@@ -39,7 +39,7 @@ func TestTypedCache_BasicOperations(t *testing.T) {
 
 func TestTypedCache_CacheMiss(t *testing.T) {
 	memCache := NewSimpleMemoryCache(time.Hour)
-	defer memCache.Close()
+	defer func() { _ = memCache.Close() }()
 
 	cache := NewTypedCache[testUser](memCache, time.Hour)
 	ctx := context.Background()
@@ -52,7 +52,7 @@ func TestTypedCache_CacheMiss(t *testing.T) {
 
 func TestTypedCache_Delete(t *testing.T) {
 	memCache := NewSimpleMemoryCache(time.Hour)
-	defer memCache.Close()
+	defer func() { _ = memCache.Close() }()
 
 	cache := NewTypedCache[testUser](memCache, time.Hour)
 	ctx := context.Background()
@@ -73,7 +73,7 @@ func TestTypedCache_Delete(t *testing.T) {
 
 func TestTypedCache_Has(t *testing.T) {
 	memCache := NewSimpleMemoryCache(time.Hour)
-	defer memCache.Close()
+	defer func() { _ = memCache.Close() }()
 
 	cache := NewTypedCache[testUser](memCache, time.Hour)
 	ctx := context.Background()
@@ -92,7 +92,7 @@ func TestTypedCache_Has(t *testing.T) {
 
 func TestTypedCache_SetWithTTL(t *testing.T) {
 	memCache := NewSimpleMemoryCache(time.Hour)
-	defer memCache.Close()
+	defer func() { _ = memCache.Close() }()
 
 	cache := NewTypedCache[testUser](memCache, time.Hour)
 	ctx := context.Background()
@@ -121,7 +121,7 @@ func TestTypedCache_SetWithTTL(t *testing.T) {
 
 func TestTypedCache_GetOrSet(t *testing.T) {
 	memCache := NewSimpleMemoryCache(time.Hour)
-	defer memCache.Close()
+	defer func() { _ = memCache.Close() }()
 
 	cache := NewTypedCache[testUser](memCache, time.Hour)
 	ctx := context.Background()
@@ -159,7 +159,7 @@ func TestTypedCache_GetOrSet(t *testing.T) {
 
 func TestTypedCache_GetOrSetError(t *testing.T) {
 	memCache := NewSimpleMemoryCache(time.Hour)
-	defer memCache.Close()
+	defer func() { _ = memCache.Close() }()
 
 	cache := NewTypedCache[testUser](memCache, time.Hour)
 	ctx := context.Background()
@@ -182,7 +182,7 @@ func TestTypedCache_GetOrSetError(t *testing.T) {
 
 func TestMultiTypedCache_GetMultiple(t *testing.T) {
 	memCache := NewSimpleMemoryCache(time.Hour)
-	defer memCache.Close()
+	defer func() { _ = memCache.Close() }()
 
 	cache := NewMultiTypedCache[testUser](memCache, time.Hour)
 	ctx := context.Background()
@@ -213,7 +213,7 @@ func TestMultiTypedCache_GetMultiple(t *testing.T) {
 
 func TestMultiTypedCache_SetMultiple(t *testing.T) {
 	memCache := NewSimpleMemoryCache(time.Hour)
-	defer memCache.Close()
+	defer func() { _ = memCache.Close() }()
 
 	cache := NewMultiTypedCache[testUser](memCache, time.Hour)
 	ctx := context.Background()
@@ -239,7 +239,7 @@ func TestMultiTypedCache_SetMultiple(t *testing.T) {
 
 func TestMultiTypedCache_DeleteMultiple(t *testing.T) {
 	memCache := NewSimpleMemoryCache(time.Hour)
-	defer memCache.Close()
+	defer func() { _ = memCache.Close() }()
 
 	cache := NewMultiTypedCache[testUser](memCache, time.Hour)
 	ctx := context.Background()
@@ -271,7 +271,7 @@ func TestMultiTypedCache_DeleteMultiple(t *testing.T) {
 
 func TestTypedCache_ComplexType(t *testing.T) {
 	memCache := NewSimpleMemoryCache(time.Hour)
-	defer memCache.Close()
+	defer func() { _ = memCache.Close() }()
 
 	type complexType struct {
 		Users    []testUser        `json:"users"`

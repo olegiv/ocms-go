@@ -143,10 +143,10 @@ func TestExportWithMediaToZip(t *testing.T) {
 			}
 			var data ExportData
 			if err := json.NewDecoder(rc).Decode(&data); err != nil {
-				rc.Close()
+				_ = rc.Close()
 				t.Fatalf("failed to decode export.json: %v", err)
 			}
-			rc.Close()
+			_ = rc.Close()
 
 			if len(data.Media) != 1 {
 				t.Errorf("expected 1 media item, got %d", len(data.Media))
@@ -433,8 +433,8 @@ func TestExportWithMediaToFile(t *testing.T) {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
 	tmpPath := tmpFile.Name()
-	tmpFile.Close()
-	defer os.Remove(tmpPath)
+	_ = tmpFile.Close()
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	if err := exporter.ExportWithMediaToFile(ctx, opts, tmpPath); err != nil {
 		t.Fatalf("ExportWithMediaToFile failed: %v", err)
@@ -445,7 +445,7 @@ func TestExportWithMediaToFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open exported zip file: %v", err)
 	}
-	defer zipReader.Close()
+	defer func() { _ = zipReader.Close() }()
 
 	// Check for export.json
 	hasExportJSON := false

@@ -28,7 +28,7 @@ func TestRedisCache_Basic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create Redis cache: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -82,7 +82,7 @@ func TestRedisCache_Miss(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create Redis cache: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -99,7 +99,7 @@ func TestRedisCache_TTL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create Redis cache: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -135,7 +135,7 @@ func TestRedisCache_Clear(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create Redis cache: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -171,7 +171,7 @@ func TestRedisCache_DeleteByPrefix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create Redis cache: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -213,7 +213,7 @@ func TestRedisCache_Stats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create Redis cache: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -254,7 +254,7 @@ func TestRedisCache_Ping(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create Redis cache: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 

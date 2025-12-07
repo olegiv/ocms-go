@@ -92,7 +92,7 @@ func NewRedisCache(opts RedisCacheOptions) (*RedisCache, error) {
 	defer cancel()
 
 	if err := client.Ping(ctx).Err(); err != nil {
-		client.Close()
+		_ = client.Close()
 		return nil, err
 	}
 

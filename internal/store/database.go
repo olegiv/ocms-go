@@ -73,14 +73,14 @@ func NewDBWithConfig(path string, cfg DBConfig) (*sql.DB, error) {
 
 	for _, pragma := range pragmas {
 		if _, err := db.Exec(pragma); err != nil {
-			db.Close()
+			_ = db.Close()
 			return nil, fmt.Errorf("setting pragma %q: %w", pragma, err)
 		}
 	}
 
 	// Verify connection
 	if err := db.Ping(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("pinging database: %w", err)
 	}
 

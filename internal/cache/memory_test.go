@@ -13,7 +13,7 @@ func TestMemoryCache_BasicOperations(t *testing.T) {
 		MaxSize:         100,
 		CleanupInterval: 0, // No background cleanup for tests
 	})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 	ctx := context.Background()
 
 	// Test Set and Get
@@ -53,7 +53,7 @@ func TestMemoryCache_BasicOperations(t *testing.T) {
 
 func TestMemoryCache_CacheMiss(t *testing.T) {
 	cache := NewSimpleMemoryCache(time.Hour)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 	ctx := context.Background()
 
 	_, err := cache.Get(ctx, "nonexistent")
@@ -75,7 +75,7 @@ func TestMemoryCache_Expiration(t *testing.T) {
 		DefaultTTL:      50 * time.Millisecond,
 		CleanupInterval: 0,
 	})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 	ctx := context.Background()
 
 	err := cache.Set(ctx, "expiring", []byte("value"), 0)
@@ -104,7 +104,7 @@ func TestMemoryCache_CustomTTL(t *testing.T) {
 		DefaultTTL:      time.Hour,
 		CleanupInterval: 0,
 	})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 	ctx := context.Background()
 
 	// Set with custom short TTL
@@ -137,7 +137,7 @@ func TestMemoryCache_CustomTTL(t *testing.T) {
 
 func TestMemoryCache_Clear(t *testing.T) {
 	cache := NewSimpleMemoryCache(time.Hour)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 	ctx := context.Background()
 
 	// Set multiple keys
@@ -162,7 +162,7 @@ func TestMemoryCache_Clear(t *testing.T) {
 
 func TestMemoryCache_DeleteByPrefix(t *testing.T) {
 	cache := NewSimpleMemoryCache(time.Hour)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 	ctx := context.Background()
 
 	// Set multiple keys with same prefix
@@ -194,7 +194,7 @@ func TestMemoryCache_DeleteByPrefix(t *testing.T) {
 
 func TestMemoryCache_Stats(t *testing.T) {
 	cache := NewSimpleMemoryCache(time.Hour)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 	ctx := context.Background()
 
 	// Set some values
@@ -239,7 +239,7 @@ func TestMemoryCache_ConcurrentAccess(t *testing.T) {
 		MaxSize:         0, // Unlimited
 		CleanupInterval: 0,
 	})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 	ctx := context.Background()
 
 	var wg sync.WaitGroup
@@ -279,7 +279,7 @@ func TestMemoryCache_ConcurrentAccess(t *testing.T) {
 
 func TestMemoryCache_ValueCopy(t *testing.T) {
 	cache := NewSimpleMemoryCache(time.Hour)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 	ctx := context.Background()
 
 	original := []byte("original")

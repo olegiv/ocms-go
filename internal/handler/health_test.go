@@ -376,9 +376,7 @@ func TestHealthHandler_EnvUploadsDir(t *testing.T) {
 
 	// Create a temp directory and set it as env var
 	tempDir := t.TempDir()
-	oldEnv := os.Getenv("UPLOADS_DIR")
-	os.Setenv("UPLOADS_DIR", tempDir)
-	defer os.Setenv("UPLOADS_DIR", oldEnv)
+	t.Setenv("UPLOADS_DIR", tempDir)
 
 	handler := NewHealthHandler(db, os.Getenv("UPLOADS_DIR"))
 

@@ -41,7 +41,7 @@ func Compress(level int) func(http.Handler) http.Handler {
 			gz := gzipWriterPool.Get().(*gzip.Writer)
 			gz.Reset(w)
 			defer func() {
-				gz.Close()
+				_ = gz.Close()
 				gzipWriterPool.Put(gz)
 			}()
 
@@ -144,11 +144,11 @@ func (sw *selectiveWriter) Flush() {
 	if shouldCompress {
 		gz := gzipWriterPool.Get().(*gzip.Writer)
 		gz.Reset(sw.ResponseWriter)
-		gz.Write(sw.buffer)
-		gz.Close()
+		_, _ = gz.Write(sw.buffer)
+		_ = gz.Close()
 		gzipWriterPool.Put(gz)
 	} else {
-		sw.ResponseWriter.Write(sw.buffer)
+		_, _ = sw.ResponseWriter.Write(sw.buffer)
 	}
 }
 

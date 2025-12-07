@@ -25,26 +25,26 @@ func testDB(t *testing.T) (*sql.DB, func()) {
 		t.Fatalf("creating temp file: %v", err)
 	}
 	dbPath := f.Name()
-	f.Close()
+	_ = f.Close()
 
 	// Open database
 	db, err := store.NewDB(dbPath)
 	if err != nil {
-		os.Remove(dbPath)
+		_ = os.Remove(dbPath)
 		t.Fatalf("NewDB: %v", err)
 	}
 
 	// Run migrations
 	if err := store.Migrate(db); err != nil {
-		db.Close()
-		os.Remove(dbPath)
+		_ = db.Close()
+		_ = os.Remove(dbPath)
 		t.Fatalf("Migrate: %v", err)
 	}
 
 	// Return cleanup function
 	cleanup := func() {
-		db.Close()
-		os.Remove(dbPath)
+		_ = db.Close()
+		_ = os.Remove(dbPath)
 	}
 
 	return db, cleanup

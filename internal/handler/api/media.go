@@ -358,7 +358,7 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		}
 
 		result, err := mediaService.Upload(ctx, file, fileHeader, apiKey.CreatedBy, folderID)
-		file.Close()
+		_ = file.Close()
 
 		if err != nil {
 			errors = append(errors, map[string]string{

@@ -5,10 +5,17 @@ import (
 	"testing"
 )
 
+func setEnv(t *testing.T, key, value string) {
+	t.Helper()
+	if err := os.Setenv(key, value); err != nil {
+		t.Fatalf("failed to set %s: %v", key, err)
+	}
+}
+
 func TestLoad_Defaults(t *testing.T) {
 	// Clear environment and set only required var
 	os.Clearenv()
-	os.Setenv("OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!")
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!")
 
 	cfg, err := Load()
 	if err != nil {
@@ -35,12 +42,12 @@ func TestLoad_Defaults(t *testing.T) {
 
 func TestLoad_CustomValues(t *testing.T) {
 	os.Clearenv()
-	os.Setenv("OCMS_SESSION_SECRET", "my-secret")
-	os.Setenv("OCMS_DB_PATH", "/custom/path.db")
-	os.Setenv("OCMS_SERVER_HOST", "0.0.0.0")
-	os.Setenv("OCMS_SERVER_PORT", "3000")
-	os.Setenv("OCMS_ENV", "production")
-	os.Setenv("OCMS_LOG_LEVEL", "debug")
+	setEnv(t, "OCMS_SESSION_SECRET", "my-secret")
+	setEnv(t, "OCMS_DB_PATH", "/custom/path.db")
+	setEnv(t, "OCMS_SERVER_HOST", "0.0.0.0")
+	setEnv(t, "OCMS_SERVER_PORT", "3000")
+	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_LOG_LEVEL", "debug")
 
 	cfg, err := Load()
 	if err != nil {
