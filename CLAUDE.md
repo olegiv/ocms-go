@@ -215,3 +215,121 @@ Additional documentation is available in the `docs/` directory:
 - `docs/csrf.md` - CSRF protection configuration, TrustedOrigins format, and troubleshooting
 
 Security audit documents are available in the `.audit/` directory (gitignored).
+
+## Claude Code Agents
+
+Specialized AI agents are available in `.claude/agents/` for focused development tasks:
+
+### test-runner
+Expert Go test runner for the oCMS project. Handles running tests, debugging failures, and adding test coverage.
+
+**Usage examples:**
+- "Run all tests with coverage"
+- "Test the cache package"
+- "Debug failing API tests"
+- "Add tests for the webhook feature"
+
+**Invoke:** `@test-runner` or use the `/test` command
+
+### db-manager
+Database migration and query management specialist. Works with goose migrations and SQLC code generation.
+
+**Usage examples:**
+- "Create a migration for a comments table"
+- "Regenerate SQLC code"
+- "Add a query to fetch pages by tag"
+- "Check migration status"
+
+**Invoke:** `@db-manager` or use `/migrate` or `/sqlc-generate` commands
+
+### api-developer
+REST API development expert. Helps develop, test, and debug API endpoints with authentication and validation.
+
+**Usage examples:**
+- "Add a new API endpoint for comments"
+- "Test the pages API endpoint"
+- "Debug API authentication issues"
+- "Add pagination to the media API"
+
+**Invoke:** `@api-developer` or use the `/api-test` command
+
+### module-developer
+Module system specialist. Creates and manages modules with lifecycle hooks and i18n support.
+
+**Usage examples:**
+- "Create a new analytics module"
+- "Add a hook to track page views"
+- "Create translations for a module"
+- "Debug module registration issues"
+
+**Invoke:** `@module-developer`
+
+### security-auditor
+Security vulnerability scanner and auditor. Identifies security issues and ensures best practices.
+
+**Usage examples:**
+- "Scan for vulnerabilities"
+- "Check for security issues in dependencies"
+- "Review CSRF protection"
+- "Audit API authentication"
+
+**Invoke:** `@security-auditor` or use the `/security-scan` command
+
+## Claude Code Slash Commands
+
+Quick commands for common development tasks:
+
+### /test
+Run all Go tests with verbose output and coverage reporting. Sets the required `OCMS_SESSION_SECRET` environment variable automatically.
+
+### /build
+Build the production binary. Compiles SCSS assets and creates the `bin/ocms` binary.
+
+### /migrate
+Manage database migrations using goose. Checks status and applies pending migrations.
+
+### /sqlc-generate
+Regenerate SQLC Go code from SQL queries in `internal/store/queries/`.
+
+### /dev-server
+Start the development server with asset compilation. Runs `make dev` and reports server status.
+
+### /api-test
+Test REST API endpoints with actual HTTP requests. Starts server, runs curl tests, and reports results.
+
+### /security-scan
+Scan the project for vulnerabilities using govulncheck. Saves audit report to `.audit/` directory.
+
+### /clean
+Clean build artifacts, compiled binaries, and development databases.
+
+## How to Use Claude Code Extensions
+
+**Agents** - For complex, multi-step tasks requiring specialized knowledge:
+```
+@agent-name Your question or task here
+```
+
+**Commands** - For quick, predefined workflows:
+```
+/command-name
+```
+
+**Examples:**
+```
+@test-runner Run all tests and report coverage
+
+/test
+
+@db-manager Create a migration to add a comments table
+
+/migrate
+
+@api-developer Add a new endpoint for fetching user statistics
+
+/api-test
+
+@security-auditor Scan for vulnerabilities and create an audit report
+
+/security-scan
+```
