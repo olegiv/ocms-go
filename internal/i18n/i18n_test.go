@@ -1,6 +1,8 @@
 package i18n
 
 import (
+	"encoding/json"
+	"fmt"
 	"testing"
 )
 
@@ -117,4 +119,96 @@ func TestGetSupportedLanguages(t *testing.T) {
 	if langs[0] != "en" || langs[1] != "ru" {
 		t.Errorf("Expected [en, ru], got %v", langs)
 	}
+}
+
+func TestTranslationFilesNoDuplicates(t *testing.T) {
+	for _, lang := range SupportedLanguages {
+		t.Run(lang, func(t *testing.T) {
+			path := fmt.Sprintf("locales/%s/messages.json", lang)
+			data, err := localesFS.ReadFile(path)
+			if err != nil {
+				t.Fatalf("Failed to read %s: %v", path, err)
+			}
+
+			var msgFile MessageFile
+			if err := json.Unmarshal(data, &msgFile); err != nil {
+				t.Fatalf("Failed to parse %s: %v", path, err)
+			}
+
+			seen := make(map[string]int)
+			var duplicates []string
+			for i, msg := range msgFile.Messages {
+				if firstIdx, exists := seen[msg.ID]; exists {
+					duplicates = append(duplicates, fmt.Sprintf("%q (lines %d and %d)", msg.ID, firstIdx+1, i+1))
+				} else {
+					seen[msg.ID] = i
+				}
+			}
+
+			if len(duplicates) > 0 {
+				t.Errorf("Found %d duplicate translation IDs in %s:\n  %v", len(duplicates), lang, duplicates)
+			}
+		})
+	}
+}
+
+func TestTranslationFilesEqualCount(t *testing.T) {
+	counts := make(map[string]int)
+	keys := make(map[string]map[string]bool)
+
+	for _, lang := range SupportedLanguages {
+		path := fmt.Sprintf("locales/%s/messages.json", lang)
+		data, err := localesFS.ReadFile(path)
+		if err != nil {
+			t.Fatalf("Failed to read %s: %v", path, err)
+		}
+
+		var msgFile MessageFile
+		if err := json.Unmarshal(data, &msgFile); err != nil {
+			t.Fatalf("Failed to parse %s: %v", path, err)
+		}
+
+		// Count unique keys (in case there are duplicates)
+		keys[lang] = make(map[string]bool)
+		for _, msg := range msgFile.Messages {
+			keys[lang][msg.ID] = true
+		}
+		counts[lang] = len(keys[lang])
+	}
+
+	// Compare all languages to the first one
+	if len(SupportedLanguages) < 2 {
+		return
+	}
+
+	refLang := SupportedLanguages[0]
+	refCount := counts[refLang]
+
+	for _, lang := range SupportedLanguages[1:] {
+		if counts[lang] != refCount {
+			t.Errorf("Translation count mismatch: %s has %d, %s has %d",
+				refLang, refCount, lang, counts[lang])
+
+			// Find missing keys
+			missingInLang := findMissingKeys(keys[refLang], keys[lang])
+			missingInRef := findMissingKeys(keys[lang], keys[refLang])
+
+			if len(missingInLang) > 0 {
+				t.Errorf("Keys in %s but missing in %s: %v", refLang, lang, missingInLang)
+			}
+			if len(missingInRef) > 0 {
+				t.Errorf("Keys in %s but missing in %s: %v", lang, refLang, missingInRef)
+			}
+		}
+	}
+}
+
+func findMissingKeys(a, b map[string]bool) []string {
+	var missing []string
+	for key := range a {
+		if !b[key] {
+			missing = append(missing, key)
+		}
+	}
+	return missing
 }
