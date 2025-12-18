@@ -158,27 +158,8 @@ func run() error {
 	// Add theme manager's template functions (TTheme) to renderer
 	renderer.AddTemplateFuncs(themeManager.TemplateFuncs())
 
-	// Set combined funcMap for theme templates
-	themeManager.SetFuncMap(renderer.TemplateFuncs())
-	if err := themeManager.LoadThemes(); err != nil {
-		slog.Warn("failed to load themes", "error", err)
-	}
-
-	// Set active theme
-	if themeManager.HasTheme(cfg.ActiveTheme) {
-		if err := themeManager.SetActiveTheme(cfg.ActiveTheme); err != nil {
-			slog.Warn("failed to set active theme", "theme", cfg.ActiveTheme, "error", err)
-		}
-	} else if themeManager.ThemeCount() > 0 {
-		// Fall back to first available theme
-		themes := themeManager.ListThemesWithActive()
-		if len(themes) > 0 {
-			if err := themeManager.SetActiveTheme(themes[0].Name); err != nil {
-				slog.Warn("failed to set fallback theme", "error", err)
-			}
-		}
-	}
-	slog.Info("theme manager initialized", "themes", themeManager.ThemeCount())
+	// Note: Theme loading is deferred until after modules are initialized
+	// so that module template functions (like analyticsHead) are available
 
 	// Initialize cache manager with config
 	cacheConfig := cache.CacheConfig{
@@ -270,7 +251,7 @@ func run() error {
 	// Set up hook registry to check module active status
 	hookRegistry.SetIsModuleActive(moduleRegistry.IsActive)
 
-	// Add module template functions to renderer and reload themes
+	// Add module template functions to renderer
 	moduleFuncs := moduleRegistry.AllTemplateFuncs()
 	if len(moduleFuncs) > 0 {
 		renderer.AddTemplateFuncs(moduleFuncs)
@@ -278,20 +259,31 @@ func run() error {
 		if err := renderer.ReloadTemplates(); err != nil {
 			slog.Warn("failed to reload admin templates with module funcs", "error", err)
 		}
-		themeManager.SetFuncMap(renderer.TemplateFuncs())
-		if err := themeManager.LoadThemes(); err != nil {
-			slog.Warn("failed to reload themes with module funcs", "error", err)
-		}
-		// Re-set active theme after reload
-		if themeManager.HasTheme(cfg.ActiveTheme) {
-			if err := themeManager.SetActiveTheme(cfg.ActiveTheme); err != nil {
-				slog.Warn("failed to set active theme after module init", "error", err)
-			}
-		}
-		slog.Info("themes reloaded with module template functions", "funcs", len(moduleFuncs))
 	}
 
 	slog.Info("module system initialized", "modules", moduleRegistry.Count())
+
+	// Load themes (after modules provide their template functions)
+	themeManager.SetFuncMap(renderer.TemplateFuncs())
+	if err := themeManager.LoadThemes(); err != nil {
+		slog.Warn("failed to load themes", "error", err)
+	}
+
+	// Set active theme
+	if themeManager.HasTheme(cfg.ActiveTheme) {
+		if err := themeManager.SetActiveTheme(cfg.ActiveTheme); err != nil {
+			slog.Warn("failed to set active theme", "theme", cfg.ActiveTheme, "error", err)
+		}
+	} else if themeManager.ThemeCount() > 0 {
+		// Fall back to first available theme
+		themes := themeManager.ListThemesWithActive()
+		if len(themes) > 0 {
+			if err := themeManager.SetActiveTheme(themes[0].Name); err != nil {
+				slog.Warn("failed to set fallback theme", "error", err)
+			}
+		}
+	}
+	slog.Info("theme manager initialized", "themes", themeManager.ThemeCount())
 
 	// Create router
 	r := chi.NewRouter()
