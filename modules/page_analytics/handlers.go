@@ -1,0 +1,147 @@
+package page_analytics
+
+import (
+	"encoding/json"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"ocms-go/internal/i18n"
+	"ocms-go/internal/middleware"
+	"ocms-go/internal/render"
+)
+
+// handleDashboard renders the analytics dashboard.
+func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+	if user == nil {
+		http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+		return
+	}
+
+	lang := m.ctx.Render.GetAdminLang(r)
+
+	// Parse date range
+	dateRange := r.URL.Query().Get("range")
+	if dateRange == "" {
+		dateRange = "30d"
+	}
+
+	startDate, endDate := parseDateRange(dateRange)
+
+	// Fetch all dashboard data
+	data := DashboardData{
+		Overview:     m.getOverviewStats(r.Context(), startDate, endDate),
+		TopPages:     m.getTopPages(r.Context(), startDate, endDate, 10),
+		TopReferrers: m.getTopReferrers(r.Context(), startDate, endDate, 10),
+		Browsers:     m.getBrowserStats(r.Context(), startDate, endDate),
+		Devices:      m.getDeviceStats(r.Context(), startDate, endDate),
+		Countries:    m.getCountryStats(r.Context(), startDate, endDate, 10),
+		TimeSeries:   m.getTimeSeries(r.Context(), startDate, endDate),
+		DateRange:    dateRange,
+		Settings:     *m.settings,
+	}
+
+	if err := m.ctx.Render.Render(w, r, "admin/module_page_analytics", render.TemplateData{
+		Title: i18n.T(lang, "page_analytics.title"),
+		User:  user,
+		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
+			{Label: i18n.T(lang, "page_analytics.title"), URL: "/admin/page-analytics", Active: true},
+		},
+	}); err != nil {
+		m.ctx.Logger.Error("render error", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+// handleAPIStats returns JSON stats for HTMX updates.
+func (m *Module) handleAPIStats(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	dateRange := r.URL.Query().Get("range")
+	if dateRange == "" {
+		dateRange = "30d"
+	}
+
+	startDate, endDate := parseDateRange(dateRange)
+
+	data := map[string]any{
+		"overview":   m.getOverviewStats(r.Context(), startDate, endDate),
+		"topPages":   m.getTopPages(r.Context(), startDate, endDate, 10),
+		"timeSeries": m.getTimeSeries(r.Context(), startDate, endDate),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
+}
+
+// handleRealtime returns real-time visitor count.
+func (m *Module) handleRealtime(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	count := m.GetRealTimeVisitorCount(5)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]int{"visitors": count})
+}
+
+// handleSaveSettings saves module settings.
+func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	lang := m.ctx.Render.GetAdminLang(r)
+
+	if err := r.ParseForm(); err != nil {
+		m.ctx.Logger.Error("parse form error", "error", err)
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "page_analytics.error_save"), "error")
+		http.Redirect(w, r, "/admin/page-analytics", http.StatusSeeOther)
+		return
+	}
+
+	// Update settings
+	m.settings.Enabled = r.FormValue("enabled") == "1"
+
+	// Parse retention days
+	if retentionStr := r.FormValue("retention_days"); retentionStr != "" {
+		if retention, err := strconv.Atoi(retentionStr); err == nil && retention > 0 {
+			m.settings.RetentionDays = retention
+		}
+	}
+
+	// Parse excluded paths (newline-separated)
+	excludePathsStr := r.FormValue("exclude_paths")
+	var excludePaths []string
+	for _, path := range strings.Split(excludePathsStr, "\n") {
+		path = strings.TrimSpace(path)
+		if path != "" {
+			excludePaths = append(excludePaths, path)
+		}
+	}
+	m.settings.ExcludePaths = excludePaths
+
+	// Save to database
+	if err := m.saveSettings(); err != nil {
+		m.ctx.Logger.Error("failed to save settings", "error", err)
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "page_analytics.error_save"), "error")
+	} else {
+		m.ctx.Logger.Info("page analytics settings updated", "user", user.Email)
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "page_analytics.success_save"), "success")
+	}
+
+	http.Redirect(w, r, "/admin/page-analytics", http.StatusSeeOther)
+}

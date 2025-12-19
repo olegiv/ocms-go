@@ -35,6 +35,7 @@ import (
 	"ocms-go/modules/developer"
 	"ocms-go/modules/example"
 	"ocms-go/modules/hcaptcha"
+	"ocms-go/modules/page_analytics"
 	"ocms-go/web"
 )
 
@@ -238,6 +239,12 @@ func run() error {
 		return fmt.Errorf("registering hcaptcha module: %w", err)
 	}
 
+	// Register page analytics module (built-in analytics tracking)
+	pageAnalyticsModule := page_analytics.New()
+	if err := moduleRegistry.Register(pageAnalyticsModule); err != nil {
+		return fmt.Errorf("registering page_analytics module: %w", err)
+	}
+
 	// Initialize all registered modules
 	if err := moduleRegistry.InitAll(moduleCtx); err != nil {
 		return fmt.Errorf("initializing modules: %w", err)
@@ -366,9 +373,13 @@ func run() error {
 	r.Get("/health/live", healthHandler.Liveness)
 	r.Get("/health/ready", healthHandler.Readiness)
 
-	// Public frontend routes (with language detection middleware)
+	// Public frontend routes (with language detection and analytics tracking)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Language(db))
+		// Add page analytics tracking middleware (if module is enabled)
+		if pageAnalyticsModule.IsEnabled() {
+			r.Use(pageAnalyticsModule.GetTrackingMiddleware())
+		}
 
 		// Default language routes (no prefix)
 		r.Get("/", frontendHandler.Home)
