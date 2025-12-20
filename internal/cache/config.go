@@ -12,7 +12,7 @@ import (
 // It loads all config values once and serves them from memory,
 // with automatic invalidation on updates.
 type ConfigCache struct {
-	cache   *Cache
+	cache   *SimpleCache
 	queries *store.Queries
 	mu      sync.RWMutex
 	loaded  bool

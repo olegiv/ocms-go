@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// Cache is a thread-safe in-memory cache with TTL support.
-type Cache struct {
+// SimpleCache is a thread-safe in-memory cache with TTL support.
+type SimpleCache struct {
 	data    sync.Map
 	ttl     time.Duration
 	stopCh  chan struct{}
@@ -39,8 +39,8 @@ type Stats struct {
 }
 
 // New creates a new cache with the specified TTL.
-func New(ttl time.Duration) *Cache {
-	return &Cache{
+func New(ttl time.Duration) *SimpleCache {
+	return &SimpleCache{
 		ttl:    ttl,
 		stopCh: make(chan struct{}),
 	}
@@ -48,7 +48,7 @@ func New(ttl time.Duration) *Cache {
 
 // Get retrieves a value from the cache.
 // Returns the value and true if found and not expired, nil and false otherwise.
-func (c *Cache) Get(key string) (any, bool) {
+func (c *SimpleCache) Get(key string) (any, bool) {
 	val, ok := c.data.Load(key)
 	if !ok {
 		c.misses.Add(1)
@@ -68,12 +68,12 @@ func (c *Cache) Get(key string) (any, bool) {
 }
 
 // Set stores a value in the cache with the default TTL.
-func (c *Cache) Set(key string, value any) {
+func (c *SimpleCache) Set(key string, value any) {
 	c.SetWithTTL(key, value, c.ttl)
 }
 
 // SetWithTTL stores a value in the cache with a custom TTL.
-func (c *Cache) SetWithTTL(key string, value any, ttl time.Duration) {
+func (c *SimpleCache) SetWithTTL(key string, value any, ttl time.Duration) {
 	entry := &cacheEntry{
 		value:     value,
 		expiresAt: time.Now().Add(ttl),
@@ -83,12 +83,12 @@ func (c *Cache) SetWithTTL(key string, value any, ttl time.Duration) {
 }
 
 // Delete removes a key from the cache.
-func (c *Cache) Delete(key string) {
+func (c *SimpleCache) Delete(key string) {
 	c.data.Delete(key)
 }
 
 // DeleteByPrefix removes all keys starting with the given prefix.
-func (c *Cache) DeleteByPrefix(prefix string) {
+func (c *SimpleCache) DeleteByPrefix(prefix string) {
 	c.data.Range(func(key, value any) bool {
 		k := key.(string)
 		if len(k) >= len(prefix) && k[:len(prefix)] == prefix {
@@ -99,7 +99,7 @@ func (c *Cache) DeleteByPrefix(prefix string) {
 }
 
 // Clear removes all entries from the cache.
-func (c *Cache) Clear() {
+func (c *SimpleCache) Clear() {
 	c.data.Range(func(key, value any) bool {
 		c.data.Delete(key)
 		return true
@@ -107,7 +107,7 @@ func (c *Cache) Clear() {
 }
 
 // StartCleanup starts a background goroutine that periodically removes expired entries.
-func (c *Cache) StartCleanup(interval time.Duration) {
+func (c *SimpleCache) StartCleanup(interval time.Duration) {
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -124,14 +124,14 @@ func (c *Cache) StartCleanup(interval time.Duration) {
 }
 
 // Stop stops the cleanup goroutine.
-func (c *Cache) Stop() {
+func (c *SimpleCache) Stop() {
 	if c.stopped.CompareAndSwap(false, true) {
 		close(c.stopCh)
 	}
 }
 
 // removeExpired removes all expired entries from the cache.
-func (c *Cache) removeExpired() {
+func (c *SimpleCache) removeExpired() {
 	now := time.Now()
 	c.data.Range(func(key, value any) bool {
 		entry := value.(*cacheEntry)
@@ -143,7 +143,7 @@ func (c *Cache) removeExpired() {
 }
 
 // Stats returns current cache statistics.
-func (c *Cache) Stats() Stats {
+func (c *SimpleCache) Stats() Stats {
 	hits := c.hits.Load()
 	misses := c.misses.Load()
 	total := hits + misses
@@ -171,7 +171,7 @@ func (c *Cache) Stats() Stats {
 }
 
 // ResetStats resets the cache statistics.
-func (c *Cache) ResetStats() {
+func (c *SimpleCache) ResetStats() {
 	c.hits.Store(0)
 	c.misses.Store(0)
 	c.sets.Store(0)
@@ -180,7 +180,7 @@ func (c *Cache) ResetStats() {
 }
 
 // Keys returns all keys in the cache (including expired ones).
-func (c *Cache) Keys() []string {
+func (c *SimpleCache) Keys() []string {
 	var keys []string
 	c.data.Range(func(key, value any) bool {
 		keys = append(keys, key.(string))

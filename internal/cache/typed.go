@@ -7,14 +7,14 @@ import (
 )
 
 // TypedCache provides type-safe caching operations using generics.
-// It wraps a Cacher implementation and handles JSON serialization/deserialization.
+// It wraps a Cache implementation and handles JSON serialization/deserialization.
 type TypedCache[T any] struct {
-	cache      Cacher
+	cache      Cache
 	defaultTTL time.Duration
 }
 
 // NewTypedCache creates a new TypedCache wrapping the given cache implementation.
-func NewTypedCache[T any](cache Cacher, defaultTTL time.Duration) *TypedCache[T] {
+func NewTypedCache[T any](cache Cache, defaultTTL time.Duration) *TypedCache[T] {
 	return &TypedCache[T]{
 		cache:      cache,
 		defaultTTL: defaultTTL,
@@ -95,7 +95,7 @@ type MultiTypedCache[T any] struct {
 }
 
 // NewMultiTypedCache creates a new MultiTypedCache.
-func NewMultiTypedCache[T any](cache Cacher, defaultTTL time.Duration) *MultiTypedCache[T] {
+func NewMultiTypedCache[T any](cache Cache, defaultTTL time.Duration) *MultiTypedCache[T] {
 	return &MultiTypedCache[T]{
 		TypedCache: NewTypedCache[T](cache, defaultTTL),
 	}

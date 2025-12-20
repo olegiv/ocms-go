@@ -12,7 +12,7 @@ import (
 // SitemapCache provides cached sitemap XML generation.
 // The sitemap is regenerated when invalidated or when TTL expires.
 type SitemapCache struct {
-	cache   *Cache
+	cache   *SimpleCache
 	queries *store.Queries
 	mu      sync.RWMutex
 
