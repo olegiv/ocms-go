@@ -23,7 +23,7 @@ type TranslationMap map[string]int64
 // TranslationCache provides cached access to translation mappings.
 // Caches are organized by entity type for efficient bulk operations.
 type TranslationCache struct {
-	cache   *Cache // Use existing Cache for stats tracking
+	cache   *SimpleCache // Use existing SimpleCache for stats tracking
 	queries *store.Queries
 	mu      sync.RWMutex
 	// translations[entityType][entityID] = map[langCode]translationID

@@ -10,7 +10,7 @@ import (
 )
 
 // RedisCache is a Redis-based cache implementation.
-// It implements the Cacher interface for distributed caching.
+// It implements the Cache interface for distributed caching.
 type RedisCache struct {
 	client     *redis.Client
 	prefix     string
@@ -323,8 +323,8 @@ func (c *RedisCache) Client() *redis.Client {
 	return c.client
 }
 
-// Ensure RedisCache implements Cacher and StatsProvider.
+// Ensure RedisCache implements Cache and StatsProvider.
 var (
-	_ Cacher        = (*RedisCache)(nil)
+	_ Cache         = (*RedisCache)(nil)
 	_ StatsProvider = (*RedisCache)(nil)
 )

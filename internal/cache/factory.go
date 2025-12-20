@@ -40,7 +40,7 @@ type Config struct {
 
 // Result holds the created cache and metadata about it.
 type Result struct {
-	Cache       Cacher
+	Cache       Cache
 	BackendType BackendType
 	IsFallback  bool // True if fell back to memory due to Redis failure
 }

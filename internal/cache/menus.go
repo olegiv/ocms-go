@@ -17,7 +17,7 @@ type MenuWithItems struct {
 // MenuCache provides cached access to menus.
 // Menus are cached by slug for efficient frontend lookups.
 type MenuCache struct {
-	cache   *Cache // Use existing Cache for backward compatibility
+	cache   *SimpleCache // Use existing SimpleCache for backward compatibility
 	queries *store.Queries
 	mu      sync.RWMutex
 	menus   map[string]*MenuWithItems // slug -> menu with items

@@ -8,7 +8,7 @@ import (
 )
 
 // MemoryCache is a thread-safe in-memory cache implementation.
-// It implements the Cacher interface using []byte values.
+// It implements the Cache interface using []byte values.
 type MemoryCache struct {
 	data       sync.Map
 	defaultTTL time.Duration
@@ -284,8 +284,8 @@ func (c *MemoryCache) cleanupLoop(interval time.Duration) {
 	}
 }
 
-// Ensure MemoryCache implements Cacher and StatsProvider.
+// Ensure MemoryCache implements Cache and StatsProvider.
 var (
-	_ Cacher        = (*MemoryCache)(nil)
+	_ Cache         = (*MemoryCache)(nil)
 	_ StatsProvider = (*MemoryCache)(nil)
 )

@@ -6,10 +6,10 @@ import (
 	"time"
 )
 
-// Cacher defines the interface for cache implementations.
+// Cache defines the interface for cache implementations.
 // All implementations must be thread-safe.
 // This interface uses []byte for values to support both in-memory and Redis caches.
-type Cacher interface {
+type Cache interface {
 	// Get retrieves a value from the cache.
 	// Returns the value and nil error if found.
 	// Returns nil and ErrCacheMiss if not found or expired.

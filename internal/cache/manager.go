@@ -44,10 +44,10 @@ type Manager struct {
 	Menus       *MenuCache
 	Language    *LanguageCache
 	Translation *TranslationCache
-	General     *Cache // for misc cached data
+	General     *SimpleCache // for misc cached data
 
 	// Distributed cache (optional, nil if only using memory cache)
-	Distributed Cacher
+	Distributed Cache
 
 	// Theme settings cache key prefix
 	ThemeSettingsPrefix string

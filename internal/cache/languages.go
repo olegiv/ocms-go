@@ -11,7 +11,7 @@ import (
 // LanguageCache provides cached access to languages.
 // Languages are cached for efficient lookups during request processing.
 type LanguageCache struct {
-	cache       *Cache // Use existing Cache for backward compatibility
+	cache       *SimpleCache // Use existing SimpleCache for backward compatibility
 	queries     *store.Queries
 	mu          sync.RWMutex
 	languages   []store.Language          // All languages
