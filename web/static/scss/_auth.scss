@@ -119,6 +119,7 @@
 
     &:hover:not(:disabled) {
         background-color: $primary-dark;
+        color: $white;
     }
 }
 

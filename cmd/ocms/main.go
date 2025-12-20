@@ -31,11 +31,11 @@ import (
 	"ocms-go/internal/store"
 	"ocms-go/internal/theme"
 	"ocms-go/internal/webhook"
-	"ocms-go/modules/analytics"
+	"ocms-go/modules/analytics_ext"
+	"ocms-go/modules/analytics_int"
 	"ocms-go/modules/developer"
 	"ocms-go/modules/example"
 	"ocms-go/modules/hcaptcha"
-	"ocms-go/modules/page_analytics"
 	"ocms-go/web"
 )
 
@@ -232,17 +232,17 @@ func run() error {
 	if err := moduleRegistry.Register(developer.New()); err != nil {
 		return fmt.Errorf("registering developer module: %w", err)
 	}
-	if err := moduleRegistry.Register(analytics.New()); err != nil {
-		return fmt.Errorf("registering analytics module: %w", err)
+	if err := moduleRegistry.Register(analytics_ext.New()); err != nil {
+		return fmt.Errorf("registering analytics_ext module: %w", err)
 	}
 	if err := moduleRegistry.Register(hcaptcha.New()); err != nil {
 		return fmt.Errorf("registering hcaptcha module: %w", err)
 	}
 
-	// Register page analytics module (built-in analytics tracking)
-	pageAnalyticsModule := page_analytics.New()
-	if err := moduleRegistry.Register(pageAnalyticsModule); err != nil {
-		return fmt.Errorf("registering page_analytics module: %w", err)
+	// Register internal analytics module (built-in analytics tracking)
+	internalAnalyticsModule := analytics_int.New()
+	if err := moduleRegistry.Register(internalAnalyticsModule); err != nil {
+		return fmt.Errorf("registering analytics_int module: %w", err)
 	}
 
 	// Initialize all registered modules
@@ -376,9 +376,9 @@ func run() error {
 	// Public frontend routes (with language detection and analytics tracking)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Language(db))
-		// Add page analytics tracking middleware (if module is enabled)
-		if pageAnalyticsModule.IsEnabled() {
-			r.Use(pageAnalyticsModule.GetTrackingMiddleware())
+		// Add internal analytics tracking middleware (if module is enabled)
+		if internalAnalyticsModule.IsEnabled() {
+			r.Use(internalAnalyticsModule.GetTrackingMiddleware())
 		}
 
 		// Default language routes (no prefix)
@@ -739,14 +739,6 @@ func run() error {
 
 	// Register module public routes
 	moduleRegistry.RouteAll(r)
-
-	// Page by slug route (catches all unmatched single-level paths)
-	// This should be registered last to catch pages by slug
-	// Uses language middleware to detect language from cookie/Accept-Language
-	r.Group(func(r chi.Router) {
-		r.Use(middleware.Language(db))
-		r.Get("/{slug}", frontendHandler.Page)
-	})
 
 	// 404 Not Found handler - use frontend theme's 404
 	r.NotFound(func(w http.ResponseWriter, req *http.Request) {

@@ -1,0 +1,31 @@
+{
+    "$schema": "../../../../.schema/i18n-schema.json",
+    "language": "ru",
+    "messages": [
+        {"id": "analytics_ext.title", "message": "External Analytics", "translation": "Внешняя аналитика"},
+        {"id": "analytics_ext.description", "message": "Configure website analytics and tracking services", "translation": "Настройка сервисов веб-аналитики и отслеживания"},
+        {"id": "analytics_ext.ga4_title", "message": "Google Analytics 4", "translation": "Google Analytics 4"},
+        {"id": "analytics_ext.ga4_description", "message": "Track website traffic and user behavior with Google Analytics", "translation": "Отслеживание трафика и поведения пользователей с помощью Google Analytics"},
+        {"id": "analytics_ext.ga4_measurement_id", "message": "Measurement ID", "translation": "Идентификатор измерения"},
+        {"id": "analytics_ext.ga4_measurement_id_help", "message": "Find this in your GA4 property settings", "translation": "Найдите его в настройках вашего ресурса GA4 (например, G-XXXXXXXXXX)"},
+        {"id": "analytics_ext.gtm_title", "message": "Google Tag Manager", "translation": "Google Tag Manager"},
+        {"id": "analytics_ext.gtm_description", "message": "Manage all your tracking tags in one place", "translation": "Управление всеми тегами отслеживания в одном месте"},
+        {"id": "analytics_ext.gtm_container_id", "message": "Container ID", "translation": "ID контейнера"},
+        {"id": "analytics_ext.gtm_container_id_help", "message": "Find this in your GTM workspace", "translation": "Найдите его в вашем рабочем пространстве GTM (например, GTM-XXXXXXX)"},
+        {"id": "analytics_ext.gtm_ga4_note", "message": "If GTM is enabled, GA4 tracking code will not be injected directly.", "translation": "Если GTM включен, код отслеживания GA4 не будет внедрен напрямую. Настройте GA4 через ваш контейнер GTM."},
+        {"id": "analytics_ext.matomo_title", "message": "Matomo", "translation": "Matomo"},
+        {"id": "analytics_ext.matomo_description", "message": "Privacy-focused, self-hosted web analytics", "translation": "Самостоятельно размещаемая веб-аналитика с фокусом на конфиденциальность"},
+        {"id": "analytics_ext.matomo_url", "message": "Matomo URL", "translation": "URL Matomo"},
+        {"id": "analytics_ext.matomo_url_help", "message": "Your Matomo installation URL", "translation": "URL вашей установки Matomo"},
+        {"id": "analytics_ext.matomo_site_id", "message": "Site ID", "translation": "ID сайта"},
+        {"id": "analytics_ext.matomo_site_id_help", "message": "Your website ID in Matomo", "translation": "Идентификатор вашего сайта в Matomo"},
+        {"id": "analytics_ext.save_button", "message": "Save Settings", "translation": "Сохранить настройки"},
+        {"id": "analytics_ext.success_save", "message": "Analytics settings saved successfully", "translation": "Настройки аналитики успешно сохранены"},
+        {"id": "analytics_ext.error_save", "message": "Failed to save analytics settings", "translation": "Не удалось сохранить настройки аналитики"},
+        {"id": "analytics_ext.error_parse_form", "message": "Failed to parse form data", "translation": "Не удалось обработать данные формы"},
+        {"id": "analytics_ext.error_ga4_id_required", "message": "GA4 Measurement ID is required when GA4 is enabled", "translation": "Идентификатор измерения GA4 обязателен, если GA4 включен"},
+        {"id": "analytics_ext.error_gtm_id_required", "message": "GTM Container ID is required when GTM is enabled", "translation": "ID контейнера GTM обязателен, если GTM включен"},
+        {"id": "analytics_ext.error_matomo_url_required", "message": "Matomo URL is required when Matomo is enabled", "translation": "URL Matomo обязателен, если Matomo включен"},
+        {"id": "analytics_ext.error_matomo_site_id_required", "message": "Matomo Site ID is required when Matomo is enabled", "translation": "ID сайта Matomo обязателен, если Matomo включен"}
+    ]
+}

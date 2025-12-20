@@ -33,6 +33,7 @@
 
   &:hover:not(:disabled) {
     background-color: $primary-dark;
+    color: $white;
   }
 }
 
@@ -51,6 +52,7 @@
 
   &:hover:not(:disabled) {
     background-color: color.adjust($error, $lightness: -10%);
+    color: $white;
   }
 }
 

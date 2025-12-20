@@ -60,15 +60,15 @@
     <style>{{.CustomCSS | safeHTML}}</style>
     {{end}}
 
-    {{/* Analytics tracking scripts (head) */}}
-    {{if analyticsHead}}{{analyticsHead}}{{end}}
+    {{/* External analytics tracking scripts (head) */}}
+    {{if analyticsExtHead}}{{analyticsExtHead}}{{end}}
 
     {{/* Additional head content */}}
     {{block "head" .}}{{end}}
 </head>
 <body class="{{if .BodyClass}}{{.BodyClass}}{{end}}">
-    {{/* Analytics tracking scripts (body - noscript fallbacks) */}}
-    {{if analyticsBody}}{{analyticsBody}}{{end}}
+    {{/* External analytics tracking scripts (body - noscript fallbacks) */}}
+    {{if analyticsExtBody}}{{analyticsExtBody}}{{end}}
 
     {{template "header.html" .}}
 
