@@ -48,7 +48,7 @@ type StatsProvider interface {
 	ResetStats()
 }
 
-// Error types for cache operations.
+// CacheError represents an error type for cache operations.
 type CacheError string
 
 func (e CacheError) Error() string {

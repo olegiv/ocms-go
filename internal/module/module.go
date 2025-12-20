@@ -30,20 +30,24 @@ type ModuleContext struct {
 
 // Module defines the interface that all modules must implement.
 type Module interface {
-	// Metadata returns information about the module.
+	// Name returns the module name.
 	Name() string
+	// Version returns the module version.
 	Version() string
+	// Description returns the module description.
 	Description() string
+	// Dependencies returns the list of module dependencies.
 	Dependencies() []string
 
-	// Lifecycle methods.
+	// Init initializes the module with the given context.
 	Init(ctx *ModuleContext) error
+	// Shutdown performs cleanup when the module is shutting down.
 	Shutdown() error
 
-	// Routes registers public routes for the module.
+	// RegisterRoutes registers public routes for the module.
 	RegisterRoutes(r chi.Router)
 
-	// AdminRoutes registers admin routes for the module.
+	// RegisterAdminRoutes registers admin routes for the module.
 	RegisterAdminRoutes(r chi.Router)
 
 	// TemplateFuncs returns template functions provided by the module.

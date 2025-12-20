@@ -171,7 +171,7 @@ func run() error {
 	// so that module template functions (like analyticsHead) are available
 
 	// Initialize cache manager with config
-	cacheConfig := cache.CacheConfig{
+	cacheConfig := cache.Config{
 		Type:             "memory",
 		RedisURL:         cfg.RedisURL,
 		Prefix:           cfg.CachePrefix,

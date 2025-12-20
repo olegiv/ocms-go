@@ -5,16 +5,16 @@ import (
 	"time"
 )
 
-// CacheType identifies the type of cache backend.
-type CacheBackendType string
+// BackendType identifies the type of cache backend.
+type BackendType string
 
 const (
-	CacheBackendMemory CacheBackendType = "memory"
-	CacheBackendRedis  CacheBackendType = "redis"
+	BackendMemory BackendType = "memory"
+	BackendRedis  BackendType = "redis"
 )
 
-// CacheConfig holds configuration for cache creation.
-type CacheConfig struct {
+// Config holds configuration for cache creation.
+type Config struct {
 	// Type is the cache backend type: "memory" or "redis"
 	Type string
 
@@ -38,9 +38,9 @@ type CacheConfig struct {
 	FallbackToMemory bool
 }
 
-// DefaultCacheConfig returns default cache configuration.
-func DefaultCacheConfig() CacheConfig {
-	return CacheConfig{
+// DefaultConfig returns default cache configuration.
+func DefaultConfig() Config {
+	return Config{
 		Type:             "memory",
 		Prefix:           "ocms:",
 		DefaultTTL:       time.Hour,
@@ -50,17 +50,17 @@ func DefaultCacheConfig() CacheConfig {
 	}
 }
 
-// CacheResult holds the created cache and metadata about it.
-type CacheResult struct {
+// Result holds the created cache and metadata about it.
+type Result struct {
 	Cache       Cacher
-	BackendType CacheBackendType
+	BackendType BackendType
 	IsFallback  bool // True if fell back to memory due to Redis failure
 }
 
 // NewCache creates a cache based on the provided configuration.
 // If RedisURL is provided and type is "redis", attempts to create a Redis cache.
 // Falls back to memory cache if Redis is unavailable and FallbackToMemory is true.
-func NewCache(cfg CacheConfig) (Cacher, error) {
+func NewCache(cfg Config) (Cacher, error) {
 	result, err := NewCacheWithInfo(cfg)
 	if err != nil {
 		return nil, err
@@ -69,7 +69,7 @@ func NewCache(cfg CacheConfig) (Cacher, error) {
 }
 
 // NewCacheWithInfo creates a cache and returns additional metadata about the cache type.
-func NewCacheWithInfo(cfg CacheConfig) (*CacheResult, error) {
+func NewCacheWithInfo(cfg Config) (*Result, error) {
 	// Try Redis if configured
 	if cfg.Type == "redis" && cfg.RedisURL != "" {
 		redisCache, err := NewRedisCacheFromURL(cfg.RedisURL, cfg.Prefix, cfg.DefaultTTL)
@@ -92,9 +92,9 @@ func NewCacheWithInfo(cfg CacheConfig) (*CacheResult, error) {
 				CleanupInterval: cfg.CleanupInterval,
 			})
 
-			return &CacheResult{
+			return &Result{
 				Cache:       memCache,
-				BackendType: CacheBackendMemory,
+				BackendType: BackendMemory,
 				IsFallback:  true,
 			}, nil
 		}
@@ -104,9 +104,9 @@ func NewCacheWithInfo(cfg CacheConfig) (*CacheResult, error) {
 			"prefix", cfg.Prefix,
 		)
 
-		return &CacheResult{
+		return &Result{
 			Cache:       redisCache,
-			BackendType: CacheBackendRedis,
+			BackendType: BackendRedis,
 			IsFallback:  false,
 		}, nil
 	}
@@ -118,16 +118,16 @@ func NewCacheWithInfo(cfg CacheConfig) (*CacheResult, error) {
 		CleanupInterval: cfg.CleanupInterval,
 	})
 
-	return &CacheResult{
+	return &Result{
 		Cache:       memCache,
-		BackendType: CacheBackendMemory,
+		BackendType: BackendMemory,
 		IsFallback:  false,
 	}, nil
 }
 
 // NewDefaultCache creates a cache with default configuration.
 func NewDefaultCache() Cacher {
-	cache, _ := NewCache(DefaultCacheConfig())
+	cache, _ := NewCache(DefaultConfig())
 	return cache
 }
 
