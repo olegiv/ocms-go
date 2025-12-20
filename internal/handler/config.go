@@ -64,39 +64,12 @@ func (h *ConfigHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert to ConfigItem with labels, excluding keys managed elsewhere
-	items := make([]ConfigItem, 0, len(configs))
-	for _, cfg := range configs {
-		// Skip active_theme - managed in Themes settings
-		if cfg.Key == "active_theme" {
-			continue
-		}
-		items = append(items, ConfigItem{
-			Key:         cfg.Key,
-			Value:       cfg.Value,
-			Type:        cfg.Type,
-			Description: configKeyToDescription(cfg.Key, cfg.Description, lang),
-			Label:       configKeyToLabel(cfg.Key, lang),
-		})
-	}
-
 	data := ConfigFormData{
-		Items:  items,
+		Items:  toConfigItems(configs, lang, nil),
 		Errors: make(map[string]string),
 	}
 
-	if err := h.renderer.Render(w, r, "admin/config", render.TemplateData{
-		Title: i18n.T(lang, "config.title"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "config.title"), URL: "/admin/config", Active: true},
-		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	h.renderConfigPage(w, r, user, lang, data)
 }
 
 // Update handles PUT /admin/config - updates configuration values.
@@ -164,43 +137,18 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(validationErrors) > 0 {
-		// Re-render form with errors
-		items := make([]ConfigItem, 0, len(configs))
+		// Build form values map for re-rendering
+		formValues := make(map[string]string)
 		for _, cfg := range configs {
-			// Skip active_theme - managed in Themes settings
-			if cfg.Key == "active_theme" {
-				continue
-			}
-			value := r.FormValue(cfg.Key)
-			if cfg.Type == model.ConfigTypeBool && value == "" {
-				value = "false"
-			}
-			items = append(items, ConfigItem{
-				Key:         cfg.Key,
-				Value:       value,
-				Type:        cfg.Type,
-				Description: configKeyToDescription(cfg.Key, cfg.Description, lang),
-				Label:       configKeyToLabel(cfg.Key, lang),
-			})
+			formValues[cfg.Key] = r.FormValue(cfg.Key)
 		}
 
 		data := ConfigFormData{
-			Items:  items,
+			Items:  toConfigItems(configs, lang, formValues),
 			Errors: validationErrors,
 		}
 
-		if err := h.renderer.Render(w, r, "admin/config", render.TemplateData{
-			Title: i18n.T(lang, "config.title"),
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-				{Label: i18n.T(lang, "config.title"), URL: "/admin/config", Active: true},
-			},
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		h.renderConfigPage(w, r, user, lang, data)
 		return
 	}
 
@@ -250,4 +198,54 @@ func configKeyToDescription(key string, dbDescription string, lang string) strin
 
 	// Fallback to database description
 	return dbDescription
+}
+
+// configBreadcrumbs returns the standard breadcrumbs for config pages.
+func configBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+		{Label: i18n.T(lang, "config.title"), URL: "/admin/config", Active: true},
+	}
+}
+
+// renderConfigPage renders the config page with standard template data.
+func (h *ConfigHandler) renderConfigPage(w http.ResponseWriter, r *http.Request, user any, lang string, data ConfigFormData) {
+	if err := h.renderer.Render(w, r, "admin/config", render.TemplateData{
+		Title:       i18n.T(lang, "config.title"),
+		User:        user,
+		Data:        data,
+		Breadcrumbs: configBreadcrumbs(lang),
+	}); err != nil {
+		slog.Error("render error", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+// toConfigItems converts store.Config slice to ConfigItem slice.
+// It skips keys managed elsewhere (like active_theme).
+// If formValues is provided, it uses those values instead of database values.
+func toConfigItems(configs []store.Config, lang string, formValues map[string]string) []ConfigItem {
+	items := make([]ConfigItem, 0, len(configs))
+	for _, cfg := range configs {
+		// Skip active_theme - managed in Themes settings
+		if cfg.Key == "active_theme" {
+			continue
+		}
+		value := cfg.Value
+		if formValues != nil {
+			if v, ok := formValues[cfg.Key]; ok {
+				value = v
+			} else if cfg.Type == model.ConfigTypeBool {
+				value = "false"
+			}
+		}
+		items = append(items, ConfigItem{
+			Key:         cfg.Key,
+			Value:       value,
+			Type:        cfg.Type,
+			Description: configKeyToDescription(cfg.Key, cfg.Description, lang),
+			Label:       configKeyToLabel(cfg.Key, lang),
+		})
+	}
+	return items
 }

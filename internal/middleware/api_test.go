@@ -47,6 +47,29 @@ func setupTestDB(t *testing.T) *sql.DB {
 	return db
 }
 
+// simpleOKHandler returns an http.Handler that writes 200 OK.
+var simpleOKHandler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusOK)
+})
+
+// executeRequest creates a test request and executes it against the handler.
+// Returns the response recorder.
+func executeRequest(handler http.Handler, method, path string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, path, nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	return w
+}
+
+// executeAuthRequest creates a test request with an auth header and executes it.
+func executeAuthRequest(handler http.Handler, method, path, authHeader string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, path, nil)
+	req.Header.Set("Authorization", authHeader)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	return w
+}
+
 // insertTestAPIKey inserts a test API key and returns the raw key.
 func insertTestAPIKey(t *testing.T, db *sql.DB, name string, permissions []string, isActive bool, expiresAt *time.Time) string {
 	t.Helper()
@@ -110,14 +133,8 @@ func TestAPIKeyAuth_MissingHeader(t *testing.T) {
 	db := setupTestDB(t)
 	defer func() { _ = db.Close() }()
 
-	handler := APIKeyAuth(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	req := httptest.NewRequest("GET", "/api/test", nil)
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, req)
+	handler := APIKeyAuth(db)(simpleOKHandler)
+	w := executeRequest(handler, "GET", "/api/test")
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
@@ -128,9 +145,7 @@ func TestAPIKeyAuth_InvalidFormat(t *testing.T) {
 	db := setupTestDB(t)
 	defer func() { _ = db.Close() }()
 
-	handler := APIKeyAuth(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
+	handler := APIKeyAuth(db)(simpleOKHandler)
 
 	testCases := []string{
 		"InvalidFormat",   // No "Bearer" prefix
@@ -140,11 +155,7 @@ func TestAPIKeyAuth_InvalidFormat(t *testing.T) {
 	}
 
 	for _, authHeader := range testCases {
-		req := httptest.NewRequest("GET", "/api/test", nil)
-		req.Header.Set("Authorization", authHeader)
-		w := httptest.NewRecorder()
-
-		handler.ServeHTTP(w, req)
+		w := executeAuthRequest(handler, "GET", "/api/test", authHeader)
 
 		if w.Code != http.StatusUnauthorized {
 			t.Errorf("auth header '%s': expected status %d, got %d", authHeader, http.StatusUnauthorized, w.Code)
@@ -156,15 +167,8 @@ func TestAPIKeyAuth_InvalidKey(t *testing.T) {
 	db := setupTestDB(t)
 	defer func() { _ = db.Close() }()
 
-	handler := APIKeyAuth(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	req := httptest.NewRequest("GET", "/api/test", nil)
-	req.Header.Set("Authorization", "Bearer invalid-key-that-does-not-exist")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, req)
+	handler := APIKeyAuth(db)(simpleOKHandler)
+	w := executeAuthRequest(handler, "GET", "/api/test", "Bearer invalid-key-that-does-not-exist")
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
@@ -176,16 +180,8 @@ func TestAPIKeyAuth_InactiveKey(t *testing.T) {
 	defer func() { _ = db.Close() }()
 
 	rawKey := insertTestAPIKey(t, db, "Inactive Key", []string{"pages:read"}, false, nil)
-
-	handler := APIKeyAuth(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	req := httptest.NewRequest("GET", "/api/test", nil)
-	req.Header.Set("Authorization", "Bearer "+rawKey)
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, req)
+	handler := APIKeyAuth(db)(simpleOKHandler)
+	w := executeAuthRequest(handler, "GET", "/api/test", "Bearer "+rawKey)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
@@ -198,16 +194,8 @@ func TestAPIKeyAuth_ExpiredKey(t *testing.T) {
 
 	expires := time.Now().Add(-1 * time.Hour) // Expired 1 hour ago
 	rawKey := insertTestAPIKey(t, db, "Expired Key", []string{"pages:read"}, true, &expires)
-
-	handler := APIKeyAuth(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	req := httptest.NewRequest("GET", "/api/test", nil)
-	req.Header.Set("Authorization", "Bearer "+rawKey)
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, req)
+	handler := APIKeyAuth(db)(simpleOKHandler)
+	w := executeAuthRequest(handler, "GET", "/api/test", "Bearer "+rawKey)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
@@ -251,16 +239,8 @@ func TestAPIKeyAuth_ValidKeyWithFutureExpiry(t *testing.T) {
 
 	expires := time.Now().Add(24 * time.Hour) // Expires in 24 hours
 	rawKey := insertTestAPIKey(t, db, "Future Expiry", []string{"pages:read"}, true, &expires)
-
-	handler := APIKeyAuth(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	req := httptest.NewRequest("GET", "/api/test", nil)
-	req.Header.Set("Authorization", "Bearer "+rawKey)
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, req)
+	handler := APIKeyAuth(db)(simpleOKHandler)
+	w := executeAuthRequest(handler, "GET", "/api/test", "Bearer "+rawKey)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
