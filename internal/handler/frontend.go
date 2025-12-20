@@ -356,7 +356,7 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		h.logger.Error("failed to get recent pages", "error", err)
-		h.renderError(w, r, http.StatusInternalServerError, "Internal Server Error")
+		h.renderInternalError(w)
 		return
 	}
 
@@ -450,7 +450,7 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.logger.Error("failed to get page", "slug", slug, "error", err)
-		h.renderError(w, r, http.StatusInternalServerError, "Internal Server Error")
+		h.renderInternalError(w)
 		return
 	}
 
@@ -565,24 +565,23 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.logger.Error("failed to get category", "slug", slug, "error", err)
-		h.renderError(w, r, http.StatusInternalServerError, "Internal Server Error")
+		h.renderInternalError(w)
 		return
 	}
 
 	// Pagination
 	page := h.getPageNum(r)
-	perPage := 10
-	offset := (page - 1) * perPage
+	offset := (page - 1) * defaultPerPage
 
 	// Get pages in category
 	pages, err := h.queries.ListPublishedPagesByCategory(ctx, store.ListPublishedPagesByCategoryParams{
 		CategoryID: category.ID,
-		Limit:      int64(perPage),
+		Limit:      int64(defaultPerPage),
 		Offset:     int64(offset),
 	})
 	if err != nil {
 		h.logger.Error("failed to get pages for category", "category", slug, "error", err)
-		h.renderError(w, r, http.StatusInternalServerError, "Internal Server Error")
+		h.renderInternalError(w)
 		return
 	}
 
@@ -607,7 +606,7 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 		URL:         "/category/" + category.Slug,
 	}
 
-	pagination := h.buildPagination(page, int(total), perPage, fmt.Sprintf("/category/%s", slug))
+	pagination := h.buildPagination(page, int(total), fmt.Sprintf("/category/%s", slug))
 
 	// Get base template data
 	title := "Category: " + category.Name
@@ -638,24 +637,23 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.logger.Error("failed to get tag", "slug", slug, "error", err)
-		h.renderError(w, r, http.StatusInternalServerError, "Internal Server Error")
+		h.renderInternalError(w)
 		return
 	}
 
 	// Pagination
 	page := h.getPageNum(r)
-	perPage := 10
-	offset := (page - 1) * perPage
+	offset := (page - 1) * defaultPerPage
 
 	// Get pages with tag
 	pages, err := h.queries.ListPublishedPagesForTag(ctx, store.ListPublishedPagesForTagParams{
 		TagID:  tag.ID,
-		Limit:  int64(perPage),
+		Limit:  int64(defaultPerPage),
 		Offset: int64(offset),
 	})
 	if err != nil {
 		h.logger.Error("failed to get pages for tag", "tag", slug, "error", err)
-		h.renderError(w, r, http.StatusInternalServerError, "Internal Server Error")
+		h.renderInternalError(w)
 		return
 	}
 
@@ -679,7 +677,7 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 		URL:  "/tag/" + tag.Slug,
 	}
 
-	pagination := h.buildPagination(page, int(total), perPage, fmt.Sprintf("/tag/%s", slug))
+	pagination := h.buildPagination(page, int(total), fmt.Sprintf("/tag/%s", slug))
 
 	// Get base template data
 	title := "Tag: " + tag.Name
@@ -703,17 +701,16 @@ func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
 
 	// Pagination
 	page := h.getPageNum(r)
-	perPage := 10
-	offset := (page - 1) * perPage
+	offset := (page - 1) * defaultPerPage
 
 	// Get published pages
 	pages, err := h.queries.ListPublishedPages(ctx, store.ListPublishedPagesParams{
-		Limit:  int64(perPage),
+		Limit:  int64(defaultPerPage),
 		Offset: int64(offset),
 	})
 	if err != nil {
 		h.logger.Error("failed to get blog pages", "error", err)
-		h.renderError(w, r, http.StatusInternalServerError, "Internal Server Error")
+		h.renderInternalError(w)
 		return
 	}
 
@@ -730,7 +727,7 @@ func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
 		pageViews = append(pageViews, h.pageToView(ctx, p))
 	}
 
-	pagination := h.buildPagination(page, int(total), perPage, "/blog")
+	pagination := h.buildPagination(page, int(total), "/blog")
 
 	// Get base template data
 	base := h.getBaseTemplateData(r, "Blog", "")
@@ -765,18 +762,17 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 
 	// Pagination
 	page := h.getPageNum(r)
-	perPage := 10
-	offset := (page - 1) * perPage
+	offset := (page - 1) * defaultPerPage
 
 	// Use FTS5 search service
 	searchResults, total, err := h.searchService.SearchPublishedPages(ctx, service.SearchParams{
 		Query:  query,
-		Limit:  perPage,
+		Limit:  defaultPerPage,
 		Offset: offset,
 	})
 	if err != nil {
 		h.logger.Error("failed to search pages", "query", query, "error", err)
-		h.renderError(w, r, http.StatusInternalServerError, "Internal Server Error")
+		h.renderInternalError(w)
 		return
 	}
 
@@ -818,7 +814,7 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 		pageViews = append(pageViews, pv)
 	}
 
-	pagination := h.buildPagination(page, int(total), perPage, fmt.Sprintf("/search?q=%s", query))
+	pagination := h.buildPagination(page, int(total), fmt.Sprintf("/search?q=%s", query))
 
 	// Get base template data
 	title := fmt.Sprintf("Search: %s", query)
@@ -1479,8 +1475,12 @@ func (h *FrontendHandler) getPageNum(r *http.Request) int {
 	return page
 }
 
+// defaultPerPage is the default number of items per page for pagination.
+const defaultPerPage = 10
+
 // buildPagination creates pagination data for templates.
-func (h *FrontendHandler) buildPagination(currentPage, totalItems, perPage int, baseURL string) Pagination {
+func (h *FrontendHandler) buildPagination(currentPage, totalItems int, baseURL string) Pagination {
+	perPage := defaultPerPage
 	totalPages := (totalItems + perPage - 1) / perPage
 	if totalPages < 1 {
 		totalPages = 1
@@ -1619,29 +1619,22 @@ func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request)
 	h.render(w, "404", data)
 }
 
-// renderError renders an error page.
-func (h *FrontendHandler) renderError(w http.ResponseWriter, r *http.Request, statusCode int, message string) {
-	// Try to render using theme's 404 template for 404 errors
-	if statusCode == http.StatusNotFound {
-		h.renderNotFound(w, r)
-		return
-	}
-
-	// For other errors, use simple HTML (safer if template system is broken)
-	w.WriteHeader(statusCode)
+// renderInternalError renders a 500 Internal Server Error page.
+func (h *FrontendHandler) renderInternalError(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = fmt.Fprintf(w, `<!DOCTYPE html>
+	w.WriteHeader(http.StatusInternalServerError)
+	_, _ = fmt.Fprint(w, `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Error %d</title>
+<title>Error 500</title>
 <style>body{font-family:system-ui,sans-serif;max-width:600px;margin:100px auto;padding:20px;text-align:center}h1{color:#dc3545}</style>
 </head>
 <body>
-<h1>%d - %s</h1>
+<h1>500 - Internal Server Error</h1>
 <p>An error occurred while processing your request.</p>
 <p><a href="/">Return to homepage</a></p>
 </body>
-</html>`, statusCode, statusCode, message)
+</html>`)
 }

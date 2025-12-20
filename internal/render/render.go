@@ -93,19 +93,13 @@ func (r *Renderer) SetSidebarModuleProvider(provider SidebarModuleProvider) {
 // parseTemplates parses all templates from the filesystem.
 func (r *Renderer) parseTemplates(templatesFS fs.FS) error {
 	// Get all partials
-	partials, err := r.getTemplateFiles(templatesFS, "partials")
-	if err != nil {
-		return fmt.Errorf("getting partials: %w", err)
-	}
+	partials := r.getTemplateFiles(templatesFS, "partials")
 
 	// Get base layout
 	baseLayout := "layouts/base.html"
 
 	// Parse admin templates with admin layout
-	adminTemplates, err := r.getTemplateFiles(templatesFS, "admin")
-	if err != nil {
-		return fmt.Errorf("getting admin templates: %w", err)
-	}
+	adminTemplates := r.getTemplateFiles(templatesFS, "admin")
 
 	adminLayout := "layouts/admin.html"
 
@@ -128,10 +122,7 @@ func (r *Renderer) parseTemplates(templatesFS fs.FS) error {
 	}
 
 	// Parse auth templates with base layout only
-	authTemplates, err := r.getTemplateFiles(templatesFS, "auth")
-	if err != nil {
-		return fmt.Errorf("getting auth templates: %w", err)
-	}
+	authTemplates := r.getTemplateFiles(templatesFS, "auth")
 
 	for _, tmplPath := range authTemplates {
 		name := filepath.Base(tmplPath)
@@ -151,10 +142,7 @@ func (r *Renderer) parseTemplates(templatesFS fs.FS) error {
 	}
 
 	// Parse error templates with admin layout
-	errorTemplates, err := r.getTemplateFiles(templatesFS, "errors")
-	if err != nil {
-		return fmt.Errorf("getting error templates: %w", err)
-	}
+	errorTemplates := r.getTemplateFiles(templatesFS, "errors")
 
 	for _, tmplPath := range errorTemplates {
 		name := filepath.Base(tmplPath)
@@ -174,10 +162,7 @@ func (r *Renderer) parseTemplates(templatesFS fs.FS) error {
 	}
 
 	// Parse public templates (standalone, with their own body)
-	publicTemplates, err := r.getTemplateFiles(templatesFS, "public")
-	if err != nil {
-		return fmt.Errorf("getting public templates: %w", err)
-	}
+	publicTemplates := r.getTemplateFiles(templatesFS, "public")
 
 	for _, tmplPath := range publicTemplates {
 		name := filepath.Base(tmplPath)
@@ -200,13 +185,14 @@ func (r *Renderer) parseTemplates(templatesFS fs.FS) error {
 }
 
 // getTemplateFiles returns all .html files in a directory.
-func (r *Renderer) getTemplateFiles(templatesFS fs.FS, dir string) ([]string, error) {
+// If the directory doesn't exist, an empty slice is returned.
+func (r *Renderer) getTemplateFiles(templatesFS fs.FS, dir string) []string {
 	var files []string
 
 	entries, err := fs.ReadDir(templatesFS, dir)
 	if err != nil {
 		// Directory might not exist yet, that's ok
-		return files, nil
+		return files
 	}
 
 	for _, entry := range entries {
@@ -215,7 +201,7 @@ func (r *Renderer) getTemplateFiles(templatesFS fs.FS, dir string) ([]string, er
 		}
 	}
 
-	return files, nil
+	return files
 }
 
 // TemplateFuncs returns custom template functions for external use.

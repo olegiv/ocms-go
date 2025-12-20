@@ -88,9 +88,7 @@ func (i *Importer) Import(ctx context.Context, data *ExportData, opts ImportOpti
 
 	// Import languages first
 	if opts.ImportLanguages && len(data.Languages) > 0 {
-		if err := i.importLanguages(ctx, queries, data.Languages, opts, result); err != nil {
-			return result, fmt.Errorf("failed to import languages: %w", err)
-		}
+		i.importLanguages(ctx, queries, data.Languages, opts, result)
 	}
 
 	// Build language code to ID map for later use
@@ -102,9 +100,7 @@ func (i *Importer) Import(ctx context.Context, data *ExportData, opts ImportOpti
 
 	// Import users
 	if opts.ImportUsers && len(data.Users) > 0 {
-		if err := i.importUsers(ctx, queries, data.Users, opts, result); err != nil {
-			return result, fmt.Errorf("failed to import users: %w", err)
-		}
+		i.importUsers(ctx, queries, data.Users, opts, result)
 	}
 
 	// Build user email to ID map for later use
@@ -116,9 +112,7 @@ func (i *Importer) Import(ctx context.Context, data *ExportData, opts ImportOpti
 
 	// Import categories
 	if opts.ImportCategories && len(data.Categories) > 0 {
-		if err := i.importCategories(ctx, queries, data.Categories, opts, result); err != nil {
-			return result, fmt.Errorf("failed to import categories: %w", err)
-		}
+		i.importCategories(ctx, queries, data.Categories, opts, result)
 	}
 
 	// Build category slug to ID map
@@ -130,9 +124,7 @@ func (i *Importer) Import(ctx context.Context, data *ExportData, opts ImportOpti
 
 	// Import tags
 	if opts.ImportTags && len(data.Tags) > 0 {
-		if err := i.importTags(ctx, queries, data.Tags, opts, result); err != nil {
-			return result, fmt.Errorf("failed to import tags: %w", err)
-		}
+		i.importTags(ctx, queries, data.Tags, opts, result)
 	}
 
 	// Build tag slug to ID map
@@ -144,9 +136,7 @@ func (i *Importer) Import(ctx context.Context, data *ExportData, opts ImportOpti
 
 	// Import media metadata
 	if opts.ImportMedia && len(data.Media) > 0 {
-		if err := i.importMedia(ctx, queries, data.Media, userMap, opts, result); err != nil {
-			return result, fmt.Errorf("failed to import media: %w", err)
-		}
+		i.importMedia(ctx, queries, data.Media, userMap, opts, result)
 	}
 
 	// Build media UUID to ID map
@@ -158,9 +148,7 @@ func (i *Importer) Import(ctx context.Context, data *ExportData, opts ImportOpti
 
 	// Import pages
 	if opts.ImportPages && len(data.Pages) > 0 {
-		if err := i.importPages(ctx, queries, data.Pages, userMap, categoryMap, tagMap, mediaMap, languageMap, opts, result); err != nil {
-			return result, fmt.Errorf("failed to import pages: %w", err)
-		}
+		i.importPages(ctx, queries, data.Pages, userMap, categoryMap, tagMap, mediaMap, languageMap, opts, result)
 	}
 
 	// Build page slug to ID map
@@ -172,23 +160,17 @@ func (i *Importer) Import(ctx context.Context, data *ExportData, opts ImportOpti
 
 	// Import menus
 	if opts.ImportMenus && len(data.Menus) > 0 {
-		if err := i.importMenus(ctx, queries, data.Menus, pageMap, opts, result); err != nil {
-			return result, fmt.Errorf("failed to import menus: %w", err)
-		}
+		i.importMenus(ctx, queries, data.Menus, pageMap, opts, result)
 	}
 
 	// Import forms
 	if opts.ImportForms && len(data.Forms) > 0 {
-		if err := i.importForms(ctx, queries, data.Forms, opts, result); err != nil {
-			return result, fmt.Errorf("failed to import forms: %w", err)
-		}
+		i.importForms(ctx, queries, data.Forms, opts, result)
 	}
 
 	// Import config
 	if opts.ImportConfig && len(data.Config) > 0 {
-		if err := i.importConfig(ctx, queries, data.Config, userMap, result); err != nil {
-			return result, fmt.Errorf("failed to import config: %w", err)
-		}
+		i.importConfig(ctx, queries, data.Config, userMap, result)
 	}
 
 	// Commit transaction
@@ -251,11 +233,7 @@ func (i *Importer) ImportFromZip(ctx context.Context, zipReader *zip.Reader, opt
 	// If importing media files, extract them first (before the transaction)
 	var mediaFileMap map[string]string // maps FilePath in JSON to extracted path
 	if opts.ImportMediaFiles && !opts.DryRun {
-		var err error
-		mediaFileMap, err = i.extractMediaFiles(zipReader)
-		if err != nil {
-			return nil, fmt.Errorf("failed to extract media files: %w", err)
-		}
+		mediaFileMap = i.extractMediaFiles(zipReader)
 	}
 
 	// Perform the regular import
@@ -294,7 +272,7 @@ func (i *Importer) ImportFromZipBytes(ctx context.Context, data []byte, opts Imp
 }
 
 // extractMediaFiles extracts media files from the zip to the uploads directory.
-func (i *Importer) extractMediaFiles(zipReader *zip.Reader) (map[string]string, error) {
+func (i *Importer) extractMediaFiles(zipReader *zip.Reader) map[string]string {
 	mediaFileMap := make(map[string]string)
 
 	for _, f := range zipReader.File {
@@ -318,7 +296,7 @@ func (i *Importer) extractMediaFiles(zipReader *zip.Reader) (map[string]string, 
 		mediaFileMap[f.Name] = extractedPath
 	}
 
-	return mediaFileMap, nil
+	return mediaFileMap
 }
 
 // extractMediaFile extracts a single media file from the zip.
@@ -861,7 +839,7 @@ func (i *Importer) countEntities(ctx context.Context, data *ExportData, opts Imp
 
 // Import methods for each entity type
 
-func (i *Importer) importLanguages(ctx context.Context, queries *store.Queries, languages []ExportLanguage, opts ImportOptions, result *ImportResult) error {
+func (i *Importer) importLanguages(ctx context.Context, queries *store.Queries, languages []ExportLanguage, opts ImportOptions, result *ImportResult) {
 	now := time.Now()
 
 	for _, lang := range languages {
@@ -924,11 +902,9 @@ func (i *Importer) importLanguages(ctx context.Context, queries *store.Queries, 
 		result.GetIDMap("languages")[int64(len(result.GetIDMap("languages"))+1)] = created.ID
 		result.IncrementCreated("languages")
 	}
-
-	return nil
 }
 
-func (i *Importer) importUsers(ctx context.Context, queries *store.Queries, users []ExportUser, opts ImportOptions, result *ImportResult) error {
+func (i *Importer) importUsers(ctx context.Context, queries *store.Queries, users []ExportUser, opts ImportOptions, result *ImportResult) {
 	now := time.Now()
 
 	for _, user := range users {
@@ -986,11 +962,9 @@ func (i *Importer) importUsers(ctx context.Context, queries *store.Queries, user
 		result.GetIDMap("users")[int64(len(result.GetIDMap("users"))+1)] = created.ID
 		result.IncrementCreated("users")
 	}
-
-	return nil
 }
 
-func (i *Importer) importCategories(ctx context.Context, queries *store.Queries, categories []ExportCategory, opts ImportOptions, result *ImportResult) error {
+func (i *Importer) importCategories(ctx context.Context, queries *store.Queries, categories []ExportCategory, opts ImportOptions, result *ImportResult) {
 	now := time.Now()
 
 	// First pass: create all categories without parent relationships
@@ -1092,11 +1066,9 @@ func (i *Importer) importCategories(ctx context.Context, queries *store.Queries,
 	for oldID, newID := range categoryOldToNew {
 		result.GetIDMap("categories")[oldID] = newID
 	}
-
-	return nil
 }
 
-func (i *Importer) importTags(ctx context.Context, queries *store.Queries, tags []ExportTag, opts ImportOptions, result *ImportResult) error {
+func (i *Importer) importTags(ctx context.Context, queries *store.Queries, tags []ExportTag, opts ImportOptions, result *ImportResult) {
 	now := time.Now()
 
 	for _, tag := range tags {
@@ -1144,11 +1116,9 @@ func (i *Importer) importTags(ctx context.Context, queries *store.Queries, tags 
 		result.GetIDMap("tags")[tag.ID] = created.ID
 		result.IncrementCreated("tags")
 	}
-
-	return nil
 }
 
-func (i *Importer) importMedia(ctx context.Context, queries *store.Queries, media []ExportMedia, userMap map[string]int64, opts ImportOptions, result *ImportResult) error {
+func (i *Importer) importMedia(ctx context.Context, queries *store.Queries, media []ExportMedia, userMap map[string]int64, opts ImportOptions, result *ImportResult) {
 	now := time.Now()
 
 	// Build folder path to ID map
@@ -1238,8 +1208,6 @@ func (i *Importer) importMedia(ctx context.Context, queries *store.Queries, medi
 		result.GetIDMap("media")[int64(len(result.GetIDMap("media"))+1)] = created.ID
 		result.IncrementCreated("media")
 	}
-
-	return nil
 }
 
 func (i *Importer) importPages(
@@ -1253,7 +1221,7 @@ func (i *Importer) importPages(
 	languageMap map[string]int64,
 	opts ImportOptions,
 	result *ImportResult,
-) error {
+) {
 	now := time.Now()
 
 	pageOldToNew := make(map[int64]int64) // maps export ID to new ID
@@ -1330,8 +1298,6 @@ func (i *Importer) importPages(
 	for oldID, newID := range pageOldToNew {
 		result.GetIDMap("pages")[oldID] = newID
 	}
-
-	return nil
 }
 
 // updateExistingPage updates an existing page with imported data.
@@ -1505,7 +1471,7 @@ func (i *Importer) createNewPage(
 	return created.ID, nil
 }
 
-func (i *Importer) importMenus(ctx context.Context, queries *store.Queries, menus []ExportMenu, pageMap map[string]int64, opts ImportOptions, result *ImportResult) error {
+func (i *Importer) importMenus(ctx context.Context, queries *store.Queries, menus []ExportMenu, pageMap map[string]int64, opts ImportOptions, result *ImportResult) {
 	now := time.Now()
 
 	for _, menu := range menus {
@@ -1567,8 +1533,6 @@ func (i *Importer) importMenus(ctx context.Context, queries *store.Queries, menu
 			i.logger.Warn("failed to import menu items", "menu", menu.Slug, "error", err)
 		}
 	}
-
-	return nil
 }
 
 func (i *Importer) importMenuItems(ctx context.Context, queries *store.Queries, menuID int64, items []ExportMenuItem, pageMap map[string]int64, parentID sql.NullInt64, now time.Time) error {
@@ -1610,7 +1574,7 @@ func (i *Importer) importMenuItems(ctx context.Context, queries *store.Queries, 
 	return nil
 }
 
-func (i *Importer) importForms(ctx context.Context, queries *store.Queries, forms []ExportForm, opts ImportOptions, result *ImportResult) error {
+func (i *Importer) importForms(ctx context.Context, queries *store.Queries, forms []ExportForm, opts ImportOptions, result *ImportResult) {
 	now := time.Now()
 
 	for _, form := range forms {
@@ -1713,11 +1677,9 @@ func (i *Importer) importForms(ctx context.Context, queries *store.Queries, form
 			}
 		}
 	}
-
-	return nil
 }
 
-func (i *Importer) importConfig(ctx context.Context, queries *store.Queries, config map[string]string, userMap map[string]int64, result *ImportResult) error {
+func (i *Importer) importConfig(ctx context.Context, queries *store.Queries, config map[string]string, userMap map[string]int64, result *ImportResult) {
 	now := time.Now()
 
 	// Get a default user ID for the updated_by field
@@ -1742,8 +1704,6 @@ func (i *Importer) importConfig(ctx context.Context, queries *store.Queries, con
 		}
 		result.IncrementCreated("config")
 	}
-
-	return nil
 }
 
 // Helper functions
