@@ -306,12 +306,13 @@ func (h *ImportExportHandler) extractExportDataFromZip(zipData []byte) (transfer
 			if err != nil {
 				return data, fmt.Errorf("failed to open export.json: %w", err)
 			}
-			defer func() { _ = rc.Close() }()
 
 			decoder := json.NewDecoder(rc)
 			if err := decoder.Decode(&data); err != nil {
+				_ = rc.Close()
 				return data, fmt.Errorf("failed to decode export.json: %w", err)
 			}
+			_ = rc.Close()
 			return data, nil
 		}
 	}
