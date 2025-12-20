@@ -2,9 +2,11 @@ package handler
 
 import (
 	"database/sql"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/alexedwards/scs/v2"
 
@@ -36,14 +38,57 @@ func NewEventsHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionMana
 
 // EventWithUser represents an event with associated user info.
 type EventWithUser struct {
-	ID        int64
-	Level     string
-	Category  string
-	Message   string
-	Metadata  string
-	CreatedAt string
-	UserName  string
-	UserEmail string
+	ID          int64
+	Level       string
+	Category    string
+	Message     string
+	Metadata    string
+	Details     string // Formatted metadata as readable text
+	DetailsLong bool   // True if details exceed display threshold
+	CreatedAt   string
+	UserName    string
+	UserEmail   string
+}
+
+// detailsLengthThreshold is the max chars before details are collapsible
+const detailsLengthThreshold = 80
+
+// formatMetadata converts JSON metadata to readable text format.
+// Example: {"path":"/admin/pages","error":"not found"} -> "path: /admin/pages, error: not found"
+func formatMetadata(metadata string) string {
+	if metadata == "" || metadata == "{}" {
+		return ""
+	}
+
+	var data map[string]any
+	if err := json.Unmarshal([]byte(metadata), &data); err != nil {
+		return metadata // Return as-is if not valid JSON
+	}
+
+	if len(data) == 0 {
+		return ""
+	}
+
+	var parts []string
+	for key, value := range data {
+		var strValue string
+		switch v := value.(type) {
+		case string:
+			strValue = v
+		case float64:
+			strValue = strconv.FormatFloat(v, 'f', -1, 64)
+		case bool:
+			strValue = strconv.FormatBool(v)
+		default:
+			// For nested objects, marshal back to JSON
+			if b, err := json.Marshal(v); err == nil {
+				strValue = string(b)
+			}
+		}
+		parts = append(parts, key+": "+strValue)
+	}
+
+	return strings.Join(parts, ", ")
 }
 
 // EventsListData holds data for the events list template.
@@ -200,15 +245,18 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 func convertEventsWithUser(rows []store.ListEventsWithUserRow) []EventWithUser {
 	events := make([]EventWithUser, len(rows))
 	for i, row := range rows {
+		details := formatMetadata(row.Metadata)
 		events[i] = EventWithUser{
-			ID:        row.ID,
-			Level:     row.Level,
-			Category:  row.Category,
-			Message:   row.Message,
-			Metadata:  row.Metadata,
-			CreatedAt: row.CreatedAt.Format("2006-01-02 15:04:05"),
-			UserName:  row.UserName.String,
-			UserEmail: row.UserEmail.String,
+			ID:          row.ID,
+			Level:       row.Level,
+			Category:    row.Category,
+			Message:     row.Message,
+			Metadata:    row.Metadata,
+			Details:     details,
+			DetailsLong: len(details) > detailsLengthThreshold,
+			CreatedAt:   row.CreatedAt.Format("2006-01-02 15:04:05"),
+			UserName:    row.UserName.String,
+			UserEmail:   row.UserEmail.String,
 		}
 	}
 	return events
@@ -217,15 +265,18 @@ func convertEventsWithUser(rows []store.ListEventsWithUserRow) []EventWithUser {
 func convertEventsWithUserByLevel(rows []store.ListEventsWithUserByLevelRow) []EventWithUser {
 	events := make([]EventWithUser, len(rows))
 	for i, row := range rows {
+		details := formatMetadata(row.Metadata)
 		events[i] = EventWithUser{
-			ID:        row.ID,
-			Level:     row.Level,
-			Category:  row.Category,
-			Message:   row.Message,
-			Metadata:  row.Metadata,
-			CreatedAt: row.CreatedAt.Format("2006-01-02 15:04:05"),
-			UserName:  row.UserName.String,
-			UserEmail: row.UserEmail.String,
+			ID:          row.ID,
+			Level:       row.Level,
+			Category:    row.Category,
+			Message:     row.Message,
+			Metadata:    row.Metadata,
+			Details:     details,
+			DetailsLong: len(details) > detailsLengthThreshold,
+			CreatedAt:   row.CreatedAt.Format("2006-01-02 15:04:05"),
+			UserName:    row.UserName.String,
+			UserEmail:   row.UserEmail.String,
 		}
 	}
 	return events
@@ -234,15 +285,18 @@ func convertEventsWithUserByLevel(rows []store.ListEventsWithUserByLevelRow) []E
 func convertEventsWithUserByCategory(rows []store.ListEventsWithUserByCategoryRow) []EventWithUser {
 	events := make([]EventWithUser, len(rows))
 	for i, row := range rows {
+		details := formatMetadata(row.Metadata)
 		events[i] = EventWithUser{
-			ID:        row.ID,
-			Level:     row.Level,
-			Category:  row.Category,
-			Message:   row.Message,
-			Metadata:  row.Metadata,
-			CreatedAt: row.CreatedAt.Format("2006-01-02 15:04:05"),
-			UserName:  row.UserName.String,
-			UserEmail: row.UserEmail.String,
+			ID:          row.ID,
+			Level:       row.Level,
+			Category:    row.Category,
+			Message:     row.Message,
+			Metadata:    row.Metadata,
+			Details:     details,
+			DetailsLong: len(details) > detailsLengthThreshold,
+			CreatedAt:   row.CreatedAt.Format("2006-01-02 15:04:05"),
+			UserName:    row.UserName.String,
+			UserEmail:   row.UserEmail.String,
 		}
 	}
 	return events
@@ -251,15 +305,18 @@ func convertEventsWithUserByCategory(rows []store.ListEventsWithUserByCategoryRo
 func convertEventsWithUserByLevelAndCategory(rows []store.ListEventsWithUserByLevelAndCategoryRow) []EventWithUser {
 	events := make([]EventWithUser, len(rows))
 	for i, row := range rows {
+		details := formatMetadata(row.Metadata)
 		events[i] = EventWithUser{
-			ID:        row.ID,
-			Level:     row.Level,
-			Category:  row.Category,
-			Message:   row.Message,
-			Metadata:  row.Metadata,
-			CreatedAt: row.CreatedAt.Format("2006-01-02 15:04:05"),
-			UserName:  row.UserName.String,
-			UserEmail: row.UserEmail.String,
+			ID:          row.ID,
+			Level:       row.Level,
+			Category:    row.Category,
+			Message:     row.Message,
+			Metadata:    row.Metadata,
+			Details:     details,
+			DetailsLong: len(details) > detailsLengthThreshold,
+			CreatedAt:   row.CreatedAt.Format("2006-01-02 15:04:05"),
+			UserName:    row.UserName.String,
+			UserEmail:   row.UserEmail.String,
 		}
 	}
 	return events

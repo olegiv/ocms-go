@@ -48,6 +48,7 @@
                     <th>{{T .AdminLang "events.level"}}</th>
                     <th>{{T .AdminLang "events.category"}}</th>
                     <th>{{T .AdminLang "events.message"}}</th>
+                    <th>{{T .AdminLang "events.details"}}</th>
                     <th>{{T .AdminLang "events.user"}}</th>
                 </tr>
             </thead>
@@ -64,6 +65,13 @@
                         <span class="badge badge-secondary">{{.Category}}</span>
                     </td>
                     <td class="event-message">{{.Message}}</td>
+                    <td class="event-details">
+                        {{if .Details}}
+                            <span class="details-text">{{.Details}}</span>
+                        {{else}}
+                            <span class="text-muted">-</span>
+                        {{end}}
+                    </td>
                     <td>
                         {{if .UserName}}
                             <span class="text-muted">{{.UserName}}</span>
@@ -129,5 +137,20 @@
         </div>
     </div>
 </div>
+{{end}}
+
+{{if .Data.Events}}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.details-text').forEach(function(el) {
+        if (el.scrollWidth > el.clientWidth) {
+            el.classList.add('truncated');
+            el.addEventListener('click', function() {
+                this.classList.toggle('expanded');
+            });
+        }
+    });
+});
+</script>
 {{end}}
 {{end}}

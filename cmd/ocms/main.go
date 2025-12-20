@@ -319,6 +319,9 @@ func run() error {
 		"x_frame_options", "SAMEORIGIN",
 	)
 
+	// Request path middleware for logging context
+	r.Use(middleware.RequestPath)
+
 	r.Use(sessionManager.LoadAndSave)
 
 	// CSRF protection middleware (applied globally, API routes will be exempted)

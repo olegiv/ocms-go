@@ -19,8 +19,9 @@ type ContextKey string
 
 // Context keys for user data.
 const (
-	ContextKeyUser     ContextKey = "user"
-	ContextKeySiteName ContextKey = "site_name"
+	ContextKeyUser        ContextKey = "user"
+	ContextKeySiteName    ContextKey = "site_name"
+	ContextKeyRequestPath ContextKey = "request_path"
 )
 
 // Session keys for storing user data and preferences.
@@ -148,6 +149,24 @@ func GetSiteName(r *http.Request) string {
 		return "oCMS"
 	}
 	return siteName
+}
+
+// RequestPath creates middleware that stores the request path in the context.
+// This is used by the logging handler to include the URL in error logs.
+func RequestPath(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), ContextKeyRequestPath, r.URL.Path)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// GetRequestPath retrieves the request path from the context.
+func GetRequestPath(ctx context.Context) string {
+	path, ok := ctx.Value(ContextKeyRequestPath).(string)
+	if !ok {
+		return ""
+	}
+	return path
 }
 
 // globalSessionManager is set by SetSessionManager and used by GetAdminLang.

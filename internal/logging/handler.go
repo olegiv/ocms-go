@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"ocms-go/internal/middleware"
 	"ocms-go/internal/model"
 	"ocms-go/internal/store"
 )
@@ -78,10 +79,10 @@ func (h *EventLogHandler) WithGroup(name string) slog.Handler {
 }
 
 // writeToEventLog writes a log record to the Event Log database.
-func (h *EventLogHandler) writeToEventLog(_ context.Context, r slog.Record) {
+func (h *EventLogHandler) writeToEventLog(ctx context.Context, r slog.Record) {
 	level := h.slogLevelToEventLevel(r.Level)
 	category := h.extractCategory(r)
-	metadata := h.extractMetadata(r)
+	metadata := h.extractMetadata(ctx, r)
 
 	// Create the event in the database
 	// We use a background context to ensure the event is logged even if the request context is cancelled
@@ -143,15 +144,20 @@ func (h *EventLogHandler) extractCategory(r slog.Record) string {
 }
 
 // extractMetadata collects all log attributes into a JSON string.
-func (h *EventLogHandler) extractMetadata(r slog.Record) string {
-	if r.NumAttrs() == 0 {
-		return "{}"
-	}
-
+// It also includes the request path from context if available.
+func (h *EventLogHandler) extractMetadata(ctx context.Context, r slog.Record) string {
 	// Build a simple JSON object from attributes
 	var sb strings.Builder
 	sb.WriteString("{")
 	first := true
+
+	// Add request path from context if available
+	if path := middleware.GetRequestPath(ctx); path != "" {
+		sb.WriteString(`"path":"`)
+		sb.WriteString(escapeJSON(path))
+		sb.WriteString(`"`)
+		first = false
+	}
 
 	r.Attrs(func(a slog.Attr) bool {
 		if a.Key == "category" {

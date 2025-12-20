@@ -2783,6 +2783,11 @@
             "translation": "Message"
         },
         {
+            "id": "events.details",
+            "message": "Details",
+            "translation": "Details"
+        },
+        {
             "id": "events.user",
             "message": "User",
             "translation": "User"
