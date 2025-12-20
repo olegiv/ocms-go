@@ -53,7 +53,7 @@ html {
 body {
     margin: 0;
     padding: 0;
-    font-family: var(--dev-font-sans);
+    font-family: var(--dev-font-sans), sans-serif;
     font-size: 1rem;
     line-height: 1.6;
     color: var(--dev-text);
@@ -126,7 +126,7 @@ img {
 }
 
 .dev-logo {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 1.25rem;
     font-weight: 600;
     color: var(--dev-text-bright);
@@ -201,7 +201,7 @@ img {
 }
 
 .dev-nav-link {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.875rem;
     color: var(--dev-text);
     padding: var(--dev-space-sm) var(--dev-space-md);
@@ -221,7 +221,7 @@ img {
 }
 
 .dev-search-input {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.875rem;
     background-color: var(--dev-bg-tertiary);
     border: 1px solid var(--dev-border);
@@ -274,7 +274,7 @@ img {
 
 .dev-footer-text,
 .dev-footer-powered {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.875rem;
     color: var(--dev-text-muted);
 }
@@ -307,7 +307,7 @@ img {
 }
 
 .dev-widget-title {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--dev-text-bright);
@@ -330,7 +330,7 @@ img {
 
 .dev-category-link,
 .dev-recent-link {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.875rem;
     color: var(--dev-text);
     display: flex;
@@ -354,7 +354,7 @@ img {
 
 .dev-recent-date {
     display: block;
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.75rem;
     color: var(--dev-text-muted);
     margin-left: var(--dev-space-lg);
@@ -367,7 +367,7 @@ img {
 }
 
 .dev-tag {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.75rem;
     color: var(--dev-accent);
     background-color: var(--dev-bg-tertiary);
@@ -383,7 +383,7 @@ img {
 
 /* Buttons */
 .dev-btn {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.875rem;
     padding: var(--dev-space-sm) var(--dev-space-lg);
     border-radius: var(--dev-radius-sm);
@@ -454,7 +454,7 @@ img {
 }
 
 .dev-terminal-title {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.75rem;
     color: var(--dev-text-muted);
     margin-left: auto;
@@ -462,7 +462,7 @@ img {
 
 .dev-terminal-body {
     padding: var(--dev-space-lg);
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
 }
 
 .dev-terminal-line {
@@ -505,7 +505,7 @@ img {
 }
 
 .dev-hero-title {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 2.5rem;
     font-weight: 700;
     color: var(--dev-text-bright);
@@ -525,7 +525,7 @@ img {
 }
 
 .dev-section-title {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 1.25rem;
     font-weight: 600;
     color: var(--dev-text-bright);
@@ -601,7 +601,7 @@ img {
 }
 
 .dev-card-title {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 1rem;
     font-weight: 600;
     margin: 0 0 var(--dev-space-sm) 0;
@@ -627,7 +627,7 @@ img {
 }
 
 .dev-read-more {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.875rem;
     color: var(--dev-accent);
 }
@@ -682,7 +682,7 @@ img {
 }
 
 .dev-post-category {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.75rem;
     margin-bottom: var(--dev-space-sm);
 }
@@ -692,7 +692,7 @@ img {
 }
 
 .dev-post-title {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 1.25rem;
     font-weight: 600;
     margin: 0 0 var(--dev-space-sm) 0;
@@ -718,7 +718,7 @@ img {
     display: flex;
     flex-wrap: wrap;
     gap: var(--dev-space-md);
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.75rem;
     color: var(--dev-text-muted);
 }
@@ -744,7 +744,7 @@ img {
 }
 
 .dev-file-path {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.875rem;
     color: var(--dev-text-muted);
     margin-bottom: var(--dev-space-md);
@@ -755,7 +755,7 @@ img {
 }
 
 .dev-article-title {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 2rem;
     font-weight: 700;
     color: var(--dev-text-bright);
@@ -773,7 +773,7 @@ img {
     display: flex;
     flex-wrap: wrap;
     gap: var(--dev-space-md);
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.875rem;
     color: var(--dev-text-muted);
 }
@@ -799,14 +799,14 @@ img {
 }
 
 .dev-label {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.75rem;
     color: var(--dev-text-muted);
     margin-right: var(--dev-space-sm);
 }
 
 .dev-category-link {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.875rem;
     color: var(--dev-accent);
 }
@@ -837,7 +837,7 @@ img {
 .dev-author-footer {
     padding: var(--dev-space-sm) var(--dev-space-lg);
     background-color: var(--dev-bg-tertiary);
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.75rem;
 }
 
@@ -860,13 +860,13 @@ img {
 }
 
 .dev-author-prefix {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.75rem;
     color: var(--dev-comment);
 }
 
 .dev-author-name {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 1rem;
     font-weight: 600;
     color: var(--dev-text-bright);
@@ -892,7 +892,7 @@ img {
 .dev-prose h4,
 .dev-prose h5,
 .dev-prose h6 {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     color: var(--dev-text-bright);
     margin-top: 2em;
     margin-bottom: 0.75em;
@@ -917,7 +917,7 @@ img {
 }
 
 .dev-prose code {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.875em;
     background-color: var(--dev-bg-tertiary);
     padding: 0.15em 0.4em;
@@ -925,7 +925,7 @@ img {
 }
 
 .dev-prose pre {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.875rem;
     background-color: var(--dev-bg-secondary);
     border: 1px solid var(--dev-border);
@@ -998,7 +998,7 @@ img {
 }
 
 .dev-archive-label {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.75rem;
     color: var(--dev-accent);
     text-transform: uppercase;
@@ -1006,7 +1006,7 @@ img {
 }
 
 .dev-archive-title {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 2rem;
     font-weight: 700;
     color: var(--dev-text-bright);
@@ -1020,7 +1020,7 @@ img {
 }
 
 .dev-archive-count {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.875rem;
     color: var(--dev-text-muted);
     margin: 0;
@@ -1038,7 +1038,7 @@ img {
 }
 
 .dev-subcategory-item {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     padding: var(--dev-space-sm) 0;
     border-bottom: 1px solid var(--dev-border);
 }
@@ -1057,7 +1057,7 @@ img {
 }
 
 .dev-list-title {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 1.75rem;
     font-weight: 700;
     color: var(--dev-text-bright);
@@ -1076,7 +1076,7 @@ img {
 }
 
 .dev-search-title {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 1.5rem;
     font-weight: 700;
     color: var(--dev-text-bright);
@@ -1097,7 +1097,7 @@ img {
     border-radius: var(--dev-radius-md);
     padding: var(--dev-space-sm) var(--dev-space-md);
     flex: 1;
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.9375rem;
 }
 
@@ -1110,7 +1110,7 @@ img {
     background: none;
     border: none;
     color: var(--dev-accent);
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.9375rem;
     padding: var(--dev-space-xs);
     min-width: 100px;
@@ -1121,7 +1121,7 @@ img {
 }
 
 .dev-results-header {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.9375rem;
     margin-bottom: var(--dev-space-lg);
     color: var(--dev-text-muted);
@@ -1151,7 +1151,7 @@ img {
 }
 
 .dev-suggestions-list li {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.875rem;
     color: var(--dev-text-muted);
     padding: var(--dev-space-xs) 0;
@@ -1172,7 +1172,7 @@ img {
 }
 
 .dev-query-link {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.875rem;
     color: var(--dev-text);
     display: block;
@@ -1218,7 +1218,7 @@ img {
 }
 
 .dev-error-title {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 1.5rem;
     color: var(--dev-text-bright);
     margin: 0 0 var(--dev-space-md) 0;
@@ -1238,7 +1238,7 @@ img {
 }
 
 .dev-or {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     color: var(--dev-text-muted);
 }
 
@@ -1265,7 +1265,7 @@ img {
 }
 
 .dev-pagination-info {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.875rem;
     color: var(--dev-text-muted);
     margin-bottom: var(--dev-space-md);
@@ -1282,7 +1282,7 @@ img {
 }
 
 .dev-pagination-link {
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.875rem;
     padding: var(--dev-space-sm) var(--dev-space-md);
     background-color: var(--dev-bg-secondary);
