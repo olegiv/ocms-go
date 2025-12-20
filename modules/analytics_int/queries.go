@@ -202,24 +202,23 @@ func (m *Module) getBrowserStats(ctx context.Context, startDate, endDate time.Ti
 	}
 	defer func() { _ = rows.Close() }()
 
-	var browsers []BrowserStat
-	var totalViews int64
+	var browsers []*BrowserStat
 	for rows.Next() {
 		var b BrowserStat
 		if err := rows.Scan(&b.Browser, &b.Views); err != nil {
 			continue
 		}
-		totalViews += b.Views
-		browsers = append(browsers, b)
+		browsers = append(browsers, &b)
 	}
 
-	// Calculate percentages
-	for i := range browsers {
-		if totalViews > 0 {
-			browsers[i].Percent = float64(browsers[i].Views) / float64(totalViews) * 100
-		}
+	calculatePercents(browsers)
+
+	// Convert back to value slice
+	result := make([]BrowserStat, len(browsers))
+	for i, b := range browsers {
+		result[i] = *b
 	}
-	return browsers
+	return result
 }
 
 // getDeviceStats returns device type breakdown.
@@ -244,24 +243,23 @@ func (m *Module) getDeviceStats(ctx context.Context, startDate, endDate time.Tim
 	}
 	defer func() { _ = rows.Close() }()
 
-	var devices []DeviceStat
-	var totalViews int64
+	var devices []*DeviceStat
 	for rows.Next() {
 		var d DeviceStat
 		if err := rows.Scan(&d.DeviceType, &d.Views); err != nil {
 			continue
 		}
-		totalViews += d.Views
-		devices = append(devices, d)
+		devices = append(devices, &d)
 	}
 
-	// Calculate percentages
-	for i := range devices {
-		if totalViews > 0 {
-			devices[i].Percent = float64(devices[i].Views) / float64(totalViews) * 100
-		}
+	calculatePercents(devices)
+
+	// Convert back to value slice
+	result := make([]DeviceStat, len(devices))
+	for i, d := range devices {
+		result[i] = *d
 	}
-	return devices
+	return result
 }
 
 // getCountryStats returns country breakdown.
@@ -361,4 +359,31 @@ func parseDateRange(rangeStr string) (time.Time, time.Time) {
 	}
 
 	return startDate, endDate
+}
+
+// viewStat represents a stat item with views and percentage.
+type viewStat interface {
+	getViews() int64
+	setPercent(float64)
+}
+
+// Implement viewStat for BrowserStat
+func (b *BrowserStat) getViews() int64      { return b.Views }
+func (b *BrowserStat) setPercent(p float64) { b.Percent = p }
+
+// Implement viewStat for DeviceStat
+func (d *DeviceStat) getViews() int64      { return d.Views }
+func (d *DeviceStat) setPercent(p float64) { d.Percent = p }
+
+// calculatePercents calculates percentage for each item based on total views.
+func calculatePercents[T viewStat](items []T) {
+	var totalViews int64
+	for _, item := range items {
+		totalViews += item.getViews()
+	}
+	if totalViews > 0 {
+		for i := range items {
+			items[i].setPercent(float64(items[i].getViews()) / float64(totalViews) * 100)
+		}
+	}
 }

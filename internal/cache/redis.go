@@ -175,28 +175,7 @@ func (c *RedisCache) Clear(ctx context.Context) error {
 		return ErrCacheClosed
 	}
 
-	var cursor uint64
-	pattern := c.prefix + "*"
-
-	for {
-		keys, nextCursor, err := c.client.Scan(ctx, cursor, pattern, 100).Result()
-		if err != nil {
-			return err
-		}
-
-		if len(keys) > 0 {
-			if err := c.client.Del(ctx, keys...).Err(); err != nil {
-				return err
-			}
-		}
-
-		cursor = nextCursor
-		if cursor == 0 {
-			break
-		}
-	}
-
-	return nil
+	return c.deleteByPattern(ctx, c.prefix+"*")
 }
 
 // Has checks if a key exists in the cache.
@@ -285,9 +264,26 @@ func (c *RedisCache) DeleteByPrefix(ctx context.Context, prefix string) error {
 		return ErrCacheClosed
 	}
 
-	var cursor uint64
-	pattern := c.prefix + prefix + "*"
+	return c.deleteByPattern(ctx, c.prefix+prefix+"*")
+}
 
+// Info returns Redis server info.
+func (c *RedisCache) Info(ctx context.Context) (string, error) {
+	if c.closed.Load() {
+		return "", ErrCacheClosed
+	}
+	return c.client.Info(ctx).Result()
+}
+
+// Client returns the underlying Redis client for advanced operations.
+// Use with caution.
+func (c *RedisCache) Client() *redis.Client {
+	return c.client
+}
+
+// deleteByPattern scans and deletes all keys matching the given pattern.
+func (c *RedisCache) deleteByPattern(ctx context.Context, pattern string) error {
+	var cursor uint64
 	for {
 		keys, nextCursor, err := c.client.Scan(ctx, cursor, pattern, 100).Result()
 		if err != nil {
@@ -305,22 +301,7 @@ func (c *RedisCache) DeleteByPrefix(ctx context.Context, prefix string) error {
 			break
 		}
 	}
-
 	return nil
-}
-
-// Info returns Redis server info.
-func (c *RedisCache) Info(ctx context.Context) (string, error) {
-	if c.closed.Load() {
-		return "", ErrCacheClosed
-	}
-	return c.client.Info(ctx).Result()
-}
-
-// Client returns the underlying Redis client for advanced operations.
-// Use with caution.
-func (c *RedisCache) Client() *redis.Client {
-	return c.client
 }
 
 // Ensure RedisCache implements Cache and StatsProvider.

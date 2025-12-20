@@ -774,25 +774,15 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	adminLang := h.renderer.GetAdminLang(r)
 
-	// Get page ID from URL
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parsePageIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid page ID", "error")
 		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
 		return
 	}
 
-	// Get page from database
-	page, err := h.queries.GetPageByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Page not found", "error")
-		} else {
-			slog.Error("failed to get page", "error", err, "page_id", id)
-			h.renderer.SetFlash(r, "Error loading page", "error")
-		}
-		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+	page, ok := h.requirePageWithRedirect(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -929,25 +919,15 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	// Get page ID from URL
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parsePageIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid page ID", "error")
 		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
 		return
 	}
 
-	// Get existing page
-	existingPage, err := h.queries.GetPageByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Page not found", "error")
-		} else {
-			slog.Error("failed to get page", "error", err, "page_id", id)
-			h.renderer.SetFlash(r, "Error loading page", "error")
-		}
-		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+	existingPage, ok := h.requirePageWithRedirect(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -957,112 +937,31 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get form values
-	title := strings.TrimSpace(r.FormValue("title"))
-	slug := strings.TrimSpace(r.FormValue("slug"))
-	body := r.FormValue("body")
-	status := r.FormValue("status")
-	featuredImageIDStr := r.FormValue("featured_image_id")
+	input := parsePageFormInput(r)
 
-	// Get SEO form values
-	metaTitle := strings.TrimSpace(r.FormValue("meta_title"))
-	metaDescription := strings.TrimSpace(r.FormValue("meta_description"))
-	metaKeywords := strings.TrimSpace(r.FormValue("meta_keywords"))
-	ogImageIDStr := r.FormValue("og_image_id")
-	noIndexStr := r.FormValue("no_index")
-	noFollowStr := r.FormValue("no_follow")
-	canonicalURL := strings.TrimSpace(r.FormValue("canonical_url"))
-
-	// Parse featured image ID
-	var featuredImageID sql.NullInt64
-	if featuredImageIDStr != "" {
-		if imgID, err := strconv.ParseInt(featuredImageIDStr, 10, 64); err == nil && imgID > 0 {
-			featuredImageID = sql.NullInt64{Int64: imgID, Valid: true}
-		}
-	}
-
-	// Parse OG image ID
-	var ogImageID sql.NullInt64
-	if ogImageIDStr != "" {
-		if imgID, err := strconv.ParseInt(ogImageIDStr, 10, 64); err == nil && imgID > 0 {
-			ogImageID = sql.NullInt64{Int64: imgID, Valid: true}
-		}
-	}
-
-	// Parse boolean SEO fields (checkboxes)
-	var noIndex int64
-	if noIndexStr == "1" || noIndexStr == "on" {
-		noIndex = 1
-	}
-	var noFollow int64
-	if noFollowStr == "1" || noFollowStr == "on" {
-		noFollow = 1
-	}
-
-	// Parse scheduled_at for scheduled publishing
-	scheduledAtStr := strings.TrimSpace(r.FormValue("scheduled_at"))
-	var scheduledAt sql.NullTime
-	if scheduledAtStr != "" {
-		if t, err := time.Parse("2006-01-02T15:04", scheduledAtStr); err == nil {
-			scheduledAt = sql.NullTime{Time: t, Valid: true}
-		}
-	}
-
-	// Store form values for re-rendering on error
-	formValues := map[string]string{
-		"title":             title,
-		"slug":              slug,
-		"body":              body,
-		"status":            status,
-		"featured_image_id": featuredImageIDStr,
-		"meta_title":        metaTitle,
-		"meta_description":  metaDescription,
-		"meta_keywords":     metaKeywords,
-		"og_image_id":       ogImageIDStr,
-		"no_index":          noIndexStr,
-		"no_follow":         noFollowStr,
-		"canonical_url":     canonicalURL,
-		"scheduled_at":      scheduledAtStr,
+	// Auto-generate slug if empty
+	if input.Slug == "" {
+		input.Slug = util.Slugify(input.Title)
+		input.FormValues["slug"] = input.Slug
 	}
 
 	// Validate
 	validationErrors := make(map[string]string)
 
-	// Title validation
-	if title == "" {
-		validationErrors["title"] = "Title is required"
-	} else if len(title) < 2 {
-		validationErrors["title"] = "Title must be at least 2 characters"
+	if err := validatePageTitle(input.Title); err != "" {
+		validationErrors["title"] = err
 	}
 
 	// Slug validation
-	if slug == "" {
-		slug = util.Slugify(title)
-		formValues["slug"] = slug
-	}
-
-	if slug == "" {
-		validationErrors["slug"] = "Slug is required"
-	} else if !util.IsValidSlug(slug) {
-		validationErrors["slug"] = "Invalid slug format (use lowercase letters, numbers, and hyphens)"
-	} else if slug != existingPage.Slug {
-		// Only check for uniqueness if slug changed
-		exists, err := h.queries.SlugExistsExcluding(r.Context(), store.SlugExistsExcludingParams{
-			Slug: slug,
-			ID:   id,
-		})
-		if err != nil {
-			slog.Error("database error checking slug", "error", err)
-			validationErrors["slug"] = "Error checking slug"
-		} else if exists != 0 {
-			validationErrors["slug"] = "Slug already exists"
-		}
+	if slugErr := h.validatePageSlugUpdate(r.Context(), input.Slug, existingPage.Slug, id); slugErr != "" {
+		validationErrors["slug"] = slugErr
 	}
 
 	// Status validation
+	status := input.Status
 	if status == "" {
 		status = existingPage.Status
-		formValues["status"] = status
+		input.FormValues["status"] = status
 	} else if !isValidPageStatus(status) {
 		validationErrors["status"] = "Invalid status"
 	}
@@ -1073,7 +972,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 			Page:       &existingPage,
 			Statuses:   ValidPageStatuses,
 			Errors:     validationErrors,
-			FormValues: formValues,
+			FormValues: input.FormValues,
 			IsEdit:     true,
 		}
 
@@ -1097,19 +996,19 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	updatedPage, err := h.queries.UpdatePage(r.Context(), store.UpdatePageParams{
 		ID:              id,
-		Title:           title,
-		Slug:            slug,
-		Body:            body,
+		Title:           input.Title,
+		Slug:            input.Slug,
+		Body:            input.Body,
 		Status:          status,
-		FeaturedImageID: featuredImageID,
-		MetaTitle:       metaTitle,
-		MetaDescription: metaDescription,
-		MetaKeywords:    metaKeywords,
-		OgImageID:       ogImageID,
-		NoIndex:         noIndex,
-		NoFollow:        noFollow,
-		CanonicalUrl:    canonicalURL,
-		ScheduledAt:     scheduledAt,
+		FeaturedImageID: input.FeaturedImageID,
+		MetaTitle:       input.MetaTitle,
+		MetaDescription: input.MetaDescription,
+		MetaKeywords:    input.MetaKeywords,
+		OgImageID:       input.OgImageID,
+		NoIndex:         input.NoIndex,
+		NoFollow:        input.NoFollow,
+		CanonicalUrl:    input.CanonicalURL,
+		ScheduledAt:     input.ScheduledAt,
 		LanguageID:      existingPage.LanguageID,
 		UpdatedAt:       now,
 	})
@@ -1121,11 +1020,11 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create new version (only if title or body changed)
-	if title != existingPage.Title || body != existingPage.Body {
+	if input.Title != existingPage.Title || input.Body != existingPage.Body {
 		_, err = h.queries.CreatePageVersion(r.Context(), store.CreatePageVersionParams{
 			PageID:    id,
-			Title:     title,
-			Body:      body,
+			Title:     input.Title,
+			Body:      input.Body,
 			ChangedBy: middleware.GetUserID(r),
 			CreatedAt: now,
 		})
@@ -1188,23 +1087,14 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/pages/{id} - deletes a page.
 func (h *PagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	// Get page ID from URL
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parsePageIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid page ID", http.StatusBadRequest)
 		return
 	}
 
-	// Get page to verify it exists and for logging
-	page, err := h.queries.GetPageByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Page not found", http.StatusNotFound)
-		} else {
-			slog.Error("failed to get page", "error", err, "page_id", id)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	page, ok := h.requirePageWithError(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -1234,25 +1124,15 @@ func (h *PagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // TogglePublish handles POST /admin/pages/{id}/publish - toggles publish status.
 func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
-	// Get page ID from URL
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parsePageIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid page ID", "error")
 		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
 		return
 	}
 
-	// Get existing page
-	page, err := h.queries.GetPageByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Page not found", "error")
-		} else {
-			slog.Error("failed to get page", "error", err, "page_id", id)
-			h.renderer.SetFlash(r, "Error loading page", "error")
-		}
-		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+	page, ok := h.requirePageWithRedirect(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -1314,25 +1194,15 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	// Get page ID from URL
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parsePageIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid page ID", "error")
 		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
 		return
 	}
 
-	// Get page from database
-	page, err := h.queries.GetPageByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Page not found", "error")
-		} else {
-			slog.Error("failed to get page", "error", err, "page_id", id)
-			h.renderer.SetFlash(r, "Error loading page", "error")
-		}
-		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+	page, ok := h.requirePageWithRedirect(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -1401,9 +1271,7 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 
 // RestoreVersion handles POST /admin/pages/{id}/versions/{versionId}/restore - restores a version.
 func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
-	// Get page ID from URL
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parsePageIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid page ID", "error")
 		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
@@ -1419,16 +1287,8 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get page to verify it exists
-	page, err := h.queries.GetPageByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Page not found", "error")
-		} else {
-			slog.Error("failed to get page", "error", err, "page_id", id)
-			h.renderer.SetFlash(r, "Error loading page", "error")
-		}
-		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+	page, ok := h.requirePageWithRedirect(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -1499,9 +1359,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 
 // Translate handles POST /admin/pages/{id}/translate/{langCode} - creates a translation.
 func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
-	// Get page ID from URL
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parsePageIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid page ID", "error")
 		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
@@ -1516,16 +1374,8 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get source page
-	sourcePage, err := h.queries.GetPageByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Page not found", "error")
-		} else {
-			slog.Error("failed to get page", "error", err, "page_id", id)
-			h.renderer.SetFlash(r, "Error loading page", "error")
-		}
-		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+	sourcePage, ok := h.requirePageWithRedirect(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -1637,4 +1487,215 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 
 	h.renderer.SetFlash(r, fmt.Sprintf("Translation created for %s. Please translate the content.", targetLang.Name), "success")
 	http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", translatedPage.ID), http.StatusSeeOther)
+}
+
+// Helper functions
+
+// parsePageIDParam parses the page "id" URL parameter as int64.
+func parsePageIDParam(r *http.Request) (int64, error) {
+	idStr := chi.URLParam(r, "id")
+	return strconv.ParseInt(idStr, 10, 64)
+}
+
+// requirePageWithRedirect fetches page by ID and handles errors with flash messages and redirect.
+// Returns the page and true if successful, or zero value and false if an error occurred (response already written).
+func (h *PagesHandler) requirePageWithRedirect(w http.ResponseWriter, r *http.Request, id int64) (store.Page, bool) {
+	page, err := h.queries.GetPageByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			h.renderer.SetFlash(r, "Page not found", "error")
+		} else {
+			slog.Error("failed to get page", "error", err, "page_id", id)
+			h.renderer.SetFlash(r, "Error loading page", "error")
+		}
+		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		return store.Page{}, false
+	}
+	return page, true
+}
+
+// requirePageWithError fetches page by ID and handles errors with http.Error.
+// Returns the page and true if successful, or zero value and false if an error occurred (response already written).
+func (h *PagesHandler) requirePageWithError(w http.ResponseWriter, r *http.Request, id int64) (store.Page, bool) {
+	page, err := h.queries.GetPageByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Page not found", http.StatusNotFound)
+		} else {
+			slog.Error("failed to get page", "error", err, "page_id", id)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return store.Page{}, false
+	}
+	return page, true
+}
+
+// pageFormInput holds parsed page form input values.
+type pageFormInput struct {
+	Title           string
+	Slug            string
+	Body            string
+	Status          string
+	FeaturedImageID sql.NullInt64
+	MetaTitle       string
+	MetaDescription string
+	MetaKeywords    string
+	OgImageID       sql.NullInt64
+	NoIndex         int64
+	NoFollow        int64
+	CanonicalURL    string
+	ScheduledAt     sql.NullTime
+	LanguageID      sql.NullInt64
+	FormValues      map[string]string
+}
+
+// parsePageFormInput parses common page form values from request.
+func parsePageFormInput(r *http.Request) pageFormInput {
+	title := strings.TrimSpace(r.FormValue("title"))
+	slug := strings.TrimSpace(r.FormValue("slug"))
+	body := r.FormValue("body")
+	status := r.FormValue("status")
+	featuredImageIDStr := r.FormValue("featured_image_id")
+
+	// SEO fields
+	metaTitle := strings.TrimSpace(r.FormValue("meta_title"))
+	metaDescription := strings.TrimSpace(r.FormValue("meta_description"))
+	metaKeywords := strings.TrimSpace(r.FormValue("meta_keywords"))
+	ogImageIDStr := r.FormValue("og_image_id")
+	noIndexStr := r.FormValue("no_index")
+	noFollowStr := r.FormValue("no_follow")
+	canonicalURL := strings.TrimSpace(r.FormValue("canonical_url"))
+	scheduledAtStr := strings.TrimSpace(r.FormValue("scheduled_at"))
+	languageIDStr := r.FormValue("language_id")
+
+	// Parse featured image ID
+	var featuredImageID sql.NullInt64
+	if featuredImageIDStr != "" {
+		if imgID, err := strconv.ParseInt(featuredImageIDStr, 10, 64); err == nil && imgID > 0 {
+			featuredImageID = sql.NullInt64{Int64: imgID, Valid: true}
+		}
+	}
+
+	// Parse OG image ID
+	var ogImageID sql.NullInt64
+	if ogImageIDStr != "" {
+		if imgID, err := strconv.ParseInt(ogImageIDStr, 10, 64); err == nil && imgID > 0 {
+			ogImageID = sql.NullInt64{Int64: imgID, Valid: true}
+		}
+	}
+
+	// Parse boolean SEO fields
+	var noIndex int64
+	if noIndexStr == "1" || noIndexStr == "on" {
+		noIndex = 1
+	}
+	var noFollow int64
+	if noFollowStr == "1" || noFollowStr == "on" {
+		noFollow = 1
+	}
+
+	// Parse scheduled_at
+	var scheduledAt sql.NullTime
+	if scheduledAtStr != "" {
+		if t, err := time.Parse("2006-01-02T15:04", scheduledAtStr); err == nil {
+			scheduledAt = sql.NullTime{Time: t, Valid: true}
+		}
+	}
+
+	// Parse language_id
+	var languageID sql.NullInt64
+	if languageIDStr != "" {
+		if lid, err := strconv.ParseInt(languageIDStr, 10, 64); err == nil && lid > 0 {
+			languageID = sql.NullInt64{Int64: lid, Valid: true}
+		}
+	}
+
+	formValues := map[string]string{
+		"title":             title,
+		"slug":              slug,
+		"body":              body,
+		"status":            status,
+		"featured_image_id": featuredImageIDStr,
+		"meta_title":        metaTitle,
+		"meta_description":  metaDescription,
+		"meta_keywords":     metaKeywords,
+		"og_image_id":       ogImageIDStr,
+		"no_index":          noIndexStr,
+		"no_follow":         noFollowStr,
+		"canonical_url":     canonicalURL,
+		"scheduled_at":      scheduledAtStr,
+		"language_id":       languageIDStr,
+	}
+
+	return pageFormInput{
+		Title:           title,
+		Slug:            slug,
+		Body:            body,
+		Status:          status,
+		FeaturedImageID: featuredImageID,
+		MetaTitle:       metaTitle,
+		MetaDescription: metaDescription,
+		MetaKeywords:    metaKeywords,
+		OgImageID:       ogImageID,
+		NoIndex:         noIndex,
+		NoFollow:        noFollow,
+		CanonicalURL:    canonicalURL,
+		ScheduledAt:     scheduledAt,
+		LanguageID:      languageID,
+		FormValues:      formValues,
+	}
+}
+
+// validatePageTitle validates the page title and returns error message if invalid.
+func validatePageTitle(title string) string {
+	if title == "" {
+		return "Title is required"
+	}
+	if len(title) < 2 {
+		return "Title must be at least 2 characters"
+	}
+	return ""
+}
+
+// validatePageSlug validates the page slug for creation (checks uniqueness).
+func (h *PagesHandler) validatePageSlugCreate(ctx context.Context, slug string) string {
+	if slug == "" {
+		return "Slug is required"
+	}
+	if !util.IsValidSlug(slug) {
+		return "Invalid slug format (use lowercase letters, numbers, and hyphens)"
+	}
+	exists, err := h.queries.SlugExists(ctx, slug)
+	if err != nil {
+		slog.Error("database error checking slug", "error", err)
+		return "Error checking slug"
+	}
+	if exists != 0 {
+		return "Slug already exists"
+	}
+	return ""
+}
+
+// validatePageSlugUpdate validates the page slug for update (checks uniqueness excluding current page).
+func (h *PagesHandler) validatePageSlugUpdate(ctx context.Context, slug string, currentSlug string, pageID int64) string {
+	if slug == "" {
+		return "Slug is required"
+	}
+	if !util.IsValidSlug(slug) {
+		return "Invalid slug format (use lowercase letters, numbers, and hyphens)"
+	}
+	if slug != currentSlug {
+		exists, err := h.queries.SlugExistsExcluding(ctx, store.SlugExistsExcludingParams{
+			Slug: slug,
+			ID:   pageID,
+		})
+		if err != nil {
+			slog.Error("database error checking slug", "error", err)
+			return "Error checking slug"
+		}
+		if exists != 0 {
+			return "Slug already exists"
+		}
+	}
+	return ""
 }
