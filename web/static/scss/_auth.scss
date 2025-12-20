@@ -154,3 +154,10 @@
     padding: $spacing-4 $spacing-6;
     font-size: $font-size-lg;
 }
+
+// Captcha group
+.captcha-group {
+    display: flex;
+    justify-content: center;
+    margin-bottom: $spacing-4;
+}
