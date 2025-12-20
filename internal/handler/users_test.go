@@ -340,25 +340,27 @@ func TestUsersListData(t *testing.T) {
 	data := UsersListData{
 		Users:         []store.User{},
 		CurrentUserID: 1,
-		CurrentPage:   2,
-		TotalPages:    5,
 		TotalUsers:    50,
-		HasPrev:       true,
-		HasNext:       true,
-		PrevPage:      1,
-		NextPage:      3,
+		Pagination: AdminPagination{
+			CurrentPage: 2,
+			TotalPages:  5,
+			HasPrev:     true,
+			HasNext:     true,
+			PrevPage:    1,
+			NextPage:    3,
+		},
 	}
 
-	if data.CurrentPage != 2 {
+	if data.Pagination.CurrentPage != 2 {
 		t.Error("CurrentPage not set correctly")
 	}
-	if data.TotalPages != 5 {
+	if data.Pagination.TotalPages != 5 {
 		t.Error("TotalPages not set correctly")
 	}
-	if !data.HasPrev {
+	if !data.Pagination.HasPrev {
 		t.Error("HasPrev should be true")
 	}
-	if !data.HasNext {
+	if !data.Pagination.HasNext {
 		t.Error("HasNext should be true")
 	}
 }
