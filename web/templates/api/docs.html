@@ -4,349 +4,60 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.SiteName}} - API Documentation</title>
+    <link rel="stylesheet" href="/static/css/main.css">
     <style>
+        /* API Docs custom properties for dark mode support */
         :root {
-            --bg-color: #f8fafc;
-            --text-color: #1e293b;
-            --text-muted: #64748b;
-            --border-color: #e2e8f0;
-            --code-bg: #f1f5f9;
-            --primary-color: #3b82f6;
-            --success-color: #10b981;
-            --warning-color: #f59e0b;
-            --danger-color: #ef4444;
-            --sidebar-width: 280px;
+            --docs-bg: #f8fafc;
+            --docs-text: #1e293b;
+            --docs-text-muted: #64748b;
+            --docs-border: #e2e8f0;
+            --docs-code-bg: #f1f5f9;
+            --docs-primary: #3b82f6;
+            --docs-success: #10b981;
+            --docs-warning: #f59e0b;
+            --docs-danger: #ef4444;
         }
 
         @media (prefers-color-scheme: dark) {
             :root {
-                --bg-color: #0f172a;
-                --text-color: #e2e8f0;
-                --text-muted: #94a3b8;
-                --border-color: #334155;
-                --code-bg: #1e293b;
+                --docs-bg: #0f172a;
+                --docs-text: #e2e8f0;
+                --docs-text-muted: #94a3b8;
+                --docs-border: #334155;
+                --docs-code-bg: #1e293b;
             }
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: var(--bg-color);
-            color: var(--text-color);
-            line-height: 1.6;
-        }
-
-        .docs-layout {
-            display: flex;
-            min-height: 100vh;
-        }
-
-        /* Sidebar */
-        .docs-sidebar {
-            width: var(--sidebar-width);
-            background: var(--bg-color);
-            border-right: 1px solid var(--border-color);
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
-            padding: 1.5rem 0;
-        }
-
-        .sidebar-header {
-            padding: 0 1.5rem 1.5rem;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .sidebar-title {
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: var(--text-color);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .sidebar-version {
-            background: var(--primary-color);
-            color: white;
-            font-size: 0.75rem;
-            padding: 0.125rem 0.5rem;
-            border-radius: 9999px;
-            font-weight: 500;
-        }
-
-        .sidebar-nav {
-            padding: 1rem 0;
-        }
-
-        .nav-section {
-            margin-bottom: 1.5rem;
-        }
-
-        .nav-section-title {
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--text-muted);
-            padding: 0 1.5rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .nav-link {
-            display: block;
-            padding: 0.5rem 1.5rem;
-            color: var(--text-color);
-            text-decoration: none;
-            font-size: 0.875rem;
-            transition: background 0.15s;
-        }
-
-        .nav-link:hover {
-            background: var(--code-bg);
-        }
-
-        .nav-link.active {
-            background: var(--code-bg);
-            color: var(--primary-color);
-            font-weight: 500;
-        }
-
-        /* Main content */
-        .docs-main {
-            margin-left: var(--sidebar-width);
-            flex: 1;
-            padding: 2rem 3rem;
-            max-width: 900px;
-        }
-
-        h1, h2, h3, h4 {
-            color: var(--text-color);
-            margin-top: 2rem;
-            margin-bottom: 1rem;
-        }
-
-        h1 { font-size: 2rem; margin-top: 0; }
-        h2 { font-size: 1.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; }
-        h3 { font-size: 1.25rem; }
-        h4 { font-size: 1rem; }
-
-        p {
-            margin-bottom: 1rem;
-            color: var(--text-muted);
-        }
-
-        a {
-            color: var(--primary-color);
-        }
-
-        /* Code */
-        code {
-            font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
-            font-size: 0.875em;
-            background: var(--code-bg);
-            padding: 0.125rem 0.375rem;
-            border-radius: 4px;
-        }
-
-        pre {
-            background: var(--code-bg);
-            padding: 1rem;
-            border-radius: 8px;
-            overflow-x: auto;
-            margin-bottom: 1rem;
-        }
-
-        pre code {
-            padding: 0;
-            background: none;
-        }
-
-        /* Endpoint cards */
-        .endpoint {
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            margin-bottom: 1.5rem;
-            overflow: hidden;
-        }
-
-        .endpoint-header {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 1rem;
-            background: var(--code-bg);
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .method {
-            font-size: 0.75rem;
-            font-weight: 700;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            text-transform: uppercase;
-            min-width: 60px;
-            text-align: center;
-        }
-
-        .method-get { background: #dbeafe; color: #1d4ed8; }
-        .method-post { background: #d1fae5; color: #059669; }
-        .method-put { background: #fef3c7; color: #d97706; }
-        .method-delete { background: #fee2e2; color: #dc2626; }
-
-        .endpoint-path {
-            font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
-            font-size: 0.875rem;
-            font-weight: 500;
-        }
-
-        .endpoint-auth {
-            margin-left: auto;
-            font-size: 0.75rem;
-            color: var(--text-muted);
-        }
-
-        .endpoint-auth .required {
-            color: var(--danger-color);
-        }
-
-        .endpoint-auth .optional {
-            color: var(--warning-color);
-        }
-
-        .endpoint-body {
-            padding: 1rem;
-        }
-
-        .endpoint-description {
-            margin-bottom: 1rem;
-        }
-
-        /* Parameters table */
-        .params-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.875rem;
-            margin-bottom: 1rem;
-        }
-
-        .params-table th,
-        .params-table td {
-            padding: 0.75rem;
-            text-align: left;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .params-table th {
-            font-weight: 600;
-            color: var(--text-muted);
-            font-size: 0.75rem;
-            text-transform: uppercase;
-        }
-
-        .param-name {
-            font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
-            font-weight: 500;
-        }
-
-        .param-required {
-            color: var(--danger-color);
-            font-size: 0.75rem;
-        }
-
-        .param-type {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-        }
-
-        /* Response examples */
-        .response-section {
-            margin-top: 1rem;
-        }
-
-        .response-title {
-            font-size: 0.875rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-        }
-
-        /* Badges */
-        .badge {
-            font-size: 0.75rem;
-            padding: 0.125rem 0.5rem;
-            border-radius: 9999px;
-            font-weight: 500;
-        }
-
-        .badge-primary { background: var(--primary-color); color: white; }
-        .badge-success { background: var(--success-color); color: white; }
-        .badge-warning { background: var(--warning-color); color: white; }
-
-        /* Info boxes */
-        .info-box {
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-            border-left: 4px solid;
-        }
-
-        .info-box.info {
-            background: #dbeafe;
-            border-color: var(--primary-color);
-        }
-
-        .info-box.warning {
-            background: #fef3c7;
-            border-color: var(--warning-color);
-        }
-
-        .info-box-title {
-            font-weight: 600;
-            margin-bottom: 0.25rem;
-        }
-
-        .info-box p {
-            margin: 0;
-            font-size: 0.875rem;
-        }
-
-        /* Section */
-        section {
-            margin-bottom: 3rem;
-            scroll-margin-top: 2rem;
-        }
-
-        /* Mobile responsiveness */
-        @media (max-width: 768px) {
-            .docs-sidebar {
-                display: none;
-            }
-
-            .docs-main {
-                margin-left: 0;
-                padding: 1.5rem;
-            }
-        }
-
-        /* Back link */
-        .back-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            color: var(--text-muted);
-            text-decoration: none;
-            font-size: 0.875rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .back-link:hover {
-            color: var(--primary-color);
-        }
+        /* API docs specific overrides for dark mode */
+        .docs-layout { background: var(--docs-bg); color: var(--docs-text); }
+        .docs-sidebar { background: var(--docs-bg); border-color: var(--docs-border); }
+        .docs-sidebar .sidebar-header { border-color: var(--docs-border); }
+        .docs-sidebar .sidebar-title { color: var(--docs-text); }
+        .docs-sidebar .nav-section-title { color: var(--docs-text-muted); }
+        .docs-sidebar .nav-link { color: var(--docs-text); }
+        .docs-sidebar .nav-link:hover,
+        .docs-sidebar .nav-link.active { background: var(--docs-code-bg); }
+        .docs-sidebar .nav-link.active { color: var(--docs-primary); }
+        .docs-main h1, .docs-main h2, .docs-main h3, .docs-main h4 { color: var(--docs-text); }
+        .docs-main h2 { border-color: var(--docs-border); }
+        .docs-main p { color: var(--docs-text-muted); }
+        .docs-main a { color: var(--docs-primary); }
+        .docs-main code { background: var(--docs-code-bg); }
+        .docs-main pre { background: var(--docs-code-bg); }
+        .endpoint { border-color: var(--docs-border); }
+        .endpoint-header { background: var(--docs-code-bg); border-color: var(--docs-border); }
+        .endpoint-auth { color: var(--docs-text-muted); }
+        .endpoint-auth .required { color: var(--docs-danger); }
+        .endpoint-auth .optional { color: var(--docs-warning); }
+        .params-table th, .params-table td { border-color: var(--docs-border); }
+        .params-table th { color: var(--docs-text-muted); }
+        .param-type { color: var(--docs-text-muted); }
+        .param-required { color: var(--docs-danger); }
+        .back-link { color: var(--docs-text-muted); }
+        .back-link:hover { color: var(--docs-primary); }
+        .info-box.info { background: rgba(59, 130, 246, 0.1); border-color: var(--docs-primary); }
+        .info-box.warning { background: rgba(245, 158, 11, 0.1); border-color: var(--docs-warning); }
     </style>
 </head>
 <body>

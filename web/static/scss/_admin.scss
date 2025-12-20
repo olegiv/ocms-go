@@ -1,4 +1,5 @@
 // Admin Layout
+@use 'sass:color';
 @use 'variables' as *;
 
 .admin-layout {
@@ -1466,4 +1467,2474 @@
 
 .form-control-sm {
   max-width: 150px;
+}
+
+// =====================================================
+// Dashboard Widget Styles
+// =====================================================
+
+.stats-grid-secondary,
+.stats-grid-tertiary {
+  margin-top: $spacing-4;
+  grid-template-columns: repeat(3, 1fr);
+
+  @media (max-width: $breakpoint-md) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.stat-icon-cyan {
+  background-color: rgba(6, 182, 212, 0.1);
+  color: #06b6d4;
+}
+
+.stat-icon-indigo {
+  background-color: rgba(99, 102, 241, 0.1);
+  color: #6366f1;
+}
+
+.stat-icon-teal {
+  background-color: rgba(20, 184, 166, 0.1);
+  color: #14b8a6;
+}
+
+.stat-icon-emerald {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.stat-icon-rose {
+  background-color: rgba(244, 63, 94, 0.1);
+  color: #f43f5e;
+}
+
+.stat-card-highlight {
+  border-color: $warning;
+  box-shadow: 0 0 0 1px rgba($warning, 0.2);
+}
+
+// Form Submissions Widget
+.submissions-list {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+}
+
+.submission-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: $spacing-3;
+  border-radius: $radius-md;
+  background: $gray-50;
+  text-decoration: none;
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background: $gray-100;
+  }
+}
+
+.submission-unread {
+  background: rgba($primary, 0.05);
+  border-left: 3px solid $primary;
+}
+
+.submission-info {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-1;
+}
+
+.submission-form {
+  font-weight: $font-weight-medium;
+  color: $gray-900;
+}
+
+.submission-time {
+  font-size: $font-size-xs;
+  color: $gray-500;
+}
+
+// Webhook Health Widget
+.webhook-health-list {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+}
+
+.webhook-health-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: $spacing-2;
+  border-radius: $radius-md;
+  background: $gray-50;
+}
+
+.webhook-health-info {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+}
+
+.webhook-health-indicator {
+  display: inline-flex;
+  align-items: center;
+}
+
+.health-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.health-green .health-dot {
+  background: $success;
+  box-shadow: 0 0 4px rgba($success, 0.4);
+}
+
+.health-yellow .health-dot {
+  background: $warning;
+  box-shadow: 0 0 4px rgba($warning, 0.4);
+}
+
+.health-red .health-dot {
+  background: $error;
+  box-shadow: 0 0 4px rgba($error, 0.4);
+}
+
+.health-unknown .health-dot {
+  background: $gray-400;
+}
+
+.webhook-name {
+  font-weight: $font-weight-medium;
+  color: $gray-900;
+}
+
+.webhook-rate {
+  font-size: $font-size-xs;
+}
+
+.webhook-alert {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  margin-top: $spacing-3;
+  padding: $spacing-2;
+  background: rgba($error, 0.1);
+  border-radius: $radius-md;
+  color: $error;
+  font-size: $font-size-sm;
+}
+
+.empty-state-sm {
+  text-align: center;
+  padding: $spacing-4;
+}
+
+.badge-sm {
+  font-size: 0.65rem;
+  padding: 0.125rem $spacing-1;
+}
+
+// Translation Coverage Widget
+.translation-coverage-list {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+}
+
+.translation-coverage-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: $spacing-3;
+  border-radius: $radius-md;
+  background: $gray-50;
+}
+
+.translation-coverage-info {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+}
+
+.language-code {
+  font-family: $font-family-mono;
+  font-weight: $font-weight-semibold;
+  padding: 0.125rem $spacing-1;
+  background: $gray-100;
+  border-radius: $radius-sm;
+  font-size: $font-size-xs;
+  text-transform: uppercase;
+}
+
+.language-name {
+  font-weight: $font-weight-medium;
+  color: $gray-900;
+}
+
+.translation-count {
+  font-size: $font-size-sm;
+  color: $gray-500;
+}
+
+// Failed Deliveries Widget
+.failed-deliveries-list {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+}
+
+.failed-delivery-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: $spacing-3;
+  border-radius: $radius-md;
+  background: $gray-50;
+  text-decoration: none;
+  transition: background-color $transition-fast;
+  border-left: 3px solid $error;
+
+  &:hover {
+    background: $gray-100;
+  }
+}
+
+.failed-delivery-info {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-1;
+
+  .webhook-name {
+    font-weight: $font-weight-medium;
+    color: $gray-900;
+  }
+
+  .event-type {
+    font-size: $font-size-xs;
+    color: $gray-500;
+    font-family: $font-family-mono;
+  }
+}
+
+.failed-delivery-meta {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+}
+
+.delivery-time {
+  font-size: $font-size-xs;
+  color: $gray-500;
+}
+
+// Stat card links
+a.stat-card-link {
+  text-decoration: none;
+  color: inherit;
+  transition: transform $transition-fast, box-shadow $transition-fast;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: $shadow-md;
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+// Activity Timeline Widget
+.activity-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-3;
+  padding: $spacing-3;
+  border-left: 3px solid $gray-200;
+  background: $gray-50;
+  margin-bottom: $spacing-2;
+  border-radius: 0 $radius-md $radius-md 0;
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background: $gray-100;
+  }
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.activity-level-info {
+  border-left-color: $primary;
+}
+
+.activity-level-warning {
+  border-left-color: $warning;
+}
+
+.activity-level-error {
+  border-left-color: $error;
+}
+
+.activity-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: $radius-md;
+  flex-shrink: 0;
+  background: $gray-100;
+  color: $gray-500;
+}
+
+.activity-icon-auth {
+  background-color: rgba(139, 92, 246, 0.1);
+  color: #8b5cf6;
+}
+
+.activity-icon-page {
+  background-color: rgba($primary, 0.1);
+  color: $primary;
+}
+
+.activity-icon-user {
+  background-color: rgba($success, 0.1);
+  color: $success;
+}
+
+.activity-icon-config {
+  background-color: rgba($warning, 0.1);
+  color: $warning;
+}
+
+.activity-icon-system {
+  background-color: rgba($gray-500, 0.1);
+  color: $gray-500;
+}
+
+.activity-icon-cache {
+  background-color: rgba(6, 182, 212, 0.1);
+  color: #06b6d4;
+}
+
+.activity-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-message {
+  font-size: $font-size-sm;
+  color: $gray-900;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.activity-meta {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  margin-top: $spacing-1;
+  font-size: $font-size-xs;
+  color: $gray-500;
+}
+
+.activity-user {
+  font-weight: $font-weight-medium;
+}
+
+.activity-system {
+  font-style: italic;
+  color: $gray-400;
+}
+
+.activity-time {
+  color: $gray-400;
+}
+
+// =====================================================
+// Cache Stats Styles
+// =====================================================
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: $spacing-6;
+}
+
+.info-item {
+  h4 {
+    margin: 0 0 $spacing-2 0;
+    font-size: $font-size-base;
+    font-weight: $font-weight-semibold;
+  }
+
+  p {
+    margin: 0;
+    font-size: $font-size-sm;
+    color: $gray-500;
+    line-height: $line-height-normal;
+  }
+}
+
+.badge-muted {
+  background: $gray-100;
+  color: $gray-500;
+}
+
+// Cache Backend Info
+.backend-card {
+  display: flex;
+  align-items: center;
+  gap: $spacing-4;
+  padding: $spacing-4 $spacing-5;
+  background: $white;
+  border: 1px solid $gray-200;
+  border-radius: $radius-lg;
+  border-left: 4px solid $primary;
+
+  &.backend-redis {
+    border-left-color: #dc382d;
+  }
+
+  &.backend-memory {
+    border-left-color: $success;
+  }
+}
+
+.backend-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: $gray-100;
+  border-radius: $radius-lg;
+  color: $gray-500;
+}
+
+.backend-content {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-1;
+}
+
+.backend-type {
+  font-weight: $font-weight-semibold;
+  font-size: $font-size-base;
+}
+
+.backend-status {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  font-size: $font-size-sm;
+  color: $gray-500;
+}
+
+.backend-url {
+  font-size: $font-size-xs;
+  color: $gray-500;
+  font-family: $font-family-mono;
+}
+
+.status-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-healthy {
+  background: $success;
+}
+
+.status-error {
+  background: $error;
+}
+
+// =====================================================
+// Export/Import Styles
+// =====================================================
+
+.export-sections,
+.import-sections {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-8;
+}
+
+.export-section,
+.import-section {
+  border: 1px solid $gray-200;
+  border-radius: $radius-lg;
+  padding: $spacing-6;
+}
+
+.export-section-title,
+.import-section-title {
+  font-size: $font-size-base;
+  font-weight: $font-weight-semibold;
+  margin: 0 0 $spacing-4 0;
+  color: $gray-900;
+}
+
+.export-options,
+.import-options {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+}
+
+.export-info,
+.import-info {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-3;
+  padding: $spacing-4;
+  background: $gray-50;
+  border-radius: $radius-lg;
+  margin-top: $spacing-6;
+  color: $gray-600;
+
+  svg {
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+  }
+
+  p {
+    margin: 0;
+    font-size: $font-size-sm;
+    line-height: $line-height-normal;
+  }
+}
+
+.import-info {
+  margin-top: 0;
+  margin-bottom: $spacing-6;
+}
+
+.export-sub-option {
+  padding-bottom: $spacing-2;
+}
+
+// Upload area
+.import-upload-section {
+  margin-bottom: $spacing-6;
+}
+
+.upload-area {
+  position: relative;
+  border: 2px dashed $gray-300;
+  border-radius: $radius-lg;
+  padding: $spacing-12 $spacing-8;
+  text-align: center;
+  transition: border-color $transition-fast, background-color $transition-fast;
+  cursor: pointer;
+
+  &:hover,
+  &.dragover {
+    border-color: $primary;
+    background-color: $gray-50;
+  }
+
+  &.has-file {
+    border-color: $success;
+    background-color: rgba($success, 0.05);
+  }
+}
+
+.upload-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.upload-content,
+.upload-selected {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $spacing-3;
+  color: $gray-500;
+  pointer-events: none;
+}
+
+.upload-selected {
+  color: color.adjust($success, $lightness: -20%);
+
+  svg {
+    color: color.adjust($success, $lightness: -20%);
+  }
+}
+
+// Validation states
+.validation-success,
+.validation-error {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  padding: $spacing-4;
+  border-radius: $radius-lg;
+  margin-bottom: $spacing-6;
+  font-weight: $font-weight-medium;
+}
+
+.validation-success {
+  background: rgba($success, 0.1);
+  color: color.adjust($success, $lightness: -25%);
+}
+
+.validation-error {
+  background: rgba($error, 0.1);
+  color: color.adjust($error, $lightness: -15%);
+}
+
+.zip-file-notice {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  padding: $spacing-3 $spacing-4;
+  background: rgba($info, 0.1);
+  color: color.adjust($info, $lightness: -25%);
+  border-radius: $radius-lg;
+  margin-bottom: $spacing-4;
+  font-weight: $font-weight-medium;
+  font-size: $font-size-sm;
+}
+
+.media-files-badge {
+  background: $primary;
+  color: $white;
+  padding: $spacing-1 $spacing-2;
+  border-radius: $radius-sm;
+  font-size: $font-size-xs;
+  margin-left: auto;
+}
+
+.section-title {
+  font-size: $font-size-base;
+  font-weight: $font-weight-semibold;
+  margin: $spacing-6 0 $spacing-4;
+  color: $gray-900;
+}
+
+.entity-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: $spacing-3;
+}
+
+.entity-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: $spacing-3 $spacing-4;
+  background: $gray-50;
+  border-radius: $radius-lg;
+}
+
+.entity-name {
+  font-weight: $font-weight-medium;
+  text-transform: capitalize;
+}
+
+.entity-count {
+  font-weight: $font-weight-semibold;
+  color: $primary;
+}
+
+.conflicts-section {
+  background: rgba($warning, 0.15);
+  border-radius: $radius-lg;
+  padding: $spacing-4;
+}
+
+.conflict-group {
+  margin-bottom: $spacing-4;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.conflict-entity {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  margin: 0 0 $spacing-2;
+  text-transform: capitalize;
+}
+
+.conflict-list {
+  margin: 0;
+  padding-left: $spacing-6;
+  font-size: $font-size-sm;
+}
+
+.errors-section {
+  background: rgba($error, 0.1);
+  border-radius: $radius-lg;
+  padding: $spacing-4;
+}
+
+.error-item {
+  font-size: $font-size-sm;
+  margin-bottom: $spacing-2;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.import-success,
+.import-failure {
+  display: flex;
+  align-items: center;
+  gap: $spacing-4;
+  padding: $spacing-6;
+  border-radius: $radius-lg;
+  margin-bottom: $spacing-6;
+
+  h3 {
+    margin: 0 0 $spacing-1;
+    font-size: $font-size-lg;
+  }
+
+  p {
+    margin: 0;
+    font-size: $font-size-sm;
+    opacity: 0.9;
+  }
+}
+
+.import-success {
+  background: rgba($success, 0.1);
+  color: color.adjust($success, $lightness: -25%);
+}
+
+.import-failure {
+  background: rgba($error, 0.1);
+  color: color.adjust($error, $lightness: -15%);
+}
+
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: $spacing-4;
+  margin-bottom: $spacing-6;
+}
+
+.result-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: $spacing-6;
+  border-radius: $radius-lg;
+  text-align: center;
+}
+
+.result-created {
+  background: rgba($success, 0.1);
+  color: color.adjust($success, $lightness: -25%);
+}
+
+.result-updated {
+  background: rgba($info, 0.1);
+  color: color.adjust($info, $lightness: -25%);
+}
+
+.result-skipped {
+  background: $gray-50;
+  color: $gray-500;
+}
+
+.result-count {
+  font-size: $font-size-3xl;
+  font-weight: $font-weight-bold;
+}
+
+.result-label {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  margin-top: $spacing-1;
+}
+
+.subsection-title {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  margin: $spacing-6 0 $spacing-3;
+  color: $gray-500;
+}
+
+.errors-title {
+  color: color.adjust($error, $lightness: -15%);
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: $spacing-2;
+}
+
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: $spacing-2 $spacing-3;
+  background: $gray-50;
+  border-radius: $radius-lg;
+}
+
+// =====================================================
+// Form Builder Styles
+// =====================================================
+
+.form-builder-container {
+  max-width: 900px;
+}
+
+.fields-list {
+  min-height: 100px;
+}
+
+.field-item {
+  display: flex;
+  align-items: center;
+  gap: $spacing-4;
+  padding: $spacing-4;
+  background: $gray-50;
+  border: 1px solid $gray-200;
+  border-radius: $radius-lg;
+  margin-bottom: $spacing-2;
+}
+
+.field-item-handle {
+  cursor: grab;
+  color: $gray-400;
+  padding: $spacing-1;
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.field-item-content {
+  flex: 1;
+}
+
+.field-item-label {
+  font-weight: $font-weight-medium;
+  margin-bottom: $spacing-1;
+}
+
+.field-item-meta {
+  display: flex;
+  gap: $spacing-2;
+  align-items: center;
+  font-size: $font-size-sm;
+  color: $gray-600;
+}
+
+.field-item-actions {
+  display: flex;
+  gap: $spacing-2;
+}
+
+// Stats bar for submissions
+.stats-bar {
+  display: flex;
+  gap: $spacing-8;
+  margin-bottom: $spacing-6;
+  padding: $spacing-4;
+  background: $gray-50;
+  border-radius: $radius-lg;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+}
+
+tr.unread {
+  background-color: rgba($primary, 0.05);
+
+  td:first-child {
+    border-left: 3px solid $primary;
+  }
+}
+
+.submission-preview {
+  color: $gray-900;
+  text-decoration: none;
+
+  &:hover {
+    color: $primary;
+  }
+}
+
+// =====================================================
+// Webhooks Styles
+// =====================================================
+
+.deliveries-list {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+}
+
+.delivery-item {
+  display: flex;
+  align-items: center;
+  gap: $spacing-4;
+  padding: $spacing-4;
+  background: $white;
+  border: 1px solid $gray-200;
+  border-radius: $radius-lg;
+  transition: border-color $transition-fast;
+
+  &:hover {
+    border-color: $gray-300;
+  }
+}
+
+.delivery-status-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: $radius-full;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  &.success {
+    background: rgba($success, 0.1);
+    color: $success;
+  }
+
+  &.error {
+    background: rgba($error, 0.1);
+    color: $error;
+  }
+
+  &.pending {
+    background: rgba($warning, 0.1);
+    color: $warning;
+  }
+}
+
+.delivery-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.delivery-event {
+  font-weight: $font-weight-medium;
+  font-family: $font-family-mono;
+  font-size: $font-size-sm;
+  color: $gray-900;
+}
+
+.delivery-meta {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  margin-top: $spacing-1;
+  font-size: $font-size-xs;
+  color: $gray-500;
+}
+
+.delivery-response {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+}
+
+.delivery-actions {
+  display: flex;
+  gap: $spacing-2;
+}
+
+// =====================================================
+// API Keys Styles
+// =====================================================
+
+.api-key-display {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  padding: $spacing-3;
+  background: $gray-900;
+  border-radius: $radius-lg;
+  font-family: $font-family-mono;
+  font-size: $font-size-sm;
+}
+
+.api-key-value {
+  flex: 1;
+  color: $success;
+  word-break: break-all;
+}
+
+.copy-btn {
+  padding: $spacing-2;
+  background: $gray-800;
+  border: none;
+  border-radius: $radius-md;
+  color: $gray-400;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover {
+    background: $gray-700;
+    color: $white;
+  }
+}
+
+.permissions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: $spacing-3;
+}
+
+.permission-item {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  padding: $spacing-3;
+  background: $gray-50;
+  border-radius: $radius-lg;
+}
+
+.permission-check {
+  width: 20px;
+  height: 20px;
+  border-radius: $radius-full;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  &.granted {
+    background: rgba($success, 0.1);
+    color: $success;
+  }
+
+  &.denied {
+    background: rgba($error, 0.1);
+    color: $error;
+  }
+}
+
+.permission-name {
+  font-family: $font-family-mono;
+  font-size: $font-size-sm;
+  color: $gray-700;
+}
+
+// =====================================================
+// Module Styles
+// =====================================================
+
+.module-card {
+  display: flex;
+  align-items: center;
+  gap: $spacing-4;
+  padding: $spacing-5;
+  background: $white;
+  border: 1px solid $gray-200;
+  border-radius: $radius-lg;
+  transition: border-color $transition-fast, box-shadow $transition-fast;
+
+  &:hover {
+    border-color: $gray-300;
+    box-shadow: $shadow-sm;
+  }
+}
+
+.module-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: $radius-lg;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba($primary, 0.1);
+  color: $primary;
+  flex-shrink: 0;
+}
+
+.module-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.module-name {
+  font-weight: $font-weight-semibold;
+  color: $gray-900;
+  margin-bottom: $spacing-1;
+}
+
+.module-description {
+  font-size: $font-size-sm;
+  color: $gray-500;
+  line-height: $line-height-normal;
+}
+
+.module-meta {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  margin-top: $spacing-2;
+  font-size: $font-size-xs;
+  color: $gray-400;
+}
+
+.module-actions {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+}
+
+// Toggle switch
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+
+  input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: $gray-300;
+  border-radius: $radius-full;
+  transition: background-color $transition-fast;
+
+  &::before {
+    content: '';
+    position: absolute;
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background: $white;
+    border-radius: $radius-full;
+    transition: transform $transition-fast;
+  }
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: $success;
+
+  &::before {
+    transform: translateX(20px);
+  }
+}
+
+// =====================================================
+// Theme Styles
+// =====================================================
+
+.themes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: $spacing-6;
+}
+
+.theme-card {
+  background: $white;
+  border: 1px solid $gray-200;
+  border-radius: $radius-lg;
+  overflow: hidden;
+  transition: border-color $transition-fast, box-shadow $transition-fast;
+
+  &:hover {
+    border-color: $gray-300;
+    box-shadow: $shadow-md;
+  }
+
+  &.active {
+    border-color: $primary;
+    box-shadow: 0 0 0 2px rgba($primary, 0.1);
+  }
+}
+
+.theme-preview {
+  aspect-ratio: 16/9;
+  background: $gray-100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $gray-400;
+  position: relative;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.theme-preview-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: $gray-300;
+}
+
+.theme-badge {
+  position: absolute;
+  top: $spacing-2;
+  right: $spacing-2;
+  padding: $spacing-1 $spacing-2;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  border-radius: $radius-sm;
+  background: $gray-900;
+  color: $white;
+
+  &.active-badge {
+    background: $success;
+  }
+}
+
+.theme-info {
+  padding: $spacing-4;
+}
+
+.theme-name {
+  font-weight: $font-weight-semibold;
+  font-size: $font-size-lg;
+  color: $gray-900;
+  margin: 0 0 $spacing-1 0;
+}
+
+.theme-version {
+  font-size: $font-size-sm;
+  color: $gray-500;
+  margin: 0 0 $spacing-1 0;
+}
+
+.theme-author {
+  font-size: $font-size-sm;
+  color: $gray-500;
+  margin: 0 0 $spacing-2 0;
+}
+
+.theme-description {
+  font-size: $font-size-sm;
+  color: $gray-600;
+  line-height: $line-height-normal;
+  margin: 0;
+}
+
+.theme-actions {
+  display: flex;
+  gap: $spacing-2;
+  padding: $spacing-3 $spacing-4;
+  border-top: 1px solid $gray-100;
+  background: $gray-50;
+}
+
+// =====================================================
+// Additional Dashboard/Activity Styles
+// =====================================================
+
+.activity-meta .activity-user::after {
+  content: "·";
+  margin-left: $spacing-2;
+  color: $gray-400;
+}
+
+.activity-badge {
+  font-size: 0.65rem;
+  padding: 0.125rem $spacing-2;
+  border-radius: $radius-full;
+  font-weight: $font-weight-medium;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+.badge-info {
+  background-color: rgba($primary, 0.1);
+  color: $primary;
+}
+
+.badge-warning {
+  background-color: rgba($warning, 0.1);
+  color: color.adjust($warning, $lightness: -10%);
+}
+
+.badge-error {
+  background-color: rgba($error, 0.1);
+  color: color.adjust($error, $lightness: -10%);
+}
+
+.badge-danger {
+  background-color: rgba($error, 0.1);
+  color: $error;
+}
+
+// =====================================================
+// Webhook List Styles
+// =====================================================
+
+.url-display {
+  font-family: $font-family-mono;
+  font-size: $font-size-xs;
+  background: $gray-100;
+  padding: $spacing-1 $spacing-2;
+  border-radius: $radius-sm;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+}
+
+.event-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-1;
+}
+
+.badge-outline {
+  background: transparent;
+  border: 1px solid $gray-200;
+  color: $gray-500;
+}
+
+.stats-display {
+  display: flex;
+  gap: $spacing-2;
+  align-items: center;
+}
+
+// =====================================================
+// Webhook Deliveries Styles
+// =====================================================
+
+.response-code {
+  font-family: $font-family-mono;
+  font-size: $font-size-sm;
+  padding: 0.125rem $spacing-1;
+  border-radius: $radius-sm;
+}
+
+.response-success {
+  background: rgba($success, 0.1);
+  color: $success;
+}
+
+.response-error {
+  background: rgba($error, 0.1);
+  color: $error;
+}
+
+.error-message {
+  color: $error;
+  cursor: help;
+  vertical-align: middle;
+  margin-left: $spacing-1;
+}
+
+.payload-row {
+  background: $gray-100;
+
+  td {
+    padding: 0 !important;
+  }
+}
+
+.payload-container {
+  padding: $spacing-4;
+}
+
+.payload-section {
+  margin-bottom: $spacing-4;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.payload-label {
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+  color: $gray-500;
+  margin-bottom: $spacing-2;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.payload-content {
+  background: $gray-900;
+  color: $gray-100;
+  padding: $spacing-3;
+  border-radius: $radius-md;
+  font-family: $font-family-mono;
+  font-size: $font-size-xs;
+  overflow-x: auto;
+  max-height: 200px;
+  overflow-y: auto;
+
+  pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+}
+
+.toggle-btn {
+  padding: $spacing-2 $spacing-3;
+  font-size: $font-size-xs;
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-1;
+  background: $gray-100;
+  border: 1px solid $gray-200;
+  border-radius: $radius-md;
+  cursor: pointer;
+  color: $gray-600;
+  transition: all $transition-fast;
+
+  &:hover {
+    background: $gray-200;
+    color: $gray-900;
+  }
+}
+
+// =====================================================
+// API Keys Styles (additional)
+// =====================================================
+
+.key-prefix {
+  font-family: $font-family-mono;
+  font-size: $font-size-sm;
+  background: $gray-100;
+  padding: $spacing-1 $spacing-2;
+  border-radius: $radius-sm;
+}
+
+.permission-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-1;
+}
+
+.code-block {
+  background: $gray-100;
+  padding: $spacing-4;
+  border-radius: $radius-lg;
+  overflow-x: auto;
+
+  code {
+    font-family: $font-family-mono;
+  }
+}
+
+// =====================================================
+// Form Submission View Styles
+// =====================================================
+
+.submission-detail-card {
+  background: $white;
+  border: 1px solid $gray-200;
+  border-radius: $radius-lg;
+  overflow: hidden;
+}
+
+.submission-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: $spacing-4 $spacing-5;
+  background: $gray-50;
+  border-bottom: 1px solid $gray-200;
+}
+
+.submission-meta {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-1;
+}
+
+.submission-date {
+  font-weight: $font-weight-semibold;
+  color: $gray-900;
+}
+
+.submission-ip {
+  font-size: $font-size-sm;
+  color: $gray-500;
+  font-family: $font-family-mono;
+}
+
+.submission-body {
+  padding: $spacing-5;
+}
+
+.field-group {
+  margin-bottom: $spacing-5;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.field-label {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $gray-500;
+  margin-bottom: $spacing-2;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.field-value {
+  font-size: $font-size-base;
+  color: $gray-900;
+  padding: $spacing-3;
+  background: $gray-50;
+  border-radius: $radius-md;
+  word-break: break-word;
+}
+
+.upload-text {
+  font-size: $font-size-base;
+  font-weight: $font-weight-medium;
+  color: $gray-900;
+  margin: 0;
+}
+
+.upload-hint {
+  font-size: $font-size-sm;
+  margin: 0;
+}
+
+// =====================================================
+// Checkbox Styles
+// =====================================================
+
+.checkbox-label {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-1;
+}
+
+.checkbox-hint {
+  font-size: $font-size-sm;
+  color: $gray-500;
+  font-weight: $font-weight-normal;
+}
+
+// =====================================================
+// Modal Styles
+// =====================================================
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba($black, 0.5);
+}
+
+.modal-content {
+  position: relative;
+  background: $white;
+  border-radius: $radius-lg;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: $shadow-xl;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-4 $spacing-6;
+  border-bottom: 1px solid $gray-200;
+
+  h3 {
+    margin: 0;
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+  }
+}
+
+.modal-body {
+  padding: $spacing-6;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: $spacing-2;
+  padding: $spacing-4 $spacing-6;
+  border-top: 1px solid $gray-200;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: $gray-500;
+  padding: $spacing-1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    color: $gray-900;
+  }
+}
+
+// =====================================================
+// Spinner Animation
+// =====================================================
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid $gray-200;
+  border-top-color: $primary;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// =====================================================
+// Alert Styles
+// =====================================================
+
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-3;
+  padding: $spacing-3 $spacing-4;
+  border-radius: $radius-lg;
+  font-size: $font-size-sm;
+
+  svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+}
+
+.alert-warning {
+  background: rgba($warning, 0.1);
+  color: color.adjust($warning, $lightness: -30%);
+  border: 1px solid rgba($warning, 0.3);
+}
+
+.alert-info {
+  background: rgba($info, 0.1);
+  color: color.adjust($info, $lightness: -25%);
+  border: 1px solid rgba($info, 0.3);
+}
+
+.alert-success {
+  background: rgba($success, 0.1);
+  color: color.adjust($success, $lightness: -25%);
+  border: 1px solid rgba($success, 0.3);
+}
+
+.alert-danger {
+  background: rgba($error, 0.1);
+  color: color.adjust($error, $lightness: -15%);
+  border: 1px solid rgba($error, 0.3);
+}
+
+// =====================================================
+// Widget Styles
+// =====================================================
+
+.widgets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: $spacing-4;
+}
+
+.widget-card {
+  display: flex;
+  align-items: center;
+  gap: $spacing-4;
+  padding: $spacing-4;
+  background: $white;
+  border: 1px solid $gray-200;
+  border-radius: $radius-lg;
+  transition: border-color $transition-fast, box-shadow $transition-fast;
+
+  &:hover {
+    border-color: $gray-300;
+    box-shadow: $shadow-sm;
+  }
+}
+
+.widget-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: $radius-lg;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba($primary, 0.1);
+  color: $primary;
+  flex-shrink: 0;
+}
+
+.widget-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.widget-name {
+  font-weight: $font-weight-medium;
+  color: $gray-900;
+  margin-bottom: $spacing-1;
+}
+
+.widget-position {
+  font-size: $font-size-sm;
+  color: $gray-500;
+}
+
+.widget-actions {
+  display: flex;
+  gap: $spacing-2;
+}
+
+// =====================================================
+// Form Submission View Styles
+// =====================================================
+
+.submission-data {
+  margin-bottom: $spacing-6;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-row {
+  border-bottom: 1px solid $gray-100;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.data-label {
+  padding: $spacing-3 $spacing-4;
+  font-weight: $font-weight-semibold;
+  color: $gray-500;
+  text-transform: uppercase;
+  font-size: $font-size-xs;
+  letter-spacing: 0.05em;
+  width: 200px;
+  vertical-align: top;
+  background: $gray-50;
+}
+
+.data-value {
+  padding: $spacing-3 $spacing-4;
+  color: $gray-900;
+  word-break: break-word;
+}
+
+.data-pre {
+  font-family: $font-family-mono;
+  font-size: $font-size-sm;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.submission-raw {
+  margin-top: $spacing-6;
+}
+
+.json-data {
+  background: $gray-900;
+  color: $gray-100;
+  padding: $spacing-4;
+  border-radius: $radius-lg;
+  font-family: $font-family-mono;
+  font-size: $font-size-sm;
+  overflow-x: auto;
+  max-height: 400px;
+  overflow-y: auto;
+
+  pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+}
+
+.meta-label {
+  font-weight: $font-weight-medium;
+  color: $gray-500;
+}
+
+.meta-value {
+  color: $gray-900;
+}
+
+.user-agent {
+  font-size: $font-size-sm;
+  color: $gray-500;
+  font-family: $font-family-mono;
+  word-break: break-all;
+}
+
+// =====================================================
+// Webhooks Form Styles
+// =====================================================
+
+.events-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: $spacing-4;
+}
+
+.event-group {
+  background: $gray-50;
+  border-radius: $radius-lg;
+  padding: $spacing-4;
+}
+
+.event-group-title {
+  font-weight: $font-weight-semibold;
+  color: $gray-700;
+  margin-bottom: $spacing-3;
+  font-size: $font-size-sm;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.headers-editor {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+}
+
+.header-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr auto;
+  gap: $spacing-2;
+  align-items: center;
+}
+
+.header-key,
+.header-value {
+  width: 100%;
+}
+
+.input-group {
+  display: flex;
+  gap: 0;
+
+  .form-control {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+}
+
+.input-group-btn {
+  padding: $spacing-2 $spacing-3;
+  background: $gray-100;
+  border: 1px solid $gray-300;
+  border-left: none;
+  border-radius: 0 $radius-md $radius-md 0;
+  cursor: pointer;
+  color: $gray-600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    background: $gray-200;
+    color: $gray-900;
+  }
+}
+
+.info-box {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-3;
+  padding: $spacing-4;
+  background: $gray-50;
+  border-radius: $radius-lg;
+  border-left: 4px solid $gray-300;
+
+  &.info {
+    background: rgba($info, 0.05);
+    border-left-color: $info;
+  }
+
+  &.warning {
+    background: rgba($warning, 0.05);
+    border-left-color: $warning;
+  }
+
+  &.success {
+    background: rgba($success, 0.05);
+    border-left-color: $success;
+  }
+
+  &.danger {
+    background: rgba($error, 0.05);
+    border-left-color: $error;
+  }
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  margin-bottom: $spacing-2;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.info-label {
+  font-weight: $font-weight-medium;
+  color: $gray-600;
+  min-width: 120px;
+}
+
+// =====================================================
+// API Keys Form Styles
+// =====================================================
+
+.key-container {
+  display: flex;
+  align-items: stretch;
+  background: $gray-900;
+  border-radius: $radius-lg;
+  overflow: hidden;
+}
+
+.key-input {
+  flex: 1;
+  padding: $spacing-3 $spacing-4;
+  background: transparent;
+  border: none;
+  color: $success;
+  font-family: $font-family-mono;
+  font-size: $font-size-sm;
+
+  &:focus {
+    outline: none;
+  }
+}
+
+.key-details {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-3;
+  padding: $spacing-4;
+  background: $gray-50;
+  border-radius: $radius-lg;
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+}
+
+.detail-label {
+  font-weight: $font-weight-medium;
+  color: $gray-500;
+  min-width: 120px;
+  font-size: $font-size-sm;
+}
+
+.detail-value {
+  color: $gray-900;
+  font-size: $font-size-sm;
+
+  &.mono {
+    font-family: $font-family-mono;
+  }
+}
+
+.permission-group {
+  background: $gray-50;
+  border-radius: $radius-lg;
+  padding: $spacing-4;
+  margin-bottom: $spacing-4;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.permission-group-title {
+  font-weight: $font-weight-semibold;
+  color: $gray-700;
+  margin-bottom: $spacing-3;
+  font-size: $font-size-sm;
+}
+
+.key-info-box {
+  background: $gray-50;
+  border-radius: $radius-lg;
+  padding: $spacing-4;
+}
+
+// =====================================================
+// Webhooks Deliveries Styles
+// =====================================================
+
+.headers-list {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-1;
+}
+
+.header-item {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-2;
+  font-size: $font-size-sm;
+  padding: $spacing-1 0;
+
+  strong {
+    color: $gray-700;
+    min-width: 150px;
+  }
+
+  span {
+    color: $gray-600;
+    word-break: break-all;
+  }
+}
+
+.timing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: $spacing-4;
+}
+
+.timing-item {
+  text-align: center;
+  padding: $spacing-3;
+  background: $gray-50;
+  border-radius: $radius-md;
+}
+
+.timing-label {
+  font-size: $font-size-xs;
+  color: $gray-500;
+  margin-bottom: $spacing-1;
+}
+
+.timing-value {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $gray-900;
+}
+
+.card-footer {
+  padding: $spacing-4;
+  border-top: 1px solid $gray-200;
+  background: $gray-50;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-4;
+}
+
+// =====================================================
+// Webhooks List Styles
+// =====================================================
+
+.health-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-1;
+
+  &::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: $gray-400;
+  }
+
+  &.healthy::before {
+    background: $success;
+  }
+
+  &.unhealthy::before {
+    background: $error;
+  }
+}
+
+.stat-success {
+  color: $success;
+}
+
+.stat-warning {
+  color: $warning;
+}
+
+.stat-danger {
+  color: $error;
+}
+
+.last-success {
+  font-size: $font-size-xs;
+  color: $gray-500;
+}
+
+// =====================================================
+// Widgets List Styles
+// =====================================================
+
+.widget-area {
+  margin-bottom: $spacing-8;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.widget-area-header {
+  margin-bottom: $spacing-4;
+}
+
+.widget-area-title {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $gray-900;
+  margin: 0 0 $spacing-1 0;
+}
+
+.widget-area-description {
+  font-size: $font-size-sm;
+  color: $gray-500;
+  margin: 0;
+}
+
+.widget-area-content {
+  background: $gray-50;
+  border-radius: $radius-lg;
+  padding: $spacing-4;
+  min-height: 100px;
+}
+
+.widgets-list {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+}
+
+.widget-item {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  padding: $spacing-3 $spacing-4;
+  background: $white;
+  border: 1px solid $gray-200;
+  border-radius: $radius-md;
+  transition: border-color $transition-fast, box-shadow $transition-fast;
+
+  &:hover {
+    border-color: $gray-300;
+    box-shadow: $shadow-sm;
+  }
+}
+
+.widget-item-header {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  flex: 1;
+}
+
+.widget-handle {
+  cursor: grab;
+  color: $gray-400;
+  padding: $spacing-1;
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.widget-type {
+  font-size: $font-size-xs;
+  color: $gray-500;
+  background: $gray-100;
+  padding: $spacing-1 $spacing-2;
+  border-radius: $radius-sm;
+}
+
+.widget-title {
+  font-weight: $font-weight-medium;
+  color: $gray-900;
+}
+
+.empty-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-8;
+  color: $gray-400;
+  text-align: center;
+
+  p {
+    margin: 0 0 $spacing-3;
+  }
+}
+
+.add-widget-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-2;
+}
+
+// =====================================================
+// Modules List Styles
+// =====================================================
+
+.module-inactive {
+  opacity: 0.6;
+}
+
+.module-version {
+  font-size: $font-size-xs;
+  color: $gray-500;
+  font-family: $font-family-mono;
+}
+
+.module-migrations {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+}
+
+.migrations-count {
+  font-size: $font-size-xs;
+  background: $gray-100;
+  padding: $spacing-1 $spacing-2;
+  border-radius: $radius-sm;
+  color: $gray-600;
+}
+
+.module-status {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+}
+
+.hooks-section {
+  margin-top: $spacing-6;
+}
+
+.hook-handlers {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+}
+
+.handler-name {
+  font-family: $font-family-mono;
+  font-size: $font-size-sm;
+  color: $gray-900;
+}
+
+.handler-module {
+  font-size: $font-size-xs;
+  color: $gray-500;
+}
+
+.handler-priority {
+  font-size: $font-size-xs;
+  color: $gray-400;
+}
+
+// =====================================================
+// Forms Submissions List Styles
+// =====================================================
+
+.table-container {
+  overflow-x: auto;
+}
+
+.col-w-60 {
+  width: 60px;
+}
+
+.col-w-80 {
+  width: 80px;
+}
+
+.col-w-120 {
+  width: 120px;
+}
+
+.col-w-150 {
+  width: 150px;
+}
+
+.col-w-160 {
+  width: 160px;
+}
+
+.link-primary {
+  color: $primary;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+// =====================================================
+// Utility Classes
+// =====================================================
+
+.d-inline {
+  display: inline;
+}
+
+.d-block {
+  display: block;
+}
+
+.d-flex {
+  display: flex;
+}
+
+.d-none {
+  display: none;
+}
+
+.mt-2 {
+  margin-top: $spacing-2;
+}
+
+.mt-4 {
+  margin-top: $spacing-4;
+}
+
+.mt-6 {
+  margin-top: $spacing-6;
+}
+
+.mt-8 {
+  margin-top: $spacing-8;
+}
+
+.mb-2 {
+  margin-bottom: $spacing-2;
+}
+
+.mb-4 {
+  margin-bottom: $spacing-4;
+}
+
+.mb-6 {
+  margin-bottom: $spacing-6;
+}
+
+.mb-8 {
+  margin-bottom: $spacing-8;
+}
+
+.text-sm {
+  font-size: $font-size-sm;
+}
+
+.text-xs {
+  font-size: $font-size-xs;
+}
+
+.text-muted {
+  color: $gray-500;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: not-allowed;
 }
