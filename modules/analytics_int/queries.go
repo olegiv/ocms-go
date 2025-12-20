@@ -323,7 +323,7 @@ func (m *Module) getTimeSeries(ctx context.Context, startDate, endDate time.Time
 			WHERE DATE(created_at) = ?
 		)
 		GROUP BY date
-		ORDER BY date ASC
+		ORDER BY date
 	`, startDate.Format("2006-01-02"), endDateStr, endDateStr)
 	if err != nil {
 		return nil

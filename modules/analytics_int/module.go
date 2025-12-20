@@ -90,7 +90,7 @@ func (m *Module) Shutdown() error {
 }
 
 // RegisterRoutes registers public routes (none for this module).
-func (m *Module) RegisterRoutes(r chi.Router) {
+func (m *Module) RegisterRoutes(_ chi.Router) {
 	// No public routes
 }
 
