@@ -61,16 +61,18 @@ func TestNewRegistry(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	r := NewRegistry(logger)
 
-	if r == nil {
-		t.Fatal("expected registry to be non-nil")
+	// Verify registry is properly initialized by checking expected behavior
+	if r.Count() != 0 {
+		t.Errorf("expected empty registry to have count 0, got %d", r.Count())
 	}
 
-	if r.modules == nil {
-		t.Error("expected modules map to be initialized")
+	// Verify List returns empty slice (not nil)
+	list := r.List()
+	if list == nil {
+		t.Error("expected List to return non-nil slice")
 	}
-
-	if r.order == nil {
-		t.Error("expected order slice to be initialized")
+	if len(list) != 0 {
+		t.Errorf("expected empty list, got %d items", len(list))
 	}
 }
 
