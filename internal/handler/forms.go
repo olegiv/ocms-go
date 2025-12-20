@@ -268,7 +268,7 @@ func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Slug:           slug,
 		Title:          title,
 		Description:    sql.NullString{String: description, Valid: description != ""},
-		SuccessMessage: sql.NullString{String: successMessage, Valid: successMessage != ""},
+		SuccessMessage: sql.NullString{String: successMessage, Valid: true}, // Always valid - has default
 		EmailTo:        sql.NullString{String: emailTo, Valid: emailTo != ""},
 		IsActive:       isActive,
 		CreatedAt:      now,
