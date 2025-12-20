@@ -4,6 +4,7 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -153,7 +154,7 @@ func (h *Handler) GetTag(w http.ResponseWriter, r *http.Request) {
 
 	tag, err := h.queries.GetTagByID(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			WriteNotFound(w, "Tag not found")
 		} else {
 			WriteInternalError(w, "Failed to retrieve tag")
@@ -191,15 +192,15 @@ func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate required fields
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 	if req.Name == "" {
-		errors["name"] = "Name is required"
+		validationErrors["name"] = "Name is required"
 	}
 	if req.Slug == "" {
-		errors["slug"] = "Slug is required"
+		validationErrors["slug"] = "Slug is required"
 	}
-	if len(errors) > 0 {
-		WriteValidationError(w, errors)
+	if len(validationErrors) > 0 {
+		WriteValidationError(w, validationErrors)
 		return
 	}
 
@@ -253,7 +254,7 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	// Get existing tag
 	existing, err := h.queries.GetTagByID(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			WriteNotFound(w, "Tag not found")
 		} else {
 			WriteInternalError(w, "Failed to retrieve tag")
@@ -335,7 +336,7 @@ func (h *Handler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 	// Check if tag exists
 	_, err = h.queries.GetTagByID(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			WriteNotFound(w, "Tag not found")
 		} else {
 			WriteInternalError(w, "Failed to retrieve tag")
@@ -407,7 +408,7 @@ func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
 
 	category, err := h.queries.GetCategoryByID(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			WriteNotFound(w, "Category not found")
 		} else {
 			WriteInternalError(w, "Failed to retrieve category")
@@ -483,15 +484,15 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate required fields
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 	if req.Name == "" {
-		errors["name"] = "Name is required"
+		validationErrors["name"] = "Name is required"
 	}
 	if req.Slug == "" {
-		errors["slug"] = "Slug is required"
+		validationErrors["slug"] = "Slug is required"
 	}
-	if len(errors) > 0 {
-		WriteValidationError(w, errors)
+	if len(validationErrors) > 0 {
+		WriteValidationError(w, validationErrors)
 		return
 	}
 
@@ -510,7 +511,7 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	if req.ParentID != nil {
 		_, err := h.queries.GetCategoryByID(ctx, *req.ParentID)
 		if err != nil {
-			if err == sql.ErrNoRows {
+			if errors.Is(err, sql.ErrNoRows) {
 				WriteValidationError(w, map[string]string{"parent_id": "Parent category not found"})
 			} else {
 				WriteInternalError(w, "Failed to validate parent category")
@@ -578,7 +579,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	// Get existing category
 	existing, err := h.queries.GetCategoryByID(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			WriteNotFound(w, "Category not found")
 		} else {
 			WriteInternalError(w, "Failed to retrieve category")
@@ -639,7 +640,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 			// Validate new parent exists and is not a descendant
 			_, err := h.queries.GetCategoryByID(ctx, *req.ParentID)
 			if err != nil {
-				if err == sql.ErrNoRows {
+				if errors.Is(err, sql.ErrNoRows) {
 					WriteValidationError(w, map[string]string{"parent_id": "Parent category not found"})
 				} else {
 					WriteInternalError(w, "Failed to validate parent category")
@@ -710,7 +711,7 @@ func (h *Handler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 	// Check if category exists
 	_, err = h.queries.GetCategoryByID(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			WriteNotFound(w, "Category not found")
 		} else {
 			WriteInternalError(w, "Failed to retrieve category")

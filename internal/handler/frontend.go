@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -445,7 +446,7 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	// Get published page by slug
 	page, err := h.queries.GetPublishedPageBySlug(ctx, slug)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderNotFound(w, r)
 			return
 		}
@@ -560,7 +561,7 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 	// Get category
 	category, err := h.queries.GetCategoryBySlug(ctx, slug)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderNotFound(w, r)
 			return
 		}
@@ -632,7 +633,7 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 	// Get tag
 	tag, err := h.queries.GetTagBySlug(ctx, slug)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderNotFound(w, r)
 			return
 		}

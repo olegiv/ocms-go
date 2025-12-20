@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -198,18 +199,18 @@ func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		formValues["is_active"] = "true"
 	}
 
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 
 	// Validate name
 	if name == "" {
-		errors["name"] = "Name is required"
+		validationErrors["name"] = "Name is required"
 	} else if len(name) < 2 {
-		errors["name"] = "Name must be at least 2 characters"
+		validationErrors["name"] = "Name must be at least 2 characters"
 	}
 
 	// Validate title
 	if title == "" {
-		errors["title"] = "Title is required"
+		validationErrors["title"] = "Title is required"
 	}
 
 	// Validate slug
@@ -219,16 +220,16 @@ func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if slug == "" {
-		errors["slug"] = "Slug is required"
+		validationErrors["slug"] = "Slug is required"
 	} else if !util.IsValidSlug(slug) {
-		errors["slug"] = "Invalid slug format"
+		validationErrors["slug"] = "Invalid slug format"
 	} else {
 		existing, err := h.queries.GetFormBySlug(r.Context(), slug)
 		if err == nil && existing.ID > 0 {
-			errors["slug"] = "Slug already exists"
-		} else if err != nil && err != sql.ErrNoRows {
+			validationErrors["slug"] = "Slug already exists"
+		} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			slog.Error("database error checking slug", "error", err)
-			errors["slug"] = "Error checking slug"
+			validationErrors["slug"] = "Error checking slug"
 		}
 	}
 
@@ -238,10 +239,10 @@ func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		formValues["success_message"] = successMessage
 	}
 
-	if len(errors) > 0 {
+	if len(validationErrors) > 0 {
 		data := FormFormData{
 			FieldTypes: model.ValidFieldTypes(),
-			Errors:     errors,
+			Errors:     validationErrors,
 			FormValues: formValues,
 			IsEdit:     false,
 		}
@@ -301,7 +302,7 @@ func (h *FormsHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	form, err := h.queries.GetFormByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Form not found", "error")
 		} else {
 			slog.Error("failed to get form", "error", err, "form_id", id)
@@ -356,7 +357,7 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	form, err := h.queries.GetFormByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Form not found", "error")
 		} else {
 			slog.Error("failed to get form", "error", err, "form_id", id)
@@ -392,16 +393,16 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		formValues["is_active"] = "true"
 	}
 
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 
 	if name == "" {
-		errors["name"] = "Name is required"
+		validationErrors["name"] = "Name is required"
 	} else if len(name) < 2 {
-		errors["name"] = "Name must be at least 2 characters"
+		validationErrors["name"] = "Name must be at least 2 characters"
 	}
 
 	if title == "" {
-		errors["title"] = "Title is required"
+		validationErrors["title"] = "Title is required"
 	}
 
 	if slug == "" {
@@ -410,16 +411,16 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if slug == "" {
-		errors["slug"] = "Slug is required"
+		validationErrors["slug"] = "Slug is required"
 	} else if !util.IsValidSlug(slug) {
-		errors["slug"] = "Invalid slug format"
+		validationErrors["slug"] = "Invalid slug format"
 	} else if slug != form.Slug {
 		existing, err := h.queries.GetFormBySlug(r.Context(), slug)
 		if err == nil && existing.ID > 0 && existing.ID != id {
-			errors["slug"] = "Slug already exists"
-		} else if err != nil && err != sql.ErrNoRows {
+			validationErrors["slug"] = "Slug already exists"
+		} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			slog.Error("database error checking slug", "error", err)
-			errors["slug"] = "Error checking slug"
+			validationErrors["slug"] = "Error checking slug"
 		}
 	}
 
@@ -428,14 +429,14 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		formValues["success_message"] = successMessage
 	}
 
-	if len(errors) > 0 {
+	if len(validationErrors) > 0 {
 		fields, _ := h.queries.GetFormFields(r.Context(), id)
 
 		data := FormFormData{
 			Form:       &form,
 			Fields:     fields,
 			FieldTypes: model.ValidFieldTypes(),
-			Errors:     errors,
+			Errors:     validationErrors,
 			FormValues: formValues,
 			IsEdit:     true,
 		}
@@ -491,7 +492,7 @@ func (h *FormsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	_, err = h.queries.GetFormByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Form not found", http.StatusNotFound)
 		} else {
 			slog.Error("failed to get form", "error", err, "form_id", id)
@@ -541,7 +542,7 @@ func (h *FormsHandler) AddField(w http.ResponseWriter, r *http.Request) {
 
 	_, err = h.queries.GetFormByID(r.Context(), formID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Form not found", http.StatusNotFound)
 		} else {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -649,7 +650,7 @@ func (h *FormsHandler) UpdateField(w http.ResponseWriter, r *http.Request) {
 
 	field, err := h.queries.GetFormFieldByID(r.Context(), fieldID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Field not found", http.StatusNotFound)
 		} else {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -735,7 +736,7 @@ func (h *FormsHandler) DeleteField(w http.ResponseWriter, r *http.Request) {
 
 	field, err := h.queries.GetFormFieldByID(r.Context(), fieldID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Field not found", http.StatusNotFound)
 		} else {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -777,7 +778,7 @@ func (h *FormsHandler) ReorderFields(w http.ResponseWriter, r *http.Request) {
 
 	_, err = h.queries.GetFormByID(r.Context(), formID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Form not found", http.StatusNotFound)
 		} else {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -845,7 +846,7 @@ func (h *FormsHandler) Show(w http.ResponseWriter, r *http.Request) {
 
 	form, err := h.queries.GetFormBySlug(r.Context(), slug)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.RenderNotFound(w, r)
 		} else {
 			slog.Error("failed to get form", "error", err, "slug", slug)
@@ -902,7 +903,7 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 
 	form, err := h.queries.GetFormBySlug(r.Context(), slug)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.RenderNotFound(w, r)
 		} else {
 			slog.Error("failed to get form", "error", err, "slug", slug)
@@ -951,7 +952,7 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 
 	// Collect values and validate
 	values := make(map[string]string)
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 
 	for _, field := range fields {
 		value := strings.TrimSpace(r.FormValue(field.Name))
@@ -959,7 +960,7 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 
 		// Required validation
 		if field.IsRequired && value == "" {
-			errors[field.Name] = fmt.Sprintf("%s is required", field.Label)
+			validationErrors[field.Name] = fmt.Sprintf("%s is required", field.Label)
 			continue
 		}
 
@@ -972,15 +973,15 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		switch field.Type {
 		case model.FieldTypeEmail:
 			if !isValidEmail(value) {
-				errors[field.Name] = "Please enter a valid email address"
+				validationErrors[field.Name] = "Please enter a valid email address"
 			}
 		case model.FieldTypeNumber:
 			if _, err := strconv.ParseFloat(value, 64); err != nil {
-				errors[field.Name] = "Please enter a valid number"
+				validationErrors[field.Name] = "Please enter a valid number"
 			}
 		case model.FieldTypeDate:
 			if !isValidDate(value) {
-				errors[field.Name] = "Please enter a valid date"
+				validationErrors[field.Name] = "Please enter a valid date"
 			}
 		}
 
@@ -989,14 +990,14 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 			var validation map[string]interface{}
 			if err := json.Unmarshal([]byte(field.Validation.String), &validation); err == nil {
 				if minLen, ok := validation["minLength"].(float64); ok && len(value) < int(minLen) {
-					errors[field.Name] = fmt.Sprintf("%s must be at least %d characters", field.Label, int(minLen))
+					validationErrors[field.Name] = fmt.Sprintf("%s must be at least %d characters", field.Label, int(minLen))
 				}
 				if maxLen, ok := validation["maxLength"].(float64); ok && len(value) > int(maxLen) {
-					errors[field.Name] = fmt.Sprintf("%s must be no more than %d characters", field.Label, int(maxLen))
+					validationErrors[field.Name] = fmt.Sprintf("%s must be no more than %d characters", field.Label, int(maxLen))
 				}
 				if pattern, ok := validation["pattern"].(string); ok && pattern != "" {
 					if matched, _ := regexp.MatchString(pattern, value); !matched {
-						errors[field.Name] = fmt.Sprintf("%s is not in the correct format", field.Label)
+						validationErrors[field.Name] = fmt.Sprintf("%s is not in the correct format", field.Label)
 					}
 				}
 			}
@@ -1004,8 +1005,8 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If there are validation errors, re-render the form
-	if len(errors) > 0 {
-		h.renderFormWithErrors(w, r, form, fields, errors, r.Form)
+	if len(validationErrors) > 0 {
+		h.renderFormWithErrors(w, r, form, fields, validationErrors, r.Form)
 		return
 	}
 
@@ -1185,7 +1186,7 @@ func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 
 	form, err := h.queries.GetFormByID(r.Context(), formID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Form not found", "error")
 		} else {
 			slog.Error("failed to get form", "error", err, "form_id", formID)
@@ -1316,7 +1317,7 @@ func (h *FormsHandler) ViewSubmission(w http.ResponseWriter, r *http.Request) {
 
 	form, err := h.queries.GetFormByID(r.Context(), formID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Form not found", "error")
 		} else {
 			slog.Error("failed to get form", "error", err, "form_id", formID)
@@ -1328,7 +1329,7 @@ func (h *FormsHandler) ViewSubmission(w http.ResponseWriter, r *http.Request) {
 
 	submission, err := h.queries.GetFormSubmissionByID(r.Context(), subID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Submission not found", "error")
 		} else {
 			slog.Error("failed to get submission", "error", err, "sub_id", subID)
@@ -1408,7 +1409,7 @@ func (h *FormsHandler) DeleteSubmission(w http.ResponseWriter, r *http.Request) 
 
 	submission, err := h.queries.GetFormSubmissionByID(r.Context(), subID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Submission not found", http.StatusNotFound)
 		} else {
 			slog.Error("failed to get submission", "error", err, "sub_id", subID)
@@ -1452,7 +1453,7 @@ func (h *FormsHandler) ExportSubmissions(w http.ResponseWriter, r *http.Request)
 
 	form, err := h.queries.GetFormByID(r.Context(), formID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Form not found", http.StatusNotFound)
 		} else {
 			slog.Error("failed to get form", "error", err, "form_id", formID)

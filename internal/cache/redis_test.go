@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -70,7 +71,7 @@ func TestRedisCache_Basic(t *testing.T) {
 
 	// Verify deleted
 	_, err = cache.Get(ctx, key)
-	if err != ErrCacheMiss {
+	if !errors.Is(err, ErrCacheMiss) {
 		t.Errorf("Get after Delete returned error %v, want ErrCacheMiss", err)
 	}
 }
@@ -87,7 +88,7 @@ func TestRedisCache_Miss(t *testing.T) {
 	ctx := context.Background()
 
 	_, err = cache.Get(ctx, "nonexistent-key-12345")
-	if err != ErrCacheMiss {
+	if !errors.Is(err, ErrCacheMiss) {
 		t.Errorf("Get nonexistent key returned %v, want ErrCacheMiss", err)
 	}
 }
@@ -123,7 +124,7 @@ func TestRedisCache_TTL(t *testing.T) {
 
 	// Should be expired
 	_, err = cache.Get(ctx, key)
-	if err != ErrCacheMiss {
+	if !errors.Is(err, ErrCacheMiss) {
 		t.Errorf("Get after TTL expiration returned %v, want ErrCacheMiss", err)
 	}
 }
@@ -158,7 +159,7 @@ func TestRedisCache_Clear(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		key := "key-" + string(rune('a'+i))
 		_, err = cache.Get(ctx, key)
-		if err != ErrCacheMiss {
+		if !errors.Is(err, ErrCacheMiss) {
 			t.Errorf("Get key %s after Clear returned %v, want ErrCacheMiss", key, err)
 		}
 	}
@@ -191,11 +192,11 @@ func TestRedisCache_DeleteByPrefix(t *testing.T) {
 
 	// User keys should be gone
 	_, err = cache.Get(ctx, "user:1")
-	if err != ErrCacheMiss {
+	if !errors.Is(err, ErrCacheMiss) {
 		t.Error("user:1 should be deleted")
 	}
 	_, err = cache.Get(ctx, "user:2")
-	if err != ErrCacheMiss {
+	if !errors.Is(err, ErrCacheMiss) {
 		t.Error("user:2 should be deleted")
 	}
 
@@ -282,12 +283,12 @@ func TestRedisCache_Close(t *testing.T) {
 
 	// Operations should fail after close
 	_, err = cache.Get(ctx, "key")
-	if err != ErrCacheClosed {
+	if !errors.Is(err, ErrCacheClosed) {
 		t.Errorf("Get after Close returned %v, want ErrCacheClosed", err)
 	}
 
 	err = cache.Set(ctx, "key", []byte("value"), time.Minute)
-	if err != ErrCacheClosed {
+	if !errors.Is(err, ErrCacheClosed) {
 		t.Errorf("Set after Close returned %v, want ErrCacheClosed", err)
 	}
 }

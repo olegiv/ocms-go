@@ -2,6 +2,7 @@ package handler
 
 import (
 	"database/sql"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -321,7 +322,7 @@ func (h *APIKeysHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	// Fetch API key
 	apiKey, err := h.queries.GetAPIKeyByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "API key not found", "error")
 		} else {
 			slog.Error("failed to get API key", "error", err)
@@ -380,7 +381,7 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Fetch the API key being edited
 	apiKey, err := h.queries.GetAPIKeyByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "API key not found", "error")
 		} else {
 			slog.Error("failed to get API key", "error", err)
@@ -520,7 +521,7 @@ func (h *APIKeysHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Fetch the API key being deleted
 	apiKey, err := h.queries.GetAPIKeyByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.sendDeleteError(w, "API key not found")
 		} else {
 			slog.Error("failed to get API key", "error", err)

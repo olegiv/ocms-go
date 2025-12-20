@@ -2,6 +2,7 @@ package hcaptcha
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"html/template"
 	"strings"
@@ -27,7 +28,7 @@ func loadSettings(db *sql.DB) (*Settings, error) {
 	var enabled int
 	err := row.Scan(&enabled, &s.SiteKey, &s.SecretKey, &s.Theme, &s.Size)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return &Settings{Theme: "light", Size: "normal"}, nil
 		}
 		return nil, fmt.Errorf("scanning hCaptcha settings: %w", err)

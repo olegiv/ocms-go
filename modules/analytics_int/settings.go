@@ -3,6 +3,7 @@ package analytics_int
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"time"
 )
 
@@ -27,7 +28,7 @@ func (m *Module) loadSettings() (*Settings, error) {
 	err := row.Scan(&enabled, &retentionDays, &excludePathsJSON,
 		&currentSalt, &saltCreatedAt, &saltRotationHours)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			// Return defaults
 			return &Settings{
 				Enabled:           true,

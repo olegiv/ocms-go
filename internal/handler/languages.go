@@ -2,6 +2,7 @@ package handler
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -268,7 +269,7 @@ func (h *LanguagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	lang, err := h.queries.GetLanguageByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.NotFound(w, r)
 		} else {
 			slog.Error("failed to get language", "error", err)
@@ -324,7 +325,7 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	existingLang, err := h.queries.GetLanguageByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.NotFound(w, r)
 		} else {
 			slog.Error("failed to get language", "error", err)
@@ -475,7 +476,7 @@ func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	lang, err := h.queries.GetLanguageByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			if r.Header.Get("HX-Request") == "true" {
 				w.Header().Set("HX-Reswap", "none")
 				http.Error(w, "Language not found", http.StatusNotFound)
@@ -572,7 +573,7 @@ func (h *LanguagesHandler) SetDefault(w http.ResponseWriter, r *http.Request) {
 
 	lang, err := h.queries.GetLanguageByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.NotFound(w, r)
 		} else {
 			slog.Error("failed to get language", "error", err)

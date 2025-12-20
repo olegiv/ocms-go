@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -45,7 +46,7 @@ func Seed(ctx context.Context, db *sql.DB) error {
 		}
 		return seedMenus(ctx, queries)
 	}
-	if err != sql.ErrNoRows {
+	if !errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("checking for admin user: %w", err)
 	}
 

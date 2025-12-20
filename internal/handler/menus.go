@@ -3,6 +3,7 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -307,7 +308,7 @@ func (h *MenusHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	menu, err := h.queries.GetMenuByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Menu not found", "error")
 		} else {
 			slog.Error("failed to get menu", "error", err, "menu_id", id)
@@ -385,7 +386,7 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	menu, err := h.queries.GetMenuByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Menu not found", "error")
 		} else {
 			slog.Error("failed to get menu", "error", err, "menu_id", id)
@@ -525,7 +526,7 @@ func (h *MenusHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	menu, err := h.queries.GetMenuByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Menu not found", http.StatusNotFound)
 		} else {
 			slog.Error("failed to get menu", "error", err, "menu_id", id)
@@ -583,7 +584,7 @@ func (h *MenusHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 	// Verify menu exists and get slug for cache invalidation
 	menu, err := h.queries.GetMenuByID(r.Context(), menuID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Menu not found", http.StatusNotFound)
 		} else {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -692,7 +693,7 @@ func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 
 	item, err := h.queries.GetMenuItemByID(r.Context(), itemID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Menu item not found", http.StatusNotFound)
 		} else {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -782,7 +783,7 @@ func (h *MenusHandler) DeleteItem(w http.ResponseWriter, r *http.Request) {
 
 	item, err := h.queries.GetMenuItemByID(r.Context(), itemID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Menu item not found", http.StatusNotFound)
 		} else {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -842,7 +843,7 @@ func (h *MenusHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 	// Get menu for cache invalidation
 	menu, err := h.queries.GetMenuByID(r.Context(), menuID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Menu not found", http.StatusNotFound)
 		} else {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
