@@ -38,17 +38,17 @@ type StatsProvider interface {
 	ResetStats()
 }
 
-// CacheError represents an error type for cache operations.
-type CacheError string
+// Error represents an error type for cache operations.
+type Error string
 
-func (e CacheError) Error() string {
+func (e Error) Error() string {
 	return string(e)
 }
 
 const (
 	// ErrCacheMiss indicates the key was not found in cache or has expired.
-	ErrCacheMiss CacheError = "cache miss"
+	ErrCacheMiss Error = "cache miss"
 
 	// ErrCacheClosed indicates the cache has been closed.
-	ErrCacheClosed CacheError = "cache closed"
+	ErrCacheClosed Error = "cache closed"
 )
