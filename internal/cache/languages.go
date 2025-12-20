@@ -31,54 +31,41 @@ func NewLanguageCache(queries *store.Queries) *LanguageCache {
 	}
 }
 
-// GetAll retrieves all languages.
-func (c *LanguageCache) GetAll(ctx context.Context) ([]store.Language, error) {
+// getLanguages retrieves languages using the provided selector function.
+// It handles cache loading and returns a copy of the selected slice.
+func (c *LanguageCache) getLanguages(ctx context.Context, selector func() []store.Language) ([]store.Language, error) {
 	c.mu.RLock()
 	if c.loaded {
-		result := make([]store.Language, len(c.languages))
-		copy(result, c.languages)
+		src := selector()
+		result := make([]store.Language, len(src))
+		copy(result, src)
 		c.mu.RUnlock()
 		c.cache.hits.Add(1)
 		return result, nil
 	}
 	c.mu.RUnlock()
 
-	// Need to load
 	if err := c.loadAll(ctx); err != nil {
 		return nil, err
 	}
 
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	result := make([]store.Language, len(c.languages))
-	copy(result, c.languages)
+	src := selector()
+	result := make([]store.Language, len(src))
+	copy(result, src)
 	c.cache.hits.Add(1)
 	return result, nil
 }
 
+// GetAll retrieves all languages.
+func (c *LanguageCache) GetAll(ctx context.Context) ([]store.Language, error) {
+	return c.getLanguages(ctx, func() []store.Language { return c.languages })
+}
+
 // GetActive retrieves only active languages.
 func (c *LanguageCache) GetActive(ctx context.Context) ([]store.Language, error) {
-	c.mu.RLock()
-	if c.loaded {
-		result := make([]store.Language, len(c.active))
-		copy(result, c.active)
-		c.mu.RUnlock()
-		c.cache.hits.Add(1)
-		return result, nil
-	}
-	c.mu.RUnlock()
-
-	// Need to load
-	if err := c.loadAll(ctx); err != nil {
-		return nil, err
-	}
-
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	result := make([]store.Language, len(c.active))
-	copy(result, c.active)
-	c.cache.hits.Add(1)
-	return result, nil
+	return c.getLanguages(ctx, func() []store.Language { return c.active })
 }
 
 // GetByCode retrieves a language by its code.

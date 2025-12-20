@@ -1302,6 +1302,67 @@ func (i *Importer) importPages(
 	}
 }
 
+// pageImportFields holds common fields extracted from an ExportPage.
+type pageImportFields struct {
+	FeaturedImageID sql.NullInt64
+	OgImageID       sql.NullInt64
+	LanguageID      sql.NullInt64
+	MetaTitle       string
+	MetaDescription string
+	MetaKeywords    string
+	CanonicalURL    string
+	NoIndex         int64
+	NoFollow        int64
+	ScheduledAt     sql.NullTime
+}
+
+// extractPageFields extracts common fields from an ExportPage using the provided maps.
+func extractPageFields(page ExportPage, mediaMap, languageMap map[string]int64) pageImportFields {
+	f := pageImportFields{}
+
+	// Get featured image ID
+	if page.FeaturedImage != nil && page.FeaturedImage.UUID != "" {
+		if id, ok := mediaMap[page.FeaturedImage.UUID]; ok {
+			f.FeaturedImageID = sql.NullInt64{Int64: id, Valid: true}
+		}
+	}
+
+	// Get OG image ID
+	if page.SEO != nil && page.SEO.OgImage != nil && page.SEO.OgImage.UUID != "" {
+		if id, ok := mediaMap[page.SEO.OgImage.UUID]; ok {
+			f.OgImageID = sql.NullInt64{Int64: id, Valid: true}
+		}
+	}
+
+	// Get language ID
+	if page.LanguageCode != "" {
+		if id, ok := languageMap[page.LanguageCode]; ok {
+			f.LanguageID = sql.NullInt64{Int64: id, Valid: true}
+		}
+	}
+
+	// Build SEO fields
+	if page.SEO != nil {
+		f.MetaTitle = page.SEO.MetaTitle
+		f.MetaDescription = page.SEO.MetaDescription
+		f.MetaKeywords = page.SEO.MetaKeywords
+		f.CanonicalURL = page.SEO.CanonicalURL
+		if page.SEO.NoIndex {
+			f.NoIndex = 1
+		}
+		if page.SEO.NoFollow {
+			f.NoFollow = 1
+		}
+	}
+
+	// Scheduled at handling
+	if page.ScheduledAt != nil {
+		f.ScheduledAt = sql.NullTime{Time: *page.ScheduledAt, Valid: true}
+	}
+
+	return f
+}
+
 // updateExistingPage updates an existing page with imported data.
 func (i *Importer) updateExistingPage(
 	ctx context.Context,
@@ -1312,51 +1373,7 @@ func (i *Importer) updateExistingPage(
 	languageMap map[string]int64,
 	now time.Time,
 ) (int64, error) {
-	// Get featured image ID
-	featuredImageID := sql.NullInt64{}
-	if page.FeaturedImage != nil && page.FeaturedImage.UUID != "" {
-		if id, ok := mediaMap[page.FeaturedImage.UUID]; ok {
-			featuredImageID = sql.NullInt64{Int64: id, Valid: true}
-		}
-	}
-
-	// Get OG image ID
-	ogImageID := sql.NullInt64{}
-	if page.SEO != nil && page.SEO.OgImage != nil && page.SEO.OgImage.UUID != "" {
-		if id, ok := mediaMap[page.SEO.OgImage.UUID]; ok {
-			ogImageID = sql.NullInt64{Int64: id, Valid: true}
-		}
-	}
-
-	// Get language ID
-	languageID := sql.NullInt64{}
-	if page.LanguageCode != "" {
-		if id, ok := languageMap[page.LanguageCode]; ok {
-			languageID = sql.NullInt64{Int64: id, Valid: true}
-		}
-	}
-
-	// Build SEO fields
-	metaTitle, metaDesc, metaKeywords, canonicalURL := "", "", "", ""
-	noIndex, noFollow := int64(0), int64(0)
-	if page.SEO != nil {
-		metaTitle = page.SEO.MetaTitle
-		metaDesc = page.SEO.MetaDescription
-		metaKeywords = page.SEO.MetaKeywords
-		canonicalURL = page.SEO.CanonicalURL
-		if page.SEO.NoIndex {
-			noIndex = 1
-		}
-		if page.SEO.NoFollow {
-			noFollow = 1
-		}
-	}
-
-	// Scheduled at handling
-	scheduledAt := sql.NullTime{}
-	if page.ScheduledAt != nil {
-		scheduledAt = sql.NullTime{Time: *page.ScheduledAt, Valid: true}
-	}
+	f := extractPageFields(page, mediaMap, languageMap)
 
 	updated, err := queries.UpdatePage(ctx, store.UpdatePageParams{
 		ID:              existingID,
@@ -1364,16 +1381,16 @@ func (i *Importer) updateExistingPage(
 		Slug:            page.Slug,
 		Body:            page.Body,
 		Status:          page.Status,
-		FeaturedImageID: featuredImageID,
-		MetaTitle:       metaTitle,
-		MetaDescription: metaDesc,
-		MetaKeywords:    metaKeywords,
-		OgImageID:       ogImageID,
-		NoIndex:         noIndex,
-		NoFollow:        noFollow,
-		CanonicalUrl:    canonicalURL,
-		ScheduledAt:     scheduledAt,
-		LanguageID:      languageID,
+		FeaturedImageID: f.FeaturedImageID,
+		MetaTitle:       f.MetaTitle,
+		MetaDescription: f.MetaDescription,
+		MetaKeywords:    f.MetaKeywords,
+		OgImageID:       f.OgImageID,
+		NoIndex:         f.NoIndex,
+		NoFollow:        f.NoFollow,
+		CanonicalUrl:    f.CanonicalURL,
+		ScheduledAt:     f.ScheduledAt,
+		LanguageID:      f.LanguageID,
 		UpdatedAt:       now,
 	})
 	if err != nil {
@@ -1401,51 +1418,7 @@ func (i *Importer) createNewPage(
 		}
 	}
 
-	// Get featured image ID
-	featuredImageID := sql.NullInt64{}
-	if page.FeaturedImage != nil && page.FeaturedImage.UUID != "" {
-		if id, ok := mediaMap[page.FeaturedImage.UUID]; ok {
-			featuredImageID = sql.NullInt64{Int64: id, Valid: true}
-		}
-	}
-
-	// Get OG image ID
-	ogImageID := sql.NullInt64{}
-	if page.SEO != nil && page.SEO.OgImage != nil && page.SEO.OgImage.UUID != "" {
-		if id, ok := mediaMap[page.SEO.OgImage.UUID]; ok {
-			ogImageID = sql.NullInt64{Int64: id, Valid: true}
-		}
-	}
-
-	// Get language ID
-	languageID := sql.NullInt64{}
-	if page.LanguageCode != "" {
-		if id, ok := languageMap[page.LanguageCode]; ok {
-			languageID = sql.NullInt64{Int64: id, Valid: true}
-		}
-	}
-
-	// Build SEO fields
-	metaTitle, metaDesc, metaKeywords, canonicalURL := "", "", "", ""
-	noIndex, noFollow := int64(0), int64(0)
-	if page.SEO != nil {
-		metaTitle = page.SEO.MetaTitle
-		metaDesc = page.SEO.MetaDescription
-		metaKeywords = page.SEO.MetaKeywords
-		canonicalURL = page.SEO.CanonicalURL
-		if page.SEO.NoIndex {
-			noIndex = 1
-		}
-		if page.SEO.NoFollow {
-			noFollow = 1
-		}
-	}
-
-	// Scheduled at handling
-	scheduledAt := sql.NullTime{}
-	if page.ScheduledAt != nil {
-		scheduledAt = sql.NullTime{Time: *page.ScheduledAt, Valid: true}
-	}
+	f := extractPageFields(page, mediaMap, languageMap)
 
 	created, err := queries.CreatePage(ctx, store.CreatePageParams{
 		Title:           page.Title,
@@ -1453,16 +1426,16 @@ func (i *Importer) createNewPage(
 		Body:            page.Body,
 		Status:          page.Status,
 		AuthorID:        authorID,
-		FeaturedImageID: featuredImageID,
-		MetaTitle:       metaTitle,
-		MetaDescription: metaDesc,
-		MetaKeywords:    metaKeywords,
-		OgImageID:       ogImageID,
-		NoIndex:         noIndex,
-		NoFollow:        noFollow,
-		CanonicalUrl:    canonicalURL,
-		ScheduledAt:     scheduledAt,
-		LanguageID:      languageID,
+		FeaturedImageID: f.FeaturedImageID,
+		MetaTitle:       f.MetaTitle,
+		MetaDescription: f.MetaDescription,
+		MetaKeywords:    f.MetaKeywords,
+		OgImageID:       f.OgImageID,
+		NoIndex:         f.NoIndex,
+		NoFollow:        f.NoFollow,
+		CanonicalUrl:    f.CanonicalURL,
+		ScheduledAt:     f.ScheduledAt,
+		LanguageID:      f.LanguageID,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	})

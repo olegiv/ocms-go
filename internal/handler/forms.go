@@ -124,6 +124,42 @@ func parseFormInput(r *http.Request) formInput {
 	}
 }
 
+// validateFormInput validates form input fields and returns validation errors.
+// It also auto-generates the slug from name if empty.
+func validateFormInput(input *formInput) map[string]string {
+	errors := make(map[string]string)
+
+	if input.Name == "" {
+		errors["name"] = "Name is required"
+	} else if len(input.Name) < 2 {
+		errors["name"] = "Name must be at least 2 characters"
+	}
+
+	if input.Title == "" {
+		errors["title"] = "Title is required"
+	}
+
+	// Auto-generate slug if empty
+	if input.Slug == "" {
+		input.Slug = util.Slugify(input.Name)
+		input.FormValues["slug"] = input.Slug
+	}
+
+	if input.Slug == "" {
+		errors["slug"] = "Slug is required"
+	} else if !util.IsValidSlug(input.Slug) {
+		errors["slug"] = "Invalid slug format"
+	}
+
+	// Set default success message
+	if input.SuccessMessage == "" {
+		input.SuccessMessage = "Thank you for your submission."
+		input.FormValues["success_message"] = input.SuccessMessage
+	}
+
+	return errors
+}
+
 // parseFormIDParam parses the form ID from URL and redirects on error.
 // Returns 0 if there was an error (redirect already sent).
 func (h *FormsHandler) parseFormIDParam(w http.ResponseWriter, r *http.Request) int64 {
@@ -369,32 +405,10 @@ func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input := parseFormInput(r)
-	validationErrors := make(map[string]string)
+	validationErrors := validateFormInput(&input)
 
-	// Validate name
-	if input.Name == "" {
-		validationErrors["name"] = "Name is required"
-	} else if len(input.Name) < 2 {
-		validationErrors["name"] = "Name must be at least 2 characters"
-	}
-
-	// Validate title
-	if input.Title == "" {
-		validationErrors["title"] = "Title is required"
-	}
-
-	// Auto-generate slug if empty
-	if input.Slug == "" {
-		input.Slug = util.Slugify(input.Name)
-		input.FormValues["slug"] = input.Slug
-	}
-
-	// Validate slug
-	if input.Slug == "" {
-		validationErrors["slug"] = "Slug is required"
-	} else if !util.IsValidSlug(input.Slug) {
-		validationErrors["slug"] = "Invalid slug format"
-	} else {
+	// Check slug uniqueness (Create: any existing slug is a conflict)
+	if validationErrors["slug"] == "" && input.Slug != "" {
 		existing, err := h.queries.GetFormBySlug(r.Context(), input.Slug)
 		if err == nil && existing.ID > 0 {
 			validationErrors["slug"] = "Slug already exists"
@@ -402,12 +416,6 @@ func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			slog.Error("database error checking slug", "error", err)
 			validationErrors["slug"] = "Error checking slug"
 		}
-	}
-
-	// Set default success message
-	if input.SuccessMessage == "" {
-		input.SuccessMessage = "Thank you for your submission."
-		input.FormValues["success_message"] = input.SuccessMessage
 	}
 
 	if len(validationErrors) > 0 {
@@ -505,28 +513,10 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input := parseFormInput(r)
-	validationErrors := make(map[string]string)
+	validationErrors := validateFormInput(&input)
 
-	if input.Name == "" {
-		validationErrors["name"] = "Name is required"
-	} else if len(input.Name) < 2 {
-		validationErrors["name"] = "Name must be at least 2 characters"
-	}
-
-	if input.Title == "" {
-		validationErrors["title"] = "Title is required"
-	}
-
-	if input.Slug == "" {
-		input.Slug = util.Slugify(input.Name)
-		input.FormValues["slug"] = input.Slug
-	}
-
-	if input.Slug == "" {
-		validationErrors["slug"] = "Slug is required"
-	} else if !util.IsValidSlug(input.Slug) {
-		validationErrors["slug"] = "Invalid slug format"
-	} else if input.Slug != form.Slug {
+	// Check slug uniqueness (Update: only if slug changed and not own ID)
+	if validationErrors["slug"] == "" && input.Slug != "" && input.Slug != form.Slug {
 		existing, err := h.queries.GetFormBySlug(r.Context(), input.Slug)
 		if err == nil && existing.ID > 0 && existing.ID != id {
 			validationErrors["slug"] = "Slug already exists"
@@ -534,11 +524,6 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 			slog.Error("database error checking slug", "error", err)
 			validationErrors["slug"] = "Error checking slug"
 		}
-	}
-
-	if input.SuccessMessage == "" {
-		input.SuccessMessage = "Thank you for your submission."
-		input.FormValues["success_message"] = input.SuccessMessage
 	}
 
 	if len(validationErrors) > 0 {

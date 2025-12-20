@@ -144,15 +144,9 @@ func (h *Handler) AuthInfo(w http.ResponseWriter, r *http.Request) {
 		Permissions []string `json:"permissions"`
 	}
 
-	// Parse permissions
-	var perms []string
-	if apiKey.Permissions != "" && apiKey.Permissions != "[]" {
-		_ = json.Unmarshal([]byte(apiKey.Permissions), &perms)
-	}
-
 	WriteSuccess(w, AuthInfoResponse{
 		KeyPrefix:   apiKey.KeyPrefix,
 		Name:        apiKey.Name,
-		Permissions: perms,
+		Permissions: middleware.ParseAPIKeyPermissions(apiKey),
 	}, nil)
 }

@@ -116,6 +116,17 @@ func GetAPIKey(r *http.Request) *store.ApiKey {
 	return &apiKey
 }
 
+// ParseAPIKeyPermissions parses the JSON permissions string from an API key.
+// Returns an empty slice if the permissions string is empty or invalid.
+func ParseAPIKeyPermissions(apiKey *store.ApiKey) []string {
+	if apiKey == nil || apiKey.Permissions == "" || apiKey.Permissions == "[]" {
+		return nil
+	}
+	var permissions []string
+	_ = json.Unmarshal([]byte(apiKey.Permissions), &permissions)
+	return permissions
+}
+
 // updateAPIKeyLastUsed updates the last used timestamp in a background goroutine.
 func updateAPIKeyLastUsed(queries *store.Queries, keyID int64) {
 	go func() {
@@ -206,11 +217,7 @@ func RequirePermission(permission string) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Parse permissions from JSON
-			var permissions []string
-			if apiKey.Permissions != "" && apiKey.Permissions != "[]" {
-				_ = json.Unmarshal([]byte(apiKey.Permissions), &permissions)
-			}
+			permissions := ParseAPIKeyPermissions(apiKey)
 
 			// Check if key has required permission
 			hasPermission := false
@@ -233,7 +240,7 @@ func RequirePermission(permission string) func(http.Handler) http.Handler {
 
 // RequireAnyPermission creates middleware that requires any one of the specified permissions.
 // This should be used after APIKeyAuth middleware.
-func RequireAnyPermission(permissions ...string) func(http.Handler) http.Handler {
+func RequireAnyPermission(requiredPerms ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			apiKey := GetAPIKey(r)
@@ -242,15 +249,11 @@ func RequireAnyPermission(permissions ...string) func(http.Handler) http.Handler
 				return
 			}
 
-			// Parse permissions from JSON
-			var keyPermissions []string
-			if apiKey.Permissions != "" && apiKey.Permissions != "[]" {
-				_ = json.Unmarshal([]byte(apiKey.Permissions), &keyPermissions)
-			}
+			keyPermissions := ParseAPIKeyPermissions(apiKey)
 
 			// Check if key has any of the required permissions
 			hasPermission := false
-			for _, required := range permissions {
+			for _, required := range requiredPerms {
 				for _, kp := range keyPermissions {
 					if kp == required {
 						hasPermission = true
@@ -310,6 +313,19 @@ func (lc *limiterCache[K]) get(key K) *rate.Limiter {
 	limiter = rate.NewLimiter(lc.rate, lc.burst)
 	lc.limiters[key] = limiter
 	return limiter
+}
+
+// clearIfExceeds clears all entries if the cache exceeds maxSize.
+// Returns true if the cache was cleared.
+func (lc *limiterCache[K]) clearIfExceeds(maxSize int) bool {
+	lc.mu.Lock()
+	defer lc.mu.Unlock()
+
+	if len(lc.limiters) > maxSize {
+		lc.limiters = make(map[K]*rate.Limiter)
+		return true
+	}
+	return false
 }
 
 // APIRateLimit creates middleware that rate limits requests per API key.
