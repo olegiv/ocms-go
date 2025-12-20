@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -269,7 +270,7 @@ func (h *Handler) GetMedia(w http.ResponseWriter, r *http.Request) {
 
 	media, err := h.queries.GetMediaByID(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			WriteNotFound(w, "Media not found")
 		} else {
 			WriteInternalError(w, "Failed to retrieve media")
@@ -431,7 +432,7 @@ func (h *Handler) UpdateMedia(w http.ResponseWriter, r *http.Request) {
 	// Get existing media
 	existing, err := h.queries.GetMediaByID(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			WriteNotFound(w, "Media not found")
 		} else {
 			WriteInternalError(w, "Failed to retrieve media")
@@ -517,7 +518,7 @@ func (h *Handler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
 	// Check if media exists
 	_, err = h.queries.GetMediaByID(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			WriteNotFound(w, "Media not found")
 		} else {
 			WriteInternalError(w, "Failed to retrieve media")

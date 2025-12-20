@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -46,7 +47,7 @@ func TestMemoryCache_BasicOperations(t *testing.T) {
 	}
 
 	_, err = cache.Get(ctx, "key1")
-	if err != ErrCacheMiss {
+	if !errors.Is(err, ErrCacheMiss) {
 		t.Errorf("expected ErrCacheMiss, got %v", err)
 	}
 }
@@ -57,7 +58,7 @@ func TestMemoryCache_CacheMiss(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := cache.Get(ctx, "nonexistent")
-	if err != ErrCacheMiss {
+	if !errors.Is(err, ErrCacheMiss) {
 		t.Errorf("expected ErrCacheMiss, got %v", err)
 	}
 
@@ -94,7 +95,7 @@ func TestMemoryCache_Expiration(t *testing.T) {
 
 	// Should be expired
 	_, err = cache.Get(ctx, "expiring")
-	if err != ErrCacheMiss {
+	if !errors.Is(err, ErrCacheMiss) {
 		t.Errorf("expected ErrCacheMiss after expiration, got %v", err)
 	}
 }
@@ -124,7 +125,7 @@ func TestMemoryCache_CustomTTL(t *testing.T) {
 
 	// Short should be expired
 	_, err = cache.Get(ctx, "short")
-	if err != ErrCacheMiss {
+	if !errors.Is(err, ErrCacheMiss) {
 		t.Errorf("expected short TTL key to expire, got %v", err)
 	}
 
@@ -154,7 +155,7 @@ func TestMemoryCache_Clear(t *testing.T) {
 	// Verify all are gone
 	for _, key := range []string{"key1", "key2", "key3"} {
 		_, err := cache.Get(ctx, key)
-		if err != ErrCacheMiss {
+		if !errors.Is(err, ErrCacheMiss) {
 			t.Errorf("expected %s to be cleared", key)
 		}
 	}
@@ -180,7 +181,7 @@ func TestMemoryCache_DeleteByPrefix(t *testing.T) {
 	// Verify prefix keys are gone
 	for _, key := range []string{"prefix:key1", "prefix:key2", "prefix:key3"} {
 		_, err := cache.Get(ctx, key)
-		if err != ErrCacheMiss {
+		if !errors.Is(err, ErrCacheMiss) {
 			t.Errorf("expected %s to be deleted", key)
 		}
 	}
@@ -326,12 +327,12 @@ func TestMemoryCache_Close(t *testing.T) {
 
 	// Operations should return ErrCacheClosed
 	_, err = cache.Get(ctx, "key")
-	if err != ErrCacheClosed {
+	if !errors.Is(err, ErrCacheClosed) {
 		t.Errorf("expected ErrCacheClosed after close, got %v", err)
 	}
 
 	err = cache.Set(ctx, "key2", []byte("value"), 0)
-	if err != ErrCacheClosed {
+	if !errors.Is(err, ErrCacheClosed) {
 		t.Errorf("expected ErrCacheClosed on Set after close, got %v", err)
 	}
 

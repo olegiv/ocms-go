@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -374,7 +375,7 @@ func (h *Handler) GetPage(w http.ResponseWriter, r *http.Request) {
 
 	page, err := h.queries.GetPageByID(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			WriteNotFound(w, "Page not found")
 		} else {
 			WriteInternalError(w, "Failed to retrieve page")
@@ -422,7 +423,7 @@ func (h *Handler) GetPageBySlug(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			WriteNotFound(w, "Page not found")
 		} else {
 			WriteInternalError(w, "Failed to retrieve page")
@@ -594,7 +595,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	// Get existing page
 	existing, err := h.queries.GetPageByID(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			WriteNotFound(w, "Page not found")
 		} else {
 			WriteInternalError(w, "Failed to retrieve page")
@@ -773,7 +774,7 @@ func (h *Handler) DeletePage(w http.ResponseWriter, r *http.Request) {
 	// Check if page exists
 	_, err = h.queries.GetPageByID(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			WriteNotFound(w, "Page not found")
 		} else {
 			WriteInternalError(w, "Failed to retrieve page")

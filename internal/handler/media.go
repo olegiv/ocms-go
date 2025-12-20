@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -419,7 +420,7 @@ func (h *MediaHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	// Get media from database
 	media, err := h.queries.GetMediaByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Media not found", "error")
 		} else {
 			slog.Error("failed to get media", "error", err, "media_id", id)
@@ -491,7 +492,7 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Get existing media
 	media, err := h.queries.GetMediaByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Media not found", "error")
 		} else {
 			slog.Error("failed to get media", "error", err, "media_id", id)
@@ -604,7 +605,7 @@ func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Get media to verify it exists
 	media, err := h.queries.GetMediaByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Media not found", http.StatusNotFound)
 		} else {
 			slog.Error("failed to get media", "error", err, "media_id", id)
@@ -717,7 +718,7 @@ func (h *MediaHandler) UpdateFolder(w http.ResponseWriter, r *http.Request) {
 	// Get existing folder
 	folder, err := h.queries.GetMediaFolderByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Folder not found", http.StatusNotFound)
 		} else {
 			slog.Error("failed to get folder", "error", err, "folder_id", id)
@@ -800,7 +801,7 @@ func (h *MediaHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 	// Check if folder exists
 	folder, err := h.queries.GetMediaFolderByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Folder not found", http.StatusNotFound)
 		} else {
 			slog.Error("failed to get folder", "error", err, "folder_id", id)
@@ -867,7 +868,7 @@ func (h *MediaHandler) MoveMedia(w http.ResponseWriter, r *http.Request) {
 	// Verify media exists
 	_, err = h.queries.GetMediaByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Media not found", http.StatusNotFound)
 		} else {
 			slog.Error("failed to get media", "error", err, "media_id", id)
@@ -889,7 +890,7 @@ func (h *MediaHandler) MoveMedia(w http.ResponseWriter, r *http.Request) {
 			// Verify folder exists
 			_, err := h.queries.GetMediaFolderByID(r.Context(), fid)
 			if err != nil {
-				if err == sql.ErrNoRows {
+				if errors.Is(err, sql.ErrNoRows) {
 					http.Error(w, "Folder not found", http.StatusNotFound)
 				} else {
 					slog.Error("failed to get folder", "error", err, "folder_id", fid)

@@ -2,6 +2,7 @@ package module
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -231,7 +232,7 @@ func (r *Registry) loadActiveStatus(db *sql.DB) error {
 	for _, name := range r.order {
 		var isActive, showInSidebar bool
 		err := db.QueryRow("SELECT is_active, show_in_sidebar FROM modules WHERE name = ?", name).Scan(&isActive, &showInSidebar)
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			// Module not in database, insert with active=true, show_in_sidebar=false
 			_, err = db.Exec(
 				"INSERT INTO modules (name, is_active, show_in_sidebar, updated_at) VALUES (?, 1, 0, CURRENT_TIMESTAMP)",

@@ -3,6 +3,7 @@ package example
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log/slog"
 	"os"
 	"testing"
@@ -297,7 +298,7 @@ func TestDeleteItemNotFound(t *testing.T) {
 
 	// Try to delete non-existent item
 	err := m.deleteItem(99999)
-	if err != sql.ErrNoRows {
+	if !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("deleteItem(99999) = %v, want sql.ErrNoRows", err)
 	}
 }

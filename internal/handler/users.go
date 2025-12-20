@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -214,52 +215,52 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 
 	// Email validation
 	if email == "" {
-		errors["email"] = "Email is required"
+		validationErrors["email"] = "Email is required"
 	} else if _, err := mail.ParseAddress(email); err != nil {
-		errors["email"] = "Invalid email format"
+		validationErrors["email"] = "Invalid email format"
 	} else {
 		// Check if email already exists
 		_, err := h.queries.GetUserByEmail(r.Context(), email)
 		if err == nil {
-			errors["email"] = "Email already exists"
-		} else if err != sql.ErrNoRows {
+			validationErrors["email"] = "Email already exists"
+		} else if !errors.Is(err, sql.ErrNoRows) {
 			slog.Error("database error checking email", "error", err)
-			errors["email"] = "Error checking email"
+			validationErrors["email"] = "Error checking email"
 		}
 	}
 
 	// Name validation
 	if name == "" {
-		errors["name"] = "Name is required"
+		validationErrors["name"] = "Name is required"
 	} else if len(name) < 2 {
-		errors["name"] = "Name must be at least 2 characters"
+		validationErrors["name"] = "Name must be at least 2 characters"
 	}
 
 	// Password validation
 	if password == "" {
-		errors["password"] = "Password is required"
+		validationErrors["password"] = "Password is required"
 	} else if len(password) < 8 {
-		errors["password"] = "Password must be at least 8 characters"
+		validationErrors["password"] = "Password must be at least 8 characters"
 	} else if password != passwordConfirm {
-		errors["password_confirm"] = "Passwords do not match"
+		validationErrors["password_confirm"] = "Passwords do not match"
 	}
 
 	// Role validation
 	if role == "" {
-		errors["role"] = "Role is required"
+		validationErrors["role"] = "Role is required"
 	} else if !isValidRole(role) {
-		errors["role"] = "Invalid role"
+		validationErrors["role"] = "Invalid role"
 	}
 
 	// If there are validation errors, re-render the form
-	if len(errors) > 0 {
+	if len(validationErrors) > 0 {
 		data := UserFormData{
 			Roles:      ValidRoles,
-			Errors:     errors,
+			Errors:     validationErrors,
 			FormValues: formValues,
 			IsEdit:     false,
 		}
@@ -332,7 +333,7 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	// Fetch user
 	editUser, err := h.queries.GetUserByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "User not found", "error")
 		} else {
 			slog.Error("failed to get user", "error", err)
@@ -390,7 +391,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Fetch the user being edited
 	editUser, err := h.queries.GetUserByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "User not found", "error")
 		} else {
 			slog.Error("failed to get user", "error", err)
@@ -421,45 +422,45 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 
 	// Email validation
 	if email == "" {
-		errors["email"] = "Email is required"
+		validationErrors["email"] = "Email is required"
 	} else if _, err := mail.ParseAddress(email); err != nil {
-		errors["email"] = "Invalid email format"
+		validationErrors["email"] = "Invalid email format"
 	} else if email != editUser.Email {
 		// Check if email already exists (only if changed)
 		_, err := h.queries.GetUserByEmail(r.Context(), email)
 		if err == nil {
-			errors["email"] = "Email already exists"
-		} else if err != sql.ErrNoRows {
+			validationErrors["email"] = "Email already exists"
+		} else if !errors.Is(err, sql.ErrNoRows) {
 			slog.Error("database error checking email", "error", err)
-			errors["email"] = "Error checking email"
+			validationErrors["email"] = "Error checking email"
 		}
 	}
 
 	// Name validation
 	if name == "" {
-		errors["name"] = "Name is required"
+		validationErrors["name"] = "Name is required"
 	} else if len(name) < 2 {
-		errors["name"] = "Name must be at least 2 characters"
+		validationErrors["name"] = "Name must be at least 2 characters"
 	}
 
 	// Password validation (optional on edit)
 	if password != "" {
 		if len(password) < 8 {
-			errors["password"] = "Password must be at least 8 characters"
+			validationErrors["password"] = "Password must be at least 8 characters"
 		} else if password != passwordConfirm {
-			errors["password_confirm"] = "Passwords do not match"
+			validationErrors["password_confirm"] = "Passwords do not match"
 		}
 	}
 
 	// Role validation
 	if role == "" {
-		errors["role"] = "Role is required"
+		validationErrors["role"] = "Role is required"
 	} else if !isValidRole(role) {
-		errors["role"] = "Invalid role"
+		validationErrors["role"] = "Invalid role"
 	}
 
 	// Business rule: Cannot demote yourself from admin if you're the last admin
@@ -467,18 +468,18 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		adminCount, err := h.queries.CountUsersByRole(r.Context(), RoleAdmin)
 		if err != nil {
 			slog.Error("failed to count admins", "error", err)
-			errors["role"] = "Error checking admin count"
+			validationErrors["role"] = "Error checking admin count"
 		} else if adminCount <= 1 {
-			errors["role"] = "Cannot demote the last admin"
+			validationErrors["role"] = "Cannot demote the last admin"
 		}
 	}
 
 	// If there are validation errors, re-render the form
-	if len(errors) > 0 {
+	if len(validationErrors) > 0 {
 		data := UserFormData{
 			User:       &editUser,
 			Roles:      ValidRoles,
-			Errors:     errors,
+			Errors:     validationErrors,
 			FormValues: formValues,
 			IsEdit:     true,
 		}
@@ -568,7 +569,7 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Fetch the user being deleted
 	deleteUser, err := h.queries.GetUserByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.sendDeleteError(w, "User not found")
 		} else {
 			slog.Error("failed to get user", "error", err)

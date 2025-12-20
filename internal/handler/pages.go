@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -339,7 +340,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		if p.LanguageID.Valid {
 			lang, err := h.queries.GetLanguageByID(r.Context(), p.LanguageID.Int64)
 			if err != nil {
-				if err != sql.ErrNoRows {
+				if !errors.Is(err, sql.ErrNoRows) {
 					slog.Error("failed to get language for page", "error", err, "page_id", p.ID, "language_id", p.LanguageID.Int64)
 				}
 				continue
@@ -785,7 +786,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	// Get page from database
 	page, err := h.queries.GetPageByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Page not found", "error")
 		} else {
 			slog.Error("failed to get page", "error", err, "page_id", id)
@@ -822,7 +823,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	if page.FeaturedImageID.Valid {
 		media, err := h.queries.GetMediaByID(r.Context(), page.FeaturedImageID.Int64)
 		if err != nil {
-			if err != sql.ErrNoRows {
+			if !errors.Is(err, sql.ErrNoRows) {
 				slog.Error("failed to get featured image", "error", err, "media_id", page.FeaturedImageID.Int64)
 			}
 		} else {
@@ -860,7 +861,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		EntityType: model.EntityTypePage,
 		EntityID:   id,
 	})
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		slog.Error("failed to get translations for page", "error", err, "page_id", id)
 	}
 
@@ -940,7 +941,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Get existing page
 	existingPage, err := h.queries.GetPageByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Page not found", "error")
 		} else {
 			slog.Error("failed to get page", "error", err, "page_id", id)
@@ -1198,7 +1199,7 @@ func (h *PagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Get page to verify it exists and for logging
 	page, err := h.queries.GetPageByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Page not found", http.StatusNotFound)
 		} else {
 			slog.Error("failed to get page", "error", err, "page_id", id)
@@ -1245,7 +1246,7 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 	// Get existing page
 	page, err := h.queries.GetPageByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Page not found", "error")
 		} else {
 			slog.Error("failed to get page", "error", err, "page_id", id)
@@ -1325,7 +1326,7 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 	// Get page from database
 	page, err := h.queries.GetPageByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Page not found", "error")
 		} else {
 			slog.Error("failed to get page", "error", err, "page_id", id)
@@ -1421,7 +1422,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 	// Get page to verify it exists
 	page, err := h.queries.GetPageByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Page not found", "error")
 		} else {
 			slog.Error("failed to get page", "error", err, "page_id", id)
@@ -1434,7 +1435,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 	// Get version to restore
 	version, err := h.queries.GetPageVersionWithUser(r.Context(), versionId)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Version not found", "error")
 		} else {
 			slog.Error("failed to get page version", "error", err, "version_id", versionId)
@@ -1518,7 +1519,7 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 	// Get source page
 	sourcePage, err := h.queries.GetPageByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Page not found", "error")
 		} else {
 			slog.Error("failed to get page", "error", err, "page_id", id)
@@ -1531,7 +1532,7 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 	// Get target language
 	targetLang, err := h.queries.GetLanguageByCode(r.Context(), langCode)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Language not found", "error")
 		} else {
 			slog.Error("failed to get language", "error", err, "lang_code", langCode)

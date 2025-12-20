@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -120,7 +121,7 @@ func TestGetUserByEmail_NotFound(t *testing.T) {
 	q := New(db)
 
 	_, err := q.GetUserByEmail(ctx, "nonexistent@example.com")
-	if err != sql.ErrNoRows {
+	if !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("expected sql.ErrNoRows, got %v", err)
 	}
 }
@@ -230,7 +231,7 @@ func TestDeleteUser(t *testing.T) {
 
 	// Verify deleted
 	_, err = q.GetUserByID(ctx, created.ID)
-	if err != sql.ErrNoRows {
+	if !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("expected sql.ErrNoRows after delete, got %v", err)
 	}
 }
@@ -601,7 +602,7 @@ func TestDeletePage(t *testing.T) {
 
 	// Verify deleted
 	_, err = q.GetPageByID(ctx, created.ID)
-	if err != sql.ErrNoRows {
+	if !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("expected sql.ErrNoRows after delete, got %v", err)
 	}
 }

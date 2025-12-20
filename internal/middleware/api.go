@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -75,7 +76,7 @@ func APIKeyAuth(db *sql.DB) func(http.Handler) http.Handler {
 
 			apiKey, err := queries.GetAPIKeyByHash(r.Context(), keyHash)
 			if err != nil {
-				if err == sql.ErrNoRows {
+				if errors.Is(err, sql.ErrNoRows) {
 					WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "Invalid API key", nil)
 				} else {
 					slog.Error("failed to validate API key", "error", err)

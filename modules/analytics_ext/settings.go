@@ -2,6 +2,7 @@ package analytics_ext
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"html/template"
 	"strings"
@@ -37,7 +38,7 @@ func loadSettings(db *sql.DB) (*Settings, error) {
 		&matomoEnabled, &s.MatomoURL, &s.MatomoSiteID,
 	)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return &Settings{}, nil
 		}
 		return nil, fmt.Errorf("scanning analytics settings: %w", err)

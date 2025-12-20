@@ -3,6 +3,7 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -317,7 +318,7 @@ func (h *TaxonomyHandler) EditTagForm(w http.ResponseWriter, r *http.Request) {
 	// Get tag from database
 	tag, err := h.queries.GetTagByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Tag not found", "error")
 		} else {
 			slog.Error("failed to get tag", "error", err, "tag_id", id)
@@ -351,7 +352,7 @@ func (h *TaxonomyHandler) EditTagForm(w http.ResponseWriter, r *http.Request) {
 		EntityType: model.EntityTypeTag,
 		EntityID:   id,
 	})
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		slog.Error("failed to get translations for tag", "error", err, "tag_id", id)
 	}
 
@@ -426,7 +427,7 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	// Get existing tag
 	existingTag, err := h.queries.GetTagByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Tag not found", "error")
 		} else {
 			slog.Error("failed to get tag", "error", err, "tag_id", id)
@@ -557,7 +558,7 @@ func (h *TaxonomyHandler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 	// Get tag to verify it exists and for logging
 	tag, err := h.queries.GetTagByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Tag not found", http.StatusNotFound)
 		} else {
 			slog.Error("failed to get tag", "error", err, "tag_id", id)
@@ -642,7 +643,7 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 	// Get source tag
 	sourceTag, err := h.queries.GetTagByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Tag not found", "error")
 		} else {
 			slog.Error("failed to get tag", "error", err, "tag_id", id)
@@ -655,7 +656,7 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 	// Get target language
 	targetLang, err := h.queries.GetLanguageByCode(r.Context(), langCode)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Language not found", "error")
 		} else {
 			slog.Error("failed to get language", "error", err, "lang_code", langCode)
@@ -1117,7 +1118,7 @@ func (h *TaxonomyHandler) EditCategoryForm(w http.ResponseWriter, r *http.Reques
 	// Get category from database
 	category, err := h.queries.GetCategoryByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Category not found", "error")
 		} else {
 			slog.Error("failed to get category", "error", err, "category_id", id)
@@ -1177,7 +1178,7 @@ func (h *TaxonomyHandler) EditCategoryForm(w http.ResponseWriter, r *http.Reques
 		EntityType: model.EntityTypeCategory,
 		EntityID:   id,
 	})
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		slog.Error("failed to get translations for category", "error", err, "category_id", id)
 	}
 
@@ -1253,7 +1254,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 	// Get existing category
 	existingCategory, err := h.queries.GetCategoryByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Category not found", "error")
 		} else {
 			slog.Error("failed to get category", "error", err, "category_id", id)
@@ -1437,7 +1438,7 @@ func (h *TaxonomyHandler) DeleteCategory(w http.ResponseWriter, r *http.Request)
 	// Get category to verify it exists and for logging
 	category, err := h.queries.GetCategoryByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Category not found", http.StatusNotFound)
 		} else {
 			slog.Error("failed to get category", "error", err, "category_id", id)
@@ -1489,7 +1490,7 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 	// Get source category
 	sourceCategory, err := h.queries.GetCategoryByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Category not found", "error")
 		} else {
 			slog.Error("failed to get category", "error", err, "category_id", id)
@@ -1502,7 +1503,7 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 	// Get target language
 	targetLang, err := h.queries.GetLanguageByCode(r.Context(), langCode)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Language not found", "error")
 		} else {
 			slog.Error("failed to get language", "error", err, "lang_code", langCode)

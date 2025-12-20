@@ -3,6 +3,7 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -373,7 +374,7 @@ func (h *WebhooksHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	webhook, err := h.queries.GetWebhookByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Webhook not found", "error")
 		} else {
 			slog.Error("failed to get webhook", "error", err)
@@ -444,7 +445,7 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	webhook, err := h.queries.GetWebhookByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Webhook not found", "error")
 		} else {
 			slog.Error("failed to get webhook", "error", err)
@@ -575,7 +576,7 @@ func (h *WebhooksHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	webhook, err := h.queries.GetWebhookByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.sendDeleteError(w, "Webhook not found")
 		} else {
 			slog.Error("failed to get webhook", "error", err)
@@ -618,7 +619,7 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 
 	webhook, err := h.queries.GetWebhookByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Webhook not found", "error")
 		} else {
 			slog.Error("failed to get webhook", "error", err)
@@ -703,7 +704,7 @@ func (h *WebhooksHandler) Test(w http.ResponseWriter, r *http.Request) {
 
 	webhook, err := h.queries.GetWebhookByID(r.Context(), id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			h.renderer.SetFlash(r, "Webhook not found", "error")
 		} else {
 			slog.Error("failed to get webhook", "error", err)
