@@ -183,7 +183,7 @@ func TestModuleInit(t *testing.T) {
 	defer cleanup()
 
 	m := testModule(t, db)
-	defer m.Shutdown()
+	defer func() { _ = m.Shutdown() }()
 
 	// Verify settings are loaded
 	if m.settings == nil {
@@ -209,7 +209,7 @@ func TestModuleIsEnabled(t *testing.T) {
 	defer cleanup()
 
 	m := testModule(t, db)
-	defer m.Shutdown()
+	defer func() { _ = m.Shutdown() }()
 
 	if !m.IsEnabled() {
 		t.Error("IsEnabled() should return true by default")
@@ -227,7 +227,7 @@ func TestInsertPageView(t *testing.T) {
 	defer cleanup()
 
 	m := testModule(t, db)
-	defer m.Shutdown()
+	defer func() { _ = m.Shutdown() }()
 
 	view := &PageView{
 		VisitorHash:    "abc123def456",
@@ -282,7 +282,7 @@ func TestGetRealTimeVisitorCount(t *testing.T) {
 	defer cleanup()
 
 	m := testModule(t, db)
-	defer m.Shutdown()
+	defer func() { _ = m.Shutdown() }()
 
 	// Initially should be 0
 	count := m.GetRealTimeVisitorCount(5)
@@ -396,7 +396,7 @@ func TestSettingsSaveLoad(t *testing.T) {
 	defer cleanup()
 
 	m := testModule(t, db)
-	defer m.Shutdown()
+	defer func() { _ = m.Shutdown() }()
 
 	// Modify settings
 	m.settings.Enabled = false

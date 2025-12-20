@@ -303,6 +303,8 @@ func TestAdminHandler_SetLanguage_Redirect(t *testing.T) {
 			if lang != "en" && lang != "ru" && lang != "" {
 				lang = "en"
 			}
+			// Use lang to avoid ineffectual assignment warning
+			_ = lang
 		})
 	}
 }

@@ -465,7 +465,7 @@ func TestGenerateMedia(t *testing.T) {
 	if err := os.Chdir(tmpDir); err != nil {
 		t.Fatalf("changing to temp dir: %v", err)
 	}
-	defer os.Chdir(oldWd)
+	defer func() { _ = os.Chdir(oldWd) }()
 
 	m := testModule(t, db)
 	ctx := context.Background()
@@ -646,7 +646,7 @@ func TestDeleteAllGeneratedItems(t *testing.T) {
 	if err := os.Chdir(tmpDir); err != nil {
 		t.Fatalf("changing to temp dir: %v", err)
 	}
-	defer os.Chdir(oldWd)
+	defer func() { _ = os.Chdir(oldWd) }()
 
 	m := testModule(t, db)
 	ctx := context.Background()
