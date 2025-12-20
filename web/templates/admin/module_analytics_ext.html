@@ -1,0 +1,376 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{T .AdminLang "analytics_ext.title"}}</h1>
+        <p class="page-description">{{T .AdminLang "analytics_ext.description"}}</p>
+    </div>
+</div>
+
+<form method="POST" action="/admin/external-analytics" class="analytics-form">
+    {{.CSRFField}}
+
+    <!-- Google Analytics 4 -->
+    <div class="card analytics-card">
+        <div class="card-header">
+            <div class="provider-header">
+                <div class="provider-logo provider-logo-ga4">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 3v18h18"/>
+                        <path d="m19 9-5 5-4-4-3 3"/>
+                    </svg>
+                </div>
+                <div class="provider-info">
+                    <h2>{{T .AdminLang "analytics_ext.ga4_title"}}</h2>
+                    <p>{{T .AdminLang "analytics_ext.ga4_description"}}</p>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" name="ga4_enabled" value="1" {{if .Data.GA4Enabled}}checked{{end}}>
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label for="ga4_measurement_id">{{T .AdminLang "analytics_ext.ga4_measurement_id"}}</label>
+                <input type="text"
+                       id="ga4_measurement_id"
+                       name="ga4_measurement_id"
+                       value="{{.Data.GA4MeasurementID}}"
+                       placeholder="G-XXXXXXXXXX"
+                       class="form-control">
+                <small class="form-text">{{T .AdminLang "analytics_ext.ga4_measurement_id_help"}}</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Google Tag Manager -->
+    <div class="card analytics-card">
+        <div class="card-header">
+            <div class="provider-header">
+                <div class="provider-logo provider-logo-gtm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                        <polyline points="2 17 12 22 22 17"/>
+                        <polyline points="2 12 12 17 22 12"/>
+                    </svg>
+                </div>
+                <div class="provider-info">
+                    <h2>{{T .AdminLang "analytics_ext.gtm_title"}}</h2>
+                    <p>{{T .AdminLang "analytics_ext.gtm_description"}}</p>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" name="gtm_enabled" value="1" {{if .Data.GTMEnabled}}checked{{end}}>
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label for="gtm_container_id">{{T .AdminLang "analytics_ext.gtm_container_id"}}</label>
+                <input type="text"
+                       id="gtm_container_id"
+                       name="gtm_container_id"
+                       value="{{.Data.GTMContainerID}}"
+                       placeholder="GTM-XXXXXXX"
+                       class="form-control">
+                <small class="form-text">{{T .AdminLang "analytics_ext.gtm_container_id_help"}}</small>
+            </div>
+            <div class="info-box info-box-warning">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 16v-4"/>
+                    <path d="M12 8h.01"/>
+                </svg>
+                <span>{{T .AdminLang "analytics_ext.gtm_ga4_note"}}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Matomo -->
+    <div class="card analytics-card">
+        <div class="card-header">
+            <div class="provider-header">
+                <div class="provider-logo provider-logo-matomo">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12a9 9 0 1 1-9-9"/>
+                        <path d="M21 3v9h-9"/>
+                    </svg>
+                </div>
+                <div class="provider-info">
+                    <h2>{{T .AdminLang "analytics_ext.matomo_title"}}</h2>
+                    <p>{{T .AdminLang "analytics_ext.matomo_description"}}</p>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" name="matomo_enabled" value="1" {{if .Data.MatomoEnabled}}checked{{end}}>
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="form-row">
+                <div class="form-group form-group-lg">
+                    <label for="matomo_url">{{T .AdminLang "analytics_ext.matomo_url"}}</label>
+                    <input type="url"
+                           id="matomo_url"
+                           name="matomo_url"
+                           value="{{.Data.MatomoURL}}"
+                           placeholder="https://matomo.example.com"
+                           class="form-control">
+                    <small class="form-text">{{T .AdminLang "analytics_ext.matomo_url_help"}}</small>
+                </div>
+                <div class="form-group form-group-sm">
+                    <label for="matomo_site_id">{{T .AdminLang "analytics_ext.matomo_site_id"}}</label>
+                    <input type="text"
+                           id="matomo_site_id"
+                           name="matomo_site_id"
+                           value="{{.Data.MatomoSiteID}}"
+                           placeholder="1"
+                           class="form-control">
+                    <small class="form-text">{{T .AdminLang "analytics_ext.matomo_site_id_help"}}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <polyline points="17 21 17 13 7 13 7 21"/>
+                <polyline points="7 3 7 8 15 8"/>
+            </svg>
+            {{T .AdminLang "analytics_ext.save_button"}}
+        </button>
+    </div>
+</form>
+
+<style>
+.analytics-form {
+    max-width: 800px;
+}
+
+.analytics-card {
+    margin-bottom: 1.5rem;
+}
+
+.analytics-card .card-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.analytics-card .card-body {
+    padding: 1.5rem;
+}
+
+.provider-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.provider-logo {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.provider-logo-ga4 {
+    background: #fff3e0;
+    color: #f57c00;
+}
+
+.provider-logo-gtm {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.provider-logo-matomo {
+    background: #e8f5e9;
+    color: #388e3c;
+}
+
+.provider-info {
+    flex: 1;
+}
+
+.provider-info h2 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem 0;
+}
+
+.provider-info p {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* Toggle Switch - scoped to analytics form */
+.analytics-form .switch {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 26px;
+    flex-shrink: 0;
+}
+
+.analytics-form .switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.analytics-form .switch .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #d1d5db;
+    transition: .3s;
+    border-radius: 26px;
+    display: block;
+}
+
+.analytics-form .switch .slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: #ffffff;
+    transition: .3s;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.analytics-form .switch input:checked + .slider {
+    background-color: #3b82f6;
+}
+
+.analytics-form .switch input:checked + .slider:before {
+    transform: translateX(22px);
+}
+
+/* Form Elements - scoped to analytics form */
+.analytics-form .form-group {
+    margin-bottom: 1rem;
+}
+
+.analytics-form .form-group:last-child {
+    margin-bottom: 0;
+}
+
+.analytics-form .form-group > label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.analytics-form .form-control {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    font-size: 0.9375rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.analytics-form .form-control:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.1);
+}
+
+.analytics-form .form-control::placeholder {
+    color: var(--text-muted);
+}
+
+.analytics-form .form-text {
+    display: block;
+    margin-top: 0.375rem;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+}
+
+.analytics-form .form-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1rem;
+}
+
+.analytics-form .form-group-lg {
+    flex: 1;
+}
+
+.analytics-form .form-group-sm {
+    width: 120px;
+}
+
+/* Info Box - scoped */
+.analytics-form .info-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-md);
+    font-size: 0.8125rem;
+    margin-top: 1rem;
+}
+
+.analytics-form .info-box svg {
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+}
+
+.analytics-form .info-box-warning {
+    background: #fff8e1;
+    color: #8d6e00;
+    border: 1px solid #ffe082;
+}
+
+/* Form Actions - scoped */
+.analytics-form .form-actions {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.analytics-form .form-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+@media (max-width: 600px) {
+    .analytics-form .provider-header {
+        flex-wrap: wrap;
+    }
+
+    .analytics-form .provider-info {
+        flex: 1 1 calc(100% - 80px);
+    }
+
+    .analytics-form .switch {
+        order: -1;
+        margin-left: auto;
+    }
+
+    .analytics-form .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .analytics-form .form-group-sm {
+        width: 100%;
+    }
+}
+</style>
+{{end}}
