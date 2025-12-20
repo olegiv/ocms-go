@@ -520,14 +520,14 @@ func TestBaseModule(t *testing.T) {
 	if base.Description() != "Test module" {
 		t.Errorf("expected description 'Test module', got %s", base.Description())
 	}
-	if base.Dependencies() != nil {
-		t.Error("expected nil dependencies")
+	if deps := base.Dependencies(); len(deps) != 0 {
+		t.Errorf("expected no dependencies, got %d", len(deps))
 	}
-	if base.Migrations() != nil {
-		t.Error("expected nil migrations")
+	if migs := base.Migrations(); len(migs) != 0 {
+		t.Errorf("expected no migrations, got %d", len(migs))
 	}
-	if base.TemplateFuncs() != nil {
-		t.Error("expected nil template funcs")
+	if funcs := base.TemplateFuncs(); len(funcs) != 0 {
+		t.Errorf("expected no template funcs, got %d", len(funcs))
 	}
 
 	// Init should work

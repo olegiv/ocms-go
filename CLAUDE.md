@@ -149,21 +149,18 @@ On first run, seeds admin user: `admin@example.com` / `changeme`
 
 ## Testing Requirements
 
-**CRITICAL**: Before reporting ANY development task as complete, you MUST:
+**CRITICAL**: After ANY code change (no exceptions - includes refactoring, renaming, style fixes, test changes, etc.), you MUST:
 
 1. **Rebuild assets**: Run `make assets` to compile SCSS
 2. **Restart the server**: Run `make dev` or restart any running server
-3. **Test the application**:
-   - Verify homepage loads: `curl -s http://localhost:8080/`
-   - Verify admin dashboard loads: `curl -s http://localhost:8080/admin/`
+3. **Test the application with HTTP requests**:
+   - Verify homepage loads: `curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/`
+   - Verify admin dashboard loads: `curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/admin/`
+   - Test health endpoint: `curl -s http://localhost:8080/health`
    - Test any affected endpoints with actual HTTP requests
 4. **Keep the server running**: Do not stop the server after testing
 
-**IMPORTANT**: Before reporting any fix as complete, you MUST:
-
-1. **Run the server** and verify changes with actual HTTP requests using curl
-2. **Test affected endpoints** - don't just build and run unit tests
-3. **Verify expected responses** - check HTTP status codes and response content
+**NO EXCEPTIONS**: Even "simple" changes like type renames, import changes, or test fixes can break the UI. Always verify with HTTP requests.
 
 Example testing workflow:
 ```bash
