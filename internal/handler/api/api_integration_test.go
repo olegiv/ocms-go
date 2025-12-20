@@ -8,6 +8,27 @@ import (
 	"testing"
 )
 
+// assertStatusCode checks that the response has the expected status code.
+func assertStatusCode(t *testing.T, w *httptest.ResponseRecorder, expected int) {
+	t.Helper()
+	if w.Code != expected {
+		t.Errorf("expected status %d, got %d", expected, w.Code)
+	}
+}
+
+// assertErrorResponse unmarshals and validates an error response.
+func assertErrorResponse(t *testing.T, w *httptest.ResponseRecorder, expectedCode string) ErrorResponse {
+	t.Helper()
+	var resp ErrorResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if resp.Error.Code != expectedCode {
+		t.Errorf("expected code '%s', got %s", expectedCode, resp.Error.Code)
+	}
+	return resp
+}
+
 func TestWriteJSON(t *testing.T) {
 	w := httptest.NewRecorder()
 
@@ -74,18 +95,9 @@ func TestWriteError(t *testing.T) {
 		"field": "name",
 	})
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected status %d, got %d", http.StatusBadRequest, w.Code)
-	}
+	assertStatusCode(t, w, http.StatusBadRequest)
+	resp := assertErrorResponse(t, w, "validation_error")
 
-	var resp ErrorResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to unmarshal response: %v", err)
-	}
-
-	if resp.Error.Code != "validation_error" {
-		t.Errorf("expected code 'validation_error', got %s", resp.Error.Code)
-	}
 	if resp.Error.Message != "Invalid input" {
 		t.Errorf("expected message 'Invalid input', got %s", resp.Error.Message)
 	}
@@ -97,46 +109,31 @@ func TestWriteError(t *testing.T) {
 func TestWriteBadRequest(t *testing.T) {
 	w := httptest.NewRecorder()
 	WriteBadRequest(w, "Bad input", nil)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected status %d, got %d", http.StatusBadRequest, w.Code)
-	}
+	assertStatusCode(t, w, http.StatusBadRequest)
 }
 
 func TestWriteNotFound(t *testing.T) {
 	w := httptest.NewRecorder()
 	WriteNotFound(w, "Resource not found")
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected status %d, got %d", http.StatusNotFound, w.Code)
-	}
+	assertStatusCode(t, w, http.StatusNotFound)
 }
 
 func TestWriteUnauthorized(t *testing.T) {
 	w := httptest.NewRecorder()
 	WriteUnauthorized(w, "Not authenticated")
-
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
-	}
+	assertStatusCode(t, w, http.StatusUnauthorized)
 }
 
 func TestWriteForbidden(t *testing.T) {
 	w := httptest.NewRecorder()
 	WriteForbidden(w, "Access denied")
-
-	if w.Code != http.StatusForbidden {
-		t.Errorf("expected status %d, got %d", http.StatusForbidden, w.Code)
-	}
+	assertStatusCode(t, w, http.StatusForbidden)
 }
 
 func TestWriteInternalError(t *testing.T) {
 	w := httptest.NewRecorder()
 	WriteInternalError(w, "Something went wrong")
-
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("expected status %d, got %d", http.StatusInternalServerError, w.Code)
-	}
+	assertStatusCode(t, w, http.StatusInternalServerError)
 }
 
 func TestWriteValidationError(t *testing.T) {
@@ -146,18 +143,9 @@ func TestWriteValidationError(t *testing.T) {
 		"name":  "Required field",
 	})
 
-	if w.Code != http.StatusUnprocessableEntity {
-		t.Errorf("expected status %d, got %d", http.StatusUnprocessableEntity, w.Code)
-	}
+	assertStatusCode(t, w, http.StatusUnprocessableEntity)
+	resp := assertErrorResponse(t, w, "validation_error")
 
-	var resp ErrorResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to unmarshal response: %v", err)
-	}
-
-	if resp.Error.Code != "validation_error" {
-		t.Errorf("expected code 'validation_error', got %s", resp.Error.Code)
-	}
 	if len(resp.Error.Details) != 2 {
 		t.Errorf("expected 2 error details, got %d", len(resp.Error.Details))
 	}

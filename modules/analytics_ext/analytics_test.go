@@ -67,27 +67,32 @@ func runModuleMigrationsDown(t *testing.T, m *Module, db *sql.DB) {
 	}
 }
 
-// testModule creates a test Module with database access
-func testModule(t *testing.T, db *sql.DB) *Module {
-	t.Helper()
-
-	m := New()
-
-	// Create a test logger that discards output
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+// testLogger creates a test logger that only outputs warnings and above.
+func testLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: slog.LevelWarn,
 	}))
+}
 
-	ctx := &module.Context{
+// testModuleContext creates a module.Context for testing.
+func testModuleContext(db *sql.DB) *module.Context {
+	logger := testLogger()
+	return &module.Context{
 		DB:     db,
 		Logger: logger,
 		Config: &config.Config{},
 		Hooks:  module.NewHookRegistry(logger),
 	}
+}
 
+// testModule creates a test Module with database access
+func testModule(t *testing.T, db *sql.DB) *Module {
+	t.Helper()
+
+	m := New()
 	runModuleMigrations(t, m, db)
 
-	if err := m.Init(ctx); err != nil {
+	if err := m.Init(testModuleContext(db)); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
 
@@ -477,20 +482,9 @@ func TestModuleInit(t *testing.T) {
 	defer cleanup()
 
 	m := New()
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelWarn,
-	}))
-
 	runModuleMigrations(t, m, db)
 
-	ctx := &module.Context{
-		DB:     db,
-		Logger: logger,
-		Config: &config.Config{},
-		Hooks:  module.NewHookRegistry(logger),
-	}
-
-	if err := m.Init(ctx); err != nil {
+	if err := m.Init(testModuleContext(db)); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
 
