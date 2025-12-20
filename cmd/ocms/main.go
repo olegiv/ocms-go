@@ -22,6 +22,7 @@ import (
 	"ocms-go/internal/handler"
 	"ocms-go/internal/handler/api"
 	"ocms-go/internal/i18n"
+	"ocms-go/internal/logging"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/module"
 	"ocms-go/internal/render"
@@ -103,6 +104,13 @@ func run() error {
 		return fmt.Errorf("running migrations: %w", err)
 	}
 	slog.Info("database ready")
+
+	// Upgrade logger to also write WARN and ERROR logs to the Event Log database
+	textHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})
+	eventLogHandler := logging.NewEventLogHandler(textHandler, db)
+	logger = slog.New(eventLogHandler)
+	slog.SetDefault(logger)
+	slog.Info("event log integration enabled", "min_level", "warn")
 
 	// Seed default data
 	ctx := context.Background()
