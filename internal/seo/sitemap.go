@@ -14,13 +14,8 @@ type ChangeFreq string
 
 // Valid change frequency values.
 const (
-	ChangeFreqAlways  ChangeFreq = "always"
-	ChangeFreqHourly  ChangeFreq = "hourly"
-	ChangeFreqDaily   ChangeFreq = "daily"
-	ChangeFreqWeekly  ChangeFreq = "weekly"
-	ChangeFreqMonthly ChangeFreq = "monthly"
-	ChangeFreqYearly  ChangeFreq = "yearly"
-	ChangeFreqNever   ChangeFreq = "never"
+	ChangeFreqDaily  ChangeFreq = "daily"
+	ChangeFreqWeekly ChangeFreq = "weekly"
 )
 
 // SitemapURL represents a single URL entry in the sitemap.
@@ -154,14 +149,4 @@ func (b *SitemapBuilder) Build() ([]byte, error) {
 	}
 
 	return append(output, xmlBytes...), nil
-}
-
-// GenerateSitemap is a convenience function to generate a sitemap from content.
-func GenerateSitemap(siteURL string, pages []SitemapPage, categories []SitemapCategory, tags []SitemapTag) ([]byte, error) {
-	builder := NewSitemapBuilder(siteURL)
-	builder.AddHomepage()
-	builder.AddPages(pages)
-	builder.AddCategories(categories)
-	builder.AddTags(tags)
-	return builder.Build()
 }

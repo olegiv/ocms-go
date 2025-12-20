@@ -10,7 +10,6 @@ const (
 	ConfigTypeString = "string"
 	ConfigTypeInt    = "int"
 	ConfigTypeBool   = "bool"
-	ConfigTypeJSON   = "json"
 )
 
 // Config keys

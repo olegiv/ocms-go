@@ -37,15 +37,6 @@ type MemoryCacheOptions struct {
 	CleanupInterval time.Duration // Interval for expired entry cleanup (0 = no cleanup)
 }
 
-// DefaultMemoryCacheOptions returns sensible defaults.
-func DefaultMemoryCacheOptions() MemoryCacheOptions {
-	return MemoryCacheOptions{
-		DefaultTTL:      time.Hour,
-		MaxSize:         10000,
-		CleanupInterval: time.Minute,
-	}
-}
-
 // NewMemoryCache creates a new memory cache with the given options.
 func NewMemoryCache(opts MemoryCacheOptions) *MemoryCache {
 	c := &MemoryCache{
@@ -72,7 +63,7 @@ func NewSimpleMemoryCache(ttl time.Duration) *MemoryCache {
 }
 
 // Get retrieves a value from the cache.
-func (c *MemoryCache) Get(ctx context.Context, key string) ([]byte, error) {
+func (c *MemoryCache) Get(_ context.Context, key string) ([]byte, error) {
 	if c.closed.Load() {
 		return nil, ErrCacheClosed
 	}
@@ -99,7 +90,7 @@ func (c *MemoryCache) Get(ctx context.Context, key string) ([]byte, error) {
 }
 
 // Set stores a value in the cache with the specified TTL.
-func (c *MemoryCache) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
+func (c *MemoryCache) Set(_ context.Context, key string, value []byte, ttl time.Duration) error {
 	if c.closed.Load() {
 		return ErrCacheClosed
 	}
@@ -140,7 +131,7 @@ func (c *MemoryCache) Set(ctx context.Context, key string, value []byte, ttl tim
 }
 
 // Delete removes a key from the cache.
-func (c *MemoryCache) Delete(ctx context.Context, key string) error {
+func (c *MemoryCache) Delete(_ context.Context, key string) error {
 	if c.closed.Load() {
 		return ErrCacheClosed
 	}
@@ -153,7 +144,7 @@ func (c *MemoryCache) Delete(ctx context.Context, key string) error {
 }
 
 // Clear removes all entries from the cache.
-func (c *MemoryCache) Clear(ctx context.Context) error {
+func (c *MemoryCache) Clear(_ context.Context) error {
 	if c.closed.Load() {
 		return ErrCacheClosed
 	}
@@ -167,7 +158,7 @@ func (c *MemoryCache) Clear(ctx context.Context) error {
 }
 
 // Has checks if a key exists in the cache (and is not expired).
-func (c *MemoryCache) Has(ctx context.Context, key string) (bool, error) {
+func (c *MemoryCache) Has(_ context.Context, key string) (bool, error) {
 	if c.closed.Load() {
 		return false, ErrCacheClosed
 	}
@@ -223,7 +214,7 @@ func (c *MemoryCache) ResetStats() {
 }
 
 // DeleteByPrefix removes all keys starting with the given prefix.
-func (c *MemoryCache) DeleteByPrefix(ctx context.Context, prefix string) error {
+func (c *MemoryCache) DeleteByPrefix(_ context.Context, prefix string) error {
 	if c.closed.Load() {
 		return ErrCacheClosed
 	}

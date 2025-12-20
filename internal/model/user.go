@@ -9,8 +9,7 @@ import (
 
 // User roles
 const (
-	RoleAdmin  = "admin"
-	RoleEditor = "editor"
+	RoleAdmin = "admin"
 )
 
 // User represents a CMS user.

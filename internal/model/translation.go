@@ -7,7 +7,6 @@ const (
 	EntityTypePage     = "page"
 	EntityTypeCategory = "category"
 	EntityTypeTag      = "tag"
-	EntityTypeMenuItem = "menu_item"
 )
 
 // Translation represents a link between content entities across languages.

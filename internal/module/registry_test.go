@@ -554,7 +554,7 @@ func TestMultipleMigrations(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	r := NewRegistry(logger)
 
-	order := []int{}
+	var order []int
 	m := newMockModule("multi", "1.0.0")
 	m.migrations = []Migration{
 		{

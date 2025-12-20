@@ -168,7 +168,7 @@ func (c *ConfigCache) Invalidate() {
 
 // InvalidateKey marks a specific key as needing reload.
 // For simplicity, this invalidates the entire cache.
-func (c *ConfigCache) InvalidateKey(key string) {
+func (c *ConfigCache) InvalidateKey(_ string) {
 	c.Invalidate()
 }
 

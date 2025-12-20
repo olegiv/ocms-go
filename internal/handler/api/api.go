@@ -123,7 +123,7 @@ type StatusResponse struct {
 }
 
 // Status returns the API status.
-func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Status(w http.ResponseWriter, _ *http.Request) {
 	WriteSuccess(w, StatusResponse{
 		Status:  "ok",
 		Version: "v1",
