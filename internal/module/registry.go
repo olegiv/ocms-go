@@ -13,25 +13,28 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"ocms-go/internal/i18n"
+	"ocms-go/internal/render"
 )
 
 // Registry manages module registration and lifecycle.
 type Registry struct {
-	modules      map[string]Module
-	order        []string // initialization order
-	activeStatus map[string]bool
-	ctx          *ModuleContext
-	logger       *slog.Logger
-	mu           sync.RWMutex
+	modules       map[string]Module
+	order         []string // initialization order
+	activeStatus  map[string]bool
+	sidebarStatus map[string]bool // show in sidebar status
+	ctx           *ModuleContext
+	logger        *slog.Logger
+	mu            sync.RWMutex
 }
 
 // NewRegistry creates a new module registry.
 func NewRegistry(logger *slog.Logger) *Registry {
 	return &Registry{
-		modules:      make(map[string]Module),
-		order:        make([]string, 0),
-		activeStatus: make(map[string]bool),
-		logger:       logger,
+		modules:       make(map[string]Module),
+		order:         make([]string, 0),
+		activeStatus:  make(map[string]bool),
+		sidebarStatus: make(map[string]bool),
+		logger:        logger,
 	}
 }
 
@@ -193,6 +196,7 @@ func (r *Registry) ensureMigrationsTable(db *sql.DB) error {
 		CREATE TABLE IF NOT EXISTS modules (
 			name TEXT PRIMARY KEY,
 			is_active BOOLEAN NOT NULL DEFAULT 1,
+			show_in_sidebar BOOLEAN NOT NULL DEFAULT 0,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)
 	`)
@@ -221,28 +225,30 @@ func (r *Registry) recordMigration(db *sql.DB, module string, version int64) err
 	return err
 }
 
-// loadActiveStatus loads the active status for all registered modules from the database.
-// Modules not in the database are considered active by default and will be inserted.
+// loadActiveStatus loads the active and sidebar status for all registered modules from the database.
+// Modules not in the database are considered active by default (sidebar=false) and will be inserted.
 func (r *Registry) loadActiveStatus(db *sql.DB) error {
 	for _, name := range r.order {
-		var isActive bool
-		err := db.QueryRow("SELECT is_active FROM modules WHERE name = ?", name).Scan(&isActive)
+		var isActive, showInSidebar bool
+		err := db.QueryRow("SELECT is_active, show_in_sidebar FROM modules WHERE name = ?", name).Scan(&isActive, &showInSidebar)
 		if err == sql.ErrNoRows {
-			// Module not in database, insert with active=true
+			// Module not in database, insert with active=true, show_in_sidebar=false
 			_, err = db.Exec(
-				"INSERT INTO modules (name, is_active, updated_at) VALUES (?, 1, CURRENT_TIMESTAMP)",
+				"INSERT INTO modules (name, is_active, show_in_sidebar, updated_at) VALUES (?, 1, 0, CURRENT_TIMESTAMP)",
 				name,
 			)
 			if err != nil {
 				return fmt.Errorf("inserting module %s: %w", name, err)
 			}
 			r.activeStatus[name] = true
-			r.logger.Debug("module registered in database", "module", name, "active", true)
+			r.sidebarStatus[name] = false
+			r.logger.Debug("module registered in database", "module", name, "active", true, "sidebar", false)
 		} else if err != nil {
 			return fmt.Errorf("loading active status for module %s: %w", name, err)
 		} else {
 			r.activeStatus[name] = isActive
-			r.logger.Debug("loaded module active status", "module", name, "active", isActive)
+			r.sidebarStatus[name] = showInSidebar
+			r.logger.Debug("loaded module status", "module", name, "active", isActive, "sidebar", showInSidebar)
 		}
 	}
 	return nil
@@ -284,6 +290,74 @@ func (r *Registry) SetActive(name string, active bool) error {
 	r.activeStatus[name] = active
 	r.logger.Info("module active status changed", "module", name, "active", active)
 	return nil
+}
+
+// ShowInSidebar returns whether a module should be shown in the admin sidebar.
+func (r *Registry) ShowInSidebar(name string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	show, exists := r.sidebarStatus[name]
+	if !exists {
+		return false // Default to not showing in sidebar
+	}
+	return show
+}
+
+// SetShowInSidebar sets whether a module should appear in the admin sidebar.
+func (r *Registry) SetShowInSidebar(name string, show bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.modules[name]; !exists {
+		return fmt.Errorf("module %q not registered", name)
+	}
+
+	if r.ctx == nil || r.ctx.DB == nil {
+		return fmt.Errorf("registry not initialized")
+	}
+
+	_, err := r.ctx.DB.Exec(
+		"UPDATE modules SET show_in_sidebar = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?",
+		show, name,
+	)
+	if err != nil {
+		return fmt.Errorf("updating module sidebar status: %w", err)
+	}
+
+	r.sidebarStatus[name] = show
+	r.logger.Info("module sidebar status changed", "module", name, "show", show)
+	return nil
+}
+
+// ListSidebarModules returns modules that should appear in the admin sidebar.
+// Implements render.SidebarModuleProvider interface.
+func (r *Registry) ListSidebarModules() []render.SidebarModule {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var modules []render.SidebarModule
+	for _, name := range r.order {
+		// Only include active modules with show_in_sidebar=true and non-empty AdminURL
+		if !r.activeStatus[name] || !r.sidebarStatus[name] {
+			continue
+		}
+		m := r.modules[name]
+		if m.AdminURL() == "" {
+			continue
+		}
+		// Use SidebarLabel if provided, otherwise fall back to Name
+		label := m.SidebarLabel()
+		if label == "" {
+			label = m.Name()
+		}
+		modules = append(modules, render.SidebarModule{
+			Name:     m.Name(),
+			Label:    label,
+			AdminURL: m.AdminURL(),
+		})
+	}
+	return modules
 }
 
 // loadModuleTranslations loads translations from a module's embedded filesystem.
@@ -416,6 +490,7 @@ type ModuleInfo struct {
 	Description       string
 	Initialized       bool
 	Active            bool   // Whether the module is active (routes/hooks enabled)
+	ShowInSidebar     bool   // Whether the module appears in admin sidebar
 	MigrationCount    int    // Total number of migrations defined
 	MigrationsApplied int    // Number of migrations applied
 	MigrationsPending int    // Number of pending migrations
@@ -458,12 +533,16 @@ func (r *Registry) ListInfo() []ModuleInfo {
 			active = true
 		}
 
+		// Default to not showing in sidebar if not tracked
+		showInSidebar := r.sidebarStatus[name]
+
 		infos = append(infos, ModuleInfo{
 			Name:              m.Name(),
 			Version:           m.Version(),
 			Description:       m.Description(),
 			Initialized:       r.ctx != nil,
 			Active:            active,
+			ShowInSidebar:     showInSidebar,
 			MigrationCount:    migrationCount,
 			MigrationsApplied: appliedCount,
 			MigrationsPending: migrationCount - appliedCount,

@@ -82,6 +82,11 @@ func (m *Module) AdminURL() string {
 	return "/admin/example"
 }
 
+// SidebarLabel returns the display label for the admin sidebar.
+func (m *Module) SidebarLabel() string {
+	return "Example Module"
+}
+
 // TranslationsFS returns the embedded filesystem containing module translations.
 func (m *Module) TranslationsFS() embed.FS {
 	return localesFS

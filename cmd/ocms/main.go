@@ -263,6 +263,9 @@ func run() error {
 		}
 	}()
 
+	// Set module registry on renderer for sidebar modules
+	renderer.SetSidebarModuleProvider(moduleRegistry)
+
 	// Set up hook registry to check module active status
 	hookRegistry.SetIsModuleActive(moduleRegistry.IsActive)
 
@@ -587,6 +590,7 @@ func run() error {
 		// Module management routes
 		r.Get("/modules", modulesHandler.List)
 		r.Post("/modules/{name}/toggle", modulesHandler.ToggleActive)
+		r.Post("/modules/{name}/toggle-sidebar", modulesHandler.ToggleSidebar)
 
 		// API key management routes
 		r.Get("/api-keys", apiKeysHandler.List)

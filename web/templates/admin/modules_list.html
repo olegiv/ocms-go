@@ -53,17 +53,28 @@
                 {{end}}
             </div>
             <div class="module-status">
-                <label class="toggle-switch" title="{{if .Active}}{{T $.AdminLang "modules.click_to_deactivate"}}{{else}}{{T $.AdminLang "modules.click_to_activate"}}{{end}}">
-                    <input type="checkbox"
-                           class="module-active-toggle"
-                           data-module="{{.Name}}"
-                           {{if .Active}}checked{{end}}>
-                    <span class="toggle-slider"></span>
-                </label>
-                {{if .Active}}
-                <span class="badge badge-success">{{T $.AdminLang "modules.active"}}</span>
-                {{else}}
-                <span class="badge badge-secondary">{{T $.AdminLang "modules.inactive"}}</span>
+                <div class="module-toggle-row">
+                    <span class="toggle-label">{{T $.AdminLang "modules.enabled"}}</span>
+                    <label class="toggle-switch" title="{{if .Active}}{{T $.AdminLang "modules.click_to_deactivate"}}{{else}}{{T $.AdminLang "modules.click_to_activate"}}{{end}}">
+                        <input type="checkbox"
+                               class="module-active-toggle"
+                               data-module="{{.Name}}"
+                               {{if .Active}}checked{{end}}>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                {{if .AdminURL}}
+                <div class="module-toggle-row">
+                    <span class="toggle-label">{{T $.AdminLang "modules.show_in_sidebar"}}</span>
+                    <label class="toggle-switch toggle-switch-sm" title="{{T $.AdminLang "modules.toggle_sidebar"}}">
+                        <input type="checkbox"
+                               class="module-sidebar-toggle"
+                               data-module="{{.Name}}"
+                               {{if .ShowInSidebar}}checked{{end}}
+                               {{if not .Active}}disabled{{end}}>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
                 {{end}}
             </div>
         </div>
@@ -138,13 +149,14 @@
 </div>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Handle active toggle
     document.querySelectorAll('.module-active-toggle').forEach(function(toggle) {
         toggle.addEventListener('change', function() {
             const moduleName = this.dataset.module;
             const isActive = this.checked;
             const moduleCard = this.closest('.module-card');
-            const badge = this.closest('.module-status').querySelector('.badge');
             const dashboardLink = moduleCard.querySelector('.module-dashboard-link');
+            const sidebarToggle = moduleCard.querySelector('.module-sidebar-toggle');
 
             // Disable toggle during request
             this.disabled = true;
@@ -159,24 +171,28 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Update badge
                     if (data.active) {
-                        badge.className = 'badge badge-success';
-                        badge.textContent = '{{T .AdminLang "modules.active"}}';
                         moduleCard.classList.remove('module-inactive');
                         // Enable dashboard link
                         if (dashboardLink) {
                             dashboardLink.classList.remove('disabled');
                             dashboardLink.removeAttribute('title');
                         }
+                        // Enable sidebar toggle
+                        if (sidebarToggle) {
+                            sidebarToggle.disabled = false;
+                        }
                     } else {
-                        badge.className = 'badge badge-secondary';
-                        badge.textContent = '{{T .AdminLang "modules.inactive"}}';
                         moduleCard.classList.add('module-inactive');
                         // Disable dashboard link
                         if (dashboardLink) {
                             dashboardLink.classList.add('disabled');
                             dashboardLink.setAttribute('title', '{{T .AdminLang "modules.activate_to_access"}}');
+                        }
+                        // Disable and uncheck sidebar toggle
+                        if (sidebarToggle) {
+                            sidebarToggle.checked = false;
+                            sidebarToggle.disabled = true;
                         }
                     }
                 } else {
@@ -190,6 +206,42 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.checked = !isActive;
                 console.error('Error toggling module:', error);
                 alert('Error toggling module');
+            })
+            .finally(() => {
+                this.disabled = false;
+            });
+        });
+    });
+
+    // Handle sidebar toggle
+    document.querySelectorAll('.module-sidebar-toggle').forEach(function(toggle) {
+        toggle.addEventListener('change', function() {
+            const moduleName = this.dataset.module;
+            const showInSidebar = this.checked;
+
+            // Disable toggle during request
+            this.disabled = true;
+
+            fetch('/admin/modules/' + encodeURIComponent(moduleName) + '/toggle-sidebar', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ show: showInSidebar })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    // Revert toggle on error
+                    this.checked = !showInSidebar;
+                    alert('Error: ' + (data.message || 'Failed to toggle sidebar visibility'));
+                }
+            })
+            .catch(error => {
+                // Revert toggle on error
+                this.checked = !showInSidebar;
+                console.error('Error toggling sidebar visibility:', error);
+                alert('Error toggling sidebar visibility');
             })
             .finally(() => {
                 this.disabled = false;

@@ -56,6 +56,10 @@ type Module interface {
 	// Return empty string if module has no admin dashboard.
 	AdminURL() string
 
+	// SidebarLabel returns the display label for the admin sidebar.
+	// Return empty string to use the module name as label.
+	SidebarLabel() string
+
 	// TranslationsFS returns an embedded filesystem containing module translations.
 	// Expected structure: locales/{lang}/messages.json
 	// Return nil if module has no translations.
@@ -123,6 +127,9 @@ func (m *BaseModule) Migrations() []Migration { return nil }
 
 // AdminURL returns the admin dashboard URL (empty by default).
 func (m *BaseModule) AdminURL() string { return "" }
+
+// SidebarLabel returns the sidebar display label (empty = use name).
+func (m *BaseModule) SidebarLabel() string { return "" }
 
 // TranslationsFS returns nil (no translations by default).
 func (m *BaseModule) TranslationsFS() embed.FS { return embed.FS{} }

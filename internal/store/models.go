@@ -165,9 +165,10 @@ type MenuItem struct {
 }
 
 type Module struct {
-	Name      string    `json:"name"`
-	IsActive  bool      `json:"is_active"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Name          string    `json:"name"`
+	IsActive      bool      `json:"is_active"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	ShowInSidebar bool      `json:"show_in_sidebar"`
 }
 
 type Page struct {
