@@ -523,12 +523,12 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 	if filename == "" {
-		errors["filename"] = "Filename is required"
+		validationErrors["filename"] = "Filename is required"
 	}
 
-	if len(errors) > 0 {
+	if len(validationErrors) > 0 {
 		// Get folders for re-render
 		folders, _ := h.queries.ListMediaFolders(r.Context())
 		variants, _ := h.queries.GetMediaVariants(r.Context(), id)
@@ -545,7 +545,7 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 			Media:    mediaItem,
 			Variants: variants,
 			Folders:  folders,
-			Errors:   errors,
+			Errors:   validationErrors,
 			FormValues: map[string]string{
 				"filename":  filename,
 				"alt":       alt,

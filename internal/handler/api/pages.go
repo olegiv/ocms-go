@@ -449,15 +449,15 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate required fields
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 	if req.Title == "" {
-		errors["title"] = "Title is required"
+		validationErrors["title"] = "Title is required"
 	}
 	if req.Slug == "" {
-		errors["slug"] = "Slug is required"
+		validationErrors["slug"] = "Slug is required"
 	}
-	if len(errors) > 0 {
-		WriteValidationError(w, errors)
+	if len(validationErrors) > 0 {
+		WriteValidationError(w, validationErrors)
 		return
 	}
 

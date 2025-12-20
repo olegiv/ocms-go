@@ -119,7 +119,7 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 	now := time.Now()
 	userID := middleware.GetUserID(r)
 	updatedBy := sql.NullInt64{Int64: userID, Valid: userID > 0}
@@ -137,7 +137,7 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 		if cfg.Type == model.ConfigTypeInt {
 			if value != "" {
 				if _, err := strconv.Atoi(value); err != nil {
-					errors[cfg.Key] = i18n.T(lang, "error.invalid_number")
+					validationErrors[cfg.Key] = i18n.T(lang, "error.invalid_number")
 					continue
 				}
 			}
@@ -159,11 +159,11 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			slog.Error("failed to update config", "key", cfg.Key, "error", err)
-			errors[cfg.Key] = i18n.T(lang, "error.saving_value")
+			validationErrors[cfg.Key] = i18n.T(lang, "error.saving_value")
 		}
 	}
 
-	if len(errors) > 0 {
+	if len(validationErrors) > 0 {
 		// Re-render form with errors
 		items := make([]ConfigItem, 0, len(configs))
 		for _, cfg := range configs {
@@ -186,7 +186,7 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 		data := ConfigFormData{
 			Items:  items,
-			Errors: errors,
+			Errors: validationErrors,
 		}
 
 		if err := h.renderer.Render(w, r, "admin/config", render.TemplateData{

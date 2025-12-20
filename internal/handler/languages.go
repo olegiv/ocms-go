@@ -177,41 +177,41 @@ func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		formValues["is_active"] = "1"
 	}
 
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 
 	// Validate code
 	if code == "" {
-		errors["code"] = "Language code is required"
+		validationErrors["code"] = "Language code is required"
 	} else if len(code) < 2 || len(code) > 5 {
-		errors["code"] = "Language code must be 2-5 characters"
+		validationErrors["code"] = "Language code must be 2-5 characters"
 	} else {
 		exists, err := h.queries.LanguageCodeExists(r.Context(), code)
 		if err != nil {
 			slog.Error("database error checking language code", "error", err)
 		} else if exists != 0 {
-			errors["code"] = "Language code already exists"
+			validationErrors["code"] = "Language code already exists"
 		}
 	}
 
 	// Validate name
 	if name == "" {
-		errors["name"] = "Name is required"
+		validationErrors["name"] = "Name is required"
 	}
 
 	// Validate native name
 	if nativeName == "" {
-		errors["native_name"] = "Native name is required"
+		validationErrors["native_name"] = "Native name is required"
 	}
 
 	// Validate direction
 	if direction != model.DirectionLTR && direction != model.DirectionRTL {
-		errors["direction"] = "Direction must be ltr or rtl"
+		validationErrors["direction"] = "Direction must be ltr or rtl"
 	}
 
-	if len(errors) > 0 {
+	if len(validationErrors) > 0 {
 		data := LanguageFormData{
 			CommonLanguages: model.CommonLanguages,
-			Errors:          errors,
+			Errors:          validationErrors,
 			FormValues:      formValues,
 			IsEdit:          false,
 		}
@@ -372,13 +372,13 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		formValues["is_active"] = "1"
 	}
 
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 
 	// Validate code
 	if code == "" {
-		errors["code"] = "Language code is required"
+		validationErrors["code"] = "Language code is required"
 	} else if len(code) < 2 || len(code) > 5 {
-		errors["code"] = "Language code must be 2-5 characters"
+		validationErrors["code"] = "Language code must be 2-5 characters"
 	} else {
 		exists, err := h.queries.LanguageCodeExistsExcluding(r.Context(), store.LanguageCodeExistsExcludingParams{
 			Code: code,
@@ -387,35 +387,35 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			slog.Error("database error checking language code", "error", err)
 		} else if exists != 0 {
-			errors["code"] = "Language code already exists"
+			validationErrors["code"] = "Language code already exists"
 		}
 	}
 
 	// Validate name
 	if name == "" {
-		errors["name"] = "Name is required"
+		validationErrors["name"] = "Name is required"
 	}
 
 	// Validate native name
 	if nativeName == "" {
-		errors["native_name"] = "Native name is required"
+		validationErrors["native_name"] = "Native name is required"
 	}
 
 	// Validate direction
 	if direction != model.DirectionLTR && direction != model.DirectionRTL {
-		errors["direction"] = "Direction must be ltr or rtl"
+		validationErrors["direction"] = "Direction must be ltr or rtl"
 	}
 
 	// Cannot deactivate default language
 	if existingLang.IsDefault && !isActive {
-		errors["is_active"] = "Cannot deactivate the default language"
+		validationErrors["is_active"] = "Cannot deactivate the default language"
 	}
 
-	if len(errors) > 0 {
+	if len(validationErrors) > 0 {
 		data := LanguageFormData{
 			Language:        &existingLang,
 			CommonLanguages: model.CommonLanguages,
-			Errors:          errors,
+			Errors:          validationErrors,
 			FormValues:      formValues,
 			IsEdit:          true,
 		}

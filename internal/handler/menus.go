@@ -201,14 +201,14 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 		"language_id": languageIDStr,
 	}
 
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 
 	// Parse language_id
 	var languageID sql.NullInt64
 	if languageIDStr != "" {
 		langID, err := strconv.ParseInt(languageIDStr, 10, 64)
 		if err != nil {
-			errors["language_id"] = "Invalid language"
+			validationErrors["language_id"] = "Invalid language"
 		} else {
 			languageID = sql.NullInt64{Int64: langID, Valid: true}
 		}
@@ -216,9 +216,9 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Validate name
 	if name == "" {
-		errors["name"] = "Name is required"
+		validationErrors["name"] = "Name is required"
 	} else if len(name) < 2 {
-		errors["name"] = "Name must be at least 2 characters"
+		validationErrors["name"] = "Name must be at least 2 characters"
 	}
 
 	// Validate slug
@@ -228,9 +228,9 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if slug == "" {
-		errors["slug"] = "Slug is required"
+		validationErrors["slug"] = "Slug is required"
 	} else if !util.IsValidSlug(slug) {
-		errors["slug"] = "Invalid slug format"
+		validationErrors["slug"] = "Invalid slug format"
 	} else if languageID.Valid {
 		// Check slug uniqueness within the same language
 		exists, err := h.queries.MenuSlugExistsForLanguage(r.Context(), store.MenuSlugExistsForLanguageParams{
@@ -239,20 +239,20 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			slog.Error("database error checking slug", "error", err)
-			errors["slug"] = "Error checking slug"
+			validationErrors["slug"] = "Error checking slug"
 		} else if exists != 0 {
-			errors["slug"] = "Slug already exists for this language"
+			validationErrors["slug"] = "Slug already exists for this language"
 		}
 	}
 
-	if len(errors) > 0 {
+	if len(validationErrors) > 0 {
 		// Get languages for re-render
 		languages, _ := h.queries.ListActiveLanguages(r.Context())
 
 		data := MenuFormData{
 			Targets:    model.ValidTargets,
 			Languages:  languages,
-			Errors:     errors,
+			Errors:     validationErrors,
 			FormValues: formValues,
 			IsEdit:     false,
 		}
@@ -412,23 +412,23 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 		"language_id": languageIDStr,
 	}
 
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 
 	// Parse language_id
 	var languageID sql.NullInt64
 	if languageIDStr != "" {
 		langID, err := strconv.ParseInt(languageIDStr, 10, 64)
 		if err != nil {
-			errors["language_id"] = "Invalid language"
+			validationErrors["language_id"] = "Invalid language"
 		} else {
 			languageID = sql.NullInt64{Int64: langID, Valid: true}
 		}
 	}
 
 	if name == "" {
-		errors["name"] = "Name is required"
+		validationErrors["name"] = "Name is required"
 	} else if len(name) < 2 {
-		errors["name"] = "Name must be at least 2 characters"
+		validationErrors["name"] = "Name must be at least 2 characters"
 	}
 
 	if slug == "" {
@@ -437,9 +437,9 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if slug == "" {
-		errors["slug"] = "Slug is required"
+		validationErrors["slug"] = "Slug is required"
 	} else if !util.IsValidSlug(slug) {
-		errors["slug"] = "Invalid slug format"
+		validationErrors["slug"] = "Invalid slug format"
 	} else if slug != menu.Slug || languageID != menu.LanguageID {
 		// Check slug uniqueness within the same language (excluding current menu)
 		exists, err := h.queries.MenuSlugExistsForLanguageExcluding(r.Context(), store.MenuSlugExistsForLanguageExcludingParams{
@@ -449,13 +449,13 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			slog.Error("database error checking slug", "error", err)
-			errors["slug"] = "Error checking slug"
+			validationErrors["slug"] = "Error checking slug"
 		} else if exists != 0 {
-			errors["slug"] = "Slug already exists for this language"
+			validationErrors["slug"] = "Slug already exists for this language"
 		}
 	}
 
-	if len(errors) > 0 {
+	if len(validationErrors) > 0 {
 		// Get menu items for re-render
 		items, _ := h.queries.ListMenuItemsWithPage(r.Context(), id)
 		tree := buildMenuTree(items, sql.NullInt64{Valid: false})
@@ -468,7 +468,7 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 			Pages:      pages,
 			Targets:    model.ValidTargets,
 			Languages:  languages,
-			Errors:     errors,
+			Errors:     validationErrors,
 			FormValues: formValues,
 			IsEdit:     true,
 		}

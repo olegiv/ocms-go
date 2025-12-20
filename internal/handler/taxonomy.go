@@ -214,13 +214,13 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 
 	// Name validation
 	if name == "" {
-		errors["name"] = "Name is required"
+		validationErrors["name"] = "Name is required"
 	} else if len(name) < 2 {
-		errors["name"] = "Name must be at least 2 characters"
+		validationErrors["name"] = "Name must be at least 2 characters"
 	}
 
 	// Slug validation - auto-generate if empty
@@ -230,22 +230,22 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if slug == "" {
-		errors["slug"] = "Slug is required"
+		validationErrors["slug"] = "Slug is required"
 	} else if !util.IsValidSlug(slug) {
-		errors["slug"] = "Invalid slug format (use lowercase letters, numbers, and hyphens)"
+		validationErrors["slug"] = "Invalid slug format (use lowercase letters, numbers, and hyphens)"
 	} else {
 		// Check if slug already exists
 		exists, err := h.queries.TagSlugExists(r.Context(), slug)
 		if err != nil {
 			slog.Error("database error checking slug", "error", err)
-			errors["slug"] = "Error checking slug"
+			validationErrors["slug"] = "Error checking slug"
 		} else if exists != 0 {
-			errors["slug"] = "Slug already exists"
+			validationErrors["slug"] = "Slug already exists"
 		}
 	}
 
 	// If there are validation errors, re-render the form
-	if len(errors) > 0 {
+	if len(validationErrors) > 0 {
 		// Load all active languages for the form
 		allLanguages, _ := h.queries.ListActiveLanguages(r.Context())
 		var currentLanguage *store.Language
@@ -257,7 +257,7 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 		}
 
 		data := TagFormData{
-			Errors:       errors,
+			Errors:       validationErrors,
 			FormValues:   formValues,
 			IsEdit:       false,
 			AllLanguages: allLanguages,
@@ -454,13 +454,13 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 
 	// Name validation
 	if name == "" {
-		errors["name"] = "Name is required"
+		validationErrors["name"] = "Name is required"
 	} else if len(name) < 2 {
-		errors["name"] = "Name must be at least 2 characters"
+		validationErrors["name"] = "Name must be at least 2 characters"
 	}
 
 	// Slug validation
@@ -470,9 +470,9 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if slug == "" {
-		errors["slug"] = "Slug is required"
+		validationErrors["slug"] = "Slug is required"
 	} else if !util.IsValidSlug(slug) {
-		errors["slug"] = "Invalid slug format (use lowercase letters, numbers, and hyphens)"
+		validationErrors["slug"] = "Invalid slug format (use lowercase letters, numbers, and hyphens)"
 	} else if slug != existingTag.Slug {
 		// Only check for uniqueness if slug changed
 		exists, err := h.queries.TagSlugExistsExcluding(r.Context(), store.TagSlugExistsExcludingParams{
@@ -481,14 +481,14 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			slog.Error("database error checking slug", "error", err)
-			errors["slug"] = "Error checking slug"
+			validationErrors["slug"] = "Error checking slug"
 		} else if exists != 0 {
-			errors["slug"] = "Slug already exists"
+			validationErrors["slug"] = "Slug already exists"
 		}
 	}
 
 	// If there are validation errors, re-render the form
-	if len(errors) > 0 {
+	if len(validationErrors) > 0 {
 		// Load languages and translations for error form
 		allLanguages, _ := h.queries.ListActiveLanguages(r.Context())
 		var tagLanguage *store.Language
@@ -501,7 +501,7 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 
 		data := TagFormData{
 			Tag:          &existingTag,
-			Errors:       errors,
+			Errors:       validationErrors,
 			FormValues:   formValues,
 			IsEdit:       true,
 			AllLanguages: allLanguages,
@@ -1005,13 +1005,13 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Validate
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 
 	// Name validation
 	if name == "" {
-		errors["name"] = "Name is required"
+		validationErrors["name"] = "Name is required"
 	} else if len(name) < 2 {
-		errors["name"] = "Name must be at least 2 characters"
+		validationErrors["name"] = "Name must be at least 2 characters"
 	}
 
 	// Slug validation - auto-generate if empty
@@ -1021,22 +1021,22 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 	}
 
 	if slug == "" {
-		errors["slug"] = "Slug is required"
+		validationErrors["slug"] = "Slug is required"
 	} else if !util.IsValidSlug(slug) {
-		errors["slug"] = "Invalid slug format (use lowercase letters, numbers, and hyphens)"
+		validationErrors["slug"] = "Invalid slug format (use lowercase letters, numbers, and hyphens)"
 	} else {
 		// Check if slug already exists
 		exists, err := h.queries.CategorySlugExists(r.Context(), slug)
 		if err != nil {
 			slog.Error("database error checking slug", "error", err)
-			errors["slug"] = "Error checking slug"
+			validationErrors["slug"] = "Error checking slug"
 		} else if exists != 0 {
-			errors["slug"] = "Slug already exists"
+			validationErrors["slug"] = "Slug already exists"
 		}
 	}
 
 	// If there are validation errors, re-render the form
-	if len(errors) > 0 {
+	if len(validationErrors) > 0 {
 		// Get categories for parent selector
 		categories, _ := h.queries.ListCategories(r.Context())
 		tree := buildCategoryTree(categories, nil, 0)
@@ -1054,7 +1054,7 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 
 		data := CategoryFormData{
 			AllCategories: flatTree,
-			Errors:        errors,
+			Errors:        validationErrors,
 			FormValues:    formValues,
 			IsEdit:        false,
 			AllLanguages:  allLanguages,
@@ -1293,13 +1293,13 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Validate
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 
 	// Name validation
 	if name == "" {
-		errors["name"] = "Name is required"
+		validationErrors["name"] = "Name is required"
 	} else if len(name) < 2 {
-		errors["name"] = "Name must be at least 2 characters"
+		validationErrors["name"] = "Name must be at least 2 characters"
 	}
 
 	// Slug validation
@@ -1309,9 +1309,9 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 	}
 
 	if slug == "" {
-		errors["slug"] = "Slug is required"
+		validationErrors["slug"] = "Slug is required"
 	} else if !util.IsValidSlug(slug) {
-		errors["slug"] = "Invalid slug format (use lowercase letters, numbers, and hyphens)"
+		validationErrors["slug"] = "Invalid slug format (use lowercase letters, numbers, and hyphens)"
 	} else if slug != existingCategory.Slug {
 		// Only check for uniqueness if slug changed
 		exists, err := h.queries.CategorySlugExistsExcluding(r.Context(), store.CategorySlugExistsExcludingParams{
@@ -1320,22 +1320,22 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 		})
 		if err != nil {
 			slog.Error("database error checking slug", "error", err)
-			errors["slug"] = "Error checking slug"
+			validationErrors["slug"] = "Error checking slug"
 		} else if exists != 0 {
-			errors["slug"] = "Slug already exists"
+			validationErrors["slug"] = "Slug already exists"
 		}
 	}
 
 	// Prevent setting parent to self or descendant
 	if parentID.Valid {
 		if parentID.Int64 == id {
-			errors["parent_id"] = "Category cannot be its own parent"
+			validationErrors["parent_id"] = "Category cannot be its own parent"
 		} else {
 			// Check if parent is a descendant
 			descendantIDs, _ := h.queries.GetDescendantIDs(r.Context(), sql.NullInt64{Int64: id, Valid: true})
 			for _, did := range descendantIDs {
 				if did == parentID.Int64 {
-					errors["parent_id"] = "Cannot set a descendant as parent (circular reference)"
+					validationErrors["parent_id"] = "Cannot set a descendant as parent (circular reference)"
 					break
 				}
 			}
@@ -1343,7 +1343,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 	}
 
 	// If there are validation errors, re-render the form
-	if len(errors) > 0 {
+	if len(validationErrors) > 0 {
 		// Get categories for parent selector
 		categories, _ := h.queries.ListCategories(r.Context())
 
@@ -1378,7 +1378,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 		data := CategoryFormData{
 			Category:      &existingCategory,
 			AllCategories: flatTree,
-			Errors:        errors,
+			Errors:        validationErrors,
 			FormValues:    formValues,
 			IsEdit:        true,
 			AllLanguages:  allLanguages,

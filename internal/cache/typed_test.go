@@ -170,7 +170,7 @@ func TestTypedCache_GetOrSetError(t *testing.T) {
 	}
 
 	_, err := cache.GetOrSet(ctx, "user:1", loader)
-	if err != expectedErr {
+	if !errors.Is(err, expectedErr) {
 		t.Errorf("expected %v, got %v", expectedErr, err)
 	}
 

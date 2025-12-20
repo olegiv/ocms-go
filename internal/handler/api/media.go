@@ -346,12 +346,12 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 
 	// Process uploads
 	var responses []MediaResponse
-	var errors []map[string]string
+	var uploadErrors []map[string]string
 
 	for _, fileHeader := range files {
 		file, err := fileHeader.Open()
 		if err != nil {
-			errors = append(errors, map[string]string{
+			uploadErrors = append(uploadErrors, map[string]string{
 				"filename": fileHeader.Filename,
 				"error":    "Failed to open file",
 			})
@@ -362,7 +362,7 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		_ = file.Close()
 
 		if err != nil {
-			errors = append(errors, map[string]string{
+			uploadErrors = append(uploadErrors, map[string]string{
 				"filename": fileHeader.Filename,
 				"error":    err.Error(),
 			})
@@ -391,7 +391,7 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If all uploads failed, return error
-	if len(responses) == 0 && len(errors) > 0 {
+	if len(responses) == 0 && len(uploadErrors) > 0 {
 		WriteError(w, http.StatusBadRequest, "upload_failed", "All uploads failed", nil)
 		return
 	}
@@ -402,7 +402,7 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		if len(responses) > 0 {
 			WriteCreated(w, responses[0])
 		} else {
-			WriteError(w, http.StatusBadRequest, "upload_failed", errors[0]["error"], nil)
+			WriteError(w, http.StatusBadRequest, "upload_failed", uploadErrors[0]["error"], nil)
 		}
 	} else {
 		// Multiple file upload - return array with any errors
@@ -412,7 +412,7 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		}
 		WriteCreated(w, BatchUploadResponse{
 			Uploaded: responses,
-			Errors:   errors,
+			Errors:   uploadErrors,
 		})
 	}
 }

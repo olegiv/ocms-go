@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -774,7 +775,7 @@ func run() error {
 	// Start server in goroutine
 	go func() {
 		slog.Info("starting server", "addr", cfg.ServerAddr(), "env", cfg.Env)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("server error", "error", err)
 		}
 	}()
