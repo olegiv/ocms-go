@@ -307,7 +307,7 @@ func (q *Queries) GetFormFields(ctx context.Context, formID int64) ([]FormField,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []FormField{}
 	for rows.Next() {
 		var i FormField
@@ -373,7 +373,7 @@ func (q *Queries) GetFormSubmissions(ctx context.Context, arg GetFormSubmissions
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []FormSubmission{}
 	for rows.Next() {
 		var i FormSubmission
@@ -426,7 +426,7 @@ func (q *Queries) GetRecentSubmissionsWithForm(ctx context.Context, limit int64)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []GetRecentSubmissionsWithFormRow{}
 	for rows.Next() {
 		var i GetRecentSubmissionsWithFormRow
@@ -468,7 +468,7 @@ func (q *Queries) ListForms(ctx context.Context, arg ListFormsParams) ([]Form, e
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Form{}
 	for rows.Next() {
 		var i Form

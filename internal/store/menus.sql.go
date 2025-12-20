@@ -343,7 +343,7 @@ func (q *Queries) ListChildMenuItems(ctx context.Context, parentID sql.NullInt64
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []MenuItem{}
 	for rows.Next() {
 		var i MenuItem
@@ -383,7 +383,7 @@ func (q *Queries) ListMenuItems(ctx context.Context, menuID int64) ([]MenuItem, 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []MenuItem{}
 	for rows.Next() {
 		var i MenuItem
@@ -449,7 +449,7 @@ func (q *Queries) ListMenuItemsWithPage(ctx context.Context, menuID int64) ([]Li
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []ListMenuItemsWithPageRow{}
 	for rows.Next() {
 		var i ListMenuItemsWithPageRow
@@ -491,7 +491,7 @@ func (q *Queries) ListMenus(ctx context.Context) ([]Menu, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Menu{}
 	for rows.Next() {
 		var i Menu
@@ -543,7 +543,7 @@ func (q *Queries) ListMenusByLanguage(ctx context.Context, languageID sql.NullIn
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []ListMenusByLanguageRow{}
 	for rows.Next() {
 		var i ListMenusByLanguageRow
@@ -595,7 +595,7 @@ func (q *Queries) ListMenusWithLanguage(ctx context.Context) ([]ListMenusWithLan
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []ListMenusWithLanguageRow{}
 	for rows.Next() {
 		var i ListMenusWithLanguageRow
@@ -632,7 +632,7 @@ func (q *Queries) ListTopLevelMenuItems(ctx context.Context, menuID int64) ([]Me
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []MenuItem{}
 	for rows.Next() {
 		var i MenuItem

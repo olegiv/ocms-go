@@ -316,7 +316,7 @@ func (q *Queries) GetMediaVariants(ctx context.Context, mediaID int64) ([]MediaV
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []MediaVariant{}
 	for rows.Next() {
 		var i MediaVariant
@@ -351,7 +351,7 @@ func (q *Queries) GetRecentMedia(ctx context.Context, limit int64) ([]Medium, er
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Medium{}
 	for rows.Next() {
 		var i Medium
@@ -392,7 +392,7 @@ func (q *Queries) ListChildMediaFolders(ctx context.Context, parentID sql.NullIn
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []MediaFolder{}
 	for rows.Next() {
 		var i MediaFolder
@@ -430,7 +430,7 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Medium{}
 	for rows.Next() {
 		var i Medium
@@ -477,7 +477,7 @@ func (q *Queries) ListMediaByType(ctx context.Context, arg ListMediaByTypeParams
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Medium{}
 	for rows.Next() {
 		var i Medium
@@ -518,7 +518,7 @@ func (q *Queries) ListMediaFolders(ctx context.Context) ([]MediaFolder, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []MediaFolder{}
 	for rows.Next() {
 		var i MediaFolder
@@ -557,7 +557,7 @@ func (q *Queries) ListMediaInFolder(ctx context.Context, arg ListMediaInFolderPa
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Medium{}
 	for rows.Next() {
 		var i Medium
@@ -603,7 +603,7 @@ func (q *Queries) ListMediaInRootFolder(ctx context.Context, arg ListMediaInRoot
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Medium{}
 	for rows.Next() {
 		var i Medium
@@ -644,7 +644,7 @@ func (q *Queries) ListRootMediaFolders(ctx context.Context) ([]MediaFolder, erro
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []MediaFolder{}
 	for rows.Next() {
 		var i MediaFolder
@@ -698,7 +698,7 @@ func (q *Queries) SearchMedia(ctx context.Context, arg SearchMediaParams) ([]Med
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Medium{}
 	for rows.Next() {
 		var i Medium

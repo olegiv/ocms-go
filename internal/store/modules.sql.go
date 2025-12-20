@@ -45,7 +45,7 @@ func (q *Queries) ListActiveModules(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []string{}
 	for rows.Next() {
 		var name string
@@ -72,7 +72,7 @@ func (q *Queries) ListModules(ctx context.Context) ([]Module, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Module{}
 	for rows.Next() {
 		var i Module
@@ -104,7 +104,7 @@ func (q *Queries) ListSidebarModules(ctx context.Context) ([]Module, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Module{}
 	for rows.Next() {
 		var i Module
