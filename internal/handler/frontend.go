@@ -841,22 +841,7 @@ func (h *FrontendHandler) NotFound(w http.ResponseWriter, r *http.Request) {
 // Sitemap generates and serves the sitemap.xml file.
 func (h *FrontendHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-
-	// Get site URL from config (use cache if available)
-	siteURL := ""
-	if h.cacheManager != nil {
-		siteURL, _ = h.cacheManager.GetConfig(ctx, "site_url")
-	} else if cfg, err := h.queries.GetConfigByKey(ctx, "site_url"); err == nil {
-		siteURL = cfg.Value
-	}
-	if siteURL == "" {
-		// Fallback to request host
-		scheme := "http"
-		if r.TLS != nil {
-			scheme = "https"
-		}
-		siteURL = scheme + "://" + r.Host
-	}
+	siteURL := h.getSiteURL(ctx, r)
 
 	// Get sitemap from cache (or generate it)
 	var xmlContent []byte
@@ -931,22 +916,7 @@ func (h *FrontendHandler) generateSitemap(ctx context.Context, siteURL string) (
 // Robots generates and serves the robots.txt file.
 func (h *FrontendHandler) Robots(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-
-	// Get site URL from config (use cache if available)
-	siteURL := ""
-	if h.cacheManager != nil {
-		siteURL, _ = h.cacheManager.GetConfig(ctx, "site_url")
-	} else if cfg, err := h.queries.GetConfigByKey(ctx, "site_url"); err == nil {
-		siteURL = cfg.Value
-	}
-	if siteURL == "" {
-		// Fallback to request host
-		scheme := "http"
-		if r.TLS != nil {
-			scheme = "https"
-		}
-		siteURL = scheme + "://" + r.Host
-	}
+	siteURL := h.getSiteURL(ctx, r)
 
 	// Check for robots_disallow_all config (for staging sites)
 	disallowAll := false
@@ -1479,6 +1449,68 @@ func (h *FrontendHandler) getPageNum(r *http.Request) int {
 // defaultPerPage is the default number of items per page for pagination.
 const defaultPerPage = 10
 
+// getSiteURL retrieves the site URL from config with cache fallback.
+// Falls back to request host if no config is set.
+func (h *FrontendHandler) getSiteURL(ctx context.Context, r *http.Request) string {
+	var siteURL string
+	if h.cacheManager != nil {
+		siteURL, _ = h.cacheManager.GetConfig(ctx, "site_url")
+	} else if cfg, err := h.queries.GetConfigByKey(ctx, "site_url"); err == nil {
+		siteURL = cfg.Value
+	}
+	if siteURL == "" {
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		siteURL = scheme + "://" + r.Host
+	}
+	return siteURL
+}
+
+// buildPaginationPages builds the page links with ellipsis for pagination.
+// This is extracted to avoid duplication between frontend and admin pagination.
+func buildPaginationPages[T any](currentPage, totalPages int, buildURL func(int) string, makePage func(number int, url string, isCurrent, isEllipsis bool) T) []T {
+	var pages []T
+
+	start := currentPage - 2
+	end := currentPage + 2
+	if start < 1 {
+		start = 1
+		end = 5
+	}
+	if end > totalPages {
+		end = totalPages
+		start = end - 4
+		if start < 1 {
+			start = 1
+		}
+	}
+
+	// Add first page and ellipsis if needed
+	if start > 1 {
+		pages = append(pages, makePage(1, buildURL(1), false, false))
+		if start > 2 {
+			pages = append(pages, makePage(0, "", false, true))
+		}
+	}
+
+	// Add page numbers
+	for i := start; i <= end; i++ {
+		pages = append(pages, makePage(i, buildURL(i), i == currentPage, false))
+	}
+
+	// Add ellipsis and last page if needed
+	if end < totalPages {
+		if end < totalPages-1 {
+			pages = append(pages, makePage(0, "", false, true))
+		}
+		pages = append(pages, makePage(totalPages, buildURL(totalPages), false, false))
+	}
+
+	return pages
+}
+
 // buildPagination creates pagination data for templates.
 func (h *FrontendHandler) buildPagination(currentPage, totalItems int, baseURL string) Pagination {
 	perPage := defaultPerPage
@@ -1519,57 +1551,11 @@ func (h *FrontendHandler) buildPagination(currentPage, totalItems int, baseURL s
 		pagination.LastURL = buildURL(totalPages)
 	}
 
-	// Build page links (show max 5 pages around current with ellipsis)
-	start := currentPage - 2
-	end := currentPage + 2
-	if start < 1 {
-		start = 1
-		end = 5
-	}
-	if end > totalPages {
-		end = totalPages
-		start = end - 4
-		if start < 1 {
-			start = 1
-		}
-	}
-
-	// Add first page and ellipsis if needed
-	if start > 1 {
-		pagination.Pages = append(pagination.Pages, PaginationPage{
-			Number:    1,
-			URL:       buildURL(1),
-			IsCurrent: false,
+	// Build page links using shared helper
+	pagination.Pages = buildPaginationPages(currentPage, totalPages, buildURL,
+		func(number int, url string, isCurrent, isEllipsis bool) PaginationPage {
+			return PaginationPage{Number: number, URL: url, IsCurrent: isCurrent, IsEllipsis: isEllipsis}
 		})
-		if start > 2 {
-			pagination.Pages = append(pagination.Pages, PaginationPage{
-				IsEllipsis: true,
-			})
-		}
-	}
-
-	// Add page numbers
-	for i := start; i <= end; i++ {
-		pagination.Pages = append(pagination.Pages, PaginationPage{
-			Number:    i,
-			URL:       buildURL(i),
-			IsCurrent: i == currentPage,
-		})
-	}
-
-	// Add ellipsis and last page if needed
-	if end < totalPages {
-		if end < totalPages-1 {
-			pagination.Pages = append(pagination.Pages, PaginationPage{
-				IsEllipsis: true,
-			})
-		}
-		pagination.Pages = append(pagination.Pages, PaginationPage{
-			Number:    totalPages,
-			URL:       buildURL(totalPages),
-			IsCurrent: false,
-		})
-	}
 
 	return pagination
 }

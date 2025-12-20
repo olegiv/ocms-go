@@ -98,18 +98,10 @@ func APIKeyAuth(db *sql.DB) func(http.Handler) http.Handler {
 			}
 
 			// Update last used timestamp (fire and forget)
-			go func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				_ = queries.UpdateAPIKeyLastUsed(ctx, store.UpdateAPIKeyLastUsedParams{
-					LastUsedAt: sql.NullTime{Time: time.Now(), Valid: true},
-					ID:         apiKey.ID,
-				})
-			}()
+			updateAPIKeyLastUsed(queries, apiKey.ID)
 
-			// Add API key to context
-			ctx := context.WithValue(r.Context(), ContextKeyAPIKey, apiKey)
-			next.ServeHTTP(w, r.WithContext(ctx))
+			// Add API key to context and continue
+			addAPIKeyToContext(next, w, r, apiKey)
 		})
 	}
 }
@@ -122,6 +114,24 @@ func GetAPIKey(r *http.Request) *store.ApiKey {
 		return nil
 	}
 	return &apiKey
+}
+
+// updateAPIKeyLastUsed updates the last used timestamp in a background goroutine.
+func updateAPIKeyLastUsed(queries *store.Queries, keyID int64) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = queries.UpdateAPIKeyLastUsed(ctx, store.UpdateAPIKeyLastUsedParams{
+			LastUsedAt: sql.NullTime{Time: time.Now(), Valid: true},
+			ID:         keyID,
+		})
+	}()
+}
+
+// addAPIKeyToContext adds the API key to context and serves the next handler.
+func addAPIKeyToContext(next http.Handler, w http.ResponseWriter, r *http.Request, apiKey store.ApiKey) {
+	ctx := context.WithValue(r.Context(), ContextKeyAPIKey, apiKey)
+	next.ServeHTTP(w, r.WithContext(ctx))
 }
 
 // OptionalAPIKeyAuth creates middleware that optionally validates API key authentication.
@@ -177,18 +187,10 @@ func OptionalAPIKeyAuth(db *sql.DB) func(http.Handler) http.Handler {
 			}
 
 			// Update last used timestamp (fire and forget)
-			go func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				_ = queries.UpdateAPIKeyLastUsed(ctx, store.UpdateAPIKeyLastUsedParams{
-					LastUsedAt: sql.NullTime{Time: time.Now(), Valid: true},
-					ID:         apiKey.ID,
-				})
-			}()
+			updateAPIKeyLastUsed(queries, apiKey.ID)
 
-			// Add API key to context
-			ctx := context.WithValue(r.Context(), ContextKeyAPIKey, apiKey)
-			next.ServeHTTP(w, r.WithContext(ctx))
+			// Add API key to context and continue
+			addAPIKeyToContext(next, w, r, apiKey)
 		})
 	}
 }
@@ -270,50 +272,50 @@ func RequireAnyPermission(permissions ...string) func(http.Handler) http.Handler
 	}
 }
 
-// rateLimiter holds rate limiters per API key.
-type rateLimiter struct {
-	limiters map[int64]*rate.Limiter
+// limiterCache is a generic rate limiter cache with double-check locking.
+type limiterCache[K comparable] struct {
+	limiters map[K]*rate.Limiter
 	mu       sync.RWMutex
 	rate     rate.Limit
 	burst    int
 }
 
-// newRateLimiter creates a new rate limiter manager.
-func newRateLimiter(rps float64, burst int) *rateLimiter {
-	return &rateLimiter{
-		limiters: make(map[int64]*rate.Limiter),
+// newLimiterCache creates a new limiter cache.
+func newLimiterCache[K comparable](rps float64, burst int) *limiterCache[K] {
+	return &limiterCache[K]{
+		limiters: make(map[K]*rate.Limiter),
 		rate:     rate.Limit(rps),
 		burst:    burst,
 	}
 }
 
-// getLimiter returns the rate limiter for a specific API key.
-func (rl *rateLimiter) getLimiter(keyID int64) *rate.Limiter {
-	rl.mu.RLock()
-	limiter, exists := rl.limiters[keyID]
-	rl.mu.RUnlock()
+// get returns the rate limiter for a specific key, creating one if needed.
+func (lc *limiterCache[K]) get(key K) *rate.Limiter {
+	lc.mu.RLock()
+	limiter, exists := lc.limiters[key]
+	lc.mu.RUnlock()
 
 	if exists {
 		return limiter
 	}
 
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
+	lc.mu.Lock()
+	defer lc.mu.Unlock()
 
 	// Double-check after acquiring write lock
-	if limiter, exists = rl.limiters[keyID]; exists {
+	if limiter, exists = lc.limiters[key]; exists {
 		return limiter
 	}
 
-	limiter = rate.NewLimiter(rl.rate, rl.burst)
-	rl.limiters[keyID] = limiter
+	limiter = rate.NewLimiter(lc.rate, lc.burst)
+	lc.limiters[key] = limiter
 	return limiter
 }
 
 // APIRateLimit creates middleware that rate limits requests per API key.
 // rps is requests per second, burst is the maximum burst size.
 func APIRateLimit(rps float64, burst int) func(http.Handler) http.Handler {
-	rl := newRateLimiter(rps, burst)
+	cache := newLimiterCache[int64](rps, burst)
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -324,8 +326,7 @@ func APIRateLimit(rps float64, burst int) func(http.Handler) http.Handler {
 				return
 			}
 
-			limiter := rl.getLimiter(apiKey.ID)
-			if !limiter.Allow() {
+			if !cache.get(apiKey.ID).Allow() {
 				WriteAPIError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "Rate limit exceeded. Please slow down.", nil)
 				return
 			}
@@ -337,63 +338,25 @@ func APIRateLimit(rps float64, burst int) func(http.Handler) http.Handler {
 
 // GlobalRateLimiter provides a global rate limiter for unauthenticated requests.
 type GlobalRateLimiter struct {
-	limiters map[string]*rate.Limiter
-	mu       sync.RWMutex
-	rate     rate.Limit
-	burst    int
+	cache *limiterCache[string]
 }
 
 // NewGlobalRateLimiter creates a new global rate limiter.
 func NewGlobalRateLimiter(rps float64, burst int) *GlobalRateLimiter {
 	return &GlobalRateLimiter{
-		limiters: make(map[string]*rate.Limiter),
-		rate:     rate.Limit(rps),
-		burst:    burst,
+		cache: newLimiterCache[string](rps, burst),
 	}
-}
-
-// getLimiter returns the rate limiter for a specific IP.
-func (rl *GlobalRateLimiter) getLimiter(ip string) *rate.Limiter {
-	rl.mu.RLock()
-	limiter, exists := rl.limiters[ip]
-	rl.mu.RUnlock()
-
-	if exists {
-		return limiter
-	}
-
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	// Double-check after acquiring write lock
-	if limiter, exists = rl.limiters[ip]; exists {
-		return limiter
-	}
-
-	limiter = rate.NewLimiter(rl.rate, rl.burst)
-	rl.limiters[ip] = limiter
-	return limiter
 }
 
 // Middleware returns the rate limiting middleware for API routes (returns JSON errors).
 func (rl *GlobalRateLimiter) Middleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Use X-Real-IP or RemoteAddr for rate limiting
-			ip := r.Header.Get("X-Real-IP")
-			if ip == "" {
-				ip = r.Header.Get("X-Forwarded-For")
-				if ip == "" {
-					ip = r.RemoteAddr
-				}
-			}
-
-			limiter := rl.getLimiter(ip)
-			if !limiter.Allow() {
+			ip := getClientIP(r)
+			if !rl.cache.get(ip).Allow() {
 				WriteAPIError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "Rate limit exceeded. Please slow down.", nil)
 				return
 			}
-
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -404,22 +367,12 @@ func (rl *GlobalRateLimiter) Middleware() func(http.Handler) http.Handler {
 func (rl *GlobalRateLimiter) HTMLMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Use X-Real-IP or RemoteAddr for rate limiting
-			ip := r.Header.Get("X-Real-IP")
-			if ip == "" {
-				ip = r.Header.Get("X-Forwarded-For")
-				if ip == "" {
-					ip = r.RemoteAddr
-				}
-			}
-
-			limiter := rl.getLimiter(ip)
-			if !limiter.Allow() {
+			ip := getClientIP(r)
+			if !rl.cache.get(ip).Allow() {
 				slog.Warn("public rate limit exceeded", "ip", ip, "path", r.URL.Path)
 				http.Error(w, "Too many requests. Please wait a moment and try again.", http.StatusTooManyRequests)
 				return
 			}
-
 			next.ServeHTTP(w, r)
 		})
 	}

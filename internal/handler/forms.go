@@ -78,6 +78,206 @@ type FormListItem struct {
 	UnreadCount     int64
 }
 
+// formInput holds parsed form input values.
+type formInput struct {
+	Name           string
+	Slug           string
+	Title          string
+	Description    string
+	SuccessMessage string
+	EmailTo        string
+	IsActive       bool
+	FormValues     map[string]string
+}
+
+// parseFormInput extracts and returns form field values from the request.
+func parseFormInput(r *http.Request) formInput {
+	name := strings.TrimSpace(r.FormValue("name"))
+	slug := strings.TrimSpace(r.FormValue("slug"))
+	title := strings.TrimSpace(r.FormValue("title"))
+	description := strings.TrimSpace(r.FormValue("description"))
+	successMessage := strings.TrimSpace(r.FormValue("success_message"))
+	emailTo := strings.TrimSpace(r.FormValue("email_to"))
+	isActive := r.FormValue("is_active") == "true" || r.FormValue("is_active") == "on"
+
+	formValues := map[string]string{
+		"name":            name,
+		"slug":            slug,
+		"title":           title,
+		"description":     description,
+		"success_message": successMessage,
+		"email_to":        emailTo,
+	}
+	if isActive {
+		formValues["is_active"] = "true"
+	}
+
+	return formInput{
+		Name:           name,
+		Slug:           slug,
+		Title:          title,
+		Description:    description,
+		SuccessMessage: successMessage,
+		EmailTo:        emailTo,
+		IsActive:       isActive,
+		FormValues:     formValues,
+	}
+}
+
+// parseFormIDParam parses the form ID from URL and redirects on error.
+// Returns 0 if there was an error (redirect already sent).
+func (h *FormsHandler) parseFormIDParam(w http.ResponseWriter, r *http.Request) int64 {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		h.renderer.SetFlash(r, "Invalid form ID", "error")
+		http.Redirect(w, r, "/admin/forms", http.StatusSeeOther)
+		return 0
+	}
+	return id
+}
+
+// fetchFormByID retrieves a form by ID and handles errors with redirect.
+// Returns nil if there was an error (redirect already sent).
+func (h *FormsHandler) fetchFormByID(w http.ResponseWriter, r *http.Request, id int64) *store.Form {
+	form, err := h.queries.GetFormByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			h.renderer.SetFlash(r, "Form not found", "error")
+		} else {
+			slog.Error("failed to get form", "error", err, "form_id", id)
+			h.renderer.SetFlash(r, "Error loading form", "error")
+		}
+		http.Redirect(w, r, "/admin/forms", http.StatusSeeOther)
+		return nil
+	}
+	return &form
+}
+
+// parseFieldIDParam parses field ID from URL and returns error response if invalid.
+// Returns 0 if there was an error (response already sent).
+func parseFieldIDParam(w http.ResponseWriter, r *http.Request, paramName string) int64 {
+	idStr := chi.URLParam(r, paramName)
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Invalid %s", paramName), http.StatusBadRequest)
+		return 0
+	}
+	return id
+}
+
+// fetchFieldByID retrieves a field by ID and verifies it belongs to the form.
+// Returns nil if there was an error (response already sent).
+func (h *FormsHandler) fetchFieldByID(w http.ResponseWriter, r *http.Request, fieldID, formID int64) *store.FormField {
+	field, err := h.queries.GetFormFieldByID(r.Context(), fieldID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Field not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return nil
+	}
+
+	if field.FormID != formID {
+		http.Error(w, "Field does not belong to this form", http.StatusBadRequest)
+		return nil
+	}
+	return &field
+}
+
+// validateFieldRequest validates a field request and normalizes values.
+// Returns error message if validation fails, empty string on success.
+func validateFieldRequest(req *AddFieldRequest) string {
+	if req.Label == "" {
+		return "Label is required"
+	}
+	if !model.IsValidFieldType(req.Type) {
+		return "Invalid field type"
+	}
+
+	// Generate name from label if not provided
+	if req.Name == "" {
+		req.Name = util.Slugify(req.Label)
+		req.Name = strings.ReplaceAll(req.Name, "-", "_")
+	}
+
+	// Set default options
+	if req.Options == "" {
+		req.Options = "[]"
+	}
+	if req.Validation == "" {
+		req.Validation = "{}"
+	}
+	return ""
+}
+
+// getActiveFormBySlug retrieves a form by slug and checks if it's active.
+// Returns nil if form not found or inactive (response already sent).
+func (h *FormsHandler) getActiveFormBySlug(w http.ResponseWriter, r *http.Request, slug string) *store.Form {
+	form, err := h.queries.GetFormBySlug(r.Context(), slug)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			h.renderer.RenderNotFound(w, r)
+		} else {
+			slog.Error("failed to get form", "error", err, "slug", slug)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return nil
+	}
+
+	if !form.IsActive {
+		h.renderer.RenderNotFound(w, r)
+		return nil
+	}
+	return &form
+}
+
+// checkFormExists verifies a form exists by ID for API handlers.
+// Returns false if the form doesn't exist (response already sent).
+func (h *FormsHandler) checkFormExists(w http.ResponseWriter, r *http.Request, formID int64) bool {
+	_, err := h.queries.GetFormByID(r.Context(), formID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Form not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return false
+	}
+	return true
+}
+
+// getSiteName retrieves the site name from config with a default fallback.
+func (h *FormsHandler) getSiteName(ctx context.Context) string {
+	if siteConfig, err := h.queries.GetConfig(ctx, "site_name"); err == nil && siteConfig.Value != "" {
+		return siteConfig.Value
+	}
+	return "oCMS"
+}
+
+// formsBreadcrumbs returns the base breadcrumbs for forms pages.
+func formsBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+		{Label: i18n.T(lang, "nav.forms"), URL: "/admin/forms"},
+	}
+}
+
+// renderFormFormPage renders the form create/edit page with data and breadcrumbs.
+func (h *FormsHandler) renderFormFormPage(w http.ResponseWriter, r *http.Request, data FormFormData, title string, breadcrumbs []render.Breadcrumb) {
+	user := middleware.GetUser(r)
+	if err := h.renderer.Render(w, r, "admin/forms_form", render.TemplateData{
+		Title:       title,
+		User:        user,
+		Data:        data,
+		Breadcrumbs: breadcrumbs,
+	}); err != nil {
+		slog.Error("render error", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
 // FormsListData holds data for the forms list template.
 type FormsListData struct {
 	Forms []FormListItem
@@ -140,7 +340,6 @@ type FormFormData struct {
 
 // NewForm handles GET /admin/forms/new - displays the new form form.
 func (h *FormsHandler) NewForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	data := FormFormData{
@@ -153,24 +352,14 @@ func (h *FormsHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 		IsEdit: false,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/forms_form", render.TemplateData{
-		Title: i18n.T(lang, "forms.new"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.forms"), URL: "/admin/forms"},
-			{Label: i18n.T(lang, "forms.new"), URL: "/admin/forms/new", Active: true},
-		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	breadcrumbs := append(formsBreadcrumbs(lang),
+		render.Breadcrumb{Label: i18n.T(lang, "forms.new"), URL: "/admin/forms/new", Active: true})
+
+	h.renderFormFormPage(w, r, data, i18n.T(lang, "forms.new"), breadcrumbs)
 }
 
 // Create handles POST /admin/forms - creates a new form.
 func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	if err := r.ParseForm(); err != nil {
@@ -179,52 +368,34 @@ func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name := strings.TrimSpace(r.FormValue("name"))
-	slug := strings.TrimSpace(r.FormValue("slug"))
-	title := strings.TrimSpace(r.FormValue("title"))
-	description := strings.TrimSpace(r.FormValue("description"))
-	successMessage := strings.TrimSpace(r.FormValue("success_message"))
-	emailTo := strings.TrimSpace(r.FormValue("email_to"))
-	isActive := r.FormValue("is_active") == "true" || r.FormValue("is_active") == "on"
-
-	formValues := map[string]string{
-		"name":            name,
-		"slug":            slug,
-		"title":           title,
-		"description":     description,
-		"success_message": successMessage,
-		"email_to":        emailTo,
-	}
-	if isActive {
-		formValues["is_active"] = "true"
-	}
-
+	input := parseFormInput(r)
 	validationErrors := make(map[string]string)
 
 	// Validate name
-	if name == "" {
+	if input.Name == "" {
 		validationErrors["name"] = "Name is required"
-	} else if len(name) < 2 {
+	} else if len(input.Name) < 2 {
 		validationErrors["name"] = "Name must be at least 2 characters"
 	}
 
 	// Validate title
-	if title == "" {
+	if input.Title == "" {
 		validationErrors["title"] = "Title is required"
 	}
 
-	// Validate slug
-	if slug == "" {
-		slug = util.Slugify(name)
-		formValues["slug"] = slug
+	// Auto-generate slug if empty
+	if input.Slug == "" {
+		input.Slug = util.Slugify(input.Name)
+		input.FormValues["slug"] = input.Slug
 	}
 
-	if slug == "" {
+	// Validate slug
+	if input.Slug == "" {
 		validationErrors["slug"] = "Slug is required"
-	} else if !util.IsValidSlug(slug) {
+	} else if !util.IsValidSlug(input.Slug) {
 		validationErrors["slug"] = "Invalid slug format"
 	} else {
-		existing, err := h.queries.GetFormBySlug(r.Context(), slug)
+		existing, err := h.queries.GetFormBySlug(r.Context(), input.Slug)
 		if err == nil && existing.ID > 0 {
 			validationErrors["slug"] = "Slug already exists"
 		} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -234,44 +405,35 @@ func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set default success message
-	if successMessage == "" {
-		successMessage = "Thank you for your submission."
-		formValues["success_message"] = successMessage
+	if input.SuccessMessage == "" {
+		input.SuccessMessage = "Thank you for your submission."
+		input.FormValues["success_message"] = input.SuccessMessage
 	}
 
 	if len(validationErrors) > 0 {
 		data := FormFormData{
 			FieldTypes: model.ValidFieldTypes(),
 			Errors:     validationErrors,
-			FormValues: formValues,
+			FormValues: input.FormValues,
 			IsEdit:     false,
 		}
 
-		if err := h.renderer.Render(w, r, "admin/forms_form", render.TemplateData{
-			Title: i18n.T(lang, "forms.new"),
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-				{Label: i18n.T(lang, "nav.forms"), URL: "/admin/forms"},
-				{Label: i18n.T(lang, "forms.new"), URL: "/admin/forms/new", Active: true},
-			},
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		breadcrumbs := append(formsBreadcrumbs(lang),
+			render.Breadcrumb{Label: i18n.T(lang, "forms.new"), URL: "/admin/forms/new", Active: true})
+
+		h.renderFormFormPage(w, r, data, i18n.T(lang, "forms.new"), breadcrumbs)
 		return
 	}
 
 	now := time.Now()
 	form, err := h.queries.CreateForm(r.Context(), store.CreateFormParams{
-		Name:           name,
-		Slug:           slug,
-		Title:          title,
-		Description:    sql.NullString{String: description, Valid: description != ""},
-		SuccessMessage: sql.NullString{String: successMessage, Valid: true}, // Always valid - has default
-		EmailTo:        sql.NullString{String: emailTo, Valid: emailTo != ""},
-		IsActive:       isActive,
+		Name:           input.Name,
+		Slug:           input.Slug,
+		Title:          input.Title,
+		Description:    sql.NullString{String: input.Description, Valid: input.Description != ""},
+		SuccessMessage: sql.NullString{String: input.SuccessMessage, Valid: true}, // Always valid - has default
+		EmailTo:        sql.NullString{String: input.EmailTo, Valid: input.EmailTo != ""},
+		IsActive:       input.IsActive,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	})
@@ -289,26 +451,15 @@ func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // EditForm handles GET /admin/forms/{id} - displays the form builder.
 func (h *FormsHandler) EditForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		h.renderer.SetFlash(r, "Invalid form ID", "error")
-		http.Redirect(w, r, "/admin/forms", http.StatusSeeOther)
+	id := h.parseFormIDParam(w, r)
+	if id == 0 {
 		return
 	}
 
-	form, err := h.queries.GetFormByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Form not found", "error")
-		} else {
-			slog.Error("failed to get form", "error", err, "form_id", id)
-			h.renderer.SetFlash(r, "Error loading form", "error")
-		}
-		http.Redirect(w, r, "/admin/forms", http.StatusSeeOther)
+	form := h.fetchFormByID(w, r, id)
+	if form == nil {
 		return
 	}
 
@@ -319,7 +470,7 @@ func (h *FormsHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := FormFormData{
-		Form:       &form,
+		Form:       form,
 		Fields:     fields,
 		FieldTypes: model.ValidFieldTypes(),
 		Errors:     make(map[string]string),
@@ -327,43 +478,23 @@ func (h *FormsHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		IsEdit:     true,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/forms_form", render.TemplateData{
-		Title: fmt.Sprintf("Edit Form - %s", form.Name),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.forms"), URL: "/admin/forms"},
-			{Label: form.Name, URL: fmt.Sprintf("/admin/forms/%d", form.ID), Active: true},
-		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	breadcrumbs := append(formsBreadcrumbs(lang),
+		render.Breadcrumb{Label: form.Name, URL: fmt.Sprintf("/admin/forms/%d", form.ID), Active: true})
+
+	h.renderFormFormPage(w, r, data, fmt.Sprintf("Edit Form - %s", form.Name), breadcrumbs)
 }
 
 // Update handles PUT /admin/forms/{id} - updates a form.
 func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		h.renderer.SetFlash(r, "Invalid form ID", "error")
-		http.Redirect(w, r, "/admin/forms", http.StatusSeeOther)
+	id := h.parseFormIDParam(w, r)
+	if id == 0 {
 		return
 	}
 
-	form, err := h.queries.GetFormByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Form not found", "error")
-		} else {
-			slog.Error("failed to get form", "error", err, "form_id", id)
-			h.renderer.SetFlash(r, "Error loading form", "error")
-		}
-		http.Redirect(w, r, "/admin/forms", http.StatusSeeOther)
+	form := h.fetchFormByID(w, r, id)
+	if form == nil {
 		return
 	}
 
@@ -373,49 +504,30 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name := strings.TrimSpace(r.FormValue("name"))
-	slug := strings.TrimSpace(r.FormValue("slug"))
-	title := strings.TrimSpace(r.FormValue("title"))
-	description := strings.TrimSpace(r.FormValue("description"))
-	successMessage := strings.TrimSpace(r.FormValue("success_message"))
-	emailTo := strings.TrimSpace(r.FormValue("email_to"))
-	isActive := r.FormValue("is_active") == "true" || r.FormValue("is_active") == "on"
-
-	formValues := map[string]string{
-		"name":            name,
-		"slug":            slug,
-		"title":           title,
-		"description":     description,
-		"success_message": successMessage,
-		"email_to":        emailTo,
-	}
-	if isActive {
-		formValues["is_active"] = "true"
-	}
-
+	input := parseFormInput(r)
 	validationErrors := make(map[string]string)
 
-	if name == "" {
+	if input.Name == "" {
 		validationErrors["name"] = "Name is required"
-	} else if len(name) < 2 {
+	} else if len(input.Name) < 2 {
 		validationErrors["name"] = "Name must be at least 2 characters"
 	}
 
-	if title == "" {
+	if input.Title == "" {
 		validationErrors["title"] = "Title is required"
 	}
 
-	if slug == "" {
-		slug = util.Slugify(name)
-		formValues["slug"] = slug
+	if input.Slug == "" {
+		input.Slug = util.Slugify(input.Name)
+		input.FormValues["slug"] = input.Slug
 	}
 
-	if slug == "" {
+	if input.Slug == "" {
 		validationErrors["slug"] = "Slug is required"
-	} else if !util.IsValidSlug(slug) {
+	} else if !util.IsValidSlug(input.Slug) {
 		validationErrors["slug"] = "Invalid slug format"
-	} else if slug != form.Slug {
-		existing, err := h.queries.GetFormBySlug(r.Context(), slug)
+	} else if input.Slug != form.Slug {
+		existing, err := h.queries.GetFormBySlug(r.Context(), input.Slug)
 		if err == nil && existing.ID > 0 && existing.ID != id {
 			validationErrors["slug"] = "Slug already exists"
 		} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -424,49 +536,40 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if successMessage == "" {
-		successMessage = "Thank you for your submission."
-		formValues["success_message"] = successMessage
+	if input.SuccessMessage == "" {
+		input.SuccessMessage = "Thank you for your submission."
+		input.FormValues["success_message"] = input.SuccessMessage
 	}
 
 	if len(validationErrors) > 0 {
 		fields, _ := h.queries.GetFormFields(r.Context(), id)
 
 		data := FormFormData{
-			Form:       &form,
+			Form:       form,
 			Fields:     fields,
 			FieldTypes: model.ValidFieldTypes(),
 			Errors:     validationErrors,
-			FormValues: formValues,
+			FormValues: input.FormValues,
 			IsEdit:     true,
 		}
 
-		if err := h.renderer.Render(w, r, "admin/forms_form", render.TemplateData{
-			Title: fmt.Sprintf("Edit Form - %s", form.Name),
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-				{Label: i18n.T(lang, "nav.forms"), URL: "/admin/forms"},
-				{Label: form.Name, URL: fmt.Sprintf("/admin/forms/%d", form.ID), Active: true},
-			},
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		breadcrumbs := append(formsBreadcrumbs(lang),
+			render.Breadcrumb{Label: form.Name, URL: fmt.Sprintf("/admin/forms/%d", form.ID), Active: true})
+
+		h.renderFormFormPage(w, r, data, fmt.Sprintf("Edit Form - %s", form.Name), breadcrumbs)
 		return
 	}
 
 	now := time.Now()
-	_, err = h.queries.UpdateForm(r.Context(), store.UpdateFormParams{
+	_, err := h.queries.UpdateForm(r.Context(), store.UpdateFormParams{
 		ID:             id,
-		Name:           name,
-		Slug:           slug,
-		Title:          title,
-		Description:    sql.NullString{String: description, Valid: description != ""},
-		SuccessMessage: sql.NullString{String: successMessage, Valid: true}, // Always valid - has default
-		EmailTo:        sql.NullString{String: emailTo, Valid: emailTo != ""},
-		IsActive:       isActive,
+		Name:           input.Name,
+		Slug:           input.Slug,
+		Title:          input.Title,
+		Description:    sql.NullString{String: input.Description, Valid: input.Description != ""},
+		SuccessMessage: sql.NullString{String: input.SuccessMessage, Valid: true}, // Always valid - has default
+		EmailTo:        sql.NullString{String: input.EmailTo, Valid: input.EmailTo != ""},
+		IsActive:       input.IsActive,
 		UpdatedAt:      now,
 	})
 	if err != nil {
@@ -533,20 +636,12 @@ type AddFieldRequest struct {
 
 // AddField handles POST /admin/forms/{id}/fields - adds a form field.
 func (h *FormsHandler) AddField(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	formID, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid form ID", http.StatusBadRequest)
+	formID := parseFieldIDParam(w, r, "id")
+	if formID == 0 {
 		return
 	}
 
-	_, err = h.queries.GetFormByID(r.Context(), formID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Form not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	if !h.checkFormExists(w, r, formID) {
 		return
 	}
 
@@ -556,29 +651,9 @@ func (h *FormsHandler) AddField(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate
-	if req.Label == "" {
-		http.Error(w, "Label is required", http.StatusBadRequest)
+	if errMsg := validateFieldRequest(&req); errMsg != "" {
+		http.Error(w, errMsg, http.StatusBadRequest)
 		return
-	}
-
-	if !model.IsValidFieldType(req.Type) {
-		http.Error(w, "Invalid field type", http.StatusBadRequest)
-		return
-	}
-
-	// Generate name from label if not provided
-	if req.Name == "" {
-		req.Name = util.Slugify(req.Label)
-		req.Name = strings.ReplaceAll(req.Name, "-", "_")
-	}
-
-	// Set default options
-	if req.Options == "" {
-		req.Options = "[]"
-	}
-	if req.Validation == "" {
-		req.Validation = "{}"
 	}
 
 	// Get max position
@@ -634,61 +709,30 @@ type UpdateFieldRequest struct {
 
 // UpdateField handles PUT /admin/forms/{id}/fields/{fieldId} - updates a form field.
 func (h *FormsHandler) UpdateField(w http.ResponseWriter, r *http.Request) {
-	formIDStr := chi.URLParam(r, "id")
-	formID, err := strconv.ParseInt(formIDStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid form ID", http.StatusBadRequest)
+	formID := parseFieldIDParam(w, r, "id")
+	if formID == 0 {
 		return
 	}
 
-	fieldIDStr := chi.URLParam(r, "fieldId")
-	fieldID, err := strconv.ParseInt(fieldIDStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid field ID", http.StatusBadRequest)
+	fieldID := parseFieldIDParam(w, r, "fieldId")
+	if fieldID == 0 {
 		return
 	}
 
-	field, err := h.queries.GetFormFieldByID(r.Context(), fieldID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Field not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	field := h.fetchFieldByID(w, r, fieldID, formID)
+	if field == nil {
 		return
 	}
 
-	if field.FormID != formID {
-		http.Error(w, "Field does not belong to this form", http.StatusBadRequest)
-		return
-	}
-
-	var req UpdateFieldRequest
+	var req AddFieldRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if req.Label == "" {
-		http.Error(w, "Label is required", http.StatusBadRequest)
+	if errMsg := validateFieldRequest(&req); errMsg != "" {
+		http.Error(w, errMsg, http.StatusBadRequest)
 		return
-	}
-
-	if !model.IsValidFieldType(req.Type) {
-		http.Error(w, "Invalid field type", http.StatusBadRequest)
-		return
-	}
-
-	if req.Name == "" {
-		req.Name = util.Slugify(req.Label)
-		req.Name = strings.ReplaceAll(req.Name, "-", "_")
-	}
-
-	if req.Options == "" {
-		req.Options = "[]"
-	}
-	if req.Validation == "" {
-		req.Validation = "{}"
 	}
 
 	now := time.Now()
@@ -720,36 +764,21 @@ func (h *FormsHandler) UpdateField(w http.ResponseWriter, r *http.Request) {
 
 // DeleteField handles DELETE /admin/forms/{id}/fields/{fieldId} - deletes a form field.
 func (h *FormsHandler) DeleteField(w http.ResponseWriter, r *http.Request) {
-	formIDStr := chi.URLParam(r, "id")
-	formID, err := strconv.ParseInt(formIDStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid form ID", http.StatusBadRequest)
+	formID := parseFieldIDParam(w, r, "id")
+	if formID == 0 {
 		return
 	}
 
-	fieldIDStr := chi.URLParam(r, "fieldId")
-	fieldID, err := strconv.ParseInt(fieldIDStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid field ID", http.StatusBadRequest)
+	fieldID := parseFieldIDParam(w, r, "fieldId")
+	if fieldID == 0 {
 		return
 	}
 
-	field, err := h.queries.GetFormFieldByID(r.Context(), fieldID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Field not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	if h.fetchFieldByID(w, r, fieldID, formID) == nil {
 		return
 	}
 
-	if field.FormID != formID {
-		http.Error(w, "Field does not belong to this form", http.StatusBadRequest)
-		return
-	}
-
-	err = h.queries.DeleteFormField(r.Context(), fieldID)
+	err := h.queries.DeleteFormField(r.Context(), fieldID)
 	if err != nil {
 		slog.Error("failed to delete form field", "error", err)
 		http.Error(w, "Error deleting field", http.StatusInternalServerError)
@@ -769,20 +798,12 @@ type ReorderFieldsRequest struct {
 
 // ReorderFields handles POST /admin/forms/{id}/fields/reorder - reorders form fields.
 func (h *FormsHandler) ReorderFields(w http.ResponseWriter, r *http.Request) {
-	formIDStr := chi.URLParam(r, "id")
-	formID, err := strconv.ParseInt(formIDStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid form ID", http.StatusBadRequest)
+	formID := parseFieldIDParam(w, r, "id")
+	if formID == 0 {
 		return
 	}
 
-	_, err = h.queries.GetFormByID(r.Context(), formID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Form not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	if !h.checkFormExists(w, r, formID) {
 		return
 	}
 
@@ -844,20 +865,8 @@ type PublicFormData struct {
 func (h *FormsHandler) Show(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 
-	form, err := h.queries.GetFormBySlug(r.Context(), slug)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.RenderNotFound(w, r)
-		} else {
-			slog.Error("failed to get form", "error", err, "slug", slug)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
-		return
-	}
-
-	// Check if form is active
-	if !form.IsActive {
-		h.renderer.RenderNotFound(w, r)
+	form := h.getActiveFormBySlug(w, r, slug)
+	if form == nil {
 		return
 	}
 
@@ -867,25 +876,14 @@ func (h *FormsHandler) Show(w http.ResponseWriter, r *http.Request) {
 		fields = []store.FormField{}
 	}
 
-	// Generate CSRF token
-	csrfToken := h.sessionManager.Token(r.Context())
-
-	// Get site name from config
-	siteName := "oCMS"
-	if siteConfig, err := h.queries.GetConfig(r.Context(), "site_name"); err == nil {
-		if siteConfig.Value != "" {
-			siteName = siteConfig.Value
-		}
-	}
-
 	data := PublicFormData{
-		Form:      form,
+		Form:      *form,
 		Fields:    fields,
 		Errors:    make(map[string]string),
 		Values:    make(map[string]string),
 		Success:   false,
-		CSRFToken: csrfToken,
-		SiteName:  siteName,
+		CSRFToken: h.sessionManager.Token(r.Context()),
+		SiteName:  h.getSiteName(r.Context()),
 	}
 
 	if err := h.renderer.Render(w, r, "public/form", render.TemplateData{
@@ -901,20 +899,8 @@ func (h *FormsHandler) Show(w http.ResponseWriter, r *http.Request) {
 func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 
-	form, err := h.queries.GetFormBySlug(r.Context(), slug)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.RenderNotFound(w, r)
-		} else {
-			slog.Error("failed to get form", "error", err, "slug", slug)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
-		return
-	}
-
-	// Check if form is active
-	if !form.IsActive {
-		h.renderer.RenderNotFound(w, r)
+	form := h.getActiveFormBySlug(w, r, slug)
+	if form == nil {
 		return
 	}
 
@@ -937,7 +923,7 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	if honeypot != "" {
 		// Bot detected, silently pretend success
 		slog.Info("honeypot triggered", "form_slug", slug, "ip", r.RemoteAddr)
-		h.renderFormSuccess(w, r, form, fields)
+		h.renderFormSuccess(w, r, *form, fields)
 		return
 	}
 
@@ -946,7 +932,7 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	if csrfToken == "" || csrfToken != h.sessionManager.Token(r.Context()) {
 		slog.Warn("invalid CSRF token", "form_slug", slug, "ip", r.RemoteAddr)
 		// Don't reveal it's a CSRF issue, just show generic error
-		h.renderFormWithErrors(w, r, form, fields, map[string]string{"_form": "Session expired. Please try again."}, r.Form)
+		h.renderFormWithErrors(w, r, *form, fields, map[string]string{"_form": "Session expired. Please try again."}, r.Form)
 		return
 	}
 
@@ -1006,7 +992,7 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
-		h.renderFormWithErrors(w, r, form, fields, validationErrors, r.Form)
+		h.renderFormWithErrors(w, r, *form, fields, validationErrors, r.Form)
 		return
 	}
 
@@ -1029,14 +1015,14 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to save form submission", "error", err, "form_id", form.ID)
-		h.renderFormWithErrors(w, r, form, fields, map[string]string{"_form": "Failed to save submission. Please try again."}, r.Form)
+		h.renderFormWithErrors(w, r, *form, fields, map[string]string{"_form": "Failed to save submission. Please try again."}, r.Form)
 		return
 	}
 
 	slog.Info("form submission saved", "form_id", form.ID, "form_slug", slug)
 
 	// Dispatch form.submitted webhook event
-	h.dispatchFormEvent(r.Context(), form, submission.ID, values)
+	h.dispatchFormEvent(r.Context(), *form, submission.ID, values)
 
 	// TODO: Send notification email if configured
 	// if form.EmailTo.Valid && form.EmailTo.String != "" {
@@ -1044,7 +1030,7 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	// }
 
 	// Render success
-	h.renderFormSuccess(w, r, form, fields)
+	h.renderFormSuccess(w, r, *form, fields)
 }
 
 // renderFormWithErrors renders the form with validation errors.
@@ -1056,23 +1042,14 @@ func (h *FormsHandler) renderFormWithErrors(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	csrfToken := h.sessionManager.Token(r.Context())
-
-	siteName := "oCMS"
-	if siteConfig, err := h.queries.GetConfig(r.Context(), "site_name"); err == nil {
-		if siteConfig.Value != "" {
-			siteName = siteConfig.Value
-		}
-	}
-
 	data := PublicFormData{
 		Form:      form,
 		Fields:    fields,
 		Errors:    errors,
 		Values:    values,
 		Success:   false,
-		CSRFToken: csrfToken,
-		SiteName:  siteName,
+		CSRFToken: h.sessionManager.Token(r.Context()),
+		SiteName:  h.getSiteName(r.Context()),
 	}
 
 	if err := h.renderer.Render(w, r, "public/form", render.TemplateData{
@@ -1086,18 +1063,11 @@ func (h *FormsHandler) renderFormWithErrors(w http.ResponseWriter, r *http.Reque
 
 // renderFormSuccess renders the form success page.
 func (h *FormsHandler) renderFormSuccess(w http.ResponseWriter, r *http.Request, form store.Form, fields []store.FormField) {
-	siteName := "oCMS"
-	if siteConfig, err := h.queries.GetConfig(r.Context(), "site_name"); err == nil {
-		if siteConfig.Value != "" {
-			siteName = siteConfig.Value
-		}
-	}
-
 	data := PublicFormData{
 		Form:     form,
 		Fields:   fields,
 		Success:  true,
-		SiteName: siteName,
+		SiteName: h.getSiteName(r.Context()),
 	}
 
 	if err := h.renderer.Render(w, r, "public/form", render.TemplateData{
@@ -1176,23 +1146,13 @@ func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	idStr := chi.URLParam(r, "id")
-	formID, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		h.renderer.SetFlash(r, "Invalid form ID", "error")
-		http.Redirect(w, r, "/admin/forms", http.StatusSeeOther)
+	formID := h.parseFormIDParam(w, r)
+	if formID == 0 {
 		return
 	}
 
-	form, err := h.queries.GetFormByID(r.Context(), formID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Form not found", "error")
-		} else {
-			slog.Error("failed to get form", "error", err, "form_id", formID)
-			h.renderer.SetFlash(r, "Error loading form", "error")
-		}
-		http.Redirect(w, r, "/admin/forms", http.StatusSeeOther)
+	form := h.fetchFormByID(w, r, formID)
+	if form == nil {
 		return
 	}
 
@@ -1262,7 +1222,7 @@ func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 	unreadCount, _ := h.queries.CountUnreadSubmissions(r.Context(), formID)
 
 	data := SubmissionsListData{
-		Form:        form,
+		Form:        *form,
 		Fields:      fields,
 		Submissions: submissionItems,
 		TotalCount:  totalCount,
@@ -1270,16 +1230,15 @@ func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 		Pagination:  BuildAdminPagination(page, int(totalCount), perPage, fmt.Sprintf("/admin/forms/%d/submissions", formID), r.URL.Query()),
 	}
 
+	breadcrumbs := append(formsBreadcrumbs(lang),
+		render.Breadcrumb{Label: form.Name, URL: fmt.Sprintf("/admin/forms/%d", form.ID)},
+		render.Breadcrumb{Label: i18n.T(lang, "forms.submissions"), URL: fmt.Sprintf("/admin/forms/%d/submissions", form.ID), Active: true})
+
 	if err := h.renderer.Render(w, r, "admin/forms_submissions", render.TemplateData{
-		Title: fmt.Sprintf("Submissions - %s", form.Name),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.forms"), URL: "/admin/forms"},
-			{Label: form.Name, URL: fmt.Sprintf("/admin/forms/%d", form.ID)},
-			{Label: i18n.T(lang, "forms.submissions"), URL: fmt.Sprintf("/admin/forms/%d/submissions", form.ID), Active: true},
-		},
+		Title:       fmt.Sprintf("Submissions - %s", form.Name),
+		User:        user,
+		Data:        data,
+		Breadcrumbs: breadcrumbs,
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -1299,11 +1258,8 @@ func (h *FormsHandler) ViewSubmission(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	formIDStr := chi.URLParam(r, "id")
-	formID, err := strconv.ParseInt(formIDStr, 10, 64)
-	if err != nil {
-		h.renderer.SetFlash(r, "Invalid form ID", "error")
-		http.Redirect(w, r, "/admin/forms", http.StatusSeeOther)
+	formID := h.parseFormIDParam(w, r)
+	if formID == 0 {
 		return
 	}
 
@@ -1315,15 +1271,8 @@ func (h *FormsHandler) ViewSubmission(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	form, err := h.queries.GetFormByID(r.Context(), formID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Form not found", "error")
-		} else {
-			slog.Error("failed to get form", "error", err, "form_id", formID)
-			h.renderer.SetFlash(r, "Error loading form", "error")
-		}
-		http.Redirect(w, r, "/admin/forms", http.StatusSeeOther)
+	form := h.fetchFormByID(w, r, formID)
+	if form == nil {
 		return
 	}
 
@@ -1368,23 +1317,22 @@ func (h *FormsHandler) ViewSubmission(w http.ResponseWriter, r *http.Request) {
 	}
 
 	viewData := SubmissionViewData{
-		Form:       form,
+		Form:       *form,
 		Fields:     fields,
 		Submission: submission,
 		Data:       data,
 	}
 
+	breadcrumbs := append(formsBreadcrumbs(lang),
+		render.Breadcrumb{Label: form.Name, URL: fmt.Sprintf("/admin/forms/%d", form.ID)},
+		render.Breadcrumb{Label: i18n.T(lang, "forms.submissions"), URL: fmt.Sprintf("/admin/forms/%d/submissions", form.ID)},
+		render.Breadcrumb{Label: fmt.Sprintf("#%d", submission.ID), URL: fmt.Sprintf("/admin/forms/%d/submissions/%d", form.ID, submission.ID), Active: true})
+
 	if err := h.renderer.Render(w, r, "admin/forms_submission_view", render.TemplateData{
-		Title: fmt.Sprintf("Submission #%d - %s", submission.ID, form.Name),
-		User:  user,
-		Data:  viewData,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.forms"), URL: "/admin/forms"},
-			{Label: form.Name, URL: fmt.Sprintf("/admin/forms/%d", form.ID)},
-			{Label: i18n.T(lang, "forms.submissions"), URL: fmt.Sprintf("/admin/forms/%d/submissions", form.ID)},
-			{Label: fmt.Sprintf("#%d", submission.ID), URL: fmt.Sprintf("/admin/forms/%d/submissions/%d", form.ID, submission.ID), Active: true},
-		},
+		Title:       fmt.Sprintf("Submission #%d - %s", submission.ID, form.Name),
+		User:        user,
+		Data:        viewData,
+		Breadcrumbs: breadcrumbs,
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -1393,17 +1341,13 @@ func (h *FormsHandler) ViewSubmission(w http.ResponseWriter, r *http.Request) {
 
 // DeleteSubmission handles DELETE /admin/forms/{id}/submissions/{subId} - deletes a submission.
 func (h *FormsHandler) DeleteSubmission(w http.ResponseWriter, r *http.Request) {
-	formIDStr := chi.URLParam(r, "id")
-	formID, err := strconv.ParseInt(formIDStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid form ID", http.StatusBadRequest)
+	formID := parseFieldIDParam(w, r, "id")
+	if formID == 0 {
 		return
 	}
 
-	subIDStr := chi.URLParam(r, "subId")
-	subID, err := strconv.ParseInt(subIDStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid submission ID", http.StatusBadRequest)
+	subID := parseFieldIDParam(w, r, "subId")
+	if subID == 0 {
 		return
 	}
 
@@ -1444,23 +1388,16 @@ func (h *FormsHandler) DeleteSubmission(w http.ResponseWriter, r *http.Request) 
 
 // ExportSubmissions handles POST /admin/forms/{id}/submissions/export - exports submissions as CSV.
 func (h *FormsHandler) ExportSubmissions(w http.ResponseWriter, r *http.Request) {
-	formIDStr := chi.URLParam(r, "id")
-	formID, err := strconv.ParseInt(formIDStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid form ID", http.StatusBadRequest)
+	formID := parseFieldIDParam(w, r, "id")
+	if formID == 0 {
 		return
 	}
 
-	form, err := h.queries.GetFormByID(r.Context(), formID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Form not found", http.StatusNotFound)
-		} else {
-			slog.Error("failed to get form", "error", err, "form_id", formID)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	if !h.checkFormExists(w, r, formID) {
 		return
 	}
+
+	form, _ := h.queries.GetFormByID(r.Context(), formID)
 
 	// Get all fields
 	fields, err := h.queries.GetFormFields(r.Context(), formID)

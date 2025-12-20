@@ -131,19 +131,8 @@ func (h *APIKeysHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 		IsEdit:      false,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/api_keys_form", render.TemplateData{
-		Title: i18n.T(lang, "api_keys.new_key"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.api_keys"), URL: "/admin/api-keys"},
-			{Label: i18n.T(lang, "api_keys.new_key"), URL: "/admin/api-keys/new", Active: true},
-		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	h.renderAPIKeyForm(w, r, user, lang, i18n.T(lang, "api_keys.new_key"), data,
+		i18n.T(lang, "api_keys.new_key"), "/admin/api-keys/new")
 }
 
 // Create handles POST /admin/api-keys - creates a new API key.
@@ -190,20 +179,8 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 			FormValues:  formValues,
 			IsEdit:      false,
 		}
-
-		if err := h.renderer.Render(w, r, "admin/api_keys_form", render.TemplateData{
-			Title: i18n.T(lang, "api_keys.new_key"),
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-				{Label: i18n.T(lang, "nav.api_keys"), URL: "/admin/api-keys"},
-				{Label: i18n.T(lang, "api_keys.new_key"), URL: "/admin/api-keys/new", Active: true},
-			},
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		h.renderAPIKeyForm(w, r, user, lang, i18n.T(lang, "api_keys.new_key"), data,
+			i18n.T(lang, "api_keys.new_key"), "/admin/api-keys/new")
 		return
 	}
 
@@ -253,20 +230,8 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 		IsEdit:       false,
 		GeneratedKey: rawKey,
 	}
-
-	if err := h.renderer.Render(w, r, "admin/api_keys_form", render.TemplateData{
-		Title: i18n.T(lang, "api_keys.key_created"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.api_keys"), URL: "/admin/api-keys"},
-			{Label: i18n.T(lang, "api_keys.new_key"), URL: "/admin/api-keys/new", Active: true},
-		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	h.renderAPIKeyForm(w, r, user, lang, i18n.T(lang, "api_keys.key_created"), data,
+		i18n.T(lang, "api_keys.new_key"), "/admin/api-keys/new")
 }
 
 // EditForm handles GET /admin/api-keys/{id} - displays the edit API key form.
@@ -302,20 +267,8 @@ func (h *APIKeysHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		},
 		IsEdit: true,
 	}
-
-	if err := h.renderer.Render(w, r, "admin/api_keys_form", render.TemplateData{
-		Title: i18n.T(lang, "api_keys.edit_key"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.api_keys"), URL: "/admin/api-keys"},
-			{Label: apiKey.Name, URL: "/admin/api-keys/" + idStr, Active: true},
-		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	h.renderAPIKeyForm(w, r, user, lang, i18n.T(lang, "api_keys.edit_key"), data,
+		apiKey.Name, "/admin/api-keys/"+idStr)
 }
 
 // Update handles PUT /admin/api-keys/{id} - updates an existing API key.
@@ -376,20 +329,8 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 			FormValues:  formValues,
 			IsEdit:      true,
 		}
-
-		if err := h.renderer.Render(w, r, "admin/api_keys_form", render.TemplateData{
-			Title: i18n.T(lang, "api_keys.edit_key"),
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-				{Label: i18n.T(lang, "nav.api_keys"), URL: "/admin/api-keys"},
-				{Label: apiKey.Name, URL: "/admin/api-keys/" + idStr, Active: true},
-			},
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		h.renderAPIKeyForm(w, r, user, lang, i18n.T(lang, "api_keys.edit_key"), data,
+			apiKey.Name, "/admin/api-keys/"+idStr)
 		return
 	}
 
@@ -553,4 +494,21 @@ func (h *APIKeysHandler) fetchAPIKey(w http.ResponseWriter, r *http.Request, id 
 		return store.ApiKey{}, false
 	}
 	return apiKey, true
+}
+
+// renderAPIKeyForm renders the API key form with appropriate breadcrumbs.
+func (h *APIKeysHandler) renderAPIKeyForm(w http.ResponseWriter, r *http.Request, user any, lang string, title string, data APIKeyFormData, breadcrumbLabel string, breadcrumbURL string) {
+	if err := h.renderer.Render(w, r, "admin/api_keys_form", render.TemplateData{
+		Title: title,
+		User:  user,
+		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.api_keys"), URL: "/admin/api-keys"},
+			{Label: breadcrumbLabel, URL: breadcrumbURL, Active: true},
+		},
+	}); err != nil {
+		slog.Error("render error", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
 }

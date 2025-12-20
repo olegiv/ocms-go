@@ -70,6 +70,16 @@ func executeAuthRequest(handler http.Handler, method, path, authHeader string) *
 	return w
 }
 
+// executeWithAPIKey creates a test request with an API key in context and executes it.
+func executeWithAPIKey(handler http.Handler, method, path string, apiKey store.ApiKey) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, path, nil)
+	ctx := context.WithValue(req.Context(), ContextKeyAPIKey, apiKey)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	return w
+}
+
 // insertTestAPIKey inserts a test API key and returns the raw key.
 func insertTestAPIKey(t *testing.T, db *sql.DB, name string, permissions []string, isActive bool, expiresAt *time.Time) string {
 	t.Helper()
@@ -335,14 +345,8 @@ func TestOptionalAPIKeyAuth_ValidKey(t *testing.T) {
 }
 
 func TestRequirePermission_NoAPIKey(t *testing.T) {
-	handler := RequirePermission("pages:read")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	req := httptest.NewRequest("GET", "/api/test", nil)
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, req)
+	handler := RequirePermission("pages:read")(simpleOKHandler)
+	w := executeRequest(handler, "GET", "/api/test")
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
@@ -350,21 +354,9 @@ func TestRequirePermission_NoAPIKey(t *testing.T) {
 }
 
 func TestRequirePermission_HasPermission(t *testing.T) {
-	handler := RequirePermission("pages:read")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	// Create a request with API key in context
-	apiKey := store.ApiKey{
-		ID:          1,
-		Permissions: `["pages:read", "pages:write"]`,
-	}
-	req := httptest.NewRequest("GET", "/api/test", nil)
-	ctx := context.WithValue(req.Context(), ContextKeyAPIKey, apiKey)
-	req = req.WithContext(ctx)
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, req)
+	handler := RequirePermission("pages:read")(simpleOKHandler)
+	apiKey := store.ApiKey{ID: 1, Permissions: `["pages:read", "pages:write"]`}
+	w := executeWithAPIKey(handler, "GET", "/api/test", apiKey)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
@@ -372,21 +364,9 @@ func TestRequirePermission_HasPermission(t *testing.T) {
 }
 
 func TestRequirePermission_LacksPermission(t *testing.T) {
-	handler := RequirePermission("pages:write")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	// Create a request with API key that only has read permission
-	apiKey := store.ApiKey{
-		ID:          1,
-		Permissions: `["pages:read"]`,
-	}
-	req := httptest.NewRequest("GET", "/api/test", nil)
-	ctx := context.WithValue(req.Context(), ContextKeyAPIKey, apiKey)
-	req = req.WithContext(ctx)
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, req)
+	handler := RequirePermission("pages:write")(simpleOKHandler)
+	apiKey := store.ApiKey{ID: 1, Permissions: `["pages:read"]`}
+	w := executeWithAPIKey(handler, "GET", "/api/test", apiKey)
 
 	if w.Code != http.StatusForbidden {
 		t.Errorf("expected status %d, got %d", http.StatusForbidden, w.Code)
@@ -394,20 +374,9 @@ func TestRequirePermission_LacksPermission(t *testing.T) {
 }
 
 func TestRequireAnyPermission_HasOnePermission(t *testing.T) {
-	handler := RequireAnyPermission("pages:read", "pages:write")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	apiKey := store.ApiKey{
-		ID:          1,
-		Permissions: `["pages:read"]`, // Only has read, not write
-	}
-	req := httptest.NewRequest("GET", "/api/test", nil)
-	ctx := context.WithValue(req.Context(), ContextKeyAPIKey, apiKey)
-	req = req.WithContext(ctx)
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, req)
+	handler := RequireAnyPermission("pages:read", "pages:write")(simpleOKHandler)
+	apiKey := store.ApiKey{ID: 1, Permissions: `["pages:read"]`}
+	w := executeWithAPIKey(handler, "GET", "/api/test", apiKey)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
@@ -415,20 +384,9 @@ func TestRequireAnyPermission_HasOnePermission(t *testing.T) {
 }
 
 func TestRequireAnyPermission_LacksAllPermissions(t *testing.T) {
-	handler := RequireAnyPermission("media:read", "media:write")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	apiKey := store.ApiKey{
-		ID:          1,
-		Permissions: `["pages:read"]`, // Has pages, not media
-	}
-	req := httptest.NewRequest("GET", "/api/test", nil)
-	ctx := context.WithValue(req.Context(), ContextKeyAPIKey, apiKey)
-	req = req.WithContext(ctx)
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, req)
+	handler := RequireAnyPermission("media:read", "media:write")(simpleOKHandler)
+	apiKey := store.ApiKey{ID: 1, Permissions: `["pages:read"]`}
+	w := executeWithAPIKey(handler, "GET", "/api/test", apiKey)
 
 	if w.Code != http.StatusForbidden {
 		t.Errorf("expected status %d, got %d", http.StatusForbidden, w.Code)
@@ -436,15 +394,8 @@ func TestRequireAnyPermission_LacksAllPermissions(t *testing.T) {
 }
 
 func TestAPIRateLimit_NoAPIKey(t *testing.T) {
-	handler := APIRateLimit(10, 5)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	// Without API key, should pass through
-	req := httptest.NewRequest("GET", "/api/test", nil)
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, req)
+	handler := APIRateLimit(10, 5)(simpleOKHandler)
+	w := executeRequest(handler, "GET", "/api/test")
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)

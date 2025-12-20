@@ -79,57 +79,11 @@ func BuildAdminPagination(currentPage, totalItems, perPage int, baseURL string, 
 		return fmt.Sprintf("%s?page=%d", baseURL, page)
 	}
 
-	// Build page links (show max 5 pages around current with ellipsis)
-	start := currentPage - 2
-	end := currentPage + 2
-	if start < 1 {
-		start = 1
-		end = 5
-	}
-	if end > totalPages {
-		end = totalPages
-		start = end - 4
-		if start < 1 {
-			start = 1
-		}
-	}
-
-	// Add first page and ellipsis if needed
-	if start > 1 {
-		pagination.Pages = append(pagination.Pages, AdminPaginationPage{
-			Number:    1,
-			URL:       buildURL(1),
-			IsCurrent: false,
+	// Build page links using shared helper
+	pagination.Pages = buildPaginationPages(currentPage, totalPages, buildURL,
+		func(number int, url string, isCurrent, isEllipsis bool) AdminPaginationPage {
+			return AdminPaginationPage{Number: number, URL: url, IsCurrent: isCurrent, IsEllipsis: isEllipsis}
 		})
-		if start > 2 {
-			pagination.Pages = append(pagination.Pages, AdminPaginationPage{
-				IsEllipsis: true,
-			})
-		}
-	}
-
-	// Add page numbers
-	for i := start; i <= end; i++ {
-		pagination.Pages = append(pagination.Pages, AdminPaginationPage{
-			Number:    i,
-			URL:       buildURL(i),
-			IsCurrent: i == currentPage,
-		})
-	}
-
-	// Add ellipsis and last page if needed
-	if end < totalPages {
-		if end < totalPages-1 {
-			pagination.Pages = append(pagination.Pages, AdminPaginationPage{
-				IsEllipsis: true,
-			})
-		}
-		pagination.Pages = append(pagination.Pages, AdminPaginationPage{
-			Number:    totalPages,
-			URL:       buildURL(totalPages),
-			IsCurrent: false,
-		})
-	}
 
 	return pagination
 }
