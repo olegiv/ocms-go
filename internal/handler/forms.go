@@ -1259,10 +1259,6 @@ func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 	// Get counts
 	totalCount, _ := h.queries.CountFormSubmissions(r.Context(), formID)
 	unreadCount, _ := h.queries.CountUnreadSubmissions(r.Context(), formID)
-	totalPages := int(totalCount) / perPage
-	if int(totalCount)%perPage > 0 {
-		totalPages++
-	}
 
 	data := SubmissionsListData{
 		Form:        form,

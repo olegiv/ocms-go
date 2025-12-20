@@ -149,8 +149,6 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 	tagIDStr := r.URL.Query().Get("tag")
 	pageStr := r.URL.Query().Get("page")
 	perPageStr := r.URL.Query().Get("per_page")
-	sortBy := r.URL.Query().Get("sort")
-	order := r.URL.Query().Get("order")
 	include := r.URL.Query().Get("include")
 
 	// Pagination defaults
@@ -181,22 +179,6 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 	// Default to published for unauthenticated requests
 	if !isAuthenticated {
 		status = model.PageStatusPublished
-	}
-
-	// Validate sort options
-	if sortBy == "" {
-		sortBy = "created_at"
-	}
-	validSorts := map[string]bool{"created_at": true, "updated_at": true, "published_at": true, "title": true}
-	if !validSorts[sortBy] {
-		sortBy = "created_at"
-	}
-
-	if order == "" {
-		order = "desc"
-	}
-	if order != "asc" && order != "desc" {
-		order = "desc"
 	}
 
 	var pages []store.Page
