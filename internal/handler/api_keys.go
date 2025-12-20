@@ -169,20 +169,20 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 
 	// Name validation
 	if name == "" {
-		errors["name"] = "Name is required"
+		validationErrors["name"] = "Name is required"
 	} else if len(name) < 3 {
-		errors["name"] = "Name must be at least 3 characters"
+		validationErrors["name"] = "Name must be at least 3 characters"
 	} else if len(name) > 100 {
-		errors["name"] = "Name must be less than 100 characters"
+		validationErrors["name"] = "Name must be less than 100 characters"
 	}
 
 	// Permissions validation
 	if len(permissions) == 0 {
-		errors["permissions"] = "At least one permission is required"
+		validationErrors["permissions"] = "At least one permission is required"
 	} else {
 		// Validate each permission
 		validPerms := model.AllPermissions()
@@ -195,7 +195,7 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if !valid {
-				errors["permissions"] = "Invalid permission: " + p
+				validationErrors["permissions"] = "Invalid permission: " + p
 				break
 			}
 		}
@@ -206,9 +206,9 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if expiresAtStr != "" {
 		t, err := time.Parse("2006-01-02", expiresAtStr)
 		if err != nil {
-			errors["expires_at"] = "Invalid date format"
+			validationErrors["expires_at"] = "Invalid date format"
 		} else if t.Before(time.Now()) {
-			errors["expires_at"] = "Expiration date must be in the future"
+			validationErrors["expires_at"] = "Expiration date must be in the future"
 		} else {
 			// Set to end of day
 			expiresAt = sql.NullTime{
@@ -219,10 +219,10 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If there are validation errors, re-render the form
-	if len(errors) > 0 {
+	if len(validationErrors) > 0 {
 		data := APIKeyFormData{
 			Permissions: model.AllPermissions(),
-			Errors:      errors,
+			Errors:      validationErrors,
 			FormValues:  formValues,
 			IsEdit:      false,
 		}
@@ -410,20 +410,20 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 
 	// Name validation
 	if name == "" {
-		errors["name"] = "Name is required"
+		validationErrors["name"] = "Name is required"
 	} else if len(name) < 3 {
-		errors["name"] = "Name must be at least 3 characters"
+		validationErrors["name"] = "Name must be at least 3 characters"
 	} else if len(name) > 100 {
-		errors["name"] = "Name must be less than 100 characters"
+		validationErrors["name"] = "Name must be less than 100 characters"
 	}
 
 	// Permissions validation
 	if len(permissions) == 0 {
-		errors["permissions"] = "At least one permission is required"
+		validationErrors["permissions"] = "At least one permission is required"
 	} else {
 		// Validate each permission
 		validPerms := model.AllPermissions()
@@ -436,7 +436,7 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if !valid {
-				errors["permissions"] = "Invalid permission: " + p
+				validationErrors["permissions"] = "Invalid permission: " + p
 				break
 			}
 		}
@@ -447,7 +447,7 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if expiresAtStr != "" {
 		t, err := time.Parse("2006-01-02", expiresAtStr)
 		if err != nil {
-			errors["expires_at"] = "Invalid date format"
+			validationErrors["expires_at"] = "Invalid date format"
 		} else {
 			// Set to end of day
 			expiresAt = sql.NullTime{
@@ -458,11 +458,11 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If there are validation errors, re-render the form
-	if len(errors) > 0 {
+	if len(validationErrors) > 0 {
 		data := APIKeyFormData{
 			APIKey:      &apiKey,
 			Permissions: model.AllPermissions(),
-			Errors:      errors,
+			Errors:      validationErrors,
 			FormValues:  formValues,
 			IsEdit:      true,
 		}

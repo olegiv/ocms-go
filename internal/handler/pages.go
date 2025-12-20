@@ -609,13 +609,13 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 
 	// Title validation
 	if title == "" {
-		errors["title"] = "Title is required"
+		validationErrors["title"] = "Title is required"
 	} else if len(title) < 2 {
-		errors["title"] = "Title must be at least 2 characters"
+		validationErrors["title"] = "Title must be at least 2 characters"
 	}
 
 	// Slug validation - auto-generate if empty
@@ -625,17 +625,17 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if slug == "" {
-		errors["slug"] = "Slug is required"
+		validationErrors["slug"] = "Slug is required"
 	} else if !util.IsValidSlug(slug) {
-		errors["slug"] = "Invalid slug format (use lowercase letters, numbers, and hyphens)"
+		validationErrors["slug"] = "Invalid slug format (use lowercase letters, numbers, and hyphens)"
 	} else {
 		// Check if slug already exists
 		exists, err := h.queries.SlugExists(r.Context(), slug)
 		if err != nil {
 			slog.Error("database error checking slug", "error", err)
-			errors["slug"] = "Error checking slug"
+			validationErrors["slug"] = "Error checking slug"
 		} else if exists != 0 {
-			errors["slug"] = "Slug already exists"
+			validationErrors["slug"] = "Slug already exists"
 		}
 	}
 
@@ -644,18 +644,18 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		status = PageStatusDraft
 		formValues["status"] = status
 	} else if !isValidPageStatus(status) {
-		errors["status"] = "Invalid status"
+		validationErrors["status"] = "Invalid status"
 	}
 
 	// If there are validation errors, re-render the form
-	if len(errors) > 0 {
+	if len(validationErrors) > 0 {
 		// Load languages for re-rendering
 		allLanguages, _ := h.queries.ListActiveLanguages(r.Context())
 
 		data := PageFormData{
 			AllLanguages: allLanguages,
 			Statuses:     ValidPageStatuses,
-			Errors:       errors,
+			Errors:       validationErrors,
 			FormValues:   formValues,
 			IsEdit:       false,
 		}
@@ -1026,13 +1026,13 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 
 	// Title validation
 	if title == "" {
-		errors["title"] = "Title is required"
+		validationErrors["title"] = "Title is required"
 	} else if len(title) < 2 {
-		errors["title"] = "Title must be at least 2 characters"
+		validationErrors["title"] = "Title must be at least 2 characters"
 	}
 
 	// Slug validation
@@ -1042,9 +1042,9 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if slug == "" {
-		errors["slug"] = "Slug is required"
+		validationErrors["slug"] = "Slug is required"
 	} else if !util.IsValidSlug(slug) {
-		errors["slug"] = "Invalid slug format (use lowercase letters, numbers, and hyphens)"
+		validationErrors["slug"] = "Invalid slug format (use lowercase letters, numbers, and hyphens)"
 	} else if slug != existingPage.Slug {
 		// Only check for uniqueness if slug changed
 		exists, err := h.queries.SlugExistsExcluding(r.Context(), store.SlugExistsExcludingParams{
@@ -1053,9 +1053,9 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			slog.Error("database error checking slug", "error", err)
-			errors["slug"] = "Error checking slug"
+			validationErrors["slug"] = "Error checking slug"
 		} else if exists != 0 {
-			errors["slug"] = "Slug already exists"
+			validationErrors["slug"] = "Slug already exists"
 		}
 	}
 
@@ -1064,15 +1064,15 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		status = existingPage.Status
 		formValues["status"] = status
 	} else if !isValidPageStatus(status) {
-		errors["status"] = "Invalid status"
+		validationErrors["status"] = "Invalid status"
 	}
 
 	// If there are validation errors, re-render the form
-	if len(errors) > 0 {
+	if len(validationErrors) > 0 {
 		data := PageFormData{
 			Page:       &existingPage,
 			Statuses:   ValidPageStatuses,
-			Errors:     errors,
+			Errors:     validationErrors,
 			FormValues: formValues,
 			IsEdit:     true,
 		}

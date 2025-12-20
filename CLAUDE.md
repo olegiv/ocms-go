@@ -149,6 +149,16 @@ On first run, seeds admin user: `admin@example.com` / `changeme`
 
 ## Testing Requirements
 
+**CRITICAL**: Before reporting ANY development task as complete, you MUST:
+
+1. **Rebuild assets**: Run `make assets` to compile SCSS
+2. **Restart the server**: Run `make dev` or restart any running server
+3. **Test the application**:
+   - Verify homepage loads: `curl -s http://localhost:8080/`
+   - Verify admin dashboard loads: `curl -s http://localhost:8080/admin/`
+   - Test any affected endpoints with actual HTTP requests
+4. **Keep the server running**: Do not stop the server after testing
+
 **IMPORTANT**: Before reporting any fix as complete, you MUST:
 
 1. **Run the server** and verify changes with actual HTTP requests using curl

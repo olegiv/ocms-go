@@ -273,22 +273,22 @@ func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 
 	if name == "" {
-		errors["name"] = "Name is required"
+		validationErrors["name"] = "Name is required"
 	} else if len(name) > 100 {
-		errors["name"] = "Name must be less than 100 characters"
+		validationErrors["name"] = "Name must be less than 100 characters"
 	}
 
 	if url == "" {
-		errors["url"] = "URL is required"
+		validationErrors["url"] = "URL is required"
 	} else if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
-		errors["url"] = "URL must start with http:// or https://"
+		validationErrors["url"] = "URL must start with http:// or https://"
 	}
 
 	if len(events) == 0 {
-		errors["events"] = "At least one event is required"
+		validationErrors["events"] = "At least one event is required"
 	} else {
 		// Validate event types
 		validEvents := model.AllWebhookEvents()
@@ -301,17 +301,17 @@ func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if !valid {
-				errors["events"] = "Invalid event type: " + e
+				validationErrors["events"] = "Invalid event type: " + e
 				break
 			}
 		}
 	}
 
 	// If there are validation errors, re-render the form
-	if len(errors) > 0 {
+	if len(validationErrors) > 0 {
 		data := WebhookFormData{
 			Events:      model.AllWebhookEvents(),
-			Errors:      errors,
+			Errors:      validationErrors,
 			FormValues:  formValues,
 			FormEvents:  events,
 			FormHeaders: headers,
@@ -495,30 +495,30 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate
-	errors := make(map[string]string)
+	validationErrors := make(map[string]string)
 
 	if name == "" {
-		errors["name"] = "Name is required"
+		validationErrors["name"] = "Name is required"
 	} else if len(name) > 100 {
-		errors["name"] = "Name must be less than 100 characters"
+		validationErrors["name"] = "Name must be less than 100 characters"
 	}
 
 	if url == "" {
-		errors["url"] = "URL is required"
+		validationErrors["url"] = "URL is required"
 	} else if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
-		errors["url"] = "URL must start with http:// or https://"
+		validationErrors["url"] = "URL must start with http:// or https://"
 	}
 
 	if len(events) == 0 {
-		errors["events"] = "At least one event is required"
+		validationErrors["events"] = "At least one event is required"
 	}
 
 	// If there are validation errors, re-render the form
-	if len(errors) > 0 {
+	if len(validationErrors) > 0 {
 		data := WebhookFormData{
 			Webhook:     &webhook,
 			Events:      model.AllWebhookEvents(),
-			Errors:      errors,
+			Errors:      validationErrors,
 			FormValues:  formValues,
 			FormEvents:  events,
 			FormHeaders: headers,
