@@ -215,12 +215,13 @@ func (i *Importer) ImportFromZip(ctx context.Context, zipReader *zip.Reader, opt
 			if err != nil {
 				return nil, fmt.Errorf("failed to open export.json: %w", err)
 			}
-			defer func() { _ = rc.Close() }()
 
 			decoder := json.NewDecoder(rc)
 			if err := decoder.Decode(&exportData); err != nil {
+				_ = rc.Close()
 				return nil, fmt.Errorf("failed to parse export.json: %w", err)
 			}
+			_ = rc.Close()
 			exportFound = true
 			break
 		}
@@ -367,16 +368,17 @@ func (i *Importer) ValidateZip(ctx context.Context, zipReader *zip.Reader) (*Val
 					Errors: []ImportError{{Entity: "zip", ID: "", Message: "failed to open export.json: " + err.Error()}},
 				}, nil
 			}
-			defer func() { _ = rc.Close() }()
 
 			var data ExportData
 			decoder := json.NewDecoder(rc)
 			if err := decoder.Decode(&data); err != nil {
+				_ = rc.Close()
 				return &ValidationResult{
 					Valid:  false,
 					Errors: []ImportError{{Entity: "json", ID: "", Message: err.Error()}},
 				}, nil
 			}
+			_ = rc.Close()
 
 			result, err := i.ValidateData(ctx, &data)
 			if err != nil {
