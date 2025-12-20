@@ -254,7 +254,7 @@ func TestResponseWriter(t *testing.T) {
 		w := httptest.NewRecorder()
 		rw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
 
-		rw.Write([]byte("hello"))
+		_, _ = rw.Write([]byte("hello"))
 
 		if rw.status != http.StatusOK {
 			t.Errorf("status = %d, want %d", rw.status, http.StatusOK)

@@ -79,7 +79,7 @@ func (m *Module) handleAPIStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+	_ = json.NewEncoder(w).Encode(data)
 }
 
 // handleRealtime returns real-time visitor count.
@@ -93,7 +93,7 @@ func (m *Module) handleRealtime(w http.ResponseWriter, r *http.Request) {
 	count := m.GetRealTimeVisitorCount(5)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]int{"visitors": count})
+	_ = json.NewEncoder(w).Encode(map[string]int{"visitors": count})
 }
 
 // handleSaveSettings saves module settings.

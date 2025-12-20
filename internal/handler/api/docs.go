@@ -116,5 +116,5 @@ func (h *DocsHandler) ServeDocs(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=3600") // Cache for 1 hour
-	buf.WriteTo(w)
+	_, _ = buf.WriteTo(w)
 }
