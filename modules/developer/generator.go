@@ -309,125 +309,119 @@ func (m *Module) generateCategories(ctx context.Context, languages []store.Langu
 
 	// Create root categories
 	for i := 0; i < numRoot; i++ {
-		name := randomElement(nouns)
-		for usedNames[name] {
-			name = randomElement(adjectives) + " " + randomElement(nouns)
-		}
-		usedNames[name] = true
-
-		catSlug := util.Slugify(name)
-		desc := randomElement(categoryDescriptions)
-		now := time.Now()
 		position++
-
-		cat, err := queries.CreateCategory(ctx, store.CreateCategoryParams{
-			Name:        name,
-			Slug:        catSlug,
-			Description: sql.NullString{String: desc, Valid: true},
-			ParentID:    sql.NullInt64{Valid: false},
-			Position:    position,
-			LanguageID:  sql.NullInt64{Int64: defaultLangID, Valid: true},
-			CreatedAt:   now,
-			UpdatedAt:   now,
+		catID, err := m.createSingleCategory(ctx, createCategoryParams{
+			queries:       queries,
+			usedNames:     usedNames,
+			parentID:      sql.NullInt64{Valid: false},
+			position:      position,
+			defaultLangID: defaultLangID,
+			languages:     languages,
+			isRoot:        true,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to create category: %w", err)
-		}
-
-		if err := m.trackItem(ctx, "category", cat.ID); err != nil {
-			return nil, fmt.Errorf("failed to track category: %w", err)
-		}
-		catIDs = append(catIDs, cat.ID)
-		rootCats = append(rootCats, cat.ID)
-
-		// Create translations
-		if err := m.createCategoryTranslations(ctx, queries, cat, name, catSlug, desc, languages, defaultLangID); err != nil {
 			return nil, err
 		}
+		catIDs = append(catIDs, catID)
+		rootCats = append(rootCats, catID)
 	}
 
 	var childCats []int64
 
 	// Create child categories
 	for i := 0; i < numChildren && len(rootCats) > 0; i++ {
-		parentID := rootCats[rand.Intn(len(rootCats))]
-
-		name := randomElement(adjectives) + " " + randomElement(nouns)
-		for usedNames[name] {
-			name = randomElement(adjectives) + " " + randomElement(nouns)
-		}
-		usedNames[name] = true
-
-		catSlug := util.Slugify(name)
-		desc := randomElement(categoryDescriptions)
-		now := time.Now()
 		position++
-
-		cat, err := queries.CreateCategory(ctx, store.CreateCategoryParams{
-			Name:        name,
-			Slug:        catSlug,
-			Description: sql.NullString{String: desc, Valid: true},
-			ParentID:    sql.NullInt64{Int64: parentID, Valid: true},
-			Position:    position,
-			LanguageID:  sql.NullInt64{Int64: defaultLangID, Valid: true},
-			CreatedAt:   now,
-			UpdatedAt:   now,
+		parentID := rootCats[rand.Intn(len(rootCats))]
+		catID, err := m.createSingleCategory(ctx, createCategoryParams{
+			queries:       queries,
+			usedNames:     usedNames,
+			parentID:      sql.NullInt64{Int64: parentID, Valid: true},
+			position:      position,
+			defaultLangID: defaultLangID,
+			languages:     languages,
+			isRoot:        false,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to create category: %w", err)
-		}
-
-		if err := m.trackItem(ctx, "category", cat.ID); err != nil {
-			return nil, fmt.Errorf("failed to track category: %w", err)
-		}
-		catIDs = append(catIDs, cat.ID)
-		childCats = append(childCats, cat.ID)
-
-		if err := m.createCategoryTranslations(ctx, queries, cat, name, catSlug, desc, languages, defaultLangID); err != nil {
 			return nil, err
 		}
+		catIDs = append(catIDs, catID)
+		childCats = append(childCats, catID)
 	}
 
 	// Create grandchild categories
 	for i := 0; i < numGrandchildren && len(childCats) > 0; i++ {
-		parentID := childCats[rand.Intn(len(childCats))]
-
-		name := randomElement(adjectives) + " " + randomElement(nouns)
-		for usedNames[name] {
-			name = randomElement(adjectives) + " " + randomElement(nouns)
-		}
-		usedNames[name] = true
-
-		catSlug := util.Slugify(name)
-		desc := randomElement(categoryDescriptions)
-		now := time.Now()
 		position++
-
-		cat, err := queries.CreateCategory(ctx, store.CreateCategoryParams{
-			Name:        name,
-			Slug:        catSlug,
-			Description: sql.NullString{String: desc, Valid: true},
-			ParentID:    sql.NullInt64{Int64: parentID, Valid: true},
-			Position:    position,
-			LanguageID:  sql.NullInt64{Int64: defaultLangID, Valid: true},
-			CreatedAt:   now,
-			UpdatedAt:   now,
+		parentID := childCats[rand.Intn(len(childCats))]
+		catID, err := m.createSingleCategory(ctx, createCategoryParams{
+			queries:       queries,
+			usedNames:     usedNames,
+			parentID:      sql.NullInt64{Int64: parentID, Valid: true},
+			position:      position,
+			defaultLangID: defaultLangID,
+			languages:     languages,
+			isRoot:        false,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to create category: %w", err)
-		}
-
-		if err := m.trackItem(ctx, "category", cat.ID); err != nil {
-			return nil, fmt.Errorf("failed to track category: %w", err)
-		}
-		catIDs = append(catIDs, cat.ID)
-
-		if err := m.createCategoryTranslations(ctx, queries, cat, name, catSlug, desc, languages, defaultLangID); err != nil {
 			return nil, err
 		}
+		catIDs = append(catIDs, catID)
 	}
 
 	return catIDs, nil
+}
+
+// createCategoryParams holds parameters for creating a single category.
+type createCategoryParams struct {
+	queries       *store.Queries
+	usedNames     map[string]bool
+	parentID      sql.NullInt64
+	position      int64
+	defaultLangID int64
+	languages     []store.Language
+	isRoot        bool
+}
+
+// createSingleCategory creates a category with tracking and translations.
+// Returns the created category ID.
+func (m *Module) createSingleCategory(ctx context.Context, p createCategoryParams) (int64, error) {
+	var name string
+	if p.isRoot {
+		name = randomElement(nouns)
+	} else {
+		name = randomElement(adjectives) + " " + randomElement(nouns)
+	}
+	for p.usedNames[name] {
+		name = randomElement(adjectives) + " " + randomElement(nouns)
+	}
+	p.usedNames[name] = true
+
+	catSlug := util.Slugify(name)
+	desc := randomElement(categoryDescriptions)
+	now := time.Now()
+
+	cat, err := p.queries.CreateCategory(ctx, store.CreateCategoryParams{
+		Name:        name,
+		Slug:        catSlug,
+		Description: sql.NullString{String: desc, Valid: true},
+		ParentID:    p.parentID,
+		Position:    p.position,
+		LanguageID:  sql.NullInt64{Int64: p.defaultLangID, Valid: true},
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to create category: %w", err)
+	}
+
+	if err := m.trackItem(ctx, "category", cat.ID); err != nil {
+		return 0, fmt.Errorf("failed to track category: %w", err)
+	}
+
+	if err := m.createCategoryTranslations(ctx, p.queries, cat, name, catSlug, desc, p.languages, p.defaultLangID); err != nil {
+		return 0, err
+	}
+
+	return cat.ID, nil
 }
 
 // createCategoryTranslations creates translations for a category

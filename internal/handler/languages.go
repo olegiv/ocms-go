@@ -56,6 +56,97 @@ type LanguageFormData struct {
 	IsEdit     bool
 }
 
+// languageFormInput holds parsed form values for language create/update.
+type languageFormInput struct {
+	Code       string
+	Name       string
+	NativeName string
+	Direction  string
+	IsActive   bool
+	Position   string
+}
+
+// parseLanguageFormInput extracts language form field values from the request.
+func parseLanguageFormInput(r *http.Request) languageFormInput {
+	isActiveStr := r.FormValue("is_active")
+	return languageFormInput{
+		Code:       strings.TrimSpace(r.FormValue("code")),
+		Name:       strings.TrimSpace(r.FormValue("name")),
+		NativeName: strings.TrimSpace(r.FormValue("native_name")),
+		Direction:  strings.TrimSpace(r.FormValue("direction")),
+		IsActive:   isActiveStr == "1" || isActiveStr == "on" || isActiveStr == "true",
+		Position:   strings.TrimSpace(r.FormValue("position")),
+	}
+}
+
+// toFormValues converts the input to a map for template re-rendering.
+func (input languageFormInput) toFormValues() map[string]string {
+	fv := map[string]string{
+		"code":        input.Code,
+		"name":        input.Name,
+		"native_name": input.NativeName,
+		"direction":   input.Direction,
+		"position":    input.Position,
+	}
+	if input.IsActive {
+		fv["is_active"] = "1"
+	}
+	return fv
+}
+
+// getLanguageByIDParam parses the language ID from URL and fetches the language.
+// Returns nil and sends an error response if the language is not found.
+func (h *LanguagesHandler) getLanguageByIDParam(w http.ResponseWriter, r *http.Request) *store.Language {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return nil
+	}
+
+	lang, err := h.queries.GetLanguageByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+		} else {
+			slog.Error("failed to get language", "error", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return nil
+	}
+	return &lang
+}
+
+// renderLanguageForm renders the language form template.
+func (h *LanguagesHandler) renderLanguageForm(w http.ResponseWriter, r *http.Request, user interface{}, data LanguageFormData) {
+	lang := middleware.GetAdminLang(r)
+
+	var title, lastLabel, lastURL string
+	if data.IsEdit && data.Language != nil {
+		title = i18n.T(lang, "languages.edit")
+		lastLabel = i18n.T(lang, "languages.edit")
+		lastURL = fmt.Sprintf("/admin/languages/%d", data.Language.ID)
+	} else {
+		title = i18n.T(lang, "languages.new")
+		lastLabel = i18n.T(lang, "languages.new")
+		lastURL = "/admin/languages/new"
+	}
+
+	if err := h.renderer.Render(w, r, "admin/languages_form", render.TemplateData{
+		Title: title,
+		User:  user,
+		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.languages"), URL: "/admin/languages"},
+			{Label: lastLabel, URL: lastURL, Active: true},
+		},
+	}); err != nil {
+		slog.Error("render error", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
 // List displays all languages.
 func (h *LanguagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
@@ -97,34 +188,17 @@ func (h *LanguagesHandler) List(w http.ResponseWriter, r *http.Request) {
 // NewForm displays the form to create a new language.
 func (h *LanguagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
-	lang := middleware.GetAdminLang(r)
-
-	data := LanguageFormData{
+	h.renderLanguageForm(w, r, user, LanguageFormData{
 		CommonLanguages: model.CommonLanguages,
 		Errors:          make(map[string]string),
 		FormValues:      make(map[string]string),
 		IsEdit:          false,
-	}
-
-	if err := h.renderer.Render(w, r, "admin/languages_form", render.TemplateData{
-		Title: i18n.T(lang, "languages.new"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.languages"), URL: "/admin/languages"},
-			{Label: i18n.T(lang, "languages.new"), URL: "/admin/languages/new", Active: true},
-		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // Create handles creating a new language.
 func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
-	lang := middleware.GetAdminLang(r)
 
 	if err := r.ParseForm(); err != nil {
 		h.renderer.SetFlash(r, "Invalid form data", "error")
@@ -132,18 +206,11 @@ func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	code := strings.TrimSpace(r.FormValue("code"))
-	name := strings.TrimSpace(r.FormValue("name"))
-	nativeName := strings.TrimSpace(r.FormValue("native_name"))
-	direction := strings.TrimSpace(r.FormValue("direction"))
-	isActiveStr := r.FormValue("is_active")
-	positionStr := strings.TrimSpace(r.FormValue("position"))
-
-	isActive := isActiveStr == "1" || isActiveStr == "on" || isActiveStr == "true"
+	input := parseLanguageFormInput(r)
 
 	position := int64(0)
-	if positionStr != "" {
-		if p, err := strconv.ParseInt(positionStr, 10, 64); err == nil {
+	if input.Position != "" {
+		if p, err := strconv.ParseInt(input.Position, 10, 64); err == nil {
 			position = p
 		}
 	} else {
@@ -162,30 +229,24 @@ func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Default direction to ltr
+	direction := input.Direction
 	if direction == "" {
 		direction = model.DirectionLTR
 	}
 
-	formValues := map[string]string{
-		"code":        code,
-		"name":        name,
-		"native_name": nativeName,
-		"direction":   direction,
-		"position":    strconv.FormatInt(position, 10),
-	}
-	if isActive {
-		formValues["is_active"] = "1"
-	}
+	// Update input with computed values for form re-rendering
+	input.Direction = direction
+	input.Position = strconv.FormatInt(position, 10)
 
 	validationErrors := make(map[string]string)
 
 	// Validate code
-	if code == "" {
+	if input.Code == "" {
 		validationErrors["code"] = "Language code is required"
-	} else if len(code) < 2 || len(code) > 5 {
+	} else if len(input.Code) < 2 || len(input.Code) > 5 {
 		validationErrors["code"] = "Language code must be 2-5 characters"
 	} else {
-		exists, err := h.queries.LanguageCodeExists(r.Context(), code)
+		exists, err := h.queries.LanguageCodeExists(r.Context(), input.Code)
 		if err != nil {
 			slog.Error("database error checking language code", "error", err)
 		} else if exists != 0 {
@@ -194,12 +255,12 @@ func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate name
-	if name == "" {
+	if input.Name == "" {
 		validationErrors["name"] = "Name is required"
 	}
 
 	// Validate native name
-	if nativeName == "" {
+	if input.NativeName == "" {
 		validationErrors["native_name"] = "Native name is required"
 	}
 
@@ -209,36 +270,22 @@ func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(validationErrors) > 0 {
-		data := LanguageFormData{
+		h.renderLanguageForm(w, r, user, LanguageFormData{
 			CommonLanguages: model.CommonLanguages,
 			Errors:          validationErrors,
-			FormValues:      formValues,
+			FormValues:      input.toFormValues(),
 			IsEdit:          false,
-		}
-
-		if err := h.renderer.Render(w, r, "admin/languages_form", render.TemplateData{
-			Title: i18n.T(lang, "languages.new"),
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-				{Label: i18n.T(lang, "nav.languages"), URL: "/admin/languages"},
-				{Label: i18n.T(lang, "languages.new"), URL: "/admin/languages/new", Active: true},
-			},
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		})
 		return
 	}
 
 	now := time.Now()
 	newLang, err := h.queries.CreateLanguage(r.Context(), store.CreateLanguageParams{
-		Code:       code,
-		Name:       name,
-		NativeName: nativeName,
+		Code:       input.Code,
+		Name:       input.Name,
+		NativeName: input.NativeName,
 		IsDefault:  false,
-		IsActive:   isActive,
+		IsActive:   input.IsActive,
 		Direction:  direction,
 		Position:   position,
 		CreatedAt:  now,
@@ -256,29 +303,9 @@ func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/languages", http.StatusSeeOther)
 }
 
-// EditForm displays the form to edit an existing language.
-func (h *LanguagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	adminLang := middleware.GetAdminLang(r)
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
-		return
-	}
-
-	lang, err := h.queries.GetLanguageByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.NotFound(w, r)
-		} else {
-			slog.Error("failed to get language", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
-		return
-	}
-
-	formValues := map[string]string{
+// languageToFormValues converts a store.Language to form values map.
+func languageToFormValues(lang *store.Language) map[string]string {
+	fv := map[string]string{
 		"code":        lang.Code,
 		"name":        lang.Name,
 		"native_name": lang.NativeName,
@@ -286,103 +313,74 @@ func (h *LanguagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		"position":    strconv.FormatInt(lang.Position, 10),
 	}
 	if lang.IsActive {
-		formValues["is_active"] = "1"
+		fv["is_active"] = "1"
+	}
+	return fv
+}
+
+// EditForm displays the form to edit an existing language.
+func (h *LanguagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+
+	lang := h.getLanguageByIDParam(w, r)
+	if lang == nil {
+		return
 	}
 
-	data := LanguageFormData{
-		Language:        &lang,
+	h.renderLanguageForm(w, r, user, LanguageFormData{
+		Language:        lang,
 		CommonLanguages: model.CommonLanguages,
 		Errors:          make(map[string]string),
-		FormValues:      formValues,
+		FormValues:      languageToFormValues(lang),
 		IsEdit:          true,
-	}
-
-	if err := h.renderer.Render(w, r, "admin/languages_form", render.TemplateData{
-		Title: i18n.T(adminLang, "languages.edit"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(adminLang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(adminLang, "nav.languages"), URL: "/admin/languages"},
-			{Label: i18n.T(adminLang, "languages.edit"), URL: fmt.Sprintf("/admin/languages/%d", id), Active: true},
-		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // Update handles updating an existing language.
 func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
-	adminLang := middleware.GetAdminLang(r)
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
-		return
-	}
 
-	existingLang, err := h.queries.GetLanguageByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.NotFound(w, r)
-		} else {
-			slog.Error("failed to get language", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	existingLang := h.getLanguageByIDParam(w, r)
+	if existingLang == nil {
 		return
 	}
 
 	if err := r.ParseForm(); err != nil {
 		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/languages/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("/admin/languages/%d", existingLang.ID), http.StatusSeeOther)
 		return
 	}
 
-	code := strings.TrimSpace(r.FormValue("code"))
-	name := strings.TrimSpace(r.FormValue("name"))
-	nativeName := strings.TrimSpace(r.FormValue("native_name"))
-	direction := strings.TrimSpace(r.FormValue("direction"))
-	isActiveStr := r.FormValue("is_active")
-	positionStr := strings.TrimSpace(r.FormValue("position"))
-
-	isActive := isActiveStr == "1" || isActiveStr == "on" || isActiveStr == "true"
+	input := parseLanguageFormInput(r)
 
 	position := existingLang.Position
-	if positionStr != "" {
-		if p, err := strconv.ParseInt(positionStr, 10, 64); err == nil {
+	if input.Position != "" {
+		if p, err := strconv.ParseInt(input.Position, 10, 64); err == nil {
 			position = p
 		}
 	}
 
 	// Default direction to ltr
+	direction := input.Direction
 	if direction == "" {
 		direction = model.DirectionLTR
 	}
 
-	formValues := map[string]string{
-		"code":        code,
-		"name":        name,
-		"native_name": nativeName,
-		"direction":   direction,
-		"position":    strconv.FormatInt(position, 10),
-	}
-	if isActive {
-		formValues["is_active"] = "1"
-	}
+	// Update input with computed values for form re-rendering
+	input.Direction = direction
+	input.Position = strconv.FormatInt(position, 10)
 
 	validationErrors := make(map[string]string)
 
 	// Validate code
-	if code == "" {
+	if input.Code == "" {
 		validationErrors["code"] = "Language code is required"
-	} else if len(code) < 2 || len(code) > 5 {
+	} else if len(input.Code) < 2 || len(input.Code) > 5 {
 		validationErrors["code"] = "Language code must be 2-5 characters"
 	} else {
 		exists, err := h.queries.LanguageCodeExistsExcluding(r.Context(), store.LanguageCodeExistsExcludingParams{
-			Code: code,
-			ID:   id,
+			Code: input.Code,
+			ID:   existingLang.ID,
 		})
 		if err != nil {
 			slog.Error("database error checking language code", "error", err)
@@ -392,12 +390,12 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate name
-	if name == "" {
+	if input.Name == "" {
 		validationErrors["name"] = "Name is required"
 	}
 
 	// Validate native name
-	if nativeName == "" {
+	if input.NativeName == "" {
 		validationErrors["native_name"] = "Native name is required"
 	}
 
@@ -407,43 +405,29 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Cannot deactivate default language
-	if existingLang.IsDefault && !isActive {
+	if existingLang.IsDefault && !input.IsActive {
 		validationErrors["is_active"] = "Cannot deactivate the default language"
 	}
 
 	if len(validationErrors) > 0 {
-		data := LanguageFormData{
-			Language:        &existingLang,
+		h.renderLanguageForm(w, r, user, LanguageFormData{
+			Language:        existingLang,
 			CommonLanguages: model.CommonLanguages,
 			Errors:          validationErrors,
-			FormValues:      formValues,
+			FormValues:      input.toFormValues(),
 			IsEdit:          true,
-		}
-
-		if err := h.renderer.Render(w, r, "admin/languages_form", render.TemplateData{
-			Title: i18n.T(adminLang, "languages.edit"),
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(adminLang, "nav.dashboard"), URL: "/admin"},
-				{Label: i18n.T(adminLang, "nav.languages"), URL: "/admin/languages"},
-				{Label: i18n.T(adminLang, "languages.edit"), URL: fmt.Sprintf("/admin/languages/%d", id), Active: true},
-			},
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		})
 		return
 	}
 
 	now := time.Now()
-	_, err = h.queries.UpdateLanguage(r.Context(), store.UpdateLanguageParams{
-		ID:         id,
-		Code:       code,
-		Name:       name,
-		NativeName: nativeName,
+	_, err := h.queries.UpdateLanguage(r.Context(), store.UpdateLanguageParams{
+		ID:         existingLang.ID,
+		Code:       input.Code,
+		Name:       input.Name,
+		NativeName: input.NativeName,
 		IsDefault:  existingLang.IsDefault, // Keep existing default status
-		IsActive:   isActive,
+		IsActive:   input.IsActive,
 		Direction:  direction,
 		Position:   position,
 		UpdatedAt:  now,
@@ -451,11 +435,11 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("failed to update language", "error", err)
 		h.renderer.SetFlash(r, "Error updating language", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/languages/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("/admin/languages/%d", existingLang.ID), http.StatusSeeOther)
 		return
 	}
 
-	slog.Info("language updated", "language_id", id, "code", code)
+	slog.Info("language updated", "language_id", existingLang.ID, "code", input.Code)
 	h.renderer.SetFlash(r, "Language updated successfully", "success")
 	http.Redirect(w, r, "/admin/languages", http.StatusSeeOther)
 }
@@ -564,21 +548,8 @@ func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // SetDefault handles setting a language as the default.
 func (h *LanguagesHandler) SetDefault(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
-		return
-	}
-
-	lang, err := h.queries.GetLanguageByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.NotFound(w, r)
-		} else {
-			slog.Error("failed to get language", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	lang := h.getLanguageByIDParam(w, r)
+	if lang == nil {
 		return
 	}
 
@@ -600,7 +571,7 @@ func (h *LanguagesHandler) SetDefault(w http.ResponseWriter, r *http.Request) {
 	// Set new default
 	now := time.Now()
 	if err := h.queries.SetDefaultLanguage(r.Context(), store.SetDefaultLanguageParams{
-		ID:        id,
+		ID:        lang.ID,
 		UpdatedAt: now,
 	}); err != nil {
 		slog.Error("failed to set default language", "error", err)
@@ -609,7 +580,7 @@ func (h *LanguagesHandler) SetDefault(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("default language set", "language_id", id, "code", lang.Code)
+	slog.Info("default language set", "language_id", lang.ID, "code", lang.Code)
 	h.renderer.SetFlash(r, fmt.Sprintf("%s set as default language", lang.Name), "success")
 	http.Redirect(w, r, "/admin/languages", http.StatusSeeOther)
 }

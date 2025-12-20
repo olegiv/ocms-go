@@ -8,18 +8,13 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/time/rate"
-
 	"ocms-go/internal/i18n"
 )
 
 // LoginProtection provides combined IP rate limiting and account lockout protection.
 type LoginProtection struct {
-	// IP-based rate limiting
-	ipLimiters map[string]*rate.Limiter
-	ipMu       sync.RWMutex
-	ipRate     rate.Limit
-	ipBurst    int
+	// IP-based rate limiting (uses limiterCache from api.go)
+	ipLimiters *limiterCache[string]
 
 	// Account-based lockout tracking
 	failedAttempts map[string]*loginAttempt
@@ -83,9 +78,7 @@ func NewLoginProtection(cfg LoginProtectionConfig) *LoginProtection {
 	}
 
 	lp := &LoginProtection{
-		ipLimiters:        make(map[string]*rate.Limiter),
-		ipRate:            rate.Limit(cfg.IPRateLimit),
-		ipBurst:           cfg.IPBurst,
+		ipLimiters:        newLimiterCache[string](cfg.IPRateLimit, cfg.IPBurst),
 		failedAttempts:    make(map[string]*loginAttempt),
 		maxFailedAttempts: cfg.MaxFailedAttempts,
 		lockoutDuration:   cfg.LockoutDuration,
@@ -98,32 +91,10 @@ func NewLoginProtection(cfg LoginProtectionConfig) *LoginProtection {
 	return lp
 }
 
-// getIPLimiter returns the rate limiter for a specific IP.
-func (lp *LoginProtection) getIPLimiter(ip string) *rate.Limiter {
-	lp.ipMu.RLock()
-	limiter, exists := lp.ipLimiters[ip]
-	lp.ipMu.RUnlock()
-
-	if exists {
-		return limiter
-	}
-
-	lp.ipMu.Lock()
-	defer lp.ipMu.Unlock()
-
-	if limiter, exists = lp.ipLimiters[ip]; exists {
-		return limiter
-	}
-
-	limiter = rate.NewLimiter(lp.ipRate, lp.ipBurst)
-	lp.ipLimiters[ip] = limiter
-	return limiter
-}
-
 // CheckIPRateLimit checks if the IP is rate limited.
 // Returns true if the request should be allowed.
 func (lp *LoginProtection) CheckIPRateLimit(ip string) bool {
-	return lp.getIPLimiter(ip).Allow()
+	return lp.ipLimiters.get(ip).Allow()
 }
 
 // IsAccountLocked checks if an account is currently locked.
@@ -248,16 +219,10 @@ func (lp *LoginProtection) cleanup() {
 func (lp *LoginProtection) cleanupStaleEntries() {
 	now := time.Now()
 
-	// Cleanup IP limiters (remove those unused for > 1 hour)
-	lp.ipMu.Lock()
-	// Note: rate.Limiter doesn't track last use, so we just periodically clear old IPs
-	// In production, you might want a more sophisticated approach
-	if len(lp.ipLimiters) > 10000 {
-		// Clear all if too many entries
-		lp.ipLimiters = make(map[string]*rate.Limiter)
+	// Cleanup IP limiters if too many entries
+	if lp.ipLimiters.clearIfExceeds(10000) {
 		slog.Info("cleared IP rate limiters due to size")
 	}
-	lp.ipMu.Unlock()
 
 	// Cleanup old login attempts
 	lp.attemptsMu.Lock()

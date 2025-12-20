@@ -149,37 +149,48 @@ type ConflictStrategyOption struct {
 	Description string
 }
 
-// ImportForm handles GET /admin/import - displays the import form.
-func (h *ImportExportHandler) ImportForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	lang := middleware.GetAdminLang(r)
-
-	data := ImportFormData{
-		ConflictStrategies: []ConflictStrategyOption{
-			{Value: "skip", Label: "Skip Existing", Description: "Skip items that already exist"},
-			{Value: "overwrite", Label: "Overwrite", Description: "Update existing items with imported data"},
-			{Value: "rename", Label: "Rename", Description: "Create with new slug if exists"},
-		},
+// defaultConflictStrategies returns the default conflict resolution strategies.
+func defaultConflictStrategies() []ConflictStrategyOption {
+	return []ConflictStrategyOption{
+		{Value: "skip", Label: "Skip Existing", Description: "Skip items that already exist"},
+		{Value: "overwrite", Label: "Overwrite", Description: "Update existing items with imported data"},
+		{Value: "rename", Label: "Rename", Description: "Create with new slug if exists"},
 	}
+}
 
+// importBreadcrumbs returns the standard breadcrumbs for import pages.
+func importBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+		{Label: i18n.T(lang, "nav.import"), URL: "/admin/import", Active: true},
+	}
+}
+
+// renderImportPage renders the import template with the given data.
+func (h *ImportExportHandler) renderImportPage(w http.ResponseWriter, r *http.Request, user interface{}, data ImportFormData) {
+	lang := middleware.GetAdminLang(r)
 	if err := h.renderer.Render(w, r, "admin/import", render.TemplateData{
-		Title: i18n.T(lang, "nav.import"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.import"), URL: "/admin/import", Active: true},
-		},
+		Title:       i18n.T(lang, "nav.import"),
+		User:        user,
+		Data:        data,
+		Breadcrumbs: importBreadcrumbs(lang),
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 }
 
+// ImportForm handles GET /admin/import - displays the import form.
+func (h *ImportExportHandler) ImportForm(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+	h.renderImportPage(w, r, user, ImportFormData{
+		ConflictStrategies: defaultConflictStrategies(),
+	})
+}
+
 // ImportValidate handles POST /admin/import/validate - validates the uploaded file.
 func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
-	lang := middleware.GetAdminLang(r)
 
 	// Parse multipart form (max 100MB for zip files with media)
 	if err := r.ParseMultipartForm(100 << 20); err != nil {
@@ -264,30 +275,13 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 		h.sessionManager.Put(r.Context(), "import_is_zip", false)
 	}
 
-	data := ImportFormData{
-		ConflictStrategies: []ConflictStrategyOption{
-			{Value: "skip", Label: "Skip Existing", Description: "Skip items that already exist"},
-			{Value: "overwrite", Label: "Overwrite", Description: "Update existing items with imported data"},
-			{Value: "rename", Label: "Rename", Description: "Create with new slug if exists"},
-		},
-		ValidationResult: validationResult,
-		UploadedData:     &exportData,
-		IsZipFile:        isZipFile,
-		HasMediaFiles:    hasMediaFiles,
-	}
-
-	if err := h.renderer.Render(w, r, "admin/import", render.TemplateData{
-		Title: i18n.T(lang, "nav.import"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.import"), URL: "/admin/import", Active: true},
-		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	h.renderImportPage(w, r, user, ImportFormData{
+		ConflictStrategies: defaultConflictStrategies(),
+		ValidationResult:   validationResult,
+		UploadedData:       &exportData,
+		IsZipFile:          isZipFile,
+		HasMediaFiles:      hasMediaFiles,
+	})
 }
 
 // extractExportDataFromZip extracts the ExportData from a zip file bytes.
@@ -323,7 +317,6 @@ func (h *ImportExportHandler) extractExportDataFromZip(zipData []byte) (transfer
 // Import handles POST /admin/import - performs the actual import.
 func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
-	lang := middleware.GetAdminLang(r)
 
 	if err := r.ParseForm(); err != nil {
 		h.renderImportError(w, r, user, "Invalid form data")
@@ -415,15 +408,6 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 	// Clear common session data
 	h.sessionManager.Remove(r.Context(), "import_is_zip")
 
-	data := ImportFormData{
-		ConflictStrategies: []ConflictStrategyOption{
-			{Value: "skip", Label: "Skip Existing", Description: "Skip items that already exist"},
-			{Value: "overwrite", Label: "Overwrite", Description: "Update existing items with imported data"},
-			{Value: "rename", Label: "Rename", Description: "Create with new slug if exists"},
-		},
-		ImportResult: result,
-	}
-
 	// Set flash message based on result
 	if result.Success {
 		if result.DryRun {
@@ -436,43 +420,16 @@ func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
 		h.sessionManager.Put(r.Context(), "flash_error", fmt.Sprintf("Import completed with %d errors", len(result.Errors)))
 	}
 
-	if err := h.renderer.Render(w, r, "admin/import", render.TemplateData{
-		Title: i18n.T(lang, "nav.import"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.import"), URL: "/admin/import", Active: true},
-		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	h.renderImportPage(w, r, user, ImportFormData{
+		ConflictStrategies: defaultConflictStrategies(),
+		ImportResult:       result,
+	})
 }
 
 // renderImportError renders the import form with an error message.
 func (h *ImportExportHandler) renderImportError(w http.ResponseWriter, r *http.Request, user interface{}, errMsg string) {
-	lang := middleware.GetAdminLang(r)
 	h.sessionManager.Put(r.Context(), "flash_error", errMsg)
-
-	data := ImportFormData{
-		ConflictStrategies: []ConflictStrategyOption{
-			{Value: "skip", Label: "Skip Existing", Description: "Skip items that already exist"},
-			{Value: "overwrite", Label: "Overwrite", Description: "Update existing items with imported data"},
-			{Value: "rename", Label: "Rename", Description: "Create with new slug if exists"},
-		},
-	}
-
-	if err := h.renderer.Render(w, r, "admin/import", render.TemplateData{
-		Title: i18n.T(lang, "nav.import"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.import"), URL: "/admin/import", Active: true},
-		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	h.renderImportPage(w, r, user, ImportFormData{
+		ConflictStrategies: defaultConflictStrategies(),
+	})
 }
