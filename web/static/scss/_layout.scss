@@ -55,15 +55,32 @@
 }
 
 // Spacing utilities
+.mt-1 { margin-top: $spacing-1; }
+.mt-2 { margin-top: $spacing-2; }
+.mt-3 { margin-top: $spacing-3; }
 .mt-4 { margin-top: $spacing-4; }
+.mt-5 { margin-top: $spacing-5; }
 .mt-6 { margin-top: $spacing-6; }
 .mt-8 { margin-top: $spacing-8; }
+.mb-1 { margin-bottom: $spacing-1; }
+.mb-2 { margin-bottom: $spacing-2; }
+.mb-3 { margin-bottom: $spacing-3; }
 .mb-4 { margin-bottom: $spacing-4; }
+.mb-5 { margin-bottom: $spacing-5; }
 .mb-6 { margin-bottom: $spacing-6; }
+.ml-1 { margin-left: $spacing-1; }
+.ml-2 { margin-left: $spacing-2; }
+.ml-3 { margin-left: $spacing-3; }
+.ml-4 { margin-left: $spacing-4; }
+.ml-6 { margin-left: $spacing-6; }
+.ml-8 { margin-left: $spacing-8; }
+.mr-1 { margin-right: $spacing-1; }
+.mr-2 { margin-right: $spacing-2; }
 .p-4 { padding: $spacing-4; }
 .p-6 { padding: $spacing-6; }
 .py-2 { padding-top: $spacing-2; padding-bottom: $spacing-2; }
 .px-4 { padding-left: $spacing-4; padding-right: $spacing-4; }
+.gap-1 { gap: $spacing-1; }
 
 // Width utilities
 .w-full { width: 100%; }
@@ -80,8 +97,36 @@
 .text-gray-500 { color: $gray-500; }
 .text-gray-600 { color: $gray-600; }
 
-// Visibility
+// Visibility & Display
 .hidden { display: none; }
+.d-inline { display: inline; }
+.d-block { display: block; }
+.d-inline-block { display: inline-block; }
+.flex-wrap { flex-wrap: wrap; }
+
+// Icon alignment
+.icon-inline {
+  vertical-align: middle;
+  margin-right: $spacing-1;
+}
+
+.icon-text {
+  vertical-align: -2px;
+  margin-right: 3px;
+}
+
+// Table column widths
+.col-w-60 { width: 60px; }
+.col-w-80 { width: 80px; }
+.col-w-120 { width: 120px; }
+.col-w-150 { width: 150px; }
+.col-w-160 { width: 160px; }
+
+// Accessibility
+.sr-only {
+  position: absolute;
+  left: -9999px;
+}
 
 @media (min-width: $breakpoint-md) {
   .md\:block { display: block; }

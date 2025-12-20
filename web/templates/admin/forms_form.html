@@ -171,7 +171,7 @@
 
 {{if .Data.IsEdit}}
 <!-- Add/Edit Field Modal -->
-<div id="field-modal" class="modal" style="display: none;">
+<div id="field-modal" class="modal hidden">
     <div class="modal-backdrop" onclick="closeFieldModal()"></div>
     <div class="modal-content">
         <div class="modal-header">
@@ -213,7 +213,7 @@
                     <small class="form-text">{{T .AdminLang "forms.field_help_hint"}}</small>
                 </div>
 
-                <div class="form-group" id="options-group" style="display: none;">
+                <div class="form-group hidden" id="options-group">
                     <label for="field-options" class="form-label">{{T .AdminLang "forms.field_options"}}</label>
                     <textarea id="field-options" name="options" class="form-input" rows="4" placeholder="Option 1&#10;Option 2&#10;Option 3"></textarea>
                     <small class="form-text">{{T .AdminLang "forms.field_options_hint"}}</small>
