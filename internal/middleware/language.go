@@ -19,7 +19,7 @@ const (
 	ContextKeyLanguageCode ContextKey = "language_code"
 )
 
-// Cookie name for language preference
+// LanguageCookieName is the cookie name for language preference.
 const LanguageCookieName = "ocms_lang"
 
 // LanguageInfo holds language data for the request context.

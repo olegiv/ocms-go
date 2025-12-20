@@ -1,4 +1,4 @@
-// Package page_analytics provides built-in server-side analytics for oCMS.
+// Package analytics_int provides built-in server-side analytics for oCMS.
 // It tracks page views, unique visitors, referrers, browser/device stats,
 // and geographic data with privacy-focused anonymization.
 package analytics_int

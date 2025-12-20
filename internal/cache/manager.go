@@ -33,9 +33,9 @@ type ManagerCacheStats struct {
 
 // ManagerInfo holds information about the cache manager configuration.
 type ManagerInfo struct {
-	BackendType CacheBackendType // The distributed cache backend type
-	IsFallback  bool             // True if fell back to memory due to Redis failure
-	RedisURL    string           // Redis URL if using Redis (masked for security)
+	BackendType BackendType // The distributed cache backend type
+	IsFallback  bool        // True if fell back to memory due to Redis failure
+	RedisURL    string      // Redis URL if using Redis (masked for security)
 }
 
 // Manager manages all cache instances and provides a unified interface.
@@ -68,14 +68,14 @@ func NewManager(queries *store.Queries) *Manager {
 		General:             New(5 * time.Minute),
 		ThemeSettingsPrefix: "theme_settings_",
 		info: ManagerInfo{
-			BackendType: CacheBackendMemory,
+			BackendType: BackendMemory,
 			IsFallback:  false,
 		},
 	}
 }
 
 // NewManagerWithConfig creates a new cache manager with optional distributed cache.
-func NewManagerWithConfig(queries *store.Queries, cfg CacheConfig) *Manager {
+func NewManagerWithConfig(queries *store.Queries, cfg Config) *Manager {
 	m := NewManager(queries)
 
 	// Try to create distributed cache if Redis is configured
@@ -88,7 +88,7 @@ func NewManagerWithConfig(queries *store.Queries, cfg CacheConfig) *Manager {
 			m.info.RedisURL = maskRedisURL(cfg.RedisURL)
 		} else {
 			slog.Warn("failed to create distributed cache", "error", err)
-			m.info.BackendType = CacheBackendMemory
+			m.info.BackendType = BackendMemory
 			m.info.IsFallback = true
 		}
 	}
@@ -135,7 +135,7 @@ func (m *Manager) Info() ManagerInfo {
 
 // IsRedis returns true if using Redis as the distributed cache backend.
 func (m *Manager) IsRedis() bool {
-	return m.info.BackendType == CacheBackendRedis
+	return m.info.BackendType == BackendRedis
 }
 
 // HealthCheck performs a health check on the cache system.

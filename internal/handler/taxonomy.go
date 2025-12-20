@@ -878,7 +878,6 @@ func (h *TaxonomyHandler) ListCategories(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// CategoryFormData holds data for the category form template.
 // CategoryTranslationInfo holds information about a category translation.
 type CategoryTranslationInfo struct {
 	Language store.Language

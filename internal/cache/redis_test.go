@@ -308,7 +308,7 @@ func TestRedisCache_EmptyURL(t *testing.T) {
 }
 
 func TestNewCacheWithInfo_Memory(t *testing.T) {
-	cfg := CacheConfig{
+	cfg := Config{
 		Type:       "memory",
 		DefaultTTL: time.Minute,
 		MaxSize:    100,
@@ -320,8 +320,8 @@ func TestNewCacheWithInfo_Memory(t *testing.T) {
 	}
 	defer func() { _ = result.Cache.Close() }()
 
-	if result.BackendType != CacheBackendMemory {
-		t.Errorf("BackendType = %s, want %s", result.BackendType, CacheBackendMemory)
+	if result.BackendType != BackendMemory {
+		t.Errorf("BackendType = %s, want %s", result.BackendType, BackendMemory)
 	}
 	if result.IsFallback {
 		t.Error("IsFallback should be false for explicit memory config")
@@ -329,7 +329,7 @@ func TestNewCacheWithInfo_Memory(t *testing.T) {
 }
 
 func TestNewCacheWithInfo_RedisFallback(t *testing.T) {
-	cfg := CacheConfig{
+	cfg := Config{
 		Type:             "redis",
 		RedisURL:         "redis://localhost:63999/0", // Non-existent Redis
 		FallbackToMemory: true,
@@ -343,8 +343,8 @@ func TestNewCacheWithInfo_RedisFallback(t *testing.T) {
 	}
 	defer func() { _ = result.Cache.Close() }()
 
-	if result.BackendType != CacheBackendMemory {
-		t.Errorf("BackendType = %s, want %s (fallback)", result.BackendType, CacheBackendMemory)
+	if result.BackendType != BackendMemory {
+		t.Errorf("BackendType = %s, want %s (fallback)", result.BackendType, BackendMemory)
 	}
 	if !result.IsFallback {
 		t.Error("IsFallback should be true when Redis fails")
@@ -352,7 +352,7 @@ func TestNewCacheWithInfo_RedisFallback(t *testing.T) {
 }
 
 func TestNewCacheWithInfo_RedisNoFallback(t *testing.T) {
-	cfg := CacheConfig{
+	cfg := Config{
 		Type:             "redis",
 		RedisURL:         "redis://localhost:63999/0", // Non-existent Redis
 		FallbackToMemory: false,

@@ -18,10 +18,8 @@ import (
 	"ocms-go/internal/store"
 )
 
-// Context keys for API data.
-const (
-	ContextKeyAPIKey ContextKey = "api_key"
-)
+// ContextKeyAPIKey is the context key for API key data.
+const ContextKeyAPIKey ContextKey = "api_key"
 
 // APIError represents a JSON error response for the API.
 type APIError struct {

@@ -243,13 +243,14 @@ func (r *Registry) loadActiveStatus(db *sql.DB) error {
 			r.activeStatus[name] = true
 			r.sidebarStatus[name] = false
 			r.logger.Debug("module registered in database", "module", name, "active", true, "sidebar", false)
-		} else if err != nil {
-			return fmt.Errorf("loading active status for module %s: %w", name, err)
-		} else {
-			r.activeStatus[name] = isActive
-			r.sidebarStatus[name] = showInSidebar
-			r.logger.Debug("loaded module status", "module", name, "active", isActive, "sidebar", showInSidebar)
+			continue
 		}
+		if err != nil {
+			return fmt.Errorf("loading active status for module %s: %w", name, err)
+		}
+		r.activeStatus[name] = isActive
+		r.sidebarStatus[name] = showInSidebar
+		r.logger.Debug("loaded module status", "module", name, "active", isActive, "sidebar", showInSidebar)
 	}
 	return nil
 }

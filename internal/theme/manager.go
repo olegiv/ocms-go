@@ -304,7 +304,7 @@ func (m *Manager) ListThemes() []*ThemeConfig {
 	return configs
 }
 
-// ListThemesWithActive returns all themes with an indicator of which is active.
+// ThemeInfo represents a theme with its configuration and active status.
 type ThemeInfo struct {
 	Name     string
 	Config   ThemeConfig
