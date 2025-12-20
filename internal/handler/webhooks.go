@@ -73,15 +73,10 @@ type WebhookFormData struct {
 
 // WebhookDeliveriesData holds data for the deliveries template.
 type WebhookDeliveriesData struct {
-	Webhook     store.Webhook
-	Deliveries  []store.WebhookDelivery
-	CurrentPage int
-	TotalPages  int
-	TotalCount  int64
-	HasPrev     bool
-	HasNext     bool
-	PrevPage    int
-	NextPage    int
+	Webhook    store.Webhook
+	Deliveries []store.WebhookDelivery
+	TotalCount int64
+	Pagination AdminPagination
 }
 
 // List handles GET /admin/webhooks - displays all webhooks.
@@ -674,15 +669,10 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := WebhookDeliveriesData{
-		Webhook:     webhook,
-		Deliveries:  deliveries,
-		CurrentPage: page,
-		TotalPages:  totalPages,
-		TotalCount:  totalCount,
-		HasPrev:     page > 1,
-		HasNext:     page < totalPages,
-		PrevPage:    page - 1,
-		NextPage:    page + 1,
+		Webhook:    webhook,
+		Deliveries: deliveries,
+		TotalCount: totalCount,
+		Pagination: BuildAdminPagination(page, int(totalCount), DeliveriesPerPage, fmt.Sprintf("/admin/webhooks/%d/deliveries", id), r.URL.Query()),
 	}
 
 	if err := h.renderer.Render(w, r, "admin/webhooks_deliveries", render.TemplateData{

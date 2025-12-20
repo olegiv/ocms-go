@@ -94,17 +94,12 @@ func formatMetadata(metadata string) string {
 // EventsListData holds data for the events list template.
 type EventsListData struct {
 	Events      []EventWithUser
-	CurrentPage int
-	TotalPages  int
 	TotalEvents int64
-	HasPrev     bool
-	HasNext     bool
-	PrevPage    int
-	NextPage    int
 	Level       string
 	Category    string
 	Levels      []string
 	Categories  []string
+	Pagination  AdminPagination
 }
 
 // List handles GET /admin/events - displays a paginated list of events.
@@ -214,17 +209,12 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	data := EventsListData{
 		Events:      events,
-		CurrentPage: page,
-		TotalPages:  totalPages,
 		TotalEvents: totalEvents,
-		HasPrev:     page > 1,
-		HasNext:     page < totalPages,
-		PrevPage:    page - 1,
-		NextPage:    page + 1,
 		Level:       level,
 		Category:    category,
 		Levels:      []string{model.EventLevelInfo, model.EventLevelWarning, model.EventLevelError},
 		Categories:  []string{model.EventCategoryAuth, model.EventCategoryPage, model.EventCategoryUser, model.EventCategoryConfig, model.EventCategorySystem},
+		Pagination:  BuildAdminPagination(page, int(totalEvents), EventsPerPage, "/admin/events", r.URL.Query()),
 	}
 
 	if err := h.renderer.Render(w, r, "admin/events", render.TemplateData{

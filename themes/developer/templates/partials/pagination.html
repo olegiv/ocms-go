@@ -6,6 +6,14 @@
     </div>
 
     <ul class="dev-pagination-list">
+        {{if .Pagination.HasFirst}}
+        <li class="dev-pagination-item">
+            <a href="{{.Pagination.FirstURL}}" class="dev-pagination-link dev-pagination-first" title="{{TTheme $.LangCode "pagination.first"}}">
+                <span class="dev-arrow">&lt;&lt;</span>
+            </a>
+        </li>
+        {{end}}
+
         {{if .Pagination.HasPrev}}
         <li class="dev-pagination-item">
             <a href="{{.Pagination.PrevURL}}" class="dev-pagination-link dev-pagination-prev">
@@ -30,6 +38,14 @@
         <li class="dev-pagination-item">
             <a href="{{.Pagination.NextURL}}" class="dev-pagination-link dev-pagination-next">
                 {{TTheme $.LangCode "pagination.next"}} <span class="dev-arrow">&gt;</span>
+            </a>
+        </li>
+        {{end}}
+
+        {{if .Pagination.HasLast}}
+        <li class="dev-pagination-item">
+            <a href="{{.Pagination.LastURL}}" class="dev-pagination-link dev-pagination-last" title="{{TTheme $.LangCode "pagination.last"}}">
+                <span class="dev-arrow">&gt;&gt;</span>
             </a>
         </li>
         {{end}}

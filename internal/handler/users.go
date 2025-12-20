@@ -83,13 +83,8 @@ func (h *UsersHandler) dispatchUserEvent(ctx context.Context, eventType string, 
 type UsersListData struct {
 	Users         []store.User
 	CurrentUserID int64
-	CurrentPage   int
-	TotalPages    int
 	TotalUsers    int64
-	HasPrev       bool
-	HasNext       bool
-	PrevPage      int
-	NextPage      int
+	Pagination    AdminPagination
 }
 
 // List handles GET /admin/users - displays a paginated list of users.
@@ -139,13 +134,8 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	data := UsersListData{
 		Users:         users,
 		CurrentUserID: middleware.GetUserID(r),
-		CurrentPage:   page,
-		TotalPages:    totalPages,
 		TotalUsers:    totalUsers,
-		HasPrev:       page > 1,
-		HasNext:       page < totalPages,
-		PrevPage:      page - 1,
-		NextPage:      page + 1,
+		Pagination:    BuildAdminPagination(page, int(totalUsers), UsersPerPage, "/admin/users", r.URL.Query()),
 	}
 
 	if err := h.renderer.Render(w, r, "admin/users_list", render.TemplateData{

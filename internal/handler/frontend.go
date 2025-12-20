@@ -93,8 +93,12 @@ type Pagination struct {
 	PerPage     int
 	HasPrev     bool
 	HasNext     bool
+	HasFirst    bool
+	HasLast     bool
 	PrevURL     string
 	NextURL     string
+	FirstURL    string
+	LastURL     string
 	Pages       []PaginationPage
 }
 
@@ -1489,6 +1493,8 @@ func (h *FrontendHandler) buildPagination(currentPage, totalItems, perPage int, 
 		PerPage:     perPage,
 		HasPrev:     currentPage > 1,
 		HasNext:     currentPage < totalPages,
+		HasFirst:    currentPage > 1,
+		HasLast:     currentPage < totalPages,
 	}
 
 	// Build URL helper
@@ -1505,8 +1511,14 @@ func (h *FrontendHandler) buildPagination(currentPage, totalItems, perPage int, 
 	if pagination.HasNext {
 		pagination.NextURL = buildURL(currentPage + 1)
 	}
+	if pagination.HasFirst {
+		pagination.FirstURL = buildURL(1)
+	}
+	if pagination.HasLast {
+		pagination.LastURL = buildURL(totalPages)
+	}
 
-	// Build page links (show max 5 pages around current)
+	// Build page links (show max 5 pages around current with ellipsis)
 	start := currentPage - 2
 	end := currentPage + 2
 	if start < 1 {
@@ -1521,11 +1533,40 @@ func (h *FrontendHandler) buildPagination(currentPage, totalItems, perPage int, 
 		}
 	}
 
+	// Add first page and ellipsis if needed
+	if start > 1 {
+		pagination.Pages = append(pagination.Pages, PaginationPage{
+			Number:    1,
+			URL:       buildURL(1),
+			IsCurrent: false,
+		})
+		if start > 2 {
+			pagination.Pages = append(pagination.Pages, PaginationPage{
+				IsEllipsis: true,
+			})
+		}
+	}
+
+	// Add page numbers
 	for i := start; i <= end; i++ {
 		pagination.Pages = append(pagination.Pages, PaginationPage{
 			Number:    i,
 			URL:       buildURL(i),
 			IsCurrent: i == currentPage,
+		})
+	}
+
+	// Add ellipsis and last page if needed
+	if end < totalPages {
+		if end < totalPages-1 {
+			pagination.Pages = append(pagination.Pages, PaginationPage{
+				IsEllipsis: true,
+			})
+		}
+		pagination.Pages = append(pagination.Pages, PaginationPage{
+			Number:    totalPages,
+			URL:       buildURL(totalPages),
+			IsCurrent: false,
 		})
 	}
 
