@@ -78,7 +78,7 @@ func (h *EventLogHandler) WithGroup(name string) slog.Handler {
 }
 
 // writeToEventLog writes a log record to the Event Log database.
-func (h *EventLogHandler) writeToEventLog(ctx context.Context, r slog.Record) {
+func (h *EventLogHandler) writeToEventLog(_ context.Context, r slog.Record) {
 	level := h.slogLevelToEventLevel(r.Level)
 	category := h.extractCategory(r)
 	metadata := h.extractMetadata(r)

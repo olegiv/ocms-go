@@ -233,11 +233,9 @@ func TestShouldTrack_DisabledModule(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	// When module is disabled, middleware should skip tracking
 	// shouldTrack still checks path filtering even when disabled
-	result := m.shouldTrack(req)
-	if !result {
-		// shouldTrack only checks path, not enabled state
-		// This is expected - the middleware checks enabled state separately
-	}
+	// shouldTrack only checks path, not enabled state
+	// The middleware checks enabled state separately
+	_ = m.shouldTrack(req)
 }
 
 func TestResponseWriter(t *testing.T) {
