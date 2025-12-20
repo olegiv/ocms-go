@@ -93,7 +93,7 @@
             <div class="form-group">
                 <label class="form-label">{{T .AdminLang "webhooks.events"}} <span class="required">*</span></label>
                 {{if index .Data.Errors "events"}}
-                <span class="form-error" style="display: block; margin-bottom: 0.5rem;">{{index .Data.Errors "events"}}</span>
+                <span class="form-error form-label-block">{{index .Data.Errors "events"}}</span>
                 {{end}}
 
                 <div class="events-grid">
@@ -149,7 +149,7 @@
 
             <div class="form-group" x-data="{ headers: {{if .Data.FormHeaders}}{{toJSON .Data.FormHeaders}}{{else}}{}{{end}} }">
                 <label class="form-label">{{T .AdminLang "webhooks.custom_headers"}}</label>
-                <span class="form-hint" style="display: block; margin-bottom: 0.5rem;">{{T .AdminLang "webhooks.headers_hint"}}</span>
+                <span class="form-hint form-label-block">{{T .AdminLang "webhooks.headers_hint"}}</span>
 
                 <div class="headers-editor">
                     <template x-for="(value, key) in headers" :key="key">

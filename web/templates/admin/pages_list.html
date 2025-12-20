@@ -26,7 +26,7 @@
             </a>
             {{end}}
             <a href="{{pagesListURL "scheduled" .Data.CategoryFilter .Data.SearchFilter 0}}" class="btn btn-sm {{if eq .Data.StatusFilter "scheduled"}}btn-primary{{else}}btn-outline{{end}}">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-text"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 {{T .AdminLang "status.scheduled"}}
             </a>
         </div>
@@ -88,7 +88,7 @@
         <table class="table">
             <thead>
                 <tr>
-                    <th style="width: 60px;">{{T .AdminLang "label.image"}}</th>
+                    <th class="col-w-60">{{T .AdminLang "label.image"}}</th>
                     <th>{{T .AdminLang "label.title"}}</th>
                     <th>{{T .AdminLang "label.tags"}}</th>
                     <th>{{T .AdminLang "label.categories"}}</th>
@@ -148,7 +148,7 @@
                     <td>
                         {{if and (eq .Status "draft") .ScheduledAt.Valid}}
                         <span class="badge badge-info" title="{{T $.AdminLang "status.scheduled"}} {{formatDateTimeLocale .ScheduledAt.Time $.AdminLang}}">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-text"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                             {{T $.AdminLang "status.scheduled"}}
                         </span>
                         {{else}}

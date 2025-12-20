@@ -3,7 +3,7 @@
     <h1 class="page-title">{{T .AdminLang "forms.submissions"}} - {{.Data.Form.Name}}</h1>
     <div class="page-actions">
         {{if .Data.Submissions}}
-        <form action="/admin/forms/{{.Data.Form.ID}}/submissions/export" method="POST" style="display: inline;">
+        <form action="/admin/forms/{{.Data.Form.ID}}/submissions/export" method="POST" class="d-inline">
             {{.CSRFField}}
             <button type="submit" class="btn btn-secondary">{{T .AdminLang "forms.export_csv"}}</button>
         </form>
@@ -28,12 +28,12 @@
     <table class="table">
         <thead>
             <tr>
-                <th style="width: 60px;">ID</th>
+                <th class="col-w-60">ID</th>
                 <th>{{T .AdminLang "forms.preview"}}</th>
-                <th style="width: 160px;">{{T .AdminLang "forms.submitted"}}</th>
-                <th style="width: 120px;">{{T .AdminLang "forms.ip_address"}}</th>
-                <th style="width: 80px;">{{T .AdminLang "label.status"}}</th>
-                <th style="width: 150px;">{{T .AdminLang "label.actions"}}</th>
+                <th class="col-w-160">{{T .AdminLang "forms.submitted"}}</th>
+                <th class="col-w-120">{{T .AdminLang "forms.ip_address"}}</th>
+                <th class="col-w-80">{{T .AdminLang "label.status"}}</th>
+                <th class="col-w-150">{{T .AdminLang "label.actions"}}</th>
             </tr>
         </thead>
         <tbody>

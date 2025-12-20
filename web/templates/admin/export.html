@@ -22,7 +22,7 @@
                         </label>
                     </div>
 
-                    <div class="form-group export-sub-option" style="margin-left: 2rem; margin-top: 0.5rem;">
+                    <div class="form-group export-sub-option nested-options">
                         <label for="page_status" class="form-label">{{T .AdminLang "export.page_status"}}</label>
                         <select id="page_status" name="page_status" class="form-select">
                             <option value="all">{{T .AdminLang "export.status_all"}}</option>
@@ -55,7 +55,7 @@
                         </label>
                     </div>
 
-                    <div class="form-checkbox" style="margin-left: 2rem;" id="media-files-option">
+                    <div class="form-checkbox ml-8" id="media-files-option">
                         <input type="checkbox" id="include_media_files" name="include_media_files" value="on" class="checkbox-input">
                         <label for="include_media_files" class="checkbox-label">
                             <strong>{{T .AdminLang "export.media_files"}}</strong>
@@ -85,7 +85,7 @@
                         </label>
                     </div>
 
-                    <div class="form-checkbox" style="margin-left: 2rem;">
+                    <div class="form-checkbox ml-8">
                         <input type="checkbox" id="include_submissions" name="include_submissions" value="on" class="checkbox-input">
                         <label for="include_submissions" class="checkbox-label">
                             <strong>{{T .AdminLang "export.submissions"}}</strong>
@@ -131,7 +131,7 @@
             <p id="export-info-text">{{T .AdminLang "export.info"}}</p>
         </div>
 
-        <div class="export-info zip-info" id="zip-info" style="display: none; background: var(--warning-bg, #fff3cd); color: var(--warning-text, #856404);">
+        <div class="export-info zip-info warning-notice" id="zip-info">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
             <p>{{T .AdminLang "export.zip_info"}}</p>
         </div>

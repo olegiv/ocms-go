@@ -16,7 +16,7 @@
 
 <div class="card">
     <div class="card-body">
-        <div class="alert alert-warning" style="margin-bottom: 1.5rem;">
+        <div class="alert alert-warning mb-6">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
             <div>
                 <strong>{{T .AdminLang "api_keys.important"}}:</strong> {{T .AdminLang "api_keys.copy_warning"}}
@@ -74,7 +74,7 @@
             {{end}}
         </div>
 
-        <div class="form-actions" style="margin-top: 2rem;">
+        <div class="form-actions mt-8">
             <a href="/admin/api-keys" class="btn btn-primary">{{T .AdminLang "btn.done"}}</a>
             <a href="/admin/api-keys/new" class="btn btn-outline">{{T .AdminLang "api_keys.create_another"}}</a>
         </div>
@@ -183,7 +183,7 @@
             <div class="form-group">
                 <label class="form-label">{{T .AdminLang "api_keys.permissions"}} <span class="required">*</span></label>
                 {{if index .Data.Errors "permissions"}}
-                <span class="form-error" style="display: block; margin-bottom: 0.5rem;">{{index .Data.Errors "permissions"}}</span>
+                <span class="form-error form-label-block">{{index .Data.Errors "permissions"}}</span>
                 {{end}}
 
                 <div class="permissions-grid">

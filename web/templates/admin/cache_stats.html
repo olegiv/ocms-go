@@ -4,14 +4,14 @@
         <h1 class="page-title">{{T .AdminLang "cache.title"}}</h1>
         <p class="page-description">{{T .AdminLang "cache.description"}}</p>
         {{if .Data.TotalStats.ResetAt}}
-        <p class="page-description" style="font-size: 0.8rem; margin-top: 0.25rem;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        <p class="page-description page-subtitle">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
             {{T .AdminLang "cache.stats_reset"}} {{.Data.TotalStats.ResetAt.Format "Jan 2, 2006 15:04:05"}}
         </p>
         {{end}}
     </div>
     <div class="page-actions">
-        <form method="POST" action="/admin/cache/clear" style="display: inline;">
+        <form method="POST" action="/admin/cache/clear" class="d-inline">
             {{.CSRFField}}
             <button type="submit" class="btn btn-danger" onclick="return confirm('{{T .AdminLang "cache.clear_confirm"}}')">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -22,7 +22,7 @@
 </div>
 
 <!-- Cache Backend Info -->
-<div class="cache-backend-info" style="margin-bottom: 1.5rem;">
+<div class="cache-backend-info mb-6">
     <div class="backend-card {{if .Data.IsRedis}}backend-redis{{else}}backend-memory{{end}}">
         <div class="backend-icon">
             {{if .Data.IsRedis}}
@@ -35,7 +35,7 @@
             <span class="backend-type">
                 {{if .Data.IsRedis}}{{T .AdminLang "cache.redis_cache"}}{{else}}{{T .AdminLang "cache.memory_cache"}}{{end}}
                 {{if .Data.Info.IsFallback}}
-                <span class="badge badge-warning" style="margin-left: 0.5rem;">{{T .AdminLang "cache.fallback"}}</span>
+                <span class="badge badge-warning ml-2">{{T .AdminLang "cache.fallback"}}</span>
                 {{end}}
             </span>
             <span class="backend-status">
@@ -53,7 +53,7 @@
         </div>
     </div>
     {{if .Data.Info.IsFallback}}
-    <div class="alert alert-warning" style="margin-top: 0.75rem;">
+    <div class="alert alert-warning mt-3">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
         <span>{{T .AdminLang "cache.redis_failed"}}</span>
     </div>
@@ -61,9 +61,9 @@
 </div>
 
 <!-- Total Stats Summary -->
-<div class="stats-grid" style="margin-bottom: 1.5rem;">
+<div class="stats-grid mb-6">
     <div class="stat-card">
-        <div class="stat-icon" style="background: var(--color-success-light); color: var(--color-success);">
+        <div class="stat-icon stat-badge-success">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
         </div>
         <div class="stat-content">
@@ -72,7 +72,7 @@
         </div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon" style="background: var(--color-warning-light); color: var(--color-warning);">
+        <div class="stat-icon stat-badge-warning">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </div>
         <div class="stat-content">
@@ -81,7 +81,7 @@
         </div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon" style="background: var(--color-primary-light); color: var(--color-primary);">
+        <div class="stat-icon stat-badge-primary">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
         </div>
         <div class="stat-content">
@@ -90,7 +90,7 @@
         </div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon" style="background: var(--color-info-light); color: var(--color-info);">
+        <div class="stat-icon stat-badge-info">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
         </div>
         <div class="stat-content">
@@ -145,12 +145,12 @@
                         </td>
                         <td>
                             {{if eq .Type "config"}}
-                            <form method="POST" action="/admin/cache/clear/config" style="display: inline;">
+                            <form method="POST" action="/admin/cache/clear/config" class="d-inline">
                                 {{$.CSRFField}}
                                 <button type="submit" class="btn btn-sm btn-outline" title="{{T $.AdminLang "cache.clear_config"}}">{{T $.AdminLang "cache.clear"}}</button>
                             </form>
                             {{else if eq .Type "sitemap"}}
-                            <form method="POST" action="/admin/cache/clear/sitemap" style="display: inline;">
+                            <form method="POST" action="/admin/cache/clear/sitemap" class="d-inline">
                                 {{$.CSRFField}}
                                 <button type="submit" class="btn btn-sm btn-outline" title="{{T $.AdminLang "cache.clear_sitemap"}}">{{T $.AdminLang "cache.clear"}}</button>
                             </form>
@@ -165,7 +165,7 @@
 </div>
 
 <!-- Cache Info -->
-<div class="card" style="margin-top: 1.5rem;">
+<div class="card mt-6">
     <div class="card-header">
         <h2 class="card-title">{{T .AdminLang "cache.info_title"}}</h2>
     </div>

@@ -2134,3 +2134,89 @@
   color: $gray-400;
   pointer-events: none;
 }
+
+// =============================================================================
+// STAT BADGES (light background variants for cache stats, etc.)
+// =============================================================================
+
+.stat-badge-success {
+  background: rgba($success, 0.1);
+  color: color.adjust($success, $lightness: -15%);
+}
+
+.stat-badge-warning {
+  background: rgba($warning, 0.1);
+  color: color.adjust($warning, $lightness: -15%);
+}
+
+.stat-badge-primary {
+  background: rgba($primary, 0.1);
+  color: $primary-dark;
+}
+
+.stat-badge-info {
+  background: rgba($info, 0.1);
+  color: $info;
+}
+
+// =============================================================================
+// FORM LABEL BLOCK (display: block with bottom margin)
+// =============================================================================
+
+.form-label-block {
+  display: block;
+  margin-bottom: $spacing-2;
+}
+
+// =============================================================================
+// PAGE SUBTITLE/META
+// =============================================================================
+
+.page-subtitle {
+  font-size: $font-size-xs;
+  margin-top: $spacing-1;
+  color: $gray-500;
+}
+
+// =============================================================================
+// WARNING NOTICE (hidden by default, styled alert)
+// =============================================================================
+
+.warning-notice {
+  display: none;
+  background: rgba($warning, 0.15);
+  color: color.adjust($warning, $lightness: -25%);
+  padding: $spacing-3;
+  border-radius: $radius-md;
+}
+
+// =============================================================================
+// API DOCS FOOTER
+// =============================================================================
+
+.api-docs-footer {
+  margin-top: $spacing-16;
+  padding-top: $spacing-8;
+  border-top: 1px solid $gray-200;
+  color: $gray-500;
+  font-size: $font-size-sm;
+}
+
+// =============================================================================
+// NESTED OPTIONS (checkboxes/radios)
+// =============================================================================
+
+.nested-options {
+  margin-left: $spacing-8;
+  margin-top: $spacing-2;
+}
+
+// =============================================================================
+// TAGS/BADGES WRAPPER
+// =============================================================================
+
+.tags-wrapper {
+  display: flex;
+  gap: $spacing-2;
+  flex-wrap: wrap;
+}

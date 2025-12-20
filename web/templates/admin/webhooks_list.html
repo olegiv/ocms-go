@@ -92,7 +92,7 @@
                             <a href="/admin/webhooks/{{.ID}}/deliveries" class="btn btn-sm btn-outline" title="{{T $.AdminLang "webhooks.view_deliveries"}}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
                             </a>
-                            <form method="POST" action="/admin/webhooks/{{.ID}}/test" style="display: inline;">
+                            <form method="POST" action="/admin/webhooks/{{.ID}}/test" class="d-inline">
                                 {{$.CSRFField}}
                                 <button type="submit" class="btn btn-sm btn-outline" title="{{T $.AdminLang "webhooks.test"}}">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -168,13 +168,13 @@
 </div>
 {{end}}
 
-<div class="card" style="margin-top: 1.5rem;">
+<div class="card mt-6">
     <div class="card-header">
         <h3 class="card-title">{{T .AdminLang "webhooks.about_title"}}</h3>
     </div>
     <div class="card-body">
         <p>{{T .AdminLang "webhooks.about_description"}}</p>
-        <h4 style="margin-top: 1rem; font-size: 0.875rem;">{{T .AdminLang "webhooks.available_events"}}</h4>
+        <h4 class="mt-4 text-sm">{{T .AdminLang "webhooks.available_events"}}</h4>
         <div class="events-grid">
             <div class="event-category">
                 <h5>{{T .AdminLang "webhooks.category_pages"}}</h5>

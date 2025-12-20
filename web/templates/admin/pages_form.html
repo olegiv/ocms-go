@@ -250,7 +250,7 @@
                     <!-- Editor Content Area -->
                     <div id="editor" class="editor-content"></div>
                     <!-- Source HTML Editor -->
-                    <textarea id="source-editor" class="source-editor" style="display: none;"></textarea>
+                    <textarea id="source-editor" class="source-editor hidden"></textarea>
                 </div>
                 <input type="hidden" name="body" id="body-input" value="{{if .Data.FormValues.body}}{{.Data.FormValues.body}}{{else if .Data.Page}}{{.Data.Page.Body}}{{end}}">
                 {{if .Data.Errors.body}}
@@ -394,7 +394,7 @@
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                         <span>{{T .AdminLang "schedule.title"}}</span>
                         {{if and .Data.Page .Data.Page.ScheduledAt.Valid}}
-                        <span class="badge badge-info" style="margin-left: 8px;">{{T .AdminLang "schedule.scheduled"}}</span>
+                        <span class="badge badge-info ml-2">{{T .AdminLang "schedule.scheduled"}}</span>
                         {{end}}
                     </summary>
                     <div class="collapsible-content">
@@ -414,11 +414,11 @@
                                 {{end}}
                             </span>
                         </div>
-                        <div class="alert alert-info" style="margin-top: 12px;">
+                        <div class="alert alert-info mt-3">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
                             <div>
                                 <strong>{{T .AdminLang "schedule.how_it_works"}}:</strong>
-                                <ul style="margin: 4px 0 0 16px; padding: 0;">
+                                <ul class="ml-4 mt-1">
                                     <li>{{T .AdminLang "schedule.step1"}}</li>
                                     <li>{{T .AdminLang "schedule.step2"}}</li>
                                     <li>{{T .AdminLang "schedule.step3"}}</li>
