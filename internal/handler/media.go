@@ -91,18 +91,13 @@ type MediaItem struct {
 
 // MediaLibraryData holds data for the media library template.
 type MediaLibraryData struct {
-	Media       []MediaItem
-	Folders     []store.MediaFolder
-	CurrentPage int
-	TotalPages  int
-	TotalCount  int64
-	HasPrev     bool
-	HasNext     bool
-	PrevPage    int
-	NextPage    int
-	Filter      string // images, documents, videos, all
-	FolderID    *int64
-	Search      string
+	Media      []MediaItem
+	Folders    []store.MediaFolder
+	TotalCount int64
+	Filter     string // images, documents, videos, all
+	FolderID   *int64
+	Search     string
+	Pagination AdminPagination
 }
 
 // Library handles GET /admin/media - displays the media library.
@@ -219,18 +214,13 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := MediaLibraryData{
-		Media:       mediaItems,
-		Folders:     folders,
-		CurrentPage: page,
-		TotalPages:  totalPages,
-		TotalCount:  totalCount,
-		HasPrev:     page > 1,
-		HasNext:     page < totalPages,
-		PrevPage:    page - 1,
-		NextPage:    page + 1,
-		Filter:      filter,
-		FolderID:    folderID,
-		Search:      search,
+		Media:      mediaItems,
+		Folders:    folders,
+		TotalCount: totalCount,
+		Filter:     filter,
+		FolderID:   folderID,
+		Search:     search,
+		Pagination: BuildAdminPagination(page, int(totalCount), MediaPerPage, "/admin/media", r.URL.Query()),
 	}
 
 	if err := h.renderer.Render(w, r, "admin/media_library", render.TemplateData{

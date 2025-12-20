@@ -821,8 +821,10 @@ p {
     cursor: not-allowed;
 }
 
+.pagination-first a,
 .pagination-prev a,
-.pagination-next a {
+.pagination-next a,
+.pagination-last a {
     gap: var(--spacing-xs);
 }
 
@@ -1133,7 +1135,7 @@ p {
         grid-template-columns: 1fr;
     }
 
-    .pagination-item:not(.pagination-prev):not(.pagination-next):not(.active) {
+    .pagination-item:not(.pagination-first):not(.pagination-prev):not(.pagination-next):not(.pagination-last):not(.active) {
         display: none;
     }
 

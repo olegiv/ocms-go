@@ -99,13 +99,7 @@ type PagesListData struct {
 	PageCategories     map[int64][]store.Category   // Map of page ID to categories
 	PageFeaturedImages map[int64]*FeaturedImageData // Map of page ID to featured image
 	PageLanguages      map[int64]*store.Language    // Map of page ID to language
-	CurrentPage        int
-	TotalPages         int
 	TotalCount         int64
-	HasPrev            bool
-	HasNext            bool
-	PrevPage           int
-	NextPage           int
 	StatusFilter       string
 	CategoryFilter     int64
 	LanguageFilter     int64              // Language filter
@@ -113,6 +107,7 @@ type PagesListData struct {
 	AllCategories      []PageCategoryNode // For category filter dropdown
 	AllLanguages       []store.Language   // All active languages for filter dropdown
 	Statuses           []string
+	Pagination         AdminPagination
 }
 
 // List handles GET /admin/pages - displays a paginated list of pages.
@@ -374,13 +369,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		PageCategories:     pageCategories,
 		PageFeaturedImages: pageFeaturedImages,
 		PageLanguages:      pageLanguages,
-		CurrentPage:        page,
-		TotalPages:         totalPages,
 		TotalCount:         totalCount,
-		HasPrev:            page > 1,
-		HasNext:            page < totalPages,
-		PrevPage:           page - 1,
-		NextPage:           page + 1,
 		StatusFilter:       statusFilter,
 		CategoryFilter:     categoryFilter,
 		LanguageFilter:     languageFilter,
@@ -388,6 +377,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		AllCategories:      categoryTree,
 		AllLanguages:       allLanguages,
 		Statuses:           ValidPageStatuses,
+		Pagination:         BuildAdminPagination(page, int(totalCount), PagesPerPage, "/admin/pages", r.URL.Query()),
 	}
 
 	if err := h.renderer.Render(w, r, "admin/pages_list", render.TemplateData{
@@ -1312,15 +1302,10 @@ const VersionsPerPage = 20
 
 // PageVersionsData holds data for the page versions template.
 type PageVersionsData struct {
-	Page        store.Page
-	Versions    []store.ListPageVersionsWithUserRow
-	CurrentPage int
-	TotalPages  int
-	TotalCount  int64
-	HasPrev     bool
-	HasNext     bool
-	PrevPage    int
-	NextPage    int
+	Page       store.Page
+	Versions   []store.ListPageVersionsWithUserRow
+	TotalCount int64
+	Pagination AdminPagination
 }
 
 // Versions handles GET /admin/pages/{id}/versions - displays version history.
@@ -1391,15 +1376,10 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := PageVersionsData{
-		Page:        page,
-		Versions:    versions,
-		CurrentPage: pageNum,
-		TotalPages:  totalPages,
-		TotalCount:  totalCount,
-		HasPrev:     pageNum > 1,
-		HasNext:     pageNum < totalPages,
-		PrevPage:    pageNum - 1,
-		NextPage:    pageNum + 1,
+		Page:       page,
+		Versions:   versions,
+		TotalCount: totalCount,
+		Pagination: BuildAdminPagination(pageNum, int(totalCount), VersionsPerPage, fmt.Sprintf("/admin/pages/%d/versions", id), r.URL.Query()),
 	}
 
 	if err := h.renderer.Render(w, r, "admin/pages_versions", render.TemplateData{

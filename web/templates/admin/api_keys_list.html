@@ -131,38 +131,9 @@
         </table>
     </div>
 
-    {{if or .Data.HasPrev .Data.HasNext}}
+    {{if .Data.Pagination.ShouldShow}}
     <div class="card-footer">
-        <div class="pagination">
-            <div class="pagination-info">
-                {{T .AdminLang "pagination.page"}} {{.Data.CurrentPage}} {{T .AdminLang "pagination.of"}} {{.Data.TotalPages}}
-            </div>
-            <div class="pagination-controls">
-                {{if .Data.HasPrev}}
-                <a href="/admin/api-keys?page={{.Data.PrevPage}}" class="btn btn-sm btn-outline">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-                    {{T .AdminLang "pagination.previous"}}
-                </a>
-                {{else}}
-                <span class="btn btn-sm btn-outline disabled">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-                    {{T .AdminLang "pagination.previous"}}
-                </span>
-                {{end}}
-
-                {{if .Data.HasNext}}
-                <a href="/admin/api-keys?page={{.Data.NextPage}}" class="btn btn-sm btn-outline">
-                    {{T .AdminLang "pagination.next"}}
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-                </a>
-                {{else}}
-                <span class="btn btn-sm btn-outline disabled">
-                    {{T .AdminLang "pagination.next"}}
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-                </span>
-                {{end}}
-            </div>
-        </div>
+        {{template "pagination" (dict "Pagination" .Data.Pagination "AdminLang" .AdminLang)}}
     </div>
     {{end}}
 </div>

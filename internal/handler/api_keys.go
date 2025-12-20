@@ -39,14 +39,9 @@ func NewAPIKeysHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionMan
 
 // APIKeysListData holds data for the API keys list template.
 type APIKeysListData struct {
-	APIKeys     []store.ApiKey
-	CurrentPage int
-	TotalPages  int
-	TotalKeys   int64
-	HasPrev     bool
-	HasNext     bool
-	PrevPage    int
-	NextPage    int
+	APIKeys    []store.ApiKey
+	TotalKeys  int64
+	Pagination AdminPagination
 }
 
 // List handles GET /admin/api-keys - displays a paginated list of API keys.
@@ -94,14 +89,9 @@ func (h *APIKeysHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := APIKeysListData{
-		APIKeys:     apiKeys,
-		CurrentPage: page,
-		TotalPages:  totalPages,
-		TotalKeys:   totalKeys,
-		HasPrev:     page > 1,
-		HasNext:     page < totalPages,
-		PrevPage:    page - 1,
-		NextPage:    page + 1,
+		APIKeys:    apiKeys,
+		TotalKeys:  totalKeys,
+		Pagination: BuildAdminPagination(page, int(totalKeys), APIKeysPerPage, "/admin/api-keys", r.URL.Query()),
 	}
 
 	if err := h.renderer.Render(w, r, "admin/api_keys_list", render.TemplateData{

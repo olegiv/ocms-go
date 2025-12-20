@@ -42,14 +42,9 @@ func NewTaxonomyHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionMa
 
 // TagsListData holds data for the tags list template.
 type TagsListData struct {
-	Tags        []store.GetTagUsageCountsWithLanguageRow
-	CurrentPage int
-	TotalPages  int
-	TotalCount  int64
-	HasPrev     bool
-	HasNext     bool
-	PrevPage    int
-	NextPage    int
+	Tags       []store.GetTagUsageCountsWithLanguageRow
+	TotalCount int64
+	Pagination AdminPagination
 }
 
 // ListTags handles GET /admin/tags - displays a paginated list of tags.
@@ -97,14 +92,9 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := TagsListData{
-		Tags:        tags,
-		CurrentPage: page,
-		TotalPages:  totalPages,
-		TotalCount:  totalCount,
-		HasPrev:     page > 1,
-		HasNext:     page < totalPages,
-		PrevPage:    page - 1,
-		NextPage:    page + 1,
+		Tags:       tags,
+		TotalCount: totalCount,
+		Pagination: BuildAdminPagination(page, int(totalCount), TagsPerPage, "/admin/tags", r.URL.Query()),
 	}
 
 	if err := h.renderer.Render(w, r, "admin/tags_list", render.TemplateData{

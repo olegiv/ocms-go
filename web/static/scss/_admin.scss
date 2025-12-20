@@ -3602,7 +3602,23 @@ tr.unread {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: $spacing-4;
+  gap: $spacing-2;
+}
+
+.pagination-pages {
+  display: flex;
+  align-items: center;
+  gap: $spacing-1;
+}
+
+.pagination-ellipsis {
+  padding: 0 $spacing-2;
+  color: $gray-500;
+}
+
+.pagination-total {
+  color: $gray-500;
+  margin-left: $spacing-1;
 }
 
 // =====================================================

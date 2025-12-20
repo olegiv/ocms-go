@@ -83,17 +83,9 @@
     </table>
 </div>
 
-{{if gt .Data.TotalPages 1}}
-<div class="pagination">
-    {{if gt .Data.Page 1}}
-    <a href="/admin/forms/{{.Data.Form.ID}}/submissions?page={{sub .Data.Page 1}}" class="btn btn-sm btn-outline">{{T .AdminLang "pagination.previous"}}</a>
-    {{end}}
-
-    <span class="pagination-info">{{T .AdminLang "pagination.page"}} {{.Data.Page}} {{T .AdminLang "pagination.of"}} {{.Data.TotalPages}}</span>
-
-    {{if lt .Data.Page .Data.TotalPages}}
-    <a href="/admin/forms/{{.Data.Form.ID}}/submissions?page={{add .Data.Page 1}}" class="btn btn-sm btn-outline">{{T .AdminLang "pagination.next"}}</a>
-    {{end}}
+{{if .Data.Pagination.ShouldShow}}
+<div class="card-footer">
+    {{template "pagination" (dict "Pagination" .Data.Pagination "AdminLang" .AdminLang)}}
 </div>
 {{end}}
 

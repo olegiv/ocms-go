@@ -1167,9 +1167,7 @@ type SubmissionsListData struct {
 	Submissions []SubmissionListItem
 	TotalCount  int64
 	UnreadCount int64
-	Page        int
-	PerPage     int
-	TotalPages  int
+	Pagination  AdminPagination
 }
 
 // Submissions handles GET /admin/forms/{id}/submissions - lists form submissions.
@@ -1272,9 +1270,7 @@ func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 		Submissions: submissionItems,
 		TotalCount:  totalCount,
 		UnreadCount: unreadCount,
-		Page:        page,
-		PerPage:     perPage,
-		TotalPages:  totalPages,
+		Pagination:  BuildAdminPagination(page, int(totalCount), perPage, fmt.Sprintf("/admin/forms/%d/submissions", formID), r.URL.Query()),
 	}
 
 	if err := h.renderer.Render(w, r, "admin/forms_submissions", render.TemplateData{

@@ -1,0 +1,90 @@
+{{define "pagination"}}
+{{if .Pagination.ShouldShow}}
+<div class="pagination">
+    <div class="pagination-info">
+        {{T .AdminLang "pagination.page"}} {{.Pagination.CurrentPage}} {{T .AdminLang "pagination.of"}} {{.Pagination.TotalPages}}
+        {{if .Pagination.TotalItems}}
+        <span class="pagination-total">({{.Pagination.TotalItems}} {{T .AdminLang "pagination.items"}})</span>
+        {{end}}
+    </div>
+    <div class="pagination-controls">
+        {{/* First Page */}}
+        {{if .Pagination.HasFirst}}
+        <a href="{{.Pagination.FirstURL}}" class="btn btn-sm btn-outline" title="{{T .AdminLang "pagination.first"}}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="11 17 6 12 11 7"></polyline>
+                <polyline points="18 17 13 12 18 7"></polyline>
+            </svg>
+        </a>
+        {{else}}
+        <span class="btn btn-sm btn-outline disabled" title="{{T .AdminLang "pagination.first"}}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="11 17 6 12 11 7"></polyline>
+                <polyline points="18 17 13 12 18 7"></polyline>
+            </svg>
+        </span>
+        {{end}}
+
+        {{/* Previous Page */}}
+        {{if .Pagination.HasPrev}}
+        <a href="{{.Pagination.PrevURL}}" class="btn btn-sm btn-outline" title="{{T .AdminLang "pagination.previous"}}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m15 18-6-6 6-6"/>
+            </svg>
+        </a>
+        {{else}}
+        <span class="btn btn-sm btn-outline disabled" title="{{T .AdminLang "pagination.previous"}}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m15 18-6-6 6-6"/>
+            </svg>
+        </span>
+        {{end}}
+
+        {{/* Page Numbers */}}
+        <div class="pagination-pages">
+            {{range .Pagination.Pages}}
+            {{if .IsEllipsis}}
+            <span class="pagination-ellipsis">&hellip;</span>
+            {{else if .IsCurrent}}
+            <span class="btn btn-sm btn-primary">{{.Number}}</span>
+            {{else}}
+            <a href="{{.URL}}" class="btn btn-sm btn-outline">{{.Number}}</a>
+            {{end}}
+            {{end}}
+        </div>
+
+        {{/* Next Page */}}
+        {{if .Pagination.HasNext}}
+        <a href="{{.Pagination.NextURL}}" class="btn btn-sm btn-outline" title="{{T .AdminLang "pagination.next"}}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m9 18 6-6-6-6"/>
+            </svg>
+        </a>
+        {{else}}
+        <span class="btn btn-sm btn-outline disabled" title="{{T .AdminLang "pagination.next"}}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m9 18 6-6-6-6"/>
+            </svg>
+        </span>
+        {{end}}
+
+        {{/* Last Page */}}
+        {{if .Pagination.HasLast}}
+        <a href="{{.Pagination.LastURL}}" class="btn btn-sm btn-outline" title="{{T .AdminLang "pagination.last"}}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="13 17 18 12 13 7"></polyline>
+                <polyline points="6 17 11 12 6 7"></polyline>
+            </svg>
+        </a>
+        {{else}}
+        <span class="btn btn-sm btn-outline disabled" title="{{T .AdminLang "pagination.last"}}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="13 17 18 12 13 7"></polyline>
+                <polyline points="6 17 11 12 6 7"></polyline>
+            </svg>
+        </a>
+        {{end}}
+    </div>
+</div>
+{{end}}
+{{end}}
