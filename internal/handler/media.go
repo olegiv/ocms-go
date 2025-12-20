@@ -408,25 +408,15 @@ func (h *MediaHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	// Get media ID from URL
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid media ID", "error")
 		http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
 		return
 	}
 
-	// Get media from database
-	media, err := h.queries.GetMediaByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Media not found", "error")
-		} else {
-			slog.Error("failed to get media", "error", err, "media_id", id)
-			h.renderer.SetFlash(r, "Error loading media", "error")
-		}
-		http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
+	media, ok := h.requireMediaWithRedirect(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -480,25 +470,15 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	// Get media ID from URL
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid media ID", "error")
 		http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
 		return
 	}
 
-	// Get existing media
-	media, err := h.queries.GetMediaByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Media not found", "error")
-		} else {
-			slog.Error("failed to get media", "error", err, "media_id", id)
-			h.renderer.SetFlash(r, "Error loading media", "error")
-		}
-		http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
+	media, ok := h.requireMediaWithRedirect(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -594,23 +574,14 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/media/{id} - deletes media and files.
 func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	// Get media ID from URL
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid media ID", http.StatusBadRequest)
 		return
 	}
 
-	// Get media to verify it exists
-	media, err := h.queries.GetMediaByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Media not found", http.StatusNotFound)
-		} else {
-			slog.Error("failed to get media", "error", err, "media_id", id)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	media, ok := h.requireMediaWithError(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -707,23 +678,14 @@ func (h *MediaHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 
 // UpdateFolder handles PUT /admin/media/folders/{id} - renames or moves a folder.
 func (h *MediaHandler) UpdateFolder(w http.ResponseWriter, r *http.Request) {
-	// Get folder ID from URL
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid folder ID", http.StatusBadRequest)
 		return
 	}
 
-	// Get existing folder
-	folder, err := h.queries.GetMediaFolderByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Folder not found", http.StatusNotFound)
-		} else {
-			slog.Error("failed to get folder", "error", err, "folder_id", id)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	folder, ok := h.requireFolderWithError(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -790,23 +752,14 @@ func (h *MediaHandler) UpdateFolder(w http.ResponseWriter, r *http.Request) {
 
 // DeleteFolder handles DELETE /admin/media/folders/{id} - deletes a folder.
 func (h *MediaHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
-	// Get folder ID from URL
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid folder ID", http.StatusBadRequest)
 		return
 	}
 
-	// Check if folder exists
-	folder, err := h.queries.GetMediaFolderByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Folder not found", http.StatusNotFound)
-		} else {
-			slog.Error("failed to get folder", "error", err, "folder_id", id)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	folder, ok := h.requireFolderWithError(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -857,23 +810,13 @@ func (h *MediaHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 
 // MoveMedia handles POST /admin/media/{id}/move - moves media to a different folder.
 func (h *MediaHandler) MoveMedia(w http.ResponseWriter, r *http.Request) {
-	// Get media ID from URL
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid media ID", http.StatusBadRequest)
 		return
 	}
 
-	// Verify media exists
-	_, err = h.queries.GetMediaByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Media not found", http.StatusNotFound)
-		} else {
-			slog.Error("failed to get media", "error", err, "media_id", id)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	if _, ok := h.requireMediaWithError(w, r, id); !ok {
 		return
 	}
 
@@ -888,14 +831,7 @@ func (h *MediaHandler) MoveMedia(w http.ResponseWriter, r *http.Request) {
 	if folderIDStr != "" && folderIDStr != "0" {
 		if fid, err := strconv.ParseInt(folderIDStr, 10, 64); err == nil {
 			// Verify folder exists
-			_, err := h.queries.GetMediaFolderByID(r.Context(), fid)
-			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					http.Error(w, "Folder not found", http.StatusNotFound)
-				} else {
-					slog.Error("failed to get folder", "error", err, "folder_id", fid)
-					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-				}
+			if _, ok := h.requireFolderWithError(w, r, fid); !ok {
 				return
 			}
 			folderID = sql.NullInt64{Int64: fid, Valid: true}
@@ -1057,6 +993,61 @@ func (h *MediaHandler) API(w http.ResponseWriter, r *http.Request) {
 }
 
 // Helper functions
+
+// parseIDParam parses the "id" URL parameter as int64.
+func parseIDParam(r *http.Request) (int64, error) {
+	idStr := chi.URLParam(r, "id")
+	return strconv.ParseInt(idStr, 10, 64)
+}
+
+// requireMediaWithRedirect fetches media by ID and handles errors with flash messages and redirect.
+// Returns the media and true if successful, or zero value and false if an error occurred (response already written).
+func (h *MediaHandler) requireMediaWithRedirect(w http.ResponseWriter, r *http.Request, id int64) (store.Medium, bool) {
+	media, err := h.queries.GetMediaByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			h.renderer.SetFlash(r, "Media not found", "error")
+		} else {
+			slog.Error("failed to get media", "error", err, "media_id", id)
+			h.renderer.SetFlash(r, "Error loading media", "error")
+		}
+		http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
+		return store.Medium{}, false
+	}
+	return media, true
+}
+
+// requireMediaWithError fetches media by ID and handles errors with http.Error.
+// Returns the media and true if successful, or zero value and false if an error occurred (response already written).
+func (h *MediaHandler) requireMediaWithError(w http.ResponseWriter, r *http.Request, id int64) (store.Medium, bool) {
+	media, err := h.queries.GetMediaByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Media not found", http.StatusNotFound)
+		} else {
+			slog.Error("failed to get media", "error", err, "media_id", id)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return store.Medium{}, false
+	}
+	return media, true
+}
+
+// requireFolderWithError fetches folder by ID and handles errors with http.Error.
+// Returns the folder and true if successful, or zero value and false if an error occurred (response already written).
+func (h *MediaHandler) requireFolderWithError(w http.ResponseWriter, r *http.Request, id int64) (store.MediaFolder, bool) {
+	folder, err := h.queries.GetMediaFolderByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Folder not found", http.StatusNotFound)
+		} else {
+			slog.Error("failed to get folder", "error", err, "folder_id", id)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return store.MediaFolder{}, false
+	}
+	return folder, true
+}
 
 func isImageMime(mimeType string) bool {
 	return strings.HasPrefix(mimeType, "image/")
