@@ -21,24 +21,24 @@ func testDB(t *testing.T) (*sql.DB, func()) {
 		t.Fatalf("CreateTemp: %v", err)
 	}
 	dbPath := f.Name()
-	f.Close()
+	_ = f.Close()
 
 	db, err := store.NewDB(dbPath)
 	if err != nil {
-		os.Remove(dbPath)
+		_ = os.Remove(dbPath)
 		t.Fatalf("NewDB: %v", err)
 	}
 
 	// Run core migrations
 	if err := store.Migrate(db); err != nil {
-		db.Close()
-		os.Remove(dbPath)
+		_ = db.Close()
+		_ = os.Remove(dbPath)
 		t.Fatalf("Migrate: %v", err)
 	}
 
 	cleanup := func() {
-		db.Close()
-		os.Remove(dbPath)
+		_ = db.Close()
+		_ = os.Remove(dbPath)
 	}
 
 	return db, cleanup

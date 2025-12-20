@@ -39,10 +39,10 @@ func (m *mockModule) Version() string                  { return m.version }
 func (m *mockModule) Description() string              { return m.description }
 func (m *mockModule) Dependencies() []string           { return m.dependencies }
 func (m *mockModule) Migrations() []Migration          { return m.migrations }
-func (m *mockModule) Init(ctx *ModuleContext) error    { m.initCalled = true; return nil }
+func (m *mockModule) Init(_ *ModuleContext) error      { m.initCalled = true; return nil }
 func (m *mockModule) Shutdown() error                  { return m.shutdownErr }
-func (m *mockModule) RegisterRoutes(r chi.Router)      { m.routesCalled = true }
-func (m *mockModule) RegisterAdminRoutes(r chi.Router) { m.adminCalled = true }
+func (m *mockModule) RegisterRoutes(_ chi.Router)      { m.routesCalled = true }
+func (m *mockModule) RegisterAdminRoutes(_ chi.Router) { m.adminCalled = true }
 func (m *mockModule) TemplateFuncs() template.FuncMap  { return m.funcMap }
 func (m *mockModule) AdminURL() string                 { return "" }
 func (m *mockModule) SidebarLabel() string             { return "" }
