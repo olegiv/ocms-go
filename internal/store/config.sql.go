@@ -76,7 +76,7 @@ func (q *Queries) ListConfig(ctx context.Context) ([]Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Config{}
 	for rows.Next() {
 		var i Config

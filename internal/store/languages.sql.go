@@ -221,7 +221,7 @@ func (q *Queries) ListActiveLanguages(ctx context.Context) ([]Language, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Language{}
 	for rows.Next() {
 		var i Language
@@ -259,7 +259,7 @@ func (q *Queries) ListLanguages(ctx context.Context) ([]Language, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Language{}
 	for rows.Next() {
 		var i Language

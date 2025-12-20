@@ -1,4 +1,4 @@
-make.PHONY: run stop restart build test clean migrate-up migrate-down migrate-status migrate-create assets dev
+make.PHONY: run stop restart build test clean migrate-up migrate-down migrate-status migrate-create assets dev sqlc
 
 # Build assets (SCSS to CSS)
 assets:
@@ -48,3 +48,9 @@ migrate-status:
 migrate-create:
 	@read -p "Migration name: " name; \
 	goose -dir $(MIGRATIONS_DIR) create $$name sql
+
+# Generate SQLC code and fix unhandled errors
+sqlc:
+	sqlc generate
+	@sed -i '' 's/defer rows\.Close()/defer func() { _ = rows.Close() }()/g' internal/store/*.sql.go
+	@echo "SQLC generated and warnings fixed"

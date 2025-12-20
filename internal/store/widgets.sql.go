@@ -82,7 +82,7 @@ func (q *Queries) GetAllWidgets(ctx context.Context) ([]Widget, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Widget{}
 	for rows.Next() {
 		var i Widget
@@ -123,7 +123,7 @@ func (q *Queries) GetAllWidgetsByTheme(ctx context.Context, theme string) ([]Wid
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Widget{}
 	for rows.Next() {
 		var i Widget
@@ -210,7 +210,7 @@ func (q *Queries) GetWidgetsByThemeAndArea(ctx context.Context, arg GetWidgetsBy
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Widget{}
 	for rows.Next() {
 		var i Widget

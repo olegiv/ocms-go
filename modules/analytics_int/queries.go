@@ -104,7 +104,7 @@ func (m *Module) getTopPages(ctx context.Context, startDate, endDate time.Time, 
 	if err != nil {
 		return nil
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var pages []TopPage
 	for rows.Next() {
@@ -166,7 +166,7 @@ func (m *Module) getTopReferrers(ctx context.Context, startDate, endDate time.Ti
 	if err != nil {
 		return nil
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var referrers []TopReferrer
 	for rows.Next() {
@@ -200,7 +200,7 @@ func (m *Module) getBrowserStats(ctx context.Context, startDate, endDate time.Ti
 	if err != nil {
 		return nil
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var browsers []BrowserStat
 	var totalViews int64
@@ -242,7 +242,7 @@ func (m *Module) getDeviceStats(ctx context.Context, startDate, endDate time.Tim
 	if err != nil {
 		return nil
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var devices []DeviceStat
 	var totalViews int64
@@ -285,7 +285,7 @@ func (m *Module) getCountryStats(ctx context.Context, startDate, endDate time.Ti
 	if err != nil {
 		return nil
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var countries []CountryStat
 	var totalViews int64
@@ -328,7 +328,7 @@ func (m *Module) getTimeSeries(ctx context.Context, startDate, endDate time.Time
 	if err != nil {
 		return nil
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var points []TimeSeriesPoint
 	for rows.Next() {
