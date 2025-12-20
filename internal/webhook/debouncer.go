@@ -98,7 +98,7 @@ func eventKey(event *Event) string {
 // Dispatch queues an event for debounced delivery.
 // If an event for the same entity is already pending, it will be updated
 // with the latest data and the timer will be reset.
-func (d *Debouncer) Dispatch(ctx context.Context, event *Event) error {
+func (d *Debouncer) Dispatch(_ context.Context, event *Event) error {
 	key := eventKey(event)
 	now := time.Now()
 

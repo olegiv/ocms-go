@@ -23,7 +23,7 @@ type ExampleItem struct {
 }
 
 // handleExample handles GET /example - public route.
-func (m *Module) handleExample(w http.ResponseWriter, r *http.Request) {
+func (m *Module) handleExample(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`<!DOCTYPE html>
@@ -112,7 +112,7 @@ func (m *Module) handleAdminExample(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleListItems handles GET /admin/example/items - returns JSON list of items.
-func (m *Module) handleListItems(w http.ResponseWriter, r *http.Request) {
+func (m *Module) handleListItems(w http.ResponseWriter, _ *http.Request) {
 	items, err := m.listItems()
 	if err != nil {
 		m.ctx.Logger.Error("failed to list example items", "error", err)

@@ -186,7 +186,7 @@ func (s *SearchService) generateExcerpt(body, query string, maxLen int) string {
 	lowerBody := strings.ToLower(body)
 	words := strings.Fields(strings.ToLower(query))
 
-	var firstMatch int = -1
+	var firstMatch = -1
 	for _, word := range words {
 		if idx := strings.Index(lowerBody, word); idx != -1 {
 			if firstMatch == -1 || idx < firstMatch {

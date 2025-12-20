@@ -538,7 +538,7 @@ func TestGeneratePages(t *testing.T) {
 
 	tagIDs := []int64{tag1.ID}
 	catIDs := []int64{cat1.ID}
-	mediaIDs := []int64{} // No media for this test
+	var mediaIDs []int64 // No media for this test
 
 	// Generate pages
 	pageIDs, err := m.generatePages(ctx, languages, tagIDs, catIDs, mediaIDs, fixtures.User.ID)

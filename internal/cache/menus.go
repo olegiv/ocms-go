@@ -151,7 +151,7 @@ func (c *MenuCache) Invalidate() {
 
 // InvalidateBySlug invalidates a specific menu by slug.
 // For simplicity, this invalidates the entire cache.
-func (c *MenuCache) InvalidateBySlug(slug string) {
+func (c *MenuCache) InvalidateBySlug(_ string) {
 	c.Invalidate()
 }
 

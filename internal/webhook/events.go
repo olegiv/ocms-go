@@ -3,8 +3,6 @@ package webhook
 
 import (
 	"time"
-
-	"ocms-go/internal/model"
 )
 
 // Event represents a webhook event to be dispatched.
@@ -67,20 +65,4 @@ type UserEventData struct {
 type TestEventData struct {
 	Message   string    `json:"message"`
 	Timestamp time.Time `json:"timestamp"`
-}
-
-// AllEventTypes returns all available webhook event types.
-func AllEventTypes() []string {
-	return []string{
-		model.EventPageCreated,
-		model.EventPageUpdated,
-		model.EventPageDeleted,
-		model.EventPagePublished,
-		model.EventPageUnpublished,
-		model.EventMediaUploaded,
-		model.EventMediaDeleted,
-		model.EventFormSubmitted,
-		model.EventUserCreated,
-		model.EventUserDeleted,
-	}
 }

@@ -258,47 +258,6 @@ func BuildArticleSchema(page *PageData, site *SiteConfig, modifiedAt time.Time) 
 	return marshalJSONLD(article)
 }
 
-// BuildBreadcrumbSchema creates JSON-LD BreadcrumbList structured data.
-func BuildBreadcrumbSchema(items []BreadcrumbItem) template.JS {
-	if len(items) == 0 {
-		return ""
-	}
-
-	schema := BreadcrumbSchema{
-		Context:  "https://schema.org",
-		Type:     "BreadcrumbList",
-		ItemList: items,
-	}
-
-	return marshalJSONLD(schema)
-}
-
-// BuildWebSiteSchema creates JSON-LD WebSite structured data for homepage.
-func BuildWebSiteSchema(site *SiteConfig) template.JS {
-	schema := WebSiteSchema{
-		Context:     "https://schema.org",
-		Type:        "WebSite",
-		Name:        site.SiteName,
-		URL:         site.SiteURL,
-		Description: site.SiteDescription,
-		Publisher: &OrgSchema{
-			Type: "Organization",
-			Name: site.SiteName,
-		},
-	}
-
-	// Add search action if site has search
-	if site.SiteURL != "" {
-		schema.SearchAction = &SearchAction{
-			Type:       "SearchAction",
-			Target:     site.SiteURL + "/search?q={search_term_string}",
-			QueryInput: "required name=search_term_string",
-		}
-	}
-
-	return marshalJSONLD(schema)
-}
-
 // marshalJSONLD marshals structured data to JSON-LD script tag content.
 func marshalJSONLD(v any) template.JS {
 	data, err := json.MarshalIndent(v, "", "  ")

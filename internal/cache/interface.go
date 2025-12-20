@@ -59,9 +59,6 @@ const (
 	// ErrCacheMiss indicates the key was not found in cache or has expired.
 	ErrCacheMiss CacheError = "cache miss"
 
-	// ErrCacheFull indicates the cache is at maximum capacity.
-	ErrCacheFull CacheError = "cache full"
-
 	// ErrCacheClosed indicates the cache has been closed.
 	ErrCacheClosed CacheError = "cache closed"
 )

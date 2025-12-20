@@ -124,15 +124,3 @@ func NewCacheWithInfo(cfg Config) (*Result, error) {
 		IsFallback:  false,
 	}, nil
 }
-
-// NewDefaultCache creates a cache with default configuration.
-func NewDefaultCache() Cacher {
-	cache, _ := NewCache(DefaultConfig())
-	return cache
-}
-
-// NewCacheWithTTL creates a simple memory cache with the specified TTL.
-// This is a convenience function for common use cases.
-func NewCacheWithTTL(ttl time.Duration) Cacher {
-	return NewSimpleMemoryCache(ttl)
-}
