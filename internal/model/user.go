@@ -7,10 +7,8 @@ import (
 	"time"
 )
 
-// User roles
-const (
-	RoleAdmin = "admin"
-)
+// RoleAdmin is the admin user role.
+const RoleAdmin = "admin"
 
 // User represents a CMS user.
 type User struct {

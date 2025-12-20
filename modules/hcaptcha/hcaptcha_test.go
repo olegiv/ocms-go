@@ -60,7 +60,7 @@ func testModule(t *testing.T, db *sql.DB) *Module {
 		Level: slog.LevelWarn,
 	}))
 
-	ctx := &module.ModuleContext{
+	ctx := &module.Context{
 		DB:     db,
 		Logger: logger,
 		Config: &config.Config{},
@@ -595,7 +595,7 @@ func TestModuleInit(t *testing.T) {
 		}
 	}
 
-	ctx := &module.ModuleContext{
+	ctx := &module.Context{
 		DB:     db,
 		Logger: logger,
 		Config: &config.Config{},
@@ -650,7 +650,7 @@ func TestModuleInit_EnvOverride(t *testing.T) {
 		HCaptchaSecretKey: "env-secret-key",
 	}
 
-	ctx := &module.ModuleContext{
+	ctx := &module.Context{
 		DB:     db,
 		Logger: logger,
 		Config: cfg,

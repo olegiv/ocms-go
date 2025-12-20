@@ -23,7 +23,7 @@ type Registry struct {
 	order         []string // initialization order
 	activeStatus  map[string]bool
 	sidebarStatus map[string]bool // show in sidebar status
-	ctx           *ModuleContext
+	ctx           *Context
 	logger        *slog.Logger
 	mu            sync.RWMutex
 }
@@ -83,7 +83,7 @@ func (r *Registry) List() []Module {
 // InitAll initializes all registered modules.
 // Modules are initialized in registration order.
 // Dependencies are checked before initialization.
-func (r *Registry) InitAll(ctx *ModuleContext) error {
+func (r *Registry) InitAll(ctx *Context) error {
 	r.mu.Lock()
 	r.ctx = ctx
 	r.mu.Unlock()
@@ -485,8 +485,8 @@ func (r *Registry) AllTemplateFuncs() template.FuncMap {
 	return funcs
 }
 
-// ModuleInfo contains information about a registered module.
-type ModuleInfo struct {
+// Info contains information about a registered module.
+type Info struct {
 	Name              string
 	Version           string
 	Description       string
@@ -508,11 +508,11 @@ type MigrationInfo struct {
 }
 
 // ListInfo returns information about all registered modules.
-func (r *Registry) ListInfo() []ModuleInfo {
+func (r *Registry) ListInfo() []Info {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	infos := make([]ModuleInfo, 0, len(r.order))
+	infos := make([]Info, 0, len(r.order))
 	for _, name := range r.order {
 		m := r.modules[name]
 		migrations := m.Migrations()
@@ -538,7 +538,7 @@ func (r *Registry) ListInfo() []ModuleInfo {
 		// Default to not showing in sidebar if not tracked
 		showInSidebar := r.sidebarStatus[name]
 
-		infos = append(infos, ModuleInfo{
+		infos = append(infos, Info{
 			Name:              m.Name(),
 			Version:           m.Version(),
 			Description:       m.Description(),

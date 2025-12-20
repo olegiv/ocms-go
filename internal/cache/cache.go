@@ -29,12 +29,13 @@ type cacheEntry struct {
 
 // Stats holds cache statistics.
 type Stats struct {
-	Hits    int64
-	Misses  int64
-	Sets    int64
-	Items   int
-	HitRate float64
-	ResetAt *time.Time // when stats were last reset (nil if never reset)
+	Hits    int64      `json:"hits"`
+	Misses  int64      `json:"misses"`
+	Sets    int64      `json:"sets"`
+	Items   int        `json:"items"`
+	HitRate float64    `json:"hit_rate"`
+	Size    int64      `json:"size_bytes,omitempty"` // Approximate size in bytes (used by distributed caches)
+	ResetAt *time.Time `json:"reset_at,omitempty"`   // when stats were last reset (nil if never reset)
 }
 
 // New creates a new cache with the specified TTL.

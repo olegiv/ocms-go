@@ -186,7 +186,7 @@ func (c *MemoryCache) Close() error {
 }
 
 // Stats returns current cache statistics.
-func (c *MemoryCache) Stats() CacheStats {
+func (c *MemoryCache) Stats() Stats {
 	hits := c.hits.Load()
 	misses := c.misses.Load()
 	total := hits + misses
@@ -196,7 +196,7 @@ func (c *MemoryCache) Stats() CacheStats {
 		hitRate = float64(hits) / float64(total) * 100
 	}
 
-	return CacheStats{
+	return Stats{
 		Hits:    hits,
 		Misses:  misses,
 		Sets:    c.sets.Load(),

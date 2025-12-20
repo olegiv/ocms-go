@@ -19,7 +19,7 @@ var localesFS embed.FS
 // Module implements the module.Module interface.
 type Module struct {
 	module.BaseModule
-	ctx *module.ModuleContext
+	ctx *module.Context
 }
 
 // New creates a new instance of the example module.
@@ -34,7 +34,7 @@ func New() *Module {
 }
 
 // Init initializes the module with the given context.
-func (m *Module) Init(ctx *module.ModuleContext) error {
+func (m *Module) Init(ctx *module.Context) error {
 	m.ctx = ctx
 	m.ctx.Logger.Info("Example module initialized")
 

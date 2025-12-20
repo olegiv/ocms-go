@@ -19,7 +19,7 @@ var localesFS embed.FS
 // Module implements the internal analytics module.
 type Module struct {
 	module.BaseModule
-	ctx      *module.ModuleContext
+	ctx      *module.Context
 	settings *Settings
 	geoIP    *GeoIPLookup
 	cron     *cron.Cron
@@ -39,7 +39,7 @@ func New() *Module {
 }
 
 // Init initializes the module.
-func (m *Module) Init(ctx *module.ModuleContext) error {
+func (m *Module) Init(ctx *module.Context) error {
 	m.ctx = ctx
 
 	// Load settings

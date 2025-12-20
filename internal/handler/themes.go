@@ -40,12 +40,12 @@ func NewThemesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionMana
 
 // ThemeListData holds data for the theme list template.
 type ThemeListData struct {
-	Themes []theme.ThemeInfo
+	Themes []theme.Info
 }
 
 // ThemeSettingsData holds data for the theme settings template.
 type ThemeSettingsData struct {
-	Theme    theme.ThemeInfo
+	Theme    theme.Info
 	Settings map[string]string
 	Errors   map[string]string
 }
@@ -148,7 +148,7 @@ func (h *ThemesHandler) Settings(w http.ResponseWriter, r *http.Request) {
 
 	// Get theme info with active status
 	activeTheme := h.themeManager.GetActiveTheme()
-	themeInfo := theme.ThemeInfo{
+	themeInfo := theme.Info{
 		Name:     thm.Name,
 		Config:   thm.Config,
 		IsActive: activeTheme != nil && activeTheme.Name == thm.Name,

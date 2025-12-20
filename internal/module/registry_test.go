@@ -39,7 +39,7 @@ func (m *mockModule) Version() string                  { return m.version }
 func (m *mockModule) Description() string              { return m.description }
 func (m *mockModule) Dependencies() []string           { return m.dependencies }
 func (m *mockModule) Migrations() []Migration          { return m.migrations }
-func (m *mockModule) Init(_ *ModuleContext) error      { m.initCalled = true; return nil }
+func (m *mockModule) Init(_ *Context) error            { m.initCalled = true; return nil }
 func (m *mockModule) Shutdown() error                  { return m.shutdownErr }
 func (m *mockModule) RegisterRoutes(_ chi.Router)      { m.routesCalled = true }
 func (m *mockModule) RegisterAdminRoutes(_ chi.Router) { m.adminCalled = true }
@@ -182,7 +182,7 @@ func TestInitAll(t *testing.T) {
 	db := createTestDB(t)
 	defer func() { _ = db.Close() }()
 
-	ctx := &ModuleContext{DB: db, Logger: logger}
+	ctx := &Context{DB: db, Logger: logger}
 	err := r.InitAll(ctx)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
@@ -210,7 +210,7 @@ func TestInitAllWithDependencies(t *testing.T) {
 	db := createTestDB(t)
 	defer func() { _ = db.Close() }()
 
-	ctx := &ModuleContext{DB: db, Logger: logger}
+	ctx := &Context{DB: db, Logger: logger}
 	err := r.InitAll(ctx)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
@@ -229,7 +229,7 @@ func TestInitAllMissingDependency(t *testing.T) {
 	db := createTestDB(t)
 	defer func() { _ = db.Close() }()
 
-	ctx := &ModuleContext{DB: db, Logger: logger}
+	ctx := &Context{DB: db, Logger: logger}
 	err := r.InitAll(ctx)
 	if err == nil {
 		t.Error("expected error for missing dependency")
@@ -250,7 +250,7 @@ func TestShutdownAll(t *testing.T) {
 	defer func() { _ = db.Close() }()
 
 	// Initialize first
-	ctx := &ModuleContext{DB: db, Logger: logger}
+	ctx := &Context{DB: db, Logger: logger}
 	_ = r.InitAll(ctx)
 
 	// Shutdown
@@ -337,7 +337,7 @@ func TestListInfo(t *testing.T) {
 	db := createTestDB(t)
 	defer func() { _ = db.Close() }()
 
-	ctx := &ModuleContext{DB: db, Logger: logger}
+	ctx := &Context{DB: db, Logger: logger}
 	_ = r.InitAll(ctx)
 
 	infos := r.ListInfo()
@@ -387,7 +387,7 @@ func TestMigrations(t *testing.T) {
 	db := createTestDB(t)
 	defer func() { _ = db.Close() }()
 
-	ctx := &ModuleContext{DB: db, Logger: logger}
+	ctx := &Context{DB: db, Logger: logger}
 	err := r.InitAll(ctx)
 	if err != nil {
 		t.Fatalf("failed to init: %v", err)
@@ -427,7 +427,7 @@ func TestMigrationNotRerun(t *testing.T) {
 	db := createTestDB(t)
 	defer func() { _ = db.Close() }()
 
-	ctx := &ModuleContext{DB: db, Logger: logger}
+	ctx := &Context{DB: db, Logger: logger}
 
 	// First init - should run migration
 	_ = r.InitAll(ctx)
@@ -479,7 +479,7 @@ func TestGetMigrationInfo(t *testing.T) {
 	db := createTestDB(t)
 	defer func() { _ = db.Close() }()
 
-	ctx := &ModuleContext{DB: db, Logger: logger}
+	ctx := &Context{DB: db, Logger: logger}
 	_ = r.InitAll(ctx)
 
 	infos, err := r.GetMigrationInfo("miginfo")
@@ -530,7 +530,7 @@ func TestBaseModule(t *testing.T) {
 
 	// Init should work
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	ctx := &ModuleContext{Logger: logger}
+	ctx := &Context{Logger: logger}
 	if err := base.Init(ctx); err != nil {
 		t.Errorf("expected no error from Init, got %v", err)
 	}
@@ -579,7 +579,7 @@ func TestMultipleMigrations(t *testing.T) {
 	db := createTestDB(t)
 	defer func() { _ = db.Close() }()
 
-	ctx := &ModuleContext{DB: db, Logger: logger}
+	ctx := &Context{DB: db, Logger: logger}
 	_ = r.InitAll(ctx)
 
 	if len(order) != 3 {
@@ -604,7 +604,7 @@ func TestIsActive(t *testing.T) {
 	db := createTestDB(t)
 	defer func() { _ = db.Close() }()
 
-	ctx := &ModuleContext{DB: db, Logger: logger}
+	ctx := &Context{DB: db, Logger: logger}
 	_ = r.InitAll(ctx)
 
 	// Modules should be active by default after init
@@ -636,7 +636,7 @@ func TestSetActive(t *testing.T) {
 	db := createTestDB(t)
 	defer func() { _ = db.Close() }()
 
-	ctx := &ModuleContext{DB: db, Logger: logger}
+	ctx := &Context{DB: db, Logger: logger}
 	_ = r.InitAll(ctx)
 
 	// Should be active by default
@@ -673,7 +673,7 @@ func TestSetActiveNotRegistered(t *testing.T) {
 	defer func() { _ = db.Close() }()
 
 	// Initialize with no modules
-	ctx := &ModuleContext{DB: db, Logger: logger}
+	ctx := &Context{DB: db, Logger: logger}
 	r.mu.Lock()
 	r.ctx = ctx
 	r.mu.Unlock()
@@ -709,7 +709,7 @@ func TestActiveStatusPersistence(t *testing.T) {
 	m1 := newMockModule("persist", "1.0.0")
 	_ = r1.Register(m1)
 
-	ctx := &ModuleContext{DB: db, Logger: logger}
+	ctx := &Context{DB: db, Logger: logger}
 	_ = r1.InitAll(ctx)
 	_ = r1.SetActive("persist", false)
 
@@ -740,7 +740,7 @@ func TestAllTemplateFuncsSkipsInactive(t *testing.T) {
 	db := createTestDB(t)
 	defer func() { _ = db.Close() }()
 
-	ctx := &ModuleContext{DB: db, Logger: logger}
+	ctx := &Context{DB: db, Logger: logger}
 	_ = r.InitAll(ctx)
 
 	// Deactivate second module
@@ -769,7 +769,7 @@ func TestListInfoShowsActiveStatus(t *testing.T) {
 	db := createTestDB(t)
 	defer func() { _ = db.Close() }()
 
-	ctx := &ModuleContext{DB: db, Logger: logger}
+	ctx := &Context{DB: db, Logger: logger}
 	_ = r.InitAll(ctx)
 
 	// Deactivate second module
