@@ -191,69 +191,36 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name := strings.TrimSpace(r.FormValue("name"))
-	slug := strings.TrimSpace(r.FormValue("slug"))
-	languageIDStr := r.FormValue("language_id")
-
-	formValues := map[string]string{
-		"name":        name,
-		"slug":        slug,
-		"language_id": languageIDStr,
-	}
-
-	validationErrors := make(map[string]string)
-
-	// Parse language_id
-	var languageID sql.NullInt64
-	if languageIDStr != "" {
-		langID, err := strconv.ParseInt(languageIDStr, 10, 64)
-		if err != nil {
-			validationErrors["language_id"] = "Invalid language"
-		} else {
-			languageID = sql.NullInt64{Int64: langID, Valid: true}
-		}
-	}
-
-	// Validate name
-	if name == "" {
-		validationErrors["name"] = "Name is required"
-	} else if len(name) < 2 {
-		validationErrors["name"] = "Name must be at least 2 characters"
-	}
+	input := parseMenuFormInput(r)
 
 	// Validate slug
-	if slug == "" {
-		slug = util.Slugify(name)
-		formValues["slug"] = slug
-	}
-
-	if slug == "" {
-		validationErrors["slug"] = "Slug is required"
-	} else if !util.IsValidSlug(slug) {
-		validationErrors["slug"] = "Invalid slug format"
-	} else if languageID.Valid {
+	if input.Slug == "" {
+		input.Errors["slug"] = "Slug is required"
+	} else if !util.IsValidSlug(input.Slug) {
+		input.Errors["slug"] = "Invalid slug format"
+	} else if input.LanguageID.Valid {
 		// Check slug uniqueness within the same language
 		exists, err := h.queries.MenuSlugExistsForLanguage(r.Context(), store.MenuSlugExistsForLanguageParams{
-			Slug:       slug,
-			LanguageID: languageID,
+			Slug:       input.Slug,
+			LanguageID: input.LanguageID,
 		})
 		if err != nil {
 			slog.Error("database error checking slug", "error", err)
-			validationErrors["slug"] = "Error checking slug"
+			input.Errors["slug"] = "Error checking slug"
 		} else if exists != 0 {
-			validationErrors["slug"] = "Slug already exists for this language"
+			input.Errors["slug"] = "Slug already exists for this language"
 		}
 	}
 
-	if len(validationErrors) > 0 {
+	if len(input.Errors) > 0 {
 		// Get languages for re-render
 		languages, _ := h.queries.ListActiveLanguages(r.Context())
 
 		data := MenuFormData{
 			Targets:    model.ValidTargets,
 			Languages:  languages,
-			Errors:     validationErrors,
-			FormValues: formValues,
+			Errors:     input.Errors,
+			FormValues: input.FormValues,
 			IsEdit:     false,
 		}
 
@@ -275,9 +242,9 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	menu, err := h.queries.CreateMenu(r.Context(), store.CreateMenuParams{
-		Name:       name,
-		Slug:       slug,
-		LanguageID: languageID,
+		Name:       input.Name,
+		Slug:       input.Slug,
+		LanguageID: input.LanguageID,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	})
@@ -298,23 +265,15 @@ func (h *MenusHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseMenuIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid menu ID", "error")
 		http.Redirect(w, r, "/admin/menus", http.StatusSeeOther)
 		return
 	}
 
-	menu, err := h.queries.GetMenuByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Menu not found", "error")
-		} else {
-			slog.Error("failed to get menu", "error", err, "menu_id", id)
-			h.renderer.SetFlash(r, "Error loading menu", "error")
-		}
-		http.Redirect(w, r, "/admin/menus", http.StatusSeeOther)
+	menu, ok := h.requireMenuWithRedirect(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -376,23 +335,15 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseMenuIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid menu ID", "error")
 		http.Redirect(w, r, "/admin/menus", http.StatusSeeOther)
 		return
 	}
 
-	menu, err := h.queries.GetMenuByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Menu not found", "error")
-		} else {
-			slog.Error("failed to get menu", "error", err, "menu_id", id)
-			h.renderer.SetFlash(r, "Error loading menu", "error")
-		}
-		http.Redirect(w, r, "/admin/menus", http.StatusSeeOther)
+	menu, ok := h.requireMenuWithRedirect(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -402,60 +353,29 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name := strings.TrimSpace(r.FormValue("name"))
-	slug := strings.TrimSpace(r.FormValue("slug"))
-	languageIDStr := r.FormValue("language_id")
+	input := parseMenuFormInput(r)
 
-	formValues := map[string]string{
-		"name":        name,
-		"slug":        slug,
-		"language_id": languageIDStr,
-	}
-
-	validationErrors := make(map[string]string)
-
-	// Parse language_id
-	var languageID sql.NullInt64
-	if languageIDStr != "" {
-		langID, err := strconv.ParseInt(languageIDStr, 10, 64)
-		if err != nil {
-			validationErrors["language_id"] = "Invalid language"
-		} else {
-			languageID = sql.NullInt64{Int64: langID, Valid: true}
-		}
-	}
-
-	if name == "" {
-		validationErrors["name"] = "Name is required"
-	} else if len(name) < 2 {
-		validationErrors["name"] = "Name must be at least 2 characters"
-	}
-
-	if slug == "" {
-		slug = util.Slugify(name)
-		formValues["slug"] = slug
-	}
-
-	if slug == "" {
-		validationErrors["slug"] = "Slug is required"
-	} else if !util.IsValidSlug(slug) {
-		validationErrors["slug"] = "Invalid slug format"
-	} else if slug != menu.Slug || languageID != menu.LanguageID {
+	// Validate slug
+	if input.Slug == "" {
+		input.Errors["slug"] = "Slug is required"
+	} else if !util.IsValidSlug(input.Slug) {
+		input.Errors["slug"] = "Invalid slug format"
+	} else if input.Slug != menu.Slug || input.LanguageID != menu.LanguageID {
 		// Check slug uniqueness within the same language (excluding current menu)
 		exists, err := h.queries.MenuSlugExistsForLanguageExcluding(r.Context(), store.MenuSlugExistsForLanguageExcludingParams{
-			Slug:       slug,
-			LanguageID: languageID,
+			Slug:       input.Slug,
+			LanguageID: input.LanguageID,
 			ID:         id,
 		})
 		if err != nil {
 			slog.Error("database error checking slug", "error", err)
-			validationErrors["slug"] = "Error checking slug"
+			input.Errors["slug"] = "Error checking slug"
 		} else if exists != 0 {
-			validationErrors["slug"] = "Slug already exists for this language"
+			input.Errors["slug"] = "Slug already exists for this language"
 		}
 	}
 
-	if len(validationErrors) > 0 {
+	if len(input.Errors) > 0 {
 		// Get menu items for re-render
 		items, _ := h.queries.ListMenuItemsWithPage(r.Context(), id)
 		tree := buildMenuTree(items, sql.NullInt64{Valid: false})
@@ -468,8 +388,8 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 			Pages:      pages,
 			Targets:    model.ValidTargets,
 			Languages:  languages,
-			Errors:     validationErrors,
-			FormValues: formValues,
+			Errors:     input.Errors,
+			FormValues: input.FormValues,
 			IsEdit:     true,
 		}
 
@@ -492,9 +412,9 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	_, err = h.queries.UpdateMenu(r.Context(), store.UpdateMenuParams{
 		ID:         id,
-		Name:       name,
-		Slug:       slug,
-		LanguageID: languageID,
+		Name:       input.Name,
+		Slug:       input.Slug,
+		LanguageID: input.LanguageID,
 		UpdatedAt:  now,
 	})
 	if err != nil {
@@ -506,8 +426,8 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Invalidate menu cache (both old and new slug in case slug changed)
 	h.renderer.InvalidateMenuCache(menu.Slug)
-	if slug != menu.Slug {
-		h.renderer.InvalidateMenuCache(slug)
+	if input.Slug != menu.Slug {
+		h.renderer.InvalidateMenuCache(input.Slug)
 	}
 
 	slog.Info("menu updated", "menu_id", id, "updated_by", middleware.GetUserID(r))
@@ -517,21 +437,14 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/menus/{id} - deletes a menu.
 func (h *MenusHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseMenuIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid menu ID", http.StatusBadRequest)
 		return
 	}
 
-	menu, err := h.queries.GetMenuByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Menu not found", http.StatusNotFound)
-		} else {
-			slog.Error("failed to get menu", "error", err, "menu_id", id)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	menu, ok := h.requireMenuWithError(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -574,21 +487,14 @@ type AddItemRequest struct {
 
 // AddItem handles POST /admin/menus/{id}/items - adds a menu item.
 func (h *MenusHandler) AddItem(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	menuID, err := strconv.ParseInt(idStr, 10, 64)
+	menuID, err := parseMenuIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid menu ID", http.StatusBadRequest)
 		return
 	}
 
-	// Verify menu exists and get slug for cache invalidation
-	menu, err := h.queries.GetMenuByID(r.Context(), menuID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Menu not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	menu, ok := h.requireMenuWithError(w, r, menuID)
+	if !ok {
 		return
 	}
 
@@ -598,18 +504,17 @@ func (h *MenusHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate
 	if req.Title == "" {
 		http.Error(w, "Title is required", http.StatusBadRequest)
 		return
 	}
 
-	if req.Target == "" {
-		req.Target = model.TargetSelf
-	} else if !model.IsValidTarget(req.Target) {
+	target, err := validateMenuItemTarget(req.Target)
+	if err != nil {
 		http.Error(w, "Invalid target", http.StatusBadRequest)
 		return
 	}
+	req.Target = target
 
 	// Get max position for this parent
 	var parentID sql.NullInt64
@@ -677,39 +582,29 @@ type UpdateItemRequest struct {
 
 // UpdateItem handles PUT /admin/menus/{id}/items/{itemId} - updates a menu item.
 func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
-	menuIDStr := chi.URLParam(r, "id")
-	menuID, err := strconv.ParseInt(menuIDStr, 10, 64)
+	menuID, err := parseMenuIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid menu ID", http.StatusBadRequest)
 		return
 	}
 
-	itemIDStr := chi.URLParam(r, "itemId")
-	itemID, err := strconv.ParseInt(itemIDStr, 10, 64)
+	itemID, err := parseItemIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid item ID", http.StatusBadRequest)
 		return
 	}
 
-	item, err := h.queries.GetMenuItemByID(r.Context(), itemID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Menu item not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	item, ok := h.requireMenuItemWithError(w, r, itemID)
+	if !ok {
 		return
 	}
 
-	if item.MenuID != menuID {
-		http.Error(w, "Item does not belong to this menu", http.StatusBadRequest)
+	if !verifyItemBelongsToMenu(w, item, menuID) {
 		return
 	}
 
-	// Get menu for cache invalidation
-	menu, err := h.queries.GetMenuByID(r.Context(), menuID)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	menu, ok := h.requireMenuWithError(w, r, menuID)
+	if !ok {
 		return
 	}
 
@@ -724,12 +619,12 @@ func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Target == "" {
-		req.Target = model.TargetSelf
-	} else if !model.IsValidTarget(req.Target) {
+	target, err := validateMenuItemTarget(req.Target)
+	if err != nil {
 		http.Error(w, "Invalid target", http.StatusBadRequest)
 		return
 	}
+	req.Target = target
 
 	var pageID sql.NullInt64
 	if req.PageID != nil {
@@ -767,39 +662,29 @@ func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 
 // DeleteItem handles DELETE /admin/menus/{id}/items/{itemId} - deletes a menu item.
 func (h *MenusHandler) DeleteItem(w http.ResponseWriter, r *http.Request) {
-	menuIDStr := chi.URLParam(r, "id")
-	menuID, err := strconv.ParseInt(menuIDStr, 10, 64)
+	menuID, err := parseMenuIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid menu ID", http.StatusBadRequest)
 		return
 	}
 
-	itemIDStr := chi.URLParam(r, "itemId")
-	itemID, err := strconv.ParseInt(itemIDStr, 10, 64)
+	itemID, err := parseItemIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid item ID", http.StatusBadRequest)
 		return
 	}
 
-	item, err := h.queries.GetMenuItemByID(r.Context(), itemID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Menu item not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	item, ok := h.requireMenuItemWithError(w, r, itemID)
+	if !ok {
 		return
 	}
 
-	if item.MenuID != menuID {
-		http.Error(w, "Item does not belong to this menu", http.StatusBadRequest)
+	if !verifyItemBelongsToMenu(w, item, menuID) {
 		return
 	}
 
-	// Get menu for cache invalidation
-	menu, err := h.queries.GetMenuByID(r.Context(), menuID)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	menu, ok := h.requireMenuWithError(w, r, menuID)
+	if !ok {
 		return
 	}
 
@@ -833,21 +718,14 @@ type ReorderRequest struct {
 
 // Reorder handles POST /admin/menus/{id}/reorder - reorders menu items.
 func (h *MenusHandler) Reorder(w http.ResponseWriter, r *http.Request) {
-	menuIDStr := chi.URLParam(r, "id")
-	menuID, err := strconv.ParseInt(menuIDStr, 10, 64)
+	menuID, err := parseMenuIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid menu ID", http.StatusBadRequest)
 		return
 	}
 
-	// Get menu for cache invalidation
-	menu, err := h.queries.GetMenuByID(r.Context(), menuID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Menu not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	menu, ok := h.requireMenuWithError(w, r, menuID)
+	if !ok {
 		return
 	}
 
@@ -910,4 +788,143 @@ func (h *MenusHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 	})
+}
+
+// Helper functions
+
+// parseMenuIDParam parses the menu "id" URL parameter as int64.
+func parseMenuIDParam(r *http.Request) (int64, error) {
+	idStr := chi.URLParam(r, "id")
+	return strconv.ParseInt(idStr, 10, 64)
+}
+
+// parseItemIDParam parses the menu item "itemId" URL parameter as int64.
+func parseItemIDParam(r *http.Request) (int64, error) {
+	idStr := chi.URLParam(r, "itemId")
+	return strconv.ParseInt(idStr, 10, 64)
+}
+
+// requireMenuWithRedirect fetches menu by ID and handles errors with flash messages and redirect.
+// Returns the menu and true if successful, or zero value and false if an error occurred (response already written).
+func (h *MenusHandler) requireMenuWithRedirect(w http.ResponseWriter, r *http.Request, id int64) (store.Menu, bool) {
+	menu, err := h.queries.GetMenuByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			h.renderer.SetFlash(r, "Menu not found", "error")
+		} else {
+			slog.Error("failed to get menu", "error", err, "menu_id", id)
+			h.renderer.SetFlash(r, "Error loading menu", "error")
+		}
+		http.Redirect(w, r, "/admin/menus", http.StatusSeeOther)
+		return store.Menu{}, false
+	}
+	return menu, true
+}
+
+// requireMenuWithError fetches menu by ID and handles errors with http.Error.
+// Returns the menu and true if successful, or zero value and false if an error occurred (response already written).
+func (h *MenusHandler) requireMenuWithError(w http.ResponseWriter, r *http.Request, id int64) (store.Menu, bool) {
+	menu, err := h.queries.GetMenuByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Menu not found", http.StatusNotFound)
+		} else {
+			slog.Error("failed to get menu", "error", err, "menu_id", id)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return store.Menu{}, false
+	}
+	return menu, true
+}
+
+// requireMenuItemWithError fetches menu item by ID and handles errors with http.Error.
+// Returns the menu item and true if successful, or zero value and false if an error occurred (response already written).
+func (h *MenusHandler) requireMenuItemWithError(w http.ResponseWriter, r *http.Request, id int64) (store.MenuItem, bool) {
+	item, err := h.queries.GetMenuItemByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Menu item not found", http.StatusNotFound)
+		} else {
+			slog.Error("failed to get menu item", "error", err, "item_id", id)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return store.MenuItem{}, false
+	}
+	return item, true
+}
+
+// menuFormInput holds parsed and validated menu form input.
+type menuFormInput struct {
+	Name       string
+	Slug       string
+	LanguageID sql.NullInt64
+	FormValues map[string]string
+	Errors     map[string]string
+}
+
+// parseMenuFormInput parses and validates menu form input (name, slug, language_id).
+func parseMenuFormInput(r *http.Request) menuFormInput {
+	name := strings.TrimSpace(r.FormValue("name"))
+	slug := strings.TrimSpace(r.FormValue("slug"))
+	languageIDStr := r.FormValue("language_id")
+
+	formValues := map[string]string{
+		"name":        name,
+		"slug":        slug,
+		"language_id": languageIDStr,
+	}
+
+	validationErrors := make(map[string]string)
+
+	// Parse language_id
+	var languageID sql.NullInt64
+	if languageIDStr != "" {
+		langID, err := strconv.ParseInt(languageIDStr, 10, 64)
+		if err != nil {
+			validationErrors["language_id"] = "Invalid language"
+		} else {
+			languageID = sql.NullInt64{Int64: langID, Valid: true}
+		}
+	}
+
+	// Validate name
+	if name == "" {
+		validationErrors["name"] = "Name is required"
+	} else if len(name) < 2 {
+		validationErrors["name"] = "Name must be at least 2 characters"
+	}
+
+	// Generate slug from name if empty
+	if slug == "" {
+		slug = util.Slugify(name)
+		formValues["slug"] = slug
+	}
+
+	return menuFormInput{
+		Name:       name,
+		Slug:       slug,
+		LanguageID: languageID,
+		FormValues: formValues,
+		Errors:     validationErrors,
+	}
+}
+
+// validateMenuItemTarget validates the target field and returns default if empty.
+func validateMenuItemTarget(target string) (string, error) {
+	if target == "" {
+		return model.TargetSelf, nil
+	}
+	if !model.IsValidTarget(target) {
+		return "", errors.New("invalid target")
+	}
+	return target, nil
+}
+
+// verifyItemBelongsToMenu checks if menu item belongs to the specified menu.
+func verifyItemBelongsToMenu(w http.ResponseWriter, item store.MenuItem, menuID int64) bool {
+	if item.MenuID != menuID {
+		http.Error(w, "Item does not belong to this menu", http.StatusBadRequest)
+		return false
+	}
+	return true
 }
