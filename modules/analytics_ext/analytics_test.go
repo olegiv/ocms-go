@@ -47,6 +47,26 @@ func testDB(t *testing.T) (*sql.DB, func()) {
 	return db, cleanup
 }
 
+// runModuleMigrations runs all migrations for the given module.
+func runModuleMigrations(t *testing.T, m *Module, db *sql.DB) {
+	t.Helper()
+	for _, mig := range m.Migrations() {
+		if err := mig.Up(db); err != nil {
+			t.Fatalf("migration up: %v", err)
+		}
+	}
+}
+
+// runModuleMigrationsDown rolls back all migrations for the given module.
+func runModuleMigrationsDown(t *testing.T, m *Module, db *sql.DB) {
+	t.Helper()
+	for _, mig := range m.Migrations() {
+		if err := mig.Down(db); err != nil {
+			t.Fatalf("migration down: %v", err)
+		}
+	}
+}
+
 // testModule creates a test Module with database access
 func testModule(t *testing.T, db *sql.DB) *Module {
 	t.Helper()
@@ -65,12 +85,7 @@ func testModule(t *testing.T, db *sql.DB) *Module {
 		Hooks:  module.NewHookRegistry(logger),
 	}
 
-	// Run module migrations first
-	for _, mig := range m.Migrations() {
-		if err := mig.Up(db); err != nil {
-			t.Fatalf("migration up: %v", err)
-		}
-	}
+	runModuleMigrations(t, m, db)
 
 	if err := m.Init(ctx); err != nil {
 		t.Fatalf("Init: %v", err)
@@ -143,13 +158,8 @@ func TestLoadSettings(t *testing.T) {
 	db, cleanup := testDB(t)
 	defer cleanup()
 
-	// Run module migration
 	m := New()
-	for _, mig := range m.Migrations() {
-		if err := mig.Up(db); err != nil {
-			t.Fatalf("migration up: %v", err)
-		}
-	}
+	runModuleMigrations(t, m, db)
 
 	// Load default settings
 	settings, err := loadSettings(db)
@@ -173,13 +183,8 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	db, cleanup := testDB(t)
 	defer cleanup()
 
-	// Run module migration
 	m := New()
-	for _, mig := range m.Migrations() {
-		if err := mig.Up(db); err != nil {
-			t.Fatalf("migration up: %v", err)
-		}
-	}
+	runModuleMigrations(t, m, db)
 
 	// Create settings
 	settings := &Settings{
@@ -476,12 +481,7 @@ func TestModuleInit(t *testing.T) {
 		Level: slog.LevelWarn,
 	}))
 
-	// Run migrations
-	for _, mig := range m.Migrations() {
-		if err := mig.Up(db); err != nil {
-			t.Fatalf("migration up: %v", err)
-		}
-	}
+	runModuleMigrations(t, m, db)
 
 	ctx := &module.Context{
 		DB:     db,
@@ -546,20 +546,8 @@ func TestMigrationDown(t *testing.T) {
 	defer cleanup()
 
 	m := New()
-
-	// Run migration up
-	for _, mig := range m.Migrations() {
-		if err := mig.Up(db); err != nil {
-			t.Fatalf("migration up: %v", err)
-		}
-	}
-
-	// Run migration down
-	for _, mig := range m.Migrations() {
-		if err := mig.Down(db); err != nil {
-			t.Fatalf("migration down: %v", err)
-		}
-	}
+	runModuleMigrations(t, m, db)
+	runModuleMigrationsDown(t, m, db)
 
 	// Table should not exist
 	var count int

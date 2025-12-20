@@ -171,51 +171,15 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Validate
 	validationErrors := make(map[string]string)
 
-	// Name validation
-	if name == "" {
-		validationErrors["name"] = "Name is required"
-	} else if len(name) < 3 {
-		validationErrors["name"] = "Name must be at least 3 characters"
-	} else if len(name) > 100 {
-		validationErrors["name"] = "Name must be less than 100 characters"
+	if err := validateAPIKeyName(name); err != "" {
+		validationErrors["name"] = err
 	}
-
-	// Permissions validation
-	if len(permissions) == 0 {
-		validationErrors["permissions"] = "At least one permission is required"
-	} else {
-		// Validate each permission
-		validPerms := model.AllPermissions()
-		for _, p := range permissions {
-			valid := false
-			for _, vp := range validPerms {
-				if p == vp {
-					valid = true
-					break
-				}
-			}
-			if !valid {
-				validationErrors["permissions"] = "Invalid permission: " + p
-				break
-			}
-		}
+	if err := validateAPIKeyPermissions(permissions); err != "" {
+		validationErrors["permissions"] = err
 	}
-
-	// Optional expiration date validation
-	var expiresAt sql.NullTime
-	if expiresAtStr != "" {
-		t, err := time.Parse("2006-01-02", expiresAtStr)
-		if err != nil {
-			validationErrors["expires_at"] = "Invalid date format"
-		} else if t.Before(time.Now()) {
-			validationErrors["expires_at"] = "Expiration date must be in the future"
-		} else {
-			// Set to end of day
-			expiresAt = sql.NullTime{
-				Time:  t.Add(23*time.Hour + 59*time.Minute + 59*time.Second),
-				Valid: true,
-			}
-		}
+	expiresAt, expiresErr := parseAPIKeyExpiration(expiresAtStr, true)
+	if expiresErr != "" {
+		validationErrors["expires_at"] = expiresErr
 	}
 
 	// If there are validation errors, re-render the form
@@ -310,25 +274,15 @@ func (h *APIKeysHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	// Get API key ID from URL
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
+	id, idStr, ok := parseAPIKeyID(r)
+	if !ok {
 		h.renderer.SetFlash(r, "Invalid API key ID", "error")
 		http.Redirect(w, r, "/admin/api-keys", http.StatusSeeOther)
 		return
 	}
 
-	// Fetch API key
-	apiKey, err := h.queries.GetAPIKeyByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "API key not found", "error")
-		} else {
-			slog.Error("failed to get API key", "error", err)
-			h.renderer.SetFlash(r, "Error loading API key", "error")
-		}
-		http.Redirect(w, r, "/admin/api-keys", http.StatusSeeOther)
+	apiKey, ok := h.fetchAPIKey(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -369,25 +323,15 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	// Get API key ID from URL
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
+	id, idStr, ok := parseAPIKeyID(r)
+	if !ok {
 		h.renderer.SetFlash(r, "Invalid API key ID", "error")
 		http.Redirect(w, r, "/admin/api-keys", http.StatusSeeOther)
 		return
 	}
 
-	// Fetch the API key being edited
-	apiKey, err := h.queries.GetAPIKeyByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "API key not found", "error")
-		} else {
-			slog.Error("failed to get API key", "error", err)
-			h.renderer.SetFlash(r, "Error loading API key", "error")
-		}
-		http.Redirect(w, r, "/admin/api-keys", http.StatusSeeOther)
+	apiKey, ok := h.fetchAPIKey(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -412,49 +356,15 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Validate
 	validationErrors := make(map[string]string)
 
-	// Name validation
-	if name == "" {
-		validationErrors["name"] = "Name is required"
-	} else if len(name) < 3 {
-		validationErrors["name"] = "Name must be at least 3 characters"
-	} else if len(name) > 100 {
-		validationErrors["name"] = "Name must be less than 100 characters"
+	if err := validateAPIKeyName(name); err != "" {
+		validationErrors["name"] = err
 	}
-
-	// Permissions validation
-	if len(permissions) == 0 {
-		validationErrors["permissions"] = "At least one permission is required"
-	} else {
-		// Validate each permission
-		validPerms := model.AllPermissions()
-		for _, p := range permissions {
-			valid := false
-			for _, vp := range validPerms {
-				if p == vp {
-					valid = true
-					break
-				}
-			}
-			if !valid {
-				validationErrors["permissions"] = "Invalid permission: " + p
-				break
-			}
-		}
+	if err := validateAPIKeyPermissions(permissions); err != "" {
+		validationErrors["permissions"] = err
 	}
-
-	// Optional expiration date validation
-	var expiresAt sql.NullTime
-	if expiresAtStr != "" {
-		t, err := time.Parse("2006-01-02", expiresAtStr)
-		if err != nil {
-			validationErrors["expires_at"] = "Invalid date format"
-		} else {
-			// Set to end of day
-			expiresAt = sql.NullTime{
-				Time:  t.Add(23*time.Hour + 59*time.Minute + 59*time.Second),
-				Valid: true,
-			}
-		}
+	expiresAt, expiresErr := parseAPIKeyExpiration(expiresAtStr, false) // Don't require future for edits
+	if expiresErr != "" {
+		validationErrors["expires_at"] = expiresErr
 	}
 
 	// If there are validation errors, re-render the form
@@ -488,7 +398,7 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Update API key
 	now := time.Now()
-	_, err = h.queries.UpdateAPIKey(r.Context(), store.UpdateAPIKeyParams{
+	_, err := h.queries.UpdateAPIKey(r.Context(), store.UpdateAPIKeyParams{
 		Name:        name,
 		Permissions: permissionsJSON,
 		ExpiresAt:   expiresAt,
@@ -510,10 +420,8 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/api-keys/{id} - deletes (deactivates) an API key.
 func (h *APIKeysHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	// Get API key ID from URL
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
+	id, _, ok := parseAPIKeyID(r)
+	if !ok {
 		h.sendDeleteError(w, "Invalid API key ID")
 		return
 	}
@@ -562,4 +470,87 @@ func (h *APIKeysHandler) sendDeleteError(w http.ResponseWriter, message string) 
 	w.Header().Set("HX-Reswap", "none")
 	w.Header().Set("HX-Trigger", `{"showToast": "`+message+`", "toastType": "error"}`)
 	w.WriteHeader(http.StatusBadRequest)
+}
+
+// validateAPIKeyName validates the name field and returns an error message if invalid.
+func validateAPIKeyName(name string) string {
+	if name == "" {
+		return "Name is required"
+	}
+	if len(name) < 3 {
+		return "Name must be at least 3 characters"
+	}
+	if len(name) > 100 {
+		return "Name must be less than 100 characters"
+	}
+	return ""
+}
+
+// validateAPIKeyPermissions validates permissions and returns an error message if invalid.
+func validateAPIKeyPermissions(permissions []string) string {
+	if len(permissions) == 0 {
+		return "At least one permission is required"
+	}
+	validPerms := model.AllPermissions()
+	for _, p := range permissions {
+		valid := false
+		for _, vp := range validPerms {
+			if p == vp {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return "Invalid permission: " + p
+		}
+	}
+	return ""
+}
+
+// parseAPIKeyExpiration parses expiration date string and returns NullTime and error message.
+// If requireFuture is true, the date must be in the future.
+func parseAPIKeyExpiration(expiresAtStr string, requireFuture bool) (sql.NullTime, string) {
+	if expiresAtStr == "" {
+		return sql.NullTime{}, ""
+	}
+	t, err := time.Parse("2006-01-02", expiresAtStr)
+	if err != nil {
+		return sql.NullTime{}, "Invalid date format"
+	}
+	if requireFuture && t.Before(time.Now()) {
+		return sql.NullTime{}, "Expiration date must be in the future"
+	}
+	// Set to end of day
+	return sql.NullTime{
+		Time:  t.Add(23*time.Hour + 59*time.Minute + 59*time.Second),
+		Valid: true,
+	}, ""
+}
+
+// parseAPIKeyID parses API key ID from URL parameter.
+// Returns id, idStr, and whether parsing succeeded.
+func parseAPIKeyID(r *http.Request) (int64, string, bool) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		return 0, idStr, false
+	}
+	return id, idStr, true
+}
+
+// fetchAPIKey fetches an API key by ID and handles common error cases.
+// Returns the API key and whether the fetch succeeded.
+func (h *APIKeysHandler) fetchAPIKey(w http.ResponseWriter, r *http.Request, id int64) (store.ApiKey, bool) {
+	apiKey, err := h.queries.GetAPIKeyByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			h.renderer.SetFlash(r, "API key not found", "error")
+		} else {
+			slog.Error("failed to get API key", "error", err)
+			h.renderer.SetFlash(r, "Error loading API key", "error")
+		}
+		http.Redirect(w, r, "/admin/api-keys", http.StatusSeeOther)
+		return store.ApiKey{}, false
+	}
+	return apiKey, true
 }
