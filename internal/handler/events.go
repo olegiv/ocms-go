@@ -186,6 +186,10 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 		Title: i18n.T(lang, "events.title"),
 		User:  user,
 		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.event_log"), URL: "/admin/events", Active: true},
+		},
 	}); err != nil {
 		slog.Error("render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
