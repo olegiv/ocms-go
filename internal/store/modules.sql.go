@@ -10,13 +10,18 @@ import (
 )
 
 const getModule = `-- name: GetModule :one
-SELECT name, is_active, updated_at FROM modules WHERE name = ?
+SELECT name, is_active, updated_at, show_in_sidebar FROM modules WHERE name = ?
 `
 
 func (q *Queries) GetModule(ctx context.Context, name string) (Module, error) {
 	row := q.db.QueryRowContext(ctx, getModule, name)
 	var i Module
-	err := row.Scan(&i.Name, &i.IsActive, &i.UpdatedAt)
+	err := row.Scan(
+		&i.Name,
+		&i.IsActive,
+		&i.UpdatedAt,
+		&i.ShowInSidebar,
+	)
 	return i, err
 }
 
@@ -59,7 +64,7 @@ func (q *Queries) ListActiveModules(ctx context.Context) ([]string, error) {
 }
 
 const listModules = `-- name: ListModules :many
-SELECT name, is_active, updated_at FROM modules ORDER BY name
+SELECT name, is_active, updated_at, show_in_sidebar FROM modules ORDER BY name
 `
 
 func (q *Queries) ListModules(ctx context.Context) ([]Module, error) {
@@ -71,7 +76,44 @@ func (q *Queries) ListModules(ctx context.Context) ([]Module, error) {
 	items := []Module{}
 	for rows.Next() {
 		var i Module
-		if err := rows.Scan(&i.Name, &i.IsActive, &i.UpdatedAt); err != nil {
+		if err := rows.Scan(
+			&i.Name,
+			&i.IsActive,
+			&i.UpdatedAt,
+			&i.ShowInSidebar,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSidebarModules = `-- name: ListSidebarModules :many
+SELECT name, is_active, updated_at, show_in_sidebar FROM modules WHERE is_active = 1 AND show_in_sidebar = 1 ORDER BY name
+`
+
+func (q *Queries) ListSidebarModules(ctx context.Context) ([]Module, error) {
+	rows, err := q.db.QueryContext(ctx, listSidebarModules)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Module{}
+	for rows.Next() {
+		var i Module
+		if err := rows.Scan(
+			&i.Name,
+			&i.IsActive,
+			&i.UpdatedAt,
+			&i.ShowInSidebar,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -89,7 +131,7 @@ const setModuleActive = `-- name: SetModuleActive :one
 UPDATE modules
 SET is_active = ?, updated_at = CURRENT_TIMESTAMP
 WHERE name = ?
-RETURNING name, is_active, updated_at
+RETURNING name, is_active, updated_at, show_in_sidebar
 `
 
 type SetModuleActiveParams struct {
@@ -100,27 +142,63 @@ type SetModuleActiveParams struct {
 func (q *Queries) SetModuleActive(ctx context.Context, arg SetModuleActiveParams) (Module, error) {
 	row := q.db.QueryRowContext(ctx, setModuleActive, arg.IsActive, arg.Name)
 	var i Module
-	err := row.Scan(&i.Name, &i.IsActive, &i.UpdatedAt)
+	err := row.Scan(
+		&i.Name,
+		&i.IsActive,
+		&i.UpdatedAt,
+		&i.ShowInSidebar,
+	)
+	return i, err
+}
+
+const setModuleShowInSidebar = `-- name: SetModuleShowInSidebar :one
+UPDATE modules
+SET show_in_sidebar = ?, updated_at = CURRENT_TIMESTAMP
+WHERE name = ?
+RETURNING name, is_active, updated_at, show_in_sidebar
+`
+
+type SetModuleShowInSidebarParams struct {
+	ShowInSidebar bool   `json:"show_in_sidebar"`
+	Name          string `json:"name"`
+}
+
+func (q *Queries) SetModuleShowInSidebar(ctx context.Context, arg SetModuleShowInSidebarParams) (Module, error) {
+	row := q.db.QueryRowContext(ctx, setModuleShowInSidebar, arg.ShowInSidebar, arg.Name)
+	var i Module
+	err := row.Scan(
+		&i.Name,
+		&i.IsActive,
+		&i.UpdatedAt,
+		&i.ShowInSidebar,
+	)
 	return i, err
 }
 
 const upsertModule = `-- name: UpsertModule :one
-INSERT INTO modules (name, is_active, updated_at)
-VALUES (?, ?, CURRENT_TIMESTAMP)
+INSERT INTO modules (name, is_active, show_in_sidebar, updated_at)
+VALUES (?, ?, ?, CURRENT_TIMESTAMP)
 ON CONFLICT(name) DO UPDATE SET
     is_active = excluded.is_active,
+    show_in_sidebar = excluded.show_in_sidebar,
     updated_at = CURRENT_TIMESTAMP
-RETURNING name, is_active, updated_at
+RETURNING name, is_active, updated_at, show_in_sidebar
 `
 
 type UpsertModuleParams struct {
-	Name     string `json:"name"`
-	IsActive bool   `json:"is_active"`
+	Name          string `json:"name"`
+	IsActive      bool   `json:"is_active"`
+	ShowInSidebar bool   `json:"show_in_sidebar"`
 }
 
 func (q *Queries) UpsertModule(ctx context.Context, arg UpsertModuleParams) (Module, error) {
-	row := q.db.QueryRowContext(ctx, upsertModule, arg.Name, arg.IsActive)
+	row := q.db.QueryRowContext(ctx, upsertModule, arg.Name, arg.IsActive, arg.ShowInSidebar)
 	var i Module
-	err := row.Scan(&i.Name, &i.IsActive, &i.UpdatedAt)
+	err := row.Scan(
+		&i.Name,
+		&i.IsActive,
+		&i.UpdatedAt,
+		&i.ShowInSidebar,
+	)
 	return i, err
 }

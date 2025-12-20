@@ -112,6 +112,11 @@ func (m *Module) AdminURL() string {
 	return "/admin/internal-analytics"
 }
 
+// SidebarLabel returns the display label for the admin sidebar.
+func (m *Module) SidebarLabel() string {
+	return "Analytics"
+}
+
 // TranslationsFS returns module translations.
 func (m *Module) TranslationsFS() embed.FS {
 	return localesFS

@@ -26,15 +26,28 @@ import (
 // SessionKeyAdminLang is the session key for storing admin UI language preference.
 const SessionKeyAdminLang = "admin_lang"
 
+// SidebarModule represents a module to display in the admin sidebar.
+type SidebarModule struct {
+	Name     string
+	Label    string
+	AdminURL string
+}
+
+// SidebarModuleProvider provides sidebar modules for the renderer.
+type SidebarModuleProvider interface {
+	ListSidebarModules() []SidebarModule
+}
+
 // Renderer handles template rendering with caching.
 type Renderer struct {
-	templates      map[string]*template.Template
-	sessionManager *scs.SessionManager
-	menuService    *service.MenuService
-	db             *sql.DB
-	isDev          bool
-	extraFuncs     template.FuncMap
-	templatesFS    fs.FS // Stored for reloading after adding module funcs
+	templates             map[string]*template.Template
+	sessionManager        *scs.SessionManager
+	menuService           *service.MenuService
+	sidebarModuleProvider SidebarModuleProvider
+	db                    *sql.DB
+	isDev                 bool
+	extraFuncs            template.FuncMap
+	templatesFS           fs.FS // Stored for reloading after adding module funcs
 }
 
 // Config holds renderer configuration.
@@ -69,6 +82,12 @@ func New(cfg Config) (*Renderer, error) {
 	}
 
 	return r, nil
+}
+
+// SetSidebarModuleProvider sets the provider for sidebar modules.
+// This is called after modules are initialized since they're registered after the renderer is created.
+func (r *Renderer) SetSidebarModuleProvider(provider SidebarModuleProvider) {
+	r.sidebarModuleProvider = provider
 }
 
 // parseTemplates parses all templates from the filesystem.
@@ -563,18 +582,19 @@ type Breadcrumb struct {
 
 // TemplateData holds data passed to templates.
 type TemplateData struct {
-	Title       string
-	Data        any
-	User        any // Current authenticated user (available in all admin templates)
-	Flash       string
-	FlashType   string
-	CurrentYear int
-	CSRFToken   string        // CSRF token value
-	CSRFField   template.HTML // Hidden input field with CSRF token
-	SiteName    string        // Site name from config
-	Breadcrumbs []Breadcrumb  // Breadcrumb navigation
-	CurrentPath string        // Current request path for active link detection
-	AdminLang   string        // Admin UI language code (en, ru, etc.)
+	Title          string
+	Data           any
+	User           any // Current authenticated user (available in all admin templates)
+	Flash          string
+	FlashType      string
+	CurrentYear    int
+	CSRFToken      string          // CSRF token value
+	CSRFField      template.HTML   // Hidden input field with CSRF token
+	SiteName       string          // Site name from config
+	Breadcrumbs    []Breadcrumb    // Breadcrumb navigation
+	CurrentPath    string          // Current request path for active link detection
+	AdminLang      string          // Admin UI language code (en, ru, etc.)
+	SidebarModules []SidebarModule // Modules to display in admin sidebar
 }
 
 // Render renders a template with the given data.
@@ -623,6 +643,11 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 				data.FlashType = "info"
 			}
 		}
+	}
+
+	// Populate sidebar modules for admin templates
+	if r.sidebarModuleProvider != nil && strings.HasPrefix(name, "admin/") {
+		data.SidebarModules = r.sidebarModuleProvider.ListSidebarModules()
 	}
 
 	// Render to buffer first to catch errors

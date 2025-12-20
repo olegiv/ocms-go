@@ -2318,6 +2318,21 @@
             "translation": "Activate module to access dashboard"
         },
         {
+            "id": "modules.enabled",
+            "message": "Enabled",
+            "translation": "Enabled"
+        },
+        {
+            "id": "modules.show_in_sidebar",
+            "message": "Show in sidebar",
+            "translation": "Show in sidebar"
+        },
+        {
+            "id": "modules.toggle_sidebar",
+            "message": "Toggle sidebar visibility",
+            "translation": "Toggle sidebar visibility"
+        },
+        {
             "id": "users.title",
             "message": "Users",
             "translation": "Users"

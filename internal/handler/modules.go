@@ -81,6 +81,18 @@ type ToggleActiveResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
+// ToggleSidebarRequest represents the request body for toggling module sidebar visibility.
+type ToggleSidebarRequest struct {
+	Show bool `json:"show"`
+}
+
+// ToggleSidebarResponse represents the response for toggling module sidebar visibility.
+type ToggleSidebarResponse struct {
+	Success bool   `json:"success"`
+	Show    bool   `json:"show"`
+	Message string `json:"message,omitempty"`
+}
+
 // ToggleActive handles POST /admin/modules/{name}/toggle - toggles module active status.
 func (h *ModulesHandler) ToggleActive(w http.ResponseWriter, r *http.Request) {
 	moduleName := chi.URLParam(r, "name")
@@ -112,5 +124,39 @@ func (h *ModulesHandler) ToggleActive(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(ToggleActiveResponse{
 		Success: true,
 		Active:  req.Active,
+	})
+}
+
+// ToggleSidebar handles POST /admin/modules/{name}/toggle-sidebar - toggles module sidebar visibility.
+func (h *ModulesHandler) ToggleSidebar(w http.ResponseWriter, r *http.Request) {
+	moduleName := chi.URLParam(r, "name")
+	if moduleName == "" {
+		http.Error(w, "Module name required", http.StatusBadRequest)
+		return
+	}
+
+	var req ToggleSidebarRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.registry.SetShowInSidebar(moduleName, req.Show); err != nil {
+		slog.Error("failed to toggle module sidebar visibility", "module", moduleName, "error", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(ToggleSidebarResponse{
+			Success: false,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	slog.Info("module sidebar visibility toggled", "module", moduleName, "show", req.Show)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(ToggleSidebarResponse{
+		Success: true,
+		Show:    req.Show,
 	})
 }

@@ -2318,6 +2318,21 @@
             "translation": "Активируйте модуль для доступа к панели"
         },
         {
+            "id": "modules.enabled",
+            "message": "Enabled",
+            "translation": "Включен"
+        },
+        {
+            "id": "modules.show_in_sidebar",
+            "message": "Show in sidebar",
+            "translation": "Показать в меню"
+        },
+        {
+            "id": "modules.toggle_sidebar",
+            "message": "Toggle sidebar visibility",
+            "translation": "Переключить отображение в меню"
+        },
+        {
             "id": "users.title",
             "message": "Users",
             "translation": "Пользователи"

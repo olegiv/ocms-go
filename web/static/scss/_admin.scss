@@ -3802,8 +3802,27 @@ tr.unread {
 
 .module-status {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: $spacing-2;
+}
+
+.module-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-2;
+  min-width: 140px;
+}
+
+.toggle-label {
+  font-size: $font-size-xs;
+  color: $gray-600;
+  white-space: nowrap;
+}
+
+.toggle-switch-sm {
+  transform: scale(0.8);
+  transform-origin: right center;
 }
 
 .hooks-section {
@@ -3830,6 +3849,204 @@ tr.unread {
 .handler-priority {
   font-size: $font-size-xs;
   color: $gray-400;
+}
+
+// =====================================================
+// Module Dashboard Styles (shared by analytics, hcaptcha, etc.)
+// =====================================================
+
+.analytics-form,
+.hcaptcha-form {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+}
+
+.analytics-card,
+.hcaptcha-card {
+  margin-bottom: 0;
+}
+
+.provider-header {
+  display: flex;
+  align-items: center;
+  gap: $spacing-4;
+}
+
+.provider-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: $radius-md;
+  background: $gray-100;
+  color: $gray-600;
+  flex-shrink: 0;
+}
+
+.provider-logo-ga4 {
+  background: linear-gradient(135deg, #f9ab00 0%, #e37400 100%);
+  color: white;
+}
+
+.provider-logo-gtm {
+  background: linear-gradient(135deg, #4285f4 0%, #3367d6 100%);
+  color: white;
+}
+
+.provider-logo-matomo {
+  background: linear-gradient(135deg, #3152a0 0%, #1a3d7c 100%);
+  color: white;
+}
+
+.provider-logo-hcaptcha {
+  background: linear-gradient(135deg, #0074bf 0%, #00527a 100%);
+  color: white;
+}
+
+.provider-info {
+  flex: 1;
+  min-width: 0;
+
+  h2 {
+    margin: 0;
+    font-size: $font-size-lg;
+    font-weight: 600;
+    color: $gray-900;
+  }
+
+  p {
+    margin: $spacing-1 0 0;
+    font-size: $font-size-sm;
+    color: $gray-500;
+  }
+}
+
+// Toggle switch (different from toggle-switch used elsewhere)
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 26px;
+  flex-shrink: 0;
+
+  input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+
+    &:checked + .slider {
+      background-color: $primary;
+    }
+
+    &:checked + .slider:before {
+      transform: translateX(22px);
+    }
+
+    &:focus + .slider {
+      box-shadow: 0 0 0 2px rgba($primary, 0.2);
+    }
+  }
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: $gray-300;
+  transition: 0.3s;
+  border-radius: 26px;
+
+  &:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+}
+
+.form-row {
+  display: flex;
+  gap: $spacing-4;
+  flex-wrap: wrap;
+
+  > .form-group {
+    flex: 1;
+    min-width: 200px;
+  }
+
+  > .form-group-lg {
+    flex: 2;
+  }
+
+  > .form-group-sm {
+    flex: 0 0 120px;
+    min-width: 120px;
+  }
+}
+
+.info-box {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-2;
+  padding: $spacing-3;
+  border-radius: $radius-md;
+  font-size: $font-size-sm;
+  margin-top: $spacing-3;
+
+  svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+}
+
+.info-box-info {
+  background-color: rgba($info, 0.1);
+  color: color.adjust($info, $lightness: -10%);
+  border: 1px solid rgba($info, 0.2);
+}
+
+.info-box-warning {
+  background-color: rgba($warning, 0.1);
+  color: color.adjust($warning, $lightness: -20%);
+  border: 1px solid rgba($warning, 0.2);
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: $spacing-4;
+  border-top: 1px solid $gray-200;
+  margin-top: $spacing-2;
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: $spacing-2;
+  }
+}
+
+.external-link {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-2;
+  color: $primary;
+  text-decoration: none;
+  font-size: $font-size-sm;
+
+  &:hover {
+    text-decoration: underline;
+  }
 }
 
 // =====================================================

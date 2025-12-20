@@ -70,6 +70,11 @@ func (m *Module) AdminURL() string {
 	return "/admin/developer"
 }
 
+// SidebarLabel returns the display label for the admin sidebar.
+func (m *Module) SidebarLabel() string {
+	return "Developer Tools"
+}
+
 // TranslationsFS returns the embedded filesystem containing module translations.
 func (m *Module) TranslationsFS() embed.FS {
 	return localesFS
