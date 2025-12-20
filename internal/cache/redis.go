@@ -223,7 +223,7 @@ func (c *RedisCache) Close() error {
 
 // Stats returns current cache statistics.
 // Note: Redis doesn't track per-prefix stats, so we use local counters.
-func (c *RedisCache) Stats() CacheStats {
+func (c *RedisCache) Stats() Stats {
 	hits := c.hits.Load()
 	misses := c.misses.Load()
 	total := hits + misses
@@ -253,7 +253,7 @@ func (c *RedisCache) Stats() CacheStats {
 		}
 	}
 
-	return CacheStats{
+	return Stats{
 		Hits:    hits,
 		Misses:  misses,
 		Sets:    c.sets.Load(),

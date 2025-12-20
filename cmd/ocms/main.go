@@ -222,7 +222,7 @@ func run() error {
 	moduleRegistry := module.NewRegistry(logger)
 
 	// Create module context
-	moduleCtx := &module.ModuleContext{
+	moduleCtx := &module.Context{
 		DB:     db,
 		Store:  store.New(db),
 		Logger: logger,

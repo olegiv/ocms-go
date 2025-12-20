@@ -17,8 +17,8 @@ import (
 	"ocms-go/internal/store"
 )
 
-// ModuleContext provides access to application services for modules.
-type ModuleContext struct {
+// Context provides access to application services for modules.
+type Context struct {
 	DB     *sql.DB
 	Store  *store.Queries
 	Logger *slog.Logger
@@ -40,7 +40,7 @@ type Module interface {
 	Dependencies() []string
 
 	// Init initializes the module with the given context.
-	Init(ctx *ModuleContext) error
+	Init(ctx *Context) error
 	// Shutdown performs cleanup when the module is shutting down.
 	Shutdown() error
 
@@ -84,7 +84,7 @@ type BaseModule struct {
 	name        string
 	version     string
 	description string
-	ctx         *ModuleContext
+	ctx         *Context
 }
 
 // NewBaseModule creates a new BaseModule with the given metadata.
@@ -109,7 +109,7 @@ func (m *BaseModule) Description() string { return m.description }
 func (m *BaseModule) Dependencies() []string { return nil }
 
 // Init initializes the module with the given context.
-func (m *BaseModule) Init(ctx *ModuleContext) error {
+func (m *BaseModule) Init(ctx *Context) error {
 	m.ctx = ctx
 	return nil
 }
@@ -139,4 +139,4 @@ func (m *BaseModule) SidebarLabel() string { return "" }
 func (m *BaseModule) TranslationsFS() embed.FS { return embed.FS{} }
 
 // Context returns the module context (for use by embedded modules).
-func (m *BaseModule) Context() *ModuleContext { return m.ctx }
+func (m *BaseModule) Context() *Context { return m.ctx }

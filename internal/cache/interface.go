@@ -32,19 +32,9 @@ type Cacher interface {
 	Close() error
 }
 
-// CacheStats holds statistics for a cache implementation.
-type CacheStats struct {
-	Hits    int64   `json:"hits"`
-	Misses  int64   `json:"misses"`
-	Sets    int64   `json:"sets"`
-	Items   int     `json:"items"`
-	HitRate float64 `json:"hit_rate"`
-	Size    int64   `json:"size_bytes"` // Approximate size in bytes
-}
-
 // StatsProvider is an optional interface for caches that provide statistics.
 type StatsProvider interface {
-	Stats() CacheStats
+	Stats() Stats
 	ResetStats()
 }
 

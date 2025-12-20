@@ -116,7 +116,7 @@ type SiteData struct {
 	SiteName    string
 	Description string
 	URL         string
-	Theme       *theme.ThemeConfig
+	Theme       *theme.Config
 	Settings    map[string]string
 	CurrentYear int
 }

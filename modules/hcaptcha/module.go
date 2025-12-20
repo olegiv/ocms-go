@@ -27,7 +27,7 @@ const (
 // Module implements the module.Module interface for the hCaptcha module.
 type Module struct {
 	module.BaseModule
-	ctx      *module.ModuleContext
+	ctx      *module.Context
 	settings *Settings
 }
 
@@ -43,7 +43,7 @@ func New() *Module {
 }
 
 // Init initializes the module with the given context.
-func (m *Module) Init(ctx *module.ModuleContext) error {
+func (m *Module) Init(ctx *module.Context) error {
 	m.ctx = ctx
 
 	// Load settings from database

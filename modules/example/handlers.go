@@ -14,8 +14,8 @@ import (
 	"ocms-go/internal/render"
 )
 
-// ExampleItem represents an item in the example module.
-type ExampleItem struct {
+// Item represents an item in the example module.
+type Item struct {
 	ID          int64     `json:"id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
@@ -89,7 +89,7 @@ func (m *Module) handleAdminExample(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct {
-		Items   []ExampleItem
+		Items   []Item
 		Version string
 	}{
 		Items:   items,
@@ -175,7 +175,7 @@ func (m *Module) handleDeleteItem(w http.ResponseWriter, r *http.Request) {
 
 // Database operations
 
-func (m *Module) listItems() ([]ExampleItem, error) {
+func (m *Module) listItems() ([]Item, error) {
 	rows, err := m.ctx.DB.Query(`
 		SELECT id, name, description, created_at
 		FROM example_items
@@ -186,9 +186,9 @@ func (m *Module) listItems() ([]ExampleItem, error) {
 	}
 	defer func() { _ = rows.Close() }()
 
-	var items []ExampleItem
+	var items []Item
 	for rows.Next() {
-		var item ExampleItem
+		var item Item
 		if err := rows.Scan(&item.ID, &item.Name, &item.Description, &item.CreatedAt); err != nil {
 			return nil, err
 		}
@@ -198,7 +198,7 @@ func (m *Module) listItems() ([]ExampleItem, error) {
 	return items, rows.Err()
 }
 
-func (m *Module) createItem(name, description string) (*ExampleItem, error) {
+func (m *Module) createItem(name, description string) (*Item, error) {
 	result, err := m.ctx.DB.Exec(`
 		INSERT INTO example_items (name, description, created_at)
 		VALUES (?, ?, ?)
@@ -212,7 +212,7 @@ func (m *Module) createItem(name, description string) (*ExampleItem, error) {
 		return nil, err
 	}
 
-	return &ExampleItem{
+	return &Item{
 		ID:          id,
 		Name:        name,
 		Description: description,

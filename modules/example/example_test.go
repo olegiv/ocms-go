@@ -59,7 +59,7 @@ func testModule(t *testing.T, db *sql.DB) *Module {
 		Level: slog.LevelWarn,
 	}))
 
-	ctx := &module.ModuleContext{
+	ctx := &module.Context{
 		DB:     db,
 		Logger: logger,
 		Config: &config.Config{},
@@ -164,7 +164,7 @@ func TestModuleInit(t *testing.T) {
 		}
 	}
 
-	ctx := &module.ModuleContext{
+	ctx := &module.Context{
 		DB:     db,
 		Logger: logger,
 		Config: &config.Config{},
@@ -351,7 +351,7 @@ func TestHookRegistration(t *testing.T) {
 		}
 	}
 
-	ctx := &module.ModuleContext{
+	ctx := &module.Context{
 		DB:     db,
 		Logger: logger,
 		Config: &config.Config{},
@@ -398,7 +398,7 @@ func TestHookHandlerInfo(t *testing.T) {
 		}
 	}
 
-	ctx := &module.ModuleContext{
+	ctx := &module.Context{
 		DB:     db,
 		Logger: logger,
 		Config: &config.Config{},

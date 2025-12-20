@@ -54,7 +54,7 @@ func testModule(t *testing.T, db *sql.DB) *Module {
 		Level: slog.LevelWarn,
 	}))
 
-	ctx := &module.ModuleContext{
+	ctx := &module.Context{
 		DB:     db,
 		Store:  store.New(db),
 		Logger: logger,

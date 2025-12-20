@@ -38,7 +38,7 @@ func NewModulesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionMan
 
 // ModulesListData holds data for the modules list template.
 type ModulesListData struct {
-	Modules []module.ModuleInfo
+	Modules []module.Info
 	Hooks   []module.HookInfo
 }
 

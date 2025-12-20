@@ -9,20 +9,20 @@ import (
 	"strings"
 )
 
-// ThemeConfig represents the configuration loaded from theme.json.
-type ThemeConfig struct {
+// Config represents the configuration loaded from theme.json.
+type Config struct {
 	Name        string            `json:"name"`
 	Version     string            `json:"version"`
 	Author      string            `json:"author"`
 	Description string            `json:"description"`
 	Screenshot  string            `json:"screenshot"`
 	Templates   map[string]string `json:"templates"`
-	Settings    []ThemeSetting    `json:"settings"`
+	Settings    []Setting         `json:"settings"`
 	WidgetAreas []WidgetArea      `json:"widget_areas,omitempty"`
 }
 
-// ThemeSetting represents a configurable option for a theme.
-type ThemeSetting struct {
+// Setting represents a configurable option for a theme.
+type Setting struct {
 	Key     string   `json:"key"`
 	Label   string   `json:"label"`
 	Type    string   `json:"type"` // text, color, image, select
@@ -41,7 +41,7 @@ type WidgetArea struct {
 type Theme struct {
 	Name         string                       // directory name (used as identifier)
 	Path         string                       // filesystem path to theme directory
-	Config       ThemeConfig                  // parsed theme.json
+	Config       Config                       // parsed theme.json
 	Templates    *template.Template           // parsed templates
 	StaticPath   string                       // path to static files
 	Translations map[string]map[string]string // lang -> key -> translation (optional overrides)

@@ -11,7 +11,7 @@ import (
 )
 
 // createTestTheme creates a test theme in a temporary directory.
-func createTestTheme(t *testing.T, themesDir, themeName string, config ThemeConfig) string {
+func createTestTheme(t *testing.T, themesDir, themeName string, config Config) string {
 	t.Helper()
 
 	themePath := filepath.Join(themesDir, themeName)
@@ -102,7 +102,7 @@ func TestLoadThemes(t *testing.T) {
 	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	// Create test themes
-	config1 := ThemeConfig{
+	config1 := Config{
 		Name:        "Test Theme 1",
 		Version:     "1.0.0",
 		Author:      "Test Author",
@@ -110,7 +110,7 @@ func TestLoadThemes(t *testing.T) {
 	}
 	createTestTheme(t, themesDir, "test1", config1)
 
-	config2 := ThemeConfig{
+	config2 := Config{
 		Name:        "Test Theme 2",
 		Version:     "2.0.0",
 		Author:      "Another Author",
@@ -161,7 +161,7 @@ func TestSetActiveTheme(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(themesDir) }()
 
-	config := ThemeConfig{Name: "Test", Version: "1.0.0"}
+	config := Config{Name: "Test", Version: "1.0.0"}
 	createTestTheme(t, themesDir, "test", config)
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -204,7 +204,7 @@ func TestGetTheme(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(themesDir) }()
 
-	config := ThemeConfig{
+	config := Config{
 		Name:    "Get Test",
 		Version: "1.0.0",
 		Author:  "Author",
@@ -242,8 +242,8 @@ func TestListThemes(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(themesDir) }()
 
-	createTestTheme(t, themesDir, "theme1", ThemeConfig{Name: "Theme 1", Version: "1.0.0"})
-	createTestTheme(t, themesDir, "theme2", ThemeConfig{Name: "Theme 2", Version: "2.0.0"})
+	createTestTheme(t, themesDir, "theme1", Config{Name: "Theme 1", Version: "1.0.0"})
+	createTestTheme(t, themesDir, "theme2", Config{Name: "Theme 2", Version: "2.0.0"})
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	m := NewManager(themesDir, logger)
@@ -265,8 +265,8 @@ func TestListThemesWithActive(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(themesDir) }()
 
-	createTestTheme(t, themesDir, "active", ThemeConfig{Name: "Active Theme", Version: "1.0.0"})
-	createTestTheme(t, themesDir, "inactive", ThemeConfig{Name: "Inactive Theme", Version: "1.0.0"})
+	createTestTheme(t, themesDir, "active", Config{Name: "Active Theme", Version: "1.0.0"})
+	createTestTheme(t, themesDir, "inactive", Config{Name: "Inactive Theme", Version: "1.0.0"})
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	m := NewManager(themesDir, logger)
@@ -317,7 +317,7 @@ func TestReloadTheme(t *testing.T) {
 	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	// Initial config
-	config := ThemeConfig{Name: "Original", Version: "1.0.0"}
+	config := Config{Name: "Original", Version: "1.0.0"}
 	createTestTheme(t, themesDir, "reload", config)
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -334,7 +334,7 @@ func TestReloadTheme(t *testing.T) {
 	}
 
 	// Update config
-	newConfig := ThemeConfig{Name: "Updated", Version: "2.0.0"}
+	newConfig := Config{Name: "Updated", Version: "2.0.0"}
 	configData, _ := json.Marshal(newConfig)
 	if err := os.WriteFile(filepath.Join(themesDir, "reload", "theme.json"), configData, 0644); err != nil {
 		t.Fatalf("failed to update theme.json: %v", err)
@@ -359,7 +359,7 @@ func TestReloadActiveTheme(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(themesDir) }()
 
-	config := ThemeConfig{Name: "Active Reload", Version: "1.0.0"}
+	config := Config{Name: "Active Reload", Version: "1.0.0"}
 	createTestTheme(t, themesDir, "active-reload", config)
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -374,7 +374,7 @@ func TestReloadActiveTheme(t *testing.T) {
 	}
 
 	// Update and reload
-	newConfig := ThemeConfig{Name: "Updated Active", Version: "2.0.0"}
+	newConfig := Config{Name: "Updated Active", Version: "2.0.0"}
 	configData, _ := json.Marshal(newConfig)
 	if err := os.WriteFile(filepath.Join(themesDir, "active-reload", "theme.json"), configData, 0644); err != nil {
 		t.Fatalf("failed to update theme.json: %v", err)
@@ -398,7 +398,7 @@ func TestHasTheme(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(themesDir) }()
 
-	createTestTheme(t, themesDir, "exists", ThemeConfig{Name: "Exists", Version: "1.0.0"})
+	createTestTheme(t, themesDir, "exists", Config{Name: "Exists", Version: "1.0.0"})
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	m := NewManager(themesDir, logger)
@@ -432,7 +432,7 @@ func TestSetFuncMap(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(themesDir) }()
 
-	config := ThemeConfig{Name: "FuncMap Test", Version: "1.0.0"}
+	config := Config{Name: "FuncMap Test", Version: "1.0.0"}
 	createTestTheme(t, themesDir, "funcmap", config)
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -517,10 +517,10 @@ func TestThemeWithSettings(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(themesDir) }()
 
-	config := ThemeConfig{
+	config := Config{
 		Name:    "Settings Theme",
 		Version: "1.0.0",
-		Settings: []ThemeSetting{
+		Settings: []Setting{
 			{
 				Key:     "primary_color",
 				Label:   "Primary Color",
@@ -573,9 +573,9 @@ func TestThemeCount(t *testing.T) {
 		t.Errorf("expected 0 themes initially, got %d", m.ThemeCount())
 	}
 
-	createTestTheme(t, themesDir, "theme1", ThemeConfig{Name: "Theme 1", Version: "1.0.0"})
-	createTestTheme(t, themesDir, "theme2", ThemeConfig{Name: "Theme 2", Version: "1.0.0"})
-	createTestTheme(t, themesDir, "theme3", ThemeConfig{Name: "Theme 3", Version: "1.0.0"})
+	createTestTheme(t, themesDir, "theme1", Config{Name: "Theme 1", Version: "1.0.0"})
+	createTestTheme(t, themesDir, "theme2", Config{Name: "Theme 2", Version: "1.0.0"})
+	createTestTheme(t, themesDir, "theme3", Config{Name: "Theme 3", Version: "1.0.0"})
 
 	if err := m.LoadThemes(); err != nil {
 		t.Fatalf("failed to load themes: %v", err)
@@ -587,7 +587,7 @@ func TestThemeCount(t *testing.T) {
 }
 
 // createTestThemeWithLocales creates a test theme with translation files.
-func createTestThemeWithLocales(t *testing.T, themesDir, themeName string, config ThemeConfig, translations map[string]map[string]string) string {
+func createTestThemeWithLocales(t *testing.T, themesDir, themeName string, config Config, translations map[string]map[string]string) string {
 	t.Helper()
 
 	// Create base theme first
@@ -703,7 +703,7 @@ func TestLoadThemeWithTranslations(t *testing.T) {
 			"frontend.read_more": "Продолжить →",
 		},
 	}
-	createTestThemeWithLocales(t, themesDir, "translated", ThemeConfig{Name: "Translated Theme", Version: "1.0.0"}, translations)
+	createTestThemeWithLocales(t, themesDir, "translated", Config{Name: "Translated Theme", Version: "1.0.0"}, translations)
 
 	m := NewManager(themesDir, logger)
 	if err := m.LoadThemes(); err != nil {
@@ -751,7 +751,7 @@ func TestLoadThemeWithoutTranslations(t *testing.T) {
 	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	// Create theme without locales directory
-	createTestTheme(t, themesDir, "no-locales", ThemeConfig{Name: "No Locales Theme", Version: "1.0.0"})
+	createTestTheme(t, themesDir, "no-locales", Config{Name: "No Locales Theme", Version: "1.0.0"})
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	m := NewManager(themesDir, logger)
@@ -790,7 +790,7 @@ func TestManagerTranslateWithFallback(t *testing.T) {
 			"frontend.read_more": "Theme Override",
 		},
 	}
-	createTestThemeWithLocales(t, themesDir, "partial", ThemeConfig{Name: "Partial Theme", Version: "1.0.0"}, translations)
+	createTestThemeWithLocales(t, themesDir, "partial", Config{Name: "Partial Theme", Version: "1.0.0"}, translations)
 
 	m := NewManager(themesDir, logger)
 	if err := m.LoadThemes(); err != nil {
@@ -874,7 +874,7 @@ func TestManagerTranslateWithArgs(t *testing.T) {
 			"greeting": "Hello, %s!",
 		},
 	}
-	createTestThemeWithLocales(t, themesDir, "args", ThemeConfig{Name: "Args Theme", Version: "1.0.0"}, translations)
+	createTestThemeWithLocales(t, themesDir, "args", Config{Name: "Args Theme", Version: "1.0.0"}, translations)
 
 	m := NewManager(themesDir, logger)
 	if err := m.LoadThemes(); err != nil {
@@ -900,7 +900,7 @@ func TestInvalidThemeLocaleJson(t *testing.T) {
 	defer func() { _ = os.RemoveAll(themesDir) }()
 
 	// Create theme first
-	createTestTheme(t, themesDir, "invalid-locale", ThemeConfig{Name: "Invalid Locale Theme", Version: "1.0.0"})
+	createTestTheme(t, themesDir, "invalid-locale", Config{Name: "Invalid Locale Theme", Version: "1.0.0"})
 
 	// Create invalid locale file
 	localeDir := filepath.Join(themesDir, "invalid-locale", "locales", "en")

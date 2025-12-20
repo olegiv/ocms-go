@@ -66,7 +66,7 @@ type WidgetsListData struct {
 		Name        string
 		Description string
 	}
-	AllThemes []theme.ThemeInfo
+	AllThemes []theme.Info
 }
 
 // List handles GET /admin/widgets - displays widget management page.

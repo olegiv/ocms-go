@@ -8,24 +8,23 @@ import (
 	"ocms-go/internal/store"
 )
 
-// CacheType identifies a specific cache.
-type CacheType string
+// Kind identifies a specific cache.
+type Kind string
 
-// Cache types.
+// Kind constants for different cache types.
 const (
-	CacheTypeConfig      CacheType = "config"
-	CacheTypeSitemap     CacheType = "sitemap"
-	CacheTypeGeneral     CacheType = "general"
-	CacheTypeMenu        CacheType = "menu"
-	CacheTypeLanguage    CacheType = "language"
-	CacheTypeTranslation CacheType = "translation"
+	KindConfig      Kind = "config"
+	KindSitemap     Kind = "sitemap"
+	KindGeneral     Kind = "general"
+	KindMenu        Kind = "menu"
+	KindLanguage    Kind = "language"
+	KindTranslation Kind = "translation"
 )
 
 // ManagerCacheStats holds statistics for a specific cache in the manager.
-// This is different from CacheStats in interface.go which is for the Cacher interface.
 type ManagerCacheStats struct {
 	Name     string
-	Type     CacheType
+	Kind     Kind
 	Stats    Stats
 	CachedAt *time.Time // when the cache was last populated (for sitemap)
 	Size     int        // size in bytes (for sitemap)
@@ -235,32 +234,32 @@ func (m *Manager) AllStats() []ManagerCacheStats {
 	stats := []ManagerCacheStats{
 		{
 			Name:  "Site Configuration",
-			Type:  CacheTypeConfig,
+			Kind:  KindConfig,
 			Stats: m.Config.Stats(),
 		},
 		{
 			Name:  "Sitemap",
-			Type:  CacheTypeSitemap,
+			Kind:  KindSitemap,
 			Stats: m.Sitemap.Stats(),
 		},
 		{
 			Name:  "Menus",
-			Type:  CacheTypeMenu,
+			Kind:  KindMenu,
 			Stats: m.Menus.Stats(),
 		},
 		{
 			Name:  "Languages",
-			Type:  CacheTypeLanguage,
+			Kind:  KindLanguage,
 			Stats: m.Language.Stats(),
 		},
 		{
 			Name:  "Translations",
-			Type:  CacheTypeTranslation,
+			Kind:  KindTranslation,
 			Stats: m.Translation.Stats(),
 		},
 		{
 			Name:  "General Cache",
-			Type:  CacheTypeGeneral,
+			Kind:  KindGeneral,
 			Stats: m.General.Stats(),
 		},
 	}

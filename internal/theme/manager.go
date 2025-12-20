@@ -87,7 +87,7 @@ func (m *Manager) loadTheme(name, path string) (*Theme, error) {
 		return nil, fmt.Errorf("reading theme.json: %w", err)
 	}
 
-	var config ThemeConfig
+	var config Config
 	if err := json.Unmarshal(configData, &config); err != nil {
 		return nil, fmt.Errorf("parsing theme.json: %w", err)
 	}
@@ -292,11 +292,11 @@ func (m *Manager) GetTheme(name string) (*Theme, error) {
 }
 
 // ListThemes returns all loaded theme configs.
-func (m *Manager) ListThemes() []*ThemeConfig {
+func (m *Manager) ListThemes() []*Config {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	configs := make([]*ThemeConfig, 0, len(m.themes))
+	configs := make([]*Config, 0, len(m.themes))
 	for _, theme := range m.themes {
 		cfg := theme.Config
 		configs = append(configs, &cfg)
@@ -304,21 +304,21 @@ func (m *Manager) ListThemes() []*ThemeConfig {
 	return configs
 }
 
-// ThemeInfo represents a theme with its configuration and active status.
-type ThemeInfo struct {
+// Info represents a theme with its configuration and active status.
+type Info struct {
 	Name     string
-	Config   ThemeConfig
+	Config   Config
 	IsActive bool
 }
 
 // ListThemesWithActive returns all themes with active status.
-func (m *Manager) ListThemesWithActive() []ThemeInfo {
+func (m *Manager) ListThemesWithActive() []Info {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	infos := make([]ThemeInfo, 0, len(m.themes))
+	infos := make([]Info, 0, len(m.themes))
 	for name, theme := range m.themes {
-		infos = append(infos, ThemeInfo{
+		infos = append(infos, Info{
 			Name:     name,
 			Config:   theme.Config,
 			IsActive: m.activeTheme != nil && m.activeTheme.Name == name,
