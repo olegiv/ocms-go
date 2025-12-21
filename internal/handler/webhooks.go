@@ -87,15 +87,13 @@ func (h *WebhooksHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	webhooks, err := h.queries.ListWebhooks(r.Context())
 	if err != nil {
-		slog.Error("failed to list webhooks", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		logAndInternalError(w, "failed to list webhooks", "error", err)
 		return
 	}
 
 	totalWebhooks, err := h.queries.CountWebhooks(r.Context())
 	if err != nil {
-		slog.Error("failed to count webhooks", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		logAndInternalError(w, "failed to count webhooks", "error", err)
 		return
 	}
 
@@ -203,9 +201,7 @@ func (h *WebhooksHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 
 // Create handles POST /admin/webhooks - creates a new webhook.
 func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, "/admin/webhooks/new", http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, "/admin/webhooks/new") {
 		return
 	}
 
@@ -216,8 +212,7 @@ func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 		generatedSecret, err := model.GenerateWebhookSecret()
 		if err != nil {
 			slog.Error("failed to generate webhook secret", "error", err)
-			h.renderer.SetFlash(r, "Error generating secret", "error")
-			http.Redirect(w, r, "/admin/webhooks/new", http.StatusSeeOther)
+			flashError(w, r, h.renderer, "/admin/webhooks/new", "Error generating secret")
 			return
 		}
 		input.Secret = generatedSecret
@@ -254,22 +249,19 @@ func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to create webhook", "error", err)
-		h.renderer.SetFlash(r, "Error creating webhook", "error")
-		http.Redirect(w, r, "/admin/webhooks/new", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/webhooks/new", "Error creating webhook")
 		return
 	}
 
 	slog.Info("webhook created", "webhook_id", webhook.ID, "name", webhook.Name, "created_by", middleware.GetUserID(r))
-	h.renderer.SetFlash(r, "Webhook created successfully", "success")
-	http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/webhooks", "Webhook created successfully")
 }
 
 // EditForm handles GET /admin/webhooks/{id} - displays the edit webhook form.
 func (h *WebhooksHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid webhook ID", "error")
-		http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/webhooks", "Invalid webhook ID")
 		return
 	}
 
@@ -305,8 +297,7 @@ func (h *WebhooksHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid webhook ID", "error")
-		http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/webhooks", "Invalid webhook ID")
 		return
 	}
 
@@ -315,9 +306,7 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/webhooks/%d", id), http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf("/admin/webhooks/%d", id)) {
 		return
 	}
 
@@ -359,14 +348,12 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to update webhook", "error", err)
-		h.renderer.SetFlash(r, "Error updating webhook", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/webhooks/%d", id), http.StatusSeeOther)
+		flashError(w, r, h.renderer, fmt.Sprintf("/admin/webhooks/%d", id), "Error updating webhook")
 		return
 	}
 
 	slog.Info("webhook updated", "webhook_id", id, "updated_by", middleware.GetUserID(r))
-	h.renderer.SetFlash(r, "Webhook updated successfully", "success")
-	http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/webhooks", "Webhook updated successfully")
 }
 
 // Delete handles DELETE /admin/webhooks/{id} - deletes a webhook.
@@ -397,8 +384,7 @@ func (h *WebhooksHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.renderer.SetFlash(r, "Webhook deleted successfully", "success")
-	http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/webhooks", "Webhook deleted successfully")
 }
 
 // Deliveries handles GET /admin/webhooks/{id}/deliveries - displays delivery history.
@@ -408,8 +394,7 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid webhook ID", "error")
-		http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/webhooks", "Invalid webhook ID")
 		return
 	}
 
@@ -423,8 +408,7 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 	// Get total count
 	totalCount, err := h.queries.CountWebhookDeliveries(r.Context(), id)
 	if err != nil {
-		slog.Error("failed to count deliveries", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		logAndInternalError(w, "failed to count deliveries", "error", err)
 		return
 	}
 
@@ -439,8 +423,7 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 		Offset:    offset,
 	})
 	if err != nil {
-		slog.Error("failed to list deliveries", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		logAndInternalError(w, "failed to list deliveries", "error", err)
 		return
 	}
 
@@ -468,8 +451,7 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 func (h *WebhooksHandler) Test(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid webhook ID", "error")
-		http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/webhooks", "Invalid webhook ID")
 		return
 	}
 
@@ -505,14 +487,12 @@ func (h *WebhooksHandler) Test(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to create test delivery", "error", err)
-		h.renderer.SetFlash(r, "Error creating test delivery", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/webhooks/%d", id), http.StatusSeeOther)
+		flashError(w, r, h.renderer, fmt.Sprintf("/admin/webhooks/%d", id), "Error creating test delivery")
 		return
 	}
 
 	slog.Info("test webhook created", "webhook_id", id, "triggered_by", middleware.GetUserID(r))
-	h.renderer.SetFlash(r, "Test event queued for delivery", "success")
-	http.Redirect(w, r, fmt.Sprintf("/admin/webhooks/%d/deliveries", id), http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/webhooks/%d/deliveries", id), "Test event queued for delivery")
 }
 
 // RetryDelivery handles POST /admin/webhooks/{id}/deliveries/{did}/retry - retries a delivery.
@@ -520,16 +500,14 @@ func (h *WebhooksHandler) RetryDelivery(w http.ResponseWriter, r *http.Request) 
 	webhookIDStr := chi.URLParam(r, "id")
 	webhookID, err := strconv.ParseInt(webhookIDStr, 10, 64)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid webhook ID", "error")
-		http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/webhooks", "Invalid webhook ID")
 		return
 	}
 
 	deliveryIDStr := chi.URLParam(r, "did")
 	deliveryID, err := strconv.ParseInt(deliveryIDStr, 10, 64)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid delivery ID", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/webhooks/%d/deliveries", webhookID), http.StatusSeeOther)
+		flashError(w, r, h.renderer, fmt.Sprintf("/admin/webhooks/%d/deliveries", webhookID), "Invalid delivery ID")
 		return
 	}
 
@@ -541,14 +519,12 @@ func (h *WebhooksHandler) RetryDelivery(w http.ResponseWriter, r *http.Request) 
 	})
 	if err != nil {
 		slog.Error("failed to reset delivery", "error", err)
-		h.renderer.SetFlash(r, "Error resetting delivery", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/webhooks/%d/deliveries", webhookID), http.StatusSeeOther)
+		flashError(w, r, h.renderer, fmt.Sprintf("/admin/webhooks/%d/deliveries", webhookID), "Error resetting delivery")
 		return
 	}
 
 	slog.Info("delivery reset for retry", "delivery_id", deliveryID, "webhook_id", webhookID, "reset_by", middleware.GetUserID(r))
-	h.renderer.SetFlash(r, "Delivery queued for retry", "success")
-	http.Redirect(w, r, fmt.Sprintf("/admin/webhooks/%d/deliveries", webhookID), http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/webhooks/%d/deliveries", webhookID), "Delivery queued for retry")
 }
 
 // sendDeleteError sends an error response for delete operations.
@@ -563,12 +539,11 @@ func (h *WebhooksHandler) requireWebhookWithRedirect(w http.ResponseWriter, r *h
 	webhook, err := h.queries.GetWebhookByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Webhook not found", "error")
+			flashError(w, r, h.renderer, "/admin/webhooks", "Webhook not found")
 		} else {
 			slog.Error("failed to get webhook", "error", err)
-			h.renderer.SetFlash(r, "Error loading webhook", "error")
+			flashError(w, r, h.renderer, "/admin/webhooks", "Error loading webhook")
 		}
-		http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
 		return store.Webhook{}, false
 	}
 	return webhook, true

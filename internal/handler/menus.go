@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -56,11 +57,7 @@ func (h *MenusHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get languages for filter/display
-	languages, err := h.queries.ListActiveLanguages(r.Context())
-	if err != nil {
-		slog.Error("failed to list languages", "error", err)
-		languages = []store.Language{}
-	}
+	languages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 
 	data := MenusListData{
 		Menus:     menus,
@@ -121,7 +118,7 @@ func buildMenuTree(items []store.ListMenuItemsWithPageRow, parentID sql.NullInt6
 					UpdatedAt: item.UpdatedAt,
 				},
 				PageSlug: item.PageSlug.String,
-				Children: buildMenuTree(items, sql.NullInt64{Int64: item.ID, Valid: true}),
+				Children: buildMenuTree(items, util.NullInt64FromValue(item.ID)),
 			}
 			nodes = append(nodes, node)
 		}
@@ -136,11 +133,7 @@ func (h *MenusHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	lang := h.renderer.GetAdminLang(r)
 
 	// Get languages for selector
-	languages, err := h.queries.ListActiveLanguages(r.Context())
-	if err != nil {
-		slog.Error("failed to list languages", "error", err)
-		languages = []store.Language{}
-	}
+	languages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 
 	// Get default language for pre-selection
 	defaultLang, err := h.queries.GetDefaultLanguage(r.Context())
@@ -178,36 +171,20 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, "/admin/menus/new", http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, "/admin/menus/new") {
 		return
 	}
 
 	input := parseMenuFormInput(r)
 
 	// Validate slug
-	if input.Slug == "" {
-		input.Errors["slug"] = "Slug is required"
-	} else if !util.IsValidSlug(input.Slug) {
-		input.Errors["slug"] = "Invalid slug format"
-	} else if input.LanguageID.Valid {
-		// Check slug uniqueness within the same language
-		exists, err := h.queries.MenuSlugExistsForLanguage(r.Context(), store.MenuSlugExistsForLanguageParams{
-			Slug:       input.Slug,
-			LanguageID: input.LanguageID,
-		})
-		if err != nil {
-			slog.Error("database error checking slug", "error", err)
-			input.Errors["slug"] = "Error checking slug"
-		} else if exists != 0 {
-			input.Errors["slug"] = "Slug already exists for this language"
-		}
+	if errMsg := h.validateMenuSlugCreate(r.Context(), input.Slug, input.LanguageID); errMsg != "" {
+		input.Errors["slug"] = errMsg
 	}
 
 	if len(input.Errors) > 0 {
 		// Get languages for re-render
-		languages, _ := h.queries.ListActiveLanguages(r.Context())
+		languages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 
 		data := MenuFormData{
 			Targets:    model.ValidTargets,
@@ -240,14 +217,12 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to create menu", "error", err)
-		h.renderer.SetFlash(r, "Error creating menu", "error")
-		http.Redirect(w, r, "/admin/menus/new", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/menus/new", "Error creating menu")
 		return
 	}
 
 	slog.Info("menu created", "menu_id", menu.ID, "slug", menu.Slug)
-	h.renderer.SetFlash(r, "Menu created successfully", "success")
-	http.Redirect(w, r, fmt.Sprintf("/admin/menus/%d", menu.ID), http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/menus/%d", menu.ID), "Menu created successfully")
 }
 
 // EditForm handles GET /admin/menus/{id} - displays the menu builder.
@@ -257,8 +232,7 @@ func (h *MenusHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid menu ID", "error")
-		http.Redirect(w, r, "/admin/menus", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/menus", "Invalid menu ID")
 		return
 	}
 
@@ -288,11 +262,7 @@ func (h *MenusHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get languages for selector
-	languages, err := h.queries.ListActiveLanguages(r.Context())
-	if err != nil {
-		slog.Error("failed to list languages", "error", err)
-		languages = []store.Language{}
-	}
+	languages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 
 	data := MenuFormData{
 		Menu:       &menu,
@@ -324,8 +294,7 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid menu ID", "error")
-		http.Redirect(w, r, "/admin/menus", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/menus", "Invalid menu ID")
 		return
 	}
 
@@ -334,32 +303,15 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/menus/%d", id), http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf("/admin/menus/%d", id)) {
 		return
 	}
 
 	input := parseMenuFormInput(r)
 
 	// Validate slug
-	if input.Slug == "" {
-		input.Errors["slug"] = "Slug is required"
-	} else if !util.IsValidSlug(input.Slug) {
-		input.Errors["slug"] = "Invalid slug format"
-	} else if input.Slug != menu.Slug || input.LanguageID != menu.LanguageID {
-		// Check slug uniqueness within the same language (excluding current menu)
-		exists, err := h.queries.MenuSlugExistsForLanguageExcluding(r.Context(), store.MenuSlugExistsForLanguageExcludingParams{
-			Slug:       input.Slug,
-			LanguageID: input.LanguageID,
-			ID:         id,
-		})
-		if err != nil {
-			slog.Error("database error checking slug", "error", err)
-			input.Errors["slug"] = "Error checking slug"
-		} else if exists != 0 {
-			input.Errors["slug"] = "Slug already exists for this language"
-		}
+	if errMsg := h.validateMenuSlugUpdate(r.Context(), input.Slug, input.LanguageID, menu.Slug, menu.LanguageID, id); errMsg != "" {
+		input.Errors["slug"] = errMsg
 	}
 
 	if len(input.Errors) > 0 {
@@ -367,7 +319,7 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 		items, _ := h.queries.ListMenuItemsWithPage(r.Context(), id)
 		tree := buildMenuTree(items, sql.NullInt64{Valid: false})
 		pages, _ := h.queries.ListPages(r.Context(), store.ListPagesParams{Limit: 1000, Offset: 0})
-		languages, _ := h.queries.ListActiveLanguages(r.Context())
+		languages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 
 		data := MenuFormData{
 			Menu:       &menu,
@@ -403,8 +355,7 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to update menu", "error", err, "menu_id", id)
-		h.renderer.SetFlash(r, "Error updating menu", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/menus/%d", id), http.StatusSeeOther)
+		flashError(w, r, h.renderer, fmt.Sprintf("/admin/menus/%d", id), "Error updating menu")
 		return
 	}
 
@@ -415,8 +366,7 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("menu updated", "menu_id", id, "updated_by", middleware.GetUserID(r))
-	h.renderer.SetFlash(r, "Menu updated successfully", "success")
-	http.Redirect(w, r, fmt.Sprintf("/admin/menus/%d", id), http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/menus/%d", id), "Menu updated successfully")
 }
 
 // Delete handles DELETE /admin/menus/{id} - deletes a menu.
@@ -455,8 +405,7 @@ func (h *MenusHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.renderer.SetFlash(r, "Menu deleted successfully", "success")
-	http.Redirect(w, r, "/admin/menus", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/menus", "Menu deleted successfully")
 }
 
 // AddItemRequest represents the JSON request for adding a menu item.
@@ -488,41 +437,32 @@ func (h *MenusHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Title == "" {
-		writeJSONError(w, http.StatusBadRequest, "Title is required")
+	validated, ok := validateMenuItemInput(w, menuItemInput{
+		Title:    req.Title,
+		Target:   req.Target,
+		PageID:   req.PageID,
+		URL:      req.URL,
+		CSSClass: req.CSSClass,
+	})
+	if !ok {
 		return
 	}
-
-	target, err := validateMenuItemTarget(req.Target)
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "Invalid target")
-		return
-	}
-	req.Target = target
 
 	// Get max position for this parent
-	var parentID sql.NullInt64
-	if req.ParentID != nil {
-		parentID = sql.NullInt64{Int64: *req.ParentID, Valid: true}
-	}
+	parentID := util.NullInt64FromPtr(req.ParentID)
 
 	maxPos := h.getMaxMenuItemPosition(r, menuID, parentID)
-
-	var pageID sql.NullInt64
-	if req.PageID != nil {
-		pageID = sql.NullInt64{Int64: *req.PageID, Valid: true}
-	}
 
 	now := time.Now()
 	item, err := h.queries.CreateMenuItem(r.Context(), store.CreateMenuItemParams{
 		MenuID:    menuID,
 		ParentID:  parentID,
 		Title:     req.Title,
-		Url:       sql.NullString{String: req.URL, Valid: req.URL != ""},
-		Target:    sql.NullString{String: req.Target, Valid: req.Target != ""},
-		PageID:    pageID,
+		Url:       validated.URL,
+		Target:    util.NullStringFromValue(validated.Target),
+		PageID:    validated.PageID,
 		Position:  maxPos + 1,
-		CssClass:  sql.NullString{String: req.CSSClass, Valid: req.CSSClass != ""},
+		CssClass:  validated.CSSClass,
 		IsActive:  true,
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -562,21 +502,15 @@ func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Title == "" {
-		writeJSONError(w, http.StatusBadRequest, "Title is required")
+	validated, ok := validateMenuItemInput(w, menuItemInput{
+		Title:    req.Title,
+		Target:   req.Target,
+		PageID:   req.PageID,
+		URL:      req.URL,
+		CSSClass: req.CSSClass,
+	})
+	if !ok {
 		return
-	}
-
-	target, err := validateMenuItemTarget(req.Target)
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "Invalid target")
-		return
-	}
-	req.Target = target
-
-	var pageID sql.NullInt64
-	if req.PageID != nil {
-		pageID = sql.NullInt64{Int64: *req.PageID, Valid: true}
 	}
 
 	now := time.Now()
@@ -584,11 +518,11 @@ func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		ID:        item.ID,
 		ParentID:  item.ParentID, // Keep existing parent
 		Title:     req.Title,
-		Url:       sql.NullString{String: req.URL, Valid: req.URL != ""},
-		Target:    sql.NullString{String: req.Target, Valid: req.Target != ""},
-		PageID:    pageID,
+		Url:       validated.URL,
+		Target:    util.NullStringFromValue(validated.Target),
+		PageID:    validated.PageID,
 		Position:  item.Position, // Keep existing position
-		CssClass:  sql.NullString{String: req.CSSClass, Valid: req.CSSClass != ""},
+		CssClass:  validated.CSSClass,
 		IsActive:  req.IsActive,
 		UpdatedAt: now,
 	})
@@ -697,7 +631,7 @@ func (h *MenusHandler) processReorderItems(r *http.Request, menuID int64, items 
 			// Process children
 			if len(item.Children) > 0 {
 				childPos := int64(0)
-				if err = processItems(item.Children, sql.NullInt64{Int64: item.ID, Valid: true}, &childPos); err != nil {
+				if err = processItems(item.Children, util.NullInt64FromValue(item.ID), &childPos); err != nil {
 					return err
 				}
 			}
@@ -716,12 +650,11 @@ func (h *MenusHandler) requireMenuWithRedirect(w http.ResponseWriter, r *http.Re
 	menu, err := h.queries.GetMenuByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Menu not found", "error")
+			flashError(w, r, h.renderer, "/admin/menus", "Menu not found")
 		} else {
 			slog.Error("failed to get menu", "error", err, "menu_id", id)
-			h.renderer.SetFlash(r, "Error loading menu", "error")
+			flashError(w, r, h.renderer, "/admin/menus", "Error loading menu")
 		}
-		http.Redirect(w, r, "/admin/menus", http.StatusSeeOther)
 		return store.Menu{}, false
 	}
 	return menu, true
@@ -773,7 +706,7 @@ func parseMenuFormInput(r *http.Request) menuFormInput {
 		if err != nil {
 			validationErrors["language_id"] = "Invalid language"
 		} else {
-			languageID = sql.NullInt64{Int64: langID, Valid: true}
+			languageID = util.NullInt64FromValue(langID)
 		}
 	}
 
@@ -808,6 +741,45 @@ func validateMenuItemTarget(target string) (string, error) {
 		return "", errors.New("invalid target")
 	}
 	return target, nil
+}
+
+// menuItemInput represents common input fields for menu item creation/update.
+type menuItemInput struct {
+	Title    string
+	Target   string
+	PageID   *int64
+	URL      string
+	CSSClass string
+}
+
+// menuItemValidated holds validated menu item data ready for database operations.
+type menuItemValidated struct {
+	Target   string
+	PageID   sql.NullInt64
+	URL      sql.NullString
+	CSSClass sql.NullString
+}
+
+// validateMenuItemInput validates common menu item fields and writes JSON error on failure.
+// Returns validated data and true on success, or zero value and false on validation error.
+func validateMenuItemInput(w http.ResponseWriter, input menuItemInput) (menuItemValidated, bool) {
+	if input.Title == "" {
+		writeJSONError(w, http.StatusBadRequest, "Title is required")
+		return menuItemValidated{}, false
+	}
+
+	target, err := validateMenuItemTarget(input.Target)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "Invalid target")
+		return menuItemValidated{}, false
+	}
+
+	return menuItemValidated{
+		Target:   target,
+		PageID:   util.NullInt64FromPtr(input.PageID),
+		URL:      util.NullStringFromValue(input.URL),
+		CSSClass: util.NullStringFromValue(input.CSSClass),
+	}, true
 }
 
 // requireMenuWithJSONError fetches menu by ID and handles errors with JSON response.
@@ -900,4 +872,40 @@ func (h *MenusHandler) getMaxMenuItemPosition(r *http.Request, menuID int64, par
 		}
 	}
 	return -1
+}
+
+// validateMenuSlugCreate validates a menu slug for creation within a language.
+func (h *MenusHandler) validateMenuSlugCreate(ctx context.Context, slug string, languageID sql.NullInt64) string {
+	if !languageID.Valid {
+		// No language specified, use basic validation without uniqueness check
+		if slug == "" {
+			return "Slug is required"
+		}
+		if !util.IsValidSlug(slug) {
+			return "Invalid slug format"
+		}
+		return ""
+	}
+	return ValidateSlugWithChecker(slug, func() (int64, error) {
+		return h.queries.MenuSlugExistsForLanguage(ctx, store.MenuSlugExistsForLanguageParams{
+			Slug:       slug,
+			LanguageID: languageID,
+		})
+	})
+}
+
+// validateMenuSlugUpdate validates a menu slug for update within a language.
+// Only validates if slug or language has changed.
+func (h *MenusHandler) validateMenuSlugUpdate(ctx context.Context, slug string, languageID sql.NullInt64, currentSlug string, currentLanguageID sql.NullInt64, menuID int64) string {
+	// If neither slug nor language changed, no validation needed
+	if slug == currentSlug && languageID == currentLanguageID {
+		return ""
+	}
+	return ValidateSlugWithChecker(slug, func() (int64, error) {
+		return h.queries.MenuSlugExistsForLanguageExcluding(ctx, store.MenuSlugExistsForLanguageExcludingParams{
+			Slug:       slug,
+			LanguageID: languageID,
+			ID:         menuID,
+		})
+	})
 }

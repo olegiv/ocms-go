@@ -108,8 +108,7 @@ func (h *ImportExportHandler) Export(w http.ResponseWriter, r *http.Request) {
 
 		// Export with media to zip
 		if err := exporter.ExportWithMedia(r.Context(), opts, w); err != nil {
-			h.logger.Error("export with media failed", "error", err)
-			http.Error(w, "Export failed", http.StatusInternalServerError)
+			logAndHTTPError(w, "Export failed", http.StatusInternalServerError, "export with media failed", "error", err)
 			return
 		}
 	} else {
@@ -122,8 +121,7 @@ func (h *ImportExportHandler) Export(w http.ResponseWriter, r *http.Request) {
 
 		// Export directly to response writer
 		if err := exporter.ExportToWriter(r.Context(), opts, w); err != nil {
-			h.logger.Error("export failed", "error", err)
-			http.Error(w, "Export failed", http.StatusInternalServerError)
+			logAndHTTPError(w, "Export failed", http.StatusInternalServerError, "export failed", "error", err)
 			return
 		}
 	}

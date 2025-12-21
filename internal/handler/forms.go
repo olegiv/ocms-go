@@ -145,10 +145,8 @@ func validateFormInput(input *formInput) map[string]string {
 		input.FormValues["slug"] = input.Slug
 	}
 
-	if input.Slug == "" {
-		errs["slug"] = "Slug is required"
-	} else if !util.IsValidSlug(input.Slug) {
-		errs["slug"] = "Invalid slug format"
+	if errMsg := ValidateSlugFormat(input.Slug); errMsg != "" {
+		errs["slug"] = errMsg
 	}
 
 	// Set default success message
@@ -165,8 +163,7 @@ func validateFormInput(input *formInput) map[string]string {
 func (h *FormsHandler) parseFormIDParam(w http.ResponseWriter, r *http.Request) int64 {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid form ID", "error")
-		http.Redirect(w, r, "/admin/forms", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/forms", "Invalid form ID")
 		return 0
 	}
 	return id
@@ -178,12 +175,11 @@ func (h *FormsHandler) fetchFormByID(w http.ResponseWriter, r *http.Request, id 
 	form, err := h.queries.GetFormByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Form not found", "error")
+			flashError(w, r, h.renderer, "/admin/forms", "Form not found")
 		} else {
 			slog.Error("failed to get form", "error", err, "form_id", id)
-			h.renderer.SetFlash(r, "Error loading form", "error")
+			flashError(w, r, h.renderer, "/admin/forms", "Error loading form")
 		}
-		http.Redirect(w, r, "/admin/forms", http.StatusSeeOther)
 		return nil
 	}
 	return &form
@@ -371,9 +367,7 @@ func (h *FormsHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	lang := h.renderer.GetAdminLang(r)
 
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, "/admin/forms/new", http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, "/admin/forms/new") {
 		return
 	}
 
@@ -411,23 +405,21 @@ func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Name:           input.Name,
 		Slug:           input.Slug,
 		Title:          input.Title,
-		Description:    sql.NullString{String: input.Description, Valid: input.Description != ""},
+		Description:    util.NullStringFromValue(input.Description),
 		SuccessMessage: sql.NullString{String: input.SuccessMessage, Valid: true}, // Always valid - has default
-		EmailTo:        sql.NullString{String: input.EmailTo, Valid: input.EmailTo != ""},
+		EmailTo:        util.NullStringFromValue(input.EmailTo),
 		IsActive:       input.IsActive,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	})
 	if err != nil {
 		slog.Error("failed to create form", "error", err)
-		h.renderer.SetFlash(r, "Error creating form", "error")
-		http.Redirect(w, r, "/admin/forms/new", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/forms/new", "Error creating form")
 		return
 	}
 
 	slog.Info("form created", "form_id", form.ID, "slug", form.Slug)
-	h.renderer.SetFlash(r, "Form created successfully", "success")
-	http.Redirect(w, r, fmt.Sprintf("/admin/forms/%d", form.ID), http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/forms/%d", form.ID), "Form created successfully")
 }
 
 // EditForm handles GET /admin/forms/{id} - displays the form builder.
@@ -479,9 +471,7 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/forms/%d", id), http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf("/admin/forms/%d", id)) {
 		return
 	}
 
@@ -524,22 +514,20 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Name:           input.Name,
 		Slug:           input.Slug,
 		Title:          input.Title,
-		Description:    sql.NullString{String: input.Description, Valid: input.Description != ""},
+		Description:    util.NullStringFromValue(input.Description),
 		SuccessMessage: sql.NullString{String: input.SuccessMessage, Valid: true}, // Always valid - has default
-		EmailTo:        sql.NullString{String: input.EmailTo, Valid: input.EmailTo != ""},
+		EmailTo:        util.NullStringFromValue(input.EmailTo),
 		IsActive:       input.IsActive,
 		UpdatedAt:      now,
 	})
 	if err != nil {
 		slog.Error("failed to update form", "error", err, "form_id", id)
-		h.renderer.SetFlash(r, "Error updating form", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/forms/%d", id), http.StatusSeeOther)
+		flashError(w, r, h.renderer, fmt.Sprintf("/admin/forms/%d", id), "Error updating form")
 		return
 	}
 
 	slog.Info("form updated", "form_id", id, "updated_by", middleware.GetUserID(r))
-	h.renderer.SetFlash(r, "Form updated successfully", "success")
-	http.Redirect(w, r, fmt.Sprintf("/admin/forms/%d", id), http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/forms/%d", id), "Form updated successfully")
 }
 
 // Delete handles DELETE /admin/forms/{id} - deletes a form.
@@ -550,14 +538,7 @@ func (h *FormsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.queries.GetFormByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Form not found", http.StatusNotFound)
-		} else {
-			slog.Error("failed to get form", "error", err, "form_id", id)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	if _, ok := h.requireFormWithHTTPError(w, r, id); !ok {
 		return
 	}
 
@@ -575,8 +556,7 @@ func (h *FormsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.renderer.SetFlash(r, "Form deleted successfully", "success")
-	http.Redirect(w, r, "/admin/forms", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/forms", "Form deleted successfully")
 }
 
 // AddFieldRequest represents the JSON request for adding a form field.
@@ -621,10 +601,10 @@ func (h *FormsHandler) AddField(w http.ResponseWriter, r *http.Request) {
 		Type:        req.Type,
 		Name:        req.Name,
 		Label:       req.Label,
-		Placeholder: sql.NullString{String: req.Placeholder, Valid: req.Placeholder != ""},
-		HelpText:    sql.NullString{String: req.HelpText, Valid: req.HelpText != ""},
-		Options:     sql.NullString{String: req.Options, Valid: req.Options != ""},
-		Validation:  sql.NullString{String: req.Validation, Valid: req.Validation != ""},
+		Placeholder: util.NullStringFromValue(req.Placeholder),
+		HelpText:    util.NullStringFromValue(req.HelpText),
+		Options:     util.NullStringFromValue(req.Options),
+		Validation:  util.NullStringFromValue(req.Validation),
 		IsRequired:  req.IsRequired,
 		Position:    maxPos + 1,
 		CreatedAt:   now,
@@ -685,10 +665,10 @@ func (h *FormsHandler) UpdateField(w http.ResponseWriter, r *http.Request) {
 		Type:        req.Type,
 		Name:        req.Name,
 		Label:       req.Label,
-		Placeholder: sql.NullString{String: req.Placeholder, Valid: req.Placeholder != ""},
-		HelpText:    sql.NullString{String: req.HelpText, Valid: req.HelpText != ""},
-		Options:     sql.NullString{String: req.Options, Valid: req.Options != ""},
-		Validation:  sql.NullString{String: req.Validation, Valid: req.Validation != ""},
+		Placeholder: util.NullStringFromValue(req.Placeholder),
+		HelpText:    util.NullStringFromValue(req.HelpText),
+		Options:     util.NullStringFromValue(req.Options),
+		Validation:  util.NullStringFromValue(req.Validation),
 		IsRequired:  req.IsRequired,
 		Position:    field.Position,
 		UpdatedAt:   now,
@@ -1186,8 +1166,7 @@ func (h *FormsHandler) ViewSubmission(w http.ResponseWriter, r *http.Request) {
 	subIDStr := chi.URLParam(r, "subId")
 	subID, err := strconv.ParseInt(subIDStr, 10, 64)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid submission ID", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/forms/%d/submissions", formID), http.StatusSeeOther)
+		flashError(w, r, h.renderer, fmt.Sprintf("/admin/forms/%d/submissions", formID), "Invalid submission ID")
 		return
 	}
 
@@ -1198,20 +1177,19 @@ func (h *FormsHandler) ViewSubmission(w http.ResponseWriter, r *http.Request) {
 
 	submission, err := h.queries.GetFormSubmissionByID(r.Context(), subID)
 	if err != nil {
+		redirectURL := fmt.Sprintf("/admin/forms/%d/submissions", formID)
 		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Submission not found", "error")
+			flashError(w, r, h.renderer, redirectURL, "Submission not found")
 		} else {
 			slog.Error("failed to get submission", "error", err, "sub_id", subID)
-			h.renderer.SetFlash(r, "Error loading submission", "error")
+			flashError(w, r, h.renderer, redirectURL, "Error loading submission")
 		}
-		http.Redirect(w, r, fmt.Sprintf("/admin/forms/%d/submissions", formID), http.StatusSeeOther)
 		return
 	}
 
 	// Verify submission belongs to this form
 	if submission.FormID != formID {
-		h.renderer.SetFlash(r, "Submission not found", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/forms/%d/submissions", formID), http.StatusSeeOther)
+		flashError(w, r, h.renderer, fmt.Sprintf("/admin/forms/%d/submissions", formID), "Submission not found")
 		return
 	}
 
@@ -1299,8 +1277,7 @@ func (h *FormsHandler) DeleteSubmission(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	h.renderer.SetFlash(r, "Submission deleted successfully", "success")
-	http.Redirect(w, r, fmt.Sprintf("/admin/forms/%d/submissions", formID), http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/forms/%d/submissions", formID), "Submission deleted successfully")
 }
 
 // ExportSubmissions handles POST /admin/forms/{id}/submissions/export - exports submissions as CSV.
@@ -1310,11 +1287,10 @@ func (h *FormsHandler) ExportSubmissions(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if !h.checkFormExists(w, r, formID) {
+	form, ok := h.requireFormWithHTTPError(w, r, formID)
+	if !ok {
 		return
 	}
-
-	form, _ := h.queries.GetFormByID(r.Context(), formID)
 
 	// Get all fields
 	fields, err := h.queries.GetFormFields(r.Context(), formID)
@@ -1444,6 +1420,38 @@ func (h *FormsHandler) checkFormExistsJSON(w http.ResponseWriter, r *http.Reques
 		return false
 	}
 	return true
+}
+
+// requireFormWithHTTPError fetches a form by ID and sends HTTP error on failure.
+// Returns the form and true if successful, or zero value and false if an error occurred.
+func (h *FormsHandler) requireFormWithHTTPError(w http.ResponseWriter, r *http.Request, formID int64) (store.Form, bool) {
+	form, err := h.queries.GetFormByID(r.Context(), formID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Form not found", http.StatusNotFound)
+		} else {
+			slog.Error("failed to get form", "error", err, "form_id", formID)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return store.Form{}, false
+	}
+	return form, true
+}
+
+// requireFormWithJSONError fetches a form by ID and sends JSON error on failure.
+// Returns the form and true if successful, or zero value and false if an error occurred.
+func (h *FormsHandler) requireFormWithJSONError(w http.ResponseWriter, r *http.Request, formID int64) (store.Form, bool) {
+	form, err := h.queries.GetFormByID(r.Context(), formID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSONError(w, http.StatusNotFound, "Form not found")
+		} else {
+			slog.Error("failed to get form", "error", err, "form_id", formID)
+			writeJSONError(w, http.StatusInternalServerError, "Internal Server Error")
+		}
+		return store.Form{}, false
+	}
+	return form, true
 }
 
 // getMaxFieldPosition returns the max position for fields in a form.

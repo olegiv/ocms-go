@@ -55,8 +55,7 @@ func (h *APIKeysHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Get total count
 	totalKeys, err := h.queries.CountAPIKeys(r.Context())
 	if err != nil {
-		slog.Error("failed to count API keys", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		logAndInternalError(w, "failed to count API keys", "error", err)
 		return
 	}
 
@@ -70,8 +69,7 @@ func (h *APIKeysHandler) List(w http.ResponseWriter, r *http.Request) {
 		Offset: offset,
 	})
 	if err != nil {
-		slog.Error("failed to list API keys", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		logAndInternalError(w, "failed to list API keys", "error", err)
 		return
 	}
 
@@ -123,9 +121,7 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, "/admin/api-keys/new", http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, "/admin/api-keys/new") {
 		return
 	}
 
@@ -171,8 +167,7 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	rawKey, prefix, err := model.GenerateAPIKey()
 	if err != nil {
 		slog.Error("failed to generate API key", "error", err)
-		h.renderer.SetFlash(r, "Error generating API key", "error")
-		http.Redirect(w, r, "/admin/api-keys/new", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/api-keys/new", "Error generating API key")
 		return
 	}
 
@@ -197,8 +192,7 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to create API key", "error", err)
-		h.renderer.SetFlash(r, "Error creating API key", "error")
-		http.Redirect(w, r, "/admin/api-keys/new", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/api-keys/new", "Error creating API key")
 		return
 	}
 
@@ -224,8 +218,7 @@ func (h *APIKeysHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	id, idStr, ok := parseAPIKeyID(r)
 	if !ok {
-		h.renderer.SetFlash(r, "Invalid API key ID", "error")
-		http.Redirect(w, r, "/admin/api-keys", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/api-keys", "Invalid API key ID")
 		return
 	}
 
@@ -261,8 +254,7 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	id, idStr, ok := parseAPIKeyID(r)
 	if !ok {
-		h.renderer.SetFlash(r, "Invalid API key ID", "error")
-		http.Redirect(w, r, "/admin/api-keys", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/api-keys", "Invalid API key ID")
 		return
 	}
 
@@ -271,9 +263,7 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, "/admin/api-keys/"+idStr, http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, "/admin/api-keys/"+idStr) {
 		return
 	}
 
@@ -332,14 +322,12 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to update API key", "error", err)
-		h.renderer.SetFlash(r, "Error updating API key", "error")
-		http.Redirect(w, r, "/admin/api-keys/"+idStr, http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/api-keys/"+idStr, "Error updating API key")
 		return
 	}
 
 	slog.Info("API key updated", "key_id", id, "updated_by", middleware.GetUserID(r))
-	h.renderer.SetFlash(r, "API key updated successfully", "success")
-	http.Redirect(w, r, "/admin/api-keys", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/api-keys", "API key updated successfully")
 }
 
 // Delete handles DELETE /admin/api-keys/{id} - deletes (deactivates) an API key.
@@ -351,20 +339,14 @@ func (h *APIKeysHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch the API key being deleted
-	apiKey, err := h.queries.GetAPIKeyByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.sendDeleteError(w, "API key not found")
-		} else {
-			slog.Error("failed to get API key", "error", err)
-			h.sendDeleteError(w, "Error loading API key")
-		}
+	apiKey, ok := h.fetchAPIKeyForDelete(w, r, id)
+	if !ok {
 		return
 	}
 
 	// Deactivate API key (soft delete)
 	now := time.Now()
-	err = h.queries.DeactivateAPIKey(r.Context(), store.DeactivateAPIKeyParams{
+	err := h.queries.DeactivateAPIKey(r.Context(), store.DeactivateAPIKeyParams{
 		UpdatedAt: now,
 		ID:        id,
 	})
@@ -385,8 +367,7 @@ func (h *APIKeysHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Regular request - redirect with flash message
-	h.renderer.SetFlash(r, "API key revoked successfully", "success")
-	http.Redirect(w, r, "/admin/api-keys", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/api-keys", "API key revoked successfully")
 }
 
 // sendDeleteError sends an error response for delete operations.
@@ -468,12 +449,28 @@ func (h *APIKeysHandler) fetchAPIKey(w http.ResponseWriter, r *http.Request, id 
 	apiKey, err := h.queries.GetAPIKeyByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "API key not found", "error")
+			flashError(w, r, h.renderer, "/admin/api-keys", "API key not found")
 		} else {
 			slog.Error("failed to get API key", "error", err)
-			h.renderer.SetFlash(r, "Error loading API key", "error")
+			flashError(w, r, h.renderer, "/admin/api-keys", "Error loading API key")
 		}
-		http.Redirect(w, r, "/admin/api-keys", http.StatusSeeOther)
+		return store.ApiKey{}, false
+	}
+	return apiKey, true
+}
+
+// fetchAPIKeyForDelete fetches an API key by ID for delete operations.
+// Uses sendDeleteError for error responses (HTMX-compatible).
+// Returns the API key and true if successful, or zero value and false if an error occurred.
+func (h *APIKeysHandler) fetchAPIKeyForDelete(w http.ResponseWriter, r *http.Request, id int64) (store.ApiKey, bool) {
+	apiKey, err := h.queries.GetAPIKeyByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			h.sendDeleteError(w, "API key not found")
+		} else {
+			slog.Error("failed to get API key", "error", err)
+			h.sendDeleteError(w, "Error loading API key")
+		}
 		return store.ApiKey{}, false
 	}
 	return apiKey, true

@@ -96,8 +96,7 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Get total user count
 	totalUsers, err := h.queries.CountUsers(r.Context())
 	if err != nil {
-		slog.Error("failed to count users", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		logAndInternalError(w, "failed to count users", "error", err)
 		return
 	}
 
@@ -111,8 +110,7 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 		Offset: offset,
 	})
 	if err != nil {
-		slog.Error("failed to list users", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		logAndInternalError(w, "failed to list users", "error", err)
 		return
 	}
 
@@ -157,9 +155,7 @@ func (h *UsersHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 
 // Create handles POST /admin/users - creates a new user.
 func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, "/admin/users/new", http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, "/admin/users/new") {
 		return
 	}
 
@@ -235,8 +231,7 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	passwordHash, err := auth.HashPassword(password)
 	if err != nil {
 		slog.Error("failed to hash password", "error", err)
-		h.renderer.SetFlash(r, "Error creating user", "error")
-		http.Redirect(w, r, "/admin/users/new", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/users/new", "Error creating user")
 		return
 	}
 
@@ -252,8 +247,7 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to create user", "error", err)
-		h.renderer.SetFlash(r, "Error creating user", "error")
-		http.Redirect(w, r, "/admin/users/new", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/users/new", "Error creating user")
 		return
 	}
 
@@ -262,8 +256,7 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Dispatch user.created webhook event
 	h.dispatchUserEvent(r.Context(), model.EventUserCreated, newUser)
 
-	h.renderer.SetFlash(r, "User created successfully", "success")
-	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/users", "User created successfully")
 }
 
 // EditForm handles GET /admin/users/{id} - displays the edit user form.
@@ -273,8 +266,7 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid user ID", "error")
-		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/users", "Invalid user ID")
 		return
 	}
 
@@ -318,8 +310,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid user ID", "error")
-		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/users", "Invalid user ID")
 		return
 	}
 
@@ -328,9 +319,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/users/%d", id), http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf("/admin/users/%d", id)) {
 		return
 	}
 
@@ -435,8 +424,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to update user", "error", err)
-		h.renderer.SetFlash(r, "Error updating user", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/users/%d", id), http.StatusSeeOther)
+		flashError(w, r, h.renderer, fmt.Sprintf("/admin/users/%d", id), "Error updating user")
 		return
 	}
 
@@ -445,8 +433,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		passwordHash, err := auth.HashPassword(password)
 		if err != nil {
 			slog.Error("failed to hash password", "error", err)
-			h.renderer.SetFlash(r, "User updated but password change failed", "warning")
-			http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+			flashAndRedirect(w, r, h.renderer, "/admin/users", "User updated but password change failed", "warning")
 			return
 		}
 
@@ -457,15 +444,13 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			slog.Error("failed to update password", "error", err)
-			h.renderer.SetFlash(r, "User updated but password change failed", "warning")
-			http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+			flashAndRedirect(w, r, h.renderer, "/admin/users", "User updated but password change failed", "warning")
 			return
 		}
 	}
 
 	slog.Info("user updated", "user_id", id, "updated_by", currentUser.ID)
-	h.renderer.SetFlash(r, "User updated successfully", "success")
-	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/users", "User updated successfully")
 }
 
 // Delete handles DELETE /admin/users/{id} - deletes a user.
@@ -537,8 +522,7 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Regular request - redirect with flash message
-	h.renderer.SetFlash(r, "User deleted successfully", "success")
-	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/users", "User deleted successfully")
 }
 
 // sendDeleteError sends an error response for delete operations.
@@ -564,12 +548,11 @@ func (h *UsersHandler) requireUserWithRedirect(w http.ResponseWriter, r *http.Re
 	user, err := h.queries.GetUserByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "User not found", "error")
+			flashError(w, r, h.renderer, "/admin/users", "User not found")
 		} else {
 			slog.Error("failed to get user", "error", err)
-			h.renderer.SetFlash(r, "Error loading user", "error")
+			flashError(w, r, h.renderer, "/admin/users", "Error loading user")
 		}
-		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 		return store.User{}, false
 	}
 	return user, true

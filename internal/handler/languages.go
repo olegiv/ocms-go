@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"ocms-go/internal/model"
 	"ocms-go/internal/render"
 	"ocms-go/internal/store"
+	"ocms-go/internal/util"
 
 	"github.com/alexedwards/scs/v2"
 )
@@ -107,8 +109,7 @@ func (h *LanguagesHandler) getLanguageByIDParam(w http.ResponseWriter, r *http.R
 		if errors.Is(err, sql.ErrNoRows) {
 			http.NotFound(w, r)
 		} else {
-			slog.Error("failed to get language", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			logAndInternalError(w, "failed to get language", "error", err)
 		}
 		return nil
 	}
@@ -149,15 +150,13 @@ func (h *LanguagesHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	languages, err := h.queries.ListLanguages(r.Context())
 	if err != nil {
-		slog.Error("failed to list languages", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		logAndInternalError(w, "failed to list languages", "error", err)
 		return
 	}
 
 	totalLanguages, err := h.queries.CountLanguages(r.Context())
 	if err != nil {
-		slog.Error("failed to count languages", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		logAndInternalError(w, "failed to count languages", "error", err)
 		return
 	}
 
@@ -192,9 +191,7 @@ func (h *LanguagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, "/admin/languages/new", http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, "/admin/languages/new") {
 		return
 	}
 
@@ -285,14 +282,12 @@ func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to create language", "error", err)
-		h.renderer.SetFlash(r, "Error creating language", "error")
-		http.Redirect(w, r, "/admin/languages/new", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/languages/new", "Error creating language")
 		return
 	}
 
 	slog.Info("language created", "language_id", newLang.ID, "code", newLang.Code)
-	h.renderer.SetFlash(r, "Language created successfully", "success")
-	http.Redirect(w, r, "/admin/languages", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/languages", "Language created successfully")
 }
 
 // languageToFormValues converts a store.Language to form values map.
@@ -337,9 +332,7 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/languages/%d", existingLang.ID), http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf("/admin/languages/%d", existingLang.ID)) {
 		return
 	}
 
@@ -426,14 +419,12 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to update language", "error", err)
-		h.renderer.SetFlash(r, "Error updating language", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/languages/%d", existingLang.ID), http.StatusSeeOther)
+		flashError(w, r, h.renderer, fmt.Sprintf("/admin/languages/%d", existingLang.ID), "Error updating language")
 		return
 	}
 
 	slog.Info("language updated", "language_id", existingLang.ID, "code", input.Code)
-	h.renderer.SetFlash(r, "Language updated successfully", "success")
-	http.Redirect(w, r, "/admin/languages", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/languages", "Language updated successfully")
 }
 
 // Delete handles deleting a language.
@@ -479,13 +470,12 @@ func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, errMsg, http.StatusBadRequest)
 			return
 		}
-		h.renderer.SetFlash(r, errMsg, "error")
-		http.Redirect(w, r, "/admin/languages", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/languages", errMsg)
 		return
 	}
 
 	// Check if there are pages linked to this language
-	pageCount, err := h.queries.CountPagesByLanguageID(r.Context(), sql.NullInt64{Int64: id, Valid: true})
+	pageCount, err := h.queries.CountPagesByLanguageID(r.Context(), util.NullInt64FromValue(id))
 	if err != nil {
 		slog.Error("failed to count pages for language", "error", err, "language_id", id)
 		if r.Header.Get("HX-Request") == "true" {
@@ -493,8 +483,7 @@ func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to check language usage", http.StatusInternalServerError)
 			return
 		}
-		h.renderer.SetFlash(r, "Failed to check language usage", "error")
-		http.Redirect(w, r, "/admin/languages", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/languages", "Failed to check language usage")
 		return
 	}
 
@@ -507,8 +496,7 @@ func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, errMsg, http.StatusConflict)
 			return
 		}
-		h.renderer.SetFlash(r, errMsg, "error")
-		http.Redirect(w, r, "/admin/languages", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/languages", errMsg)
 		return
 	}
 
@@ -520,8 +508,7 @@ func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, errMsg, http.StatusInternalServerError)
 			return
 		}
-		h.renderer.SetFlash(r, errMsg, "error")
-		http.Redirect(w, r, "/admin/languages", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/languages", errMsg)
 		return
 	}
 
@@ -533,8 +520,7 @@ func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.renderer.SetFlash(r, "Language deleted successfully", "success")
-	http.Redirect(w, r, "/admin/languages", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/languages", "Language deleted successfully")
 }
 
 // SetDefault handles setting a language as the default.
@@ -546,16 +532,14 @@ func (h *LanguagesHandler) SetDefault(w http.ResponseWriter, r *http.Request) {
 
 	// Cannot set inactive language as default
 	if !lang.IsActive {
-		h.renderer.SetFlash(r, "Cannot set an inactive language as default", "error")
-		http.Redirect(w, r, "/admin/languages", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/languages", "Cannot set an inactive language as default")
 		return
 	}
 
 	// Clear current default
 	if err := h.queries.ClearDefaultLanguage(r.Context()); err != nil {
 		slog.Error("failed to clear default language", "error", err)
-		h.renderer.SetFlash(r, "Error setting default language", "error")
-		http.Redirect(w, r, "/admin/languages", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/languages", "Error setting default language")
 		return
 	}
 
@@ -566,12 +550,32 @@ func (h *LanguagesHandler) SetDefault(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt: now,
 	}); err != nil {
 		slog.Error("failed to set default language", "error", err)
-		h.renderer.SetFlash(r, "Error setting default language", "error")
-		http.Redirect(w, r, "/admin/languages", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/languages", "Error setting default language")
 		return
 	}
 
 	slog.Info("default language set", "language_id", lang.ID, "code", lang.Code)
-	h.renderer.SetFlash(r, fmt.Sprintf("%s set as default language", lang.Name), "success")
-	http.Redirect(w, r, "/admin/languages", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/languages", fmt.Sprintf("%s set as default language", lang.Name))
+}
+
+// FindDefaultLanguage returns a pointer to the default language from a slice.
+// Returns nil if no default language is found or the slice is empty.
+func FindDefaultLanguage(languages []store.Language) *store.Language {
+	for i := range languages {
+		if languages[i].IsDefault {
+			return &languages[i]
+		}
+	}
+	return nil
+}
+
+// ListActiveLanguagesWithFallback returns all active languages, or an empty slice on error.
+// This is useful when the languages list is needed for display but not critical for the operation.
+func ListActiveLanguagesWithFallback(ctx context.Context, queries *store.Queries) []store.Language {
+	languages, err := queries.ListActiveLanguages(ctx)
+	if err != nil {
+		slog.Error("failed to list languages", "error", err)
+		return []store.Language{}
+	}
+	return languages
 }

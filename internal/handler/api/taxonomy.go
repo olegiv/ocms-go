@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 
 	"ocms-go/internal/handler"
 	"ocms-go/internal/store"
+	"ocms-go/internal/util"
 )
 
 // TagAPIResponse represents a tag in API responses.
@@ -177,13 +179,7 @@ func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check slug uniqueness
-	exists, err := h.queries.TagSlugExists(ctx, req.Slug)
-	if err != nil {
-		WriteInternalError(w, "Failed to check slug")
-		return
-	}
-	if exists != 0 {
-		WriteValidationError(w, map[string]string{"slug": "Slug already exists"})
+	if !h.checkTagSlugUnique(w, ctx, req.Slug) {
 		return
 	}
 
@@ -241,16 +237,7 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Slug != nil && *req.Slug != "" {
 		// Check slug uniqueness (excluding current tag)
-		exists, err := h.queries.TagSlugExistsExcluding(ctx, store.TagSlugExistsExcludingParams{
-			Slug: *req.Slug,
-			ID:   existing.ID,
-		})
-		if err != nil {
-			WriteInternalError(w, "Failed to check slug")
-			return
-		}
-		if exists != 0 {
-			WriteValidationError(w, map[string]string{"slug": "Slug already exists"})
+		if !h.checkTagSlugUniqueExcluding(w, ctx, *req.Slug, existing.ID) {
 			return
 		}
 		params.Slug = *req.Slug
@@ -357,7 +344,7 @@ func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get children
-	children, err := h.queries.ListChildCategories(ctx, sql.NullInt64{Int64: category.ID, Valid: true})
+	children, err := h.queries.ListChildCategories(ctx, util.NullInt64FromValue(category.ID))
 	if err != nil {
 		children = nil
 	}
@@ -431,13 +418,7 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check slug uniqueness
-	exists, err := h.queries.CategorySlugExists(ctx, req.Slug)
-	if err != nil {
-		WriteInternalError(w, "Failed to check slug")
-		return
-	}
-	if exists > 0 {
-		WriteValidationError(w, map[string]string{"slug": "Slug already exists"})
+	if !h.checkCategorySlugUnique(w, ctx, req.Slug) {
 		return
 	}
 
@@ -463,10 +444,10 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Description != "" {
-		params.Description = sql.NullString{String: req.Description, Valid: true}
+		params.Description = util.NullStringFromValue(req.Description)
 	}
 	if req.ParentID != nil {
-		params.ParentID = sql.NullInt64{Int64: *req.ParentID, Valid: true}
+		params.ParentID = util.NullInt64FromPtr(req.ParentID)
 	}
 	if req.Position != nil {
 		params.Position = *req.Position
@@ -531,22 +512,13 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Slug != nil && *req.Slug != "" {
 		// Check slug uniqueness (excluding current category)
-		exists, err := h.queries.CategorySlugExistsExcluding(ctx, store.CategorySlugExistsExcludingParams{
-			Slug: *req.Slug,
-			ID:   existing.ID,
-		})
-		if err != nil {
-			WriteInternalError(w, "Failed to check slug")
-			return
-		}
-		if exists > 0 {
-			WriteValidationError(w, map[string]string{"slug": "Slug already exists"})
+		if !h.checkCategorySlugUniqueExcluding(w, ctx, *req.Slug, existing.ID) {
 			return
 		}
 		params.Slug = *req.Slug
 	}
 	if req.Description != nil {
-		params.Description = sql.NullString{String: *req.Description, Valid: *req.Description != ""}
+		params.Description = util.NullStringFromValue(*req.Description)
 	}
 	if req.ParentID != nil {
 		// Check for circular reference
@@ -570,7 +542,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Check for circular reference (new parent is a descendant)
-			descendants, _ := h.queries.GetDescendantIDs(ctx, sql.NullInt64{Int64: existing.ID, Valid: true})
+			descendants, _ := h.queries.GetDescendantIDs(ctx, util.NullInt64FromValue(existing.ID))
 			for _, descID := range descendants {
 				if descID == *req.ParentID {
 					WriteValidationError(w, map[string]string{"parent_id": "Cannot set a descendant as parent (circular reference)"})
@@ -578,7 +550,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			params.ParentID = sql.NullInt64{Int64: *req.ParentID, Valid: true}
+			params.ParentID = util.NullInt64FromPtr(req.ParentID)
 		}
 	}
 	if req.Position != nil {
@@ -628,7 +600,7 @@ func (h *Handler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check for child categories
-	children, err := h.queries.ListChildCategories(ctx, sql.NullInt64{Int64: category.ID, Valid: true})
+	children, err := h.queries.ListChildCategories(ctx, util.NullInt64FromValue(category.ID))
 	if err == nil && len(children) > 0 {
 		WriteError(w, http.StatusConflict, "has_children", "Cannot delete category with child categories. Delete or reassign children first.", nil)
 		return
@@ -740,4 +712,70 @@ func (h *Handler) requireCategoryForAPI(w http.ResponseWriter, r *http.Request) 
 		return store.Category{}, false
 	}
 	return category, true
+}
+
+// checkTagSlugUnique checks if a tag slug is unique for creation.
+// Returns true if unique, false if duplicate or error (response already written).
+func (h *Handler) checkTagSlugUnique(w http.ResponseWriter, ctx context.Context, slug string) bool {
+	exists, err := h.queries.TagSlugExists(ctx, slug)
+	if err != nil {
+		WriteInternalError(w, "Failed to check slug")
+		return false
+	}
+	if exists != 0 {
+		WriteValidationError(w, map[string]string{"slug": "Slug already exists"})
+		return false
+	}
+	return true
+}
+
+// checkTagSlugUniqueExcluding checks if a tag slug is unique for update (excluding current tag).
+// Returns true if unique, false if duplicate or error (response already written).
+func (h *Handler) checkTagSlugUniqueExcluding(w http.ResponseWriter, ctx context.Context, slug string, tagID int64) bool {
+	exists, err := h.queries.TagSlugExistsExcluding(ctx, store.TagSlugExistsExcludingParams{
+		Slug: slug,
+		ID:   tagID,
+	})
+	if err != nil {
+		WriteInternalError(w, "Failed to check slug")
+		return false
+	}
+	if exists != 0 {
+		WriteValidationError(w, map[string]string{"slug": "Slug already exists"})
+		return false
+	}
+	return true
+}
+
+// checkCategorySlugUnique checks if a category slug is unique for creation.
+// Returns true if unique, false if duplicate or error (response already written).
+func (h *Handler) checkCategorySlugUnique(w http.ResponseWriter, ctx context.Context, slug string) bool {
+	exists, err := h.queries.CategorySlugExists(ctx, slug)
+	if err != nil {
+		WriteInternalError(w, "Failed to check slug")
+		return false
+	}
+	if exists != 0 {
+		WriteValidationError(w, map[string]string{"slug": "Slug already exists"})
+		return false
+	}
+	return true
+}
+
+// checkCategorySlugUniqueExcluding checks if a category slug is unique for update (excluding current category).
+// Returns true if unique, false if duplicate or error (response already written).
+func (h *Handler) checkCategorySlugUniqueExcluding(w http.ResponseWriter, ctx context.Context, slug string, categoryID int64) bool {
+	exists, err := h.queries.CategorySlugExistsExcluding(ctx, store.CategorySlugExistsExcludingParams{
+		Slug: slug,
+		ID:   categoryID,
+	})
+	if err != nil {
+		WriteInternalError(w, "Failed to check slug")
+		return false
+	}
+	if exists != 0 {
+		WriteValidationError(w, map[string]string{"slug": "Slug already exists"})
+		return false
+	}
+	return true
 }

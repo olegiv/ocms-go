@@ -15,6 +15,7 @@ import (
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/service"
 	"ocms-go/internal/store"
+	"ocms-go/internal/util"
 )
 
 // MediaResponse represents a media item in API responses.
@@ -147,7 +148,7 @@ func (h *Handler) ListMedia(w http.ResponseWriter, r *http.Request) {
 		searchPattern := "%" + searchQuery + "%"
 		media, err = h.queries.SearchMedia(ctx, store.SearchMediaParams{
 			Filename: searchPattern,
-			Alt:      sql.NullString{String: searchPattern, Valid: true},
+			Alt:      util.NullStringFromValue(searchPattern),
 			Limit:    int64(perPage),
 		})
 		if err == nil {
@@ -161,12 +162,12 @@ func (h *Handler) ListMedia(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		media, err = h.queries.ListMediaInFolder(ctx, store.ListMediaInFolderParams{
-			FolderID: sql.NullInt64{Int64: folderID, Valid: true},
+			FolderID: util.NullInt64FromValue(folderID),
 			Limit:    int64(perPage),
 			Offset:   int64(offset),
 		})
 		if err == nil {
-			total, err = h.queries.CountMediaInFolder(ctx, sql.NullInt64{Int64: folderID, Valid: true})
+			total, err = h.queries.CountMediaInFolder(ctx, util.NullInt64FromValue(folderID))
 		}
 	} else if typeFilter != "" {
 		// Filter by type (image, document, video)
@@ -423,16 +424,16 @@ func (h *Handler) UpdateMedia(w http.ResponseWriter, r *http.Request) {
 		params.Filename = *req.Filename
 	}
 	if req.Alt != nil {
-		params.Alt = sql.NullString{String: *req.Alt, Valid: true}
+		params.Alt = util.NullStringFromValue(*req.Alt)
 	}
 	if req.Caption != nil {
-		params.Caption = sql.NullString{String: *req.Caption, Valid: true}
+		params.Caption = util.NullStringFromValue(*req.Caption)
 	}
 	if req.FolderID != nil {
 		if *req.FolderID == 0 {
-			params.FolderID = sql.NullInt64{Valid: false}
+			params.FolderID = sql.NullInt64{}
 		} else {
-			params.FolderID = sql.NullInt64{Int64: *req.FolderID, Valid: true}
+			params.FolderID = util.NullInt64FromPtr(req.FolderID)
 		}
 	}
 
