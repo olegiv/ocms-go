@@ -78,28 +78,24 @@ func TestApplyOptionalNameUpdate(t *testing.T) {
 		name        string
 		reqName     *string
 		currentName string
-		wantApplied bool
 		wantName    string
 	}{
 		{
 			name:        "nil request name",
 			reqName:     nil,
 			currentName: "Original",
-			wantApplied: false,
 			wantName:    "Original",
 		},
 		{
 			name:        "empty request name",
 			reqName:     strPtr(""),
 			currentName: "Original",
-			wantApplied: false,
 			wantName:    "Original",
 		},
 		{
 			name:        "valid request name",
 			reqName:     strPtr("New Name"),
 			currentName: "Original",
-			wantApplied: true,
 			wantName:    "New Name",
 		},
 	}
@@ -107,11 +103,8 @@ func TestApplyOptionalNameUpdate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			current := tt.currentName
-			got := applyOptionalNameUpdate(tt.reqName, &current)
+			applyOptionalNameUpdate(tt.reqName, &current)
 
-			if got != tt.wantApplied {
-				t.Errorf("applyOptionalNameUpdate() = %v, want %v", got, tt.wantApplied)
-			}
 			if current != tt.wantName {
 				t.Errorf("applyOptionalNameUpdate() currentName = %q, want %q", current, tt.wantName)
 			}
@@ -164,7 +157,6 @@ func TestApplyOptionalSlugUpdate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			w := httptest.NewRecorder()
 			current := tt.currentSlug
 			checkCalled := false
 
@@ -173,7 +165,7 @@ func TestApplyOptionalSlugUpdate(t *testing.T) {
 				return tt.checkResult
 			}
 
-			got := applyOptionalSlugUpdate(w, tt.reqSlug, &current, checkSlug)
+			got := applyOptionalSlugUpdate(tt.reqSlug, &current, checkSlug)
 
 			if got != tt.wantOK {
 				t.Errorf("applyOptionalSlugUpdate() = %v, want %v", got, tt.wantOK)

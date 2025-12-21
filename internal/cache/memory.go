@@ -149,7 +149,7 @@ func (c *MemoryCache) Clear(_ context.Context) error {
 		return ErrCacheClosed
 	}
 
-	c.data.Range(func(key, value any) bool {
+	c.data.Range(func(key, _ any) bool {
 		c.data.Delete(key)
 		return true
 	})
@@ -233,7 +233,7 @@ func (c *MemoryCache) DeleteByPrefix(_ context.Context, prefix string) error {
 // Keys returns all keys in the cache (including expired ones).
 func (c *MemoryCache) Keys() []string {
 	var keys []string
-	c.data.Range(func(key, value any) bool {
+	c.data.Range(func(key, _ any) bool {
 		keys = append(keys, key.(string))
 		return true
 	})
@@ -243,7 +243,7 @@ func (c *MemoryCache) Keys() []string {
 // count returns the number of items in the cache.
 func (c *MemoryCache) count() int {
 	count := 0
-	c.data.Range(func(key, value any) bool {
+	c.data.Range(func(_, _ any) bool {
 		count++
 		return true
 	})

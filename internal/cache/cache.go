@@ -89,7 +89,7 @@ func (c *SimpleCache) Delete(key string) {
 
 // DeleteByPrefix removes all keys starting with the given prefix.
 func (c *SimpleCache) DeleteByPrefix(prefix string) {
-	c.data.Range(func(key, value any) bool {
+	c.data.Range(func(key, _ any) bool {
 		k := key.(string)
 		if len(k) >= len(prefix) && k[:len(prefix)] == prefix {
 			c.data.Delete(key)
@@ -100,7 +100,7 @@ func (c *SimpleCache) DeleteByPrefix(prefix string) {
 
 // Clear removes all entries from the cache.
 func (c *SimpleCache) Clear() {
-	c.data.Range(func(key, value any) bool {
+	c.data.Range(func(key, _ any) bool {
 		c.data.Delete(key)
 		return true
 	})
@@ -155,7 +155,7 @@ func (c *SimpleCache) Stats() Stats {
 
 	// Count items
 	itemCount := 0
-	c.data.Range(func(key, value any) bool {
+	c.data.Range(func(_, _ any) bool {
 		itemCount++
 		return true
 	})
@@ -182,7 +182,7 @@ func (c *SimpleCache) ResetStats() {
 // Keys returns all keys in the cache (including expired ones).
 func (c *SimpleCache) Keys() []string {
 	var keys []string
-	c.data.Range(func(key, value any) bool {
+	c.data.Range(func(key, _ any) bool {
 		keys = append(keys, key.(string))
 		return true
 	})

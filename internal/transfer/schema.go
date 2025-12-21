@@ -154,7 +154,7 @@ type ExportMenuItem struct {
 	URL      string           `json:"url,omitempty"`
 	Target   string           `json:"target,omitempty"`
 	PageSlug string           `json:"page_slug,omitempty"`
-	CssClass string           `json:"css_class,omitempty"`
+	CSSClass string           `json:"css_class,omitempty"`
 	IsActive bool             `json:"is_active"`
 	Position int64            `json:"position"`
 	Children []ExportMenuItem `json:"children,omitempty"`

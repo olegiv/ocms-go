@@ -231,7 +231,7 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 
 	// Apply updates
 	applyOptionalNameUpdate(req.Name, &params.Name)
-	if !applyOptionalSlugUpdate(w, req.Slug, &params.Slug, func() bool {
+	if !applyOptionalSlugUpdate(req.Slug, &params.Slug, func() bool {
 		return h.checkTagSlugUniqueExcluding(w, ctx, *req.Slug, existing.ID)
 	}) {
 		return
@@ -442,7 +442,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 
 	// Apply updates
 	applyOptionalNameUpdate(req.Name, &params.Name)
-	if !applyOptionalSlugUpdate(w, req.Slug, &params.Slug, func() bool {
+	if !applyOptionalSlugUpdate(req.Slug, &params.Slug, func() bool {
 		return h.checkCategorySlugUniqueExcluding(w, ctx, *req.Slug, existing.ID)
 	}) {
 		return
@@ -535,14 +535,14 @@ func (h *Handler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 // validateNameSlugRequired validates that name and slug are provided.
 // Returns validation errors map (empty if valid).
 func validateNameSlugRequired(name, slug string) map[string]string {
-	errors := make(map[string]string)
+	errs := make(map[string]string)
 	if name == "" {
-		errors["name"] = "Name is required"
+		errs["name"] = "Name is required"
 	}
 	if slug == "" {
-		errors["slug"] = "Slug is required"
+		errs["slug"] = "Slug is required"
 	}
-	return errors
+	return errs
 }
 
 // nameSlugProvider is implemented by request types that have Name and Slug fields.
@@ -569,18 +569,15 @@ func decodeAndValidateNameSlug[T nameSlugProvider](w http.ResponseWriter, r *htt
 }
 
 // applyOptionalNameUpdate applies an optional name update to params.
-// Returns true if name was applied.
-func applyOptionalNameUpdate(reqName *string, currentName *string) bool {
+func applyOptionalNameUpdate(reqName *string, currentName *string) {
 	if reqName != nil && *reqName != "" {
 		*currentName = *reqName
-		return true
 	}
-	return false
 }
 
 // applyOptionalSlugUpdate applies an optional slug update after checking uniqueness.
 // Returns true if slug was applied or no update needed, false if slug conflict (response already written).
-func applyOptionalSlugUpdate(w http.ResponseWriter, reqSlug *string, currentSlug *string, checkSlug func() bool) bool {
+func applyOptionalSlugUpdate(reqSlug *string, currentSlug *string, checkSlug func() bool) bool {
 	if reqSlug != nil && *reqSlug != "" {
 		if !checkSlug() {
 			return false
