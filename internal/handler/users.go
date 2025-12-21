@@ -8,12 +8,10 @@ import (
 	"log/slog"
 	"net/http"
 	"net/mail"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
-	"github.com/go-chi/chi/v5"
 
 	"ocms-go/internal/auth"
 	"ocms-go/internal/i18n"
@@ -93,14 +91,7 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	// Get page number from query string
-	pageStr := r.URL.Query().Get("page")
-	page := 1
-	if pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
+	page := ParsePageParam(r)
 
 	// Get total user count
 	totalUsers, err := h.queries.CountUsers(r.Context())
@@ -110,15 +101,8 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Calculate pagination
-	totalPages := int((totalUsers + UsersPerPage - 1) / UsersPerPage)
-	if totalPages < 1 {
-		totalPages = 1
-	}
-	if page > totalPages {
-		page = totalPages
-	}
-
+	// Normalize page to valid range
+	page, _ = NormalizePagination(page, int(totalUsers), UsersPerPage)
 	offset := int64((page - 1) * UsersPerPage)
 
 	// Fetch users for current page
@@ -287,7 +271,7 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	currentUser := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	id, err := parseUserIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid user ID", "error")
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
@@ -332,7 +316,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	lang := h.renderer.GetAdminLang(r)
 
-	id, err := parseUserIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid user ID", "error")
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
@@ -493,8 +477,7 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get user ID from URL
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.sendDeleteError(w, "Invalid user ID")
 		return
@@ -573,12 +556,6 @@ func isValidRole(role string) bool {
 		}
 	}
 	return false
-}
-
-// parseUserIDParam parses the user ID from the URL.
-func parseUserIDParam(r *http.Request) (int64, error) {
-	idStr := chi.URLParam(r, "id")
-	return strconv.ParseInt(idStr, 10, 64)
 }
 
 // requireUserWithRedirect fetches a user by ID and redirects with flash on error.

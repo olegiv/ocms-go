@@ -54,14 +54,7 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	// Get page number from query string
-	pageStr := r.URL.Query().Get("page")
-	page := 1
-	if pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
+	page := ParsePageParam(r)
 
 	// Get total count
 	totalCount, err := h.queries.CountTags(r.Context())
@@ -71,15 +64,8 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Calculate pagination
-	totalPages := int((totalCount + TagsPerPage - 1) / TagsPerPage)
-	if totalPages < 1 {
-		totalPages = 1
-	}
-	if page > totalPages {
-		page = totalPages
-	}
-
+	// Normalize page to valid range
+	page, _ = NormalizePagination(page, int(totalCount), TagsPerPage)
 	offset := int64((page - 1) * TagsPerPage)
 
 	// Fetch tags with usage counts and language info
@@ -268,7 +254,7 @@ func (h *TaxonomyHandler) EditTagForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	id, err := parseTagIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid tag ID", "error")
 		http.Redirect(w, r, "/admin/tags", http.StatusSeeOther)
@@ -310,7 +296,7 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	id, err := parseTagIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid tag ID", "error")
 		http.Redirect(w, r, "/admin/tags", http.StatusSeeOther)
@@ -402,7 +388,7 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 
 // DeleteTag handles DELETE /admin/tags/{id} - deletes a tag.
 func (h *TaxonomyHandler) DeleteTag(w http.ResponseWriter, r *http.Request) {
-	id, err := parseTagIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid tag ID", http.StatusBadRequest)
 		return
@@ -469,7 +455,7 @@ func (h *TaxonomyHandler) SearchTags(w http.ResponseWriter, r *http.Request) {
 
 // TranslateTag handles POST /admin/tags/{id}/translate/{langCode} - creates a translation.
 func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
-	id, err := parseTagIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid tag ID", "error")
 		http.Redirect(w, r, "/admin/tags", http.StatusSeeOther)
@@ -903,7 +889,7 @@ func (h *TaxonomyHandler) EditCategoryForm(w http.ResponseWriter, r *http.Reques
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	id, err := parseCategoryIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid category ID", "error")
 		http.Redirect(w, r, "/admin/categories", http.StatusSeeOther)
@@ -972,7 +958,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	id, err := parseCategoryIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid category ID", "error")
 		http.Redirect(w, r, "/admin/categories", http.StatusSeeOther)
@@ -1117,7 +1103,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 
 // DeleteCategory handles DELETE /admin/categories/{id} - deletes a category.
 func (h *TaxonomyHandler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
-	id, err := parseCategoryIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid category ID", http.StatusBadRequest)
 		return
@@ -1151,7 +1137,7 @@ func (h *TaxonomyHandler) DeleteCategory(w http.ResponseWriter, r *http.Request)
 
 // TranslateCategory handles POST /admin/categories/{id}/translate/{langCode} - creates a translation.
 func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Request) {
-	id, err := parseCategoryIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid category ID", "error")
 		http.Redirect(w, r, "/admin/categories", http.StatusSeeOther)
@@ -1261,18 +1247,6 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 // =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
-
-// parseTagIDParam parses the tag ID from the URL.
-func parseTagIDParam(r *http.Request) (int64, error) {
-	idStr := chi.URLParam(r, "id")
-	return strconv.ParseInt(idStr, 10, 64)
-}
-
-// parseCategoryIDParam parses the category ID from the URL.
-func parseCategoryIDParam(r *http.Request) (int64, error) {
-	idStr := chi.URLParam(r, "id")
-	return strconv.ParseInt(idStr, 10, 64)
-}
 
 // requireTagWithRedirect fetches a tag by ID and redirects with flash on error.
 // Returns the tag and true if successful, or false if an error occurred (redirect sent).

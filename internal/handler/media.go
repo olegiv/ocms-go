@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/alexedwards/scs/v2"
-	"github.com/go-chi/chi/v5"
 
 	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
@@ -106,14 +105,7 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	// Get page number from query string
-	pageStr := r.URL.Query().Get("page")
-	page := 1
-	if pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
+	page := ParsePageParam(r)
 
 	// Get filter
 	filter := r.URL.Query().Get("filter")
@@ -396,7 +388,7 @@ func (h *MediaHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	id, err := parseIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid media ID", "error")
 		http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
@@ -455,7 +447,7 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	id, err := parseIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid media ID", "error")
 		http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
@@ -556,7 +548,7 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/media/{id} - deletes media and files.
 func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, err := parseIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid media ID", http.StatusBadRequest)
 		return
@@ -660,7 +652,7 @@ func (h *MediaHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 
 // UpdateFolder handles PUT /admin/media/folders/{id} - renames or moves a folder.
 func (h *MediaHandler) UpdateFolder(w http.ResponseWriter, r *http.Request) {
-	id, err := parseIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid folder ID", http.StatusBadRequest)
 		return
@@ -734,7 +726,7 @@ func (h *MediaHandler) UpdateFolder(w http.ResponseWriter, r *http.Request) {
 
 // DeleteFolder handles DELETE /admin/media/folders/{id} - deletes a folder.
 func (h *MediaHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
-	id, err := parseIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid folder ID", http.StatusBadRequest)
 		return
@@ -792,7 +784,7 @@ func (h *MediaHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 
 // MoveMedia handles POST /admin/media/{id}/move - moves media to a different folder.
 func (h *MediaHandler) MoveMedia(w http.ResponseWriter, r *http.Request) {
-	id, err := parseIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid media ID", http.StatusBadRequest)
 		return
@@ -847,14 +839,7 @@ func (h *MediaHandler) MoveMedia(w http.ResponseWriter, r *http.Request) {
 
 // API handles GET /admin/media/api - returns media items as JSON for the media picker.
 func (h *MediaHandler) API(w http.ResponseWriter, r *http.Request) {
-	// Get page number
-	pageStr := r.URL.Query().Get("page")
-	page := 1
-	if pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
+	page := ParsePageParam(r)
 
 	// Get limit
 	limitStr := r.URL.Query().Get("limit")
@@ -972,12 +957,6 @@ func (h *MediaHandler) API(w http.ResponseWriter, r *http.Request) {
 }
 
 // Helper functions
-
-// parseIDParam parses the "id" URL parameter as int64.
-func parseIDParam(r *http.Request) (int64, error) {
-	idStr := chi.URLParam(r, "id")
-	return strconv.ParseInt(idStr, 10, 64)
-}
 
 // requireMediaWithRedirect fetches media by ID and handles errors with flash messages and redirect.
 // Returns the media and true if successful, or zero value and false if an error occurred (response already written).

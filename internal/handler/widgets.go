@@ -6,11 +6,9 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/alexedwards/scs/v2"
-	"github.com/go-chi/chi/v5"
 
 	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
@@ -204,7 +202,7 @@ type UpdateWidgetRequest struct {
 
 // Update handles PUT /admin/widgets/{id} - updates a widget.
 func (h *WidgetsHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, err := parseWidgetIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid widget ID", http.StatusBadRequest)
 		return
@@ -252,7 +250,7 @@ func (h *WidgetsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/widgets/{id} - deletes a widget.
 func (h *WidgetsHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, err := parseWidgetIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid widget ID", http.StatusBadRequest)
 		return
@@ -313,7 +311,7 @@ func (h *WidgetsHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 
 // GetWidget handles GET /admin/widgets/{id} - gets a widget by ID.
 func (h *WidgetsHandler) GetWidget(w http.ResponseWriter, r *http.Request) {
-	id, err := parseWidgetIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid widget ID", http.StatusBadRequest)
 		return
@@ -335,7 +333,7 @@ type MoveWidgetRequest struct {
 
 // MoveWidget handles POST /admin/widgets/{id}/move - moves a widget to a different area.
 func (h *WidgetsHandler) MoveWidget(w http.ResponseWriter, r *http.Request) {
-	id, err := parseWidgetIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid widget ID", http.StatusBadRequest)
 		return
@@ -395,12 +393,6 @@ func (h *WidgetsHandler) MoveWidget(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 		"widget":  updatedWidget,
 	})
-}
-
-// parseWidgetIDParam parses the widget ID from the URL.
-func parseWidgetIDParam(r *http.Request) (int64, error) {
-	idStr := chi.URLParam(r, "id")
-	return strconv.ParseInt(idStr, 10, 64)
 }
 
 // requireWidgetWithError fetches a widget by ID and returns http.Error on failure.

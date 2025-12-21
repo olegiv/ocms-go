@@ -11,7 +11,6 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -1438,12 +1437,7 @@ func (h *FrontendHandler) getHomepageTranslations(currentLangCode string, langua
 
 // getPageNum extracts page number from request query params.
 func (h *FrontendHandler) getPageNum(r *http.Request) int {
-	pageStr := r.URL.Query().Get("page")
-	page, err := strconv.Atoi(pageStr)
-	if err != nil || page < 1 {
-		return 1
-	}
-	return page
+	return ParsePageParam(r)
 }
 
 // defaultPerPage is the default number of items per page for pagination.
