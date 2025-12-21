@@ -473,29 +473,29 @@ type AddItemRequest struct {
 func (h *MenusHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 	menuID, err := ParseIDParam(r)
 	if err != nil {
-		http.Error(w, "Invalid menu ID", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid menu ID")
 		return
 	}
 
-	menu, ok := h.requireMenuWithError(w, r, menuID)
+	menu, ok := h.requireMenuWithJSONError(w, r, menuID)
 	if !ok {
 		return
 	}
 
 	var req AddItemRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if req.Title == "" {
-		http.Error(w, "Title is required", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Title is required")
 		return
 	}
 
 	target, err := validateMenuItemTarget(req.Target)
 	if err != nil {
-		http.Error(w, "Invalid target", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid target")
 		return
 	}
 	req.Target = target
@@ -506,18 +506,7 @@ func (h *MenusHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 		parentID = sql.NullInt64{Int64: *req.ParentID, Valid: true}
 	}
 
-	maxPosResult, err := h.queries.GetMaxMenuItemPosition(r.Context(), store.GetMaxMenuItemPositionParams{
-		MenuID:   menuID,
-		ParentID: parentID,
-	})
-	var maxPos int64 = -1
-	if err != nil {
-		slog.Error("failed to get max position", "error", err)
-	} else if maxPosResult != nil {
-		if v, ok := maxPosResult.(int64); ok {
-			maxPos = v
-		}
-	}
+	maxPos := h.getMaxMenuItemPosition(r, menuID, parentID)
 
 	var pageID sql.NullInt64
 	if req.PageID != nil {
@@ -540,18 +529,14 @@ func (h *MenusHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to create menu item", "error", err)
-		http.Error(w, "Error creating menu item", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "Error creating menu item")
 		return
 	}
 
 	// Invalidate menu cache
 	h.renderer.InvalidateMenuCache(menu.Slug)
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"item":    item,
-	})
+	writeJSONSuccess(w, map[string]any{"item": item})
 }
 
 // UpdateItemRequest represents the JSON request for updating a menu item.
@@ -568,44 +553,44 @@ type UpdateItemRequest struct {
 func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 	menuID, err := ParseIDParam(r)
 	if err != nil {
-		http.Error(w, "Invalid menu ID", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid menu ID")
 		return
 	}
 
 	itemID, err := ParseURLParamInt64(r, "itemId")
 	if err != nil {
-		http.Error(w, "Invalid item ID", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid item ID")
 		return
 	}
 
-	item, ok := h.requireMenuItemWithError(w, r, itemID)
+	item, ok := h.requireMenuItemWithJSONError(w, r, itemID)
 	if !ok {
 		return
 	}
 
-	if !verifyItemBelongsToMenu(w, item, menuID) {
+	if !verifyItemBelongsToMenuJSON(w, item, menuID) {
 		return
 	}
 
-	menu, ok := h.requireMenuWithError(w, r, menuID)
+	menu, ok := h.requireMenuWithJSONError(w, r, menuID)
 	if !ok {
 		return
 	}
 
 	var req UpdateItemRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if req.Title == "" {
-		http.Error(w, "Title is required", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Title is required")
 		return
 	}
 
 	target, err := validateMenuItemTarget(req.Target)
 	if err != nil {
-		http.Error(w, "Invalid target", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid target")
 		return
 	}
 	req.Target = target
@@ -630,62 +615,54 @@ func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to update menu item", "error", err)
-		http.Error(w, "Error updating menu item", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "Error updating menu item")
 		return
 	}
 
 	// Invalidate menu cache
 	h.renderer.InvalidateMenuCache(menu.Slug)
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"item":    updatedItem,
-	})
+	writeJSONSuccess(w, map[string]any{"item": updatedItem})
 }
 
 // DeleteItem handles DELETE /admin/menus/{id}/items/{itemId} - deletes a menu item.
 func (h *MenusHandler) DeleteItem(w http.ResponseWriter, r *http.Request) {
 	menuID, err := ParseIDParam(r)
 	if err != nil {
-		http.Error(w, "Invalid menu ID", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid menu ID")
 		return
 	}
 
 	itemID, err := ParseURLParamInt64(r, "itemId")
 	if err != nil {
-		http.Error(w, "Invalid item ID", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid item ID")
 		return
 	}
 
-	item, ok := h.requireMenuItemWithError(w, r, itemID)
+	item, ok := h.requireMenuItemWithJSONError(w, r, itemID)
 	if !ok {
 		return
 	}
 
-	if !verifyItemBelongsToMenu(w, item, menuID) {
+	if !verifyItemBelongsToMenuJSON(w, item, menuID) {
 		return
 	}
 
-	menu, ok := h.requireMenuWithError(w, r, menuID)
+	menu, ok := h.requireMenuWithJSONError(w, r, menuID)
 	if !ok {
 		return
 	}
 
-	err = h.queries.DeleteMenuItem(r.Context(), itemID)
-	if err != nil {
+	if err = h.queries.DeleteMenuItem(r.Context(), itemID); err != nil {
 		slog.Error("failed to delete menu item", "error", err)
-		http.Error(w, "Error deleting menu item", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "Error deleting menu item")
 		return
 	}
 
 	// Invalidate menu cache
 	h.renderer.InvalidateMenuCache(menu.Slug)
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-	})
+	writeJSONSuccess(w, nil)
 }
 
 // ReorderItem represents an item in the reorder request.
@@ -704,24 +681,38 @@ type ReorderRequest struct {
 func (h *MenusHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 	menuID, err := ParseIDParam(r)
 	if err != nil {
-		http.Error(w, "Invalid menu ID", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid menu ID")
 		return
 	}
 
-	menu, ok := h.requireMenuWithError(w, r, menuID)
+	menu, ok := h.requireMenuWithJSONError(w, r, menuID)
 	if !ok {
 		return
 	}
 
 	var req ReorderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	now := time.Now()
+	if err := h.processReorderItems(r, menuID, req.Items); err != nil {
+		slog.Error("failed to reorder menu items", "error", err)
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
-	// Process items recursively
+	// Invalidate menu cache
+	h.renderer.InvalidateMenuCache(menu.Slug)
+
+	writeJSONSuccess(w, nil)
+}
+
+// processReorderItems recursively processes and updates menu item positions.
+func (h *MenusHandler) processReorderItems(r *http.Request, menuID int64, items []ReorderItem) error {
+	now := time.Now()
+	pos := int64(0)
+
 	var processItems func(items []ReorderItem, parentID sql.NullInt64, position *int64) error
 	processItems = func(items []ReorderItem, parentID sql.NullInt64, position *int64) error {
 		for _, item := range items {
@@ -735,13 +726,12 @@ func (h *MenusHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Update position
-			err = h.queries.UpdateMenuItemPosition(r.Context(), store.UpdateMenuItemPositionParams{
+			if err = h.queries.UpdateMenuItemPosition(r.Context(), store.UpdateMenuItemPositionParams{
 				ID:        item.ID,
 				ParentID:  parentID,
 				Position:  *position,
 				UpdatedAt: now,
-			})
-			if err != nil {
+			}); err != nil {
 				return fmt.Errorf("failed to update item %d: %w", item.ID, err)
 			}
 			*position++
@@ -749,8 +739,7 @@ func (h *MenusHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 			// Process children
 			if len(item.Children) > 0 {
 				childPos := int64(0)
-				err = processItems(item.Children, sql.NullInt64{Int64: item.ID, Valid: true}, &childPos)
-				if err != nil {
+				if err = processItems(item.Children, sql.NullInt64{Int64: item.ID, Valid: true}, &childPos); err != nil {
 					return err
 				}
 			}
@@ -758,20 +747,7 @@ func (h *MenusHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 		return nil
 	}
 
-	pos := int64(0)
-	if err := processItems(req.Items, sql.NullInt64{Valid: false}, &pos); err != nil {
-		slog.Error("failed to reorder menu items", "error", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// Invalidate menu cache
-	h.renderer.InvalidateMenuCache(menu.Slug)
-
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-	})
+	return processItems(items, sql.NullInt64{Valid: false}, &pos)
 }
 
 // Helper functions
@@ -899,4 +875,64 @@ func verifyItemBelongsToMenu(w http.ResponseWriter, item store.MenuItem, menuID 
 		return false
 	}
 	return true
+}
+
+// requireMenuWithJSONError fetches menu by ID and handles errors with JSON response.
+// Returns the menu and true if successful, or zero value and false if an error occurred.
+func (h *MenusHandler) requireMenuWithJSONError(w http.ResponseWriter, r *http.Request, id int64) (store.Menu, bool) {
+	menu, err := h.queries.GetMenuByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSONError(w, http.StatusNotFound, "Menu not found")
+		} else {
+			slog.Error("failed to get menu", "error", err, "menu_id", id)
+			writeJSONError(w, http.StatusInternalServerError, "Internal Server Error")
+		}
+		return store.Menu{}, false
+	}
+	return menu, true
+}
+
+// requireMenuItemWithJSONError fetches menu item by ID and handles errors with JSON response.
+// Returns the menu item and true if successful, or zero value and false if an error occurred.
+func (h *MenusHandler) requireMenuItemWithJSONError(w http.ResponseWriter, r *http.Request, id int64) (store.MenuItem, bool) {
+	item, err := h.queries.GetMenuItemByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSONError(w, http.StatusNotFound, "Menu item not found")
+		} else {
+			slog.Error("failed to get menu item", "error", err, "item_id", id)
+			writeJSONError(w, http.StatusInternalServerError, "Internal Server Error")
+		}
+		return store.MenuItem{}, false
+	}
+	return item, true
+}
+
+// verifyItemBelongsToMenuJSON checks if menu item belongs to the specified menu.
+// Returns true if valid, false if not (response already written).
+func verifyItemBelongsToMenuJSON(w http.ResponseWriter, item store.MenuItem, menuID int64) bool {
+	if item.MenuID != menuID {
+		writeJSONError(w, http.StatusBadRequest, "Item does not belong to this menu")
+		return false
+	}
+	return true
+}
+
+// getMaxMenuItemPosition returns the max position for menu items under a parent.
+func (h *MenusHandler) getMaxMenuItemPosition(r *http.Request, menuID int64, parentID sql.NullInt64) int64 {
+	maxPosResult, err := h.queries.GetMaxMenuItemPosition(r.Context(), store.GetMaxMenuItemPositionParams{
+		MenuID:   menuID,
+		ParentID: parentID,
+	})
+	if err != nil {
+		slog.Error("failed to get max position", "error", err)
+		return -1
+	}
+	if maxPosResult != nil {
+		if v, ok := maxPosResult.(int64); ok {
+			return v
+		}
+	}
+	return -1
 }

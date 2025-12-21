@@ -613,36 +613,27 @@ type AddFieldRequest struct {
 
 // AddField handles POST /admin/forms/{id}/fields - adds a form field.
 func (h *FormsHandler) AddField(w http.ResponseWriter, r *http.Request) {
-	formID := parseFieldIDParam(w, r, "id")
-	if formID == 0 {
+	formID, ok := parseFieldIDParamJSON(w, r, "id")
+	if !ok {
 		return
 	}
 
-	if !h.checkFormExists(w, r, formID) {
+	if !h.checkFormExistsJSON(w, r, formID) {
 		return
 	}
 
 	var req AddFieldRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if errMsg := validateFieldRequest(&req); errMsg != "" {
-		http.Error(w, errMsg, http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, errMsg)
 		return
 	}
 
-	// Get max position
-	fields, err := h.queries.GetFormFields(r.Context(), formID)
-	maxPos := int64(-1)
-	if err == nil {
-		for _, f := range fields {
-			if f.Position > maxPos {
-				maxPos = f.Position
-			}
-		}
-	}
+	maxPos := h.getMaxFieldPosition(r, formID)
 
 	now := time.Now()
 	field, err := h.queries.CreateFormField(r.Context(), store.CreateFormFieldParams{
@@ -661,15 +652,11 @@ func (h *FormsHandler) AddField(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to create form field", "error", err)
-		http.Error(w, "Error creating field", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "Error creating field")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"field":   field,
-	})
+	writeJSONSuccess(w, map[string]any{"field": field})
 }
 
 // UpdateFieldRequest represents the JSON request for updating a form field.
@@ -686,29 +673,29 @@ type UpdateFieldRequest struct {
 
 // UpdateField handles PUT /admin/forms/{id}/fields/{fieldId} - updates a form field.
 func (h *FormsHandler) UpdateField(w http.ResponseWriter, r *http.Request) {
-	formID := parseFieldIDParam(w, r, "id")
-	if formID == 0 {
+	formID, ok := parseFieldIDParamJSON(w, r, "id")
+	if !ok {
 		return
 	}
 
-	fieldID := parseFieldIDParam(w, r, "fieldId")
-	if fieldID == 0 {
+	fieldID, ok := parseFieldIDParamJSON(w, r, "fieldId")
+	if !ok {
 		return
 	}
 
-	field := h.fetchFieldByID(w, r, fieldID, formID)
+	field := h.fetchFieldByIDJSON(w, r, fieldID, formID)
 	if field == nil {
 		return
 	}
 
 	var req AddFieldRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if errMsg := validateFieldRequest(&req); errMsg != "" {
-		http.Error(w, errMsg, http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, errMsg)
 		return
 	}
 
@@ -728,44 +715,36 @@ func (h *FormsHandler) UpdateField(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to update form field", "error", err)
-		http.Error(w, "Error updating field", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "Error updating field")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"field":   updatedField,
-	})
+	writeJSONSuccess(w, map[string]any{"field": updatedField})
 }
 
 // DeleteField handles DELETE /admin/forms/{id}/fields/{fieldId} - deletes a form field.
 func (h *FormsHandler) DeleteField(w http.ResponseWriter, r *http.Request) {
-	formID := parseFieldIDParam(w, r, "id")
-	if formID == 0 {
+	formID, ok := parseFieldIDParamJSON(w, r, "id")
+	if !ok {
 		return
 	}
 
-	fieldID := parseFieldIDParam(w, r, "fieldId")
-	if fieldID == 0 {
+	fieldID, ok := parseFieldIDParamJSON(w, r, "fieldId")
+	if !ok {
 		return
 	}
 
-	if h.fetchFieldByID(w, r, fieldID, formID) == nil {
+	if h.fetchFieldByIDJSON(w, r, fieldID, formID) == nil {
 		return
 	}
 
-	err := h.queries.DeleteFormField(r.Context(), fieldID)
-	if err != nil {
+	if err := h.queries.DeleteFormField(r.Context(), fieldID); err != nil {
 		slog.Error("failed to delete form field", "error", err)
-		http.Error(w, "Error deleting field", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "Error deleting field")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-	})
+	writeJSONSuccess(w, nil)
 }
 
 // ReorderFieldsRequest represents the JSON request for reordering form fields.
@@ -775,18 +754,18 @@ type ReorderFieldsRequest struct {
 
 // ReorderFields handles POST /admin/forms/{id}/fields/reorder - reorders form fields.
 func (h *FormsHandler) ReorderFields(w http.ResponseWriter, r *http.Request) {
-	formID := parseFieldIDParam(w, r, "id")
-	if formID == 0 {
+	formID, ok := parseFieldIDParamJSON(w, r, "id")
+	if !ok {
 		return
 	}
 
-	if !h.checkFormExists(w, r, formID) {
+	if !h.checkFormExistsJSON(w, r, formID) {
 		return
 	}
 
 	var req ReorderFieldsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
@@ -801,7 +780,7 @@ func (h *FormsHandler) ReorderFields(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		_, err = h.queries.UpdateFormField(r.Context(), store.UpdateFormFieldParams{
+		if _, err = h.queries.UpdateFormField(r.Context(), store.UpdateFormFieldParams{
 			ID:          fieldID,
 			Type:        field.Type,
 			Name:        field.Name,
@@ -813,16 +792,12 @@ func (h *FormsHandler) ReorderFields(w http.ResponseWriter, r *http.Request) {
 			IsRequired:  field.IsRequired,
 			Position:    int64(i),
 			UpdatedAt:   now,
-		})
-		if err != nil {
+		}); err != nil {
 			slog.Error("failed to update field position", "error", err, "field_id", fieldID)
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-	})
+	writeJSONSuccess(w, nil)
 }
 
 // ===== Public Form Handlers =====
@@ -1440,4 +1415,68 @@ func escapeCSVRow(values []string) string {
 		escaped[i] = v
 	}
 	return strings.Join(escaped, ",")
+}
+
+// parseFieldIDParamJSON parses field ID from URL and returns JSON error response if invalid.
+// Returns the ID and true on success, or 0 and false on error (response already sent).
+func parseFieldIDParamJSON(w http.ResponseWriter, r *http.Request, paramName string) (int64, bool) {
+	idStr := chi.URLParam(r, paramName)
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Invalid %s", paramName))
+		return 0, false
+	}
+	return id, true
+}
+
+// fetchFieldByIDJSON retrieves a field by ID and verifies it belongs to the form.
+// Returns nil if there was an error (JSON response already sent).
+func (h *FormsHandler) fetchFieldByIDJSON(w http.ResponseWriter, r *http.Request, fieldID, formID int64) *store.FormField {
+	field, err := h.queries.GetFormFieldByID(r.Context(), fieldID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSONError(w, http.StatusNotFound, "Field not found")
+		} else {
+			slog.Error("failed to get form field", "error", err, "field_id", fieldID)
+			writeJSONError(w, http.StatusInternalServerError, "Internal Server Error")
+		}
+		return nil
+	}
+
+	if field.FormID != formID {
+		writeJSONError(w, http.StatusBadRequest, "Field does not belong to this form")
+		return nil
+	}
+	return &field
+}
+
+// checkFormExistsJSON verifies a form exists by ID for JSON API handlers.
+// Returns false if the form doesn't exist (JSON response already sent).
+func (h *FormsHandler) checkFormExistsJSON(w http.ResponseWriter, r *http.Request, formID int64) bool {
+	_, err := h.queries.GetFormByID(r.Context(), formID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSONError(w, http.StatusNotFound, "Form not found")
+		} else {
+			slog.Error("failed to get form", "error", err, "form_id", formID)
+			writeJSONError(w, http.StatusInternalServerError, "Internal Server Error")
+		}
+		return false
+	}
+	return true
+}
+
+// getMaxFieldPosition returns the max position for fields in a form.
+func (h *FormsHandler) getMaxFieldPosition(r *http.Request, formID int64) int64 {
+	fields, err := h.queries.GetFormFields(r.Context(), formID)
+	if err != nil {
+		return -1
+	}
+	maxPos := int64(-1)
+	for _, f := range fields {
+		if f.Position > maxPos {
+			maxPos = f.Position
+		}
+	}
+	return maxPos
 }

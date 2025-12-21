@@ -134,37 +134,25 @@ type CreateWidgetRequest struct {
 func (h *WidgetsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req CreateWidgetRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	// Validate
 	if req.Theme == "" {
-		http.Error(w, "Theme is required", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Theme is required")
 		return
 	}
 	if req.Area == "" {
-		http.Error(w, "Area is required", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Area is required")
 		return
 	}
 	if req.WidgetType == "" {
-		http.Error(w, "Widget type is required", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Widget type is required")
 		return
 	}
 
-	// Get max position
-	maxPosResult, err := h.queries.GetMaxWidgetPosition(r.Context(), store.GetMaxWidgetPositionParams{
-		Theme: req.Theme,
-		Area:  req.Area,
-	})
-	var maxPos int64 = -1
-	if err != nil {
-		slog.Error("failed to get max position", "error", err)
-	} else if maxPosResult != nil {
-		if v, ok := maxPosResult.(int64); ok {
-			maxPos = v
-		}
-	}
+	maxPos := h.getMaxWidgetPosition(r, req.Theme, req.Area)
 
 	widget, err := h.queries.CreateWidget(r.Context(), store.CreateWidgetParams{
 		Theme:      req.Theme,
@@ -178,17 +166,13 @@ func (h *WidgetsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to create widget", "error", err)
-		http.Error(w, "Error creating widget", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "Error creating widget")
 		return
 	}
 
 	slog.Info("widget created", "widget_id", widget.ID, "theme", req.Theme, "area", req.Area)
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"widget":  widget,
-	})
+	writeJSONSuccess(w, map[string]any{"widget": widget})
 }
 
 // UpdateWidgetRequest represents the JSON request for updating a widget.
@@ -204,18 +188,18 @@ type UpdateWidgetRequest struct {
 func (h *WidgetsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		http.Error(w, "Invalid widget ID", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid widget ID")
 		return
 	}
 
-	widget, ok := h.requireWidgetWithError(w, r, id)
+	widget, ok := h.requireWidgetWithJSONError(w, r, id)
 	if !ok {
 		return
 	}
 
 	var req UpdateWidgetRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
@@ -235,44 +219,36 @@ func (h *WidgetsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to update widget", "error", err, "widget_id", id)
-		http.Error(w, "Error updating widget", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "Error updating widget")
 		return
 	}
 
 	slog.Info("widget updated", "widget_id", id)
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"widget":  updatedWidget,
-	})
+	writeJSONSuccess(w, map[string]any{"widget": updatedWidget})
 }
 
 // Delete handles DELETE /admin/widgets/{id} - deletes a widget.
 func (h *WidgetsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		http.Error(w, "Invalid widget ID", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid widget ID")
 		return
 	}
 
-	if _, ok := h.requireWidgetWithError(w, r, id); !ok {
+	if _, ok := h.requireWidgetWithJSONError(w, r, id); !ok {
 		return
 	}
 
-	err = h.queries.DeleteWidget(r.Context(), id)
-	if err != nil {
+	if err = h.queries.DeleteWidget(r.Context(), id); err != nil {
 		slog.Error("failed to delete widget", "error", err, "widget_id", id)
-		http.Error(w, "Error deleting widget", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "Error deleting widget")
 		return
 	}
 
 	slog.Info("widget deleted", "widget_id", id, "deleted_by", middleware.GetUserID(r))
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-	})
+	writeJSONSuccess(w, nil)
 }
 
 // ReorderWidgetsRequest represents the JSON request for reordering widgets.
@@ -287,43 +263,38 @@ type ReorderWidgetsRequest struct {
 func (h *WidgetsHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 	var req ReorderWidgetsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	for _, item := range req.Widgets {
-		err := h.queries.UpdateWidgetPosition(r.Context(), store.UpdateWidgetPositionParams{
+		if err := h.queries.UpdateWidgetPosition(r.Context(), store.UpdateWidgetPositionParams{
 			ID:       item.ID,
 			Position: item.Position,
-		})
-		if err != nil {
+		}); err != nil {
 			slog.Error("failed to update widget position", "error", err, "widget_id", item.ID)
-			http.Error(w, "Error reordering widgets", http.StatusInternalServerError)
+			writeJSONError(w, http.StatusInternalServerError, "Error reordering widgets")
 			return
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-	})
+	writeJSONSuccess(w, nil)
 }
 
 // GetWidget handles GET /admin/widgets/{id} - gets a widget by ID.
 func (h *WidgetsHandler) GetWidget(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		http.Error(w, "Invalid widget ID", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid widget ID")
 		return
 	}
 
-	widget, ok := h.requireWidgetWithError(w, r, id)
+	widget, ok := h.requireWidgetWithJSONError(w, r, id)
 	if !ok {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(widget)
+	writeJSONSuccess(w, map[string]any{"widget": widget})
 }
 
 // MoveWidgetRequest represents the JSON request for moving a widget to a different area.
@@ -335,40 +306,28 @@ type MoveWidgetRequest struct {
 func (h *WidgetsHandler) MoveWidget(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		http.Error(w, "Invalid widget ID", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid widget ID")
 		return
 	}
 
-	widget, ok := h.requireWidgetWithError(w, r, id)
+	widget, ok := h.requireWidgetWithJSONError(w, r, id)
 	if !ok {
 		return
 	}
 
 	var req MoveWidgetRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	req.Area = strings.TrimSpace(req.Area)
 	if req.Area == "" {
-		http.Error(w, "Area is required", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Area is required")
 		return
 	}
 
-	// Get max position in target area
-	maxPosResult, err := h.queries.GetMaxWidgetPosition(r.Context(), store.GetMaxWidgetPositionParams{
-		Theme: widget.Theme,
-		Area:  req.Area,
-	})
-	var maxPos int64 = -1
-	if err != nil {
-		slog.Error("failed to get max position", "error", err)
-	} else if maxPosResult != nil {
-		if v, ok := maxPosResult.(int64); ok {
-			maxPos = v
-		}
-	}
+	maxPos := h.getMaxWidgetPosition(r, widget.Theme, req.Area)
 
 	// Update widget with new area and position
 	updatedWidget, err := h.queries.UpdateWidget(r.Context(), store.UpdateWidgetParams{
@@ -382,17 +341,13 @@ func (h *WidgetsHandler) MoveWidget(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to move widget", "error", err, "widget_id", id)
-		http.Error(w, "Error moving widget", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "Error moving widget")
 		return
 	}
 
 	slog.Info("widget moved", "widget_id", id, "new_area", req.Area)
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"widget":  updatedWidget,
-	})
+	writeJSONSuccess(w, map[string]any{"widget": updatedWidget})
 }
 
 // requireWidgetWithError fetches a widget by ID and returns http.Error on failure.
@@ -407,4 +362,37 @@ func (h *WidgetsHandler) requireWidgetWithError(w http.ResponseWriter, r *http.R
 		return store.Widget{}, false
 	}
 	return widget, true
+}
+
+// requireWidgetWithJSONError fetches a widget by ID and returns JSON error on failure.
+func (h *WidgetsHandler) requireWidgetWithJSONError(w http.ResponseWriter, r *http.Request, id int64) (store.Widget, bool) {
+	widget, err := h.queries.GetWidget(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSONError(w, http.StatusNotFound, "Widget not found")
+		} else {
+			slog.Error("failed to get widget", "error", err, "widget_id", id)
+			writeJSONError(w, http.StatusInternalServerError, "Internal Server Error")
+		}
+		return store.Widget{}, false
+	}
+	return widget, true
+}
+
+// getMaxWidgetPosition returns the max position for widgets in a theme/area.
+func (h *WidgetsHandler) getMaxWidgetPosition(r *http.Request, theme, area string) int64 {
+	maxPosResult, err := h.queries.GetMaxWidgetPosition(r.Context(), store.GetMaxWidgetPositionParams{
+		Theme: theme,
+		Area:  area,
+	})
+	if err != nil {
+		slog.Error("failed to get max position", "error", err)
+		return -1
+	}
+	if maxPosResult != nil {
+		if v, ok := maxPosResult.(int64); ok {
+			return v
+		}
+	}
+	return -1
 }

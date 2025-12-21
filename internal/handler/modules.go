@@ -94,66 +94,48 @@ type ToggleSidebarResponse struct {
 func (h *ModulesHandler) ToggleActive(w http.ResponseWriter, r *http.Request) {
 	moduleName := chi.URLParam(r, "name")
 	if moduleName == "" {
-		http.Error(w, "Module name required", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Module name required")
 		return
 	}
 
 	var req ToggleActiveRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if err := h.registry.SetActive(moduleName, req.Active); err != nil {
 		slog.Error("failed to toggle module active status", "module", moduleName, "error", err)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(ToggleActiveResponse{
-			Success: false,
-			Message: err.Error(),
-		})
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	slog.Info("module active status toggled", "module", moduleName, "active", req.Active)
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(ToggleActiveResponse{
-		Success: true,
-		Active:  req.Active,
-	})
+	writeJSONSuccess(w, map[string]any{"active": req.Active})
 }
 
 // ToggleSidebar handles POST /admin/modules/{name}/toggle-sidebar - toggles module sidebar visibility.
 func (h *ModulesHandler) ToggleSidebar(w http.ResponseWriter, r *http.Request) {
 	moduleName := chi.URLParam(r, "name")
 	if moduleName == "" {
-		http.Error(w, "Module name required", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Module name required")
 		return
 	}
 
 	var req ToggleSidebarRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if err := h.registry.SetShowInSidebar(moduleName, req.Show); err != nil {
 		slog.Error("failed to toggle module sidebar visibility", "module", moduleName, "error", err)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(ToggleSidebarResponse{
-			Success: false,
-			Message: err.Error(),
-		})
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	slog.Info("module sidebar visibility toggled", "module", moduleName, "show", req.Show)
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(ToggleSidebarResponse{
-		Success: true,
-		Show:    req.Show,
-	})
+	writeJSONSuccess(w, map[string]any{"show": req.Show})
 }
