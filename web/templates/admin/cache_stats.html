@@ -122,8 +122,8 @@
                     {{range .Data.Caches}}
                     <tr>
                         <td>
-                            <strong>{{if eq .Type "config"}}{{T $.AdminLang "cache.name_config"}}{{else if eq .Type "sitemap"}}{{T $.AdminLang "cache.name_sitemap"}}{{else if eq .Type "menu"}}{{T $.AdminLang "cache.name_menus"}}{{else if eq .Type "language"}}{{T $.AdminLang "cache.name_languages"}}{{else if eq .Type "translation"}}{{T $.AdminLang "cache.name_translations"}}{{else if eq .Type "general"}}{{T $.AdminLang "cache.name_general"}}{{else}}{{.Name}}{{end}}</strong>
-                            {{if eq .Type "sitemap"}}
+                            <strong>{{if eq .Kind "config"}}{{T $.AdminLang "cache.name_config"}}{{else if eq .Kind "sitemap"}}{{T $.AdminLang "cache.name_sitemap"}}{{else if eq .Kind "menu"}}{{T $.AdminLang "cache.name_menus"}}{{else if eq .Kind "language"}}{{T $.AdminLang "cache.name_languages"}}{{else if eq .Kind "translation"}}{{T $.AdminLang "cache.name_translations"}}{{else if eq .Kind "general"}}{{T $.AdminLang "cache.name_general"}}{{else}}{{.Name}}{{end}}</strong>
+                            {{if eq .Kind "sitemap"}}
                                 {{if .CachedAt}}
                                 <br><small class="text-muted">{{T $.AdminLang "cache.cached"}}: {{.CachedAt.Format "Jan 2, 15:04"}} ({{.Size}} {{T $.AdminLang "cache.bytes"}})</small>
                                 {{else}}
@@ -144,12 +144,12 @@
                             {{end}}
                         </td>
                         <td>
-                            {{if eq .Type "config"}}
+                            {{if eq .Kind "config"}}
                             <form method="POST" action="/admin/cache/clear/config" class="d-inline">
                                 {{$.CSRFField}}
                                 <button type="submit" class="btn btn-sm btn-outline" title="{{T $.AdminLang "cache.clear_config"}}">{{T $.AdminLang "cache.clear"}}</button>
                             </form>
-                            {{else if eq .Type "sitemap"}}
+                            {{else if eq .Kind "sitemap"}}
                             <form method="POST" action="/admin/cache/clear/sitemap" class="d-inline">
                                 {{$.CSRFField}}
                                 <button type="submit" class="btn btn-sm btn-outline" title="{{T $.AdminLang "cache.clear_sitemap"}}">{{T $.AdminLang "cache.clear"}}</button>
