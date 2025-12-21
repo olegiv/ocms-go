@@ -655,7 +655,7 @@ func (e *Exporter) exportMenuItem(ctx context.Context, item store.MenuItem, page
 		Title:    item.Title,
 		URL:      nullStringToString(item.Url),
 		Target:   nullStringToString(item.Target),
-		CssClass: nullStringToString(item.CssClass),
+		CSSClass: nullStringToString(item.CssClass),
 		IsActive: item.IsActive,
 		Position: item.Position,
 	}
