@@ -367,13 +367,11 @@ func TestMigrations(t *testing.T) {
 	r := NewRegistry(logger)
 
 	m := newMockModule("migrate", "1.0.0")
-	migrationCalled := false
 	m.migrations = []Migration{
 		{
 			Version:     1,
 			Description: "Create test table",
 			Up: func(db *sql.DB) error {
-				migrationCalled = true
 				_, err := db.Exec("CREATE TABLE test_table (id INTEGER PRIMARY KEY)")
 				return err
 			},
@@ -395,11 +393,7 @@ func TestMigrations(t *testing.T) {
 		t.Fatalf("failed to init: %v", err)
 	}
 
-	if !migrationCalled {
-		t.Error("expected migration to be called")
-	}
-
-	// Verify table was created
+	// Verify table was created (implicitly confirms migration was called)
 	var name string
 	err = db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='test_table'").Scan(&name)
 	if err != nil {
@@ -411,14 +405,14 @@ func TestMigrationNotRerun(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	r := NewRegistry(logger)
 
-	runCount := 0
+	runCount := new(int)
 	m := newMockModule("rerun", "1.0.0")
 	m.migrations = []Migration{
 		{
 			Version:     1,
 			Description: "Test migration",
 			Up: func(db *sql.DB) error {
-				runCount++
+				*runCount++
 				return nil
 			},
 		},
@@ -433,8 +427,8 @@ func TestMigrationNotRerun(t *testing.T) {
 
 	// First init - should run migration
 	_ = r.InitAll(ctx)
-	if runCount != 1 {
-		t.Errorf("expected migration to run once, ran %d times", runCount)
+	if *runCount != 1 {
+		t.Errorf("expected migration to run once, ran %d times", *runCount)
 	}
 
 	// Create new registry and init again - should not rerun
@@ -445,7 +439,7 @@ func TestMigrationNotRerun(t *testing.T) {
 			Version:     1,
 			Description: "Test migration",
 			Up: func(db *sql.DB) error {
-				runCount++
+				*runCount++
 				return nil
 			},
 		},
@@ -453,8 +447,8 @@ func TestMigrationNotRerun(t *testing.T) {
 	_ = r2.Register(m2)
 	_ = r2.InitAll(ctx)
 
-	if runCount != 1 {
-		t.Errorf("expected migration not to rerun, ran %d times", runCount)
+	if *runCount != 1 {
+		t.Errorf("expected migration not to rerun, ran %d times", *runCount)
 	}
 }
 
