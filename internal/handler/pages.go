@@ -158,7 +158,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	if searchFilter != "" {
 		if languageFilter > 0 {
 			totalCount, err = h.queries.CountSearchPagesByLanguage(r.Context(), store.CountSearchPagesByLanguageParams{
-				LanguageID: sql.NullInt64{Int64: languageFilter, Valid: true},
+				LanguageID: util.NullInt64FromValue(languageFilter),
 				Title:      searchPattern,
 				Body:       searchPattern,
 				Slug:       searchPattern,
@@ -180,11 +180,11 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	} else if languageFilter > 0 {
 		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
 			totalCount, err = h.queries.CountPagesByLanguageAndStatus(r.Context(), store.CountPagesByLanguageAndStatusParams{
-				LanguageID: sql.NullInt64{Int64: languageFilter, Valid: true},
+				LanguageID: util.NullInt64FromValue(languageFilter),
 				Status:     statusFilter,
 			})
 		} else {
-			totalCount, err = h.queries.CountPagesByLanguage(r.Context(), sql.NullInt64{Int64: languageFilter, Valid: true})
+			totalCount, err = h.queries.CountPagesByLanguage(r.Context(), util.NullInt64FromValue(languageFilter))
 		}
 	} else if categoryFilter > 0 {
 		totalCount, err = h.queries.CountPagesByCategory(r.Context(), categoryFilter)
@@ -210,7 +210,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	if searchFilter != "" {
 		if languageFilter > 0 {
 			pages, err = h.queries.SearchPagesByLanguage(r.Context(), store.SearchPagesByLanguageParams{
-				LanguageID: sql.NullInt64{Int64: languageFilter, Valid: true},
+				LanguageID: util.NullInt64FromValue(languageFilter),
 				Title:      searchPattern,
 				Body:       searchPattern,
 				Slug:       searchPattern,
@@ -238,14 +238,14 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	} else if languageFilter > 0 {
 		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
 			pages, err = h.queries.ListPagesByLanguageAndStatus(r.Context(), store.ListPagesByLanguageAndStatusParams{
-				LanguageID: sql.NullInt64{Int64: languageFilter, Valid: true},
+				LanguageID: util.NullInt64FromValue(languageFilter),
 				Status:     statusFilter,
 				Limit:      PagesPerPage,
 				Offset:     offset,
 			})
 		} else {
 			pages, err = h.queries.ListPagesByLanguage(r.Context(), store.ListPagesByLanguageParams{
-				LanguageID: sql.NullInt64{Int64: languageFilter, Valid: true},
+				LanguageID: util.NullInt64FromValue(languageFilter),
 				Limit:      PagesPerPage,
 				Offset:     offset,
 			})
@@ -344,11 +344,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	categoryTree := buildPageCategoryTree(allCategories, nil, 0)
 
 	// Load all active languages for filter dropdown
-	allLanguages, err := h.queries.ListActiveLanguages(r.Context())
-	if err != nil {
-		slog.Error("failed to list languages for filter", "error", err)
-		allLanguages = []store.Language{}
-	}
+	allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 
 	data := PagesListData{
 		Pages:              pages,
@@ -458,18 +454,10 @@ func (h *PagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	categoryTree := buildPageCategoryTree(allCategories, nil, 0)
 
 	// Load all active languages for selection
-	allLanguages, err := h.queries.ListActiveLanguages(r.Context())
-	if err != nil {
-		slog.Error("failed to list languages", "error", err)
-		allLanguages = []store.Language{}
-	}
+	allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 
-	// Get default language
-	var defaultLanguage *store.Language
-	defaultLang, err := h.queries.GetDefaultLanguage(r.Context())
-	if err == nil {
-		defaultLanguage = &defaultLang
-	}
+	// Get default language from loaded languages
+	defaultLanguage := FindDefaultLanguage(allLanguages)
 
 	data := PageFormData{
 		AllCategories: categoryTree,
@@ -498,9 +486,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, "/admin/pages/new", http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, "/admin/pages/new") {
 		return
 	}
 
@@ -511,7 +497,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if !input.LanguageID.Valid {
 		defaultLang, err := h.queries.GetDefaultLanguage(r.Context())
 		if err == nil {
-			input.LanguageID = sql.NullInt64{Int64: defaultLang.ID, Valid: true}
+			input.LanguageID = util.NullInt64FromValue(defaultLang.ID)
 		}
 	}
 
@@ -529,19 +515,8 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		input.FormValues["slug"] = input.Slug
 	}
 
-	if input.Slug == "" {
-		validationErrors["slug"] = "Slug is required"
-	} else if !util.IsValidSlug(input.Slug) {
-		validationErrors["slug"] = "Invalid slug format (use lowercase letters, numbers, and hyphens)"
-	} else {
-		// Check if slug already exists
-		exists, err := h.queries.SlugExists(r.Context(), input.Slug)
-		if err != nil {
-			slog.Error("database error checking slug", "error", err)
-			validationErrors["slug"] = "Error checking slug"
-		} else if exists != 0 {
-			validationErrors["slug"] = "Slug already exists"
-		}
+	if errMsg := h.validatePageSlugCreate(r.Context(), input.Slug); errMsg != "" {
+		validationErrors["slug"] = errMsg
 	}
 
 	// Status validation
@@ -555,7 +530,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
 		// Load languages for re-rendering
-		allLanguages, _ := h.queries.ListActiveLanguages(r.Context())
+		allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 
 		data := PageFormData{
 			AllLanguages: allLanguages,
@@ -602,8 +577,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to create page", "error", err)
-		h.renderer.SetFlash(r, "Error creating page", "error")
-		http.Redirect(w, r, "/admin/pages/new", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/pages/new", "Error creating page")
 		return
 	}
 
@@ -657,8 +631,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Dispatch page.created webhook event
 	h.dispatchPageEvent(r.Context(), model.EventPageCreated, newPage, middleware.GetUserEmail(r))
 
-	h.renderer.SetFlash(r, "Page created successfully", "success")
-	http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/pages", "Page created successfully")
 }
 
 // isValidPageStatus checks if a status is valid.
@@ -678,8 +651,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid page ID", "error")
-		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/pages", "Invalid page ID")
 		return
 	}
 
@@ -730,11 +702,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load all active languages
-	allLanguages, err := h.queries.ListActiveLanguages(r.Context())
-	if err != nil {
-		slog.Error("failed to list languages", "error", err)
-		allLanguages = []store.Language{}
-	}
+	allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 
 	// Load current page's language
 	var pageLanguage *store.Language
@@ -820,8 +788,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid page ID", "error")
-		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/pages", "Invalid page ID")
 		return
 	}
 
@@ -830,9 +797,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", id), http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf("/admin/pages/%d", id)) {
 		return
 	}
 
@@ -910,8 +875,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to update page", "error", err, "page_id", id)
-		h.renderer.SetFlash(r, "Error updating page", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", id), http.StatusSeeOther)
+		flashError(w, r, h.renderer, fmt.Sprintf("/admin/pages/%d", id), "Error updating page")
 		return
 	}
 
@@ -977,8 +941,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Dispatch page.updated webhook event
 	h.dispatchPageEvent(r.Context(), model.EventPageUpdated, updatedPage, middleware.GetUserEmail(r))
 
-	h.renderer.SetFlash(r, "Page updated successfully", "success")
-	http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/pages", "Page updated successfully")
 }
 
 // Delete handles DELETE /admin/pages/{id} - deletes a page.
@@ -1014,16 +977,14 @@ func (h *PagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// For regular requests, redirect
-	h.renderer.SetFlash(r, "Page deleted successfully", "success")
-	http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/pages", "Page deleted successfully")
 }
 
 // TogglePublish handles POST /admin/pages/{id}/publish - toggles publish status.
 func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid page ID", "error")
-		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/pages", "Invalid page ID")
 		return
 	}
 
@@ -1059,8 +1020,7 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		slog.Error("failed to toggle publish status", "error", err, "page_id", id)
-		h.renderer.SetFlash(r, "Error updating page status", "error")
-		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/pages", "Error updating page status")
 		return
 	}
 
@@ -1070,8 +1030,7 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 		h.dispatchPageEvent(r.Context(), eventType, updatedPage, middleware.GetUserEmail(r))
 	}
 
-	h.renderer.SetFlash(r, message, "success")
-	http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/pages", message)
 }
 
 // VersionsPerPage is the number of versions to display per page.
@@ -1092,8 +1051,7 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid page ID", "error")
-		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/pages", "Invalid page ID")
 		return
 	}
 
@@ -1152,17 +1110,16 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid page ID", "error")
-		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/pages", "Invalid page ID")
 		return
 	}
 
 	// Get version ID from URL
+	versionsURL := fmt.Sprintf("/admin/pages/%d/versions", id)
 	versionIdStr := chi.URLParam(r, "versionId")
 	versionId, err := strconv.ParseInt(versionIdStr, 10, 64)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid version ID", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d/versions", id), http.StatusSeeOther)
+		flashError(w, r, h.renderer, versionsURL, "Invalid version ID")
 		return
 	}
 
@@ -1175,19 +1132,17 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 	version, err := h.queries.GetPageVersionWithUser(r.Context(), versionId)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Version not found", "error")
+			flashError(w, r, h.renderer, versionsURL, "Version not found")
 		} else {
 			slog.Error("failed to get page version", "error", err, "version_id", versionId)
-			h.renderer.SetFlash(r, "Error loading version", "error")
+			flashError(w, r, h.renderer, versionsURL, "Error loading version")
 		}
-		http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d/versions", id), http.StatusSeeOther)
 		return
 	}
 
 	// Verify version belongs to this page
 	if version.PageID != id {
-		h.renderer.SetFlash(r, "Version does not belong to this page", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d/versions", id), http.StatusSeeOther)
+		flashError(w, r, h.renderer, versionsURL, "Version does not belong to this page")
 		return
 	}
 
@@ -1213,8 +1168,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to restore page version", "error", err, "page_id", id, "version_id", versionId)
-		h.renderer.SetFlash(r, "Error restoring version", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d/versions", id), http.StatusSeeOther)
+		flashError(w, r, h.renderer, versionsURL, "Error restoring version")
 		return
 	}
 
@@ -1232,24 +1186,22 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("page version restored", "page_id", id, "version_id", versionId, "restored_by", middleware.GetUserID(r))
-	h.renderer.SetFlash(r, "Version restored successfully", "success")
-	http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", id), http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/pages/%d", id), "Version restored successfully")
 }
 
 // Translate handles POST /admin/pages/{id}/translate/{langCode} - creates a translation.
 func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid page ID", "error")
-		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/pages", "Invalid page ID")
 		return
 	}
 
 	// Get language code from URL
+	redirectURL := fmt.Sprintf("/admin/pages/%d", id)
 	langCode := chi.URLParam(r, "langCode")
 	if langCode == "" {
-		h.renderer.SetFlash(r, "Language code is required", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", id), http.StatusSeeOther)
+		flashError(w, r, h.renderer, redirectURL, "Language code is required")
 		return
 	}
 
@@ -1262,12 +1214,11 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 	targetLang, err := h.queries.GetLanguageByCode(r.Context(), langCode)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Language not found", "error")
+			flashError(w, r, h.renderer, redirectURL, "Language not found")
 		} else {
 			slog.Error("failed to get language", "error", err, "lang_code", langCode)
-			h.renderer.SetFlash(r, "Error loading language", "error")
+			flashError(w, r, h.renderer, redirectURL, "Error loading language")
 		}
-		http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", id), http.StatusSeeOther)
 		return
 	}
 
@@ -1279,8 +1230,7 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 	})
 	if err == nil && existingTranslation.ID > 0 {
 		// Translation already exists, redirect to it
-		h.renderer.SetFlash(r, "Translation already exists", "info")
-		http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", existingTranslation.TranslationID), http.StatusSeeOther)
+		flashAndRedirect(w, r, h.renderer, fmt.Sprintf("/admin/pages/%d", existingTranslation.TranslationID), "Translation already exists", "info")
 		return
 	}
 
@@ -1292,8 +1242,7 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		exists, err := h.queries.SlugExists(r.Context(), translatedSlug)
 		if err != nil {
 			slog.Error("database error checking slug", "error", err)
-			h.renderer.SetFlash(r, "Error creating translation", "error")
-			http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", id), http.StatusSeeOther)
+			flashError(w, r, h.renderer, redirectURL, "Error creating translation")
 			return
 		}
 		if exists == 0 {
@@ -1321,14 +1270,13 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		NoFollow:        0,
 		CanonicalUrl:    "",
 		ScheduledAt:     sql.NullTime{},
-		LanguageID:      sql.NullInt64{Int64: targetLang.ID, Valid: true},
+		LanguageID:      util.NullInt64FromValue(targetLang.ID),
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	})
 	if err != nil {
 		slog.Error("failed to create translated page", "error", err)
-		h.renderer.SetFlash(r, "Error creating translation", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", id), http.StatusSeeOther)
+		flashError(w, r, h.renderer, redirectURL, "Error creating translation")
 		return
 	}
 
@@ -1364,8 +1312,7 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		"language", langCode,
 		"created_by", userID)
 
-	h.renderer.SetFlash(r, fmt.Sprintf("Translation created for %s. Please translate the content.", targetLang.Name), "success")
-	http.Redirect(w, r, fmt.Sprintf("/admin/pages/%d", translatedPage.ID), http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/pages/%d", translatedPage.ID), fmt.Sprintf("Translation created for %s. Please translate the content.", targetLang.Name))
 }
 
 // Helper functions
@@ -1376,12 +1323,11 @@ func (h *PagesHandler) requirePageWithRedirect(w http.ResponseWriter, r *http.Re
 	page, err := h.queries.GetPageByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Page not found", "error")
+			flashError(w, r, h.renderer, "/admin/pages", "Page not found")
 		} else {
 			slog.Error("failed to get page", "error", err, "page_id", id)
-			h.renderer.SetFlash(r, "Error loading page", "error")
+			flashError(w, r, h.renderer, "/admin/pages", "Error loading page")
 		}
-		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
 		return store.Page{}, false
 	}
 	return page, true
@@ -1442,20 +1388,10 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 	languageIDStr := r.FormValue("language_id")
 
 	// Parse featured image ID
-	var featuredImageID sql.NullInt64
-	if featuredImageIDStr != "" {
-		if imgID, err := strconv.ParseInt(featuredImageIDStr, 10, 64); err == nil && imgID > 0 {
-			featuredImageID = sql.NullInt64{Int64: imgID, Valid: true}
-		}
-	}
+	featuredImageID := util.ParseNullInt64Positive(featuredImageIDStr)
 
 	// Parse OG image ID
-	var ogImageID sql.NullInt64
-	if ogImageIDStr != "" {
-		if imgID, err := strconv.ParseInt(ogImageIDStr, 10, 64); err == nil && imgID > 0 {
-			ogImageID = sql.NullInt64{Int64: imgID, Valid: true}
-		}
-	}
+	ogImageID := util.ParseNullInt64Positive(ogImageIDStr)
 
 	// Parse boolean SEO fields
 	var noIndex int64
@@ -1476,12 +1412,7 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 	}
 
 	// Parse language_id
-	var languageID sql.NullInt64
-	if languageIDStr != "" {
-		if lid, err := strconv.ParseInt(languageIDStr, 10, 64); err == nil && lid > 0 {
-			languageID = sql.NullInt64{Int64: lid, Valid: true}
-		}
-	}
+	languageID := util.ParseNullInt64Positive(languageIDStr)
 
 	formValues := map[string]string{
 		"title":             title,
@@ -1530,26 +1461,19 @@ func validatePageTitle(title string) string {
 	return ""
 }
 
+// validatePageSlugCreate validates a page slug for creation.
+func (h *PagesHandler) validatePageSlugCreate(ctx context.Context, slug string) string {
+	return ValidateSlugWithChecker(slug, func() (int64, error) {
+		return h.queries.SlugExists(ctx, slug)
+	})
+}
+
 // validatePageSlugUpdate validates the page slug for update (checks uniqueness excluding current page).
 func (h *PagesHandler) validatePageSlugUpdate(ctx context.Context, slug string, currentSlug string, pageID int64) string {
-	if slug == "" {
-		return "Slug is required"
-	}
-	if !util.IsValidSlug(slug) {
-		return "Invalid slug format (use lowercase letters, numbers, and hyphens)"
-	}
-	if slug != currentSlug {
-		exists, err := h.queries.SlugExistsExcluding(ctx, store.SlugExistsExcludingParams{
+	return ValidateSlugForUpdate(slug, currentSlug, func() (int64, error) {
+		return h.queries.SlugExistsExcluding(ctx, store.SlugExistsExcludingParams{
 			Slug: slug,
 			ID:   pageID,
 		})
-		if err != nil {
-			slog.Error("database error checking slug", "error", err)
-			return "Error checking slug"
-		}
-		if exists != 0 {
-			return "Slug already exists"
-		}
-	}
-	return ""
+	})
 }

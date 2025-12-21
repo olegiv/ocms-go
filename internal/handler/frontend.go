@@ -854,8 +854,7 @@ func (h *FrontendHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		h.logger.Error("failed to generate sitemap", "error", err)
-		http.Error(w, "Failed to generate sitemap", http.StatusInternalServerError)
+		logAndHTTPError(w, "Failed to generate sitemap", http.StatusInternalServerError, "failed to generate sitemap", "error", err)
 		return
 	}
 
@@ -1558,16 +1557,14 @@ func (h *FrontendHandler) buildPagination(currentPage, totalItems int, baseURL s
 func (h *FrontendHandler) render(w http.ResponseWriter, templateName string, data any) {
 	activeTheme := h.themeManager.GetActiveTheme()
 	if activeTheme == nil {
-		h.logger.Error("no active theme")
-		http.Error(w, "No active theme", http.StatusInternalServerError)
+		logAndHTTPError(w, "No active theme", http.StatusInternalServerError, "no active theme")
 		return
 	}
 
 	// Render to buffer first to catch errors
 	buf := new(bytes.Buffer)
 	if err := activeTheme.RenderPage(buf, templateName, data); err != nil {
-		h.logger.Error("failed to render template", "template", templateName, "error", err)
-		http.Error(w, "Template rendering error", http.StatusInternalServerError)
+		logAndHTTPError(w, "Template rendering error", http.StatusInternalServerError, "failed to render template", "template", templateName, "error", err)
 		return
 	}
 

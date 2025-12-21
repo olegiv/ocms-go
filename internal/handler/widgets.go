@@ -15,6 +15,7 @@ import (
 	"ocms-go/internal/render"
 	"ocms-go/internal/store"
 	"ocms-go/internal/theme"
+	"ocms-go/internal/util"
 )
 
 // WidgetsHandler handles widget management routes.
@@ -75,8 +76,7 @@ func (h *WidgetsHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Get active theme
 	activeTheme := h.themeManager.GetActiveTheme()
 	if activeTheme == nil {
-		h.renderer.SetFlash(r, "No active theme found", "error")
-		http.Redirect(w, r, "/admin", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin", "No active theme found")
 		return
 	}
 
@@ -158,9 +158,9 @@ func (h *WidgetsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Theme:      req.Theme,
 		Area:       req.Area,
 		WidgetType: req.WidgetType,
-		Title:      sql.NullString{String: req.Title, Valid: req.Title != ""},
-		Content:    sql.NullString{String: req.Content, Valid: req.Content != ""},
-		Settings:   sql.NullString{String: req.Settings, Valid: req.Settings != ""},
+		Title:      util.NullStringFromValue(req.Title),
+		Content:    util.NullStringFromValue(req.Content),
+		Settings:   util.NullStringFromValue(req.Settings),
 		Position:   maxPos + 1,
 		IsActive:   1,
 	})
@@ -211,9 +211,9 @@ func (h *WidgetsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	updatedWidget, err := h.queries.UpdateWidget(r.Context(), store.UpdateWidgetParams{
 		ID:         id,
 		WidgetType: req.WidgetType,
-		Title:      sql.NullString{String: req.Title, Valid: req.Title != ""},
-		Content:    sql.NullString{String: req.Content, Valid: req.Content != ""},
-		Settings:   sql.NullString{String: req.Settings, Valid: req.Settings != ""},
+		Title:      util.NullStringFromValue(req.Title),
+		Content:    util.NullStringFromValue(req.Content),
+		Settings:   util.NullStringFromValue(req.Settings),
 		Position:   widget.Position,
 		IsActive:   isActive,
 	})

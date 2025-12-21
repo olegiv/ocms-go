@@ -60,8 +60,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	lang := middleware.GetAdminLang(r)
 
 	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, i18n.T(lang, "auth.invalid_form_data"), "error")
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/login", i18n.T(lang, "auth.invalid_form_data"))
 		return
 	}
 
@@ -70,8 +69,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	// Validate input
 	if email == "" || password == "" {
-		h.renderer.SetFlash(r, i18n.T(lang, "auth.email_password_required"), "error")
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/login", i18n.T(lang, "auth.email_password_required"))
 		return
 	}
 
@@ -85,8 +83,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		result, err := h.hookRegistry.Call(r.Context(), hcaptcha.HookAuthBeforeLogin, verifyReq)
 		if err != nil {
 			slog.Error("captcha hook error", "error", err)
-			h.renderer.SetFlash(r, i18n.T(lang, "hcaptcha.error_verification"), "error")
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			flashError(w, r, h.renderer, "/login", i18n.T(lang, "hcaptcha.error_verification"))
 			return
 		}
 
@@ -95,8 +92,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			if errorMsg == req.ErrorCode {
 				errorMsg = req.Error
 			}
-			h.renderer.SetFlash(r, errorMsg, "error")
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			flashError(w, r, h.renderer, "/login", errorMsg)
 			return
 		}
 	}
@@ -105,8 +101,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if h.loginProtection != nil {
 		if locked, remaining := h.loginProtection.IsAccountLocked(email); locked {
 			_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login attempt on locked account", nil, map[string]any{"email": email})
-			h.renderer.SetFlash(r, i18n.T(lang, "auth.account_locked", formatDuration(remaining)), "error")
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			flashError(w, r, h.renderer, "/login", i18n.T(lang, "auth.account_locked", formatDuration(remaining)))
 			return
 		}
 	}
@@ -123,19 +118,16 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		// Record failed attempt even for non-existent users to prevent enumeration
 		if h.loginProtection != nil {
 			if locked, lockDuration := h.loginProtection.RecordFailedAttempt(email); locked {
-				h.renderer.SetFlash(r, i18n.T(lang, "auth.too_many_attempts", formatDuration(lockDuration)), "error")
-				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				flashError(w, r, h.renderer, "/login", i18n.T(lang, "auth.too_many_attempts", formatDuration(lockDuration)))
 				return
 			}
 			remaining := h.loginProtection.GetRemainingAttempts(email)
 			if remaining <= 3 && remaining > 0 {
-				h.renderer.SetFlash(r, i18n.T(lang, "auth.attempts_remaining", remaining), "error")
-				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				flashError(w, r, h.renderer, "/login", i18n.T(lang, "auth.attempts_remaining", remaining))
 				return
 			}
 		}
-		h.renderer.SetFlash(r, i18n.T(lang, "auth.invalid_credentials"), "error")
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/login", i18n.T(lang, "auth.invalid_credentials"))
 		return
 	}
 
@@ -143,8 +135,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	valid, err := auth.CheckPassword(password, user.PasswordHash)
 	if err != nil {
 		slog.Error("password check error", "error", err)
-		h.renderer.SetFlash(r, i18n.T(lang, "auth.invalid_credentials"), "error")
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/login", i18n.T(lang, "auth.invalid_credentials"))
 		return
 	}
 
@@ -155,19 +146,16 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		if h.loginProtection != nil {
 			if locked, lockDuration := h.loginProtection.RecordFailedAttempt(email); locked {
 				_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Account locked due to failed attempts", &user.ID, map[string]any{"email": email, "duration": lockDuration.String()})
-				h.renderer.SetFlash(r, i18n.T(lang, "auth.too_many_attempts", formatDuration(lockDuration)), "error")
-				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				flashError(w, r, h.renderer, "/login", i18n.T(lang, "auth.too_many_attempts", formatDuration(lockDuration)))
 				return
 			}
 			remaining := h.loginProtection.GetRemainingAttempts(email)
 			if remaining <= 3 && remaining > 0 {
-				h.renderer.SetFlash(r, i18n.T(lang, "auth.attempts_remaining", remaining), "error")
-				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				flashError(w, r, h.renderer, "/login", i18n.T(lang, "auth.attempts_remaining", remaining))
 				return
 			}
 		}
-		h.renderer.SetFlash(r, i18n.T(lang, "auth.invalid_credentials"), "error")
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/login", i18n.T(lang, "auth.invalid_credentials"))
 		return
 	}
 
@@ -187,8 +175,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	// Regenerate session ID to prevent session fixation
 	if err := h.sessionManager.RenewToken(r.Context()); err != nil {
-		slog.Error("session renewal error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		logAndInternalError(w, "session renewal error", "error", err)
 		return
 	}
 
@@ -226,8 +213,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	slog.Info("user logged out", "user_id", userID)
 
 	lang := middleware.GetAdminLang(r)
-	h.renderer.SetFlash(r, i18n.T(lang, "auth.logged_out"), "info")
-	http.Redirect(w, r, "/login", http.StatusSeeOther)
+	flashAndRedirect(w, r, h.renderer, "/login", i18n.T(lang, "auth.logged_out"), "info")
 }
 
 // formatDuration formats a duration into a human-readable string.

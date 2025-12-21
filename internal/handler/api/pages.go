@@ -17,6 +17,7 @@ import (
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/model"
 	"ocms-go/internal/store"
+	"ocms-go/internal/util"
 )
 
 // PageResponse represents a page in API responses.
@@ -432,13 +433,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check slug uniqueness
-	exists, err := h.queries.SlugExists(ctx, req.Slug)
-	if err != nil {
-		WriteInternalError(w, "Failed to check slug")
-		return
-	}
-	if exists == 1 {
-		WriteValidationError(w, map[string]string{"slug": "Slug already exists"})
+	if !h.checkPageSlugUnique(w, ctx, req.Slug) {
 		return
 	}
 
@@ -463,10 +458,10 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.FeaturedImageID != nil {
-		params.FeaturedImageID = sql.NullInt64{Int64: *req.FeaturedImageID, Valid: true}
+		params.FeaturedImageID = util.NullInt64FromPtr(req.FeaturedImageID)
 	}
 	if req.OGImageID != nil {
-		params.OgImageID = sql.NullInt64{Int64: *req.OGImageID, Valid: true}
+		params.OgImageID = util.NullInt64FromPtr(req.OGImageID)
 	}
 	if req.ScheduledAt != nil && *req.ScheduledAt != "" {
 		t, parseErr := time.Parse(time.RFC3339, *req.ScheduledAt)
@@ -583,16 +578,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Slug != nil {
 		// Check slug uniqueness
-		exists, err := h.queries.SlugExistsExcluding(ctx, store.SlugExistsExcludingParams{
-			Slug: *req.Slug,
-			ID:   existing.ID,
-		})
-		if err != nil {
-			WriteInternalError(w, "Failed to check slug")
-			return
-		}
-		if exists == 1 {
-			WriteValidationError(w, map[string]string{"slug": "Slug already exists"})
+		if !h.checkPageSlugUniqueExcluding(w, ctx, *req.Slug, existing.ID) {
 			return
 		}
 		params.Slug = *req.Slug
@@ -608,10 +594,10 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		params.Status = *req.Status
 	}
 	if req.FeaturedImageID != nil {
-		params.FeaturedImageID = sql.NullInt64{Int64: *req.FeaturedImageID, Valid: true}
+		params.FeaturedImageID = util.NullInt64FromPtr(req.FeaturedImageID)
 	}
 	if req.OGImageID != nil {
-		params.OgImageID = sql.NullInt64{Int64: *req.OGImageID, Valid: true}
+		params.OgImageID = util.NullInt64FromPtr(req.OGImageID)
 	}
 	if req.MetaTitle != nil {
 		params.MetaTitle = *req.MetaTitle
@@ -800,4 +786,37 @@ func (h *Handler) requirePageForAPI(w http.ResponseWriter, r *http.Request) (sto
 		return store.Page{}, false
 	}
 	return page, true
+}
+
+// checkPageSlugUnique checks if a page slug is unique for creation.
+// Returns true if unique, false if duplicate or error (response already written).
+func (h *Handler) checkPageSlugUnique(w http.ResponseWriter, ctx context.Context, slug string) bool {
+	exists, err := h.queries.SlugExists(ctx, slug)
+	if err != nil {
+		WriteInternalError(w, "Failed to check slug")
+		return false
+	}
+	if exists != 0 {
+		WriteValidationError(w, map[string]string{"slug": "Slug already exists"})
+		return false
+	}
+	return true
+}
+
+// checkPageSlugUniqueExcluding checks if a page slug is unique for update (excluding current page).
+// Returns true if unique, false if duplicate or error (response already written).
+func (h *Handler) checkPageSlugUniqueExcluding(w http.ResponseWriter, ctx context.Context, slug string, pageID int64) bool {
+	exists, err := h.queries.SlugExistsExcluding(ctx, store.SlugExistsExcludingParams{
+		Slug: slug,
+		ID:   pageID,
+	})
+	if err != nil {
+		WriteInternalError(w, "Failed to check slug")
+		return false
+	}
+	if exists != 0 {
+		WriteValidationError(w, map[string]string{"slug": "Slug already exists"})
+		return false
+	}
+	return true
 }

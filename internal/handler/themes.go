@@ -74,31 +74,26 @@ func (h *ThemesHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Activate handles POST /admin/themes/activate - activates a theme.
 func (h *ThemesHandler) Activate(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, "/admin/themes", http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, "/admin/themes") {
 		return
 	}
 
 	themeName := r.FormValue("theme")
 	if themeName == "" {
-		h.renderer.SetFlash(r, "Theme name is required", "error")
-		http.Redirect(w, r, "/admin/themes", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/themes", "Theme name is required")
 		return
 	}
 
 	// Check if theme exists
 	if !h.themeManager.HasTheme(themeName) {
-		h.renderer.SetFlash(r, "Theme not found", "error")
-		http.Redirect(w, r, "/admin/themes", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/themes", "Theme not found")
 		return
 	}
 
 	// Activate the theme in manager
 	if err := h.themeManager.SetActiveTheme(themeName); err != nil {
 		slog.Error("failed to activate theme", "theme", themeName, "error", err)
-		h.renderer.SetFlash(r, "Failed to activate theme", "error")
-		http.Redirect(w, r, "/admin/themes", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/themes", "Failed to activate theme")
 		return
 	}
 
@@ -126,8 +121,7 @@ func (h *ThemesHandler) Activate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("theme activated", "theme", themeName, "activated_by", middleware.GetUserID(r))
-	h.renderer.SetFlash(r, "Theme activated successfully", "success")
-	http.Redirect(w, r, "/admin/themes", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/themes", "Theme activated successfully")
 }
 
 // Settings handles GET /admin/themes/{name}/settings - displays theme settings form.
@@ -138,8 +132,7 @@ func (h *ThemesHandler) Settings(w http.ResponseWriter, r *http.Request) {
 
 	thm, err := h.themeManager.GetTheme(themeName)
 	if err != nil {
-		h.renderer.SetFlash(r, "Theme not found", "error")
-		http.Redirect(w, r, "/admin/themes", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/themes", "Theme not found")
 		return
 	}
 
@@ -185,14 +178,11 @@ func (h *ThemesHandler) SaveSettings(w http.ResponseWriter, r *http.Request) {
 
 	thm, err := h.themeManager.GetTheme(themeName)
 	if err != nil {
-		h.renderer.SetFlash(r, "Theme not found", "error")
-		http.Redirect(w, r, "/admin/themes", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/themes", "Theme not found")
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, "/admin/themes/"+themeName+"/settings", http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, "/admin/themes/"+themeName+"/settings") {
 		return
 	}
 
@@ -210,8 +200,7 @@ func (h *ThemesHandler) SaveSettings(w http.ResponseWriter, r *http.Request) {
 	settingsJSON, err := json.Marshal(settings)
 	if err != nil {
 		slog.Error("failed to marshal theme settings", "error", err)
-		h.renderer.SetFlash(r, "Error saving settings", "error")
-		http.Redirect(w, r, "/admin/themes/"+themeName+"/settings", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/themes/"+themeName+"/settings", "Error saving settings")
 		return
 	}
 
@@ -230,8 +219,7 @@ func (h *ThemesHandler) SaveSettings(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to save theme settings", "theme", themeName, "error", err)
-		h.renderer.SetFlash(r, "Error saving settings", "error")
-		http.Redirect(w, r, "/admin/themes/"+themeName+"/settings", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/themes/"+themeName+"/settings", "Error saving settings")
 		return
 	}
 
@@ -241,8 +229,7 @@ func (h *ThemesHandler) SaveSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("theme settings saved", "theme", themeName, "saved_by", middleware.GetUserID(r))
-	h.renderer.SetFlash(r, "Theme settings saved successfully", "success")
-	http.Redirect(w, r, "/admin/themes/"+themeName+"/settings", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/themes/"+themeName+"/settings", "Theme settings saved successfully")
 }
 
 // loadThemeSettings loads theme settings from the config table.

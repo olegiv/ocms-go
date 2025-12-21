@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -120,20 +119,10 @@ func (h *TaxonomyHandler) NewTagForm(w http.ResponseWriter, r *http.Request) {
 	lang := middleware.GetAdminLang(r)
 
 	// Load all active languages
-	allLanguages, err := h.queries.ListActiveLanguages(r.Context())
-	if err != nil {
-		slog.Error("failed to list languages", "error", err)
-		allLanguages = []store.Language{}
-	}
+	allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 
 	// Get default language for preselection
-	var defaultLanguage *store.Language
-	for i := range allLanguages {
-		if allLanguages[i].IsDefault {
-			defaultLanguage = &allLanguages[i]
-			break
-		}
-	}
+	defaultLanguage := FindDefaultLanguage(allLanguages)
 
 	data := TagFormData{
 		Errors:       make(map[string]string),
@@ -160,9 +149,7 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, "/admin/tags/new", http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, "/admin/tags/new") {
 		return
 	}
 
@@ -194,7 +181,7 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
 		// Load all active languages for the form
-		allLanguages, _ := h.queries.ListActiveLanguages(r.Context())
+		allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 		var currentLanguage *store.Language
 		if languageID.Valid {
 			langObj, err := h.queries.GetLanguageByID(r.Context(), languageID.Int64)
@@ -235,14 +222,12 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to create tag", "error", err)
-		h.renderer.SetFlash(r, "Error creating tag", "error")
-		http.Redirect(w, r, "/admin/tags/new", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/tags/new", "Error creating tag")
 		return
 	}
 
 	slog.Info("tag created", "tag_id", newTag.ID, "slug", newTag.Slug, "created_by", middleware.GetUserID(r))
-	h.renderer.SetFlash(r, "Tag created successfully", "success")
-	http.Redirect(w, r, "/admin/tags", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/tags", "Tag created successfully")
 }
 
 // EditTagForm handles GET /admin/tags/{id} - displays the edit tag form.
@@ -252,8 +237,7 @@ func (h *TaxonomyHandler) EditTagForm(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid tag ID", "error")
-		http.Redirect(w, r, "/admin/tags", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/tags", "Invalid tag ID")
 		return
 	}
 
@@ -294,8 +278,7 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid tag ID", "error")
-		http.Redirect(w, r, "/admin/tags", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/tags", "Invalid tag ID")
 		return
 	}
 
@@ -304,9 +287,7 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/tags/%d", id), http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf("/admin/tags/%d", id)) {
 		return
 	}
 
@@ -368,14 +349,12 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to update tag", "error", err, "tag_id", id)
-		h.renderer.SetFlash(r, "Error updating tag", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/tags/%d", id), http.StatusSeeOther)
+		flashError(w, r, h.renderer, fmt.Sprintf("/admin/tags/%d", id), "Error updating tag")
 		return
 	}
 
 	slog.Info("tag updated", "tag_id", updatedTag.ID, "slug", updatedTag.Slug, "updated_by", middleware.GetUserID(r))
-	h.renderer.SetFlash(r, "Tag updated successfully", "success")
-	http.Redirect(w, r, "/admin/tags", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/tags", "Tag updated successfully")
 }
 
 // DeleteTag handles DELETE /admin/tags/{id} - deletes a tag.
@@ -408,8 +387,7 @@ func (h *TaxonomyHandler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// For regular requests, redirect
-	h.renderer.SetFlash(r, "Tag deleted successfully", "success")
-	http.Redirect(w, r, "/admin/tags", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/tags", "Tag deleted successfully")
 }
 
 // SearchTags handles GET /admin/tags/search - AJAX search for autocomplete.
@@ -447,16 +425,14 @@ func (h *TaxonomyHandler) SearchTags(w http.ResponseWriter, r *http.Request) {
 func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid tag ID", "error")
-		http.Redirect(w, r, "/admin/tags", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/tags", "Invalid tag ID")
 		return
 	}
 
 	// Get language code from URL
 	langCode := chi.URLParam(r, "langCode")
 	if langCode == "" {
-		h.renderer.SetFlash(r, "Language code is required", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/tags/%d", id), http.StatusSeeOther)
+		flashError(w, r, h.renderer, fmt.Sprintf("/admin/tags/%d", id), "Language code is required")
 		return
 	}
 
@@ -466,15 +442,15 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get target language
+	redirectURL := fmt.Sprintf("/admin/tags/%d", id)
 	targetLang, err := h.queries.GetLanguageByCode(r.Context(), langCode)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Language not found", "error")
+			flashError(w, r, h.renderer, redirectURL, "Language not found")
 		} else {
 			slog.Error("failed to get language", "error", err, "lang_code", langCode)
-			h.renderer.SetFlash(r, "Error loading language", "error")
+			flashError(w, r, h.renderer, redirectURL, "Error loading language")
 		}
-		http.Redirect(w, r, fmt.Sprintf("/admin/tags/%d", id), http.StatusSeeOther)
 		return
 	}
 
@@ -486,8 +462,7 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 	})
 	if err == nil && existingTranslation.ID > 0 {
 		// Translation already exists, redirect to it
-		h.renderer.SetFlash(r, "Translation already exists", "info")
-		http.Redirect(w, r, fmt.Sprintf("/admin/tags/%d", existingTranslation.TranslationID), http.StatusSeeOther)
+		flashAndRedirect(w, r, h.renderer, fmt.Sprintf("/admin/tags/%d", existingTranslation.TranslationID), "Translation already exists", "info")
 		return
 	}
 
@@ -499,8 +474,7 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 		exists, err := h.queries.TagSlugExists(r.Context(), translatedSlug)
 		if err != nil {
 			slog.Error("database error checking slug", "error", err)
-			h.renderer.SetFlash(r, "Error creating translation", "error")
-			http.Redirect(w, r, fmt.Sprintf("/admin/tags/%d", id), http.StatusSeeOther)
+			flashError(w, r, h.renderer, redirectURL, "Error creating translation")
 			return
 		}
 		if exists == 0 {
@@ -515,14 +489,13 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 	translatedTag, err := h.queries.CreateTag(r.Context(), store.CreateTagParams{
 		Name:       sourceTag.Name, // Keep same name (user will translate)
 		Slug:       translatedSlug,
-		LanguageID: sql.NullInt64{Int64: targetLang.ID, Valid: true},
+		LanguageID: util.NullInt64FromValue(targetLang.ID),
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	})
 	if err != nil {
 		slog.Error("failed to create translated tag", "error", err)
-		h.renderer.SetFlash(r, "Error creating translation", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/tags/%d", id), http.StatusSeeOther)
+		flashError(w, r, h.renderer, redirectURL, "Error creating translation")
 		return
 	}
 
@@ -545,8 +518,7 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 		"language", langCode,
 		"created_by", middleware.GetUserID(r))
 
-	h.renderer.SetFlash(r, fmt.Sprintf("Translation created for %s. Please translate the name.", targetLang.Name), "success")
-	http.Redirect(w, r, fmt.Sprintf("/admin/tags/%d", translatedTag.ID), http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/tags/%d", translatedTag.ID), fmt.Sprintf("Translation created for %s. Please translate the name.", targetLang.Name))
 }
 
 // =============================================================================
@@ -616,7 +588,7 @@ func (h *TaxonomyHandler) buildFilteredCategoryTree(ctx context.Context, exclude
 	}
 
 	// Get descendant IDs to exclude
-	descendantIDs, _ := h.queries.GetDescendantIDs(ctx, sql.NullInt64{Int64: excludeID, Valid: true})
+	descendantIDs, _ := h.queries.GetDescendantIDs(ctx, util.NullInt64FromValue(excludeID))
 	excludeIDs := make(map[int64]bool)
 	excludeIDs[excludeID] = true
 	for _, did := range descendantIDs {
@@ -752,20 +724,10 @@ func (h *TaxonomyHandler) NewCategoryForm(w http.ResponseWriter, r *http.Request
 	flatTree := flattenCategoryTree(tree)
 
 	// Load all active languages
-	allLanguages, err := h.queries.ListActiveLanguages(r.Context())
-	if err != nil {
-		slog.Error("failed to list languages", "error", err)
-		allLanguages = []store.Language{}
-	}
+	allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 
 	// Get default language for preselection
-	var defaultLanguage *store.Language
-	for i := range allLanguages {
-		if allLanguages[i].IsDefault {
-			defaultLanguage = &allLanguages[i]
-			break
-		}
-	}
+	defaultLanguage := FindDefaultLanguage(allLanguages)
 
 	data := CategoryFormData{
 		AllCategories: flatTree,
@@ -793,9 +755,7 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, "/admin/categories/new", http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, "/admin/categories/new") {
 		return
 	}
 
@@ -807,12 +767,7 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 	languageIDStr := r.FormValue("language_id")
 
 	// Parse parent ID
-	var parentID sql.NullInt64
-	if parentIDStr != "" && parentIDStr != "0" {
-		if pid, err := strconv.ParseInt(parentIDStr, 10, 64); err == nil {
-			parentID = sql.NullInt64{Int64: pid, Valid: true}
-		}
-	}
+	parentID := util.ParseNullInt64(parentIDStr)
 
 	languageID := h.parseLanguageIDWithDefault(r.Context(), languageIDStr)
 
@@ -844,7 +799,7 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 		flatTree := flattenCategoryTree(tree)
 
 		// Load all active languages for the form
-		allLanguages, _ := h.queries.ListActiveLanguages(r.Context())
+		allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 		var currentLanguage *store.Language
 		if languageID.Valid {
 			lang, err := h.queries.GetLanguageByID(r.Context(), languageID.Int64)
@@ -880,7 +835,7 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 	newCategory, err := h.queries.CreateCategory(r.Context(), store.CreateCategoryParams{
 		Name:        name,
 		Slug:        slug,
-		Description: sql.NullString{String: description, Valid: description != ""},
+		Description: util.NullStringFromValue(description),
 		ParentID:    parentID,
 		Position:    0,
 		LanguageID:  languageID,
@@ -889,14 +844,12 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 	})
 	if err != nil {
 		slog.Error("failed to create category", "error", err)
-		h.renderer.SetFlash(r, "Error creating category", "error")
-		http.Redirect(w, r, "/admin/categories/new", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/categories/new", "Error creating category")
 		return
 	}
 
 	slog.Info("category created", "category_id", newCategory.ID, "slug", newCategory.Slug, "created_by", middleware.GetUserID(r))
-	h.renderer.SetFlash(r, "Category created successfully", "success")
-	http.Redirect(w, r, "/admin/categories", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/categories", "Category created successfully")
 }
 
 // EditCategoryForm handles GET /admin/categories/{id} - displays the edit category form.
@@ -906,8 +859,7 @@ func (h *TaxonomyHandler) EditCategoryForm(w http.ResponseWriter, r *http.Reques
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid category ID", "error")
-		http.Redirect(w, r, "/admin/categories", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/categories", "Invalid category ID")
 		return
 	}
 
@@ -951,8 +903,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid category ID", "error")
-		http.Redirect(w, r, "/admin/categories", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/categories", "Invalid category ID")
 		return
 	}
 
@@ -961,9 +912,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/categories/%d", id), http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf("/admin/categories/%d", id)) {
 		return
 	}
 
@@ -974,12 +923,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 	parentIDStr := r.FormValue("parent_id")
 
 	// Parse parent ID
-	var parentID sql.NullInt64
-	if parentIDStr != "" && parentIDStr != "0" {
-		if pid, err := strconv.ParseInt(parentIDStr, 10, 64); err == nil {
-			parentID = sql.NullInt64{Int64: pid, Valid: true}
-		}
-	}
+	parentID := util.ParseNullInt64(parentIDStr)
 
 	// Store form values for re-rendering on error
 	formValues := map[string]string{
@@ -1006,7 +950,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 			validationErrors["parent_id"] = "Category cannot be its own parent"
 		} else {
 			// Check if parent is a descendant
-			descendantIDs, _ := h.queries.GetDescendantIDs(r.Context(), sql.NullInt64{Int64: id, Valid: true})
+			descendantIDs, _ := h.queries.GetDescendantIDs(r.Context(), util.NullInt64FromValue(id))
 			for _, did := range descendantIDs {
 				if did == parentID.Int64 {
 					validationErrors["parent_id"] = "Cannot set a descendant as parent (circular reference)"
@@ -1050,7 +994,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 		ID:          id,
 		Name:        name,
 		Slug:        slug,
-		Description: sql.NullString{String: description, Valid: description != ""},
+		Description: util.NullStringFromValue(description),
 		ParentID:    parentID,
 		Position:    existingCategory.Position,
 		LanguageID:  existingCategory.LanguageID,
@@ -1058,14 +1002,12 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 	})
 	if err != nil {
 		slog.Error("failed to update category", "error", err, "category_id", id)
-		h.renderer.SetFlash(r, "Error updating category", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/categories/%d", id), http.StatusSeeOther)
+		flashError(w, r, h.renderer, fmt.Sprintf("/admin/categories/%d", id), "Error updating category")
 		return
 	}
 
 	slog.Info("category updated", "category_id", updatedCategory.ID, "slug", updatedCategory.Slug, "updated_by", middleware.GetUserID(r))
-	h.renderer.SetFlash(r, "Category updated successfully", "success")
-	http.Redirect(w, r, "/admin/categories", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/categories", "Category updated successfully")
 }
 
 // DeleteCategory handles DELETE /admin/categories/{id} - deletes a category.
@@ -1098,24 +1040,22 @@ func (h *TaxonomyHandler) DeleteCategory(w http.ResponseWriter, r *http.Request)
 	}
 
 	// For regular requests, redirect
-	h.renderer.SetFlash(r, "Category deleted successfully", "success")
-	http.Redirect(w, r, "/admin/categories", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/categories", "Category deleted successfully")
 }
 
 // TranslateCategory handles POST /admin/categories/{id}/translate/{langCode} - creates a translation.
 func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid category ID", "error")
-		http.Redirect(w, r, "/admin/categories", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/categories", "Invalid category ID")
 		return
 	}
 
 	// Get language code from URL
 	langCode := chi.URLParam(r, "langCode")
+	redirectURL := fmt.Sprintf("/admin/categories/%d", id)
 	if langCode == "" {
-		h.renderer.SetFlash(r, "Language code is required", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/categories/%d", id), http.StatusSeeOther)
+		flashError(w, r, h.renderer, redirectURL, "Language code is required")
 		return
 	}
 
@@ -1128,12 +1068,11 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 	targetLang, err := h.queries.GetLanguageByCode(r.Context(), langCode)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Language not found", "error")
+			flashError(w, r, h.renderer, redirectURL, "Language not found")
 		} else {
 			slog.Error("failed to get language", "error", err, "lang_code", langCode)
-			h.renderer.SetFlash(r, "Error loading language", "error")
+			flashError(w, r, h.renderer, redirectURL, "Error loading language")
 		}
-		http.Redirect(w, r, fmt.Sprintf("/admin/categories/%d", id), http.StatusSeeOther)
 		return
 	}
 
@@ -1145,8 +1084,7 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 	})
 	if err == nil && existingTranslation.ID > 0 {
 		// Translation already exists, redirect to it
-		h.renderer.SetFlash(r, "Translation already exists", "info")
-		http.Redirect(w, r, fmt.Sprintf("/admin/categories/%d", existingTranslation.TranslationID), http.StatusSeeOther)
+		flashAndRedirect(w, r, h.renderer, fmt.Sprintf("/admin/categories/%d", existingTranslation.TranslationID), "Translation already exists", "info")
 		return
 	}
 
@@ -1158,8 +1096,7 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 		exists, err := h.queries.CategorySlugExists(r.Context(), translatedSlug)
 		if err != nil {
 			slog.Error("database error checking slug", "error", err)
-			h.renderer.SetFlash(r, "Error creating translation", "error")
-			http.Redirect(w, r, fmt.Sprintf("/admin/categories/%d", id), http.StatusSeeOther)
+			flashError(w, r, h.renderer, redirectURL, "Error creating translation")
 			return
 		}
 		if exists == 0 {
@@ -1177,14 +1114,13 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 		Description: sourceCategory.Description,
 		ParentID:    sql.NullInt64{}, // No parent by default for translations
 		Position:    0,
-		LanguageID:  sql.NullInt64{Int64: targetLang.ID, Valid: true},
+		LanguageID:  util.NullInt64FromValue(targetLang.ID),
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	})
 	if err != nil {
 		slog.Error("failed to create translated category", "error", err)
-		h.renderer.SetFlash(r, "Error creating translation", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/categories/%d", id), http.StatusSeeOther)
+		flashError(w, r, h.renderer, redirectURL, "Error creating translation")
 		return
 	}
 
@@ -1207,8 +1143,7 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 		"language", langCode,
 		"created_by", middleware.GetUserID(r))
 
-	h.renderer.SetFlash(r, fmt.Sprintf("Translation created for %s. Please translate the name.", targetLang.Name), "success")
-	http.Redirect(w, r, fmt.Sprintf("/admin/categories/%d", translatedCategory.ID), http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/categories/%d", translatedCategory.ID), fmt.Sprintf("Translation created for %s. Please translate the name.", targetLang.Name))
 }
 
 // =============================================================================
@@ -1221,12 +1156,11 @@ func (h *TaxonomyHandler) requireTagWithRedirect(w http.ResponseWriter, r *http.
 	tag, err := h.queries.GetTagByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Tag not found", "error")
+			flashError(w, r, h.renderer, "/admin/tags", "Tag not found")
 		} else {
 			slog.Error("failed to get tag", "error", err, "tag_id", id)
-			h.renderer.SetFlash(r, "Error loading tag", "error")
+			flashError(w, r, h.renderer, "/admin/tags", "Error loading tag")
 		}
-		http.Redirect(w, r, "/admin/tags", http.StatusSeeOther)
 		return store.Tag{}, false
 	}
 	return tag, true
@@ -1254,12 +1188,11 @@ func (h *TaxonomyHandler) requireCategoryWithRedirect(w http.ResponseWriter, r *
 	category, err := h.queries.GetCategoryByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Category not found", "error")
+			flashError(w, r, h.renderer, "/admin/categories", "Category not found")
 		} else {
 			slog.Error("failed to get category", "error", err, "category_id", id)
-			h.renderer.SetFlash(r, "Error loading category", "error")
+			flashError(w, r, h.renderer, "/admin/categories", "Error loading category")
 		}
-		http.Redirect(w, r, "/admin/categories", http.StatusSeeOther)
 		return store.Category{}, false
 	}
 	return category, true
@@ -1283,18 +1216,13 @@ func (h *TaxonomyHandler) requireCategoryWithError(w http.ResponseWriter, r *htt
 
 // parseLanguageIDWithDefault parses language ID from string and falls back to default language.
 func (h *TaxonomyHandler) parseLanguageIDWithDefault(ctx context.Context, languageIDStr string) sql.NullInt64 {
-	var languageID sql.NullInt64
-	if languageIDStr != "" && languageIDStr != "0" {
-		if lid, err := strconv.ParseInt(languageIDStr, 10, 64); err == nil {
-			languageID = sql.NullInt64{Int64: lid, Valid: true}
-		}
-	}
+	languageID := util.ParseNullInt64(languageIDStr)
 
 	// If no language specified, use default
 	if !languageID.Valid {
 		defaultLang, err := h.queries.GetDefaultLanguage(ctx)
 		if err == nil {
-			languageID = sql.NullInt64{Int64: defaultLang.ID, Valid: true}
+			languageID = util.NullInt64FromValue(defaultLang.ID)
 		}
 	}
 
@@ -1321,41 +1249,16 @@ func validateTaxonomyName(name string) string {
 	return ""
 }
 
-// slugExistsFunc is a function type for checking if a slug exists.
-type slugExistsFunc func() (int64, error)
-
-// validateSlugWithChecker validates a slug using a custom existence checker.
-func validateSlugWithChecker(slug string, checkExists slugExistsFunc) string {
-	if slug == "" {
-		return "Slug is required"
-	}
-	if !util.IsValidSlug(slug) {
-		return "Invalid slug format (use lowercase letters, numbers, and hyphens)"
-	}
-	exists, err := checkExists()
-	if err != nil {
-		slog.Error("database error checking slug", "error", err)
-		return "Error checking slug"
-	}
-	if exists != 0 {
-		return "Slug already exists"
-	}
-	return ""
-}
-
 // validateTagSlugCreate validates a tag slug for creation.
 func (h *TaxonomyHandler) validateTagSlugCreate(ctx context.Context, slug string) string {
-	return validateSlugWithChecker(slug, func() (int64, error) {
+	return ValidateSlugWithChecker(slug, func() (int64, error) {
 		return h.queries.TagSlugExists(ctx, slug)
 	})
 }
 
 // validateTagSlugUpdate validates a tag slug for update.
 func (h *TaxonomyHandler) validateTagSlugUpdate(ctx context.Context, slug, currentSlug string, tagID int64) string {
-	if slug == currentSlug {
-		return "" // No change, no validation needed
-	}
-	return validateSlugWithChecker(slug, func() (int64, error) {
+	return ValidateSlugForUpdate(slug, currentSlug, func() (int64, error) {
 		return h.queries.TagSlugExistsExcluding(ctx, store.TagSlugExistsExcludingParams{
 			Slug: slug,
 			ID:   tagID,
@@ -1365,17 +1268,14 @@ func (h *TaxonomyHandler) validateTagSlugUpdate(ctx context.Context, slug, curre
 
 // validateCategorySlugCreate validates a category slug for creation.
 func (h *TaxonomyHandler) validateCategorySlugCreate(ctx context.Context, slug string) string {
-	return validateSlugWithChecker(slug, func() (int64, error) {
+	return ValidateSlugWithChecker(slug, func() (int64, error) {
 		return h.queries.CategorySlugExists(ctx, slug)
 	})
 }
 
 // validateCategorySlugUpdate validates a category slug for update.
 func (h *TaxonomyHandler) validateCategorySlugUpdate(ctx context.Context, slug, currentSlug string, categoryID int64) string {
-	if slug == currentSlug {
-		return "" // No change, no validation needed
-	}
-	return validateSlugWithChecker(slug, func() (int64, error) {
+	return ValidateSlugForUpdate(slug, currentSlug, func() (int64, error) {
 		return h.queries.CategorySlugExistsExcluding(ctx, store.CategorySlugExistsExcludingParams{
 			Slug: slug,
 			ID:   categoryID,
@@ -1401,11 +1301,7 @@ func (h *TaxonomyHandler) loadTranslationBaseInfo(ctx context.Context, entityTyp
 	}
 
 	// Load all active languages
-	allLanguages, err := h.queries.ListActiveLanguages(ctx)
-	if err != nil {
-		slog.Error("failed to list languages", "error", err)
-		allLanguages = []store.Language{}
-	}
+	allLanguages := ListActiveLanguagesWithFallback(ctx, h.queries)
 	info.AllLanguages = allLanguages
 
 	// Build language lookup map
@@ -1534,7 +1430,7 @@ func (h *TaxonomyHandler) SearchCategories(w http.ResponseWriter, r *http.Reques
 		categories, err = h.queries.ListCategories(r.Context())
 	} else {
 		// Search categories by name
-		categories, err = h.queries.SearchCategories(r.Context(), sql.NullString{String: query, Valid: true})
+		categories, err = h.queries.SearchCategories(r.Context(), util.NullStringFromValue(query))
 	}
 
 	if err != nil {

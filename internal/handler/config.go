@@ -59,8 +59,7 @@ func (h *ConfigHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Get all config items
 	configs, err := h.queries.ListConfig(r.Context())
 	if err != nil {
-		slog.Error("failed to list config", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		logAndInternalError(w, "failed to list config", "error", err)
 		return
 	}
 
@@ -77,9 +76,7 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, i18n.T(lang, "error.invalid_form"), "error")
-		http.Redirect(w, r, "/admin/config", http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, "/admin/config") {
 		return
 	}
 
@@ -87,8 +84,7 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 	configs, err := h.queries.ListConfig(r.Context())
 	if err != nil {
 		slog.Error("failed to list config", "error", err)
-		h.renderer.SetFlash(r, i18n.T(lang, "error.loading_config"), "error")
-		http.Redirect(w, r, "/admin/config", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/config", i18n.T(lang, "error.loading_config"))
 		return
 	}
 
@@ -158,8 +154,7 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("config updated", "updated_by", middleware.GetUserID(r))
-	h.renderer.SetFlash(r, i18n.T(lang, "msg.config_saved"), "success")
-	http.Redirect(w, r, "/admin/config", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/config", i18n.T(lang, "msg.config_saved"))
 }
 
 // configKeyToLabel converts a config key to a translated label.

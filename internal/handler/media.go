@@ -20,6 +20,7 @@ import (
 	"ocms-go/internal/render"
 	"ocms-go/internal/service"
 	"ocms-go/internal/store"
+	"ocms-go/internal/util"
 	"ocms-go/internal/webhook"
 )
 
@@ -128,8 +129,7 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 	// Get total count
 	totalCount, err := h.queries.CountMedia(r.Context())
 	if err != nil {
-		slog.Error("failed to count media", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		logAndInternalError(w, "failed to count media", "error", err)
 		return
 	}
 
@@ -143,7 +143,7 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 	if search != "" {
 		mediaList, err = h.queries.SearchMedia(r.Context(), store.SearchMediaParams{
 			Filename: "%" + search + "%",
-			Alt:      sql.NullString{String: "%" + search + "%", Valid: true},
+			Alt:      util.NullStringFromValue("%" + search + "%"),
 			Limit:    MediaPerPage,
 		})
 	} else if filter != "all" {
@@ -165,7 +165,7 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 		})
 	} else if folderID != nil {
 		mediaList, err = h.queries.ListMediaInFolder(r.Context(), store.ListMediaInFolderParams{
-			FolderID: sql.NullInt64{Int64: *folderID, Valid: true},
+			FolderID: util.NullInt64FromPtr(folderID),
 			Limit:    MediaPerPage,
 			Offset:   offset,
 		})
@@ -176,8 +176,7 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	if err != nil {
-		slog.Error("failed to list media", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		logAndInternalError(w, "failed to list media", "error", err)
 		return
 	}
 
@@ -270,8 +269,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte("File too large or invalid form"))
 			return
 		}
-		h.renderer.SetFlash(r, "Error parsing upload", "error")
-		http.Redirect(w, r, "/admin/media/upload", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/media/upload", "Error parsing upload")
 		return
 	}
 
@@ -295,8 +293,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 				_, _ = w.Write([]byte("No file uploaded"))
 				return
 			}
-			h.renderer.SetFlash(r, "No file uploaded", "error")
-			http.Redirect(w, r, "/admin/media/upload", http.StatusSeeOther)
+			flashError(w, r, h.renderer, "/admin/media/upload", "No file uploaded")
 			return
 		}
 		defer func() { _ = file.Close() }()
@@ -310,8 +307,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 				_, _ = w.Write([]byte(err.Error()))
 				return
 			}
-			h.renderer.SetFlash(r, "Upload failed: "+err.Error(), "error")
-			http.Redirect(w, r, "/admin/media/upload", http.StatusSeeOther)
+			flashError(w, r, h.renderer, "/admin/media/upload", "Upload failed: "+err.Error())
 			return
 		}
 
@@ -327,8 +323,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		h.renderer.SetFlash(r, "File uploaded successfully", "success")
-		http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
+		flashSuccess(w, r, h.renderer, "/admin/media", "File uploaded successfully")
 		return
 	}
 
@@ -367,11 +362,10 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if errorCount > 0 {
-		h.renderer.SetFlash(r, fmt.Sprintf("Uploaded %d files, %d failed", uploadedCount, errorCount), "warning")
+		flashAndRedirect(w, r, h.renderer, "/admin/media", fmt.Sprintf("Uploaded %d files, %d failed", uploadedCount, errorCount), "warning")
 	} else {
-		h.renderer.SetFlash(r, fmt.Sprintf("Uploaded %d files successfully", uploadedCount), "success")
+		flashSuccess(w, r, h.renderer, "/admin/media", fmt.Sprintf("Uploaded %d files successfully", uploadedCount))
 	}
-	http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
 }
 
 // MediaEditData holds data for the media edit template.
@@ -390,8 +384,7 @@ func (h *MediaHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid media ID", "error")
-		http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/media", "Invalid media ID")
 		return
 	}
 
@@ -449,8 +442,7 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		h.renderer.SetFlash(r, "Invalid media ID", "error")
-		http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
+		flashError(w, r, h.renderer, "/admin/media", "Invalid media ID")
 		return
 	}
 
@@ -459,9 +451,7 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
-		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/media/%d", id), http.StatusSeeOther)
+	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf("/admin/media/%d", id)) {
 		return
 	}
 
@@ -472,12 +462,7 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 	folderIDStr := r.FormValue("folder_id")
 
 	// Parse folder ID
-	var folderID sql.NullInt64
-	if folderIDStr != "" && folderIDStr != "0" {
-		if fid, err := strconv.ParseInt(folderIDStr, 10, 64); err == nil {
-			folderID = sql.NullInt64{Int64: fid, Valid: true}
-		}
-	}
+	folderID := util.ParseNullInt64(folderIDStr)
 
 	// Validate
 	validationErrors := make(map[string]string)
@@ -529,21 +514,19 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 	_, err = h.queries.UpdateMedia(r.Context(), store.UpdateMediaParams{
 		ID:        id,
 		Filename:  filename,
-		Alt:       sql.NullString{String: alt, Valid: alt != ""},
-		Caption:   sql.NullString{String: caption, Valid: caption != ""},
+		Alt:       util.NullStringFromValue(alt),
+		Caption:   util.NullStringFromValue(caption),
 		FolderID:  folderID,
 		UpdatedAt: now,
 	})
 	if err != nil {
 		slog.Error("failed to update media", "error", err, "media_id", id)
-		h.renderer.SetFlash(r, "Error updating media", "error")
-		http.Redirect(w, r, fmt.Sprintf("/admin/media/%d", id), http.StatusSeeOther)
+		flashError(w, r, h.renderer, fmt.Sprintf("/admin/media/%d", id), "Error updating media")
 		return
 	}
 
 	slog.Info("media updated", "media_id", id, "updated_by", middleware.GetUserID(r))
-	h.renderer.SetFlash(r, "Media updated successfully", "success")
-	http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/media", "Media updated successfully")
 }
 
 // Delete handles DELETE /admin/media/{id} - deletes media and files.
@@ -579,8 +562,7 @@ func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// For regular requests, redirect
-	h.renderer.SetFlash(r, "Media deleted successfully", "success")
-	http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/media", "Media deleted successfully")
 }
 
 // CreateFolder handles POST /admin/media/folders - creates a new folder.
@@ -597,13 +579,8 @@ func (h *MediaHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse parent ID
-	var parentID sql.NullInt64
 	parentIDStr := r.FormValue("parent_id")
-	if parentIDStr != "" && parentIDStr != "0" {
-		if pid, err := strconv.ParseInt(parentIDStr, 10, 64); err == nil {
-			parentID = sql.NullInt64{Int64: pid, Valid: true}
-		}
-	}
+	parentID := util.ParseNullInt64(parentIDStr)
 
 	// Get position (count of siblings + 1)
 	var position int64
@@ -623,8 +600,7 @@ func (h *MediaHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: time.Now(),
 	})
 	if err != nil {
-		slog.Error("failed to create folder", "error", err)
-		http.Error(w, "Error creating folder", http.StatusInternalServerError)
+		logAndHTTPError(w, "Error creating folder", http.StatusInternalServerError, "failed to create folder", "error", err)
 		return
 	}
 
@@ -646,8 +622,7 @@ func (h *MediaHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.renderer.SetFlash(r, "Folder created successfully", "success")
-	http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/media", "Folder created successfully")
 }
 
 // UpdateFolder handles PUT /admin/media/folders/{id} - renames or moves a folder.
@@ -678,14 +653,14 @@ func (h *MediaHandler) UpdateFolder(w http.ResponseWriter, r *http.Request) {
 	parentID := folder.ParentID
 	if parentIDStr := r.FormValue("parent_id"); parentIDStr != "" {
 		if parentIDStr == "0" {
-			parentID = sql.NullInt64{Valid: false}
+			parentID = sql.NullInt64{}
 		} else if pid, err := strconv.ParseInt(parentIDStr, 10, 64); err == nil {
 			// Prevent setting parent to self
 			if pid == id {
 				http.Error(w, "Cannot move folder into itself", http.StatusBadRequest)
 				return
 			}
-			parentID = sql.NullInt64{Int64: pid, Valid: true}
+			parentID = util.NullInt64FromValue(pid)
 		}
 	}
 
@@ -705,8 +680,7 @@ func (h *MediaHandler) UpdateFolder(w http.ResponseWriter, r *http.Request) {
 		Position: position,
 	})
 	if err != nil {
-		slog.Error("failed to update folder", "error", err, "folder_id", id)
-		http.Error(w, "Error updating folder", http.StatusInternalServerError)
+		logAndHTTPError(w, "Error updating folder", http.StatusInternalServerError, "failed to update folder", "error", err, "folder_id", id)
 		return
 	}
 
@@ -720,8 +694,7 @@ func (h *MediaHandler) UpdateFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.renderer.SetFlash(r, "Folder updated successfully", "success")
-	http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/media", "Folder updated successfully")
 }
 
 // DeleteFolder handles DELETE /admin/media/folders/{id} - deletes a folder.
@@ -738,10 +711,9 @@ func (h *MediaHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check for child folders
-	children, err := h.queries.ListChildMediaFolders(r.Context(), sql.NullInt64{Int64: id, Valid: true})
+	children, err := h.queries.ListChildMediaFolders(r.Context(), util.NullInt64FromValue(id))
 	if err != nil {
-		slog.Error("failed to check child folders", "error", err, "folder_id", id)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		logAndInternalError(w, "failed to check child folders", "error", err, "folder_id", id)
 		return
 	}
 	if len(children) > 0 {
@@ -750,10 +722,9 @@ func (h *MediaHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check for media in folder
-	mediaCount, err := h.queries.CountMediaInFolder(r.Context(), sql.NullInt64{Int64: id, Valid: true})
+	mediaCount, err := h.queries.CountMediaInFolder(r.Context(), util.NullInt64FromValue(id))
 	if err != nil {
-		slog.Error("failed to count media in folder", "error", err, "folder_id", id)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		logAndInternalError(w, "failed to count media in folder", "error", err, "folder_id", id)
 		return
 	}
 	if mediaCount > 0 {
@@ -764,8 +735,7 @@ func (h *MediaHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 	// Delete folder
 	err = h.queries.DeleteMediaFolder(r.Context(), id)
 	if err != nil {
-		slog.Error("failed to delete folder", "error", err, "folder_id", id)
-		http.Error(w, "Error deleting folder", http.StatusInternalServerError)
+		logAndHTTPError(w, "Error deleting folder", http.StatusInternalServerError, "failed to delete folder", "error", err, "folder_id", id)
 		return
 	}
 
@@ -778,8 +748,7 @@ func (h *MediaHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.renderer.SetFlash(r, "Folder deleted successfully", "success")
-	http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/media", "Folder deleted successfully")
 }
 
 // MoveMedia handles POST /admin/media/{id}/move - moves media to a different folder.
@@ -808,7 +777,7 @@ func (h *MediaHandler) MoveMedia(w http.ResponseWriter, r *http.Request) {
 			if _, ok := h.requireFolderWithError(w, r, fid); !ok {
 				return
 			}
-			folderID = sql.NullInt64{Int64: fid, Valid: true}
+			folderID = util.NullInt64FromValue(fid)
 		}
 	}
 
@@ -819,8 +788,7 @@ func (h *MediaHandler) MoveMedia(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt: time.Now(),
 	})
 	if err != nil {
-		slog.Error("failed to move media", "error", err, "media_id", id)
-		http.Error(w, "Error moving media", http.StatusInternalServerError)
+		logAndHTTPError(w, "Error moving media", http.StatusInternalServerError, "failed to move media", "error", err, "media_id", id)
 		return
 	}
 
@@ -833,8 +801,7 @@ func (h *MediaHandler) MoveMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.renderer.SetFlash(r, "Media moved successfully", "success")
-	http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
+	flashSuccess(w, r, h.renderer, "/admin/media", "Media moved successfully")
 }
 
 // API handles GET /admin/media/api - returns media items as JSON for the media picker.
@@ -866,7 +833,7 @@ func (h *MediaHandler) API(w http.ResponseWriter, r *http.Request) {
 	if search != "" {
 		mediaList, err = h.queries.SearchMedia(r.Context(), store.SearchMediaParams{
 			Filename: "%" + search + "%",
-			Alt:      sql.NullString{String: "%" + search + "%", Valid: true},
+			Alt:      util.NullStringFromValue("%" + search + "%"),
 			Limit:    int64(limit),
 		})
 		// For search, total is approximated by result count
@@ -962,12 +929,11 @@ func (h *MediaHandler) requireMediaWithRedirect(w http.ResponseWriter, r *http.R
 	media, err := h.queries.GetMediaByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Media not found", "error")
+			flashError(w, r, h.renderer, "/admin/media", "Media not found")
 		} else {
 			slog.Error("failed to get media", "error", err, "media_id", id)
-			h.renderer.SetFlash(r, "Error loading media", "error")
+			flashError(w, r, h.renderer, "/admin/media", "Error loading media")
 		}
-		http.Redirect(w, r, "/admin/media", http.StatusSeeOther)
 		return store.Medium{}, false
 	}
 	return media, true
@@ -981,8 +947,7 @@ func (h *MediaHandler) requireMediaWithError(w http.ResponseWriter, r *http.Requ
 		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Media not found", http.StatusNotFound)
 		} else {
-			slog.Error("failed to get media", "error", err, "media_id", id)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			logAndInternalError(w, "failed to get media", "error", err, "media_id", id)
 		}
 		return store.Medium{}, false
 	}
@@ -997,8 +962,7 @@ func (h *MediaHandler) requireFolderWithError(w http.ResponseWriter, r *http.Req
 		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Folder not found", http.StatusNotFound)
 		} else {
-			slog.Error("failed to get folder", "error", err, "folder_id", id)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			logAndInternalError(w, "failed to get folder", "error", err, "folder_id", id)
 		}
 		return store.MediaFolder{}, false
 	}

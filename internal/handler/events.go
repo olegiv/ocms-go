@@ -3,7 +3,6 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -131,8 +130,7 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		slog.Error("failed to count events", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		logAndInternalError(w, "failed to count events", "error", err)
 		return
 	}
 
@@ -151,8 +149,7 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 			Offset:   offset,
 		})
 		if err != nil {
-			slog.Error("failed to list events", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			logAndInternalError(w, "failed to list events", "error", err)
 			return
 		}
 		events = convertEventsWithUserByLevelAndCategory(rows)
@@ -163,8 +160,7 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 			Offset: offset,
 		})
 		if err != nil {
-			slog.Error("failed to list events", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			logAndInternalError(w, "failed to list events", "error", err)
 			return
 		}
 		events = convertEventsWithUserByLevel(rows)
@@ -175,8 +171,7 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 			Offset:   offset,
 		})
 		if err != nil {
-			slog.Error("failed to list events", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			logAndInternalError(w, "failed to list events", "error", err)
 			return
 		}
 		events = convertEventsWithUserByCategory(rows)
@@ -186,8 +181,7 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 			Offset: offset,
 		})
 		if err != nil {
-			slog.Error("failed to list events", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			logAndInternalError(w, "failed to list events", "error", err)
 			return
 		}
 		events = convertEventsWithUser(rows)
