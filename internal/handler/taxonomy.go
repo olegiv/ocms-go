@@ -429,42 +429,27 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	langCode := chi.URLParam(r, "langCode")
 	redirectURL := fmt.Sprintf("/admin/tags/%d", id)
-	if langCode == "" {
-		flashError(w, r, h.renderer, redirectURL, "Language code is required")
-		return
-	}
-
 	sourceTag, ok := h.requireTagWithRedirect(w, r, id)
 	if !ok {
 		return
 	}
 
-	// Validate language and check for existing translation
-	tc, ok := getTargetLanguageForTranslation(w, r, h.queries, h.renderer, langCode, redirectURL, model.EntityTypeTag, id)
+	// Validate language, check for existing translation, and generate unique slug
+	setup, ok := h.setupTranslation(w, r, model.EntityTypeTag, id, sourceTag.Slug, redirectURL, func(slug string) (int64, error) {
+		return h.queries.TagSlugExists(r.Context(), slug)
+	})
 	if !ok {
 		return
 	}
 
-	// Generate a unique slug for the translated tag
-	translatedSlug, err := generateUniqueSlug(sourceTag.Slug, langCode, func(slug string) (int64, error) {
-		return h.queries.TagSlugExists(r.Context(), slug)
-	})
-	if err != nil {
-		slog.Error("database error checking slug", "error", err)
-		flashError(w, r, h.renderer, redirectURL, "Error creating translation")
-		return
-	}
-
 	// Create the translated tag with same name
-	now := time.Now()
 	translatedTag, err := h.queries.CreateTag(r.Context(), store.CreateTagParams{
 		Name:       sourceTag.Name, // Keep same name (user will translate)
-		Slug:       translatedSlug,
-		LanguageID: util.NullInt64FromValue(tc.TargetLang.ID),
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		Slug:       setup.TranslatedSlug,
+		LanguageID: util.NullInt64FromValue(setup.TargetContext.TargetLang.ID),
+		CreatedAt:  setup.Now,
+		UpdatedAt:  setup.Now,
 	})
 	if err != nil {
 		slog.Error("failed to create translated tag", "error", err)
@@ -476,9 +461,9 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 	_, err = h.queries.CreateTranslation(r.Context(), store.CreateTranslationParams{
 		EntityType:    model.EntityTypeTag,
 		EntityID:      id,
-		LanguageID:    tc.TargetLang.ID,
+		LanguageID:    setup.TargetContext.TargetLang.ID,
 		TranslationID: translatedTag.ID,
-		CreatedAt:     now,
+		CreatedAt:     setup.Now,
 	})
 	if err != nil {
 		slog.Error("failed to create translation link", "error", err)
@@ -488,10 +473,10 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 	slog.Info("tag translation created",
 		"source_tag_id", id,
 		"translated_tag_id", translatedTag.ID,
-		"language", langCode,
+		"language", setup.TargetContext.TargetLang.Code,
 		"created_by", middleware.GetUserID(r))
 
-	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/tags/%d", translatedTag.ID), fmt.Sprintf("Translation created for %s. Please translate the name.", tc.TargetLang.Name))
+	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/tags/%d", translatedTag.ID), fmt.Sprintf("Translation created for %s. Please translate the name.", setup.TargetContext.TargetLang.Name))
 }
 
 // =============================================================================
@@ -1024,45 +1009,30 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	langCode := chi.URLParam(r, "langCode")
 	redirectURL := fmt.Sprintf("/admin/categories/%d", id)
-	if langCode == "" {
-		flashError(w, r, h.renderer, redirectURL, "Language code is required")
-		return
-	}
-
 	sourceCategory, ok := h.requireCategoryWithRedirect(w, r, id)
 	if !ok {
 		return
 	}
 
-	// Validate language and check for existing translation
-	tc, ok := getTargetLanguageForTranslation(w, r, h.queries, h.renderer, langCode, redirectURL, model.EntityTypeCategory, id)
+	// Validate language, check for existing translation, and generate unique slug
+	setup, ok := h.setupTranslation(w, r, model.EntityTypeCategory, id, sourceCategory.Slug, redirectURL, func(slug string) (int64, error) {
+		return h.queries.CategorySlugExists(r.Context(), slug)
+	})
 	if !ok {
 		return
 	}
 
-	// Generate a unique slug for the translated category
-	translatedSlug, err := generateUniqueSlug(sourceCategory.Slug, langCode, func(slug string) (int64, error) {
-		return h.queries.CategorySlugExists(r.Context(), slug)
-	})
-	if err != nil {
-		slog.Error("database error checking slug", "error", err)
-		flashError(w, r, h.renderer, redirectURL, "Error creating translation")
-		return
-	}
-
 	// Create the translated category with same name
-	now := time.Now()
 	translatedCategory, err := h.queries.CreateCategory(r.Context(), store.CreateCategoryParams{
 		Name:        sourceCategory.Name, // Keep same name (user will translate)
-		Slug:        translatedSlug,
+		Slug:        setup.TranslatedSlug,
 		Description: sourceCategory.Description,
 		ParentID:    sql.NullInt64{}, // No parent by default for translations
 		Position:    0,
-		LanguageID:  util.NullInt64FromValue(tc.TargetLang.ID),
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		LanguageID:  util.NullInt64FromValue(setup.TargetContext.TargetLang.ID),
+		CreatedAt:   setup.Now,
+		UpdatedAt:   setup.Now,
 	})
 	if err != nil {
 		slog.Error("failed to create translated category", "error", err)
@@ -1074,9 +1044,9 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 	_, err = h.queries.CreateTranslation(r.Context(), store.CreateTranslationParams{
 		EntityType:    model.EntityTypeCategory,
 		EntityID:      id,
-		LanguageID:    tc.TargetLang.ID,
+		LanguageID:    setup.TargetContext.TargetLang.ID,
 		TranslationID: translatedCategory.ID,
-		CreatedAt:     now,
+		CreatedAt:     setup.Now,
 	})
 	if err != nil {
 		slog.Error("failed to create translation link", "error", err)
@@ -1086,10 +1056,10 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 	slog.Info("category translation created",
 		"source_category_id", id,
 		"translated_category_id", translatedCategory.ID,
-		"language", langCode,
+		"language", setup.TargetContext.TargetLang.Code,
 		"created_by", middleware.GetUserID(r))
 
-	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/categories/%d", translatedCategory.ID), fmt.Sprintf("Translation created for %s. Please translate the name.", tc.TargetLang.Name))
+	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/categories/%d", translatedCategory.ID), fmt.Sprintf("Translation created for %s. Please translate the name.", setup.TargetContext.TargetLang.Name))
 }
 
 // =============================================================================
@@ -1247,6 +1217,51 @@ func generateUniqueSlug(baseSlug, langCode string, slugExists SlugExistsChecker)
 		counter++
 		translatedSlug = fmt.Sprintf("%s-%s-%d", baseSlug, langCode, counter)
 	}
+}
+
+// translationSetupResult holds the result of translation setup validation.
+type translationSetupResult struct {
+	TargetContext  *translationContext
+	TranslatedSlug string
+	Now            time.Time
+}
+
+// setupTranslation validates langCode, gets target language, and generates unique slug.
+// Returns nil, false if validation failed (flash message sent).
+func (h *TaxonomyHandler) setupTranslation(
+	w http.ResponseWriter,
+	r *http.Request,
+	entityType string,
+	entityID int64,
+	sourceSlug string,
+	redirectURL string,
+	slugChecker SlugExistsChecker,
+) (*translationSetupResult, bool) {
+	langCode := chi.URLParam(r, "langCode")
+	if langCode == "" {
+		flashError(w, r, h.renderer, redirectURL, "Language code is required")
+		return nil, false
+	}
+
+	// Validate language and check for existing translation
+	tc, ok := getTargetLanguageForTranslation(w, r, h.queries, h.renderer, langCode, redirectURL, entityType, entityID)
+	if !ok {
+		return nil, false
+	}
+
+	// Generate a unique slug
+	translatedSlug, err := generateUniqueSlug(sourceSlug, langCode, slugChecker)
+	if err != nil {
+		slog.Error("database error checking slug", "error", err)
+		flashError(w, r, h.renderer, redirectURL, "Error creating translation")
+		return nil, false
+	}
+
+	return &translationSetupResult{
+		TargetContext:  tc,
+		TranslatedSlug: translatedSlug,
+		Now:            time.Now(),
+	}, true
 }
 
 // translationContext holds common data for translation operations.
