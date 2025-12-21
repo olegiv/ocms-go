@@ -987,7 +987,9 @@
   gap: $spacing-3;
 }
 
-.checkbox-label {
+// Checkbox label as a wrapper (contains input + text)
+// Does not apply inside .form-checkbox which uses different pattern
+.checkbox-label:not(.form-checkbox > .checkbox-label) {
   display: flex;
   align-items: flex-start;
   gap: $spacing-2;
@@ -1004,6 +1006,14 @@
     cursor: pointer;
     accent-color: $primary;
   }
+}
+
+// Checkbox label inside .form-checkbox (text only, not a wrapper)
+.form-checkbox > .checkbox-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
 }
 
 .checkbox-text {
@@ -3035,22 +3045,6 @@ tr.unread {
 .upload-hint {
   font-size: $font-size-sm;
   margin: 0;
-}
-
-// =====================================================
-// Checkbox Styles
-// =====================================================
-
-.checkbox-label {
-  display: flex;
-  flex-direction: column;
-  gap: $spacing-1;
-}
-
-.checkbox-hint {
-  font-size: $font-size-sm;
-  color: $gray-500;
-  font-weight: $font-weight-normal;
 }
 
 // =====================================================
