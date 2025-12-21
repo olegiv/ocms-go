@@ -440,7 +440,7 @@ func (h *TaxonomyHandler) SearchTags(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		slog.Error("failed to search tags", "error", err, "query", query)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
@@ -448,8 +448,6 @@ func (h *TaxonomyHandler) SearchTags(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(tags); err != nil {
 		slog.Error("failed to encode tags response", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
 	}
 }
 
@@ -1580,7 +1578,7 @@ func (h *TaxonomyHandler) SearchCategories(w http.ResponseWriter, r *http.Reques
 
 	if err != nil {
 		slog.Error("failed to search categories", "error", err, "query", query)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
@@ -1588,7 +1586,5 @@ func (h *TaxonomyHandler) SearchCategories(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(categories); err != nil {
 		slog.Error("failed to encode categories response", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
 	}
 }
