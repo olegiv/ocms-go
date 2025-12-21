@@ -164,9 +164,6 @@ type UserFormData struct {
 
 // NewForm handles GET /admin/users/new - displays the new user form.
 func (h *UsersHandler) NewForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	lang := h.renderer.GetAdminLang(r)
-
 	data := UserFormData{
 		Roles:      ValidRoles,
 		Errors:     make(map[string]string),
@@ -174,26 +171,11 @@ func (h *UsersHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 		IsEdit:     false,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/users_form", render.TemplateData{
-		Title: i18n.T(lang, "users.new"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.users"), URL: "/admin/users"},
-			{Label: i18n.T(lang, "users.new"), URL: "/admin/users/new", Active: true},
-		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	h.renderNewUserForm(w, r, data)
 }
 
 // Create handles POST /admin/users - creates a new user.
 func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	lang := h.renderer.GetAdminLang(r)
-
 	if err := r.ParseForm(); err != nil {
 		h.renderer.SetFlash(r, "Invalid form data", "error")
 		http.Redirect(w, r, "/admin/users/new", http.StatusSeeOther)
@@ -264,20 +246,7 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 			FormValues: formValues,
 			IsEdit:     false,
 		}
-
-		if err := h.renderer.Render(w, r, "admin/users_form", render.TemplateData{
-			Title: i18n.T(lang, "users.new"),
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-				{Label: i18n.T(lang, "nav.users"), URL: "/admin/users"},
-				{Label: i18n.T(lang, "users.new"), URL: "/admin/users/new", Active: true},
-			},
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		h.renderNewUserForm(w, r, data)
 		return
 	}
 
@@ -321,25 +290,15 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	currentUser := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	// Get user ID from URL
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseUserIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid user ID", "error")
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 		return
 	}
 
-	// Fetch user
-	editUser, err := h.queries.GetUserByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "User not found", "error")
-		} else {
-			slog.Error("failed to get user", "error", err)
-			h.renderer.SetFlash(r, "Error loading user", "error")
-		}
-		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+	editUser, ok := h.requireUserWithRedirect(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -379,31 +338,21 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	lang := h.renderer.GetAdminLang(r)
 
-	// Get user ID from URL
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseUserIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid user ID", "error")
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 		return
 	}
 
-	// Fetch the user being edited
-	editUser, err := h.queries.GetUserByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "User not found", "error")
-		} else {
-			slog.Error("failed to get user", "error", err)
-			h.renderer.SetFlash(r, "Error loading user", "error")
-		}
-		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+	editUser, ok := h.requireUserWithRedirect(w, r, id)
+	if !ok {
 		return
 	}
 
 	if err := r.ParseForm(); err != nil {
 		h.renderer.SetFlash(r, "Invalid form data", "error")
-		http.Redirect(w, r, "/admin/users/"+idStr, http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("/admin/users/%d", id), http.StatusSeeOther)
 		return
 	}
 
@@ -512,7 +461,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("failed to update user", "error", err)
 		h.renderer.SetFlash(r, "Error updating user", "error")
-		http.Redirect(w, r, "/admin/users/"+idStr, http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("/admin/users/%d", id), http.StatusSeeOther)
 		return
 	}
 
@@ -633,4 +582,47 @@ func isValidRole(role string) bool {
 		}
 	}
 	return false
+}
+
+// parseUserIDParam parses the user ID from the URL.
+func parseUserIDParam(r *http.Request) (int64, error) {
+	idStr := chi.URLParam(r, "id")
+	return strconv.ParseInt(idStr, 10, 64)
+}
+
+// requireUserWithRedirect fetches a user by ID and redirects with flash on error.
+// Returns the user and true if successful, or false if an error occurred (redirect sent).
+func (h *UsersHandler) requireUserWithRedirect(w http.ResponseWriter, r *http.Request, id int64) (store.User, bool) {
+	user, err := h.queries.GetUserByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			h.renderer.SetFlash(r, "User not found", "error")
+		} else {
+			slog.Error("failed to get user", "error", err)
+			h.renderer.SetFlash(r, "Error loading user", "error")
+		}
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+		return store.User{}, false
+	}
+	return user, true
+}
+
+// renderNewUserForm renders the new user form with the given data.
+func (h *UsersHandler) renderNewUserForm(w http.ResponseWriter, r *http.Request, data UserFormData) {
+	user := middleware.GetUser(r)
+	lang := h.renderer.GetAdminLang(r)
+
+	if err := h.renderer.Render(w, r, "admin/users_form", render.TemplateData{
+		Title: i18n.T(lang, "users.new"),
+		User:  user,
+		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.users"), URL: "/admin/users"},
+			{Label: i18n.T(lang, "users.new"), URL: "/admin/users/new", Active: true},
+		},
+	}); err != nil {
+		slog.Error("render error", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
 }
