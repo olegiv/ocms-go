@@ -743,22 +743,6 @@ func (h *MenusHandler) requireMenuWithError(w http.ResponseWriter, r *http.Reque
 	return menu, true
 }
 
-// requireMenuItemWithError fetches menu item by ID and handles errors with http.Error.
-// Returns the menu item and true if successful, or zero value and false if an error occurred (response already written).
-func (h *MenusHandler) requireMenuItemWithError(w http.ResponseWriter, r *http.Request, id int64) (store.MenuItem, bool) {
-	item, err := h.queries.GetMenuItemByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Menu item not found", http.StatusNotFound)
-		} else {
-			slog.Error("failed to get menu item", "error", err, "item_id", id)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
-		return store.MenuItem{}, false
-	}
-	return item, true
-}
-
 // menuFormInput holds parsed and validated menu form input.
 type menuFormInput struct {
 	Name       string
@@ -824,15 +808,6 @@ func validateMenuItemTarget(target string) (string, error) {
 		return "", errors.New("invalid target")
 	}
 	return target, nil
-}
-
-// verifyItemBelongsToMenu checks if menu item belongs to the specified menu.
-func verifyItemBelongsToMenu(w http.ResponseWriter, item store.MenuItem, menuID int64) bool {
-	if item.MenuID != menuID {
-		http.Error(w, "Item does not belong to this menu", http.StatusBadRequest)
-		return false
-	}
-	return true
 }
 
 // requireMenuWithJSONError fetches menu by ID and handles errors with JSON response.
