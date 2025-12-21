@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -121,6 +120,48 @@ func isImageMime(mimeType string) bool {
 	return strings.HasPrefix(mimeType, "image/")
 }
 
+// parseMediaIncludes parses the include query parameter for media endpoints.
+// Returns flags for variants and folder includes.
+func parseMediaIncludes(include string) (includeVariants, includeFolder bool) {
+	if include == "" {
+		return false, false
+	}
+	includes := strings.Split(include, ",")
+	for _, inc := range includes {
+		switch strings.TrimSpace(inc) {
+		case "variants":
+			includeVariants = true
+		case "folder":
+			includeFolder = true
+		}
+	}
+	return
+}
+
+// storeVariantToResponse converts a store.MediaVariant to VariantResponse.
+func storeVariantToResponse(v store.MediaVariant, uuid, filename string) VariantResponse {
+	return VariantResponse{
+		ID:        v.ID,
+		Type:      v.Type,
+		Width:     v.Width,
+		Height:    v.Height,
+		Size:      v.Size,
+		URL:       "/uploads/" + v.Type + "/" + uuid + "/" + filename,
+		CreatedAt: v.CreatedAt,
+	}
+}
+
+// populateMediaVariants populates the variants slice in a media response.
+func populateMediaVariants(resp *MediaResponse, variants []store.MediaVariant) {
+	if len(variants) == 0 {
+		return
+	}
+	resp.Variants = make([]VariantResponse, 0, len(variants))
+	for _, v := range variants {
+		resp.Variants = append(resp.Variants, storeVariantToResponse(v, resp.UUID, resp.Filename))
+	}
+}
+
 // ListMedia handles GET /api/v1/media
 // Public: returns all media
 // With API key: enhanced access (same for now, could add private media later)
@@ -208,19 +249,7 @@ func (h *Handler) ListMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse includes
-	includeVariants := false
-	includeFolder := false
-	if include != "" {
-		includes := strings.Split(include, ",")
-		for _, inc := range includes {
-			switch strings.TrimSpace(inc) {
-			case "variants":
-				includeVariants = true
-			case "folder":
-				includeFolder = true
-			}
-		}
-	}
+	includeVariants, includeFolder := parseMediaIncludes(include)
 
 	// Convert to response
 	responses := make([]MediaResponse, 0, len(media))
@@ -257,20 +286,7 @@ func (h *Handler) GetMedia(w http.ResponseWriter, r *http.Request) {
 	resp := storeMediaToResponse(media)
 
 	// Parse includes
-	includeVariants := false
-	includeFolder := false
-	if include != "" {
-		includes := strings.Split(include, ",")
-		for _, inc := range includes {
-			switch strings.TrimSpace(inc) {
-			case "variants":
-				includeVariants = true
-			case "folder":
-				includeFolder = true
-			}
-		}
-	}
-
+	includeVariants, includeFolder := parseMediaIncludes(include)
 	h.populateMediaIncludes(ctx, &resp, media.ID, includeVariants, includeFolder)
 
 	WriteSuccess(w, resp, nil)
@@ -348,20 +364,7 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		resp := storeMediaToResponse(result.Media)
 
 		// Add variants to response
-		if len(result.Variants) > 0 {
-			resp.Variants = make([]VariantResponse, 0, len(result.Variants))
-			for _, v := range result.Variants {
-				resp.Variants = append(resp.Variants, VariantResponse{
-					ID:        v.ID,
-					Type:      v.Type,
-					Width:     v.Width,
-					Height:    v.Height,
-					Size:      v.Size,
-					URL:       "/uploads/" + v.Type + "/" + result.Media.Uuid + "/" + result.Media.Filename,
-					CreatedAt: v.CreatedAt,
-				})
-			}
-		}
+		populateMediaVariants(&resp, result.Variants)
 
 		responses = append(responses, resp)
 	}
@@ -448,20 +451,7 @@ func (h *Handler) UpdateMedia(w http.ResponseWriter, r *http.Request) {
 
 	// Include variants in response
 	variants, _ := h.queries.GetMediaVariants(ctx, media.ID)
-	if len(variants) > 0 {
-		resp.Variants = make([]VariantResponse, 0, len(variants))
-		for _, v := range variants {
-			resp.Variants = append(resp.Variants, VariantResponse{
-				ID:        v.ID,
-				Type:      v.Type,
-				Width:     v.Width,
-				Height:    v.Height,
-				Size:      v.Size,
-				URL:       "/uploads/" + v.Type + "/" + media.Uuid + "/" + media.Filename,
-				CreatedAt: v.CreatedAt,
-			})
-		}
-	}
+	populateMediaVariants(&resp, variants)
 
 	WriteSuccess(w, resp, nil)
 }
@@ -490,19 +480,8 @@ func (h *Handler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) populateMediaIncludes(ctx context.Context, resp *MediaResponse, mediaID int64, includeVariants, includeFolder bool) {
 	if includeVariants {
 		variants, err := h.queries.GetMediaVariants(ctx, mediaID)
-		if err == nil && len(variants) > 0 {
-			resp.Variants = make([]VariantResponse, 0, len(variants))
-			for _, v := range variants {
-				resp.Variants = append(resp.Variants, VariantResponse{
-					ID:        v.ID,
-					Type:      v.Type,
-					Width:     v.Width,
-					Height:    v.Height,
-					Size:      v.Size,
-					URL:       "/uploads/" + v.Type + "/" + resp.UUID + "/" + resp.Filename,
-					CreatedAt: v.CreatedAt,
-				})
-			}
+		if err == nil {
+			populateMediaVariants(resp, variants)
 		}
 	}
 
@@ -531,20 +510,7 @@ func decodeJSON(r *http.Request, v any) error {
 // requireMediaForAPI parses media ID from URL and fetches the media item.
 // Returns the media and true if successful, or zero value and false if an error occurred (response already written).
 func (h *Handler) requireMediaForAPI(w http.ResponseWriter, r *http.Request) (store.Medium, bool) {
-	id, err := handler.ParseIDParam(r)
-	if err != nil {
-		WriteBadRequest(w, "Invalid media ID", nil)
-		return store.Medium{}, false
-	}
-
-	media, err := h.queries.GetMediaByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			WriteNotFound(w, "Media not found")
-		} else {
-			WriteInternalError(w, "Failed to retrieve media")
-		}
-		return store.Medium{}, false
-	}
-	return media, true
+	return requireEntityByID(w, r, "media", func(id int64) (store.Medium, error) {
+		return h.queries.GetMediaByID(r.Context(), id)
+	})
 }

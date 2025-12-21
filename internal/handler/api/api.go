@@ -4,8 +4,11 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
 
+	"ocms-go/internal/handler"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/store"
 )
@@ -167,4 +170,33 @@ func checkSlugUnique(w http.ResponseWriter, slugExists SlugExistsChecker) bool {
 		return false
 	}
 	return true
+}
+
+// EntityFetcher is a function that fetches an entity by ID.
+type EntityFetcher[T any] func(id int64) (T, error)
+
+// requireEntityByID parses an ID from the URL and fetches the entity.
+// Returns the entity and true if successful, or zero value and false if error (response written).
+// The entityName is used for error messages (e.g., "page", "tag", "category", "media").
+func requireEntityByID[T any](w http.ResponseWriter, r *http.Request, entityName string, fetch EntityFetcher[T]) (T, bool) {
+	var zero T
+
+	id, err := handler.ParseIDParam(r)
+	if err != nil {
+		WriteBadRequest(w, "Invalid "+entityName+" ID", nil)
+		return zero, false
+	}
+
+	entity, err := fetch(id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// Capitalize first letter for error message
+			WriteNotFound(w, strings.Title(entityName)+" not found")
+		} else {
+			WriteInternalError(w, "Failed to retrieve "+entityName)
+		}
+		return zero, false
+	}
+
+	return entity, true
 }

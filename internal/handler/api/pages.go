@@ -105,6 +105,28 @@ type UpdatePageRequest struct {
 	TagIDs          *[]int64 `json:"tag_ids,omitempty"`
 }
 
+// storeCategoryToResponse converts a store.Category to CategoryResponse.
+func storeCategoryToResponse(c store.Category) CategoryResponse {
+	resp := CategoryResponse{
+		ID:   c.ID,
+		Name: c.Name,
+		Slug: c.Slug,
+	}
+	if c.Description.Valid {
+		resp.Description = c.Description.String
+	}
+	return resp
+}
+
+// storeTagToResponse converts a store.Tag to TagResponse.
+func storeTagToResponse(t store.Tag) TagResponse {
+	return TagResponse{
+		ID:   t.ID,
+		Name: t.Name,
+		Slug: t.Slug,
+	}
+}
+
 // storePageToResponse converts a store.Page to PageResponse.
 func storePageToResponse(p store.Page) PageResponse {
 	resp := PageResponse{
@@ -285,35 +307,11 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if includeCategories {
-			categories, catErr := h.queries.GetCategoriesForPage(ctx, p.ID)
-			if catErr == nil {
-				resp.Categories = make([]CategoryResponse, 0, len(categories))
-				for _, c := range categories {
-					catResp := CategoryResponse{
-						ID:   c.ID,
-						Name: c.Name,
-						Slug: c.Slug,
-					}
-					if c.Description.Valid {
-						catResp.Description = c.Description.String
-					}
-					resp.Categories = append(resp.Categories, catResp)
-				}
-			}
+			h.populatePageCategories(ctx, &resp, p.ID)
 		}
 
 		if includeTags {
-			tags, tagErr := h.queries.GetTagsForPage(ctx, p.ID)
-			if tagErr == nil {
-				resp.Tags = make([]TagResponse, 0, len(tags))
-				for _, t := range tags {
-					resp.Tags = append(resp.Tags, TagResponse{
-						ID:   t.ID,
-						Name: t.Name,
-						Slug: t.Slug,
-					})
-				}
-			}
+			h.populatePageTags(ctx, &resp, p.ID)
 		}
 
 		responses = append(responses, resp)
@@ -515,22 +513,10 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 
 	// Include categories and tags in response
 	if len(req.CategoryIDs) > 0 {
-		categories, _ := h.queries.GetCategoriesForPage(ctx, page.ID)
-		resp.Categories = make([]CategoryResponse, 0, len(categories))
-		for _, c := range categories {
-			catResp := CategoryResponse{ID: c.ID, Name: c.Name, Slug: c.Slug}
-			if c.Description.Valid {
-				catResp.Description = c.Description.String
-			}
-			resp.Categories = append(resp.Categories, catResp)
-		}
+		h.populatePageCategories(ctx, &resp, page.ID)
 	}
 	if len(req.TagIDs) > 0 {
-		tags, _ := h.queries.GetTagsForPage(ctx, page.ID)
-		resp.Tags = make([]TagResponse, 0, len(tags))
-		for _, t := range tags {
-			resp.Tags = append(resp.Tags, TagResponse{ID: t.ID, Name: t.Name, Slug: t.Slug})
-		}
+		h.populatePageTags(ctx, &resp, page.ID)
 	}
 
 	WriteCreated(w, resp)
@@ -670,25 +656,8 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	resp := storePageToResponse(page)
 
 	// Include categories and tags
-	categories, _ := h.queries.GetCategoriesForPage(ctx, page.ID)
-	if len(categories) > 0 {
-		resp.Categories = make([]CategoryResponse, 0, len(categories))
-		for _, c := range categories {
-			catResp := CategoryResponse{ID: c.ID, Name: c.Name, Slug: c.Slug}
-			if c.Description.Valid {
-				catResp.Description = c.Description.String
-			}
-			resp.Categories = append(resp.Categories, catResp)
-		}
-	}
-
-	tags, _ := h.queries.GetTagsForPage(ctx, page.ID)
-	if len(tags) > 0 {
-		resp.Tags = make([]TagResponse, 0, len(tags))
-		for _, t := range tags {
-			resp.Tags = append(resp.Tags, TagResponse{ID: t.ID, Name: t.Name, Slug: t.Slug})
-		}
-	}
+	h.populatePageCategories(ctx, &resp, page.ID)
+	h.populatePageTags(ctx, &resp, page.ID)
 
 	WriteSuccess(w, resp, nil)
 }
@@ -717,6 +686,30 @@ func (h *Handler) DeletePage(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// populatePageCategories fetches and populates categories for a page response.
+func (h *Handler) populatePageCategories(ctx context.Context, resp *PageResponse, pageID int64) {
+	categories, err := h.queries.GetCategoriesForPage(ctx, pageID)
+	if err != nil || len(categories) == 0 {
+		return
+	}
+	resp.Categories = make([]CategoryResponse, 0, len(categories))
+	for _, c := range categories {
+		resp.Categories = append(resp.Categories, storeCategoryToResponse(c))
+	}
+}
+
+// populatePageTags fetches and populates tags for a page response.
+func (h *Handler) populatePageTags(ctx context.Context, resp *PageResponse, pageID int64) {
+	tags, err := h.queries.GetTagsForPage(ctx, pageID)
+	if err != nil || len(tags) == 0 {
+		return
+	}
+	resp.Tags = make([]TagResponse, 0, len(tags))
+	for _, t := range tags {
+		resp.Tags = append(resp.Tags, storeTagToResponse(t))
+	}
+}
+
 // populatePageIncludes adds related data to a page response based on include parameter.
 func (h *Handler) populatePageIncludes(ctx context.Context, resp *PageResponse, pageID int64, include string) {
 	if include == "" {
@@ -736,33 +729,9 @@ func (h *Handler) populatePageIncludes(ctx context.Context, resp *PageResponse, 
 				}
 			}
 		case "categories":
-			categories, err := h.queries.GetCategoriesForPage(ctx, pageID)
-			if err == nil {
-				resp.Categories = make([]CategoryResponse, 0, len(categories))
-				for _, c := range categories {
-					catResp := CategoryResponse{
-						ID:   c.ID,
-						Name: c.Name,
-						Slug: c.Slug,
-					}
-					if c.Description.Valid {
-						catResp.Description = c.Description.String
-					}
-					resp.Categories = append(resp.Categories, catResp)
-				}
-			}
+			h.populatePageCategories(ctx, resp, pageID)
 		case "tags":
-			tags, err := h.queries.GetTagsForPage(ctx, pageID)
-			if err == nil {
-				resp.Tags = make([]TagResponse, 0, len(tags))
-				for _, t := range tags {
-					resp.Tags = append(resp.Tags, TagResponse{
-						ID:   t.ID,
-						Name: t.Name,
-						Slug: t.Slug,
-					})
-				}
-			}
+			h.populatePageTags(ctx, resp, pageID)
 		}
 	}
 }
@@ -770,22 +739,9 @@ func (h *Handler) populatePageIncludes(ctx context.Context, resp *PageResponse, 
 // requirePageForAPI parses page ID from URL and fetches the page.
 // Returns the page and true if successful, or zero value and false if an error occurred (response already written).
 func (h *Handler) requirePageForAPI(w http.ResponseWriter, r *http.Request) (store.Page, bool) {
-	id, err := handler.ParseIDParam(r)
-	if err != nil {
-		WriteBadRequest(w, "Invalid page ID", nil)
-		return store.Page{}, false
-	}
-
-	page, err := h.queries.GetPageByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			WriteNotFound(w, "Page not found")
-		} else {
-			WriteInternalError(w, "Failed to retrieve page")
-		}
-		return store.Page{}, false
-	}
-	return page, true
+	return requireEntityByID(w, r, "page", func(id int64) (store.Page, error) {
+		return h.queries.GetPageByID(r.Context(), id)
+	})
 }
 
 // checkPageSlugUnique checks if a page slug is unique for creation.
