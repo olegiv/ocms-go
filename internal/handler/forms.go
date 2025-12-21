@@ -163,8 +163,7 @@ func validateFormInput(input *formInput) map[string]string {
 // parseFormIDParam parses the form ID from URL and redirects on error.
 // Returns 0 if there was an error (redirect already sent).
 func (h *FormsHandler) parseFormIDParam(w http.ResponseWriter, r *http.Request) int64 {
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid form ID", "error")
 		http.Redirect(w, r, "/admin/forms", http.StatusSeeOther)
@@ -565,8 +564,7 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/forms/{id} - deletes a form.
 func (h *FormsHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid form ID", http.StatusBadRequest)
 		return

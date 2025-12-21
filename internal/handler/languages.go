@@ -17,7 +17,6 @@ import (
 	"ocms-go/internal/store"
 
 	"github.com/alexedwards/scs/v2"
-	"github.com/go-chi/chi/v5"
 )
 
 // LanguagesHandler handles language management in admin.
@@ -97,8 +96,7 @@ func (input languageFormInput) toFormValues() map[string]string {
 // getLanguageByIDParam parses the language ID from URL and fetches the language.
 // Returns nil and sends an error response if the language is not found.
 func (h *LanguagesHandler) getLanguageByIDParam(w http.ResponseWriter, r *http.Request) *store.Language {
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return nil
@@ -440,8 +438,7 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles deleting a language.
 func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		if r.Header.Get("HX-Request") == "true" {
 			w.Header().Set("HX-Reswap", "none")

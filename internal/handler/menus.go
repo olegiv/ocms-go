@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/alexedwards/scs/v2"
-	"github.com/go-chi/chi/v5"
 
 	"ocms-go/internal/i18n"
 	"ocms-go/internal/middleware"
@@ -256,7 +255,7 @@ func (h *MenusHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	id, err := parseMenuIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid menu ID", "error")
 		http.Redirect(w, r, "/admin/menus", http.StatusSeeOther)
@@ -323,7 +322,7 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	id, err := parseMenuIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid menu ID", "error")
 		http.Redirect(w, r, "/admin/menus", http.StatusSeeOther)
@@ -422,7 +421,7 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/menus/{id} - deletes a menu.
 func (h *MenusHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, err := parseMenuIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid menu ID", http.StatusBadRequest)
 		return
@@ -472,7 +471,7 @@ type AddItemRequest struct {
 
 // AddItem handles POST /admin/menus/{id}/items - adds a menu item.
 func (h *MenusHandler) AddItem(w http.ResponseWriter, r *http.Request) {
-	menuID, err := parseMenuIDParam(r)
+	menuID, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid menu ID", http.StatusBadRequest)
 		return
@@ -567,13 +566,13 @@ type UpdateItemRequest struct {
 
 // UpdateItem handles PUT /admin/menus/{id}/items/{itemId} - updates a menu item.
 func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
-	menuID, err := parseMenuIDParam(r)
+	menuID, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid menu ID", http.StatusBadRequest)
 		return
 	}
 
-	itemID, err := parseItemIDParam(r)
+	itemID, err := ParseURLParamInt64(r, "itemId")
 	if err != nil {
 		http.Error(w, "Invalid item ID", http.StatusBadRequest)
 		return
@@ -647,13 +646,13 @@ func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 
 // DeleteItem handles DELETE /admin/menus/{id}/items/{itemId} - deletes a menu item.
 func (h *MenusHandler) DeleteItem(w http.ResponseWriter, r *http.Request) {
-	menuID, err := parseMenuIDParam(r)
+	menuID, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid menu ID", http.StatusBadRequest)
 		return
 	}
 
-	itemID, err := parseItemIDParam(r)
+	itemID, err := ParseURLParamInt64(r, "itemId")
 	if err != nil {
 		http.Error(w, "Invalid item ID", http.StatusBadRequest)
 		return
@@ -703,7 +702,7 @@ type ReorderRequest struct {
 
 // Reorder handles POST /admin/menus/{id}/reorder - reorders menu items.
 func (h *MenusHandler) Reorder(w http.ResponseWriter, r *http.Request) {
-	menuID, err := parseMenuIDParam(r)
+	menuID, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid menu ID", http.StatusBadRequest)
 		return
@@ -776,18 +775,6 @@ func (h *MenusHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 }
 
 // Helper functions
-
-// parseMenuIDParam parses the menu "id" URL parameter as int64.
-func parseMenuIDParam(r *http.Request) (int64, error) {
-	idStr := chi.URLParam(r, "id")
-	return strconv.ParseInt(idStr, 10, 64)
-}
-
-// parseItemIDParam parses the menu item "itemId" URL parameter as int64.
-func parseItemIDParam(r *http.Request) (int64, error) {
-	idStr := chi.URLParam(r, "itemId")
-	return strconv.ParseInt(idStr, 10, 64)
-}
 
 // requireMenuWithRedirect fetches menu by ID and handles errors with flash messages and redirect.
 // Returns the menu and true if successful, or zero value and false if an error occurred (response already written).

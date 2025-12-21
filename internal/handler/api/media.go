@@ -11,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	"ocms-go/internal/handler"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/service"
@@ -248,10 +246,9 @@ func (h *Handler) ListMedia(w http.ResponseWriter, r *http.Request) {
 // GetMedia handles GET /api/v1/media/{id}
 func (h *Handler) GetMedia(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	idStr := chi.URLParam(r, "id")
 	include := r.URL.Query().Get("include")
 
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := handler.ParseIDParam(r)
 	if err != nil {
 		WriteBadRequest(w, "Invalid media ID", nil)
 		return
@@ -410,9 +407,7 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 // Requires media:write permission
 func (h *Handler) UpdateMedia(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	idStr := chi.URLParam(r, "id")
-
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := handler.ParseIDParam(r)
 	if err != nil {
 		WriteBadRequest(w, "Invalid media ID", nil)
 		return
@@ -496,9 +491,7 @@ func (h *Handler) UpdateMedia(w http.ResponseWriter, r *http.Request) {
 // Requires media:write permission
 func (h *Handler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	idStr := chi.URLParam(r, "id")
-
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := handler.ParseIDParam(r)
 	if err != nil {
 		WriteBadRequest(w, "Invalid media ID", nil)
 		return

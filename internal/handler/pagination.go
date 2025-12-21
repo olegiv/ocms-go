@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/go-chi/chi/v5"
 )
 
 // AdminPagination holds pagination data for admin templates.
@@ -197,4 +199,17 @@ func ParseIntParam(r *http.Request, param string, defaultVal, minVal, maxVal int
 		return defaultVal
 	}
 	return val
+}
+
+// ParseIDParam parses the "id" URL parameter from the request as int64.
+// Returns the parsed ID or an error if the parameter is missing or invalid.
+func ParseIDParam(r *http.Request) (int64, error) {
+	return ParseURLParamInt64(r, "id")
+}
+
+// ParseURLParamInt64 parses a named URL parameter from the request as int64.
+// Returns the parsed value or an error if the parameter is missing or invalid.
+func ParseURLParamInt64(r *http.Request, name string) (int64, error) {
+	str := chi.URLParam(r, name)
+	return strconv.ParseInt(str, 10, 64)
 }

@@ -266,7 +266,7 @@ func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // EditForm handles GET /admin/webhooks/{id} - displays the edit webhook form.
 func (h *WebhooksHandler) EditForm(w http.ResponseWriter, r *http.Request) {
-	id, err := parseWebhookIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid webhook ID", "error")
 		http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
@@ -303,7 +303,7 @@ func (h *WebhooksHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /admin/webhooks/{id} - updates an existing webhook.
 func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, err := parseWebhookIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid webhook ID", "error")
 		http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
@@ -371,7 +371,7 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/webhooks/{id} - deletes a webhook.
 func (h *WebhooksHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, err := parseWebhookIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.sendDeleteError(w, "Invalid webhook ID")
 		return
@@ -406,7 +406,7 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	id, err := parseWebhookIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid webhook ID", "error")
 		http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
@@ -418,14 +418,7 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get page number
-	pageStr := r.URL.Query().Get("page")
-	page := 1
-	if pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
+	page := ParsePageParam(r)
 
 	// Get total count
 	totalCount, err := h.queries.CountWebhookDeliveries(r.Context(), id)
@@ -435,15 +428,8 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Calculate pagination
-	totalPages := int((totalCount + DeliveriesPerPage - 1) / DeliveriesPerPage)
-	if totalPages < 1 {
-		totalPages = 1
-	}
-	if page > totalPages {
-		page = totalPages
-	}
-
+	// Normalize page to valid range
+	page, _ = NormalizePagination(page, int(totalCount), DeliveriesPerPage)
 	offset := int64((page - 1) * DeliveriesPerPage)
 
 	// Get deliveries
@@ -480,7 +466,7 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 
 // Test handles POST /admin/webhooks/{id}/test - sends a test event.
 func (h *WebhooksHandler) Test(w http.ResponseWriter, r *http.Request) {
-	id, err := parseWebhookIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid webhook ID", "error")
 		http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
@@ -570,12 +556,6 @@ func (h *WebhooksHandler) sendDeleteError(w http.ResponseWriter, message string)
 	w.Header().Set("HX-Reswap", "none")
 	w.Header().Set("HX-Trigger", `{"showToast": "`+message+`", "toastType": "error"}`)
 	w.WriteHeader(http.StatusBadRequest)
-}
-
-// parseWebhookIDParam parses the webhook ID from the URL.
-func parseWebhookIDParam(r *http.Request) (int64, error) {
-	idStr := chi.URLParam(r, "id")
-	return strconv.ParseInt(idStr, 10, 64)
 }
 
 // requireWebhookWithRedirect fetches a webhook by ID and redirects with flash on error.

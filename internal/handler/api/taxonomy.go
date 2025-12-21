@@ -6,11 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
+	"ocms-go/internal/handler"
 	"ocms-go/internal/store"
 )
 
@@ -77,23 +75,9 @@ type UpdateCategoryRequest struct {
 func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Parse query parameters
-	pageStr := r.URL.Query().Get("page")
-	perPageStr := r.URL.Query().Get("per_page")
-
-	// Pagination defaults
-	page := 1
-	perPage := 50
-	if pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
-	if perPageStr != "" {
-		if pp, err := strconv.Atoi(perPageStr); err == nil && pp > 0 && pp <= 100 {
-			perPage = pp
-		}
-	}
+	// Parse pagination
+	page := handler.ParsePageParam(r)
+	perPage := handler.ParsePerPageParam(r, 50, 100)
 	offset := (page - 1) * perPage
 
 	// Get tags with usage counts
@@ -144,9 +128,7 @@ func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
 // Public: returns a single tag
 func (h *Handler) GetTag(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	idStr := chi.URLParam(r, "id")
-
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := handler.ParseIDParam(r)
 	if err != nil {
 		WriteBadRequest(w, "Invalid tag ID", nil)
 		return
@@ -243,9 +225,7 @@ func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 // Requires taxonomy:write permission
 func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	idStr := chi.URLParam(r, "id")
-
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := handler.ParseIDParam(r)
 	if err != nil {
 		WriteBadRequest(w, "Invalid tag ID", nil)
 		return
@@ -325,9 +305,7 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 // Requires taxonomy:write permission
 func (h *Handler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	idStr := chi.URLParam(r, "id")
-
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := handler.ParseIDParam(r)
 	if err != nil {
 		WriteBadRequest(w, "Invalid tag ID", nil)
 		return
@@ -398,9 +376,7 @@ func (h *Handler) ListCategories(w http.ResponseWriter, r *http.Request) {
 // Public: returns a single category with its children
 func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	idStr := chi.URLParam(r, "id")
-
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := handler.ParseIDParam(r)
 	if err != nil {
 		WriteBadRequest(w, "Invalid category ID", nil)
 		return
@@ -568,9 +544,7 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 // Requires taxonomy:write permission
 func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	idStr := chi.URLParam(r, "id")
-
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := handler.ParseIDParam(r)
 	if err != nil {
 		WriteBadRequest(w, "Invalid category ID", nil)
 		return
@@ -700,9 +674,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 // Requires taxonomy:write permission
 func (h *Handler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	idStr := chi.URLParam(r, "id")
-
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := handler.ParseIDParam(r)
 	if err != nil {
 		WriteBadRequest(w, "Invalid category ID", nil)
 		return

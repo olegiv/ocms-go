@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"ocms-go/internal/handler"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/model"
 	"ocms-go/internal/store"
@@ -148,23 +149,11 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
 	categoryIDStr := r.URL.Query().Get("category")
 	tagIDStr := r.URL.Query().Get("tag")
-	pageStr := r.URL.Query().Get("page")
-	perPageStr := r.URL.Query().Get("per_page")
 	include := r.URL.Query().Get("include")
 
-	// Pagination defaults
-	page := 1
-	perPage := 20
-	if pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
-	if perPageStr != "" {
-		if pp, err := strconv.Atoi(perPageStr); err == nil && pp > 0 && pp <= 100 {
-			perPage = pp
-		}
-	}
+	// Parse pagination
+	page := handler.ParsePageParam(r)
+	perPage := handler.ParsePerPageParam(r, 20, 100)
 	offset := (page - 1) * perPage
 
 	// Check authentication for non-published access
@@ -364,10 +353,9 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 // With API key: returns any page
 func (h *Handler) GetPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	idStr := chi.URLParam(r, "id")
 	include := r.URL.Query().Get("include")
 
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := handler.ParseIDParam(r)
 	if err != nil {
 		WriteBadRequest(w, "Invalid page ID", nil)
 		return
@@ -584,9 +572,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 // Requires pages:write permission
 func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	idStr := chi.URLParam(r, "id")
-
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := handler.ParseIDParam(r)
 	if err != nil {
 		WriteBadRequest(w, "Invalid page ID", nil)
 		return
@@ -763,9 +749,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 // Requires pages:write permission
 func (h *Handler) DeletePage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	idStr := chi.URLParam(r, "id")
-
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := handler.ParseIDParam(r)
 	if err != nil {
 		WriteBadRequest(w, "Invalid page ID", nil)
 		return

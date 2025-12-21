@@ -111,14 +111,7 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 	level := r.URL.Query().Get("level")
 	category := r.URL.Query().Get("category")
 
-	// Get page number from query string
-	pageStr := r.URL.Query().Get("page")
-	page := 1
-	if pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
+	page := ParsePageParam(r)
 
 	// Get total event count based on filters
 	var totalEvents int64
@@ -143,15 +136,8 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Calculate pagination
-	totalPages := int((totalEvents + EventsPerPage - 1) / EventsPerPage)
-	if totalPages < 1 {
-		totalPages = 1
-	}
-	if page > totalPages {
-		page = totalPages
-	}
-
+	// Normalize page to valid range
+	page, _ = NormalizePagination(page, int(totalEvents), EventsPerPage)
 	offset := int64((page - 1) * EventsPerPage)
 
 	// Fetch events for current page based on filters

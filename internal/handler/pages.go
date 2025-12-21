@@ -116,14 +116,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	// Get page number from query string
-	pageStr := r.URL.Query().Get("page")
-	page := 1
-	if pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
+	page := ParsePageParam(r)
 
 	// Get status filter from query string
 	statusFilter := r.URL.Query().Get("status")
@@ -208,15 +201,8 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Calculate pagination
-	totalPages := int((totalCount + PagesPerPage - 1) / PagesPerPage)
-	if totalPages < 1 {
-		totalPages = 1
-	}
-	if page > totalPages {
-		page = totalPages
-	}
-
+	// Normalize page to valid range
+	page, _ = NormalizePagination(page, int(totalCount), PagesPerPage)
 	offset := int64((page - 1) * PagesPerPage)
 
 	// Fetch pages for current page
@@ -765,7 +751,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	adminLang := h.renderer.GetAdminLang(r)
 
-	id, err := parsePageIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid page ID", "error")
 		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
@@ -907,7 +893,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	id, err := parsePageIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid page ID", "error")
 		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
@@ -1072,7 +1058,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/pages/{id} - deletes a page.
 func (h *PagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, err := parsePageIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid page ID", http.StatusBadRequest)
 		return
@@ -1109,7 +1095,7 @@ func (h *PagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // TogglePublish handles POST /admin/pages/{id}/publish - toggles publish status.
 func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
-	id, err := parsePageIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid page ID", "error")
 		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
@@ -1179,7 +1165,7 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	id, err := parsePageIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid page ID", "error")
 		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
@@ -1191,14 +1177,7 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get page number from query string
-	pageStr := r.URL.Query().Get("page")
-	pageNum := 1
-	if pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			pageNum = p
-		}
-	}
+	pageNum := ParsePageParam(r)
 
 	// Get total count
 	totalCount, err := h.queries.CountPageVersions(r.Context(), id)
@@ -1208,15 +1187,8 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Calculate pagination
-	totalPages := int((totalCount + VersionsPerPage - 1) / VersionsPerPage)
-	if totalPages < 1 {
-		totalPages = 1
-	}
-	if pageNum > totalPages {
-		pageNum = totalPages
-	}
-
+	// Normalize page to valid range
+	pageNum, _ = NormalizePagination(pageNum, int(totalCount), VersionsPerPage)
 	offset := int64((pageNum - 1) * VersionsPerPage)
 
 	// Fetch versions for current page
@@ -1253,7 +1225,7 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 
 // RestoreVersion handles POST /admin/pages/{id}/versions/{versionId}/restore - restores a version.
 func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
-	id, err := parsePageIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid page ID", "error")
 		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
@@ -1341,7 +1313,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 
 // Translate handles POST /admin/pages/{id}/translate/{langCode} - creates a translation.
 func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
-	id, err := parsePageIDParam(r)
+	id, err := ParseIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid page ID", "error")
 		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
@@ -1472,12 +1444,6 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 }
 
 // Helper functions
-
-// parsePageIDParam parses the page "id" URL parameter as int64.
-func parsePageIDParam(r *http.Request) (int64, error) {
-	idStr := chi.URLParam(r, "id")
-	return strconv.ParseInt(idStr, 10, 64)
-}
 
 // requirePageWithRedirect fetches page by ID and handles errors with flash messages and redirect.
 // Returns the page and true if successful, or zero value and false if an error occurred (response already written).

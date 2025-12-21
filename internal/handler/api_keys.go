@@ -50,14 +50,7 @@ func (h *APIKeysHandler) List(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	// Get page number from query string
-	pageStr := r.URL.Query().Get("page")
-	page := 1
-	if pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
+	page := ParsePageParam(r)
 
 	// Get total count
 	totalKeys, err := h.queries.CountAPIKeys(r.Context())
@@ -67,15 +60,8 @@ func (h *APIKeysHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Calculate pagination
-	totalPages := int((totalKeys + APIKeysPerPage - 1) / APIKeysPerPage)
-	if totalPages < 1 {
-		totalPages = 1
-	}
-	if page > totalPages {
-		page = totalPages
-	}
-
+	// Normalize page to valid range
+	page, _ = NormalizePagination(page, int(totalKeys), APIKeysPerPage)
 	offset := int64((page - 1) * APIKeysPerPage)
 
 	// Fetch API keys for current page
