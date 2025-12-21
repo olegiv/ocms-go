@@ -127,16 +127,16 @@ func parseFormInput(r *http.Request) formInput {
 // validateFormInput validates form input fields and returns validation errors.
 // It also auto-generates the slug from name if empty.
 func validateFormInput(input *formInput) map[string]string {
-	errors := make(map[string]string)
+	errs := make(map[string]string)
 
 	if input.Name == "" {
-		errors["name"] = "Name is required"
+		errs["name"] = "Name is required"
 	} else if len(input.Name) < 2 {
-		errors["name"] = "Name must be at least 2 characters"
+		errs["name"] = "Name must be at least 2 characters"
 	}
 
 	if input.Title == "" {
-		errors["title"] = "Title is required"
+		errs["title"] = "Title is required"
 	}
 
 	// Auto-generate slug if empty
@@ -146,9 +146,9 @@ func validateFormInput(input *formInput) map[string]string {
 	}
 
 	if input.Slug == "" {
-		errors["slug"] = "Slug is required"
+		errs["slug"] = "Slug is required"
 	} else if !util.IsValidSlug(input.Slug) {
-		errors["slug"] = "Invalid slug format"
+		errs["slug"] = "Invalid slug format"
 	}
 
 	// Set default success message
@@ -157,7 +157,7 @@ func validateFormInput(input *formInput) map[string]string {
 		input.FormValues["success_message"] = input.SuccessMessage
 	}
 
-	return errors
+	return errs
 }
 
 // parseFormIDParam parses the form ID from URL and redirects on error.

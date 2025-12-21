@@ -175,6 +175,11 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 	var total int64
 	var err error
 
+	// Helper to execute list and count queries
+	publishedOnly := status == model.PageStatusPublished
+	limit := int64(perPage)
+	off := int64(offset)
+
 	// Filter by category
 	if categoryIDStr != "" {
 		categoryID, parseErr := strconv.ParseInt(categoryIDStr, 10, 64)
@@ -183,20 +188,16 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if status == model.PageStatusPublished {
+		if publishedOnly {
 			pages, err = h.queries.ListPublishedPagesByCategory(ctx, store.ListPublishedPagesByCategoryParams{
-				CategoryID: categoryID,
-				Limit:      int64(perPage),
-				Offset:     int64(offset),
+				CategoryID: categoryID, Limit: limit, Offset: off,
 			})
 			if err == nil {
 				total, err = h.queries.CountPublishedPagesByCategory(ctx, categoryID)
 			}
 		} else {
 			pages, err = h.queries.ListPagesByCategory(ctx, store.ListPagesByCategoryParams{
-				CategoryID: categoryID,
-				Limit:      int64(perPage),
-				Offset:     int64(offset),
+				CategoryID: categoryID, Limit: limit, Offset: off,
 			})
 			if err == nil {
 				total, err = h.queries.CountPagesByCategory(ctx, categoryID)
@@ -210,20 +211,16 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if status == model.PageStatusPublished {
+		if publishedOnly {
 			pages, err = h.queries.ListPublishedPagesForTag(ctx, store.ListPublishedPagesForTagParams{
-				TagID:  tagID,
-				Limit:  int64(perPage),
-				Offset: int64(offset),
+				TagID: tagID, Limit: limit, Offset: off,
 			})
 			if err == nil {
 				total, err = h.queries.CountPublishedPagesForTag(ctx, tagID)
 			}
 		} else {
 			pages, err = h.queries.GetPagesForTag(ctx, store.GetPagesForTagParams{
-				TagID:  tagID,
-				Limit:  int64(perPage),
-				Offset: int64(offset),
+				TagID: tagID, Limit: limit, Offset: off,
 			})
 			if err == nil {
 				total, err = h.queries.CountPagesForTag(ctx, tagID)
@@ -232,9 +229,7 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 	} else if status != "" {
 		// Filter by status
 		pages, err = h.queries.ListPagesByStatus(ctx, store.ListPagesByStatusParams{
-			Status: status,
-			Limit:  int64(perPage),
-			Offset: int64(offset),
+			Status: status, Limit: limit, Offset: off,
 		})
 		if err == nil {
 			total, err = h.queries.CountPagesByStatus(ctx, status)
@@ -242,8 +237,7 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// All pages (authenticated only - unauthenticated requests have status set to "published")
 		pages, err = h.queries.ListPages(ctx, store.ListPagesParams{
-			Limit:  int64(perPage),
-			Offset: int64(offset),
+			Limit: limit, Offset: off,
 		})
 		if err == nil {
 			total, err = h.queries.CountPages(ctx)

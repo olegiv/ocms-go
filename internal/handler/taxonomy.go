@@ -1385,17 +1385,19 @@ func (h *TaxonomyHandler) validateCategorySlugUpdate(ctx context.Context, slug, 
 
 // translationBaseInfo holds common language info for taxonomy entities.
 type translationBaseInfo struct {
-	EntityLanguage   *store.Language
-	AllLanguages     []store.Language
-	TranslatedIDs    map[int64]bool
-	TranslationLinks []store.GetTranslationsForEntityRow
-	MissingLanguages []store.Language
+	EntityLanguage       *store.Language
+	AllLanguages         []store.Language
+	TranslatedIDs        map[int64]bool
+	TranslationLinks     []store.GetTranslationsForEntityRow
+	TranslationLanguages map[int64]store.Language // maps LanguageID to Language for each translation link
+	MissingLanguages     []store.Language
 }
 
 // loadTranslationBaseInfo loads common language and translation info for any entity.
 func (h *TaxonomyHandler) loadTranslationBaseInfo(ctx context.Context, entityType string, entityID int64, languageID sql.NullInt64) translationBaseInfo {
 	info := translationBaseInfo{
-		TranslatedIDs: make(map[int64]bool),
+		TranslatedIDs:        make(map[int64]bool),
+		TranslationLanguages: make(map[int64]store.Language),
 	}
 
 	// Load all active languages
@@ -1406,10 +1408,15 @@ func (h *TaxonomyHandler) loadTranslationBaseInfo(ctx context.Context, entityTyp
 	}
 	info.AllLanguages = allLanguages
 
+	// Build language lookup map
+	langByID := make(map[int64]store.Language, len(allLanguages))
+	for _, lang := range allLanguages {
+		langByID[lang.ID] = lang
+	}
+
 	// Load entity's language
 	if languageID.Valid {
-		lang, err := h.queries.GetLanguageByID(ctx, languageID.Int64)
-		if err == nil {
+		if lang, ok := langByID[languageID.Int64]; ok {
 			info.EntityLanguage = &lang
 			info.TranslatedIDs[lang.ID] = true
 		}
@@ -1425,9 +1432,12 @@ func (h *TaxonomyHandler) loadTranslationBaseInfo(ctx context.Context, entityTyp
 	}
 	info.TranslationLinks = translationLinks
 
-	// Mark translated language IDs
+	// Mark translated language IDs and cache languages
 	for _, tl := range translationLinks {
 		info.TranslatedIDs[tl.LanguageID] = true
+		if lang, ok := langByID[tl.LanguageID]; ok {
+			info.TranslationLanguages[tl.LanguageID] = lang
+		}
 	}
 
 	// Find missing languages
@@ -1458,17 +1468,18 @@ func (h *TaxonomyHandler) loadTagLanguageInfo(ctx context.Context, tag store.Tag
 		MissingLanguages: base.MissingLanguages,
 	}
 
-	// Load translated tags
+	// Load translated tags (languages are pre-fetched in base)
 	for _, tl := range base.TranslationLinks {
+		lang, ok := base.TranslationLanguages[tl.LanguageID]
+		if !ok {
+			continue
+		}
 		translatedTag, err := h.queries.GetTagByID(ctx, tl.TranslationID)
 		if err == nil {
-			lang, err := h.queries.GetLanguageByID(ctx, tl.LanguageID)
-			if err == nil {
-				info.Translations = append(info.Translations, TagTranslationInfo{
-					Language: lang,
-					Tag:      translatedTag,
-				})
-			}
+			info.Translations = append(info.Translations, TagTranslationInfo{
+				Language: lang,
+				Tag:      translatedTag,
+			})
 		}
 	}
 
@@ -1493,17 +1504,18 @@ func (h *TaxonomyHandler) loadCategoryLanguageInfo(ctx context.Context, category
 		MissingLanguages: base.MissingLanguages,
 	}
 
-	// Load translated categories
+	// Load translated categories (languages are pre-fetched in base)
 	for _, tl := range base.TranslationLinks {
+		lang, ok := base.TranslationLanguages[tl.LanguageID]
+		if !ok {
+			continue
+		}
 		translatedCategory, err := h.queries.GetCategoryByID(ctx, tl.TranslationID)
 		if err == nil {
-			lang, err := h.queries.GetLanguageByID(ctx, tl.LanguageID)
-			if err == nil {
-				info.Translations = append(info.Translations, CategoryTranslationInfo{
-					Language: lang,
-					Category: translatedCategory,
-				})
-			}
+			info.Translations = append(info.Translations, CategoryTranslationInfo{
+				Language: lang,
+				Category: translatedCategory,
+			})
 		}
 	}
 
