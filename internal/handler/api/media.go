@@ -202,7 +202,7 @@ func (h *Handler) ListMedia(w http.ResponseWriter, r *http.Request) {
 			WriteBadRequest(w, "Invalid folder ID", nil)
 			return
 		}
-		media, total, err = listAndCount(
+		media, total, err = handler.ListAndCount(
 			func() ([]store.Medium, error) {
 				return h.queries.ListMediaInFolder(ctx, store.ListMediaInFolderParams{
 					FolderID: util.NullInt64FromValue(folderID),
@@ -226,7 +226,7 @@ func (h *Handler) ListMedia(w http.ResponseWriter, r *http.Request) {
 			WriteBadRequest(w, "Invalid type filter. Use: image, document, or video", nil)
 			return
 		}
-		media, total, err = listAndCount(
+		media, total, err = handler.ListAndCount(
 			func() ([]store.Medium, error) {
 				return h.queries.ListMediaByType(ctx, store.ListMediaByTypeParams{
 					MimeType: mimePattern,
@@ -238,7 +238,7 @@ func (h *Handler) ListMedia(w http.ResponseWriter, r *http.Request) {
 		)
 	} else {
 		// List all media
-		media, total, err = listAndCount(
+		media, total, err = handler.ListAndCount(
 			func() ([]store.Medium, error) {
 				return h.queries.ListMedia(ctx, store.ListMediaParams{
 					Limit:  int64(perPage),

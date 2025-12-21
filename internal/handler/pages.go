@@ -280,26 +280,20 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch tags for all displayed pages
-	pageTags := make(map[int64][]store.Tag)
-	for _, p := range pages {
-		tags, err := h.queries.GetTagsForPage(r.Context(), p.ID)
-		if err != nil {
-			slog.Error("failed to get tags for page", "error", err, "page_id", p.ID)
-			continue
-		}
-		pageTags[p.ID] = tags
-	}
+	pageTags := batchFetchRelated(r.Context(), pages,
+		func(p store.Page) int64 { return p.ID },
+		func(ctx context.Context, id int64) ([]store.Tag, error) { return h.queries.GetTagsForPage(ctx, id) },
+		"page_tags",
+	)
 
 	// Fetch categories for all displayed pages
-	pageCategories := make(map[int64][]store.Category)
-	for _, p := range pages {
-		categories, err := h.queries.GetCategoriesForPage(r.Context(), p.ID)
-		if err != nil {
-			slog.Error("failed to get categories for page", "error", err, "page_id", p.ID)
-			continue
-		}
-		pageCategories[p.ID] = categories
-	}
+	pageCategories := batchFetchRelated(r.Context(), pages,
+		func(p store.Page) int64 { return p.ID },
+		func(ctx context.Context, id int64) ([]store.Category, error) {
+			return h.queries.GetCategoriesForPage(ctx, id)
+		},
+		"page_categories",
+	)
 
 	// Fetch featured images for all displayed pages
 	pageFeaturedImages := make(map[int64]*FeaturedImageData)
@@ -321,19 +315,12 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch languages for all displayed pages
-	pageLanguages := make(map[int64]*store.Language)
-	for _, p := range pages {
-		if p.LanguageID.Valid {
-			lang, err := h.queries.GetLanguageByID(r.Context(), p.LanguageID.Int64)
-			if err != nil {
-				if !errors.Is(err, sql.ErrNoRows) {
-					slog.Error("failed to get language for page", "error", err, "page_id", p.ID, "language_id", p.LanguageID.Int64)
-				}
-				continue
-			}
-			pageLanguages[p.ID] = &lang
-		}
-	}
+	pageLanguages := batchFetchOptional(r.Context(), pages,
+		func(p store.Page) int64 { return p.ID },
+		func(p store.Page) sql.NullInt64 { return p.LanguageID },
+		func(ctx context.Context, id int64) (store.Language, error) { return h.queries.GetLanguageByID(ctx, id) },
+		"page_languages",
+	)
 
 	// Load all categories for filter dropdown
 	allCategories, err := h.queries.ListCategories(r.Context())
@@ -411,6 +398,32 @@ type PageFormData struct {
 type PageTranslationInfo struct {
 	Language store.Language
 	Page     store.Page
+}
+
+// pageLanguageInfo holds language and translation info for a page.
+type pageLanguageInfo struct {
+	PageLanguage     *store.Language
+	AllLanguages     []store.Language
+	Translations     []PageTranslationInfo
+	MissingLanguages []store.Language
+}
+
+// loadPageLanguageInfo loads language and translation info for a page.
+func (h *PagesHandler) loadPageLanguageInfo(ctx context.Context, page store.Page) pageLanguageInfo {
+	base := loadTranslationBaseInfo(ctx, h.queries, model.EntityTypePage, page.ID, page.LanguageID)
+	result := loadEntityTranslations(
+		base,
+		func(id int64) (store.Page, error) { return h.queries.GetPageByID(ctx, id) },
+		func(lang store.Language, p store.Page) PageTranslationInfo {
+			return PageTranslationInfo{Language: lang, Page: p}
+		},
+	)
+	return pageLanguageInfo{
+		PageLanguage:     result.EntityLanguage,
+		AllLanguages:     result.AllLanguages,
+		Translations:     result.Translations,
+		MissingLanguages: result.MissingLanguages,
+	}
 }
 
 // buildPageCategoryTree builds a flat list with depth for display.
@@ -673,57 +686,8 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Load all active languages
-	allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
-
-	// Load current page's language
-	var pageLanguage *store.Language
-	if page.LanguageID.Valid {
-		lang, err := h.queries.GetLanguageByID(r.Context(), page.LanguageID.Int64)
-		if err == nil {
-			pageLanguage = &lang
-		}
-	}
-
-	// Load translations for this page
-	var translations []PageTranslationInfo
-	var missingLanguages []store.Language
-
-	translationLinks, err := h.queries.GetTranslationsForEntity(r.Context(), store.GetTranslationsForEntityParams{
-		EntityType: model.EntityTypePage,
-		EntityID:   id,
-	})
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		slog.Error("failed to get translations for page", "error", err, "page_id", id)
-	}
-
-	// Build translations list and find missing languages
-	translatedLangIDs := make(map[int64]bool)
-	if pageLanguage != nil {
-		translatedLangIDs[pageLanguage.ID] = true // Current page's language is "taken"
-	}
-
-	for _, tl := range translationLinks {
-		translatedLangIDs[tl.LanguageID] = true
-		// Get the translated page
-		translatedPage, err := h.queries.GetPageByID(r.Context(), tl.TranslationID)
-		if err == nil {
-			lang, err := h.queries.GetLanguageByID(r.Context(), tl.LanguageID)
-			if err == nil {
-				translations = append(translations, PageTranslationInfo{
-					Language: lang,
-					Page:     translatedPage,
-				})
-			}
-		}
-	}
-
-	// Find languages that don't have translations yet
-	for _, lang := range allLanguages {
-		if !translatedLangIDs[lang.ID] {
-			missingLanguages = append(missingLanguages, lang)
-		}
-	}
+	// Load language and translation info
+	langInfo := h.loadPageLanguageInfo(r.Context(), page)
 
 	data := PageFormData{
 		Page:             &page,
@@ -731,10 +695,10 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		Categories:       categories,
 		AllCategories:    categoryTree,
 		FeaturedImage:    featuredImage,
-		AllLanguages:     allLanguages,
-		Language:         pageLanguage,
-		Translations:     translations,
-		MissingLanguages: missingLanguages,
+		AllLanguages:     langInfo.AllLanguages,
+		Language:         langInfo.PageLanguage,
+		Translations:     langInfo.Translations,
+		MissingLanguages: langInfo.MissingLanguages,
 		Statuses:         ValidPageStatuses,
 		Errors:           make(map[string]string),
 		FormValues:       make(map[string]string),
@@ -1375,32 +1339,20 @@ func (h *PagesHandler) validatePageSlugUpdate(ctx context.Context, slug string, 
 
 // savePageTags saves tag associations for a page from form values.
 func (h *PagesHandler) savePageTags(ctx context.Context, pageID int64, tagIDStrs []string) {
-	for _, tagIDStr := range tagIDStrs {
-		tagID, err := strconv.ParseInt(tagIDStr, 10, 64)
-		if err != nil {
-			continue
-		}
-		if err = h.queries.AddTagToPage(ctx, store.AddTagToPageParams{
+	saveBatchAssociations(tagIDStrs, func(tagID int64) error {
+		return h.queries.AddTagToPage(ctx, store.AddTagToPageParams{
 			PageID: pageID,
 			TagID:  tagID,
-		}); err != nil {
-			slog.Error("failed to add tag to page", "error", err, "page_id", pageID, "tag_id", tagID)
-		}
-	}
+		})
+	}, "page_tags")
 }
 
 // savePageCategories saves category associations for a page from form values.
 func (h *PagesHandler) savePageCategories(ctx context.Context, pageID int64, categoryIDStrs []string) {
-	for _, categoryIDStr := range categoryIDStrs {
-		categoryID, err := strconv.ParseInt(categoryIDStr, 10, 64)
-		if err != nil {
-			continue
-		}
-		if err = h.queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{
+	saveBatchAssociations(categoryIDStrs, func(categoryID int64) error {
+		return h.queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{
 			PageID:     pageID,
 			CategoryID: categoryID,
-		}); err != nil {
-			slog.Error("failed to add category to page", "error", err, "page_id", pageID, "category_id", categoryID)
-		}
-	}
+		})
+	}, "page_categories")
 }

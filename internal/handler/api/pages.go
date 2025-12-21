@@ -134,9 +134,9 @@ func selectAndListPages(
 	publishedCountFn, allCountFn func() (int64, error),
 ) ([]store.Page, int64, error) {
 	if publishedOnly {
-		return listAndCount(publishedListFn, publishedCountFn)
+		return handler.ListAndCount(publishedListFn, publishedCountFn)
 	}
-	return listAndCount(allListFn, allCountFn)
+	return handler.ListAndCount(allListFn, allCountFn)
 }
 
 // listPagesByCategory returns pages filtered by category with published-only option.
@@ -271,7 +271,7 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 		pages, total, err = h.listPagesByTag(ctx, publishedOnly, tagID, limit, off)
 	} else if status != "" {
 		// Filter by status
-		pages, total, err = listAndCount(
+		pages, total, err = handler.ListAndCount(
 			func() ([]store.Page, error) {
 				return h.queries.ListPagesByStatus(ctx, store.ListPagesByStatusParams{
 					Status: status, Limit: limit, Offset: off,
@@ -281,7 +281,7 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 		)
 	} else {
 		// All pages (authenticated only - unauthenticated requests have status set to "published")
-		pages, total, err = listAndCount(
+		pages, total, err = handler.ListAndCount(
 			func() ([]store.Page, error) {
 				return h.queries.ListPages(ctx, store.ListPagesParams{
 					Limit: limit, Offset: off,
