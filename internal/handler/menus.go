@@ -551,28 +551,7 @@ type UpdateItemRequest struct {
 
 // UpdateItem handles PUT /admin/menus/{id}/items/{itemId} - updates a menu item.
 func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
-	menuID, err := ParseIDParam(r)
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "Invalid menu ID")
-		return
-	}
-
-	itemID, err := ParseURLParamInt64(r, "itemId")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "Invalid item ID")
-		return
-	}
-
-	item, ok := h.requireMenuItemWithJSONError(w, r, itemID)
-	if !ok {
-		return
-	}
-
-	if !verifyItemBelongsToMenuJSON(w, item, menuID) {
-		return
-	}
-
-	menu, ok := h.requireMenuWithJSONError(w, r, menuID)
+	menu, item, ok := h.requireMenuAndItemForJSON(w, r)
 	if !ok {
 		return
 	}
@@ -602,7 +581,7 @@ func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	updatedItem, err := h.queries.UpdateMenuItem(r.Context(), store.UpdateMenuItemParams{
-		ID:        itemID,
+		ID:        item.ID,
 		ParentID:  item.ParentID, // Keep existing parent
 		Title:     req.Title,
 		Url:       sql.NullString{String: req.URL, Valid: req.URL != ""},
@@ -627,33 +606,12 @@ func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 
 // DeleteItem handles DELETE /admin/menus/{id}/items/{itemId} - deletes a menu item.
 func (h *MenusHandler) DeleteItem(w http.ResponseWriter, r *http.Request) {
-	menuID, err := ParseIDParam(r)
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "Invalid menu ID")
-		return
-	}
-
-	itemID, err := ParseURLParamInt64(r, "itemId")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "Invalid item ID")
-		return
-	}
-
-	item, ok := h.requireMenuItemWithJSONError(w, r, itemID)
+	menu, item, ok := h.requireMenuAndItemForJSON(w, r)
 	if !ok {
 		return
 	}
 
-	if !verifyItemBelongsToMenuJSON(w, item, menuID) {
-		return
-	}
-
-	menu, ok := h.requireMenuWithJSONError(w, r, menuID)
-	if !ok {
-		return
-	}
-
-	if err = h.queries.DeleteMenuItem(r.Context(), itemID); err != nil {
+	if err := h.queries.DeleteMenuItem(r.Context(), item.ID); err != nil {
 		slog.Error("failed to delete menu item", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "Error deleting menu item")
 		return
@@ -917,6 +875,38 @@ func verifyItemBelongsToMenuJSON(w http.ResponseWriter, item store.MenuItem, men
 		return false
 	}
 	return true
+}
+
+// requireMenuAndItemForJSON parses menu and item IDs from URL, validates ownership,
+// and returns both entities. Used by UpdateItem and DeleteItem handlers.
+func (h *MenusHandler) requireMenuAndItemForJSON(w http.ResponseWriter, r *http.Request) (store.Menu, store.MenuItem, bool) {
+	menuID, err := ParseIDParam(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "Invalid menu ID")
+		return store.Menu{}, store.MenuItem{}, false
+	}
+
+	itemID, err := ParseURLParamInt64(r, "itemId")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "Invalid item ID")
+		return store.Menu{}, store.MenuItem{}, false
+	}
+
+	item, ok := h.requireMenuItemWithJSONError(w, r, itemID)
+	if !ok {
+		return store.Menu{}, store.MenuItem{}, false
+	}
+
+	if !verifyItemBelongsToMenuJSON(w, item, menuID) {
+		return store.Menu{}, store.MenuItem{}, false
+	}
+
+	menu, ok := h.requireMenuWithJSONError(w, r, menuID)
+	if !ok {
+		return store.Menu{}, store.MenuItem{}, false
+	}
+
+	return menu, item, true
 }
 
 // getMaxMenuItemPosition returns the max position for menu items under a parent.
