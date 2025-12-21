@@ -194,64 +194,28 @@ func (h *WebhooksHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // NewForm handles GET /admin/webhooks/new - displays the new webhook form.
 func (h *WebhooksHandler) NewForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	lang := middleware.GetAdminLang(r)
-
-	data := WebhookFormData{
+	h.renderNewWebhookForm(w, r, WebhookFormData{
 		Events:      model.AllWebhookEvents(),
 		Errors:      make(map[string]string),
 		FormValues:  make(map[string]string),
 		FormEvents:  []string{},
 		FormHeaders: make(map[string]string),
 		IsEdit:      false,
-	}
-
-	if err := h.renderer.Render(w, r, "admin/webhooks_form", render.TemplateData{
-		Title: i18n.T(lang, "webhooks.new"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.webhooks"), URL: "/admin/webhooks"},
-			{Label: i18n.T(lang, "webhooks.new"), URL: "/admin/webhooks/new", Active: true},
-		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // Create handles POST /admin/webhooks - creates a new webhook.
 func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	lang := middleware.GetAdminLang(r)
-
 	if err := r.ParseForm(); err != nil {
 		h.renderer.SetFlash(r, "Invalid form data", "error")
 		http.Redirect(w, r, "/admin/webhooks/new", http.StatusSeeOther)
 		return
 	}
 
-	// Get form values
-	name := strings.TrimSpace(r.FormValue("name"))
-	url := strings.TrimSpace(r.FormValue("url"))
-	secret := strings.TrimSpace(r.FormValue("secret"))
-	events := r.Form["events"]
-	isActive := r.FormValue("is_active") == "on" || r.FormValue("is_active") == "true" || r.FormValue("is_active") == "1"
-
-	// Parse custom headers
-	headerKeys := r.Form["header_key"]
-	headerValues := r.Form["header_value"]
-	headers := make(map[string]string)
-	for i, key := range headerKeys {
-		key = strings.TrimSpace(key)
-		if key != "" && i < len(headerValues) {
-			headers[key] = strings.TrimSpace(headerValues[i])
-		}
-	}
+	input := parseWebhookFormInput(r)
 
 	// Auto-generate secret if empty
-	if secret == "" {
+	if input.Secret == "" {
 		generatedSecret, err := model.GenerateWebhookSecret()
 		if err != nil {
 			slog.Error("failed to generate webhook secret", "error", err)
@@ -259,90 +223,34 @@ func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/admin/webhooks/new", http.StatusSeeOther)
 			return
 		}
-		secret = generatedSecret
+		input.Secret = generatedSecret
 	}
 
-	// Store form values for re-rendering on error
-	formValues := map[string]string{
-		"name":   name,
-		"url":    url,
-		"secret": secret,
-	}
-	if isActive {
-		formValues["is_active"] = "1"
-	}
-
-	// Validate
-	validationErrors := make(map[string]string)
-
-	if name == "" {
-		validationErrors["name"] = "Name is required"
-	} else if len(name) > 100 {
-		validationErrors["name"] = "Name must be less than 100 characters"
-	}
-
-	if url == "" {
-		validationErrors["url"] = "URL is required"
-	} else if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
-		validationErrors["url"] = "URL must start with http:// or https://"
-	}
-
-	if len(events) == 0 {
-		validationErrors["events"] = "At least one event is required"
-	} else {
-		// Validate event types
-		validEvents := model.AllWebhookEvents()
-		for _, e := range events {
-			valid := false
-			for _, ve := range validEvents {
-				if e == ve.Type {
-					valid = true
-					break
-				}
-			}
-			if !valid {
-				validationErrors["events"] = "Invalid event type: " + e
-				break
-			}
-		}
-	}
+	// Validate with full event type checking for create
+	validationErrors := validateWebhookForm(input, true)
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
-		data := WebhookFormData{
+		h.renderNewWebhookForm(w, r, WebhookFormData{
 			Events:      model.AllWebhookEvents(),
 			Errors:      validationErrors,
-			FormValues:  formValues,
-			FormEvents:  events,
-			FormHeaders: headers,
+			FormValues:  input.toFormValues(),
+			FormEvents:  input.Events,
+			FormHeaders: input.Headers,
 			IsEdit:      false,
-		}
-
-		if err := h.renderer.Render(w, r, "admin/webhooks_form", render.TemplateData{
-			Title: i18n.T(lang, "webhooks.new"),
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-				{Label: i18n.T(lang, "nav.webhooks"), URL: "/admin/webhooks"},
-				{Label: i18n.T(lang, "webhooks.new"), URL: "/admin/webhooks/new", Active: true},
-			},
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		})
 		return
 	}
 
 	// Create webhook
 	now := time.Now()
 	webhook, err := h.queries.CreateWebhook(r.Context(), store.CreateWebhookParams{
-		Name:      name,
-		Url:       url,
-		Secret:    secret,
-		Events:    model.EventsToJSON(events),
-		IsActive:  isActive,
-		Headers:   model.HeadersToJSON(headers),
+		Name:      input.Name,
+		Url:       input.URL,
+		Secret:    input.Secret,
+		Events:    model.EventsToJSON(input.Events),
+		IsActive:  input.IsActive,
+		Headers:   model.HeadersToJSON(input.Headers),
 		CreatedBy: middleware.GetUserID(r),
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -361,40 +269,20 @@ func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // EditForm handles GET /admin/webhooks/{id} - displays the edit webhook form.
 func (h *WebhooksHandler) EditForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	lang := middleware.GetAdminLang(r)
-
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseWebhookIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid webhook ID", "error")
 		http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
 		return
 	}
 
-	webhook, err := h.queries.GetWebhookByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Webhook not found", "error")
-		} else {
-			slog.Error("failed to get webhook", "error", err)
-			h.renderer.SetFlash(r, "Error loading webhook", "error")
-		}
-		http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
+	webhook, ok := h.requireWebhookWithRedirect(w, r, id)
+	if !ok {
 		return
 	}
 
-	// Parse events
-	var events []string
-	if webhook.Events != "" && webhook.Events != "[]" {
-		_ = json.Unmarshal([]byte(webhook.Events), &events)
-	}
-
-	// Parse headers
-	headers := make(map[string]string)
-	if webhook.Headers != "" && webhook.Headers != "{}" {
-		_ = json.Unmarshal([]byte(webhook.Headers), &headers)
-	}
+	// Parse events and headers from stored JSON
+	events, headers := parseWebhookStoredData(webhook)
 
 	formValues := map[string]string{
 		"name":   webhook.Name,
@@ -405,7 +293,7 @@ func (h *WebhooksHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		formValues["is_active"] = "1"
 	}
 
-	data := WebhookFormData{
+	h.renderEditWebhookForm(w, r, webhook, WebhookFormData{
 		Webhook:     &webhook,
 		Events:      model.AllWebhookEvents(),
 		Errors:      make(map[string]string),
@@ -413,45 +301,20 @@ func (h *WebhooksHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		FormEvents:  events,
 		FormHeaders: headers,
 		IsEdit:      true,
-	}
-
-	if err := h.renderer.Render(w, r, "admin/webhooks_form", render.TemplateData{
-		Title: webhook.Name,
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.webhooks"), URL: "/admin/webhooks"},
-			{Label: webhook.Name, URL: fmt.Sprintf("/admin/webhooks/%d", id), Active: true},
-		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // Update handles PUT /admin/webhooks/{id} - updates an existing webhook.
 func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	lang := middleware.GetAdminLang(r)
-
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseWebhookIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid webhook ID", "error")
 		http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
 		return
 	}
 
-	webhook, err := h.queries.GetWebhookByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Webhook not found", "error")
-		} else {
-			slog.Error("failed to get webhook", "error", err)
-			h.renderer.SetFlash(r, "Error loading webhook", "error")
-		}
-		http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
+	webhook, ok := h.requireWebhookWithRedirect(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -461,83 +324,27 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get form values
-	name := strings.TrimSpace(r.FormValue("name"))
-	url := strings.TrimSpace(r.FormValue("url"))
-	secret := strings.TrimSpace(r.FormValue("secret"))
-	events := r.Form["events"]
-	isActive := r.FormValue("is_active") == "on" || r.FormValue("is_active") == "true" || r.FormValue("is_active") == "1"
-
-	// Parse custom headers
-	headerKeys := r.Form["header_key"]
-	headerValues := r.Form["header_value"]
-	headers := make(map[string]string)
-	for i, key := range headerKeys {
-		key = strings.TrimSpace(key)
-		if key != "" && i < len(headerValues) {
-			headers[key] = strings.TrimSpace(headerValues[i])
-		}
-	}
+	input := parseWebhookFormInput(r)
 
 	// Keep existing secret if not changed
-	if secret == "" {
-		secret = webhook.Secret
+	if input.Secret == "" {
+		input.Secret = webhook.Secret
 	}
 
-	// Store form values for re-rendering on error
-	formValues := map[string]string{
-		"name":   name,
-		"url":    url,
-		"secret": secret,
-	}
-	if isActive {
-		formValues["is_active"] = "1"
-	}
-
-	// Validate
-	validationErrors := make(map[string]string)
-
-	if name == "" {
-		validationErrors["name"] = "Name is required"
-	} else if len(name) > 100 {
-		validationErrors["name"] = "Name must be less than 100 characters"
-	}
-
-	if url == "" {
-		validationErrors["url"] = "URL is required"
-	} else if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
-		validationErrors["url"] = "URL must start with http:// or https://"
-	}
-
-	if len(events) == 0 {
-		validationErrors["events"] = "At least one event is required"
-	}
+	// Validate without full event type checking for update
+	validationErrors := validateWebhookForm(input, false)
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
-		data := WebhookFormData{
+		h.renderEditWebhookForm(w, r, webhook, WebhookFormData{
 			Webhook:     &webhook,
 			Events:      model.AllWebhookEvents(),
 			Errors:      validationErrors,
-			FormValues:  formValues,
-			FormEvents:  events,
-			FormHeaders: headers,
+			FormValues:  input.toFormValues(),
+			FormEvents:  input.Events,
+			FormHeaders: input.Headers,
 			IsEdit:      true,
-		}
-
-		if err := h.renderer.Render(w, r, "admin/webhooks_form", render.TemplateData{
-			Title: webhook.Name,
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-				{Label: i18n.T(lang, "nav.webhooks"), URL: "/admin/webhooks"},
-				{Label: webhook.Name, URL: fmt.Sprintf("/admin/webhooks/%d", id), Active: true},
-			},
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		})
 		return
 	}
 
@@ -545,12 +352,12 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	_, err = h.queries.UpdateWebhook(r.Context(), store.UpdateWebhookParams{
 		ID:        id,
-		Name:      name,
-		Url:       url,
-		Secret:    secret,
-		Events:    model.EventsToJSON(events),
-		IsActive:  isActive,
-		Headers:   model.HeadersToJSON(headers),
+		Name:      input.Name,
+		Url:       input.URL,
+		Secret:    input.Secret,
+		Events:    model.EventsToJSON(input.Events),
+		IsActive:  input.IsActive,
+		Headers:   model.HeadersToJSON(input.Headers),
 		UpdatedAt: now,
 	})
 	if err != nil {
@@ -567,21 +374,14 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/webhooks/{id} - deletes a webhook.
 func (h *WebhooksHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseWebhookIDParam(r)
 	if err != nil {
 		h.sendDeleteError(w, "Invalid webhook ID")
 		return
 	}
 
-	webhook, err := h.queries.GetWebhookByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.sendDeleteError(w, "Webhook not found")
-		} else {
-			slog.Error("failed to get webhook", "error", err)
-			h.sendDeleteError(w, "Error loading webhook")
-		}
+	webhook, ok := h.requireWebhookWithDeleteError(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -609,23 +409,15 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseWebhookIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid webhook ID", "error")
 		http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
 		return
 	}
 
-	webhook, err := h.queries.GetWebhookByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Webhook not found", "error")
-		} else {
-			slog.Error("failed to get webhook", "error", err)
-			h.renderer.SetFlash(r, "Error loading webhook", "error")
-		}
-		http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
+	webhook, ok := h.requireWebhookWithRedirect(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -694,23 +486,15 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 
 // Test handles POST /admin/webhooks/{id}/test - sends a test event.
 func (h *WebhooksHandler) Test(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseWebhookIDParam(r)
 	if err != nil {
 		h.renderer.SetFlash(r, "Invalid webhook ID", "error")
 		http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
 		return
 	}
 
-	webhook, err := h.queries.GetWebhookByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.SetFlash(r, "Webhook not found", "error")
-		} else {
-			slog.Error("failed to get webhook", "error", err)
-			h.renderer.SetFlash(r, "Error loading webhook", "error")
-		}
-		http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
+	webhook, ok := h.requireWebhookWithRedirect(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -792,6 +576,189 @@ func (h *WebhooksHandler) sendDeleteError(w http.ResponseWriter, message string)
 	w.Header().Set("HX-Reswap", "none")
 	w.Header().Set("HX-Trigger", `{"showToast": "`+message+`", "toastType": "error"}`)
 	w.WriteHeader(http.StatusBadRequest)
+}
+
+// parseWebhookIDParam parses the webhook ID from the URL.
+func parseWebhookIDParam(r *http.Request) (int64, error) {
+	idStr := chi.URLParam(r, "id")
+	return strconv.ParseInt(idStr, 10, 64)
+}
+
+// requireWebhookWithRedirect fetches a webhook by ID and redirects with flash on error.
+func (h *WebhooksHandler) requireWebhookWithRedirect(w http.ResponseWriter, r *http.Request, id int64) (store.Webhook, bool) {
+	webhook, err := h.queries.GetWebhookByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			h.renderer.SetFlash(r, "Webhook not found", "error")
+		} else {
+			slog.Error("failed to get webhook", "error", err)
+			h.renderer.SetFlash(r, "Error loading webhook", "error")
+		}
+		http.Redirect(w, r, "/admin/webhooks", http.StatusSeeOther)
+		return store.Webhook{}, false
+	}
+	return webhook, true
+}
+
+// requireWebhookWithDeleteError fetches a webhook by ID and sends delete error on failure.
+func (h *WebhooksHandler) requireWebhookWithDeleteError(w http.ResponseWriter, r *http.Request, id int64) (store.Webhook, bool) {
+	webhook, err := h.queries.GetWebhookByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			h.sendDeleteError(w, "Webhook not found")
+		} else {
+			slog.Error("failed to get webhook", "error", err)
+			h.sendDeleteError(w, "Error loading webhook")
+		}
+		return store.Webhook{}, false
+	}
+	return webhook, true
+}
+
+// webhookFormInput holds parsed form values for webhook create/update.
+type webhookFormInput struct {
+	Name     string
+	URL      string
+	Secret   string
+	Events   []string
+	IsActive bool
+	Headers  map[string]string
+}
+
+// parseWebhookFormInput extracts and parses webhook form values.
+func parseWebhookFormInput(r *http.Request) webhookFormInput {
+	name := strings.TrimSpace(r.FormValue("name"))
+	url := strings.TrimSpace(r.FormValue("url"))
+	secret := strings.TrimSpace(r.FormValue("secret"))
+	events := r.Form["events"]
+	isActive := r.FormValue("is_active") == "on" || r.FormValue("is_active") == "true" || r.FormValue("is_active") == "1"
+
+	// Parse custom headers
+	headerKeys := r.Form["header_key"]
+	headerValues := r.Form["header_value"]
+	headers := make(map[string]string)
+	for i, key := range headerKeys {
+		key = strings.TrimSpace(key)
+		if key != "" && i < len(headerValues) {
+			headers[key] = strings.TrimSpace(headerValues[i])
+		}
+	}
+
+	return webhookFormInput{
+		Name:     name,
+		URL:      url,
+		Secret:   secret,
+		Events:   events,
+		IsActive: isActive,
+		Headers:  headers,
+	}
+}
+
+// toFormValues converts webhookFormInput to a map for form re-rendering.
+func (input webhookFormInput) toFormValues() map[string]string {
+	formValues := map[string]string{
+		"name":   input.Name,
+		"url":    input.URL,
+		"secret": input.Secret,
+	}
+	if input.IsActive {
+		formValues["is_active"] = "1"
+	}
+	return formValues
+}
+
+// parseWebhookStoredData parses events and headers from a stored webhook's JSON fields.
+func parseWebhookStoredData(webhook store.Webhook) ([]string, map[string]string) {
+	var events []string
+	if webhook.Events != "" && webhook.Events != "[]" {
+		_ = json.Unmarshal([]byte(webhook.Events), &events)
+	}
+
+	headers := make(map[string]string)
+	if webhook.Headers != "" && webhook.Headers != "{}" {
+		_ = json.Unmarshal([]byte(webhook.Headers), &headers)
+	}
+
+	return events, headers
+}
+
+// validateWebhookForm validates webhook form input and returns validation errors.
+func validateWebhookForm(input webhookFormInput, validateEvents bool) map[string]string {
+	validationErrors := make(map[string]string)
+
+	if input.Name == "" {
+		validationErrors["name"] = "Name is required"
+	} else if len(input.Name) > 100 {
+		validationErrors["name"] = "Name must be less than 100 characters"
+	}
+
+	if input.URL == "" {
+		validationErrors["url"] = "URL is required"
+	} else if !strings.HasPrefix(input.URL, "http://") && !strings.HasPrefix(input.URL, "https://") {
+		validationErrors["url"] = "URL must start with http:// or https://"
+	}
+
+	if len(input.Events) == 0 {
+		validationErrors["events"] = "At least one event is required"
+	} else if validateEvents {
+		// Validate event types
+		validEvents := model.AllWebhookEvents()
+		for _, e := range input.Events {
+			valid := false
+			for _, ve := range validEvents {
+				if e == ve.Type {
+					valid = true
+					break
+				}
+			}
+			if !valid {
+				validationErrors["events"] = "Invalid event type: " + e
+				break
+			}
+		}
+	}
+
+	return validationErrors
+}
+
+// renderNewWebhookForm renders the new webhook form with the given data.
+func (h *WebhooksHandler) renderNewWebhookForm(w http.ResponseWriter, r *http.Request, data WebhookFormData) {
+	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
+
+	if err := h.renderer.Render(w, r, "admin/webhooks_form", render.TemplateData{
+		Title: i18n.T(lang, "webhooks.new"),
+		User:  user,
+		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.webhooks"), URL: "/admin/webhooks"},
+			{Label: i18n.T(lang, "webhooks.new"), URL: "/admin/webhooks/new", Active: true},
+		},
+	}); err != nil {
+		slog.Error("render error", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+// renderEditWebhookForm renders the edit webhook form with the given data.
+func (h *WebhooksHandler) renderEditWebhookForm(w http.ResponseWriter, r *http.Request, webhook store.Webhook, data WebhookFormData) {
+	user := middleware.GetUser(r)
+	lang := middleware.GetAdminLang(r)
+
+	if err := h.renderer.Render(w, r, "admin/webhooks_form", render.TemplateData{
+		Title: webhook.Name,
+		User:  user,
+		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.webhooks"), URL: "/admin/webhooks"},
+			{Label: webhook.Name, URL: fmt.Sprintf("/admin/webhooks/%d", webhook.ID), Active: true},
+		},
+	}); err != nil {
+		slog.Error("render error", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
 }
 
 // calculateHealthStatus determines the health status based on success rate.

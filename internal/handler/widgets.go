@@ -207,20 +207,14 @@ type UpdateWidgetRequest struct {
 
 // Update handles PUT /admin/widgets/{id} - updates a widget.
 func (h *WidgetsHandler) Update(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseWidgetIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid widget ID", http.StatusBadRequest)
 		return
 	}
 
-	widget, err := h.queries.GetWidget(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Widget not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	widget, ok := h.requireWidgetWithError(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -261,20 +255,13 @@ func (h *WidgetsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/widgets/{id} - deletes a widget.
 func (h *WidgetsHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseWidgetIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid widget ID", http.StatusBadRequest)
 		return
 	}
 
-	_, err = h.queries.GetWidget(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Widget not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	if _, ok := h.requireWidgetWithError(w, r, id); !ok {
 		return
 	}
 
@@ -329,20 +316,14 @@ func (h *WidgetsHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 
 // GetWidget handles GET /admin/widgets/{id} - gets a widget by ID.
 func (h *WidgetsHandler) GetWidget(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseWidgetIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid widget ID", http.StatusBadRequest)
 		return
 	}
 
-	widget, err := h.queries.GetWidget(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Widget not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	widget, ok := h.requireWidgetWithError(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -357,20 +338,14 @@ type MoveWidgetRequest struct {
 
 // MoveWidget handles POST /admin/widgets/{id}/move - moves a widget to a different area.
 func (h *WidgetsHandler) MoveWidget(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseWidgetIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid widget ID", http.StatusBadRequest)
 		return
 	}
 
-	widget, err := h.queries.GetWidget(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Widget not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+	widget, ok := h.requireWidgetWithError(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -423,4 +398,24 @@ func (h *WidgetsHandler) MoveWidget(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 		"widget":  updatedWidget,
 	})
+}
+
+// parseWidgetIDParam parses the widget ID from the URL.
+func parseWidgetIDParam(r *http.Request) (int64, error) {
+	idStr := chi.URLParam(r, "id")
+	return strconv.ParseInt(idStr, 10, 64)
+}
+
+// requireWidgetWithError fetches a widget by ID and returns http.Error on failure.
+func (h *WidgetsHandler) requireWidgetWithError(w http.ResponseWriter, r *http.Request, id int64) (store.Widget, bool) {
+	widget, err := h.queries.GetWidget(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Widget not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return store.Widget{}, false
+	}
+	return widget, true
 }
