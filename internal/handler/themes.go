@@ -229,7 +229,7 @@ func (h *ThemesHandler) SaveSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("theme settings saved", "theme", themeName, "saved_by", middleware.GetUserID(r))
-	flashSuccess(w, r, h.renderer, "/admin/themes/"+themeName+"/settings", "Theme settings saved successfully")
+	flashSuccess(w, r, h.renderer, "/admin/themes", "Theme settings saved successfully")
 }
 
 // loadThemeSettings loads theme settings from the config table.
