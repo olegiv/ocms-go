@@ -248,19 +248,8 @@ func (h *Handler) GetMedia(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	include := r.URL.Query().Get("include")
 
-	id, err := handler.ParseIDParam(r)
-	if err != nil {
-		WriteBadRequest(w, "Invalid media ID", nil)
-		return
-	}
-
-	media, err := h.queries.GetMediaByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			WriteNotFound(w, "Media not found")
-		} else {
-			WriteInternalError(w, "Failed to retrieve media")
-		}
+	media, ok := h.requireMediaForAPI(w, r)
+	if !ok {
 		return
 	}
 
@@ -407,20 +396,9 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 // Requires media:write permission
 func (h *Handler) UpdateMedia(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	id, err := handler.ParseIDParam(r)
-	if err != nil {
-		WriteBadRequest(w, "Invalid media ID", nil)
-		return
-	}
 
-	// Get existing media
-	existing, err := h.queries.GetMediaByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			WriteNotFound(w, "Media not found")
-		} else {
-			WriteInternalError(w, "Failed to retrieve media")
-		}
+	existing, ok := h.requireMediaForAPI(w, r)
+	if !ok {
 		return
 	}
 
@@ -432,7 +410,7 @@ func (h *Handler) UpdateMedia(w http.ResponseWriter, r *http.Request) {
 
 	// Build update params, starting with existing values
 	params := store.UpdateMediaParams{
-		ID:        id,
+		ID:        existing.ID,
 		Filename:  existing.Filename,
 		Alt:       existing.Alt,
 		Caption:   existing.Caption,
@@ -491,26 +469,15 @@ func (h *Handler) UpdateMedia(w http.ResponseWriter, r *http.Request) {
 // Requires media:write permission
 func (h *Handler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	id, err := handler.ParseIDParam(r)
-	if err != nil {
-		WriteBadRequest(w, "Invalid media ID", nil)
-		return
-	}
 
-	// Check if media exists
-	_, err = h.queries.GetMediaByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			WriteNotFound(w, "Media not found")
-		} else {
-			WriteInternalError(w, "Failed to retrieve media")
-		}
+	media, ok := h.requireMediaForAPI(w, r)
+	if !ok {
 		return
 	}
 
 	// Create media service and delete
 	mediaService := service.NewMediaService(h.db, "./uploads")
-	if err := mediaService.Delete(ctx, id); err != nil {
+	if err := mediaService.Delete(ctx, media.ID); err != nil {
 		WriteInternalError(w, "Failed to delete media")
 		return
 	}
@@ -558,4 +525,25 @@ func (h *Handler) populateMediaIncludes(ctx context.Context, resp *MediaResponse
 // decodeJSON decodes JSON from request body.
 func decodeJSON(r *http.Request, v any) error {
 	return json.NewDecoder(r.Body).Decode(v)
+}
+
+// requireMediaForAPI parses media ID from URL and fetches the media item.
+// Returns the media and true if successful, or zero value and false if an error occurred (response already written).
+func (h *Handler) requireMediaForAPI(w http.ResponseWriter, r *http.Request) (store.Medium, bool) {
+	id, err := handler.ParseIDParam(r)
+	if err != nil {
+		WriteBadRequest(w, "Invalid media ID", nil)
+		return store.Medium{}, false
+	}
+
+	media, err := h.queries.GetMediaByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			WriteNotFound(w, "Media not found")
+		} else {
+			WriteInternalError(w, "Failed to retrieve media")
+		}
+		return store.Medium{}, false
+	}
+	return media, true
 }

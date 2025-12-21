@@ -355,19 +355,8 @@ func (h *Handler) GetPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	include := r.URL.Query().Get("include")
 
-	id, err := handler.ParseIDParam(r)
-	if err != nil {
-		WriteBadRequest(w, "Invalid page ID", nil)
-		return
-	}
-
-	page, err := h.queries.GetPageByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			WriteNotFound(w, "Page not found")
-		} else {
-			WriteInternalError(w, "Failed to retrieve page")
-		}
+	page, ok := h.requirePageForAPI(w, r)
+	if !ok {
 		return
 	}
 
@@ -572,20 +561,9 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 // Requires pages:write permission
 func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	id, err := handler.ParseIDParam(r)
-	if err != nil {
-		WriteBadRequest(w, "Invalid page ID", nil)
-		return
-	}
 
-	// Get existing page
-	existing, err := h.queries.GetPageByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			WriteNotFound(w, "Page not found")
-		} else {
-			WriteInternalError(w, "Failed to retrieve page")
-		}
+	existing, ok := h.requirePageForAPI(w, r)
+	if !ok {
 		return
 	}
 
@@ -597,7 +575,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 
 	// Build update params, starting with existing values
 	params := store.UpdatePageParams{
-		ID:              id,
+		ID:              existing.ID,
 		Title:           existing.Title,
 		Slug:            existing.Slug,
 		Body:            existing.Body,
@@ -623,7 +601,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		// Check slug uniqueness
 		exists, err := h.queries.SlugExistsExcluding(ctx, store.SlugExistsExcludingParams{
 			Slug: *req.Slug,
-			ID:   id,
+			ID:   existing.ID,
 		})
 		if err != nil {
 			WriteInternalError(w, "Failed to check slug")
@@ -699,10 +677,10 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 
 	// Update categories if provided
 	if req.CategoryIDs != nil {
-		_ = h.queries.ClearPageCategories(ctx, id)
+		_ = h.queries.ClearPageCategories(ctx, existing.ID)
 		for _, catID := range *req.CategoryIDs {
 			_ = h.queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{
-				PageID:     id,
+				PageID:     existing.ID,
 				CategoryID: catID,
 			})
 		}
@@ -710,10 +688,10 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 
 	// Update tags if provided
 	if req.TagIDs != nil {
-		_ = h.queries.ClearPageTags(ctx, id)
+		_ = h.queries.ClearPageTags(ctx, existing.ID)
 		for _, tagID := range *req.TagIDs {
 			_ = h.queries.AddTagToPage(ctx, store.AddTagToPageParams{
-				PageID: id,
+				PageID: existing.ID,
 				TagID:  tagID,
 			})
 		}
@@ -749,30 +727,19 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 // Requires pages:write permission
 func (h *Handler) DeletePage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	id, err := handler.ParseIDParam(r)
-	if err != nil {
-		WriteBadRequest(w, "Invalid page ID", nil)
-		return
-	}
 
-	// Check if page exists
-	_, err = h.queries.GetPageByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			WriteNotFound(w, "Page not found")
-		} else {
-			WriteInternalError(w, "Failed to retrieve page")
-		}
+	page, ok := h.requirePageForAPI(w, r)
+	if !ok {
 		return
 	}
 
 	// Delete associated data
-	_ = h.queries.ClearPageCategories(ctx, id)
-	_ = h.queries.ClearPageTags(ctx, id)
-	_ = h.queries.DeletePageVersions(ctx, id)
+	_ = h.queries.ClearPageCategories(ctx, page.ID)
+	_ = h.queries.ClearPageTags(ctx, page.ID)
+	_ = h.queries.DeletePageVersions(ctx, page.ID)
 
 	// Delete page
-	if err := h.queries.DeletePage(ctx, id); err != nil {
+	if err := h.queries.DeletePage(ctx, page.ID); err != nil {
 		WriteInternalError(w, "Failed to delete page")
 		return
 	}
@@ -828,4 +795,25 @@ func (h *Handler) populatePageIncludes(ctx context.Context, resp *PageResponse, 
 			}
 		}
 	}
+}
+
+// requirePageForAPI parses page ID from URL and fetches the page.
+// Returns the page and true if successful, or zero value and false if an error occurred (response already written).
+func (h *Handler) requirePageForAPI(w http.ResponseWriter, r *http.Request) (store.Page, bool) {
+	id, err := handler.ParseIDParam(r)
+	if err != nil {
+		WriteBadRequest(w, "Invalid page ID", nil)
+		return store.Page{}, false
+	}
+
+	page, err := h.queries.GetPageByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			WriteNotFound(w, "Page not found")
+		} else {
+			WriteInternalError(w, "Failed to retrieve page")
+		}
+		return store.Page{}, false
+	}
+	return page, true
 }

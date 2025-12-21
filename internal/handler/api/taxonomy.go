@@ -128,24 +128,14 @@ func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
 // Public: returns a single tag
 func (h *Handler) GetTag(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	id, err := handler.ParseIDParam(r)
-	if err != nil {
-		WriteBadRequest(w, "Invalid tag ID", nil)
-		return
-	}
 
-	tag, err := h.queries.GetTagByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			WriteNotFound(w, "Tag not found")
-		} else {
-			WriteInternalError(w, "Failed to retrieve tag")
-		}
+	tag, ok := h.requireTagForAPI(w, r)
+	if !ok {
 		return
 	}
 
 	// Get page count for this tag
-	pageCount, err := h.queries.CountPagesForTag(ctx, id)
+	pageCount, err := h.queries.CountPagesForTag(ctx, tag.ID)
 	if err != nil {
 		pageCount = 0
 	}
@@ -225,20 +215,9 @@ func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 // Requires taxonomy:write permission
 func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	id, err := handler.ParseIDParam(r)
-	if err != nil {
-		WriteBadRequest(w, "Invalid tag ID", nil)
-		return
-	}
 
-	// Get existing tag
-	existing, err := h.queries.GetTagByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			WriteNotFound(w, "Tag not found")
-		} else {
-			WriteInternalError(w, "Failed to retrieve tag")
-		}
+	existing, ok := h.requireTagForAPI(w, r)
+	if !ok {
 		return
 	}
 
@@ -250,7 +229,7 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 
 	// Build update params
 	params := store.UpdateTagParams{
-		ID:        id,
+		ID:        existing.ID,
 		Name:      existing.Name,
 		Slug:      existing.Slug,
 		UpdatedAt: time.Now(),
@@ -264,7 +243,7 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 		// Check slug uniqueness (excluding current tag)
 		exists, err := h.queries.TagSlugExistsExcluding(ctx, store.TagSlugExistsExcludingParams{
 			Slug: *req.Slug,
-			ID:   id,
+			ID:   existing.ID,
 		})
 		if err != nil {
 			WriteInternalError(w, "Failed to check slug")
@@ -284,7 +263,7 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get page count
-	pageCount, err := h.queries.CountPagesForTag(ctx, id)
+	pageCount, err := h.queries.CountPagesForTag(ctx, existing.ID)
 	if err != nil {
 		pageCount = 0
 	}
@@ -305,25 +284,14 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 // Requires taxonomy:write permission
 func (h *Handler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	id, err := handler.ParseIDParam(r)
-	if err != nil {
-		WriteBadRequest(w, "Invalid tag ID", nil)
-		return
-	}
 
-	// Check if tag exists
-	_, err = h.queries.GetTagByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			WriteNotFound(w, "Tag not found")
-		} else {
-			WriteInternalError(w, "Failed to retrieve tag")
-		}
+	tag, ok := h.requireTagForAPI(w, r)
+	if !ok {
 		return
 	}
 
 	// Delete tag (page_tags associations are handled by CASCADE or manually)
-	if err := h.queries.DeleteTag(ctx, id); err != nil {
+	if err := h.queries.DeleteTag(ctx, tag.ID); err != nil {
 		WriteInternalError(w, "Failed to delete tag")
 		return
 	}
@@ -376,30 +344,20 @@ func (h *Handler) ListCategories(w http.ResponseWriter, r *http.Request) {
 // Public: returns a single category with its children
 func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	id, err := handler.ParseIDParam(r)
-	if err != nil {
-		WriteBadRequest(w, "Invalid category ID", nil)
-		return
-	}
 
-	category, err := h.queries.GetCategoryByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			WriteNotFound(w, "Category not found")
-		} else {
-			WriteInternalError(w, "Failed to retrieve category")
-		}
+	category, ok := h.requireCategoryForAPI(w, r)
+	if !ok {
 		return
 	}
 
 	// Get page count for this category
-	pageCount, err := h.queries.CountPagesByCategory(ctx, id)
+	pageCount, err := h.queries.CountPagesByCategory(ctx, category.ID)
 	if err != nil {
 		pageCount = 0
 	}
 
 	// Get children
-	children, err := h.queries.ListChildCategories(ctx, sql.NullInt64{Int64: id, Valid: true})
+	children, err := h.queries.ListChildCategories(ctx, sql.NullInt64{Int64: category.ID, Valid: true})
 	if err != nil {
 		children = nil
 	}
@@ -544,20 +502,9 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 // Requires taxonomy:write permission
 func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	id, err := handler.ParseIDParam(r)
-	if err != nil {
-		WriteBadRequest(w, "Invalid category ID", nil)
-		return
-	}
 
-	// Get existing category
-	existing, err := h.queries.GetCategoryByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			WriteNotFound(w, "Category not found")
-		} else {
-			WriteInternalError(w, "Failed to retrieve category")
-		}
+	existing, ok := h.requireCategoryForAPI(w, r)
+	if !ok {
 		return
 	}
 
@@ -569,7 +516,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 
 	// Build update params
 	params := store.UpdateCategoryParams{
-		ID:          id,
+		ID:          existing.ID,
 		Name:        existing.Name,
 		Slug:        existing.Slug,
 		Description: existing.Description,
@@ -586,7 +533,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 		// Check slug uniqueness (excluding current category)
 		exists, err := h.queries.CategorySlugExistsExcluding(ctx, store.CategorySlugExistsExcludingParams{
 			Slug: *req.Slug,
-			ID:   id,
+			ID:   existing.ID,
 		})
 		if err != nil {
 			WriteInternalError(w, "Failed to check slug")
@@ -603,7 +550,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.ParentID != nil {
 		// Check for circular reference
-		if *req.ParentID == id {
+		if *req.ParentID == existing.ID {
 			WriteValidationError(w, map[string]string{"parent_id": "Category cannot be its own parent"})
 			return
 		}
@@ -623,7 +570,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Check for circular reference (new parent is a descendant)
-			descendants, _ := h.queries.GetDescendantIDs(ctx, sql.NullInt64{Int64: id, Valid: true})
+			descendants, _ := h.queries.GetDescendantIDs(ctx, sql.NullInt64{Int64: existing.ID, Valid: true})
 			for _, descID := range descendants {
 				if descID == *req.ParentID {
 					WriteValidationError(w, map[string]string{"parent_id": "Cannot set a descendant as parent (circular reference)"})
@@ -645,7 +592,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get page count
-	pageCount, err := h.queries.CountPagesByCategory(ctx, id)
+	pageCount, err := h.queries.CountPagesByCategory(ctx, existing.ID)
 	if err != nil {
 		pageCount = 0
 	}
@@ -674,32 +621,21 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 // Requires taxonomy:write permission
 func (h *Handler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	id, err := handler.ParseIDParam(r)
-	if err != nil {
-		WriteBadRequest(w, "Invalid category ID", nil)
-		return
-	}
 
-	// Check if category exists
-	_, err = h.queries.GetCategoryByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			WriteNotFound(w, "Category not found")
-		} else {
-			WriteInternalError(w, "Failed to retrieve category")
-		}
+	category, ok := h.requireCategoryForAPI(w, r)
+	if !ok {
 		return
 	}
 
 	// Check for child categories
-	children, err := h.queries.ListChildCategories(ctx, sql.NullInt64{Int64: id, Valid: true})
+	children, err := h.queries.ListChildCategories(ctx, sql.NullInt64{Int64: category.ID, Valid: true})
 	if err == nil && len(children) > 0 {
 		WriteError(w, http.StatusConflict, "has_children", "Cannot delete category with child categories. Delete or reassign children first.", nil)
 		return
 	}
 
 	// Delete category (page_categories associations are handled by CASCADE or manually)
-	if err := h.queries.DeleteCategory(ctx, id); err != nil {
+	if err := h.queries.DeleteCategory(ctx, category.ID); err != nil {
 		WriteInternalError(w, "Failed to delete category")
 		return
 	}
@@ -762,4 +698,46 @@ func buildCategoryTree(categories []store.GetCategoryUsageCountsRow) []*Category
 	}
 
 	return rootCategories
+}
+
+// requireTagForAPI parses tag ID from URL and fetches the tag.
+// Returns the tag and true if successful, or zero value and false if an error occurred (response already written).
+func (h *Handler) requireTagForAPI(w http.ResponseWriter, r *http.Request) (store.Tag, bool) {
+	id, err := handler.ParseIDParam(r)
+	if err != nil {
+		WriteBadRequest(w, "Invalid tag ID", nil)
+		return store.Tag{}, false
+	}
+
+	tag, err := h.queries.GetTagByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			WriteNotFound(w, "Tag not found")
+		} else {
+			WriteInternalError(w, "Failed to retrieve tag")
+		}
+		return store.Tag{}, false
+	}
+	return tag, true
+}
+
+// requireCategoryForAPI parses category ID from URL and fetches the category.
+// Returns the category and true if successful, or zero value and false if an error occurred (response already written).
+func (h *Handler) requireCategoryForAPI(w http.ResponseWriter, r *http.Request) (store.Category, bool) {
+	id, err := handler.ParseIDParam(r)
+	if err != nil {
+		WriteBadRequest(w, "Invalid category ID", nil)
+		return store.Category{}, false
+	}
+
+	category, err := h.queries.GetCategoryByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			WriteNotFound(w, "Category not found")
+		} else {
+			WriteInternalError(w, "Failed to retrieve category")
+		}
+		return store.Category{}, false
+	}
+	return category, true
 }
