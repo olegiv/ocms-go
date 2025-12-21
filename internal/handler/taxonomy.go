@@ -180,11 +180,7 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 		"language_id": languageIDStr,
 	}
 
-	// Auto-generate slug if empty
-	if slug == "" {
-		slug = util.Slugify(name)
-		formValues["slug"] = slug
-	}
+	slug = autoGenerateSlug(name, slug, formValues)
 
 	// Validate
 	validationErrors := make(map[string]string)
@@ -324,11 +320,7 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 		"slug": slug,
 	}
 
-	// Auto-generate slug if empty
-	if slug == "" {
-		slug = util.Slugify(name)
-		formValues["slug"] = slug
-	}
+	slug = autoGenerateSlug(name, slug, formValues)
 
 	// Validate
 	validationErrors := make(map[string]string)
@@ -614,6 +606,35 @@ func flattenCategoryTree(nodes []CategoryTreeNode) []CategoryTreeNode {
 	return result
 }
 
+// buildFilteredCategoryTree builds a flat category tree excluding a category and its descendants.
+// Used for parent selectors where the category cannot be its own parent or ancestor.
+func (h *TaxonomyHandler) buildFilteredCategoryTree(ctx context.Context, excludeID int64) []CategoryTreeNode {
+	categories, err := h.queries.ListCategories(ctx)
+	if err != nil {
+		slog.Error("failed to list categories", "error", err)
+		categories = []store.Category{}
+	}
+
+	// Get descendant IDs to exclude
+	descendantIDs, _ := h.queries.GetDescendantIDs(ctx, sql.NullInt64{Int64: excludeID, Valid: true})
+	excludeIDs := make(map[int64]bool)
+	excludeIDs[excludeID] = true
+	for _, did := range descendantIDs {
+		excludeIDs[did] = true
+	}
+
+	// Filter out excluded categories
+	var filteredCategories []store.Category
+	for _, cat := range categories {
+		if !excludeIDs[cat.ID] {
+			filteredCategories = append(filteredCategories, cat)
+		}
+	}
+
+	tree := buildCategoryTree(filteredCategories, nil, 0)
+	return flattenCategoryTree(tree)
+}
+
 // buildCategoryTreeWithUsage builds a tree structure from categories with usage counts.
 func buildCategoryTreeWithUsage(categories []store.GetCategoryUsageCountsWithLanguageRow, parentID *int64, depth int) []CategoryTreeNode {
 	var nodes []CategoryTreeNode
@@ -804,11 +825,7 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 		"language_id": languageIDStr,
 	}
 
-	// Auto-generate slug if empty
-	if slug == "" {
-		slug = util.Slugify(name)
-		formValues["slug"] = slug
-	}
+	slug = autoGenerateSlug(name, slug, formValues)
 
 	// Validate
 	validationErrors := make(map[string]string)
@@ -900,31 +917,7 @@ func (h *TaxonomyHandler) EditCategoryForm(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Get all categories for parent selector (excluding self and descendants)
-	categories, err := h.queries.ListCategories(r.Context())
-	if err != nil {
-		slog.Error("failed to list categories", "error", err)
-		categories = []store.Category{}
-	}
-
-	// Get descendant IDs to exclude from parent selector
-	descendantIDs, _ := h.queries.GetDescendantIDs(r.Context(), sql.NullInt64{Int64: id, Valid: true})
-	excludeIDs := make(map[int64]bool)
-	excludeIDs[id] = true // Exclude self
-	for _, did := range descendantIDs {
-		excludeIDs[did] = true
-	}
-
-	// Filter out excluded categories
-	var filteredCategories []store.Category
-	for _, cat := range categories {
-		if !excludeIDs[cat.ID] {
-			filteredCategories = append(filteredCategories, cat)
-		}
-	}
-
-	tree := buildCategoryTree(filteredCategories, nil, 0)
-	flatTree := flattenCategoryTree(tree)
-
+	flatTree := h.buildFilteredCategoryTree(r.Context(), id)
 	langInfo := h.loadCategoryLanguageInfo(r.Context(), category)
 
 	data := CategoryFormData{
@@ -996,11 +989,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 		"parent_id":   parentIDStr,
 	}
 
-	// Auto-generate slug if empty
-	if slug == "" {
-		slug = util.Slugify(name)
-		formValues["slug"] = slug
-	}
+	slug = autoGenerateSlug(name, slug, formValues)
 
 	// Validate
 	validationErrors := make(map[string]string)
@@ -1029,27 +1018,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
-		// Get categories for parent selector
-		categories, _ := h.queries.ListCategories(r.Context())
-
-		// Get descendant IDs to exclude
-		descendantIDs, _ := h.queries.GetDescendantIDs(r.Context(), sql.NullInt64{Int64: id, Valid: true})
-		excludeIDs := make(map[int64]bool)
-		excludeIDs[id] = true
-		for _, did := range descendantIDs {
-			excludeIDs[did] = true
-		}
-
-		var filteredCategories []store.Category
-		for _, cat := range categories {
-			if !excludeIDs[cat.ID] {
-				filteredCategories = append(filteredCategories, cat)
-			}
-		}
-
-		tree := buildCategoryTree(filteredCategories, nil, 0)
-		flatTree := flattenCategoryTree(tree)
-
+		flatTree := h.buildFilteredCategoryTree(r.Context(), id)
 		langInfo := h.loadCategoryLanguageInfo(r.Context(), existingCategory)
 
 		data := CategoryFormData{
@@ -1332,6 +1301,15 @@ func (h *TaxonomyHandler) parseLanguageIDWithDefault(ctx context.Context, langua
 	return languageID
 }
 
+// autoGenerateSlug generates a slug from name if slug is empty, updating formValues.
+func autoGenerateSlug(name, slug string, formValues map[string]string) string {
+	if slug == "" {
+		slug = util.Slugify(name)
+		formValues["slug"] = slug
+	}
+	return slug
+}
+
 // validateTaxonomyName validates a taxonomy name (tag or category).
 func validateTaxonomyName(name string) string {
 	if name == "" {
@@ -1343,15 +1321,18 @@ func validateTaxonomyName(name string) string {
 	return ""
 }
 
-// validateTagSlugCreate validates a tag slug for creation.
-func (h *TaxonomyHandler) validateTagSlugCreate(ctx context.Context, slug string) string {
+// slugExistsFunc is a function type for checking if a slug exists.
+type slugExistsFunc func() (int64, error)
+
+// validateSlugWithChecker validates a slug using a custom existence checker.
+func validateSlugWithChecker(slug string, checkExists slugExistsFunc) string {
 	if slug == "" {
 		return "Slug is required"
 	}
 	if !util.IsValidSlug(slug) {
 		return "Invalid slug format (use lowercase letters, numbers, and hyphens)"
 	}
-	exists, err := h.queries.TagSlugExists(ctx, slug)
+	exists, err := checkExists()
 	if err != nil {
 		slog.Error("database error checking slug", "error", err)
 		return "Error checking slug"
@@ -1360,73 +1341,103 @@ func (h *TaxonomyHandler) validateTagSlugCreate(ctx context.Context, slug string
 		return "Slug already exists"
 	}
 	return ""
+}
+
+// validateTagSlugCreate validates a tag slug for creation.
+func (h *TaxonomyHandler) validateTagSlugCreate(ctx context.Context, slug string) string {
+	return validateSlugWithChecker(slug, func() (int64, error) {
+		return h.queries.TagSlugExists(ctx, slug)
+	})
 }
 
 // validateTagSlugUpdate validates a tag slug for update.
 func (h *TaxonomyHandler) validateTagSlugUpdate(ctx context.Context, slug, currentSlug string, tagID int64) string {
-	if slug == "" {
-		return "Slug is required"
+	if slug == currentSlug {
+		return "" // No change, no validation needed
 	}
-	if !util.IsValidSlug(slug) {
-		return "Invalid slug format (use lowercase letters, numbers, and hyphens)"
-	}
-	if slug != currentSlug {
-		exists, err := h.queries.TagSlugExistsExcluding(ctx, store.TagSlugExistsExcludingParams{
+	return validateSlugWithChecker(slug, func() (int64, error) {
+		return h.queries.TagSlugExistsExcluding(ctx, store.TagSlugExistsExcludingParams{
 			Slug: slug,
 			ID:   tagID,
 		})
-		if err != nil {
-			slog.Error("database error checking slug", "error", err)
-			return "Error checking slug"
-		}
-		if exists != 0 {
-			return "Slug already exists"
-		}
-	}
-	return ""
+	})
 }
 
 // validateCategorySlugCreate validates a category slug for creation.
 func (h *TaxonomyHandler) validateCategorySlugCreate(ctx context.Context, slug string) string {
-	if slug == "" {
-		return "Slug is required"
-	}
-	if !util.IsValidSlug(slug) {
-		return "Invalid slug format (use lowercase letters, numbers, and hyphens)"
-	}
-	exists, err := h.queries.CategorySlugExists(ctx, slug)
-	if err != nil {
-		slog.Error("database error checking slug", "error", err)
-		return "Error checking slug"
-	}
-	if exists != 0 {
-		return "Slug already exists"
-	}
-	return ""
+	return validateSlugWithChecker(slug, func() (int64, error) {
+		return h.queries.CategorySlugExists(ctx, slug)
+	})
 }
 
 // validateCategorySlugUpdate validates a category slug for update.
 func (h *TaxonomyHandler) validateCategorySlugUpdate(ctx context.Context, slug, currentSlug string, categoryID int64) string {
-	if slug == "" {
-		return "Slug is required"
+	if slug == currentSlug {
+		return "" // No change, no validation needed
 	}
-	if !util.IsValidSlug(slug) {
-		return "Invalid slug format (use lowercase letters, numbers, and hyphens)"
-	}
-	if slug != currentSlug {
-		exists, err := h.queries.CategorySlugExistsExcluding(ctx, store.CategorySlugExistsExcludingParams{
+	return validateSlugWithChecker(slug, func() (int64, error) {
+		return h.queries.CategorySlugExistsExcluding(ctx, store.CategorySlugExistsExcludingParams{
 			Slug: slug,
 			ID:   categoryID,
 		})
-		if err != nil {
-			slog.Error("database error checking slug", "error", err)
-			return "Error checking slug"
-		}
-		if exists != 0 {
-			return "Slug already exists"
+	})
+}
+
+// translationBaseInfo holds common language info for taxonomy entities.
+type translationBaseInfo struct {
+	EntityLanguage   *store.Language
+	AllLanguages     []store.Language
+	TranslatedIDs    map[int64]bool
+	TranslationLinks []store.GetTranslationsForEntityRow
+	MissingLanguages []store.Language
+}
+
+// loadTranslationBaseInfo loads common language and translation info for any entity.
+func (h *TaxonomyHandler) loadTranslationBaseInfo(ctx context.Context, entityType string, entityID int64, languageID sql.NullInt64) translationBaseInfo {
+	info := translationBaseInfo{
+		TranslatedIDs: make(map[int64]bool),
+	}
+
+	// Load all active languages
+	allLanguages, err := h.queries.ListActiveLanguages(ctx)
+	if err != nil {
+		slog.Error("failed to list languages", "error", err)
+		allLanguages = []store.Language{}
+	}
+	info.AllLanguages = allLanguages
+
+	// Load entity's language
+	if languageID.Valid {
+		lang, err := h.queries.GetLanguageByID(ctx, languageID.Int64)
+		if err == nil {
+			info.EntityLanguage = &lang
+			info.TranslatedIDs[lang.ID] = true
 		}
 	}
-	return ""
+
+	// Load translation links
+	translationLinks, err := h.queries.GetTranslationsForEntity(ctx, store.GetTranslationsForEntityParams{
+		EntityType: entityType,
+		EntityID:   entityID,
+	})
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		slog.Error("failed to get translations", "error", err, "entity_type", entityType, "entity_id", entityID)
+	}
+	info.TranslationLinks = translationLinks
+
+	// Mark translated language IDs
+	for _, tl := range translationLinks {
+		info.TranslatedIDs[tl.LanguageID] = true
+	}
+
+	// Find missing languages
+	for _, lang := range allLanguages {
+		if !info.TranslatedIDs[lang.ID] {
+			info.MissingLanguages = append(info.MissingLanguages, lang)
+		}
+	}
+
+	return info
 }
 
 // tagLanguageInfo holds language and translation info for a tag.
@@ -1439,40 +1450,16 @@ type tagLanguageInfo struct {
 
 // loadTagLanguageInfo loads language and translation info for a tag.
 func (h *TaxonomyHandler) loadTagLanguageInfo(ctx context.Context, tag store.Tag) tagLanguageInfo {
-	info := tagLanguageInfo{}
+	base := h.loadTranslationBaseInfo(ctx, model.EntityTypeTag, tag.ID, tag.LanguageID)
 
-	// Load all active languages
-	allLanguages, err := h.queries.ListActiveLanguages(ctx)
-	if err != nil {
-		slog.Error("failed to list languages", "error", err)
-		allLanguages = []store.Language{}
-	}
-	info.AllLanguages = allLanguages
-
-	// Load tag's language
-	if tag.LanguageID.Valid {
-		lang, err := h.queries.GetLanguageByID(ctx, tag.LanguageID.Int64)
-		if err == nil {
-			info.TagLanguage = &lang
-		}
+	info := tagLanguageInfo{
+		TagLanguage:      base.EntityLanguage,
+		AllLanguages:     base.AllLanguages,
+		MissingLanguages: base.MissingLanguages,
 	}
 
-	// Load translations
-	translatedLangIDs := make(map[int64]bool)
-	if info.TagLanguage != nil {
-		translatedLangIDs[info.TagLanguage.ID] = true
-	}
-
-	translationLinks, err := h.queries.GetTranslationsForEntity(ctx, store.GetTranslationsForEntityParams{
-		EntityType: model.EntityTypeTag,
-		EntityID:   tag.ID,
-	})
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		slog.Error("failed to get translations for tag", "error", err, "tag_id", tag.ID)
-	}
-
-	for _, tl := range translationLinks {
-		translatedLangIDs[tl.LanguageID] = true
+	// Load translated tags
+	for _, tl := range base.TranslationLinks {
 		translatedTag, err := h.queries.GetTagByID(ctx, tl.TranslationID)
 		if err == nil {
 			lang, err := h.queries.GetLanguageByID(ctx, tl.LanguageID)
@@ -1482,13 +1469,6 @@ func (h *TaxonomyHandler) loadTagLanguageInfo(ctx context.Context, tag store.Tag
 					Tag:      translatedTag,
 				})
 			}
-		}
-	}
-
-	// Find missing languages
-	for _, lang := range allLanguages {
-		if !translatedLangIDs[lang.ID] {
-			info.MissingLanguages = append(info.MissingLanguages, lang)
 		}
 	}
 
@@ -1505,40 +1485,16 @@ type categoryLanguageInfo struct {
 
 // loadCategoryLanguageInfo loads language and translation info for a category.
 func (h *TaxonomyHandler) loadCategoryLanguageInfo(ctx context.Context, category store.Category) categoryLanguageInfo {
-	info := categoryLanguageInfo{}
+	base := h.loadTranslationBaseInfo(ctx, model.EntityTypeCategory, category.ID, category.LanguageID)
 
-	// Load all active languages
-	allLanguages, err := h.queries.ListActiveLanguages(ctx)
-	if err != nil {
-		slog.Error("failed to list languages", "error", err)
-		allLanguages = []store.Language{}
-	}
-	info.AllLanguages = allLanguages
-
-	// Load category's language
-	if category.LanguageID.Valid {
-		lang, err := h.queries.GetLanguageByID(ctx, category.LanguageID.Int64)
-		if err == nil {
-			info.CategoryLanguage = &lang
-		}
+	info := categoryLanguageInfo{
+		CategoryLanguage: base.EntityLanguage,
+		AllLanguages:     base.AllLanguages,
+		MissingLanguages: base.MissingLanguages,
 	}
 
-	// Load translations
-	translatedLangIDs := make(map[int64]bool)
-	if info.CategoryLanguage != nil {
-		translatedLangIDs[info.CategoryLanguage.ID] = true
-	}
-
-	translationLinks, err := h.queries.GetTranslationsForEntity(ctx, store.GetTranslationsForEntityParams{
-		EntityType: model.EntityTypeCategory,
-		EntityID:   category.ID,
-	})
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		slog.Error("failed to get translations for category", "error", err, "category_id", category.ID)
-	}
-
-	for _, tl := range translationLinks {
-		translatedLangIDs[tl.LanguageID] = true
+	// Load translated categories
+	for _, tl := range base.TranslationLinks {
 		translatedCategory, err := h.queries.GetCategoryByID(ctx, tl.TranslationID)
 		if err == nil {
 			lang, err := h.queries.GetLanguageByID(ctx, tl.LanguageID)
@@ -1548,13 +1504,6 @@ func (h *TaxonomyHandler) loadCategoryLanguageInfo(ctx context.Context, category
 					Category: translatedCategory,
 				})
 			}
-		}
-	}
-
-	// Find missing languages
-	for _, lang := range allLanguages {
-		if !translatedLangIDs[lang.ID] {
-			info.MissingLanguages = append(info.MissingLanguages, lang)
 		}
 	}
 
