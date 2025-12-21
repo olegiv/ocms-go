@@ -901,9 +901,7 @@ func (h *MediaHandler) API(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		slog.Error("failed to fetch media for API", "error", err)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"error":"Internal server error"}`))
+		writeJSONError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
