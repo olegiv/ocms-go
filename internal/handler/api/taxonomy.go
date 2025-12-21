@@ -343,44 +343,15 @@ func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
 		children = nil
 	}
 
-	resp := CategoryAPIResponse{
-		ID:        category.ID,
-		Name:      category.Name,
-		Slug:      category.Slug,
-		Position:  category.Position,
-		PageCount: pageCount,
-		CreatedAt: category.CreatedAt,
-		UpdatedAt: category.UpdatedAt,
-	}
-
-	if category.Description.Valid {
-		resp.Description = category.Description.String
-	}
-	if category.ParentID.Valid {
-		resp.ParentID = &category.ParentID.Int64
-	}
+	resp := categoryToAPIResponse(category, pageCount)
 
 	// Add children
 	if len(children) > 0 {
 		resp.Children = make([]*CategoryAPIResponse, 0, len(children))
 		for _, child := range children {
 			childPageCount, _ := h.queries.CountPagesByCategory(ctx, child.ID)
-			childResp := &CategoryAPIResponse{
-				ID:        child.ID,
-				Name:      child.Name,
-				Slug:      child.Slug,
-				Position:  child.Position,
-				PageCount: childPageCount,
-				CreatedAt: child.CreatedAt,
-				UpdatedAt: child.UpdatedAt,
-			}
-			if child.Description.Valid {
-				childResp.Description = child.Description.String
-			}
-			if child.ParentID.Valid {
-				childResp.ParentID = &child.ParentID.Int64
-			}
-			resp.Children = append(resp.Children, childResp)
+			childResp := categoryToAPIResponse(child, childPageCount)
+			resp.Children = append(resp.Children, &childResp)
 		}
 	}
 
@@ -439,24 +410,7 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := CategoryAPIResponse{
-		ID:        category.ID,
-		Name:      category.Name,
-		Slug:      category.Slug,
-		Position:  category.Position,
-		PageCount: 0,
-		CreatedAt: category.CreatedAt,
-		UpdatedAt: category.UpdatedAt,
-	}
-
-	if category.Description.Valid {
-		resp.Description = category.Description.String
-	}
-	if category.ParentID.Valid {
-		resp.ParentID = &category.ParentID.Int64
-	}
-
-	WriteCreated(w, resp)
+	WriteCreated(w, categoryToAPIResponse(category, 0))
 }
 
 // UpdateCategory handles PUT /api/v1/categories/{id}
@@ -545,24 +499,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 		pageCount = 0
 	}
 
-	resp := CategoryAPIResponse{
-		ID:        category.ID,
-		Name:      category.Name,
-		Slug:      category.Slug,
-		Position:  category.Position,
-		PageCount: pageCount,
-		CreatedAt: category.CreatedAt,
-		UpdatedAt: category.UpdatedAt,
-	}
-
-	if category.Description.Valid {
-		resp.Description = category.Description.String
-	}
-	if category.ParentID.Valid {
-		resp.ParentID = &category.ParentID.Int64
-	}
-
-	WriteSuccess(w, resp, nil)
+	WriteSuccess(w, categoryToAPIResponse(category, pageCount), nil)
 }
 
 // DeleteCategory handles DELETE /api/v1/categories/{id}
@@ -651,6 +588,26 @@ func applyOptionalSlugUpdate(w http.ResponseWriter, reqSlug *string, currentSlug
 		*currentSlug = *reqSlug
 	}
 	return true
+}
+
+// categoryToAPIResponse converts a store.Category to CategoryAPIResponse.
+func categoryToAPIResponse(c store.Category, pageCount int64) CategoryAPIResponse {
+	resp := CategoryAPIResponse{
+		ID:        c.ID,
+		Name:      c.Name,
+		Slug:      c.Slug,
+		Position:  c.Position,
+		PageCount: pageCount,
+		CreatedAt: c.CreatedAt,
+		UpdatedAt: c.UpdatedAt,
+	}
+	if c.Description.Valid {
+		resp.Description = c.Description.String
+	}
+	if c.ParentID.Valid {
+		resp.ParentID = &c.ParentID.Int64
+	}
+	return resp
 }
 
 // categoryRowToResponse converts a GetCategoryUsageCountsRow to CategoryAPIResponse.

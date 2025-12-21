@@ -172,6 +172,20 @@ func checkSlugUnique(w http.ResponseWriter, slugExists SlugExistsChecker) bool {
 	return true
 }
 
+// listAndCount executes list and count queries, returning combined results.
+// This is a generic helper used by pages and media list endpoints.
+func listAndCount[T any](
+	listFn func() ([]T, error),
+	countFn func() (int64, error),
+) ([]T, int64, error) {
+	items, err := listFn()
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := countFn()
+	return items, total, err
+}
+
 // EntityFetcher is a function that fetches an entity by ID.
 type EntityFetcher[T any] func(id int64) (T, error)
 

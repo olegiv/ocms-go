@@ -594,37 +594,9 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		// Page was created but version failed - log but don't fail the request
 	}
 
-	// Save tags
-	tagIDs := r.Form["tags[]"]
-	for _, tagIDStr := range tagIDs {
-		tagID, err := strconv.ParseInt(tagIDStr, 10, 64)
-		if err != nil {
-			continue
-		}
-		err = h.queries.AddTagToPage(r.Context(), store.AddTagToPageParams{
-			PageID: newPage.ID,
-			TagID:  tagID,
-		})
-		if err != nil {
-			slog.Error("failed to add tag to page", "error", err, "page_id", newPage.ID, "tag_id", tagID)
-		}
-	}
-
-	// Save categories
-	categoryIDs := r.Form["categories[]"]
-	for _, categoryIDStr := range categoryIDs {
-		categoryID, err := strconv.ParseInt(categoryIDStr, 10, 64)
-		if err != nil {
-			continue
-		}
-		err = h.queries.AddCategoryToPage(r.Context(), store.AddCategoryToPageParams{
-			PageID:     newPage.ID,
-			CategoryID: categoryID,
-		})
-		if err != nil {
-			slog.Error("failed to add category to page", "error", err, "page_id", newPage.ID, "category_id", categoryID)
-		}
-	}
+	// Save tags and categories
+	h.savePageTags(r.Context(), newPage.ID, r.Form["tags[]"])
+	h.savePageCategories(r.Context(), newPage.ID, r.Form["categories[]"])
 
 	slog.Info("page created", "page_id", newPage.ID, "slug", newPage.Slug, "created_by", middleware.GetUserID(r))
 
@@ -895,46 +867,16 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update tags - clear existing and add new
-	err = h.queries.ClearPageTags(r.Context(), id)
-	if err != nil {
+	if err = h.queries.ClearPageTags(r.Context(), id); err != nil {
 		slog.Error("failed to clear page tags", "error", err, "page_id", id)
 	}
-
-	tagIDs := r.Form["tags[]"]
-	for _, tagIDStr := range tagIDs {
-		tagID, err := strconv.ParseInt(tagIDStr, 10, 64)
-		if err != nil {
-			continue
-		}
-		err = h.queries.AddTagToPage(r.Context(), store.AddTagToPageParams{
-			PageID: id,
-			TagID:  tagID,
-		})
-		if err != nil {
-			slog.Error("failed to add tag to page", "error", err, "page_id", id, "tag_id", tagID)
-		}
-	}
+	h.savePageTags(r.Context(), id, r.Form["tags[]"])
 
 	// Update categories - clear existing and add new
-	err = h.queries.ClearPageCategories(r.Context(), id)
-	if err != nil {
+	if err = h.queries.ClearPageCategories(r.Context(), id); err != nil {
 		slog.Error("failed to clear page categories", "error", err, "page_id", id)
 	}
-
-	categoryIDs := r.Form["categories[]"]
-	for _, categoryIDStr := range categoryIDs {
-		categoryID, err := strconv.ParseInt(categoryIDStr, 10, 64)
-		if err != nil {
-			continue
-		}
-		err = h.queries.AddCategoryToPage(r.Context(), store.AddCategoryToPageParams{
-			PageID:     id,
-			CategoryID: categoryID,
-		})
-		if err != nil {
-			slog.Error("failed to add category to page", "error", err, "page_id", id, "category_id", categoryID)
-		}
-	}
+	h.savePageCategories(r.Context(), id, r.Form["categories[]"])
 
 	slog.Info("page updated", "page_id", updatedPage.ID, "slug", updatedPage.Slug, "updated_by", middleware.GetUserID(r))
 
@@ -1449,4 +1391,36 @@ func (h *PagesHandler) validatePageSlugUpdate(ctx context.Context, slug string, 
 			ID:   pageID,
 		})
 	})
+}
+
+// savePageTags saves tag associations for a page from form values.
+func (h *PagesHandler) savePageTags(ctx context.Context, pageID int64, tagIDStrs []string) {
+	for _, tagIDStr := range tagIDStrs {
+		tagID, err := strconv.ParseInt(tagIDStr, 10, 64)
+		if err != nil {
+			continue
+		}
+		if err = h.queries.AddTagToPage(ctx, store.AddTagToPageParams{
+			PageID: pageID,
+			TagID:  tagID,
+		}); err != nil {
+			slog.Error("failed to add tag to page", "error", err, "page_id", pageID, "tag_id", tagID)
+		}
+	}
+}
+
+// savePageCategories saves category associations for a page from form values.
+func (h *PagesHandler) savePageCategories(ctx context.Context, pageID int64, categoryIDStrs []string) {
+	for _, categoryIDStr := range categoryIDStrs {
+		categoryID, err := strconv.ParseInt(categoryIDStr, 10, 64)
+		if err != nil {
+			continue
+		}
+		if err = h.queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{
+			PageID:     pageID,
+			CategoryID: categoryID,
+		}); err != nil {
+			slog.Error("failed to add category to page", "error", err, "page_id", pageID, "category_id", categoryID)
+		}
+	}
 }
