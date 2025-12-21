@@ -791,32 +791,18 @@ func (h *Handler) requirePageForAPI(w http.ResponseWriter, r *http.Request) (sto
 // checkPageSlugUnique checks if a page slug is unique for creation.
 // Returns true if unique, false if duplicate or error (response already written).
 func (h *Handler) checkPageSlugUnique(w http.ResponseWriter, ctx context.Context, slug string) bool {
-	exists, err := h.queries.SlugExists(ctx, slug)
-	if err != nil {
-		WriteInternalError(w, "Failed to check slug")
-		return false
-	}
-	if exists != 0 {
-		WriteValidationError(w, map[string]string{"slug": "Slug already exists"})
-		return false
-	}
-	return true
+	return checkSlugUnique(w, func() (int64, error) {
+		return h.queries.SlugExists(ctx, slug)
+	})
 }
 
 // checkPageSlugUniqueExcluding checks if a page slug is unique for update (excluding current page).
 // Returns true if unique, false if duplicate or error (response already written).
 func (h *Handler) checkPageSlugUniqueExcluding(w http.ResponseWriter, ctx context.Context, slug string, pageID int64) bool {
-	exists, err := h.queries.SlugExistsExcluding(ctx, store.SlugExistsExcludingParams{
-		Slug: slug,
-		ID:   pageID,
+	return checkSlugUnique(w, func() (int64, error) {
+		return h.queries.SlugExistsExcluding(ctx, store.SlugExistsExcludingParams{
+			Slug: slug,
+			ID:   pageID,
+		})
 	})
-	if err != nil {
-		WriteInternalError(w, "Failed to check slug")
-		return false
-	}
-	if exists != 0 {
-		WriteValidationError(w, map[string]string{"slug": "Slug already exists"})
-		return false
-	}
-	return true
 }

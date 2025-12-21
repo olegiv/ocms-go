@@ -159,22 +159,25 @@ func (t *Theme) Translate(lang, key string) (string, bool) {
 	return "", false
 }
 
-// HasSetting returns true if the theme has a setting with the given key.
-func (t *Theme) HasSetting(key string) bool {
-	for _, s := range t.Config.Settings {
-		if s.Key == key {
-			return true
+// findSetting returns a setting by key, or nil if not found.
+func (t *Theme) findSetting(key string) *Setting {
+	for i := range t.Config.Settings {
+		if t.Config.Settings[i].Key == key {
+			return &t.Config.Settings[i]
 		}
 	}
-	return false
+	return nil
+}
+
+// HasSetting returns true if the theme has a setting with the given key.
+func (t *Theme) HasSetting(key string) bool {
+	return t.findSetting(key) != nil
 }
 
 // GetSettingDefault returns the default value for a setting.
 func (t *Theme) GetSettingDefault(key string) string {
-	for _, s := range t.Config.Settings {
-		if s.Key == key {
-			return s.Default
-		}
+	if s := t.findSetting(key); s != nil {
+		return s.Default
 	}
 	return ""
 }

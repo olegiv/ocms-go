@@ -150,3 +150,21 @@ func (h *Handler) AuthInfo(w http.ResponseWriter, r *http.Request) {
 		Permissions: middleware.ParseAPIKeyPermissions(apiKey),
 	}, nil)
 }
+
+// SlugExistsChecker is a function that checks if a slug exists (returns count and error).
+type SlugExistsChecker func() (int64, error)
+
+// checkSlugUnique checks if a slug is unique using the provided checker function.
+// Returns true if unique, false if duplicate or error (response already written).
+func checkSlugUnique(w http.ResponseWriter, slugExists SlugExistsChecker) bool {
+	exists, err := slugExists()
+	if err != nil {
+		WriteInternalError(w, "Failed to check slug")
+		return false
+	}
+	if exists != 0 {
+		WriteValidationError(w, map[string]string{"slug": "Slug already exists"})
+		return false
+	}
+	return true
+}

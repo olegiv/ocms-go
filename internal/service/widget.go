@@ -75,17 +75,7 @@ func (s *WidgetService) GetWidgetsForArea(ctx context.Context, theme, area strin
 
 	widgets := make([]WidgetView, 0, len(dbWidgets))
 	for _, w := range dbWidgets {
-		// Sanitize HTML content to prevent XSS attacks (SEC-003)
-		sanitizedContent := htmlSanitizer.Sanitize(w.Content.String)
-		widgets = append(widgets, WidgetView{
-			ID:       w.ID,
-			Type:     w.WidgetType,
-			Title:    w.Title.String,
-			Content:  template.HTML(sanitizedContent),
-			Settings: w.Settings.String,
-			IsActive: w.IsActive == 1,
-			Position: w.Position,
-		})
+		widgets = append(widgets, toWidgetView(w))
 	}
 
 	// Update cache
@@ -109,18 +99,7 @@ func (s *WidgetService) GetAllWidgetsForTheme(ctx context.Context, theme string)
 		if w.IsActive != 1 {
 			continue
 		}
-		// Sanitize HTML content to prevent XSS attacks (SEC-003)
-		sanitizedContent := htmlSanitizer.Sanitize(w.Content.String)
-		view := WidgetView{
-			ID:       w.ID,
-			Type:     w.WidgetType,
-			Title:    w.Title.String,
-			Content:  template.HTML(sanitizedContent),
-			Settings: w.Settings.String,
-			IsActive: true,
-			Position: w.Position,
-		}
-		result[w.Area] = append(result[w.Area], view)
+		result[w.Area] = append(result[w.Area], toWidgetView(w))
 	}
 
 	return result
@@ -132,4 +111,18 @@ func (s *WidgetService) InvalidateCache() {
 	s.cache = make(map[string][]WidgetView)
 	s.lastExp = time.Time{}
 	s.cacheMu.Unlock()
+}
+
+// toWidgetView converts a store.Widget to WidgetView with HTML sanitization.
+func toWidgetView(w store.Widget) WidgetView {
+	sanitizedContent := htmlSanitizer.Sanitize(w.Content.String)
+	return WidgetView{
+		ID:       w.ID,
+		Type:     w.WidgetType,
+		Title:    w.Title.String,
+		Content:  template.HTML(sanitizedContent),
+		Settings: w.Settings.String,
+		IsActive: w.IsActive == 1,
+		Position: w.Position,
+	}
 }

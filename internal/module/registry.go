@@ -256,80 +256,60 @@ func (r *Registry) loadActiveStatus(db *sql.DB) error {
 	return nil
 }
 
-// IsActive returns whether a module is active.
-func (r *Registry) IsActive(name string) bool {
+// getStatus returns a boolean status from the given map with the specified default.
+func (r *Registry) getStatus(statusMap map[string]bool, name string, defaultValue bool) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	active, exists := r.activeStatus[name]
+	value, exists := statusMap[name]
 	if !exists {
-		return true // Default to active if not tracked
+		return defaultValue
 	}
-	return active
+	return value
+}
+
+// setStatus updates a module status in the database and local map.
+func (r *Registry) setStatus(statusMap map[string]bool, name, column, logField string, value bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.modules[name]; !exists {
+		return fmt.Errorf("module %q not registered", name)
+	}
+
+	if r.ctx == nil || r.ctx.DB == nil {
+		return fmt.Errorf("registry not initialized")
+	}
+
+	query := fmt.Sprintf("UPDATE modules SET %s = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?", column)
+	_, err := r.ctx.DB.Exec(query, value, name)
+	if err != nil {
+		return fmt.Errorf("updating module %s: %w", column, err)
+	}
+
+	statusMap[name] = value
+	r.logger.Info("module status changed", "module", name, logField, value)
+	return nil
+}
+
+// IsActive returns whether a module is active.
+func (r *Registry) IsActive(name string) bool {
+	return r.getStatus(r.activeStatus, name, true)
 }
 
 // SetActive sets a module's active status and persists it to the database.
 func (r *Registry) SetActive(name string, active bool) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if _, exists := r.modules[name]; !exists {
-		return fmt.Errorf("module %q not registered", name)
-	}
-
-	if r.ctx == nil || r.ctx.DB == nil {
-		return fmt.Errorf("registry not initialized")
-	}
-
-	_, err := r.ctx.DB.Exec(
-		"UPDATE modules SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?",
-		active, name,
-	)
-	if err != nil {
-		return fmt.Errorf("updating module active status: %w", err)
-	}
-
-	r.activeStatus[name] = active
-	r.logger.Info("module active status changed", "module", name, "active", active)
-	return nil
+	return r.setStatus(r.activeStatus, name, "is_active", "active", active)
 }
 
 // ShowInSidebar returns whether a module should be shown in the admin sidebar.
 func (r *Registry) ShowInSidebar(name string) bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	show, exists := r.sidebarStatus[name]
-	if !exists {
-		return false // Default to not showing in sidebar
-	}
-	return show
+	return r.getStatus(r.sidebarStatus, name, false)
 }
 
 // SetShowInSidebar sets whether a module should appear in the admin sidebar.
 func (r *Registry) SetShowInSidebar(name string, show bool) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if _, exists := r.modules[name]; !exists {
-		return fmt.Errorf("module %q not registered", name)
-	}
-
-	if r.ctx == nil || r.ctx.DB == nil {
-		return fmt.Errorf("registry not initialized")
-	}
-
-	_, err := r.ctx.DB.Exec(
-		"UPDATE modules SET show_in_sidebar = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?",
-		show, name,
-	)
-	if err != nil {
-		return fmt.Errorf("updating module sidebar status: %w", err)
-	}
-
-	r.sidebarStatus[name] = show
-	r.logger.Info("module sidebar status changed", "module", name, "show", show)
-	return nil
+	return r.setStatus(r.sidebarStatus, name, "show_in_sidebar", "show", show)
 }
 
 // ListSidebarModules returns modules that should appear in the admin sidebar.
@@ -408,8 +388,8 @@ func (r *Registry) ShutdownAll() error {
 	return nil
 }
 
-// RouteAll registers all module public routes with active status middleware.
-func (r *Registry) RouteAll(router chi.Router) {
+// routeAllWithFunc registers all module routes using the provided registration function.
+func (r *Registry) routeAllWithFunc(router chi.Router, isAdmin bool, registerFunc func(Module, chi.Router)) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -419,27 +399,24 @@ func (r *Registry) RouteAll(router chi.Router) {
 
 		// Create a sub-router with middleware that checks active status
 		router.Group(func(subRouter chi.Router) {
-			subRouter.Use(r.moduleActiveMiddleware(moduleName, false))
-			m.RegisterRoutes(subRouter)
+			subRouter.Use(r.moduleActiveMiddleware(moduleName, isAdmin))
+			registerFunc(m, subRouter)
 		})
 	}
 }
 
+// RouteAll registers all module public routes with active status middleware.
+func (r *Registry) RouteAll(router chi.Router) {
+	r.routeAllWithFunc(router, false, func(m Module, subRouter chi.Router) {
+		m.RegisterRoutes(subRouter)
+	})
+}
+
 // AdminRouteAll registers all module admin routes with active status middleware.
 func (r *Registry) AdminRouteAll(router chi.Router) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	for _, name := range r.order {
-		m := r.modules[name]
-		moduleName := name // capture for closure
-
-		// Create a sub-router with middleware that checks active status
-		router.Group(func(subRouter chi.Router) {
-			subRouter.Use(r.moduleActiveMiddleware(moduleName, true))
-			m.RegisterAdminRoutes(subRouter)
-		})
-	}
+	r.routeAllWithFunc(router, true, func(m Module, subRouter chi.Router) {
+		m.RegisterAdminRoutes(subRouter)
+	})
 }
 
 // moduleActiveMiddleware returns middleware that checks if a module is active.
