@@ -58,6 +58,19 @@ func (h *MediaHandler) SetDispatcher(d *webhook.Dispatcher) {
 	h.dispatcher = d
 }
 
+// countAndListMedia executes count and list queries, returning combined results.
+func countAndListMedia(
+	countFn func() (int64, error),
+	listFn func() ([]store.Medium, error),
+) ([]store.Medium, int64, error) {
+	total, err := countFn()
+	if err != nil {
+		return nil, 0, err
+	}
+	media, err := listFn()
+	return media, total, err
+}
+
 // dispatchMediaEvent dispatches a media-related webhook event.
 func (h *MediaHandler) dispatchMediaEvent(ctx context.Context, eventType string, media store.Medium) {
 	if h.dispatcher == nil {
@@ -839,31 +852,37 @@ func (h *MediaHandler) API(w http.ResponseWriter, r *http.Request) {
 		// For search, total is approximated by result count
 		totalCount = int64(len(mediaList))
 	} else if typeFilter == "image" {
-		totalCount, err = h.queries.CountMediaByType(r.Context(), "image/%")
-		if err == nil {
-			mediaList, err = h.queries.ListMediaByType(r.Context(), store.ListMediaByTypeParams{
-				MimeType: "image/%",
-				Limit:    int64(limit),
-				Offset:   offset,
-			})
-		}
+		mediaList, totalCount, err = countAndListMedia(
+			func() (int64, error) { return h.queries.CountMediaByType(r.Context(), "image/%") },
+			func() ([]store.Medium, error) {
+				return h.queries.ListMediaByType(r.Context(), store.ListMediaByTypeParams{
+					MimeType: "image/%",
+					Limit:    int64(limit),
+					Offset:   offset,
+				})
+			},
+		)
 	} else if typeFilter == "document" {
-		totalCount, err = h.queries.CountMediaByType(r.Context(), "application/%")
-		if err == nil {
-			mediaList, err = h.queries.ListMediaByType(r.Context(), store.ListMediaByTypeParams{
-				MimeType: "application/%",
-				Limit:    int64(limit),
-				Offset:   offset,
-			})
-		}
+		mediaList, totalCount, err = countAndListMedia(
+			func() (int64, error) { return h.queries.CountMediaByType(r.Context(), "application/%") },
+			func() ([]store.Medium, error) {
+				return h.queries.ListMediaByType(r.Context(), store.ListMediaByTypeParams{
+					MimeType: "application/%",
+					Limit:    int64(limit),
+					Offset:   offset,
+				})
+			},
+		)
 	} else {
-		totalCount, err = h.queries.CountMedia(r.Context())
-		if err == nil {
-			mediaList, err = h.queries.ListMedia(r.Context(), store.ListMediaParams{
-				Limit:  int64(limit),
-				Offset: offset,
-			})
-		}
+		mediaList, totalCount, err = countAndListMedia(
+			func() (int64, error) { return h.queries.CountMedia(r.Context()) },
+			func() ([]store.Medium, error) {
+				return h.queries.ListMedia(r.Context(), store.ListMediaParams{
+					Limit:  int64(limit),
+					Offset: offset,
+				})
+			},
+		)
 	}
 
 	if err != nil {

@@ -162,6 +162,19 @@ func populateMediaVariants(resp *MediaResponse, variants []store.MediaVariant) {
 	}
 }
 
+// listAndCountMedia executes list and count queries, returning combined results.
+func listAndCountMedia(
+	listFn func() ([]store.Medium, error),
+	countFn func() (int64, error),
+) ([]store.Medium, int64, error) {
+	media, err := listFn()
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := countFn()
+	return media, total, err
+}
+
 // ListMedia handles GET /api/v1/media
 // Public: returns all media
 // With API key: enhanced access (same for now, could add private media later)
@@ -202,14 +215,16 @@ func (h *Handler) ListMedia(w http.ResponseWriter, r *http.Request) {
 			WriteBadRequest(w, "Invalid folder ID", nil)
 			return
 		}
-		media, err = h.queries.ListMediaInFolder(ctx, store.ListMediaInFolderParams{
-			FolderID: util.NullInt64FromValue(folderID),
-			Limit:    int64(perPage),
-			Offset:   int64(offset),
-		})
-		if err == nil {
-			total, err = h.queries.CountMediaInFolder(ctx, util.NullInt64FromValue(folderID))
-		}
+		media, total, err = listAndCountMedia(
+			func() ([]store.Medium, error) {
+				return h.queries.ListMediaInFolder(ctx, store.ListMediaInFolderParams{
+					FolderID: util.NullInt64FromValue(folderID),
+					Limit:    int64(perPage),
+					Offset:   int64(offset),
+				})
+			},
+			func() (int64, error) { return h.queries.CountMediaInFolder(ctx, util.NullInt64FromValue(folderID)) },
+		)
 	} else if typeFilter != "" {
 		// Filter by type (image, document, video)
 		var mimePattern string
@@ -224,23 +239,27 @@ func (h *Handler) ListMedia(w http.ResponseWriter, r *http.Request) {
 			WriteBadRequest(w, "Invalid type filter. Use: image, document, or video", nil)
 			return
 		}
-		media, err = h.queries.ListMediaByType(ctx, store.ListMediaByTypeParams{
-			MimeType: mimePattern,
-			Limit:    int64(perPage),
-			Offset:   int64(offset),
-		})
-		if err == nil {
-			total, err = h.queries.CountMediaByType(ctx, mimePattern)
-		}
+		media, total, err = listAndCountMedia(
+			func() ([]store.Medium, error) {
+				return h.queries.ListMediaByType(ctx, store.ListMediaByTypeParams{
+					MimeType: mimePattern,
+					Limit:    int64(perPage),
+					Offset:   int64(offset),
+				})
+			},
+			func() (int64, error) { return h.queries.CountMediaByType(ctx, mimePattern) },
+		)
 	} else {
 		// List all media
-		media, err = h.queries.ListMedia(ctx, store.ListMediaParams{
-			Limit:  int64(perPage),
-			Offset: int64(offset),
-		})
-		if err == nil {
-			total, err = h.queries.CountMedia(ctx)
-		}
+		media, total, err = listAndCountMedia(
+			func() ([]store.Medium, error) {
+				return h.queries.ListMedia(ctx, store.ListMediaParams{
+					Limit:  int64(perPage),
+					Offset: int64(offset),
+				})
+			},
+			func() (int64, error) { return h.queries.CountMedia(ctx) },
+		)
 	}
 
 	if err != nil {
