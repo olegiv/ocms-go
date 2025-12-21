@@ -132,7 +132,7 @@ func (h *LanguagesHandler) renderLanguageForm(w http.ResponseWriter, r *http.Req
 		lastURL = "/admin/languages/new"
 	}
 
-	if err := h.renderer.Render(w, r, "admin/languages_form", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/languages_form", render.TemplateData{
 		Title: title,
 		User:  user,
 		Data:  data,
@@ -141,10 +141,7 @@ func (h *LanguagesHandler) renderLanguageForm(w http.ResponseWriter, r *http.Req
 			{Label: i18n.T(lang, "nav.languages"), URL: "/admin/languages"},
 			{Label: lastLabel, URL: lastURL, Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // List displays all languages.
@@ -171,7 +168,7 @@ func (h *LanguagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		TotalLanguages: totalLanguages,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/languages_list", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/languages_list", render.TemplateData{
 		Title: i18n.T(lang, "nav.languages"),
 		User:  user,
 		Data:  data,
@@ -179,10 +176,7 @@ func (h *LanguagesHandler) List(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
 			{Label: i18n.T(lang, "nav.languages"), URL: "/admin/languages", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // NewForm displays the form to create a new language.

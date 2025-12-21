@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -690,6 +691,15 @@ func (r *Renderer) RenderForbidden(w http.ResponseWriter, req *http.Request) {
 // RenderInternalError renders a 500 Internal Server Error page.
 func (r *Renderer) RenderInternalError(w http.ResponseWriter, req *http.Request) {
 	r.RenderError(w, req, http.StatusInternalServerError, "Internal Server Error")
+}
+
+// RenderPage renders a template and handles errors by logging and returning a 500 response.
+// This is a convenience wrapper around Render that eliminates boilerplate error handling.
+func (r *Renderer) RenderPage(w http.ResponseWriter, req *http.Request, name string, data TemplateData) {
+	if err := r.Render(w, req, name, data); err != nil {
+		slog.Error("render error", "error", err, "template", name)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
 }
 
 // InvalidateMenuCache clears the cached menu by slug, or all menus if slug is empty.

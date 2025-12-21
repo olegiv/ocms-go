@@ -50,12 +50,9 @@ func NewAuthHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManage
 func (h *AuthHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
 	lang := middleware.GetAdminLang(r)
 	// If already logged in, just show login page (let user decide where to go)
-	if err := h.renderer.Render(w, r, "auth/login", render.TemplateData{
+	h.renderer.RenderPage(w, r, "auth/login", render.TemplateData{
 		Title: i18n.T(lang, "auth.login"),
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // Login handles the login form submission.

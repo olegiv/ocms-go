@@ -210,15 +210,12 @@ func configBreadcrumbs(lang string) []render.Breadcrumb {
 
 // renderConfigPage renders the config page with standard template data.
 func (h *ConfigHandler) renderConfigPage(w http.ResponseWriter, r *http.Request, user any, lang string, data ConfigFormData) {
-	if err := h.renderer.Render(w, r, "admin/config", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/config", render.TemplateData{
 		Title:       i18n.T(lang, "config.title"),
 		User:        user,
 		Data:        data,
 		Breadcrumbs: configBreadcrumbs(lang),
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // toConfigItems converts store.Config slice to ConfigItem slice.

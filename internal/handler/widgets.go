@@ -111,7 +111,7 @@ func (h *WidgetsHandler) List(w http.ResponseWriter, r *http.Request) {
 		AllThemes:   h.themeManager.ListThemesWithActive(),
 	}
 
-	if err := h.renderer.Render(w, r, "admin/widgets_list", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/widgets_list", render.TemplateData{
 		Title: i18n.T(lang, "nav.widgets"),
 		User:  user,
 		Data:  data,
@@ -119,10 +119,7 @@ func (h *WidgetsHandler) List(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
 			{Label: i18n.T(lang, "nav.widgets"), URL: "/admin/widgets", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // CreateWidgetRequest represents the JSON request for creating a widget.

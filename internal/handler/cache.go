@@ -64,7 +64,7 @@ func (h *CacheHandler) Stats(w http.ResponseWriter, r *http.Request) {
 		data.HealthError = err.Error()
 	}
 
-	if err := h.renderer.Render(w, r, "admin/cache_stats", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/cache_stats", render.TemplateData{
 		Title: i18n.T(lang, "nav.cache"),
 		User:  user,
 		Data:  data,
@@ -72,10 +72,7 @@ func (h *CacheHandler) Stats(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
 			{Label: i18n.T(lang, "nav.cache"), URL: "/admin/cache", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // Clear handles POST /admin/cache/clear - clears all caches.

@@ -55,7 +55,7 @@ func (h *ImportExportHandler) ExportForm(w http.ResponseWriter, r *http.Request)
 		PageStatuses: []string{"all", "published", "draft"},
 	}
 
-	if err := h.renderer.Render(w, r, "admin/export", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/export", render.TemplateData{
 		Title: i18n.T(lang, "nav.export"),
 		User:  user,
 		Data:  data,
@@ -63,10 +63,7 @@ func (h *ImportExportHandler) ExportForm(w http.ResponseWriter, r *http.Request)
 			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
 			{Label: i18n.T(lang, "nav.export"), URL: "/admin/export", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // Export handles POST /admin/export - generates and downloads the export.
@@ -169,15 +166,12 @@ func importBreadcrumbs(lang string) []render.Breadcrumb {
 // renderImportPage renders the import template with the given data.
 func (h *ImportExportHandler) renderImportPage(w http.ResponseWriter, r *http.Request, user interface{}, data ImportFormData) {
 	lang := middleware.GetAdminLang(r)
-	if err := h.renderer.Render(w, r, "admin/import", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/import", render.TemplateData{
 		Title:       i18n.T(lang, "nav.import"),
 		User:        user,
 		Data:        data,
 		Breadcrumbs: importBreadcrumbs(lang),
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // ImportForm handles GET /admin/import - displays the import form.

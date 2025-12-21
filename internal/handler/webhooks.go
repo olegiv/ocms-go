@@ -178,7 +178,7 @@ func (h *WebhooksHandler) List(w http.ResponseWriter, r *http.Request) {
 		TotalWebhooks: totalWebhooks,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/webhooks_list", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/webhooks_list", render.TemplateData{
 		Title: i18n.T(lang, "nav.webhooks"),
 		User:  user,
 		Data:  data,
@@ -186,10 +186,7 @@ func (h *WebhooksHandler) List(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
 			{Label: i18n.T(lang, "nav.webhooks"), URL: "/admin/webhooks", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // NewForm handles GET /admin/webhooks/new - displays the new webhook form.
@@ -468,7 +465,7 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 		Pagination: BuildAdminPagination(page, int(totalCount), DeliveriesPerPage, fmt.Sprintf("/admin/webhooks/%d/deliveries", id), r.URL.Query()),
 	}
 
-	if err := h.renderer.Render(w, r, "admin/webhooks_deliveries", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/webhooks_deliveries", render.TemplateData{
 		Title: i18n.T(lang, "webhooks.deliveries_title"),
 		User:  user,
 		Data:  data,
@@ -478,10 +475,7 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 			{Label: webhook.Name, URL: fmt.Sprintf("/admin/webhooks/%d", id)},
 			{Label: i18n.T(lang, "webhooks.deliveries_title"), URL: fmt.Sprintf("/admin/webhooks/%d/deliveries", id), Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // Test handles POST /admin/webhooks/{id}/test - sends a test event.
@@ -726,7 +720,7 @@ func (h *WebhooksHandler) renderNewWebhookForm(w http.ResponseWriter, r *http.Re
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	if err := h.renderer.Render(w, r, "admin/webhooks_form", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/webhooks_form", render.TemplateData{
 		Title: i18n.T(lang, "webhooks.new"),
 		User:  user,
 		Data:  data,
@@ -735,10 +729,7 @@ func (h *WebhooksHandler) renderNewWebhookForm(w http.ResponseWriter, r *http.Re
 			{Label: i18n.T(lang, "nav.webhooks"), URL: "/admin/webhooks"},
 			{Label: i18n.T(lang, "webhooks.new"), URL: "/admin/webhooks/new", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // renderEditWebhookForm renders the edit webhook form with the given data.
@@ -746,7 +737,7 @@ func (h *WebhooksHandler) renderEditWebhookForm(w http.ResponseWriter, r *http.R
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	if err := h.renderer.Render(w, r, "admin/webhooks_form", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/webhooks_form", render.TemplateData{
 		Title: webhook.Name,
 		User:  user,
 		Data:  data,
@@ -755,10 +746,7 @@ func (h *WebhooksHandler) renderEditWebhookForm(w http.ResponseWriter, r *http.R
 			{Label: i18n.T(lang, "nav.webhooks"), URL: "/admin/webhooks"},
 			{Label: webhook.Name, URL: fmt.Sprintf("/admin/webhooks/%d", webhook.ID), Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // calculateHealthStatus determines the health status based on success rate.

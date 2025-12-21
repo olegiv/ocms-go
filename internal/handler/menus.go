@@ -68,7 +68,7 @@ func (h *MenusHandler) List(w http.ResponseWriter, r *http.Request) {
 		Languages: languages,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/menus_list", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/menus_list", render.TemplateData{
 		Title: i18n.T(lang, "nav.menus"),
 		User:  user,
 		Data:  data,
@@ -76,10 +76,7 @@ func (h *MenusHandler) List(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
 			{Label: i18n.T(lang, "nav.menus"), URL: "/admin/menus", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // MenuItemNode represents a menu item with children for tree display.
@@ -165,7 +162,7 @@ func (h *MenusHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 		IsEdit:     false,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/menus_form", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/menus_form", render.TemplateData{
 		Title: i18n.T(lang, "menus.new"),
 		User:  user,
 		Data:  data,
@@ -174,10 +171,7 @@ func (h *MenusHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.menus"), URL: "/admin/menus"},
 			{Label: i18n.T(lang, "menus.new"), URL: "/admin/menus/new", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // Create handles POST /admin/menus - creates a new menu.
@@ -224,7 +218,7 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 			IsEdit:     false,
 		}
 
-		if err := h.renderer.Render(w, r, "admin/menus_form", render.TemplateData{
+		h.renderer.RenderPage(w, r, "admin/menus_form", render.TemplateData{
 			Title: i18n.T(lang, "menus.new"),
 			User:  user,
 			Data:  data,
@@ -233,10 +227,7 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 				{Label: i18n.T(lang, "nav.menus"), URL: "/admin/menus"},
 				{Label: i18n.T(lang, "menus.new"), URL: "/admin/menus/new", Active: true},
 			},
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		})
 		return
 	}
 
@@ -315,7 +306,7 @@ func (h *MenusHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		IsEdit:     true,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/menus_form", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/menus_form", render.TemplateData{
 		Title: fmt.Sprintf("Edit Menu - %s", menu.Name),
 		User:  user,
 		Data:  data,
@@ -324,10 +315,7 @@ func (h *MenusHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.menus"), URL: "/admin/menus"},
 			{Label: menu.Name, URL: fmt.Sprintf("/admin/menus/%d", menu.ID), Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // Update handles PUT /admin/menus/{id} - updates a menu.
@@ -393,7 +381,7 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 			IsEdit:     true,
 		}
 
-		if err := h.renderer.Render(w, r, "admin/menus_form", render.TemplateData{
+		h.renderer.RenderPage(w, r, "admin/menus_form", render.TemplateData{
 			Title: fmt.Sprintf("Edit Menu - %s", menu.Name),
 			User:  user,
 			Data:  data,
@@ -402,10 +390,7 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 				{Label: i18n.T(lang, "nav.menus"), URL: "/admin/menus"},
 				{Label: menu.Name, URL: fmt.Sprintf("/admin/menus/%d", menu.ID), Active: true},
 			},
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		})
 		return
 	}
 

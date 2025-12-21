@@ -352,17 +352,14 @@ func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		RecentActivity:         recentActivity,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/dashboard", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/dashboard", render.TemplateData{
 		Title: i18n.T(lang, "nav.dashboard"),
 		User:  user,
 		Data:  dashboardData,
 		Breadcrumbs: []render.Breadcrumb{
 			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // SetLanguage changes the admin UI language preference.
