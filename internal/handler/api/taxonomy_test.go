@@ -310,8 +310,8 @@ func TestBuildCategoryTree(t *testing.T) {
 
 	t.Run("empty list", func(t *testing.T) {
 		result := buildCategoryTree([]store.GetCategoryUsageCountsRow{})
-		if result != nil && len(result) != 0 {
-			t.Errorf("buildCategoryTree() with empty input should return nil or empty slice, got %v", result)
+		if len(result) != 0 {
+			t.Errorf("buildCategoryTree() with empty input should return empty slice, got %v", result)
 		}
 	})
 

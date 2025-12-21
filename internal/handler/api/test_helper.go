@@ -174,41 +174,6 @@ func createTestCategory(t *testing.T, db *sql.DB, name, slug string, parentID *i
 	return cat
 }
 
-// createTestPage creates a test page in the database.
-func createTestPage(t *testing.T, db *sql.DB, title, slug string) int64 {
-	t.Helper()
-	now := time.Now()
-
-	result, err := db.Exec(
-		`INSERT INTO pages (title, slug, content, status, author_id, created_at, updated_at) VALUES (?, ?, '', 'published', 1, ?, ?)`,
-		title, slug, now, now,
-	)
-	if err != nil {
-		t.Fatalf("failed to create test page: %v", err)
-	}
-
-	id, _ := result.LastInsertId()
-	return id
-}
-
-// linkPageToTag links a page to a tag.
-func linkPageToTag(t *testing.T, db *sql.DB, pageID, tagID int64) {
-	t.Helper()
-	_, err := db.Exec(`INSERT INTO page_tags (page_id, tag_id) VALUES (?, ?)`, pageID, tagID)
-	if err != nil {
-		t.Fatalf("failed to link page to tag: %v", err)
-	}
-}
-
-// linkPageToCategory links a page to a category.
-func linkPageToCategory(t *testing.T, db *sql.DB, pageID, categoryID int64) {
-	t.Helper()
-	_, err := db.Exec(`INSERT INTO page_categories (page_id, category_id) VALUES (?, ?)`, pageID, categoryID)
-	if err != nil {
-		t.Fatalf("failed to link page to category: %v", err)
-	}
-}
-
 // requestWithURLParams adds chi URL parameters to a request.
 func requestWithURLParams(r *http.Request, params map[string]string) *http.Request {
 	rctx := chi.NewRouteContext()

@@ -8,7 +8,6 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
-	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -130,12 +129,7 @@ func (m *Module) getTrackedItems(ctx context.Context, entityType string) ([]int6
 	if err != nil {
 		return nil, err
 	}
-	defer func(rows *sql.Rows) {
-		err := rows.Close()
-		if err != nil {
-			log.Println("Failed to close rows:", err)
-		}
-	}(rows)
+	defer func() { _ = rows.Close() }()
 
 	var ids []int64
 	for rows.Next() {
@@ -156,12 +150,7 @@ func (m *Module) getTrackedCounts(ctx context.Context) (map[string]int, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func(rows *sql.Rows) {
-		err := rows.Close()
-		if err != nil {
-			log.Println("Failed to close rows:", err)
-		}
-	}(rows)
+	defer func() { _ = rows.Close() }()
 
 	counts := make(map[string]int)
 	for rows.Next() {
@@ -890,93 +879,64 @@ func (m *Module) deleteAllGeneratedItems(ctx context.Context) error {
 	queries := store.New(m.ctx.DB)
 	uploadDir := "./uploads"
 
+	// Helper for simple entity deletion
+	deleteEntities := func(entityType string, deleteFn func(context.Context, int64) error) error {
+		ids, err := m.getTrackedItems(ctx, entityType)
+		if err != nil {
+			return fmt.Errorf("failed to get tracked %ss: %w", entityType, err)
+		}
+		for _, id := range ids {
+			if err := deleteFn(ctx, id); err != nil {
+				m.ctx.Logger.Warn("failed to delete "+entityType, "id", id, "error", err)
+			}
+		}
+		return nil
+	}
+
 	// Delete in order: menu_items, translations, pages, media, categories, tags
 
-	// Delete menu items first
-	menuItemIDs, err := m.getTrackedItems(ctx, "menu_item")
-	if err != nil {
-		return fmt.Errorf("failed to get tracked menu items: %w", err)
+	// Simple deletions
+	if err := deleteEntities("menu_item", queries.DeleteMenuItem); err != nil {
+		return err
 	}
-	for _, id := range menuItemIDs {
-		if err := queries.DeleteMenuItem(ctx, id); err != nil {
-			m.ctx.Logger.Warn("failed to delete menu item", "id", id, "error", err)
-		}
+	if err := deleteEntities("translation", queries.DeleteTranslation); err != nil {
+		return err
 	}
 
-	// Delete translations
-	transIDs, err := m.getTrackedItems(ctx, "translation")
-	if err != nil {
-		return fmt.Errorf("failed to get tracked translations: %w", err)
-	}
-	for _, id := range transIDs {
-		if err := queries.DeleteTranslation(ctx, id); err != nil {
-			m.ctx.Logger.Warn("failed to delete translation", "id", id, "error", err)
-		}
-	}
-
-	// Delete pages
+	// Delete pages (need to clear associations first)
 	pageIDs, err := m.getTrackedItems(ctx, "page")
 	if err != nil {
 		return fmt.Errorf("failed to get tracked pages: %w", err)
 	}
 	for _, id := range pageIDs {
-		// Clear page associations first
-		if err := queries.ClearPageTags(ctx, id); err != nil {
-			m.ctx.Logger.Warn("failed to clear page tags", "id", id, "error", err)
-		}
-		if err := queries.ClearPageCategories(ctx, id); err != nil {
-			m.ctx.Logger.Warn("failed to clear page categories", "id", id, "error", err)
-		}
+		_ = queries.ClearPageTags(ctx, id)
+		_ = queries.ClearPageCategories(ctx, id)
 		if err := queries.DeletePage(ctx, id); err != nil {
 			m.ctx.Logger.Warn("failed to delete page", "id", id, "error", err)
 		}
 	}
 
-	// Delete media (including files)
+	// Delete media (need to delete files and variants)
 	mediaIDs, err := m.getTrackedItems(ctx, "media")
 	if err != nil {
 		return fmt.Errorf("failed to get tracked media: %w", err)
 	}
 	for _, id := range mediaIDs {
-		// Get media to find UUID for file deletion
-		media, err := queries.GetMediaByID(ctx, id)
-		if err != nil {
-			m.ctx.Logger.Warn("failed to get media for deletion", "id", id, "error", err)
-			continue
+		if media, err := queries.GetMediaByID(ctx, id); err == nil {
+			deleteMediaFiles(uploadDir, media.Uuid)
 		}
-
-		// Delete files
-		deleteMediaFiles(uploadDir, media.Uuid)
-
-		// Delete variants and media record
-		if err := queries.DeleteMediaVariants(ctx, id); err != nil {
-			m.ctx.Logger.Warn("failed to delete media variants", "id", id, "error", err)
-		}
+		_ = queries.DeleteMediaVariants(ctx, id)
 		if err := queries.DeleteMedia(ctx, id); err != nil {
 			m.ctx.Logger.Warn("failed to delete media", "id", id, "error", err)
 		}
 	}
 
-	// Delete categories
-	catIDs, err := m.getTrackedItems(ctx, "category")
-	if err != nil {
-		return fmt.Errorf("failed to get tracked categories: %w", err)
+	// Simple deletions
+	if err := deleteEntities("category", queries.DeleteCategory); err != nil {
+		return err
 	}
-	for _, id := range catIDs {
-		if err := queries.DeleteCategory(ctx, id); err != nil {
-			m.ctx.Logger.Warn("failed to delete category", "id", id, "error", err)
-		}
-	}
-
-	// Delete tags
-	tagIDs, err := m.getTrackedItems(ctx, "tag")
-	if err != nil {
-		return fmt.Errorf("failed to get tracked tags: %w", err)
-	}
-	for _, id := range tagIDs {
-		if err := queries.DeleteTag(ctx, id); err != nil {
-			m.ctx.Logger.Warn("failed to delete tag", "id", id, "error", err)
-		}
+	if err := deleteEntities("tag", queries.DeleteTag); err != nil {
+		return err
 	}
 
 	// Clear tracking table
