@@ -61,7 +61,7 @@ func (h *ThemesHandler) List(w http.ResponseWriter, r *http.Request) {
 		Themes: themes,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/themes_list", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/themes_list", render.TemplateData{
 		Title: i18n.T(lang, "nav.themes"),
 		User:  user,
 		Data:  data,
@@ -69,10 +69,7 @@ func (h *ThemesHandler) List(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
 			{Label: i18n.T(lang, "nav.themes"), URL: "/admin/themes", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // Activate handles POST /admin/themes/activate - activates a theme.
@@ -170,7 +167,7 @@ func (h *ThemesHandler) Settings(w http.ResponseWriter, r *http.Request) {
 		Errors:   make(map[string]string),
 	}
 
-	if err := h.renderer.Render(w, r, "admin/themes_settings", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/themes_settings", render.TemplateData{
 		Title: thm.Config.Name + " Settings",
 		User:  user,
 		Data:  data,
@@ -179,10 +176,7 @@ func (h *ThemesHandler) Settings(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.themes"), URL: "/admin/themes"},
 			{Label: thm.Config.Name + " Settings", URL: "/admin/themes/" + themeName + "/settings", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // SaveSettings handles PUT /admin/themes/{name}/settings - saves theme settings.

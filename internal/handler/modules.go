@@ -55,7 +55,7 @@ func (h *ModulesHandler) List(w http.ResponseWriter, r *http.Request) {
 		Hooks:   hooks,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/modules_list", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/modules_list", render.TemplateData{
 		Title: i18n.T(lang, "nav.modules"),
 		User:  user,
 		Data:  data,
@@ -63,10 +63,7 @@ func (h *ModulesHandler) List(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
 			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // ToggleActiveRequest represents the request body for toggling module active status.

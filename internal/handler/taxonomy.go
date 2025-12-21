@@ -99,7 +99,7 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 		Pagination: BuildAdminPagination(page, int(totalCount), TagsPerPage, "/admin/tags", r.URL.Query()),
 	}
 
-	if err := h.renderer.Render(w, r, "admin/tags_list", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/tags_list", render.TemplateData{
 		Title: i18n.T(lang, "nav.tags"),
 		User:  user,
 		Data:  data,
@@ -107,10 +107,7 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
 			{Label: i18n.T(lang, "nav.tags"), URL: "/admin/tags", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // TagTranslationInfo holds information about a tag translation.
@@ -160,7 +157,7 @@ func (h *TaxonomyHandler) NewTagForm(w http.ResponseWriter, r *http.Request) {
 		Language:     defaultLanguage,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/tags_form", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/tags_form", render.TemplateData{
 		Title: i18n.T(lang, "tags.new"),
 		User:  user,
 		Data:  data,
@@ -169,10 +166,7 @@ func (h *TaxonomyHandler) NewTagForm(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.tags"), URL: "/admin/tags"},
 			{Label: i18n.T(lang, "tags.new"), URL: "/admin/tags/new", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // CreateTag handles POST /admin/tags - creates a new tag.
@@ -235,7 +229,7 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 			Language:     currentLanguage,
 		}
 
-		if err := h.renderer.Render(w, r, "admin/tags_form", render.TemplateData{
+		h.renderer.RenderPage(w, r, "admin/tags_form", render.TemplateData{
 			Title: i18n.T(lang, "tags.new"),
 			User:  user,
 			Data:  data,
@@ -244,10 +238,7 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 				{Label: i18n.T(lang, "nav.tags"), URL: "/admin/tags"},
 				{Label: i18n.T(lang, "tags.new"), URL: "/admin/tags/new", Active: true},
 			},
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		})
 		return
 	}
 
@@ -302,7 +293,7 @@ func (h *TaxonomyHandler) EditTagForm(w http.ResponseWriter, r *http.Request) {
 		MissingLanguages: langInfo.MissingLanguages,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/tags_form", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/tags_form", render.TemplateData{
 		Title: tag.Name,
 		User:  user,
 		Data:  data,
@@ -311,10 +302,7 @@ func (h *TaxonomyHandler) EditTagForm(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.tags"), URL: "/admin/tags"},
 			{Label: tag.Name, URL: fmt.Sprintf("/admin/tags/%d", tag.ID), Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // UpdateTag handles PUT /admin/tags/{id} - updates an existing tag.
@@ -378,7 +366,7 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 			Language:     langInfo.TagLanguage,
 		}
 
-		if err := h.renderer.Render(w, r, "admin/tags_form", render.TemplateData{
+		h.renderer.RenderPage(w, r, "admin/tags_form", render.TemplateData{
 			Title: existingTag.Name,
 			User:  user,
 			Data:  data,
@@ -387,10 +375,7 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 				{Label: i18n.T(lang, "nav.tags"), URL: "/admin/tags"},
 				{Label: existingTag.Name, URL: fmt.Sprintf("/admin/tags/%d", id), Active: true},
 			},
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		})
 		return
 	}
 
@@ -716,7 +701,7 @@ func (h *TaxonomyHandler) ListCategories(w http.ResponseWriter, r *http.Request)
 		TotalCount: totalCount,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/categories_list", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/categories_list", render.TemplateData{
 		Title: i18n.T(lang, "nav.categories"),
 		User:  user,
 		Data:  data,
@@ -724,10 +709,7 @@ func (h *TaxonomyHandler) ListCategories(w http.ResponseWriter, r *http.Request)
 			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
 			{Label: i18n.T(lang, "nav.categories"), URL: "/admin/categories", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // CategoryTranslationInfo holds information about a category translation.
@@ -789,7 +771,7 @@ func (h *TaxonomyHandler) NewCategoryForm(w http.ResponseWriter, r *http.Request
 		Language:      defaultLanguage,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/categories_form", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/categories_form", render.TemplateData{
 		Title: i18n.T(lang, "categories.new"),
 		User:  user,
 		Data:  data,
@@ -798,10 +780,7 @@ func (h *TaxonomyHandler) NewCategoryForm(w http.ResponseWriter, r *http.Request
 			{Label: i18n.T(lang, "nav.categories"), URL: "/admin/categories"},
 			{Label: i18n.T(lang, "categories.new"), URL: "/admin/categories/new", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // CreateCategory handles POST /admin/categories - creates a new category.
@@ -882,7 +861,7 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 			Language:      currentLanguage,
 		}
 
-		if err := h.renderer.Render(w, r, "admin/categories_form", render.TemplateData{
+		h.renderer.RenderPage(w, r, "admin/categories_form", render.TemplateData{
 			Title: i18n.T(lang, "categories.new"),
 			User:  user,
 			Data:  data,
@@ -891,10 +870,7 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 				{Label: i18n.T(lang, "nav.categories"), URL: "/admin/categories"},
 				{Label: i18n.T(lang, "categories.new"), URL: "/admin/categories/new", Active: true},
 			},
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		})
 		return
 	}
 
@@ -979,7 +955,7 @@ func (h *TaxonomyHandler) EditCategoryForm(w http.ResponseWriter, r *http.Reques
 		MissingLanguages: langInfo.MissingLanguages,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/categories_form", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/categories_form", render.TemplateData{
 		Title: category.Name,
 		User:  user,
 		Data:  data,
@@ -988,10 +964,7 @@ func (h *TaxonomyHandler) EditCategoryForm(w http.ResponseWriter, r *http.Reques
 			{Label: i18n.T(lang, "nav.categories"), URL: "/admin/categories"},
 			{Label: category.Name, URL: fmt.Sprintf("/admin/categories/%d", category.ID), Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // UpdateCategory handles PUT /admin/categories/{id} - updates an existing category.
@@ -1105,7 +1078,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 			Language:      langInfo.CategoryLanguage,
 		}
 
-		if err := h.renderer.Render(w, r, "admin/categories_form", render.TemplateData{
+		h.renderer.RenderPage(w, r, "admin/categories_form", render.TemplateData{
 			Title: existingCategory.Name,
 			User:  user,
 			Data:  data,
@@ -1114,10 +1087,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 				{Label: i18n.T(lang, "nav.categories"), URL: "/admin/categories"},
 				{Label: existingCategory.Name, URL: fmt.Sprintf("/admin/categories/%d", id), Active: true},
 			},
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		})
 		return
 	}
 

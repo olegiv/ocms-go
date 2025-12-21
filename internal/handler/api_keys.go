@@ -95,7 +95,7 @@ func (h *APIKeysHandler) List(w http.ResponseWriter, r *http.Request) {
 		Pagination: BuildAdminPagination(page, int(totalKeys), APIKeysPerPage, "/admin/api-keys", r.URL.Query()),
 	}
 
-	if err := h.renderer.Render(w, r, "admin/api_keys_list", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/api_keys_list", render.TemplateData{
 		Title: i18n.T(lang, "api_keys.title"),
 		User:  user,
 		Data:  data,
@@ -103,10 +103,7 @@ func (h *APIKeysHandler) List(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
 			{Label: i18n.T(lang, "nav.api_keys"), URL: "/admin/api-keys", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // APIKeyFormData holds data for the API key form template.
@@ -498,7 +495,7 @@ func (h *APIKeysHandler) fetchAPIKey(w http.ResponseWriter, r *http.Request, id 
 
 // renderAPIKeyForm renders the API key form with appropriate breadcrumbs.
 func (h *APIKeysHandler) renderAPIKeyForm(w http.ResponseWriter, r *http.Request, user any, lang string, title string, data APIKeyFormData, breadcrumbLabel string, breadcrumbURL string) {
-	if err := h.renderer.Render(w, r, "admin/api_keys_form", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/api_keys_form", render.TemplateData{
 		Title: title,
 		User:  user,
 		Data:  data,
@@ -507,8 +504,5 @@ func (h *APIKeysHandler) renderAPIKeyForm(w http.ResponseWriter, r *http.Request
 			{Label: i18n.T(lang, "nav.api_keys"), URL: "/admin/api-keys"},
 			{Label: breadcrumbLabel, URL: breadcrumbURL, Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }

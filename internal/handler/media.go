@@ -141,14 +141,8 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Calculate pagination
-	totalPages := int((totalCount + MediaPerPage - 1) / MediaPerPage)
-	if totalPages < 1 {
-		totalPages = 1
-	}
-	if page > totalPages {
-		page = totalPages
-	}
+	// Normalize page to valid range
+	page, _ = NormalizePagination(page, int(totalCount), MediaPerPage)
 
 	offset := int64((page - 1) * MediaPerPage)
 
@@ -224,7 +218,7 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 		Pagination: BuildAdminPagination(page, int(totalCount), MediaPerPage, "/admin/media", r.URL.Query()),
 	}
 
-	if err := h.renderer.Render(w, r, "admin/media_library", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/media_library", render.TemplateData{
 		Title: i18n.T(lang, "media.title"),
 		User:  user,
 		Data:  data,
@@ -232,10 +226,7 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
 			{Label: i18n.T(lang, "nav.media"), URL: "/admin/media", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // UploadFormData holds data for the upload form template.
@@ -263,7 +254,7 @@ func (h *MediaHandler) UploadForm(w http.ResponseWriter, r *http.Request) {
 		AllowedExt: ".jpg,.jpeg,.png,.gif,.webp,.pdf,.mp4,.webm",
 	}
 
-	if err := h.renderer.Render(w, r, "admin/media_upload", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/media_upload", render.TemplateData{
 		Title: i18n.T(lang, "media.upload_title"),
 		User:  user,
 		Data:  data,
@@ -272,10 +263,7 @@ func (h *MediaHandler) UploadForm(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.media"), URL: "/admin/media"},
 			{Label: i18n.T(lang, "media.upload"), URL: "/admin/media/upload", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // Upload handles POST /admin/media/upload - processes file upload.
@@ -450,7 +438,7 @@ func (h *MediaHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		FormValues: make(map[string]string),
 	}
 
-	if err := h.renderer.Render(w, r, "admin/media_edit", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/media_edit", render.TemplateData{
 		Title: i18n.T(lang, "media.edit_title"),
 		User:  user,
 		Data:  data,
@@ -459,10 +447,7 @@ func (h *MediaHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.media"), URL: "/admin/media"},
 			{Label: media.Filename, URL: fmt.Sprintf("/admin/media/%d", media.ID), Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // Update handles PUT /admin/media/{id} - updates media metadata.
@@ -534,7 +519,7 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 
-		if err := h.renderer.Render(w, r, "admin/media_edit", render.TemplateData{
+		h.renderer.RenderPage(w, r, "admin/media_edit", render.TemplateData{
 			Title: i18n.T(lang, "media.edit_title"),
 			User:  user,
 			Data:  data,
@@ -543,10 +528,7 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 				{Label: i18n.T(lang, "nav.media"), URL: "/admin/media"},
 				{Label: media.Filename, URL: fmt.Sprintf("/admin/media/%d", id), Active: true},
 			},
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		})
 		return
 	}
 
@@ -941,10 +923,7 @@ func (h *MediaHandler) API(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Calculate total pages
-	totalPages := int((totalCount + int64(limit) - 1) / int64(limit))
-	if totalPages < 1 {
-		totalPages = 1
-	}
+	totalPages := CalculateTotalPages(int(totalCount), limit)
 
 	// Build response
 	type MediaAPIItem struct {

@@ -139,7 +139,7 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 		Pagination:    BuildAdminPagination(page, int(totalUsers), UsersPerPage, "/admin/users", r.URL.Query()),
 	}
 
-	if err := h.renderer.Render(w, r, "admin/users_list", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/users_list", render.TemplateData{
 		Title: i18n.T(lang, "nav.users"),
 		User:  user,
 		Data:  data,
@@ -147,10 +147,7 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
 			{Label: i18n.T(lang, "nav.users"), URL: "/admin/users", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // UserFormData holds data for the user form template.
@@ -314,7 +311,7 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		IsEdit: true,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/users_form", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/users_form", render.TemplateData{
 		Title: i18n.T(lang, "users.edit"),
 		User:  currentUser,
 		Data:  data,
@@ -323,10 +320,7 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.users"), URL: "/admin/users"},
 			{Label: editUser.Name, URL: fmt.Sprintf("/admin/users/%d", editUser.ID), Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // Update handles PUT /admin/users/{id} - updates an existing user.
@@ -433,7 +427,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 			IsEdit:     true,
 		}
 
-		if err := h.renderer.Render(w, r, "admin/users_form", render.TemplateData{
+		h.renderer.RenderPage(w, r, "admin/users_form", render.TemplateData{
 			Title: i18n.T(lang, "users.edit"),
 			User:  currentUser,
 			Data:  data,
@@ -442,10 +436,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 				{Label: i18n.T(lang, "nav.users"), URL: "/admin/users"},
 				{Label: editUser.Name, URL: fmt.Sprintf("/admin/users/%d", id), Active: true},
 			},
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		})
 		return
 	}
 
@@ -612,7 +603,7 @@ func (h *UsersHandler) renderNewUserForm(w http.ResponseWriter, r *http.Request,
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	if err := h.renderer.Render(w, r, "admin/users_form", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/users_form", render.TemplateData{
 		Title: i18n.T(lang, "users.new"),
 		User:  user,
 		Data:  data,
@@ -621,8 +612,5 @@ func (h *UsersHandler) renderNewUserForm(w http.ResponseWriter, r *http.Request,
 			{Label: i18n.T(lang, "nav.users"), URL: "/admin/users"},
 			{Label: i18n.T(lang, "users.new"), URL: "/admin/users/new", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }

@@ -303,15 +303,12 @@ func formsBreadcrumbs(lang string) []render.Breadcrumb {
 // renderFormFormPage renders the form create/edit page with data and breadcrumbs.
 func (h *FormsHandler) renderFormFormPage(w http.ResponseWriter, r *http.Request, data FormFormData, title string, breadcrumbs []render.Breadcrumb) {
 	user := middleware.GetUser(r)
-	if err := h.renderer.Render(w, r, "admin/forms_form", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/forms_form", render.TemplateData{
 		Title:       title,
 		User:        user,
 		Data:        data,
 		Breadcrumbs: breadcrumbs,
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // FormsListData holds data for the forms list template.
@@ -350,7 +347,7 @@ func (h *FormsHandler) List(w http.ResponseWriter, r *http.Request) {
 		Forms: formItems,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/forms_list", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/forms_list", render.TemplateData{
 		Title: i18n.T(lang, "nav.forms"),
 		User:  user,
 		Data:  data,
@@ -358,10 +355,7 @@ func (h *FormsHandler) List(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
 			{Label: i18n.T(lang, "nav.forms"), URL: "/admin/forms", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // FormFormData holds data for the form create/edit template.
@@ -871,13 +865,10 @@ func (h *FormsHandler) Show(w http.ResponseWriter, r *http.Request) {
 		SiteName:  h.getSiteName(r.Context()),
 	}
 
-	if err := h.renderer.Render(w, r, "public/form", render.TemplateData{
+	h.renderer.RenderPage(w, r, "public/form", render.TemplateData{
 		Title: form.Title,
 		Data:  data,
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // Submit handles POST /forms/{slug} - processes form submission.
@@ -1037,13 +1028,10 @@ func (h *FormsHandler) renderFormWithErrors(w http.ResponseWriter, r *http.Reque
 		SiteName:  h.getSiteName(r.Context()),
 	}
 
-	if err := h.renderer.Render(w, r, "public/form", render.TemplateData{
+	h.renderer.RenderPage(w, r, "public/form", render.TemplateData{
 		Title: form.Title,
 		Data:  data,
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // renderFormSuccess renders the form success page.
@@ -1055,13 +1043,10 @@ func (h *FormsHandler) renderFormSuccess(w http.ResponseWriter, r *http.Request,
 		SiteName: h.getSiteName(r.Context()),
 	}
 
-	if err := h.renderer.Render(w, r, "public/form", render.TemplateData{
+	h.renderer.RenderPage(w, r, "public/form", render.TemplateData{
 		Title: form.Title,
 		Data:  data,
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // isValidEmail checks if the email is valid.
@@ -1219,15 +1204,12 @@ func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 		render.Breadcrumb{Label: form.Name, URL: fmt.Sprintf("/admin/forms/%d", form.ID)},
 		render.Breadcrumb{Label: i18n.T(lang, "forms.submissions"), URL: fmt.Sprintf("/admin/forms/%d/submissions", form.ID), Active: true})
 
-	if err := h.renderer.Render(w, r, "admin/forms_submissions", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/forms_submissions", render.TemplateData{
 		Title:       fmt.Sprintf("Submissions - %s", form.Name),
 		User:        user,
 		Data:        data,
 		Breadcrumbs: breadcrumbs,
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // SubmissionViewData holds data for viewing a single submission.
@@ -1313,15 +1295,12 @@ func (h *FormsHandler) ViewSubmission(w http.ResponseWriter, r *http.Request) {
 		render.Breadcrumb{Label: i18n.T(lang, "forms.submissions"), URL: fmt.Sprintf("/admin/forms/%d/submissions", form.ID)},
 		render.Breadcrumb{Label: fmt.Sprintf("#%d", submission.ID), URL: fmt.Sprintf("/admin/forms/%d/submissions/%d", form.ID, submission.ID), Active: true})
 
-	if err := h.renderer.Render(w, r, "admin/forms_submission_view", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/forms_submission_view", render.TemplateData{
 		Title:       fmt.Sprintf("Submission #%d - %s", submission.ID, form.Name),
 		User:        user,
 		Data:        viewData,
 		Breadcrumbs: breadcrumbs,
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // DeleteSubmission handles DELETE /admin/forms/{id}/submissions/{subId} - deletes a submission.

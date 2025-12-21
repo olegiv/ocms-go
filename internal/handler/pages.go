@@ -381,7 +381,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		Pagination:         BuildAdminPagination(page, int(totalCount), PagesPerPage, "/admin/pages", r.URL.Query()),
 	}
 
-	if err := h.renderer.Render(w, r, "admin/pages_list", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/pages_list", render.TemplateData{
 		Title: i18n.T(lang, "pages.title"),
 		User:  user,
 		Data:  data,
@@ -389,10 +389,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
 			{Label: i18n.T(lang, "pages.title"), URL: "/admin/pages", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // PageCategoryNode represents a category with depth for tree display.
@@ -498,7 +495,7 @@ func (h *PagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 		IsEdit:        false,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/pages_form", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/pages_form", render.TemplateData{
 		Title: i18n.T(lang, "pages.new"),
 		User:  user,
 		Data:  data,
@@ -507,10 +504,7 @@ func (h *PagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "pages.title"), URL: "/admin/pages"},
 			{Label: i18n.T(lang, "pages.new"), URL: "/admin/pages/new", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // Create handles POST /admin/pages - creates a new page.
@@ -660,7 +654,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 			IsEdit:       false,
 		}
 
-		if err := h.renderer.Render(w, r, "admin/pages_form", render.TemplateData{
+		h.renderer.RenderPage(w, r, "admin/pages_form", render.TemplateData{
 			Title: i18n.T(lang, "pages.new"),
 			User:  user,
 			Data:  data,
@@ -669,10 +663,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 				{Label: i18n.T(lang, "pages.title"), URL: "/admin/pages"},
 				{Label: i18n.T(lang, "pages.new"), URL: "/admin/pages/new", Active: true},
 			},
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		})
 		return
 	}
 
@@ -899,7 +890,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		IsEdit:           true,
 	}
 
-	if err := h.renderer.Render(w, r, "admin/pages_form", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/pages_form", render.TemplateData{
 		Title: i18n.T(adminLang, "pages.edit"),
 		User:  user,
 		Data:  data,
@@ -908,10 +899,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(adminLang, "pages.title"), URL: "/admin/pages"},
 			{Label: page.Title, URL: fmt.Sprintf("/admin/pages/%d", page.ID), Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // Update handles PUT /admin/pages/{id} - updates an existing page.
@@ -976,7 +964,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 			IsEdit:     true,
 		}
 
-		if err := h.renderer.Render(w, r, "admin/pages_form", render.TemplateData{
+		h.renderer.RenderPage(w, r, "admin/pages_form", render.TemplateData{
 			Title: i18n.T(lang, "pages.edit"),
 			User:  user,
 			Data:  data,
@@ -985,10 +973,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 				{Label: i18n.T(lang, "pages.title"), URL: "/admin/pages"},
 				{Label: existingPage.Title, URL: fmt.Sprintf("/admin/pages/%d", id), Active: true},
 			},
-		}); err != nil {
-			slog.Error("render error", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		})
 		return
 	}
 
@@ -1253,7 +1238,7 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 		Pagination: BuildAdminPagination(pageNum, int(totalCount), VersionsPerPage, fmt.Sprintf("/admin/pages/%d/versions", id), r.URL.Query()),
 	}
 
-	if err := h.renderer.Render(w, r, "admin/pages_versions", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/pages_versions", render.TemplateData{
 		Title: fmt.Sprintf("%s - %s", i18n.T(lang, "versions.title"), page.Title),
 		User:  user,
 		Data:  data,
@@ -1263,10 +1248,7 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 			{Label: page.Title, URL: fmt.Sprintf("/admin/pages/%d", page.ID)},
 			{Label: i18n.T(lang, "versions.title"), URL: fmt.Sprintf("/admin/pages/%d/versions", page.ID), Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // RestoreVersion handles POST /admin/pages/{id}/versions/{versionId}/restore - restores a version.

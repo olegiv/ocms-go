@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"ocms-go/internal/handler"
 	"ocms-go/internal/middleware"
 	"ocms-go/internal/service"
 	"ocms-go/internal/store"
@@ -131,23 +132,11 @@ func (h *Handler) ListMedia(w http.ResponseWriter, r *http.Request) {
 	typeFilter := r.URL.Query().Get("type")
 	folderIDStr := r.URL.Query().Get("folder")
 	searchQuery := r.URL.Query().Get("search")
-	pageStr := r.URL.Query().Get("page")
-	perPageStr := r.URL.Query().Get("per_page")
 	include := r.URL.Query().Get("include")
 
-	// Pagination defaults
-	page := 1
-	perPage := 20
-	if pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
-	if perPageStr != "" {
-		if pp, err := strconv.Atoi(perPageStr); err == nil && pp > 0 && pp <= 100 {
-			perPage = pp
-		}
-	}
+	// Parse pagination
+	page := handler.ParsePageParam(r)
+	perPage := handler.ParsePerPageParam(r, 20, 100)
 	offset := (page - 1) * perPage
 
 	var media []store.Medium

@@ -2,7 +2,9 @@ package handler
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -129,4 +131,70 @@ func (p AdminPagination) PageRange() string {
 		end = int(p.TotalItems)
 	}
 	return strings.TrimSpace(fmt.Sprintf("%d-%d", start, end))
+}
+
+// CalculateTotalPages calculates the number of pages for the given total items and items per page.
+func CalculateTotalPages(totalItems, perPage int) int {
+	if perPage <= 0 {
+		return 1
+	}
+	totalPages := (totalItems + perPage - 1) / perPage
+	if totalPages < 1 {
+		totalPages = 1
+	}
+	return totalPages
+}
+
+// ClampPage ensures the page number is within the valid range [1, totalPages].
+func ClampPage(page, totalPages int) int {
+	if page < 1 {
+		return 1
+	}
+	if page > totalPages {
+		return totalPages
+	}
+	return page
+}
+
+// NormalizePagination calculates total pages and clamps the current page to a valid range.
+// Returns the normalized page number and total pages.
+func NormalizePagination(page, totalItems, perPage int) (normalizedPage, totalPages int) {
+	totalPages = CalculateTotalPages(totalItems, perPage)
+	normalizedPage = ClampPage(page, totalPages)
+	return normalizedPage, totalPages
+}
+
+// ParsePageParam parses the "page" query parameter from the request.
+// Returns 1 if the parameter is missing, empty, or invalid.
+func ParsePageParam(r *http.Request) int {
+	return ParseIntParam(r, "page", 1, 1, 0)
+}
+
+// ParsePerPageParam parses the "per_page" query parameter from the request.
+// Returns the default value if the parameter is missing, empty, or invalid.
+// The value is clamped to the range [1, maxPerPage].
+func ParsePerPageParam(r *http.Request, defaultPerPage, maxPerPage int) int {
+	return ParseIntParam(r, "per_page", defaultPerPage, 1, maxPerPage)
+}
+
+// ParseIntParam parses an integer query parameter from the request.
+// Returns defaultVal if the parameter is missing, empty, or invalid.
+// If minVal > 0, values below minVal return defaultVal.
+// If maxVal > 0, values above maxVal return defaultVal.
+func ParseIntParam(r *http.Request, param string, defaultVal, minVal, maxVal int) int {
+	str := r.URL.Query().Get(param)
+	if str == "" {
+		return defaultVal
+	}
+	val, err := strconv.Atoi(str)
+	if err != nil {
+		return defaultVal
+	}
+	if minVal > 0 && val < minVal {
+		return defaultVal
+	}
+	if maxVal > 0 && val > maxVal {
+		return defaultVal
+	}
+	return val
 }

@@ -217,7 +217,7 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 		Pagination:  BuildAdminPagination(page, int(totalEvents), EventsPerPage, "/admin/events", r.URL.Query()),
 	}
 
-	if err := h.renderer.Render(w, r, "admin/events", render.TemplateData{
+	h.renderer.RenderPage(w, r, "admin/events", render.TemplateData{
 		Title: i18n.T(lang, "events.title"),
 		User:  user,
 		Data:  data,
@@ -225,10 +225,7 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
 			{Label: i18n.T(lang, "nav.event_log"), URL: "/admin/events", Active: true},
 		},
-	}); err != nil {
-		slog.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	})
 }
 
 // Helper functions to convert sqlc rows to EventWithUser
