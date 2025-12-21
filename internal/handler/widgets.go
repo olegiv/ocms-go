@@ -350,20 +350,6 @@ func (h *WidgetsHandler) MoveWidget(w http.ResponseWriter, r *http.Request) {
 	writeJSONSuccess(w, map[string]any{"widget": updatedWidget})
 }
 
-// requireWidgetWithError fetches a widget by ID and returns http.Error on failure.
-func (h *WidgetsHandler) requireWidgetWithError(w http.ResponseWriter, r *http.Request, id int64) (store.Widget, bool) {
-	widget, err := h.queries.GetWidget(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Widget not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
-		return store.Widget{}, false
-	}
-	return widget, true
-}
-
 // requireWidgetWithJSONError fetches a widget by ID and returns JSON error on failure.
 func (h *WidgetsHandler) requireWidgetWithJSONError(w http.ResponseWriter, r *http.Request, id int64) (store.Widget, bool) {
 	widget, err := h.queries.GetWidget(r.Context(), id)

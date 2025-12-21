@@ -1605,25 +1605,6 @@ func validatePageTitle(title string) string {
 	return ""
 }
 
-// validatePageSlug validates the page slug for creation (checks uniqueness).
-func (h *PagesHandler) validatePageSlugCreate(ctx context.Context, slug string) string {
-	if slug == "" {
-		return "Slug is required"
-	}
-	if !util.IsValidSlug(slug) {
-		return "Invalid slug format (use lowercase letters, numbers, and hyphens)"
-	}
-	exists, err := h.queries.SlugExists(ctx, slug)
-	if err != nil {
-		slog.Error("database error checking slug", "error", err)
-		return "Error checking slug"
-	}
-	if exists != 0 {
-		return "Slug already exists"
-	}
-	return ""
-}
-
 // validatePageSlugUpdate validates the page slug for update (checks uniqueness excluding current page).
 func (h *PagesHandler) validatePageSlugUpdate(ctx context.Context, slug string, currentSlug string, pageID int64) string {
 	if slug == "" {

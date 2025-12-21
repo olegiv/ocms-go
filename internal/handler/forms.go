@@ -201,26 +201,6 @@ func parseFieldIDParam(w http.ResponseWriter, r *http.Request, paramName string)
 	return id
 }
 
-// fetchFieldByID retrieves a field by ID and verifies it belongs to the form.
-// Returns nil if there was an error (response already sent).
-func (h *FormsHandler) fetchFieldByID(w http.ResponseWriter, r *http.Request, fieldID, formID int64) *store.FormField {
-	field, err := h.queries.GetFormFieldByID(r.Context(), fieldID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Field not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
-		return nil
-	}
-
-	if field.FormID != formID {
-		http.Error(w, "Field does not belong to this form", http.StatusBadRequest)
-		return nil
-	}
-	return &field
-}
-
 // validateFieldRequest validates a field request and normalizes values.
 // Returns error message if validation fails, empty string on success.
 func validateFieldRequest(req *AddFieldRequest) string {
