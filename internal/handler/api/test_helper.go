@@ -1,0 +1,219 @@
+package api
+
+import (
+	"context"
+	"database/sql"
+	"net/http"
+	"testing"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	_ "github.com/mattn/go-sqlite3"
+
+	"ocms-go/internal/store"
+)
+
+// testDB creates an in-memory SQLite database with taxonomy tables for testing.
+func testDB(t *testing.T) *sql.DB {
+	t.Helper()
+
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open test database: %v", err)
+	}
+
+	schema := `
+		CREATE TABLE languages (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			code TEXT NOT NULL UNIQUE,
+			name TEXT NOT NULL,
+			native_name TEXT NOT NULL,
+			is_default BOOLEAN NOT NULL DEFAULT 0,
+			is_active BOOLEAN NOT NULL DEFAULT 1,
+			direction TEXT NOT NULL DEFAULT 'ltr',
+			position INTEGER NOT NULL DEFAULT 0,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+
+		INSERT INTO languages (code, name, native_name, is_default, is_active)
+		VALUES ('en', 'English', 'English', 1, 1);
+
+		CREATE TABLE tags (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			slug TEXT NOT NULL UNIQUE,
+			language_id INTEGER,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (language_id) REFERENCES languages(id) ON DELETE SET NULL
+		);
+		CREATE INDEX idx_tags_slug ON tags(slug);
+
+		CREATE TABLE categories (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			slug TEXT NOT NULL UNIQUE,
+			description TEXT,
+			parent_id INTEGER,
+			position INTEGER NOT NULL DEFAULT 0,
+			language_id INTEGER,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL,
+			FOREIGN KEY (language_id) REFERENCES languages(id) ON DELETE SET NULL
+		);
+		CREATE INDEX idx_categories_slug ON categories(slug);
+		CREATE INDEX idx_categories_parent_id ON categories(parent_id);
+
+		CREATE TABLE pages (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			title TEXT NOT NULL,
+			slug TEXT NOT NULL UNIQUE,
+			content TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'draft',
+			author_id INTEGER NOT NULL,
+			category_id INTEGER,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+
+		CREATE TABLE page_tags (
+			page_id INTEGER NOT NULL,
+			tag_id INTEGER NOT NULL,
+			PRIMARY KEY (page_id, tag_id),
+			FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE,
+			FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+		);
+
+		CREATE TABLE page_categories (
+			page_id INTEGER NOT NULL,
+			category_id INTEGER NOT NULL,
+			PRIMARY KEY (page_id, category_id),
+			FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE,
+			FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+		);
+	`
+
+	if _, err := db.Exec(schema); err != nil {
+		t.Fatalf("failed to create test schema: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+
+	return db
+}
+
+// testHandler creates a test API handler with the given database.
+func testHandler(t *testing.T, db *sql.DB) *Handler {
+	t.Helper()
+	return NewHandler(db)
+}
+
+// createTestTag creates a test tag in the database.
+func createTestTag(t *testing.T, db *sql.DB, name, slug string) store.Tag {
+	t.Helper()
+	now := time.Now()
+
+	result, err := db.Exec(
+		`INSERT INTO tags (name, slug, language_id, created_at, updated_at) VALUES (?, ?, 1, ?, ?)`,
+		name, slug, now, now,
+	)
+	if err != nil {
+		t.Fatalf("failed to create test tag: %v", err)
+	}
+
+	id, _ := result.LastInsertId()
+	return store.Tag{
+		ID:         id,
+		Name:       name,
+		Slug:       slug,
+		LanguageID: sql.NullInt64{Int64: 1, Valid: true},
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+}
+
+// createTestCategory creates a test category in the database.
+func createTestCategory(t *testing.T, db *sql.DB, name, slug string, parentID *int64) store.Category {
+	t.Helper()
+	now := time.Now()
+
+	var result sql.Result
+	var err error
+
+	if parentID != nil {
+		result, err = db.Exec(
+			`INSERT INTO categories (name, slug, parent_id, language_id, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)`,
+			name, slug, *parentID, now, now,
+		)
+	} else {
+		result, err = db.Exec(
+			`INSERT INTO categories (name, slug, language_id, created_at, updated_at) VALUES (?, ?, 1, ?, ?)`,
+			name, slug, now, now,
+		)
+	}
+	if err != nil {
+		t.Fatalf("failed to create test category: %v", err)
+	}
+
+	id, _ := result.LastInsertId()
+	cat := store.Category{
+		ID:         id,
+		Name:       name,
+		Slug:       slug,
+		LanguageID: sql.NullInt64{Int64: 1, Valid: true},
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+	if parentID != nil {
+		cat.ParentID = sql.NullInt64{Int64: *parentID, Valid: true}
+	}
+	return cat
+}
+
+// createTestPage creates a test page in the database.
+func createTestPage(t *testing.T, db *sql.DB, title, slug string) int64 {
+	t.Helper()
+	now := time.Now()
+
+	result, err := db.Exec(
+		`INSERT INTO pages (title, slug, content, status, author_id, created_at, updated_at) VALUES (?, ?, '', 'published', 1, ?, ?)`,
+		title, slug, now, now,
+	)
+	if err != nil {
+		t.Fatalf("failed to create test page: %v", err)
+	}
+
+	id, _ := result.LastInsertId()
+	return id
+}
+
+// linkPageToTag links a page to a tag.
+func linkPageToTag(t *testing.T, db *sql.DB, pageID, tagID int64) {
+	t.Helper()
+	_, err := db.Exec(`INSERT INTO page_tags (page_id, tag_id) VALUES (?, ?)`, pageID, tagID)
+	if err != nil {
+		t.Fatalf("failed to link page to tag: %v", err)
+	}
+}
+
+// linkPageToCategory links a page to a category.
+func linkPageToCategory(t *testing.T, db *sql.DB, pageID, categoryID int64) {
+	t.Helper()
+	_, err := db.Exec(`INSERT INTO page_categories (page_id, category_id) VALUES (?, ?)`, pageID, categoryID)
+	if err != nil {
+		t.Fatalf("failed to link page to category: %v", err)
+	}
+}
+
+// requestWithURLParams adds chi URL parameters to a request.
+func requestWithURLParams(r *http.Request, params map[string]string) *http.Request {
+	rctx := chi.NewRouteContext()
+	for key, value := range params {
+		rctx.URLParams.Add(key, value)
+	}
+	return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+}

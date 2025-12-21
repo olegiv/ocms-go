@@ -44,6 +44,12 @@ type CreateTagRequest struct {
 	Slug string `json:"slug"`
 }
 
+// GetName returns the name field.
+func (r CreateTagRequest) GetName() string { return r.Name }
+
+// GetSlug returns the slug field.
+func (r CreateTagRequest) GetSlug() string { return r.Slug }
+
 // UpdateTagRequest represents the request body for updating a tag.
 type UpdateTagRequest struct {
 	Name *string `json:"name,omitempty"`
@@ -58,6 +64,12 @@ type CreateCategoryRequest struct {
 	ParentID    *int64 `json:"parent_id,omitempty"`
 	Position    *int64 `json:"position,omitempty"`
 }
+
+// GetName returns the name field.
+func (r CreateCategoryRequest) GetName() string { return r.Name }
+
+// GetSlug returns the slug field.
+func (r CreateCategoryRequest) GetSlug() string { return r.Slug }
 
 // UpdateCategoryRequest represents the request body for updating a category.
 type UpdateCategoryRequest struct {
@@ -159,22 +171,8 @@ func (h *Handler) GetTag(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	var req CreateTagRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteBadRequest(w, "Invalid JSON body", nil)
-		return
-	}
-
-	// Validate required fields
-	validationErrors := make(map[string]string)
-	if req.Name == "" {
-		validationErrors["name"] = "Name is required"
-	}
-	if req.Slug == "" {
-		validationErrors["slug"] = "Slug is required"
-	}
-	if len(validationErrors) > 0 {
-		WriteValidationError(w, validationErrors)
+	req, ok := decodeAndValidateNameSlug[CreateTagRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -232,15 +230,11 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Apply updates
-	if req.Name != nil && *req.Name != "" {
-		params.Name = *req.Name
-	}
-	if req.Slug != nil && *req.Slug != "" {
-		// Check slug uniqueness (excluding current tag)
-		if !h.checkTagSlugUniqueExcluding(w, ctx, *req.Slug, existing.ID) {
-			return
-		}
-		params.Slug = *req.Slug
+	applyOptionalNameUpdate(req.Name, &params.Name)
+	if !applyOptionalSlugUpdate(w, req.Slug, &params.Slug, func() bool {
+		return h.checkTagSlugUniqueExcluding(w, ctx, *req.Slug, existing.ID)
+	}) {
+		return
 	}
 
 	tag, err := h.queries.UpdateTag(ctx, params)
@@ -398,22 +392,8 @@ func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	var req CreateCategoryRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteBadRequest(w, "Invalid JSON body", nil)
-		return
-	}
-
-	// Validate required fields
-	validationErrors := make(map[string]string)
-	if req.Name == "" {
-		validationErrors["name"] = "Name is required"
-	}
-	if req.Slug == "" {
-		validationErrors["slug"] = "Slug is required"
-	}
-	if len(validationErrors) > 0 {
-		WriteValidationError(w, validationErrors)
+	req, ok := decodeAndValidateNameSlug[CreateCategoryRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -507,15 +487,11 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Apply updates
-	if req.Name != nil && *req.Name != "" {
-		params.Name = *req.Name
-	}
-	if req.Slug != nil && *req.Slug != "" {
-		// Check slug uniqueness (excluding current category)
-		if !h.checkCategorySlugUniqueExcluding(w, ctx, *req.Slug, existing.ID) {
-			return
-		}
-		params.Slug = *req.Slug
+	applyOptionalNameUpdate(req.Name, &params.Name)
+	if !applyOptionalSlugUpdate(w, req.Slug, &params.Slug, func() bool {
+		return h.checkCategorySlugUniqueExcluding(w, ctx, *req.Slug, existing.ID)
+	}) {
+		return
 	}
 	if req.Description != nil {
 		params.Description = util.NullStringFromValue(*req.Description)
@@ -619,6 +595,64 @@ func (h *Handler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 // Helper Functions
 // ============================================================================
 
+// validateNameSlugRequired validates that name and slug are provided.
+// Returns validation errors map (empty if valid).
+func validateNameSlugRequired(name, slug string) map[string]string {
+	errors := make(map[string]string)
+	if name == "" {
+		errors["name"] = "Name is required"
+	}
+	if slug == "" {
+		errors["slug"] = "Slug is required"
+	}
+	return errors
+}
+
+// nameSlugProvider is implemented by request types that have Name and Slug fields.
+type nameSlugProvider interface {
+	GetName() string
+	GetSlug() string
+}
+
+// decodeAndValidateNameSlug decodes JSON body and validates name/slug fields.
+// Returns the decoded request and true if successful, or zero value and false if error (response written).
+func decodeAndValidateNameSlug[T nameSlugProvider](w http.ResponseWriter, r *http.Request) (T, bool) {
+	var req T
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteBadRequest(w, "Invalid JSON body", nil)
+		return req, false
+	}
+
+	if validationErrors := validateNameSlugRequired(req.GetName(), req.GetSlug()); len(validationErrors) > 0 {
+		WriteValidationError(w, validationErrors)
+		return req, false
+	}
+
+	return req, true
+}
+
+// applyOptionalNameUpdate applies an optional name update to params.
+// Returns true if name was applied.
+func applyOptionalNameUpdate(reqName *string, currentName *string) bool {
+	if reqName != nil && *reqName != "" {
+		*currentName = *reqName
+		return true
+	}
+	return false
+}
+
+// applyOptionalSlugUpdate applies an optional slug update after checking uniqueness.
+// Returns true if slug was applied or no update needed, false if slug conflict (response already written).
+func applyOptionalSlugUpdate(w http.ResponseWriter, reqSlug *string, currentSlug *string, checkSlug func() bool) bool {
+	if reqSlug != nil && *reqSlug != "" {
+		if !checkSlug() {
+			return false
+		}
+		*currentSlug = *reqSlug
+	}
+	return true
+}
+
 // categoryRowToResponse converts a GetCategoryUsageCountsRow to CategoryAPIResponse.
 func categoryRowToResponse(c store.GetCategoryUsageCountsRow) CategoryAPIResponse {
 	resp := CategoryAPIResponse{
@@ -675,43 +709,17 @@ func buildCategoryTree(categories []store.GetCategoryUsageCountsRow) []*Category
 // requireTagForAPI parses tag ID from URL and fetches the tag.
 // Returns the tag and true if successful, or zero value and false if an error occurred (response already written).
 func (h *Handler) requireTagForAPI(w http.ResponseWriter, r *http.Request) (store.Tag, bool) {
-	id, err := handler.ParseIDParam(r)
-	if err != nil {
-		WriteBadRequest(w, "Invalid tag ID", nil)
-		return store.Tag{}, false
-	}
-
-	tag, err := h.queries.GetTagByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			WriteNotFound(w, "Tag not found")
-		} else {
-			WriteInternalError(w, "Failed to retrieve tag")
-		}
-		return store.Tag{}, false
-	}
-	return tag, true
+	return requireEntityByID(w, r, "tag", func(id int64) (store.Tag, error) {
+		return h.queries.GetTagByID(r.Context(), id)
+	})
 }
 
 // requireCategoryForAPI parses category ID from URL and fetches the category.
 // Returns the category and true if successful, or zero value and false if an error occurred (response already written).
 func (h *Handler) requireCategoryForAPI(w http.ResponseWriter, r *http.Request) (store.Category, bool) {
-	id, err := handler.ParseIDParam(r)
-	if err != nil {
-		WriteBadRequest(w, "Invalid category ID", nil)
-		return store.Category{}, false
-	}
-
-	category, err := h.queries.GetCategoryByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			WriteNotFound(w, "Category not found")
-		} else {
-			WriteInternalError(w, "Failed to retrieve category")
-		}
-		return store.Category{}, false
-	}
-	return category, true
+	return requireEntityByID(w, r, "category", func(id int64) (store.Category, error) {
+		return h.queries.GetCategoryByID(r.Context(), id)
+	})
 }
 
 // checkTagSlugUnique checks if a tag slug is unique for creation.
