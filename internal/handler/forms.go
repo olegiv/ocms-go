@@ -244,21 +244,6 @@ func (h *FormsHandler) getActiveFormBySlug(w http.ResponseWriter, r *http.Reques
 	return &form
 }
 
-// checkFormExists verifies a form exists by ID for API handlers.
-// Returns false if the form doesn't exist (response already sent).
-func (h *FormsHandler) checkFormExists(w http.ResponseWriter, r *http.Request, formID int64) bool {
-	_, err := h.queries.GetFormByID(r.Context(), formID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Form not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
-		return false
-	}
-	return true
-}
-
 // getSiteName retrieves the site name from config with a default fallback.
 func (h *FormsHandler) getSiteName(ctx context.Context) string {
 	if siteConfig, err := h.queries.GetConfig(ctx, "site_name"); err == nil && siteConfig.Value != "" {
@@ -1432,22 +1417,6 @@ func (h *FormsHandler) requireFormWithHTTPError(w http.ResponseWriter, r *http.R
 		} else {
 			slog.Error("failed to get form", "error", err, "form_id", formID)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
-		return store.Form{}, false
-	}
-	return form, true
-}
-
-// requireFormWithJSONError fetches a form by ID and sends JSON error on failure.
-// Returns the form and true if successful, or zero value and false if an error occurred.
-func (h *FormsHandler) requireFormWithJSONError(w http.ResponseWriter, r *http.Request, formID int64) (store.Form, bool) {
-	form, err := h.queries.GetFormByID(r.Context(), formID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeJSONError(w, http.StatusNotFound, "Form not found")
-		} else {
-			slog.Error("failed to get form", "error", err, "form_id", formID)
-			writeJSONError(w, http.StatusInternalServerError, "Internal Server Error")
 		}
 		return store.Form{}, false
 	}

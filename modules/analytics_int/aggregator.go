@@ -223,34 +223,24 @@ func (m *Module) cleanupExpiredData(ctx context.Context) error {
 
 	m.ctx.Logger.Info("cleaning up expired analytics data", "older_than", cutoffStr)
 
-	// Delete from hourly table
-	if _, err := m.ctx.DB.ExecContext(ctx,
-		"DELETE FROM page_analytics_hourly WHERE hour_start < ?", cutoff); err != nil {
-		return err
+	// Tables with date-based cleanup
+	tables := []struct {
+		name   string
+		column string
+		value  any
+	}{
+		{"page_analytics_hourly", "hour_start", cutoff},
+		{"page_analytics_daily", "date", cutoffStr},
+		{"page_analytics_referrers", "date", cutoffStr},
+		{"page_analytics_tech", "date", cutoffStr},
+		{"page_analytics_geo", "date", cutoffStr},
 	}
 
-	// Delete from daily table
-	if _, err := m.ctx.DB.ExecContext(ctx,
-		"DELETE FROM page_analytics_daily WHERE date < ?", cutoffStr); err != nil {
-		return err
-	}
-
-	// Delete from referrers table
-	if _, err := m.ctx.DB.ExecContext(ctx,
-		"DELETE FROM page_analytics_referrers WHERE date < ?", cutoffStr); err != nil {
-		return err
-	}
-
-	// Delete from tech table
-	if _, err := m.ctx.DB.ExecContext(ctx,
-		"DELETE FROM page_analytics_tech WHERE date < ?", cutoffStr); err != nil {
-		return err
-	}
-
-	// Delete from geo table
-	if _, err := m.ctx.DB.ExecContext(ctx,
-		"DELETE FROM page_analytics_geo WHERE date < ?", cutoffStr); err != nil {
-		return err
+	for _, t := range tables {
+		if _, err := m.ctx.DB.ExecContext(ctx,
+			"DELETE FROM "+t.name+" WHERE "+t.column+" < ?", t.value); err != nil {
+			return err
+		}
 	}
 
 	m.ctx.Logger.Info("expired analytics data cleanup complete")

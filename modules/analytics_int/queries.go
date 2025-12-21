@@ -8,6 +8,8 @@ import (
 // getOverviewStats returns summary statistics for the dashboard.
 func (m *Module) getOverviewStats(ctx context.Context, startDate, endDate time.Time) OverviewStats {
 	stats := OverviewStats{}
+	today := time.Now().Format("2006-01-02")
+	startDateStr := startDate.Format("2006-01-02")
 
 	// Total views: combine aggregated daily data + today's raw views
 	var aggregatedViews int64
@@ -15,7 +17,7 @@ func (m *Module) getOverviewStats(ctx context.Context, startDate, endDate time.T
 		SELECT COALESCE(SUM(views), 0)
 		FROM page_analytics_daily
 		WHERE date >= ? AND date < ?
-	`, startDate.Format("2006-01-02"), time.Now().Format("2006-01-02")).Scan(&aggregatedViews)
+	`, startDateStr, today).Scan(&aggregatedViews)
 
 	// Add today's views from raw table
 	var todayViews int64
@@ -23,7 +25,7 @@ func (m *Module) getOverviewStats(ctx context.Context, startDate, endDate time.T
 		SELECT COUNT(*)
 		FROM page_analytics_views
 		WHERE DATE(created_at) = ?
-	`, time.Now().Format("2006-01-02")).Scan(&todayViews)
+	`, today).Scan(&todayViews)
 
 	stats.TotalViews = aggregatedViews + todayViews
 
@@ -33,14 +35,14 @@ func (m *Module) getOverviewStats(ctx context.Context, startDate, endDate time.T
 		SELECT COALESCE(SUM(unique_visitors), 0)
 		FROM page_analytics_daily
 		WHERE date >= ? AND date < ?
-	`, startDate.Format("2006-01-02"), time.Now().Format("2006-01-02")).Scan(&aggregatedUnique)
+	`, startDateStr, today).Scan(&aggregatedUnique)
 
 	var todayUnique int64
 	_ = m.ctx.DB.QueryRowContext(ctx, `
 		SELECT COUNT(DISTINCT visitor_hash)
 		FROM page_analytics_views
 		WHERE DATE(created_at) = ?
-	`, time.Now().Format("2006-01-02")).Scan(&todayUnique)
+	`, today).Scan(&todayUnique)
 
 	stats.UniqueVisitors = aggregatedUnique + todayUnique
 
@@ -168,15 +170,9 @@ func (m *Module) getTopReferrers(ctx context.Context, startDate, endDate time.Ti
 	}
 	defer func() { _ = rows.Close() }()
 
-	var referrers []TopReferrer
-	for rows.Next() {
-		var r TopReferrer
-		if err := rows.Scan(&r.Domain, &r.Views, &r.UniqueVisitors); err != nil {
-			continue
-		}
-		referrers = append(referrers, r)
-	}
-	return referrers
+	return scanRows(rows, func(r *TopReferrer) []any {
+		return []any{&r.Domain, &r.Views, &r.UniqueVisitors}
+	})
 }
 
 // getBrowserStats returns browser breakdown.
@@ -202,23 +198,9 @@ func (m *Module) getBrowserStats(ctx context.Context, startDate, endDate time.Ti
 	}
 	defer func() { _ = rows.Close() }()
 
-	var browsers []*BrowserStat
-	for rows.Next() {
-		var b BrowserStat
-		if err := rows.Scan(&b.Browser, &b.Views); err != nil {
-			continue
-		}
-		browsers = append(browsers, &b)
-	}
-
-	calculatePercents(browsers)
-
-	// Convert back to value slice
-	result := make([]BrowserStat, len(browsers))
-	for i, b := range browsers {
-		result[i] = *b
-	}
-	return result
+	return scanViewStats[BrowserStat](rows, func(b *BrowserStat) []any {
+		return []any{&b.Browser, &b.Views}
+	})
 }
 
 // getDeviceStats returns device type breakdown.
@@ -243,23 +225,9 @@ func (m *Module) getDeviceStats(ctx context.Context, startDate, endDate time.Tim
 	}
 	defer func() { _ = rows.Close() }()
 
-	var devices []*DeviceStat
-	for rows.Next() {
-		var d DeviceStat
-		if err := rows.Scan(&d.DeviceType, &d.Views); err != nil {
-			continue
-		}
-		devices = append(devices, &d)
-	}
-
-	calculatePercents(devices)
-
-	// Convert back to value slice
-	result := make([]DeviceStat, len(devices))
-	for i, d := range devices {
-		result[i] = *d
-	}
-	return result
+	return scanViewStats[DeviceStat](rows, func(d *DeviceStat) []any {
+		return []any{&d.DeviceType, &d.Views}
+	})
 }
 
 // getCountryStats returns country breakdown.
@@ -328,15 +296,9 @@ func (m *Module) getTimeSeries(ctx context.Context, startDate, endDate time.Time
 	}
 	defer func() { _ = rows.Close() }()
 
-	var points []TimeSeriesPoint
-	for rows.Next() {
-		var p TimeSeriesPoint
-		if err := rows.Scan(&p.Date, &p.Views, &p.Unique); err != nil {
-			continue
-		}
-		points = append(points, p)
-	}
-	return points
+	return scanRows(rows, func(p *TimeSeriesPoint) []any {
+		return []any{&p.Date, &p.Views, &p.Unique}
+	})
 }
 
 // parseDateRange converts a date range string to start and end times.
@@ -386,4 +348,58 @@ func calculatePercents[T viewStat](items []T) {
 			items[i].setPercent(float64(items[i].getViews()) / float64(totalViews) * 100)
 		}
 	}
+}
+
+// scanViewStats scans rows into a slice of viewStat items and calculates percentages.
+func scanViewStats[T any, PT interface {
+	*T
+	viewStat
+}](rows rowScanner, scanFunc func(*T) []any) []T {
+	if rows == nil {
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+
+	var items []T
+	for rows.Next() {
+		var item T
+		if err := rows.Scan(scanFunc(&item)...); err != nil {
+			continue
+		}
+		items = append(items, item)
+	}
+
+	// Calculate percentages using pointer slice
+	ptrs := make([]PT, len(items))
+	for i := range items {
+		ptrs[i] = &items[i]
+	}
+	calculatePercents(ptrs)
+
+	return items
+}
+
+// rowScanner abstracts sql.Rows for scanning.
+type rowScanner interface {
+	Next() bool
+	Scan(dest ...any) error
+	Close() error
+}
+
+// scanRows scans rows into a slice using the provided scan function.
+func scanRows[T any](rows rowScanner, scanFunc func(*T) []any) []T {
+	if rows == nil {
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+
+	var items []T
+	for rows.Next() {
+		var item T
+		if err := rows.Scan(scanFunc(&item)...); err != nil {
+			continue
+		}
+		items = append(items, item)
+	}
+	return items
 }

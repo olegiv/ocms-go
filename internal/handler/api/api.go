@@ -190,8 +190,7 @@ func requireEntityByID[T any](w http.ResponseWriter, r *http.Request, entityName
 	entity, err := fetch(id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			// Capitalize first letter for error message
-			WriteNotFound(w, strings.Title(entityName)+" not found")
+			WriteNotFound(w, capitalizeFirst(entityName)+" not found")
 		} else {
 			WriteInternalError(w, "Failed to retrieve "+entityName)
 		}
@@ -199,4 +198,12 @@ func requireEntityByID[T any](w http.ResponseWriter, r *http.Request, entityName
 	}
 
 	return entity, true
+}
+
+// capitalizeFirst returns s with the first letter capitalized.
+func capitalizeFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
