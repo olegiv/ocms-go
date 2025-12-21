@@ -164,26 +164,36 @@ func (d *Dispatcher) worker(ctx context.Context, id int) {
 	}
 }
 
-// retryWorker periodically checks for pending deliveries that are ready for retry.
-func (d *Dispatcher) retryWorker(ctx context.Context) {
+// runTickerWorker runs a periodic task with the given interval.
+// It handles shutdown signals and context cancellation.
+func (d *Dispatcher) runTickerWorker(ctx context.Context, name string, interval time.Duration, runOnStart bool, task func(context.Context)) {
 	defer d.wg.Done()
-	d.logger.Debug("webhook retry worker started")
+	d.logger.Debug("webhook worker started", "worker", name)
 
-	ticker := time.NewTicker(RetryInterval)
+	if runOnStart {
+		task(ctx)
+	}
+
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-d.done:
-			d.logger.Debug("webhook retry worker stopping")
+			d.logger.Debug("webhook worker stopping", "worker", name)
 			return
 		case <-ctx.Done():
-			d.logger.Debug("webhook retry worker context cancelled")
+			d.logger.Debug("webhook worker context cancelled", "worker", name)
 			return
 		case <-ticker.C:
-			d.processRetries(ctx)
+			task(ctx)
 		}
 	}
+}
+
+// retryWorker periodically checks for pending deliveries that are ready for retry.
+func (d *Dispatcher) retryWorker(ctx context.Context) {
+	d.runTickerWorker(ctx, "retry", RetryInterval, false, d.processRetries)
 }
 
 // processRetries fetches and processes pending deliveries that are ready for retry.
@@ -255,27 +265,7 @@ func (d *Dispatcher) processRetries(ctx context.Context) {
 
 // cleanupWorker periodically cleans up old delivered and dead deliveries.
 func (d *Dispatcher) cleanupWorker(ctx context.Context) {
-	defer d.wg.Done()
-	d.logger.Debug("webhook cleanup worker started")
-
-	// Run cleanup once on startup
-	d.cleanupOldDeliveries(ctx)
-
-	ticker := time.NewTicker(CleanupInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-d.done:
-			d.logger.Debug("webhook cleanup worker stopping")
-			return
-		case <-ctx.Done():
-			d.logger.Debug("webhook cleanup worker context cancelled")
-			return
-		case <-ticker.C:
-			d.cleanupOldDeliveries(ctx)
-		}
-	}
+	d.runTickerWorker(ctx, "cleanup", CleanupInterval, true, d.cleanupOldDeliveries)
 }
 
 // cleanupOldDeliveries removes old delivered and dead delivery records.

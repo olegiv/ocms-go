@@ -74,17 +74,22 @@ func (b *SitemapBuilder) AddHomepage() {
 	})
 }
 
-// AddPage adds a page to the sitemap.
-func (b *SitemapBuilder) AddPage(page SitemapPage) {
+// addURL adds a URL entry to the sitemap with the given parameters.
+func (b *SitemapBuilder) addURL(path string, priority string, updatedAt time.Time) {
 	url := SitemapURL{
-		Loc:        b.siteURL + "/" + page.Slug,
+		Loc:        b.siteURL + path,
 		ChangeFreq: ChangeFreqWeekly,
-		Priority:   "0.8",
+		Priority:   priority,
 	}
-	if !page.UpdatedAt.IsZero() {
-		url.LastMod = page.UpdatedAt.Format(time.RFC3339)
+	if !updatedAt.IsZero() {
+		url.LastMod = updatedAt.Format(time.RFC3339)
 	}
 	b.urls = append(b.urls, url)
+}
+
+// AddPage adds a page to the sitemap.
+func (b *SitemapBuilder) AddPage(page SitemapPage) {
+	b.addURL("/"+page.Slug, "0.8", page.UpdatedAt)
 }
 
 // AddPages adds multiple pages to the sitemap.
@@ -96,15 +101,7 @@ func (b *SitemapBuilder) AddPages(pages []SitemapPage) {
 
 // AddCategory adds a category archive page to the sitemap.
 func (b *SitemapBuilder) AddCategory(cat SitemapCategory) {
-	url := SitemapURL{
-		Loc:        b.siteURL + "/category/" + cat.Slug,
-		ChangeFreq: ChangeFreqWeekly,
-		Priority:   "0.6",
-	}
-	if !cat.UpdatedAt.IsZero() {
-		url.LastMod = cat.UpdatedAt.Format(time.RFC3339)
-	}
-	b.urls = append(b.urls, url)
+	b.addURL("/category/"+cat.Slug, "0.6", cat.UpdatedAt)
 }
 
 // AddCategories adds multiple categories to the sitemap.
@@ -116,15 +113,7 @@ func (b *SitemapBuilder) AddCategories(categories []SitemapCategory) {
 
 // AddTag adds a tag archive page to the sitemap.
 func (b *SitemapBuilder) AddTag(tag SitemapTag) {
-	url := SitemapURL{
-		Loc:        b.siteURL + "/tag/" + tag.Slug,
-		ChangeFreq: ChangeFreqWeekly,
-		Priority:   "0.5",
-	}
-	if !tag.UpdatedAt.IsZero() {
-		url.LastMod = tag.UpdatedAt.Format(time.RFC3339)
-	}
-	b.urls = append(b.urls, url)
+	b.addURL("/tag/"+tag.Slug, "0.5", tag.UpdatedAt)
 }
 
 // AddTags adds multiple tags to the sitemap.

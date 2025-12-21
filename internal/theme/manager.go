@@ -157,6 +157,38 @@ func (m *Manager) loadThemeTranslations(themePath string) map[string]map[string]
 	return translations
 }
 
+// collectHTMLFiles returns all .html files from a directory.
+func collectHTMLFiles(dir string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var files []string
+	for _, entry := range entries {
+		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".html" {
+			files = append(files, filepath.Join(dir, entry.Name()))
+		}
+	}
+	return files
+}
+
+// parseTemplateFiles parses template files into the given template.
+// nameFunc determines how each template is named (receives file path, returns template name).
+func parseTemplateFiles(tmpl *template.Template, templatesPath string, files []string, fileType string, nameFunc func(string) string) error {
+	for _, f := range files {
+		relPath, _ := filepath.Rel(templatesPath, f)
+		content, err := os.ReadFile(f)
+		if err != nil {
+			return fmt.Errorf("reading %s %s: %w", fileType, relPath, err)
+		}
+		name := nameFunc(f)
+		if _, err := tmpl.New(name).Parse(string(content)); err != nil {
+			return fmt.Errorf("parsing %s %s: %w", fileType, relPath, err)
+		}
+	}
+	return nil
+}
+
 // parseTemplates parses all HTML templates in the templates directory.
 // Each page template is parsed together with layouts and partials to create
 // a complete template set that can be rendered independently.
@@ -170,53 +202,21 @@ func (m *Manager) parseTemplates(templatesPath string) (*template.Template, erro
 	// Create root template with function map
 	tmpl := template.New("").Funcs(m.funcMap)
 
-	// First, collect all layout and partial templates
-	var layoutFiles []string
-	var partialFiles []string
-
-	// Get layouts
-	layoutDir := filepath.Join(templatesPath, "layouts")
-	if entries, err := os.ReadDir(layoutDir); err == nil {
-		for _, entry := range entries {
-			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".html" {
-				layoutFiles = append(layoutFiles, filepath.Join(layoutDir, entry.Name()))
-			}
-		}
-	}
-
-	// Get partials
-	partialDir := filepath.Join(templatesPath, "partials")
-	if entries, err := os.ReadDir(partialDir); err == nil {
-		for _, entry := range entries {
-			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".html" {
-				partialFiles = append(partialFiles, filepath.Join(partialDir, entry.Name()))
-			}
-		}
-	}
-
-	// Parse layouts and partials into the root template
-	for _, f := range layoutFiles {
+	// Collect and parse layouts (named by relative path)
+	layoutFiles := collectHTMLFiles(filepath.Join(templatesPath, "layouts"))
+	if err := parseTemplateFiles(tmpl, templatesPath, layoutFiles, "layout", func(f string) string {
 		relPath, _ := filepath.Rel(templatesPath, f)
-		content, err := os.ReadFile(f)
-		if err != nil {
-			return nil, fmt.Errorf("reading layout %s: %w", relPath, err)
-		}
-		if _, err := tmpl.New(relPath).Parse(string(content)); err != nil {
-			return nil, fmt.Errorf("parsing layout %s: %w", relPath, err)
-		}
+		return relPath
+	}); err != nil {
+		return nil, err
 	}
 
-	for _, f := range partialFiles {
-		relPath, _ := filepath.Rel(templatesPath, f)
-		content, err := os.ReadFile(f)
-		if err != nil {
-			return nil, fmt.Errorf("reading partial %s: %w", relPath, err)
-		}
-		// Parse partials with just the filename (e.g., "header.html") for {{template "header.html" .}}
-		filename := filepath.Base(f)
-		if _, err := tmpl.New(filename).Parse(string(content)); err != nil {
-			return nil, fmt.Errorf("parsing partial %s: %w", relPath, err)
-		}
+	// Collect and parse partials (named by filename only for {{template "header.html" .}})
+	partialFiles := collectHTMLFiles(filepath.Join(templatesPath, "partials"))
+	if err := parseTemplateFiles(tmpl, templatesPath, partialFiles, "partial", func(f string) string {
+		return filepath.Base(f)
+	}); err != nil {
+		return nil, err
 	}
 
 	// Now parse each page template as a separate named template

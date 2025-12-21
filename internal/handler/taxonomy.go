@@ -429,10 +429,10 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get language code from URL
 	langCode := chi.URLParam(r, "langCode")
+	redirectURL := fmt.Sprintf("/admin/tags/%d", id)
 	if langCode == "" {
-		flashError(w, r, h.renderer, fmt.Sprintf("/admin/tags/%d", id), "Language code is required")
+		flashError(w, r, h.renderer, redirectURL, "Language code is required")
 		return
 	}
 
@@ -441,47 +441,20 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get target language
-	redirectURL := fmt.Sprintf("/admin/tags/%d", id)
-	targetLang, err := h.queries.GetLanguageByCode(r.Context(), langCode)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			flashError(w, r, h.renderer, redirectURL, "Language not found")
-		} else {
-			slog.Error("failed to get language", "error", err, "lang_code", langCode)
-			flashError(w, r, h.renderer, redirectURL, "Error loading language")
-		}
-		return
-	}
-
-	// Check if translation already exists
-	existingTranslation, err := h.queries.GetTranslation(r.Context(), store.GetTranslationParams{
-		EntityType: model.EntityTypeTag,
-		EntityID:   id,
-		LanguageID: targetLang.ID,
-	})
-	if err == nil && existingTranslation.ID > 0 {
-		// Translation already exists, redirect to it
-		flashAndRedirect(w, r, h.renderer, fmt.Sprintf("/admin/tags/%d", existingTranslation.TranslationID), "Translation already exists", "info")
+	// Validate language and check for existing translation
+	tc, ok := getTargetLanguageForTranslation(w, r, h.queries, h.renderer, langCode, redirectURL, model.EntityTypeTag, id)
+	if !ok {
 		return
 	}
 
 	// Generate a unique slug for the translated tag
-	baseSlug := sourceTag.Slug + "-" + langCode
-	translatedSlug := baseSlug
-	counter := 1
-	for {
-		exists, err := h.queries.TagSlugExists(r.Context(), translatedSlug)
-		if err != nil {
-			slog.Error("database error checking slug", "error", err)
-			flashError(w, r, h.renderer, redirectURL, "Error creating translation")
-			return
-		}
-		if exists == 0 {
-			break
-		}
-		counter++
-		translatedSlug = fmt.Sprintf("%s-%d", baseSlug, counter)
+	translatedSlug, err := generateUniqueSlug(sourceTag.Slug, langCode, func(slug string) (int64, error) {
+		return h.queries.TagSlugExists(r.Context(), slug)
+	})
+	if err != nil {
+		slog.Error("database error checking slug", "error", err)
+		flashError(w, r, h.renderer, redirectURL, "Error creating translation")
+		return
 	}
 
 	// Create the translated tag with same name
@@ -489,7 +462,7 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 	translatedTag, err := h.queries.CreateTag(r.Context(), store.CreateTagParams{
 		Name:       sourceTag.Name, // Keep same name (user will translate)
 		Slug:       translatedSlug,
-		LanguageID: util.NullInt64FromValue(targetLang.ID),
+		LanguageID: util.NullInt64FromValue(tc.TargetLang.ID),
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	})
@@ -503,7 +476,7 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 	_, err = h.queries.CreateTranslation(r.Context(), store.CreateTranslationParams{
 		EntityType:    model.EntityTypeTag,
 		EntityID:      id,
-		LanguageID:    targetLang.ID,
+		LanguageID:    tc.TargetLang.ID,
 		TranslationID: translatedTag.ID,
 		CreatedAt:     now,
 	})
@@ -518,7 +491,7 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 		"language", langCode,
 		"created_by", middleware.GetUserID(r))
 
-	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/tags/%d", translatedTag.ID), fmt.Sprintf("Translation created for %s. Please translate the name.", targetLang.Name))
+	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/tags/%d", translatedTag.ID), fmt.Sprintf("Translation created for %s. Please translate the name.", tc.TargetLang.Name))
 }
 
 // =============================================================================
@@ -1051,7 +1024,6 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Get language code from URL
 	langCode := chi.URLParam(r, "langCode")
 	redirectURL := fmt.Sprintf("/admin/categories/%d", id)
 	if langCode == "" {
@@ -1064,46 +1036,20 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Get target language
-	targetLang, err := h.queries.GetLanguageByCode(r.Context(), langCode)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			flashError(w, r, h.renderer, redirectURL, "Language not found")
-		} else {
-			slog.Error("failed to get language", "error", err, "lang_code", langCode)
-			flashError(w, r, h.renderer, redirectURL, "Error loading language")
-		}
-		return
-	}
-
-	// Check if translation already exists
-	existingTranslation, err := h.queries.GetTranslation(r.Context(), store.GetTranslationParams{
-		EntityType: model.EntityTypeCategory,
-		EntityID:   id,
-		LanguageID: targetLang.ID,
-	})
-	if err == nil && existingTranslation.ID > 0 {
-		// Translation already exists, redirect to it
-		flashAndRedirect(w, r, h.renderer, fmt.Sprintf("/admin/categories/%d", existingTranslation.TranslationID), "Translation already exists", "info")
+	// Validate language and check for existing translation
+	tc, ok := getTargetLanguageForTranslation(w, r, h.queries, h.renderer, langCode, redirectURL, model.EntityTypeCategory, id)
+	if !ok {
 		return
 	}
 
 	// Generate a unique slug for the translated category
-	baseSlug := sourceCategory.Slug + "-" + langCode
-	translatedSlug := baseSlug
-	counter := 1
-	for {
-		exists, err := h.queries.CategorySlugExists(r.Context(), translatedSlug)
-		if err != nil {
-			slog.Error("database error checking slug", "error", err)
-			flashError(w, r, h.renderer, redirectURL, "Error creating translation")
-			return
-		}
-		if exists == 0 {
-			break
-		}
-		counter++
-		translatedSlug = fmt.Sprintf("%s-%d", baseSlug, counter)
+	translatedSlug, err := generateUniqueSlug(sourceCategory.Slug, langCode, func(slug string) (int64, error) {
+		return h.queries.CategorySlugExists(r.Context(), slug)
+	})
+	if err != nil {
+		slog.Error("database error checking slug", "error", err)
+		flashError(w, r, h.renderer, redirectURL, "Error creating translation")
+		return
 	}
 
 	// Create the translated category with same name
@@ -1114,7 +1060,7 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 		Description: sourceCategory.Description,
 		ParentID:    sql.NullInt64{}, // No parent by default for translations
 		Position:    0,
-		LanguageID:  util.NullInt64FromValue(targetLang.ID),
+		LanguageID:  util.NullInt64FromValue(tc.TargetLang.ID),
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	})
@@ -1128,7 +1074,7 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 	_, err = h.queries.CreateTranslation(r.Context(), store.CreateTranslationParams{
 		EntityType:    model.EntityTypeCategory,
 		EntityID:      id,
-		LanguageID:    targetLang.ID,
+		LanguageID:    tc.TargetLang.ID,
 		TranslationID: translatedCategory.ID,
 		CreatedAt:     now,
 	})
@@ -1143,7 +1089,7 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 		"language", langCode,
 		"created_by", middleware.GetUserID(r))
 
-	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/categories/%d", translatedCategory.ID), fmt.Sprintf("Translation created for %s. Please translate the name.", targetLang.Name))
+	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/categories/%d", translatedCategory.ID), fmt.Sprintf("Translation created for %s. Please translate the name.", tc.TargetLang.Name))
 }
 
 // =============================================================================
@@ -1281,6 +1227,67 @@ func (h *TaxonomyHandler) validateCategorySlugUpdate(ctx context.Context, slug, 
 			ID:   categoryID,
 		})
 	})
+}
+
+// SlugExistsChecker is a function that checks if a slug exists (returns count).
+type SlugExistsChecker func(slug string) (int64, error)
+
+// generateUniqueSlug generates a unique slug by appending langCode and incrementing counter if needed.
+func generateUniqueSlug(baseSlug, langCode string, slugExists SlugExistsChecker) (string, error) {
+	translatedSlug := baseSlug + "-" + langCode
+	counter := 1
+	for {
+		exists, err := slugExists(translatedSlug)
+		if err != nil {
+			return "", err
+		}
+		if exists == 0 {
+			return translatedSlug, nil
+		}
+		counter++
+		translatedSlug = fmt.Sprintf("%s-%s-%d", baseSlug, langCode, counter)
+	}
+}
+
+// translationContext holds common data for translation operations.
+type translationContext struct {
+	TargetLang store.Language
+}
+
+// getTargetLanguageForTranslation validates and returns the target language for translation.
+// Returns nil, false if an error occurred (flash message sent).
+func getTargetLanguageForTranslation(
+	w http.ResponseWriter,
+	r *http.Request,
+	queries *store.Queries,
+	renderer *render.Renderer,
+	langCode, redirectURL string,
+	entityType string,
+	entityID int64,
+) (*translationContext, bool) {
+	targetLang, err := queries.GetLanguageByCode(r.Context(), langCode)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			flashError(w, r, renderer, redirectURL, "Language not found")
+		} else {
+			slog.Error("failed to get language", "error", err, "lang_code", langCode)
+			flashError(w, r, renderer, redirectURL, "Error loading language")
+		}
+		return nil, false
+	}
+
+	// Check if translation already exists
+	existingTranslation, err := queries.GetTranslation(r.Context(), store.GetTranslationParams{
+		EntityType: entityType,
+		EntityID:   entityID,
+		LanguageID: targetLang.ID,
+	})
+	if err == nil && existingTranslation.ID > 0 {
+		flashAndRedirect(w, r, renderer, fmt.Sprintf("/admin/%ss/%d", entityType, existingTranslation.TranslationID), "Translation already exists", "info")
+		return nil, false
+	}
+
+	return &translationContext{TargetLang: targetLang}, true
 }
 
 // translationBaseInfo holds common language info for taxonomy entities.

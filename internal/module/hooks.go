@@ -206,24 +206,28 @@ func (h *HookRegistry) ListHookInfo() []HookInfo {
 	return infos
 }
 
+// filterHandlersByModule returns handlers that don't belong to the given module.
+func filterHandlersByModule(handlers []HookHandler, moduleName string) []HookHandler {
+	result := make([]HookHandler, 0, len(handlers))
+	for _, handler := range handlers {
+		if handler.Module != moduleName {
+			result = append(result, handler)
+		}
+	}
+	return result
+}
+
 // Unregister removes all handlers for a hook from a specific module.
 func (h *HookRegistry) Unregister(hookName, moduleName string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	handlers := h.hooks[hookName]
-	newHandlers := make([]HookHandler, 0, len(handlers))
-	for _, handler := range handlers {
-		if handler.Module != moduleName {
-			newHandlers = append(newHandlers, handler)
-		}
-	}
-	h.hooks[hookName] = newHandlers
+	h.hooks[hookName] = filterHandlersByModule(h.hooks[hookName], moduleName)
 
 	h.logger.Debug("hooks unregistered",
 		"hook", hookName,
 		"module", moduleName,
-		"remaining", len(newHandlers),
+		"remaining", len(h.hooks[hookName]),
 	)
 }
 
@@ -233,13 +237,7 @@ func (h *HookRegistry) UnregisterAll(moduleName string) {
 	defer h.mu.Unlock()
 
 	for hookName, handlers := range h.hooks {
-		newHandlers := make([]HookHandler, 0, len(handlers))
-		for _, handler := range handlers {
-			if handler.Module != moduleName {
-				newHandlers = append(newHandlers, handler)
-			}
-		}
-		h.hooks[hookName] = newHandlers
+		h.hooks[hookName] = filterHandlersByModule(handlers, moduleName)
 	}
 
 	h.logger.Debug("all hooks unregistered for module", "module", moduleName)

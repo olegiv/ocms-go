@@ -74,15 +74,10 @@ func (p *Processor) ProcessImage(reader io.Reader, uuid, filename string) (*Proc
 		processed = rotated
 	}
 
-	// Ensure originals directory exists
-	originalsDir := filepath.Join(p.uploadDir, "originals", uuid)
-	if err := os.MkdirAll(originalsDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create originals directory: %w", err)
-	}
-
 	// Save the processed original
-	filePath := filepath.Join(originalsDir, filename)
-	if err := os.WriteFile(filePath, processed, 0644); err != nil {
+	originalsDir := filepath.Join(p.uploadDir, "originals", uuid)
+	filePath, err := saveImageFile(originalsDir, filename, processed)
+	if err != nil {
 		return nil, fmt.Errorf("failed to save original image: %w", err)
 	}
 
@@ -156,16 +151,11 @@ func (p *Processor) CreateVariant(sourcePath, uuid, filename string, config mode
 		return nil, fmt.Errorf("failed to process image variant: %w", err)
 	}
 
-	// Ensure variant directory exists
-	variantDir := filepath.Join(p.uploadDir, variantType, uuid)
-	if err := os.MkdirAll(variantDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create variant directory: %w", err)
-	}
-
 	// Save the variant
-	variantPath := filepath.Join(variantDir, filename)
-	if err := os.WriteFile(variantPath, processed, 0644); err != nil {
-		return nil, fmt.Errorf("failed to save variant image: %w", err)
+	variantDir := filepath.Join(p.uploadDir, variantType, uuid)
+	variantPath, err := saveImageFile(variantDir, filename, processed)
+	if err != nil {
+		return nil, fmt.Errorf("failed to save %s variant: %w", variantType, err)
 	}
 
 	// Get final dimensions
@@ -300,4 +290,16 @@ func bimgTypeToMimeType(imgType string) string {
 	default:
 		return "application/octet-stream"
 	}
+}
+
+// saveImageFile creates the directory if needed and saves image data to a file.
+func saveImageFile(dir, filename string, data []byte) (string, error) {
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create directory: %w", err)
+	}
+	filePath := filepath.Join(dir, filename)
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
+		return "", fmt.Errorf("failed to save image: %w", err)
+	}
+	return filePath, nil
 }

@@ -138,13 +138,7 @@ func (s *MenuService) GetMenuForLanguage(slug string, langCode string) []MenuIte
 				if err != nil {
 					return nil
 				}
-				menu = store.GetMenuBySlugAndLanguageRow{
-					ID:        basicMenu.ID,
-					Name:      basicMenu.Name,
-					Slug:      basicMenu.Slug,
-					CreatedAt: basicMenu.CreatedAt,
-					UpdatedAt: basicMenu.UpdatedAt,
-				}
+				menu = menuToRow(basicMenu)
 			}
 		} else {
 			// Already tried with default language, try basic lookup
@@ -152,13 +146,7 @@ func (s *MenuService) GetMenuForLanguage(slug string, langCode string) []MenuIte
 			if err != nil {
 				return nil
 			}
-			menu = store.GetMenuBySlugAndLanguageRow{
-				ID:        basicMenu.ID,
-				Name:      basicMenu.Name,
-				Slug:      basicMenu.Slug,
-				CreatedAt: basicMenu.CreatedAt,
-				UpdatedAt: basicMenu.UpdatedAt,
-			}
+			menu = menuToRow(basicMenu)
 		}
 	}
 
@@ -219,26 +207,14 @@ func (s *MenuService) GetMenuForLanguageID(slug string, langID int64) []MenuItem
 				if err != nil {
 					return nil
 				}
-				menu = store.GetMenuBySlugAndLanguageRow{
-					ID:        basicMenu.ID,
-					Name:      basicMenu.Name,
-					Slug:      basicMenu.Slug,
-					CreatedAt: basicMenu.CreatedAt,
-					UpdatedAt: basicMenu.UpdatedAt,
-				}
+				menu = menuToRow(basicMenu)
 			}
 		} else {
 			basicMenu, err := s.queries.GetMenuBySlug(ctx, slug)
 			if err != nil {
 				return nil
 			}
-			menu = store.GetMenuBySlugAndLanguageRow{
-				ID:        basicMenu.ID,
-				Name:      basicMenu.Name,
-				Slug:      basicMenu.Slug,
-				CreatedAt: basicMenu.CreatedAt,
-				UpdatedAt: basicMenu.UpdatedAt,
-			}
+			menu = menuToRow(basicMenu)
 		}
 	}
 
@@ -343,4 +319,15 @@ func (s *MenuService) buildMenuTree(items []store.ListMenuItemsWithPageRow) []Me
 	}
 
 	return roots
+}
+
+// menuToRow converts a basic Menu to GetMenuBySlugAndLanguageRow.
+func menuToRow(m store.Menu) store.GetMenuBySlugAndLanguageRow {
+	return store.GetMenuBySlugAndLanguageRow{
+		ID:        m.ID,
+		Name:      m.Name,
+		Slug:      m.Slug,
+		CreatedAt: m.CreatedAt,
+		UpdatedAt: m.UpdatedAt,
+	}
 }

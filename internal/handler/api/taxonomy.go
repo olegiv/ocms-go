@@ -717,65 +717,37 @@ func (h *Handler) requireCategoryForAPI(w http.ResponseWriter, r *http.Request) 
 // checkTagSlugUnique checks if a tag slug is unique for creation.
 // Returns true if unique, false if duplicate or error (response already written).
 func (h *Handler) checkTagSlugUnique(w http.ResponseWriter, ctx context.Context, slug string) bool {
-	exists, err := h.queries.TagSlugExists(ctx, slug)
-	if err != nil {
-		WriteInternalError(w, "Failed to check slug")
-		return false
-	}
-	if exists != 0 {
-		WriteValidationError(w, map[string]string{"slug": "Slug already exists"})
-		return false
-	}
-	return true
+	return checkSlugUnique(w, func() (int64, error) {
+		return h.queries.TagSlugExists(ctx, slug)
+	})
 }
 
 // checkTagSlugUniqueExcluding checks if a tag slug is unique for update (excluding current tag).
 // Returns true if unique, false if duplicate or error (response already written).
 func (h *Handler) checkTagSlugUniqueExcluding(w http.ResponseWriter, ctx context.Context, slug string, tagID int64) bool {
-	exists, err := h.queries.TagSlugExistsExcluding(ctx, store.TagSlugExistsExcludingParams{
-		Slug: slug,
-		ID:   tagID,
+	return checkSlugUnique(w, func() (int64, error) {
+		return h.queries.TagSlugExistsExcluding(ctx, store.TagSlugExistsExcludingParams{
+			Slug: slug,
+			ID:   tagID,
+		})
 	})
-	if err != nil {
-		WriteInternalError(w, "Failed to check slug")
-		return false
-	}
-	if exists != 0 {
-		WriteValidationError(w, map[string]string{"slug": "Slug already exists"})
-		return false
-	}
-	return true
 }
 
 // checkCategorySlugUnique checks if a category slug is unique for creation.
 // Returns true if unique, false if duplicate or error (response already written).
 func (h *Handler) checkCategorySlugUnique(w http.ResponseWriter, ctx context.Context, slug string) bool {
-	exists, err := h.queries.CategorySlugExists(ctx, slug)
-	if err != nil {
-		WriteInternalError(w, "Failed to check slug")
-		return false
-	}
-	if exists != 0 {
-		WriteValidationError(w, map[string]string{"slug": "Slug already exists"})
-		return false
-	}
-	return true
+	return checkSlugUnique(w, func() (int64, error) {
+		return h.queries.CategorySlugExists(ctx, slug)
+	})
 }
 
 // checkCategorySlugUniqueExcluding checks if a category slug is unique for update (excluding current category).
 // Returns true if unique, false if duplicate or error (response already written).
 func (h *Handler) checkCategorySlugUniqueExcluding(w http.ResponseWriter, ctx context.Context, slug string, categoryID int64) bool {
-	exists, err := h.queries.CategorySlugExistsExcluding(ctx, store.CategorySlugExistsExcludingParams{
-		Slug: slug,
-		ID:   categoryID,
+	return checkSlugUnique(w, func() (int64, error) {
+		return h.queries.CategorySlugExistsExcluding(ctx, store.CategorySlugExistsExcludingParams{
+			Slug: slug,
+			ID:   categoryID,
+		})
 	})
-	if err != nil {
-		WriteInternalError(w, "Failed to check slug")
-		return false
-	}
-	if exists != 0 {
-		WriteValidationError(w, map[string]string{"slug": "Slug already exists"})
-		return false
-	}
-	return true
 }

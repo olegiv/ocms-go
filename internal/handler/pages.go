@@ -1197,9 +1197,8 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get language code from URL
-	redirectURL := fmt.Sprintf("/admin/pages/%d", id)
 	langCode := chi.URLParam(r, "langCode")
+	redirectURL := fmt.Sprintf("/admin/pages/%d", id)
 	if langCode == "" {
 		flashError(w, r, h.renderer, redirectURL, "Language code is required")
 		return
@@ -1210,46 +1209,20 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get target language
-	targetLang, err := h.queries.GetLanguageByCode(r.Context(), langCode)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			flashError(w, r, h.renderer, redirectURL, "Language not found")
-		} else {
-			slog.Error("failed to get language", "error", err, "lang_code", langCode)
-			flashError(w, r, h.renderer, redirectURL, "Error loading language")
-		}
-		return
-	}
-
-	// Check if translation already exists
-	existingTranslation, err := h.queries.GetTranslation(r.Context(), store.GetTranslationParams{
-		EntityType: model.EntityTypePage,
-		EntityID:   id,
-		LanguageID: targetLang.ID,
-	})
-	if err == nil && existingTranslation.ID > 0 {
-		// Translation already exists, redirect to it
-		flashAndRedirect(w, r, h.renderer, fmt.Sprintf("/admin/pages/%d", existingTranslation.TranslationID), "Translation already exists", "info")
+	// Validate language and check for existing translation
+	tc, ok := getTargetLanguageForTranslation(w, r, h.queries, h.renderer, langCode, redirectURL, model.EntityTypePage, id)
+	if !ok {
 		return
 	}
 
 	// Generate a unique slug for the translated page
-	baseSlug := sourcePage.Slug + "-" + langCode
-	translatedSlug := baseSlug
-	counter := 1
-	for {
-		exists, err := h.queries.SlugExists(r.Context(), translatedSlug)
-		if err != nil {
-			slog.Error("database error checking slug", "error", err)
-			flashError(w, r, h.renderer, redirectURL, "Error creating translation")
-			return
-		}
-		if exists == 0 {
-			break
-		}
-		counter++
-		translatedSlug = fmt.Sprintf("%s-%d", baseSlug, counter)
+	translatedSlug, err := generateUniqueSlug(sourcePage.Slug, langCode, func(slug string) (int64, error) {
+		return h.queries.SlugExists(r.Context(), slug)
+	})
+	if err != nil {
+		slog.Error("database error checking slug", "error", err)
+		flashError(w, r, h.renderer, redirectURL, "Error creating translation")
+		return
 	}
 
 	// Create the translated page with same title but empty body
@@ -1270,7 +1243,7 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		NoFollow:        0,
 		CanonicalUrl:    "",
 		ScheduledAt:     sql.NullTime{},
-		LanguageID:      util.NullInt64FromValue(targetLang.ID),
+		LanguageID:      util.NullInt64FromValue(tc.TargetLang.ID),
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	})
@@ -1297,7 +1270,7 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 	_, err = h.queries.CreateTranslation(r.Context(), store.CreateTranslationParams{
 		EntityType:    model.EntityTypePage,
 		EntityID:      id,
-		LanguageID:    targetLang.ID,
+		LanguageID:    tc.TargetLang.ID,
 		TranslationID: translatedPage.ID,
 		CreatedAt:     now,
 	})
@@ -1312,7 +1285,7 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		"language", langCode,
 		"created_by", userID)
 
-	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/pages/%d", translatedPage.ID), fmt.Sprintf("Translation created for %s. Please translate the content.", targetLang.Name))
+	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/pages/%d", translatedPage.ID), fmt.Sprintf("Translation created for %s. Please translate the content.", tc.TargetLang.Name))
 }
 
 // Helper functions

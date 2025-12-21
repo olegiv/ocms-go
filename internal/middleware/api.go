@@ -44,6 +44,72 @@ func WriteAPIError(w http.ResponseWriter, statusCode int, code, message string, 
 	_ = json.NewEncoder(w).Encode(apiErr)
 }
 
+// validateAPIKey parses the Authorization header and validates the API key.
+// Returns the API key if valid, or nil if not.
+// If required is true and validation fails, writes an error response and returns (nil, true).
+// The second return value indicates if an error response was written.
+func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queries, required bool) (*store.ApiKey, bool) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		if required {
+			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "Missing Authorization header", nil)
+			return nil, true
+		}
+		return nil, false
+	}
+
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+		if required {
+			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "Invalid Authorization header format. Use: Bearer <api_key>", nil)
+			return nil, true
+		}
+		return nil, false
+	}
+
+	rawKey := parts[1]
+	if rawKey == "" {
+		if required {
+			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key is empty", nil)
+			return nil, true
+		}
+		return nil, false
+	}
+
+	keyHash := model.HashAPIKey(rawKey)
+	apiKey, err := queries.GetAPIKeyByHash(r.Context(), keyHash)
+	if err != nil {
+		if required {
+			if errors.Is(err, sql.ErrNoRows) {
+				WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "Invalid API key", nil)
+			} else {
+				slog.Error("failed to validate API key", "error", err)
+				WriteAPIError(w, http.StatusInternalServerError, "internal_error", "Failed to validate API key", nil)
+			}
+			return nil, true
+		}
+		return nil, false
+	}
+
+	if !apiKey.IsActive {
+		if required {
+			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key is inactive", nil)
+			return nil, true
+		}
+		return nil, false
+	}
+
+	if apiKey.ExpiresAt.Valid && time.Now().After(apiKey.ExpiresAt.Time) {
+		if required {
+			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key has expired", nil)
+			return nil, true
+		}
+		return nil, false
+	}
+
+	return &apiKey, false
+}
+
 // APIKeyAuth creates middleware that validates API key authentication.
 // It checks the Authorization header for a Bearer token.
 func APIKeyAuth(db *sql.DB) func(http.Handler) http.Handler {
@@ -51,57 +117,13 @@ func APIKeyAuth(db *sql.DB) func(http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Get Authorization header
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "Missing Authorization header", nil)
+			apiKey, errorWritten := validateAPIKey(w, r, queries, true)
+			if errorWritten {
 				return
 			}
 
-			// Expect "Bearer <key>" format
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-				WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "Invalid Authorization header format. Use: Bearer <api_key>", nil)
-				return
-			}
-
-			rawKey := parts[1]
-			if rawKey == "" {
-				WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key is empty", nil)
-				return
-			}
-
-			// Hash the key and look it up
-			keyHash := model.HashAPIKey(rawKey)
-
-			apiKey, err := queries.GetAPIKeyByHash(r.Context(), keyHash)
-			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "Invalid API key", nil)
-				} else {
-					slog.Error("failed to validate API key", "error", err)
-					WriteAPIError(w, http.StatusInternalServerError, "internal_error", "Failed to validate API key", nil)
-				}
-				return
-			}
-
-			// Check if key is active
-			if !apiKey.IsActive {
-				WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key is inactive", nil)
-				return
-			}
-
-			// Check if key is expired
-			if apiKey.ExpiresAt.Valid && time.Now().After(apiKey.ExpiresAt.Time) {
-				WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key has expired", nil)
-				return
-			}
-
-			// Update last used timestamp (fire and forget)
 			updateAPIKeyLastUsed(queries, apiKey.ID)
-
-			// Add API key to context and continue
-			addAPIKeyToContext(next, w, r, apiKey)
+			addAPIKeyToContext(next, w, r, *apiKey)
 		})
 	}
 }
@@ -153,55 +175,14 @@ func OptionalAPIKeyAuth(db *sql.DB) func(http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Get Authorization header
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				// No auth header - continue without API key
+			apiKey, _ := validateAPIKey(w, r, queries, false)
+			if apiKey == nil {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			// Expect "Bearer <key>" format
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-				// Invalid format - continue without API key
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			rawKey := parts[1]
-			if rawKey == "" {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			// Hash the key and look it up
-			keyHash := model.HashAPIKey(rawKey)
-
-			apiKey, err := queries.GetAPIKeyByHash(r.Context(), keyHash)
-			if err != nil {
-				// Invalid key - continue without API key
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			// Check if key is active
-			if !apiKey.IsActive {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			// Check if key is expired
-			if apiKey.ExpiresAt.Valid && time.Now().After(apiKey.ExpiresAt.Time) {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			// Update last used timestamp (fire and forget)
 			updateAPIKeyLastUsed(queries, apiKey.ID)
-
-			// Add API key to context and continue
-			addAPIKeyToContext(next, w, r, apiKey)
+			addAPIKeyToContext(next, w, r, *apiKey)
 		})
 	}
 }

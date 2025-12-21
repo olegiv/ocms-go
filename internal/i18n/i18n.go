@@ -195,13 +195,7 @@ func MatchLanguage(acceptLang string) string {
 
 // IsSupported checks if a language code is supported for the admin UI.
 func IsSupported(lang string) bool {
-	lang = strings.ToLower(lang)
-	for _, supported := range SupportedLanguages {
-		if supported == lang {
-			return true
-		}
-	}
-	return false
+	return contains(SupportedLanguages, strings.ToLower(lang))
 }
 
 // TranslationCount returns the number of translations loaded for a language.

@@ -91,95 +91,52 @@ func (r *Renderer) SetSidebarModuleProvider(provider SidebarModuleProvider) {
 	r.sidebarModuleProvider = provider
 }
 
+// templateParseConfig defines how to parse a group of templates.
+type templateParseConfig struct {
+	dir     string   // Directory containing templates
+	prefix  string   // Prefix for template names (e.g., "admin/")
+	layouts []string // Layout files to include before partials
+}
+
+// parseTemplateGroup parses all templates in a directory with the given configuration.
+func (r *Renderer) parseTemplateGroup(templatesFS fs.FS, partials []string, cfg templateParseConfig) error {
+	templates := r.getTemplateFiles(templatesFS, cfg.dir)
+
+	for _, tmplPath := range templates {
+		name := cfg.prefix + strings.TrimSuffix(filepath.Base(tmplPath), ".html")
+
+		files := append([]string{}, cfg.layouts...)
+		files = append(files, partials...)
+		files = append(files, tmplPath)
+
+		tmpl, err := template.New("").Funcs(r.TemplateFuncs()).ParseFS(templatesFS, files...)
+		if err != nil {
+			return fmt.Errorf("parsing template %s: %w", name, err)
+		}
+
+		r.templates[name] = tmpl
+	}
+	return nil
+}
+
 // parseTemplates parses all templates from the filesystem.
 func (r *Renderer) parseTemplates(templatesFS fs.FS) error {
-	// Get all partials
 	partials := r.getTemplateFiles(templatesFS, "partials")
-
-	// Get base layout
 	baseLayout := "layouts/base.html"
-
-	// Parse admin templates with admin layout
-	adminTemplates := r.getTemplateFiles(templatesFS, "admin")
-
 	adminLayout := "layouts/admin.html"
 
-	for _, tmplPath := range adminTemplates {
-		name := filepath.Base(tmplPath)
-		name = strings.TrimSuffix(name, ".html")
-		name = "admin/" + name
-
-		// Parse in order: base layout, admin layout, partials, page template
-		files := []string{baseLayout, adminLayout}
-		files = append(files, partials...)
-		files = append(files, tmplPath)
-
-		tmpl, err := template.New("").Funcs(r.TemplateFuncs()).ParseFS(templatesFS, files...)
-		if err != nil {
-			return fmt.Errorf("parsing template %s: %w", name, err)
-		}
-
-		r.templates[name] = tmpl
+	// Define template groups with their layouts
+	groups := []templateParseConfig{
+		{dir: "admin", prefix: "admin/", layouts: []string{baseLayout, adminLayout}},
+		{dir: "auth", prefix: "auth/", layouts: []string{baseLayout}},
+		{dir: "errors", prefix: "errors/", layouts: []string{baseLayout, adminLayout}},
+		{dir: "public", prefix: "public/", layouts: nil}, // Public templates are standalone
 	}
 
-	// Parse auth templates with base layout only
-	authTemplates := r.getTemplateFiles(templatesFS, "auth")
-
-	for _, tmplPath := range authTemplates {
-		name := filepath.Base(tmplPath)
-		name = strings.TrimSuffix(name, ".html")
-		name = "auth/" + name
-
-		files := []string{baseLayout}
-		files = append(files, partials...)
-		files = append(files, tmplPath)
-
-		tmpl, err := template.New("").Funcs(r.TemplateFuncs()).ParseFS(templatesFS, files...)
-		if err != nil {
-			return fmt.Errorf("parsing template %s: %w", name, err)
+	for _, cfg := range groups {
+		if err := r.parseTemplateGroup(templatesFS, partials, cfg); err != nil {
+			return err
 		}
-
-		r.templates[name] = tmpl
-	}
-
-	// Parse error templates with admin layout
-	errorTemplates := r.getTemplateFiles(templatesFS, "errors")
-
-	for _, tmplPath := range errorTemplates {
-		name := filepath.Base(tmplPath)
-		name = strings.TrimSuffix(name, ".html")
-		name = "errors/" + name
-
-		files := []string{baseLayout, adminLayout}
-		files = append(files, partials...)
-		files = append(files, tmplPath)
-
-		tmpl, err := template.New("").Funcs(r.TemplateFuncs()).ParseFS(templatesFS, files...)
-		if err != nil {
-			return fmt.Errorf("parsing template %s: %w", name, err)
-		}
-
-		r.templates[name] = tmpl
-	}
-
-	// Parse public templates (standalone, with their own body)
-	publicTemplates := r.getTemplateFiles(templatesFS, "public")
-
-	for _, tmplPath := range publicTemplates {
-		name := filepath.Base(tmplPath)
-		name = strings.TrimSuffix(name, ".html")
-		name = "public/" + name
-
-		// Public templates define their own "body" template that is self-contained
-		files := []string{tmplPath}
-		files = append(files, partials...)
-
-		tmpl, err := template.New("").Funcs(r.TemplateFuncs()).ParseFS(templatesFS, files...)
-		if err != nil {
-			return fmt.Errorf("parsing template %s: %w", name, err)
-		}
-
-		r.templates[name] = tmpl
 	}
 
 	return nil
@@ -256,33 +213,13 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		// Usage: {{formatDateLocale .PublishedAt .LangCode}}
 		// Handles both time.Time and *time.Time (returns empty string for nil)
 		"formatDateLocale": func(t any, lang string) string {
-			switch v := t.(type) {
-			case time.Time:
-				return formatDateForLocale(v, lang)
-			case *time.Time:
-				if v == nil {
-					return ""
-				}
-				return formatDateForLocale(*v, lang)
-			default:
-				return ""
-			}
+			return applyTimeFormatter(t, lang, formatDateForLocale)
 		},
 		// formatDateTimeLocale formats a datetime according to the specified language.
 		// Usage: {{formatDateTimeLocale .UpdatedAt .AdminLang}}
 		// Handles both time.Time and *time.Time (returns empty string for nil)
 		"formatDateTimeLocale": func(t any, lang string) string {
-			switch v := t.(type) {
-			case time.Time:
-				return formatDateTimeForLocale(v, lang)
-			case *time.Time:
-				if v == nil {
-					return ""
-				}
-				return formatDateTimeForLocale(*v, lang)
-			default:
-				return ""
-			}
+			return applyTimeFormatter(t, lang, formatDateTimeForLocale)
 		},
 		"truncate": func(s string, length int) string {
 			if len(s) <= length {
@@ -731,34 +668,39 @@ func (r *Renderer) GetAdminLang(req *http.Request) string {
 	return i18n.GetDefaultLanguage()
 }
 
+// monthsRu contains Russian month names in genitive case.
+var monthsRu = []string{
+	"января", "февраля", "марта", "апреля", "мая", "июня",
+	"июля", "августа", "сентября", "октября", "ноября", "декабря",
+}
+
+// applyTimeFormatter applies a time formatting function to a value that may be time.Time or *time.Time.
+func applyTimeFormatter(t any, lang string, formatter func(time.Time, string) string) string {
+	switch v := t.(type) {
+	case time.Time:
+		return formatter(v, lang)
+	case *time.Time:
+		if v == nil {
+			return ""
+		}
+		return formatter(*v, lang)
+	default:
+		return ""
+	}
+}
+
 // formatDateForLocale formats a date according to the specified language.
 func formatDateForLocale(t time.Time, lang string) string {
-	switch lang {
-	case "ru":
-		// Russian date format: "2 января 2006"
-		monthsRu := []string{
-			"января", "февраля", "марта", "апреля", "мая", "июня",
-			"июля", "августа", "сентября", "октября", "ноября", "декабря",
-		}
+	if lang == "ru" {
 		return fmt.Sprintf("%d %s %d", t.Day(), monthsRu[t.Month()-1], t.Year())
-	default:
-		// English date format: "Jan 2, 2006"
-		return t.Format("Jan 2, 2006")
 	}
+	return t.Format("Jan 2, 2006")
 }
 
 // formatDateTimeForLocale formats a time.Time as a localized datetime string.
 func formatDateTimeForLocale(t time.Time, lang string) string {
-	switch lang {
-	case "ru":
-		// Russian datetime format: "2 января 2006, 15:04"
-		monthsRu := []string{
-			"января", "февраля", "марта", "апреля", "мая", "июня",
-			"июля", "августа", "сентября", "октября", "ноября", "декабря",
-		}
+	if lang == "ru" {
 		return fmt.Sprintf("%d %s %d, %02d:%02d", t.Day(), monthsRu[t.Month()-1], t.Year(), t.Hour(), t.Minute())
-	default:
-		// English datetime format: "Jan 2, 2006 3:04 PM"
-		return t.Format("Jan 2, 2006 3:04 PM")
 	}
+	return t.Format("Jan 2, 2006 3:04 PM")
 }
