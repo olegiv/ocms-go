@@ -139,6 +139,44 @@ func selectAndListPages(
 	return listAndCount(allListFn, allCountFn)
 }
 
+// listPagesByCategory returns pages filtered by category with published-only option.
+func (h *Handler) listPagesByCategory(ctx context.Context, publishedOnly bool, categoryID, limit, offset int64) ([]store.Page, int64, error) {
+	return selectAndListPages(
+		publishedOnly,
+		func() ([]store.Page, error) {
+			return h.queries.ListPublishedPagesByCategory(ctx, store.ListPublishedPagesByCategoryParams{
+				CategoryID: categoryID, Limit: limit, Offset: offset,
+			})
+		},
+		func() ([]store.Page, error) {
+			return h.queries.ListPagesByCategory(ctx, store.ListPagesByCategoryParams{
+				CategoryID: categoryID, Limit: limit, Offset: offset,
+			})
+		},
+		func() (int64, error) { return h.queries.CountPublishedPagesByCategory(ctx, categoryID) },
+		func() (int64, error) { return h.queries.CountPagesByCategory(ctx, categoryID) },
+	)
+}
+
+// listPagesByTag returns pages filtered by tag with published-only option.
+func (h *Handler) listPagesByTag(ctx context.Context, publishedOnly bool, tagID, limit, offset int64) ([]store.Page, int64, error) {
+	return selectAndListPages(
+		publishedOnly,
+		func() ([]store.Page, error) {
+			return h.queries.ListPublishedPagesForTag(ctx, store.ListPublishedPagesForTagParams{
+				TagID: tagID, Limit: limit, Offset: offset,
+			})
+		},
+		func() ([]store.Page, error) {
+			return h.queries.GetPagesForTag(ctx, store.GetPagesForTagParams{
+				TagID: tagID, Limit: limit, Offset: offset,
+			})
+		},
+		func() (int64, error) { return h.queries.CountPublishedPagesForTag(ctx, tagID) },
+		func() (int64, error) { return h.queries.CountPagesForTag(ctx, tagID) },
+	)
+}
+
 // storePageToResponse converts a store.Page to PageResponse.
 func storePageToResponse(p store.Page) PageResponse {
 	resp := PageResponse{
@@ -222,22 +260,7 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 			WriteBadRequest(w, "Invalid category ID", nil)
 			return
 		}
-
-		pages, total, err = selectAndListPages(
-			publishedOnly,
-			func() ([]store.Page, error) {
-				return h.queries.ListPublishedPagesByCategory(ctx, store.ListPublishedPagesByCategoryParams{
-					CategoryID: categoryID, Limit: limit, Offset: off,
-				})
-			},
-			func() ([]store.Page, error) {
-				return h.queries.ListPagesByCategory(ctx, store.ListPagesByCategoryParams{
-					CategoryID: categoryID, Limit: limit, Offset: off,
-				})
-			},
-			func() (int64, error) { return h.queries.CountPublishedPagesByCategory(ctx, categoryID) },
-			func() (int64, error) { return h.queries.CountPagesByCategory(ctx, categoryID) },
-		)
+		pages, total, err = h.listPagesByCategory(ctx, publishedOnly, categoryID, limit, off)
 	} else if tagIDStr != "" {
 		// Filter by tag
 		tagID, parseErr := strconv.ParseInt(tagIDStr, 10, 64)
@@ -245,22 +268,7 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 			WriteBadRequest(w, "Invalid tag ID", nil)
 			return
 		}
-
-		pages, total, err = selectAndListPages(
-			publishedOnly,
-			func() ([]store.Page, error) {
-				return h.queries.ListPublishedPagesForTag(ctx, store.ListPublishedPagesForTagParams{
-					TagID: tagID, Limit: limit, Offset: off,
-				})
-			},
-			func() ([]store.Page, error) {
-				return h.queries.GetPagesForTag(ctx, store.GetPagesForTagParams{
-					TagID: tagID, Limit: limit, Offset: off,
-				})
-			},
-			func() (int64, error) { return h.queries.CountPublishedPagesForTag(ctx, tagID) },
-			func() (int64, error) { return h.queries.CountPagesForTag(ctx, tagID) },
-		)
+		pages, total, err = h.listPagesByTag(ctx, publishedOnly, tagID, limit, off)
 	} else if status != "" {
 		// Filter by status
 		pages, total, err = listAndCount(
