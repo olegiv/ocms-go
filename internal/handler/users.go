@@ -543,19 +543,9 @@ func isValidRole(role string) bool {
 }
 
 // requireUserWithRedirect fetches a user by ID and redirects with flash on error.
-// Returns the user and true if successful, or false if an error occurred (redirect sent).
 func (h *UsersHandler) requireUserWithRedirect(w http.ResponseWriter, r *http.Request, id int64) (store.User, bool) {
-	user, err := h.queries.GetUserByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			flashError(w, r, h.renderer, "/admin/users", "User not found")
-		} else {
-			slog.Error("failed to get user", "error", err)
-			flashError(w, r, h.renderer, "/admin/users", "Error loading user")
-		}
-		return store.User{}, false
-	}
-	return user, true
+	return requireEntityWithRedirect(w, r, h.renderer, "/admin/users", "User", id,
+		func(id int64) (store.User, error) { return h.queries.GetUserByID(r.Context(), id) })
 }
 
 // renderNewUserForm renders the new user form with the given data.

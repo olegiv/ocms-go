@@ -1067,67 +1067,27 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 // =============================================================================
 
 // requireTagWithRedirect fetches a tag by ID and redirects with flash on error.
-// Returns the tag and true if successful, or false if an error occurred (redirect sent).
 func (h *TaxonomyHandler) requireTagWithRedirect(w http.ResponseWriter, r *http.Request, id int64) (store.Tag, bool) {
-	tag, err := h.queries.GetTagByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			flashError(w, r, h.renderer, "/admin/tags", "Tag not found")
-		} else {
-			slog.Error("failed to get tag", "error", err, "tag_id", id)
-			flashError(w, r, h.renderer, "/admin/tags", "Error loading tag")
-		}
-		return store.Tag{}, false
-	}
-	return tag, true
+	return requireEntityWithRedirect(w, r, h.renderer, "/admin/tags", "Tag", id,
+		func(id int64) (store.Tag, error) { return h.queries.GetTagByID(r.Context(), id) })
 }
 
 // requireTagWithError fetches a tag by ID and returns http.Error on error.
-// Returns the tag and true if successful, or false if an error occurred.
 func (h *TaxonomyHandler) requireTagWithError(w http.ResponseWriter, r *http.Request, id int64) (store.Tag, bool) {
-	tag, err := h.queries.GetTagByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Tag not found", http.StatusNotFound)
-		} else {
-			slog.Error("failed to get tag", "error", err, "tag_id", id)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
-		return store.Tag{}, false
-	}
-	return tag, true
+	return requireEntityWithError(w, "Tag", id,
+		func(id int64) (store.Tag, error) { return h.queries.GetTagByID(r.Context(), id) })
 }
 
 // requireCategoryWithRedirect fetches a category by ID and redirects with flash on error.
-// Returns the category and true if successful, or false if an error occurred (redirect sent).
 func (h *TaxonomyHandler) requireCategoryWithRedirect(w http.ResponseWriter, r *http.Request, id int64) (store.Category, bool) {
-	category, err := h.queries.GetCategoryByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			flashError(w, r, h.renderer, "/admin/categories", "Category not found")
-		} else {
-			slog.Error("failed to get category", "error", err, "category_id", id)
-			flashError(w, r, h.renderer, "/admin/categories", "Error loading category")
-		}
-		return store.Category{}, false
-	}
-	return category, true
+	return requireEntityWithRedirect(w, r, h.renderer, "/admin/categories", "Category", id,
+		func(id int64) (store.Category, error) { return h.queries.GetCategoryByID(r.Context(), id) })
 }
 
 // requireCategoryWithError fetches a category by ID and returns http.Error on error.
-// Returns the category and true if successful, or false if an error occurred.
 func (h *TaxonomyHandler) requireCategoryWithError(w http.ResponseWriter, r *http.Request, id int64) (store.Category, bool) {
-	category, err := h.queries.GetCategoryByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Category not found", http.StatusNotFound)
-		} else {
-			slog.Error("failed to get category", "error", err, "category_id", id)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
-		return store.Category{}, false
-	}
-	return category, true
+	return requireEntityWithError(w, "Category", id,
+		func(id int64) (store.Category, error) { return h.queries.GetCategoryByID(r.Context(), id) })
 }
 
 // parseLanguageIDWithDefault parses language ID from string and falls back to default language.

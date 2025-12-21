@@ -645,35 +645,15 @@ func (h *MenusHandler) processReorderItems(r *http.Request, menuID int64, items 
 // Helper functions
 
 // requireMenuWithRedirect fetches menu by ID and handles errors with flash messages and redirect.
-// Returns the menu and true if successful, or zero value and false if an error occurred (response already written).
 func (h *MenusHandler) requireMenuWithRedirect(w http.ResponseWriter, r *http.Request, id int64) (store.Menu, bool) {
-	menu, err := h.queries.GetMenuByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			flashError(w, r, h.renderer, "/admin/menus", "Menu not found")
-		} else {
-			slog.Error("failed to get menu", "error", err, "menu_id", id)
-			flashError(w, r, h.renderer, "/admin/menus", "Error loading menu")
-		}
-		return store.Menu{}, false
-	}
-	return menu, true
+	return requireEntityWithRedirect(w, r, h.renderer, "/admin/menus", "Menu", id,
+		func(id int64) (store.Menu, error) { return h.queries.GetMenuByID(r.Context(), id) })
 }
 
 // requireMenuWithError fetches menu by ID and handles errors with http.Error.
-// Returns the menu and true if successful, or zero value and false if an error occurred (response already written).
 func (h *MenusHandler) requireMenuWithError(w http.ResponseWriter, r *http.Request, id int64) (store.Menu, bool) {
-	menu, err := h.queries.GetMenuByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Menu not found", http.StatusNotFound)
-		} else {
-			slog.Error("failed to get menu", "error", err, "menu_id", id)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
-		return store.Menu{}, false
-	}
-	return menu, true
+	return requireEntityWithError(w, "Menu", id,
+		func(id int64) (store.Menu, error) { return h.queries.GetMenuByID(r.Context(), id) })
 }
 
 // menuFormInput holds parsed and validated menu form input.
@@ -783,35 +763,15 @@ func validateMenuItemInput(w http.ResponseWriter, input menuItemInput) (menuItem
 }
 
 // requireMenuWithJSONError fetches menu by ID and handles errors with JSON response.
-// Returns the menu and true if successful, or zero value and false if an error occurred.
 func (h *MenusHandler) requireMenuWithJSONError(w http.ResponseWriter, r *http.Request, id int64) (store.Menu, bool) {
-	menu, err := h.queries.GetMenuByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeJSONError(w, http.StatusNotFound, "Menu not found")
-		} else {
-			slog.Error("failed to get menu", "error", err, "menu_id", id)
-			writeJSONError(w, http.StatusInternalServerError, "Internal Server Error")
-		}
-		return store.Menu{}, false
-	}
-	return menu, true
+	return requireEntityWithJSONError(w, "Menu", id,
+		func(id int64) (store.Menu, error) { return h.queries.GetMenuByID(r.Context(), id) })
 }
 
 // requireMenuItemWithJSONError fetches menu item by ID and handles errors with JSON response.
-// Returns the menu item and true if successful, or zero value and false if an error occurred.
 func (h *MenusHandler) requireMenuItemWithJSONError(w http.ResponseWriter, r *http.Request, id int64) (store.MenuItem, bool) {
-	item, err := h.queries.GetMenuItemByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeJSONError(w, http.StatusNotFound, "Menu item not found")
-		} else {
-			slog.Error("failed to get menu item", "error", err, "item_id", id)
-			writeJSONError(w, http.StatusInternalServerError, "Internal Server Error")
-		}
-		return store.MenuItem{}, false
-	}
-	return item, true
+	return requireEntityWithJSONError(w, "Menu item", id,
+		func(id int64) (store.MenuItem, error) { return h.queries.GetMenuItemByID(r.Context(), id) })
 }
 
 // verifyItemBelongsToMenuJSON checks if menu item belongs to the specified menu.

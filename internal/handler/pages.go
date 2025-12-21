@@ -1233,35 +1233,15 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 // Helper functions
 
 // requirePageWithRedirect fetches page by ID and handles errors with flash messages and redirect.
-// Returns the page and true if successful, or zero value and false if an error occurred (response already written).
 func (h *PagesHandler) requirePageWithRedirect(w http.ResponseWriter, r *http.Request, id int64) (store.Page, bool) {
-	page, err := h.queries.GetPageByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			flashError(w, r, h.renderer, "/admin/pages", "Page not found")
-		} else {
-			slog.Error("failed to get page", "error", err, "page_id", id)
-			flashError(w, r, h.renderer, "/admin/pages", "Error loading page")
-		}
-		return store.Page{}, false
-	}
-	return page, true
+	return requireEntityWithRedirect(w, r, h.renderer, "/admin/pages", "Page", id,
+		func(id int64) (store.Page, error) { return h.queries.GetPageByID(r.Context(), id) })
 }
 
 // requirePageWithError fetches page by ID and handles errors with http.Error.
-// Returns the page and true if successful, or zero value and false if an error occurred (response already written).
 func (h *PagesHandler) requirePageWithError(w http.ResponseWriter, r *http.Request, id int64) (store.Page, bool) {
-	page, err := h.queries.GetPageByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Page not found", http.StatusNotFound)
-		} else {
-			slog.Error("failed to get page", "error", err, "page_id", id)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
-		return store.Page{}, false
-	}
-	return page, true
+	return requireEntityWithError(w, "Page", id,
+		func(id int64) (store.Page, error) { return h.queries.GetPageByID(r.Context(), id) })
 }
 
 // pageFormInput holds parsed page form input values.

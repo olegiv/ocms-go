@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -943,49 +942,21 @@ func (h *MediaHandler) API(w http.ResponseWriter, r *http.Request) {
 // Helper functions
 
 // requireMediaWithRedirect fetches media by ID and handles errors with flash messages and redirect.
-// Returns the media and true if successful, or zero value and false if an error occurred (response already written).
 func (h *MediaHandler) requireMediaWithRedirect(w http.ResponseWriter, r *http.Request, id int64) (store.Medium, bool) {
-	media, err := h.queries.GetMediaByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			flashError(w, r, h.renderer, "/admin/media", "Media not found")
-		} else {
-			slog.Error("failed to get media", "error", err, "media_id", id)
-			flashError(w, r, h.renderer, "/admin/media", "Error loading media")
-		}
-		return store.Medium{}, false
-	}
-	return media, true
+	return requireEntityWithRedirect(w, r, h.renderer, "/admin/media", "Media", id,
+		func(id int64) (store.Medium, error) { return h.queries.GetMediaByID(r.Context(), id) })
 }
 
 // requireMediaWithError fetches media by ID and handles errors with http.Error.
-// Returns the media and true if successful, or zero value and false if an error occurred (response already written).
 func (h *MediaHandler) requireMediaWithError(w http.ResponseWriter, r *http.Request, id int64) (store.Medium, bool) {
-	media, err := h.queries.GetMediaByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Media not found", http.StatusNotFound)
-		} else {
-			logAndInternalError(w, "failed to get media", "error", err, "media_id", id)
-		}
-		return store.Medium{}, false
-	}
-	return media, true
+	return requireEntityWithError(w, "Media", id,
+		func(id int64) (store.Medium, error) { return h.queries.GetMediaByID(r.Context(), id) })
 }
 
 // requireFolderWithError fetches folder by ID and handles errors with http.Error.
-// Returns the folder and true if successful, or zero value and false if an error occurred (response already written).
 func (h *MediaHandler) requireFolderWithError(w http.ResponseWriter, r *http.Request, id int64) (store.MediaFolder, bool) {
-	folder, err := h.queries.GetMediaFolderByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Folder not found", http.StatusNotFound)
-		} else {
-			logAndInternalError(w, "failed to get folder", "error", err, "folder_id", id)
-		}
-		return store.MediaFolder{}, false
-	}
-	return folder, true
+	return requireEntityWithError(w, "Folder", id,
+		func(id int64) (store.MediaFolder, error) { return h.queries.GetMediaFolderByID(r.Context(), id) })
 }
 
 func isImageMime(mimeType string) bool {
