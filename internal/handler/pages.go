@@ -504,113 +504,38 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get form values
-	title := strings.TrimSpace(r.FormValue("title"))
-	slug := strings.TrimSpace(r.FormValue("slug"))
-	body := r.FormValue("body")
-	status := r.FormValue("status")
-	featuredImageIDStr := r.FormValue("featured_image_id")
+	// Parse form input
+	input := parsePageFormInput(r)
 
-	// Get SEO form values
-	metaTitle := strings.TrimSpace(r.FormValue("meta_title"))
-	metaDescription := strings.TrimSpace(r.FormValue("meta_description"))
-	metaKeywords := strings.TrimSpace(r.FormValue("meta_keywords"))
-	ogImageIDStr := r.FormValue("og_image_id")
-	noIndexStr := r.FormValue("no_index")
-	noFollowStr := r.FormValue("no_follow")
-	canonicalURL := strings.TrimSpace(r.FormValue("canonical_url"))
-
-	// Parse featured image ID
-	var featuredImageID sql.NullInt64
-	if featuredImageIDStr != "" {
-		if imgID, err := strconv.ParseInt(featuredImageIDStr, 10, 64); err == nil && imgID > 0 {
-			featuredImageID = sql.NullInt64{Int64: imgID, Valid: true}
-		}
-	}
-
-	// Parse OG image ID
-	var ogImageID sql.NullInt64
-	if ogImageIDStr != "" {
-		if imgID, err := strconv.ParseInt(ogImageIDStr, 10, 64); err == nil && imgID > 0 {
-			ogImageID = sql.NullInt64{Int64: imgID, Valid: true}
-		}
-	}
-
-	// Parse boolean SEO fields (checkboxes)
-	var noIndex int64
-	if noIndexStr == "1" || noIndexStr == "on" {
-		noIndex = 1
-	}
-	var noFollow int64
-	if noFollowStr == "1" || noFollowStr == "on" {
-		noFollow = 1
-	}
-
-	// Parse scheduled_at for scheduled publishing
-	scheduledAtStr := strings.TrimSpace(r.FormValue("scheduled_at"))
-	var scheduledAt sql.NullTime
-	if scheduledAtStr != "" {
-		if t, err := time.Parse("2006-01-02T15:04", scheduledAtStr); err == nil {
-			scheduledAt = sql.NullTime{Time: t, Valid: true}
-		}
-	}
-
-	// Parse language_id
-	languageIDStr := r.FormValue("language_id")
-	var languageID sql.NullInt64
-	if languageIDStr != "" {
-		if lid, err := strconv.ParseInt(languageIDStr, 10, 64); err == nil && lid > 0 {
-			languageID = sql.NullInt64{Int64: lid, Valid: true}
-		}
-	} else {
-		// Default to the default language if not specified
+	// Default to the default language if not specified
+	if !input.LanguageID.Valid {
 		defaultLang, err := h.queries.GetDefaultLanguage(r.Context())
 		if err == nil {
-			languageID = sql.NullInt64{Int64: defaultLang.ID, Valid: true}
+			input.LanguageID = sql.NullInt64{Int64: defaultLang.ID, Valid: true}
 		}
-	}
-
-	// Store form values for re-rendering on error
-	formValues := map[string]string{
-		"title":             title,
-		"slug":              slug,
-		"body":              body,
-		"status":            status,
-		"featured_image_id": featuredImageIDStr,
-		"meta_title":        metaTitle,
-		"meta_description":  metaDescription,
-		"meta_keywords":     metaKeywords,
-		"og_image_id":       ogImageIDStr,
-		"no_index":          noIndexStr,
-		"no_follow":         noFollowStr,
-		"canonical_url":     canonicalURL,
-		"scheduled_at":      scheduledAtStr,
-		"language_id":       languageIDStr,
 	}
 
 	// Validate
 	validationErrors := make(map[string]string)
 
 	// Title validation
-	if title == "" {
-		validationErrors["title"] = "Title is required"
-	} else if len(title) < 2 {
-		validationErrors["title"] = "Title must be at least 2 characters"
+	if err := validatePageTitle(input.Title); err != "" {
+		validationErrors["title"] = err
 	}
 
 	// Slug validation - auto-generate if empty
-	if slug == "" {
-		slug = util.Slugify(title)
-		formValues["slug"] = slug
+	if input.Slug == "" {
+		input.Slug = util.Slugify(input.Title)
+		input.FormValues["slug"] = input.Slug
 	}
 
-	if slug == "" {
+	if input.Slug == "" {
 		validationErrors["slug"] = "Slug is required"
-	} else if !util.IsValidSlug(slug) {
+	} else if !util.IsValidSlug(input.Slug) {
 		validationErrors["slug"] = "Invalid slug format (use lowercase letters, numbers, and hyphens)"
 	} else {
 		// Check if slug already exists
-		exists, err := h.queries.SlugExists(r.Context(), slug)
+		exists, err := h.queries.SlugExists(r.Context(), input.Slug)
 		if err != nil {
 			slog.Error("database error checking slug", "error", err)
 			validationErrors["slug"] = "Error checking slug"
@@ -620,10 +545,10 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Status validation
-	if status == "" {
-		status = PageStatusDraft
-		formValues["status"] = status
-	} else if !isValidPageStatus(status) {
+	if input.Status == "" {
+		input.Status = PageStatusDraft
+		input.FormValues["status"] = input.Status
+	} else if !isValidPageStatus(input.Status) {
 		validationErrors["status"] = "Invalid status"
 	}
 
@@ -636,7 +561,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 			AllLanguages: allLanguages,
 			Statuses:     ValidPageStatuses,
 			Errors:       validationErrors,
-			FormValues:   formValues,
+			FormValues:   input.FormValues,
 			IsEdit:       false,
 		}
 
@@ -657,21 +582,21 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	userID := middleware.GetUserID(r)
 	newPage, err := h.queries.CreatePage(r.Context(), store.CreatePageParams{
-		Title:           title,
-		Slug:            slug,
-		Body:            body,
-		Status:          status,
+		Title:           input.Title,
+		Slug:            input.Slug,
+		Body:            input.Body,
+		Status:          input.Status,
 		AuthorID:        userID,
-		FeaturedImageID: featuredImageID,
-		MetaTitle:       metaTitle,
-		MetaDescription: metaDescription,
-		MetaKeywords:    metaKeywords,
-		OgImageID:       ogImageID,
-		NoIndex:         noIndex,
-		NoFollow:        noFollow,
-		CanonicalUrl:    canonicalURL,
-		ScheduledAt:     scheduledAt,
-		LanguageID:      languageID,
+		FeaturedImageID: input.FeaturedImageID,
+		MetaTitle:       input.MetaTitle,
+		MetaDescription: input.MetaDescription,
+		MetaKeywords:    input.MetaKeywords,
+		OgImageID:       input.OgImageID,
+		NoIndex:         input.NoIndex,
+		NoFollow:        input.NoFollow,
+		CanonicalUrl:    input.CanonicalURL,
+		ScheduledAt:     input.ScheduledAt,
+		LanguageID:      input.LanguageID,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	})
@@ -685,8 +610,8 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Create initial version
 	_, err = h.queries.CreatePageVersion(r.Context(), store.CreatePageVersionParams{
 		PageID:    newPage.ID,
-		Title:     title,
-		Body:      body,
+		Title:     input.Title,
+		Body:      input.Body,
 		ChangedBy: userID,
 		CreatedAt: now,
 	})
