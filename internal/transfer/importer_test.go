@@ -313,18 +313,6 @@ func TestToNullString(t *testing.T) {
 	assert.Equal(t, "test", result.String)
 }
 
-func TestToNullInt64(t *testing.T) {
-	// Test nil
-	result := toNullInt64(nil)
-	assert.False(t, result.Valid)
-
-	// Test non-nil
-	val := int64(42)
-	result = toNullInt64(&val)
-	assert.True(t, result.Valid)
-	assert.Equal(t, int64(42), result.Int64)
-}
-
 func TestImporter_DryRun(t *testing.T) {
 	// Skip if no database available
 	if testing.Short() {

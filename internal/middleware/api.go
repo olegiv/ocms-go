@@ -349,7 +349,7 @@ func NewGlobalRateLimiter(rps float64, burst int) *GlobalRateLimiter {
 func (rl *GlobalRateLimiter) Middleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ip := getClientIP(r)
+			ip := GetClientIP(r)
 			if !rl.cache.get(ip).Allow() {
 				WriteAPIError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "Rate limit exceeded. Please slow down.", nil)
 				return
@@ -364,7 +364,7 @@ func (rl *GlobalRateLimiter) Middleware() func(http.Handler) http.Handler {
 func (rl *GlobalRateLimiter) HTMLMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ip := getClientIP(r)
+			ip := GetClientIP(r)
 			if !rl.cache.get(ip).Allow() {
 				slog.Warn("public rate limit exceeded", "ip", ip, "path", r.URL.Path)
 				http.Error(w, "Too many requests. Please wait a moment and try again.", http.StatusTooManyRequests)

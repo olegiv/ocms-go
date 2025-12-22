@@ -106,18 +106,13 @@ func storeMediaToResponse(m store.Medium) MediaResponse {
 	resp.URLs = &MediaURLs{
 		Original: "/uploads/originals/" + m.Uuid + "/" + m.Filename,
 	}
-	if isImageMime(m.MimeType) {
+	if handler.IsImageMime(m.MimeType) {
 		resp.URLs.Thumbnail = "/uploads/thumbnail/" + m.Uuid + "/" + m.Filename
 		resp.URLs.Medium = "/uploads/medium/" + m.Uuid + "/" + m.Filename
 		resp.URLs.Large = "/uploads/large/" + m.Uuid + "/" + m.Filename
 	}
 
 	return resp
-}
-
-// isImageMime checks if the MIME type is an image.
-func isImageMime(mimeType string) bool {
-	return strings.HasPrefix(mimeType, "image/")
 }
 
 // parseMediaIncludes parses the include query parameter for media endpoints.
@@ -265,17 +260,11 @@ func (h *Handler) ListMedia(w http.ResponseWriter, r *http.Request) {
 		responses = append(responses, resp)
 	}
 
-	// Calculate total pages
-	totalPages := int(total) / perPage
-	if int(total)%perPage != 0 {
-		totalPages++
-	}
-
 	WriteSuccess(w, responses, &Meta{
 		Total:   total,
 		Page:    page,
 		PerPage: perPage,
-		Pages:   totalPages,
+		Pages:   handler.CalculateTotalPages(int(total), perPage),
 	})
 }
 

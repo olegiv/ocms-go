@@ -16,6 +16,7 @@ import (
 	"ocms-go/internal/imaging"
 	"ocms-go/internal/model"
 	"ocms-go/internal/store"
+	"ocms-go/internal/util"
 )
 
 // Upload limits
@@ -106,7 +107,7 @@ func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *
 			Height:     sql.NullInt64{Int64: int64(processResult.Height), Valid: true},
 			Alt:        sql.NullString{String: "", Valid: true},
 			Caption:    sql.NullString{String: "", Valid: true},
-			FolderID:   toNullInt64(folderID),
+			FolderID:   util.NullInt64FromPtr(folderID),
 			UploadedBy: userID,
 			CreatedAt:  now,
 			UpdatedAt:  now,
@@ -158,7 +159,7 @@ func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *
 			Height:     sql.NullInt64{Valid: false},
 			Alt:        sql.NullString{String: "", Valid: true},
 			Caption:    sql.NullString{String: "", Valid: true},
-			FolderID:   toNullInt64(folderID),
+			FolderID:   util.NullInt64FromPtr(folderID),
 			UploadedBy: userID,
 			CreatedAt:  now,
 			UpdatedAt:  now,
@@ -303,11 +304,4 @@ func isImageMimeType(mimeType string) bool {
 	default:
 		return false
 	}
-}
-
-func toNullInt64(val *int64) sql.NullInt64 {
-	if val == nil {
-		return sql.NullInt64{Valid: false}
-	}
-	return sql.NullInt64{Int64: *val, Valid: true}
 }

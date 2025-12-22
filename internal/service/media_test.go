@@ -115,21 +115,3 @@ func TestAllowedMimeTypes(t *testing.T) {
 		}
 	}
 }
-
-func TestToNullInt64(t *testing.T) {
-	// Test with nil
-	result := toNullInt64(nil)
-	if result.Valid {
-		t.Error("toNullInt64(nil) should return invalid NullInt64")
-	}
-
-	// Test with value
-	val := int64(42)
-	result = toNullInt64(&val)
-	if !result.Valid {
-		t.Error("toNullInt64(&42) should return valid NullInt64")
-	}
-	if result.Int64 != 42 {
-		t.Errorf("toNullInt64(&42).Int64 = %d, want 42", result.Int64)
-	}
-}

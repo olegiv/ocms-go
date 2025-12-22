@@ -19,6 +19,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"ocms-go/internal/store"
+	"ocms-go/internal/util"
 )
 
 // Importer handles importing CMS content from JSON format.
@@ -1193,8 +1194,8 @@ func (i *Importer) importMedia(ctx context.Context, queries *store.Queries, medi
 			Filename:   m.Filename,
 			MimeType:   m.MimeType,
 			Size:       m.Size,
-			Width:      toNullInt64(m.Width),
-			Height:     toNullInt64(m.Height),
+			Width:      util.NullInt64FromPtr(m.Width),
+			Height:     util.NullInt64FromPtr(m.Height),
 			Alt:        toNullString(m.Alt),
 			Caption:    toNullString(m.Caption),
 			FolderID:   folderID,
@@ -1901,12 +1902,4 @@ func toNullString(s string) sql.NullString {
 		return sql.NullString{}
 	}
 	return sql.NullString{String: s, Valid: true}
-}
-
-// toNullInt64 converts a *int64 to sql.NullInt64.
-func toNullInt64(i *int64) sql.NullInt64 {
-	if i == nil {
-		return sql.NullInt64{}
-	}
-	return sql.NullInt64{Int64: *i, Valid: true}
 }

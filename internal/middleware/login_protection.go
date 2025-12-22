@@ -5,6 +5,7 @@ package middleware
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -247,7 +248,7 @@ func (lp *LoginProtection) Middleware() func(http.Handler) http.Handler {
 				return
 			}
 
-			ip := getClientIP(r)
+			ip := GetClientIP(r)
 
 			if !lp.CheckIPRateLimit(ip) {
 				slog.Warn("login rate limit exceeded", "ip", ip)
@@ -261,19 +262,28 @@ func (lp *LoginProtection) Middleware() func(http.Handler) http.Handler {
 	}
 }
 
-// getClientIP extracts the client IP from the request.
-func getClientIP(r *http.Request) string {
+// GetClientIP extracts the client IP from the request.
+// It checks X-Forwarded-For and X-Real-IP headers for proxied requests,
+// and falls back to RemoteAddr with port stripped.
+func GetClientIP(r *http.Request) string {
+	// Check X-Forwarded-For header (can contain multiple IPs)
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		// Take the first IP in the list
+		if idx := strings.Index(xff, ","); idx != -1 {
+			return strings.TrimSpace(xff[:idx])
+		}
+		return strings.TrimSpace(xff)
+	}
+
 	// Check X-Real-IP header (set by reverse proxies)
 	if ip := r.Header.Get("X-Real-IP"); ip != "" {
 		return ip
 	}
 
-	// Check X-Forwarded-For header
-	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
-		// X-Forwarded-For can contain multiple IPs; take the first one
-		return ip
+	// Fall back to RemoteAddr with port stripped
+	host := r.RemoteAddr
+	if idx := strings.LastIndex(host, ":"); idx != -1 {
+		host = host[:idx]
 	}
-
-	// Fall back to RemoteAddr
-	return r.RemoteAddr
+	return host
 }
