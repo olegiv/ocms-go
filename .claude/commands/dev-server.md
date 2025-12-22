@@ -12,9 +12,10 @@ Steps:
    - Health check: http://localhost:8080/health
 
 The `make dev` command will:
+- Install npm dependencies (htmx, alpine.js)
+- Copy JS deps to `web/static/dist/js/`
 - Compile SCSS to CSS
-- Start the Go development server with hot reload (if using air/realize)
-- Or start with `go run ./cmd/ocms`
+- Start the Go development server with `go run ./cmd/ocms`
 
 To stop the server: Use `make stop` or Ctrl+C
 
