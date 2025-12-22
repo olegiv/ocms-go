@@ -15,14 +15,14 @@ SELECT t.*, l.code as language_code, l.name as language_name, l.native_name as l
 FROM translations t
 INNER JOIN languages l ON l.id = t.language_id
 WHERE t.entity_type = ? AND t.entity_id = ?
-ORDER BY l.position ASC;
+ORDER BY l.position;
 
 -- name: GetAllTranslationsOfEntity :many
 SELECT t.*, l.code as language_code, l.name as language_name, l.native_name as language_native_name
 FROM translations t
 INNER JOIN languages l ON l.id = t.language_id
 WHERE t.entity_type = ? AND (t.entity_id = ? OR t.translation_id = ?)
-ORDER BY l.position ASC;
+ORDER BY l.position;
 
 -- name: DeleteTranslation :exec
 DELETE FROM translations WHERE id = ?;
@@ -54,7 +54,7 @@ FROM translations t
 INNER JOIN languages l ON l.id = t.language_id
 WHERE t.entity_type = ?
   AND (t.entity_id = ? OR t.translation_id = ?)
-ORDER BY l.position ASC;
+ORDER BY l.position;
 
 -- Check if translation exists
 -- name: TranslationExists :one
@@ -131,7 +131,7 @@ LEFT JOIN translations t ON t.language_id = l.id
     AND t.entity_type = 'page'
     AND t.entity_id = ?
 WHERE l.is_active = 1
-ORDER BY l.position ASC;
+ORDER BY l.position;
 
 -- Update page language
 -- name: UpdatePageLanguage :exec
@@ -172,7 +172,7 @@ LEFT JOIN (
     AND p2.status = 'published'
 ) p ON p.language_id = l.id
 WHERE l.is_active = 1
-ORDER BY l.position ASC;
+ORDER BY l.position;
 
 -- Get page with language info by slug
 -- name: GetPublishedPageWithLanguageBySlug :one
@@ -198,8 +198,8 @@ SELECT
 FROM languages l
 LEFT JOIN pages p ON p.language_id = l.id
 WHERE l.is_active = 1
-GROUP BY l.id, l.code, l.name, l.is_default
-ORDER BY l.is_default DESC, l.position ASC;
+GROUP BY l.id, l.code, l.name, l.is_default, l.position
+ORDER BY l.is_default DESC, l.position;
 
 -- Batch get translation counts for multiple entities (for page lists)
 -- Returns translation count per entity
@@ -231,4 +231,5 @@ SELECT
     COUNT(*) as total_translations,
     (SELECT COUNT(*) FROM translations WHERE entity_type = 'page') as page_translations,
     (SELECT COUNT(*) FROM translations WHERE entity_type = 'category') as category_translations,
-    (SELECT COUNT(*) FROM translations WHERE entity_type = 'tag') as tag_translations;
+    (SELECT COUNT(*) FROM translations WHERE entity_type = 'tag') as tag_translations
+FROM translations;

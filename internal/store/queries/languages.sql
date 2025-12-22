@@ -13,10 +13,10 @@ SELECT * FROM languages WHERE code = ?;
 SELECT * FROM languages WHERE is_default = 1;
 
 -- name: ListLanguages :many
-SELECT * FROM languages ORDER BY position ASC, name ASC;
+SELECT * FROM languages ORDER BY position, name;
 
 -- name: ListActiveLanguages :many
-SELECT * FROM languages WHERE is_active = 1 ORDER BY position ASC, name ASC;
+SELECT * FROM languages WHERE is_active = 1 ORDER BY position, name;
 
 -- name: UpdateLanguage :one
 UPDATE languages SET code = ?, name = ?, native_name = ?, is_default = ?, is_active = ?, direction = ?, position = ?, updated_at = ?

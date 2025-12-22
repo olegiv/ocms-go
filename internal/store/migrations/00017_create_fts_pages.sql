@@ -14,7 +14,7 @@ CREATE VIRTUAL TABLE pages_fts USING fts5(
 
 -- Populate the FTS index with existing published pages
 INSERT INTO pages_fts(rowid, title, body, meta_title, meta_description, meta_keywords)
-SELECT id, title, body, COALESCE(meta_title, ''), COALESCE(meta_description, ''), COALESCE(meta_keywords, '')
+SELECT id, title, body, meta_title, meta_description, meta_keywords
 FROM pages
 WHERE status = 'published';
 
@@ -23,7 +23,7 @@ CREATE TRIGGER pages_fts_ai AFTER INSERT ON pages
 WHEN NEW.status = 'published'
 BEGIN
     INSERT INTO pages_fts(rowid, title, body, meta_title, meta_description, meta_keywords)
-    VALUES(NEW.id, NEW.title, NEW.body, COALESCE(NEW.meta_title, ''), COALESCE(NEW.meta_description, ''), COALESCE(NEW.meta_keywords, ''));
+    VALUES(NEW.id, NEW.title, NEW.body, NEW.meta_title, NEW.meta_description, NEW.meta_keywords);
 END;
 
 -- Trigger to update FTS when a page is deleted
@@ -37,7 +37,7 @@ CREATE TRIGGER pages_fts_au AFTER UPDATE ON pages BEGIN
     DELETE FROM pages_fts WHERE rowid = OLD.id;
     -- Insert new entry if it's now published
     INSERT INTO pages_fts(rowid, title, body, meta_title, meta_description, meta_keywords)
-    SELECT NEW.id, NEW.title, NEW.body, COALESCE(NEW.meta_title, ''), COALESCE(NEW.meta_description, ''), COALESCE(NEW.meta_keywords, '')
+    SELECT NEW.id, NEW.title, NEW.body, NEW.meta_title, NEW.meta_description, NEW.meta_keywords
     WHERE NEW.status = 'published';
 END;
 

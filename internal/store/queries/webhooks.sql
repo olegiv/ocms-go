@@ -7,13 +7,13 @@ RETURNING *;
 SELECT * FROM webhooks WHERE id = ?;
 
 -- name: ListWebhooks :many
-SELECT * FROM webhooks ORDER BY name ASC;
+SELECT * FROM webhooks ORDER BY name;
 
 -- name: ListWebhooksPaginated :many
-SELECT * FROM webhooks ORDER BY name ASC LIMIT ? OFFSET ?;
+SELECT * FROM webhooks ORDER BY name LIMIT ? OFFSET ?;
 
 -- name: ListActiveWebhooks :many
-SELECT * FROM webhooks WHERE is_active = 1 ORDER BY name ASC;
+SELECT * FROM webhooks WHERE is_active = 1 ORDER BY name;
 
 -- name: ListWebhooksForEvent :many
 SELECT * FROM webhooks
@@ -50,7 +50,7 @@ ORDER BY created_at DESC LIMIT ? OFFSET ?;
 -- name: GetPendingDeliveries :many
 SELECT * FROM webhook_deliveries
 WHERE status = 'pending' AND (next_retry_at IS NULL OR next_retry_at <= ?)
-ORDER BY created_at ASC LIMIT ?;
+ORDER BY created_at LIMIT ?;
 
 -- name: UpdateDeliverySuccess :exec
 UPDATE webhook_deliveries
@@ -123,8 +123,8 @@ SELECT
     SUM(CASE WHEN wd.status = 'dead' THEN 1 ELSE 0 END) as dead_count
 FROM webhooks w
 LEFT JOIN webhook_deliveries wd ON wd.webhook_id = w.id AND wd.created_at >= ?
-GROUP BY w.id
-ORDER BY w.name ASC;
+GROUP BY w.id, w.name, w.is_active
+ORDER BY w.name;
 
 -- name: GetRecentFailedDeliveriesWithWebhook :many
 SELECT

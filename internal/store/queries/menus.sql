@@ -10,7 +10,7 @@ SELECT * FROM menus WHERE id = ?;
 SELECT * FROM menus WHERE slug = ?;
 
 -- name: ListMenus :many
-SELECT * FROM menus ORDER BY name ASC;
+SELECT * FROM menus ORDER BY name;
 
 -- name: UpdateMenu :one
 UPDATE menus SET name = ?, slug = ?, language_id = ?, updated_at = ?
@@ -46,13 +46,13 @@ RETURNING *;
 SELECT * FROM menu_items WHERE id = ?;
 
 -- name: ListMenuItems :many
-SELECT * FROM menu_items WHERE menu_id = ? ORDER BY position ASC;
+SELECT * FROM menu_items WHERE menu_id = ? ORDER BY position;
 
 -- name: ListTopLevelMenuItems :many
-SELECT * FROM menu_items WHERE menu_id = ? AND parent_id IS NULL ORDER BY position ASC;
+SELECT * FROM menu_items WHERE menu_id = ? AND parent_id IS NULL ORDER BY position;
 
 -- name: ListChildMenuItems :many
-SELECT * FROM menu_items WHERE parent_id = ? ORDER BY position ASC;
+SELECT * FROM menu_items WHERE parent_id = ? ORDER BY position;
 
 -- name: UpdateMenuItem :one
 UPDATE menu_items SET parent_id = ?, title = ?, url = ?, target = ?, page_id = ?, position = ?, css_class = ?, is_active = ?, updated_at = ?
@@ -85,7 +85,7 @@ SELECT
 FROM menu_items mi
 LEFT JOIN pages p ON mi.page_id = p.id
 WHERE mi.menu_id = ?
-ORDER BY mi.position ASC;
+ORDER BY mi.position;
 
 -- Language-specific menu queries
 
@@ -94,13 +94,13 @@ SELECT m.*, l.code as language_code, l.name as language_name, l.native_name as l
 FROM menus m
 LEFT JOIN languages l ON m.language_id = l.id
 WHERE m.language_id = ?
-ORDER BY m.name ASC;
+ORDER BY m.name;
 
 -- name: ListMenusWithLanguage :many
 SELECT m.*, l.code as language_code, l.name as language_name, l.native_name as language_native_name
 FROM menus m
 LEFT JOIN languages l ON m.language_id = l.id
-ORDER BY m.name ASC;
+ORDER BY m.name;
 
 -- name: GetMenuBySlugAndLanguage :one
 SELECT m.*, l.code as language_code

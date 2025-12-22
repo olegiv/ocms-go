@@ -67,13 +67,13 @@ RETURNING *;
 SELECT * FROM media_folders WHERE id = ?;
 
 -- name: ListMediaFolders :many
-SELECT * FROM media_folders ORDER BY position ASC, name ASC;
+SELECT * FROM media_folders ORDER BY position, name;
 
 -- name: ListRootMediaFolders :many
-SELECT * FROM media_folders WHERE parent_id IS NULL ORDER BY position ASC, name ASC;
+SELECT * FROM media_folders WHERE parent_id IS NULL ORDER BY position, name;
 
 -- name: ListChildMediaFolders :many
-SELECT * FROM media_folders WHERE parent_id = ? ORDER BY position ASC, name ASC;
+SELECT * FROM media_folders WHERE parent_id = ? ORDER BY position, name;
 
 -- name: UpdateMediaFolder :one
 UPDATE media_folders SET name = ?, parent_id = ?, position = ?
