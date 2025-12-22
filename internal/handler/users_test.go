@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -9,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"ocms-go/internal/middleware"
 	"ocms-go/internal/store"
 )
 
@@ -101,19 +99,8 @@ func TestUsersHandler_Delete_SelfDelete(t *testing.T) {
 	handler := NewUsersHandler(db, nil, sm)
 
 	// Try to delete self - requires user context
-	req := httptest.NewRequest(http.MethodDelete, "/admin/users/1", nil)
-	req = requestWithURLParams(req, map[string]string{"id": "1"})
-	req = requestWithSession(sm, req)
-
-	// Add user to context - simulate middleware
-	req = addUserToContext(req, &store.User{
-		ID:    user.ID,
-		Email: user.Email,
-		Name:  user.Name,
-		Role:  user.Role,
-	})
-
-	w := httptest.NewRecorder()
+	req, w := newAuthenticatedRequest(t, sm, http.MethodDelete, "/admin/users/1",
+		map[string]string{"id": "1"}, &user)
 
 	handler.Delete(w, req)
 
@@ -137,17 +124,8 @@ func TestUsersHandler_Delete_InvalidID(t *testing.T) {
 
 	handler := NewUsersHandler(db, nil, sm)
 
-	req := httptest.NewRequest(http.MethodDelete, "/admin/users/abc", nil)
-	req = requestWithURLParams(req, map[string]string{"id": "abc"})
-	req = requestWithSession(sm, req)
-	req = addUserToContext(req, &store.User{
-		ID:    user.ID,
-		Email: user.Email,
-		Name:  user.Name,
-		Role:  user.Role,
-	})
-
-	w := httptest.NewRecorder()
+	req, w := newAuthenticatedRequest(t, sm, http.MethodDelete, "/admin/users/abc",
+		map[string]string{"id": "abc"}, &user)
 
 	handler.Delete(w, req)
 
@@ -165,17 +143,8 @@ func TestUsersHandler_Delete_UserNotFound(t *testing.T) {
 
 	handler := NewUsersHandler(db, nil, sm)
 
-	req := httptest.NewRequest(http.MethodDelete, "/admin/users/9999", nil)
-	req = requestWithURLParams(req, map[string]string{"id": "9999"})
-	req = requestWithSession(sm, req)
-	req = addUserToContext(req, &store.User{
-		ID:    user.ID,
-		Email: user.Email,
-		Name:  user.Name,
-		Role:  user.Role,
-	})
-
-	w := httptest.NewRecorder()
+	req, w := newAuthenticatedRequest(t, sm, http.MethodDelete, "/admin/users/9999",
+		map[string]string{"id": "9999"}, &user)
 
 	handler.Delete(w, req)
 
@@ -202,18 +171,9 @@ func TestUsersHandler_Delete_LastAdmin_Blocked(t *testing.T) {
 	handler := NewUsersHandler(db, nil, sm)
 
 	// Try to delete the last admin using HTMX request
-	req := httptest.NewRequest(http.MethodDelete, "/admin/users/1", nil)
-	req = requestWithURLParams(req, map[string]string{"id": "1"})
+	req, w := newAuthenticatedRequest(t, sm, http.MethodDelete, "/admin/users/1",
+		map[string]string{"id": "1"}, &deleter)
 	req.Header.Set("HX-Request", "true")
-	req = requestWithSession(sm, req)
-	req = addUserToContext(req, &store.User{
-		ID:    deleter.ID,
-		Email: deleter.Email,
-		Name:  deleter.Name,
-		Role:  deleter.Role,
-	})
-
-	w := httptest.NewRecorder()
 
 	handler.Delete(w, req)
 
@@ -268,18 +228,9 @@ func TestUsersHandler_Delete_HTMX(t *testing.T) {
 
 	// Use the actual target ID
 	targetIDStr := fmt.Sprintf("%d", target.ID)
-	req := httptest.NewRequest(http.MethodDelete, "/admin/users/"+targetIDStr, nil)
-	req = requestWithURLParams(req, map[string]string{"id": targetIDStr})
+	req, w := newAuthenticatedRequest(t, sm, http.MethodDelete, "/admin/users/"+targetIDStr,
+		map[string]string{"id": targetIDStr}, &admin)
 	req.Header.Set("HX-Request", "true")
-	req = requestWithSession(sm, req)
-	req = addUserToContext(req, &store.User{
-		ID:    admin.ID,
-		Email: admin.Email,
-		Name:  admin.Name,
-		Role:  admin.Role,
-	})
-
-	w := httptest.NewRecorder()
 
 	handler.Delete(w, req)
 
@@ -374,12 +325,4 @@ func TestUserFormData(t *testing.T) {
 	if data.Errors["email"] != "Invalid" {
 		t.Error("Errors not set correctly")
 	}
-}
-
-// addUserToContext adds a user to the request context (simulating middleware).
-// Uses the same context key and value type as middleware.LoadUser.
-func addUserToContext(r *http.Request, user *store.User) *http.Request {
-	ctx := r.Context()
-	// Store as value type, not pointer (matches middleware behavior)
-	return r.WithContext(context.WithValue(ctx, middleware.ContextKeyUser, *user))
 }

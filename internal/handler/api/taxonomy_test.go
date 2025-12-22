@@ -266,15 +266,7 @@ func TestCategoryRowToResponse(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := categoryRowToResponse(tt.row)
 
-			if got.ID != tt.want.ID {
-				t.Errorf("categoryRowToResponse().ID = %v, want %v", got.ID, tt.want.ID)
-			}
-			if got.Name != tt.want.Name {
-				t.Errorf("categoryRowToResponse().Name = %v, want %v", got.Name, tt.want.Name)
-			}
-			if got.Slug != tt.want.Slug {
-				t.Errorf("categoryRowToResponse().Slug = %v, want %v", got.Slug, tt.want.Slug)
-			}
+			assertIDNameSlug(t, got.ID, tt.want.ID, got.Name, tt.want.Name, got.Slug, tt.want.Slug)
 			if got.Description != tt.want.Description {
 				t.Errorf("categoryRowToResponse().Description = %v, want %v", got.Description, tt.want.Description)
 			}

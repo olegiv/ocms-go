@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	_ "github.com/mattn/go-sqlite3"
 
+	"ocms-go/internal/middleware"
 	"ocms-go/internal/store"
 )
 
@@ -281,4 +283,20 @@ func testHandlerSetup(t *testing.T) (*sql.DB, *scs.SessionManager) {
 func newTestHealthHandler(t *testing.T) *HealthHandler {
 	t.Helper()
 	return NewHealthHandler(testDB(t), t.TempDir())
+}
+
+// addUserToContext adds a user to the request context (simulating middleware).
+func addUserToContext(r *http.Request, user *store.User) *http.Request {
+	ctx := r.Context()
+	return r.WithContext(context.WithValue(ctx, middleware.ContextKeyUser, *user))
+}
+
+// newAuthenticatedRequest creates a request with URL params, session, and user context.
+func newAuthenticatedRequest(t *testing.T, sm *scs.SessionManager, method, path string, params map[string]string, user *store.User) (*http.Request, *httptest.ResponseRecorder) {
+	t.Helper()
+	req := httptest.NewRequest(method, path, nil)
+	req = requestWithURLParams(req, params)
+	req = requestWithSession(sm, req)
+	req = addUserToContext(req, user)
+	return req, httptest.NewRecorder()
 }
