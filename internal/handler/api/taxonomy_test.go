@@ -423,8 +423,7 @@ func int64Ptr(i int64) *int64 {
 // ============================================================================
 
 func TestListTags(t *testing.T) {
-	db := testDB(t)
-	h := testHandler(t, db)
+	db, h := testSetup(t)
 
 	t.Run("empty list", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/tags", nil)
@@ -497,8 +496,7 @@ func TestListTags(t *testing.T) {
 }
 
 func TestGetTag(t *testing.T) {
-	db := testDB(t)
-	h := testHandler(t, db)
+	db, h := testSetup(t)
 
 	tag := createTestTag(t, db, "Test Tag", "test-tag")
 
@@ -611,8 +609,7 @@ func TestRequireEntityByID_InternalError(t *testing.T) {
 }
 
 func TestCreateTag(t *testing.T) {
-	db := testDB(t)
-	h := testHandler(t, db)
+	db, h := testSetup(t)
 
 	t.Run("valid tag", func(t *testing.T) {
 		body := `{"name": "New Tag", "slug": "new-tag"}`
@@ -688,8 +685,7 @@ func TestCreateTag(t *testing.T) {
 }
 
 func TestUpdateTag(t *testing.T) {
-	db := testDB(t)
-	h := testHandler(t, db)
+	db, h := testSetup(t)
 
 	tag := createTestTag(t, db, "Original", "original-slug")
 
@@ -768,8 +764,7 @@ func TestUpdateTag(t *testing.T) {
 }
 
 func TestDeleteTag(t *testing.T) {
-	db := testDB(t)
-	h := testHandler(t, db)
+	db, h := testSetup(t)
 
 	t.Run("delete existing tag", func(t *testing.T) {
 		tag := createTestTag(t, db, "To Delete", "to-delete")
@@ -806,8 +801,7 @@ func TestDeleteTag(t *testing.T) {
 // ============================================================================
 
 func TestListCategories(t *testing.T) {
-	db := testDB(t)
-	h := testHandler(t, db)
+	db, h := testSetup(t)
 
 	t.Run("empty list", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/categories", nil)
@@ -883,8 +877,7 @@ func TestListCategories(t *testing.T) {
 }
 
 func TestGetCategory(t *testing.T) {
-	db := testDB(t)
-	h := testHandler(t, db)
+	db, h := testSetup(t)
 
 	cat := createTestCategory(t, db, "Test Category", "test-category", nil)
 
@@ -958,8 +951,7 @@ func TestGetCategory(t *testing.T) {
 }
 
 func TestCreateCategory(t *testing.T) {
-	db := testDB(t)
-	h := testHandler(t, db)
+	db, h := testSetup(t)
 
 	t.Run("valid category", func(t *testing.T) {
 		body := `{"name": "New Category", "slug": "new-category"}`
@@ -1045,8 +1037,7 @@ func TestCreateCategory(t *testing.T) {
 }
 
 func TestUpdateCategory(t *testing.T) {
-	db := testDB(t)
-	h := testHandler(t, db)
+	db, h := testSetup(t)
 
 	cat := createTestCategory(t, db, "Original Cat", "original-cat-slug", nil)
 
@@ -1302,8 +1293,7 @@ func TestUpdateCategory(t *testing.T) {
 }
 
 func TestDeleteCategory(t *testing.T) {
-	db := testDB(t)
-	h := testHandler(t, db)
+	db, h := testSetup(t)
 
 	t.Run("delete existing category", func(t *testing.T) {
 		cat := createTestCategory(t, db, "To Delete", "to-delete-cat", nil)

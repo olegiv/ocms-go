@@ -10,6 +10,7 @@ func TestFormatDuration(t *testing.T) {
 		duration time.Duration
 		want     string
 	}{
+		// Basic cases
 		{30 * time.Second, "30 seconds"},
 		{1 * time.Minute, "1 minute"},
 		{5 * time.Minute, "5 minutes"},
@@ -18,47 +19,7 @@ func TestFormatDuration(t *testing.T) {
 		{90 * time.Second, "1 minute"},
 		{150 * time.Second, "2 minutes"},
 		{90 * time.Minute, "1 hour"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.want, func(t *testing.T) {
-			got := formatDuration(tt.duration)
-			if got != tt.want {
-				t.Errorf("formatDuration(%v) = %q; want %q", tt.duration, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestNewAuthHandler(t *testing.T) {
-	db := testDB(t)
-	sm := testSessionManager(t)
-
-	handler := NewAuthHandler(db, nil, sm, nil, nil)
-
-	if handler == nil {
-		t.Fatal("NewAuthHandler returned nil")
-	}
-	if handler.queries == nil {
-		t.Error("queries should not be nil")
-	}
-	if handler.sessionManager != sm {
-		t.Error("sessionManager not set correctly")
-	}
-	if handler.eventService == nil {
-		t.Error("eventService should not be nil")
-	}
-}
-
-// Note: Login and Logout handler methods require a renderer to set flash messages.
-// Full handler testing would require a mock renderer or integration tests.
-// These tests focus on validation logic and data structures.
-
-func TestFormatDuration_EdgeCases(t *testing.T) {
-	tests := []struct {
-		duration time.Duration
-		want     string
-	}{
+		// Edge cases
 		{0, "0 seconds"},
 		{999 * time.Millisecond, "0 seconds"},
 		{59 * time.Second, "59 seconds"},
@@ -84,9 +45,31 @@ func TestFormatDuration_EdgeCases(t *testing.T) {
 	}
 }
 
+func TestNewAuthHandler(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+
+	handler := NewAuthHandler(db, nil, sm, nil, nil)
+
+	if handler == nil {
+		t.Fatal("NewAuthHandler returned nil")
+	}
+	if handler.queries == nil {
+		t.Error("queries should not be nil")
+	}
+	if handler.sessionManager != sm {
+		t.Error("sessionManager not set correctly")
+	}
+	if handler.eventService == nil {
+		t.Error("eventService should not be nil")
+	}
+}
+
+// Note: Login and Logout handler methods require a renderer to set flash messages.
+// Full handler testing would require a mock renderer or integration tests.
+// These tests focus on validation logic and data structures.
+
 func TestAuthHandler_LoginProtectionNil(t *testing.T) {
-	db := testDB(t)
-	sm := testSessionManager(t)
+	db, sm := testHandlerSetup(t)
 
 	// Create handler without login protection
 	handler := NewAuthHandler(db, nil, sm, nil, nil)

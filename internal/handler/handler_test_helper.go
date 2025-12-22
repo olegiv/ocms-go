@@ -270,3 +270,15 @@ func assertStatus(t *testing.T, got, want int) {
 		t.Errorf("status = %d; want %d", got, want)
 	}
 }
+
+// testHandlerSetup creates a test database and session manager for handler tests.
+func testHandlerSetup(t *testing.T) (*sql.DB, *scs.SessionManager) {
+	t.Helper()
+	return testDB(t), testSessionManager(t)
+}
+
+// newTestHealthHandler creates a HealthHandler with a test database and temp uploads directory.
+func newTestHealthHandler(t *testing.T) *HealthHandler {
+	t.Helper()
+	return NewHealthHandler(testDB(t), t.TempDir())
+}

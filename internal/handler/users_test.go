@@ -14,8 +14,7 @@ import (
 )
 
 func TestNewUsersHandler(t *testing.T) {
-	db := testDB(t)
-	sm := testSessionManager(t)
+	db, sm := testHandlerSetup(t)
 
 	handler := NewUsersHandler(db, nil, sm)
 
@@ -31,8 +30,7 @@ func TestNewUsersHandler(t *testing.T) {
 }
 
 func TestUsersHandler_SetDispatcher(t *testing.T) {
-	db := testDB(t)
-	sm := testSessionManager(t)
+	db, sm := testHandlerSetup(t)
 
 	handler := NewUsersHandler(db, nil, sm)
 
@@ -91,8 +89,7 @@ func TestValidRoles(t *testing.T) {
 // Full handler testing would require a mock renderer or integration tests.
 
 func TestUsersHandler_Delete_SelfDelete(t *testing.T) {
-	db := testDB(t)
-	sm := testSessionManager(t)
+	db, sm := testHandlerSetup(t)
 
 	// Create a test user
 	user := createTestUser(t, db, testUser{
@@ -130,8 +127,7 @@ func TestUsersHandler_Delete_SelfDelete(t *testing.T) {
 }
 
 func TestUsersHandler_Delete_InvalidID(t *testing.T) {
-	db := testDB(t)
-	sm := testSessionManager(t)
+	db, sm := testHandlerSetup(t)
 
 	user := createTestUser(t, db, testUser{
 		Email: "admin@example.com",
@@ -159,8 +155,7 @@ func TestUsersHandler_Delete_InvalidID(t *testing.T) {
 }
 
 func TestUsersHandler_Delete_UserNotFound(t *testing.T) {
-	db := testDB(t)
-	sm := testSessionManager(t)
+	db, sm := testHandlerSetup(t)
 
 	user := createTestUser(t, db, testUser{
 		Email: "admin@example.com",
@@ -188,8 +183,7 @@ func TestUsersHandler_Delete_UserNotFound(t *testing.T) {
 }
 
 func TestUsersHandler_Delete_LastAdmin_Blocked(t *testing.T) {
-	db := testDB(t)
-	sm := testSessionManager(t)
+	db, sm := testHandlerSetup(t)
 
 	// Create only one admin user
 	admin := createTestUser(t, db, testUser{
@@ -238,8 +232,7 @@ func TestUsersHandler_Delete_LastAdmin_Blocked(t *testing.T) {
 }
 
 func TestUsersHandler_Delete_Unauthorized(t *testing.T) {
-	db := testDB(t)
-	sm := testSessionManager(t)
+	db, sm := testHandlerSetup(t)
 
 	handler := NewUsersHandler(db, nil, sm)
 
@@ -256,8 +249,7 @@ func TestUsersHandler_Delete_Unauthorized(t *testing.T) {
 }
 
 func TestUsersHandler_Delete_HTMX(t *testing.T) {
-	db := testDB(t)
-	sm := testSessionManager(t)
+	db, sm := testHandlerSetup(t)
 
 	// Create two users
 	admin := createTestUser(t, db, testUser{
@@ -313,8 +305,7 @@ func TestUsersHandler_Delete_HTMX(t *testing.T) {
 // Full handler testing would require a mock renderer or integration tests.
 
 func TestUsersHandler_Update_Unauthorized(t *testing.T) {
-	db := testDB(t)
-	sm := testSessionManager(t)
+	db, sm := testHandlerSetup(t)
 
 	handler := NewUsersHandler(db, nil, sm)
 

@@ -132,8 +132,7 @@ func TestHealthHandler_Health_UnhealthyDatabase(t *testing.T) {
 }
 
 func TestHealthHandler_Liveness(t *testing.T) {
-	db := testDB(t)
-	handler := NewHealthHandler(db, t.TempDir())
+	handler := newTestHealthHandler(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
 	w := httptest.NewRecorder()
@@ -153,8 +152,7 @@ func TestHealthHandler_Liveness(t *testing.T) {
 }
 
 func TestHealthHandler_Readiness(t *testing.T) {
-	db := testDB(t)
-	handler := NewHealthHandler(db, t.TempDir())
+	handler := newTestHealthHandler(t)
 
 	tests := []struct {
 		name       string
@@ -191,7 +189,9 @@ func TestHealthHandler_Readiness(t *testing.T) {
 }
 
 func TestHealthHandler_Readiness_NotReady(t *testing.T) {
+	// Need separate db to close it
 	db := testDB(t)
+
 	handler := NewHealthHandler(db, t.TempDir())
 
 	// Close database to make it not ready
@@ -291,8 +291,7 @@ func TestFormatBytes(t *testing.T) {
 }
 
 func TestHealthHandler_SystemInfo(t *testing.T) {
-	db := testDB(t)
-	handler := NewHealthHandler(db, t.TempDir())
+	handler := newTestHealthHandler(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/health?verbose=true", nil)
 	w := httptest.NewRecorder()
@@ -346,8 +345,7 @@ func TestNewHealthHandler(t *testing.T) {
 }
 
 func TestHealthHandler_UptimeCalculation(t *testing.T) {
-	db := testDB(t)
-	handler := NewHealthHandler(db, t.TempDir())
+	handler := newTestHealthHandler(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	w := httptest.NewRecorder()
