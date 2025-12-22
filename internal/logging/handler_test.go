@@ -4,49 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"ocms-go/internal/model"
 	"ocms-go/internal/store"
+	"ocms-go/internal/testutil"
 )
-
-// testDB creates a temporary test database with migrations applied.
-func testDB(t *testing.T) (*sql.DB, func()) {
-	t.Helper()
-
-	// Create temp file for test database
-	f, err := os.CreateTemp("", "ocms-logging-test-*.db")
-	if err != nil {
-		t.Fatalf("creating temp file: %v", err)
-	}
-	dbPath := f.Name()
-	_ = f.Close()
-
-	// Open database
-	db, err := store.NewDB(dbPath)
-	if err != nil {
-		_ = os.Remove(dbPath)
-		t.Fatalf("NewDB: %v", err)
-	}
-
-	// Run migrations
-	if err := store.Migrate(db); err != nil {
-		_ = db.Close()
-		_ = os.Remove(dbPath)
-		t.Fatalf("Migrate: %v", err)
-	}
-
-	// Return cleanup function
-	cleanup := func() {
-		_ = db.Close()
-		_ = os.Remove(dbPath)
-	}
-
-	return db, cleanup
-}
 
 // discardHandler is a slog.Handler that discards all logs.
 type discardHandler struct{}
@@ -81,7 +46,7 @@ func requireSingleEvent(t *testing.T, db *sql.DB) store.Event {
 }
 
 func TestEventLogHandler_Handle_ErrorLevel(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	handler := NewEventLogHandler(discardHandler{}, db)
@@ -99,7 +64,7 @@ func TestEventLogHandler_Handle_ErrorLevel(t *testing.T) {
 }
 
 func TestEventLogHandler_Handle_WarnLevel(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	handler := NewEventLogHandler(discardHandler{}, db)
@@ -117,7 +82,7 @@ func TestEventLogHandler_Handle_WarnLevel(t *testing.T) {
 }
 
 func TestEventLogHandler_Handle_InfoLevel_NotCaptured(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	handler := NewEventLogHandler(discardHandler{}, db)
@@ -132,7 +97,7 @@ func TestEventLogHandler_Handle_InfoLevel_NotCaptured(t *testing.T) {
 }
 
 func TestEventLogHandler_Handle_DebugLevel_NotCaptured(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	handler := NewEventLogHandler(discardHandler{}, db)
@@ -147,7 +112,7 @@ func TestEventLogHandler_Handle_DebugLevel_NotCaptured(t *testing.T) {
 }
 
 func TestEventLogHandler_Handle_CustomLevel(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	handler := NewEventLogHandlerWithLevel(discardHandler{}, db, slog.LevelInfo)
@@ -178,7 +143,7 @@ func TestEventLogHandler_CategoryInference(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			db, cleanup := testDB(t)
+			db, cleanup := testutil.TestDB(t)
 			defer cleanup()
 
 			handler := NewEventLogHandler(discardHandler{}, db)
@@ -195,7 +160,7 @@ func TestEventLogHandler_CategoryInference(t *testing.T) {
 }
 
 func TestEventLogHandler_ExplicitCategory(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	handler := NewEventLogHandler(discardHandler{}, db)
@@ -210,7 +175,7 @@ func TestEventLogHandler_ExplicitCategory(t *testing.T) {
 }
 
 func TestEventLogHandler_MetadataExtraction(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	handler := NewEventLogHandler(discardHandler{}, db)
@@ -236,7 +201,7 @@ func TestEventLogHandler_MetadataExtraction(t *testing.T) {
 }
 
 func TestEventLogHandler_WithAttrs(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	handler := NewEventLogHandler(discardHandler{}, db)
@@ -254,7 +219,7 @@ func TestEventLogHandler_WithAttrs(t *testing.T) {
 }
 
 func TestEventLogHandler_WithGroup(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	handler := NewEventLogHandler(discardHandler{}, db)
@@ -270,7 +235,7 @@ func TestEventLogHandler_WithGroup(t *testing.T) {
 }
 
 func TestEventLogHandler_MultipleEvents(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	handler := NewEventLogHandler(discardHandler{}, db)
@@ -297,7 +262,7 @@ func TestEventLogHandler_MultipleEvents(t *testing.T) {
 }
 
 func TestEventLogHandler_SpecialCharactersInMetadata(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	handler := NewEventLogHandler(discardHandler{}, db)

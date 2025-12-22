@@ -6,52 +6,17 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log/slog"
-	"os"
 	"testing"
 	"time"
 
 	"ocms-go/internal/store"
+	"ocms-go/internal/testutil"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// testDB creates a temporary test database.
-func testDB(t *testing.T) (*sql.DB, func()) {
-	t.Helper()
-
-	// Create temp file for test database
-	f, err := os.CreateTemp("", "ocms-export-test-*.db")
-	if err != nil {
-		t.Fatalf("creating temp file: %v", err)
-	}
-	dbPath := f.Name()
-	_ = f.Close()
-
-	// Open database
-	db, err := store.NewDB(dbPath)
-	if err != nil {
-		_ = os.Remove(dbPath)
-		t.Fatalf("NewDB: %v", err)
-	}
-
-	// Run migrations
-	if err := store.Migrate(db); err != nil {
-		_ = db.Close()
-		_ = os.Remove(dbPath)
-		t.Fatalf("Migrate: %v", err)
-	}
-
-	// Return cleanup function
-	cleanup := func() {
-		_ = db.Close()
-		_ = os.Remove(dbPath)
-	}
-
-	return db, cleanup
-}
-
 func TestExportEmptyDatabase(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	queries := store.New(db)
@@ -86,7 +51,7 @@ func TestExportEmptyDatabase(t *testing.T) {
 }
 
 func TestExportToWriter(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	queries := store.New(db)
@@ -113,7 +78,7 @@ func TestExportToWriter(t *testing.T) {
 }
 
 func TestExportWithData(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	queries := store.New(db)
@@ -221,7 +186,7 @@ func TestExportWithData(t *testing.T) {
 }
 
 func TestExportOptionsFiltering(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	queries := store.New(db)
@@ -384,7 +349,7 @@ func TestDefaultExportOptions(t *testing.T) {
 }
 
 func TestExportCategoryHierarchy(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	queries := store.New(db)
@@ -450,7 +415,7 @@ func TestExportCategoryHierarchy(t *testing.T) {
 }
 
 func TestExportMenuWithItems(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	queries := store.New(db)
@@ -521,7 +486,7 @@ func TestExportMenuWithItems(t *testing.T) {
 }
 
 func TestExportFormWithFields(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	queries := store.New(db)
@@ -596,7 +561,7 @@ func TestExportFormWithFields(t *testing.T) {
 }
 
 func TestExportPageWithTranslations(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	queries := store.New(db)

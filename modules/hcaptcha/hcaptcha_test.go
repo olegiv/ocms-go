@@ -2,83 +2,39 @@ package hcaptcha
 
 import (
 	"database/sql"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
 	"ocms-go/internal/config"
 	"ocms-go/internal/module"
-	"ocms-go/internal/store"
+	"ocms-go/internal/testutil"
+	"ocms-go/internal/testutil/moduleutil"
 )
 
-// testDB creates a temporary test database.
-func testDB(t *testing.T) (*sql.DB, func()) {
-	t.Helper()
-
-	// Create temp file for test database
-	f, err := os.CreateTemp("", "ocms-hcaptcha-test-*.db")
-	if err != nil {
-		t.Fatalf("creating temp file: %v", err)
-	}
-	dbPath := f.Name()
-	_ = f.Close()
-
-	// Open database
-	db, err := store.NewDB(dbPath)
-	if err != nil {
-		_ = os.Remove(dbPath)
-		t.Fatalf("NewDB: %v", err)
-	}
-
-	// Run core migrations
-	if err := store.Migrate(db); err != nil {
-		_ = db.Close()
-		_ = os.Remove(dbPath)
-		t.Fatalf("Migrate: %v", err)
-	}
-
-	// Return cleanup function
-	cleanup := func() {
-		_ = db.Close()
-		_ = os.Remove(dbPath)
-	}
-
-	return db, cleanup
-}
-
-// testModule creates a test Module with database access
+// testModule creates a test Module with database access.
 func testModule(t *testing.T, db *sql.DB) *Module {
 	t.Helper()
-
 	m := New()
-
-	// Create a test logger that discards output
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelWarn,
-	}))
-
-	ctx := &module.Context{
-		DB:     db,
-		Logger: logger,
-		Config: &config.Config{},
-		Hooks:  module.NewHookRegistry(logger),
-	}
-
-	// Run module migrations first
-	for _, mig := range m.Migrations() {
-		if err := mig.Up(db); err != nil {
-			t.Fatalf("migration up: %v", err)
-		}
-	}
-
+	ctx, _ := moduleutil.TestModuleContext(t, db)
+	moduleutil.RunMigrations(t, db, m.Migrations())
 	if err := m.Init(ctx); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
-
 	return m
+}
+
+// testModuleWithHooks creates a test Module and returns the hooks registry.
+func testModuleWithHooks(t *testing.T, db *sql.DB) (*Module, *module.HookRegistry) {
+	t.Helper()
+	m := New()
+	ctx, hooks := moduleutil.TestModuleContext(t, db)
+	moduleutil.RunMigrations(t, db, m.Migrations())
+	if err := m.Init(ctx); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	return m, hooks
 }
 
 func TestModuleNew(t *testing.T) {
@@ -120,7 +76,7 @@ func TestModuleMigrations(t *testing.T) {
 }
 
 func TestModuleTemplateFuncs(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -148,16 +104,11 @@ func TestModuleTemplateFuncs(t *testing.T) {
 }
 
 func TestLoadSettings(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
-	// Run module migration
 	m := New()
-	for _, mig := range m.Migrations() {
-		if err := mig.Up(db); err != nil {
-			t.Fatalf("migration up: %v", err)
-		}
-	}
+	moduleutil.RunMigrations(t, db, m.Migrations())
 
 	// Load default settings
 	settings, err := loadSettings(db)
@@ -184,16 +135,11 @@ func TestLoadSettings(t *testing.T) {
 }
 
 func TestSaveAndLoadSettings(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
-	// Run module migration
 	m := New()
-	for _, mig := range m.Migrations() {
-		if err := mig.Up(db); err != nil {
-			t.Fatalf("migration up: %v", err)
-		}
-	}
+	moduleutil.RunMigrations(t, db, m.Migrations())
 
 	// Create settings
 	settings := &Settings{
@@ -522,7 +468,7 @@ func TestVerifyFromRequest_Disabled(t *testing.T) {
 }
 
 func TestVerifyFromRequest_EmptyResponse(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -579,39 +525,14 @@ func TestVerify_EmptyResponse(t *testing.T) {
 }
 
 func TestModuleInit(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
-	m := New()
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelWarn,
-	}))
-	hooks := module.NewHookRegistry(logger)
+	m, hooks := testModuleWithHooks(t, db)
 
-	// Run migrations
-	for _, mig := range m.Migrations() {
-		if err := mig.Up(db); err != nil {
-			t.Fatalf("migration up: %v", err)
-		}
-	}
-
-	ctx := &module.Context{
-		DB:     db,
-		Logger: logger,
-		Config: &config.Config{},
-		Hooks:  hooks,
-	}
-
-	if err := m.Init(ctx); err != nil {
-		t.Fatalf("Init: %v", err)
-	}
-
-	// Settings should be loaded
 	if m.settings == nil {
 		t.Error("settings should be initialized after Init")
 	}
-
-	// Hooks should be registered
 	if !hooks.HasHandlers(HookAuthLoginWidget) {
 		t.Error("HookAuthLoginWidget handler not registered")
 	}
@@ -621,20 +542,11 @@ func TestModuleInit(t *testing.T) {
 }
 
 func TestModuleInit_EnvOverride(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := New()
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelWarn,
-	}))
-
-	// Run migrations
-	for _, mig := range m.Migrations() {
-		if err := mig.Up(db); err != nil {
-			t.Fatalf("migration up: %v", err)
-		}
-	}
+	moduleutil.RunMigrations(t, db, m.Migrations())
 
 	// Save some settings to DB
 	if err := saveSettings(db, &Settings{
@@ -645,23 +557,21 @@ func TestModuleInit_EnvOverride(t *testing.T) {
 	}
 
 	// Config with env overrides
-	cfg := &config.Config{
-		HCaptchaSiteKey:   "env-site-key",
-		HCaptchaSecretKey: "env-secret-key",
-	}
-
+	logger := testutil.TestLogger()
 	ctx := &module.Context{
 		DB:     db,
 		Logger: logger,
-		Config: cfg,
-		Hooks:  module.NewHookRegistry(logger),
+		Config: &config.Config{
+			HCaptchaSiteKey:   "env-site-key",
+			HCaptchaSecretKey: "env-secret-key",
+		},
+		Hooks: module.NewHookRegistry(logger),
 	}
 
 	if err := m.Init(ctx); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
 
-	// Env should override DB settings
 	if m.settings.SiteKey != "env-site-key" {
 		t.Errorf("SiteKey = %q, want 'env-site-key'", m.settings.SiteKey)
 	}
@@ -671,7 +581,7 @@ func TestModuleInit_EnvOverride(t *testing.T) {
 }
 
 func TestModuleShutdown(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -683,7 +593,7 @@ func TestModuleShutdown(t *testing.T) {
 }
 
 func TestReloadSettings(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -715,26 +625,13 @@ func TestReloadSettings(t *testing.T) {
 }
 
 func TestMigrationDown(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := New()
+	moduleutil.RunMigrations(t, db, m.Migrations())
+	moduleutil.RunMigrationsDown(t, db, m.Migrations())
 
-	// Run migration up
-	for _, mig := range m.Migrations() {
-		if err := mig.Up(db); err != nil {
-			t.Fatalf("migration up: %v", err)
-		}
-	}
-
-	// Run migration down
-	for _, mig := range m.Migrations() {
-		if err := mig.Down(db); err != nil {
-			t.Fatalf("migration down: %v", err)
-		}
-	}
-
-	// Table should not exist
 	var count int
 	err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='hcaptcha_settings'").Scan(&count)
 	if err != nil {
