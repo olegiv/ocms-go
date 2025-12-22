@@ -3,7 +3,10 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -188,4 +191,74 @@ func requestWithURLParams(r *http.Request, params map[string]string) *http.Reque
 		rctx.URLParams.Add(key, value)
 	}
 	return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+}
+
+// newJSONRequest creates an HTTP request with JSON body and optional URL params.
+func newJSONRequest(t *testing.T, method, path string, body string, params map[string]string) *http.Request {
+	t.Helper()
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	if len(params) > 0 {
+		req = requestWithURLParams(req, params)
+	}
+	return req
+}
+
+// newGetRequest creates an HTTP GET request with optional URL params.
+func newGetRequest(t *testing.T, path string, params map[string]string) *http.Request {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	if len(params) > 0 {
+		req = requestWithURLParams(req, params)
+	}
+	return req
+}
+
+// newDeleteRequest creates an HTTP DELETE request with optional URL params.
+func newDeleteRequest(t *testing.T, path string, params map[string]string) *http.Request {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodDelete, path, nil)
+	if len(params) > 0 {
+		req = requestWithURLParams(req, params)
+	}
+	return req
+}
+
+// dataResponse is a generic wrapper for API responses with a "data" field.
+type dataResponse[T any] struct {
+	Data T `json:"data"`
+}
+
+// listResponse is a generic wrapper for API list responses with data and meta.
+type listResponse[T any] struct {
+	Data []T   `json:"data"`
+	Meta *Meta `json:"meta"`
+}
+
+// unmarshalData unmarshals a JSON response body into the specified type.
+func unmarshalData[T any](t *testing.T, w *httptest.ResponseRecorder) T {
+	t.Helper()
+	var resp dataResponse[T]
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	return resp.Data
+}
+
+// unmarshalList unmarshals a JSON list response body into the specified type.
+func unmarshalList[T any](t *testing.T, w *httptest.ResponseRecorder) ([]T, *Meta) {
+	t.Helper()
+	var resp listResponse[T]
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	return resp.Data, resp.Meta
+}
+
+// executeHandler executes a handler and returns the response recorder.
+func executeHandler(t *testing.T, handler func(http.ResponseWriter, *http.Request), req *http.Request) *httptest.ResponseRecorder {
+	t.Helper()
+	w := httptest.NewRecorder()
+	handler(w, req)
+	return w
 }
