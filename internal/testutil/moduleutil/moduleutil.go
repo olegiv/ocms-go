@@ -98,17 +98,3 @@ func AssertTableNotExists(t *testing.T, db *sql.DB, tableName string) {
 		t.Errorf("table %q should not exist", tableName)
 	}
 }
-
-// AssertTableExists verifies that a table exists in the database.
-func AssertTableExists(t *testing.T, db *sql.DB, tableName string) {
-	t.Helper()
-
-	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", tableName).Scan(&count)
-	if err != nil {
-		t.Fatalf("query table existence: %v", err)
-	}
-	if count == 0 {
-		t.Errorf("table %q should exist", tableName)
-	}
-}
