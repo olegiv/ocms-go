@@ -14,6 +14,33 @@ import (
 	"ocms-go/internal/testutil/moduleutil"
 )
 
+// setupTempUploadDir creates a temporary directory for uploads and changes to it.
+// Returns a cleanup function that restores the original working directory.
+func setupTempUploadDir(t *testing.T) func() {
+	t.Helper()
+
+	tmpDir, err := os.MkdirTemp("", "ocms-upload-test-*")
+	if err != nil {
+		t.Fatalf("creating temp dir: %v", err)
+	}
+
+	oldWd, err := os.Getwd()
+	if err != nil {
+		_ = os.RemoveAll(tmpDir)
+		t.Fatalf("getting working directory: %v", err)
+	}
+
+	if err := os.Chdir(tmpDir); err != nil {
+		_ = os.RemoveAll(tmpDir)
+		t.Fatalf("changing to temp dir: %v", err)
+	}
+
+	return func() {
+		_ = os.Chdir(oldWd)
+		_ = os.RemoveAll(tmpDir)
+	}
+}
+
 // testModule creates a test Module with database access.
 func testModule(t *testing.T, db *sql.DB) *Module {
 	t.Helper()
@@ -402,23 +429,7 @@ func TestGenerateCategories(t *testing.T) {
 func TestGenerateMedia(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
-
-	// Create temp upload directory
-	tmpDir, err := os.MkdirTemp("", "ocms-upload-test-*")
-	if err != nil {
-		t.Fatalf("creating temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-
-	// Change to temp dir for uploads
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getting working directory: %v", err)
-	}
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatalf("changing to temp dir: %v", err)
-	}
-	defer func() { _ = os.Chdir(oldWd) }()
+	defer setupTempUploadDir(t)()
 
 	m := testModule(t, db)
 	ctx := context.Background()
@@ -584,22 +595,7 @@ func TestGenerateMenuItems(t *testing.T) {
 func TestDeleteAllGeneratedItems(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
-
-	// Create temp upload directory
-	tmpDir, err := os.MkdirTemp("", "ocms-upload-test-*")
-	if err != nil {
-		t.Fatalf("creating temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getting working directory: %v", err)
-	}
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatalf("changing to temp dir: %v", err)
-	}
-	defer func() { _ = os.Chdir(oldWd) }()
+	defer setupTempUploadDir(t)()
 
 	m := testModule(t, db)
 	ctx := context.Background()
@@ -682,15 +678,7 @@ func TestModuleNew(t *testing.T) {
 
 func TestModuleMigrations(t *testing.T) {
 	m := New()
-
-	migrations := m.Migrations()
-	if len(migrations) != 1 {
-		t.Errorf("len(migrations) = %d, want 1", len(migrations))
-	}
-
-	if migrations[0].Version != 1 {
-		t.Errorf("migration version = %d, want 1", migrations[0].Version)
-	}
+	moduleutil.AssertMigrations(t, m.Migrations(), 1)
 }
 
 func TestMin(t *testing.T) {

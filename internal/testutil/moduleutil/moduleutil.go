@@ -59,3 +59,56 @@ func TestModuleContextWithStore(t *testing.T, db *sql.DB) (*module.Context, *mod
 		Hooks:  hooks,
 	}, hooks
 }
+
+// AssertMigrations verifies that migrations have the expected count and valid structure.
+// Checks that the first migration has version 1 and all migrations have descriptions.
+func AssertMigrations(t *testing.T, migrations []module.Migration, expectedCount int) {
+	t.Helper()
+
+	if len(migrations) != expectedCount {
+		t.Errorf("len(migrations) = %d, want %d", len(migrations), expectedCount)
+	}
+
+	if len(migrations) == 0 {
+		return
+	}
+
+	if migrations[0].Version != 1 {
+		t.Errorf("first migration version = %d, want 1", migrations[0].Version)
+	}
+
+	for i, mig := range migrations {
+		if mig.Description == "" {
+			t.Errorf("migration %d: description should not be empty", i+1)
+		}
+	}
+}
+
+// AssertTableNotExists verifies that a table does not exist in the database.
+// Useful for testing migration rollbacks.
+func AssertTableNotExists(t *testing.T, db *sql.DB, tableName string) {
+	t.Helper()
+
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", tableName).Scan(&count)
+	if err != nil {
+		t.Fatalf("query table existence: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("table %q should not exist", tableName)
+	}
+}
+
+// AssertTableExists verifies that a table exists in the database.
+func AssertTableExists(t *testing.T, db *sql.DB, tableName string) {
+	t.Helper()
+
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", tableName).Scan(&count)
+	if err != nil {
+		t.Fatalf("query table existence: %v", err)
+	}
+	if count == 0 {
+		t.Errorf("table %q should exist", tableName)
+	}
+}
