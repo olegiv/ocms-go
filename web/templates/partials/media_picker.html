@@ -47,15 +47,15 @@
         <div class="media-picker-dialog">
             <div class="media-picker-header">
                 <h3>{{T .AdminLang "media.select_media"}}</h3>
-                <button type="button" class="media-picker-close" @click="closeModal()">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                <button type="button" class="media-picker-close" @click="closeModal()" aria-label="{{T .AdminLang "btn.close"}}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                 </button>
             </div>
 
             <!-- Search and Filter -->
             <div class="media-picker-toolbar">
                 <div class="media-picker-search">
-                    <input type="text" placeholder="{{T .AdminLang "media.search_media"}}" x-model="searchQuery" @input.debounce.300ms="loadMedia()" class="form-input">
+                    <input type="text" placeholder="{{T .AdminLang "media.search_media"}}" x-model="searchQuery" @input.debounce.300ms="loadMedia()" class="form-input" aria-label="{{T .AdminLang "media.search_media"}}">
                 </div>
                 <div class="media-picker-filter">
                     <select x-model="filterType" @change="loadMedia()" class="form-select">

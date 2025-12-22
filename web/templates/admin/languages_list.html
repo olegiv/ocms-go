@@ -89,7 +89,7 @@
                                     <div class="modal" @click.stop>
                                         <div class="modal-header">
                                             <h3 class="modal-title">{{T $.AdminLang "languages.delete"}}</h3>
-                                            <button type="button" class="modal-close" @click="showConfirm = false">&times;</button>
+                                            <button type="button" class="modal-close" @click="showConfirm = false" aria-label="{{T $.AdminLang "btn.close"}}">&times;</button>
                                         </div>
                                         <div class="modal-body">
                                             <p>{{T $.AdminLang "languages.confirm_delete"}} <strong>{{.Name}} ({{.Code}})</strong>?</p>

@@ -3,7 +3,7 @@
     <header class="search-header">
         <h1 class="search-title">{{TTheme .LangCode "search.title"}}</h1>
         <form action="/search" method="get" class="search-form large">
-            <input type="search" name="q" value="{{.SearchQuery}}" placeholder="{{TTheme .LangCode "search.placeholder"}}" autofocus>
+            <input type="search" name="q" value="{{.SearchQuery}}" placeholder="{{TTheme .LangCode "search.placeholder"}}" aria-label="{{TTheme .LangCode "search.placeholder"}}" autofocus>
             <button type="submit" class="btn btn-primary">{{TTheme .LangCode "search.button"}}</button>
         </form>
     </header>

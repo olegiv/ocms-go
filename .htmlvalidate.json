@@ -1,0 +1,87 @@
+{
+  "extends": ["html-validate:recommended"],
+  "rules": {
+    "no-unknown-elements": "off",
+    "void-style": "off",
+    "attribute-allowed-values": "off"
+  },
+  "transform": {
+    "^.*\\.html$": "html-validate:transform-mustache"
+  },
+  "elements": [
+    "html5",
+    {
+      "svg": {
+        "attributes": {
+          "xmlns": {},
+          "viewBox": {},
+          "fill": {},
+          "stroke": {},
+          "stroke-width": {},
+          "stroke-linecap": {},
+          "stroke-linejoin": {},
+          "aria-hidden": {
+            "boolean": true
+          }
+        }
+      },
+      "*": {
+        "attributes": {
+          "x-data": {},
+          "x-init": {},
+          "x-show": {},
+          "x-bind": {},
+          "x-on": {},
+          "x-model": {},
+          "x-text": {},
+          "x-html": {},
+          "x-ref": {},
+          "x-if": {},
+          "x-for": {},
+          "x-transition": {},
+          "x-transition:enter": {},
+          "x-transition:enter-start": {},
+          "x-transition:enter-end": {},
+          "x-transition:leave": {},
+          "x-transition:leave-start": {},
+          "x-transition:leave-end": {},
+          "x-spread": {},
+          "x-cloak": {
+            "boolean": true
+          },
+          "x-ignore": {
+            "boolean": true
+          },
+          "@click": {},
+          "@click.self": {},
+          "@click.stop": {},
+          "@click.prevent": {},
+          "@click.outside": {},
+          "@submit": {},
+          "@submit.prevent": {},
+          "@input": {},
+          "@input.debounce": {},
+          "@input.debounce.300ms": {},
+          "@change": {},
+          "@focus": {},
+          "@blur": {},
+          "@keydown": {},
+          "@keydown.enter": {},
+          "@keydown.enter.prevent": {},
+          "@keydown.escape": {},
+          "@keydown.escape.window": {},
+          "@mouseenter": {},
+          "@mouseleave": {},
+          ":class": {},
+          ":value": {},
+          ":src": {},
+          ":alt": {},
+          ":href": {},
+          ":disabled": {},
+          ":checked": {},
+          ":style": {}
+        }
+      }
+    }
+  ]
+}

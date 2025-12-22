@@ -12,7 +12,7 @@
         </div>
         {{if .HeroImage}}
         <div class="hero-image">
-            <img src="{{.HeroImage}}" alt="">
+            <img src="{{.HeroImage}}" alt="{{if .HeroTitle}}{{.HeroTitle}}{{else}}{{.SiteName}}{{end}}">
         </div>
         {{end}}
     </section>

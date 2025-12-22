@@ -3128,6 +3128,11 @@
             "translation": "Закрыть"
         },
         {
+            "id": "btn.menu",
+            "message": "Menu",
+            "translation": "Меню"
+        },
+        {
             "id": "btn.confirm",
             "message": "Confirm",
             "translation": "Подтвердить"
