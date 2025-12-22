@@ -18,25 +18,8 @@ import (
 )
 
 func TestExportWithMediaToZip(t *testing.T) {
-	db, cleanup := testutil.TestDB(t)
-	defer cleanup()
-
-	queries := store.New(db)
-	ctx := context.Background()
-	now := time.Now()
-
-	// Create test user
-	user, err := queries.CreateUser(ctx, store.CreateUserParams{
-		Email:        "test@example.com",
-		PasswordHash: "hash",
-		Role:         "admin",
-		Name:         "Test User",
-		CreatedAt:    now,
-		UpdatedAt:    now,
-	})
-	if err != nil {
-		t.Fatalf("failed to create user: %v", err)
-	}
+	ts := setupTest(t)
+	defer ts.Cleanup()
 
 	// Create temp upload directory
 	uploadDir, err := os.MkdirTemp("", "ocms-test-uploads-*")
@@ -59,14 +42,14 @@ func TestExportWithMediaToZip(t *testing.T) {
 	}
 
 	// Create media record in database
-	media, err := queries.CreateMedia(ctx, store.CreateMediaParams{
+	media, err := ts.Queries.CreateMedia(ts.Ctx, store.CreateMediaParams{
 		Uuid:       testMediaUUID,
 		Filename:   testFilename,
 		MimeType:   "image/jpeg",
 		Size:       int64(len(testContent)),
-		UploadedBy: user.ID,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		UploadedBy: ts.User.ID,
+		CreatedAt:  ts.Now,
+		UpdatedAt:  ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create media record: %v", err)
@@ -83,13 +66,13 @@ func TestExportWithMediaToZip(t *testing.T) {
 		t.Fatalf("failed to write variant file: %v", err)
 	}
 
-	_, err = queries.CreateMediaVariant(ctx, store.CreateMediaVariantParams{
+	_, err = ts.Queries.CreateMediaVariant(ts.Ctx, store.CreateMediaVariantParams{
 		MediaID:   media.ID,
 		Type:      "thumbnail",
 		Size:      int64(len(variantContent)),
 		Width:     150,
 		Height:    150,
-		CreatedAt: now,
+		CreatedAt: ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create media variant: %v", err)
@@ -97,7 +80,7 @@ func TestExportWithMediaToZip(t *testing.T) {
 
 	// Export with media files
 	logger := slog.Default()
-	exporter := NewExporter(queries, logger)
+	exporter := NewExporter(ts.Queries, logger)
 	exporter.SetUploadDir(uploadDir)
 
 	opts := ExportOptions{
@@ -106,7 +89,7 @@ func TestExportWithMediaToZip(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := exporter.ExportWithMedia(ctx, opts, &buf); err != nil {
+	if err := exporter.ExportWithMedia(ts.Ctx, opts, &buf); err != nil {
 		t.Fatalf("ExportWithMedia failed: %v", err)
 	}
 

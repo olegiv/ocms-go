@@ -78,65 +78,48 @@ func TestExportToWriter(t *testing.T) {
 }
 
 func TestExportWithData(t *testing.T) {
-	db, cleanup := testutil.TestDB(t)
-	defer cleanup()
-
-	queries := store.New(db)
-	ctx := context.Background()
-
-	// Create test user
-	now := time.Now()
-	user, err := queries.CreateUser(ctx, store.CreateUserParams{
-		Email:        "test@example.com",
-		PasswordHash: "hash",
-		Role:         "admin",
-		Name:         "Test User",
-		CreatedAt:    now,
-		UpdatedAt:    now,
-	})
-	if err != nil {
-		t.Fatalf("failed to create user: %v", err)
-	}
+	ts := setupTest(t)
+	defer ts.Cleanup()
 
 	// Get default language
-	lang, err := queries.GetDefaultLanguage(ctx)
+	lang, err := ts.Queries.GetDefaultLanguage(ts.Ctx)
 	if err != nil {
 		t.Fatalf("failed to get default language: %v", err)
 	}
 
 	// Create test page
-	_, err = queries.CreatePage(ctx, store.CreatePageParams{
+	_, err = ts.Queries.CreatePage(ts.Ctx, store.CreatePageParams{
 		Title:      "Test Page",
 		Slug:       "test-page",
 		Body:       "Test content",
 		Status:     "published",
-		AuthorID:   user.ID,
+		AuthorID:   ts.User.ID,
 		LanguageID: sql.NullInt64{Int64: lang.ID, Valid: true},
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		CreatedAt:  ts.Now,
+		UpdatedAt:  ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create page: %v", err)
 	}
 
 	// Create test category
-	_, err = queries.CreateCategory(ctx, store.CreateCategoryParams{
+	_, err = ts.Queries.CreateCategory(ts.Ctx, store.CreateCategoryParams{
 		Name:      "Test Category",
 		Slug:      "test-category",
 		Position:  0,
-		CreatedAt: now,
-		UpdatedAt: now,
+		CreatedAt: ts.Now,
+		UpdatedAt: ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create category: %v", err)
 	}
 
 	// Create test tag
-	_, err = queries.CreateTag(ctx, store.CreateTagParams{
+	_, err = ts.Queries.CreateTag(ts.Ctx, store.CreateTagParams{
 		Name:      "Test Tag",
 		Slug:      "test-tag",
-		CreatedAt: now,
-		UpdatedAt: now,
+		CreatedAt: ts.Now,
+		UpdatedAt: ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create tag: %v", err)
@@ -144,10 +127,10 @@ func TestExportWithData(t *testing.T) {
 
 	// Export
 	logger := slog.Default()
-	exporter := NewExporter(queries, logger)
+	exporter := NewExporter(ts.Queries, logger)
 	opts := DefaultExportOptions()
 
-	data, err := exporter.Export(ctx, opts)
+	data, err := exporter.Export(ts.Ctx, opts)
 	if err != nil {
 		t.Fatalf("Export failed: %v", err)
 	}
@@ -186,55 +169,38 @@ func TestExportWithData(t *testing.T) {
 }
 
 func TestExportOptionsFiltering(t *testing.T) {
-	db, cleanup := testutil.TestDB(t)
-	defer cleanup()
-
-	queries := store.New(db)
-	ctx := context.Background()
-
-	// Create test user
-	now := time.Now()
-	user, err := queries.CreateUser(ctx, store.CreateUserParams{
-		Email:        "test@example.com",
-		PasswordHash: "hash",
-		Role:         "admin",
-		Name:         "Test User",
-		CreatedAt:    now,
-		UpdatedAt:    now,
-	})
-	if err != nil {
-		t.Fatalf("failed to create user: %v", err)
-	}
+	ts := setupTest(t)
+	defer ts.Cleanup()
 
 	// Create pages with different statuses
-	_, err = queries.CreatePage(ctx, store.CreatePageParams{
+	_, err := ts.Queries.CreatePage(ts.Ctx, store.CreatePageParams{
 		Title:     "Published Page",
 		Slug:      "published-page",
 		Body:      "Published content",
 		Status:    "published",
-		AuthorID:  user.ID,
-		CreatedAt: now,
-		UpdatedAt: now,
+		AuthorID:  ts.User.ID,
+		CreatedAt: ts.Now,
+		UpdatedAt: ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create published page: %v", err)
 	}
 
-	_, err = queries.CreatePage(ctx, store.CreatePageParams{
+	_, err = ts.Queries.CreatePage(ts.Ctx, store.CreatePageParams{
 		Title:     "Draft Page",
 		Slug:      "draft-page",
 		Body:      "Draft content",
 		Status:    "draft",
-		AuthorID:  user.ID,
-		CreatedAt: now,
-		UpdatedAt: now,
+		AuthorID:  ts.User.ID,
+		CreatedAt: ts.Now,
+		UpdatedAt: ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create draft page: %v", err)
 	}
 
 	logger := slog.Default()
-	exporter := NewExporter(queries, logger)
+	exporter := NewExporter(ts.Queries, logger)
 
 	t.Run("ExportOnlyPublished", func(t *testing.T) {
 		opts := ExportOptions{
@@ -242,7 +208,7 @@ func TestExportOptionsFiltering(t *testing.T) {
 			PageStatus:   "published",
 		}
 
-		data, err := exporter.Export(ctx, opts)
+		data, err := exporter.Export(ts.Ctx, opts)
 		if err != nil {
 			t.Fatalf("Export failed: %v", err)
 		}
@@ -261,7 +227,7 @@ func TestExportOptionsFiltering(t *testing.T) {
 			PageStatus:   "draft",
 		}
 
-		data, err := exporter.Export(ctx, opts)
+		data, err := exporter.Export(ts.Ctx, opts)
 		if err != nil {
 			t.Fatalf("Export failed: %v", err)
 		}
@@ -280,7 +246,7 @@ func TestExportOptionsFiltering(t *testing.T) {
 			PageStatus:   "all",
 		}
 
-		data, err := exporter.Export(ctx, opts)
+		data, err := exporter.Export(ts.Ctx, opts)
 		if err != nil {
 			t.Fatalf("Export failed: %v", err)
 		}
@@ -296,7 +262,7 @@ func TestExportOptionsFiltering(t *testing.T) {
 			IncludeUsers: true,
 		}
 
-		data, err := exporter.Export(ctx, opts)
+		data, err := exporter.Export(ts.Ctx, opts)
 		if err != nil {
 			t.Fatalf("Export failed: %v", err)
 		}
@@ -561,34 +527,17 @@ func TestExportFormWithFields(t *testing.T) {
 }
 
 func TestExportPageWithTranslations(t *testing.T) {
-	db, cleanup := testutil.TestDB(t)
-	defer cleanup()
-
-	queries := store.New(db)
-	ctx := context.Background()
-	now := time.Now()
-
-	// Create user
-	user, err := queries.CreateUser(ctx, store.CreateUserParams{
-		Email:        "test@example.com",
-		PasswordHash: "hash",
-		Role:         "admin",
-		Name:         "Test User",
-		CreatedAt:    now,
-		UpdatedAt:    now,
-	})
-	if err != nil {
-		t.Fatalf("failed to create user: %v", err)
-	}
+	ts := setupTest(t)
+	defer ts.Cleanup()
 
 	// Get default language (English)
-	enLang, err := queries.GetDefaultLanguage(ctx)
+	enLang, err := ts.Queries.GetDefaultLanguage(ts.Ctx)
 	if err != nil {
 		t.Fatalf("failed to get default language: %v", err)
 	}
 
 	// Create another language (Russian)
-	ruLang, err := queries.CreateLanguage(ctx, store.CreateLanguageParams{
+	ruLang, err := ts.Queries.CreateLanguage(ts.Ctx, store.CreateLanguageParams{
 		Code:       "ru",
 		Name:       "Russian",
 		NativeName: "Русский",
@@ -596,50 +545,50 @@ func TestExportPageWithTranslations(t *testing.T) {
 		IsActive:   true,
 		Direction:  "ltr",
 		Position:   1,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		CreatedAt:  ts.Now,
+		UpdatedAt:  ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create language: %v", err)
 	}
 
 	// Create English page
-	enPage, err := queries.CreatePage(ctx, store.CreatePageParams{
+	enPage, err := ts.Queries.CreatePage(ts.Ctx, store.CreatePageParams{
 		Title:      "Hello World",
 		Slug:       "hello-world",
 		Body:       "English content",
 		Status:     "published",
-		AuthorID:   user.ID,
+		AuthorID:   ts.User.ID,
 		LanguageID: sql.NullInt64{Int64: enLang.ID, Valid: true},
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		CreatedAt:  ts.Now,
+		UpdatedAt:  ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create English page: %v", err)
 	}
 
 	// Create Russian page
-	ruPage, err := queries.CreatePage(ctx, store.CreatePageParams{
+	ruPage, err := ts.Queries.CreatePage(ts.Ctx, store.CreatePageParams{
 		Title:      "Привет мир",
 		Slug:       "privet-mir",
 		Body:       "Russian content",
 		Status:     "published",
-		AuthorID:   user.ID,
+		AuthorID:   ts.User.ID,
 		LanguageID: sql.NullInt64{Int64: ruLang.ID, Valid: true},
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		CreatedAt:  ts.Now,
+		UpdatedAt:  ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create Russian page: %v", err)
 	}
 
 	// Create translation link
-	_, err = queries.CreateTranslation(ctx, store.CreateTranslationParams{
+	_, err = ts.Queries.CreateTranslation(ts.Ctx, store.CreateTranslationParams{
 		EntityType:    "page",
 		EntityID:      enPage.ID,
 		LanguageID:    ruLang.ID,
 		TranslationID: ruPage.ID,
-		CreatedAt:     now,
+		CreatedAt:     ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create translation: %v", err)
@@ -647,10 +596,10 @@ func TestExportPageWithTranslations(t *testing.T) {
 
 	// Export
 	logger := slog.Default()
-	exporter := NewExporter(queries, logger)
+	exporter := NewExporter(ts.Queries, logger)
 	opts := DefaultExportOptions()
 
-	data, err := exporter.Export(ctx, opts)
+	data, err := exporter.Export(ts.Ctx, opts)
 	if err != nil {
 		t.Fatalf("Export failed: %v", err)
 	}

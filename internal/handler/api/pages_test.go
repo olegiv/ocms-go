@@ -73,15 +73,7 @@ func TestStoreCategoryToResponse(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := storeCategoryToResponse(tt.category)
 
-			if got.ID != tt.want.ID {
-				t.Errorf("ID = %d, want %d", got.ID, tt.want.ID)
-			}
-			if got.Name != tt.want.Name {
-				t.Errorf("Name = %q, want %q", got.Name, tt.want.Name)
-			}
-			if got.Slug != tt.want.Slug {
-				t.Errorf("Slug = %q, want %q", got.Slug, tt.want.Slug)
-			}
+			assertIDNameSlug(t, got.ID, tt.want.ID, got.Name, tt.want.Name, got.Slug, tt.want.Slug)
 			if got.Description != tt.want.Description {
 				t.Errorf("Description = %q, want %q", got.Description, tt.want.Description)
 			}
@@ -133,15 +125,7 @@ func TestStoreTagToResponse(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := storeTagToResponse(tt.tag)
 
-			if got.ID != tt.want.ID {
-				t.Errorf("ID = %d, want %d", got.ID, tt.want.ID)
-			}
-			if got.Name != tt.want.Name {
-				t.Errorf("Name = %q, want %q", got.Name, tt.want.Name)
-			}
-			if got.Slug != tt.want.Slug {
-				t.Errorf("Slug = %q, want %q", got.Slug, tt.want.Slug)
-			}
+			assertIDNameSlug(t, got.ID, tt.want.ID, got.Name, tt.want.Name, got.Slug, tt.want.Slug)
 		})
 	}
 }

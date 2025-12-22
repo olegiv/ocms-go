@@ -80,6 +80,22 @@ func executeWithAPIKey(handler http.Handler, method, path string, apiKey store.A
 	return w
 }
 
+// executeAuthAndCaptureKey executes a request with Bearer token and returns the recorder and captured API key.
+func executeAuthAndCaptureKey(middleware func(*sql.DB) func(http.Handler) http.Handler, db *sql.DB, rawKey string) (*httptest.ResponseRecorder, *store.ApiKey) {
+	var capturedKey *store.ApiKey
+	handler := middleware(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedKey = GetAPIKey(r)
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.Header.Set("Authorization", "Bearer "+rawKey)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	return w, capturedKey
+}
+
 // insertTestAPIKey inserts a test API key and returns the raw key.
 func insertTestAPIKey(t *testing.T, db *sql.DB, name string, permissions []string, isActive bool, expiresAt *time.Time) string {
 	t.Helper()
@@ -218,17 +234,7 @@ func TestAPIKeyAuth_ValidKey(t *testing.T) {
 
 	rawKey := insertTestAPIKey(t, db, "Valid Key", []string{"pages:read"}, true, nil)
 
-	var receivedAPIKey *store.ApiKey
-	handler := APIKeyAuth(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedAPIKey = GetAPIKey(r)
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	req := httptest.NewRequest("GET", "/api/test", nil)
-	req.Header.Set("Authorization", "Bearer "+rawKey)
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, req)
+	w, receivedAPIKey := executeAuthAndCaptureKey(APIKeyAuth, db, rawKey)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
@@ -323,17 +329,7 @@ func TestOptionalAPIKeyAuth_ValidKey(t *testing.T) {
 
 	rawKey := insertTestAPIKey(t, db, "Optional Key", []string{"pages:read"}, true, nil)
 
-	var receivedAPIKey *store.ApiKey
-	handler := OptionalAPIKeyAuth(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedAPIKey = GetAPIKey(r)
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	req := httptest.NewRequest("GET", "/api/test", nil)
-	req.Header.Set("Authorization", "Bearer "+rawKey)
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, req)
+	w, receivedAPIKey := executeAuthAndCaptureKey(OptionalAPIKeyAuth, db, rawKey)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
