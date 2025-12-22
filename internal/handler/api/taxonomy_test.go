@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -426,20 +424,14 @@ func TestListTags(t *testing.T) {
 	db, h := testSetup(t)
 
 	t.Run("empty list", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/tags", nil)
-		w := httptest.NewRecorder()
-
-		h.ListTags(w, req)
+		req := newGetRequest(t, "/api/v1/tags", nil)
+		w := executeHandler(t, h.ListTags, req)
 
 		assertStatusCode(t, w, http.StatusOK)
 
-		var resp Response
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
-		if resp.Meta == nil || resp.Meta.Total != 0 {
-			t.Errorf("expected total 0, got %v", resp.Meta)
+		_, meta := unmarshalList[TagAPIResponse](t, w)
+		if meta == nil || meta.Total != 0 {
+			t.Errorf("expected total 0, got %v", meta)
 		}
 	})
 
@@ -447,50 +439,32 @@ func TestListTags(t *testing.T) {
 		createTestTag(t, db, "Tag One", "tag-one")
 		createTestTag(t, db, "Tag Two", "tag-two")
 
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/tags", nil)
-		w := httptest.NewRecorder()
-
-		h.ListTags(w, req)
+		req := newGetRequest(t, "/api/v1/tags", nil)
+		w := executeHandler(t, h.ListTags, req)
 
 		assertStatusCode(t, w, http.StatusOK)
 
-		var resp struct {
-			Data []TagAPIResponse `json:"data"`
-			Meta *Meta            `json:"meta"`
+		data, meta := unmarshalList[TagAPIResponse](t, w)
+		if len(data) != 2 {
+			t.Errorf("expected 2 tags, got %d", len(data))
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
-		if len(resp.Data) != 2 {
-			t.Errorf("expected 2 tags, got %d", len(resp.Data))
-		}
-		if resp.Meta.Total != 2 {
-			t.Errorf("expected total 2, got %d", resp.Meta.Total)
+		if meta.Total != 2 {
+			t.Errorf("expected total 2, got %d", meta.Total)
 		}
 	})
 
 	t.Run("with pagination", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/tags?page=1&per_page=1", nil)
-		w := httptest.NewRecorder()
-
-		h.ListTags(w, req)
+		req := newGetRequest(t, "/api/v1/tags?page=1&per_page=1", nil)
+		w := executeHandler(t, h.ListTags, req)
 
 		assertStatusCode(t, w, http.StatusOK)
 
-		var resp struct {
-			Data []TagAPIResponse `json:"data"`
-			Meta *Meta            `json:"meta"`
+		data, meta := unmarshalList[TagAPIResponse](t, w)
+		if len(data) != 1 {
+			t.Errorf("expected 1 tag per page, got %d", len(data))
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
-		if len(resp.Data) != 1 {
-			t.Errorf("expected 1 tag per page, got %d", len(resp.Data))
-		}
-		if resp.Meta.PerPage != 1 {
-			t.Errorf("expected per_page 1, got %d", resp.Meta.PerPage)
+		if meta.PerPage != 1 {
+			t.Errorf("expected per_page 1, got %d", meta.PerPage)
 		}
 	})
 }
@@ -501,45 +475,30 @@ func TestGetTag(t *testing.T) {
 	tag := createTestTag(t, db, "Test Tag", "test-tag")
 
 	t.Run("existing tag", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/tags/1", nil)
-		req = requestWithURLParams(req, map[string]string{"id": "1"})
-		w := httptest.NewRecorder()
-
-		h.GetTag(w, req)
+		req := newGetRequest(t, "/api/v1/tags/1", map[string]string{"id": "1"})
+		w := executeHandler(t, h.GetTag, req)
 
 		assertStatusCode(t, w, http.StatusOK)
 
-		var resp struct {
-			Data TagAPIResponse `json:"data"`
+		data := unmarshalData[TagAPIResponse](t, w)
+		if data.ID != tag.ID {
+			t.Errorf("expected ID %d, got %d", tag.ID, data.ID)
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
-		if resp.Data.ID != tag.ID {
-			t.Errorf("expected ID %d, got %d", tag.ID, resp.Data.ID)
-		}
-		if resp.Data.Name != "Test Tag" {
-			t.Errorf("expected name 'Test Tag', got %q", resp.Data.Name)
+		if data.Name != "Test Tag" {
+			t.Errorf("expected name 'Test Tag', got %q", data.Name)
 		}
 	})
 
 	t.Run("non-existent tag", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/tags/999", nil)
-		req = requestWithURLParams(req, map[string]string{"id": "999"})
-		w := httptest.NewRecorder()
-
-		h.GetTag(w, req)
+		req := newGetRequest(t, "/api/v1/tags/999", map[string]string{"id": "999"})
+		w := executeHandler(t, h.GetTag, req)
 
 		assertStatusCode(t, w, http.StatusNotFound)
 	})
 
 	t.Run("invalid tag ID", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/tags/invalid", nil)
-		req = requestWithURLParams(req, map[string]string{"id": "invalid"})
-		w := httptest.NewRecorder()
-
-		h.GetTag(w, req)
+		req := newGetRequest(t, "/api/v1/tags/invalid", map[string]string{"id": "invalid"})
+		w := executeHandler(t, h.GetTag, req)
 
 		assertStatusCode(t, w, http.StatusBadRequest)
 	})
@@ -564,44 +523,24 @@ func TestRequireEntityByID_InternalError(t *testing.T) {
 	_ = db.Close()
 
 	t.Run("database error returns internal error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/tags/1", nil)
-		req = requestWithURLParams(req, map[string]string{"id": "1"})
-		w := httptest.NewRecorder()
-
-		h.GetTag(w, req)
+		req := newGetRequest(t, "/api/v1/tags/1", map[string]string{"id": "1"})
+		w := executeHandler(t, h.GetTag, req)
 
 		assertStatusCode(t, w, http.StatusInternalServerError)
 
-		var resp ErrorResponse
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
-		if resp.Error.Code != "internal_error" {
-			t.Errorf("expected error code 'internal_error', got %q", resp.Error.Code)
-		}
+		resp := assertErrorResponse(t, w, "internal_error")
 		if resp.Error.Message != "Failed to retrieve tag" {
 			t.Errorf("expected message 'Failed to retrieve tag', got %q", resp.Error.Message)
 		}
 	})
 
 	t.Run("database error on category returns internal error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/categories/1", nil)
-		req = requestWithURLParams(req, map[string]string{"id": "1"})
-		w := httptest.NewRecorder()
-
-		h.GetCategory(w, req)
+		req := newGetRequest(t, "/api/v1/categories/1", map[string]string{"id": "1"})
+		w := executeHandler(t, h.GetCategory, req)
 
 		assertStatusCode(t, w, http.StatusInternalServerError)
 
-		var resp ErrorResponse
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
-		if resp.Error.Code != "internal_error" {
-			t.Errorf("expected error code 'internal_error', got %q", resp.Error.Code)
-		}
+		resp := assertErrorResponse(t, w, "internal_error")
 		if resp.Error.Message != "Failed to retrieve category" {
 			t.Errorf("expected message 'Failed to retrieve category', got %q", resp.Error.Message)
 		}
@@ -612,48 +551,30 @@ func TestCreateTag(t *testing.T) {
 	db, h := testSetup(t)
 
 	t.Run("valid tag", func(t *testing.T) {
-		body := `{"name": "New Tag", "slug": "new-tag"}`
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tags", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.CreateTag(w, req)
+		req := newJSONRequest(t, http.MethodPost, "/api/v1/tags", `{"name": "New Tag", "slug": "new-tag"}`, nil)
+		w := executeHandler(t, h.CreateTag, req)
 
 		assertStatusCode(t, w, http.StatusCreated)
 
-		var resp struct {
-			Data TagAPIResponse `json:"data"`
+		data := unmarshalData[TagAPIResponse](t, w)
+		if data.Name != "New Tag" {
+			t.Errorf("expected name 'New Tag', got %q", data.Name)
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
-		if resp.Data.Name != "New Tag" {
-			t.Errorf("expected name 'New Tag', got %q", resp.Data.Name)
-		}
-		if resp.Data.Slug != "new-tag" {
-			t.Errorf("expected slug 'new-tag', got %q", resp.Data.Slug)
+		if data.Slug != "new-tag" {
+			t.Errorf("expected slug 'new-tag', got %q", data.Slug)
 		}
 	})
 
 	t.Run("missing name", func(t *testing.T) {
-		body := `{"slug": "missing-name"}`
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tags", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.CreateTag(w, req)
+		req := newJSONRequest(t, http.MethodPost, "/api/v1/tags", `{"slug": "missing-name"}`, nil)
+		w := executeHandler(t, h.CreateTag, req)
 
 		assertStatusCode(t, w, http.StatusUnprocessableEntity)
 	})
 
 	t.Run("missing slug", func(t *testing.T) {
-		body := `{"name": "Missing Slug"}`
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tags", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.CreateTag(w, req)
+		req := newJSONRequest(t, http.MethodPost, "/api/v1/tags", `{"name": "Missing Slug"}`, nil)
+		w := executeHandler(t, h.CreateTag, req)
 
 		assertStatusCode(t, w, http.StatusUnprocessableEntity)
 	})
@@ -661,24 +582,16 @@ func TestCreateTag(t *testing.T) {
 	t.Run("duplicate slug", func(t *testing.T) {
 		createTestTag(t, db, "Existing", "existing-slug")
 
-		body := `{"name": "Another", "slug": "existing-slug"}`
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tags", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.CreateTag(w, req)
+		req := newJSONRequest(t, http.MethodPost, "/api/v1/tags", `{"name": "Another", "slug": "existing-slug"}`, nil)
+		w := executeHandler(t, h.CreateTag, req)
 
 		// Duplicate slug returns 422 Unprocessable Entity with validation error
 		assertStatusCode(t, w, http.StatusUnprocessableEntity)
 	})
 
 	t.Run("invalid JSON", func(t *testing.T) {
-		body := `not valid json`
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tags", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.CreateTag(w, req)
+		req := newJSONRequest(t, http.MethodPost, "/api/v1/tags", `not valid json`, nil)
+		w := executeHandler(t, h.CreateTag, req)
 
 		assertStatusCode(t, w, http.StatusBadRequest)
 	})
@@ -690,74 +603,42 @@ func TestUpdateTag(t *testing.T) {
 	tag := createTestTag(t, db, "Original", "original-slug")
 
 	t.Run("update name", func(t *testing.T) {
-		body := `{"name": "Updated Name"}`
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/tags/1", strings.NewReader(body))
-		req = requestWithURLParams(req, map[string]string{"id": fmt.Sprintf("%d", tag.ID)})
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.UpdateTag(w, req)
+		req := newJSONRequest(t, http.MethodPut, "/api/v1/tags/1", `{"name": "Updated Name"}`, map[string]string{"id": fmt.Sprintf("%d", tag.ID)})
+		w := executeHandler(t, h.UpdateTag, req)
 
 		assertStatusCode(t, w, http.StatusOK)
 
-		var resp struct {
-			Data TagAPIResponse `json:"data"`
+		data := unmarshalData[TagAPIResponse](t, w)
+		if data.Name != "Updated Name" {
+			t.Errorf("expected name 'Updated Name', got %q", data.Name)
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
-		if resp.Data.Name != "Updated Name" {
-			t.Errorf("expected name 'Updated Name', got %q", resp.Data.Name)
-		}
-		if resp.Data.Slug != "original-slug" {
-			t.Errorf("expected slug to remain 'original-slug', got %q", resp.Data.Slug)
+		if data.Slug != "original-slug" {
+			t.Errorf("expected slug to remain 'original-slug', got %q", data.Slug)
 		}
 	})
 
 	t.Run("update slug", func(t *testing.T) {
-		body := `{"slug": "updated-slug"}`
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/tags/1", strings.NewReader(body))
-		req = requestWithURLParams(req, map[string]string{"id": fmt.Sprintf("%d", tag.ID)})
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.UpdateTag(w, req)
+		req := newJSONRequest(t, http.MethodPut, "/api/v1/tags/1", `{"slug": "updated-slug"}`, map[string]string{"id": fmt.Sprintf("%d", tag.ID)})
+		w := executeHandler(t, h.UpdateTag, req)
 
 		assertStatusCode(t, w, http.StatusOK)
 
-		var resp struct {
-			Data TagAPIResponse `json:"data"`
-		}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
-		if resp.Data.Slug != "updated-slug" {
-			t.Errorf("expected slug 'updated-slug', got %q", resp.Data.Slug)
+		data := unmarshalData[TagAPIResponse](t, w)
+		if data.Slug != "updated-slug" {
+			t.Errorf("expected slug 'updated-slug', got %q", data.Slug)
 		}
 	})
 
 	t.Run("non-existent tag", func(t *testing.T) {
-		body := `{"name": "Update"}`
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/tags/999", strings.NewReader(body))
-		req = requestWithURLParams(req, map[string]string{"id": "999"})
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.UpdateTag(w, req)
+		req := newJSONRequest(t, http.MethodPut, "/api/v1/tags/999", `{"name": "Update"}`, map[string]string{"id": "999"})
+		w := executeHandler(t, h.UpdateTag, req)
 
 		assertStatusCode(t, w, http.StatusNotFound)
 	})
 
 	t.Run("invalid JSON", func(t *testing.T) {
-		body := `invalid`
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/tags/1", strings.NewReader(body))
-		req = requestWithURLParams(req, map[string]string{"id": fmt.Sprintf("%d", tag.ID)})
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.UpdateTag(w, req)
+		req := newJSONRequest(t, http.MethodPut, "/api/v1/tags/1", `invalid`, map[string]string{"id": fmt.Sprintf("%d", tag.ID)})
+		w := executeHandler(t, h.UpdateTag, req)
 
 		assertStatusCode(t, w, http.StatusBadRequest)
 	})
@@ -769,11 +650,8 @@ func TestDeleteTag(t *testing.T) {
 	t.Run("delete existing tag", func(t *testing.T) {
 		tag := createTestTag(t, db, "To Delete", "to-delete")
 
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/tags/1", nil)
-		req = requestWithURLParams(req, map[string]string{"id": fmt.Sprintf("%d", tag.ID)})
-		w := httptest.NewRecorder()
-
-		h.DeleteTag(w, req)
+		req := newDeleteRequest(t, "/api/v1/tags/1", map[string]string{"id": fmt.Sprintf("%d", tag.ID)})
+		w := executeHandler(t, h.DeleteTag, req)
 
 		assertStatusCode(t, w, http.StatusNoContent)
 
@@ -786,11 +664,8 @@ func TestDeleteTag(t *testing.T) {
 	})
 
 	t.Run("delete non-existent tag", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/tags/999", nil)
-		req = requestWithURLParams(req, map[string]string{"id": "999"})
-		w := httptest.NewRecorder()
-
-		h.DeleteTag(w, req)
+		req := newDeleteRequest(t, "/api/v1/tags/999", map[string]string{"id": "999"})
+		w := executeHandler(t, h.DeleteTag, req)
 
 		assertStatusCode(t, w, http.StatusNotFound)
 	})
@@ -804,20 +679,14 @@ func TestListCategories(t *testing.T) {
 	db, h := testSetup(t)
 
 	t.Run("empty list", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/categories", nil)
-		w := httptest.NewRecorder()
-
-		h.ListCategories(w, req)
+		req := newGetRequest(t, "/api/v1/categories", nil)
+		w := executeHandler(t, h.ListCategories, req)
 
 		assertStatusCode(t, w, http.StatusOK)
 
-		var resp Response
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
-		if resp.Meta == nil || resp.Meta.Total != 0 {
-			t.Errorf("expected total 0, got %v", resp.Meta)
+		_, meta := unmarshalList[CategoryAPIResponse](t, w)
+		if meta == nil || meta.Total != 0 {
+			t.Errorf("expected total 0, got %v", meta)
 		}
 	})
 
@@ -826,13 +695,12 @@ func TestListCategories(t *testing.T) {
 		parentID := parent.ID
 		createTestCategory(t, db, "Child", "child", &parentID)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/categories", nil)
-		w := httptest.NewRecorder()
-
-		h.ListCategories(w, req)
+		req := newGetRequest(t, "/api/v1/categories", nil)
+		w := executeHandler(t, h.ListCategories, req)
 
 		assertStatusCode(t, w, http.StatusOK)
 
+		// Tree response uses pointers for nested children
 		var resp struct {
 			Data []*CategoryAPIResponse `json:"data"`
 			Meta *Meta                  `json:"meta"`
@@ -854,24 +722,15 @@ func TestListCategories(t *testing.T) {
 	})
 
 	t.Run("flat list", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/categories?flat=true", nil)
-		w := httptest.NewRecorder()
-
-		h.ListCategories(w, req)
+		req := newGetRequest(t, "/api/v1/categories?flat=true", nil)
+		w := executeHandler(t, h.ListCategories, req)
 
 		assertStatusCode(t, w, http.StatusOK)
 
-		var resp struct {
-			Data []CategoryAPIResponse `json:"data"`
-			Meta *Meta                 `json:"meta"`
-		}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
+		data, _ := unmarshalList[CategoryAPIResponse](t, w)
 		// Flat list should return all categories without nesting
-		if len(resp.Data) != 2 {
-			t.Errorf("expected 2 categories in flat list, got %d", len(resp.Data))
+		if len(data) != 2 {
+			t.Errorf("expected 2 categories in flat list, got %d", len(data))
 		}
 	})
 }
@@ -882,26 +741,17 @@ func TestGetCategory(t *testing.T) {
 	cat := createTestCategory(t, db, "Test Category", "test-category", nil)
 
 	t.Run("existing category", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/categories/1", nil)
-		req = requestWithURLParams(req, map[string]string{"id": fmt.Sprintf("%d", cat.ID)})
-		w := httptest.NewRecorder()
-
-		h.GetCategory(w, req)
+		req := newGetRequest(t, "/api/v1/categories/1", map[string]string{"id": fmt.Sprintf("%d", cat.ID)})
+		w := executeHandler(t, h.GetCategory, req)
 
 		assertStatusCode(t, w, http.StatusOK)
 
-		var resp struct {
-			Data CategoryAPIResponse `json:"data"`
+		data := unmarshalData[CategoryAPIResponse](t, w)
+		if data.ID != cat.ID {
+			t.Errorf("expected ID %d, got %d", cat.ID, data.ID)
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
-		if resp.Data.ID != cat.ID {
-			t.Errorf("expected ID %d, got %d", cat.ID, resp.Data.ID)
-		}
-		if resp.Data.Name != "Test Category" {
-			t.Errorf("expected name 'Test Category', got %q", resp.Data.Name)
+		if data.Name != "Test Category" {
+			t.Errorf("expected name 'Test Category', got %q", data.Name)
 		}
 	})
 
@@ -909,42 +759,27 @@ func TestGetCategory(t *testing.T) {
 		catID := cat.ID
 		createTestCategory(t, db, "Child Cat", "child-cat", &catID)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/categories/1", nil)
-		req = requestWithURLParams(req, map[string]string{"id": fmt.Sprintf("%d", cat.ID)})
-		w := httptest.NewRecorder()
-
-		h.GetCategory(w, req)
+		req := newGetRequest(t, "/api/v1/categories/1", map[string]string{"id": fmt.Sprintf("%d", cat.ID)})
+		w := executeHandler(t, h.GetCategory, req)
 
 		assertStatusCode(t, w, http.StatusOK)
 
-		var resp struct {
-			Data CategoryAPIResponse `json:"data"`
-		}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
-		if len(resp.Data.Children) != 1 {
-			t.Errorf("expected 1 child, got %d", len(resp.Data.Children))
+		data := unmarshalData[CategoryAPIResponse](t, w)
+		if len(data.Children) != 1 {
+			t.Errorf("expected 1 child, got %d", len(data.Children))
 		}
 	})
 
 	t.Run("non-existent category", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/categories/999", nil)
-		req = requestWithURLParams(req, map[string]string{"id": "999"})
-		w := httptest.NewRecorder()
-
-		h.GetCategory(w, req)
+		req := newGetRequest(t, "/api/v1/categories/999", map[string]string{"id": "999"})
+		w := executeHandler(t, h.GetCategory, req)
 
 		assertStatusCode(t, w, http.StatusNotFound)
 	})
 
 	t.Run("invalid category ID", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/categories/invalid", nil)
-		req = requestWithURLParams(req, map[string]string{"id": "invalid"})
-		w := httptest.NewRecorder()
-
-		h.GetCategory(w, req)
+		req := newGetRequest(t, "/api/v1/categories/invalid", map[string]string{"id": "invalid"})
+		w := executeHandler(t, h.GetCategory, req)
 
 		assertStatusCode(t, w, http.StatusBadRequest)
 	})
@@ -954,24 +789,14 @@ func TestCreateCategory(t *testing.T) {
 	db, h := testSetup(t)
 
 	t.Run("valid category", func(t *testing.T) {
-		body := `{"name": "New Category", "slug": "new-category"}`
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/categories", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.CreateCategory(w, req)
+		req := newJSONRequest(t, http.MethodPost, "/api/v1/categories", `{"name": "New Category", "slug": "new-category"}`, nil)
+		w := executeHandler(t, h.CreateCategory, req)
 
 		assertStatusCode(t, w, http.StatusCreated)
 
-		var resp struct {
-			Data CategoryAPIResponse `json:"data"`
-		}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
-		if resp.Data.Name != "New Category" {
-			t.Errorf("expected name 'New Category', got %q", resp.Data.Name)
+		data := unmarshalData[CategoryAPIResponse](t, w)
+		if data.Name != "New Category" {
+			t.Errorf("expected name 'New Category', got %q", data.Name)
 		}
 	})
 
@@ -979,44 +804,27 @@ func TestCreateCategory(t *testing.T) {
 		parent := createTestCategory(t, db, "Parent Cat", "parent-cat", nil)
 
 		body := fmt.Sprintf(`{"name": "Child Category", "slug": "child-category", "parent_id": %d}`, parent.ID)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/categories", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.CreateCategory(w, req)
+		req := newJSONRequest(t, http.MethodPost, "/api/v1/categories", body, nil)
+		w := executeHandler(t, h.CreateCategory, req)
 
 		assertStatusCode(t, w, http.StatusCreated)
 
-		var resp struct {
-			Data CategoryAPIResponse `json:"data"`
-		}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
-		if resp.Data.ParentID == nil || *resp.Data.ParentID != parent.ID {
-			t.Errorf("expected parent_id %d, got %v", parent.ID, resp.Data.ParentID)
+		data := unmarshalData[CategoryAPIResponse](t, w)
+		if data.ParentID == nil || *data.ParentID != parent.ID {
+			t.Errorf("expected parent_id %d, got %v", parent.ID, data.ParentID)
 		}
 	})
 
 	t.Run("with invalid parent", func(t *testing.T) {
-		body := `{"name": "Orphan", "slug": "orphan", "parent_id": 9999}`
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/categories", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.CreateCategory(w, req)
+		req := newJSONRequest(t, http.MethodPost, "/api/v1/categories", `{"name": "Orphan", "slug": "orphan", "parent_id": 9999}`, nil)
+		w := executeHandler(t, h.CreateCategory, req)
 
 		assertStatusCode(t, w, http.StatusUnprocessableEntity)
 	})
 
 	t.Run("missing name", func(t *testing.T) {
-		body := `{"slug": "missing-name"}`
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/categories", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.CreateCategory(w, req)
+		req := newJSONRequest(t, http.MethodPost, "/api/v1/categories", `{"slug": "missing-name"}`, nil)
+		w := executeHandler(t, h.CreateCategory, req)
 
 		assertStatusCode(t, w, http.StatusUnprocessableEntity)
 	})
@@ -1024,12 +832,8 @@ func TestCreateCategory(t *testing.T) {
 	t.Run("duplicate slug", func(t *testing.T) {
 		createTestCategory(t, db, "Existing", "existing-cat-slug", nil)
 
-		body := `{"name": "Another", "slug": "existing-cat-slug"}`
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/categories", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.CreateCategory(w, req)
+		req := newJSONRequest(t, http.MethodPost, "/api/v1/categories", `{"name": "Another", "slug": "existing-cat-slug"}`, nil)
+		w := executeHandler(t, h.CreateCategory, req)
 
 		// Duplicate slug returns 422 Unprocessable Entity with validation error
 		assertStatusCode(t, w, http.StatusUnprocessableEntity)
@@ -1042,71 +846,40 @@ func TestUpdateCategory(t *testing.T) {
 	cat := createTestCategory(t, db, "Original Cat", "original-cat-slug", nil)
 
 	t.Run("update name", func(t *testing.T) {
-		body := `{"name": "Updated Category"}`
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/categories/1", strings.NewReader(body))
-		req = requestWithURLParams(req, map[string]string{"id": fmt.Sprintf("%d", cat.ID)})
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.UpdateCategory(w, req)
+		req := newJSONRequest(t, http.MethodPut, "/api/v1/categories/1", `{"name": "Updated Category"}`, map[string]string{"id": fmt.Sprintf("%d", cat.ID)})
+		w := executeHandler(t, h.UpdateCategory, req)
 
 		assertStatusCode(t, w, http.StatusOK)
 
-		var resp struct {
-			Data CategoryAPIResponse `json:"data"`
-		}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
-		if resp.Data.Name != "Updated Category" {
-			t.Errorf("expected name 'Updated Category', got %q", resp.Data.Name)
+		data := unmarshalData[CategoryAPIResponse](t, w)
+		if data.Name != "Updated Category" {
+			t.Errorf("expected name 'Updated Category', got %q", data.Name)
 		}
 	})
 
 	t.Run("update description", func(t *testing.T) {
-		body := `{"description": "A new description"}`
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/categories/1", strings.NewReader(body))
-		req = requestWithURLParams(req, map[string]string{"id": fmt.Sprintf("%d", cat.ID)})
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.UpdateCategory(w, req)
+		req := newJSONRequest(t, http.MethodPut, "/api/v1/categories/1", `{"description": "A new description"}`, map[string]string{"id": fmt.Sprintf("%d", cat.ID)})
+		w := executeHandler(t, h.UpdateCategory, req)
 
 		assertStatusCode(t, w, http.StatusOK)
 
-		var resp struct {
-			Data CategoryAPIResponse `json:"data"`
-		}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
-		if resp.Data.Description != "A new description" {
-			t.Errorf("expected description 'A new description', got %q", resp.Data.Description)
+		data := unmarshalData[CategoryAPIResponse](t, w)
+		if data.Description != "A new description" {
+			t.Errorf("expected description 'A new description', got %q", data.Description)
 		}
 	})
 
 	t.Run("self as parent", func(t *testing.T) {
 		body := fmt.Sprintf(`{"parent_id": %d}`, cat.ID)
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/categories/1", strings.NewReader(body))
-		req = requestWithURLParams(req, map[string]string{"id": fmt.Sprintf("%d", cat.ID)})
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.UpdateCategory(w, req)
+		req := newJSONRequest(t, http.MethodPut, "/api/v1/categories/1", body, map[string]string{"id": fmt.Sprintf("%d", cat.ID)})
+		w := executeHandler(t, h.UpdateCategory, req)
 
 		assertStatusCode(t, w, http.StatusUnprocessableEntity)
 	})
 
 	t.Run("non-existent category", func(t *testing.T) {
-		body := `{"name": "Update"}`
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/categories/999", strings.NewReader(body))
-		req = requestWithURLParams(req, map[string]string{"id": "999"})
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.UpdateCategory(w, req)
+		req := newJSONRequest(t, http.MethodPut, "/api/v1/categories/999", `{"name": "Update"}`, map[string]string{"id": "999"})
+		w := executeHandler(t, h.UpdateCategory, req)
 
 		assertStatusCode(t, w, http.StatusNotFound)
 	})
@@ -1121,19 +894,12 @@ func TestUpdateCategory(t *testing.T) {
 
 		// Try to set child as parent of grandparent (circular reference)
 		body := fmt.Sprintf(`{"parent_id": %d}`, child.ID)
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/categories/1", strings.NewReader(body))
-		req = requestWithURLParams(req, map[string]string{"id": fmt.Sprintf("%d", grandparent.ID)})
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.UpdateCategory(w, req)
+		req := newJSONRequest(t, http.MethodPut, "/api/v1/categories/1", body, map[string]string{"id": fmt.Sprintf("%d", grandparent.ID)})
+		w := executeHandler(t, h.UpdateCategory, req)
 
 		assertStatusCode(t, w, http.StatusUnprocessableEntity)
 
-		var resp ErrorResponse
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
+		resp := assertErrorResponse(t, w, "validation_error")
 		if resp.Error.Details["parent_id"] != "Cannot set a descendant as parent (circular reference)" {
 			t.Errorf("expected circular reference error, got %q", resp.Error.Details["parent_id"])
 		}
@@ -1149,12 +915,8 @@ func TestUpdateCategory(t *testing.T) {
 
 		// Try to set grandchild as parent of root (circular reference)
 		body := fmt.Sprintf(`{"parent_id": %d}`, grandchild.ID)
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/categories/1", strings.NewReader(body))
-		req = requestWithURLParams(req, map[string]string{"id": fmt.Sprintf("%d", root.ID)})
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.UpdateCategory(w, req)
+		req := newJSONRequest(t, http.MethodPut, "/api/v1/categories/1", body, map[string]string{"id": fmt.Sprintf("%d", root.ID)})
+		w := executeHandler(t, h.UpdateCategory, req)
 
 		assertStatusCode(t, w, http.StatusUnprocessableEntity)
 	})
@@ -1166,25 +928,14 @@ func TestUpdateCategory(t *testing.T) {
 		childCat := createTestCategory(t, db, "Has Parent", "has-parent", &parentID)
 
 		// Clear the parent by setting parent_id to 0
-		body := `{"parent_id": 0}`
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/categories/1", strings.NewReader(body))
-		req = requestWithURLParams(req, map[string]string{"id": fmt.Sprintf("%d", childCat.ID)})
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.UpdateCategory(w, req)
+		req := newJSONRequest(t, http.MethodPut, "/api/v1/categories/1", `{"parent_id": 0}`, map[string]string{"id": fmt.Sprintf("%d", childCat.ID)})
+		w := executeHandler(t, h.UpdateCategory, req)
 
 		assertStatusCode(t, w, http.StatusOK)
 
-		var resp struct {
-			Data CategoryAPIResponse `json:"data"`
-		}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
-		if resp.Data.ParentID != nil {
-			t.Errorf("expected parent_id to be nil after clearing, got %v", resp.Data.ParentID)
+		data := unmarshalData[CategoryAPIResponse](t, w)
+		if data.ParentID != nil {
+			t.Errorf("expected parent_id to be nil after clearing, got %v", data.ParentID)
 		}
 	})
 
@@ -1195,44 +946,26 @@ func TestUpdateCategory(t *testing.T) {
 
 		// Set parent for orphan
 		body := fmt.Sprintf(`{"parent_id": %d}`, newParent.ID)
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/categories/1", strings.NewReader(body))
-		req = requestWithURLParams(req, map[string]string{"id": fmt.Sprintf("%d", orphan.ID)})
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.UpdateCategory(w, req)
+		req := newJSONRequest(t, http.MethodPut, "/api/v1/categories/1", body, map[string]string{"id": fmt.Sprintf("%d", orphan.ID)})
+		w := executeHandler(t, h.UpdateCategory, req)
 
 		assertStatusCode(t, w, http.StatusOK)
 
-		var resp struct {
-			Data CategoryAPIResponse `json:"data"`
-		}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
-		if resp.Data.ParentID == nil || *resp.Data.ParentID != newParent.ID {
-			t.Errorf("expected parent_id %d, got %v", newParent.ID, resp.Data.ParentID)
+		data := unmarshalData[CategoryAPIResponse](t, w)
+		if data.ParentID == nil || *data.ParentID != newParent.ID {
+			t.Errorf("expected parent_id %d, got %v", newParent.ID, data.ParentID)
 		}
 	})
 
 	t.Run("non-existent parent", func(t *testing.T) {
 		orphan := createTestCategory(t, db, "Orphan2", "orphan2", nil)
 
-		body := `{"parent_id": 99999}`
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/categories/1", strings.NewReader(body))
-		req = requestWithURLParams(req, map[string]string{"id": fmt.Sprintf("%d", orphan.ID)})
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.UpdateCategory(w, req)
+		req := newJSONRequest(t, http.MethodPut, "/api/v1/categories/1", `{"parent_id": 99999}`, map[string]string{"id": fmt.Sprintf("%d", orphan.ID)})
+		w := executeHandler(t, h.UpdateCategory, req)
 
 		assertStatusCode(t, w, http.StatusUnprocessableEntity)
 
-		var resp ErrorResponse
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
+		resp := assertErrorResponse(t, w, "validation_error")
 		if resp.Error.Details["parent_id"] != "Parent category not found" {
 			t.Errorf("expected 'Parent category not found', got %q", resp.Error.Details["parent_id"])
 		}
@@ -1241,25 +974,14 @@ func TestUpdateCategory(t *testing.T) {
 	t.Run("update position", func(t *testing.T) {
 		posCat := createTestCategory(t, db, "Position Cat", "position-cat", nil)
 
-		body := `{"position": 5}`
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/categories/1", strings.NewReader(body))
-		req = requestWithURLParams(req, map[string]string{"id": fmt.Sprintf("%d", posCat.ID)})
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.UpdateCategory(w, req)
+		req := newJSONRequest(t, http.MethodPut, "/api/v1/categories/1", `{"position": 5}`, map[string]string{"id": fmt.Sprintf("%d", posCat.ID)})
+		w := executeHandler(t, h.UpdateCategory, req)
 
 		assertStatusCode(t, w, http.StatusOK)
 
-		var resp struct {
-			Data CategoryAPIResponse `json:"data"`
-		}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to unmarshal response: %v", err)
-		}
-
-		if resp.Data.Position != 5 {
-			t.Errorf("expected position 5, got %d", resp.Data.Position)
+		data := unmarshalData[CategoryAPIResponse](t, w)
+		if data.Position != 5 {
+			t.Errorf("expected position 5, got %d", data.Position)
 		}
 	})
 
@@ -1268,25 +990,15 @@ func TestUpdateCategory(t *testing.T) {
 		createTestCategory(t, db, "Cat Two", "cat-two-slug", nil)
 
 		// Try to update cat1's slug to cat2's slug
-		body := `{"slug": "cat-two-slug"}`
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/categories/1", strings.NewReader(body))
-		req = requestWithURLParams(req, map[string]string{"id": fmt.Sprintf("%d", cat1.ID)})
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.UpdateCategory(w, req)
+		req := newJSONRequest(t, http.MethodPut, "/api/v1/categories/1", `{"slug": "cat-two-slug"}`, map[string]string{"id": fmt.Sprintf("%d", cat1.ID)})
+		w := executeHandler(t, h.UpdateCategory, req)
 
 		assertStatusCode(t, w, http.StatusUnprocessableEntity)
 	})
 
 	t.Run("invalid JSON", func(t *testing.T) {
-		body := `invalid json`
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/categories/1", strings.NewReader(body))
-		req = requestWithURLParams(req, map[string]string{"id": fmt.Sprintf("%d", cat.ID)})
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.UpdateCategory(w, req)
+		req := newJSONRequest(t, http.MethodPut, "/api/v1/categories/1", `invalid json`, map[string]string{"id": fmt.Sprintf("%d", cat.ID)})
+		w := executeHandler(t, h.UpdateCategory, req)
 
 		assertStatusCode(t, w, http.StatusBadRequest)
 	})
@@ -1298,11 +1010,8 @@ func TestDeleteCategory(t *testing.T) {
 	t.Run("delete existing category", func(t *testing.T) {
 		cat := createTestCategory(t, db, "To Delete", "to-delete-cat", nil)
 
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/categories/1", nil)
-		req = requestWithURLParams(req, map[string]string{"id": fmt.Sprintf("%d", cat.ID)})
-		w := httptest.NewRecorder()
-
-		h.DeleteCategory(w, req)
+		req := newDeleteRequest(t, "/api/v1/categories/1", map[string]string{"id": fmt.Sprintf("%d", cat.ID)})
+		w := executeHandler(t, h.DeleteCategory, req)
 
 		assertStatusCode(t, w, http.StatusNoContent)
 
@@ -1319,21 +1028,15 @@ func TestDeleteCategory(t *testing.T) {
 		parentID := parent.ID
 		createTestCategory(t, db, "Child of Parent", "child-of-parent", &parentID)
 
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/categories/1", nil)
-		req = requestWithURLParams(req, map[string]string{"id": fmt.Sprintf("%d", parent.ID)})
-		w := httptest.NewRecorder()
-
-		h.DeleteCategory(w, req)
+		req := newDeleteRequest(t, "/api/v1/categories/1", map[string]string{"id": fmt.Sprintf("%d", parent.ID)})
+		w := executeHandler(t, h.DeleteCategory, req)
 
 		assertStatusCode(t, w, http.StatusConflict)
 	})
 
 	t.Run("delete non-existent category", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/categories/999", nil)
-		req = requestWithURLParams(req, map[string]string{"id": "999"})
-		w := httptest.NewRecorder()
-
-		h.DeleteCategory(w, req)
+		req := newDeleteRequest(t, "/api/v1/categories/999", map[string]string{"id": "999"})
+		w := executeHandler(t, h.DeleteCategory, req)
 
 		assertStatusCode(t, w, http.StatusNotFound)
 	})
