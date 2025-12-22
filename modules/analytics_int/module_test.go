@@ -2,78 +2,22 @@ package analytics_int
 
 import (
 	"database/sql"
-	"log/slog"
-	"os"
 	"testing"
 	"time"
 
-	"ocms-go/internal/config"
-	"ocms-go/internal/module"
-	"ocms-go/internal/store"
+	"ocms-go/internal/testutil"
+	"ocms-go/internal/testutil/moduleutil"
 )
-
-// testDB creates a temporary test database and returns cleanup function.
-func testDB(t *testing.T) (*sql.DB, func()) {
-	t.Helper()
-
-	f, err := os.CreateTemp("", "ocms-page-analytics-test-*.db")
-	if err != nil {
-		t.Fatalf("CreateTemp: %v", err)
-	}
-	dbPath := f.Name()
-	_ = f.Close()
-
-	db, err := store.NewDB(dbPath)
-	if err != nil {
-		_ = os.Remove(dbPath)
-		t.Fatalf("NewDB: %v", err)
-	}
-
-	// Run core migrations
-	if err := store.Migrate(db); err != nil {
-		_ = db.Close()
-		_ = os.Remove(dbPath)
-		t.Fatalf("Migrate: %v", err)
-	}
-
-	cleanup := func() {
-		_ = db.Close()
-		_ = os.Remove(dbPath)
-	}
-
-	return db, cleanup
-}
 
 // testModule creates a module instance with test database.
 func testModule(t *testing.T, db *sql.DB) *Module {
 	t.Helper()
-
 	m := New()
-
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelWarn,
-	}))
-
-	ctx := &module.Context{
-		DB:     db,
-		Store:  store.New(db),
-		Logger: logger,
-		Config: &config.Config{},
-		Hooks:  module.NewHookRegistry(logger),
-	}
-
-	// Run module migrations
-	for _, mig := range m.Migrations() {
-		if err := mig.Up(db); err != nil {
-			t.Fatalf("migration %d failed: %v", mig.Version, err)
-		}
-	}
-
-	// Initialize module
+	moduleutil.RunMigrations(t, db, m.Migrations())
+	ctx, _ := moduleutil.TestModuleContextWithStore(t, db)
 	if err := m.Init(ctx); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
-
 	return m
 }
 
@@ -111,17 +55,11 @@ func TestModuleMigrations(t *testing.T) {
 }
 
 func TestModuleMigrationUp(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := New()
-
-	// Run all migrations
-	for _, mig := range m.Migrations() {
-		if err := mig.Up(db); err != nil {
-			t.Fatalf("migration %d Up failed: %v", mig.Version, err)
-		}
-	}
+	moduleutil.RunMigrations(t, db, m.Migrations())
 
 	// Verify tables exist
 	tables := []string{
@@ -144,7 +82,7 @@ func TestModuleMigrationUp(t *testing.T) {
 }
 
 func TestModuleMigrationDown(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := New()
@@ -179,7 +117,7 @@ func TestModuleMigrationDown(t *testing.T) {
 }
 
 func TestModuleInit(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -205,7 +143,7 @@ func TestModuleInit(t *testing.T) {
 }
 
 func TestModuleIsEnabled(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -223,7 +161,7 @@ func TestModuleIsEnabled(t *testing.T) {
 }
 
 func TestInsertPageView(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -278,7 +216,7 @@ func TestInsertPageView(t *testing.T) {
 }
 
 func TestGetRealTimeVisitorCount(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -392,7 +330,7 @@ func TestParseDateRange(t *testing.T) {
 }
 
 func TestSettingsSaveLoad(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)

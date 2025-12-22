@@ -4,80 +4,35 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log/slog"
-	"os"
 	"testing"
 
-	"ocms-go/internal/config"
 	"ocms-go/internal/module"
-	"ocms-go/internal/store"
+	"ocms-go/internal/testutil"
+	"ocms-go/internal/testutil/moduleutil"
 )
 
-// testDB creates a temporary test database.
-func testDB(t *testing.T) (*sql.DB, func()) {
-	t.Helper()
-
-	// Create temp file for test database
-	f, err := os.CreateTemp("", "ocms-example-test-*.db")
-	if err != nil {
-		t.Fatalf("creating temp file: %v", err)
-	}
-	dbPath := f.Name()
-	_ = f.Close()
-
-	// Open database
-	db, err := store.NewDB(dbPath)
-	if err != nil {
-		_ = os.Remove(dbPath)
-		t.Fatalf("NewDB: %v", err)
-	}
-
-	// Run core migrations
-	if err := store.Migrate(db); err != nil {
-		_ = db.Close()
-		_ = os.Remove(dbPath)
-		t.Fatalf("Migrate: %v", err)
-	}
-
-	// Return cleanup function
-	cleanup := func() {
-		_ = db.Close()
-		_ = os.Remove(dbPath)
-	}
-
-	return db, cleanup
-}
-
-// testModule creates a test Module with database access
+// testModule creates a test Module with database access.
 func testModule(t *testing.T, db *sql.DB) *Module {
 	t.Helper()
-
 	m := New()
-
-	// Create a test logger that discards output
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelWarn,
-	}))
-
-	ctx := &module.Context{
-		DB:     db,
-		Logger: logger,
-		Config: &config.Config{},
-		Hooks:  module.NewHookRegistry(logger),
-	}
-
-	// Run module migrations first
-	for _, mig := range m.Migrations() {
-		if err := mig.Up(db); err != nil {
-			t.Fatalf("migration up: %v", err)
-		}
-	}
-
+	moduleutil.RunMigrations(t, db, m.Migrations())
+	ctx, _ := moduleutil.TestModuleContext(t, db)
 	if err := m.Init(ctx); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
-
 	return m
+}
+
+// testModuleWithHooks creates a test Module and returns the hooks registry.
+func testModuleWithHooks(t *testing.T, db *sql.DB) (*Module, *module.HookRegistry) {
+	t.Helper()
+	m := New()
+	moduleutil.RunMigrations(t, db, m.Migrations())
+	ctx, hooks := moduleutil.TestModuleContext(t, db)
+	if err := m.Init(ctx); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	return m, hooks
 }
 
 func TestModuleNew(t *testing.T) {
@@ -148,34 +103,11 @@ func TestModuleTemplateFuncs(t *testing.T) {
 }
 
 func TestModuleInit(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
-	m := New()
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelWarn,
-	}))
-	hooks := module.NewHookRegistry(logger)
+	_, hooks := testModuleWithHooks(t, db)
 
-	// Run migrations
-	for _, mig := range m.Migrations() {
-		if err := mig.Up(db); err != nil {
-			t.Fatalf("migration up: %v", err)
-		}
-	}
-
-	ctx := &module.Context{
-		DB:     db,
-		Logger: logger,
-		Config: &config.Config{},
-		Hooks:  hooks,
-	}
-
-	if err := m.Init(ctx); err != nil {
-		t.Fatalf("Init: %v", err)
-	}
-
-	// Check hooks were registered
 	if !hooks.HasHandlers(module.HookPageAfterSave) {
 		t.Error("HookPageAfterSave handler not registered")
 	}
@@ -185,7 +117,7 @@ func TestModuleInit(t *testing.T) {
 }
 
 func TestModuleShutdown(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -197,7 +129,7 @@ func TestModuleShutdown(t *testing.T) {
 }
 
 func TestCreateItem(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -224,7 +156,7 @@ func TestCreateItem(t *testing.T) {
 }
 
 func TestListItems(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -264,7 +196,7 @@ func TestListItems(t *testing.T) {
 }
 
 func TestDeleteItem(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -291,7 +223,7 @@ func TestDeleteItem(t *testing.T) {
 }
 
 func TestDeleteItemNotFound(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -304,26 +236,13 @@ func TestDeleteItemNotFound(t *testing.T) {
 }
 
 func TestMigrationDown(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := New()
+	moduleutil.RunMigrations(t, db, m.Migrations())
+	moduleutil.RunMigrationsDown(t, db, m.Migrations())
 
-	// Run migration up
-	for _, mig := range m.Migrations() {
-		if err := mig.Up(db); err != nil {
-			t.Fatalf("migration up: %v", err)
-		}
-	}
-
-	// Run migration down
-	for _, mig := range m.Migrations() {
-		if err := mig.Down(db); err != nil {
-			t.Fatalf("migration down: %v", err)
-		}
-	}
-
-	// Table should not exist
 	var count int
 	err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='example_items'").Scan(&count)
 	if err != nil {
@@ -335,34 +254,11 @@ func TestMigrationDown(t *testing.T) {
 }
 
 func TestHookRegistration(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
-	m := New()
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelWarn,
-	}))
-	hooks := module.NewHookRegistry(logger)
+	_, hooks := testModuleWithHooks(t, db)
 
-	// Run migrations
-	for _, mig := range m.Migrations() {
-		if err := mig.Up(db); err != nil {
-			t.Fatalf("migration up: %v", err)
-		}
-	}
-
-	ctx := &module.Context{
-		DB:     db,
-		Logger: logger,
-		Config: &config.Config{},
-		Hooks:  hooks,
-	}
-
-	if err := m.Init(ctx); err != nil {
-		t.Fatalf("Init: %v", err)
-	}
-
-	// Test page.after_save hook
 	result, err := hooks.Call(context.Background(), module.HookPageAfterSave, "test data")
 	if err != nil {
 		t.Errorf("HookPageAfterSave: %v", err)
@@ -371,7 +267,6 @@ func TestHookRegistration(t *testing.T) {
 		t.Errorf("HookPageAfterSave result = %v, want 'test data'", result)
 	}
 
-	// Test page.before_render hook
 	result, err = hooks.Call(context.Background(), module.HookPageBeforeRender, "render data")
 	if err != nil {
 		t.Errorf("HookPageBeforeRender: %v", err)
@@ -382,34 +277,11 @@ func TestHookRegistration(t *testing.T) {
 }
 
 func TestHookHandlerInfo(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
-	m := New()
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelWarn,
-	}))
-	hooks := module.NewHookRegistry(logger)
+	_, hooks := testModuleWithHooks(t, db)
 
-	// Run migrations
-	for _, mig := range m.Migrations() {
-		if err := mig.Up(db); err != nil {
-			t.Fatalf("migration up: %v", err)
-		}
-	}
-
-	ctx := &module.Context{
-		DB:     db,
-		Logger: logger,
-		Config: &config.Config{},
-		Hooks:  hooks,
-	}
-
-	if err := m.Init(ctx); err != nil {
-		t.Fatalf("Init: %v", err)
-	}
-
-	// Check handler count
 	afterSaveCount := hooks.HandlerCount(module.HookPageAfterSave)
 	if afterSaveCount != 1 {
 		t.Errorf("HookPageAfterSave handler count = %d, want 1", afterSaveCount)
@@ -422,7 +294,7 @@ func TestHookHandlerInfo(t *testing.T) {
 }
 
 func TestCreateItemEmptyDescription(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -439,7 +311,7 @@ func TestCreateItemEmptyDescription(t *testing.T) {
 }
 
 func TestMultipleItemsCRUD(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)

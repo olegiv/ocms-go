@@ -3,7 +3,6 @@ package developer
 import (
 	"context"
 	"database/sql"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,54 +10,15 @@ import (
 
 	"ocms-go/internal/module"
 	"ocms-go/internal/store"
+	"ocms-go/internal/testutil"
+	"ocms-go/internal/testutil/moduleutil"
 )
 
-// testDB creates a temporary test database.
-func testDB(t *testing.T) (*sql.DB, func()) {
-	t.Helper()
-
-	// Create temp file for test database
-	f, err := os.CreateTemp("", "ocms-dev-test-*.db")
-	if err != nil {
-		t.Fatalf("creating temp file: %v", err)
-	}
-	dbPath := f.Name()
-	_ = f.Close()
-
-	// Open database
-	db, err := store.NewDB(dbPath)
-	if err != nil {
-		_ = os.Remove(dbPath)
-		t.Fatalf("NewDB: %v", err)
-	}
-
-	// Run core migrations
-	if err := store.Migrate(db); err != nil {
-		_ = db.Close()
-		_ = os.Remove(dbPath)
-		t.Fatalf("Migrate: %v", err)
-	}
-
-	// Return cleanup function
-	cleanup := func() {
-		_ = db.Close()
-		_ = os.Remove(dbPath)
-	}
-
-	return db, cleanup
-}
-
-// testModule creates a test Module with database access
+// testModule creates a test Module with database access.
 func testModule(t *testing.T, db *sql.DB) *Module {
 	t.Helper()
-
 	m := New()
-
-	// Create a test logger that discards output
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelWarn, // Only show warnings and errors in tests
-	}))
-
+	logger := testutil.TestLogger()
 	ctx := &module.Context{
 		DB:     db,
 		Logger: logger,
@@ -66,14 +26,7 @@ func testModule(t *testing.T, db *sql.DB) *Module {
 	if err := m.Init(ctx); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
-
-	// Run module migrations
-	for _, mig := range m.Migrations() {
-		if err := mig.Up(db); err != nil {
-			t.Fatalf("migration up: %v", err)
-		}
-	}
-
+	moduleutil.RunMigrations(t, db, m.Migrations())
 	return m
 }
 
@@ -241,7 +194,7 @@ func TestGetColorName(t *testing.T) {
 }
 
 func TestTrackItem(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -277,7 +230,7 @@ func TestTrackItem(t *testing.T) {
 }
 
 func TestGetTrackedCounts(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -310,7 +263,7 @@ func TestGetTrackedCounts(t *testing.T) {
 }
 
 func TestClearTrackedItems(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -340,7 +293,7 @@ func TestClearTrackedItems(t *testing.T) {
 }
 
 func TestGenerateTags(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -371,7 +324,7 @@ func TestGenerateTags(t *testing.T) {
 }
 
 func TestGenerateTagsWithMultipleLanguages(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -408,7 +361,7 @@ func TestGenerateTagsWithMultipleLanguages(t *testing.T) {
 }
 
 func TestGenerateCategories(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -447,7 +400,7 @@ func TestGenerateCategories(t *testing.T) {
 }
 
 func TestGenerateMedia(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	// Create temp upload directory
@@ -509,7 +462,7 @@ func TestGenerateMedia(t *testing.T) {
 }
 
 func TestGeneratePages(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -574,7 +527,7 @@ func TestGeneratePages(t *testing.T) {
 }
 
 func TestGenerateMenuItems(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	m := testModule(t, db)
@@ -629,7 +582,7 @@ func TestGenerateMenuItems(t *testing.T) {
 }
 
 func TestDeleteAllGeneratedItems(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	// Create temp upload directory

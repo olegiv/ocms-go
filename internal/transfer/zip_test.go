@@ -12,12 +12,13 @@ import (
 	"time"
 
 	"ocms-go/internal/store"
+	"ocms-go/internal/testutil"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
 func TestExportWithMediaToZip(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	queries := store.New(db)
@@ -161,7 +162,7 @@ func TestExportWithMediaToZip(t *testing.T) {
 
 func TestImportFromZip(t *testing.T) {
 	// Create source database with data
-	srcDB, srcCleanup := testDB(t)
+	srcDB, srcCleanup := testutil.TestDB(t)
 	defer srcCleanup()
 
 	srcQueries := store.New(srcDB)
@@ -232,7 +233,7 @@ func TestImportFromZip(t *testing.T) {
 	}
 
 	// Create destination database
-	dstDB, dstCleanup := testDB(t)
+	dstDB, dstCleanup := testutil.TestDB(t)
 	defer dstCleanup()
 
 	dstQueries := store.New(dstDB)
@@ -291,7 +292,7 @@ func TestImportFromZip(t *testing.T) {
 }
 
 func TestValidateZipFile(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	queries := store.New(db)
@@ -363,7 +364,7 @@ func TestValidateZipFile(t *testing.T) {
 }
 
 func TestValidateInvalidZip(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	queries := store.New(db)
@@ -413,7 +414,7 @@ func TestValidateInvalidZip(t *testing.T) {
 }
 
 func TestExportWithMediaToFile(t *testing.T) {
-	db, cleanup := testDB(t)
+	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
 	queries := store.New(db)

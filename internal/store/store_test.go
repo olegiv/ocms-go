@@ -13,7 +13,6 @@ import (
 func testDB(t *testing.T) (*sql.DB, func()) {
 	t.Helper()
 
-	// Create temp file for test database
 	f, err := os.CreateTemp("", "ocms-test-*.db")
 	if err != nil {
 		t.Fatalf("creating temp file: %v", err)
@@ -21,27 +20,22 @@ func testDB(t *testing.T) (*sql.DB, func()) {
 	dbPath := f.Name()
 	_ = f.Close()
 
-	// Open database
 	db, err := NewDB(dbPath)
 	if err != nil {
 		_ = os.Remove(dbPath)
 		t.Fatalf("NewDB: %v", err)
 	}
 
-	// Run migrations
 	if err := Migrate(db); err != nil {
 		_ = db.Close()
 		_ = os.Remove(dbPath)
 		t.Fatalf("Migrate: %v", err)
 	}
 
-	// Return cleanup function
-	cleanup := func() {
+	return db, func() {
 		_ = db.Close()
 		_ = os.Remove(dbPath)
 	}
-
-	return db, cleanup
 }
 
 // testSetup creates a test database and returns common test dependencies.

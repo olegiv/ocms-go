@@ -4,9 +4,9 @@ import (
 	"database/sql"
 	"embed"
 	"html/template"
-	"log/slog"
-	"os"
 	"testing"
+
+	"ocms-go/internal/testutil"
 
 	"github.com/go-chi/chi/v5"
 	_ "github.com/mattn/go-sqlite3"
@@ -50,15 +50,11 @@ func (m *mockModule) TranslationsFS() embed.FS         { return embed.FS{} }
 
 func createTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatalf("failed to open test db: %v", err)
-	}
-	return db
+	return testutil.TestMemoryDB(t)
 }
 
 func TestNewRegistry(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	// Verify registry is properly initialized by checking expected behavior
@@ -77,7 +73,7 @@ func TestNewRegistry(t *testing.T) {
 }
 
 func TestRegister(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	m := newMockModule("test", "1.0.0")
@@ -93,7 +89,7 @@ func TestRegister(t *testing.T) {
 }
 
 func TestRegisterDuplicate(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	m1 := newMockModule("test", "1.0.0")
@@ -110,7 +106,7 @@ func TestRegisterDuplicate(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	m := newMockModule("gettest", "1.0.0")
@@ -133,7 +129,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestList(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	m1 := newMockModule("mod1", "1.0.0")
@@ -156,7 +152,7 @@ func TestList(t *testing.T) {
 }
 
 func TestCount(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	if r.Count() != 0 {
@@ -172,7 +168,7 @@ func TestCount(t *testing.T) {
 }
 
 func TestInitAll(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	m1 := newMockModule("init1", "1.0.0")
@@ -199,7 +195,7 @@ func TestInitAll(t *testing.T) {
 }
 
 func TestInitAllWithDependencies(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	m1 := newMockModule("base", "1.0.0")
@@ -220,7 +216,7 @@ func TestInitAllWithDependencies(t *testing.T) {
 }
 
 func TestInitAllMissingDependency(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	m := newMockModule("dependent", "1.0.0")
@@ -239,7 +235,7 @@ func TestInitAllMissingDependency(t *testing.T) {
 }
 
 func TestShutdownAll(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	m1 := newMockModule("shut1", "1.0.0")
@@ -263,7 +259,7 @@ func TestShutdownAll(t *testing.T) {
 }
 
 func TestRouteAll(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	m1 := newMockModule("route1", "1.0.0")
@@ -284,7 +280,7 @@ func TestRouteAll(t *testing.T) {
 }
 
 func TestAdminRouteAll(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	m1 := newMockModule("admin1", "1.0.0")
@@ -305,7 +301,7 @@ func TestAdminRouteAll(t *testing.T) {
 }
 
 func TestAllTemplateFuncs(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	m1 := newMockModule("func1", "1.0.0")
@@ -328,7 +324,7 @@ func TestAllTemplateFuncs(t *testing.T) {
 }
 
 func TestListInfo(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	m := newMockModule("info", "1.0.0")
@@ -363,7 +359,7 @@ func TestListInfo(t *testing.T) {
 }
 
 func TestMigrations(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	m := newMockModule("migrate", "1.0.0")
@@ -402,7 +398,7 @@ func TestMigrations(t *testing.T) {
 }
 
 func TestMigrationNotRerun(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	runCount := new(int)
@@ -453,7 +449,7 @@ func TestMigrationNotRerun(t *testing.T) {
 }
 
 func TestGetMigrationInfo(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	m := newMockModule("miginfo", "1.0.0")
@@ -493,7 +489,7 @@ func TestGetMigrationInfo(t *testing.T) {
 }
 
 func TestGetMigrationInfoNotFound(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	_, err := r.GetMigrationInfo("nonexistent")
@@ -525,7 +521,7 @@ func TestBaseModule(t *testing.T) {
 	}
 
 	// Init should work
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	ctx := &Context{Logger: logger}
 	if err := base.Init(ctx); err != nil {
 		t.Errorf("expected no error from Init, got %v", err)
@@ -547,7 +543,7 @@ func TestBaseModule(t *testing.T) {
 }
 
 func TestMultipleMigrations(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	var order []int
@@ -591,7 +587,7 @@ func TestMultipleMigrations(t *testing.T) {
 }
 
 func TestIsActive(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	m := newMockModule("active-test", "1.0.0")
@@ -610,7 +606,7 @@ func TestIsActive(t *testing.T) {
 }
 
 func TestIsActiveDefault(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	m := newMockModule("untracked", "1.0.0")
@@ -623,7 +619,7 @@ func TestIsActiveDefault(t *testing.T) {
 }
 
 func TestSetActive(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	m := newMockModule("toggle", "1.0.0")
@@ -662,7 +658,7 @@ func TestSetActive(t *testing.T) {
 }
 
 func TestSetActiveNotRegistered(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	db := createTestDB(t)
@@ -681,7 +677,7 @@ func TestSetActiveNotRegistered(t *testing.T) {
 }
 
 func TestSetActiveNotInitialized(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	m := newMockModule("uninit", "1.0.0")
@@ -695,7 +691,7 @@ func TestSetActiveNotInitialized(t *testing.T) {
 }
 
 func TestActiveStatusPersistence(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 
 	db := createTestDB(t)
 	defer func() { _ = db.Close() }()
@@ -721,7 +717,7 @@ func TestActiveStatusPersistence(t *testing.T) {
 }
 
 func TestAllTemplateFuncsSkipsInactive(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	m1 := newMockModule("active-mod", "1.0.0")
@@ -753,7 +749,7 @@ func TestAllTemplateFuncsSkipsInactive(t *testing.T) {
 }
 
 func TestListInfoShowsActiveStatus(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
 	m1 := newMockModule("status-active", "1.0.0")
