@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,6 +56,30 @@ func (h discardHandler) Handle(context.Context, slog.Record) error { return nil 
 func (h discardHandler) WithAttrs([]slog.Attr) slog.Handler        { return h }
 func (h discardHandler) WithGroup(string) slog.Handler             { return h }
 
+// fetchEvents retrieves events from the database after waiting for async writes.
+func fetchEvents(t *testing.T, db *sql.DB, limit int) []store.Event {
+	t.Helper()
+	time.Sleep(50 * time.Millisecond)
+	events, err := store.New(db).ListEvents(context.Background(), store.ListEventsParams{
+		Limit:  int64(limit),
+		Offset: 0,
+	})
+	if err != nil {
+		t.Fatalf("ListEvents: %v", err)
+	}
+	return events
+}
+
+// requireSingleEvent fetches events and asserts exactly one was created.
+func requireSingleEvent(t *testing.T, db *sql.DB) store.Event {
+	t.Helper()
+	events := fetchEvents(t, db, 1)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	return events[0]
+}
+
 func TestEventLogHandler_Handle_ErrorLevel(t *testing.T) {
 	db, cleanup := testDB(t)
 	defer cleanup()
@@ -62,31 +87,14 @@ func TestEventLogHandler_Handle_ErrorLevel(t *testing.T) {
 	handler := NewEventLogHandler(discardHandler{}, db)
 	logger := slog.New(handler)
 
-	// Log an error
 	logger.Error("database connection failed", "host", "localhost", "port", 5432)
 
-	// Give it a moment to write
-	time.Sleep(50 * time.Millisecond)
-
-	// Verify event was created in database
-	q := store.New(db)
-	events, err := q.ListEvents(context.Background(), store.ListEventsParams{
-		Limit:  10,
-		Offset: 0,
-	})
-	if err != nil {
-		t.Fatalf("ListEvents: %v", err)
+	event := requireSingleEvent(t, db)
+	if event.Level != model.EventLevelError {
+		t.Errorf("Level = %q, want %q", event.Level, model.EventLevelError)
 	}
-
-	if len(events) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(events))
-	}
-
-	if events[0].Level != model.EventLevelError {
-		t.Errorf("Level = %q, want %q", events[0].Level, model.EventLevelError)
-	}
-	if events[0].Message != "database connection failed" {
-		t.Errorf("Message = %q, want %q", events[0].Message, "database connection failed")
+	if event.Message != "database connection failed" {
+		t.Errorf("Message = %q, want %q", event.Message, "database connection failed")
 	}
 }
 
@@ -97,29 +105,14 @@ func TestEventLogHandler_Handle_WarnLevel(t *testing.T) {
 	handler := NewEventLogHandler(discardHandler{}, db)
 	logger := slog.New(handler)
 
-	// Log a warning
 	logger.Warn("slow query detected", "duration_ms", 5000)
 
-	time.Sleep(50 * time.Millisecond)
-
-	q := store.New(db)
-	events, err := q.ListEvents(context.Background(), store.ListEventsParams{
-		Limit:  10,
-		Offset: 0,
-	})
-	if err != nil {
-		t.Fatalf("ListEvents: %v", err)
+	event := requireSingleEvent(t, db)
+	if event.Level != model.EventLevelWarning {
+		t.Errorf("Level = %q, want %q", event.Level, model.EventLevelWarning)
 	}
-
-	if len(events) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(events))
-	}
-
-	if events[0].Level != model.EventLevelWarning {
-		t.Errorf("Level = %q, want %q", events[0].Level, model.EventLevelWarning)
-	}
-	if events[0].Message != "slow query detected" {
-		t.Errorf("Message = %q, want %q", events[0].Message, "slow query detected")
+	if event.Message != "slow query detected" {
+		t.Errorf("Message = %q, want %q", event.Message, "slow query detected")
 	}
 }
 
@@ -130,20 +123,9 @@ func TestEventLogHandler_Handle_InfoLevel_NotCaptured(t *testing.T) {
 	handler := NewEventLogHandler(discardHandler{}, db)
 	logger := slog.New(handler)
 
-	// Log info level - should NOT be captured
-	logger.Info("server started", "port", 8080)
+	logger.Info("server started", "port", 8080) // Should NOT be captured
 
-	time.Sleep(50 * time.Millisecond)
-
-	q := store.New(db)
-	events, err := q.ListEvents(context.Background(), store.ListEventsParams{
-		Limit:  10,
-		Offset: 0,
-	})
-	if err != nil {
-		t.Fatalf("ListEvents: %v", err)
-	}
-
+	events := fetchEvents(t, db, 10)
 	if len(events) != 0 {
 		t.Errorf("expected 0 events for INFO level, got %d", len(events))
 	}
@@ -156,20 +138,9 @@ func TestEventLogHandler_Handle_DebugLevel_NotCaptured(t *testing.T) {
 	handler := NewEventLogHandler(discardHandler{}, db)
 	logger := slog.New(handler)
 
-	// Log debug level - should NOT be captured
-	logger.Debug("processing request", "request_id", "abc123")
+	logger.Debug("processing request", "request_id", "abc123") // Should NOT be captured
 
-	time.Sleep(50 * time.Millisecond)
-
-	q := store.New(db)
-	events, err := q.ListEvents(context.Background(), store.ListEventsParams{
-		Limit:  10,
-		Offset: 0,
-	})
-	if err != nil {
-		t.Fatalf("ListEvents: %v", err)
-	}
-
+	events := fetchEvents(t, db, 10)
 	if len(events) != 0 {
 		t.Errorf("expected 0 events for DEBUG level, got %d", len(events))
 	}
@@ -179,152 +150,47 @@ func TestEventLogHandler_Handle_CustomLevel(t *testing.T) {
 	db, cleanup := testDB(t)
 	defer cleanup()
 
-	// Create handler with INFO as minimum level
 	handler := NewEventLogHandlerWithLevel(discardHandler{}, db, slog.LevelInfo)
 	logger := slog.New(handler)
 
-	// Log info level - should now be captured
-	logger.Info("server started", "port", 8080)
+	logger.Info("server started", "port", 8080) // Should be captured with custom level
 
-	time.Sleep(50 * time.Millisecond)
-
-	q := store.New(db)
-	events, err := q.ListEvents(context.Background(), store.ListEventsParams{
-		Limit:  10,
-		Offset: 0,
-	})
-	if err != nil {
-		t.Fatalf("ListEvents: %v", err)
-	}
-
+	events := fetchEvents(t, db, 10)
 	if len(events) != 1 {
 		t.Errorf("expected 1 event with custom INFO level, got %d", len(events))
 	}
 }
 
-func TestEventLogHandler_CategoryInference_Auth(t *testing.T) {
-	db, cleanup := testDB(t)
-	defer cleanup()
-
-	handler := NewEventLogHandler(discardHandler{}, db)
-	logger := slog.New(handler)
-
+func TestEventLogHandler_CategoryInference(t *testing.T) {
 	testCases := []struct {
-		message          string
-		expectedCategory string
+		name     string
+		message  string
+		category string
 	}{
-		{"user authentication failed", model.EventCategoryAuth},
-		{"login attempt blocked", model.EventCategoryAuth},
-		{"logout completed", model.EventCategoryAuth},
+		{"auth_failed", "user authentication failed", model.EventCategoryAuth},
+		{"login_blocked", "login attempt blocked", model.EventCategoryAuth},
+		{"logout", "logout completed", model.EventCategoryAuth},
+		{"page", "page not found", model.EventCategoryPage},
+		{"cache", "cache invalidation failed", model.EventCategoryCache},
+		{"config", "config validation failed", model.EventCategoryConfig},
+		{"system_default", "unknown error occurred", model.EventCategorySystem},
 	}
 
 	for _, tc := range testCases {
-		// Clear events first
-		_, _ = db.Exec("DELETE FROM events")
+		t.Run(tc.name, func(t *testing.T) {
+			db, cleanup := testDB(t)
+			defer cleanup()
 
-		logger.Error(tc.message)
-		time.Sleep(50 * time.Millisecond)
+			handler := NewEventLogHandler(discardHandler{}, db)
+			logger := slog.New(handler)
 
-		q := store.New(db)
-		events, _ := q.ListEvents(context.Background(), store.ListEventsParams{Limit: 1, Offset: 0})
+			logger.Error(tc.message)
 
-		if len(events) != 1 {
-			t.Errorf("message %q: expected 1 event, got %d", tc.message, len(events))
-			continue
-		}
-
-		if events[0].Category != tc.expectedCategory {
-			t.Errorf("message %q: Category = %q, want %q", tc.message, events[0].Category, tc.expectedCategory)
-		}
-	}
-}
-
-func TestEventLogHandler_CategoryInference_Page(t *testing.T) {
-	db, cleanup := testDB(t)
-	defer cleanup()
-
-	handler := NewEventLogHandler(discardHandler{}, db)
-	logger := slog.New(handler)
-
-	logger.Error("page not found")
-	time.Sleep(50 * time.Millisecond)
-
-	q := store.New(db)
-	events, _ := q.ListEvents(context.Background(), store.ListEventsParams{Limit: 1, Offset: 0})
-
-	if len(events) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(events))
-	}
-
-	if events[0].Category != model.EventCategoryPage {
-		t.Errorf("Category = %q, want %q", events[0].Category, model.EventCategoryPage)
-	}
-}
-
-func TestEventLogHandler_CategoryInference_Cache(t *testing.T) {
-	db, cleanup := testDB(t)
-	defer cleanup()
-
-	handler := NewEventLogHandler(discardHandler{}, db)
-	logger := slog.New(handler)
-
-	logger.Error("cache invalidation failed")
-	time.Sleep(50 * time.Millisecond)
-
-	q := store.New(db)
-	events, _ := q.ListEvents(context.Background(), store.ListEventsParams{Limit: 1, Offset: 0})
-
-	if len(events) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(events))
-	}
-
-	if events[0].Category != model.EventCategoryCache {
-		t.Errorf("Category = %q, want %q", events[0].Category, model.EventCategoryCache)
-	}
-}
-
-func TestEventLogHandler_CategoryInference_Config(t *testing.T) {
-	db, cleanup := testDB(t)
-	defer cleanup()
-
-	handler := NewEventLogHandler(discardHandler{}, db)
-	logger := slog.New(handler)
-
-	logger.Error("config validation failed")
-	time.Sleep(50 * time.Millisecond)
-
-	q := store.New(db)
-	events, _ := q.ListEvents(context.Background(), store.ListEventsParams{Limit: 1, Offset: 0})
-
-	if len(events) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(events))
-	}
-
-	if events[0].Category != model.EventCategoryConfig {
-		t.Errorf("Category = %q, want %q", events[0].Category, model.EventCategoryConfig)
-	}
-}
-
-func TestEventLogHandler_CategoryInference_System(t *testing.T) {
-	db, cleanup := testDB(t)
-	defer cleanup()
-
-	handler := NewEventLogHandler(discardHandler{}, db)
-	logger := slog.New(handler)
-
-	// Message without known keywords should default to system
-	logger.Error("unknown error occurred")
-	time.Sleep(50 * time.Millisecond)
-
-	q := store.New(db)
-	events, _ := q.ListEvents(context.Background(), store.ListEventsParams{Limit: 1, Offset: 0})
-
-	if len(events) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(events))
-	}
-
-	if events[0].Category != model.EventCategorySystem {
-		t.Errorf("Category = %q, want %q", events[0].Category, model.EventCategorySystem)
+			event := requireSingleEvent(t, db)
+			if event.Category != tc.category {
+				t.Errorf("Category = %q, want %q", event.Category, tc.category)
+			}
+		})
 	}
 }
 
@@ -335,19 +201,11 @@ func TestEventLogHandler_ExplicitCategory(t *testing.T) {
 	handler := NewEventLogHandler(discardHandler{}, db)
 	logger := slog.New(handler)
 
-	// Use explicit category attribute - should override inference
-	logger.Error("something happened", "category", model.EventCategoryUser)
-	time.Sleep(50 * time.Millisecond)
+	logger.Error("something happened", "category", model.EventCategoryUser) // Explicit category overrides inference
 
-	q := store.New(db)
-	events, _ := q.ListEvents(context.Background(), store.ListEventsParams{Limit: 1, Offset: 0})
-
-	if len(events) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(events))
-	}
-
-	if events[0].Category != model.EventCategoryUser {
-		t.Errorf("Category = %q, want %q (explicit category should override)", events[0].Category, model.EventCategoryUser)
+	event := requireSingleEvent(t, db)
+	if event.Category != model.EventCategoryUser {
+		t.Errorf("Category = %q, want %q (explicit category should override)", event.Category, model.EventCategoryUser)
 	}
 }
 
@@ -363,30 +221,17 @@ func TestEventLogHandler_MetadataExtraction(t *testing.T) {
 		"path", "/api/users",
 		"duration_ms", 1234,
 	)
-	time.Sleep(50 * time.Millisecond)
 
-	q := store.New(db)
-	events, _ := q.ListEvents(context.Background(), store.ListEventsParams{Limit: 1, Offset: 0})
-
-	if len(events) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(events))
-	}
-
-	// Check that metadata contains the attributes
-	metadata := events[0].Metadata
+	event := requireSingleEvent(t, db)
+	metadata := event.Metadata
 	if metadata == "{}" {
 		t.Error("Metadata should not be empty")
 	}
 
-	// Basic checks that keys are present in the JSON
-	if !contains(metadata, "status_code") {
-		t.Errorf("Metadata should contain 'status_code': %s", metadata)
-	}
-	if !contains(metadata, "path") {
-		t.Errorf("Metadata should contain 'path': %s", metadata)
-	}
-	if !contains(metadata, "duration_ms") {
-		t.Errorf("Metadata should contain 'duration_ms': %s", metadata)
+	for _, key := range []string{"status_code", "path", "duration_ms"} {
+		if !contains(metadata, key) {
+			t.Errorf("Metadata should contain %q: %s", key, metadata)
+		}
 	}
 }
 
@@ -401,18 +246,10 @@ func TestEventLogHandler_WithAttrs(t *testing.T) {
 
 	logger := slog.New(handlerWithAttrs)
 	logger.Error("service error")
-	time.Sleep(50 * time.Millisecond)
 
-	q := store.New(db)
-	events, _ := q.ListEvents(context.Background(), store.ListEventsParams{Limit: 1, Offset: 0})
-
-	if len(events) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(events))
-	}
-
-	// The wrapped handler should still work and capture events
-	if events[0].Message != "service error" {
-		t.Errorf("Message = %q, want %q", events[0].Message, "service error")
+	event := requireSingleEvent(t, db)
+	if event.Message != "service error" {
+		t.Errorf("Message = %q, want %q", event.Message, "service error")
 	}
 }
 
@@ -425,18 +262,10 @@ func TestEventLogHandler_WithGroup(t *testing.T) {
 
 	logger := slog.New(handlerWithGroup)
 	logger.Error("request error", "id", "abc123")
-	time.Sleep(50 * time.Millisecond)
 
-	q := store.New(db)
-	events, _ := q.ListEvents(context.Background(), store.ListEventsParams{Limit: 1, Offset: 0})
-
-	if len(events) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(events))
-	}
-
-	// The wrapped handler should still work
-	if events[0].Message != "request error" {
-		t.Errorf("Message = %q, want %q", events[0].Message, "request error")
+	event := requireSingleEvent(t, db)
+	if event.Message != "request error" {
+		t.Errorf("Message = %q, want %q", event.Message, "request error")
 	}
 }
 
@@ -474,23 +303,14 @@ func TestEventLogHandler_SpecialCharactersInMetadata(t *testing.T) {
 	handler := NewEventLogHandler(discardHandler{}, db)
 	logger := slog.New(handler)
 
-	// Log with special characters that need JSON escaping
 	logger.Error("parse error",
 		"input", `{"key": "value with \"quotes\""}`,
 		"path", "C:\\Users\\test",
 		"message", "line1\nline2\ttabbed",
 	)
-	time.Sleep(50 * time.Millisecond)
 
-	q := store.New(db)
-	events, _ := q.ListEvents(context.Background(), store.ListEventsParams{Limit: 1, Offset: 0})
-
-	if len(events) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(events))
-	}
-
-	// Metadata should be valid JSON (not crash on special characters)
-	if events[0].Metadata == "" {
+	event := requireSingleEvent(t, db)
+	if event.Metadata == "" {
 		t.Error("Metadata should not be empty")
 	}
 }
@@ -538,16 +358,7 @@ func TestSlogLevelToEventLevel(t *testing.T) {
 	}
 }
 
-// Helper function to check if a string contains a substring
+// contains is a simple wrapper for strings.Contains.
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
-}
-
-func containsHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(s, substr)
 }

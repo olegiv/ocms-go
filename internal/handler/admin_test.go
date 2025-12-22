@@ -7,8 +7,7 @@ import (
 )
 
 func TestNewAdminHandler(t *testing.T) {
-	db := testDB(t)
-	sm := testSessionManager(t)
+	db, sm := testHandlerSetup(t)
 
 	handler := NewAdminHandler(db, nil, sm, nil)
 
@@ -310,8 +309,7 @@ func TestAdminHandler_SetLanguage_Redirect(t *testing.T) {
 }
 
 func TestAdminHandler_WithCacheManager(t *testing.T) {
-	db := testDB(t)
-	sm := testSessionManager(t)
+	db, sm := testHandlerSetup(t)
 
 	// Test with nil cache manager (should not panic during construction)
 	handler := NewAdminHandler(db, nil, sm, nil)

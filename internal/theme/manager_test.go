@@ -10,6 +10,29 @@ import (
 	"ocms-go/internal/i18n"
 )
 
+// testLogger returns a logger configured for tests (errors only).
+func testLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+}
+
+// testThemesDir creates a temporary themes directory and registers cleanup.
+func testThemesDir(t *testing.T) string {
+	t.Helper()
+	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(themesDir) })
+	return themesDir
+}
+
+// testManager creates a theme manager with a temporary themes directory.
+func testManager(t *testing.T) (*Manager, string) {
+	t.Helper()
+	themesDir := testThemesDir(t)
+	return NewManager(themesDir, testLogger()), themesDir
+}
+
 // createTestTheme creates a test theme in a temporary directory.
 func createTestTheme(t *testing.T, themesDir, themeName string, config Config) string {
 	t.Helper()
@@ -77,300 +100,180 @@ func createTestTheme(t *testing.T, themesDir, themeName string, config Config) s
 }
 
 func TestNewManager(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewManager("/tmp/themes", logger)
+	m := NewManager("/tmp/themes", testLogger())
 
 	if m == nil {
 		t.Fatal("expected manager to be non-nil")
 	}
-
 	if m.themesDir != "/tmp/themes" {
-		t.Errorf("expected themesDir /tmp/themes, got %s", m.themesDir)
+		t.Errorf("themesDir = %s, want /tmp/themes", m.themesDir)
 	}
-
 	if m.themes == nil {
 		t.Error("expected themes map to be initialized")
 	}
 }
 
 func TestLoadThemes(t *testing.T) {
-	// Create temp directory
-	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(themesDir) }()
+	m, themesDir := testManager(t)
 
-	// Create test themes
-	config1 := Config{
-		Name:        "Test Theme 1",
-		Version:     "1.0.0",
-		Author:      "Test Author",
-		Description: "Test theme description",
-	}
-	createTestTheme(t, themesDir, "test1", config1)
-
-	config2 := Config{
-		Name:        "Test Theme 2",
-		Version:     "2.0.0",
-		Author:      "Another Author",
-		Description: "Another description",
-	}
-	createTestTheme(t, themesDir, "test2", config2)
-
-	// Create manager and load themes
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewManager(themesDir, logger)
+	createTestTheme(t, themesDir, "test1", Config{Name: "Test Theme 1", Version: "1.0.0", Author: "Test Author"})
+	createTestTheme(t, themesDir, "test2", Config{Name: "Test Theme 2", Version: "2.0.0", Author: "Another Author"})
 
 	if err := m.LoadThemes(); err != nil {
-		t.Fatalf("failed to load themes: %v", err)
+		t.Fatalf("LoadThemes: %v", err)
 	}
 
-	// Verify themes loaded
 	if m.ThemeCount() != 2 {
-		t.Errorf("expected 2 themes, got %d", m.ThemeCount())
+		t.Errorf("ThemeCount = %d, want 2", m.ThemeCount())
 	}
-
 	if !m.HasTheme("test1") {
 		t.Error("expected theme test1 to be loaded")
 	}
-
 	if !m.HasTheme("test2") {
 		t.Error("expected theme test2 to be loaded")
 	}
 }
 
 func TestLoadThemesNonExistentDirectory(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewManager("/nonexistent/path", logger)
+	m := NewManager("/nonexistent/path", testLogger())
 
-	// Should not error, just log a warning
 	if err := m.LoadThemes(); err != nil {
-		t.Errorf("expected no error for nonexistent dir, got %v", err)
+		t.Errorf("LoadThemes: %v (expected no error for nonexistent dir)", err)
 	}
-
 	if m.ThemeCount() != 0 {
-		t.Errorf("expected 0 themes, got %d", m.ThemeCount())
+		t.Errorf("ThemeCount = %d, want 0", m.ThemeCount())
 	}
 }
 
 func TestSetActiveTheme(t *testing.T) {
-	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(themesDir) }()
-
-	config := Config{Name: "Test", Version: "1.0.0"}
-	createTestTheme(t, themesDir, "test", config)
-
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewManager(themesDir, logger)
+	m, themesDir := testManager(t)
+	createTestTheme(t, themesDir, "test", Config{Name: "Test", Version: "1.0.0"})
 
 	if err := m.LoadThemes(); err != nil {
-		t.Fatalf("failed to load themes: %v", err)
+		t.Fatalf("LoadThemes: %v", err)
 	}
-
-	// Set active theme
 	if err := m.SetActiveTheme("test"); err != nil {
-		t.Errorf("failed to set active theme: %v", err)
+		t.Errorf("SetActiveTheme: %v", err)
 	}
 
-	// Verify active theme
 	active := m.GetActiveTheme()
 	if active == nil {
 		t.Fatal("expected active theme to be set")
 	}
-
 	if active.Name != "test" {
-		t.Errorf("expected active theme name 'test', got %s", active.Name)
+		t.Errorf("active.Name = %s, want test", active.Name)
 	}
 }
 
 func TestSetActiveThemeNotFound(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewManager("/tmp/themes", logger)
+	m := NewManager("/tmp/themes", testLogger())
 
-	err := m.SetActiveTheme("nonexistent")
-	if err == nil {
+	if err := m.SetActiveTheme("nonexistent"); err == nil {
 		t.Error("expected error for nonexistent theme")
 	}
 }
 
 func TestGetTheme(t *testing.T) {
-	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(themesDir) }()
-
-	config := Config{
-		Name:    "Get Test",
-		Version: "1.0.0",
-		Author:  "Author",
-	}
-	createTestTheme(t, themesDir, "gettest", config)
-
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewManager(themesDir, logger)
+	m, themesDir := testManager(t)
+	createTestTheme(t, themesDir, "gettest", Config{Name: "Get Test", Version: "1.0.0", Author: "Author"})
 
 	if err := m.LoadThemes(); err != nil {
-		t.Fatalf("failed to load themes: %v", err)
+		t.Fatalf("LoadThemes: %v", err)
 	}
 
-	// Get existing theme
 	theme, err := m.GetTheme("gettest")
 	if err != nil {
-		t.Errorf("failed to get theme: %v", err)
+		t.Errorf("GetTheme: %v", err)
 	}
-
 	if theme.Config.Name != "Get Test" {
-		t.Errorf("expected theme name 'Get Test', got %s", theme.Config.Name)
+		t.Errorf("theme.Config.Name = %s, want Get Test", theme.Config.Name)
 	}
 
-	// Get nonexistent theme
-	_, err = m.GetTheme("nonexistent")
-	if err == nil {
+	if _, err = m.GetTheme("nonexistent"); err == nil {
 		t.Error("expected error for nonexistent theme")
 	}
 }
 
 func TestListThemes(t *testing.T) {
-	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(themesDir) }()
-
+	m, themesDir := testManager(t)
 	createTestTheme(t, themesDir, "theme1", Config{Name: "Theme 1", Version: "1.0.0"})
 	createTestTheme(t, themesDir, "theme2", Config{Name: "Theme 2", Version: "2.0.0"})
 
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewManager(themesDir, logger)
-
 	if err := m.LoadThemes(); err != nil {
-		t.Fatalf("failed to load themes: %v", err)
+		t.Fatalf("LoadThemes: %v", err)
 	}
 
-	configs := m.ListThemes()
-	if len(configs) != 2 {
-		t.Errorf("expected 2 theme configs, got %d", len(configs))
+	if len(m.ListThemes()) != 2 {
+		t.Errorf("len(ListThemes) = %d, want 2", len(m.ListThemes()))
 	}
 }
 
 func TestListThemesWithActive(t *testing.T) {
-	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(themesDir) }()
-
+	m, themesDir := testManager(t)
 	createTestTheme(t, themesDir, "active", Config{Name: "Active Theme", Version: "1.0.0"})
 	createTestTheme(t, themesDir, "inactive", Config{Name: "Inactive Theme", Version: "1.0.0"})
 
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewManager(themesDir, logger)
-
 	if err := m.LoadThemes(); err != nil {
-		t.Fatalf("failed to load themes: %v", err)
+		t.Fatalf("LoadThemes: %v", err)
 	}
-
 	if err := m.SetActiveTheme("active"); err != nil {
-		t.Fatalf("failed to set active theme: %v", err)
+		t.Fatalf("SetActiveTheme: %v", err)
 	}
 
 	infos := m.ListThemesWithActive()
 	if len(infos) != 2 {
-		t.Errorf("expected 2 theme infos, got %d", len(infos))
+		t.Errorf("len(infos) = %d, want 2", len(infos))
 	}
 
-	// Find active theme
-	var activeFound, inactiveFound bool
 	for _, info := range infos {
-		if info.Name == "active" {
-			activeFound = true
-			if !info.IsActive {
-				t.Error("expected 'active' theme to be marked as active")
-			}
+		if info.Name == "active" && !info.IsActive {
+			t.Error("expected 'active' theme to be marked as active")
 		}
-		if info.Name == "inactive" {
-			inactiveFound = true
-			if info.IsActive {
-				t.Error("expected 'inactive' theme to not be marked as active")
-			}
+		if info.Name == "inactive" && info.IsActive {
+			t.Error("expected 'inactive' theme to not be marked as active")
 		}
-	}
-
-	if !activeFound {
-		t.Error("active theme not found in list")
-	}
-	if !inactiveFound {
-		t.Error("inactive theme not found in list")
 	}
 }
 
 func TestReloadTheme(t *testing.T) {
-	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(themesDir) }()
-
-	// Initial config
-	config := Config{Name: "Original", Version: "1.0.0"}
-	createTestTheme(t, themesDir, "reload", config)
-
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewManager(themesDir, logger)
+	m, themesDir := testManager(t)
+	createTestTheme(t, themesDir, "reload", Config{Name: "Original", Version: "1.0.0"})
 
 	if err := m.LoadThemes(); err != nil {
-		t.Fatalf("failed to load themes: %v", err)
+		t.Fatalf("LoadThemes: %v", err)
 	}
 
-	// Verify initial name
 	theme, _ := m.GetTheme("reload")
 	if theme.Config.Name != "Original" {
-		t.Errorf("expected initial name 'Original', got %s", theme.Config.Name)
+		t.Errorf("initial name = %s, want Original", theme.Config.Name)
 	}
 
-	// Update config
+	// Update config on disk
 	newConfig := Config{Name: "Updated", Version: "2.0.0"}
 	configData, _ := json.Marshal(newConfig)
 	if err := os.WriteFile(filepath.Join(themesDir, "reload", "theme.json"), configData, 0644); err != nil {
 		t.Fatalf("failed to update theme.json: %v", err)
 	}
 
-	// Reload theme
 	if err := m.ReloadTheme("reload"); err != nil {
-		t.Fatalf("failed to reload theme: %v", err)
+		t.Fatalf("ReloadTheme: %v", err)
 	}
 
-	// Verify updated name
 	theme, _ = m.GetTheme("reload")
 	if theme.Config.Name != "Updated" {
-		t.Errorf("expected updated name 'Updated', got %s", theme.Config.Name)
+		t.Errorf("updated name = %s, want Updated", theme.Config.Name)
 	}
 }
 
 func TestReloadActiveTheme(t *testing.T) {
-	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(themesDir) }()
-
-	config := Config{Name: "Active Reload", Version: "1.0.0"}
-	createTestTheme(t, themesDir, "active-reload", config)
-
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewManager(themesDir, logger)
+	m, themesDir := testManager(t)
+	createTestTheme(t, themesDir, "active-reload", Config{Name: "Active Reload", Version: "1.0.0"})
 
 	if err := m.LoadThemes(); err != nil {
-		t.Fatalf("failed to load themes: %v", err)
+		t.Fatalf("LoadThemes: %v", err)
 	}
-
 	if err := m.SetActiveTheme("active-reload"); err != nil {
-		t.Fatalf("failed to set active theme: %v", err)
+		t.Fatalf("SetActiveTheme: %v", err)
 	}
 
 	// Update and reload
@@ -381,86 +284,54 @@ func TestReloadActiveTheme(t *testing.T) {
 	}
 
 	if err := m.ReloadTheme("active-reload"); err != nil {
-		t.Fatalf("failed to reload theme: %v", err)
+		t.Fatalf("ReloadTheme: %v", err)
 	}
 
-	// Verify active theme was updated
-	active := m.GetActiveTheme()
-	if active.Config.Name != "Updated Active" {
-		t.Errorf("expected active theme name 'Updated Active', got %s", active.Config.Name)
+	if active := m.GetActiveTheme(); active.Config.Name != "Updated Active" {
+		t.Errorf("active.Config.Name = %s, want Updated Active", active.Config.Name)
 	}
 }
 
 func TestHasTheme(t *testing.T) {
-	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(themesDir) }()
-
+	m, themesDir := testManager(t)
 	createTestTheme(t, themesDir, "exists", Config{Name: "Exists", Version: "1.0.0"})
 
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewManager(themesDir, logger)
-
 	if err := m.LoadThemes(); err != nil {
-		t.Fatalf("failed to load themes: %v", err)
+		t.Fatalf("LoadThemes: %v", err)
 	}
 
 	if !m.HasTheme("exists") {
-		t.Error("expected HasTheme to return true for existing theme")
+		t.Error("HasTheme(exists) = false, want true")
 	}
-
 	if m.HasTheme("nonexistent") {
-		t.Error("expected HasTheme to return false for nonexistent theme")
+		t.Error("HasTheme(nonexistent) = true, want false")
 	}
 }
 
 func TestThemesDir(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewManager("/custom/themes/path", logger)
+	m := NewManager("/custom/themes/path", testLogger())
 
 	if m.ThemesDir() != "/custom/themes/path" {
-		t.Errorf("expected ThemesDir '/custom/themes/path', got %s", m.ThemesDir())
+		t.Errorf("ThemesDir = %s, want /custom/themes/path", m.ThemesDir())
 	}
 }
 
 func TestSetFuncMap(t *testing.T) {
-	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(themesDir) }()
+	m, themesDir := testManager(t)
+	createTestTheme(t, themesDir, "funcmap", Config{Name: "FuncMap Test", Version: "1.0.0"})
 
-	config := Config{Name: "FuncMap Test", Version: "1.0.0"}
-	createTestTheme(t, themesDir, "funcmap", config)
+	m.SetFuncMap(map[string]any{"upper": func(s string) string { return s }})
 
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewManager(themesDir, logger)
-
-	// Set function map before loading
-	funcMap := map[string]any{
-		"upper": func(s string) string { return s },
-	}
-	m.SetFuncMap(funcMap)
-
-	// Load themes (should use the func map)
 	if err := m.LoadThemes(); err != nil {
-		t.Fatalf("failed to load themes: %v", err)
+		t.Fatalf("LoadThemes: %v", err)
 	}
-
-	// Theme should be loaded successfully with func map
 	if !m.HasTheme("funcmap") {
 		t.Error("expected theme to be loaded with custom func map")
 	}
 }
 
 func TestInvalidThemeJson(t *testing.T) {
-	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(themesDir) }()
+	themesDir := testThemesDir(t)
 
 	// Create theme with invalid JSON
 	themePath := filepath.Join(themesDir, "invalid")
@@ -471,86 +342,52 @@ func TestInvalidThemeJson(t *testing.T) {
 		t.Fatalf("failed to write invalid theme.json: %v", err)
 	}
 
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewManager(themesDir, logger)
-
-	// Should not error, just skip invalid theme
+	m := NewManager(themesDir, testLogger())
 	if err := m.LoadThemes(); err != nil {
-		t.Errorf("expected no error, got %v", err)
+		t.Errorf("LoadThemes: %v (expected no error)", err)
 	}
-
 	if m.HasTheme("invalid") {
 		t.Error("expected invalid theme to be skipped")
 	}
 }
 
 func TestMissingThemeJson(t *testing.T) {
-	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(themesDir) }()
+	themesDir := testThemesDir(t)
 
 	// Create theme directory without theme.json
-	themePath := filepath.Join(themesDir, "missing")
-	if err := os.MkdirAll(themePath, 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(themesDir, "missing"), 0755); err != nil {
 		t.Fatalf("failed to create theme dir: %v", err)
 	}
 
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewManager(themesDir, logger)
-
-	// Should not error, just skip theme without config
+	m := NewManager(themesDir, testLogger())
 	if err := m.LoadThemes(); err != nil {
-		t.Errorf("expected no error, got %v", err)
+		t.Errorf("LoadThemes: %v (expected no error)", err)
 	}
-
 	if m.HasTheme("missing") {
 		t.Error("expected theme without config to be skipped")
 	}
 }
 
 func TestThemeWithSettings(t *testing.T) {
-	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(themesDir) }()
-
+	m, themesDir := testManager(t)
 	config := Config{
 		Name:    "Settings Theme",
 		Version: "1.0.0",
 		Settings: []Setting{
-			{
-				Key:     "primary_color",
-				Label:   "Primary Color",
-				Type:    "color",
-				Default: "#3b82f6",
-			},
-			{
-				Key:     "show_sidebar",
-				Label:   "Show Sidebar",
-				Type:    "select",
-				Default: "yes",
-				Options: []string{"yes", "no"},
-			},
+			{Key: "primary_color", Label: "Primary Color", Type: "color", Default: "#3b82f6"},
+			{Key: "show_sidebar", Label: "Show Sidebar", Type: "select", Default: "yes", Options: []string{"yes", "no"}},
 		},
 	}
 	createTestTheme(t, themesDir, "settings", config)
 
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewManager(themesDir, logger)
-
 	if err := m.LoadThemes(); err != nil {
-		t.Fatalf("failed to load themes: %v", err)
+		t.Fatalf("LoadThemes: %v", err)
 	}
 
 	theme, _ := m.GetTheme("settings")
 	if len(theme.Config.Settings) != 2 {
-		t.Errorf("expected 2 settings, got %d", len(theme.Config.Settings))
+		t.Errorf("len(Settings) = %d, want 2", len(theme.Config.Settings))
 	}
-
-	// Verify settings
 	if theme.Config.Settings[0].Key != "primary_color" {
 		t.Error("expected first setting to be primary_color")
 	}
@@ -560,17 +397,10 @@ func TestThemeWithSettings(t *testing.T) {
 }
 
 func TestThemeCount(t *testing.T) {
-	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(themesDir) }()
-
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewManager(themesDir, logger)
+	m, themesDir := testManager(t)
 
 	if m.ThemeCount() != 0 {
-		t.Errorf("expected 0 themes initially, got %d", m.ThemeCount())
+		t.Errorf("ThemeCount = %d initially, want 0", m.ThemeCount())
 	}
 
 	createTestTheme(t, themesDir, "theme1", Config{Name: "Theme 1", Version: "1.0.0"})
@@ -578,11 +408,10 @@ func TestThemeCount(t *testing.T) {
 	createTestTheme(t, themesDir, "theme3", Config{Name: "Theme 3", Version: "1.0.0"})
 
 	if err := m.LoadThemes(); err != nil {
-		t.Fatalf("failed to load themes: %v", err)
+		t.Fatalf("LoadThemes: %v", err)
 	}
-
 	if m.ThemeCount() != 3 {
-		t.Errorf("expected 3 themes, got %d", m.ThemeCount())
+		t.Errorf("ThemeCount = %d, want 3", m.ThemeCount())
 	}
 }
 
@@ -681,225 +510,125 @@ func TestThemeTranslate(t *testing.T) {
 }
 
 func TestLoadThemeWithTranslations(t *testing.T) {
-	// Initialize i18n first (required for theme translations)
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	if err := i18n.Init(logger); err != nil {
-		t.Fatalf("failed to init i18n: %v", err)
+	if err := i18n.Init(testLogger()); err != nil {
+		t.Fatalf("i18n.Init: %v", err)
 	}
 
-	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(themesDir) }()
-
-	// Create theme with translations
+	themesDir := testThemesDir(t)
 	translations := map[string]map[string]string{
-		"en": {
-			"frontend.read_more": "Continue reading →",
-			"frontend.home":      "Home Page",
-		},
-		"ru": {
-			"frontend.read_more": "Продолжить →",
-		},
+		"en": {"frontend.read_more": "Continue reading →", "frontend.home": "Home Page"},
+		"ru": {"frontend.read_more": "Продолжить →"},
 	}
 	createTestThemeWithLocales(t, themesDir, "translated", Config{Name: "Translated Theme", Version: "1.0.0"}, translations)
 
-	m := NewManager(themesDir, logger)
+	m := NewManager(themesDir, testLogger())
 	if err := m.LoadThemes(); err != nil {
-		t.Fatalf("failed to load themes: %v", err)
+		t.Fatalf("LoadThemes: %v", err)
 	}
 
 	theme, err := m.GetTheme("translated")
 	if err != nil {
-		t.Fatalf("failed to get theme: %v", err)
+		t.Fatalf("GetTheme: %v", err)
 	}
 
-	// Verify translations were loaded
 	if theme.Translations == nil {
 		t.Fatal("expected translations to be loaded")
 	}
-
 	if len(theme.Translations) != 2 {
-		t.Errorf("expected 2 languages, got %d", len(theme.Translations))
+		t.Errorf("len(Translations) = %d, want 2", len(theme.Translations))
 	}
 
-	// Check English translation
-	trans, ok := theme.Translate("en", "frontend.read_more")
-	if !ok {
-		t.Error("expected English translation to be found")
+	if trans, ok := theme.Translate("en", "frontend.read_more"); !ok || trans != "Continue reading →" {
+		t.Errorf("en translation = %q, want 'Continue reading →'", trans)
 	}
-	if trans != "Continue reading →" {
-		t.Errorf("expected 'Continue reading →', got %s", trans)
-	}
-
-	// Check Russian translation
-	trans, ok = theme.Translate("ru", "frontend.read_more")
-	if !ok {
-		t.Error("expected Russian translation to be found")
-	}
-	if trans != "Продолжить →" {
-		t.Errorf("expected 'Продолжить →', got %s", trans)
+	if trans, ok := theme.Translate("ru", "frontend.read_more"); !ok || trans != "Продолжить →" {
+		t.Errorf("ru translation = %q, want 'Продолжить →'", trans)
 	}
 }
 
 func TestLoadThemeWithoutTranslations(t *testing.T) {
-	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(themesDir) }()
-
-	// Create theme without locales directory
+	m, themesDir := testManager(t)
 	createTestTheme(t, themesDir, "no-locales", Config{Name: "No Locales Theme", Version: "1.0.0"})
 
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewManager(themesDir, logger)
-
 	if err := m.LoadThemes(); err != nil {
-		t.Fatalf("failed to load themes: %v", err)
+		t.Fatalf("LoadThemes: %v", err)
 	}
 
-	theme, err := m.GetTheme("no-locales")
-	if err != nil {
-		t.Fatalf("failed to get theme: %v", err)
-	}
-
-	// Theme should load successfully with nil translations
+	theme, _ := m.GetTheme("no-locales")
 	if theme.Translations != nil {
 		t.Error("expected translations to be nil for theme without locales")
 	}
 }
 
 func TestManagerTranslateWithFallback(t *testing.T) {
-	// Initialize i18n
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	if err := i18n.Init(logger); err != nil {
-		t.Fatalf("failed to init i18n: %v", err)
+	if err := i18n.Init(testLogger()); err != nil {
+		t.Fatalf("i18n.Init: %v", err)
 	}
 
-	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(themesDir) }()
-
-	// Create theme with partial translations (only overrides some keys)
-	translations := map[string]map[string]string{
-		"en": {
-			"frontend.read_more": "Theme Override",
-		},
-	}
+	themesDir := testThemesDir(t)
+	translations := map[string]map[string]string{"en": {"frontend.read_more": "Theme Override"}}
 	createTestThemeWithLocales(t, themesDir, "partial", Config{Name: "Partial Theme", Version: "1.0.0"}, translations)
 
-	m := NewManager(themesDir, logger)
+	m := NewManager(themesDir, testLogger())
 	if err := m.LoadThemes(); err != nil {
-		t.Fatalf("failed to load themes: %v", err)
+		t.Fatalf("LoadThemes: %v", err)
 	}
-
 	if err := m.SetActiveTheme("partial"); err != nil {
-		t.Fatalf("failed to set active theme: %v", err)
+		t.Fatalf("SetActiveTheme: %v", err)
 	}
 
-	// Test theme-specific translation (should return theme override)
-	result := m.Translate("en", "frontend.read_more")
-	if result != "Theme Override" {
-		t.Errorf("expected 'Theme Override', got %s", result)
+	if result := m.Translate("en", "frontend.read_more"); result != "Theme Override" {
+		t.Errorf("Translate = %s, want Theme Override", result)
 	}
-
-	// Test global fallback (key not in theme translations)
-	// This should fall back to global i18n
-	result = m.Translate("en", "nav.dashboard")
-	if result != "Dashboard" {
-		t.Errorf("expected 'Dashboard' from global i18n, got %s", result)
+	if result := m.Translate("en", "nav.dashboard"); result != "Dashboard" {
+		t.Errorf("Translate (fallback) = %s, want Dashboard", result)
 	}
 }
 
 func TestManagerTranslateNoActiveTheme(t *testing.T) {
-	// Initialize i18n
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	if err := i18n.Init(logger); err != nil {
-		t.Fatalf("failed to init i18n: %v", err)
+	if err := i18n.Init(testLogger()); err != nil {
+		t.Fatalf("i18n.Init: %v", err)
 	}
 
-	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(themesDir) }()
-
-	m := NewManager(themesDir, logger)
-
-	// No active theme - should fall back to global i18n
-	result := m.Translate("en", "nav.dashboard")
-	if result != "Dashboard" {
-		t.Errorf("expected 'Dashboard' from global i18n, got %s", result)
+	m := NewManager(testThemesDir(t), testLogger())
+	if result := m.Translate("en", "nav.dashboard"); result != "Dashboard" {
+		t.Errorf("Translate = %s, want Dashboard", result)
 	}
 }
 
 func TestManagerTemplateFuncs(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewManager("/tmp/themes", logger)
+	m := NewManager("/tmp/themes", testLogger())
 
 	funcs := m.TemplateFuncs()
-
-	// Verify TTheme function exists
-	ttheme, ok := funcs["TTheme"]
-	if !ok {
+	if ttheme, ok := funcs["TTheme"]; !ok || ttheme == nil {
 		t.Fatal("expected TTheme function to be in TemplateFuncs")
-	}
-
-	// Verify it's callable
-	if ttheme == nil {
-		t.Error("expected TTheme to be non-nil")
 	}
 }
 
 func TestManagerTranslateWithArgs(t *testing.T) {
-	// Initialize i18n
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	if err := i18n.Init(logger); err != nil {
-		t.Fatalf("failed to init i18n: %v", err)
+	if err := i18n.Init(testLogger()); err != nil {
+		t.Fatalf("i18n.Init: %v", err)
 	}
 
-	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(themesDir) }()
-
-	// Create theme with a translation containing format placeholder
-	translations := map[string]map[string]string{
-		"en": {
-			"greeting": "Hello, %s!",
-		},
-	}
+	themesDir := testThemesDir(t)
+	translations := map[string]map[string]string{"en": {"greeting": "Hello, %s!"}}
 	createTestThemeWithLocales(t, themesDir, "args", Config{Name: "Args Theme", Version: "1.0.0"}, translations)
 
-	m := NewManager(themesDir, logger)
+	m := NewManager(themesDir, testLogger())
 	if err := m.LoadThemes(); err != nil {
-		t.Fatalf("failed to load themes: %v", err)
+		t.Fatalf("LoadThemes: %v", err)
 	}
-
 	if err := m.SetActiveTheme("args"); err != nil {
-		t.Fatalf("failed to set active theme: %v", err)
+		t.Fatalf("SetActiveTheme: %v", err)
 	}
 
-	// Test translation with arguments
-	result := m.Translate("en", "greeting", "World")
-	if result != "Hello, World!" {
-		t.Errorf("expected 'Hello, World!', got %s", result)
+	if result := m.Translate("en", "greeting", "World"); result != "Hello, World!" {
+		t.Errorf("Translate = %s, want Hello, World!", result)
 	}
 }
 
 func TestInvalidThemeLocaleJson(t *testing.T) {
-	themesDir, err := os.MkdirTemp("", "ocms-themes-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(themesDir) }()
-
-	// Create theme first
+	themesDir := testThemesDir(t)
 	createTestTheme(t, themesDir, "invalid-locale", Config{Name: "Invalid Locale Theme", Version: "1.0.0"})
 
 	// Create invalid locale file
@@ -911,20 +640,12 @@ func TestInvalidThemeLocaleJson(t *testing.T) {
 		t.Fatalf("failed to write invalid messages.json: %v", err)
 	}
 
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewManager(themesDir, logger)
-
-	// Should load theme but skip invalid locale
+	m := NewManager(themesDir, testLogger())
 	if err := m.LoadThemes(); err != nil {
-		t.Fatalf("failed to load themes: %v", err)
+		t.Fatalf("LoadThemes: %v", err)
 	}
 
-	theme, err := m.GetTheme("invalid-locale")
-	if err != nil {
-		t.Fatalf("failed to get theme: %v", err)
-	}
-
-	// Theme should be loaded with nil translations (invalid locale skipped)
+	theme, _ := m.GetTheme("invalid-locale")
 	if len(theme.Translations) > 0 {
 		t.Error("expected no translations loaded for theme with invalid locale")
 	}

@@ -112,6 +112,13 @@ func testHandler(t *testing.T, db *sql.DB) *Handler {
 	return NewHandler(db)
 }
 
+// testSetup creates a test database and API handler for testing.
+func testSetup(t *testing.T) (*sql.DB, *Handler) {
+	t.Helper()
+	db := testDB(t)
+	return db, NewHandler(db)
+}
+
 // createTestTag creates a test tag in the database.
 func createTestTag(t *testing.T, db *sql.DB, name, slug string) store.Tag {
 	t.Helper()
