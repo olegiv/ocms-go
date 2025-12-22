@@ -549,10 +549,6 @@ img {
     grid-template-columns: repeat(3, 1fr);
 }
 
-.dev-grid-2 {
-    grid-template-columns: repeat(2, 1fr);
-}
-
 @media (max-width: 900px) {
     .dev-grid-3 {
         grid-template-columns: repeat(2, 1fr);
@@ -560,8 +556,7 @@ img {
 }
 
 @media (max-width: 600px) {
-    .dev-grid-3,
-    .dev-grid-2 {
+    .dev-grid-3 {
         grid-template-columns: 1fr;
     }
 }
