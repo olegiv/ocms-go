@@ -109,12 +109,6 @@ func testDB(t *testing.T) *sql.DB {
 	return db
 }
 
-// testHandler creates a test API handler with the given database.
-func testHandler(t *testing.T, db *sql.DB) *Handler {
-	t.Helper()
-	return NewHandler(db)
-}
-
 // testSetup creates a test database and API handler for testing.
 func testSetup(t *testing.T) (*sql.DB, *Handler) {
 	t.Helper()
