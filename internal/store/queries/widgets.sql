@@ -9,15 +9,15 @@ SELECT * FROM widgets WHERE id = ?;
 -- name: GetWidgetsByThemeAndArea :many
 SELECT * FROM widgets
 WHERE theme = ? AND area = ? AND is_active = 1
-ORDER BY position ASC;
+ORDER BY position;
 
 -- name: GetAllWidgetsByTheme :many
 SELECT * FROM widgets
 WHERE theme = ?
-ORDER BY area ASC, position ASC;
+ORDER BY area, position;
 
 -- name: GetAllWidgets :many
-SELECT * FROM widgets ORDER BY theme ASC, area ASC, position ASC;
+SELECT * FROM widgets ORDER BY theme, area, position;
 
 -- name: UpdateWidget :one
 UPDATE widgets

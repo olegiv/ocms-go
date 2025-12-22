@@ -10,13 +10,13 @@ SELECT * FROM tags WHERE id = ?;
 SELECT * FROM tags WHERE slug = ?;
 
 -- name: ListTags :many
-SELECT * FROM tags ORDER BY name ASC LIMIT ? OFFSET ?;
+SELECT * FROM tags ORDER BY name LIMIT ? OFFSET ?;
 
 -- name: ListAllTags :many
-SELECT * FROM tags ORDER BY name ASC;
+SELECT * FROM tags ORDER BY name;
 
 -- name: SearchTags :many
-SELECT * FROM tags WHERE name LIKE ? ORDER BY name ASC LIMIT ?;
+SELECT * FROM tags WHERE name LIKE ? ORDER BY name LIMIT ?;
 
 -- name: UpdateTag :one
 UPDATE tags SET name = ?, slug = ?, language_id = ?, updated_at = ?
@@ -47,7 +47,7 @@ DELETE FROM page_tags WHERE page_id = ? AND tag_id = ?;
 SELECT t.* FROM tags t
 INNER JOIN page_tags pt ON pt.tag_id = t.id
 WHERE pt.page_id = ?
-ORDER BY t.name ASC;
+ORDER BY t.name;
 
 -- name: GetPagesForTag :many
 SELECT p.* FROM pages p
@@ -66,8 +66,8 @@ DELETE FROM page_tags WHERE page_id = ?;
 SELECT t.id, t.name, t.slug, t.created_at, t.updated_at, COUNT(pt.page_id) as usage_count
 FROM tags t
 LEFT JOIN page_tags pt ON pt.tag_id = t.id
-GROUP BY t.id
-ORDER BY t.name ASC
+GROUP BY t.id, t.name, t.slug, t.created_at, t.updated_at
+ORDER BY t.name
 LIMIT ? OFFSET ?;
 
 -- name: ListTagsForSitemap :many
@@ -89,7 +89,7 @@ WHERE t.id = ?;
 -- name: ListTagsByLanguage :many
 SELECT * FROM tags
 WHERE language_id = ?
-ORDER BY name ASC;
+ORDER BY name;
 
 -- name: ListTagsWithLanguage :many
 SELECT
@@ -98,7 +98,7 @@ SELECT
     COALESCE(l.name, '') as language_name
 FROM tags t
 LEFT JOIN languages l ON l.id = t.language_id
-ORDER BY t.name ASC;
+ORDER BY t.name;
 
 -- name: GetTagUsageCountsWithLanguage :many
 SELECT
@@ -109,8 +109,8 @@ SELECT
 FROM tags t
 LEFT JOIN page_tags pt ON pt.tag_id = t.id
 LEFT JOIN languages l ON l.id = t.language_id
-GROUP BY t.id
-ORDER BY t.name ASC
+GROUP BY t.id, t.name, t.slug, t.language_id, t.created_at, t.updated_at, l.code, l.name
+ORDER BY t.name
 LIMIT ? OFFSET ?;
 
 -- name: UpdateTagLanguage :exec
@@ -149,7 +149,7 @@ LEFT JOIN (
     AND (tr.entity_id = ? OR tr.translation_id = ?)
 ) t ON t.language_id = l.id
 WHERE l.is_active = 1
-ORDER BY l.position ASC;
+ORDER BY l.position;
 
 -- name: TagSlugExistsForLanguage :one
 SELECT EXISTS(SELECT 1 FROM tags WHERE slug = ? AND language_id = ?);

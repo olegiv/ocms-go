@@ -10,13 +10,13 @@ SELECT * FROM categories WHERE id = ?;
 SELECT * FROM categories WHERE slug = ?;
 
 -- name: ListCategories :many
-SELECT * FROM categories ORDER BY position ASC, name ASC;
+SELECT * FROM categories ORDER BY position, name;
 
 -- name: ListRootCategories :many
-SELECT * FROM categories WHERE parent_id IS NULL ORDER BY position ASC, name ASC;
+SELECT * FROM categories WHERE parent_id IS NULL ORDER BY position, name;
 
 -- name: ListChildCategories :many
-SELECT * FROM categories WHERE parent_id = ? ORDER BY position ASC, name ASC;
+SELECT * FROM categories WHERE parent_id = ? ORDER BY position, name;
 
 -- name: UpdateCategory :one
 UPDATE categories SET name = ?, slug = ?, description = ?, parent_id = ?, position = ?, language_id = ?, updated_at = ?
@@ -39,7 +39,7 @@ DELETE FROM page_categories WHERE page_id = ? AND category_id = ?;
 SELECT c.* FROM categories c
 INNER JOIN page_categories pc ON pc.category_id = c.id
 WHERE pc.page_id = ?
-ORDER BY c.name ASC;
+ORDER BY c.name;
 
 -- name: ClearPageCategories :exec
 DELETE FROM page_categories WHERE page_id = ?;
@@ -64,15 +64,14 @@ SELECT COUNT(*) FROM categories WHERE slug = ? AND id != ?;
 -- name: SearchCategories :many
 SELECT * FROM categories
 WHERE name LIKE '%' || ? || '%'
-ORDER BY name ASC
-LIMIT 20;
+ORDER BY name LIMIT 20;
 
 -- name: GetCategoryUsageCounts :many
 SELECT c.*, COUNT(pc.page_id) as usage_count
 FROM categories c
 LEFT JOIN page_categories pc ON pc.category_id = c.id
-GROUP BY c.id
-ORDER BY c.position ASC, c.name ASC;
+GROUP BY c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.language_id, c.created_at, c.updated_at
+ORDER BY c.position, c.name;
 
 -- name: UpdateCategoryPosition :exec
 UPDATE categories SET position = ?, updated_at = ? WHERE id = ?;
@@ -117,7 +116,7 @@ WHERE c.id = ?;
 -- name: ListCategoriesByLanguage :many
 SELECT * FROM categories
 WHERE language_id = ?
-ORDER BY position ASC, name ASC;
+ORDER BY position, name;
 
 -- name: ListCategoriesWithLanguage :many
 SELECT
@@ -126,7 +125,7 @@ SELECT
     COALESCE(l.name, '') as language_name
 FROM categories c
 LEFT JOIN languages l ON l.id = c.language_id
-ORDER BY c.position ASC, c.name ASC;
+ORDER BY c.position, c.name;
 
 -- name: GetCategoryUsageCountsWithLanguage :many
 SELECT
@@ -137,8 +136,8 @@ SELECT
 FROM categories c
 LEFT JOIN page_categories pc ON pc.category_id = c.id
 LEFT JOIN languages l ON l.id = c.language_id
-GROUP BY c.id
-ORDER BY c.position ASC, c.name ASC;
+GROUP BY c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.language_id, c.created_at, c.updated_at, l.code, l.name
+ORDER BY c.position, c.name;
 
 -- name: UpdateCategoryLanguage :exec
 UPDATE categories SET language_id = ?, updated_at = ? WHERE id = ?;
@@ -176,7 +175,7 @@ LEFT JOIN (
     AND (t.entity_id = ? OR t.translation_id = ?)
 ) c ON c.language_id = l.id
 WHERE l.is_active = 1
-ORDER BY l.position ASC;
+ORDER BY l.position;
 
 -- name: CategorySlugExistsForLanguage :one
 SELECT COUNT(*) FROM categories WHERE slug = ? AND language_id = ?;

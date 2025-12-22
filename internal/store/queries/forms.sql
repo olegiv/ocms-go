@@ -10,7 +10,7 @@ SELECT * FROM forms WHERE id = ?;
 SELECT * FROM forms WHERE slug = ?;
 
 -- name: ListForms :many
-SELECT * FROM forms ORDER BY name ASC LIMIT ? OFFSET ?;
+SELECT * FROM forms ORDER BY name LIMIT ? OFFSET ?;
 
 -- name: UpdateForm :one
 UPDATE forms SET name = ?, slug = ?, title = ?, description = ?, success_message = ?, email_to = ?, is_active = ?, updated_at = ?
@@ -32,7 +32,7 @@ RETURNING *;
 SELECT * FROM form_fields WHERE id = ?;
 
 -- name: GetFormFields :many
-SELECT * FROM form_fields WHERE form_id = ? ORDER BY position ASC;
+SELECT * FROM form_fields WHERE form_id = ? ORDER BY position;
 
 -- name: UpdateFormField :one
 UPDATE form_fields SET type = ?, name = ?, label = ?, placeholder = ?, help_text = ?, options = ?, validation = ?, is_required = ?, position = ?, updated_at = ?

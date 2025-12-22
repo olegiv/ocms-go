@@ -170,7 +170,7 @@ ORDER BY updated_at DESC;
 -- name: GetScheduledPagesForPublishing :many
 SELECT * FROM pages
 WHERE scheduled_at IS NOT NULL AND scheduled_at <= ? AND status = 'draft'
-ORDER BY scheduled_at ASC;
+ORDER BY scheduled_at;
 
 -- name: PublishScheduledPage :one
 UPDATE pages
@@ -185,7 +185,7 @@ UPDATE pages SET scheduled_at = NULL, updated_at = ? WHERE id = ?;
 SELECT COUNT(*) FROM pages WHERE scheduled_at IS NOT NULL AND status = 'draft';
 
 -- name: ListScheduledPages :many
-SELECT * FROM pages WHERE scheduled_at IS NOT NULL AND status = 'draft' ORDER BY scheduled_at ASC LIMIT ? OFFSET ?;
+SELECT * FROM pages WHERE scheduled_at IS NOT NULL AND status = 'draft' ORDER BY scheduled_at LIMIT ? OFFSET ?;
 
 -- Admin search queries (using LIKE for searching all pages regardless of status)
 
