@@ -51,23 +51,22 @@ func testDB(t *testing.T) *sql.DB {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			title TEXT NOT NULL,
 			slug TEXT NOT NULL UNIQUE,
-			content TEXT NOT NULL DEFAULT '',
+			body TEXT NOT NULL DEFAULT '',
 			status TEXT NOT NULL DEFAULT 'draft',
 			author_id INTEGER NOT NULL,
-			category_id INTEGER,
 			featured_image_id INTEGER,
-			meta_title TEXT,
-			meta_description TEXT,
-			meta_keywords TEXT,
-			og_title TEXT,
-			og_description TEXT,
-			og_image TEXT,
-			canonical_url TEXT,
-			structured_data TEXT,
-			no_index BOOLEAN NOT NULL DEFAULT 0,
+			meta_title TEXT NOT NULL DEFAULT '',
+			meta_description TEXT NOT NULL DEFAULT '',
+			meta_keywords TEXT NOT NULL DEFAULT '',
+			og_image_id INTEGER,
+			no_index INTEGER NOT NULL DEFAULT 0,
+			no_follow INTEGER NOT NULL DEFAULT 0,
+			canonical_url TEXT NOT NULL DEFAULT '',
 			scheduled_at DATETIME,
+			language_id INTEGER,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			published_at DATETIME,
 			FOREIGN KEY (author_id) REFERENCES users(id)
 		);
 		CREATE INDEX idx_pages_slug ON pages(slug);
@@ -108,33 +107,57 @@ func testDB(t *testing.T) *sql.DB {
 		INSERT INTO languages (code, name, native_name, is_default, is_active, direction, position)
 		VALUES ('en', 'English', 'English', 1, 1, 'ltr', 0);
 
+		CREATE TABLE media_folders (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			parent_id INTEGER REFERENCES media_folders(id) ON DELETE CASCADE,
+			position INTEGER NOT NULL DEFAULT 0,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+
 		CREATE TABLE media (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			uuid TEXT NOT NULL UNIQUE,
 			filename TEXT NOT NULL,
-			original_filename TEXT NOT NULL,
-			filepath TEXT NOT NULL,
 			mime_type TEXT NOT NULL,
 			size INTEGER NOT NULL,
-			alt_text TEXT DEFAULT '',
-			title TEXT DEFAULT '',
-			description TEXT DEFAULT '',
+			width INTEGER,
+			height INTEGER,
+			alt TEXT,
+			caption TEXT,
 			folder_id INTEGER,
 			uploaded_by INTEGER NOT NULL,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (uploaded_by) REFERENCES users(id)
+			FOREIGN KEY (uploaded_by) REFERENCES users(id),
+			FOREIGN KEY (folder_id) REFERENCES media_folders(id) ON DELETE SET NULL
 		);
 
 		CREATE TABLE forms (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
 			slug TEXT NOT NULL UNIQUE,
+			title TEXT NOT NULL,
 			description TEXT DEFAULT '',
 			success_message TEXT DEFAULT 'Thank you for your submission.',
-			redirect_url TEXT DEFAULT '',
-			email_notification BOOLEAN NOT NULL DEFAULT 0,
-			notification_email TEXT DEFAULT '',
+			email_to TEXT DEFAULT '',
 			is_active BOOLEAN NOT NULL DEFAULT 1,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+
+		CREATE TABLE form_fields (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			form_id INTEGER NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+			type TEXT NOT NULL,
+			name TEXT NOT NULL,
+			label TEXT NOT NULL,
+			placeholder TEXT DEFAULT '',
+			help_text TEXT DEFAULT '',
+			options TEXT DEFAULT '[]',
+			validation TEXT DEFAULT '{}',
+			is_required BOOLEAN NOT NULL DEFAULT 0,
+			position INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
@@ -154,39 +177,160 @@ func testDB(t *testing.T) *sql.DB {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
 			url TEXT NOT NULL,
-			secret TEXT DEFAULT '',
+			secret TEXT NOT NULL,
 			events TEXT NOT NULL DEFAULT '[]',
 			is_active BOOLEAN NOT NULL DEFAULT 1,
-			retry_count INTEGER NOT NULL DEFAULT 3,
-			timeout_seconds INTEGER NOT NULL DEFAULT 30,
+			headers TEXT NOT NULL DEFAULT '{}',
+			created_by INTEGER NOT NULL REFERENCES users(id),
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
 
 		CREATE TABLE webhook_deliveries (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			webhook_id INTEGER NOT NULL,
+			webhook_id INTEGER NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
 			event TEXT NOT NULL,
 			payload TEXT NOT NULL,
-			status TEXT NOT NULL DEFAULT 'pending',
 			response_code INTEGER,
-			response_body TEXT,
-			attempt INTEGER NOT NULL DEFAULT 0,
+			response_body TEXT DEFAULT '',
+			attempts INTEGER NOT NULL DEFAULT 0,
 			next_retry_at DATETIME,
-			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			delivered_at DATETIME,
-			FOREIGN KEY (webhook_id) REFERENCES webhooks(id) ON DELETE CASCADE
-		);
-
-		CREATE TABLE config (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			key TEXT NOT NULL UNIQUE,
-			value TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'pending',
+			error_message TEXT DEFAULT '',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
 
-		INSERT INTO config (key, value) VALUES ('site_name', 'Test Site');
+		CREATE TABLE config (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL DEFAULT '',
+			type TEXT NOT NULL DEFAULT 'string',
+			description TEXT NOT NULL DEFAULT '',
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_by INTEGER,
+			FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+		);
+
+		INSERT INTO config (key, value, type) VALUES ('site_name', 'Test Site', 'string');
+
+		CREATE TABLE tags (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			slug TEXT NOT NULL UNIQUE,
+			language_id INTEGER,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (language_id) REFERENCES languages(id) ON DELETE SET NULL
+		);
+		CREATE INDEX idx_tags_slug ON tags(slug);
+
+		CREATE TABLE categories (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			slug TEXT NOT NULL UNIQUE,
+			description TEXT,
+			parent_id INTEGER,
+			position INTEGER NOT NULL DEFAULT 0,
+			language_id INTEGER,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL,
+			FOREIGN KEY (language_id) REFERENCES languages(id) ON DELETE SET NULL
+		);
+		CREATE INDEX idx_categories_slug ON categories(slug);
+		CREATE INDEX idx_categories_parent ON categories(parent_id);
+
+		CREATE TABLE page_tags (
+			page_id INTEGER NOT NULL,
+			tag_id INTEGER NOT NULL,
+			PRIMARY KEY (page_id, tag_id),
+			FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE,
+			FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+		);
+
+		CREATE TABLE page_categories (
+			page_id INTEGER NOT NULL,
+			category_id INTEGER NOT NULL,
+			PRIMARY KEY (page_id, category_id),
+			FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE,
+			FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+		);
+
+		CREATE TABLE translations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			entity_type TEXT NOT NULL,
+			entity_id INTEGER NOT NULL,
+			language_id INTEGER NOT NULL,
+			translation_id INTEGER NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (language_id) REFERENCES languages(id) ON DELETE CASCADE
+		);
+		CREATE INDEX idx_translations_entity ON translations(entity_type, entity_id);
+
+		CREATE TABLE menus (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			slug TEXT NOT NULL UNIQUE,
+			language_id INTEGER REFERENCES languages(id),
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+
+		CREATE TABLE menu_items (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			menu_id INTEGER NOT NULL,
+			parent_id INTEGER,
+			title TEXT NOT NULL,
+			url TEXT NOT NULL DEFAULT '',
+			page_id INTEGER,
+			category_id INTEGER,
+			target TEXT NOT NULL DEFAULT '_self',
+			css_class TEXT NOT NULL DEFAULT '',
+			icon TEXT NOT NULL DEFAULT '',
+			position INTEGER NOT NULL DEFAULT 0,
+			is_active INTEGER NOT NULL DEFAULT 1,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (menu_id) REFERENCES menus(id) ON DELETE CASCADE,
+			FOREIGN KEY (parent_id) REFERENCES menu_items(id) ON DELETE SET NULL,
+			FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE SET NULL,
+			FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+		);
+		CREATE INDEX idx_menu_items_menu ON menu_items(menu_id);
+		CREATE INDEX idx_menu_items_position ON menu_items(position);
+
+		CREATE TABLE api_keys (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			key_hash TEXT NOT NULL,
+			key_prefix TEXT NOT NULL,
+			permissions TEXT NOT NULL DEFAULT '[]',
+			last_used_at DATETIME,
+			expires_at DATETIME,
+			is_active BOOLEAN NOT NULL DEFAULT 1,
+			created_by INTEGER NOT NULL REFERENCES users(id),
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE INDEX idx_api_keys_prefix ON api_keys(key_prefix);
+		CREATE INDEX idx_api_keys_active ON api_keys(is_active);
+
+		CREATE TABLE widgets (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			theme TEXT NOT NULL,
+			area TEXT NOT NULL,
+			widget_type TEXT NOT NULL,
+			title TEXT,
+			content TEXT,
+			settings TEXT,
+			position INTEGER NOT NULL DEFAULT 0,
+			is_active INTEGER NOT NULL DEFAULT 1,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE INDEX idx_widgets_theme ON widgets(theme);
+		CREATE INDEX idx_widgets_area ON widgets(area);
 	`
 
 	if _, err := db.Exec(schema); err != nil {
@@ -245,6 +389,16 @@ func createTestUser(t *testing.T, db *sql.DB, user testUser) store.User {
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
+}
+
+// createTestAdminUser creates a standard admin user for tests.
+func createTestAdminUser(t *testing.T, db *sql.DB) store.User {
+	t.Helper()
+	return createTestUser(t, db, testUser{
+		Email: "admin@example.com",
+		Name:  "Admin",
+		Role:  "admin",
+	})
 }
 
 // requestWithURLParams adds chi URL parameters to a request.

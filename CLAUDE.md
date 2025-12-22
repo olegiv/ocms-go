@@ -36,6 +36,32 @@ make migrate-down        # Rollback
 make migrate-create      # Create new migration
 ```
 
+## Go Toolchain Requirements
+
+**CRITICAL**: If you see this error during build or test:
+```
+compile: version "go1.X.Y" does not match go tool version "go1.X.Z"
+```
+
+**STOP IMMEDIATELY** and fix it before proceeding. This indicates a corrupted or mismatched Go installation.
+
+**Diagnosis**:
+```bash
+go version                    # Reports go binary version
+go env GOTOOLDIR              # Shows toolchain location
+$(go env GOTOOLDIR)/compile -V  # Shows actual compiler version
+```
+
+**Fix**: The local Go installation must match the version in `go.mod`. Upgrade Go:
+```bash
+# Download from https://go.dev/dl/
+curl -LO https://go.dev/dl/go<VERSION>.darwin-arm64.tar.gz
+sudo rm -rf /usr/local/go
+sudo tar -C /usr/local -xzf go<VERSION>.darwin-arm64.tar.gz
+```
+
+**NEVER** downgrade the Go version in `go.mod` to work around this issue.
+
 ## Code Generation
 
 After modifying SQL queries or migrations, regenerate code:
@@ -190,6 +216,57 @@ pkill -f "go run ./cmd/ocms" || true
 ```
 
 Never tell the user to "restart the server and test" - always run the tests yourself first.
+
+## Code Quality Requirements
+
+**CRITICAL**: All code MUST be free of the following warnings and issues:
+
+- **Duplicate code**: Avoid copy-paste code blocks. Extract common logic into reusable functions.
+- **Unhandled errors**: All errors MUST be checked and handled appropriately. Never ignore returned errors.
+- **Condition is always 'false'/'true'**: Remove dead code and unreachable branches. Ensure all conditions can evaluate to both outcomes.
+- **Unused variables/imports**: Remove any unused declarations.
+- **Shadowed variables**: Avoid shadowing variables from outer scopes.
+
+Before submitting code, verify with:
+```bash
+go vet ./...              # Check for common issues
+staticcheck ./...         # Extended static analysis
+errcheck ./...            # Detect unhandled errors
+```
+
+Install errcheck if needed: `go install github.com/kisielk/errcheck@latest`
+
+**Detecting "Condition is always false/true":** Standard tools don't catch constant comparisons. Perform semantic analysis manually:
+1. Find constant definitions: `grep -rn "^const\|^\tconst" --include="*.go" .`
+2. Find comparisons to those constants in test files
+3. Evaluate if comparisons like `if CONST != literal` are always false (when CONST equals that literal)
+4. Remove useless tests that compare constants to their own values
+
+**Detecting "Empty slice declaration using literal":** Use `var x []Type` instead of `x := []Type{}`.
+```bash
+grep -rn ":= \[\][a-zA-Z.]*{}" --include="*.go" .
+```
+- `x := []Type{}` creates non-nil empty slice (usually unnecessary)
+- `var x []Type` creates nil slice (idiomatic Go)
+- Exception: Use literal when nil vs empty matters (e.g., JSON marshaling)
+
+**Detecting "Variable collides with imported package name":** Never use variable names that match imported package names.
+
+Common packages to check: `bytes`, `context`, `crypto`, `encoding`, `errors`, `fmt`, `hash`, `html`, `http`, `io`, `json`, `log`, `math`, `net`, `os`, `path`, `reflect`, `regexp`, `runtime`, `sort`, `sql`, `strconv`, `strings`, `sync`, `template`, `testing`, `time`, `unicode`, `url`, `xml`
+
+Detection method:
+1. Find files importing a package: `grep -l '"net/url"' --include="*_test.go" -r .`
+2. Check if those files use the package name as a variable: `grep -n 'url :=' <file>`
+3. Rename colliding variables to `got`, `result`, `gotURL`, etc.
+
+Example fix:
+```go
+// BAD: 'url' shadows imported "net/url" package
+url := p.PageURL(2)
+
+// GOOD: Use descriptive name that doesn't collide
+got := p.PageURL(2)
+```
 
 ## Testing Specific Components
 
