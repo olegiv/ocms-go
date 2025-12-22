@@ -76,7 +76,7 @@
                                     <div class="modal modal-lg" @click.stop>
                                         <div class="modal-header">
                                             <h3 class="modal-title">{{T $.AdminLang "versions.preview_title"}} #{{.ID}}</h3>
-                                            <button type="button" class="modal-close" @click="showPreview = false">&times;</button>
+                                            <button type="button" class="modal-close" @click="showPreview = false" aria-label="{{T $.AdminLang "btn.close"}}">&times;</button>
                                         </div>
                                         <div class="modal-body">
                                             <div class="version-preview">
@@ -119,7 +119,7 @@
                                     <div class="modal" @click.stop>
                                         <div class="modal-header">
                                             <h3 class="modal-title">{{T $.AdminLang "versions.restore_title"}}</h3>
-                                            <button type="button" class="modal-close" @click="showConfirm = false">&times;</button>
+                                            <button type="button" class="modal-close" @click="showConfirm = false" aria-label="{{T $.AdminLang "btn.close"}}">&times;</button>
                                         </div>
                                         <div class="modal-body">
                                             <p>{{T $.AdminLang "versions.restore_confirm"}} <strong>#{{.ID}}</strong>?</p>

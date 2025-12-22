@@ -7,8 +7,8 @@
         <template x-for="tag in selectedTags" :key="tag.id">
             <span class="tag-badge">
                 <span x-text="tag.name"></span>
-                <button type="button" class="tag-remove" @click="removeTag(tag.id)" title="Remove tag">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                <button type="button" class="tag-remove" @click="removeTag(tag.id)" title="Remove tag" aria-label="Remove tag">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                 </button>
                 <input type="hidden" name="tags[]" :value="tag.id">
             </span>

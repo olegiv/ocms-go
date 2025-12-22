@@ -3643,6 +3643,11 @@
             "translation": "Close"
         },
         {
+            "id": "btn.menu",
+            "message": "Menu",
+            "translation": "Menu"
+        },
+        {
             "id": "btn.confirm",
             "message": "Confirm",
             "translation": "Confirm"

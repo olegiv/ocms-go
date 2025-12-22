@@ -1,8 +1,8 @@
 {{define "header"}}
 <header class="admin-header">
     <div class="header-left">
-        <button class="menu-toggle" @click="sidebarOpen = true">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+        <button class="menu-toggle" @click="sidebarOpen = true" aria-label="{{T .AdminLang "btn.menu"}}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
         </button>
         <h1 class="header-title">{{if .Title}}{{.Title}}{{else}}{{T .AdminLang "nav.dashboard"}}{{end}}</h1>
     </div>
@@ -19,7 +19,7 @@
         <form action="/admin/language" method="POST" class="lang-selector-form">
             <label class="lang-selector" title="{{T .AdminLang "admin.change_language"}}">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                <select name="lang" onchange="this.form.submit()" class="lang-select">
+                <select name="lang" onchange="this.form.submit()" class="lang-select" aria-label="{{T .AdminLang "admin.change_language"}}">
                     {{range $langOptions}}
                     <option value="{{.Code}}"{{if eq .Code $.AdminLang}} selected{{end}}>{{.Name}}</option>
                     {{end}}

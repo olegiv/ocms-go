@@ -17,7 +17,7 @@
          @mouseenter="$el.querySelector('.alert-progress').style.animationPlayState = 'paused'"
          @mouseleave="$el.querySelector('.alert-progress').style.animationPlayState = 'running'">
         <span class="alert-message">{{.Flash}}</span>
-        <button type="button" class="alert-close" @click="dismiss()">&times;</button>
+        <button type="button" class="alert-close" @click="dismiss()" aria-label="{{T .AdminLang "btn.close"}}">&times;</button>
         <div class="alert-progress" :style="'animation-duration: ' + autoDismissTime + 'ms'"></div>
     </div>
 </div>

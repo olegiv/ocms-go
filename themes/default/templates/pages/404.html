@@ -11,7 +11,7 @@
             {{if .ShowSearch}}
             <span class="or">{{TTheme .LangCode "frontend.or"}}</span>
             <form action="/search" method="get" class="search-form inline">
-                <input type="search" name="q" placeholder="{{TTheme .LangCode "search.placeholder"}}">
+                <input type="search" name="q" placeholder="{{TTheme .LangCode "search.placeholder"}}" aria-label="{{TTheme .LangCode "search.placeholder"}}">
                 <button type="submit" class="btn btn-secondary">{{TTheme .LangCode "search.button"}}</button>
             </form>
             {{end}}
