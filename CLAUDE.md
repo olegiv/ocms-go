@@ -23,8 +23,12 @@ OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./internal/store/
 # Check for vulnerabilities
 govulncheck ./...
 
-# Compile SCSS to CSS
+# Build assets (install npm deps, compile SCSS)
 make assets
+
+# Update JS dependencies
+npm update                # Update htmx, alpine.js in package.json
+make assets               # Reinstall and copy to static/dist/js
 
 # Database migrations
 make migrate-up          # Apply migrations
@@ -52,7 +56,7 @@ templ generate           # Regenerate template Go code (if using templ)
    - Run `sqlc generate` to create type-safe Go code
    - Migrations live in `internal/store/migrations/` (goose format)
 
-2. **Embedded Assets**: Templates and static files are embedded using `//go:embed` in `web/embed.go`. After modifying CSS/SCSS, run `make assets` to compile.
+2. **Embedded Assets**: Templates and static files are embedded using `//go:embed` in `web/embed.go`. JS dependencies (htmx, Alpine.js) are managed via `package.json` and copied to `web/static/dist/js/` during build. Run `make assets` to compile SCSS and install JS deps. After modifying JS dependencies, use `go build -a` to force re-embedding.
 
 3. **Handler Pattern**: Each handler struct (in `internal/handler/`) receives `*sql.DB`, `*render.Renderer`, and `*scs.SessionManager`. Handlers call `store.New(db)` to get sqlc queries.
 
@@ -151,7 +155,7 @@ On first run, seeds admin user: `admin@example.com` / `changeme`
 
 **CRITICAL**: After ANY code change (no exceptions - includes refactoring, renaming, style fixes, test changes, etc.), you MUST:
 
-1. **Rebuild assets**: Run `make assets` to compile SCSS
+1. **Rebuild assets**: Run `make assets` to install JS deps and compile SCSS
 2. **Restart the server**: Run `make dev` or restart any running server
 3. **Test the application with HTTP requests**:
    - Verify homepage loads: `curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/`

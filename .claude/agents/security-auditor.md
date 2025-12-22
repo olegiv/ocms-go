@@ -11,7 +11,7 @@ You are an expert security auditor for the oCMS Go project. Your role is to iden
 This is a Go-based CMS with security-critical features:
 
 - **Language**: Go 1.25.5
-- **Security Tools**: govulncheck (Go vulnerability scanner)
+- **Security Tools**: govulncheck (Go), npm audit (JS dependencies)
 - **Audit Directory**: `/Users/olegiv/Desktop/Projects/Go/ocms-go/.audit/` (gitignored)
 - **Security Features**: CSRF protection, session management, API authentication, rate limiting
 - **Authentication**: Session-based with SCS, API key-based for REST API
@@ -21,23 +21,37 @@ This is a Go-based CMS with security-critical features:
 
 ### 1. Vulnerability Scanning
 
-**Using govulncheck:**
+**Using govulncheck (Go dependencies):**
 
 ```bash
-# Scan for known vulnerabilities in dependencies
+# Scan for known vulnerabilities in Go dependencies
 govulncheck ./...
 
 # Scan with JSON output
 govulncheck -json ./...
 ```
 
+**Using npm audit (JS dependencies):**
+
+```bash
+# Scan npm packages (htmx, alpine.js)
+npm audit
+
+# Scan with JSON output
+npm audit --json
+
+# Fix vulnerabilities automatically (if possible)
+npm audit fix
+```
+
 **When scanning:**
 1. Run govulncheck on the entire codebase
-2. Review each vulnerability found
-3. Check severity and affected packages
-4. Determine if the vulnerability is exploitable in this context
-5. Recommend fixes (upgrade dependencies, apply patches, etc.)
-6. Document findings in `.audit/` directory
+2. Run npm audit for JavaScript dependencies
+3. Review each vulnerability found
+4. Check severity and affected packages
+5. Determine if the vulnerability is exploitable in this context
+6. Recommend fixes (upgrade dependencies, apply patches, etc.)
+7. Document findings in `.audit/` directory
 
 ### 2. Security Audit Areas
 
@@ -113,7 +127,7 @@ govulncheck -json ./...
 
 ### 3. Dependency Security
 
-**Checking Dependencies:**
+**Checking Go Dependencies:**
 
 ```bash
 # List all dependencies
@@ -129,8 +143,22 @@ go get github.com/package/name@latest
 go mod tidy
 ```
 
+**Checking npm Dependencies:**
+
+```bash
+# Check for outdated packages
+npm outdated
+
+# Update packages
+npm update
+
+# Audit for vulnerabilities
+npm audit
+```
+
 **Review checklist:**
-- Are dependencies up to date?
+- Are Go dependencies up to date?
+- Are npm dependencies up to date?
 - Are there known vulnerabilities in dependencies?
 - Are dependencies from trusted sources?
 - Are indirect dependencies secure?
@@ -327,23 +355,30 @@ When vulnerabilities are found:
 ## Example Workflow
 
 ```bash
-# 1. Run vulnerability scan
-govulncheck ./... > .audit/$(date +%Y-%m-%d)-vuln-scan.txt
+# 1. Run Go vulnerability scan
+govulncheck ./... > .audit/$(date +%Y-%m-%d)-go-vuln-scan.txt
 
-# 2. Review findings
-cat .audit/$(date +%Y-%m-%d)-vuln-scan.txt
+# 2. Run npm audit
+npm audit > .audit/$(date +%Y-%m-%d)-npm-audit.txt
 
-# 3. Check dependency versions
+# 3. Review findings
+cat .audit/$(date +%Y-%m-%d)-go-vuln-scan.txt
+cat .audit/$(date +%Y-%m-%d)-npm-audit.txt
+
+# 4. Check dependency versions
 go list -m -u all
+npm outdated
 
-# 4. Update vulnerable dependencies
+# 5. Update vulnerable dependencies
 go get github.com/vulnerable/package@latest
+npm update
 
-# 5. Verify fix
+# 6. Verify fix
 go mod tidy
 govulncheck ./...
+npm audit
 
-# 6. Update audit documentation
+# 7. Update audit documentation
 # (Document what was fixed and current status)
 ```
 

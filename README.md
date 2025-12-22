@@ -106,6 +106,7 @@ A lightweight content management system built with Go, featuring a modern admin 
 ## Prerequisites
 
 - Go 1.21 or later
+- [Node.js](https://nodejs.org/) (npm) for frontend dependencies
 - [sqlc](https://sqlc.dev/) for SQL code generation
 - [templ](https://templ.guide/) for type-safe HTML templates
 - [goose](https://github.com/pressly/goose) for database migrations
@@ -155,9 +156,9 @@ sudo dnf install vips-devel
    templ generate
    ```
 
-5. Build assets:
+5. Build assets (installs npm dependencies and compiles SCSS):
    ```bash
-   ./scripts/build-assets.sh
+   make assets
    ```
 
 ## Environment Variables
@@ -209,7 +210,7 @@ make run
 | `make migrate-down` | Rollback last migration |
 | `make migrate-status` | Show migration status |
 | `make migrate-create` | Create new migration file |
-| `make assets` | Compile SCSS to CSS |
+| `make assets` | Install npm deps and compile SCSS |
 
 ### Default Admin Credentials
 
@@ -273,6 +274,7 @@ ocms-go/
 ├── uploads/              # Media uploads directory
 ├── scripts/              # Build scripts
 ├── Makefile              # Development commands
+├── package.json          # npm dependencies (htmx, alpine.js)
 └── sqlc.yaml             # sqlc configuration
 ```
 

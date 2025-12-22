@@ -1,22 +1,25 @@
-Scan the project for security vulnerabilities using govulncheck.
+Scan the project for security vulnerabilities using govulncheck and npm audit.
 
 Steps:
-1. Run `govulncheck ./...` to scan all packages
-2. Analyze the results:
+1. Run `govulncheck ./...` to scan Go packages
+2. Run `npm audit` to scan npm packages (htmx, alpine.js)
+3. Analyze the results:
    - Count total vulnerabilities found
    - Categorize by severity (if available)
    - Identify affected packages and versions
-3. For each vulnerability found:
+4. For each vulnerability found:
    - Explain what it is
    - Assess if it affects this application
    - Suggest remediation (version upgrade, patch, workaround)
-4. Save audit report to `.audit/YYYY-MM-DD-vulnerability-scan.md`
-5. Provide summary of findings and recommended actions
+5. Save audit report to `.audit/YYYY-MM-DD-vulnerability-scan.md`
+6. Provide summary of findings and recommended actions
 
 If vulnerabilities are found:
-- List affected dependencies
+- List affected dependencies (Go and npm)
 - Suggest specific version upgrades
-- Provide commands to update: `go get package@version`
+- Provide commands to update:
+  - Go: `go get package@version`
+  - npm: `npm update` or edit `package.json`
 
 If no vulnerabilities found:
 - Confirm all dependencies are secure
