@@ -124,17 +124,11 @@ func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// Calculate total pages
-	totalPages := int(total) / perPage
-	if int(total)%perPage != 0 {
-		totalPages++
-	}
-
 	WriteSuccess(w, responses, &Meta{
 		Total:   total,
 		Page:    page,
 		PerPage: perPage,
-		Pages:   totalPages,
+		Pages:   handler.CalculateTotalPages(int(total), perPage),
 	})
 }
 

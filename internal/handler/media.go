@@ -193,7 +193,7 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 			Medium:       m,
 			ThumbnailURL: h.mediaService.GetThumbnailURL(m),
 			OriginalURL:  h.mediaService.GetURL(m, "original"),
-			IsImage:      isImageMime(m.MimeType),
+			IsImage:      IsImageMime(m.MimeType),
 			TypeIcon:     getTypeIcon(m.MimeType),
 		}
 	}
@@ -410,7 +410,7 @@ func (h *MediaHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		Medium:       media,
 		ThumbnailURL: h.mediaService.GetThumbnailURL(media),
 		OriginalURL:  h.mediaService.GetURL(media, "original"),
-		IsImage:      isImageMime(media.MimeType),
+		IsImage:      IsImageMime(media.MimeType),
 		TypeIcon:     getTypeIcon(media.MimeType),
 	}
 
@@ -478,7 +478,7 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 			Medium:       media,
 			ThumbnailURL: h.mediaService.GetThumbnailURL(media),
 			OriginalURL:  h.mediaService.GetURL(media, "original"),
-			IsImage:      isImageMime(media.MimeType),
+			IsImage:      IsImageMime(media.MimeType),
 			TypeIcon:     getTypeIcon(media.MimeType),
 		}
 
@@ -946,7 +946,8 @@ func (h *MediaHandler) requireFolderWithError(w http.ResponseWriter, r *http.Req
 		func(id int64) (store.MediaFolder, error) { return h.queries.GetMediaFolderByID(r.Context(), id) })
 }
 
-func isImageMime(mimeType string) bool {
+// IsImageMime checks if the MIME type is an image.
+func IsImageMime(mimeType string) bool {
 	return strings.HasPrefix(mimeType, "image/")
 }
 

@@ -902,7 +902,7 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	submission, err := h.queries.CreateFormSubmission(r.Context(), store.CreateFormSubmissionParams{
 		FormID:    form.ID,
 		Data:      string(dataJSON),
-		IpAddress: sql.NullString{String: getClientIP(r), Valid: true},
+		IpAddress: sql.NullString{String: middleware.GetClientIP(r), Valid: true},
 		UserAgent: sql.NullString{String: r.UserAgent(), Valid: true},
 		IsRead:    false,
 		CreatedAt: time.Now(),
@@ -981,33 +981,6 @@ func isValidDate(date string) bool {
 	}
 	_, err := time.Parse("2006-01-02", date)
 	return err == nil
-}
-
-// getClientIP extracts the client IP from the request.
-func getClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header
-	xff := r.Header.Get("X-Forwarded-For")
-	if xff != "" {
-		// Take the first IP in the list
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			return strings.TrimSpace(parts[0])
-		}
-	}
-
-	// Check X-Real-IP header
-	xrip := r.Header.Get("X-Real-IP")
-	if xrip != "" {
-		return xrip
-	}
-
-	// Fall back to RemoteAddr
-	host := r.RemoteAddr
-	// Remove port if present
-	if idx := strings.LastIndex(host, ":"); idx != -1 {
-		host = host[:idx]
-	}
-	return host
 }
 
 // ===== Submission Management Handlers =====

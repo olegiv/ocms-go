@@ -320,14 +320,7 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 		resp := storePageToResponse(p)
 
 		if includeAuthor {
-			author, authorErr := h.queries.GetPageAuthor(ctx, p.ID)
-			if authorErr == nil {
-				resp.Author = &AuthorResponse{
-					ID:    author.ID,
-					Name:  author.Name,
-					Email: author.Email,
-				}
-			}
+			h.populatePageAuthor(ctx, &resp, p.ID)
 		}
 
 		if includeCategories {
@@ -341,17 +334,11 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 		responses = append(responses, resp)
 	}
 
-	// Calculate total pages
-	totalPages := int(total) / perPage
-	if int(total)%perPage != 0 {
-		totalPages++
-	}
-
 	WriteSuccess(w, responses, &Meta{
 		Total:   total,
 		Page:    page,
 		PerPage: perPage,
-		Pages:   totalPages,
+		Pages:   handler.CalculateTotalPages(int(total), perPage),
 	})
 }
 
@@ -710,6 +697,19 @@ func (h *Handler) DeletePage(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// populatePageAuthor fetches and populates author for a page response.
+func (h *Handler) populatePageAuthor(ctx context.Context, resp *PageResponse, pageID int64) {
+	author, err := h.queries.GetPageAuthor(ctx, pageID)
+	if err != nil {
+		return
+	}
+	resp.Author = &AuthorResponse{
+		ID:    author.ID,
+		Name:  author.Name,
+		Email: author.Email,
+	}
+}
+
 // populatePageCategories fetches and populates categories for a page response.
 func (h *Handler) populatePageCategories(ctx context.Context, resp *PageResponse, pageID int64) {
 	categories, err := h.queries.GetCategoriesForPage(ctx, pageID)
@@ -744,14 +744,7 @@ func (h *Handler) populatePageIncludes(ctx context.Context, resp *PageResponse, 
 	for _, inc := range includes {
 		switch strings.TrimSpace(inc) {
 		case "author":
-			author, err := h.queries.GetPageAuthor(ctx, pageID)
-			if err == nil {
-				resp.Author = &AuthorResponse{
-					ID:    author.ID,
-					Name:  author.Name,
-					Email: author.Email,
-				}
-			}
+			h.populatePageAuthor(ctx, resp, pageID)
 		case "categories":
 			h.populatePageCategories(ctx, resp, pageID)
 		case "tags":

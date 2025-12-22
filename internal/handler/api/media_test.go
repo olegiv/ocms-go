@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"ocms-go/internal/handler"
 	"ocms-go/internal/store"
 )
 
@@ -97,9 +98,9 @@ func TestIsImageMime(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.mimeType, func(t *testing.T) {
-			got := isImageMime(tt.mimeType)
+			got := handler.IsImageMime(tt.mimeType)
 			if got != tt.want {
-				t.Errorf("isImageMime(%q) = %v, want %v", tt.mimeType, got, tt.want)
+				t.Errorf("handler.IsImageMime(%q) = %v, want %v", tt.mimeType, got, tt.want)
 			}
 		})
 	}
