@@ -45,18 +45,7 @@ func TestModuleAdminURL(t *testing.T) {
 
 func TestModuleMigrations(t *testing.T) {
 	m := New()
-
-	migrations := m.Migrations()
-	if len(migrations) != 1 {
-		t.Errorf("len(migrations) = %d, want 1", len(migrations))
-	}
-
-	if migrations[0].Version != 1 {
-		t.Errorf("migration version = %d, want 1", migrations[0].Version)
-	}
-	if migrations[0].Description == "" {
-		t.Error("migration description should not be empty")
-	}
+	moduleutil.AssertMigrations(t, m.Migrations(), 1)
 }
 
 func TestModuleTemplateFuncs(t *testing.T) {
@@ -465,15 +454,7 @@ func TestMigrationDown(t *testing.T) {
 	moduleutil.RunMigrations(t, db, m.Migrations())
 	moduleutil.RunMigrationsDown(t, db, m.Migrations())
 
-	// Table should not exist
-	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='analytics_settings'").Scan(&count)
-	if err != nil {
-		t.Fatalf("query: %v", err)
-	}
-	if count != 0 {
-		t.Error("analytics_settings table should not exist after migration down")
-	}
+	moduleutil.AssertTableNotExists(t, db, "analytics_settings")
 }
 
 func TestAllTrackersEnabled(t *testing.T) {
