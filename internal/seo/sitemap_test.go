@@ -1,0 +1,234 @@
+package seo
+
+import (
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestNewSitemapBuilder(t *testing.T) {
+	builder := NewSitemapBuilder("https://example.com")
+	if builder == nil {
+		t.Fatal("NewSitemapBuilder() returned nil")
+	}
+	if builder.siteURL != "https://example.com" {
+		t.Errorf("siteURL = %q, want %q", builder.siteURL, "https://example.com")
+	}
+	if len(builder.urls) != 0 {
+		t.Errorf("urls length = %d, want 0", len(builder.urls))
+	}
+}
+
+func TestSitemapBuilderAddHomepage(t *testing.T) {
+	builder := NewSitemapBuilder("https://example.com")
+	builder.AddHomepage()
+
+	if len(builder.urls) != 1 {
+		t.Fatalf("urls length = %d, want 1", len(builder.urls))
+	}
+
+	url := builder.urls[0]
+	if url.Loc != "https://example.com" {
+		t.Errorf("Loc = %q, want %q", url.Loc, "https://example.com")
+	}
+	if url.Priority != "1.0" {
+		t.Errorf("Priority = %q, want %q", url.Priority, "1.0")
+	}
+	if url.ChangeFreq != ChangeFreqDaily {
+		t.Errorf("ChangeFreq = %q, want %q", url.ChangeFreq, ChangeFreqDaily)
+	}
+}
+
+func TestSitemapBuilderAddPage(t *testing.T) {
+	builder := NewSitemapBuilder("https://example.com")
+	updatedAt := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
+
+	builder.AddPage(SitemapPage{
+		Slug:      "about-us",
+		UpdatedAt: updatedAt,
+	})
+
+	if len(builder.urls) != 1 {
+		t.Fatalf("urls length = %d, want 1", len(builder.urls))
+	}
+
+	url := builder.urls[0]
+	if url.Loc != "https://example.com/about-us" {
+		t.Errorf("Loc = %q, want %q", url.Loc, "https://example.com/about-us")
+	}
+	if url.Priority != "0.8" {
+		t.Errorf("Priority = %q, want %q", url.Priority, "0.8")
+	}
+	if url.ChangeFreq != ChangeFreqWeekly {
+		t.Errorf("ChangeFreq = %q, want %q", url.ChangeFreq, ChangeFreqWeekly)
+	}
+	if !strings.Contains(url.LastMod, "2025-01-15") {
+		t.Errorf("LastMod = %q, should contain 2025-01-15", url.LastMod)
+	}
+}
+
+func TestSitemapBuilderAddPages(t *testing.T) {
+	builder := NewSitemapBuilder("https://example.com")
+
+	pages := []SitemapPage{
+		{Slug: "page-1"},
+		{Slug: "page-2"},
+		{Slug: "page-3"},
+	}
+	builder.AddPages(pages)
+
+	if len(builder.urls) != 3 {
+		t.Fatalf("urls length = %d, want 3", len(builder.urls))
+	}
+
+	for i, page := range pages {
+		expected := "https://example.com/" + page.Slug
+		if builder.urls[i].Loc != expected {
+			t.Errorf("urls[%d].Loc = %q, want %q", i, builder.urls[i].Loc, expected)
+		}
+	}
+}
+
+func TestSitemapBuilderAddCategory(t *testing.T) {
+	builder := NewSitemapBuilder("https://example.com")
+
+	builder.AddCategory(SitemapCategory{
+		Slug: "technology",
+	})
+
+	if len(builder.urls) != 1 {
+		t.Fatalf("urls length = %d, want 1", len(builder.urls))
+	}
+
+	url := builder.urls[0]
+	if url.Loc != "https://example.com/category/technology" {
+		t.Errorf("Loc = %q, want %q", url.Loc, "https://example.com/category/technology")
+	}
+	if url.Priority != "0.6" {
+		t.Errorf("Priority = %q, want %q", url.Priority, "0.6")
+	}
+}
+
+func TestSitemapBuilderAddCategories(t *testing.T) {
+	builder := NewSitemapBuilder("https://example.com")
+
+	categories := []SitemapCategory{
+		{Slug: "tech"},
+		{Slug: "news"},
+	}
+	builder.AddCategories(categories)
+
+	if len(builder.urls) != 2 {
+		t.Fatalf("urls length = %d, want 2", len(builder.urls))
+	}
+}
+
+func TestSitemapBuilderAddTag(t *testing.T) {
+	builder := NewSitemapBuilder("https://example.com")
+
+	builder.AddTag(SitemapTag{
+		Slug: "golang",
+	})
+
+	if len(builder.urls) != 1 {
+		t.Fatalf("urls length = %d, want 1", len(builder.urls))
+	}
+
+	url := builder.urls[0]
+	if url.Loc != "https://example.com/tag/golang" {
+		t.Errorf("Loc = %q, want %q", url.Loc, "https://example.com/tag/golang")
+	}
+	if url.Priority != "0.5" {
+		t.Errorf("Priority = %q, want %q", url.Priority, "0.5")
+	}
+}
+
+func TestSitemapBuilderAddTags(t *testing.T) {
+	builder := NewSitemapBuilder("https://example.com")
+
+	tags := []SitemapTag{
+		{Slug: "go"},
+		{Slug: "rust"},
+		{Slug: "python"},
+	}
+	builder.AddTags(tags)
+
+	if len(builder.urls) != 3 {
+		t.Fatalf("urls length = %d, want 3", len(builder.urls))
+	}
+}
+
+func TestSitemapBuilderBuild(t *testing.T) {
+	builder := NewSitemapBuilder("https://example.com")
+	builder.AddHomepage()
+	builder.AddPage(SitemapPage{Slug: "about"})
+
+	xml, err := builder.Build()
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+
+	content := string(xml)
+
+	// Check XML header
+	if !strings.HasPrefix(content, "<?xml") {
+		t.Error("Build() output should start with XML header")
+	}
+
+	// Check namespace
+	if !strings.Contains(content, XMLNamespace) {
+		t.Errorf("Build() output should contain namespace %q", XMLNamespace)
+	}
+
+	// Check URLs are present
+	if !strings.Contains(content, "https://example.com") {
+		t.Error("Build() output should contain homepage URL")
+	}
+	if !strings.Contains(content, "https://example.com/about") {
+		t.Error("Build() output should contain about page URL")
+	}
+
+	// Check structure elements
+	if !strings.Contains(content, "<urlset") {
+		t.Error("Build() output should contain <urlset> element")
+	}
+	if !strings.Contains(content, "<url>") {
+		t.Error("Build() output should contain <url> element")
+	}
+	if !strings.Contains(content, "<loc>") {
+		t.Error("Build() output should contain <loc> element")
+	}
+}
+
+func TestSitemapBuilderBuildEmpty(t *testing.T) {
+	builder := NewSitemapBuilder("https://example.com")
+
+	xml, err := builder.Build()
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+
+	content := string(xml)
+	if !strings.Contains(content, "<urlset") {
+		t.Error("Build() empty sitemap should still have urlset element")
+	}
+}
+
+func TestSitemapBuilderLastModWithZeroTime(t *testing.T) {
+	builder := NewSitemapBuilder("https://example.com")
+
+	// Add page with zero time (should not include lastmod)
+	builder.AddPage(SitemapPage{
+		Slug:      "no-date",
+		UpdatedAt: time.Time{},
+	})
+
+	if len(builder.urls) != 1 {
+		t.Fatalf("urls length = %d, want 1", len(builder.urls))
+	}
+
+	// LastMod should be empty for zero time
+	if builder.urls[0].LastMod != "" {
+		t.Errorf("LastMod = %q, want empty string for zero time", builder.urls[0].LastMod)
+	}
+}
