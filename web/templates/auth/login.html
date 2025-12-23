@@ -67,6 +67,22 @@ document.addEventListener('DOMContentLoaded', function() {
             input.setCustomValidity('');
         });
     });
+
+    // Fix hCaptcha iframe height to show test mode warning text properly
+    // hCaptcha sets inline height of 76px which clips the warning message
+    function fixHCaptchaHeight() {
+        const iframe = document.querySelector('.h-captcha iframe');
+        if (iframe && iframe.offsetHeight < 115) {
+            iframe.style.setProperty('height', '115px', 'important');
+            iframe.style.setProperty('min-height', '115px', 'important');
+        }
+    }
+    // Poll until hCaptcha is loaded and fixed (hCaptcha loads async)
+    let hcaptchaAttempts = 0;
+    const hcaptchaInterval = setInterval(function() {
+        fixHCaptchaHeight();
+        if (++hcaptchaAttempts > 50) clearInterval(hcaptchaInterval);
+    }, 100);
 });
 </script>
 {{end}}

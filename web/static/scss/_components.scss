@@ -656,7 +656,19 @@ select.form-control {
   margin-left: auto;
 }
 
+// Search group in filter bar (media library)
+.search-group {
+  margin-left: auto;
+}
+
+.search-form {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+}
+
 .search-input-wrapper {
+  position: relative;
   display: flex;
   align-items: center;
   gap: $spacing-2;
@@ -665,21 +677,52 @@ select.form-control {
     min-width: 200px;
   }
 
-  .search-btn,
-  .clear-search-btn {
-    padding: $spacing-2;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  .search-icon {
+    position: absolute;
+    left: $spacing-3;
+    top: 50%;
+    transform: translateY(-50%);
+    color: $gray-400;
+    pointer-events: none;
   }
+}
 
-  .clear-search-btn {
+.search-input {
+  padding-left: $spacing-10 !important;
+}
+
+.search-clear {
+  position: absolute;
+  right: $spacing-2;
+  top: 50%;
+  transform: translateY(-50%);
+  color: $gray-400;
+  font-size: $font-size-lg;
+  line-height: 1;
+  text-decoration: none;
+  padding: $spacing-1;
+  border-radius: $radius-sm;
+
+  &:hover {
     color: $danger;
+    background-color: rgba($danger, 0.1);
+  }
+}
 
-    &:hover {
-      background-color: rgba($danger, 0.1);
-      border-color: $danger;
-    }
+.search-btn,
+.clear-search-btn {
+  padding: $spacing-2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clear-search-btn {
+  color: $danger;
+
+  &:hover {
+    background-color: rgba($danger, 0.1);
+    border-color: $danger;
   }
 }
 
