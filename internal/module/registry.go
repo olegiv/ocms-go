@@ -17,6 +17,9 @@ import (
 	"ocms-go/internal/render"
 )
 
+// errModuleNotFound is the format string for module not found errors.
+const errModuleNotFoundFmt = "module %q not found in registry"
+
 // Registry manages module registration and lifecycle.
 type Registry struct {
 	modules       map[string]Module
@@ -107,7 +110,7 @@ func (r *Registry) InitAll(ctx *Context) error {
 	for _, name := range r.order {
 		m, ok := r.modules[name]
 		if !ok || m == nil {
-			return fmt.Errorf("module %q not found in registry", name)
+			return fmt.Errorf(errModuleNotFoundFmt, name)
 		}
 		r.logger.Info("initializing module", "name", name, "active", r.activeStatus[name])
 
@@ -131,7 +134,7 @@ func (r *Registry) checkDependencies() error {
 	for _, name := range r.order {
 		m, ok := r.modules[name]
 		if !ok || m == nil {
-			return fmt.Errorf("module %q not found in registry", name)
+			return fmt.Errorf(errModuleNotFoundFmt, name)
 		}
 		for _, dep := range m.Dependencies() {
 			if _, ok := r.modules[dep]; !ok {
@@ -153,7 +156,7 @@ func (r *Registry) runAllMigrations(db *sql.DB) error {
 	for _, name := range r.order {
 		m, ok := r.modules[name]
 		if !ok || m == nil {
-			return fmt.Errorf("module %q not found in registry", name)
+			return fmt.Errorf(errModuleNotFoundFmt, name)
 		}
 		migrations := m.Migrations()
 		if len(migrations) == 0 {
