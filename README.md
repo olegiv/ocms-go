@@ -479,6 +479,32 @@ Check for vulnerabilities:
 govulncheck ./...
 ```
 
+## Claude Code Support Tools
+
+This project uses a shared submodule at `.claude/shared` containing reusable Claude Code extensions:
+
+- **Agents**: security-auditor, project-architect, code-quality-auditor
+- **Commands**: commit-prepare, commit-do, security-audit, setup-project-tools
+- **Global config**: CLAUDE.md rules and settings.json templates
+
+### Updating the Submodule
+
+To update the shared Claude Code tools to the latest version:
+
+```bash
+# Using the slash command (recommended)
+/update-submodule
+
+# Or manually
+git submodule update --remote --merge
+```
+
+After updating, stage and commit the submodule change if you want to keep it:
+```bash
+git add .claude/shared
+git commit -m "Update Claude Code shared submodule"
+```
+
 ## Technology Stack
 
 - **Backend**: Go 1.21+
