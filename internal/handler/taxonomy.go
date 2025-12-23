@@ -81,7 +81,7 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 	data := TagsListData{
 		Tags:       tags,
 		TotalCount: totalCount,
-		Pagination: BuildAdminPagination(page, int(totalCount), TagsPerPage, "/admin/tags", r.URL.Query()),
+		Pagination: BuildAdminPagination(page, int(totalCount), TagsPerPage, redirectAdminTags, r.URL.Query()),
 	}
 
 	h.renderer.RenderPage(w, r, "admin/tags_list", render.TemplateData{
@@ -89,8 +89,8 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.tags"), URL: "/admin/tags", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.tags"), URL: redirectAdminTags, Active: true},
 		},
 	})
 }
@@ -137,9 +137,9 @@ func (h *TaxonomyHandler) NewTagForm(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.tags"), URL: "/admin/tags"},
-			{Label: i18n.T(lang, "tags.new"), URL: "/admin/tags/new", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.tags"), URL: redirectAdminTags},
+			{Label: i18n.T(lang, "tags.new"), URL: redirectAdminTagsNew, Active: true},
 		},
 	})
 }
@@ -149,7 +149,7 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	if !parseFormOrRedirect(w, r, h.renderer, "/admin/tags/new") {
+	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminTagsNew) {
 		return
 	}
 
@@ -203,9 +203,9 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-				{Label: i18n.T(lang, "nav.tags"), URL: "/admin/tags"},
-				{Label: i18n.T(lang, "tags.new"), URL: "/admin/tags/new", Active: true},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+				{Label: i18n.T(lang, "nav.tags"), URL: redirectAdminTags},
+				{Label: i18n.T(lang, "tags.new"), URL: redirectAdminTagsNew, Active: true},
 			},
 		})
 		return
@@ -222,12 +222,12 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to create tag", "error", err)
-		flashError(w, r, h.renderer, "/admin/tags/new", "Error creating tag")
+		flashError(w, r, h.renderer, redirectAdminTagsNew, "Error creating tag")
 		return
 	}
 
 	slog.Info("tag created", "tag_id", newTag.ID, "slug", newTag.Slug, "created_by", middleware.GetUserID(r))
-	flashSuccess(w, r, h.renderer, "/admin/tags", "Tag created successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminTags, "Tag created successfully")
 }
 
 // EditTagForm handles GET /admin/tags/{id} - displays the edit tag form.
@@ -237,7 +237,7 @@ func (h *TaxonomyHandler) EditTagForm(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/tags", "Invalid tag ID")
+		flashError(w, r, h.renderer, redirectAdminTags, "Invalid tag ID")
 		return
 	}
 
@@ -264,9 +264,9 @@ func (h *TaxonomyHandler) EditTagForm(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.tags"), URL: "/admin/tags"},
-			{Label: tag.Name, URL: fmt.Sprintf("/admin/tags/%d", tag.ID), Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.tags"), URL: redirectAdminTags},
+			{Label: tag.Name, URL: fmt.Sprintf(redirectAdminTagsID, tag.ID), Active: true},
 		},
 	})
 }
@@ -278,7 +278,7 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/tags", "Invalid tag ID")
+		flashError(w, r, h.renderer, redirectAdminTags, "Invalid tag ID")
 		return
 	}
 
@@ -287,7 +287,7 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf("/admin/tags/%d", id)) {
+	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf(redirectAdminTagsID, id)) {
 		return
 	}
 
@@ -330,9 +330,9 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-				{Label: i18n.T(lang, "nav.tags"), URL: "/admin/tags"},
-				{Label: existingTag.Name, URL: fmt.Sprintf("/admin/tags/%d", id), Active: true},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+				{Label: i18n.T(lang, "nav.tags"), URL: redirectAdminTags},
+				{Label: existingTag.Name, URL: fmt.Sprintf(redirectAdminTagsID, id), Active: true},
 			},
 		})
 		return
@@ -349,12 +349,12 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to update tag", "error", err, "tag_id", id)
-		flashError(w, r, h.renderer, fmt.Sprintf("/admin/tags/%d", id), "Error updating tag")
+		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminTagsID, id), "Error updating tag")
 		return
 	}
 
 	slog.Info("tag updated", "tag_id", updatedTag.ID, "slug", updatedTag.Slug, "updated_by", middleware.GetUserID(r))
-	flashSuccess(w, r, h.renderer, "/admin/tags", "Tag updated successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminTags, "Tag updated successfully")
 }
 
 // DeleteTag handles DELETE /admin/tags/{id} - deletes a tag.
@@ -387,7 +387,7 @@ func (h *TaxonomyHandler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// For regular requests, redirect
-	flashSuccess(w, r, h.renderer, "/admin/tags", "Tag deleted successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminTags, "Tag deleted successfully")
 }
 
 // SearchTags handles GET /admin/tags/search - AJAX search for autocomplete.
@@ -425,11 +425,11 @@ func (h *TaxonomyHandler) SearchTags(w http.ResponseWriter, r *http.Request) {
 func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/tags", "Invalid tag ID")
+		flashError(w, r, h.renderer, redirectAdminTags, "Invalid tag ID")
 		return
 	}
 
-	redirectURL := fmt.Sprintf("/admin/tags/%d", id)
+	redirectURL := fmt.Sprintf(redirectAdminTagsID, id)
 	sourceTag, ok := h.requireTagWithRedirect(w, r, id)
 	if !ok {
 		return
@@ -476,7 +476,7 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 		"language", setup.TargetContext.TargetLang.Code,
 		"created_by", middleware.GetUserID(r))
 
-	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/tags/%d", translatedTag.ID), fmt.Sprintf("Translation created for %s. Please translate the name.", setup.TargetContext.TargetLang.Name))
+	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminTagsID, translatedTag.ID), fmt.Sprintf("Translation created for %s. Please translate the name.", setup.TargetContext.TargetLang.Name))
 }
 
 // =============================================================================
@@ -641,8 +641,8 @@ func (h *TaxonomyHandler) ListCategories(w http.ResponseWriter, r *http.Request)
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.categories"), URL: "/admin/categories", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.categories"), URL: redirectAdminCategories, Active: true},
 		},
 	})
 }
@@ -701,9 +701,9 @@ func (h *TaxonomyHandler) NewCategoryForm(w http.ResponseWriter, r *http.Request
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.categories"), URL: "/admin/categories"},
-			{Label: i18n.T(lang, "categories.new"), URL: "/admin/categories/new", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.categories"), URL: redirectAdminCategories},
+			{Label: i18n.T(lang, "categories.new"), URL: redirectAdminCategoriesNew, Active: true},
 		},
 	})
 }
@@ -713,7 +713,7 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	if !parseFormOrRedirect(w, r, h.renderer, "/admin/categories/new") {
+	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminCategoriesNew) {
 		return
 	}
 
@@ -780,9 +780,9 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-				{Label: i18n.T(lang, "nav.categories"), URL: "/admin/categories"},
-				{Label: i18n.T(lang, "categories.new"), URL: "/admin/categories/new", Active: true},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+				{Label: i18n.T(lang, "nav.categories"), URL: redirectAdminCategories},
+				{Label: i18n.T(lang, "categories.new"), URL: redirectAdminCategoriesNew, Active: true},
 			},
 		})
 		return
@@ -802,12 +802,12 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 	})
 	if err != nil {
 		slog.Error("failed to create category", "error", err)
-		flashError(w, r, h.renderer, "/admin/categories/new", "Error creating category")
+		flashError(w, r, h.renderer, redirectAdminCategoriesNew, "Error creating category")
 		return
 	}
 
 	slog.Info("category created", "category_id", newCategory.ID, "slug", newCategory.Slug, "created_by", middleware.GetUserID(r))
-	flashSuccess(w, r, h.renderer, "/admin/categories", "Category created successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminCategories, "Category created successfully")
 }
 
 // EditCategoryForm handles GET /admin/categories/{id} - displays the edit category form.
@@ -817,7 +817,7 @@ func (h *TaxonomyHandler) EditCategoryForm(w http.ResponseWriter, r *http.Reques
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/categories", "Invalid category ID")
+		flashError(w, r, h.renderer, redirectAdminCategories, "Invalid category ID")
 		return
 	}
 
@@ -847,9 +847,9 @@ func (h *TaxonomyHandler) EditCategoryForm(w http.ResponseWriter, r *http.Reques
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.categories"), URL: "/admin/categories"},
-			{Label: category.Name, URL: fmt.Sprintf("/admin/categories/%d", category.ID), Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.categories"), URL: redirectAdminCategories},
+			{Label: category.Name, URL: fmt.Sprintf(redirectAdminCategoriesID, category.ID), Active: true},
 		},
 	})
 }
@@ -861,7 +861,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/categories", "Invalid category ID")
+		flashError(w, r, h.renderer, redirectAdminCategories, "Invalid category ID")
 		return
 	}
 
@@ -870,7 +870,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf("/admin/categories/%d", id)) {
+	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf(redirectAdminCategoriesID, id)) {
 		return
 	}
 
@@ -938,9 +938,9 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-				{Label: i18n.T(lang, "nav.categories"), URL: "/admin/categories"},
-				{Label: existingCategory.Name, URL: fmt.Sprintf("/admin/categories/%d", id), Active: true},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+				{Label: i18n.T(lang, "nav.categories"), URL: redirectAdminCategories},
+				{Label: existingCategory.Name, URL: fmt.Sprintf(redirectAdminCategoriesID, id), Active: true},
 			},
 		})
 		return
@@ -960,12 +960,12 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 	})
 	if err != nil {
 		slog.Error("failed to update category", "error", err, "category_id", id)
-		flashError(w, r, h.renderer, fmt.Sprintf("/admin/categories/%d", id), "Error updating category")
+		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminCategoriesID, id), "Error updating category")
 		return
 	}
 
 	slog.Info("category updated", "category_id", updatedCategory.ID, "slug", updatedCategory.Slug, "updated_by", middleware.GetUserID(r))
-	flashSuccess(w, r, h.renderer, "/admin/categories", "Category updated successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminCategories, "Category updated successfully")
 }
 
 // DeleteCategory handles DELETE /admin/categories/{id} - deletes a category.
@@ -998,18 +998,18 @@ func (h *TaxonomyHandler) DeleteCategory(w http.ResponseWriter, r *http.Request)
 	}
 
 	// For regular requests, redirect
-	flashSuccess(w, r, h.renderer, "/admin/categories", "Category deleted successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminCategories, "Category deleted successfully")
 }
 
 // TranslateCategory handles POST /admin/categories/{id}/translate/{langCode} - creates a translation.
 func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/categories", "Invalid category ID")
+		flashError(w, r, h.renderer, redirectAdminCategories, "Invalid category ID")
 		return
 	}
 
-	redirectURL := fmt.Sprintf("/admin/categories/%d", id)
+	redirectURL := fmt.Sprintf(redirectAdminCategoriesID, id)
 	sourceCategory, ok := h.requireCategoryWithRedirect(w, r, id)
 	if !ok {
 		return
@@ -1059,7 +1059,7 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 		"language", setup.TargetContext.TargetLang.Code,
 		"created_by", middleware.GetUserID(r))
 
-	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/categories/%d", translatedCategory.ID), fmt.Sprintf("Translation created for %s. Please translate the name.", setup.TargetContext.TargetLang.Name))
+	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminCategoriesID, translatedCategory.ID), fmt.Sprintf("Translation created for %s. Please translate the name.", setup.TargetContext.TargetLang.Name))
 }
 
 // =============================================================================
@@ -1068,7 +1068,7 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 
 // requireTagWithRedirect fetches a tag by ID and redirects with flash on error.
 func (h *TaxonomyHandler) requireTagWithRedirect(w http.ResponseWriter, r *http.Request, id int64) (store.Tag, bool) {
-	return requireEntityWithRedirect(w, r, h.renderer, "/admin/tags", "Tag", id,
+	return requireEntityWithRedirect(w, r, h.renderer, redirectAdminTags, "Tag", id,
 		func(id int64) (store.Tag, error) { return h.queries.GetTagByID(r.Context(), id) })
 }
 
@@ -1080,7 +1080,7 @@ func (h *TaxonomyHandler) requireTagWithError(w http.ResponseWriter, r *http.Req
 
 // requireCategoryWithRedirect fetches a category by ID and redirects with flash on error.
 func (h *TaxonomyHandler) requireCategoryWithRedirect(w http.ResponseWriter, r *http.Request, id int64) (store.Category, bool) {
-	return requireEntityWithRedirect(w, r, h.renderer, "/admin/categories", "Category", id,
+	return requireEntityWithRedirect(w, r, h.renderer, redirectAdminCategories, "Category", id,
 		func(id int64) (store.Category, error) { return h.queries.GetCategoryByID(r.Context(), id) })
 }
 

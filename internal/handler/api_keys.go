@@ -76,7 +76,7 @@ func (h *APIKeysHandler) List(w http.ResponseWriter, r *http.Request) {
 	data := APIKeysListData{
 		APIKeys:    apiKeys,
 		TotalKeys:  totalKeys,
-		Pagination: BuildAdminPagination(page, int(totalKeys), APIKeysPerPage, "/admin/api-keys", r.URL.Query()),
+		Pagination: BuildAdminPagination(page, int(totalKeys), APIKeysPerPage, redirectAdminAPIKeys, r.URL.Query()),
 	}
 
 	h.renderer.RenderPage(w, r, "admin/api_keys_list", render.TemplateData{
@@ -84,8 +84,8 @@ func (h *APIKeysHandler) List(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.api_keys"), URL: "/admin/api-keys", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.api_keys"), URL: redirectAdminAPIKeys, Active: true},
 		},
 	})
 }
@@ -113,7 +113,7 @@ func (h *APIKeysHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.renderAPIKeyForm(w, r, user, lang, i18n.T(lang, "api_keys.new_key"), data,
-		i18n.T(lang, "api_keys.new_key"), "/admin/api-keys/new")
+		i18n.T(lang, "api_keys.new_key"), redirectAdminAPIKeysNew)
 }
 
 // Create handles POST /admin/api-keys - creates a new API key.
@@ -121,7 +121,7 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	if !parseFormOrRedirect(w, r, h.renderer, "/admin/api-keys/new") {
+	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminAPIKeysNew) {
 		return
 	}
 
@@ -159,7 +159,7 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 			IsEdit:      false,
 		}
 		h.renderAPIKeyForm(w, r, user, lang, i18n.T(lang, "api_keys.new_key"), data,
-			i18n.T(lang, "api_keys.new_key"), "/admin/api-keys/new")
+			i18n.T(lang, "api_keys.new_key"), redirectAdminAPIKeysNew)
 		return
 	}
 
@@ -167,7 +167,7 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	rawKey, prefix, err := model.GenerateAPIKey()
 	if err != nil {
 		slog.Error("failed to generate API key", "error", err)
-		flashError(w, r, h.renderer, "/admin/api-keys/new", "Error generating API key")
+		flashError(w, r, h.renderer, redirectAdminAPIKeysNew, "Error generating API key")
 		return
 	}
 
@@ -192,7 +192,7 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to create API key", "error", err)
-		flashError(w, r, h.renderer, "/admin/api-keys/new", "Error creating API key")
+		flashError(w, r, h.renderer, redirectAdminAPIKeysNew, "Error creating API key")
 		return
 	}
 
@@ -208,7 +208,7 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 		GeneratedKey: rawKey,
 	}
 	h.renderAPIKeyForm(w, r, user, lang, i18n.T(lang, "api_keys.key_created"), data,
-		i18n.T(lang, "api_keys.new_key"), "/admin/api-keys/new")
+		i18n.T(lang, "api_keys.new_key"), redirectAdminAPIKeysNew)
 }
 
 // EditForm handles GET /admin/api-keys/{id} - displays the edit API key form.
@@ -218,7 +218,7 @@ func (h *APIKeysHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	id, idStr, ok := parseAPIKeyID(r)
 	if !ok {
-		flashError(w, r, h.renderer, "/admin/api-keys", "Invalid API key ID")
+		flashError(w, r, h.renderer, redirectAdminAPIKeys, "Invalid API key ID")
 		return
 	}
 
@@ -244,7 +244,7 @@ func (h *APIKeysHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		IsEdit: true,
 	}
 	h.renderAPIKeyForm(w, r, user, lang, i18n.T(lang, "api_keys.edit_key"), data,
-		apiKey.Name, "/admin/api-keys/"+idStr)
+		apiKey.Name, redirectAdminAPIKeysSlash+idStr)
 }
 
 // Update handles PUT /admin/api-keys/{id} - updates an existing API key.
@@ -254,7 +254,7 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	id, idStr, ok := parseAPIKeyID(r)
 	if !ok {
-		flashError(w, r, h.renderer, "/admin/api-keys", "Invalid API key ID")
+		flashError(w, r, h.renderer, redirectAdminAPIKeys, "Invalid API key ID")
 		return
 	}
 
@@ -263,7 +263,7 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !parseFormOrRedirect(w, r, h.renderer, "/admin/api-keys/"+idStr) {
+	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminAPIKeysSlash+idStr) {
 		return
 	}
 
@@ -303,7 +303,7 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 			IsEdit:      true,
 		}
 		h.renderAPIKeyForm(w, r, user, lang, i18n.T(lang, "api_keys.edit_key"), data,
-			apiKey.Name, "/admin/api-keys/"+idStr)
+			apiKey.Name, redirectAdminAPIKeysSlash+idStr)
 		return
 	}
 
@@ -322,12 +322,12 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to update API key", "error", err)
-		flashError(w, r, h.renderer, "/admin/api-keys/"+idStr, "Error updating API key")
+		flashError(w, r, h.renderer, redirectAdminAPIKeysSlash+idStr, "Error updating API key")
 		return
 	}
 
 	slog.Info("API key updated", "key_id", id, "updated_by", middleware.GetUserID(r))
-	flashSuccess(w, r, h.renderer, "/admin/api-keys", "API key updated successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminAPIKeys, "API key updated successfully")
 }
 
 // Delete handles DELETE /admin/api-keys/{id} - deletes (deactivates) an API key.
@@ -367,7 +367,7 @@ func (h *APIKeysHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Regular request - redirect with flash message
-	flashSuccess(w, r, h.renderer, "/admin/api-keys", "API key revoked successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminAPIKeys, "API key revoked successfully")
 }
 
 // sendDeleteError sends an error response for delete operations.
@@ -449,10 +449,10 @@ func (h *APIKeysHandler) fetchAPIKey(w http.ResponseWriter, r *http.Request, id 
 	apiKey, err := h.queries.GetAPIKeyByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			flashError(w, r, h.renderer, "/admin/api-keys", "API key not found")
+			flashError(w, r, h.renderer, redirectAdminAPIKeys, "API key not found")
 		} else {
 			slog.Error("failed to get API key", "error", err)
-			flashError(w, r, h.renderer, "/admin/api-keys", "Error loading API key")
+			flashError(w, r, h.renderer, redirectAdminAPIKeys, "Error loading API key")
 		}
 		return store.ApiKey{}, false
 	}
@@ -483,8 +483,8 @@ func (h *APIKeysHandler) renderAPIKeyForm(w http.ResponseWriter, r *http.Request
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.api_keys"), URL: "/admin/api-keys"},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.api_keys"), URL: redirectAdminAPIKeys},
 			{Label: breadcrumbLabel, URL: breadcrumbURL, Active: true},
 		},
 	})

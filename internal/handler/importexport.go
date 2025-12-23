@@ -60,7 +60,7 @@ func (h *ImportExportHandler) ExportForm(w http.ResponseWriter, r *http.Request)
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
 			{Label: i18n.T(lang, "nav.export"), URL: "/admin/export", Active: true},
 		},
 	})
@@ -156,7 +156,7 @@ func defaultConflictStrategies() []ConflictStrategyOption {
 // importBreadcrumbs returns the standard breadcrumbs for import pages.
 func importBreadcrumbs(lang string) []render.Breadcrumb {
 	return []render.Breadcrumb{
-		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
 		{Label: i18n.T(lang, "nav.import"), URL: "/admin/import", Active: true},
 	}
 }

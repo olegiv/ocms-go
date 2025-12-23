@@ -118,7 +118,7 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 		Users:         users,
 		CurrentUserID: middleware.GetUserID(r),
 		TotalUsers:    totalUsers,
-		Pagination:    BuildAdminPagination(page, int(totalUsers), UsersPerPage, "/admin/users", r.URL.Query()),
+		Pagination:    BuildAdminPagination(page, int(totalUsers), UsersPerPage, redirectAdminUsers, r.URL.Query()),
 	}
 
 	h.renderer.RenderPage(w, r, "admin/users_list", render.TemplateData{
@@ -126,8 +126,8 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.users"), URL: "/admin/users", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.users"), URL: redirectAdminUsers, Active: true},
 		},
 	})
 }
@@ -155,7 +155,7 @@ func (h *UsersHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 
 // Create handles POST /admin/users - creates a new user.
 func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
-	if !parseFormOrRedirect(w, r, h.renderer, "/admin/users/new") {
+	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminUsersNew) {
 		return
 	}
 
@@ -231,7 +231,7 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	passwordHash, err := auth.HashPassword(password)
 	if err != nil {
 		slog.Error("failed to hash password", "error", err)
-		flashError(w, r, h.renderer, "/admin/users/new", "Error creating user")
+		flashError(w, r, h.renderer, redirectAdminUsersNew, "Error creating user")
 		return
 	}
 
@@ -247,7 +247,7 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to create user", "error", err)
-		flashError(w, r, h.renderer, "/admin/users/new", "Error creating user")
+		flashError(w, r, h.renderer, redirectAdminUsersNew, "Error creating user")
 		return
 	}
 
@@ -256,7 +256,7 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Dispatch user.created webhook event
 	h.dispatchUserEvent(r.Context(), model.EventUserCreated, newUser)
 
-	flashSuccess(w, r, h.renderer, "/admin/users", "User created successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminUsers, "User created successfully")
 }
 
 // EditForm handles GET /admin/users/{id} - displays the edit user form.
@@ -266,7 +266,7 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/users", "Invalid user ID")
+		flashError(w, r, h.renderer, redirectAdminUsers, "Invalid user ID")
 		return
 	}
 
@@ -292,9 +292,9 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		User:  currentUser,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.users"), URL: "/admin/users"},
-			{Label: editUser.Name, URL: fmt.Sprintf("/admin/users/%d", editUser.ID), Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.users"), URL: redirectAdminUsers},
+			{Label: editUser.Name, URL: fmt.Sprintf(redirectAdminUsersID, editUser.ID), Active: true},
 		},
 	})
 }
@@ -310,7 +310,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/users", "Invalid user ID")
+		flashError(w, r, h.renderer, redirectAdminUsers, "Invalid user ID")
 		return
 	}
 
@@ -319,7 +319,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf("/admin/users/%d", id)) {
+	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf(redirectAdminUsersID, id)) {
 		return
 	}
 
@@ -405,9 +405,9 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 			User:  currentUser,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-				{Label: i18n.T(lang, "nav.users"), URL: "/admin/users"},
-				{Label: editUser.Name, URL: fmt.Sprintf("/admin/users/%d", id), Active: true},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+				{Label: i18n.T(lang, "nav.users"), URL: redirectAdminUsers},
+				{Label: editUser.Name, URL: fmt.Sprintf(redirectAdminUsersID, id), Active: true},
 			},
 		})
 		return
@@ -424,7 +424,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to update user", "error", err)
-		flashError(w, r, h.renderer, fmt.Sprintf("/admin/users/%d", id), "Error updating user")
+		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminUsersID, id), "Error updating user")
 		return
 	}
 
@@ -433,7 +433,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		passwordHash, err := auth.HashPassword(password)
 		if err != nil {
 			slog.Error("failed to hash password", "error", err)
-			flashAndRedirect(w, r, h.renderer, "/admin/users", "User updated but password change failed", "warning")
+			flashAndRedirect(w, r, h.renderer, redirectAdminUsers, "User updated but password change failed", "warning")
 			return
 		}
 
@@ -444,13 +444,13 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			slog.Error("failed to update password", "error", err)
-			flashAndRedirect(w, r, h.renderer, "/admin/users", "User updated but password change failed", "warning")
+			flashAndRedirect(w, r, h.renderer, redirectAdminUsers, "User updated but password change failed", "warning")
 			return
 		}
 	}
 
 	slog.Info("user updated", "user_id", id, "updated_by", currentUser.ID)
-	flashSuccess(w, r, h.renderer, "/admin/users", "User updated successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminUsers, "User updated successfully")
 }
 
 // Delete handles DELETE /admin/users/{id} - deletes a user.
@@ -522,7 +522,7 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Regular request - redirect with flash message
-	flashSuccess(w, r, h.renderer, "/admin/users", "User deleted successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminUsers, "User deleted successfully")
 }
 
 // sendDeleteError sends an error response for delete operations.
@@ -544,7 +544,7 @@ func isValidRole(role string) bool {
 
 // requireUserWithRedirect fetches a user by ID and redirects with flash on error.
 func (h *UsersHandler) requireUserWithRedirect(w http.ResponseWriter, r *http.Request, id int64) (store.User, bool) {
-	return requireEntityWithRedirect(w, r, h.renderer, "/admin/users", "User", id,
+	return requireEntityWithRedirect(w, r, h.renderer, redirectAdminUsers, "User", id,
 		func(id int64) (store.User, error) { return h.queries.GetUserByID(r.Context(), id) })
 }
 
@@ -558,9 +558,9 @@ func (h *UsersHandler) renderNewUserForm(w http.ResponseWriter, r *http.Request,
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.users"), URL: "/admin/users"},
-			{Label: i18n.T(lang, "users.new"), URL: "/admin/users/new", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.users"), URL: redirectAdminUsers},
+			{Label: i18n.T(lang, "users.new"), URL: redirectAdminUsersNew, Active: true},
 		},
 	})
 }

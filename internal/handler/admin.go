@@ -357,7 +357,7 @@ func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  dashboardData,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin, Active: true},
 		},
 	})
 }
@@ -381,7 +381,7 @@ func (h *AdminHandler) SetLanguage(w http.ResponseWriter, r *http.Request) {
 	// Redirect back to the referring page, or dashboard if not available
 	referer := r.Header.Get("Referer")
 	if referer == "" {
-		referer = "/admin"
+		referer = redirectAdmin
 	}
 
 	http.Redirect(w, r, referer, http.StatusSeeOther)

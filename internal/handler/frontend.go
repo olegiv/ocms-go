@@ -379,7 +379,7 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 			Name:        c.Name,
 			Slug:        c.Slug,
 			Description: c.Description.String,
-			URL:         "/category/" + c.Slug,
+			URL:         redirectCategory + c.Slug,
 			PageCount:   c.UsageCount,
 		})
 	}
@@ -398,7 +398,7 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 			ID:        t.ID,
 			Name:      t.Name,
 			Slug:      t.Slug,
-			URL:       "/tag/" + t.Slug,
+			URL:       redirectTag + t.Slug,
 			PageCount: t.UsageCount,
 		})
 	}
@@ -603,7 +603,7 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 		Name:        category.Name,
 		Slug:        category.Slug,
 		Description: category.Description.String,
-		URL:         "/category/" + category.Slug,
+		URL:         redirectCategory + category.Slug,
 	}
 
 	pagination := h.buildPagination(page, int(total), fmt.Sprintf("/category/%s", slug))
@@ -674,7 +674,7 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 		ID:   tag.ID,
 		Name: tag.Name,
 		Slug: tag.Slug,
-		URL:  "/tag/" + tag.Slug,
+		URL:  redirectTag + tag.Slug,
 	}
 
 	pagination := h.buildPagination(page, int(total), fmt.Sprintf("/tag/%s", slug))
@@ -1003,7 +1003,7 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page) PageView
 				Name:        c.Name,
 				Slug:        c.Slug,
 				Description: c.Description.String,
-				URL:         "/category/" + c.Slug,
+				URL:         redirectCategory + c.Slug,
 			}
 		}
 		// Set primary category (first one)
@@ -1019,7 +1019,7 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page) PageView
 				ID:   t.ID,
 				Name: t.Name,
 				Slug: t.Slug,
-				URL:  "/tag/" + t.Slug,
+				URL:  redirectTag + t.Slug,
 			}
 		}
 	}

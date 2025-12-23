@@ -205,7 +205,7 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 		Filter:     filter,
 		FolderID:   folderID,
 		Search:     search,
-		Pagination: BuildAdminPagination(page, int(totalCount), MediaPerPage, "/admin/media", r.URL.Query()),
+		Pagination: BuildAdminPagination(page, int(totalCount), MediaPerPage, redirectAdminMedia, r.URL.Query()),
 	}
 
 	h.renderer.RenderPage(w, r, "admin/media_library", render.TemplateData{
@@ -213,8 +213,8 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.media"), URL: "/admin/media", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.media"), URL: redirectAdminMedia, Active: true},
 		},
 	})
 }
@@ -249,9 +249,9 @@ func (h *MediaHandler) UploadForm(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.media"), URL: "/admin/media"},
-			{Label: i18n.T(lang, "media.upload"), URL: "/admin/media/upload", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.media"), URL: redirectAdminMedia},
+			{Label: i18n.T(lang, "media.upload"), URL: redirectAdminMediaUpload, Active: true},
 		},
 	})
 }
@@ -268,7 +268,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte("File too large or invalid form"))
 			return
 		}
-		flashError(w, r, h.renderer, "/admin/media/upload", "Error parsing upload")
+		flashError(w, r, h.renderer, redirectAdminMediaUpload, "Error parsing upload")
 		return
 	}
 
@@ -292,7 +292,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 				_, _ = w.Write([]byte("No file uploaded"))
 				return
 			}
-			flashError(w, r, h.renderer, "/admin/media/upload", "No file uploaded")
+			flashError(w, r, h.renderer, redirectAdminMediaUpload, "No file uploaded")
 			return
 		}
 		defer func() { _ = file.Close() }()
@@ -306,7 +306,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 				_, _ = w.Write([]byte(err.Error()))
 				return
 			}
-			flashError(w, r, h.renderer, "/admin/media/upload", "Upload failed: "+err.Error())
+			flashError(w, r, h.renderer, redirectAdminMediaUpload, "Upload failed: "+err.Error())
 			return
 		}
 
@@ -322,7 +322,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		flashSuccess(w, r, h.renderer, "/admin/media", "File uploaded successfully")
+		flashSuccess(w, r, h.renderer, redirectAdminMedia, "File uploaded successfully")
 		return
 	}
 
@@ -361,9 +361,9 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if errorCount > 0 {
-		flashAndRedirect(w, r, h.renderer, "/admin/media", fmt.Sprintf("Uploaded %d files, %d failed", uploadedCount, errorCount), "warning")
+		flashAndRedirect(w, r, h.renderer, redirectAdminMedia, fmt.Sprintf("Uploaded %d files, %d failed", uploadedCount, errorCount), "warning")
 	} else {
-		flashSuccess(w, r, h.renderer, "/admin/media", fmt.Sprintf("Uploaded %d files successfully", uploadedCount))
+		flashSuccess(w, r, h.renderer, redirectAdminMedia, fmt.Sprintf("Uploaded %d files successfully", uploadedCount))
 	}
 }
 
@@ -383,7 +383,7 @@ func (h *MediaHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/media", "Invalid media ID")
+		flashError(w, r, h.renderer, redirectAdminMedia, "Invalid media ID")
 		return
 	}
 
@@ -427,9 +427,9 @@ func (h *MediaHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.media"), URL: "/admin/media"},
-			{Label: media.Filename, URL: fmt.Sprintf("/admin/media/%d", media.ID), Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.media"), URL: redirectAdminMedia},
+			{Label: media.Filename, URL: fmt.Sprintf(redirectAdminMediaID, media.ID), Active: true},
 		},
 	})
 }
@@ -441,7 +441,7 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/media", "Invalid media ID")
+		flashError(w, r, h.renderer, redirectAdminMedia, "Invalid media ID")
 		return
 	}
 
@@ -450,7 +450,7 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf("/admin/media/%d", id)) {
+	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf(redirectAdminMediaID, id)) {
 		return
 	}
 
@@ -500,9 +500,9 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-				{Label: i18n.T(lang, "nav.media"), URL: "/admin/media"},
-				{Label: media.Filename, URL: fmt.Sprintf("/admin/media/%d", id), Active: true},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+				{Label: i18n.T(lang, "nav.media"), URL: redirectAdminMedia},
+				{Label: media.Filename, URL: fmt.Sprintf(redirectAdminMediaID, id), Active: true},
 			},
 		})
 		return
@@ -520,12 +520,12 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to update media", "error", err, "media_id", id)
-		flashError(w, r, h.renderer, fmt.Sprintf("/admin/media/%d", id), "Error updating media")
+		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminMediaID, id), "Error updating media")
 		return
 	}
 
 	slog.Info("media updated", "media_id", id, "updated_by", middleware.GetUserID(r))
-	flashSuccess(w, r, h.renderer, "/admin/media", "Media updated successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminMedia, "Media updated successfully")
 }
 
 // Delete handles DELETE /admin/media/{id} - deletes media and files.
@@ -561,7 +561,7 @@ func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// For regular requests, redirect
-	flashSuccess(w, r, h.renderer, "/admin/media", "Media deleted successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminMedia, "Media deleted successfully")
 }
 
 // CreateFolder handles POST /admin/media/folders - creates a new folder.
@@ -621,7 +621,7 @@ func (h *MediaHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flashSuccess(w, r, h.renderer, "/admin/media", "Folder created successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminMedia, "Folder created successfully")
 }
 
 // UpdateFolder handles PUT /admin/media/folders/{id} - renames or moves a folder.
@@ -693,7 +693,7 @@ func (h *MediaHandler) UpdateFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flashSuccess(w, r, h.renderer, "/admin/media", "Folder updated successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminMedia, "Folder updated successfully")
 }
 
 // DeleteFolder handles DELETE /admin/media/folders/{id} - deletes a folder.
@@ -747,7 +747,7 @@ func (h *MediaHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flashSuccess(w, r, h.renderer, "/admin/media", "Folder deleted successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminMedia, "Folder deleted successfully")
 }
 
 // MoveMedia handles POST /admin/media/{id}/move - moves media to a different folder.
@@ -800,7 +800,7 @@ func (h *MediaHandler) MoveMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flashSuccess(w, r, h.renderer, "/admin/media", "Media moved successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminMedia, "Media moved successfully")
 }
 
 // API handles GET /admin/media/api - returns media items as JSON for the media picker.
@@ -930,7 +930,7 @@ func (h *MediaHandler) API(w http.ResponseWriter, r *http.Request) {
 
 // requireMediaWithRedirect fetches media by ID and handles errors with flash messages and redirect.
 func (h *MediaHandler) requireMediaWithRedirect(w http.ResponseWriter, r *http.Request, id int64) (store.Medium, bool) {
-	return requireEntityWithRedirect(w, r, h.renderer, "/admin/media", "Media", id,
+	return requireEntityWithRedirect(w, r, h.renderer, redirectAdminMedia, "Media", id,
 		func(id int64) (store.Medium, error) { return h.queries.GetMediaByID(r.Context(), id) })
 }
 

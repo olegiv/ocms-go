@@ -49,6 +49,74 @@ var (
 	buildTime = "unknown"
 )
 
+// Constants for repeated literals
+const (
+	// Log messages
+	logCacheManagerInit = "cache manager initialized"
+
+	// Paths
+	uploadsDirPath = "./uploads"
+
+	// HTTP headers
+	headerContentType = "Content-Type"
+
+	// Common route suffixes
+	routeRoot            = "/"
+	routeSuffixNew       = "/new"
+	routeSuffixSearch    = "/search"
+	routeSuffixUpload    = "/upload"
+	routeSuffixReorder   = "/reorder"
+	routeSuffixMove      = "/move"
+	routeSuffixTranslate = "/translate/{langCode}"
+
+	// Route parameter patterns
+	routeParamID          = "/{id}"
+	routeParamSlug        = "/{slug}"
+	routeTagSlug          = "/tag/{slug}"
+	routeCategorySlug     = "/category/{slug}"
+	routeFormsSlug        = "/forms/{slug}"
+	routeSubmissionsSubID = "/submissions/{subId}"
+	routeItemsItemID      = "/items/{itemId}"
+	routeFieldsFieldID    = "/fields/{fieldId}"
+	routeSuffixFolders    = "/folders"
+
+	// Public route patterns
+	routeLogin  = "/login"
+	routeLogout = "/logout"
+	routeBlog   = "/blog"
+
+	// Admin route patterns - base routes
+	routeUsers      = "/users"
+	routeLanguages  = "/languages"
+	routePages      = "/pages"
+	routeTags       = "/tags"
+	routeCategories = "/categories"
+	routeMedia      = "/media"
+	routeMenus      = "/menus"
+	routeForms      = "/forms"
+	routeWidgets    = "/widgets"
+	routeAPIKeys    = "/api-keys"
+	routeWebhooks   = "/webhooks"
+	routeExport     = "/export"
+	routeImport     = "/import"
+
+	// Admin route patterns - with ID parameter
+	routeUsersID        = routeUsers + routeParamID
+	routeLanguagesID    = routeLanguages + routeParamID
+	routePagesID        = routePages + routeParamID
+	routeConfig         = "/config"
+	routeTagsID         = routeTags + routeParamID
+	routeCategoriesID   = routeCategories + routeParamID
+	routeMediaID        = routeMedia + routeParamID
+	routeMediaFoldersID = routeMedia + routeSuffixFolders + routeParamID
+	routeMenusID        = routeMenus + routeParamID
+	routeFormsID        = routeForms + routeParamID
+	routeThemeSettings  = "/themes/{name}/settings"
+	routeWidgetsID      = routeWidgets + routeParamID
+	routeAPIKeysID      = routeAPIKeys + routeParamID
+	routeWebhooksID     = routeWebhooks + routeParamID
+)
+
 func main() {
 	// Parse CLI flags
 	showVersion := flag.Bool("version", false, "Show version information")
@@ -237,11 +305,11 @@ func run() error {
 		slog.Warn("failed to preload config cache", "error", err)
 	}
 	if cacheManager.IsRedis() {
-		slog.Info("cache manager initialized", "backend", "redis", "url", cfg.RedisURL)
+		slog.Info(logCacheManagerInit, "backend", "redis", "url", cfg.RedisURL)
 	} else if cacheManager.Info().IsFallback {
-		slog.Warn("cache manager initialized", "backend", "memory", "note", "Redis unavailable, using fallback")
+		slog.Warn(logCacheManagerInit, "backend", "memory", "note", "Redis unavailable, using fallback")
 	} else {
-		slog.Info("cache manager initialized", "backend", "memory")
+		slog.Info(logCacheManagerInit, "backend", "memory")
 	}
 
 	// Initialize and start scheduler
@@ -398,7 +466,7 @@ func run() error {
 	configHandler := handler.NewConfigHandler(db, renderer, sessionManager, cacheManager)
 	eventsHandler := handler.NewEventsHandler(db, renderer, sessionManager)
 	taxonomyHandler := handler.NewTaxonomyHandler(db, renderer, sessionManager)
-	mediaHandler := handler.NewMediaHandler(db, renderer, sessionManager, "./uploads")
+	mediaHandler := handler.NewMediaHandler(db, renderer, sessionManager, uploadsDirPath)
 	menusHandler := handler.NewMenusHandler(db, renderer, sessionManager)
 	formsHandler := handler.NewFormsHandler(db, renderer, sessionManager)
 	themesHandler := handler.NewThemesHandler(db, renderer, sessionManager, themeManager, cacheManager)
@@ -419,7 +487,7 @@ func run() error {
 	apiKeysHandler := handler.NewAPIKeysHandler(db, renderer, sessionManager)
 	webhooksHandler := handler.NewWebhooksHandler(db, renderer, sessionManager)
 	importExportHandler := handler.NewImportExportHandler(db, renderer, sessionManager)
-	healthHandler := handler.NewHealthHandler(db, "./uploads")
+	healthHandler := handler.NewHealthHandler(db, uploadsDirPath)
 
 	// Set webhook dispatcher on handlers that dispatch events
 	pagesHandler.SetDispatcher(webhookDispatcher)
@@ -441,23 +509,23 @@ func run() error {
 		}
 
 		// Default language routes (no prefix)
-		r.Get("/", frontendHandler.Home)
+		r.Get(routeRoot, frontendHandler.Home)
 		r.Get("/sitemap.xml", frontendHandler.Sitemap)
 		r.Get("/robots.txt", frontendHandler.Robots)
-		r.Get("/search", frontendHandler.Search)
-		r.Get("/blog", frontendHandler.Blog)
-		r.Get("/category/{slug}", frontendHandler.Category)
-		r.Get("/tag/{slug}", frontendHandler.Tag)
-		r.Get("/{slug}", frontendHandler.Page) // Must be last - catch-all for page slugs
+		r.Get(routeSuffixSearch, frontendHandler.Search)
+		r.Get(routeBlog, frontendHandler.Blog)
+		r.Get(routeCategorySlug, frontendHandler.Category)
+		r.Get(routeTagSlug, frontendHandler.Tag)
+		r.Get(routeParamSlug, frontendHandler.Page) // Must be last - catch-all for page slugs
 
 		// Language-prefixed routes (e.g., /ru/, /ru/page-slug)
 		r.Route("/{lang:[a-z]{2}}", func(r chi.Router) {
-			r.Get("/", frontendHandler.Home)
-			r.Get("/search", frontendHandler.Search)
-			r.Get("/blog", frontendHandler.Blog)
-			r.Get("/category/{slug}", frontendHandler.Category)
-			r.Get("/tag/{slug}", frontendHandler.Tag)
-			r.Get("/{slug}", frontendHandler.Page)
+			r.Get(routeRoot, frontendHandler.Home)
+			r.Get(routeSuffixSearch, frontendHandler.Search)
+			r.Get(routeBlog, frontendHandler.Blog)
+			r.Get(routeCategorySlug, frontendHandler.Category)
+			r.Get(routeTagSlug, frontendHandler.Tag)
+			r.Get(routeParamSlug, frontendHandler.Page)
 		})
 	})
 
@@ -466,10 +534,10 @@ func run() error {
 	r.Group(func(r chi.Router) {
 		r.Use(publicRateLimiter.HTMLMiddleware())
 		r.Use(csrfMiddleware)
-		r.Get("/login", authHandler.LoginForm)
-		r.With(loginProtection.Middleware()).Post("/login", authHandler.Login)
-		r.Get("/logout", authHandler.Logout)
-		r.Post("/logout", authHandler.Logout)
+		r.Get(routeLogin, authHandler.LoginForm)
+		r.With(loginProtection.Middleware()).Post(routeLogin, authHandler.Login)
+		r.Get(routeLogout, authHandler.Logout)
+		r.Post(routeLogout, authHandler.Logout)
 	})
 
 	// Session test routes (development only)
@@ -480,13 +548,13 @@ func run() error {
 				value = "test-value"
 			}
 			sessionManager.Put(r.Context(), "test_key", value)
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Header().Set(headerContentType, "text/plain; charset=utf-8")
 			_, _ = fmt.Fprintf(w, "Session value set: %s\n", value)
 		})
 
 		r.Get("/session/get", func(w http.ResponseWriter, r *http.Request) {
 			value := sessionManager.GetString(r.Context(), "test_key")
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Header().Set(headerContentType, "text/plain; charset=utf-8")
 			if value == "" {
 				_, _ = fmt.Fprintln(w, "No session value found")
 			} else {
@@ -502,135 +570,135 @@ func run() error {
 		r.Use(middleware.LoadUser(sessionManager, db))
 		r.Use(middleware.LoadSiteConfig(db, cacheManager))
 
-		r.Get("/", adminHandler.Dashboard)
+		r.Get(routeRoot, adminHandler.Dashboard)
 		r.Post("/language", adminHandler.SetLanguage)
 
 		// User management routes
-		r.Get("/users", usersHandler.List)
-		r.Get("/users/new", usersHandler.NewForm)
-		r.Post("/users", usersHandler.Create)
-		r.Get("/users/{id}", usersHandler.EditForm)
-		r.Put("/users/{id}", usersHandler.Update)
-		r.Post("/users/{id}", usersHandler.Update) // HTML forms can't send PUT
-		r.Delete("/users/{id}", usersHandler.Delete)
+		r.Get(routeUsers, usersHandler.List)
+		r.Get(routeUsers+routeSuffixNew, usersHandler.NewForm)
+		r.Post(routeUsers, usersHandler.Create)
+		r.Get(routeUsersID, usersHandler.EditForm)
+		r.Put(routeUsersID, usersHandler.Update)
+		r.Post(routeUsersID, usersHandler.Update) // HTML forms can't send PUT
+		r.Delete(routeUsersID, usersHandler.Delete)
 
 		// Language management routes
-		r.Get("/languages", languagesHandler.List)
-		r.Get("/languages/new", languagesHandler.NewForm)
-		r.Post("/languages", languagesHandler.Create)
-		r.Get("/languages/{id}", languagesHandler.EditForm)
-		r.Put("/languages/{id}", languagesHandler.Update)
-		r.Post("/languages/{id}", languagesHandler.Update) // HTML forms can't send PUT
-		r.Delete("/languages/{id}", languagesHandler.Delete)
-		r.Post("/languages/{id}/default", languagesHandler.SetDefault)
+		r.Get(routeLanguages, languagesHandler.List)
+		r.Get(routeLanguages+routeSuffixNew, languagesHandler.NewForm)
+		r.Post(routeLanguages, languagesHandler.Create)
+		r.Get(routeLanguagesID, languagesHandler.EditForm)
+		r.Put(routeLanguagesID, languagesHandler.Update)
+		r.Post(routeLanguagesID, languagesHandler.Update) // HTML forms can't send PUT
+		r.Delete(routeLanguagesID, languagesHandler.Delete)
+		r.Post(routeLanguagesID+"/default", languagesHandler.SetDefault)
 
 		// Page management routes
-		r.Get("/pages", pagesHandler.List)
-		r.Get("/pages/new", pagesHandler.NewForm)
-		r.Post("/pages", pagesHandler.Create)
-		r.Get("/pages/{id}", pagesHandler.EditForm)
-		r.Put("/pages/{id}", pagesHandler.Update)
-		r.Post("/pages/{id}", pagesHandler.Update) // HTML forms can't send PUT
-		r.Delete("/pages/{id}", pagesHandler.Delete)
-		r.Post("/pages/{id}/publish", pagesHandler.TogglePublish)
-		r.Get("/pages/{id}/versions", pagesHandler.Versions)
-		r.Post("/pages/{id}/versions/{versionId}/restore", pagesHandler.RestoreVersion)
-		r.Post("/pages/{id}/translate/{langCode}", pagesHandler.Translate)
+		r.Get(routePages, pagesHandler.List)
+		r.Get(routePages+routeSuffixNew, pagesHandler.NewForm)
+		r.Post(routePages, pagesHandler.Create)
+		r.Get(routePagesID, pagesHandler.EditForm)
+		r.Put(routePagesID, pagesHandler.Update)
+		r.Post(routePagesID, pagesHandler.Update) // HTML forms can't send PUT
+		r.Delete(routePagesID, pagesHandler.Delete)
+		r.Post(routePagesID+"/publish", pagesHandler.TogglePublish)
+		r.Get(routePagesID+"/versions", pagesHandler.Versions)
+		r.Post(routePagesID+"/versions/{versionId}/restore", pagesHandler.RestoreVersion)
+		r.Post(routePagesID+routeSuffixTranslate, pagesHandler.Translate)
 
 		// Configuration routes
-		r.Get("/config", configHandler.List)
-		r.Put("/config", configHandler.Update)
-		r.Post("/config", configHandler.Update) // HTML forms can't send PUT
+		r.Get(routeConfig, configHandler.List)
+		r.Put(routeConfig, configHandler.Update)
+		r.Post(routeConfig, configHandler.Update) // HTML forms can't send PUT
 
 		// Events log route
 		r.Get("/events", eventsHandler.List)
 
 		// Tag management routes
-		r.Get("/tags", taxonomyHandler.ListTags)
-		r.Get("/tags/new", taxonomyHandler.NewTagForm)
-		r.Post("/tags", taxonomyHandler.CreateTag)
-		r.Get("/tags/search", taxonomyHandler.SearchTags)
-		r.Get("/tags/{id}", taxonomyHandler.EditTagForm)
-		r.Put("/tags/{id}", taxonomyHandler.UpdateTag)
-		r.Post("/tags/{id}", taxonomyHandler.UpdateTag) // HTML forms can't send PUT
-		r.Delete("/tags/{id}", taxonomyHandler.DeleteTag)
-		r.Post("/tags/{id}/translate/{langCode}", taxonomyHandler.TranslateTag)
+		r.Get(routeTags, taxonomyHandler.ListTags)
+		r.Get(routeTags+routeSuffixNew, taxonomyHandler.NewTagForm)
+		r.Post(routeTags, taxonomyHandler.CreateTag)
+		r.Get(routeTags+routeSuffixSearch, taxonomyHandler.SearchTags)
+		r.Get(routeTagsID, taxonomyHandler.EditTagForm)
+		r.Put(routeTagsID, taxonomyHandler.UpdateTag)
+		r.Post(routeTagsID, taxonomyHandler.UpdateTag) // HTML forms can't send PUT
+		r.Delete(routeTagsID, taxonomyHandler.DeleteTag)
+		r.Post(routeTagsID+routeSuffixTranslate, taxonomyHandler.TranslateTag)
 
 		// Category management routes
-		r.Get("/categories", taxonomyHandler.ListCategories)
-		r.Get("/categories/new", taxonomyHandler.NewCategoryForm)
-		r.Post("/categories", taxonomyHandler.CreateCategory)
-		r.Get("/categories/search", taxonomyHandler.SearchCategories)
-		r.Get("/categories/{id}", taxonomyHandler.EditCategoryForm)
-		r.Put("/categories/{id}", taxonomyHandler.UpdateCategory)
-		r.Post("/categories/{id}", taxonomyHandler.UpdateCategory) // HTML forms can't send PUT
-		r.Delete("/categories/{id}", taxonomyHandler.DeleteCategory)
-		r.Post("/categories/{id}/translate/{langCode}", taxonomyHandler.TranslateCategory)
+		r.Get(routeCategories, taxonomyHandler.ListCategories)
+		r.Get(routeCategories+routeSuffixNew, taxonomyHandler.NewCategoryForm)
+		r.Post(routeCategories, taxonomyHandler.CreateCategory)
+		r.Get(routeCategories+routeSuffixSearch, taxonomyHandler.SearchCategories)
+		r.Get(routeCategoriesID, taxonomyHandler.EditCategoryForm)
+		r.Put(routeCategoriesID, taxonomyHandler.UpdateCategory)
+		r.Post(routeCategoriesID, taxonomyHandler.UpdateCategory) // HTML forms can't send PUT
+		r.Delete(routeCategoriesID, taxonomyHandler.DeleteCategory)
+		r.Post(routeCategoriesID+routeSuffixTranslate, taxonomyHandler.TranslateCategory)
 
 		// Media library routes
-		r.Get("/media", mediaHandler.Library)
-		r.Get("/media/api", mediaHandler.API) // JSON API for media picker
-		r.Get("/media/upload", mediaHandler.UploadForm)
-		r.Post("/media/upload", mediaHandler.Upload)
-		r.Get("/media/{id}", mediaHandler.EditForm)
-		r.Put("/media/{id}", mediaHandler.Update)
-		r.Post("/media/{id}", mediaHandler.Update) // HTML forms can't send PUT
-		r.Delete("/media/{id}", mediaHandler.Delete)
-		r.Post("/media/{id}/move", mediaHandler.MoveMedia)
+		r.Get(routeMedia, mediaHandler.Library)
+		r.Get(routeMedia+"/api", mediaHandler.API) // JSON API for media picker
+		r.Get(routeMedia+routeSuffixUpload, mediaHandler.UploadForm)
+		r.Post(routeMedia+routeSuffixUpload, mediaHandler.Upload)
+		r.Get(routeMediaID, mediaHandler.EditForm)
+		r.Put(routeMediaID, mediaHandler.Update)
+		r.Post(routeMediaID, mediaHandler.Update) // HTML forms can't send PUT
+		r.Delete(routeMediaID, mediaHandler.Delete)
+		r.Post(routeMediaID+routeSuffixMove, mediaHandler.MoveMedia)
 
 		// Media folders
-		r.Post("/media/folders", mediaHandler.CreateFolder)
-		r.Put("/media/folders/{id}", mediaHandler.UpdateFolder)
-		r.Post("/media/folders/{id}", mediaHandler.UpdateFolder) // HTML forms can't send PUT
-		r.Delete("/media/folders/{id}", mediaHandler.DeleteFolder)
+		r.Post(routeMedia+routeSuffixFolders, mediaHandler.CreateFolder)
+		r.Put(routeMediaFoldersID, mediaHandler.UpdateFolder)
+		r.Post(routeMediaFoldersID, mediaHandler.UpdateFolder) // HTML forms can't send PUT
+		r.Delete(routeMediaFoldersID, mediaHandler.DeleteFolder)
 
 		// Menu management routes
-		r.Get("/menus", menusHandler.List)
-		r.Get("/menus/new", menusHandler.NewForm)
-		r.Post("/menus", menusHandler.Create)
-		r.Get("/menus/{id}", menusHandler.EditForm)
-		r.Put("/menus/{id}", menusHandler.Update)
-		r.Post("/menus/{id}", menusHandler.Update) // HTML forms can't send PUT
-		r.Delete("/menus/{id}", menusHandler.Delete)
-		r.Post("/menus/{id}/items", menusHandler.AddItem)
-		r.Put("/menus/{id}/items/{itemId}", menusHandler.UpdateItem)
-		r.Delete("/menus/{id}/items/{itemId}", menusHandler.DeleteItem)
-		r.Post("/menus/{id}/reorder", menusHandler.Reorder)
+		r.Get(routeMenus, menusHandler.List)
+		r.Get(routeMenus+routeSuffixNew, menusHandler.NewForm)
+		r.Post(routeMenus, menusHandler.Create)
+		r.Get(routeMenusID, menusHandler.EditForm)
+		r.Put(routeMenusID, menusHandler.Update)
+		r.Post(routeMenusID, menusHandler.Update) // HTML forms can't send PUT
+		r.Delete(routeMenusID, menusHandler.Delete)
+		r.Post(routeMenusID+"/items", menusHandler.AddItem)
+		r.Put(routeMenusID+routeItemsItemID, menusHandler.UpdateItem)
+		r.Delete(routeMenusID+routeItemsItemID, menusHandler.DeleteItem)
+		r.Post(routeMenusID+routeSuffixReorder, menusHandler.Reorder)
 
 		// Form management routes
-		r.Get("/forms", formsHandler.List)
-		r.Get("/forms/new", formsHandler.NewForm)
-		r.Post("/forms", formsHandler.Create)
-		r.Get("/forms/{id}", formsHandler.EditForm)
-		r.Put("/forms/{id}", formsHandler.Update)
-		r.Post("/forms/{id}", formsHandler.Update) // HTML forms can't send PUT
-		r.Delete("/forms/{id}", formsHandler.Delete)
-		r.Post("/forms/{id}/fields", formsHandler.AddField)
-		r.Put("/forms/{id}/fields/{fieldId}", formsHandler.UpdateField)
-		r.Delete("/forms/{id}/fields/{fieldId}", formsHandler.DeleteField)
-		r.Post("/forms/{id}/fields/reorder", formsHandler.ReorderFields)
+		r.Get(routeForms, formsHandler.List)
+		r.Get(routeForms+routeSuffixNew, formsHandler.NewForm)
+		r.Post(routeForms, formsHandler.Create)
+		r.Get(routeFormsID, formsHandler.EditForm)
+		r.Put(routeFormsID, formsHandler.Update)
+		r.Post(routeFormsID, formsHandler.Update) // HTML forms can't send PUT
+		r.Delete(routeFormsID, formsHandler.Delete)
+		r.Post(routeFormsID+"/fields", formsHandler.AddField)
+		r.Put(routeFormsID+routeFieldsFieldID, formsHandler.UpdateField)
+		r.Delete(routeFormsID+routeFieldsFieldID, formsHandler.DeleteField)
+		r.Post(routeFormsID+"/fields/reorder", formsHandler.ReorderFields)
 
 		// Form submissions routes
-		r.Get("/forms/{id}/submissions", formsHandler.Submissions)
-		r.Get("/forms/{id}/submissions/{subId}", formsHandler.ViewSubmission)
-		r.Delete("/forms/{id}/submissions/{subId}", formsHandler.DeleteSubmission)
-		r.Post("/forms/{id}/submissions/export", formsHandler.ExportSubmissions)
+		r.Get(routeFormsID+"/submissions", formsHandler.Submissions)
+		r.Get(routeFormsID+routeSubmissionsSubID, formsHandler.ViewSubmission)
+		r.Delete(routeFormsID+routeSubmissionsSubID, formsHandler.DeleteSubmission)
+		r.Post(routeFormsID+"/submissions/export", formsHandler.ExportSubmissions)
 
 		// Theme management routes
 		r.Get("/themes", themesHandler.List)
 		r.Post("/themes/activate", themesHandler.Activate)
-		r.Get("/themes/{name}/settings", themesHandler.Settings)
-		r.Put("/themes/{name}/settings", themesHandler.SaveSettings)
-		r.Post("/themes/{name}/settings", themesHandler.SaveSettings) // HTML forms can't send PUT
+		r.Get(routeThemeSettings, themesHandler.Settings)
+		r.Put(routeThemeSettings, themesHandler.SaveSettings)
+		r.Post(routeThemeSettings, themesHandler.SaveSettings) // HTML forms can't send PUT
 
 		// Widget management routes
-		r.Get("/widgets", widgetsHandler.List)
-		r.Post("/widgets", widgetsHandler.Create)
-		r.Get("/widgets/{id}", widgetsHandler.GetWidget)
-		r.Put("/widgets/{id}", widgetsHandler.Update)
-		r.Delete("/widgets/{id}", widgetsHandler.Delete)
-		r.Post("/widgets/{id}/move", widgetsHandler.MoveWidget)
-		r.Post("/widgets/reorder", widgetsHandler.Reorder)
+		r.Get(routeWidgets, widgetsHandler.List)
+		r.Post(routeWidgets, widgetsHandler.Create)
+		r.Get(routeWidgetsID, widgetsHandler.GetWidget)
+		r.Put(routeWidgetsID, widgetsHandler.Update)
+		r.Delete(routeWidgetsID, widgetsHandler.Delete)
+		r.Post(routeWidgetsID+routeSuffixMove, widgetsHandler.MoveWidget)
+		r.Post(routeWidgets+routeSuffixReorder, widgetsHandler.Reorder)
 
 		// Module management routes
 		r.Get("/modules", modulesHandler.List)
@@ -638,25 +706,25 @@ func run() error {
 		r.Post("/modules/{name}/toggle-sidebar", modulesHandler.ToggleSidebar)
 
 		// API key management routes
-		r.Get("/api-keys", apiKeysHandler.List)
-		r.Get("/api-keys/new", apiKeysHandler.NewForm)
-		r.Post("/api-keys", apiKeysHandler.Create)
-		r.Get("/api-keys/{id}", apiKeysHandler.EditForm)
-		r.Put("/api-keys/{id}", apiKeysHandler.Update)
-		r.Post("/api-keys/{id}", apiKeysHandler.Update) // HTML forms can't send PUT
-		r.Delete("/api-keys/{id}", apiKeysHandler.Delete)
+		r.Get(routeAPIKeys, apiKeysHandler.List)
+		r.Get(routeAPIKeys+routeSuffixNew, apiKeysHandler.NewForm)
+		r.Post(routeAPIKeys, apiKeysHandler.Create)
+		r.Get(routeAPIKeysID, apiKeysHandler.EditForm)
+		r.Put(routeAPIKeysID, apiKeysHandler.Update)
+		r.Post(routeAPIKeysID, apiKeysHandler.Update) // HTML forms can't send PUT
+		r.Delete(routeAPIKeysID, apiKeysHandler.Delete)
 
 		// Webhook management routes
-		r.Get("/webhooks", webhooksHandler.List)
-		r.Get("/webhooks/new", webhooksHandler.NewForm)
-		r.Post("/webhooks", webhooksHandler.Create)
-		r.Get("/webhooks/{id}", webhooksHandler.EditForm)
-		r.Put("/webhooks/{id}", webhooksHandler.Update)
-		r.Post("/webhooks/{id}", webhooksHandler.Update) // HTML forms can't send PUT
-		r.Delete("/webhooks/{id}", webhooksHandler.Delete)
-		r.Get("/webhooks/{id}/deliveries", webhooksHandler.Deliveries)
-		r.Post("/webhooks/{id}/test", webhooksHandler.Test)
-		r.Post("/webhooks/{id}/deliveries/{did}/retry", webhooksHandler.RetryDelivery)
+		r.Get(routeWebhooks, webhooksHandler.List)
+		r.Get(routeWebhooks+routeSuffixNew, webhooksHandler.NewForm)
+		r.Post(routeWebhooks, webhooksHandler.Create)
+		r.Get(routeWebhooksID, webhooksHandler.EditForm)
+		r.Put(routeWebhooksID, webhooksHandler.Update)
+		r.Post(routeWebhooksID, webhooksHandler.Update) // HTML forms can't send PUT
+		r.Delete(routeWebhooksID, webhooksHandler.Delete)
+		r.Get(routeWebhooksID+"/deliveries", webhooksHandler.Deliveries)
+		r.Post(routeWebhooksID+"/test", webhooksHandler.Test)
+		r.Post(routeWebhooksID+"/deliveries/{did}/retry", webhooksHandler.RetryDelivery)
 
 		// Cache management routes
 		r.Get("/cache", cacheHandler.Stats)
@@ -665,11 +733,11 @@ func run() error {
 		r.Post("/cache/clear/sitemap", cacheHandler.ClearSitemap)
 
 		// Import/Export routes
-		r.Get("/export", importExportHandler.ExportForm)
-		r.Post("/export", importExportHandler.Export)
-		r.Get("/import", importExportHandler.ImportForm)
-		r.Post("/import/validate", importExportHandler.ImportValidate)
-		r.Post("/import", importExportHandler.Import)
+		r.Get(routeExport, importExportHandler.ExportForm)
+		r.Post(routeExport, importExportHandler.Export)
+		r.Get(routeImport, importExportHandler.ImportForm)
+		r.Post(routeImport+"/validate", importExportHandler.ImportValidate)
+		r.Post(routeImport, importExportHandler.Import)
 
 		// Register module admin routes
 		moduleRegistry.AdminRouteAll(r)
@@ -688,25 +756,25 @@ func run() error {
 		// Pages - public read endpoints (optional auth for enhanced access)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.OptionalAPIKeyAuth(db))
-			r.Get("/pages", apiHandler.ListPages)
-			r.Get("/pages/{id}", apiHandler.GetPage)
-			r.Get("/pages/slug/{slug}", apiHandler.GetPageBySlug)
+			r.Get(routePages, apiHandler.ListPages)
+			r.Get(routePagesID, apiHandler.GetPage)
+			r.Get(routePages+"/slugrouteParamSlug", apiHandler.GetPageBySlug)
 		})
 
 		// Media - public read endpoints (optional auth for enhanced access)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.OptionalAPIKeyAuth(db))
-			r.Get("/media", apiHandler.ListMedia)
-			r.Get("/media/{id}", apiHandler.GetMedia)
+			r.Get(routeMedia, apiHandler.ListMedia)
+			r.Get(routeMediaID, apiHandler.GetMedia)
 		})
 
 		// Tags - public read endpoints
-		r.Get("/tags", apiHandler.ListTags)
-		r.Get("/tags/{id}", apiHandler.GetTag)
+		r.Get(routeTags, apiHandler.ListTags)
+		r.Get(routeTagsID, apiHandler.GetTag)
 
 		// Categories - public read endpoints
-		r.Get("/categories", apiHandler.ListCategories)
-		r.Get("/categories/{id}", apiHandler.GetCategory)
+		r.Get(routeCategories, apiHandler.ListCategories)
+		r.Get(routeCategoriesID, apiHandler.GetCategory)
 
 		// Protected endpoints (API key required)
 		r.Group(func(r chi.Router) {
@@ -719,28 +787,28 @@ func run() error {
 			// Pages - write endpoints (requires pages:write permission)
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequirePermission("pages:write"))
-				r.Post("/pages", apiHandler.CreatePage)
-				r.Put("/pages/{id}", apiHandler.UpdatePage)
-				r.Delete("/pages/{id}", apiHandler.DeletePage)
+				r.Post(routePages, apiHandler.CreatePage)
+				r.Put(routePagesID, apiHandler.UpdatePage)
+				r.Delete(routePagesID, apiHandler.DeletePage)
 			})
 
 			// Media - write endpoints (requires media:write permission)
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequirePermission("media:write"))
-				r.Post("/media", apiHandler.UploadMedia)
-				r.Put("/media/{id}", apiHandler.UpdateMedia)
-				r.Delete("/media/{id}", apiHandler.DeleteMedia)
+				r.Post(routeMedia, apiHandler.UploadMedia)
+				r.Put(routeMediaID, apiHandler.UpdateMedia)
+				r.Delete(routeMediaID, apiHandler.DeleteMedia)
 			})
 
 			// Taxonomy - write endpoints (requires taxonomy:write permission)
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequirePermission("taxonomy:write"))
-				r.Post("/tags", apiHandler.CreateTag)
-				r.Put("/tags/{id}", apiHandler.UpdateTag)
-				r.Delete("/tags/{id}", apiHandler.DeleteTag)
-				r.Post("/categories", apiHandler.CreateCategory)
-				r.Put("/categories/{id}", apiHandler.UpdateCategory)
-				r.Delete("/categories/{id}", apiHandler.DeleteCategory)
+				r.Post(routeTags, apiHandler.CreateTag)
+				r.Put(routeTagsID, apiHandler.UpdateTag)
+				r.Delete(routeTagsID, apiHandler.DeleteTag)
+				r.Post(routeCategories, apiHandler.CreateCategory)
+				r.Put(routeCategoriesID, apiHandler.UpdateCategory)
+				r.Delete(routeCategoriesID, apiHandler.DeleteCategory)
 			})
 		})
 	})
@@ -749,8 +817,8 @@ func run() error {
 	// Public form routes (no authentication required, with CSRF protection)
 	r.Group(func(r chi.Router) {
 		r.Use(csrfMiddleware)
-		r.Get("/forms/{slug}", formsHandler.Show)
-		r.Post("/forms/{slug}", formsHandler.Submit)
+		r.Get(routeFormsSlug, formsHandler.Show)
+		r.Post(routeFormsSlug, formsHandler.Submit)
 	})
 
 	// Favicon route - serve from embedded static files
@@ -760,7 +828,7 @@ func run() error {
 			http.NotFound(w, r)
 			return
 		}
-		w.Header().Set("Content-Type", "image/svg+xml")
+		w.Header().Set(headerContentType, "image/svg+xml")
 		w.Header().Set("Cache-Control", "public, max-age=31536000")
 		_, _ = w.Write(data)
 	})
@@ -776,7 +844,7 @@ func run() error {
 
 	// Serve uploaded media files from ./uploads directory
 	// Uploads: cache for 1 week (604800 seconds)
-	uploadsDir := http.Dir("./uploads")
+	uploadsDir := http.Dir(uploadsDirPath)
 	uploadsHandler := middleware.StaticCache(604800)(http.StripPrefix("/uploads/", http.FileServer(uploadsDir)))
 	r.Handle("/uploads/*", uploadsHandler)
 

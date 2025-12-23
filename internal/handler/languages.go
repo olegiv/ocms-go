@@ -124,11 +124,11 @@ func (h *LanguagesHandler) renderLanguageForm(w http.ResponseWriter, r *http.Req
 	if data.IsEdit && data.Language != nil {
 		title = i18n.T(lang, "languages.edit")
 		lastLabel = i18n.T(lang, "languages.edit")
-		lastURL = fmt.Sprintf("/admin/languages/%d", data.Language.ID)
+		lastURL = fmt.Sprintf(redirectAdminLanguagesID, data.Language.ID)
 	} else {
 		title = i18n.T(lang, "languages.new")
 		lastLabel = i18n.T(lang, "languages.new")
-		lastURL = "/admin/languages/new"
+		lastURL = redirectAdminLanguagesNew
 	}
 
 	h.renderer.RenderPage(w, r, "admin/languages_form", render.TemplateData{
@@ -136,8 +136,8 @@ func (h *LanguagesHandler) renderLanguageForm(w http.ResponseWriter, r *http.Req
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.languages"), URL: "/admin/languages"},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.languages"), URL: redirectAdminLanguages},
 			{Label: lastLabel, URL: lastURL, Active: true},
 		},
 	})
@@ -170,8 +170,8 @@ func (h *LanguagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.languages"), URL: "/admin/languages", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.languages"), URL: redirectAdminLanguages, Active: true},
 		},
 	})
 }
@@ -191,7 +191,7 @@ func (h *LanguagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 
-	if !parseFormOrRedirect(w, r, h.renderer, "/admin/languages/new") {
+	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminLanguagesNew) {
 		return
 	}
 
@@ -282,12 +282,12 @@ func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to create language", "error", err)
-		flashError(w, r, h.renderer, "/admin/languages/new", "Error creating language")
+		flashError(w, r, h.renderer, redirectAdminLanguagesNew, "Error creating language")
 		return
 	}
 
 	slog.Info("language created", "language_id", newLang.ID, "code", newLang.Code)
-	flashSuccess(w, r, h.renderer, "/admin/languages", "Language created successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminLanguages, "Language created successfully")
 }
 
 // languageToFormValues converts a store.Language to form values map.
@@ -332,7 +332,7 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf("/admin/languages/%d", existingLang.ID)) {
+	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf(redirectAdminLanguagesID, existingLang.ID)) {
 		return
 	}
 
@@ -419,12 +419,12 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to update language", "error", err)
-		flashError(w, r, h.renderer, fmt.Sprintf("/admin/languages/%d", existingLang.ID), "Error updating language")
+		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminLanguagesID, existingLang.ID), "Error updating language")
 		return
 	}
 
 	slog.Info("language updated", "language_id", existingLang.ID, "code", input.Code)
-	flashSuccess(w, r, h.renderer, "/admin/languages", "Language updated successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminLanguages, "Language updated successfully")
 }
 
 // Delete handles deleting a language.
@@ -470,7 +470,7 @@ func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, errMsg, http.StatusBadRequest)
 			return
 		}
-		flashError(w, r, h.renderer, "/admin/languages", errMsg)
+		flashError(w, r, h.renderer, redirectAdminLanguages, errMsg)
 		return
 	}
 
@@ -483,7 +483,7 @@ func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to check language usage", http.StatusInternalServerError)
 			return
 		}
-		flashError(w, r, h.renderer, "/admin/languages", "Failed to check language usage")
+		flashError(w, r, h.renderer, redirectAdminLanguages, "Failed to check language usage")
 		return
 	}
 
@@ -496,7 +496,7 @@ func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, errMsg, http.StatusConflict)
 			return
 		}
-		flashError(w, r, h.renderer, "/admin/languages", errMsg)
+		flashError(w, r, h.renderer, redirectAdminLanguages, errMsg)
 		return
 	}
 
@@ -508,7 +508,7 @@ func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, errMsg, http.StatusInternalServerError)
 			return
 		}
-		flashError(w, r, h.renderer, "/admin/languages", errMsg)
+		flashError(w, r, h.renderer, redirectAdminLanguages, errMsg)
 		return
 	}
 
@@ -520,7 +520,7 @@ func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flashSuccess(w, r, h.renderer, "/admin/languages", "Language deleted successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminLanguages, "Language deleted successfully")
 }
 
 // SetDefault handles setting a language as the default.
@@ -532,14 +532,14 @@ func (h *LanguagesHandler) SetDefault(w http.ResponseWriter, r *http.Request) {
 
 	// Cannot set inactive language as default
 	if !lang.IsActive {
-		flashError(w, r, h.renderer, "/admin/languages", "Cannot set an inactive language as default")
+		flashError(w, r, h.renderer, redirectAdminLanguages, "Cannot set an inactive language as default")
 		return
 	}
 
 	// Clear current default
 	if err := h.queries.ClearDefaultLanguage(r.Context()); err != nil {
 		slog.Error("failed to clear default language", "error", err)
-		flashError(w, r, h.renderer, "/admin/languages", "Error setting default language")
+		flashError(w, r, h.renderer, redirectAdminLanguages, "Error setting default language")
 		return
 	}
 
@@ -550,12 +550,12 @@ func (h *LanguagesHandler) SetDefault(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt: now,
 	}); err != nil {
 		slog.Error("failed to set default language", "error", err)
-		flashError(w, r, h.renderer, "/admin/languages", "Error setting default language")
+		flashError(w, r, h.renderer, redirectAdminLanguages, "Error setting default language")
 		return
 	}
 
 	slog.Info("default language set", "language_id", lang.ID, "code", lang.Code)
-	flashSuccess(w, r, h.renderer, "/admin/languages", fmt.Sprintf("%s set as default language", lang.Name))
+	flashSuccess(w, r, h.renderer, redirectAdminLanguages, fmt.Sprintf("%s set as default language", lang.Name))
 }
 
 // FindDefaultLanguage returns a pointer to the default language from a slice.

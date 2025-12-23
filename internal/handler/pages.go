@@ -347,7 +347,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		AllCategories:      categoryTree,
 		AllLanguages:       allLanguages,
 		Statuses:           ValidPageStatuses,
-		Pagination:         BuildAdminPagination(page, int(totalCount), PagesPerPage, "/admin/pages", r.URL.Query()),
+		Pagination:         BuildAdminPagination(page, int(totalCount), PagesPerPage, redirectAdminPages, r.URL.Query()),
 	}
 
 	h.renderer.RenderPage(w, r, "admin/pages_list", render.TemplateData{
@@ -355,8 +355,8 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "pages.title"), URL: "/admin/pages", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "pages.title"), URL: redirectAdminPages, Active: true},
 		},
 	})
 }
@@ -487,9 +487,9 @@ func (h *PagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "pages.title"), URL: "/admin/pages"},
-			{Label: i18n.T(lang, "pages.new"), URL: "/admin/pages/new", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "pages.title"), URL: redirectAdminPages},
+			{Label: i18n.T(lang, "pages.new"), URL: redirectAdminPagesNew, Active: true},
 		},
 	})
 }
@@ -499,7 +499,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	if !parseFormOrRedirect(w, r, h.renderer, "/admin/pages/new") {
+	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminPagesNew) {
 		return
 	}
 
@@ -558,9 +558,9 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-				{Label: i18n.T(lang, "pages.title"), URL: "/admin/pages"},
-				{Label: i18n.T(lang, "pages.new"), URL: "/admin/pages/new", Active: true},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+				{Label: i18n.T(lang, "pages.title"), URL: redirectAdminPages},
+				{Label: i18n.T(lang, "pages.new"), URL: redirectAdminPagesNew, Active: true},
 			},
 		})
 		return
@@ -590,7 +590,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to create page", "error", err)
-		flashError(w, r, h.renderer, "/admin/pages/new", "Error creating page")
+		flashError(w, r, h.renderer, redirectAdminPagesNew, "Error creating page")
 		return
 	}
 
@@ -616,7 +616,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Dispatch page.created webhook event
 	h.dispatchPageEvent(r.Context(), model.EventPageCreated, newPage, middleware.GetUserEmail(r))
 
-	flashSuccess(w, r, h.renderer, "/admin/pages", "Page created successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminPages, "Page created successfully")
 }
 
 // isValidPageStatus checks if a status is valid.
@@ -636,7 +636,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/pages", "Invalid page ID")
+		flashError(w, r, h.renderer, redirectAdminPages, "Invalid page ID")
 		return
 	}
 
@@ -710,9 +710,9 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(adminLang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(adminLang, "pages.title"), URL: "/admin/pages"},
-			{Label: page.Title, URL: fmt.Sprintf("/admin/pages/%d", page.ID), Active: true},
+			{Label: i18n.T(adminLang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(adminLang, "pages.title"), URL: redirectAdminPages},
+			{Label: page.Title, URL: fmt.Sprintf(redirectAdminPagesID, page.ID), Active: true},
 		},
 	})
 }
@@ -724,7 +724,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/pages", "Invalid page ID")
+		flashError(w, r, h.renderer, redirectAdminPages, "Invalid page ID")
 		return
 	}
 
@@ -733,7 +733,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf("/admin/pages/%d", id)) {
+	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id)) {
 		return
 	}
 
@@ -781,9 +781,9 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-				{Label: i18n.T(lang, "pages.title"), URL: "/admin/pages"},
-				{Label: existingPage.Title, URL: fmt.Sprintf("/admin/pages/%d", id), Active: true},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+				{Label: i18n.T(lang, "pages.title"), URL: redirectAdminPages},
+				{Label: existingPage.Title, URL: fmt.Sprintf(redirectAdminPagesID, id), Active: true},
 			},
 		})
 		return
@@ -811,7 +811,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to update page", "error", err, "page_id", id)
-		flashError(w, r, h.renderer, fmt.Sprintf("/admin/pages/%d", id), "Error updating page")
+		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id), "Error updating page")
 		return
 	}
 
@@ -847,7 +847,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Dispatch page.updated webhook event
 	h.dispatchPageEvent(r.Context(), model.EventPageUpdated, updatedPage, middleware.GetUserEmail(r))
 
-	flashSuccess(w, r, h.renderer, "/admin/pages", "Page updated successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminPages, "Page updated successfully")
 }
 
 // Delete handles DELETE /admin/pages/{id} - deletes a page.
@@ -883,14 +883,14 @@ func (h *PagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// For regular requests, redirect
-	flashSuccess(w, r, h.renderer, "/admin/pages", "Page deleted successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminPages, "Page deleted successfully")
 }
 
 // TogglePublish handles POST /admin/pages/{id}/publish - toggles publish status.
 func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/pages", "Invalid page ID")
+		flashError(w, r, h.renderer, redirectAdminPages, "Invalid page ID")
 		return
 	}
 
@@ -926,7 +926,7 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		slog.Error("failed to toggle publish status", "error", err, "page_id", id)
-		flashError(w, r, h.renderer, "/admin/pages", "Error updating page status")
+		flashError(w, r, h.renderer, redirectAdminPages, "Error updating page status")
 		return
 	}
 
@@ -936,7 +936,7 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 		h.dispatchPageEvent(r.Context(), eventType, updatedPage, middleware.GetUserEmail(r))
 	}
 
-	flashSuccess(w, r, h.renderer, "/admin/pages", message)
+	flashSuccess(w, r, h.renderer, redirectAdminPages, message)
 }
 
 // VersionsPerPage is the number of versions to display per page.
@@ -957,7 +957,7 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/pages", "Invalid page ID")
+		flashError(w, r, h.renderer, redirectAdminPages, "Invalid page ID")
 		return
 	}
 
@@ -996,7 +996,7 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 		Page:       page,
 		Versions:   versions,
 		TotalCount: totalCount,
-		Pagination: BuildAdminPagination(pageNum, int(totalCount), VersionsPerPage, fmt.Sprintf("/admin/pages/%d/versions", id), r.URL.Query()),
+		Pagination: BuildAdminPagination(pageNum, int(totalCount), VersionsPerPage, fmt.Sprintf(redirectAdminPagesIDVersions, id), r.URL.Query()),
 	}
 
 	h.renderer.RenderPage(w, r, "admin/pages_versions", render.TemplateData{
@@ -1004,10 +1004,10 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "pages.title"), URL: "/admin/pages"},
-			{Label: page.Title, URL: fmt.Sprintf("/admin/pages/%d", page.ID)},
-			{Label: i18n.T(lang, "versions.title"), URL: fmt.Sprintf("/admin/pages/%d/versions", page.ID), Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "pages.title"), URL: redirectAdminPages},
+			{Label: page.Title, URL: fmt.Sprintf(redirectAdminPagesID, page.ID)},
+			{Label: i18n.T(lang, "versions.title"), URL: fmt.Sprintf(redirectAdminPagesIDVersions, page.ID), Active: true},
 		},
 	})
 }
@@ -1016,12 +1016,12 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/pages", "Invalid page ID")
+		flashError(w, r, h.renderer, redirectAdminPages, "Invalid page ID")
 		return
 	}
 
 	// Get version ID from URL
-	versionsURL := fmt.Sprintf("/admin/pages/%d/versions", id)
+	versionsURL := fmt.Sprintf(redirectAdminPagesIDVersions, id)
 	versionIdStr := chi.URLParam(r, "versionId")
 	versionId, err := strconv.ParseInt(versionIdStr, 10, 64)
 	if err != nil {
@@ -1092,19 +1092,19 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("page version restored", "page_id", id, "version_id", versionId, "restored_by", middleware.GetUserID(r))
-	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/pages/%d", id), "Version restored successfully")
+	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id), "Version restored successfully")
 }
 
 // Translate handles POST /admin/pages/{id}/translate/{langCode} - creates a translation.
 func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/pages", "Invalid page ID")
+		flashError(w, r, h.renderer, redirectAdminPages, "Invalid page ID")
 		return
 	}
 
 	langCode := chi.URLParam(r, "langCode")
-	redirectURL := fmt.Sprintf("/admin/pages/%d", id)
+	redirectURL := fmt.Sprintf(redirectAdminPagesID, id)
 	if langCode == "" {
 		flashError(w, r, h.renderer, redirectURL, "Language code is required")
 		return
@@ -1191,14 +1191,14 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		"language", langCode,
 		"created_by", userID)
 
-	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/pages/%d", translatedPage.ID), fmt.Sprintf("Translation created for %s. Please translate the content.", tc.TargetLang.Name))
+	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, translatedPage.ID), fmt.Sprintf("Translation created for %s. Please translate the content.", tc.TargetLang.Name))
 }
 
 // Helper functions
 
 // requirePageWithRedirect fetches page by ID and handles errors with flash messages and redirect.
 func (h *PagesHandler) requirePageWithRedirect(w http.ResponseWriter, r *http.Request, id int64) (store.Page, bool) {
-	return requireEntityWithRedirect(w, r, h.renderer, "/admin/pages", "Page", id,
+	return requireEntityWithRedirect(w, r, h.renderer, redirectAdminPages, "Page", id,
 		func(id int64) (store.Page, error) { return h.queries.GetPageByID(r.Context(), id) })
 }
 
