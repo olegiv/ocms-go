@@ -158,6 +158,27 @@
 // Captcha group
 .captcha-group {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
     margin-bottom: $spacing-4;
+
+    // hCaptcha widget container
+    .h-captcha {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+
+        // Increase iframe height to accommodate test mode warning text
+        // hCaptcha sets inline height of 76px which clips the warning
+        iframe {
+            height: 100px !important;
+            min-height: 100px !important;
+        }
+    }
+
+    // hCaptcha iframe container
+    > div,
+    iframe {
+        max-width: 100%;
+    }
 }
