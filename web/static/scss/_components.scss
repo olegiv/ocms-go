@@ -102,7 +102,8 @@
 
 .form-input,
 .form-select,
-.form-textarea {
+.form-textarea,
+.form-control {
   width: 100%;
   padding: $spacing-2 $spacing-3;
   font-size: $font-size-base;
@@ -125,6 +126,16 @@
     background-color: $gray-100;
     cursor: not-allowed;
   }
+}
+
+// Select specific styling for form-control
+select.form-control {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M2.5 4.5l3.5 3.5 3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right $spacing-3 center;
+  padding-right: $spacing-8;
+  cursor: pointer;
 }
 
 .form-textarea {
