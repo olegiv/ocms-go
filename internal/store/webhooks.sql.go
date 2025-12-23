@@ -259,7 +259,7 @@ func (q *Queries) GetLastSuccessfulDelivery(ctx context.Context, webhookID int64
 const getPendingDeliveries = `-- name: GetPendingDeliveries :many
 SELECT id, webhook_id, event, payload, response_code, response_body, attempts, next_retry_at, delivered_at, status, error_message, created_at, updated_at FROM webhook_deliveries
 WHERE status = 'pending' AND (next_retry_at IS NULL OR next_retry_at <= ?)
-ORDER BY created_at ASC LIMIT ?
+ORDER BY created_at LIMIT ?
 `
 
 type GetPendingDeliveriesParams struct {
@@ -272,7 +272,7 @@ func (q *Queries) GetPendingDeliveries(ctx context.Context, arg GetPendingDelive
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []WebhookDelivery{}
 	for rows.Next() {
 		var i WebhookDelivery
@@ -314,7 +314,7 @@ func (q *Queries) GetRecentDeliveries(ctx context.Context, limit int64) ([]Webho
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []WebhookDelivery{}
 	for rows.Next() {
 		var i WebhookDelivery
@@ -357,7 +357,7 @@ func (q *Queries) GetRecentFailedDeliveries(ctx context.Context, limit int64) ([
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []WebhookDelivery{}
 	for rows.Next() {
 		var i WebhookDelivery
@@ -421,7 +421,7 @@ func (q *Queries) GetRecentFailedDeliveriesWithWebhook(ctx context.Context, limi
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetRecentFailedDeliveriesWithWebhookRow{}
 	for rows.Next() {
 		var i GetRecentFailedDeliveriesWithWebhookRow
@@ -512,8 +512,8 @@ SELECT
     SUM(CASE WHEN wd.status = 'dead' THEN 1 ELSE 0 END) as dead_count
 FROM webhooks w
 LEFT JOIN webhook_deliveries wd ON wd.webhook_id = w.id AND wd.created_at >= ?
-GROUP BY w.id
-ORDER BY w.name ASC
+GROUP BY w.id, w.name, w.is_active
+ORDER BY w.name
 `
 
 type GetWebhookHealthSummaryRow struct {
@@ -531,7 +531,7 @@ func (q *Queries) GetWebhookHealthSummary(ctx context.Context, createdAt time.Ti
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetWebhookHealthSummaryRow{}
 	for rows.Next() {
 		var i GetWebhookHealthSummaryRow
@@ -558,7 +558,7 @@ func (q *Queries) GetWebhookHealthSummary(ctx context.Context, createdAt time.Ti
 }
 
 const listActiveWebhooks = `-- name: ListActiveWebhooks :many
-SELECT id, name, url, secret, events, is_active, headers, created_by, created_at, updated_at FROM webhooks WHERE is_active = 1 ORDER BY name ASC
+SELECT id, name, url, secret, events, is_active, headers, created_by, created_at, updated_at FROM webhooks WHERE is_active = 1 ORDER BY name
 `
 
 func (q *Queries) ListActiveWebhooks(ctx context.Context) ([]Webhook, error) {
@@ -566,7 +566,7 @@ func (q *Queries) ListActiveWebhooks(ctx context.Context) ([]Webhook, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Webhook{}
 	for rows.Next() {
 		var i Webhook
@@ -611,7 +611,7 @@ func (q *Queries) ListWebhookDeliveries(ctx context.Context, arg ListWebhookDeli
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []WebhookDelivery{}
 	for rows.Next() {
 		var i WebhookDelivery
@@ -644,7 +644,7 @@ func (q *Queries) ListWebhookDeliveries(ctx context.Context, arg ListWebhookDeli
 }
 
 const listWebhooks = `-- name: ListWebhooks :many
-SELECT id, name, url, secret, events, is_active, headers, created_by, created_at, updated_at FROM webhooks ORDER BY name ASC
+SELECT id, name, url, secret, events, is_active, headers, created_by, created_at, updated_at FROM webhooks ORDER BY name
 `
 
 func (q *Queries) ListWebhooks(ctx context.Context) ([]Webhook, error) {
@@ -652,7 +652,7 @@ func (q *Queries) ListWebhooks(ctx context.Context) ([]Webhook, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Webhook{}
 	for rows.Next() {
 		var i Webhook
@@ -691,7 +691,7 @@ func (q *Queries) ListWebhooksForEvent(ctx context.Context, dollar_1 sql.NullStr
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Webhook{}
 	for rows.Next() {
 		var i Webhook
@@ -721,7 +721,7 @@ func (q *Queries) ListWebhooksForEvent(ctx context.Context, dollar_1 sql.NullStr
 }
 
 const listWebhooksPaginated = `-- name: ListWebhooksPaginated :many
-SELECT id, name, url, secret, events, is_active, headers, created_by, created_at, updated_at FROM webhooks ORDER BY name ASC LIMIT ? OFFSET ?
+SELECT id, name, url, secret, events, is_active, headers, created_by, created_at, updated_at FROM webhooks ORDER BY name LIMIT ? OFFSET ?
 `
 
 type ListWebhooksPaginatedParams struct {
@@ -734,7 +734,7 @@ func (q *Queries) ListWebhooksPaginated(ctx context.Context, arg ListWebhooksPag
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Webhook{}
 	for rows.Next() {
 		var i Webhook

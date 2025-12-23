@@ -616,7 +616,7 @@ const getScheduledPagesForPublishing = `-- name: GetScheduledPagesForPublishing 
 
 SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id FROM pages
 WHERE scheduled_at IS NOT NULL AND scheduled_at <= ? AND status = 'draft'
-ORDER BY scheduled_at ASC
+ORDER BY scheduled_at
 `
 
 // Scheduled publishing queries
@@ -625,7 +625,7 @@ func (q *Queries) GetScheduledPagesForPublishing(ctx context.Context, scheduledA
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -678,7 +678,7 @@ func (q *Queries) ListPageVersions(ctx context.Context, arg ListPageVersionsPara
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []PageVersion{}
 	for rows.Next() {
 		var i PageVersion
@@ -742,7 +742,7 @@ func (q *Queries) ListPageVersionsWithUser(ctx context.Context, arg ListPageVers
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ListPageVersionsWithUserRow{}
 	for rows.Next() {
 		var i ListPageVersionsWithUserRow
@@ -783,7 +783,7 @@ func (q *Queries) ListPages(ctx context.Context, arg ListPagesParams) ([]Page, e
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -845,7 +845,7 @@ func (q *Queries) ListPagesByLanguageAndStatus(ctx context.Context, arg ListPage
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -898,7 +898,7 @@ func (q *Queries) ListPagesByStatus(ctx context.Context, arg ListPagesByStatusPa
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -985,7 +985,7 @@ func (q *Queries) ListPagesByStatusWithLanguage(ctx context.Context, arg ListPag
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ListPagesByStatusWithLanguageRow{}
 	for rows.Next() {
 		var i ListPagesByStatusWithLanguageRow
@@ -1075,7 +1075,7 @@ func (q *Queries) ListPagesWithLanguage(ctx context.Context, arg ListPagesWithLa
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ListPagesWithLanguageRow{}
 	for rows.Next() {
 		var i ListPagesWithLanguageRow
@@ -1132,7 +1132,7 @@ func (q *Queries) ListPublishedPages(ctx context.Context, arg ListPublishedPages
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -1189,7 +1189,7 @@ func (q *Queries) ListPublishedPagesByCategory(ctx context.Context, arg ListPubl
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -1245,7 +1245,7 @@ func (q *Queries) ListPublishedPagesForSitemap(ctx context.Context) ([]ListPubli
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ListPublishedPagesForSitemapRow{}
 	for rows.Next() {
 		var i ListPublishedPagesForSitemapRow
@@ -1287,7 +1287,7 @@ func (q *Queries) ListPublishedPagesForTag(ctx context.Context, arg ListPublishe
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -1326,7 +1326,7 @@ func (q *Queries) ListPublishedPagesForTag(ctx context.Context, arg ListPublishe
 }
 
 const listScheduledPages = `-- name: ListScheduledPages :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id FROM pages WHERE scheduled_at IS NOT NULL AND status = 'draft' ORDER BY scheduled_at ASC LIMIT ? OFFSET ?
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id FROM pages WHERE scheduled_at IS NOT NULL AND status = 'draft' ORDER BY scheduled_at LIMIT ? OFFSET ?
 `
 
 type ListScheduledPagesParams struct {
@@ -1339,7 +1339,7 @@ func (q *Queries) ListScheduledPages(ctx context.Context, arg ListScheduledPages
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -1485,7 +1485,7 @@ func (q *Queries) SearchPages(ctx context.Context, arg SearchPagesParams) ([]Pag
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -1551,7 +1551,7 @@ func (q *Queries) SearchPagesByLanguage(ctx context.Context, arg SearchPagesByLa
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -1617,7 +1617,7 @@ func (q *Queries) SearchPagesByStatus(ctx context.Context, arg SearchPagesByStat
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -1712,7 +1712,7 @@ func (q *Queries) SearchPagesWithLanguage(ctx context.Context, arg SearchPagesWi
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []SearchPagesWithLanguageRow{}
 	for rows.Next() {
 		var i SearchPagesWithLanguageRow

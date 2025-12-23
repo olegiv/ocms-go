@@ -38,17 +38,46 @@ func NewConfigHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionMana
 
 // ConfigItem represents a config item with display metadata.
 type ConfigItem struct {
-	Key         string
-	Value       string
-	Type        string
-	Description string
-	Label       string
+	Key          string
+	Value        string
+	Type         string
+	Description  string
+	Label        string
+	Translatable bool
+}
+
+// ConfigTranslationValue holds a translation value for a specific language.
+type ConfigTranslationValue struct {
+	LanguageID   int64
+	LanguageCode string
+	LanguageName string
+	Value        string
+}
+
+// TranslatableConfigItem holds a translatable config item with its translations per language.
+type TranslatableConfigItem struct {
+	Key          string
+	Label        string
+	Description  string
+	Type         string
+	Translations []ConfigTranslationValue // Values per language (includes default lang)
+}
+
+// ConfigLanguage represents a language option for the config form.
+type ConfigLanguage struct {
+	ID        int64
+	Code      string
+	Name      string
+	IsDefault bool
 }
 
 // ConfigFormData holds data for the config form template.
 type ConfigFormData struct {
-	Items  []ConfigItem
-	Errors map[string]string
+	Items                []ConfigItem             // Non-translatable items
+	TranslatableItems    []TranslatableConfigItem // Translatable items with language tabs
+	Languages            []ConfigLanguage         // Available languages for translation
+	Errors               map[string]string
+	HasMultipleLanguages bool
 }
 
 // List handles GET /admin/config - displays configuration settings.
@@ -63,10 +92,30 @@ func (h *ConfigHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := ConfigFormData{
-		Items:  toConfigItems(configs, lang, nil),
-		Errors: make(map[string]string),
+	// Get active languages
+	languages, err := h.queries.ListActiveLanguages(r.Context())
+	if err != nil {
+		slog.Error("failed to list languages", "error", err)
+		languages = nil // Continue without translations
 	}
+
+	// Get all config translations
+	allTranslations, err := h.queries.ListAllConfigTranslations(r.Context())
+	if err != nil {
+		slog.Error("failed to list config translations", "error", err)
+		allTranslations = nil
+	}
+
+	// Build translations map: key -> langID -> value
+	translationsMap := make(map[string]map[int64]string)
+	for _, t := range allTranslations {
+		if translationsMap[t.ConfigKey] == nil {
+			translationsMap[t.ConfigKey] = make(map[int64]string)
+		}
+		translationsMap[t.ConfigKey][t.LanguageID] = t.Value
+	}
+
+	data := h.buildConfigFormData(configs, languages, translationsMap, lang, nil)
 
 	h.renderConfigPage(w, r, user, lang, data)
 }
@@ -88,6 +137,13 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get active languages for translation handling
+	languages, err := h.queries.ListActiveLanguages(r.Context())
+	if err != nil {
+		slog.Error("failed to list languages", "error", err)
+		languages = nil
+	}
+
 	validationErrors := make(map[string]string)
 	now := time.Now()
 	userID := middleware.GetUserID(r)
@@ -100,6 +156,31 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		// Handle translatable config items
+		if model.IsTranslatableConfigKey(cfg.Key) && len(languages) > 0 {
+			// Save translations for each language
+			for _, language := range languages {
+				// Form field name: key_langcode (e.g., site_name_en, site_name_ru)
+				fieldName := cfg.Key + "_" + language.Code
+				value := r.FormValue(fieldName)
+
+				// Save translation
+				_, err := h.queries.UpsertConfigTranslation(r.Context(), store.UpsertConfigTranslationParams{
+					ConfigKey:  cfg.Key,
+					LanguageID: language.ID,
+					Value:      value,
+					UpdatedAt:  now,
+					UpdatedBy:  updatedBy,
+				})
+				if err != nil {
+					slog.Error("failed to save config translation", "key", cfg.Key, "lang", language.Code, "error", err)
+					validationErrors[fieldName] = i18n.T(lang, "error.saving_value")
+				}
+			}
+			continue
+		}
+
+		// Handle non-translatable config items
 		value := r.FormValue(cfg.Key)
 
 		// Validate based on type
@@ -133,16 +214,31 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(validationErrors) > 0 {
-		// Build form values map for re-rendering
-		formValues := make(map[string]string)
-		for _, cfg := range configs {
-			formValues[cfg.Key] = r.FormValue(cfg.Key)
+		// Get all config translations for re-rendering
+		allTranslations, _ := h.queries.ListAllConfigTranslations(r.Context())
+		translationsMap := make(map[string]map[int64]string)
+		for _, t := range allTranslations {
+			if translationsMap[t.ConfigKey] == nil {
+				translationsMap[t.ConfigKey] = make(map[int64]string)
+			}
+			translationsMap[t.ConfigKey][t.LanguageID] = t.Value
 		}
 
-		data := ConfigFormData{
-			Items:  toConfigItems(configs, lang, formValues),
-			Errors: validationErrors,
+		// Build form values map for re-rendering (including translation values from form)
+		formValues := make(map[string]string)
+		for _, cfg := range configs {
+			if model.IsTranslatableConfigKey(cfg.Key) {
+				for _, language := range languages {
+					fieldName := cfg.Key + "_" + language.Code
+					formValues[fieldName] = r.FormValue(fieldName)
+				}
+			} else {
+				formValues[cfg.Key] = r.FormValue(cfg.Key)
+			}
 		}
+
+		data := h.buildConfigFormData(configs, languages, translationsMap, lang, formValues)
+		data.Errors = validationErrors
 
 		h.renderConfigPage(w, r, user, lang, data)
 		return
@@ -213,16 +309,86 @@ func (h *ConfigHandler) renderConfigPage(w http.ResponseWriter, r *http.Request,
 	})
 }
 
-// toConfigItems converts store.Config slice to ConfigItem slice.
-// It skips keys managed elsewhere (like active_theme and theme_settings_*).
-// If formValues is provided, it uses those values instead of database values.
-func toConfigItems(configs []store.Config, lang string, formValues map[string]string) []ConfigItem {
-	items := make([]ConfigItem, 0, len(configs))
+// buildConfigFormData builds the form data for the config page, separating translatable
+// and non-translatable items, and including translation values per language.
+func (h *ConfigHandler) buildConfigFormData(
+	configs []store.Config,
+	languages []store.Language,
+	translationsMap map[string]map[int64]string,
+	adminLang string,
+	formValues map[string]string,
+) ConfigFormData {
+	data := ConfigFormData{
+		Items:                make([]ConfigItem, 0),
+		TranslatableItems:    make([]TranslatableConfigItem, 0),
+		Languages:            make([]ConfigLanguage, 0, len(languages)),
+		Errors:               make(map[string]string),
+		HasMultipleLanguages: len(languages) > 1,
+	}
+
+	// Build language list
+	for _, lang := range languages {
+		data.Languages = append(data.Languages, ConfigLanguage{
+			ID:        lang.ID,
+			Code:      lang.Code,
+			Name:      lang.Name,
+			IsDefault: lang.IsDefault,
+		})
+	}
+
+	// Process config items
 	for _, cfg := range configs {
 		// Skip theme-related config - managed in Themes settings
 		if cfg.Key == "active_theme" || strings.HasPrefix(cfg.Key, "theme_settings_") {
 			continue
 		}
+
+		// Handle translatable items
+		if model.IsTranslatableConfigKey(cfg.Key) && len(languages) > 0 {
+			item := TranslatableConfigItem{
+				Key:          cfg.Key,
+				Label:        configKeyToLabel(cfg.Key, adminLang),
+				Description:  configKeyToDescription(cfg.Key, cfg.Description, adminLang),
+				Type:         cfg.Type,
+				Translations: make([]ConfigTranslationValue, 0, len(languages)),
+			}
+
+			// Add translation value for each language
+			for _, lang := range languages {
+				var value string
+				fieldName := cfg.Key + "_" + lang.Code
+
+				// Use form value if provided (for re-rendering after validation errors)
+				if formValues != nil {
+					if v, ok := formValues[fieldName]; ok {
+						value = v
+					}
+				} else {
+					// Use saved translation value or default config value
+					if trans, ok := translationsMap[cfg.Key]; ok {
+						if v, ok := trans[lang.ID]; ok {
+							value = v
+						}
+					}
+					// If no translation, use the base config value for default language only
+					if value == "" && lang.IsDefault {
+						value = cfg.Value
+					}
+				}
+
+				item.Translations = append(item.Translations, ConfigTranslationValue{
+					LanguageID:   lang.ID,
+					LanguageCode: lang.Code,
+					LanguageName: lang.Name,
+					Value:        value,
+				})
+			}
+
+			data.TranslatableItems = append(data.TranslatableItems, item)
+			continue
+		}
+
+		// Handle non-translatable items
 		value := cfg.Value
 		if formValues != nil {
 			if v, ok := formValues[cfg.Key]; ok {
@@ -231,13 +397,15 @@ func toConfigItems(configs []store.Config, lang string, formValues map[string]st
 				value = "false"
 			}
 		}
-		items = append(items, ConfigItem{
-			Key:         cfg.Key,
-			Value:       value,
-			Type:        cfg.Type,
-			Description: configKeyToDescription(cfg.Key, cfg.Description, lang),
-			Label:       configKeyToLabel(cfg.Key, lang),
+		data.Items = append(data.Items, ConfigItem{
+			Key:          cfg.Key,
+			Value:        value,
+			Type:         cfg.Type,
+			Description:  configKeyToDescription(cfg.Key, cfg.Description, adminLang),
+			Label:        configKeyToLabel(cfg.Key, adminLang),
+			Translatable: false,
 		})
 	}
-	return items
+
+	return data
 }

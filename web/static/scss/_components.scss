@@ -3021,3 +3021,64 @@
     margin: 0;
   }
 }
+
+// =============================================================================
+// LANGUAGE TABS (for translatable config fields)
+// =============================================================================
+
+.translatable-config-section {
+  margin-bottom: $spacing-4;
+}
+
+.translatable-field {
+  margin-bottom: $spacing-6;
+}
+
+.lang-tabs {
+  display: flex;
+  gap: $spacing-1;
+  margin-bottom: $spacing-2;
+  border-bottom: 1px solid $gray-200;
+  padding-bottom: $spacing-1;
+}
+
+.lang-tab {
+  padding: $spacing-1 $spacing-3;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $gray-500;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: $radius-md $radius-md 0 0;
+  cursor: pointer;
+  transition: all $transition-fast;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+
+  &:hover {
+    color: $gray-700;
+    background: $gray-50;
+  }
+
+  &.active {
+    color: $primary;
+    background: $white;
+    border-color: $gray-200;
+    position: relative;
+
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: $white;
+    }
+  }
+}
+
+.lang-tab-content {
+  padding-top: $spacing-2;
+}

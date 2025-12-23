@@ -1277,6 +1277,22 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		if data.LangDirection == "" {
 			data.LangDirection = "ltr"
 		}
+
+		// Apply translated config values for current language
+		if translatedName, err := h.queries.GetConfigTranslationByKeyAndLangCode(ctx, store.GetConfigTranslationByKeyAndLangCodeParams{
+			ConfigKey: "site_name",
+			Code:      langInfo.Code,
+		}); err == nil && translatedName.Value != "" {
+			data.SiteName = translatedName.Value
+			data.Site.SiteName = translatedName.Value
+		}
+		if translatedDesc, err := h.queries.GetConfigTranslationByKeyAndLangCode(ctx, store.GetConfigTranslationByKeyAndLangCodeParams{
+			ConfigKey: "site_description",
+			Code:      langInfo.Code,
+		}); err == nil && translatedDesc.Value != "" {
+			data.SiteTagline = translatedDesc.Value
+			data.Site.Description = translatedDesc.Value
+		}
 	}
 
 	// Load all active languages for language picker

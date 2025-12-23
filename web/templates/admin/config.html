@@ -11,6 +11,87 @@
         {{.CSRFField}}
         <input type="hidden" name="_method" value="PUT">
 
+        {{/* Translatable config items with language tabs */}}
+        {{if and .Data.TranslatableItems .Data.HasMultipleLanguages}}
+        <div class="translatable-config-section">
+            {{range .Data.TranslatableItems}}
+            <div class="form-group translatable-field" x-data="{ activeTab: '{{(index .Translations 0).LanguageCode}}' }">
+                <label class="form-label">{{.Label}}</label>
+
+                {{/* Language tabs */}}
+                <div class="lang-tabs">
+                    {{range .Translations}}
+                    <button type="button"
+                            class="lang-tab"
+                            :class="{ 'active': activeTab === '{{.LanguageCode}}' }"
+                            @click="activeTab = '{{.LanguageCode}}'">
+                        {{.LanguageCode | upper}}
+                    </button>
+                    {{end}}
+                </div>
+
+                {{/* Tab content - one input per language */}}
+                <div class="lang-tab-content">
+                    {{$key := .Key}}
+                    {{$type := .Type}}
+                    {{range .Translations}}
+                    <div x-show="activeTab === '{{.LanguageCode}}'" x-cloak>
+                        <input
+                            type="text"
+                            id="{{$key}}_{{.LanguageCode}}"
+                            name="{{$key}}_{{.LanguageCode}}"
+                            class="form-input {{if index $.Data.Errors (printf "%s_%s" $key .LanguageCode)}}is-invalid{{end}}"
+                            value="{{.Value}}"
+                            placeholder="{{T $.AdminLang "config.enter_value_for"}} {{.LanguageName}}"
+                        >
+                        {{if index $.Data.Errors (printf "%s_%s" $key .LanguageCode)}}
+                        <span class="form-error">{{index $.Data.Errors (printf "%s_%s" $key .LanguageCode)}}</span>
+                        {{end}}
+                    </div>
+                    {{end}}
+                </div>
+
+                {{if .Description}}
+                <span class="form-hint">{{.Description}}</span>
+                {{end}}
+            </div>
+            {{end}}
+        </div>
+
+        <hr class="form-divider">
+        {{end}}
+
+        {{/* Single-language translatable items (when only one language is active) */}}
+        {{if and .Data.TranslatableItems (not .Data.HasMultipleLanguages)}}
+        <div class="config-grid">
+            {{range .Data.TranslatableItems}}
+            <div class="form-group">
+                <label for="{{.Key}}_{{(index .Translations 0).LanguageCode}}" class="form-label">
+                    {{.Label}}
+                </label>
+                <input
+                    type="text"
+                    id="{{.Key}}_{{(index .Translations 0).LanguageCode}}"
+                    name="{{.Key}}_{{(index .Translations 0).LanguageCode}}"
+                    class="form-input {{if index $.Data.Errors (printf "%s_%s" .Key (index .Translations 0).LanguageCode)}}is-invalid{{end}}"
+                    value="{{(index .Translations 0).Value}}"
+                >
+                {{if .Description}}
+                <span class="form-hint">{{.Description}}</span>
+                {{end}}
+                {{if index $.Data.Errors (printf "%s_%s" .Key (index .Translations 0).LanguageCode)}}
+                <span class="form-error">{{index $.Data.Errors (printf "%s_%s" .Key (index .Translations 0).LanguageCode)}}</span>
+                {{end}}
+            </div>
+            {{end}}
+        </div>
+
+        {{if .Data.Items}}
+        <hr class="form-divider">
+        {{end}}
+        {{end}}
+
+        {{/* Non-translatable config items */}}
         <div class="config-grid">
             {{range .Data.Items}}
             <div class="form-group">
@@ -61,7 +142,7 @@
             {{end}}
         </div>
 
-        {{if not .Data.Items}}
+        {{if and (not .Data.Items) (not .Data.TranslatableItems)}}
         <div class="empty-state">
             <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
             <p>{{T .AdminLang "config.no_settings"}}</p>
