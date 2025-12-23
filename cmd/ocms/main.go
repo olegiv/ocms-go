@@ -57,19 +57,19 @@ func main() {
 	flag.BoolVar(showHelp, "h", false, "Show help information (shorthand)")
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "oCMS - Open Content Management System\n\n")
-		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "Options:\n")
+		_, _ = fmt.Fprintf(os.Stderr, "oCMS - Open Content Management System\n\n")
+		_, _ = fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", os.Args[0])
+		_, _ = fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nEnvironment Variables:\n")
-		fmt.Fprintf(os.Stderr, "  OCMS_SESSION_SECRET    Session encryption key (required, min 32 bytes)\n")
-		fmt.Fprintf(os.Stderr, "  OCMS_DB_PATH           SQLite database path (default: ./data/ocms.db)\n")
-		fmt.Fprintf(os.Stderr, "  OCMS_SERVER_PORT       Server port (default: 8080)\n")
-		fmt.Fprintf(os.Stderr, "  OCMS_ENV               Environment: development|production (default: development)\n")
-		fmt.Fprintf(os.Stderr, "  OCMS_THEMES_DIR        Themes directory (default: ./themes)\n")
-		fmt.Fprintf(os.Stderr, "  OCMS_ACTIVE_THEME      Active theme name (default: default)\n")
-		fmt.Fprintf(os.Stderr, "  OCMS_REDIS_URL         Redis URL for distributed caching (optional)\n")
-		fmt.Fprintf(os.Stderr, "\nFor more information, see: https://github.com/olegiv/ocms-go\n")
+		_, _ = fmt.Fprintf(os.Stderr, "\nEnvironment Variables:\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SESSION_SECRET    Session encryption key (required, min 32 bytes)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_DB_PATH           SQLite database path (default: ./data/ocms.db)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SERVER_PORT       Server port (default: 8080)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_ENV               Environment: development|production (default: development)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_THEMES_DIR        Themes directory (default: ./themes)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_ACTIVE_THEME      Active theme name (default: default)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REDIS_URL         Redis URL for distributed caching (optional)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "\nFor more information, see: https://github.com/olegiv/ocms-go\n")
 	}
 
 	flag.Parse()
@@ -82,7 +82,7 @@ func main() {
 
 	// Handle -v/-version flag
 	if *showVersion {
-		fmt.Printf("ocms %s (commit: %s, built: %s)\n", version, gitCommit, buildTime)
+		_, _ = fmt.Printf("ocms %s (commit: %s, built: %s)\n", version, gitCommit, buildTime)
 		os.Exit(0)
 	}
 
