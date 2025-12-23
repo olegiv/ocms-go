@@ -248,5 +248,10 @@ func (h *ThemesHandler) loadThemeSettings(r *http.Request, themeName string) map
 		return make(map[string]string)
 	}
 
+	// Ensure we never return nil (could happen if JSON was "null")
+	if settings == nil {
+		return make(map[string]string)
+	}
+
 	return settings
 }

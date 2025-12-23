@@ -175,7 +175,7 @@ func TestListItems(t *testing.T) {
 		t.Fatalf("listItems: %v", err)
 	}
 	if len(items) != 2 {
-		t.Errorf("len(items) = %d, want 2", len(items))
+		t.Fatalf("len(items) = %d, want 2", len(items))
 	}
 
 	// Items should be sorted by created_at DESC (most recent first)

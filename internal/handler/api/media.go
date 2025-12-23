@@ -375,8 +375,10 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		// Single file upload - return the media directly
 		if len(responses) > 0 {
 			WriteCreated(w, responses[0])
-		} else {
+		} else if len(uploadErrors) > 0 {
 			WriteError(w, http.StatusBadRequest, "upload_failed", uploadErrors[0]["error"], nil)
+		} else {
+			WriteError(w, http.StatusBadRequest, "upload_failed", "Unknown upload error", nil)
 		}
 	} else {
 		// Multiple file upload - return array with any errors

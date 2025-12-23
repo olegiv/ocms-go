@@ -195,15 +195,23 @@ func TestMultiTypedCache_GetMultiple(t *testing.T) {
 	result := cache.GetMultiple(ctx, []string{"user:1", "user:2", "user:3"})
 
 	if len(result) != 2 {
-		t.Errorf("expected 2 results, got %d", len(result))
+		t.Fatalf("expected 2 results, got %d", len(result))
 	}
 
-	if result["user:1"].Name != "Alice" {
-		t.Errorf("expected Alice, got %s", result["user:1"].Name)
+	user1, ok := result["user:1"]
+	if !ok || user1 == nil {
+		t.Fatalf("expected user:1 to exist")
+	}
+	if user1.Name != "Alice" {
+		t.Errorf("expected Alice, got %s", user1.Name)
 	}
 
-	if result["user:2"].Name != "Bob" {
-		t.Errorf("expected Bob, got %s", result["user:2"].Name)
+	user2, ok := result["user:2"]
+	if !ok || user2 == nil {
+		t.Fatalf("expected user:2 to exist")
+	}
+	if user2.Name != "Bob" {
+		t.Errorf("expected Bob, got %s", user2.Name)
 	}
 
 	if _, exists := result["user:3"]; exists {

@@ -297,6 +297,9 @@ func TestMemoryCache_ValueCopy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
+	if val == nil {
+		t.Fatalf("Get returned nil value")
+	}
 	if string(val) != "original" {
 		t.Errorf("expected original, got %s (cache didn't copy on set)", string(val))
 	}

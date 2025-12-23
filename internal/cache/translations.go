@@ -174,6 +174,10 @@ func (c *TranslationCache) loadBatch(ctx context.Context, entityType string, ent
 
 		for _, t := range translations {
 			langCode := t.LanguageCode
+			// Ensure the inner map exists (defensive check for nilaway)
+			if result[id] == nil {
+				result[id] = make(TranslationMap)
+			}
 			if t.EntityID == id {
 				result[id][langCode] = t.TranslationID
 			} else {

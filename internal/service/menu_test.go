@@ -79,7 +79,7 @@ func TestBuildMenuTree(t *testing.T) {
 
 	// Verify root items
 	if len(tree) != 3 {
-		t.Errorf("len(tree) = %d, want 3", len(tree))
+		t.Fatalf("len(tree) = %d, want 3", len(tree))
 	}
 
 	// Verify first root item
@@ -95,17 +95,15 @@ func TestBuildMenuTree(t *testing.T) {
 		t.Errorf("tree[1].Title = %q, want %q", tree[1].Title, "About")
 	}
 	if len(tree[1].Children) != 2 {
-		t.Errorf("len(tree[1].Children) = %d, want 2", len(tree[1].Children))
+		t.Fatalf("len(tree[1].Children) = %d, want 2", len(tree[1].Children))
 	}
 
 	// Verify children
-	if len(tree[1].Children) >= 2 {
-		if tree[1].Children[0].Title != "Team" {
-			t.Errorf("tree[1].Children[0].Title = %q, want %q", tree[1].Children[0].Title, "Team")
-		}
-		if tree[1].Children[1].Title != "History" {
-			t.Errorf("tree[1].Children[1].Title = %q, want %q", tree[1].Children[1].Title, "History")
-		}
+	if tree[1].Children[0].Title != "Team" {
+		t.Errorf("tree[1].Children[0].Title = %q, want %q", tree[1].Children[0].Title, "Team")
+	}
+	if tree[1].Children[1].Title != "History" {
+		t.Errorf("tree[1].Children[1].Title = %q, want %q", tree[1].Children[1].Title, "History")
 	}
 
 	// Verify third root item
@@ -158,7 +156,7 @@ func TestBuildMenuTreeWithInactiveItems(t *testing.T) {
 
 	// Verify inactive items are filtered out
 	if len(tree) != 2 {
-		t.Errorf("len(tree) = %d, want 2 (inactive items should be filtered)", len(tree))
+		t.Fatalf("len(tree) = %d, want 2 (inactive items should be filtered)", len(tree))
 	}
 
 	// Verify correct items remain
