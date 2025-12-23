@@ -69,8 +69,8 @@ func (h *MenusHandler) List(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.menus"), URL: "/admin/menus", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.menus"), URL: redirectAdminMenus, Active: true},
 		},
 	})
 }
@@ -159,9 +159,9 @@ func (h *MenusHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.menus"), URL: "/admin/menus"},
-			{Label: i18n.T(lang, "menus.new"), URL: "/admin/menus/new", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.menus"), URL: redirectAdminMenus},
+			{Label: i18n.T(lang, "menus.new"), URL: redirectAdminMenusNew, Active: true},
 		},
 	})
 }
@@ -171,7 +171,7 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	if !parseFormOrRedirect(w, r, h.renderer, "/admin/menus/new") {
+	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminMenusNew) {
 		return
 	}
 
@@ -199,9 +199,9 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-				{Label: i18n.T(lang, "nav.menus"), URL: "/admin/menus"},
-				{Label: i18n.T(lang, "menus.new"), URL: "/admin/menus/new", Active: true},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+				{Label: i18n.T(lang, "nav.menus"), URL: redirectAdminMenus},
+				{Label: i18n.T(lang, "menus.new"), URL: redirectAdminMenusNew, Active: true},
 			},
 		})
 		return
@@ -217,12 +217,12 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to create menu", "error", err)
-		flashError(w, r, h.renderer, "/admin/menus/new", "Error creating menu")
+		flashError(w, r, h.renderer, redirectAdminMenusNew, "Error creating menu")
 		return
 	}
 
 	slog.Info("menu created", "menu_id", menu.ID, "slug", menu.Slug)
-	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/menus/%d", menu.ID), "Menu created successfully")
+	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminMenusID, menu.ID), "Menu created successfully")
 }
 
 // EditForm handles GET /admin/menus/{id} - displays the menu builder.
@@ -232,7 +232,7 @@ func (h *MenusHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/menus", "Invalid menu ID")
+		flashError(w, r, h.renderer, redirectAdminMenus, "Invalid menu ID")
 		return
 	}
 
@@ -280,9 +280,9 @@ func (h *MenusHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.menus"), URL: "/admin/menus"},
-			{Label: menu.Name, URL: fmt.Sprintf("/admin/menus/%d", menu.ID), Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.menus"), URL: redirectAdminMenus},
+			{Label: menu.Name, URL: fmt.Sprintf(redirectAdminMenusID, menu.ID), Active: true},
 		},
 	})
 }
@@ -294,7 +294,7 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/menus", "Invalid menu ID")
+		flashError(w, r, h.renderer, redirectAdminMenus, "Invalid menu ID")
 		return
 	}
 
@@ -303,7 +303,7 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf("/admin/menus/%d", id)) {
+	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf(redirectAdminMenusID, id)) {
 		return
 	}
 
@@ -337,9 +337,9 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 			User:  user,
 			Data:  data,
 			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-				{Label: i18n.T(lang, "nav.menus"), URL: "/admin/menus"},
-				{Label: menu.Name, URL: fmt.Sprintf("/admin/menus/%d", menu.ID), Active: true},
+				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+				{Label: i18n.T(lang, "nav.menus"), URL: redirectAdminMenus},
+				{Label: menu.Name, URL: fmt.Sprintf(redirectAdminMenusID, menu.ID), Active: true},
 			},
 		})
 		return
@@ -355,7 +355,7 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to update menu", "error", err, "menu_id", id)
-		flashError(w, r, h.renderer, fmt.Sprintf("/admin/menus/%d", id), "Error updating menu")
+		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminMenusID, id), "Error updating menu")
 		return
 	}
 
@@ -366,7 +366,7 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("menu updated", "menu_id", id, "updated_by", middleware.GetUserID(r))
-	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/menus/%d", id), "Menu updated successfully")
+	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminMenusID, id), "Menu updated successfully")
 }
 
 // Delete handles DELETE /admin/menus/{id} - deletes a menu.
@@ -405,7 +405,7 @@ func (h *MenusHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flashSuccess(w, r, h.renderer, "/admin/menus", "Menu deleted successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminMenus, "Menu deleted successfully")
 }
 
 // AddItemRequest represents the JSON request for adding a menu item.
@@ -646,7 +646,7 @@ func (h *MenusHandler) processReorderItems(r *http.Request, menuID int64, items 
 
 // requireMenuWithRedirect fetches menu by ID and handles errors with flash messages and redirect.
 func (h *MenusHandler) requireMenuWithRedirect(w http.ResponseWriter, r *http.Request, id int64) (store.Menu, bool) {
-	return requireEntityWithRedirect(w, r, h.renderer, "/admin/menus", "Menu", id,
+	return requireEntityWithRedirect(w, r, h.renderer, redirectAdminMenus, "Menu", id,
 		func(id int64) (store.Menu, error) { return h.queries.GetMenuByID(r.Context(), id) })
 }
 

@@ -66,34 +66,34 @@ func (h *ThemesHandler) List(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.themes"), URL: "/admin/themes", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.themes"), URL: redirectAdminThemes, Active: true},
 		},
 	})
 }
 
 // Activate handles POST /admin/themes/activate - activates a theme.
 func (h *ThemesHandler) Activate(w http.ResponseWriter, r *http.Request) {
-	if !parseFormOrRedirect(w, r, h.renderer, "/admin/themes") {
+	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminThemes) {
 		return
 	}
 
 	themeName := r.FormValue("theme")
 	if themeName == "" {
-		flashError(w, r, h.renderer, "/admin/themes", "Theme name is required")
+		flashError(w, r, h.renderer, redirectAdminThemes, "Theme name is required")
 		return
 	}
 
 	// Check if theme exists
 	if !h.themeManager.HasTheme(themeName) {
-		flashError(w, r, h.renderer, "/admin/themes", "Theme not found")
+		flashError(w, r, h.renderer, redirectAdminThemes, "Theme not found")
 		return
 	}
 
 	// Activate the theme in manager
 	if err := h.themeManager.SetActiveTheme(themeName); err != nil {
 		slog.Error("failed to activate theme", "theme", themeName, "error", err)
-		flashError(w, r, h.renderer, "/admin/themes", "Failed to activate theme")
+		flashError(w, r, h.renderer, redirectAdminThemes, "Failed to activate theme")
 		return
 	}
 
@@ -121,7 +121,7 @@ func (h *ThemesHandler) Activate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("theme activated", "theme", themeName, "activated_by", middleware.GetUserID(r))
-	flashSuccess(w, r, h.renderer, "/admin/themes", "Theme activated successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminThemes, "Theme activated successfully")
 }
 
 // Settings handles GET /admin/themes/{name}/settings - displays theme settings form.
@@ -132,7 +132,7 @@ func (h *ThemesHandler) Settings(w http.ResponseWriter, r *http.Request) {
 
 	thm, err := h.themeManager.GetTheme(themeName)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/themes", "Theme not found")
+		flashError(w, r, h.renderer, redirectAdminThemes, "Theme not found")
 		return
 	}
 
@@ -165,9 +165,9 @@ func (h *ThemesHandler) Settings(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.themes"), URL: "/admin/themes"},
-			{Label: thm.Config.Name + " Settings", URL: "/admin/themes/" + themeName + "/settings", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.themes"), URL: redirectAdminThemes},
+			{Label: thm.Config.Name + " Settings", URL: redirectAdminThemesSlash + themeName + pathSettings, Active: true},
 		},
 	})
 }
@@ -178,11 +178,11 @@ func (h *ThemesHandler) SaveSettings(w http.ResponseWriter, r *http.Request) {
 
 	thm, err := h.themeManager.GetTheme(themeName)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/themes", "Theme not found")
+		flashError(w, r, h.renderer, redirectAdminThemes, "Theme not found")
 		return
 	}
 
-	if !parseFormOrRedirect(w, r, h.renderer, "/admin/themes/"+themeName+"/settings") {
+	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminThemesSlash+themeName+pathSettings) {
 		return
 	}
 
@@ -200,7 +200,7 @@ func (h *ThemesHandler) SaveSettings(w http.ResponseWriter, r *http.Request) {
 	settingsJSON, err := json.Marshal(settings)
 	if err != nil {
 		slog.Error("failed to marshal theme settings", "error", err)
-		flashError(w, r, h.renderer, "/admin/themes/"+themeName+"/settings", "Error saving settings")
+		flashError(w, r, h.renderer, redirectAdminThemesSlash+themeName+pathSettings, "Error saving settings")
 		return
 	}
 
@@ -219,7 +219,7 @@ func (h *ThemesHandler) SaveSettings(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to save theme settings", "theme", themeName, "error", err)
-		flashError(w, r, h.renderer, "/admin/themes/"+themeName+"/settings", "Error saving settings")
+		flashError(w, r, h.renderer, redirectAdminThemesSlash+themeName+pathSettings, "Error saving settings")
 		return
 	}
 
@@ -229,7 +229,7 @@ func (h *ThemesHandler) SaveSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("theme settings saved", "theme", themeName, "saved_by", middleware.GetUserID(r))
-	flashSuccess(w, r, h.renderer, "/admin/themes", "Theme settings saved successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminThemes, "Theme settings saved successfully")
 }
 
 // loadThemeSettings loads theme settings from the config table.

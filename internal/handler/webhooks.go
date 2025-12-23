@@ -181,8 +181,8 @@ func (h *WebhooksHandler) List(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.webhooks"), URL: "/admin/webhooks", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.webhooks"), URL: redirectAdminWebhooks, Active: true},
 		},
 	})
 }
@@ -201,7 +201,7 @@ func (h *WebhooksHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 
 // Create handles POST /admin/webhooks - creates a new webhook.
 func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
-	if !parseFormOrRedirect(w, r, h.renderer, "/admin/webhooks/new") {
+	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminWebhooksNew) {
 		return
 	}
 
@@ -212,7 +212,7 @@ func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 		generatedSecret, err := model.GenerateWebhookSecret()
 		if err != nil {
 			slog.Error("failed to generate webhook secret", "error", err)
-			flashError(w, r, h.renderer, "/admin/webhooks/new", "Error generating secret")
+			flashError(w, r, h.renderer, redirectAdminWebhooksNew, "Error generating secret")
 			return
 		}
 		input.Secret = generatedSecret
@@ -249,19 +249,19 @@ func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to create webhook", "error", err)
-		flashError(w, r, h.renderer, "/admin/webhooks/new", "Error creating webhook")
+		flashError(w, r, h.renderer, redirectAdminWebhooksNew, "Error creating webhook")
 		return
 	}
 
 	slog.Info("webhook created", "webhook_id", webhook.ID, "name", webhook.Name, "created_by", middleware.GetUserID(r))
-	flashSuccess(w, r, h.renderer, "/admin/webhooks", "Webhook created successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminWebhooks, "Webhook created successfully")
 }
 
 // EditForm handles GET /admin/webhooks/{id} - displays the edit webhook form.
 func (h *WebhooksHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/webhooks", "Invalid webhook ID")
+		flashError(w, r, h.renderer, redirectAdminWebhooks, "Invalid webhook ID")
 		return
 	}
 
@@ -297,7 +297,7 @@ func (h *WebhooksHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/webhooks", "Invalid webhook ID")
+		flashError(w, r, h.renderer, redirectAdminWebhooks, "Invalid webhook ID")
 		return
 	}
 
@@ -306,7 +306,7 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf("/admin/webhooks/%d", id)) {
+	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf(redirectAdminWebhooksID, id)) {
 		return
 	}
 
@@ -348,12 +348,12 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to update webhook", "error", err)
-		flashError(w, r, h.renderer, fmt.Sprintf("/admin/webhooks/%d", id), "Error updating webhook")
+		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminWebhooksID, id), "Error updating webhook")
 		return
 	}
 
 	slog.Info("webhook updated", "webhook_id", id, "updated_by", middleware.GetUserID(r))
-	flashSuccess(w, r, h.renderer, "/admin/webhooks", "Webhook updated successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminWebhooks, "Webhook updated successfully")
 }
 
 // Delete handles DELETE /admin/webhooks/{id} - deletes a webhook.
@@ -384,7 +384,7 @@ func (h *WebhooksHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flashSuccess(w, r, h.renderer, "/admin/webhooks", "Webhook deleted successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminWebhooks, "Webhook deleted successfully")
 }
 
 // Deliveries handles GET /admin/webhooks/{id}/deliveries - displays delivery history.
@@ -394,7 +394,7 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/webhooks", "Invalid webhook ID")
+		flashError(w, r, h.renderer, redirectAdminWebhooks, "Invalid webhook ID")
 		return
 	}
 
@@ -431,7 +431,7 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 		Webhook:    webhook,
 		Deliveries: deliveries,
 		TotalCount: totalCount,
-		Pagination: BuildAdminPagination(page, int(totalCount), DeliveriesPerPage, fmt.Sprintf("/admin/webhooks/%d/deliveries", id), r.URL.Query()),
+		Pagination: BuildAdminPagination(page, int(totalCount), DeliveriesPerPage, fmt.Sprintf(redirectAdminWebhooksIDDeliveries, id), r.URL.Query()),
 	}
 
 	h.renderer.RenderPage(w, r, "admin/webhooks_deliveries", render.TemplateData{
@@ -439,10 +439,10 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.webhooks"), URL: "/admin/webhooks"},
-			{Label: webhook.Name, URL: fmt.Sprintf("/admin/webhooks/%d", id)},
-			{Label: i18n.T(lang, "webhooks.deliveries_title"), URL: fmt.Sprintf("/admin/webhooks/%d/deliveries", id), Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.webhooks"), URL: redirectAdminWebhooks},
+			{Label: webhook.Name, URL: fmt.Sprintf(redirectAdminWebhooksID, id)},
+			{Label: i18n.T(lang, "webhooks.deliveries_title"), URL: fmt.Sprintf(redirectAdminWebhooksIDDeliveries, id), Active: true},
 		},
 	})
 }
@@ -451,7 +451,7 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 func (h *WebhooksHandler) Test(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/webhooks", "Invalid webhook ID")
+		flashError(w, r, h.renderer, redirectAdminWebhooks, "Invalid webhook ID")
 		return
 	}
 
@@ -487,12 +487,12 @@ func (h *WebhooksHandler) Test(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to create test delivery", "error", err)
-		flashError(w, r, h.renderer, fmt.Sprintf("/admin/webhooks/%d", id), "Error creating test delivery")
+		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminWebhooksID, id), "Error creating test delivery")
 		return
 	}
 
 	slog.Info("test webhook created", "webhook_id", id, "triggered_by", middleware.GetUserID(r))
-	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/webhooks/%d/deliveries", id), "Test event queued for delivery")
+	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminWebhooksIDDeliveries, id), "Test event queued for delivery")
 }
 
 // RetryDelivery handles POST /admin/webhooks/{id}/deliveries/{did}/retry - retries a delivery.
@@ -500,14 +500,14 @@ func (h *WebhooksHandler) RetryDelivery(w http.ResponseWriter, r *http.Request) 
 	webhookIDStr := chi.URLParam(r, "id")
 	webhookID, err := strconv.ParseInt(webhookIDStr, 10, 64)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/webhooks", "Invalid webhook ID")
+		flashError(w, r, h.renderer, redirectAdminWebhooks, "Invalid webhook ID")
 		return
 	}
 
 	deliveryIDStr := chi.URLParam(r, "did")
 	deliveryID, err := strconv.ParseInt(deliveryIDStr, 10, 64)
 	if err != nil {
-		flashError(w, r, h.renderer, fmt.Sprintf("/admin/webhooks/%d/deliveries", webhookID), "Invalid delivery ID")
+		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminWebhooksIDDeliveries, webhookID), "Invalid delivery ID")
 		return
 	}
 
@@ -519,12 +519,12 @@ func (h *WebhooksHandler) RetryDelivery(w http.ResponseWriter, r *http.Request) 
 	})
 	if err != nil {
 		slog.Error("failed to reset delivery", "error", err)
-		flashError(w, r, h.renderer, fmt.Sprintf("/admin/webhooks/%d/deliveries", webhookID), "Error resetting delivery")
+		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminWebhooksIDDeliveries, webhookID), "Error resetting delivery")
 		return
 	}
 
 	slog.Info("delivery reset for retry", "delivery_id", deliveryID, "webhook_id", webhookID, "reset_by", middleware.GetUserID(r))
-	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/webhooks/%d/deliveries", webhookID), "Delivery queued for retry")
+	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminWebhooksIDDeliveries, webhookID), "Delivery queued for retry")
 }
 
 // sendDeleteError sends an error response for delete operations.
@@ -539,10 +539,10 @@ func (h *WebhooksHandler) requireWebhookWithRedirect(w http.ResponseWriter, r *h
 	webhook, err := h.queries.GetWebhookByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			flashError(w, r, h.renderer, "/admin/webhooks", "Webhook not found")
+			flashError(w, r, h.renderer, redirectAdminWebhooks, "Webhook not found")
 		} else {
 			slog.Error("failed to get webhook", "error", err)
-			flashError(w, r, h.renderer, "/admin/webhooks", "Error loading webhook")
+			flashError(w, r, h.renderer, redirectAdminWebhooks, "Error loading webhook")
 		}
 		return store.Webhook{}, false
 	}
@@ -680,9 +680,9 @@ func (h *WebhooksHandler) renderNewWebhookForm(w http.ResponseWriter, r *http.Re
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.webhooks"), URL: "/admin/webhooks"},
-			{Label: i18n.T(lang, "webhooks.new"), URL: "/admin/webhooks/new", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.webhooks"), URL: redirectAdminWebhooks},
+			{Label: i18n.T(lang, "webhooks.new"), URL: redirectAdminWebhooksNew, Active: true},
 		},
 	})
 }
@@ -697,9 +697,9 @@ func (h *WebhooksHandler) renderEditWebhookForm(w http.ResponseWriter, r *http.R
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.webhooks"), URL: "/admin/webhooks"},
-			{Label: webhook.Name, URL: fmt.Sprintf("/admin/webhooks/%d", webhook.ID), Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.webhooks"), URL: redirectAdminWebhooks},
+			{Label: webhook.Name, URL: fmt.Sprintf(redirectAdminWebhooksID, webhook.ID), Active: true},
 		},
 	})
 }

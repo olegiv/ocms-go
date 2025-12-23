@@ -163,7 +163,7 @@ func validateFormInput(input *formInput) map[string]string {
 func (h *FormsHandler) parseFormIDParam(w http.ResponseWriter, r *http.Request) int64 {
 	id, err := ParseIDParam(r)
 	if err != nil {
-		flashError(w, r, h.renderer, "/admin/forms", "Invalid form ID")
+		flashError(w, r, h.renderer, redirectAdminForms, "Invalid form ID")
 		return 0
 	}
 	return id
@@ -175,10 +175,10 @@ func (h *FormsHandler) fetchFormByID(w http.ResponseWriter, r *http.Request, id 
 	form, err := h.queries.GetFormByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			flashError(w, r, h.renderer, "/admin/forms", "Form not found")
+			flashError(w, r, h.renderer, redirectAdminForms, "Form not found")
 		} else {
 			slog.Error("failed to get form", "error", err, "form_id", id)
-			flashError(w, r, h.renderer, "/admin/forms", "Error loading form")
+			flashError(w, r, h.renderer, redirectAdminForms, "Error loading form")
 		}
 		return nil
 	}
@@ -255,8 +255,8 @@ func (h *FormsHandler) getSiteName(ctx context.Context) string {
 // formsBreadcrumbs returns the base breadcrumbs for forms pages.
 func formsBreadcrumbs(lang string) []render.Breadcrumb {
 	return []render.Breadcrumb{
-		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-		{Label: i18n.T(lang, "nav.forms"), URL: "/admin/forms"},
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.forms"), URL: redirectAdminForms},
 	}
 }
 
@@ -312,8 +312,8 @@ func (h *FormsHandler) List(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.forms"), URL: "/admin/forms", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.forms"), URL: redirectAdminForms, Active: true},
 		},
 	})
 }
@@ -343,7 +343,7 @@ func (h *FormsHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	breadcrumbs := append(formsBreadcrumbs(lang),
-		render.Breadcrumb{Label: i18n.T(lang, "forms.new"), URL: "/admin/forms/new", Active: true})
+		render.Breadcrumb{Label: i18n.T(lang, "forms.new"), URL: redirectAdminFormsNew, Active: true})
 
 	h.renderFormFormPage(w, r, data, i18n.T(lang, "forms.new"), breadcrumbs)
 }
@@ -352,7 +352,7 @@ func (h *FormsHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	lang := h.renderer.GetAdminLang(r)
 
-	if !parseFormOrRedirect(w, r, h.renderer, "/admin/forms/new") {
+	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminFormsNew) {
 		return
 	}
 
@@ -379,7 +379,7 @@ func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 
 		breadcrumbs := append(formsBreadcrumbs(lang),
-			render.Breadcrumb{Label: i18n.T(lang, "forms.new"), URL: "/admin/forms/new", Active: true})
+			render.Breadcrumb{Label: i18n.T(lang, "forms.new"), URL: redirectAdminFormsNew, Active: true})
 
 		h.renderFormFormPage(w, r, data, i18n.T(lang, "forms.new"), breadcrumbs)
 		return
@@ -399,12 +399,12 @@ func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to create form", "error", err)
-		flashError(w, r, h.renderer, "/admin/forms/new", "Error creating form")
+		flashError(w, r, h.renderer, redirectAdminFormsNew, "Error creating form")
 		return
 	}
 
 	slog.Info("form created", "form_id", form.ID, "slug", form.Slug)
-	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/forms/%d", form.ID), "Form created successfully")
+	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminFormsID, form.ID), "Form created successfully")
 }
 
 // EditForm handles GET /admin/forms/{id} - displays the form builder.
@@ -437,7 +437,7 @@ func (h *FormsHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	breadcrumbs := append(formsBreadcrumbs(lang),
-		render.Breadcrumb{Label: form.Name, URL: fmt.Sprintf("/admin/forms/%d", form.ID), Active: true})
+		render.Breadcrumb{Label: form.Name, URL: fmt.Sprintf(redirectAdminFormsID, form.ID), Active: true})
 
 	h.renderFormFormPage(w, r, data, fmt.Sprintf("Edit Form - %s", form.Name), breadcrumbs)
 }
@@ -456,7 +456,7 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf("/admin/forms/%d", id)) {
+	if !parseFormOrRedirect(w, r, h.renderer, fmt.Sprintf(redirectAdminFormsID, id)) {
 		return
 	}
 
@@ -487,7 +487,7 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 
 		breadcrumbs := append(formsBreadcrumbs(lang),
-			render.Breadcrumb{Label: form.Name, URL: fmt.Sprintf("/admin/forms/%d", form.ID), Active: true})
+			render.Breadcrumb{Label: form.Name, URL: fmt.Sprintf(redirectAdminFormsID, form.ID), Active: true})
 
 		h.renderFormFormPage(w, r, data, fmt.Sprintf("Edit Form - %s", form.Name), breadcrumbs)
 		return
@@ -507,12 +507,12 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("failed to update form", "error", err, "form_id", id)
-		flashError(w, r, h.renderer, fmt.Sprintf("/admin/forms/%d", id), "Error updating form")
+		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminFormsID, id), "Error updating form")
 		return
 	}
 
 	slog.Info("form updated", "form_id", id, "updated_by", middleware.GetUserID(r))
-	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/forms/%d", id), "Form updated successfully")
+	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminFormsID, id), "Form updated successfully")
 }
 
 // Delete handles DELETE /admin/forms/{id} - deletes a form.
@@ -541,7 +541,7 @@ func (h *FormsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flashSuccess(w, r, h.renderer, "/admin/forms", "Form deleted successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminForms, "Form deleted successfully")
 }
 
 // AddFieldRequest represents the JSON request for adding a form field.
@@ -1088,12 +1088,12 @@ func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 		Submissions: submissionItems,
 		TotalCount:  totalCount,
 		UnreadCount: unreadCount,
-		Pagination:  BuildAdminPagination(page, int(totalCount), perPage, fmt.Sprintf("/admin/forms/%d/submissions", formID), r.URL.Query()),
+		Pagination:  BuildAdminPagination(page, int(totalCount), perPage, fmt.Sprintf(redirectAdminFormsIDSubmissions, formID), r.URL.Query()),
 	}
 
 	breadcrumbs := append(formsBreadcrumbs(lang),
-		render.Breadcrumb{Label: form.Name, URL: fmt.Sprintf("/admin/forms/%d", form.ID)},
-		render.Breadcrumb{Label: i18n.T(lang, "forms.submissions"), URL: fmt.Sprintf("/admin/forms/%d/submissions", form.ID), Active: true})
+		render.Breadcrumb{Label: form.Name, URL: fmt.Sprintf(redirectAdminFormsID, form.ID)},
+		render.Breadcrumb{Label: i18n.T(lang, "forms.submissions"), URL: fmt.Sprintf(redirectAdminFormsIDSubmissions, form.ID), Active: true})
 
 	h.renderer.RenderPage(w, r, "admin/forms_submissions", render.TemplateData{
 		Title:       fmt.Sprintf("Submissions - %s", form.Name),
@@ -1124,7 +1124,7 @@ func (h *FormsHandler) ViewSubmission(w http.ResponseWriter, r *http.Request) {
 	subIDStr := chi.URLParam(r, "subId")
 	subID, err := strconv.ParseInt(subIDStr, 10, 64)
 	if err != nil {
-		flashError(w, r, h.renderer, fmt.Sprintf("/admin/forms/%d/submissions", formID), "Invalid submission ID")
+		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminFormsIDSubmissions, formID), "Invalid submission ID")
 		return
 	}
 
@@ -1135,7 +1135,7 @@ func (h *FormsHandler) ViewSubmission(w http.ResponseWriter, r *http.Request) {
 
 	submission, err := h.queries.GetFormSubmissionByID(r.Context(), subID)
 	if err != nil {
-		redirectURL := fmt.Sprintf("/admin/forms/%d/submissions", formID)
+		redirectURL := fmt.Sprintf(redirectAdminFormsIDSubmissions, formID)
 		if errors.Is(err, sql.ErrNoRows) {
 			flashError(w, r, h.renderer, redirectURL, "Submission not found")
 		} else {
@@ -1147,7 +1147,7 @@ func (h *FormsHandler) ViewSubmission(w http.ResponseWriter, r *http.Request) {
 
 	// Verify submission belongs to this form
 	if submission.FormID != formID {
-		flashError(w, r, h.renderer, fmt.Sprintf("/admin/forms/%d/submissions", formID), "Submission not found")
+		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminFormsIDSubmissions, formID), "Submission not found")
 		return
 	}
 
@@ -1180,8 +1180,8 @@ func (h *FormsHandler) ViewSubmission(w http.ResponseWriter, r *http.Request) {
 	}
 
 	breadcrumbs := append(formsBreadcrumbs(lang),
-		render.Breadcrumb{Label: form.Name, URL: fmt.Sprintf("/admin/forms/%d", form.ID)},
-		render.Breadcrumb{Label: i18n.T(lang, "forms.submissions"), URL: fmt.Sprintf("/admin/forms/%d/submissions", form.ID)},
+		render.Breadcrumb{Label: form.Name, URL: fmt.Sprintf(redirectAdminFormsID, form.ID)},
+		render.Breadcrumb{Label: i18n.T(lang, "forms.submissions"), URL: fmt.Sprintf(redirectAdminFormsIDSubmissions, form.ID)},
 		render.Breadcrumb{Label: fmt.Sprintf("#%d", submission.ID), URL: fmt.Sprintf("/admin/forms/%d/submissions/%d", form.ID, submission.ID), Active: true})
 
 	h.renderer.RenderPage(w, r, "admin/forms_submission_view", render.TemplateData{
@@ -1235,7 +1235,7 @@ func (h *FormsHandler) DeleteSubmission(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	flashSuccess(w, r, h.renderer, fmt.Sprintf("/admin/forms/%d/submissions", formID), "Submission deleted successfully")
+	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminFormsIDSubmissions, formID), "Submission deleted successfully")
 }
 
 // ExportSubmissions handles POST /admin/forms/{id}/submissions/export - exports submissions as CSV.

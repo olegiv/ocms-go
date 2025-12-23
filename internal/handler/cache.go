@@ -47,7 +47,7 @@ func (h *CacheHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	lang := middleware.GetAdminLang(r)
 
 	if h.cacheManager == nil {
-		flashError(w, r, h.renderer, "/admin", "Cache system not initialized")
+		flashError(w, r, h.renderer, redirectAdmin, "Cache system not initialized")
 		return
 	}
 
@@ -68,8 +68,8 @@ func (h *CacheHandler) Stats(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.cache"), URL: "/admin/cache", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.cache"), URL: redirectAdminCache, Active: true},
 		},
 	})
 }
@@ -77,7 +77,7 @@ func (h *CacheHandler) Stats(w http.ResponseWriter, r *http.Request) {
 // Clear handles POST /admin/cache/clear - clears all caches.
 func (h *CacheHandler) Clear(w http.ResponseWriter, r *http.Request) {
 	if h.cacheManager == nil {
-		flashError(w, r, h.renderer, "/admin", "Cache system not initialized")
+		flashError(w, r, h.renderer, redirectAdmin, "Cache system not initialized")
 		return
 	}
 
@@ -90,13 +90,13 @@ func (h *CacheHandler) Clear(w http.ResponseWriter, r *http.Request) {
 		_ = h.eventService.LogCacheEvent(r.Context(), model.EventLevelInfo, "All caches cleared", middleware.GetUserIDPtr(r), nil)
 	}
 
-	flashSuccess(w, r, h.renderer, "/admin/cache", "All caches cleared successfully")
+	flashSuccess(w, r, h.renderer, redirectAdminCache, "All caches cleared successfully")
 }
 
 // ClearConfig handles POST /admin/cache/clear/config - clears config cache.
 func (h *CacheHandler) ClearConfig(w http.ResponseWriter, r *http.Request) {
 	if h.cacheManager == nil {
-		flashError(w, r, h.renderer, "/admin/cache", "Cache system not initialized")
+		flashError(w, r, h.renderer, redirectAdminCache, "Cache system not initialized")
 		return
 	}
 
@@ -109,13 +109,13 @@ func (h *CacheHandler) ClearConfig(w http.ResponseWriter, r *http.Request) {
 		_ = h.eventService.LogCacheEvent(r.Context(), model.EventLevelInfo, "Configuration cache cleared", middleware.GetUserIDPtr(r), nil)
 	}
 
-	flashSuccess(w, r, h.renderer, "/admin/cache", "Configuration cache cleared")
+	flashSuccess(w, r, h.renderer, redirectAdminCache, "Configuration cache cleared")
 }
 
 // ClearSitemap handles POST /admin/cache/clear/sitemap - clears sitemap cache.
 func (h *CacheHandler) ClearSitemap(w http.ResponseWriter, r *http.Request) {
 	if h.cacheManager == nil {
-		flashError(w, r, h.renderer, "/admin/cache", "Cache system not initialized")
+		flashError(w, r, h.renderer, redirectAdminCache, "Cache system not initialized")
 		return
 	}
 
@@ -128,5 +128,5 @@ func (h *CacheHandler) ClearSitemap(w http.ResponseWriter, r *http.Request) {
 		_ = h.eventService.LogCacheEvent(r.Context(), model.EventLevelInfo, "Sitemap cache cleared", middleware.GetUserIDPtr(r), nil)
 	}
 
-	flashSuccess(w, r, h.renderer, "/admin/cache", "Sitemap cache cleared")
+	flashSuccess(w, r, h.renderer, redirectAdminCache, "Sitemap cache cleared")
 }

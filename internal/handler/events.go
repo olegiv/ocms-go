@@ -194,7 +194,7 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 		Category:    category,
 		Levels:      []string{model.EventLevelInfo, model.EventLevelWarning, model.EventLevelError},
 		Categories:  []string{model.EventCategoryAuth, model.EventCategoryPage, model.EventCategoryUser, model.EventCategoryConfig, model.EventCategorySystem},
-		Pagination:  BuildAdminPagination(page, int(totalEvents), EventsPerPage, "/admin/events", r.URL.Query()),
+		Pagination:  BuildAdminPagination(page, int(totalEvents), EventsPerPage, redirectAdminEvents, r.URL.Query()),
 	}
 
 	h.renderer.RenderPage(w, r, "admin/events", render.TemplateData{
@@ -202,8 +202,8 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.event_log"), URL: "/admin/events", Active: true},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.event_log"), URL: redirectAdminEvents, Active: true},
 		},
 	})
 }

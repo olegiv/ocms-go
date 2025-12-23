@@ -76,7 +76,7 @@ func (h *WidgetsHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Get active theme
 	activeTheme := h.themeManager.GetActiveTheme()
 	if activeTheme == nil {
-		flashError(w, r, h.renderer, "/admin", "No active theme found")
+		flashError(w, r, h.renderer, redirectAdmin, "No active theme found")
 		return
 	}
 
@@ -114,7 +114,7 @@ func (h *WidgetsHandler) List(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
 			{Label: i18n.T(lang, "nav.widgets"), URL: "/admin/widgets", Active: true},
 		},
 	})

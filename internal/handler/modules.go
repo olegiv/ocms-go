@@ -60,7 +60,7 @@ func (h *ModulesHandler) List(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Data:  data,
 		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
 			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules", Active: true},
 		},
 	})

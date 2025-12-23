@@ -125,7 +125,7 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	if !parseFormOrRedirect(w, r, h.renderer, "/admin/config") {
+	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminConfig) {
 		return
 	}
 
@@ -133,7 +133,7 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 	configs, err := h.queries.ListConfig(r.Context())
 	if err != nil {
 		slog.Error("failed to list config", "error", err)
-		flashError(w, r, h.renderer, "/admin/config", i18n.T(lang, "error.loading_config"))
+		flashError(w, r, h.renderer, redirectAdminConfig, i18n.T(lang, "error.loading_config"))
 		return
 	}
 
@@ -250,7 +250,7 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("config updated", "updated_by", middleware.GetUserID(r))
-	flashSuccess(w, r, h.renderer, "/admin/config", i18n.T(lang, "msg.config_saved"))
+	flashSuccess(w, r, h.renderer, redirectAdminConfig, i18n.T(lang, "msg.config_saved"))
 }
 
 // configKeyToLabel converts a config key to a translated label.
@@ -294,8 +294,8 @@ func configKeyToDescription(key string, dbDescription string, lang string) strin
 // configBreadcrumbs returns the standard breadcrumbs for config pages.
 func configBreadcrumbs(lang string) []render.Breadcrumb {
 	return []render.Breadcrumb{
-		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-		{Label: i18n.T(lang, "config.title"), URL: "/admin/config", Active: true},
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "config.title"), URL: redirectAdminConfig, Active: true},
 	}
 }
 
