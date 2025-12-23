@@ -95,8 +95,8 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Update each config item
 	for _, cfg := range configs {
-		// Skip active_theme - managed in Themes settings
-		if cfg.Key == "active_theme" {
+		// Skip theme-related config - managed in Themes settings
+		if cfg.Key == "active_theme" || strings.HasPrefix(cfg.Key, "theme_settings_") {
 			continue
 		}
 
@@ -214,13 +214,13 @@ func (h *ConfigHandler) renderConfigPage(w http.ResponseWriter, r *http.Request,
 }
 
 // toConfigItems converts store.Config slice to ConfigItem slice.
-// It skips keys managed elsewhere (like active_theme).
+// It skips keys managed elsewhere (like active_theme and theme_settings_*).
 // If formValues is provided, it uses those values instead of database values.
 func toConfigItems(configs []store.Config, lang string, formValues map[string]string) []ConfigItem {
 	items := make([]ConfigItem, 0, len(configs))
 	for _, cfg := range configs {
-		// Skip active_theme - managed in Themes settings
-		if cfg.Key == "active_theme" {
+		// Skip theme-related config - managed in Themes settings
+		if cfg.Key == "active_theme" || strings.HasPrefix(cfg.Key, "theme_settings_") {
 			continue
 		}
 		value := cfg.Value
