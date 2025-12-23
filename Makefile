@@ -1,4 +1,23 @@
-make.PHONY: run stop restart build test clean migrate-up migrate-down migrate-status migrate-create assets dev sqlc
+make.PHONY: run stop restart build build-prod build-linux-amd64 build-darwin-arm64 build-all-platforms test clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc
+
+# Build variables
+BINARY_NAME=ocms
+BUILD_DIR=bin
+GO=go
+GOFLAGS=-v
+MAIN_DIR=./cmd/ocms
+
+# Version info from git
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_TIME ?= $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+# Linker flags for version injection
+LDFLAGS_VERSION=-X main.version=$(VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.buildTime=$(BUILD_TIME)
+
+# Database migrations (using goose CLI)
+MIGRATIONS_DIR := internal/store/migrations
+DB_PATH := ./data/ocms.db
 
 # Build assets (SCSS to CSS)
 assets:
@@ -6,11 +25,11 @@ assets:
 
 # Development server with asset build
 dev: assets
-	go run ./cmd/ocms
+	go run $(MAIN_DIR)
 
 # Development server (without asset build)
 run:
-	go run ./cmd/ocms
+	go run $(MAIN_DIR)
 
 # Stop development server
 stop:
@@ -20,9 +39,34 @@ stop:
 # Restart development server
 restart: stop dev
 
-# Build production binary
+# Build the application
 build:
-	go build -o bin/ocms ./cmd/ocms
+	@echo "Building $(BINARY_NAME) $(VERSION)..."
+	@mkdir -p $(BUILD_DIR)
+	$(GO) build $(GOFLAGS) -ldflags="$(LDFLAGS_VERSION)" -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_DIR)
+
+# Build with optimizations (smaller binary)
+build-prod:
+	@echo "Building $(BINARY_NAME) $(VERSION) for production..."
+	@mkdir -p $(BUILD_DIR)
+	$(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_DIR)
+
+# Build for Linux AMD64 (Debian 12/Ubuntu 24)
+build-linux-amd64:
+	@echo "Building $(BINARY_NAME) $(VERSION) for Linux AMD64..."
+	@mkdir -p $(BUILD_DIR)
+	GOOS=linux GOARCH=amd64 $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 $(MAIN_DIR)
+
+# Build for macOS ARM64 (Apple Silicon)
+build-darwin-arm64:
+	@echo "Building $(BINARY_NAME) $(VERSION) for macOS ARM64..."
+	@mkdir -p $(BUILD_DIR)
+	GOOS=darwin GOARCH=arm64 $(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 $(MAIN_DIR)
+
+# Build for all platforms
+build-all-platforms: build-linux-amd64 build-darwin-arm64
+	@echo "All platform builds complete!"
+	@ls -lh $(BUILD_DIR)/$(BINARY_NAME)-*
 
 # Run tests
 test:
@@ -30,11 +74,11 @@ test:
 
 # Clean build artifacts
 clean:
-	rm -rf bin/ data/*.db
+	rm -rf bin/
 
-# Database migrations (using goose CLI)
-MIGRATIONS_DIR := internal/store/migrations
-DB_PATH := ./data/ocms.db
+# Clean DB
+clean-db:
+	rm -rf data/*.db
 
 migrate-up:
 	goose -dir $(MIGRATIONS_DIR) sqlite3 $(DB_PATH) up

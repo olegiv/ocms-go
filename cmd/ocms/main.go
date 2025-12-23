@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"flag"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -41,7 +42,50 @@ import (
 	"ocms-go/web"
 )
 
+// Version information - injected at build time via ldflags
+var (
+	version   = "dev"
+	gitCommit = "unknown"
+	buildTime = "unknown"
+)
+
 func main() {
+	// Parse CLI flags
+	showVersion := flag.Bool("version", false, "Show version information")
+	flag.BoolVar(showVersion, "v", false, "Show version information (shorthand)")
+	showHelp := flag.Bool("help", false, "Show help information")
+	flag.BoolVar(showHelp, "h", false, "Show help information (shorthand)")
+
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "oCMS - Open Content Management System\n\n")
+		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nEnvironment Variables:\n")
+		fmt.Fprintf(os.Stderr, "  OCMS_SESSION_SECRET    Session encryption key (required, min 32 bytes)\n")
+		fmt.Fprintf(os.Stderr, "  OCMS_DB_PATH           SQLite database path (default: ./data/ocms.db)\n")
+		fmt.Fprintf(os.Stderr, "  OCMS_SERVER_PORT       Server port (default: 8080)\n")
+		fmt.Fprintf(os.Stderr, "  OCMS_ENV               Environment: development|production (default: development)\n")
+		fmt.Fprintf(os.Stderr, "  OCMS_THEMES_DIR        Themes directory (default: ./themes)\n")
+		fmt.Fprintf(os.Stderr, "  OCMS_ACTIVE_THEME      Active theme name (default: default)\n")
+		fmt.Fprintf(os.Stderr, "  OCMS_REDIS_URL         Redis URL for distributed caching (optional)\n")
+		fmt.Fprintf(os.Stderr, "\nFor more information, see: https://github.com/olegiv/ocms-go\n")
+	}
+
+	flag.Parse()
+
+	// Handle -h/-help flag
+	if *showHelp {
+		flag.Usage()
+		os.Exit(0)
+	}
+
+	// Handle -v/-version flag
+	if *showVersion {
+		fmt.Printf("ocms %s (commit: %s, built: %s)\n", version, gitCommit, buildTime)
+		os.Exit(0)
+	}
+
 	if err := run(); err != nil {
 		slog.Error("application error", "error", err)
 		os.Exit(1)
