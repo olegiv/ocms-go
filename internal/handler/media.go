@@ -837,27 +837,16 @@ func (h *MediaHandler) API(w http.ResponseWriter, r *http.Request) {
 		})
 		// For search, total is approximated by result count
 		totalCount = int64(len(mediaList))
-	} else if typeFilter == "image" {
+	} else if mimePattern := mimePatternForType(typeFilter); mimePattern != "" {
 		mediaList, totalCount, err = ListAndCount(
 			func() ([]store.Medium, error) {
 				return h.queries.ListMediaByType(r.Context(), store.ListMediaByTypeParams{
-					MimeType: "image/%",
+					MimeType: mimePattern,
 					Limit:    int64(limit),
 					Offset:   offset,
 				})
 			},
-			func() (int64, error) { return h.queries.CountMediaByType(r.Context(), "image/%") },
-		)
-	} else if typeFilter == "document" {
-		mediaList, totalCount, err = ListAndCount(
-			func() ([]store.Medium, error) {
-				return h.queries.ListMediaByType(r.Context(), store.ListMediaByTypeParams{
-					MimeType: "application/%",
-					Limit:    int64(limit),
-					Offset:   offset,
-				})
-			},
-			func() (int64, error) { return h.queries.CountMediaByType(r.Context(), "application/%") },
+			func() (int64, error) { return h.queries.CountMediaByType(r.Context(), mimePattern) },
 		)
 	} else {
 		mediaList, totalCount, err = ListAndCount(
@@ -949,6 +938,18 @@ func (h *MediaHandler) requireFolderWithError(w http.ResponseWriter, r *http.Req
 // IsImageMime checks if the MIME type is an image.
 func IsImageMime(mimeType string) bool {
 	return strings.HasPrefix(mimeType, "image/")
+}
+
+// mimePatternForType returns the MIME type pattern for a media type filter.
+func mimePatternForType(typeFilter string) string {
+	switch typeFilter {
+	case "image":
+		return "image/%"
+	case "document":
+		return "application/%"
+	default:
+		return ""
+	}
 }
 
 func getTypeIcon(mimeType string) string {
