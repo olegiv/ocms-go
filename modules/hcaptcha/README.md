@@ -44,9 +44,9 @@ OCMS_HCAPTCHA_SECRET_KEY=your-secret-key
 
 Environment variables override database settings for keys.
 
-## Test Keys
+## Test Keys (Defaults)
 
-For development and testing, use hCaptcha's test keys:
+hCaptcha's test keys are used as defaults when no keys are configured:
 
 | Key | Value |
 |-----|-------|
@@ -54,6 +54,8 @@ For development and testing, use hCaptcha's test keys:
 | Secret Key | `0x0000000000000000000000000000000000000000` |
 
 With test keys, the widget auto-passes without showing a challenge.
+
+This means you can enable hCaptcha immediately in development without configuring any keys. Just enable it in the admin interface and it will work. Replace with your own keys from [hcaptcha.com](https://www.hcaptcha.com/) for production use.
 
 ## Template Functions
 
@@ -116,13 +118,15 @@ Settings are stored in a single-row table:
 CREATE TABLE hcaptcha_settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     enabled INTEGER NOT NULL DEFAULT 0,
-    site_key TEXT NOT NULL DEFAULT '',
-    secret_key TEXT NOT NULL DEFAULT '',
+    site_key TEXT NOT NULL DEFAULT '10000000-ffff-ffff-ffff-000000000001',
+    secret_key TEXT NOT NULL DEFAULT '0x0000000000000000000000000000000000000000',
     theme TEXT NOT NULL DEFAULT 'light',
     size TEXT NOT NULL DEFAULT 'normal',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ```
+
+Note: Default values are hCaptcha test keys for development convenience.
 
 ## Module Structure
 
