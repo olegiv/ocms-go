@@ -28,6 +28,7 @@
         {"id": "hcaptcha.error_verification", "message": "Captcha verification failed. Please try again.", "translation": "Captcha verification failed. Please try again."},
         {"id": "hcaptcha.error_invalid", "message": "Captcha verification failed. Please try again.", "translation": "Captcha verification failed. Please try again."},
         {"id": "hcaptcha.env_override_notice", "message": "Note: Keys can be overridden via environment variables", "translation": "Note: Keys can be overridden via OCMS_HCAPTCHA_SITE_KEY and OCMS_HCAPTCHA_SECRET_KEY environment variables"},
+        {"id": "hcaptcha.test_keys_notice", "message": "Test keys are used by default", "translation": "Default keys are hCaptcha test keys that always pass verification. Replace with your own keys for production use."},
         {"id": "hcaptcha.get_keys", "message": "Get your keys at hcaptcha.com", "translation": "Get your keys at hcaptcha.com"}
     ]
 }

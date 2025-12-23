@@ -28,6 +28,7 @@
         {"id": "hcaptcha.error_verification", "message": "Captcha verification failed. Please try again.", "translation": "Проверка капчи не удалась. Попробуйте снова."},
         {"id": "hcaptcha.error_invalid", "message": "Captcha verification failed. Please try again.", "translation": "Проверка капчи не удалась. Попробуйте снова."},
         {"id": "hcaptcha.env_override_notice", "message": "Note: Keys can be overridden via environment variables", "translation": "Примечание: Ключи можно переопределить через переменные окружения OCMS_HCAPTCHA_SITE_KEY и OCMS_HCAPTCHA_SECRET_KEY"},
+        {"id": "hcaptcha.test_keys_notice", "message": "Test keys are used by default", "translation": "По умолчанию используются тестовые ключи hCaptcha, которые всегда проходят проверку. Замените на свои ключи для продакшена."},
         {"id": "hcaptcha.get_keys", "message": "Get your keys at hcaptcha.com", "translation": "Получите ключи на hcaptcha.com"}
     ]
 }

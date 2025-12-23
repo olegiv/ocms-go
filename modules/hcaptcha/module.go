@@ -156,12 +156,13 @@ func (m *Module) Migrations() []module.Migration {
 			Version:     1,
 			Description: "Create hcaptcha_settings table",
 			Up: func(db *sql.DB) error {
+				// Use test keys as defaults for development
 				_, err := db.Exec(`
 					CREATE TABLE IF NOT EXISTS hcaptcha_settings (
 						id INTEGER PRIMARY KEY CHECK (id = 1),
 						enabled INTEGER NOT NULL DEFAULT 0,
-						site_key TEXT NOT NULL DEFAULT '',
-						secret_key TEXT NOT NULL DEFAULT '',
+						site_key TEXT NOT NULL DEFAULT '` + TestSiteKey + `',
+						secret_key TEXT NOT NULL DEFAULT '` + TestSecretKey + `',
 						theme TEXT NOT NULL DEFAULT 'light',
 						size TEXT NOT NULL DEFAULT 'normal',
 						updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP

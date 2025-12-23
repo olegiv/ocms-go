@@ -105,15 +105,15 @@ func TestLoadSettings(t *testing.T) {
 		t.Fatalf("loadSettings: %v", err)
 	}
 
-	// Default values
+	// Default values (test keys are used as defaults)
 	if settings.Enabled {
 		t.Error("Enabled should be false by default")
 	}
-	if settings.SiteKey != "" {
-		t.Error("SiteKey should be empty by default")
+	if settings.SiteKey != TestSiteKey {
+		t.Errorf("SiteKey = %q, want test key %q", settings.SiteKey, TestSiteKey)
 	}
-	if settings.SecretKey != "" {
-		t.Error("SecretKey should be empty by default")
+	if settings.SecretKey != TestSecretKey {
+		t.Errorf("SecretKey = %q, want test key %q", settings.SecretKey, TestSecretKey)
 	}
 	if settings.Theme != "light" {
 		t.Errorf("Theme = %q, want 'light'", settings.Theme)

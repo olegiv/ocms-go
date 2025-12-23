@@ -8,6 +8,14 @@ import (
 	"strings"
 )
 
+// hCaptcha test/debug keys for development.
+// These always pass verification without showing a challenge.
+// See: https://docs.hcaptcha.com/#integration-testing-test-keys
+const (
+	TestSiteKey   = "10000000-ffff-ffff-ffff-000000000001"
+	TestSecretKey = "0x0000000000000000000000000000000000000000"
+)
+
 // Settings holds the hCaptcha configuration.
 type Settings struct {
 	Enabled   bool
@@ -29,9 +37,22 @@ func loadSettings(db *sql.DB) (*Settings, error) {
 	err := row.Scan(&enabled, &s.SiteKey, &s.SecretKey, &s.Theme, &s.Size)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return &Settings{Theme: "light", Size: "normal"}, nil
+			return &Settings{
+				SiteKey:   TestSiteKey,
+				SecretKey: TestSecretKey,
+				Theme:     "light",
+				Size:      "normal",
+			}, nil
 		}
 		return nil, fmt.Errorf("scanning hCaptcha settings: %w", err)
+	}
+
+	// Use test keys as defaults if no keys are configured
+	if s.SiteKey == "" {
+		s.SiteKey = TestSiteKey
+	}
+	if s.SecretKey == "" {
+		s.SecretKey = TestSecretKey
 	}
 
 	s.Enabled = enabled == 1

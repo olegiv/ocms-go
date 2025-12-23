@@ -83,9 +83,9 @@ Failure: Show error, stay on login page
 
 ## Testing
 
-### Test Keys
+### Test Keys (Defaults)
 
-hCaptcha provides test keys for development and testing:
+hCaptcha provides test keys for development and testing. **These are used as defaults** when no keys are configured:
 
 | Key Type | Value |
 |----------|-------|
@@ -97,14 +97,20 @@ With test keys:
 - No actual challenge is shown
 - Verification always succeeds
 
-### Using Test Keys
+This means you can enable hCaptcha immediately in development without setting up a real hCaptcha account. Just enable it in the admin interface and it will work with the test keys.
+
+### Using Custom Keys
+
+To use your own production keys, either set them via environment variables:
 
 ```bash
-OCMS_HCAPTCHA_SITE_KEY="10000000-ffff-ffff-ffff-000000000001" \
-OCMS_HCAPTCHA_SECRET_KEY="0x0000000000000000000000000000000000000000" \
+OCMS_HCAPTCHA_SITE_KEY="your-site-key" \
+OCMS_HCAPTCHA_SECRET_KEY="your-secret-key" \
 OCMS_SESSION_SECRET=your-secret-key \
 ./ocms
 ```
+
+Or configure them in the admin interface at **Modules > hCaptcha**.
 
 ## Error Messages
 
