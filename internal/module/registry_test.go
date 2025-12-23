@@ -114,8 +114,8 @@ func TestGet(t *testing.T) {
 
 	// Get existing module
 	found, ok := r.Get("gettest")
-	if !ok {
-		t.Error("expected to find module")
+	if !ok || found == nil {
+		t.Fatal("expected to find module")
 	}
 	if found.Name() != "gettest" {
 		t.Errorf("expected name 'gettest', got %s", found.Name())

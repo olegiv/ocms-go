@@ -105,7 +105,10 @@ func (r *Registry) InitAll(ctx *Context) error {
 
 	// Finally, initialize modules in order
 	for _, name := range r.order {
-		m := r.modules[name]
+		m, ok := r.modules[name]
+		if !ok || m == nil {
+			return fmt.Errorf("module %q not found in registry", name)
+		}
 		r.logger.Info("initializing module", "name", name, "active", r.activeStatus[name])
 
 		if err := m.Init(ctx); err != nil {
@@ -126,7 +129,10 @@ func (r *Registry) InitAll(ctx *Context) error {
 // checkDependencies verifies that all module dependencies are registered.
 func (r *Registry) checkDependencies() error {
 	for _, name := range r.order {
-		m := r.modules[name]
+		m, ok := r.modules[name]
+		if !ok || m == nil {
+			return fmt.Errorf("module %q not found in registry", name)
+		}
 		for _, dep := range m.Dependencies() {
 			if _, ok := r.modules[dep]; !ok {
 				return fmt.Errorf("module %q depends on %q which is not registered", name, dep)
@@ -145,7 +151,10 @@ func (r *Registry) runAllMigrations(db *sql.DB) error {
 
 	// Run migrations for each module
 	for _, name := range r.order {
-		m := r.modules[name]
+		m, ok := r.modules[name]
+		if !ok || m == nil {
+			return fmt.Errorf("module %q not found in registry", name)
+		}
 		migrations := m.Migrations()
 		if len(migrations) == 0 {
 			continue
@@ -324,7 +333,10 @@ func (r *Registry) ListSidebarModules() []render.SidebarModule {
 		if !r.activeStatus[name] || !r.sidebarStatus[name] {
 			continue
 		}
-		m := r.modules[name]
+		m, ok := r.modules[name]
+		if !ok || m == nil {
+			continue
+		}
 		if m.AdminURL() == "" {
 			continue
 		}
@@ -371,7 +383,11 @@ func (r *Registry) ShutdownAll() error {
 	// Shutdown in reverse order
 	for i := len(r.order) - 1; i >= 0; i-- {
 		name := r.order[i]
-		m := r.modules[name]
+		m, ok := r.modules[name]
+		if !ok || m == nil {
+			r.logger.Warn("module not found during shutdown", "name", name)
+			continue
+		}
 
 		r.logger.Info("shutting down module", "name", name)
 
@@ -394,7 +410,10 @@ func (r *Registry) routeAllWithFunc(router chi.Router, isAdmin bool, registerFun
 	defer r.mu.RUnlock()
 
 	for _, name := range r.order {
-		m := r.modules[name]
+		m, ok := r.modules[name]
+		if !ok || m == nil {
+			continue
+		}
 		moduleName := name // capture for closure
 
 		// Create a sub-router with middleware that checks active status
@@ -454,7 +473,10 @@ func (r *Registry) AllTemplateFuncs() template.FuncMap {
 		if exists && !active {
 			continue
 		}
-		m := r.modules[name]
+		m, ok := r.modules[name]
+		if !ok || m == nil {
+			continue
+		}
 		for k, v := range m.TemplateFuncs() {
 			funcs[k] = v
 		}
@@ -491,7 +513,10 @@ func (r *Registry) ListInfo() []Info {
 
 	infos := make([]Info, 0, len(r.order))
 	for _, name := range r.order {
-		m := r.modules[name]
+		m, ok := r.modules[name]
+		if !ok || m == nil {
+			continue
+		}
 		migrations := m.Migrations()
 		migrationCount := len(migrations)
 		appliedCount := 0

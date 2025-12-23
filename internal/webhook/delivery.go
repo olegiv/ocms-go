@@ -181,6 +181,13 @@ func (d *Dispatcher) attemptDelivery(ctx context.Context, delivery *QueuedDelive
 			ShouldRetry: true, // Network error, retry
 		}
 	}
+	if resp == nil {
+		return DeliveryResult{
+			Success:     false,
+			Error:       fmt.Errorf("nil response from server"),
+			ShouldRetry: true,
+		}
+	}
 	defer func() { _ = resp.Body.Close() }()
 
 	// Read response body (limited to MaxResponseLen)

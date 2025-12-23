@@ -183,7 +183,10 @@ func TestGetTheme(t *testing.T) {
 
 	theme, err := m.GetTheme("gettest")
 	if err != nil {
-		t.Errorf("GetTheme: %v", err)
+		t.Fatalf("GetTheme: %v", err)
+	}
+	if theme == nil {
+		t.Fatal("GetTheme returned nil theme")
 	}
 	if theme.Config.Name != "Get Test" {
 		t.Errorf("theme.Config.Name = %s, want Get Test", theme.Config.Name)
@@ -243,7 +246,10 @@ func TestReloadTheme(t *testing.T) {
 		t.Fatalf("LoadThemes: %v", err)
 	}
 
-	theme, _ := m.GetTheme("reload")
+	theme, err := m.GetTheme("reload")
+	if err != nil || theme == nil {
+		t.Fatalf("GetTheme failed: %v", err)
+	}
 	if theme.Config.Name != "Original" {
 		t.Errorf("initial name = %s, want Original", theme.Config.Name)
 	}
@@ -259,7 +265,10 @@ func TestReloadTheme(t *testing.T) {
 		t.Fatalf("ReloadTheme: %v", err)
 	}
 
-	theme, _ = m.GetTheme("reload")
+	theme, err = m.GetTheme("reload")
+	if err != nil || theme == nil {
+		t.Fatalf("GetTheme after reload failed: %v", err)
+	}
 	if theme.Config.Name != "Updated" {
 		t.Errorf("updated name = %s, want Updated", theme.Config.Name)
 	}
@@ -384,7 +393,10 @@ func TestThemeWithSettings(t *testing.T) {
 		t.Fatalf("LoadThemes: %v", err)
 	}
 
-	theme, _ := m.GetTheme("settings")
+	theme, err := m.GetTheme("settings")
+	if err != nil || theme == nil {
+		t.Fatalf("GetTheme failed: %v", err)
+	}
 	if len(theme.Config.Settings) != 2 {
 		t.Errorf("len(Settings) = %d, want 2", len(theme.Config.Settings))
 	}
@@ -554,7 +566,10 @@ func TestLoadThemeWithoutTranslations(t *testing.T) {
 		t.Fatalf("LoadThemes: %v", err)
 	}
 
-	theme, _ := m.GetTheme("no-locales")
+	theme, err := m.GetTheme("no-locales")
+	if err != nil || theme == nil {
+		t.Fatalf("GetTheme failed: %v", err)
+	}
 	if theme.Translations != nil {
 		t.Error("expected translations to be nil for theme without locales")
 	}
@@ -645,7 +660,10 @@ func TestInvalidThemeLocaleJson(t *testing.T) {
 		t.Fatalf("LoadThemes: %v", err)
 	}
 
-	theme, _ := m.GetTheme("invalid-locale")
+	theme, err := m.GetTheme("invalid-locale")
+	if err != nil || theme == nil {
+		t.Fatalf("GetTheme failed: %v", err)
+	}
 	if len(theme.Translations) > 0 {
 		t.Error("expected no translations loaded for theme with invalid locale")
 	}
