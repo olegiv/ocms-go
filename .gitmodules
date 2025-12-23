@@ -1,0 +1,3 @@
+[submodule ".claude/shared"]
+	path = .claude/shared
+	url = https://github.com/olegiv/claude-code-support-tools.git
