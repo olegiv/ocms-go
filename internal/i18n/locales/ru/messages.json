@@ -3053,6 +3053,11 @@
             "translation": "Включить режим обслуживания"
         },
         {
+            "id": "config.enter_value_for",
+            "message": "Enter value for",
+            "translation": "Введите значение для"
+        },
+        {
             "id": "error.invalid_form",
             "message": "Invalid form data",
             "translation": "Неверные данные формы"

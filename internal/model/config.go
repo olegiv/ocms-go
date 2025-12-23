@@ -20,6 +20,22 @@ const (
 	ConfigKeyPostsPerPage    = "posts_per_page"
 )
 
+// TranslatableConfigKeys is the list of config keys that support per-language translations.
+var TranslatableConfigKeys = []string{
+	ConfigKeySiteName,
+	ConfigKeySiteDescription,
+}
+
+// IsTranslatableConfigKey checks if a config key supports translations.
+func IsTranslatableConfigKey(key string) bool {
+	for _, k := range TranslatableConfigKeys {
+		if k == key {
+			return true
+		}
+	}
+	return false
+}
+
 // Config represents a site configuration item.
 type Config struct {
 	Key         string

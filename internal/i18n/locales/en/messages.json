@@ -3568,6 +3568,11 @@
             "translation": "Enable maintenance mode"
         },
         {
+            "id": "config.enter_value_for",
+            "message": "Enter value for",
+            "translation": "Enter value for"
+        },
+        {
             "id": "error.invalid_form",
             "message": "Invalid form data",
             "translation": "Invalid form data"

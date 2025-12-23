@@ -213,7 +213,7 @@ func (q *Queries) LanguageCodeExistsExcluding(ctx context.Context, arg LanguageC
 }
 
 const listActiveLanguages = `-- name: ListActiveLanguages :many
-SELECT id, code, name, native_name, is_default, is_active, direction, position, created_at, updated_at FROM languages WHERE is_active = 1 ORDER BY position ASC, name ASC
+SELECT id, code, name, native_name, is_default, is_active, direction, position, created_at, updated_at FROM languages WHERE is_active = 1 ORDER BY position, name
 `
 
 func (q *Queries) ListActiveLanguages(ctx context.Context) ([]Language, error) {
@@ -221,7 +221,7 @@ func (q *Queries) ListActiveLanguages(ctx context.Context) ([]Language, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Language{}
 	for rows.Next() {
 		var i Language
@@ -251,7 +251,7 @@ func (q *Queries) ListActiveLanguages(ctx context.Context) ([]Language, error) {
 }
 
 const listLanguages = `-- name: ListLanguages :many
-SELECT id, code, name, native_name, is_default, is_active, direction, position, created_at, updated_at FROM languages ORDER BY position ASC, name ASC
+SELECT id, code, name, native_name, is_default, is_active, direction, position, created_at, updated_at FROM languages ORDER BY position, name
 `
 
 func (q *Queries) ListLanguages(ctx context.Context) ([]Language, error) {
@@ -259,7 +259,7 @@ func (q *Queries) ListLanguages(ctx context.Context) ([]Language, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Language{}
 	for rows.Next() {
 		var i Language

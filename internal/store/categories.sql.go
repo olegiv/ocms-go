@@ -174,7 +174,7 @@ const getCategoriesForPage = `-- name: GetCategoriesForPage :many
 SELECT c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.created_at, c.updated_at, c.language_id FROM categories c
 INNER JOIN page_categories pc ON pc.category_id = c.id
 WHERE pc.page_id = ?
-ORDER BY c.name ASC
+ORDER BY c.name
 `
 
 func (q *Queries) GetCategoriesForPage(ctx context.Context, pageID int64) ([]Category, error) {
@@ -182,7 +182,7 @@ func (q *Queries) GetCategoriesForPage(ctx context.Context, pageID int64) ([]Cat
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Category{}
 	for rows.Next() {
 		var i Category
@@ -242,7 +242,7 @@ LEFT JOIN (
     AND (t.entity_id = ? OR t.translation_id = ?)
 ) c ON c.language_id = l.id
 WHERE l.is_active = 1
-ORDER BY l.position ASC
+ORDER BY l.position
 `
 
 type GetCategoryAvailableTranslationsParams struct {
@@ -275,7 +275,7 @@ func (q *Queries) GetCategoryAvailableTranslations(ctx context.Context, arg GetC
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetCategoryAvailableTranslationsRow{}
 	for rows.Next() {
 		var i GetCategoryAvailableTranslationsRow
@@ -370,7 +370,7 @@ func (q *Queries) GetCategoryPath(ctx context.Context, id int64) ([]GetCategoryP
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetCategoryPathRow{}
 	for rows.Next() {
 		var i GetCategoryPathRow
@@ -398,8 +398,8 @@ const getCategoryUsageCounts = `-- name: GetCategoryUsageCounts :many
 SELECT c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.created_at, c.updated_at, c.language_id, COUNT(pc.page_id) as usage_count
 FROM categories c
 LEFT JOIN page_categories pc ON pc.category_id = c.id
-GROUP BY c.id
-ORDER BY c.position ASC, c.name ASC
+GROUP BY c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.language_id, c.created_at, c.updated_at
+ORDER BY c.position, c.name
 `
 
 type GetCategoryUsageCountsRow struct {
@@ -420,7 +420,7 @@ func (q *Queries) GetCategoryUsageCounts(ctx context.Context) ([]GetCategoryUsag
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetCategoryUsageCountsRow{}
 	for rows.Next() {
 		var i GetCategoryUsageCountsRow
@@ -458,8 +458,8 @@ SELECT
 FROM categories c
 LEFT JOIN page_categories pc ON pc.category_id = c.id
 LEFT JOIN languages l ON l.id = c.language_id
-GROUP BY c.id
-ORDER BY c.position ASC, c.name ASC
+GROUP BY c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.language_id, c.created_at, c.updated_at, l.code, l.name
+ORDER BY c.position, c.name
 `
 
 type GetCategoryUsageCountsWithLanguageRow struct {
@@ -482,7 +482,7 @@ func (q *Queries) GetCategoryUsageCountsWithLanguage(ctx context.Context) ([]Get
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetCategoryUsageCountsWithLanguageRow{}
 	for rows.Next() {
 		var i GetCategoryUsageCountsWithLanguageRow
@@ -579,7 +579,7 @@ func (q *Queries) GetDescendantIDs(ctx context.Context, parentID sql.NullInt64) 
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []int64{}
 	for rows.Next() {
 		var id int64
@@ -598,7 +598,7 @@ func (q *Queries) GetDescendantIDs(ctx context.Context, parentID sql.NullInt64) 
 }
 
 const listCategories = `-- name: ListCategories :many
-SELECT id, name, slug, description, parent_id, position, created_at, updated_at, language_id FROM categories ORDER BY position ASC, name ASC
+SELECT id, name, slug, description, parent_id, position, created_at, updated_at, language_id FROM categories ORDER BY position, name
 `
 
 func (q *Queries) ListCategories(ctx context.Context) ([]Category, error) {
@@ -606,7 +606,7 @@ func (q *Queries) ListCategories(ctx context.Context) ([]Category, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Category{}
 	for rows.Next() {
 		var i Category
@@ -637,7 +637,7 @@ func (q *Queries) ListCategories(ctx context.Context) ([]Category, error) {
 const listCategoriesByLanguage = `-- name: ListCategoriesByLanguage :many
 SELECT id, name, slug, description, parent_id, position, created_at, updated_at, language_id FROM categories
 WHERE language_id = ?
-ORDER BY position ASC, name ASC
+ORDER BY position, name
 `
 
 func (q *Queries) ListCategoriesByLanguage(ctx context.Context, languageID sql.NullInt64) ([]Category, error) {
@@ -645,7 +645,7 @@ func (q *Queries) ListCategoriesByLanguage(ctx context.Context, languageID sql.N
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Category{}
 	for rows.Next() {
 		var i Category
@@ -688,7 +688,7 @@ func (q *Queries) ListCategoriesForSitemap(ctx context.Context) ([]ListCategorie
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ListCategoriesForSitemapRow{}
 	for rows.Next() {
 		var i ListCategoriesForSitemapRow
@@ -713,7 +713,7 @@ SELECT
     COALESCE(l.name, '') as language_name
 FROM categories c
 LEFT JOIN languages l ON l.id = c.language_id
-ORDER BY c.position ASC, c.name ASC
+ORDER BY c.position, c.name
 `
 
 type ListCategoriesWithLanguageRow struct {
@@ -735,7 +735,7 @@ func (q *Queries) ListCategoriesWithLanguage(ctx context.Context) ([]ListCategor
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ListCategoriesWithLanguageRow{}
 	for rows.Next() {
 		var i ListCategoriesWithLanguageRow
@@ -766,7 +766,7 @@ func (q *Queries) ListCategoriesWithLanguage(ctx context.Context) ([]ListCategor
 }
 
 const listChildCategories = `-- name: ListChildCategories :many
-SELECT id, name, slug, description, parent_id, position, created_at, updated_at, language_id FROM categories WHERE parent_id = ? ORDER BY position ASC, name ASC
+SELECT id, name, slug, description, parent_id, position, created_at, updated_at, language_id FROM categories WHERE parent_id = ? ORDER BY position, name
 `
 
 func (q *Queries) ListChildCategories(ctx context.Context, parentID sql.NullInt64) ([]Category, error) {
@@ -774,7 +774,7 @@ func (q *Queries) ListChildCategories(ctx context.Context, parentID sql.NullInt6
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Category{}
 	for rows.Next() {
 		var i Category
@@ -821,7 +821,7 @@ func (q *Queries) ListPagesByCategory(ctx context.Context, arg ListPagesByCatego
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -860,7 +860,7 @@ func (q *Queries) ListPagesByCategory(ctx context.Context, arg ListPagesByCatego
 }
 
 const listRootCategories = `-- name: ListRootCategories :many
-SELECT id, name, slug, description, parent_id, position, created_at, updated_at, language_id FROM categories WHERE parent_id IS NULL ORDER BY position ASC, name ASC
+SELECT id, name, slug, description, parent_id, position, created_at, updated_at, language_id FROM categories WHERE parent_id IS NULL ORDER BY position, name
 `
 
 func (q *Queries) ListRootCategories(ctx context.Context) ([]Category, error) {
@@ -868,7 +868,7 @@ func (q *Queries) ListRootCategories(ctx context.Context) ([]Category, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Category{}
 	for rows.Next() {
 		var i Category
@@ -913,8 +913,7 @@ func (q *Queries) RemoveCategoryFromPage(ctx context.Context, arg RemoveCategory
 const searchCategories = `-- name: SearchCategories :many
 SELECT id, name, slug, description, parent_id, position, created_at, updated_at, language_id FROM categories
 WHERE name LIKE '%' || ? || '%'
-ORDER BY name ASC
-LIMIT 20
+ORDER BY name LIMIT 20
 `
 
 func (q *Queries) SearchCategories(ctx context.Context, dollar_1 sql.NullString) ([]Category, error) {
@@ -922,7 +921,7 @@ func (q *Queries) SearchCategories(ctx context.Context, dollar_1 sql.NullString)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Category{}
 	for rows.Next() {
 		var i Category

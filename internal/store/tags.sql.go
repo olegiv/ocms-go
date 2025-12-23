@@ -120,7 +120,7 @@ func (q *Queries) GetPagesForTag(ctx context.Context, arg GetPagesForTagParams) 
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -190,7 +190,7 @@ LEFT JOIN (
     AND (tr.entity_id = ? OR tr.translation_id = ?)
 ) t ON t.language_id = l.id
 WHERE l.is_active = 1
-ORDER BY l.position ASC
+ORDER BY l.position
 `
 
 type GetTagAvailableTranslationsParams struct {
@@ -223,7 +223,7 @@ func (q *Queries) GetTagAvailableTranslations(ctx context.Context, arg GetTagAva
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetTagAvailableTranslationsRow{}
 	for rows.Next() {
 		var i GetTagAvailableTranslationsRow
@@ -291,8 +291,8 @@ const getTagUsageCounts = `-- name: GetTagUsageCounts :many
 SELECT t.id, t.name, t.slug, t.created_at, t.updated_at, COUNT(pt.page_id) as usage_count
 FROM tags t
 LEFT JOIN page_tags pt ON pt.tag_id = t.id
-GROUP BY t.id
-ORDER BY t.name ASC
+GROUP BY t.id, t.name, t.slug, t.created_at, t.updated_at
+ORDER BY t.name
 LIMIT ? OFFSET ?
 `
 
@@ -315,7 +315,7 @@ func (q *Queries) GetTagUsageCounts(ctx context.Context, arg GetTagUsageCountsPa
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetTagUsageCountsRow{}
 	for rows.Next() {
 		var i GetTagUsageCountsRow
@@ -349,8 +349,8 @@ SELECT
 FROM tags t
 LEFT JOIN page_tags pt ON pt.tag_id = t.id
 LEFT JOIN languages l ON l.id = t.language_id
-GROUP BY t.id
-ORDER BY t.name ASC
+GROUP BY t.id, t.name, t.slug, t.language_id, t.created_at, t.updated_at, l.code, l.name
+ORDER BY t.name
 LIMIT ? OFFSET ?
 `
 
@@ -376,7 +376,7 @@ func (q *Queries) GetTagUsageCountsWithLanguage(ctx context.Context, arg GetTagU
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetTagUsageCountsWithLanguageRow{}
 	for rows.Next() {
 		var i GetTagUsageCountsWithLanguageRow
@@ -453,7 +453,7 @@ const getTagsForPage = `-- name: GetTagsForPage :many
 SELECT t.id, t.name, t.slug, t.created_at, t.updated_at, t.language_id FROM tags t
 INNER JOIN page_tags pt ON pt.tag_id = t.id
 WHERE pt.page_id = ?
-ORDER BY t.name ASC
+ORDER BY t.name
 `
 
 func (q *Queries) GetTagsForPage(ctx context.Context, pageID int64) ([]Tag, error) {
@@ -461,7 +461,7 @@ func (q *Queries) GetTagsForPage(ctx context.Context, pageID int64) ([]Tag, erro
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Tag{}
 	for rows.Next() {
 		var i Tag
@@ -487,7 +487,7 @@ func (q *Queries) GetTagsForPage(ctx context.Context, pageID int64) ([]Tag, erro
 }
 
 const listAllTags = `-- name: ListAllTags :many
-SELECT id, name, slug, created_at, updated_at, language_id FROM tags ORDER BY name ASC
+SELECT id, name, slug, created_at, updated_at, language_id FROM tags ORDER BY name
 `
 
 func (q *Queries) ListAllTags(ctx context.Context) ([]Tag, error) {
@@ -495,7 +495,7 @@ func (q *Queries) ListAllTags(ctx context.Context) ([]Tag, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Tag{}
 	for rows.Next() {
 		var i Tag
@@ -521,7 +521,7 @@ func (q *Queries) ListAllTags(ctx context.Context) ([]Tag, error) {
 }
 
 const listTags = `-- name: ListTags :many
-SELECT id, name, slug, created_at, updated_at, language_id FROM tags ORDER BY name ASC LIMIT ? OFFSET ?
+SELECT id, name, slug, created_at, updated_at, language_id FROM tags ORDER BY name LIMIT ? OFFSET ?
 `
 
 type ListTagsParams struct {
@@ -534,7 +534,7 @@ func (q *Queries) ListTags(ctx context.Context, arg ListTagsParams) ([]Tag, erro
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Tag{}
 	for rows.Next() {
 		var i Tag
@@ -562,7 +562,7 @@ func (q *Queries) ListTags(ctx context.Context, arg ListTagsParams) ([]Tag, erro
 const listTagsByLanguage = `-- name: ListTagsByLanguage :many
 SELECT id, name, slug, created_at, updated_at, language_id FROM tags
 WHERE language_id = ?
-ORDER BY name ASC
+ORDER BY name
 `
 
 func (q *Queries) ListTagsByLanguage(ctx context.Context, languageID sql.NullInt64) ([]Tag, error) {
@@ -570,7 +570,7 @@ func (q *Queries) ListTagsByLanguage(ctx context.Context, languageID sql.NullInt
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Tag{}
 	for rows.Next() {
 		var i Tag
@@ -610,7 +610,7 @@ func (q *Queries) ListTagsForSitemap(ctx context.Context) ([]ListTagsForSitemapR
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ListTagsForSitemapRow{}
 	for rows.Next() {
 		var i ListTagsForSitemapRow
@@ -635,7 +635,7 @@ SELECT
     COALESCE(l.name, '') as language_name
 FROM tags t
 LEFT JOIN languages l ON l.id = t.language_id
-ORDER BY t.name ASC
+ORDER BY t.name
 `
 
 type ListTagsWithLanguageRow struct {
@@ -654,7 +654,7 @@ func (q *Queries) ListTagsWithLanguage(ctx context.Context) ([]ListTagsWithLangu
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ListTagsWithLanguageRow{}
 	for rows.Next() {
 		var i ListTagsWithLanguageRow
@@ -696,7 +696,7 @@ func (q *Queries) RemoveTagFromPage(ctx context.Context, arg RemoveTagFromPagePa
 }
 
 const searchTags = `-- name: SearchTags :many
-SELECT id, name, slug, created_at, updated_at, language_id FROM tags WHERE name LIKE ? ORDER BY name ASC LIMIT ?
+SELECT id, name, slug, created_at, updated_at, language_id FROM tags WHERE name LIKE ? ORDER BY name LIMIT ?
 `
 
 type SearchTagsParams struct {
@@ -709,7 +709,7 @@ func (q *Queries) SearchTags(ctx context.Context, arg SearchTagsParams) ([]Tag, 
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Tag{}
 	for rows.Next() {
 		var i Tag

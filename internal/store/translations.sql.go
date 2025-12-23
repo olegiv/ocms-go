@@ -129,7 +129,7 @@ SELECT t.id, t.entity_type, t.entity_id, t.language_id, t.translation_id, t.crea
 FROM translations t
 INNER JOIN languages l ON l.id = t.language_id
 WHERE t.entity_type = ? AND (t.entity_id = ? OR t.translation_id = ?)
-ORDER BY l.position ASC
+ORDER BY l.position
 `
 
 type GetAllTranslationsOfEntityParams struct {
@@ -155,7 +155,7 @@ func (q *Queries) GetAllTranslationsOfEntity(ctx context.Context, arg GetAllTran
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetAllTranslationsOfEntityRow{}
 	for rows.Next() {
 		var i GetAllTranslationsOfEntityRow
@@ -216,7 +216,7 @@ LEFT JOIN (
     AND p2.status = 'published'
 ) p ON p.language_id = l.id
 WHERE l.is_active = 1
-ORDER BY l.position ASC
+ORDER BY l.position
 `
 
 type GetPageAvailableTranslationsParams struct {
@@ -250,7 +250,7 @@ func (q *Queries) GetPageAvailableTranslations(ctx context.Context, arg GetPageA
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetPageAvailableTranslationsRow{}
 	for rows.Next() {
 		var i GetPageAvailableTranslationsRow
@@ -373,7 +373,7 @@ LEFT JOIN translations t ON t.language_id = l.id
     AND t.entity_type = 'page'
     AND t.entity_id = ?
 WHERE l.is_active = 1
-ORDER BY l.position ASC
+ORDER BY l.position
 `
 
 type GetPageTranslationLinksRow struct {
@@ -390,7 +390,7 @@ func (q *Queries) GetPageTranslationLinks(ctx context.Context, entityID int64) (
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetPageTranslationLinksRow{}
 	for rows.Next() {
 		var i GetPageTranslationLinksRow
@@ -572,7 +572,7 @@ FROM translations t
 INNER JOIN languages l ON l.id = t.language_id
 WHERE t.entity_type = ?
   AND (t.entity_id = ? OR t.translation_id = ?)
-ORDER BY l.position ASC
+ORDER BY l.position
 `
 
 type GetRelatedTranslationsParams struct {
@@ -599,7 +599,7 @@ func (q *Queries) GetRelatedTranslations(ctx context.Context, arg GetRelatedTran
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetRelatedTranslationsRow{}
 	for rows.Next() {
 		var i GetRelatedTranslationsRow
@@ -710,7 +710,7 @@ func (q *Queries) GetTranslationCountsBatch(ctx context.Context, entityType stri
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetTranslationCountsBatchRow{}
 	for rows.Next() {
 		var i GetTranslationCountsBatchRow
@@ -738,8 +738,8 @@ SELECT
 FROM languages l
 LEFT JOIN pages p ON p.language_id = l.id
 WHERE l.is_active = 1
-GROUP BY l.id, l.code, l.name, l.is_default
-ORDER BY l.is_default DESC, l.position ASC
+GROUP BY l.id, l.code, l.name, l.is_default, l.position
+ORDER BY l.is_default DESC, l.position
 `
 
 type GetTranslationCoverageRow struct {
@@ -756,7 +756,7 @@ func (q *Queries) GetTranslationCoverage(ctx context.Context) ([]GetTranslationC
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetTranslationCoverageRow{}
 	for rows.Next() {
 		var i GetTranslationCoverageRow
@@ -787,6 +787,7 @@ SELECT
     (SELECT COUNT(*) FROM translations WHERE entity_type = 'page') as page_translations,
     (SELECT COUNT(*) FROM translations WHERE entity_type = 'category') as category_translations,
     (SELECT COUNT(*) FROM translations WHERE entity_type = 'tag') as tag_translations
+FROM translations
 `
 
 type GetTranslationStatsRow struct {
@@ -816,7 +817,7 @@ SELECT t.id, t.entity_type, t.entity_id, t.language_id, t.translation_id, t.crea
 FROM translations t
 INNER JOIN languages l ON l.id = t.language_id
 WHERE t.entity_type = ? AND t.entity_id = ?
-ORDER BY l.position ASC
+ORDER BY l.position
 `
 
 type GetTranslationsForEntityParams struct {
@@ -841,7 +842,7 @@ func (q *Queries) GetTranslationsForEntity(ctx context.Context, arg GetTranslati
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetTranslationsForEntityRow{}
 	for rows.Next() {
 		var i GetTranslationsForEntityRow
@@ -896,7 +897,7 @@ func (q *Queries) GetTranslationsForPagesBatch(ctx context.Context) ([]GetTransl
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetTranslationsForPagesBatchRow{}
 	for rows.Next() {
 		var i GetTranslationsForPagesBatchRow
@@ -939,7 +940,7 @@ func (q *Queries) ListPagesByLanguage(ctx context.Context, arg ListPagesByLangua
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -996,7 +997,7 @@ func (q *Queries) ListPublishedPagesByLanguage(ctx context.Context, arg ListPubl
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Page{}
 	for rows.Next() {
 		var i Page

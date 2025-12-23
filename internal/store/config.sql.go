@@ -31,6 +31,29 @@ func (q *Queries) DeleteConfig(ctx context.Context, key string) error {
 	return err
 }
 
+const deleteConfigTranslation = `-- name: DeleteConfigTranslation :exec
+DELETE FROM config_translations WHERE config_key = ? AND language_id = ?
+`
+
+type DeleteConfigTranslationParams struct {
+	ConfigKey  string `json:"config_key"`
+	LanguageID int64  `json:"language_id"`
+}
+
+func (q *Queries) DeleteConfigTranslation(ctx context.Context, arg DeleteConfigTranslationParams) error {
+	_, err := q.db.ExecContext(ctx, deleteConfigTranslation, arg.ConfigKey, arg.LanguageID)
+	return err
+}
+
+const deleteConfigTranslationsForKey = `-- name: DeleteConfigTranslationsForKey :exec
+DELETE FROM config_translations WHERE config_key = ?
+`
+
+func (q *Queries) DeleteConfigTranslationsForKey(ctx context.Context, configKey string) error {
+	_, err := q.db.ExecContext(ctx, deleteConfigTranslationsForKey, configKey)
+	return err
+}
+
 const getConfig = `-- name: GetConfig :one
 SELECT "key", value, type, description, updated_at, updated_by FROM config WHERE key = ?
 `
@@ -67,6 +90,136 @@ func (q *Queries) GetConfigByKey(ctx context.Context, key string) (Config, error
 	return i, err
 }
 
+const getConfigTranslation = `-- name: GetConfigTranslation :one
+
+SELECT ct.id, ct.config_key, ct.language_id, ct.value, ct.updated_at, ct.updated_by, l.code as language_code, l.name as language_name
+FROM config_translations ct
+JOIN languages l ON l.id = ct.language_id
+WHERE ct.config_key = ? AND ct.language_id = ?
+`
+
+type GetConfigTranslationParams struct {
+	ConfigKey  string `json:"config_key"`
+	LanguageID int64  `json:"language_id"`
+}
+
+type GetConfigTranslationRow struct {
+	ID           int64         `json:"id"`
+	ConfigKey    string        `json:"config_key"`
+	LanguageID   int64         `json:"language_id"`
+	Value        string        `json:"value"`
+	UpdatedAt    time.Time     `json:"updated_at"`
+	UpdatedBy    sql.NullInt64 `json:"updated_by"`
+	LanguageCode string        `json:"language_code"`
+	LanguageName string        `json:"language_name"`
+}
+
+// Config Translations
+func (q *Queries) GetConfigTranslation(ctx context.Context, arg GetConfigTranslationParams) (GetConfigTranslationRow, error) {
+	row := q.db.QueryRowContext(ctx, getConfigTranslation, arg.ConfigKey, arg.LanguageID)
+	var i GetConfigTranslationRow
+	err := row.Scan(
+		&i.ID,
+		&i.ConfigKey,
+		&i.LanguageID,
+		&i.Value,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+		&i.LanguageCode,
+		&i.LanguageName,
+	)
+	return i, err
+}
+
+const getConfigTranslationByKeyAndLangCode = `-- name: GetConfigTranslationByKeyAndLangCode :one
+SELECT ct.id, ct.config_key, ct.language_id, ct.value, ct.updated_at, ct.updated_by, l.code as language_code, l.name as language_name
+FROM config_translations ct
+JOIN languages l ON l.id = ct.language_id
+WHERE ct.config_key = ? AND l.code = ?
+`
+
+type GetConfigTranslationByKeyAndLangCodeParams struct {
+	ConfigKey string `json:"config_key"`
+	Code      string `json:"code"`
+}
+
+type GetConfigTranslationByKeyAndLangCodeRow struct {
+	ID           int64         `json:"id"`
+	ConfigKey    string        `json:"config_key"`
+	LanguageID   int64         `json:"language_id"`
+	Value        string        `json:"value"`
+	UpdatedAt    time.Time     `json:"updated_at"`
+	UpdatedBy    sql.NullInt64 `json:"updated_by"`
+	LanguageCode string        `json:"language_code"`
+	LanguageName string        `json:"language_name"`
+}
+
+func (q *Queries) GetConfigTranslationByKeyAndLangCode(ctx context.Context, arg GetConfigTranslationByKeyAndLangCodeParams) (GetConfigTranslationByKeyAndLangCodeRow, error) {
+	row := q.db.QueryRowContext(ctx, getConfigTranslationByKeyAndLangCode, arg.ConfigKey, arg.Code)
+	var i GetConfigTranslationByKeyAndLangCodeRow
+	err := row.Scan(
+		&i.ID,
+		&i.ConfigKey,
+		&i.LanguageID,
+		&i.Value,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+		&i.LanguageCode,
+		&i.LanguageName,
+	)
+	return i, err
+}
+
+const listAllConfigTranslations = `-- name: ListAllConfigTranslations :many
+SELECT ct.id, ct.config_key, ct.language_id, ct.value, ct.updated_at, ct.updated_by, l.code as language_code, l.name as language_name
+FROM config_translations ct
+JOIN languages l ON l.id = ct.language_id
+ORDER BY ct.config_key, l.position, l.code
+`
+
+type ListAllConfigTranslationsRow struct {
+	ID           int64         `json:"id"`
+	ConfigKey    string        `json:"config_key"`
+	LanguageID   int64         `json:"language_id"`
+	Value        string        `json:"value"`
+	UpdatedAt    time.Time     `json:"updated_at"`
+	UpdatedBy    sql.NullInt64 `json:"updated_by"`
+	LanguageCode string        `json:"language_code"`
+	LanguageName string        `json:"language_name"`
+}
+
+func (q *Queries) ListAllConfigTranslations(ctx context.Context) ([]ListAllConfigTranslationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAllConfigTranslations)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAllConfigTranslationsRow{}
+	for rows.Next() {
+		var i ListAllConfigTranslationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConfigKey,
+			&i.LanguageID,
+			&i.Value,
+			&i.UpdatedAt,
+			&i.UpdatedBy,
+			&i.LanguageCode,
+			&i.LanguageName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listConfig = `-- name: ListConfig :many
 SELECT "key", value, type, description, updated_at, updated_by FROM config ORDER BY key
 `
@@ -76,7 +229,7 @@ func (q *Queries) ListConfig(ctx context.Context) ([]Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Config{}
 	for rows.Next() {
 		var i Config
@@ -87,6 +240,57 @@ func (q *Queries) ListConfig(ctx context.Context) ([]Config, error) {
 			&i.Description,
 			&i.UpdatedAt,
 			&i.UpdatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listConfigTranslations = `-- name: ListConfigTranslations :many
+SELECT ct.id, ct.config_key, ct.language_id, ct.value, ct.updated_at, ct.updated_by, l.code as language_code, l.name as language_name
+FROM config_translations ct
+JOIN languages l ON l.id = ct.language_id
+WHERE ct.config_key = ?
+ORDER BY l.position, l.code
+`
+
+type ListConfigTranslationsRow struct {
+	ID           int64         `json:"id"`
+	ConfigKey    string        `json:"config_key"`
+	LanguageID   int64         `json:"language_id"`
+	Value        string        `json:"value"`
+	UpdatedAt    time.Time     `json:"updated_at"`
+	UpdatedBy    sql.NullInt64 `json:"updated_by"`
+	LanguageCode string        `json:"language_code"`
+	LanguageName string        `json:"language_name"`
+}
+
+func (q *Queries) ListConfigTranslations(ctx context.Context, configKey string) ([]ListConfigTranslationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listConfigTranslations, configKey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListConfigTranslationsRow{}
+	for rows.Next() {
+		var i ListConfigTranslationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConfigKey,
+			&i.LanguageID,
+			&i.Value,
+			&i.UpdatedAt,
+			&i.UpdatedBy,
+			&i.LanguageCode,
+			&i.LanguageName,
 		); err != nil {
 			return nil, err
 		}
@@ -168,6 +372,44 @@ func (q *Queries) UpsertConfig(ctx context.Context, arg UpsertConfigParams) (Con
 		&i.Value,
 		&i.Type,
 		&i.Description,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+	)
+	return i, err
+}
+
+const upsertConfigTranslation = `-- name: UpsertConfigTranslation :one
+INSERT INTO config_translations (config_key, language_id, value, updated_at, updated_by)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(config_key, language_id) DO UPDATE SET
+    value = excluded.value,
+    updated_at = excluded.updated_at,
+    updated_by = excluded.updated_by
+RETURNING id, config_key, language_id, value, updated_at, updated_by
+`
+
+type UpsertConfigTranslationParams struct {
+	ConfigKey  string        `json:"config_key"`
+	LanguageID int64         `json:"language_id"`
+	Value      string        `json:"value"`
+	UpdatedAt  time.Time     `json:"updated_at"`
+	UpdatedBy  sql.NullInt64 `json:"updated_by"`
+}
+
+func (q *Queries) UpsertConfigTranslation(ctx context.Context, arg UpsertConfigTranslationParams) (ConfigTranslation, error) {
+	row := q.db.QueryRowContext(ctx, upsertConfigTranslation,
+		arg.ConfigKey,
+		arg.LanguageID,
+		arg.Value,
+		arg.UpdatedAt,
+		arg.UpdatedBy,
+	)
+	var i ConfigTranslation
+	err := row.Scan(
+		&i.ID,
+		&i.ConfigKey,
+		&i.LanguageID,
+		&i.Value,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
 	)

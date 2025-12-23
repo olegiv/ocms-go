@@ -299,7 +299,7 @@ func (q *Queries) GetFormFieldByID(ctx context.Context, id int64) (FormField, er
 }
 
 const getFormFields = `-- name: GetFormFields :many
-SELECT id, form_id, type, name, label, placeholder, help_text, options, validation, is_required, position, created_at, updated_at FROM form_fields WHERE form_id = ? ORDER BY position ASC
+SELECT id, form_id, type, name, label, placeholder, help_text, options, validation, is_required, position, created_at, updated_at FROM form_fields WHERE form_id = ? ORDER BY position
 `
 
 func (q *Queries) GetFormFields(ctx context.Context, formID int64) ([]FormField, error) {
@@ -307,7 +307,7 @@ func (q *Queries) GetFormFields(ctx context.Context, formID int64) ([]FormField,
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []FormField{}
 	for rows.Next() {
 		var i FormField
@@ -373,7 +373,7 @@ func (q *Queries) GetFormSubmissions(ctx context.Context, arg GetFormSubmissions
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []FormSubmission{}
 	for rows.Next() {
 		var i FormSubmission
@@ -426,7 +426,7 @@ func (q *Queries) GetRecentSubmissionsWithForm(ctx context.Context, limit int64)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetRecentSubmissionsWithFormRow{}
 	for rows.Next() {
 		var i GetRecentSubmissionsWithFormRow
@@ -455,7 +455,7 @@ func (q *Queries) GetRecentSubmissionsWithForm(ctx context.Context, limit int64)
 }
 
 const listForms = `-- name: ListForms :many
-SELECT id, name, slug, title, description, success_message, email_to, is_active, created_at, updated_at FROM forms ORDER BY name ASC LIMIT ? OFFSET ?
+SELECT id, name, slug, title, description, success_message, email_to, is_active, created_at, updated_at FROM forms ORDER BY name LIMIT ? OFFSET ?
 `
 
 type ListFormsParams struct {
@@ -468,7 +468,7 @@ func (q *Queries) ListForms(ctx context.Context, arg ListFormsParams) ([]Form, e
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Form{}
 	for rows.Next() {
 		var i Form

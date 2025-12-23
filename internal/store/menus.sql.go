@@ -335,7 +335,7 @@ func (q *Queries) GetMenuItemByID(ctx context.Context, id int64) (MenuItem, erro
 }
 
 const listChildMenuItems = `-- name: ListChildMenuItems :many
-SELECT id, menu_id, parent_id, title, url, target, page_id, position, css_class, is_active, created_at, updated_at FROM menu_items WHERE parent_id = ? ORDER BY position ASC
+SELECT id, menu_id, parent_id, title, url, target, page_id, position, css_class, is_active, created_at, updated_at FROM menu_items WHERE parent_id = ? ORDER BY position
 `
 
 func (q *Queries) ListChildMenuItems(ctx context.Context, parentID sql.NullInt64) ([]MenuItem, error) {
@@ -343,7 +343,7 @@ func (q *Queries) ListChildMenuItems(ctx context.Context, parentID sql.NullInt64
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []MenuItem{}
 	for rows.Next() {
 		var i MenuItem
@@ -375,7 +375,7 @@ func (q *Queries) ListChildMenuItems(ctx context.Context, parentID sql.NullInt64
 }
 
 const listMenuItems = `-- name: ListMenuItems :many
-SELECT id, menu_id, parent_id, title, url, target, page_id, position, css_class, is_active, created_at, updated_at FROM menu_items WHERE menu_id = ? ORDER BY position ASC
+SELECT id, menu_id, parent_id, title, url, target, page_id, position, css_class, is_active, created_at, updated_at FROM menu_items WHERE menu_id = ? ORDER BY position
 `
 
 func (q *Queries) ListMenuItems(ctx context.Context, menuID int64) ([]MenuItem, error) {
@@ -383,7 +383,7 @@ func (q *Queries) ListMenuItems(ctx context.Context, menuID int64) ([]MenuItem, 
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []MenuItem{}
 	for rows.Next() {
 		var i MenuItem
@@ -423,7 +423,7 @@ SELECT
 FROM menu_items mi
 LEFT JOIN pages p ON mi.page_id = p.id
 WHERE mi.menu_id = ?
-ORDER BY mi.position ASC
+ORDER BY mi.position
 `
 
 type ListMenuItemsWithPageRow struct {
@@ -449,7 +449,7 @@ func (q *Queries) ListMenuItemsWithPage(ctx context.Context, menuID int64) ([]Li
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ListMenuItemsWithPageRow{}
 	for rows.Next() {
 		var i ListMenuItemsWithPageRow
@@ -483,7 +483,7 @@ func (q *Queries) ListMenuItemsWithPage(ctx context.Context, menuID int64) ([]Li
 }
 
 const listMenus = `-- name: ListMenus :many
-SELECT id, name, slug, created_at, updated_at, language_id FROM menus ORDER BY name ASC
+SELECT id, name, slug, created_at, updated_at, language_id FROM menus ORDER BY name
 `
 
 func (q *Queries) ListMenus(ctx context.Context) ([]Menu, error) {
@@ -491,7 +491,7 @@ func (q *Queries) ListMenus(ctx context.Context) ([]Menu, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Menu{}
 	for rows.Next() {
 		var i Menu
@@ -522,7 +522,7 @@ SELECT m.id, m.name, m.slug, m.created_at, m.updated_at, m.language_id, l.code a
 FROM menus m
 LEFT JOIN languages l ON m.language_id = l.id
 WHERE m.language_id = ?
-ORDER BY m.name ASC
+ORDER BY m.name
 `
 
 type ListMenusByLanguageRow struct {
@@ -543,7 +543,7 @@ func (q *Queries) ListMenusByLanguage(ctx context.Context, languageID sql.NullIn
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ListMenusByLanguageRow{}
 	for rows.Next() {
 		var i ListMenusByLanguageRow
@@ -575,7 +575,7 @@ const listMenusWithLanguage = `-- name: ListMenusWithLanguage :many
 SELECT m.id, m.name, m.slug, m.created_at, m.updated_at, m.language_id, l.code as language_code, l.name as language_name, l.native_name as language_native_name
 FROM menus m
 LEFT JOIN languages l ON m.language_id = l.id
-ORDER BY m.name ASC
+ORDER BY m.name
 `
 
 type ListMenusWithLanguageRow struct {
@@ -595,7 +595,7 @@ func (q *Queries) ListMenusWithLanguage(ctx context.Context) ([]ListMenusWithLan
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ListMenusWithLanguageRow{}
 	for rows.Next() {
 		var i ListMenusWithLanguageRow
@@ -624,7 +624,7 @@ func (q *Queries) ListMenusWithLanguage(ctx context.Context) ([]ListMenusWithLan
 }
 
 const listTopLevelMenuItems = `-- name: ListTopLevelMenuItems :many
-SELECT id, menu_id, parent_id, title, url, target, page_id, position, css_class, is_active, created_at, updated_at FROM menu_items WHERE menu_id = ? AND parent_id IS NULL ORDER BY position ASC
+SELECT id, menu_id, parent_id, title, url, target, page_id, position, css_class, is_active, created_at, updated_at FROM menu_items WHERE menu_id = ? AND parent_id IS NULL ORDER BY position
 `
 
 func (q *Queries) ListTopLevelMenuItems(ctx context.Context, menuID int64) ([]MenuItem, error) {
@@ -632,7 +632,7 @@ func (q *Queries) ListTopLevelMenuItems(ctx context.Context, menuID int64) ([]Me
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []MenuItem{}
 	for rows.Next() {
 		var i MenuItem

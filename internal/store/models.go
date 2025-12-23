@@ -44,6 +44,15 @@ type Config struct {
 	UpdatedBy   sql.NullInt64 `json:"updated_by"`
 }
 
+type ConfigTranslation struct {
+	ID         int64         `json:"id"`
+	ConfigKey  string        `json:"config_key"`
+	LanguageID int64         `json:"language_id"`
+	Value      string        `json:"value"`
+	UpdatedAt  time.Time     `json:"updated_at"`
+	UpdatedBy  sql.NullInt64 `json:"updated_by"`
+}
+
 type Event struct {
 	ID        int64         `json:"id"`
 	Level     string        `json:"level"`
