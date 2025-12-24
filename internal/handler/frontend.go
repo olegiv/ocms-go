@@ -1532,19 +1532,8 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		}
 	}
 
-	// Load menus by slug
-	data.MainMenu = h.loadMenu("main", r.URL.Path)
-	data.FooterMenu = h.loadMenu("footer", r.URL.Path)
-	// Navigation/FooterNav are aliases for MainMenu/FooterMenu (for template compatibility)
-	data.Navigation = data.MainMenu
-	data.FooterNav = data.FooterMenu
-
-	// Load widgets for the active theme
-	if activeTheme := h.themeManager.GetActiveTheme(); activeTheme != nil {
-		data.Widgets = h.widgetService.GetAllWidgetsForTheme(ctx, activeTheme.Name)
-	}
-
-	// Load language info from middleware context
+	// Load language info from middleware context FIRST (needed for menu loading)
+	var langCode string
 	if langInfo := middleware.GetLanguage(r); langInfo != nil {
 		data.CurrentLanguage = &LanguageView{
 			ID:         langInfo.ID,
@@ -1556,6 +1545,7 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 			IsCurrent:  true,
 		}
 		data.LangCode = langInfo.Code
+		langCode = langInfo.Code
 		data.LangDirection = langInfo.Direction
 		if data.LangDirection == "" {
 			data.LangDirection = "ltr"
@@ -1582,6 +1572,18 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		}
 	}
 
+	// Load menus by slug and language
+	data.MainMenu = h.loadMenu("main", r.URL.Path, langCode)
+	data.FooterMenu = h.loadMenu("footer", r.URL.Path, langCode)
+	// Navigation/FooterNav are aliases for MainMenu/FooterMenu (for template compatibility)
+	data.Navigation = data.MainMenu
+	data.FooterNav = data.FooterMenu
+
+	// Load widgets for the active theme
+	if activeTheme := h.themeManager.GetActiveTheme(); activeTheme != nil {
+		data.Widgets = h.widgetService.GetAllWidgetsForTheme(ctx, activeTheme.Name)
+	}
+
 	// Load all active languages for language picker
 	activeLanguages, err := h.queries.ListActiveLanguages(ctx)
 	if err == nil && len(activeLanguages) > 1 {
@@ -1604,9 +1606,14 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 	return data
 }
 
-// loadMenu loads a menu by slug and marks active items.
-func (h *FrontendHandler) loadMenu(slug, currentPath string) []MenuItem {
-	items := h.menuService.GetMenu(slug)
+// loadMenu loads a menu by slug and language, and marks active items.
+func (h *FrontendHandler) loadMenu(slug, currentPath, langCode string) []MenuItem {
+	var items []service.MenuItem
+	if langCode != "" {
+		items = h.menuService.GetMenuForLanguage(slug, langCode)
+	} else {
+		items = h.menuService.GetMenu(slug)
+	}
 	if items == nil {
 		return nil
 	}
