@@ -546,11 +546,12 @@ func TestGenerateMenuItems(t *testing.T) {
 	q := store.New(db)
 	fixtures := createTestFixtures(t, db)
 
-	// Create some pages
+	languages := []store.Language{fixtures.Language}
+
+	// Create some pages with the language
 	now := time.Now()
-	var pageIDs []int64
 	for i := 0; i < 5; i++ {
-		page, err := q.CreatePage(ctx, store.CreatePageParams{
+		_, err := q.CreatePage(ctx, store.CreatePageParams{
 			Title: "Test Page", Slug: "test-page-" + string(rune('0'+i)),
 			Body: "<p>Content</p>", Status: "published", AuthorID: fixtures.User.ID,
 			LanguageID: sql.NullInt64{Int64: fixtures.Language.ID, Valid: true},
@@ -559,21 +560,20 @@ func TestGenerateMenuItems(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreatePage: %v", err)
 		}
-		pageIDs = append(pageIDs, page.ID)
 	}
 
-	// Generate menu items
-	menuItemIDs, err := m.generateMenuItems(ctx, pageIDs)
+	// Generate menu items for all menus
+	menuItemIDs, err := m.generateMenuItems(ctx, languages)
 	if err != nil {
 		t.Fatalf("generateMenuItems: %v", err)
 	}
 
-	// Should have 5-20 menu items
-	if len(menuItemIDs) < 5 || len(menuItemIDs) > 20 {
-		t.Errorf("len(menuItemIDs) = %d, want 5-20", len(menuItemIDs))
+	// Should have 3-7 menu items per menu (we have 1 menu in fixtures)
+	if len(menuItemIDs) < 3 || len(menuItemIDs) > 7 {
+		t.Errorf("len(menuItemIDs) = %d, want 3-7 for single menu", len(menuItemIDs))
 	}
 
-	// Verify all items are in Main Menu (ID=1)
+	// Verify all items are in the fixture menu
 	items, err := q.ListMenuItems(ctx, fixtures.Menu.ID)
 	if err != nil {
 		t.Fatalf("ListMenuItems: %v", err)
@@ -617,11 +617,11 @@ func TestDeleteAllGeneratedItems(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generateMedia: %v", err)
 	}
-	pageIDs, err := m.generatePages(ctx, languages, tagIDs, catIDs, mediaIDs, fixtures.User.ID)
+	_, err = m.generatePages(ctx, languages, tagIDs, catIDs, mediaIDs, fixtures.User.ID)
 	if err != nil {
 		t.Fatalf("generatePages: %v", err)
 	}
-	_, err = m.generateMenuItems(ctx, pageIDs)
+	_, err = m.generateMenuItems(ctx, languages)
 	if err != nil {
 		t.Fatalf("generateMenuItems: %v", err)
 	}

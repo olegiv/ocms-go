@@ -115,8 +115,8 @@ func (m *Module) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	}
 	m.ctx.Logger.Info("generated pages", "count", len(pageIDs))
 
-	// Generate menu items in Main Menu
-	menuItemIDs, err := m.generateMenuItems(ctx, pageIDs)
+	// Generate menu items for all menus
+	menuItemIDs, err := m.generateMenuItems(ctx, languages)
 	if err != nil {
 		m.ctx.Logger.Error("failed to generate menu items", "error", err)
 		m.setFlashAndRedirect(w, r, "error", i18n.T(lang, "developer.error_generate_menu")+": "+err.Error())
