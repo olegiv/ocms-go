@@ -592,6 +592,132 @@ func TestGenerateMenuItems(t *testing.T) {
 	}
 }
 
+func TestGenerateMenuItemsWithLanguageSpecificMenus(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	ctx := context.Background()
+	q := store.New(db)
+	fixtures := createTestFixtures(t, db)
+	now := time.Now()
+
+	languages := []store.Language{fixtures.Language, fixtures.Language2}
+
+	// Create menus WITH language_id (like the real database)
+	menuEN, err := q.CreateMenu(ctx, store.CreateMenuParams{
+		Name:       "Main EN",
+		Slug:       "main-en",
+		LanguageID: sql.NullInt64{Int64: fixtures.Language.ID, Valid: true},
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	})
+	if err != nil {
+		t.Fatalf("CreateMenu EN: %v", err)
+	}
+
+	menuRU, err := q.CreateMenu(ctx, store.CreateMenuParams{
+		Name:       "Main RU",
+		Slug:       "main-ru",
+		LanguageID: sql.NullInt64{Int64: fixtures.Language2.ID, Valid: true},
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	})
+	if err != nil {
+		t.Fatalf("CreateMenu RU: %v", err)
+	}
+
+	// Create pages for each language
+	for i := 0; i < 10; i++ {
+		_, err := q.CreatePage(ctx, store.CreatePageParams{
+			Title: "EN Page", Slug: "en-page-" + string(rune('a'+i)),
+			Body: "<p>Content</p>", Status: "published", AuthorID: fixtures.User.ID,
+			LanguageID: sql.NullInt64{Int64: fixtures.Language.ID, Valid: true},
+			CreatedAt:  now, UpdatedAt: now,
+		})
+		if err != nil {
+			t.Fatalf("CreatePage EN: %v", err)
+		}
+
+		_, err = q.CreatePage(ctx, store.CreatePageParams{
+			Title: "RU Page", Slug: "ru-page-" + string(rune('a'+i)),
+			Body: "<p>Content</p>", Status: "published", AuthorID: fixtures.User.ID,
+			LanguageID: sql.NullInt64{Int64: fixtures.Language2.ID, Valid: true},
+			CreatedAt:  now, UpdatedAt: now,
+		})
+		if err != nil {
+			t.Fatalf("CreatePage RU: %v", err)
+		}
+	}
+
+	// Run generation 10 times to check for consistent nested item creation
+	totalNestedEN := 0
+	totalNestedRU := 0
+	runsWithNoNested := 0
+
+	for run := 0; run < 10; run++ {
+		// Clear previous items
+		items, _ := q.ListMenuItems(ctx, menuEN.ID)
+		for _, item := range items {
+			_ = q.DeleteMenuItem(ctx, item.ID)
+		}
+		items, _ = q.ListMenuItems(ctx, menuRU.ID)
+		for _, item := range items {
+			_ = q.DeleteMenuItem(ctx, item.ID)
+		}
+		items, _ = q.ListMenuItems(ctx, fixtures.Menu.ID)
+		for _, item := range items {
+			_ = q.DeleteMenuItem(ctx, item.ID)
+		}
+		_ = m.clearTrackedItems(ctx)
+
+		// Generate menu items
+		_, err := m.generateMenuItems(ctx, languages)
+		if err != nil {
+			t.Fatalf("generateMenuItems run %d: %v", run, err)
+		}
+
+		// Count nested items for EN menu
+		itemsEN, _ := q.ListMenuItems(ctx, menuEN.ID)
+		nestedEN := 0
+		for _, item := range itemsEN {
+			if item.ParentID.Valid {
+				nestedEN++
+			}
+		}
+		totalNestedEN += nestedEN
+
+		// Count nested items for RU menu
+		itemsRU, _ := q.ListMenuItems(ctx, menuRU.ID)
+		nestedRU := 0
+		for _, item := range itemsRU {
+			if item.ParentID.Valid {
+				nestedRU++
+			}
+		}
+		totalNestedRU += nestedRU
+
+		if nestedEN == 0 && nestedRU == 0 {
+			runsWithNoNested++
+		}
+	}
+
+	// Over 10 runs with 40% nesting probability, we should see nested items
+	if totalNestedEN == 0 {
+		t.Errorf("no nested items created for EN menu across 10 runs")
+	}
+	if totalNestedRU == 0 {
+		t.Errorf("no nested items created for RU menu across 10 runs")
+	}
+
+	// Most runs should have at least some nested items
+	if runsWithNoNested > 5 {
+		t.Errorf("%d out of 10 runs had no nested items (expected fewer)", runsWithNoNested)
+	}
+
+	t.Logf("Total nested items - EN: %d, RU: %d, runs with zero: %d", totalNestedEN, totalNestedRU, runsWithNoNested)
+}
+
 func TestDeleteAllGeneratedItems(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
