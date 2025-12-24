@@ -21,6 +21,13 @@ import (
 	"ocms-go/internal/util"
 )
 
+// Error message formats for translation operations
+const (
+	errFmtCreateTranslationRecord = "failed to create translation record: %w"
+	errFmtTrackTranslation        = "failed to track translation: %w"
+	translatedNameFmt             = "%s (%s)"
+)
+
 // Word lists for generating random content
 var (
 	adjectives = []string{
@@ -224,7 +231,7 @@ func (m *Module) generateTags(ctx context.Context, languages []store.Language) (
 				continue
 			}
 
-			translatedName := fmt.Sprintf("%s (%s)", name, lang.Code)
+			translatedName := fmt.Sprintf(translatedNameFmt, name, lang.Code)
 			translatedSlug := fmt.Sprintf("%s-%s", tagSlug, lang.Code)
 
 			transTag, err := queries.CreateTag(ctx, store.CreateTagParams{
@@ -251,11 +258,11 @@ func (m *Module) generateTags(ctx context.Context, languages []store.Language) (
 				CreatedAt:     now,
 			})
 			if err != nil {
-				return nil, fmt.Errorf("failed to create translation record: %w", err)
+				return nil, fmt.Errorf(errFmtCreateTranslationRecord, err)
 			}
 
 			if err := m.trackItem(ctx, "translation", trans.ID); err != nil {
-				return nil, fmt.Errorf("failed to track translation: %w", err)
+				return nil, fmt.Errorf(errFmtTrackTranslation, err)
 			}
 		}
 	}
@@ -401,32 +408,51 @@ func (m *Module) createSingleCategory(ctx context.Context, p createCategoryParam
 		return 0, fmt.Errorf("failed to track category: %w", err)
 	}
 
-	if err := m.createCategoryTranslations(ctx, p.queries, cat, name, catSlug, desc, p.languages, p.defaultLangID); err != nil {
+	if err := m.createCategoryTranslations(ctx, categoryTranslationParams{
+		queries:       p.queries,
+		cat:           cat,
+		name:          name,
+		catSlug:       catSlug,
+		desc:          desc,
+		languages:     p.languages,
+		defaultLangID: p.defaultLangID,
+	}); err != nil {
 		return 0, err
 	}
 
 	return cat.ID, nil
 }
 
+// categoryTranslationParams holds parameters for creating category translations.
+type categoryTranslationParams struct {
+	queries       *store.Queries
+	cat           store.Category
+	name          string
+	catSlug       string
+	desc          string
+	languages     []store.Language
+	defaultLangID int64
+}
+
 // createCategoryTranslations creates translations for a category
-func (m *Module) createCategoryTranslations(ctx context.Context, queries *store.Queries, cat store.Category, name, catSlug, desc string, languages []store.Language, defaultLangID int64) error {
+func (m *Module) createCategoryTranslations(ctx context.Context, p categoryTranslationParams) error {
 	now := time.Now()
 
-	for _, lang := range languages {
-		if lang.ID == defaultLangID {
+	for _, lang := range p.languages {
+		if lang.ID == p.defaultLangID {
 			continue
 		}
 
-		translatedName := fmt.Sprintf("%s (%s)", name, lang.Code)
-		translatedSlug := fmt.Sprintf("%s-%s", catSlug, lang.Code)
-		translatedDesc := fmt.Sprintf("%s [%s]", desc, lang.Code)
+		translatedName := fmt.Sprintf(translatedNameFmt, p.name, lang.Code)
+		translatedSlug := fmt.Sprintf("%s-%s", p.catSlug, lang.Code)
+		translatedDesc := fmt.Sprintf("%s [%s]", p.desc, lang.Code)
 
-		transCat, err := queries.CreateCategory(ctx, store.CreateCategoryParams{
+		transCat, err := p.queries.CreateCategory(ctx, store.CreateCategoryParams{
 			Name:        translatedName,
 			Slug:        translatedSlug,
 			Description: sql.NullString{String: translatedDesc, Valid: true},
-			ParentID:    cat.ParentID,
-			Position:    cat.Position,
+			ParentID:    p.cat.ParentID,
+			Position:    p.cat.Position,
 			LanguageID:  sql.NullInt64{Int64: lang.ID, Valid: true},
 			CreatedAt:   now,
 			UpdatedAt:   now,
@@ -439,19 +465,19 @@ func (m *Module) createCategoryTranslations(ctx context.Context, queries *store.
 			return fmt.Errorf("failed to track category translation: %w", err)
 		}
 
-		trans, err := queries.CreateTranslation(ctx, store.CreateTranslationParams{
+		trans, err := p.queries.CreateTranslation(ctx, store.CreateTranslationParams{
 			EntityType:    "category",
-			EntityID:      cat.ID,
+			EntityID:      p.cat.ID,
 			LanguageID:    lang.ID,
 			TranslationID: transCat.ID,
 			CreatedAt:     now,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create translation record: %w", err)
+			return fmt.Errorf(errFmtCreateTranslationRecord, err)
 		}
 
 		if err := m.trackItem(ctx, "translation", trans.ID); err != nil {
-			return fmt.Errorf("failed to track translation: %w", err)
+			return fmt.Errorf(errFmtTrackTranslation, err)
 		}
 	}
 
@@ -739,7 +765,7 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 				continue
 			}
 
-			translatedTitle := fmt.Sprintf("%s (%s)", title, lang.Code)
+			translatedTitle := fmt.Sprintf(translatedNameFmt, title, lang.Code)
 			translatedSlug := fmt.Sprintf("%s-%s", pageSlug, lang.Code)
 			translatedBody := fmt.Sprintf("[%s]\n\n%s", lang.Code, body)
 
@@ -827,11 +853,11 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 				CreatedAt:     now,
 			})
 			if err != nil {
-				return nil, fmt.Errorf("failed to create translation record: %w", err)
+				return nil, fmt.Errorf(errFmtCreateTranslationRecord, err)
 			}
 
 			if err := m.trackItem(ctx, "translation", trans.ID); err != nil {
-				return nil, fmt.Errorf("failed to track translation: %w", err)
+				return nil, fmt.Errorf(errFmtTrackTranslation, err)
 			}
 		}
 	}
