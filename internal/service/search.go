@@ -267,7 +267,7 @@ func (s *SearchService) RebuildIndex(ctx context.Context) error {
 	//goland:noinspection SqlResolve
 	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO pages_fts(rowid, title, body, meta_title, meta_description, meta_keywords)
-		SELECT id, title, body, COALESCE(meta_title, ''), COALESCE(meta_description, ''), COALESCE(meta_keywords, '')
+		SELECT id, title, body, meta_title, meta_description, meta_keywords
 		FROM pages
 		WHERE status = 'published'
 	`)
