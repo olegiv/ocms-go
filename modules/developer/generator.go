@@ -692,7 +692,11 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 		}
 		pageIDs = append(pageIDs, page.ID)
 
-		// Assign 1-3 random tags
+		// Collect the tag and category IDs assigned to the original page
+		var assignedTagIDs []int64
+		var assignedCatIDs []int64
+
+		// Assign 1-3 random tags to original page and collect them
 		if len(tagIDs) > 0 {
 			numTags := rand.Intn(3) + 1
 			usedTagIDs := make(map[int64]bool)
@@ -707,11 +711,13 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 					TagID:  tagID,
 				}); err != nil {
 					m.ctx.Logger.Warn("failed to add tag to page", "error", err)
+				} else {
+					assignedTagIDs = append(assignedTagIDs, tagID)
 				}
 			}
 		}
 
-		// Assign 1-2 random categories
+		// Assign 1-2 random categories to original page and collect them
 		if len(catIDs) > 0 {
 			numCats := rand.Intn(2) + 1
 			usedCatIDs := make(map[int64]bool)
@@ -726,6 +732,8 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 					CategoryID: catID,
 				}); err != nil {
 					m.ctx.Logger.Warn("failed to add category to page", "error", err)
+				} else {
+					assignedCatIDs = append(assignedCatIDs, catID)
 				}
 			}
 		}
@@ -775,6 +783,44 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 
 			if err := m.trackItem(ctx, "page", transPage.ID); err != nil {
 				return nil, fmt.Errorf("failed to track page translation: %w", err)
+			}
+
+			// Assign translated tags to the translated page
+			for _, origTagID := range assignedTagIDs {
+				translatedTagID, err := queries.GetTranslatedEntityID(ctx, store.GetTranslatedEntityIDParams{
+					EntityType: "tag",
+					EntityID:   origTagID,
+					LanguageID: lang.ID,
+				})
+				if err != nil {
+					m.ctx.Logger.Warn("failed to get translated tag", "origTagID", origTagID, "langID", lang.ID, "error", err)
+					continue
+				}
+				if err := queries.AddTagToPage(ctx, store.AddTagToPageParams{
+					PageID: transPage.ID,
+					TagID:  translatedTagID,
+				}); err != nil {
+					m.ctx.Logger.Warn("failed to add translated tag to page", "error", err)
+				}
+			}
+
+			// Assign translated categories to the translated page
+			for _, origCatID := range assignedCatIDs {
+				translatedCatID, err := queries.GetTranslatedEntityID(ctx, store.GetTranslatedEntityIDParams{
+					EntityType: "category",
+					EntityID:   origCatID,
+					LanguageID: lang.ID,
+				})
+				if err != nil {
+					m.ctx.Logger.Warn("failed to get translated category", "origCatID", origCatID, "langID", lang.ID, "error", err)
+					continue
+				}
+				if err := queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{
+					PageID:     transPage.ID,
+					CategoryID: translatedCatID,
+				}); err != nil {
+					m.ctx.Logger.Warn("failed to add translated category to page", "error", err)
+				}
 			}
 
 			// Create translation record
