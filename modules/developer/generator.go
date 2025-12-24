@@ -92,11 +92,6 @@ func generateRandomCount() int {
 	return rand.Intn(16) + 5 // 5-20
 }
 
-// generateMenuItemCount returns a random number between 5 and 10 for menu items
-func generateMenuItemCount() int {
-	return rand.Intn(6) + 5 // 5-10
-}
-
 // randomElement returns a random element from a string slice
 func randomElement(slice []string) string {
 	return slice[rand.Intn(len(slice))]

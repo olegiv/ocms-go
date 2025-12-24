@@ -517,6 +517,28 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Update language context based on page's language (fixes translated pages like /slug-ru)
+	// This ensures that when visiting a translated page directly, the UI language matches the content
+	if page.LanguageID.Valid {
+		if pageLang, err := h.queries.GetLanguageByID(ctx, page.LanguageID.Int64); err == nil {
+			// Update the request context with the page's language
+			langInfo := middleware.LanguageInfo{
+				ID:         pageLang.ID,
+				Code:       pageLang.Code,
+				Name:       pageLang.Name,
+				NativeName: pageLang.NativeName,
+				Direction:  pageLang.Direction,
+				IsDefault:  pageLang.IsDefault,
+			}
+			ctx = context.WithValue(ctx, middleware.ContextKeyLanguage, langInfo)
+			ctx = context.WithValue(ctx, middleware.ContextKeyLanguageCode, pageLang.Code)
+			r = r.WithContext(ctx)
+
+			// Set language cookie to remember the preference
+			middleware.SetLanguageCookie(w, pageLang.Code)
+		}
+	}
+
 	// Convert to PageView
 	pageView := h.pageToView(ctx, page)
 
