@@ -126,7 +126,7 @@ func (s *SearchService) SearchPublishedPages(ctx context.Context, params SearchP
 	// Search with ranking and highlights
 	// bm25() provides relevance ranking (lower = more relevant)
 	// snippet() provides highlighted excerpts
-	//goland:noinspection SqlResolve
+	//goland:noinspection SqlResolve,SqlSignature
 	searchQuery := `
 		SELECT
 			p.id,
