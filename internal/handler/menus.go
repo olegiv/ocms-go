@@ -94,6 +94,20 @@ type MenuFormData struct {
 	IsEdit     bool
 }
 
+// renderMenuEditForm renders the menu edit form with common template data.
+func (h *MenusHandler) renderMenuEditForm(w http.ResponseWriter, r *http.Request, menu *store.Menu, user *store.User, lang string, data MenuFormData) {
+	h.renderer.RenderPage(w, r, "admin/menus_form", render.TemplateData{
+		Title: fmt.Sprintf("Edit Menu - %s", menu.Name),
+		User:  user,
+		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, "nav.menus"), URL: redirectAdminMenus},
+			{Label: menu.Name, URL: fmt.Sprintf(redirectAdminMenusID, menu.ID), Active: true},
+		},
+	})
+}
+
 // buildMenuTree builds a nested tree from flat menu items.
 func buildMenuTree(items []store.ListMenuItemsWithPageRow, parentID sql.NullInt64) []MenuItemNode {
 	var nodes []MenuItemNode
@@ -264,7 +278,7 @@ func (h *MenusHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	// Get languages for selector
 	languages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 
-	data := MenuFormData{
+	h.renderMenuEditForm(w, r, &menu, user, lang, MenuFormData{
 		Menu:       &menu,
 		Items:      tree,
 		Pages:      pages,
@@ -273,17 +287,6 @@ func (h *MenusHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		Errors:     make(map[string]string),
 		FormValues: make(map[string]string),
 		IsEdit:     true,
-	}
-
-	h.renderer.RenderPage(w, r, "admin/menus_form", render.TemplateData{
-		Title: fmt.Sprintf("Edit Menu - %s", menu.Name),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.menus"), URL: redirectAdminMenus},
-			{Label: menu.Name, URL: fmt.Sprintf(redirectAdminMenusID, menu.ID), Active: true},
-		},
 	})
 }
 
@@ -321,7 +324,7 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 		pages, _ := h.queries.ListPages(r.Context(), store.ListPagesParams{Limit: 1000, Offset: 0})
 		languages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 
-		data := MenuFormData{
+		h.renderMenuEditForm(w, r, &menu, user, lang, MenuFormData{
 			Menu:       &menu,
 			Items:      tree,
 			Pages:      pages,
@@ -330,17 +333,6 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 			Errors:     input.Errors,
 			FormValues: input.FormValues,
 			IsEdit:     true,
-		}
-
-		h.renderer.RenderPage(w, r, "admin/menus_form", render.TemplateData{
-			Title: fmt.Sprintf("Edit Menu - %s", menu.Name),
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-				{Label: i18n.T(lang, "nav.menus"), URL: redirectAdminMenus},
-				{Label: menu.Name, URL: fmt.Sprintf(redirectAdminMenusID, menu.ID), Active: true},
-			},
 		})
 		return
 	}

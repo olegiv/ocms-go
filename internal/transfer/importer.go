@@ -419,164 +419,82 @@ func (i *Importer) ValidateZipBytes(ctx context.Context, data []byte) (*Validati
 	return i.ValidateZip(ctx, zipReader)
 }
 
+// validateEntities validates a slice of entities and appends errors for missing required fields.
+func validateEntities[T any](
+	errs []ImportError,
+	items []T,
+	entity string,
+	primaryField string,
+	getPrimary func(T) string,
+	secondaryField string,
+	getSecondary func(T) string,
+) []ImportError {
+	for idx, item := range items {
+		primary := getPrimary(item)
+		if primary == "" {
+			errs = append(errs, ImportError{
+				Entity:  entity,
+				ID:      strconv.Itoa(idx),
+				Message: "missing " + entity + " " + primaryField,
+			})
+		}
+		if getSecondary(item) == "" {
+			errs = append(errs, ImportError{
+				Entity:  entity,
+				ID:      primary,
+				Message: "missing " + entity + " " + secondaryField,
+			})
+		}
+	}
+	return errs
+}
+
 // Validate validates the import data without making changes.
 func (i *Importer) Validate(data *ExportData) []ImportError {
-	var importErrors []ImportError
+	var errs []ImportError
 
 	// Check version
 	if data.Version == "" {
-		importErrors = append(importErrors, ImportError{
+		errs = append(errs, ImportError{
 			Entity:  "export",
 			ID:      "",
 			Message: "missing version field",
 		})
 	}
 
-	// Validate languages
-	for idx, lang := range data.Languages {
-		if lang.Code == "" {
-			importErrors = append(importErrors, ImportError{
-				Entity:  "language",
-				ID:      strconv.Itoa(idx),
-				Message: "missing language code",
-			})
-		}
-		if lang.Name == "" {
-			importErrors = append(importErrors, ImportError{
-				Entity:  "language",
-				ID:      lang.Code,
-				Message: "missing language name",
-			})
-		}
-	}
+	errs = validateEntities(errs, data.Languages, "language", "code",
+		func(l ExportLanguage) string { return l.Code }, "name",
+		func(l ExportLanguage) string { return l.Name })
 
-	// Validate users
-	for idx, user := range data.Users {
-		if user.Email == "" {
-			importErrors = append(importErrors, ImportError{
-				Entity:  "user",
-				ID:      strconv.Itoa(idx),
-				Message: "missing user email",
-			})
-		}
-		if user.Role == "" {
-			importErrors = append(importErrors, ImportError{
-				Entity:  "user",
-				ID:      user.Email,
-				Message: "missing user role",
-			})
-		}
-	}
+	errs = validateEntities(errs, data.Users, "user", "email",
+		func(u ExportUser) string { return u.Email }, "role",
+		func(u ExportUser) string { return u.Role })
 
-	// Validate categories
-	for idx, cat := range data.Categories {
-		if cat.Slug == "" {
-			importErrors = append(importErrors, ImportError{
-				Entity:  "category",
-				ID:      strconv.Itoa(idx),
-				Message: "missing category slug",
-			})
-		}
-		if cat.Name == "" {
-			importErrors = append(importErrors, ImportError{
-				Entity:  "category",
-				ID:      cat.Slug,
-				Message: "missing category name",
-			})
-		}
-	}
+	errs = validateEntities(errs, data.Categories, "category", "slug",
+		func(c ExportCategory) string { return c.Slug }, "name",
+		func(c ExportCategory) string { return c.Name })
 
-	// Validate tags
-	for idx, tag := range data.Tags {
-		if tag.Slug == "" {
-			importErrors = append(importErrors, ImportError{
-				Entity:  "tag",
-				ID:      strconv.Itoa(idx),
-				Message: "missing tag slug",
-			})
-		}
-		if tag.Name == "" {
-			importErrors = append(importErrors, ImportError{
-				Entity:  "tag",
-				ID:      tag.Slug,
-				Message: "missing tag name",
-			})
-		}
-	}
+	errs = validateEntities(errs, data.Tags, "tag", "slug",
+		func(t ExportTag) string { return t.Slug }, "name",
+		func(t ExportTag) string { return t.Name })
 
-	// Validate pages
-	for idx, page := range data.Pages {
-		if page.Slug == "" {
-			importErrors = append(importErrors, ImportError{
-				Entity:  "page",
-				ID:      strconv.Itoa(idx),
-				Message: "missing page slug",
-			})
-		}
-		if page.Title == "" {
-			importErrors = append(importErrors, ImportError{
-				Entity:  "page",
-				ID:      page.Slug,
-				Message: "missing page title",
-			})
-		}
-	}
+	errs = validateEntities(errs, data.Pages, "page", "slug",
+		func(p ExportPage) string { return p.Slug }, "title",
+		func(p ExportPage) string { return p.Title })
 
-	// Validate media
-	for idx, media := range data.Media {
-		if media.UUID == "" {
-			importErrors = append(importErrors, ImportError{
-				Entity:  "media",
-				ID:      strconv.Itoa(idx),
-				Message: "missing media UUID",
-			})
-		}
-		if media.Filename == "" {
-			importErrors = append(importErrors, ImportError{
-				Entity:  "media",
-				ID:      media.UUID,
-				Message: "missing media filename",
-			})
-		}
-	}
+	errs = validateEntities(errs, data.Media, "media", "UUID",
+		func(m ExportMedia) string { return m.UUID }, "filename",
+		func(m ExportMedia) string { return m.Filename })
 
-	// Validate menus
-	for idx, menu := range data.Menus {
-		if menu.Slug == "" {
-			importErrors = append(importErrors, ImportError{
-				Entity:  "menu",
-				ID:      strconv.Itoa(idx),
-				Message: "missing menu slug",
-			})
-		}
-		if menu.Name == "" {
-			importErrors = append(importErrors, ImportError{
-				Entity:  "menu",
-				ID:      menu.Slug,
-				Message: "missing menu name",
-			})
-		}
-	}
+	errs = validateEntities(errs, data.Menus, "menu", "slug",
+		func(m ExportMenu) string { return m.Slug }, "name",
+		func(m ExportMenu) string { return m.Name })
 
-	// Validate forms
-	for idx, form := range data.Forms {
-		if form.Slug == "" {
-			importErrors = append(importErrors, ImportError{
-				Entity:  "form",
-				ID:      strconv.Itoa(idx),
-				Message: "missing form slug",
-			})
-		}
-		if form.Name == "" {
-			importErrors = append(importErrors, ImportError{
-				Entity:  "form",
-				ID:      form.Slug,
-				Message: "missing form name",
-			})
-		}
-	}
+	errs = validateEntities(errs, data.Forms, "form", "slug",
+		func(f ExportForm) string { return f.Slug }, "name",
+		func(f ExportForm) string { return f.Name })
 
-	return importErrors
+	return errs
 }
 
 // ValidateFile validates an import file and returns information about its contents.
@@ -700,142 +618,75 @@ func (i *Importer) ValidateData(ctx context.Context, data *ExportData) (*Validat
 	return result, nil
 }
 
+// countEntity increments the appropriate counter based on existence and conflict strategy.
+func countEntity(result *ImportResult, strategy ConflictStrategy, exists bool, category string) {
+	if exists {
+		switch strategy {
+		case ConflictSkip:
+			result.IncrementSkipped(category)
+		case ConflictOverwrite:
+			result.IncrementUpdated(category)
+		}
+	} else {
+		result.IncrementCreated(category)
+	}
+}
+
 // countEntities counts entities that would be imported (for dry run).
 // It checks existing entities to properly categorize as created, updated, or skipped.
 func (i *Importer) countEntities(ctx context.Context, data *ExportData, opts ImportOptions, result *ImportResult) {
 	if opts.ImportLanguages {
 		for _, lang := range data.Languages {
 			exists, _ := i.store.LanguageCodeExists(ctx, lang.Code)
-			if exists != 0 {
-				switch opts.ConflictStrategy {
-				case ConflictSkip:
-					result.IncrementSkipped("languages")
-				case ConflictOverwrite:
-					result.IncrementUpdated("languages")
-				}
-			} else {
-				result.IncrementCreated("languages")
-			}
+			countEntity(result, opts.ConflictStrategy, exists != 0, "languages")
 		}
 	}
 	if opts.ImportUsers {
 		for _, user := range data.Users {
 			_, err := i.store.GetUserByEmail(ctx, user.Email)
-			if err == nil {
-				switch opts.ConflictStrategy {
-				case ConflictSkip:
-					result.IncrementSkipped("users")
-				case ConflictOverwrite:
-					result.IncrementUpdated("users")
-				}
-			} else {
-				result.IncrementCreated("users")
-			}
+			countEntity(result, opts.ConflictStrategy, err == nil, "users")
 		}
 	}
 	if opts.ImportCategories {
 		for _, cat := range data.Categories {
 			_, err := i.store.GetCategoryBySlug(ctx, cat.Slug)
-			if err == nil {
-				switch opts.ConflictStrategy {
-				case ConflictSkip:
-					result.IncrementSkipped("categories")
-				case ConflictOverwrite:
-					result.IncrementUpdated("categories")
-				}
-			} else {
-				result.IncrementCreated("categories")
-			}
+			countEntity(result, opts.ConflictStrategy, err == nil, "categories")
 		}
 	}
 	if opts.ImportTags {
 		for _, tag := range data.Tags {
 			_, err := i.store.GetTagBySlug(ctx, tag.Slug)
-			if err == nil {
-				switch opts.ConflictStrategy {
-				case ConflictSkip:
-					result.IncrementSkipped("tags")
-				case ConflictOverwrite:
-					result.IncrementUpdated("tags")
-				}
-			} else {
-				result.IncrementCreated("tags")
-			}
+			countEntity(result, opts.ConflictStrategy, err == nil, "tags")
 		}
 	}
 	if opts.ImportPages {
 		for _, page := range data.Pages {
 			_, err := i.store.GetPageBySlug(ctx, page.Slug)
-			if err == nil {
-				switch opts.ConflictStrategy {
-				case ConflictSkip:
-					result.IncrementSkipped("pages")
-				case ConflictOverwrite:
-					result.IncrementUpdated("pages")
-				}
-			} else {
-				result.IncrementCreated("pages")
-			}
+			countEntity(result, opts.ConflictStrategy, err == nil, "pages")
 		}
 	}
 	if opts.ImportMedia {
 		for _, media := range data.Media {
 			_, err := i.store.GetMediaByUUID(ctx, media.UUID)
-			if err == nil {
-				switch opts.ConflictStrategy {
-				case ConflictSkip:
-					result.IncrementSkipped("media")
-				case ConflictOverwrite:
-					result.IncrementUpdated("media")
-				}
-			} else {
-				result.IncrementCreated("media")
-			}
+			countEntity(result, opts.ConflictStrategy, err == nil, "media")
 		}
 	}
 	if opts.ImportMenus {
 		for _, menu := range data.Menus {
 			_, err := i.store.GetMenuBySlug(ctx, menu.Slug)
-			if err == nil {
-				switch opts.ConflictStrategy {
-				case ConflictSkip:
-					result.IncrementSkipped("menus")
-				case ConflictOverwrite:
-					result.IncrementUpdated("menus")
-				}
-			} else {
-				result.IncrementCreated("menus")
-			}
+			countEntity(result, opts.ConflictStrategy, err == nil, "menus")
 		}
 	}
 	if opts.ImportForms {
 		for _, form := range data.Forms {
 			_, err := i.store.GetFormBySlug(ctx, form.Slug)
-			if err == nil {
-				switch opts.ConflictStrategy {
-				case ConflictSkip:
-					result.IncrementSkipped("forms")
-				case ConflictOverwrite:
-					result.IncrementUpdated("forms")
-				}
-			} else {
-				result.IncrementCreated("forms")
-			}
+			countEntity(result, opts.ConflictStrategy, err == nil, "forms")
 		}
 	}
 	if opts.ImportConfig {
 		for key := range data.Config {
 			_, err := i.store.GetConfigByKey(ctx, key)
-			if err == nil {
-				switch opts.ConflictStrategy {
-				case ConflictSkip:
-					result.IncrementSkipped("config")
-				case ConflictOverwrite:
-					result.IncrementUpdated("config")
-				}
-			} else {
-				result.IncrementCreated("config")
-			}
+			countEntity(result, opts.ConflictStrategy, err == nil, "config")
 		}
 	}
 }
@@ -1684,33 +1535,29 @@ func (i *Importer) importConfig(ctx context.Context, queries *store.Queries, con
 
 // Helper functions
 
+// buildEntityMap creates a map from a slice of entities using the provided key and ID extractors.
+func buildEntityMap[T any](items []T, keyFn func(T) string, idFn func(T) int64) map[string]int64 {
+	m := make(map[string]int64, len(items))
+	for _, item := range items {
+		m[keyFn(item)] = idFn(item)
+	}
+	return m
+}
+
 func (i *Importer) buildLanguageCodeMap(ctx context.Context, queries *store.Queries) (map[string]int64, error) {
 	languages, err := queries.ListLanguages(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	m := make(map[string]int64, len(languages))
-	for _, lang := range languages {
-		m[lang.Code] = lang.ID
-	}
-	return m, nil
+	return buildEntityMap(languages, func(l store.Language) string { return l.Code }, func(l store.Language) int64 { return l.ID }), nil
 }
 
 func (i *Importer) buildUserEmailMap(ctx context.Context, queries *store.Queries) (map[string]int64, error) {
-	users, err := queries.ListUsers(ctx, store.ListUsersParams{
-		Limit:  10000,
-		Offset: 0,
-	})
+	users, err := queries.ListUsers(ctx, store.ListUsersParams{Limit: 10000, Offset: 0})
 	if err != nil {
 		return nil, err
 	}
-
-	m := make(map[string]int64, len(users))
-	for _, user := range users {
-		m[user.Email] = user.ID
-	}
-	return m, nil
+	return buildEntityMap(users, func(u store.User) string { return u.Email }, func(u store.User) int64 { return u.ID }), nil
 }
 
 func (i *Importer) buildCategorySlugMap(ctx context.Context, queries *store.Queries) (map[string]int64, error) {
@@ -1718,12 +1565,7 @@ func (i *Importer) buildCategorySlugMap(ctx context.Context, queries *store.Quer
 	if err != nil {
 		return nil, err
 	}
-
-	m := make(map[string]int64, len(categories))
-	for _, cat := range categories {
-		m[cat.Slug] = cat.ID
-	}
-	return m, nil
+	return buildEntityMap(categories, func(c store.Category) string { return c.Slug }, func(c store.Category) int64 { return c.ID }), nil
 }
 
 func (i *Importer) buildTagSlugMap(ctx context.Context, queries *store.Queries) (map[string]int64, error) {
@@ -1731,44 +1573,23 @@ func (i *Importer) buildTagSlugMap(ctx context.Context, queries *store.Queries) 
 	if err != nil {
 		return nil, err
 	}
-
-	m := make(map[string]int64, len(tags))
-	for _, tag := range tags {
-		m[tag.Slug] = tag.ID
-	}
-	return m, nil
+	return buildEntityMap(tags, func(t store.Tag) string { return t.Slug }, func(t store.Tag) int64 { return t.ID }), nil
 }
 
 func (i *Importer) buildMediaUUIDMap(ctx context.Context, queries *store.Queries) (map[string]int64, error) {
-	media, err := queries.ListMedia(ctx, store.ListMediaParams{
-		Limit:  100000,
-		Offset: 0,
-	})
+	media, err := queries.ListMedia(ctx, store.ListMediaParams{Limit: 100000, Offset: 0})
 	if err != nil {
 		return nil, err
 	}
-
-	result := make(map[string]int64, len(media))
-	for _, item := range media {
-		result[item.Uuid] = item.ID
-	}
-	return result, nil
+	return buildEntityMap(media, func(m store.Medium) string { return m.Uuid }, func(m store.Medium) int64 { return m.ID }), nil
 }
 
 func (i *Importer) buildPageSlugMap(ctx context.Context, queries *store.Queries) (map[string]int64, error) {
-	pages, err := queries.ListPages(ctx, store.ListPagesParams{
-		Limit:  100000,
-		Offset: 0,
-	})
+	pages, err := queries.ListPages(ctx, store.ListPagesParams{Limit: 100000, Offset: 0})
 	if err != nil {
 		return nil, err
 	}
-
-	m := make(map[string]int64, len(pages))
-	for _, page := range pages {
-		m[page.Slug] = page.ID
-	}
-	return m, nil
+	return buildEntityMap(pages, func(p store.Page) string { return p.Slug }, func(p store.Page) int64 { return p.ID }), nil
 }
 
 func (i *Importer) buildOrCreateFolders(ctx context.Context, queries *store.Queries, media []ExportMedia) (map[string]int64, error) {
