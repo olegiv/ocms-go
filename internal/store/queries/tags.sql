@@ -156,3 +156,13 @@ SELECT EXISTS(SELECT 1 FROM tags WHERE slug = ? AND language_id = ?);
 
 -- name: TagSlugExistsExcludingForLanguage :one
 SELECT EXISTS(SELECT 1 FROM tags WHERE slug = ? AND id != ? AND language_id = ?);
+
+-- Tag usage counts filtered by page language (for frontend sidebar)
+-- name: GetTagUsageCountsByLanguage :many
+SELECT t.id, t.name, t.slug, t.created_at, t.updated_at, COUNT(p.id) as usage_count
+FROM tags t
+INNER JOIN page_tags pt ON pt.tag_id = t.id
+INNER JOIN pages p ON p.id = pt.page_id AND p.status = 'published' AND p.language_id = ?
+GROUP BY t.id, t.name, t.slug, t.created_at, t.updated_at
+ORDER BY t.name
+LIMIT ? OFFSET ?;

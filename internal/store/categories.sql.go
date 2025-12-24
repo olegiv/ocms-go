@@ -449,6 +449,63 @@ func (q *Queries) GetCategoryUsageCounts(ctx context.Context) ([]GetCategoryUsag
 	return items, nil
 }
 
+const getCategoryUsageCountsByLanguage = `-- name: GetCategoryUsageCountsByLanguage :many
+SELECT c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.created_at, c.updated_at, c.language_id, COUNT(p.id) as usage_count
+FROM categories c
+INNER JOIN page_categories pc ON pc.category_id = c.id
+INNER JOIN pages p ON p.id = pc.page_id AND p.status = 'published' AND p.language_id = ?
+GROUP BY c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.language_id, c.created_at, c.updated_at
+ORDER BY c.position, c.name
+`
+
+type GetCategoryUsageCountsByLanguageRow struct {
+	ID          int64          `json:"id"`
+	Name        string         `json:"name"`
+	Slug        string         `json:"slug"`
+	Description sql.NullString `json:"description"`
+	ParentID    sql.NullInt64  `json:"parent_id"`
+	Position    int64          `json:"position"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	LanguageID  sql.NullInt64  `json:"language_id"`
+	UsageCount  int64          `json:"usage_count"`
+}
+
+// Category usage counts filtered by page language (for frontend sidebar)
+func (q *Queries) GetCategoryUsageCountsByLanguage(ctx context.Context, languageID sql.NullInt64) ([]GetCategoryUsageCountsByLanguageRow, error) {
+	rows, err := q.db.QueryContext(ctx, getCategoryUsageCountsByLanguage, languageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetCategoryUsageCountsByLanguageRow{}
+	for rows.Next() {
+		var i GetCategoryUsageCountsByLanguageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.Description,
+			&i.ParentID,
+			&i.Position,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.LanguageID,
+			&i.UsageCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCategoryUsageCountsWithLanguage = `-- name: GetCategoryUsageCountsWithLanguage :many
 SELECT
     c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.created_at, c.updated_at, c.language_id,

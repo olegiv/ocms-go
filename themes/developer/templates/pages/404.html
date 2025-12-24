@@ -42,7 +42,7 @@ Error: ENOENT: no such file or directory
             </a>
             {{if .ShowSearch}}
             <span class="dev-or">||</span>
-            <form action="/search" method="get" class="dev-inline-search">
+            <form action="{{.LangPrefix}}/search" method="get" class="dev-inline-search">
                 <input type="search" name="q" placeholder="grep -r 'query'" class="dev-search-input" aria-label="Search">
                 <button type="submit" class="dev-btn dev-btn-secondary">find</button>
             </form>

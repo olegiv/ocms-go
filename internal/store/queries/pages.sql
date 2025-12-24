@@ -268,3 +268,30 @@ WHERE language_id = ? AND (title LIKE ? OR body LIKE ? OR slug LIKE ?);
 -- name: GetPublishedPageBySlugAndLanguage :one
 SELECT * FROM pages
 WHERE slug = ? AND language_id = ? AND status = 'published';
+
+-- Frontend queries filtered by language (for showing pages in current language only)
+-- Note: ListPublishedPagesByLanguage and CountPublishedPagesByLanguage are in translations.sql
+
+-- name: ListPublishedPagesByCategoryAndLanguage :many
+SELECT DISTINCT p.* FROM pages p
+INNER JOIN page_categories pc ON pc.page_id = p.id
+WHERE pc.category_id = ? AND p.status = 'published' AND p.language_id = ?
+ORDER BY p.published_at DESC
+LIMIT ? OFFSET ?;
+
+-- name: CountPublishedPagesByCategoryAndLanguage :one
+SELECT COUNT(DISTINCT p.id) FROM pages p
+INNER JOIN page_categories pc ON pc.page_id = p.id
+WHERE pc.category_id = ? AND p.status = 'published' AND p.language_id = ?;
+
+-- name: ListPublishedPagesForTagAndLanguage :many
+SELECT p.* FROM pages p
+INNER JOIN page_tags pt ON pt.page_id = p.id
+WHERE pt.tag_id = ? AND p.status = 'published' AND p.language_id = ?
+ORDER BY p.published_at DESC
+LIMIT ? OFFSET ?;
+
+-- name: CountPublishedPagesForTagAndLanguage :one
+SELECT COUNT(*) FROM pages p
+INNER JOIN page_tags pt ON pt.page_id = p.id
+WHERE pt.tag_id = ? AND p.status = 'published' AND p.language_id = ?;

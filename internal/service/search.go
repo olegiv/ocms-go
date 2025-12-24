@@ -33,9 +33,10 @@ type SearchResult struct {
 
 // SearchParams holds search parameters.
 type SearchParams struct {
-	Query  string
-	Limit  int
-	Offset int
+	Query      string
+	Limit      int
+	Offset     int
+	LanguageID int64 // Optional: filter by language ID (0 = all languages)
 }
 
 // NewSearchService creates a new search service.
@@ -87,16 +88,29 @@ func (s *SearchService) SearchPublishedPages(ctx context.Context, params SearchP
 		return []SearchResult{}, 0, nil
 	}
 
+	// Build language filter clause
+	var languageFilter string
+	var countArgs []interface{}
+	var searchArgs []interface{}
+
+	countArgs = append(countArgs, escapedQuery)
+	searchArgs = append(searchArgs, escapedQuery)
+
+	if params.LanguageID > 0 {
+		languageFilter = " AND p.language_id = ?"
+		countArgs = append(countArgs, params.LanguageID)
+		searchArgs = append(searchArgs, params.LanguageID)
+	}
+
 	// Count total results
 	//goland:noinspection SqlResolve
 	countQuery := `
 		SELECT COUNT(*) FROM pages p
 		INNER JOIN pages_fts ON pages_fts.rowid = p.id
-		WHERE pages_fts MATCH ? AND p.status = 'published'
-	`
+		WHERE pages_fts MATCH ? AND p.status = 'published'` + languageFilter
 
 	var total int64
-	err := s.db.QueryRowContext(ctx, countQuery, escapedQuery).Scan(&total)
+	err := s.db.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total)
 	if err != nil {
 		// If FTS table doesn't exist yet, fall back to 0 results
 		if strings.Contains(err.Error(), "no such table") {
@@ -128,12 +142,13 @@ func (s *SearchService) SearchPublishedPages(ctx context.Context, params SearchP
 			snippet(pages_fts, 1, '<mark>', '</mark>', '...', 30) as highlight
 		FROM pages p
 		INNER JOIN pages_fts ON pages_fts.rowid = p.id
-		WHERE pages_fts MATCH ? AND p.status = 'published'
+		WHERE pages_fts MATCH ? AND p.status = 'published'` + languageFilter + `
 		ORDER BY rank
 		LIMIT ? OFFSET ?
 	`
 
-	rows, err := s.db.QueryContext(ctx, searchQuery, escapedQuery, params.Limit, params.Offset)
+	searchArgs = append(searchArgs, params.Limit, params.Offset)
+	rows, err := s.db.QueryContext(ctx, searchQuery, searchArgs...)
 	if err != nil {
 		return nil, 0, err
 	}

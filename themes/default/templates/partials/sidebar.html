@@ -4,7 +4,7 @@
     {{if .ShowSearch}}
     <div class="widget widget-search">
         <h3 class="widget-title">Search</h3>
-        <form action="/search" method="get" class="search-form">
+        <form action="{{$.LangPrefix}}/search" method="get" class="search-form">
             <input type="search" name="q" placeholder="Search..." value="{{.SearchQuery}}" aria-label="Search">
             <button type="submit">Search</button>
         </form>
@@ -18,7 +18,7 @@
         <ul class="category-list">
             {{range .Categories}}
             <li>
-                <a href="/category/{{.Slug}}">{{.Name}}</a>
+                <a href="{{$.LangPrefix}}/category/{{.Slug}}">{{.Name}}</a>
                 {{if .Count}}<span class="count">({{.Count}})</span>{{end}}
             </li>
             {{end}}
@@ -32,7 +32,7 @@
         <h3 class="widget-title">Tags</h3>
         <div class="tag-cloud">
             {{range .Tags}}
-            <a href="/tag/{{.Slug}}" class="tag">{{.Name}}</a>
+            <a href="{{$.LangPrefix}}/tag/{{.Slug}}" class="tag">{{.Name}}</a>
             {{end}}
         </div>
     </div>

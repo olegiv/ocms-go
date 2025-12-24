@@ -2,7 +2,7 @@
 <div class="search-page">
     <header class="search-header">
         <h1 class="search-title">{{TTheme .LangCode "search.title"}}</h1>
-        <form action="/search" method="get" class="search-form large">
+        <form action="{{.LangPrefix}}/search" method="get" class="search-form large">
             <input type="search" name="q" value="{{.SearchQuery}}" placeholder="{{TTheme .LangCode "search.placeholder"}}" aria-label="{{TTheme .LangCode "search.placeholder"}}" autofocus>
             <button type="submit" class="btn btn-primary">{{TTheme .LangCode "search.button"}}</button>
         </form>
@@ -28,7 +28,7 @@
                 <div class="post-content">
                     {{if .Category}}
                     <span class="post-category">
-                        <a href="/category/{{.Category.Slug}}">{{.Category.Name}}</a>
+                        <a href="{{$.LangPrefix}}/category/{{.Category.Slug}}">{{.Category.Name}}</a>
                     </span>
                     {{end}}
                     <h2 class="post-title">
@@ -75,7 +75,7 @@
             <h3>{{TTheme .LangCode "search.popular_title"}}</h3>
             <ul>
                 {{range .PopularSearches}}
-                <li><a href="/search?q={{.}}">{{.}}</a></li>
+                <li><a href="{{$.LangPrefix}}/search?q={{.}}">{{.}}</a></li>
                 {{end}}
             </ul>
         </div>

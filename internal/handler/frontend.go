@@ -181,6 +181,7 @@ type BaseTemplateData struct {
 	HrefLangs          []HrefLangLink    // hreflang links for SEO
 	LangCode           string            // Current language code (shortcut)
 	LangDirection      string            // Current language direction (ltr/rtl)
+	LangPrefix         string            // URL prefix for current language (e.g., "/ru" or "" for default)
 	ShowLanguagePicker bool              // Whether to show language picker
 }
 
@@ -348,16 +349,32 @@ func NewFrontendHandler(db *sql.DB, themeManager *theme.Manager, cacheManager *c
 func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	// Get current language for filtering
+	var languageID int64
+	if langInfo := middleware.GetLanguage(r); langInfo != nil {
+		languageID = langInfo.ID
+	}
+
 	// Get base template data
 	base := h.getBaseTemplateData(r, "", "")
 	base.MetaDescription = base.Site.Description
 	base.BodyClass = "home"
 
-	// Get recent published pages
-	recentPages, err := h.queries.ListPublishedPages(ctx, store.ListPublishedPagesParams{
-		Limit:  10,
-		Offset: 0,
-	})
+	// Get recent published pages filtered by language
+	var recentPages []store.Page
+	var err error
+	if languageID > 0 {
+		recentPages, err = h.queries.ListPublishedPagesByLanguage(ctx, store.ListPublishedPagesByLanguageParams{
+			LanguageID: sql.NullInt64{Int64: languageID, Valid: true},
+			Limit:      10,
+			Offset:     0,
+		})
+	} else {
+		recentPages, err = h.queries.ListPublishedPages(ctx, store.ListPublishedPagesParams{
+			Limit:  10,
+			Offset: 0,
+		})
+	}
 	if err != nil {
 		h.logger.Error("failed to get recent pages", "error", err)
 		h.renderInternalError(w)
@@ -371,40 +388,82 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 		recentPageViews = append(recentPageViews, pv)
 	}
 
-	// Get categories with usage counts
-	categoriesWithCount, err := h.queries.GetCategoryUsageCounts(ctx)
-	if err != nil {
-		h.logger.Error("failed to get categories", "error", err)
-	}
-	categoryViews := make([]CategoryView, 0, len(categoriesWithCount))
-	for _, c := range categoriesWithCount {
-		categoryViews = append(categoryViews, CategoryView{
-			ID:          c.ID,
-			Name:        c.Name,
-			Slug:        c.Slug,
-			Description: c.Description.String,
-			URL:         redirectCategory + c.Slug,
-			PageCount:   c.UsageCount,
-		})
-	}
+	// Get categories and tags filtered by language
+	var categoryViews []CategoryView
+	var tagViews []TagView
 
-	// Get tags with usage counts
-	tagsWithCount, err := h.queries.GetTagUsageCounts(ctx, store.GetTagUsageCountsParams{
-		Limit:  20,
-		Offset: 0,
-	})
-	if err != nil {
-		h.logger.Error("failed to get tags", "error", err)
-	}
-	tagViews := make([]TagView, 0, len(tagsWithCount))
-	for _, t := range tagsWithCount {
-		tagViews = append(tagViews, TagView{
-			ID:        t.ID,
-			Name:      t.Name,
-			Slug:      t.Slug,
-			URL:       redirectTag + t.Slug,
-			PageCount: t.UsageCount,
+	if languageID > 0 {
+		// Get categories with usage counts filtered by language
+		categoriesWithCount, err := h.queries.GetCategoryUsageCountsByLanguage(ctx, sql.NullInt64{Int64: languageID, Valid: true})
+		if err != nil {
+			h.logger.Error("failed to get categories", "error", err)
+		}
+		categoryViews = make([]CategoryView, 0, len(categoriesWithCount))
+		for _, c := range categoriesWithCount {
+			categoryViews = append(categoryViews, CategoryView{
+				ID:          c.ID,
+				Name:        c.Name,
+				Slug:        c.Slug,
+				Description: c.Description.String,
+				URL:         redirectCategory + c.Slug,
+				PageCount:   c.UsageCount,
+			})
+		}
+
+		// Get tags with usage counts filtered by language
+		tagsWithCount, err := h.queries.GetTagUsageCountsByLanguage(ctx, store.GetTagUsageCountsByLanguageParams{
+			LanguageID: sql.NullInt64{Int64: languageID, Valid: true},
+			Limit:      20,
+			Offset:     0,
 		})
+		if err != nil {
+			h.logger.Error("failed to get tags", "error", err)
+		}
+		tagViews = make([]TagView, 0, len(tagsWithCount))
+		for _, t := range tagsWithCount {
+			tagViews = append(tagViews, TagView{
+				ID:        t.ID,
+				Name:      t.Name,
+				Slug:      t.Slug,
+				URL:       redirectTag + t.Slug,
+				PageCount: t.UsageCount,
+			})
+		}
+	} else {
+		// Fallback to all languages
+		categoriesWithCount, err := h.queries.GetCategoryUsageCounts(ctx)
+		if err != nil {
+			h.logger.Error("failed to get categories", "error", err)
+		}
+		categoryViews = make([]CategoryView, 0, len(categoriesWithCount))
+		for _, c := range categoriesWithCount {
+			categoryViews = append(categoryViews, CategoryView{
+				ID:          c.ID,
+				Name:        c.Name,
+				Slug:        c.Slug,
+				Description: c.Description.String,
+				URL:         redirectCategory + c.Slug,
+				PageCount:   c.UsageCount,
+			})
+		}
+
+		tagsWithCount, err := h.queries.GetTagUsageCounts(ctx, store.GetTagUsageCountsParams{
+			Limit:  20,
+			Offset: 0,
+		})
+		if err != nil {
+			h.logger.Error("failed to get tags", "error", err)
+		}
+		tagViews = make([]TagView, 0, len(tagsWithCount))
+		for _, t := range tagsWithCount {
+			tagViews = append(tagViews, TagView{
+				ID:        t.ID,
+				Name:      t.Name,
+				Slug:      t.Slug,
+				URL:       redirectTag + t.Slug,
+				PageCount: t.UsageCount,
+			})
+		}
 	}
 
 	// Split into featured (first 3) and recent (rest)
@@ -561,6 +620,12 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	slug := chi.URLParam(r, "slug")
 
+	// Get current language for filtering
+	var languageID int64
+	if langInfo := middleware.GetLanguage(r); langInfo != nil {
+		languageID = langInfo.ID
+	}
+
 	// Get category
 	category, err := h.queries.GetCategoryBySlug(ctx, slug)
 	if err != nil {
@@ -577,23 +642,48 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 	page := h.getPageNum(r)
 	offset := (page - 1) * defaultPerPage
 
-	// Get pages in category
-	pages, err := h.queries.ListPublishedPagesByCategory(ctx, store.ListPublishedPagesByCategoryParams{
-		CategoryID: category.ID,
-		Limit:      int64(defaultPerPage),
-		Offset:     int64(offset),
-	})
-	if err != nil {
-		h.logger.Error("failed to get pages for category", "category", slug, "error", err)
-		h.renderInternalError(w)
-		return
-	}
+	// Get pages in category filtered by language
+	var pages []store.Page
+	var total int64
 
-	// Get total count
-	total, err := h.queries.CountPublishedPagesByCategory(ctx, category.ID)
-	if err != nil {
-		h.logger.Error("failed to count pages for category", "error", err)
-		total = 0
+	if languageID > 0 {
+		pages, err = h.queries.ListPublishedPagesByCategoryAndLanguage(ctx, store.ListPublishedPagesByCategoryAndLanguageParams{
+			CategoryID: category.ID,
+			LanguageID: sql.NullInt64{Int64: languageID, Valid: true},
+			Limit:      int64(defaultPerPage),
+			Offset:     int64(offset),
+		})
+		if err != nil {
+			h.logger.Error("failed to get pages for category", "category", slug, "error", err)
+			h.renderInternalError(w)
+			return
+		}
+
+		total, err = h.queries.CountPublishedPagesByCategoryAndLanguage(ctx, store.CountPublishedPagesByCategoryAndLanguageParams{
+			CategoryID: category.ID,
+			LanguageID: sql.NullInt64{Int64: languageID, Valid: true},
+		})
+		if err != nil {
+			h.logger.Error("failed to count pages for category", "error", err)
+			total = 0
+		}
+	} else {
+		pages, err = h.queries.ListPublishedPagesByCategory(ctx, store.ListPublishedPagesByCategoryParams{
+			CategoryID: category.ID,
+			Limit:      int64(defaultPerPage),
+			Offset:     int64(offset),
+		})
+		if err != nil {
+			h.logger.Error("failed to get pages for category", "category", slug, "error", err)
+			h.renderInternalError(w)
+			return
+		}
+
+		total, err = h.queries.CountPublishedPagesByCategory(ctx, category.ID)
+		if err != nil {
+			h.logger.Error("failed to count pages for category", "error", err)
+			total = 0
+		}
 	}
 
 	// Convert to PageViews
@@ -610,12 +700,13 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 		URL:         redirectCategory + category.Slug,
 	}
 
-	pagination := h.buildPagination(page, int(total), fmt.Sprintf("/category/%s", slug))
-
-	// Get base template data
+	// Get base template data first to access LangPrefix
 	title := "Category: " + category.Name
 	base := h.getBaseTemplateData(r, title, category.Description.String)
 	base.BodyClass = "archive category"
+
+	// Build pagination with language prefix
+	pagination := h.buildPagination(page, int(total), fmt.Sprintf("%s/category/%s", base.LangPrefix, slug))
 
 	data := CategoryPageData{
 		BaseTemplateData: base,
@@ -633,6 +724,12 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	slug := chi.URLParam(r, "slug")
 
+	// Get current language for filtering
+	var languageID int64
+	if langInfo := middleware.GetLanguage(r); langInfo != nil {
+		languageID = langInfo.ID
+	}
+
 	// Get tag
 	tag, err := h.queries.GetTagBySlug(ctx, slug)
 	if err != nil {
@@ -649,23 +746,48 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 	page := h.getPageNum(r)
 	offset := (page - 1) * defaultPerPage
 
-	// Get pages with tag
-	pages, err := h.queries.ListPublishedPagesForTag(ctx, store.ListPublishedPagesForTagParams{
-		TagID:  tag.ID,
-		Limit:  int64(defaultPerPage),
-		Offset: int64(offset),
-	})
-	if err != nil {
-		h.logger.Error("failed to get pages for tag", "tag", slug, "error", err)
-		h.renderInternalError(w)
-		return
-	}
+	// Get pages with tag filtered by language
+	var pages []store.Page
+	var total int64
 
-	// Get total count
-	total, err := h.queries.CountPublishedPagesForTag(ctx, tag.ID)
-	if err != nil {
-		h.logger.Error("failed to count pages for tag", "error", err)
-		total = 0
+	if languageID > 0 {
+		pages, err = h.queries.ListPublishedPagesForTagAndLanguage(ctx, store.ListPublishedPagesForTagAndLanguageParams{
+			TagID:      tag.ID,
+			LanguageID: sql.NullInt64{Int64: languageID, Valid: true},
+			Limit:      int64(defaultPerPage),
+			Offset:     int64(offset),
+		})
+		if err != nil {
+			h.logger.Error("failed to get pages for tag", "tag", slug, "error", err)
+			h.renderInternalError(w)
+			return
+		}
+
+		total, err = h.queries.CountPublishedPagesForTagAndLanguage(ctx, store.CountPublishedPagesForTagAndLanguageParams{
+			TagID:      tag.ID,
+			LanguageID: sql.NullInt64{Int64: languageID, Valid: true},
+		})
+		if err != nil {
+			h.logger.Error("failed to count pages for tag", "error", err)
+			total = 0
+		}
+	} else {
+		pages, err = h.queries.ListPublishedPagesForTag(ctx, store.ListPublishedPagesForTagParams{
+			TagID:  tag.ID,
+			Limit:  int64(defaultPerPage),
+			Offset: int64(offset),
+		})
+		if err != nil {
+			h.logger.Error("failed to get pages for tag", "tag", slug, "error", err)
+			h.renderInternalError(w)
+			return
+		}
+
+		total, err = h.queries.CountPublishedPagesForTag(ctx, tag.ID)
+		if err != nil {
+			h.logger.Error("failed to count pages for tag", "error", err)
+			total = 0
+		}
 	}
 
 	// Convert to PageViews
@@ -681,12 +803,13 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 		URL:  redirectTag + tag.Slug,
 	}
 
-	pagination := h.buildPagination(page, int(total), fmt.Sprintf("/tag/%s", slug))
-
-	// Get base template data
+	// Get base template data first to access LangPrefix
 	title := "Tag: " + tag.Name
 	base := h.getBaseTemplateData(r, title, "")
 	base.BodyClass = "archive tag"
+
+	// Build pagination with language prefix
+	pagination := h.buildPagination(page, int(total), fmt.Sprintf("%s/tag/%s", base.LangPrefix, slug))
 
 	data := TagPageData{
 		BaseTemplateData: base,
@@ -703,26 +826,54 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	// Get current language for filtering
+	var languageID int64
+	if langInfo := middleware.GetLanguage(r); langInfo != nil {
+		languageID = langInfo.ID
+	}
+
 	// Pagination
 	page := h.getPageNum(r)
 	offset := (page - 1) * defaultPerPage
 
-	// Get published pages
-	pages, err := h.queries.ListPublishedPages(ctx, store.ListPublishedPagesParams{
-		Limit:  int64(defaultPerPage),
-		Offset: int64(offset),
-	})
-	if err != nil {
-		h.logger.Error("failed to get blog pages", "error", err)
-		h.renderInternalError(w)
-		return
-	}
+	// Get published pages filtered by language
+	var pages []store.Page
+	var total int64
+	var err error
 
-	// Get total count
-	total, err := h.queries.CountPublishedPages(ctx)
-	if err != nil {
-		h.logger.Error("failed to count blog pages", "error", err)
-		total = 0
+	if languageID > 0 {
+		pages, err = h.queries.ListPublishedPagesByLanguage(ctx, store.ListPublishedPagesByLanguageParams{
+			LanguageID: sql.NullInt64{Int64: languageID, Valid: true},
+			Limit:      int64(defaultPerPage),
+			Offset:     int64(offset),
+		})
+		if err != nil {
+			h.logger.Error("failed to get blog pages", "error", err)
+			h.renderInternalError(w)
+			return
+		}
+
+		total, err = h.queries.CountPublishedPagesByLanguage(ctx, sql.NullInt64{Int64: languageID, Valid: true})
+		if err != nil {
+			h.logger.Error("failed to count blog pages", "error", err)
+			total = 0
+		}
+	} else {
+		pages, err = h.queries.ListPublishedPages(ctx, store.ListPublishedPagesParams{
+			Limit:  int64(defaultPerPage),
+			Offset: int64(offset),
+		})
+		if err != nil {
+			h.logger.Error("failed to get blog pages", "error", err)
+			h.renderInternalError(w)
+			return
+		}
+
+		total, err = h.queries.CountPublishedPages(ctx)
+		if err != nil {
+			h.logger.Error("failed to count blog pages", "error", err)
+			total = 0
+		}
 	}
 
 	// Convert to PageViews
@@ -731,11 +882,12 @@ func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
 		pageViews = append(pageViews, h.pageToView(ctx, p))
 	}
 
-	pagination := h.buildPagination(page, int(total), "/blog")
-
-	// Get base template data
+	// Get base template data first to access LangPrefix
 	base := h.getBaseTemplateData(r, "Blog", "")
 	base.BodyClass = "archive blog"
+
+	// Build pagination with language prefix
+	pagination := h.buildPagination(page, int(total), base.LangPrefix+"/blog")
 
 	data := ListData{
 		BaseTemplateData: base,
@@ -751,8 +903,14 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	query := r.URL.Query().Get("q")
 
-	// Fetch sidebar data (categories, tags, recent pages)
-	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx)
+	// Get current language for filtering
+	var languageID int64
+	if langInfo := middleware.GetLanguage(r); langInfo != nil {
+		languageID = langInfo.ID
+	}
+
+	// Fetch sidebar data (categories, tags, recent pages) filtered by language
+	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageID)
 
 	// If no query, show empty search page
 	if query == "" {
@@ -774,11 +932,12 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 	page := h.getPageNum(r)
 	offset := (page - 1) * defaultPerPage
 
-	// Use FTS5 search service
+	// Use FTS5 search service with language filtering
 	searchResults, total, err := h.searchService.SearchPublishedPages(ctx, service.SearchParams{
-		Query:  query,
-		Limit:  defaultPerPage,
-		Offset: offset,
+		Query:      query,
+		Limit:      defaultPerPage,
+		Offset:     offset,
+		LanguageID: languageID,
 	})
 	if err != nil {
 		h.logger.Error("failed to search pages", "query", query, "error", err)
@@ -824,12 +983,13 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 		pageViews = append(pageViews, pv)
 	}
 
-	pagination := h.buildPagination(page, int(total), fmt.Sprintf("/search?q=%s", query))
-
-	// Get base template data
+	// Get base template data first to access LangPrefix
 	title := fmt.Sprintf("Search: %s", query)
 	base := h.getBaseTemplateData(r, title, "")
 	base.BodyClass = "search"
+
+	// Build pagination with language prefix
+	pagination := h.buildPagination(page, int(total), fmt.Sprintf("%s/search?q=%s", base.LangPrefix, query))
 
 	data := SearchData{
 		BaseTemplateData: base,
@@ -1096,54 +1256,110 @@ func (h *FrontendHandler) generateExcerpt(html string, maxLen int) string {
 }
 
 // getSidebarData fetches categories, tags, and recent pages for sidebar display.
-func (h *FrontendHandler) getSidebarData(ctx context.Context) ([]CategoryView, []TagView, []PageView) {
-	// Get categories with usage counts
-	categoriesWithCount, err := h.queries.GetCategoryUsageCounts(ctx)
-	if err != nil {
-		h.logger.Error("failed to get sidebar categories", "error", err)
-	}
-	categoryViews := make([]CategoryView, 0, len(categoriesWithCount))
-	for _, c := range categoriesWithCount {
-		categoryViews = append(categoryViews, CategoryView{
-			ID:          c.ID,
-			Name:        c.Name,
-			Slug:        c.Slug,
-			Description: c.Description.String,
-			URL:         redirectCategory + c.Slug,
-			PageCount:   c.UsageCount,
-		})
-	}
+// languageID: if > 0, filters by language; if 0, shows all languages.
+func (h *FrontendHandler) getSidebarData(ctx context.Context, languageID int64) ([]CategoryView, []TagView, []PageView) {
+	var categoryViews []CategoryView
+	var tagViews []TagView
+	var recentPageViews []PageView
 
-	// Get tags with usage counts
-	tagsWithCount, err := h.queries.GetTagUsageCounts(ctx, store.GetTagUsageCountsParams{
-		Limit:  20,
-		Offset: 0,
-	})
-	if err != nil {
-		h.logger.Error("failed to get sidebar tags", "error", err)
-	}
-	tagViews := make([]TagView, 0, len(tagsWithCount))
-	for _, t := range tagsWithCount {
-		tagViews = append(tagViews, TagView{
-			ID:        t.ID,
-			Name:      t.Name,
-			Slug:      t.Slug,
-			URL:       redirectTag + t.Slug,
-			PageCount: t.UsageCount,
-		})
-	}
+	if languageID > 0 {
+		// Get categories with usage counts filtered by language
+		categoriesWithCount, err := h.queries.GetCategoryUsageCountsByLanguage(ctx, sql.NullInt64{Int64: languageID, Valid: true})
+		if err != nil {
+			h.logger.Error("failed to get sidebar categories", "error", err)
+		}
+		categoryViews = make([]CategoryView, 0, len(categoriesWithCount))
+		for _, c := range categoriesWithCount {
+			categoryViews = append(categoryViews, CategoryView{
+				ID:          c.ID,
+				Name:        c.Name,
+				Slug:        c.Slug,
+				Description: c.Description.String,
+				URL:         redirectCategory + c.Slug,
+				PageCount:   c.UsageCount,
+			})
+		}
 
-	// Get recent pages
-	recentPages, err := h.queries.ListPublishedPages(ctx, store.ListPublishedPagesParams{
-		Limit:  5,
-		Offset: 0,
-	})
-	if err != nil {
-		h.logger.Error("failed to get sidebar recent pages", "error", err)
-	}
-	recentPageViews := make([]PageView, 0, len(recentPages))
-	for _, p := range recentPages {
-		recentPageViews = append(recentPageViews, h.pageToView(ctx, p))
+		// Get tags with usage counts filtered by language
+		tagsWithCount, err := h.queries.GetTagUsageCountsByLanguage(ctx, store.GetTagUsageCountsByLanguageParams{
+			LanguageID: sql.NullInt64{Int64: languageID, Valid: true},
+			Limit:      20,
+			Offset:     0,
+		})
+		if err != nil {
+			h.logger.Error("failed to get sidebar tags", "error", err)
+		}
+		tagViews = make([]TagView, 0, len(tagsWithCount))
+		for _, t := range tagsWithCount {
+			tagViews = append(tagViews, TagView{
+				ID:        t.ID,
+				Name:      t.Name,
+				Slug:      t.Slug,
+				URL:       redirectTag + t.Slug,
+				PageCount: t.UsageCount,
+			})
+		}
+
+		// Get recent pages filtered by language
+		recentPages, err := h.queries.ListPublishedPagesByLanguage(ctx, store.ListPublishedPagesByLanguageParams{
+			LanguageID: sql.NullInt64{Int64: languageID, Valid: true},
+			Limit:      5,
+			Offset:     0,
+		})
+		if err != nil {
+			h.logger.Error("failed to get sidebar recent pages", "error", err)
+		}
+		recentPageViews = make([]PageView, 0, len(recentPages))
+		for _, p := range recentPages {
+			recentPageViews = append(recentPageViews, h.pageToView(ctx, p))
+		}
+	} else {
+		// Fallback to all languages (for single-language sites)
+		categoriesWithCount, err := h.queries.GetCategoryUsageCounts(ctx)
+		if err != nil {
+			h.logger.Error("failed to get sidebar categories", "error", err)
+		}
+		categoryViews = make([]CategoryView, 0, len(categoriesWithCount))
+		for _, c := range categoriesWithCount {
+			categoryViews = append(categoryViews, CategoryView{
+				ID:          c.ID,
+				Name:        c.Name,
+				Slug:        c.Slug,
+				Description: c.Description.String,
+				URL:         redirectCategory + c.Slug,
+				PageCount:   c.UsageCount,
+			})
+		}
+
+		tagsWithCount, err := h.queries.GetTagUsageCounts(ctx, store.GetTagUsageCountsParams{
+			Limit:  20,
+			Offset: 0,
+		})
+		if err != nil {
+			h.logger.Error("failed to get sidebar tags", "error", err)
+		}
+		tagViews = make([]TagView, 0, len(tagsWithCount))
+		for _, t := range tagsWithCount {
+			tagViews = append(tagViews, TagView{
+				ID:        t.ID,
+				Name:      t.Name,
+				Slug:      t.Slug,
+				URL:       redirectTag + t.Slug,
+				PageCount: t.UsageCount,
+			})
+		}
+
+		recentPages, err := h.queries.ListPublishedPages(ctx, store.ListPublishedPagesParams{
+			Limit:  5,
+			Offset: 0,
+		})
+		if err != nil {
+			h.logger.Error("failed to get sidebar recent pages", "error", err)
+		}
+		recentPageViews = make([]PageView, 0, len(recentPages))
+		for _, p := range recentPages {
+			recentPageViews = append(recentPageViews, h.pageToView(ctx, p))
+		}
 	}
 
 	return categoryViews, tagViews, recentPageViews
@@ -1343,6 +1559,10 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		data.LangDirection = langInfo.Direction
 		if data.LangDirection == "" {
 			data.LangDirection = "ltr"
+		}
+		// Set language prefix for URLs (empty for default language)
+		if !langInfo.IsDefault {
+			data.LangPrefix = "/" + langInfo.Code
 		}
 
 		// Apply translated config values for current language

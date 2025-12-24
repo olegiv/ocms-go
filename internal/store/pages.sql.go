@@ -112,6 +112,24 @@ func (q *Queries) CountPublishedPagesByCategory(ctx context.Context, categoryID 
 	return count, err
 }
 
+const countPublishedPagesByCategoryAndLanguage = `-- name: CountPublishedPagesByCategoryAndLanguage :one
+SELECT COUNT(DISTINCT p.id) FROM pages p
+INNER JOIN page_categories pc ON pc.page_id = p.id
+WHERE pc.category_id = ? AND p.status = 'published' AND p.language_id = ?
+`
+
+type CountPublishedPagesByCategoryAndLanguageParams struct {
+	CategoryID int64         `json:"category_id"`
+	LanguageID sql.NullInt64 `json:"language_id"`
+}
+
+func (q *Queries) CountPublishedPagesByCategoryAndLanguage(ctx context.Context, arg CountPublishedPagesByCategoryAndLanguageParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPublishedPagesByCategoryAndLanguage, arg.CategoryID, arg.LanguageID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countPublishedPagesForTag = `-- name: CountPublishedPagesForTag :one
 SELECT COUNT(*) FROM pages p
 INNER JOIN page_tags pt ON pt.page_id = p.id
@@ -120,6 +138,24 @@ WHERE pt.tag_id = ? AND p.status = 'published'
 
 func (q *Queries) CountPublishedPagesForTag(ctx context.Context, tagID int64) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countPublishedPagesForTag, tagID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countPublishedPagesForTagAndLanguage = `-- name: CountPublishedPagesForTagAndLanguage :one
+SELECT COUNT(*) FROM pages p
+INNER JOIN page_tags pt ON pt.page_id = p.id
+WHERE pt.tag_id = ? AND p.status = 'published' AND p.language_id = ?
+`
+
+type CountPublishedPagesForTagAndLanguageParams struct {
+	TagID      int64         `json:"tag_id"`
+	LanguageID sql.NullInt64 `json:"language_id"`
+}
+
+func (q *Queries) CountPublishedPagesForTagAndLanguage(ctx context.Context, arg CountPublishedPagesForTagAndLanguageParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPublishedPagesForTagAndLanguage, arg.TagID, arg.LanguageID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -1227,6 +1263,72 @@ func (q *Queries) ListPublishedPagesByCategory(ctx context.Context, arg ListPubl
 	return items, nil
 }
 
+const listPublishedPagesByCategoryAndLanguage = `-- name: ListPublishedPagesByCategoryAndLanguage :many
+
+SELECT DISTINCT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_id FROM pages p
+INNER JOIN page_categories pc ON pc.page_id = p.id
+WHERE pc.category_id = ? AND p.status = 'published' AND p.language_id = ?
+ORDER BY p.published_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListPublishedPagesByCategoryAndLanguageParams struct {
+	CategoryID int64         `json:"category_id"`
+	LanguageID sql.NullInt64 `json:"language_id"`
+	Limit      int64         `json:"limit"`
+	Offset     int64         `json:"offset"`
+}
+
+// Frontend queries filtered by language (for showing pages in current language only)
+// Note: ListPublishedPagesByLanguage and CountPublishedPagesByLanguage are in translations.sql
+func (q *Queries) ListPublishedPagesByCategoryAndLanguage(ctx context.Context, arg ListPublishedPagesByCategoryAndLanguageParams) ([]Page, error) {
+	rows, err := q.db.QueryContext(ctx, listPublishedPagesByCategoryAndLanguage,
+		arg.CategoryID,
+		arg.LanguageID,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Page{}
+	for rows.Next() {
+		var i Page
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Slug,
+			&i.Body,
+			&i.Status,
+			&i.AuthorID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PublishedAt,
+			&i.FeaturedImageID,
+			&i.MetaTitle,
+			&i.MetaDescription,
+			&i.MetaKeywords,
+			&i.OgImageID,
+			&i.NoIndex,
+			&i.NoFollow,
+			&i.CanonicalUrl,
+			&i.ScheduledAt,
+			&i.LanguageID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPublishedPagesForSitemap = `-- name: ListPublishedPagesForSitemap :many
 SELECT id, slug, updated_at, no_index FROM pages
 WHERE status = 'published' AND no_index = 0
@@ -1284,6 +1386,69 @@ type ListPublishedPagesForTagParams struct {
 
 func (q *Queries) ListPublishedPagesForTag(ctx context.Context, arg ListPublishedPagesForTagParams) ([]Page, error) {
 	rows, err := q.db.QueryContext(ctx, listPublishedPagesForTag, arg.TagID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Page{}
+	for rows.Next() {
+		var i Page
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Slug,
+			&i.Body,
+			&i.Status,
+			&i.AuthorID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PublishedAt,
+			&i.FeaturedImageID,
+			&i.MetaTitle,
+			&i.MetaDescription,
+			&i.MetaKeywords,
+			&i.OgImageID,
+			&i.NoIndex,
+			&i.NoFollow,
+			&i.CanonicalUrl,
+			&i.ScheduledAt,
+			&i.LanguageID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublishedPagesForTagAndLanguage = `-- name: ListPublishedPagesForTagAndLanguage :many
+SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_id FROM pages p
+INNER JOIN page_tags pt ON pt.page_id = p.id
+WHERE pt.tag_id = ? AND p.status = 'published' AND p.language_id = ?
+ORDER BY p.published_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListPublishedPagesForTagAndLanguageParams struct {
+	TagID      int64         `json:"tag_id"`
+	LanguageID sql.NullInt64 `json:"language_id"`
+	Limit      int64         `json:"limit"`
+	Offset     int64         `json:"offset"`
+}
+
+func (q *Queries) ListPublishedPagesForTagAndLanguage(ctx context.Context, arg ListPublishedPagesForTagAndLanguageParams) ([]Page, error) {
+	rows, err := q.db.QueryContext(ctx, listPublishedPagesForTagAndLanguage,
+		arg.TagID,
+		arg.LanguageID,
+		arg.Limit,
+		arg.Offset,
+	)
 	if err != nil {
 		return nil, err
 	}

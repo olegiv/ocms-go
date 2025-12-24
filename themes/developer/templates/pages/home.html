@@ -107,8 +107,8 @@
         </div>
         {{if .ShowAllPostsLink}}
         <div class="dev-section-footer">
-            <a href="/blog" class="dev-btn dev-btn-secondary">
-                <span class="dev-arrow">&gt;</span> ls -la /blog
+            <a href="{{.LangPrefix}}/blog" class="dev-btn dev-btn-secondary">
+                <span class="dev-arrow">&gt;</span> ls -la {{.LangPrefix}}/blog
             </a>
         </div>
         {{end}}
