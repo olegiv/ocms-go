@@ -302,6 +302,10 @@ type SearchData struct {
 	Pagination      Pagination
 	ResultCount     int
 	PopularSearches []string
+	// Sidebar data for themes that show sidebar on search page
+	Categories  []CategoryView
+	Tags        []TagView
+	RecentPages []PageView
 }
 
 // NotFoundData holds data for 404 templates.
@@ -747,6 +751,9 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	query := r.URL.Query().Get("q")
 
+	// Fetch sidebar data (categories, tags, recent pages)
+	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx)
+
 	// If no query, show empty search page
 	if query == "" {
 		base := h.getBaseTemplateData(r, "Search", "")
@@ -755,6 +762,9 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 			BaseTemplateData: base,
 			Query:            "",
 			Pages:            []PageView{},
+			Categories:       sidebarCategories,
+			Tags:             sidebarTags,
+			RecentPages:      sidebarRecent,
 		}
 		h.render(w, "search", data)
 		return
@@ -827,6 +837,9 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 		Pages:            pageViews,
 		Pagination:       pagination,
 		ResultCount:      int(total),
+		Categories:       sidebarCategories,
+		Tags:             sidebarTags,
+		RecentPages:      sidebarRecent,
 	}
 
 	h.render(w, "search", data)
@@ -1080,6 +1093,60 @@ func (h *FrontendHandler) generateExcerpt(html string, maxLen int) string {
 	}
 
 	return truncated + "..."
+}
+
+// getSidebarData fetches categories, tags, and recent pages for sidebar display.
+func (h *FrontendHandler) getSidebarData(ctx context.Context) ([]CategoryView, []TagView, []PageView) {
+	// Get categories with usage counts
+	categoriesWithCount, err := h.queries.GetCategoryUsageCounts(ctx)
+	if err != nil {
+		h.logger.Error("failed to get sidebar categories", "error", err)
+	}
+	categoryViews := make([]CategoryView, 0, len(categoriesWithCount))
+	for _, c := range categoriesWithCount {
+		categoryViews = append(categoryViews, CategoryView{
+			ID:          c.ID,
+			Name:        c.Name,
+			Slug:        c.Slug,
+			Description: c.Description.String,
+			URL:         redirectCategory + c.Slug,
+			PageCount:   c.UsageCount,
+		})
+	}
+
+	// Get tags with usage counts
+	tagsWithCount, err := h.queries.GetTagUsageCounts(ctx, store.GetTagUsageCountsParams{
+		Limit:  20,
+		Offset: 0,
+	})
+	if err != nil {
+		h.logger.Error("failed to get sidebar tags", "error", err)
+	}
+	tagViews := make([]TagView, 0, len(tagsWithCount))
+	for _, t := range tagsWithCount {
+		tagViews = append(tagViews, TagView{
+			ID:        t.ID,
+			Name:      t.Name,
+			Slug:      t.Slug,
+			URL:       redirectTag + t.Slug,
+			PageCount: t.UsageCount,
+		})
+	}
+
+	// Get recent pages
+	recentPages, err := h.queries.ListPublishedPages(ctx, store.ListPublishedPagesParams{
+		Limit:  5,
+		Offset: 0,
+	})
+	if err != nil {
+		h.logger.Error("failed to get sidebar recent pages", "error", err)
+	}
+	recentPageViews := make([]PageView, 0, len(recentPages))
+	for _, p := range recentPages {
+		recentPageViews = append(recentPageViews, h.pageToView(ctx, p))
+	}
+
+	return categoryViews, tagViews, recentPageViews
 }
 
 // stripHTMLPreserveMark strips HTML tags from a string but preserves <mark> and </mark> tags.
