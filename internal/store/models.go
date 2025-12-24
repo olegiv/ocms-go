@@ -123,6 +123,16 @@ type MediaFolder struct {
 	CreatedAt time.Time     `json:"created_at"`
 }
 
+type MediaTranslation struct {
+	ID         int64        `json:"id"`
+	MediaID    int64        `json:"media_id"`
+	LanguageID int64        `json:"language_id"`
+	Alt        string       `json:"alt"`
+	Caption    string       `json:"caption"`
+	CreatedAt  sql.NullTime `json:"created_at"`
+	UpdatedAt  sql.NullTime `json:"updated_at"`
+}
+
 type MediaVariant struct {
 	ID        int64     `json:"id"`
 	MediaID   int64     `json:"media_id"`

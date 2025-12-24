@@ -189,6 +189,15 @@ func (q *Queries) CreateMediaVariant(ctx context.Context, arg CreateMediaVariant
 	return i, err
 }
 
+const deleteAllMediaTranslations = `-- name: DeleteAllMediaTranslations :exec
+DELETE FROM media_translations WHERE media_id = ?
+`
+
+func (q *Queries) DeleteAllMediaTranslations(ctx context.Context, mediaID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteAllMediaTranslations, mediaID)
+	return err
+}
+
 const deleteMedia = `-- name: DeleteMedia :exec
 DELETE FROM media WHERE id = ?
 `
@@ -204,6 +213,20 @@ DELETE FROM media_folders WHERE id = ?
 
 func (q *Queries) DeleteMediaFolder(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deleteMediaFolder, id)
+	return err
+}
+
+const deleteMediaTranslation = `-- name: DeleteMediaTranslation :exec
+DELETE FROM media_translations WHERE media_id = ? AND language_id = ?
+`
+
+type DeleteMediaTranslationParams struct {
+	MediaID    int64 `json:"media_id"`
+	LanguageID int64 `json:"language_id"`
+}
+
+func (q *Queries) DeleteMediaTranslation(ctx context.Context, arg DeleteMediaTranslationParams) error {
+	_, err := q.db.ExecContext(ctx, deleteMediaTranslation, arg.MediaID, arg.LanguageID)
 	return err
 }
 
@@ -281,6 +304,86 @@ func (q *Queries) GetMediaFolderByID(ctx context.Context, id int64) (MediaFolder
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const getMediaTranslation = `-- name: GetMediaTranslation :one
+
+SELECT id, media_id, language_id, alt, caption, created_at, updated_at FROM media_translations
+WHERE media_id = ? AND language_id = ?
+`
+
+type GetMediaTranslationParams struct {
+	MediaID    int64 `json:"media_id"`
+	LanguageID int64 `json:"language_id"`
+}
+
+// Media Translations
+func (q *Queries) GetMediaTranslation(ctx context.Context, arg GetMediaTranslationParams) (MediaTranslation, error) {
+	row := q.db.QueryRowContext(ctx, getMediaTranslation, arg.MediaID, arg.LanguageID)
+	var i MediaTranslation
+	err := row.Scan(
+		&i.ID,
+		&i.MediaID,
+		&i.LanguageID,
+		&i.Alt,
+		&i.Caption,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getMediaTranslations = `-- name: GetMediaTranslations :many
+SELECT mt.id, mt.media_id, mt.language_id, mt.alt, mt.caption, mt.created_at, mt.updated_at, l.code as language_code, l.name as language_name
+FROM media_translations mt
+JOIN languages l ON l.id = mt.language_id
+WHERE mt.media_id = ?
+ORDER BY l.position
+`
+
+type GetMediaTranslationsRow struct {
+	ID           int64        `json:"id"`
+	MediaID      int64        `json:"media_id"`
+	LanguageID   int64        `json:"language_id"`
+	Alt          string       `json:"alt"`
+	Caption      string       `json:"caption"`
+	CreatedAt    sql.NullTime `json:"created_at"`
+	UpdatedAt    sql.NullTime `json:"updated_at"`
+	LanguageCode string       `json:"language_code"`
+	LanguageName string       `json:"language_name"`
+}
+
+func (q *Queries) GetMediaTranslations(ctx context.Context, mediaID int64) ([]GetMediaTranslationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getMediaTranslations, mediaID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMediaTranslationsRow{}
+	for rows.Next() {
+		var i GetMediaTranslationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.MediaID,
+			&i.LanguageID,
+			&i.Alt,
+			&i.Caption,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.LanguageCode,
+			&i.LanguageName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getMediaVariant = `-- name: GetMediaVariant :one
@@ -800,6 +903,41 @@ func (q *Queries) UpdateMediaFolder(ctx context.Context, arg UpdateMediaFolderPa
 		&i.ParentID,
 		&i.Position,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const upsertMediaTranslation = `-- name: UpsertMediaTranslation :one
+INSERT INTO media_translations (media_id, language_id, alt, caption, updated_at)
+VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+ON CONFLICT(media_id, language_id)
+DO UPDATE SET alt = excluded.alt, caption = excluded.caption, updated_at = CURRENT_TIMESTAMP
+RETURNING id, media_id, language_id, alt, caption, created_at, updated_at
+`
+
+type UpsertMediaTranslationParams struct {
+	MediaID    int64  `json:"media_id"`
+	LanguageID int64  `json:"language_id"`
+	Alt        string `json:"alt"`
+	Caption    string `json:"caption"`
+}
+
+func (q *Queries) UpsertMediaTranslation(ctx context.Context, arg UpsertMediaTranslationParams) (MediaTranslation, error) {
+	row := q.db.QueryRowContext(ctx, upsertMediaTranslation,
+		arg.MediaID,
+		arg.LanguageID,
+		arg.Alt,
+		arg.Caption,
+	)
+	var i MediaTranslation
+	err := row.Scan(
+		&i.ID,
+		&i.MediaID,
+		&i.LanguageID,
+		&i.Alt,
+		&i.Caption,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

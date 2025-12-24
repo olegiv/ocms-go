@@ -40,6 +40,8 @@ type PageView struct {
 	UpdatedAt            time.Time
 	FeaturedImage        string
 	FeaturedImageLarge   string // Large variant for single page views
+	FeaturedImageID      int64  // Media ID for translation lookup
+	FeaturedImageAlt     string // Alt text (default language)
 	ReadingTime          int    // Estimated reading time in minutes
 	Highlight            string // Search result highlight
 	Author               *AuthorView
@@ -999,6 +1001,8 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 			media, err := h.queries.GetMediaByID(ctx, sr.FeaturedImageID.Int64)
 			if err == nil {
 				pv.FeaturedImage = fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename)
+				pv.FeaturedImageID = media.ID
+				pv.FeaturedImageAlt = media.Alt.String
 			}
 		}
 
@@ -1175,6 +1179,8 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page) PageView
 		if err == nil {
 			pv.FeaturedImage = fmt.Sprintf("/uploads/medium/%s/%s", media.Uuid, media.Filename)
 			pv.FeaturedImageLarge = fmt.Sprintf("/uploads/large/%s/%s", media.Uuid, media.Filename)
+			pv.FeaturedImageID = media.ID
+			pv.FeaturedImageAlt = media.Alt.String
 		}
 	}
 

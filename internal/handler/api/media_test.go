@@ -10,70 +10,96 @@ import (
 
 func TestParseMediaIncludes(t *testing.T) {
 	tests := []struct {
-		name         string
-		include      string
-		wantVariants bool
-		wantFolder   bool
+		name             string
+		include          string
+		wantVariants     bool
+		wantFolder       bool
+		wantTranslations bool
 	}{
 		{
-			name:         "empty string",
-			include:      "",
-			wantVariants: false,
-			wantFolder:   false,
+			name:             "empty string",
+			include:          "",
+			wantVariants:     false,
+			wantFolder:       false,
+			wantTranslations: false,
 		},
 		{
-			name:         "variants only",
-			include:      "variants",
-			wantVariants: true,
-			wantFolder:   false,
+			name:             "variants only",
+			include:          "variants",
+			wantVariants:     true,
+			wantFolder:       false,
+			wantTranslations: false,
 		},
 		{
-			name:         "folder only",
-			include:      "folder",
-			wantVariants: false,
-			wantFolder:   true,
+			name:             "folder only",
+			include:          "folder",
+			wantVariants:     false,
+			wantFolder:       true,
+			wantTranslations: false,
 		},
 		{
-			name:         "both variants and folder",
-			include:      "variants,folder",
-			wantVariants: true,
-			wantFolder:   true,
+			name:             "translations only",
+			include:          "translations",
+			wantVariants:     false,
+			wantFolder:       false,
+			wantTranslations: true,
 		},
 		{
-			name:         "with spaces",
-			include:      "variants, folder",
-			wantVariants: true,
-			wantFolder:   true,
+			name:             "both variants and folder",
+			include:          "variants,folder",
+			wantVariants:     true,
+			wantFolder:       true,
+			wantTranslations: false,
 		},
 		{
-			name:         "reversed order",
-			include:      "folder,variants",
-			wantVariants: true,
-			wantFolder:   true,
+			name:             "all includes",
+			include:          "variants,folder,translations",
+			wantVariants:     true,
+			wantFolder:       true,
+			wantTranslations: true,
 		},
 		{
-			name:         "unknown include ignored",
-			include:      "variants,unknown,folder",
-			wantVariants: true,
-			wantFolder:   true,
+			name:             "with spaces",
+			include:          "variants, folder, translations",
+			wantVariants:     true,
+			wantFolder:       true,
+			wantTranslations: true,
 		},
 		{
-			name:         "only unknown",
-			include:      "unknown",
-			wantVariants: false,
-			wantFolder:   false,
+			name:             "reversed order",
+			include:          "folder,variants",
+			wantVariants:     true,
+			wantFolder:       true,
+			wantTranslations: false,
+		},
+		{
+			name:             "unknown include ignored",
+			include:          "variants,unknown,folder",
+			wantVariants:     true,
+			wantFolder:       true,
+			wantTranslations: false,
+		},
+		{
+			name:             "only unknown",
+			include:          "unknown",
+			wantVariants:     false,
+			wantFolder:       false,
+			wantTranslations: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotVariants, gotFolder := parseMediaIncludes(tt.include)
+			gotVariants, gotFolder, gotTranslations := parseMediaIncludes(tt.include)
 
 			if gotVariants != tt.wantVariants {
 				t.Errorf("variants = %v, want %v", gotVariants, tt.wantVariants)
 			}
 			if gotFolder != tt.wantFolder {
 				t.Errorf("folder = %v, want %v", gotFolder, tt.wantFolder)
+			}
+			if gotTranslations != tt.wantTranslations {
+				t.Errorf("translations = %v, want %v", gotTranslations, tt.wantTranslations)
 			}
 		})
 	}

@@ -91,3 +91,29 @@ UPDATE media SET folder_id = ?, updated_at = ? WHERE id = ?;
 
 -- name: GetRecentMedia :many
 SELECT * FROM media ORDER BY created_at DESC LIMIT ?;
+
+-- Media Translations
+
+-- name: GetMediaTranslation :one
+SELECT * FROM media_translations
+WHERE media_id = ? AND language_id = ?;
+
+-- name: GetMediaTranslations :many
+SELECT mt.*, l.code as language_code, l.name as language_name
+FROM media_translations mt
+JOIN languages l ON l.id = mt.language_id
+WHERE mt.media_id = ?
+ORDER BY l.position;
+
+-- name: UpsertMediaTranslation :one
+INSERT INTO media_translations (media_id, language_id, alt, caption, updated_at)
+VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+ON CONFLICT(media_id, language_id)
+DO UPDATE SET alt = excluded.alt, caption = excluded.caption, updated_at = CURRENT_TIMESTAMP
+RETURNING *;
+
+-- name: DeleteMediaTranslation :exec
+DELETE FROM media_translations WHERE media_id = ? AND language_id = ?;
+
+-- name: DeleteAllMediaTranslations :exec
+DELETE FROM media_translations WHERE media_id = ?;

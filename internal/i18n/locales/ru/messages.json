@@ -1003,6 +1003,11 @@
             "translation": "Необязательная подпись для этого медиафайла"
         },
         {
+            "id": "media.translations",
+            "message": "Translations",
+            "translation": "Переводы"
+        },
+        {
             "id": "media.folder",
             "message": "Folder",
             "translation": "Папка"
