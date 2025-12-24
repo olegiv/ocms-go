@@ -61,7 +61,7 @@
                         >
                     </a>
                     <div class="folder-actions">
-                        <button type="button" class="folder-action-btn" @click="editing = true; newName = '{{.Name}}'; $nextTick(() => $refs.renameInput{{.ID}}.focus())" title="{{T $.AdminLang "media.rename"}}">
+                        <button type="button" class="folder-action-btn" @click="editing = true; newName = $el.closest('.folder-link-wrapper').querySelector('.folder-name').textContent; $nextTick(() => $refs.renameInput{{.ID}}.focus())" title="{{T $.AdminLang "media.rename"}}">
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                         </button>
                         <button type="button" class="folder-action-btn folder-action-danger" @click="showDelete = true" title="{{T $.AdminLang "btn.delete"}}">

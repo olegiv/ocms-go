@@ -160,7 +160,7 @@ function widgetsManager() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        theme: '{{.Data.Theme.Name}}',
+                        theme: {{toJSON .Data.Theme.Name}},
                         area: this.selectedArea,
                         widget_type: this.newWidget.widget_type,
                         title: this.newWidget.title,

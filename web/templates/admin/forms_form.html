@@ -148,7 +148,7 @@
                             </div>
                         </div>
                         <div class="field-item-actions">
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="openEditFieldModal({{.ID}}, '{{.Type}}', '{{.Name}}', '{{.Label}}', '{{.Placeholder.String}}', '{{.HelpText.String}}', '{{.Options.String}}', '{{.Validation.String}}', {{.IsRequired}})">
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="openEditFieldModal({{.ID}}, {{toJSON .Type}}, {{toJSON .Name}}, {{toJSON .Label}}, {{toJSON .Placeholder.String}}, {{toJSON .HelpText.String}}, {{toJSON .Options.String}}, {{toJSON .Validation.String}}, {{.IsRequired}})">
                                 {{T $.AdminLang "btn.edit"}}
                             </button>
                             <button type="button" class="btn btn-sm btn-danger" onclick="deleteField({{.ID}})">

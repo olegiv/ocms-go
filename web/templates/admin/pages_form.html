@@ -282,13 +282,14 @@
                     </summary>
                     <div class="collapsible-content">
                         <!-- Meta Title -->
-                        <div class="form-group" x-data="{ charCount: '{{if .Data.FormValues.meta_title}}{{.Data.FormValues.meta_title}}{{else if .Data.Page}}{{.Data.Page.MetaTitle}}{{end}}'.length }">
+                        <div class="form-group" x-data="{ charCount: 0 }" x-init="charCount = $refs.metaTitleInput.value.length">
                             <label for="meta_title" class="form-label">{{T .AdminLang "seo.meta_title"}}</label>
                             <input
                                 type="text"
                                 id="meta_title"
                                 name="meta_title"
                                 class="form-input"
+                                x-ref="metaTitleInput"
                                 value="{{if .Data.FormValues.meta_title}}{{.Data.FormValues.meta_title}}{{else if .Data.Page}}{{.Data.Page.MetaTitle}}{{end}}"
                                 placeholder="{{T .AdminLang "seo.meta_title_hint"}}"
                                 maxlength="70"
@@ -301,13 +302,14 @@
                         </div>
 
                         <!-- Meta Description -->
-                        <div class="form-group" x-data="{ charCount: '{{if .Data.FormValues.meta_description}}{{.Data.FormValues.meta_description}}{{else if .Data.Page}}{{.Data.Page.MetaDescription}}{{end}}'.length }">
+                        <div class="form-group" x-data="{ charCount: 0 }" x-init="charCount = $refs.metaDescInput.value.length">
                             <label for="meta_description" class="form-label">{{T .AdminLang "seo.meta_description"}}</label>
                             <textarea
                                 id="meta_description"
                                 name="meta_description"
                                 class="form-input form-textarea"
                                 rows="3"
+                                x-ref="metaDescInput"
                                 placeholder="{{T .AdminLang "seo.meta_description_hint"}}"
                                 maxlength="320"
                                 @input="charCount = $event.target.value.length"
