@@ -25,9 +25,10 @@
         {{end}}
         {{else}}
         {{/* Fallback to language list without page-specific translations */}}
+        {{/* Always use ?lang= parameter to ensure language cookie is updated */}}
         {{range .Languages}}
         <li class="{{if .IsCurrent}}active{{end}}">
-            <a href="{{if .IsDefault}}/{{else}}/{{.Code}}/{{end}}" {{if .Direction}}dir="{{.Direction}}"{{end}} title="{{.Name}}">
+            <a href="/?lang={{.Code}}" {{if .Direction}}dir="{{.Direction}}"{{end}} title="{{.Name}}">
                 <span class="lang-code">{{.Code | upper}}</span>
                 <span class="lang-name">{{.NativeName}}</span>
             </a>

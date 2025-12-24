@@ -5,7 +5,7 @@
             <h1 class="dev-search-title">
                 <span class="dev-comment">// </span>{{TTheme .LangCode "search.title"}}
             </h1>
-            <form action="/search" method="get" class="dev-search-form">
+            <form action="{{.LangPrefix}}/search" method="get" class="dev-search-form">
                 <div class="dev-search-input-wrapper">
                     <span class="dev-prompt">$</span>
                     <span class="dev-grep">grep -ri "</span>
@@ -37,7 +37,7 @@
                     <div class="dev-post-content">
                         {{if .Category}}
                         <span class="dev-post-category">
-                            <a href="/category/{{.Category.Slug}}">{{.Category.Name}}</a>
+                            <a href="{{$.LangPrefix}}/category/{{.Category.Slug}}">{{.Category.Name}}</a>
                         </span>
                         {{end}}
                         <h2 class="dev-post-title">
@@ -118,7 +118,7 @@
                 <ul class="dev-query-list">
                     {{range .PopularSearches}}
                     <li>
-                        <a href="/search?q={{.}}" class="dev-query-link">
+                        <a href="{{$.LangPrefix}}/search?q={{.}}" class="dev-query-link">
                             <span class="dev-prompt">$</span> grep "{{.}}"
                         </a>
                     </li>

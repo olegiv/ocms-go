@@ -182,3 +182,12 @@ SELECT COUNT(*) FROM categories WHERE slug = ? AND language_id = ?;
 
 -- name: CategorySlugExistsExcludingForLanguage :one
 SELECT COUNT(*) FROM categories WHERE slug = ? AND id != ? AND language_id = ?;
+
+-- Category usage counts filtered by page language (for frontend sidebar)
+-- name: GetCategoryUsageCountsByLanguage :many
+SELECT c.*, COUNT(p.id) as usage_count
+FROM categories c
+INNER JOIN page_categories pc ON pc.category_id = c.id
+INNER JOIN pages p ON p.id = pc.page_id AND p.status = 'published' AND p.language_id = ?
+GROUP BY c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.language_id, c.created_at, c.updated_at
+ORDER BY c.position, c.name;

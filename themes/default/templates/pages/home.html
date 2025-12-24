@@ -73,7 +73,7 @@
         </div>
         {{if .ShowAllPostsLink}}
         <div class="section-footer">
-            <a href="/blog" class="btn btn-secondary">{{TTheme $.LangCode "frontend.view_all_posts"}}</a>
+            <a href="{{.LangPrefix}}/blog" class="btn btn-secondary">{{TTheme $.LangCode "frontend.view_all_posts"}}</a>
         </div>
         {{end}}
     </section>

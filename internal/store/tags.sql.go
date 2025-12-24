@@ -340,6 +340,62 @@ func (q *Queries) GetTagUsageCounts(ctx context.Context, arg GetTagUsageCountsPa
 	return items, nil
 }
 
+const getTagUsageCountsByLanguage = `-- name: GetTagUsageCountsByLanguage :many
+SELECT t.id, t.name, t.slug, t.created_at, t.updated_at, COUNT(p.id) as usage_count
+FROM tags t
+INNER JOIN page_tags pt ON pt.tag_id = t.id
+INNER JOIN pages p ON p.id = pt.page_id AND p.status = 'published' AND p.language_id = ?
+GROUP BY t.id, t.name, t.slug, t.created_at, t.updated_at
+ORDER BY t.name
+LIMIT ? OFFSET ?
+`
+
+type GetTagUsageCountsByLanguageParams struct {
+	LanguageID sql.NullInt64 `json:"language_id"`
+	Limit      int64         `json:"limit"`
+	Offset     int64         `json:"offset"`
+}
+
+type GetTagUsageCountsByLanguageRow struct {
+	ID         int64     `json:"id"`
+	Name       string    `json:"name"`
+	Slug       string    `json:"slug"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	UsageCount int64     `json:"usage_count"`
+}
+
+// Tag usage counts filtered by page language (for frontend sidebar)
+func (q *Queries) GetTagUsageCountsByLanguage(ctx context.Context, arg GetTagUsageCountsByLanguageParams) ([]GetTagUsageCountsByLanguageRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTagUsageCountsByLanguage, arg.LanguageID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetTagUsageCountsByLanguageRow{}
+	for rows.Next() {
+		var i GetTagUsageCountsByLanguageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.UsageCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTagUsageCountsWithLanguage = `-- name: GetTagUsageCountsWithLanguage :many
 SELECT
     t.id, t.name, t.slug, t.language_id, t.created_at, t.updated_at,
