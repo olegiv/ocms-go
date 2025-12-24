@@ -1354,4 +1354,116 @@ img {
     .dev-sidebar {
         display: none;
     }
+
+    .dev-lang-switcher {
+        position: static;
+        margin-top: var(--dev-space-md);
+    }
+}
+
+/* Language Switcher */
+.dev-lang-switcher {
+    position: relative;
+    margin-left: var(--dev-space-md);
+}
+
+.dev-lang-current {
+    display: flex;
+    align-items: center;
+    gap: var(--dev-space-xs);
+    padding: var(--dev-space-xs) var(--dev-space-sm);
+    background: var(--dev-bg-tertiary);
+    border: 1px solid var(--dev-border);
+    border-radius: var(--dev-radius-sm);
+    color: var(--dev-text);
+    font-family: var(--dev-font-mono);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.dev-lang-current:hover {
+    background: var(--dev-bg-secondary);
+    border-color: var(--dev-accent);
+}
+
+.dev-lang-code {
+    font-weight: 600;
+    color: var(--dev-accent);
+}
+
+.dev-lang-arrow {
+    transition: transform 0.2s ease;
+}
+
+.dev-lang-switcher:hover .dev-lang-arrow {
+    transform: rotate(180deg);
+}
+
+.dev-lang-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: var(--dev-space-xs);
+    padding: var(--dev-space-xs) 0;
+    background: var(--dev-bg-secondary);
+    border: 1px solid var(--dev-border);
+    border-radius: var(--dev-radius-md);
+    list-style: none;
+    min-width: 140px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.2s ease;
+    z-index: 100;
+}
+
+.dev-lang-switcher:hover .dev-lang-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.dev-lang-item a {
+    display: flex;
+    align-items: center;
+    gap: var(--dev-space-sm);
+    padding: var(--dev-space-sm) var(--dev-space-md);
+    color: var(--dev-text);
+    text-decoration: none;
+    font-family: var(--dev-font-mono);
+    font-size: 0.8125rem;
+    transition: background 0.15s ease;
+}
+
+.dev-lang-item a:hover {
+    background: var(--dev-bg-tertiary);
+}
+
+.dev-lang-item.active a {
+    color: var(--dev-accent);
+}
+
+.dev-lang-item.active a::before {
+    content: '>';
+    color: var(--dev-accent);
+    margin-right: var(--dev-space-xs);
+}
+
+.dev-lang-item-code {
+    font-weight: 600;
+    min-width: 24px;
+}
+
+.dev-lang-item-name {
+    color: var(--dev-text-muted);
+}
+
+.dev-lang-item.no-translation a {
+    opacity: 0.6;
+}
+
+.dev-lang-item .dev-comment {
+    font-size: 0.75rem;
+    color: var(--dev-comment);
 }

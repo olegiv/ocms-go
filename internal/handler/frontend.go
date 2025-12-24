@@ -257,6 +257,10 @@ type PageData struct {
 	Page          *PageView
 	RelatedPages  []PageView
 	ShowAuthorBox bool
+	// Sidebar data for themes that show sidebar on single pages
+	Categories  []CategoryView
+	Tags        []TagView
+	RecentPages []PageView
 }
 
 // ListData holds data for list templates (blog, archives).
@@ -265,6 +269,10 @@ type ListData struct {
 	Pages       []PageView
 	Pagination  Pagination
 	Description string // Optional description for list pages (blog, archives, etc.)
+	// Sidebar data for themes that show sidebar on list pages
+	Categories  []CategoryView
+	Tags        []TagView
+	RecentPages []PageView
 }
 
 // SubcategoryView represents a subcategory with page count for template rendering.
@@ -285,6 +293,10 @@ type CategoryPageData struct {
 	Pagination    Pagination
 	PageCount     int
 	Subcategories []SubcategoryView
+	// Sidebar data for themes that show sidebar on category pages
+	Categories  []CategoryView
+	Tags        []TagView
+	RecentPages []PageView
 }
 
 // TagPageData holds data for tag archive templates.
@@ -295,6 +307,10 @@ type TagPageData struct {
 	Pagination  Pagination
 	PageCount   int
 	RelatedTags []TagView
+	// Sidebar data for themes that show sidebar on tag pages
+	Categories  []CategoryView
+	Tags        []TagView
+	RecentPages []PageView
 }
 
 // SearchData holds data for search results templates.
@@ -629,11 +645,21 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 		middleware.SetLanguageCookie(w, langInfo.Code)
 	}
 
+	// Fetch sidebar data for themes that show sidebar on single pages
+	var languageID int64
+	if page.LanguageID.Valid {
+		languageID = page.LanguageID.Int64
+	}
+	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageID)
+
 	data := PageData{
 		BaseTemplateData: base,
 		Page:             &pageView,
 		RelatedPages:     relatedPages,
 		ShowAuthorBox:    true,
+		Categories:       sidebarCategories,
+		Tags:             sidebarTags,
+		RecentPages:      sidebarRecent,
 	}
 
 	h.render(w, "page", data)
@@ -732,12 +758,18 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 	// Build pagination with language prefix
 	pagination := h.buildPagination(page, int(total), fmt.Sprintf("%s/category/%s", base.LangPrefix, slug))
 
+	// Fetch sidebar data for themes that show sidebar on category pages
+	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageID)
+
 	data := CategoryPageData{
 		BaseTemplateData: base,
 		Category:         categoryView,
 		Pages:            pageViews,
 		Pagination:       pagination,
 		PageCount:        int(total),
+		Categories:       sidebarCategories,
+		Tags:             sidebarTags,
+		RecentPages:      sidebarRecent,
 	}
 
 	h.render(w, "category", data)
@@ -835,12 +867,18 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 	// Build pagination with language prefix
 	pagination := h.buildPagination(page, int(total), fmt.Sprintf("%s/tag/%s", base.LangPrefix, slug))
 
+	// Fetch sidebar data for themes that show sidebar on tag pages
+	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageID)
+
 	data := TagPageData{
 		BaseTemplateData: base,
 		Tag:              tagView,
 		Pages:            pageViews,
 		Pagination:       pagination,
 		PageCount:        int(total),
+		Categories:       sidebarCategories,
+		Tags:             sidebarTags,
+		RecentPages:      sidebarRecent,
 	}
 
 	h.render(w, "tag", data)
@@ -913,10 +951,16 @@ func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
 	// Build pagination with language prefix
 	pagination := h.buildPagination(page, int(total), base.LangPrefix+"/blog")
 
+	// Fetch sidebar data for themes that show sidebar on list pages
+	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageID)
+
 	data := ListData{
 		BaseTemplateData: base,
 		Pages:            pageViews,
 		Pagination:       pagination,
+		Categories:       sidebarCategories,
+		Tags:             sidebarTags,
+		RecentPages:      sidebarRecent,
 	}
 
 	h.render(w, "list", data)
