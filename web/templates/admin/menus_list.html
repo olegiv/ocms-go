@@ -108,14 +108,17 @@
     </div>
 </div>
 {{else}}
-<div class="empty-state">
-    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="18" y2="18"/></svg>
-    <h3>{{T .AdminLang "menus.no_menus"}}</h3>
-    <p>{{T .AdminLang "menus.no_menus_hint"}}</p>
-    <a href="/admin/menus/new" class="btn btn-primary">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
-        {{T .AdminLang "menus.create"}}
-    </a>
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="18" y2="18"/></svg>
+            <p>{{T .AdminLang "menus.no_menus"}}</p>
+            <span class="empty-hint">{{T .AdminLang "menus.no_menus_hint"}}</span>
+            <div class="empty-state-action">
+                <a href="/admin/menus/new" class="btn btn-primary">{{T .AdminLang "menus.create"}}</a>
+            </div>
+        </div>
+    </div>
 </div>
 {{end}}
 {{end}}
