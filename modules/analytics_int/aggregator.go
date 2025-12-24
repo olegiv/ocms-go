@@ -7,45 +7,32 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
+// addCronJob registers a cron job with timeout and error logging.
+func (m *Module) addCronJob(schedule string, timeout time.Duration, jobFunc func(context.Context) error, errMsg string) {
+	_, _ = m.cron.AddFunc(schedule, func() {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		if err := jobFunc(ctx); err != nil {
+			m.ctx.Logger.Error(errMsg, "error", err)
+		}
+	})
+}
+
 // StartAggregator starts background aggregation jobs.
 func (m *Module) StartAggregator() {
 	m.cron = cron.New()
 
 	// Every hour at minute 5: aggregate raw views into hourly stats
-	_, _ = m.cron.AddFunc("5 * * * *", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-		if err := m.aggregateHourly(ctx); err != nil {
-			m.ctx.Logger.Error("hourly aggregation failed", "error", err)
-		}
-	})
+	m.addCronJob("5 * * * *", 5*time.Minute, m.aggregateHourly, "hourly aggregation failed")
 
 	// Daily at 00:15: aggregate hourly into daily stats
-	_, _ = m.cron.AddFunc("15 0 * * *", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		defer cancel()
-		if err := m.aggregateDaily(ctx); err != nil {
-			m.ctx.Logger.Error("daily aggregation failed", "error", err)
-		}
-	})
+	m.addCronJob("15 0 * * *", 10*time.Minute, m.aggregateDaily, "daily aggregation failed")
 
 	// Daily at 00:30: cleanup old raw data (keep 7 days)
-	_, _ = m.cron.AddFunc("30 0 * * *", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-		if err := m.cleanupOldRawData(ctx); err != nil {
-			m.ctx.Logger.Error("raw data cleanup failed", "error", err)
-		}
-	})
+	m.addCronJob("30 0 * * *", 5*time.Minute, m.cleanupOldRawData, "raw data cleanup failed")
 
 	// Monthly on 1st at 01:00: cleanup expired aggregate data
-	_, _ = m.cron.AddFunc("0 1 1 * *", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-		defer cancel()
-		if err := m.cleanupExpiredData(ctx); err != nil {
-			m.ctx.Logger.Error("expired data cleanup failed", "error", err)
-		}
-	})
+	m.addCronJob("0 1 1 * *", 30*time.Minute, m.cleanupExpiredData, "expired data cleanup failed")
 
 	m.cron.Start()
 	m.ctx.Logger.Debug("Page Analytics aggregator started")

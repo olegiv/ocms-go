@@ -83,27 +83,27 @@ func (m *Module) getCurrentSalt() string {
 	return newSalt
 }
 
-// CreateVisitorHash creates an anonymized visitor fingerprint hash.
-// The hash combines anonymized IP + user agent + date + salt.
-// This allows counting unique visitors per day without tracking across days.
-func (m *Module) CreateVisitorHash(ip, userAgent string) string {
+// createHash creates an anonymized hash with the given suffix.
+// Combines anonymized IP + user agent + date + suffix + salt.
+func (m *Module) createHash(ip, userAgent, suffix string) string {
 	salt := m.getCurrentSalt()
 	anonIP := anonymizeIP(ip)
 	date := timeNow().Format("2006-01-02")
 
 	hasher := sha256.New()
-	hasher.Write([]byte(anonIP + userAgent + date + "visitor" + salt))
+	hasher.Write([]byte(anonIP + userAgent + date + suffix + salt))
 	return hex.EncodeToString(hasher.Sum(nil))[:16]
+}
+
+// CreateVisitorHash creates an anonymized visitor fingerprint hash.
+// The hash combines anonymized IP + user agent + date + salt.
+// This allows counting unique visitors per day without tracking across days.
+func (m *Module) CreateVisitorHash(ip, userAgent string) string {
+	return m.createHash(ip, userAgent, "visitor")
 }
 
 // CreateSessionHash creates a session proxy hash for grouping page views.
 // Similar to visitor hash but with different suffix for distinct identification.
 func (m *Module) CreateSessionHash(ip, userAgent string) string {
-	salt := m.getCurrentSalt()
-	anonIP := anonymizeIP(ip)
-	date := timeNow().Format("2006-01-02")
-
-	hasher := sha256.New()
-	hasher.Write([]byte(anonIP + userAgent + date + "session" + salt))
-	return hex.EncodeToString(hasher.Sum(nil))[:16]
+	return m.createHash(ip, userAgent, "session")
 }
