@@ -90,10 +90,17 @@
 {{end}}
 
 {{else}}
-<div class="empty-state">
-    <h3>{{T .AdminLang "forms.no_submissions"}}</h3>
-    <p>{{T .AdminLang "forms.no_submissions_hint"}}</p>
-    <a href="/forms/{{.Data.Form.Slug}}" class="btn btn-primary" target="_blank">{{T .AdminLang "forms.view_form"}}</a>
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            <p>{{T .AdminLang "forms.no_submissions"}}</p>
+            <span class="empty-hint">{{T .AdminLang "forms.no_submissions_hint"}}</span>
+            <div class="empty-state-action">
+                <a href="/forms/{{.Data.Form.Slug}}" class="btn btn-primary" target="_blank">{{T .AdminLang "forms.view_form"}}</a>
+            </div>
+        </div>
+    </div>
 </div>
 {{end}}
 {{end}}
