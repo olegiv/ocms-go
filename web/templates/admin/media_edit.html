@@ -133,6 +133,40 @@
                     >{{if .Data.FormValues.caption}}{{.Data.FormValues.caption}}{{else}}{{.Data.Media.Caption.String}}{{end}}</textarea>
                 </div>
 
+                {{if .Data.Languages}}
+                <!-- Translations Section -->
+                <div class="translations-section">
+                    <h4 class="section-title">{{T .AdminLang "media.translations"}}</h4>
+                    {{range .Data.Languages}}
+                    {{$trans := index $.Data.Translations .Code}}
+                    <fieldset class="translation-fieldset">
+                        <legend class="translation-legend">{{.NativeName}} ({{.Code}})</legend>
+                        <div class="form-group">
+                            <label for="alt_{{.Code}}" class="form-label">{{T $.AdminLang "media.alt_text"}}</label>
+                            <input
+                                type="text"
+                                id="alt_{{.Code}}"
+                                name="alt_{{.Code}}"
+                                value="{{if $trans}}{{$trans.Alt}}{{end}}"
+                                class="form-input"
+                                placeholder="{{T $.AdminLang "media.alt_placeholder"}}"
+                            >
+                        </div>
+                        <div class="form-group">
+                            <label for="caption_{{.Code}}" class="form-label">{{T $.AdminLang "media.caption"}}</label>
+                            <textarea
+                                id="caption_{{.Code}}"
+                                name="caption_{{.Code}}"
+                                class="form-input"
+                                rows="2"
+                                placeholder="{{T $.AdminLang "media.caption_placeholder"}}"
+                            >{{if $trans}}{{$trans.Caption}}{{end}}</textarea>
+                        </div>
+                    </fieldset>
+                    {{end}}
+                </div>
+                {{end}}
+
                 {{if .Data.Folders}}
                 <div class="form-group">
                     <label for="folder_id" class="form-label">{{T .AdminLang "media.folder"}}</label>

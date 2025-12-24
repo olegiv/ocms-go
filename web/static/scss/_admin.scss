@@ -1160,6 +1160,47 @@
   padding: $spacing-2;
 }
 
+// Translations Section (inline fieldset style)
+.translations-section {
+  margin-top: $spacing-6;
+
+  .section-title {
+    font-size: $font-size-base;
+    font-weight: $font-weight-semibold;
+    color: $gray-700;
+    margin: 0 0 $spacing-4 0;
+    padding-bottom: $spacing-3;
+    border-bottom: 1px solid $gray-200;
+  }
+}
+
+.translation-fieldset {
+  border: 1px solid $gray-200;
+  border-radius: $radius-md;
+  padding: $spacing-4;
+  margin: $spacing-4 0 0 0;
+  background-color: $gray-50;
+
+  .form-group {
+    margin-bottom: $spacing-3;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+}
+
+.translation-legend {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $gray-600;
+  padding: $spacing-1 $spacing-3;
+  background-color: white;
+  border: 1px solid $gray-200;
+  border-radius: $radius-md;
+  margin-left: $spacing-2;
+}
+
 // Language badge for page list
 .language-badge {
   display: inline-block;

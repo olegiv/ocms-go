@@ -9,7 +9,7 @@
 
     {{if .Page.FeaturedImage}}
     <div class="page-featured-image">
-        <img src="{{.Page.FeaturedImage}}" alt="{{.Page.Title}}">
+        <img src="{{.Page.FeaturedImage}}" alt="{{mediaAlt .Page.FeaturedImageID $.LangCode .Page.FeaturedImageAlt}}">
     </div>
     {{end}}
 

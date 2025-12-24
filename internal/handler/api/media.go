@@ -19,22 +19,23 @@ import (
 
 // MediaResponse represents a media item in API responses.
 type MediaResponse struct {
-	ID         int64             `json:"id"`
-	UUID       string            `json:"uuid"`
-	Filename   string            `json:"filename"`
-	MimeType   string            `json:"mime_type"`
-	Size       int64             `json:"size"`
-	Width      *int64            `json:"width,omitempty"`
-	Height     *int64            `json:"height,omitempty"`
-	Alt        string            `json:"alt"`
-	Caption    string            `json:"caption"`
-	FolderID   *int64            `json:"folder_id,omitempty"`
-	UploadedBy int64             `json:"uploaded_by"`
-	CreatedAt  time.Time         `json:"created_at"`
-	UpdatedAt  time.Time         `json:"updated_at"`
-	URLs       *MediaURLs        `json:"urls,omitempty"`
-	Variants   []VariantResponse `json:"variants,omitempty"`
-	Folder     *FolderResponse   `json:"folder,omitempty"`
+	ID           int64                      `json:"id"`
+	UUID         string                     `json:"uuid"`
+	Filename     string                     `json:"filename"`
+	MimeType     string                     `json:"mime_type"`
+	Size         int64                      `json:"size"`
+	Width        *int64                     `json:"width,omitempty"`
+	Height       *int64                     `json:"height,omitempty"`
+	Alt          string                     `json:"alt"`
+	Caption      string                     `json:"caption"`
+	FolderID     *int64                     `json:"folder_id,omitempty"`
+	UploadedBy   int64                      `json:"uploaded_by"`
+	CreatedAt    time.Time                  `json:"created_at"`
+	UpdatedAt    time.Time                  `json:"updated_at"`
+	URLs         *MediaURLs                 `json:"urls,omitempty"`
+	Variants     []VariantResponse          `json:"variants,omitempty"`
+	Folder       *FolderResponse            `json:"folder,omitempty"`
+	Translations []MediaTranslationResponse `json:"translations,omitempty"`
 }
 
 // MediaURLs contains URLs for different media sizes.
@@ -63,6 +64,15 @@ type FolderResponse struct {
 	ParentID  *int64    `json:"parent_id,omitempty"`
 	Position  int64     `json:"position"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// MediaTranslationResponse represents a media translation in API responses.
+type MediaTranslationResponse struct {
+	LanguageID   int64  `json:"language_id"`
+	LanguageCode string `json:"language_code"`
+	LanguageName string `json:"language_name"`
+	Alt          string `json:"alt"`
+	Caption      string `json:"caption"`
 }
 
 // UpdateMediaRequest represents the request body for updating media metadata.
@@ -116,10 +126,10 @@ func storeMediaToResponse(m store.Medium) MediaResponse {
 }
 
 // parseMediaIncludes parses the include query parameter for media endpoints.
-// Returns flags for variants and folder includes.
-func parseMediaIncludes(include string) (includeVariants, includeFolder bool) {
+// Returns flags for variants, folder, and translations includes.
+func parseMediaIncludes(include string) (includeVariants, includeFolder, includeTranslations bool) {
 	if include == "" {
-		return false, false
+		return false, false, false
 	}
 	includes := strings.Split(include, ",")
 	for _, inc := range includes {
@@ -128,6 +138,8 @@ func parseMediaIncludes(include string) (includeVariants, includeFolder bool) {
 			includeVariants = true
 		case "folder":
 			includeFolder = true
+		case "translations":
+			includeTranslations = true
 		}
 	}
 	return
@@ -250,13 +262,13 @@ func (h *Handler) ListMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse includes
-	includeVariants, includeFolder := parseMediaIncludes(include)
+	includeVariants, includeFolder, includeTranslations := parseMediaIncludes(include)
 
 	// Convert to response
 	responses := make([]MediaResponse, 0, len(media))
 	for _, m := range media {
 		resp := storeMediaToResponse(m)
-		h.populateMediaIncludes(ctx, &resp, m.ID, includeVariants, includeFolder)
+		h.populateMediaIncludes(ctx, &resp, m.ID, includeVariants, includeFolder, includeTranslations)
 		responses = append(responses, resp)
 	}
 
@@ -281,8 +293,8 @@ func (h *Handler) GetMedia(w http.ResponseWriter, r *http.Request) {
 	resp := storeMediaToResponse(media)
 
 	// Parse includes
-	includeVariants, includeFolder := parseMediaIncludes(include)
-	h.populateMediaIncludes(ctx, &resp, media.ID, includeVariants, includeFolder)
+	includeVariants, includeFolder, includeTranslations := parseMediaIncludes(include)
+	h.populateMediaIncludes(ctx, &resp, media.ID, includeVariants, includeFolder, includeTranslations)
 
 	WriteSuccess(w, resp, nil)
 }
@@ -474,7 +486,7 @@ func (h *Handler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
 }
 
 // populateMediaIncludes adds related data to a media response.
-func (h *Handler) populateMediaIncludes(ctx context.Context, resp *MediaResponse, mediaID int64, includeVariants, includeFolder bool) {
+func (h *Handler) populateMediaIncludes(ctx context.Context, resp *MediaResponse, mediaID int64, includeVariants, includeFolder, includeTranslations bool) {
 	if includeVariants {
 		variants, err := h.queries.GetMediaVariants(ctx, mediaID)
 		if err == nil {
@@ -495,6 +507,22 @@ func (h *Handler) populateMediaIncludes(ctx context.Context, resp *MediaResponse
 				folderResp.ParentID = &folder.ParentID.Int64
 			}
 			resp.Folder = folderResp
+		}
+	}
+
+	if includeTranslations {
+		translations, err := h.queries.GetMediaTranslations(ctx, mediaID)
+		if err == nil && len(translations) > 0 {
+			resp.Translations = make([]MediaTranslationResponse, 0, len(translations))
+			for _, t := range translations {
+				resp.Translations = append(resp.Translations, MediaTranslationResponse{
+					LanguageID:   t.LanguageID,
+					LanguageCode: t.LanguageCode,
+					LanguageName: t.LanguageName,
+					Alt:          t.Alt,
+					Caption:      t.Caption,
+				})
+			}
 		}
 	}
 }

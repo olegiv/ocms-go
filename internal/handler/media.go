@@ -367,13 +367,25 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// MediaTranslationData holds translation data for a language.
+type MediaTranslationData struct {
+	LanguageID   int64
+	LanguageCode string
+	LanguageName string
+	NativeName   string
+	Alt          string
+	Caption      string
+}
+
 // MediaEditData holds data for the media edit template.
 type MediaEditData struct {
-	Media      MediaItem
-	Variants   []store.MediaVariant
-	Folders    []store.MediaFolder
-	Errors     map[string]string
-	FormValues map[string]string
+	Media        MediaItem
+	Variants     []store.MediaVariant
+	Folders      []store.MediaFolder
+	Languages    []store.Language                // All active languages (except default)
+	Translations map[string]MediaTranslationData // Keyed by language code
+	Errors       map[string]string
+	FormValues   map[string]string
 }
 
 // EditForm handles GET /admin/media/{id} - displays the edit form.
@@ -406,6 +418,34 @@ func (h *MediaHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		folders = []store.MediaFolder{}
 	}
 
+	// Get all active languages (excluding default - that's in the media table)
+	allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
+	var nonDefaultLanguages []store.Language
+	for _, l := range allLanguages {
+		if !l.IsDefault {
+			nonDefaultLanguages = append(nonDefaultLanguages, l)
+		}
+	}
+
+	// Get existing translations for this media
+	translations := make(map[string]MediaTranslationData)
+	if len(nonDefaultLanguages) > 0 {
+		existingTranslations, err := h.queries.GetMediaTranslations(r.Context(), id)
+		if err != nil {
+			slog.Error("failed to get media translations", "error", err, "media_id", id)
+		} else {
+			for _, t := range existingTranslations {
+				translations[t.LanguageCode] = MediaTranslationData{
+					LanguageID:   t.LanguageID,
+					LanguageCode: t.LanguageCode,
+					LanguageName: t.LanguageName,
+					Alt:          t.Alt,
+					Caption:      t.Caption,
+				}
+			}
+		}
+	}
+
 	mediaItem := MediaItem{
 		Medium:       media,
 		ThumbnailURL: h.mediaService.GetThumbnailURL(media),
@@ -415,11 +455,13 @@ func (h *MediaHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := MediaEditData{
-		Media:      mediaItem,
-		Variants:   variants,
-		Folders:    folders,
-		Errors:     make(map[string]string),
-		FormValues: make(map[string]string),
+		Media:        mediaItem,
+		Variants:     variants,
+		Folders:      folders,
+		Languages:    nonDefaultLanguages,
+		Translations: translations,
+		Errors:       make(map[string]string),
+		FormValues:   make(map[string]string),
 	}
 
 	h.renderer.RenderPage(w, r, "admin/media_edit", render.TemplateData{
@@ -522,6 +564,39 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 		slog.Error("failed to update media", "error", err, "media_id", id)
 		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminMediaID, id), "Error updating media")
 		return
+	}
+
+	// Save translations for non-default languages
+	allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
+	for _, l := range allLanguages {
+		if l.IsDefault {
+			continue // Default language values are in the media table
+		}
+
+		// Get translated alt/caption from form
+		translatedAlt := strings.TrimSpace(r.FormValue("alt_" + l.Code))
+		translatedCaption := strings.TrimSpace(r.FormValue("caption_" + l.Code))
+
+		// If both are empty, delete translation if exists
+		if translatedAlt == "" && translatedCaption == "" {
+			if err := h.queries.DeleteMediaTranslation(r.Context(), store.DeleteMediaTranslationParams{
+				MediaID:    id,
+				LanguageID: l.ID,
+			}); err != nil {
+				slog.Error("failed to delete media translation", "error", err, "media_id", id, "language_id", l.ID)
+			}
+			continue
+		}
+
+		// Upsert translation
+		if _, err := h.queries.UpsertMediaTranslation(r.Context(), store.UpsertMediaTranslationParams{
+			MediaID:    id,
+			LanguageID: l.ID,
+			Alt:        translatedAlt,
+			Caption:    translatedCaption,
+		}); err != nil {
+			slog.Error("failed to upsert media translation", "error", err, "media_id", id, "language_id", l.ID)
+		}
 	}
 
 	slog.Info("media updated", "media_id", id, "updated_by", middleware.GetUserID(r))
