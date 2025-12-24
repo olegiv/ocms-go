@@ -844,77 +844,127 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 	return pageIDs, nil
 }
 
-// generateMenuItems creates random menu items in the Main Menu (ID=1) with nested structure pointing to pages
-func (m *Module) generateMenuItems(ctx context.Context, pageIDs []int64) ([]int64, error) {
-	count := generateMenuItemCount() // 5-10 menu items
+// generateMenuItems creates random menu items for all menus with nested structure pointing to pages
+// For menus with a language_id, it links to pages in the same language
+// For menus without a language_id (global menus), it links to pages in the default language
+func (m *Module) generateMenuItems(ctx context.Context, languages []store.Language) ([]int64, error) {
 	var menuItemIDs []int64
 	queries := store.New(m.ctx.DB)
-
-	const mainMenuID int64 = 1 // Main Menu ID
 	now := time.Now()
 
-	// Get the current max position in the menu
-	maxPos, err := queries.GetMaxMenuItemPosition(ctx, store.GetMaxMenuItemPositionParams{
-		MenuID:   mainMenuID,
-		ParentID: sql.NullInt64{Valid: false},
-	})
+	// Get all menus
+	menus, err := queries.ListMenus(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get max position: %w", err)
-	}
-	startPosition := int64(0)
-	if maxPos != nil {
-		if pos, ok := maxPos.(int64); ok {
-			startPosition = pos + 1
-		}
+		return nil, fmt.Errorf("failed to list menus: %w", err)
 	}
 
-	var rootItemIDs []int64
+	if len(menus) == 0 {
+		m.ctx.Logger.Info("no menus found, skipping menu item generation")
+		return menuItemIDs, nil
+	}
 
-	for i := 0; i < count; i++ {
-		// Determine if this item should have a parent (40% chance if we have root items)
-		var parentID sql.NullInt64
-		if len(rootItemIDs) > 0 && rand.Float32() < 0.4 {
-			parentID = sql.NullInt64{Int64: rootItemIDs[rand.Intn(len(rootItemIDs))], Valid: true}
+	// Find default language
+	var defaultLangID int64
+	for _, lang := range languages {
+		if lang.IsDefault {
+			defaultLangID = lang.ID
+			break
 		}
+	}
 
-		// All items link to pages (since we have generated pages)
-		var pageID sql.NullInt64
-		var url sql.NullString
-		title := randomElement(adjectives) + " " + randomElement(nouns)
-
-		if len(pageIDs) > 0 {
-			pageID = sql.NullInt64{Int64: pageIDs[rand.Intn(len(pageIDs))], Valid: true}
-		} else {
-			// Fallback to URL if no pages
-			url = sql.NullString{String: "#", Valid: true}
-		}
-
-		menuItem, err := queries.CreateMenuItem(ctx, store.CreateMenuItemParams{
-			MenuID:    mainMenuID,
-			ParentID:  parentID,
-			Title:     title,
-			Url:       url,
-			Target:    sql.NullString{Valid: false},
-			PageID:    pageID,
-			Position:  startPosition + int64(i),
-			CssClass:  sql.NullString{Valid: false},
-			IsActive:  true,
-			CreatedAt: now,
-			UpdatedAt: now,
+	// Build a map of language ID to pages for that language
+	pagesByLang := make(map[int64][]int64)
+	for _, lang := range languages {
+		pages, err := queries.ListPagesByLanguage(ctx, store.ListPagesByLanguageParams{
+			LanguageID: sql.NullInt64{Int64: lang.ID, Valid: true},
+			Limit:      1000,
+			Offset:     0,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to create menu item: %w", err)
+			m.ctx.Logger.Warn("failed to get pages for language", "lang", lang.Code, "error", err)
+			continue
+		}
+		for _, page := range pages {
+			pagesByLang[lang.ID] = append(pagesByLang[lang.ID], page.ID)
+		}
+	}
+
+	// Generate menu items for each menu
+	for _, menu := range menus {
+		// Determine which pages to use for this menu
+		var pagesForMenu []int64
+		if menu.LanguageID.Valid {
+			// Menu is language-specific, use pages for that language
+			pagesForMenu = pagesByLang[menu.LanguageID.Int64]
+		} else {
+			// Menu is global (no language), use pages from default language
+			pagesForMenu = pagesByLang[defaultLangID]
 		}
 
-		if err := m.trackItem(ctx, "menu_item", menuItem.ID); err != nil {
-			return nil, fmt.Errorf("failed to track menu item: %w", err)
+		if len(pagesForMenu) == 0 {
+			m.ctx.Logger.Info("no pages found for menu, skipping", "menu", menu.Name, "langID", menu.LanguageID)
+			continue
 		}
-		menuItemIDs = append(menuItemIDs, menuItem.ID)
 
-		// Add to root items if no parent (for nesting)
-		if !parentID.Valid {
-			rootItemIDs = append(rootItemIDs, menuItem.ID)
+		// Get the current max position in this menu
+		maxPos, err := queries.GetMaxMenuItemPosition(ctx, store.GetMaxMenuItemPositionParams{
+			MenuID:   menu.ID,
+			ParentID: sql.NullInt64{Valid: false},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get max position for menu %d: %w", menu.ID, err)
 		}
+		startPosition := int64(0)
+		if maxPos != nil {
+			if pos, ok := maxPos.(int64); ok {
+				startPosition = pos + 1
+			}
+		}
+
+		// Generate 3-7 menu items per menu
+		count := rand.Intn(5) + 3
+		var rootItemIDs []int64
+
+		for i := 0; i < count; i++ {
+			// Determine if this item should have a parent (40% chance if we have root items)
+			var parentID sql.NullInt64
+			if len(rootItemIDs) > 0 && rand.Float32() < 0.4 {
+				parentID = sql.NullInt64{Int64: rootItemIDs[rand.Intn(len(rootItemIDs))], Valid: true}
+			}
+
+			// All items link to pages
+			title := randomElement(adjectives) + " " + randomElement(nouns)
+			pageID := sql.NullInt64{Int64: pagesForMenu[rand.Intn(len(pagesForMenu))], Valid: true}
+
+			menuItem, err := queries.CreateMenuItem(ctx, store.CreateMenuItemParams{
+				MenuID:    menu.ID,
+				ParentID:  parentID,
+				Title:     title,
+				Url:       sql.NullString{Valid: false},
+				Target:    sql.NullString{Valid: false},
+				PageID:    pageID,
+				Position:  startPosition + int64(i),
+				CssClass:  sql.NullString{Valid: false},
+				IsActive:  true,
+				CreatedAt: now,
+				UpdatedAt: now,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to create menu item for menu %d: %w", menu.ID, err)
+			}
+
+			if err := m.trackItem(ctx, "menu_item", menuItem.ID); err != nil {
+				return nil, fmt.Errorf("failed to track menu item: %w", err)
+			}
+			menuItemIDs = append(menuItemIDs, menuItem.ID)
+
+			// Add to root items if no parent (for nesting)
+			if !parentID.Valid {
+				rootItemIDs = append(rootItemIDs, menuItem.ID)
+			}
+		}
+
+		m.ctx.Logger.Info("generated menu items for menu", "menu", menu.Name, "count", count)
 	}
 
 	return menuItemIDs, nil
