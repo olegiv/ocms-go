@@ -4166,3 +4166,122 @@ tr.unread {
   pointer-events: none;
   cursor: not-allowed;
 }
+
+// =====================================================
+// Developer Module Styles
+// =====================================================
+
+.developer-warning {
+  margin-bottom: $spacing-6;
+
+  .warning-content {
+    display: flex;
+    align-items: flex-start;
+    gap: $spacing-3;
+
+    svg {
+      flex-shrink: 0;
+      color: $warning;
+    }
+
+    strong {
+      display: block;
+      margin-bottom: $spacing-1;
+    }
+
+    p {
+      margin: 0;
+      color: $gray-600;
+    }
+  }
+}
+
+.actions-section {
+  .section-header {
+    margin-bottom: $spacing-4;
+
+    h2 {
+      margin: 0 0 $spacing-1 0;
+      font-size: $font-size-xl;
+      font-weight: $font-weight-semibold;
+    }
+
+    p {
+      margin: 0;
+      color: $gray-500;
+    }
+  }
+}
+
+.action-cards {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-6;
+}
+
+.action-card {
+  .card-body {
+    padding: $spacing-5;
+  }
+
+  .action-header {
+    display: flex;
+    align-items: flex-start;
+    gap: $spacing-4;
+    margin-bottom: $spacing-4;
+  }
+
+  .action-icon {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: $radius-lg;
+
+    &.action-icon-generate {
+      background: rgba($primary, 0.1);
+      color: $primary;
+    }
+
+    &.action-icon-delete {
+      background: rgba($danger, 0.1);
+      color: $danger;
+    }
+  }
+
+  .action-title {
+    h3 {
+      margin: 0 0 $spacing-1 0;
+      font-size: $font-size-lg;
+      font-weight: $font-weight-semibold;
+    }
+
+    p {
+      margin: 0;
+      color: $gray-500;
+      font-size: $font-size-sm;
+    }
+  }
+
+  .action-details {
+    margin: 0 0 $spacing-6 0;
+    padding-left: $spacing-5;
+    color: $gray-600;
+    font-size: $font-size-sm;
+    line-height: $line-height-relaxed;
+
+    li {
+      margin-bottom: $spacing-1;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+  }
+
+  .action-form {
+    margin-top: $spacing-6;
+  }
+}
