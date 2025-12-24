@@ -92,7 +92,7 @@
                     <th>{{T .AdminLang "label.title"}}</th>
                     <th>{{T .AdminLang "label.tags"}}</th>
                     <th>{{T .AdminLang "label.categories"}}</th>
-                    <th>{{T .AdminLang "label.slug"}}</th>
+                    <th>{{T .AdminLang "label.language"}}</th>
                     <th>{{T .AdminLang "label.status"}}</th>
                     <th>{{T .AdminLang "label.updated_at"}}</th>
                     <th class="text-right">{{T .AdminLang "label.actions"}}</th>
@@ -112,10 +112,6 @@
                         {{end}}
                     </td>
                     <td>
-                        {{$lang := index $.Data.PageLanguages .ID}}
-                        {{if $lang}}
-                        <span class="language-badge" title="{{$lang.Name}}">{{$lang.Code}}</span>
-                        {{end}}
                         <a href="/{{.Slug}}" class="page-title-link" target="_blank">{{.Title}}</a>
                     </td>
                     <td>
@@ -143,7 +139,12 @@
                         {{end}}
                     </td>
                     <td>
-                        <code class="slug-code">/{{.Slug}}</code>
+                        {{$lang := index $.Data.PageLanguages .ID}}
+                        {{if $lang}}
+                        <span class="language-badge" title="{{$lang.Name}}">{{$lang.Code}}</span>
+                        {{else}}
+                        <span class="text-muted">—</span>
+                        {{end}}
                     </td>
                     <td>
                         {{if and (eq .Status "draft") .ScheduledAt.Valid}}
