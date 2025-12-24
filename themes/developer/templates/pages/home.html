@@ -42,7 +42,7 @@
                 {{if .FeaturedImage}}
                 <div class="dev-card-image">
                     <a href="{{.URL}}">
-                        <img src="{{.FeaturedImage}}" alt="{{.Title}}" loading="lazy">
+                        <img src="{{.FeaturedImage}}" alt="{{mediaAlt .FeaturedImageID $.LangCode .FeaturedImageAlt}}" loading="lazy">
                     </a>
                 </div>
                 {{end}}
@@ -75,7 +75,7 @@
                 {{if .FeaturedImage}}
                 <div class="dev-post-image">
                     <a href="{{.URL}}">
-                        <img src="{{.FeaturedImage}}" alt="{{.Title}}" loading="lazy">
+                        <img src="{{.FeaturedImage}}" alt="{{mediaAlt .FeaturedImageID $.LangCode .FeaturedImageAlt}}" loading="lazy">
                     </a>
                 </div>
                 {{end}}

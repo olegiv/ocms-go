@@ -1,0 +1,37 @@
+{{/* Language Switcher Partial - developer theme */}}
+{{if .ShowLanguagePicker}}
+<div class="dev-lang-switcher">
+    <button class="dev-lang-current" aria-label="Select language">
+        {{if .CurrentLanguage}}
+        <span class="dev-lang-code">{{.CurrentLanguage.Code | upper}}</span>
+        {{end}}
+        <svg class="dev-lang-arrow" width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+    </button>
+    <ul class="dev-lang-dropdown">
+        {{if .Translations}}
+        {{/* Page-specific translations */}}
+        {{range .Translations}}
+        <li class="dev-lang-item{{if .Language.IsCurrent}} active{{end}}{{if not .HasPage}} no-translation{{end}}">
+            <a href="{{.URL}}" {{if .Language.Direction}}dir="{{.Language.Direction}}"{{end}}>
+                <span class="dev-lang-item-code">{{.Language.Code | upper}}</span>
+                <span class="dev-lang-item-name">{{.Language.NativeName}}</span>
+                {{if not .HasPage}}<span class="dev-comment"> // no translation</span>{{end}}
+            </a>
+        </li>
+        {{end}}
+        {{else}}
+        {{/* Fallback to language list */}}
+        {{range .Languages}}
+        <li class="dev-lang-item{{if .IsCurrent}} active{{end}}">
+            <a href="/?lang={{.Code}}" {{if .Direction}}dir="{{.Direction}}"{{end}}>
+                <span class="dev-lang-item-code">{{.Code | upper}}</span>
+                <span class="dev-lang-item-name">{{.NativeName}}</span>
+            </a>
+        </li>
+        {{end}}
+        {{end}}
+    </ul>
+</div>
+{{end}}
