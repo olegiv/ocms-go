@@ -930,6 +930,17 @@ p {
     padding: var(--spacing-md) var(--spacing-lg);
 }
 
+.search-form.large button.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+    padding: var(--spacing-md) var(--spacing-xl);
+    font-size: 1rem;
+}
+
+.search-form.large button.btn-primary:hover {
+    background-color: var(--primary-hover);
+}
+
 .results-count {
     color: var(--text-muted);
     margin-bottom: var(--spacing-lg);
