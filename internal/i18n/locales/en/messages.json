@@ -3743,6 +3743,11 @@
             "translation": "Deselect All"
         },
         {
+            "id": "btn.save_changes",
+            "message": "Save Changes",
+            "translation": "Save Changes"
+        },
+        {
             "id": "msg.saved",
             "message": "Changes saved successfully",
             "translation": "Changes saved successfully"
