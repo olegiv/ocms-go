@@ -82,6 +82,98 @@ type MenuItemNode struct {
 	PageSlug string // If linked to a page
 }
 
+// menuItemJSON is a JSON-friendly representation of MenuItem.
+type menuItemJSON struct {
+	ID       int64  `json:"id"`
+	MenuID   int64  `json:"menu_id"`
+	ParentID *int64 `json:"parent_id"`
+	Title    string `json:"title"`
+	URL      string `json:"url"`
+	Target   string `json:"target"`
+	PageID   *int64 `json:"page_id"`
+	Position int64  `json:"position"`
+	CssClass string `json:"css_class"`
+	IsActive bool   `json:"is_active"`
+}
+
+// menuItemNodeJSON is a JSON-friendly representation of MenuItemNode.
+type menuItemNodeJSON struct {
+	Item     menuItemJSON       `json:"Item"`
+	Children []menuItemNodeJSON `json:"Children"`
+	PageSlug string             `json:"PageSlug"`
+}
+
+// MarshalJSON implements custom JSON marshaling for MenuItemNode.
+func (n MenuItemNode) MarshalJSON() ([]byte, error) {
+	var parentID *int64
+	if n.Item.ParentID.Valid {
+		parentID = &n.Item.ParentID.Int64
+	}
+	var pageID *int64
+	if n.Item.PageID.Valid {
+		pageID = &n.Item.PageID.Int64
+	}
+
+	// Convert children recursively
+	children := make([]menuItemNodeJSON, 0, len(n.Children))
+	for _, child := range n.Children {
+		childJSON, _ := child.toJSON()
+		children = append(children, childJSON)
+	}
+
+	return json.Marshal(menuItemNodeJSON{
+		Item: menuItemJSON{
+			ID:       n.Item.ID,
+			MenuID:   n.Item.MenuID,
+			ParentID: parentID,
+			Title:    n.Item.Title,
+			URL:      n.Item.Url.String,
+			Target:   n.Item.Target.String,
+			PageID:   pageID,
+			Position: n.Item.Position,
+			CssClass: n.Item.CssClass.String,
+			IsActive: n.Item.IsActive,
+		},
+		Children: children,
+		PageSlug: n.PageSlug,
+	})
+}
+
+// toJSON converts MenuItemNode to its JSON-friendly representation.
+func (n MenuItemNode) toJSON() (menuItemNodeJSON, error) {
+	var parentID *int64
+	if n.Item.ParentID.Valid {
+		parentID = &n.Item.ParentID.Int64
+	}
+	var pageID *int64
+	if n.Item.PageID.Valid {
+		pageID = &n.Item.PageID.Int64
+	}
+
+	children := make([]menuItemNodeJSON, 0, len(n.Children))
+	for _, child := range n.Children {
+		childJSON, _ := child.toJSON()
+		children = append(children, childJSON)
+	}
+
+	return menuItemNodeJSON{
+		Item: menuItemJSON{
+			ID:       n.Item.ID,
+			MenuID:   n.Item.MenuID,
+			ParentID: parentID,
+			Title:    n.Item.Title,
+			URL:      n.Item.Url.String,
+			Target:   n.Item.Target.String,
+			PageID:   pageID,
+			Position: n.Item.Position,
+			CssClass: n.Item.CssClass.String,
+			IsActive: n.Item.IsActive,
+		},
+		Children: children,
+		PageSlug: n.PageSlug,
+	}, nil
+}
+
 // MenuFormData holds data for the menu builder template.
 type MenuFormData struct {
 	Menu       *store.Menu

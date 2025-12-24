@@ -3228,6 +3228,11 @@
             "translation": "Снять выделение"
         },
         {
+            "id": "btn.save_changes",
+            "message": "Save Changes",
+            "translation": "Сохранить изменения"
+        },
+        {
             "id": "msg.saved",
             "message": "Changes saved successfully",
             "translation": "Изменения сохранены"
