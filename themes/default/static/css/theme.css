@@ -494,7 +494,7 @@ p {
 }
 
 /* Tags */
-.tag {
+a.tag {
     display: inline-block;
     padding: var(--spacing-xs) var(--spacing-sm);
     background: var(--bg-secondary);
@@ -504,7 +504,7 @@ p {
     margin-right: var(--spacing-xs);
 }
 
-.tag:hover {
+a.tag:hover {
     background: var(--primary-color);
     color: white;
 }
