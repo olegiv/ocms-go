@@ -17,7 +17,8 @@
         {"id": "migrator.option_import_tags", "message": "Import tags", "translation": "Импортировать теги"},
         {"id": "migrator.option_import_media", "message": "Import media files", "translation": "Импортировать медиафайлы"},
         {"id": "migrator.option_import_posts", "message": "Import blog posts", "translation": "Импортировать записи блога"},
-        {"id": "migrator.option_skip_existing", "message": "Skip existing items (by slug)", "translation": "Пропускать существующие (по slug)"},
+        {"id": "migrator.option_import_users", "message": "Import users (as public users)", "translation": "Импортировать пользователей (как публичные)"},
+        {"id": "migrator.option_skip_existing", "message": "Skip existing items (by slug/email)", "translation": "Пропускать существующие (по slug/email)"},
         {"id": "migrator.start_import", "message": "Start Import", "translation": "Начать импорт"},
         {"id": "migrator.confirm_import", "message": "Are you sure you want to start the import? This will create new content in oCMS.", "translation": "Вы уверены, что хотите начать импорт? Это создаст новый контент в oCMS."},
 
@@ -34,10 +35,11 @@
         {"id": "migrator.imported_content", "message": "Imported Content", "translation": "Импортированный контент"},
         {"id": "migrator.imported_pages", "message": "Pages", "translation": "Страницы"},
         {"id": "migrator.imported_tags", "message": "Tags", "translation": "Теги"},
+        {"id": "migrator.imported_users", "message": "Users", "translation": "Пользователи"},
         {"id": "migrator.no_imported_content", "message": "No content has been imported from this source yet.", "translation": "Контент из этого источника ещё не импортировался."},
         {"id": "migrator.delete_imported", "message": "Delete All Imported Content", "translation": "Удалить весь импортированный контент"},
         {"id": "migrator.confirm_delete", "message": "Are you sure you want to delete ALL content imported from this source? This action cannot be undone.", "translation": "Вы уверены, что хотите удалить ВЕСЬ контент, импортированный из этого источника? Это действие нельзя отменить."},
         {"id": "migrator.error_delete", "message": "Failed to delete imported content", "translation": "Не удалось удалить импортированный контент"},
-        {"id": "migrator.success_delete", "message": "Deleted %d pages and %d tags", "translation": "Удалено %d страниц и %d тегов"}
+        {"id": "migrator.success_delete", "message": "Deleted %d pages, %d tags, and %d users", "translation": "Удалено %d страниц, %d тегов и %d пользователей"}
     ]
 }

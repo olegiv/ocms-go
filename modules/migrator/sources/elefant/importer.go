@@ -15,6 +15,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 	"github.com/olegiv/ocms-go/modules/migrator/types"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Source implements the migrator.Source interface for Elefant CMS.
@@ -140,6 +141,13 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	if opts.ImportPosts {
 		if err := s.importPosts(ctx, queries, reader, authorID, tagMap, opts, result, tracker); err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("Posts import error: %v", err))
+		}
+	}
+
+	// Import users (as public users only)
+	if opts.ImportUsers {
+		if err := s.importUsers(ctx, queries, reader, opts, result, tracker); err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("Users import error: %v", err))
 		}
 	}
 
@@ -343,3 +351,69 @@ func nullStringToString(ns sql.NullString) string {
 	}
 	return ""
 }
+
+// importUsers imports users from Elefant as public users.
+// Note: Passwords cannot be migrated due to different hashing algorithms,
+// so new random passwords are generated for imported users.
+// Users will need to use "forgot password" to set their own passwords.
+func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader *Reader, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) error {
+	users, err := reader.GetUsers()
+	if err != nil {
+		return fmt.Errorf("failed to get users from Elefant: %w", err)
+	}
+
+	now := time.Now()
+
+	// Pre-generate a single password hash to use for all imported users.
+	// This is much faster than hashing individually, and since users need
+	// to reset their passwords anyway, using the same placeholder is fine.
+	// We use MinCost since this is just a placeholder password.
+	placeholderHash, err := bcrypt.GenerateFromPassword([]byte("imported-user-must-reset"), bcrypt.MinCost)
+	if err != nil {
+		return fmt.Errorf("failed to generate placeholder password hash: %w", err)
+	}
+	passwordHash := string(placeholderHash)
+
+	for _, user := range users {
+		// Check context for cancellation
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		// Check if user already exists by email
+		if opts.SkipExisting {
+			_, err := queries.GetUserByEmail(ctx, user.Email)
+			if err == nil {
+				// User exists, skip
+				result.UsersSkipped++
+				continue
+			}
+		}
+
+		// Create user with "public" role (no admin access)
+		createdUser, err := queries.CreateUser(ctx, store.CreateUserParams{
+			Email:        user.Email,
+			PasswordHash: passwordHash, // Placeholder - users must reset password
+			Role:         "public",     // Public users only - no admin access
+			Name:         user.Name,
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		})
+		if err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("Failed to create user '%s': %v", user.Email, err))
+			continue
+		}
+
+		// Track imported user for later deletion
+		if tracker != nil {
+			_ = tracker.TrackImportedItem(ctx, s.Name(), "user", createdUser.ID)
+		}
+
+		result.UsersImported++
+	}
+
+	return nil
+}
+

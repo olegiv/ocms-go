@@ -190,6 +190,7 @@ func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
 		ImportTags:   r.FormValue("import_tags") == "on",
 		ImportMedia:  r.FormValue("import_media") == "on",
 		ImportPosts:  r.FormValue("import_posts") == "on",
+		ImportUsers:  r.FormValue("import_users") == "on",
 		SkipExisting: r.FormValue("skip_existing") == "on",
 	}
 
@@ -199,6 +200,7 @@ func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
 		"import_tags", opts.ImportTags,
 		"import_media", opts.ImportMedia,
 		"import_posts", opts.ImportPosts,
+		"import_users", opts.ImportUsers,
 		"skip_existing", opts.SkipExisting,
 	)
 
@@ -219,9 +221,11 @@ func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
 		"tags_imported", result.TagsImported,
 		"media_imported", result.MediaImported,
 		"posts_imported", result.PostsImported,
+		"users_imported", result.UsersImported,
 		"tags_skipped", result.TagsSkipped,
 		"media_skipped", result.MediaSkipped,
 		"posts_skipped", result.PostsSkipped,
+		"users_skipped", result.UsersSkipped,
 		"errors", len(result.Errors),
 	)
 
@@ -279,9 +283,10 @@ func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
 		"source", sourceName,
 		"pages", deleted["page"],
 		"tags", deleted["tag"],
+		"users", deleted["user"],
 	)
 
-	msg := i18n.T(lang, "migrator.success_delete", deleted["page"], deleted["tag"])
+	msg := i18n.T(lang, "migrator.success_delete", deleted["page"], deleted["tag"], deleted["user"])
 	m.ctx.Render.SetFlash(r, msg, "success")
 	http.Redirect(w, r, "/admin/migrator/"+sourceName, http.StatusSeeOther)
 
@@ -375,6 +380,19 @@ func (m *Module) deleteImportedItems(ctx context.Context, source string) (map[st
 			m.ctx.Logger.Warn("failed to delete tag", "id", id, "error", err)
 		} else {
 			deleted["tag"]++
+		}
+	}
+
+	// Delete users
+	userIDs, err := m.getImportedItems(ctx, source, "user")
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range userIDs {
+		if err := queries.DeleteUser(ctx, id); err != nil {
+			m.ctx.Logger.Warn("failed to delete user", "id", id, "error", err)
+		} else {
+			deleted["user"]++
 		}
 	}
 
