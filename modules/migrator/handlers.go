@@ -225,6 +225,11 @@ func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
 		"errors", len(result.Errors),
 	)
 
+	// Log each error for debugging
+	for i, errMsg := range result.Errors {
+		m.ctx.Logger.Error("import error", "source", sourceName, "index", i, "message", errMsg)
+	}
+
 	// Build success message
 	msg := i18n.T(lang, "migrator.success_import",
 		result.PostsImported, result.TagsImported, result.MediaImported)

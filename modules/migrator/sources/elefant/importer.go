@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -40,15 +41,24 @@ func (s *Source) Description() string {
 }
 
 // ConfigFields returns the configuration fields needed for this source.
+// Defaults are read from environment variables (ELEFANT_HOST, ELEFANT_PORT, etc.)
 func (s *Source) ConfigFields() []types.ConfigField {
 	return []types.ConfigField{
-		{Name: "mysql_host", Label: "MySQL Host", Type: "text", Required: true, Default: "localhost"},
-		{Name: "mysql_port", Label: "MySQL Port", Type: "number", Required: true, Default: "3306"},
-		{Name: "mysql_user", Label: "MySQL User", Type: "text", Required: true},
-		{Name: "mysql_password", Label: "MySQL Password", Type: "password", Required: true},
-		{Name: "mysql_database", Label: "Database Name", Type: "text", Required: true},
-		{Name: "table_prefix", Label: "Table Prefix", Type: "text", Required: false, Placeholder: "e.g. elefant_"},
+		{Name: "mysql_host", Label: "MySQL Host", Type: "text", Required: true, Default: envOrDefault("ELEFANT_HOST", "localhost")},
+		{Name: "mysql_port", Label: "MySQL Port", Type: "number", Required: true, Default: envOrDefault("ELEFANT_PORT", "3306")},
+		{Name: "mysql_user", Label: "MySQL User", Type: "text", Required: true, Default: os.Getenv("ELEFANT_USER")},
+		{Name: "mysql_password", Label: "MySQL Password", Type: "password", Required: true, Default: os.Getenv("ELEFANT_PASSWORD")},
+		{Name: "mysql_database", Label: "Database Name", Type: "text", Required: true, Default: os.Getenv("ELEFANT_DB")},
+		{Name: "table_prefix", Label: "Table Prefix", Type: "text", Required: false, Default: os.Getenv("ELEFANT_PREFIX"), Placeholder: "e.g. elefant_"},
 	}
+}
+
+// envOrDefault returns the environment variable value or the default if not set.
+func envOrDefault(key, defaultValue string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return defaultValue
 }
 
 // buildDSN builds a MySQL DSN from the config.
@@ -229,9 +239,15 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 	now := time.Now()
 
 	for _, post := range posts {
+		// Generate slug from title if not present (older Elefant versions)
+		slug := post.Slug
+		if slug == "" {
+			slug = util.Slugify(post.Title)
+		}
+
 		// Check if page already exists by slug
 		if opts.SkipExisting {
-			_, err := queries.GetPageBySlug(ctx, post.Slug)
+			_, err := queries.GetPageBySlug(ctx, slug)
 			if err == nil {
 				// Page exists, skip it
 				result.PostsSkipped++
@@ -248,7 +264,7 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 		// Create page
 		page, err := queries.CreatePage(ctx, store.CreatePageParams{
 			Title:           post.Title,
-			Slug:            post.Slug,
+			Slug:            slug,
 			Body:            post.Body,
 			Status:          status,
 			AuthorID:        authorID,
