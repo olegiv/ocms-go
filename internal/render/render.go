@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -509,6 +510,23 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		"hcaptchaWidget": func() template.HTML {
 			return ""
 		},
+		// isAdmin checks if the user has admin role.
+		// Usage: {{if isAdmin .User}}...{{end}}
+		"isAdmin": func(user any) bool {
+			return getUserRole(user) == "admin"
+		},
+		// isEditor checks if the user has at least editor role (editor or admin).
+		// Public users have no admin access.
+		// Usage: {{if isEditor .User}}...{{end}}
+		"isEditor": func(user any) bool {
+			role := getUserRole(user)
+			return role == "admin" || role == "editor"
+		},
+		// userRole returns the user's role string.
+		// Usage: {{userRole .User}}
+		"userRole": func(user any) string {
+			return getUserRole(user)
+		},
 	}
 }
 
@@ -757,4 +775,42 @@ func formatDateTimeForLocale(t time.Time, lang string) string {
 		return fmt.Sprintf("%d %s %d, %02d:%02d", t.Day(), monthsRu[t.Month()-1], t.Year(), t.Hour(), t.Minute())
 	}
 	return t.Format("Jan 2, 2006 3:04 PM")
+}
+
+// getUserRole extracts the role from a user object.
+// Accepts store.User, *store.User, or any struct with a Role field.
+func getUserRole(user any) string {
+	if user == nil {
+		return ""
+	}
+
+	// Use reflection to get the Role field since we can't import store
+	// package here (would create circular dependency).
+	// The user is typically store.User passed from middleware.GetUser().
+	v := reflect.ValueOf(user)
+
+	// Handle pointer types
+	if v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return ""
+		}
+		v = v.Elem()
+	}
+
+	// Must be a struct
+	if v.Kind() != reflect.Struct {
+		return ""
+	}
+
+	// Get the Role field
+	roleField := v.FieldByName("Role")
+	if !roleField.IsValid() {
+		return ""
+	}
+
+	if roleField.Kind() != reflect.String {
+		return ""
+	}
+
+	return roleField.String()
 }

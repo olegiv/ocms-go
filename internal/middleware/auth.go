@@ -172,6 +172,66 @@ func GetRequestPath(ctx context.Context) string {
 	return path
 }
 
+// User roles - must match handler.Role* constants.
+const (
+	RoleAdmin  = "admin"
+	RoleEditor = "editor"
+	RolePublic = "public" // Public users have no admin access
+)
+
+// roleLevel returns a numeric level for role hierarchy.
+// Higher level = more permissions. Public users have level 0 (no admin access).
+func roleLevel(role string) int {
+	switch role {
+	case RoleAdmin:
+		return 2
+	case RoleEditor:
+		return 1
+	default:
+		// Public and unknown roles have no admin access
+		return 0
+	}
+}
+
+// RequireRole creates middleware that requires a minimum user role.
+// Roles are hierarchical: admin > editor. Public users have no admin access.
+// For example, RequireRole("editor") allows both admin and editor users.
+func RequireRole(minRole string) func(http.Handler) http.Handler {
+	minLevel := roleLevel(minRole)
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			user := GetUser(r)
+			if user == nil {
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				return
+			}
+
+			// Check role hierarchy
+			userLevel := roleLevel(user.Role)
+			if userLevel < minLevel {
+				// Return 403 Forbidden for insufficient role
+				http.Error(w, "Forbidden: insufficient permissions", http.StatusForbidden)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// RequireAdmin creates middleware that requires admin role.
+// Shorthand for RequireRole(RoleAdmin).
+func RequireAdmin() func(http.Handler) http.Handler {
+	return RequireRole(RoleAdmin)
+}
+
+// RequireEditor creates middleware that requires at least editor role.
+// Allows both admin and editor users.
+func RequireEditor() func(http.Handler) http.Handler {
+	return RequireRole(RoleEditor)
+}
+
 // globalSessionManager is set by SetSessionManager and used by GetAdminLang.
 var globalSessionManager *scs.SessionManager
 

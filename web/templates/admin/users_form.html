@@ -67,7 +67,7 @@
                         {{$adminLang := .AdminLang}}
                         {{range .Data.Roles}}
                         <option value="{{.}}"{{if eq . $currentRole}} selected{{end}}>
-                            {{if eq . "admin"}}{{T $adminLang "users.role_admin"}}{{else if eq . "editor"}}{{T $adminLang "users.role_editor"}}{{else}}{{T $adminLang "users.role_viewer"}}{{end}}
+                            {{if eq . "admin"}}{{T $adminLang "users.role_admin"}}{{else if eq . "editor"}}{{T $adminLang "users.role_editor"}}{{else}}{{T $adminLang "users.role_public"}}{{end}}
                         </option>
                         {{end}}
                     </select>

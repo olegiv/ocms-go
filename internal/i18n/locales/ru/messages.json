@@ -2443,9 +2443,9 @@
             "translation": "Редактор - Управление контентом"
         },
         {
-            "id": "users.role_viewer",
-            "message": "Viewer - Read only",
-            "translation": "Читатель - Только просмотр"
+            "id": "users.role_public",
+            "message": "Public - No admin access",
+            "translation": "Публичный - Нет доступа к админке"
         },
         {
             "id": "users.password_section",
