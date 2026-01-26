@@ -119,8 +119,9 @@ func main() {
 }
 
 func run() error {
-	// Load .env file if present (development)
+	// Load .env files if present (development)
 	_ = godotenv.Load()
+	_ = godotenv.Load("modules/migrator/.env") // Migrator module config
 
 	// Load configuration
 	cfg, err := config.Load()
