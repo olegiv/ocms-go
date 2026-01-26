@@ -1,1 +1,1 @@
-../shared/lang/go/agents/code-quality-auditor.md
+../shared/stacks/go/agents/code-quality-auditor.md
