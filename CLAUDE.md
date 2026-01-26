@@ -268,6 +268,124 @@ url := p.PageURL(2)
 got := p.PageURL(2)
 ```
 
+## Code Style
+
+### License Headers
+
+All `.go` source files must include the SPDX short form header:
+```go
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package <name>
+```
+
+### Error Handling
+
+**Wrapping errors:**
+```go
+// Use fmt.Errorf with %w for wrapped errors
+if err != nil {
+    return fmt.Errorf("failed to create page: %w", err)
+}
+```
+
+**Web handlers:** Use flash messages and redirects for user-facing errors
+```go
+if errors.Is(err, sql.ErrNoRows) {
+    flashError(w, r, h.renderer, redirectURL, "Page not found")
+} else {
+    slog.Error("failed to get page", "error", err, "page_id", id)
+    flashError(w, r, h.renderer, redirectURL, "Error loading page")
+}
+```
+
+**API handlers:** Use typed JSON error responses
+```go
+slog.Error("failed to fetch data", "error", err)
+api.WriteInternalError(w, "Error loading data")
+```
+
+### Constants
+
+Use constants for magic values:
+```go
+const (
+    PagesPerPage    = 20
+    VersionsPerPage = 10
+    DefaultTimeout  = 30 * time.Second
+)
+```
+
+Use typed context keys to prevent collisions:
+```go
+type ContextKey string
+
+const (
+    ContextKeyUser     ContextKey = "user"
+    ContextKeySiteName ContextKey = "siteName"
+)
+```
+
+### Cleanup
+
+Use defer for cleanup immediately after acquiring resources:
+```go
+db, err := sql.Open("sqlite", path)
+if err != nil {
+    return err
+}
+defer db.Close()
+```
+
+### Logging (slog)
+
+Use structured logging with consistent field names:
+```go
+// Errors: always include "error" field and relevant IDs
+slog.Error("failed to create page", "error", err, "user_id", userID)
+
+// Info: log actions with entity IDs for audit trails
+slog.Info("page created", "page_id", page.ID, "slug", page.Slug, "created_by", userID)
+slog.Info("page deleted", "page_id", id, "deleted_by", userID)
+```
+
+### Naming Conventions
+
+| Type | Convention | Example |
+|------|------------|---------|
+| Constants | PascalCase with prefix | `SessionKeyUserID`, `ContextKeyUser` |
+| Handler methods | HTTP verb pattern | `List`, `Create`, `Update`, `Delete` |
+| Validation funcs | `validate` + Field | `validatePageTitle`, `ValidateSlugForUpdate` |
+| Helper funcs | action + Entity | `buildPageTree`, `parseFormInput` |
+| Test funcs | `Test` + FuncName | `TestNewPagesHandler`, `TestParsePageForm` |
+
+### Validation Functions
+
+Return empty string for success, error message for failure:
+```go
+func validateSlug(slug string) string {
+    if slug == "" {
+        return "Slug is required"
+    }
+    if !util.IsValidSlug(slug) {
+        return "Invalid slug format"
+    }
+    return "" // Valid
+}
+```
+
+### Function Documentation
+
+Comments start with the function/type name:
+```go
+// NewPagesHandler creates a new PagesHandler with the given dependencies.
+func NewPagesHandler(db *sql.DB, renderer *render.Renderer) *PagesHandler { ... }
+
+// List handles GET /admin/pages - displays a paginated list of pages.
+func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) { ... }
+```
+
 ## Testing Specific Components
 
 ```bash
