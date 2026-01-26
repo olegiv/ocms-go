@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -71,8 +72,16 @@ func formatMetadata(metadata string) string {
 		return ""
 	}
 
+	// Sort keys for consistent output order
+	keys := make([]string, 0, len(data))
+	for key := range data {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
 	var parts []string
-	for key, value := range data {
+	for _, key := range keys {
+		value := data[key]
 		var strValue string
 		switch v := value.(type) {
 		case string:
