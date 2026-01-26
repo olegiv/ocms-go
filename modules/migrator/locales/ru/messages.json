@@ -1,0 +1,43 @@
+{
+    "$schema": "../../../../.schema/i18n-schema.json",
+    "language": "ru",
+    "messages": [
+        {"id": "nav.migrator", "message": "Content Migrator", "translation": "Миграция контента"},
+        {"id": "migrator.title", "message": "Content Migrator", "translation": "Миграция контента"},
+        {"id": "migrator.description", "message": "Import content from other CMS platforms to oCMS", "translation": "Импорт контента из других CMS платформ в oCMS"},
+        {"id": "migrator.select_source", "message": "Select Source", "translation": "Выберите источник"},
+        {"id": "migrator.select_source_description", "message": "Choose the CMS platform you want to import content from", "translation": "Выберите CMS платформу, из которой вы хотите импортировать контент"},
+        {"id": "migrator.no_sources", "message": "No migration sources available", "translation": "Нет доступных источников миграции"},
+        {"id": "migrator.import_button", "message": "Import", "translation": "Импорт"},
+        {"id": "migrator.import_from", "message": "Import from %s", "translation": "Импорт из %s"},
+        {"id": "migrator.back_to_sources", "message": "Back to Sources", "translation": "Назад к источникам"},
+        {"id": "migrator.connection_settings", "message": "Connection Settings", "translation": "Настройки подключения"},
+        {"id": "migrator.test_connection", "message": "Test Connection", "translation": "Проверить подключение"},
+        {"id": "migrator.import_options", "message": "Import Options", "translation": "Параметры импорта"},
+        {"id": "migrator.option_import_tags", "message": "Import tags", "translation": "Импортировать теги"},
+        {"id": "migrator.option_import_media", "message": "Import media files", "translation": "Импортировать медиафайлы"},
+        {"id": "migrator.option_import_posts", "message": "Import blog posts", "translation": "Импортировать записи блога"},
+        {"id": "migrator.option_skip_existing", "message": "Skip existing items (by slug)", "translation": "Пропускать существующие (по slug)"},
+        {"id": "migrator.start_import", "message": "Start Import", "translation": "Начать импорт"},
+        {"id": "migrator.confirm_import", "message": "Are you sure you want to start the import? This will create new content in oCMS.", "translation": "Вы уверены, что хотите начать импорт? Это создаст новый контент в oCMS."},
+
+        {"id": "migrator.error_source_not_found", "message": "Migration source not found", "translation": "Источник миграции не найден"},
+        {"id": "migrator.error_parse_form", "message": "Failed to parse form data", "translation": "Не удалось обработать данные формы"},
+        {"id": "migrator.error_connection", "message": "Connection failed", "translation": "Ошибка подключения"},
+        {"id": "migrator.error_import", "message": "Import failed", "translation": "Ошибка импорта"},
+
+        {"id": "migrator.success_connection", "message": "Connection successful! You can now start the import.", "translation": "Подключение успешно! Теперь вы можете начать импорт."},
+        {"id": "migrator.success_import", "message": "Import completed: %d posts, %d tags, %d media files imported", "translation": "Импорт завершён: %d записей, %d тегов, %d медиафайлов импортировано"},
+        {"id": "migrator.skipped_count", "message": "(%d items skipped)", "translation": "(%d пропущено)"},
+        {"id": "migrator.errors_count", "message": "(%d errors)", "translation": "(%d ошибок)"},
+
+        {"id": "migrator.imported_content", "message": "Imported Content", "translation": "Импортированный контент"},
+        {"id": "migrator.imported_pages", "message": "Pages", "translation": "Страницы"},
+        {"id": "migrator.imported_tags", "message": "Tags", "translation": "Теги"},
+        {"id": "migrator.no_imported_content", "message": "No content has been imported from this source yet.", "translation": "Контент из этого источника ещё не импортировался."},
+        {"id": "migrator.delete_imported", "message": "Delete All Imported Content", "translation": "Удалить весь импортированный контент"},
+        {"id": "migrator.confirm_delete", "message": "Are you sure you want to delete ALL content imported from this source? This action cannot be undone.", "translation": "Вы уверены, что хотите удалить ВЕСЬ контент, импортированный из этого источника? Это действие нельзя отменить."},
+        {"id": "migrator.error_delete", "message": "Failed to delete imported content", "translation": "Не удалось удалить импортированный контент"},
+        {"id": "migrator.success_delete", "message": "Deleted %d pages and %d tags", "translation": "Удалено %d страниц и %d тегов"}
+    ]
+}

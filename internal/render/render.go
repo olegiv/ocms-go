@@ -703,6 +703,25 @@ func (r *Renderer) GetAdminLang(req *http.Request) string {
 	return i18n.GetDefaultLanguage()
 }
 
+// SetSessionData stores arbitrary data in the session under the given key.
+// Data is stored as JSON-encoded string.
+func (r *Renderer) SetSessionData(req *http.Request, key string, data map[string]string) {
+	if r.sessionManager != nil && data != nil {
+		r.sessionManager.Put(req.Context(), key, data)
+	}
+}
+
+// PopSessionData retrieves and removes data from the session.
+// Returns nil if no data found.
+func (r *Renderer) PopSessionData(req *http.Request, key string) map[string]string {
+	if r.sessionManager != nil {
+		if data, ok := r.sessionManager.Pop(req.Context(), key).(map[string]string); ok {
+			return data
+		}
+	}
+	return nil
+}
+
 // monthsRu contains Russian month names in genitive case.
 var monthsRu = []string{
 	"января", "февраля", "марта", "апреля", "мая", "июня",
