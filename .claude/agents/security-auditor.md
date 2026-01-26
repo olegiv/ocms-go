@@ -12,7 +12,7 @@ This is a Go-based CMS with security-critical features:
 
 - **Language**: Go 1.25.5
 - **Security Tools**: govulncheck (Go), npm audit (JS dependencies)
-- **Audit Directory**: `/Users/olegiv/Desktop/Projects/Go/ocms-go/.audit/` (gitignored)
+- **Audit Directory**: `.audit/` (gitignored)
 - **Security Features**: CSRF protection, session management, API authentication, rate limiting
 - **Authentication**: Session-based with SCS, API key-based for REST API
 - **Database**: SQLite with SQLC (safe from SQL injection)

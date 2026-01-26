@@ -10,8 +10,8 @@ You are an expert module system developer for the oCMS project. Your role is to 
 
 This is a Go-based CMS with an extensible module system:
 
-- **Module Registry**: `/Users/olegiv/Desktop/Projects/Go/ocms-go/internal/module/`
-- **Modules Directory**: `/Users/olegiv/Desktop/Projects/Go/ocms-go/modules/`
+- **Module Registry**: `internal/module/`
+- **Modules Directory**: `modules/`
 - **Existing Modules**: example, developer, analytics, hcaptcha
 - **Database**: Modules stored in `modules` table with active status
 - **Hooks System**: Event-driven architecture with hook registration
@@ -82,8 +82,8 @@ modules/
 ### Step 1: Create Module Directory
 
 ```bash
-mkdir -p /Users/olegiv/Desktop/Projects/Go/ocms-go/modules/mymodule/locales/en
-mkdir -p /Users/olegiv/Desktop/Projects/Go/ocms-go/modules/mymodule/locales/ru
+mkdir -p modules/mymodule/locales/en
+mkdir -p modules/mymodule/locales/ru
 ```
 
 ### Step 2: Implement Module Interface

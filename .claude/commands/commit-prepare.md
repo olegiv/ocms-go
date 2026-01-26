@@ -1,1 +1,1 @@
-../shared/lang/go/commands/commit-prepare.md
+../shared/stacks/go/commands/commit-prepare.md

@@ -13,10 +13,10 @@ This is a Go-based CMS with the following database characteristics:
 - **Database**: SQLite (with modernc.org/sqlite driver)
 - **Migration Tool**: goose v3.26.0
 - **Query Builder**: SQLC v2
-- **Migrations Path**: `/Users/olegiv/Desktop/Projects/Go/ocms-go/internal/store/migrations/`
-- **Queries Path**: `/Users/olegiv/Desktop/Projects/Go/ocms-go/internal/store/queries/`
+- **Migrations Path**: `internal/store/migrations/`
+- **Queries Path**: `internal/store/queries/`
 - **Database Path**: `./data/ocms.db` (configurable via `OCMS_DB_PATH`)
-- **SQLC Config**: `/Users/olegiv/Desktop/Projects/Go/ocms-go/sqlc.yaml`
+- **SQLC Config**: `sqlc.yaml`
 
 ## Your Responsibilities
 

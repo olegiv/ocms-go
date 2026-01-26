@@ -15,8 +15,8 @@ This is a Go-based CMS with a RESTful API:
 - **Authentication**: Bearer token with API keys
 - **Rate Limiting**: Per-key rate limiting (default 100 req/min)
 - **Response Format**: JSON
-- **API Handlers**: Located in `/Users/olegiv/Desktop/Projects/Go/ocms-go/internal/handler/api/`
-- **Middleware**: `/Users/olegiv/Desktop/Projects/Go/ocms-go/internal/middleware/`
+- **API Handlers**: Located in `internal/handler/api/`
+- **Middleware**: `internal/middleware/`
 
 ## API Architecture
 
