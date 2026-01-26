@@ -104,6 +104,11 @@ func (s *EventService) LogCacheEvent(ctx context.Context, level, message string,
 	return s.LogEvent(ctx, level, model.EventCategoryCache, message, userID, metadata)
 }
 
+// LogMigratorEvent logs a migrator-related event.
+func (s *EventService) LogMigratorEvent(ctx context.Context, level, message string, userID *int64, metadata map[string]any) error {
+	return s.LogEvent(ctx, level, model.EventCategoryMigrator, message, userID, metadata)
+}
+
 // DeleteOldEvents removes events older than the specified duration.
 func (s *EventService) DeleteOldEvents(ctx context.Context, olderThan time.Duration) error {
 	cutoff := time.Now().Add(-olderThan)
