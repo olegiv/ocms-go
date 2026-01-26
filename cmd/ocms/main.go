@@ -532,149 +532,160 @@ func run() error {
 		r.Use(middleware.LoadUser(sessionManager, db))
 		r.Use(middleware.LoadSiteConfig(db, cacheManager))
 
-		r.Get(handler.RouteRoot, adminHandler.Dashboard)
-		r.Post("/language", adminHandler.SetLanguage)
+		// Editor routes (editor + admin) - public users have no admin access
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireEditor())
 
-		// User management routes
-		registerCRUD(r, handler.RouteUsers, handler.RouteUsersID, crudHandlers{
-			List: usersHandler.List, NewForm: usersHandler.NewForm, Create: usersHandler.Create,
-			EditForm: usersHandler.EditForm, Update: usersHandler.Update, Delete: usersHandler.Delete,
+			// Dashboard and common routes
+			r.Get(handler.RouteRoot, adminHandler.Dashboard)
+			r.Post("/language", adminHandler.SetLanguage)
+			r.Get("/events", eventsHandler.List)
+
+			// Page management routes
+			registerCRUD(r, handler.RoutePages, handler.RoutePagesID, crudHandlers{
+				List: pagesHandler.List, NewForm: pagesHandler.NewForm, Create: pagesHandler.Create,
+				EditForm: pagesHandler.EditForm, Update: pagesHandler.Update, Delete: pagesHandler.Delete,
+			})
+			r.Post(handler.RoutePagesID+"/publish", pagesHandler.TogglePublish)
+			r.Get(handler.RoutePagesID+"/versions", pagesHandler.Versions)
+			r.Post(handler.RoutePagesID+"/versions/{versionId}/restore", pagesHandler.RestoreVersion)
+			r.Post(handler.RoutePagesID+handler.RouteSuffixTranslate, pagesHandler.Translate)
+
+			// Tag management routes
+			registerCRUD(r, handler.RouteTags, handler.RouteTagsID, crudHandlers{
+				List: taxonomyHandler.ListTags, NewForm: taxonomyHandler.NewTagForm, Create: taxonomyHandler.CreateTag,
+				EditForm: taxonomyHandler.EditTagForm, Update: taxonomyHandler.UpdateTag, Delete: taxonomyHandler.DeleteTag,
+			})
+			r.Get(handler.RouteTags+handler.RouteSuffixSearch, taxonomyHandler.SearchTags)
+			r.Post(handler.RouteTagsID+handler.RouteSuffixTranslate, taxonomyHandler.TranslateTag)
+
+			// Category management routes
+			registerCRUD(r, handler.RouteCategories, handler.RouteCategoriesID, crudHandlers{
+				List: taxonomyHandler.ListCategories, NewForm: taxonomyHandler.NewCategoryForm, Create: taxonomyHandler.CreateCategory,
+				EditForm: taxonomyHandler.EditCategoryForm, Update: taxonomyHandler.UpdateCategory, Delete: taxonomyHandler.DeleteCategory,
+			})
+			r.Get(handler.RouteCategories+handler.RouteSuffixSearch, taxonomyHandler.SearchCategories)
+			r.Post(handler.RouteCategoriesID+handler.RouteSuffixTranslate, taxonomyHandler.TranslateCategory)
+
+			// Media library routes
+			r.Get(handler.RouteMedia, mediaHandler.Library)
+			r.Get(handler.RouteMedia+"/api", mediaHandler.API) // JSON API for media picker
+			r.Get(handler.RouteMedia+handler.RouteSuffixUpload, mediaHandler.UploadForm)
+			r.Post(handler.RouteMedia+handler.RouteSuffixUpload, mediaHandler.Upload)
+			r.Get(handler.RouteMediaID, mediaHandler.EditForm)
+			r.Put(handler.RouteMediaID, mediaHandler.Update)
+			r.Post(handler.RouteMediaID, mediaHandler.Update) // HTML forms can't send PUT
+			r.Delete(handler.RouteMediaID, mediaHandler.Delete)
+			r.Post(handler.RouteMediaID+handler.RouteSuffixMove, mediaHandler.MoveMedia)
+
+			// Media folders
+			r.Post(handler.RouteMedia+handler.RouteSuffixFolders, mediaHandler.CreateFolder)
+			r.Put(handler.RouteMediaFoldersID, mediaHandler.UpdateFolder)
+			r.Post(handler.RouteMediaFoldersID, mediaHandler.UpdateFolder) // HTML forms can't send PUT
+			r.Delete(handler.RouteMediaFoldersID, mediaHandler.DeleteFolder)
+
+			// Menu management routes
+			registerCRUD(r, handler.RouteMenus, handler.RouteMenusID, crudHandlers{
+				List: menusHandler.List, NewForm: menusHandler.NewForm, Create: menusHandler.Create,
+				EditForm: menusHandler.EditForm, Update: menusHandler.Update, Delete: menusHandler.Delete,
+			})
+			r.Post(handler.RouteMenusID+"/items", menusHandler.AddItem)
+			r.Put(handler.RouteMenusID+handler.RouteItemsItemID, menusHandler.UpdateItem)
+			r.Delete(handler.RouteMenusID+handler.RouteItemsItemID, menusHandler.DeleteItem)
+			r.Post(handler.RouteMenusID+handler.RouteSuffixReorder, menusHandler.Reorder)
+
+			// Form management routes
+			registerCRUD(r, handler.RouteForms, handler.RouteFormsID, crudHandlers{
+				List: formsHandler.List, NewForm: formsHandler.NewForm, Create: formsHandler.Create,
+				EditForm: formsHandler.EditForm, Update: formsHandler.Update, Delete: formsHandler.Delete,
+			})
+			r.Post(handler.RouteFormsID+"/fields", formsHandler.AddField)
+			r.Put(handler.RouteFormsID+handler.RouteFieldsFieldID, formsHandler.UpdateField)
+			r.Delete(handler.RouteFormsID+handler.RouteFieldsFieldID, formsHandler.DeleteField)
+			r.Post(handler.RouteFormsID+"/fields/reorder", formsHandler.ReorderFields)
+
+			// Form submissions routes
+			r.Get(handler.RouteFormsID+"/submissions", formsHandler.Submissions)
+			r.Get(handler.RouteFormsID+handler.RouteSubmissionsSubID, formsHandler.ViewSubmission)
+			r.Delete(handler.RouteFormsID+handler.RouteSubmissionsSubID, formsHandler.DeleteSubmission)
+			r.Post(handler.RouteFormsID+"/submissions/export", formsHandler.ExportSubmissions)
+
+			// Theme settings (not activation - that's admin only)
+			r.Get(handler.RouteThemeSettings, themesHandler.Settings)
+			r.Put(handler.RouteThemeSettings, themesHandler.SaveSettings)
+			r.Post(handler.RouteThemeSettings, themesHandler.SaveSettings) // HTML forms can't send PUT
+
+			// Widget management routes
+			r.Get(handler.RouteWidgets, widgetsHandler.List)
+			r.Post(handler.RouteWidgets, widgetsHandler.Create)
+			r.Get(handler.RouteWidgetsID, widgetsHandler.GetWidget)
+			r.Put(handler.RouteWidgetsID, widgetsHandler.Update)
+			r.Delete(handler.RouteWidgetsID, widgetsHandler.Delete)
+			r.Post(handler.RouteWidgetsID+handler.RouteSuffixMove, widgetsHandler.MoveWidget)
+			r.Post(handler.RouteWidgets+handler.RouteSuffixReorder, widgetsHandler.Reorder)
 		})
 
-		// Language management routes
-		registerCRUD(r, handler.RouteLanguages, handler.RouteLanguagesID, crudHandlers{
-			List: languagesHandler.List, NewForm: languagesHandler.NewForm, Create: languagesHandler.Create,
-			EditForm: languagesHandler.EditForm, Update: languagesHandler.Update, Delete: languagesHandler.Delete,
-		})
-		r.Post(handler.RouteLanguagesID+"/default", languagesHandler.SetDefault)
+		// Admin-only routes
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAdmin())
 
-		// Page management routes
-		registerCRUD(r, handler.RoutePages, handler.RoutePagesID, crudHandlers{
-			List: pagesHandler.List, NewForm: pagesHandler.NewForm, Create: pagesHandler.Create,
-			EditForm: pagesHandler.EditForm, Update: pagesHandler.Update, Delete: pagesHandler.Delete,
-		})
-		r.Post(handler.RoutePagesID+"/publish", pagesHandler.TogglePublish)
-		r.Get(handler.RoutePagesID+"/versions", pagesHandler.Versions)
-		r.Post(handler.RoutePagesID+"/versions/{versionId}/restore", pagesHandler.RestoreVersion)
-		r.Post(handler.RoutePagesID+handler.RouteSuffixTranslate, pagesHandler.Translate)
+			// User management routes
+			registerCRUD(r, handler.RouteUsers, handler.RouteUsersID, crudHandlers{
+				List: usersHandler.List, NewForm: usersHandler.NewForm, Create: usersHandler.Create,
+				EditForm: usersHandler.EditForm, Update: usersHandler.Update, Delete: usersHandler.Delete,
+			})
 
-		// Configuration routes
-		r.Get(handler.RouteConfig, configHandler.List)
-		r.Put(handler.RouteConfig, configHandler.Update)
-		r.Post(handler.RouteConfig, configHandler.Update) // HTML forms can't send PUT
+			// Language management routes
+			registerCRUD(r, handler.RouteLanguages, handler.RouteLanguagesID, crudHandlers{
+				List: languagesHandler.List, NewForm: languagesHandler.NewForm, Create: languagesHandler.Create,
+				EditForm: languagesHandler.EditForm, Update: languagesHandler.Update, Delete: languagesHandler.Delete,
+			})
+			r.Post(handler.RouteLanguagesID+"/default", languagesHandler.SetDefault)
 
-		// Events log route
-		r.Get("/events", eventsHandler.List)
+			// Configuration routes
+			r.Get(handler.RouteConfig, configHandler.List)
+			r.Put(handler.RouteConfig, configHandler.Update)
+			r.Post(handler.RouteConfig, configHandler.Update) // HTML forms can't send PUT
 
-		// Tag management routes
-		registerCRUD(r, handler.RouteTags, handler.RouteTagsID, crudHandlers{
-			List: taxonomyHandler.ListTags, NewForm: taxonomyHandler.NewTagForm, Create: taxonomyHandler.CreateTag,
-			EditForm: taxonomyHandler.EditTagForm, Update: taxonomyHandler.UpdateTag, Delete: taxonomyHandler.DeleteTag,
-		})
-		r.Get(handler.RouteTags+handler.RouteSuffixSearch, taxonomyHandler.SearchTags)
-		r.Post(handler.RouteTagsID+handler.RouteSuffixTranslate, taxonomyHandler.TranslateTag)
+			// Theme management routes (activation is admin only)
+			r.Get("/themes", themesHandler.List)
+			r.Post("/themes/activate", themesHandler.Activate)
 
-		// Category management routes
-		registerCRUD(r, handler.RouteCategories, handler.RouteCategoriesID, crudHandlers{
-			List: taxonomyHandler.ListCategories, NewForm: taxonomyHandler.NewCategoryForm, Create: taxonomyHandler.CreateCategory,
-			EditForm: taxonomyHandler.EditCategoryForm, Update: taxonomyHandler.UpdateCategory, Delete: taxonomyHandler.DeleteCategory,
-		})
-		r.Get(handler.RouteCategories+handler.RouteSuffixSearch, taxonomyHandler.SearchCategories)
-		r.Post(handler.RouteCategoriesID+handler.RouteSuffixTranslate, taxonomyHandler.TranslateCategory)
+			// Module management routes
+			r.Get("/modules", modulesHandler.List)
+			r.Post("/modules/{name}/toggle", modulesHandler.ToggleActive)
+			r.Post("/modules/{name}/toggle-sidebar", modulesHandler.ToggleSidebar)
 
-		// Media library routes
-		r.Get(handler.RouteMedia, mediaHandler.Library)
-		r.Get(handler.RouteMedia+"/api", mediaHandler.API) // JSON API for media picker
-		r.Get(handler.RouteMedia+handler.RouteSuffixUpload, mediaHandler.UploadForm)
-		r.Post(handler.RouteMedia+handler.RouteSuffixUpload, mediaHandler.Upload)
-		r.Get(handler.RouteMediaID, mediaHandler.EditForm)
-		r.Put(handler.RouteMediaID, mediaHandler.Update)
-		r.Post(handler.RouteMediaID, mediaHandler.Update) // HTML forms can't send PUT
-		r.Delete(handler.RouteMediaID, mediaHandler.Delete)
-		r.Post(handler.RouteMediaID+handler.RouteSuffixMove, mediaHandler.MoveMedia)
+			// API key management routes
+			registerCRUD(r, handler.RouteAPIKeys, handler.RouteAPIKeysID, crudHandlers{
+				List: apiKeysHandler.List, NewForm: apiKeysHandler.NewForm, Create: apiKeysHandler.Create,
+				EditForm: apiKeysHandler.EditForm, Update: apiKeysHandler.Update, Delete: apiKeysHandler.Delete,
+			})
 
-		// Media folders
-		r.Post(handler.RouteMedia+handler.RouteSuffixFolders, mediaHandler.CreateFolder)
-		r.Put(handler.RouteMediaFoldersID, mediaHandler.UpdateFolder)
-		r.Post(handler.RouteMediaFoldersID, mediaHandler.UpdateFolder) // HTML forms can't send PUT
-		r.Delete(handler.RouteMediaFoldersID, mediaHandler.DeleteFolder)
+			// Webhook management routes
+			registerCRUD(r, handler.RouteWebhooks, handler.RouteWebhooksID, crudHandlers{
+				List: webhooksHandler.List, NewForm: webhooksHandler.NewForm, Create: webhooksHandler.Create,
+				EditForm: webhooksHandler.EditForm, Update: webhooksHandler.Update, Delete: webhooksHandler.Delete,
+			})
+			r.Get(handler.RouteWebhooksID+"/deliveries", webhooksHandler.Deliveries)
+			r.Post(handler.RouteWebhooksID+"/test", webhooksHandler.Test)
+			r.Post(handler.RouteWebhooksID+"/deliveries/{did}/retry", webhooksHandler.RetryDelivery)
 
-		// Menu management routes
-		registerCRUD(r, handler.RouteMenus, handler.RouteMenusID, crudHandlers{
-			List: menusHandler.List, NewForm: menusHandler.NewForm, Create: menusHandler.Create,
-			EditForm: menusHandler.EditForm, Update: menusHandler.Update, Delete: menusHandler.Delete,
-		})
-		r.Post(handler.RouteMenusID+"/items", menusHandler.AddItem)
-		r.Put(handler.RouteMenusID+handler.RouteItemsItemID, menusHandler.UpdateItem)
-		r.Delete(handler.RouteMenusID+handler.RouteItemsItemID, menusHandler.DeleteItem)
-		r.Post(handler.RouteMenusID+handler.RouteSuffixReorder, menusHandler.Reorder)
+			// Cache management routes
+			r.Get("/cache", cacheHandler.Stats)
+			r.Post("/cache/clear", cacheHandler.Clear)
+			r.Post("/cache/clear/config", cacheHandler.ClearConfig)
+			r.Post("/cache/clear/sitemap", cacheHandler.ClearSitemap)
 
-		// Form management routes
-		registerCRUD(r, handler.RouteForms, handler.RouteFormsID, crudHandlers{
-			List: formsHandler.List, NewForm: formsHandler.NewForm, Create: formsHandler.Create,
-			EditForm: formsHandler.EditForm, Update: formsHandler.Update, Delete: formsHandler.Delete,
-		})
-		r.Post(handler.RouteFormsID+"/fields", formsHandler.AddField)
-		r.Put(handler.RouteFormsID+handler.RouteFieldsFieldID, formsHandler.UpdateField)
-		r.Delete(handler.RouteFormsID+handler.RouteFieldsFieldID, formsHandler.DeleteField)
-		r.Post(handler.RouteFormsID+"/fields/reorder", formsHandler.ReorderFields)
-
-		// Form submissions routes
-		r.Get(handler.RouteFormsID+"/submissions", formsHandler.Submissions)
-		r.Get(handler.RouteFormsID+handler.RouteSubmissionsSubID, formsHandler.ViewSubmission)
-		r.Delete(handler.RouteFormsID+handler.RouteSubmissionsSubID, formsHandler.DeleteSubmission)
-		r.Post(handler.RouteFormsID+"/submissions/export", formsHandler.ExportSubmissions)
-
-		// Theme management routes
-		r.Get("/themes", themesHandler.List)
-		r.Post("/themes/activate", themesHandler.Activate)
-		r.Get(handler.RouteThemeSettings, themesHandler.Settings)
-		r.Put(handler.RouteThemeSettings, themesHandler.SaveSettings)
-		r.Post(handler.RouteThemeSettings, themesHandler.SaveSettings) // HTML forms can't send PUT
-
-		// Widget management routes
-		r.Get(handler.RouteWidgets, widgetsHandler.List)
-		r.Post(handler.RouteWidgets, widgetsHandler.Create)
-		r.Get(handler.RouteWidgetsID, widgetsHandler.GetWidget)
-		r.Put(handler.RouteWidgetsID, widgetsHandler.Update)
-		r.Delete(handler.RouteWidgetsID, widgetsHandler.Delete)
-		r.Post(handler.RouteWidgetsID+handler.RouteSuffixMove, widgetsHandler.MoveWidget)
-		r.Post(handler.RouteWidgets+handler.RouteSuffixReorder, widgetsHandler.Reorder)
-
-		// Module management routes
-		r.Get("/modules", modulesHandler.List)
-		r.Post("/modules/{name}/toggle", modulesHandler.ToggleActive)
-		r.Post("/modules/{name}/toggle-sidebar", modulesHandler.ToggleSidebar)
-
-		// API key management routes
-		registerCRUD(r, handler.RouteAPIKeys, handler.RouteAPIKeysID, crudHandlers{
-			List: apiKeysHandler.List, NewForm: apiKeysHandler.NewForm, Create: apiKeysHandler.Create,
-			EditForm: apiKeysHandler.EditForm, Update: apiKeysHandler.Update, Delete: apiKeysHandler.Delete,
+			// Import/Export routes
+			r.Get(handler.RouteExport, importExportHandler.ExportForm)
+			r.Post(handler.RouteExport, importExportHandler.Export)
+			r.Get(handler.RouteImport, importExportHandler.ImportForm)
+			r.Post(handler.RouteImport+"/validate", importExportHandler.ImportValidate)
+			r.Post(handler.RouteImport, importExportHandler.Import)
 		})
 
-		// Webhook management routes
-		registerCRUD(r, handler.RouteWebhooks, handler.RouteWebhooksID, crudHandlers{
-			List: webhooksHandler.List, NewForm: webhooksHandler.NewForm, Create: webhooksHandler.Create,
-			EditForm: webhooksHandler.EditForm, Update: webhooksHandler.Update, Delete: webhooksHandler.Delete,
-		})
-		r.Get(handler.RouteWebhooksID+"/deliveries", webhooksHandler.Deliveries)
-		r.Post(handler.RouteWebhooksID+"/test", webhooksHandler.Test)
-		r.Post(handler.RouteWebhooksID+"/deliveries/{did}/retry", webhooksHandler.RetryDelivery)
-
-		// Cache management routes
-		r.Get("/cache", cacheHandler.Stats)
-		r.Post("/cache/clear", cacheHandler.Clear)
-		r.Post("/cache/clear/config", cacheHandler.ClearConfig)
-		r.Post("/cache/clear/sitemap", cacheHandler.ClearSitemap)
-
-		// Import/Export routes
-		r.Get(handler.RouteExport, importExportHandler.ExportForm)
-		r.Post(handler.RouteExport, importExportHandler.Export)
-		r.Get(handler.RouteImport, importExportHandler.ImportForm)
-		r.Post(handler.RouteImport+"/validate", importExportHandler.ImportValidate)
-		r.Post(handler.RouteImport, importExportHandler.Import)
-
-		// Register module admin routes
+		// Register module admin routes (module-specific permissions)
 		moduleRegistry.AdminRouteAll(r)
 	})
 

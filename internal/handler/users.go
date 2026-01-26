@@ -29,11 +29,11 @@ import (
 const (
 	RoleAdmin  = "admin"
 	RoleEditor = "editor"
-	RoleViewer = "viewer"
+	RolePublic = "public" // Public users have no admin access
 )
 
 // ValidRoles contains all valid user roles.
-var ValidRoles = []string{RoleAdmin, RoleEditor, RoleViewer}
+var ValidRoles = []string{RoleAdmin, RoleEditor, RolePublic}
 
 // UsersPerPage is the number of users to display per page.
 const UsersPerPage = 10

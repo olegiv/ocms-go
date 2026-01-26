@@ -54,7 +54,7 @@ func TestIsValidRole(t *testing.T) {
 	}{
 		{"admin", true},
 		{"editor", true},
-		{"viewer", true},
+		{"public", true},
 		{"", false},
 		{"invalid", false},
 		{"Admin", false},
@@ -73,7 +73,7 @@ func TestIsValidRole(t *testing.T) {
 }
 
 func TestValidRoles(t *testing.T) {
-	expected := []string{RoleAdmin, RoleEditor, RoleViewer}
+	expected := []string{RoleAdmin, RoleEditor, RolePublic}
 
 	if len(ValidRoles) != len(expected) {
 		t.Errorf("ValidRoles has %d elements; want %d", len(ValidRoles), len(expected))

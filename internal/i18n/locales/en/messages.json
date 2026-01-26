@@ -2443,9 +2443,9 @@
             "translation": "Editor - Content management"
         },
         {
-            "id": "users.role_viewer",
-            "message": "Viewer - Read only",
-            "translation": "Viewer - Read only"
+            "id": "users.role_public",
+            "message": "Public - No admin access",
+            "translation": "Public - No admin access"
         },
         {
             "id": "users.password_section",
