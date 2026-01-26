@@ -7,12 +7,19 @@ package session
 
 import (
 	"database/sql"
+	"encoding/gob"
 	"net/http"
 	"time"
 
 	"github.com/alexedwards/scs/sqlite3store"
 	"github.com/alexedwards/scs/v2"
 )
+
+func init() {
+	// Register types that may be stored in sessions.
+	// This is required by gob encoding used by the session store.
+	gob.Register(map[string]string{})
+}
 
 // New creates a new session manager configured with SQLite store.
 func New(db *sql.DB, isDev bool) *scs.SessionManager {

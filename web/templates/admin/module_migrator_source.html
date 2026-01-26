@@ -1,0 +1,333 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{T .AdminLang "migrator.import_from" .Data.Source.DisplayName}}</h1>
+        <p class="page-description">{{.Data.Source.Description}}</p>
+    </div>
+    <div class="page-actions">
+        <a href="/admin/migrator" class="btn btn-secondary">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m12 19-7-7 7-7"/>
+                <path d="M19 12H5"/>
+            </svg>
+            {{T .AdminLang "migrator.back_to_sources"}}
+        </a>
+    </div>
+</div>
+
+<div class="migrator-form-container">
+    <form method="POST" action="/admin/migrator/{{.Data.Source.Name}}/import" id="import-form" onsubmit="confirmImport(event)">
+        {{.CSRFField}}
+
+        <div class="card">
+            <div class="card-header">
+                <h2>{{T .AdminLang "migrator.connection_settings"}}</h2>
+            </div>
+            <div class="card-body">
+                <div class="form-grid">
+                    {{range .Data.ConfigFields}}
+                    <div class="form-group {{if eq .Type "password"}}form-group-password{{end}}">
+                        <label for="{{.Name}}">
+                            {{.Label}}
+                            {{if .Required}}<span class="required">*</span>{{end}}
+                        </label>
+                        {{if eq .Type "password"}}
+                        <input type="password" id="{{.Name}}" name="{{.Name}}"
+                               value="{{index $.Data.Config .Name}}"
+                               {{if .Required}}required{{end}}
+                               {{if .Placeholder}}placeholder="{{.Placeholder}}"{{end}}
+                               class="form-control">
+                        {{else if eq .Type "number"}}
+                        <input type="number" id="{{.Name}}" name="{{.Name}}"
+                               value="{{index $.Data.Config .Name}}"
+                               {{if .Required}}required{{end}}
+                               {{if .Placeholder}}placeholder="{{.Placeholder}}"{{end}}
+                               class="form-control">
+                        {{else}}
+                        <input type="text" id="{{.Name}}" name="{{.Name}}"
+                               value="{{index $.Data.Config .Name}}"
+                               {{if .Required}}required{{end}}
+                               {{if .Placeholder}}placeholder="{{.Placeholder}}"{{end}}
+                               class="form-control">
+                        {{end}}
+                    </div>
+                    {{end}}
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="test-connection-btn" onclick="testConnection()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                        {{T .AdminLang "migrator.test_connection"}}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>{{T .AdminLang "migrator.import_options"}}</h2>
+            </div>
+            <div class="card-body">
+                <div class="form-checkboxes">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="import_tags" checked>
+                        <span>{{T .AdminLang "migrator.option_import_tags"}}</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="import_media" checked>
+                        <span>{{T .AdminLang "migrator.option_import_media"}}</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="import_posts" checked>
+                        <span>{{T .AdminLang "migrator.option_import_posts"}}</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="skip_existing">
+                        <span>{{T .AdminLang "migrator.option_skip_existing"}}</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-submit">
+            <button type="submit" class="btn btn-primary btn-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" x2="12" y1="15" y2="3"/>
+                </svg>
+                {{T .AdminLang "migrator.start_import"}}
+            </button>
+        </div>
+    </form>
+
+    {{/* Imported Content Section */}}
+    <div class="card card-danger">
+        <div class="card-header">
+            <h2>{{T .AdminLang "migrator.imported_content"}}</h2>
+        </div>
+        <div class="card-body">
+            {{if .Data.ImportedCounts}}
+                {{$pageCount := index .Data.ImportedCounts "page"}}
+                {{$tagCount := index .Data.ImportedCounts "tag"}}
+                {{if or $pageCount $tagCount}}
+                <div class="imported-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">{{T .AdminLang "migrator.imported_pages"}}:</span>
+                        <span class="stat-value">{{$pageCount}}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">{{T .AdminLang "migrator.imported_tags"}}:</span>
+                        <span class="stat-value">{{$tagCount}}</span>
+                    </div>
+                </div>
+                <form method="POST" action="/admin/migrator/{{.Data.Source.Name}}/delete" onsubmit="return confirmDelete()">
+                    {{.CSRFField}}
+                    <button type="submit" class="btn btn-danger">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 6h18"/>
+                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                            <line x1="10" x2="10" y1="11" y2="17"/>
+                            <line x1="14" x2="14" y1="11" y2="17"/>
+                        </svg>
+                        {{T .AdminLang "migrator.delete_imported"}}
+                    </button>
+                </form>
+                {{else}}
+                <p class="text-muted">{{T .AdminLang "migrator.no_imported_content"}}</p>
+                {{end}}
+            {{else}}
+            <p class="text-muted">{{T .AdminLang "migrator.no_imported_content"}}</p>
+            {{end}}
+        </div>
+    </div>
+</div>
+
+<style>
+.migrator-form-container {
+    max-width: 800px;
+    margin-top: 2rem;
+}
+
+.card {
+    margin-bottom: 1.5rem;
+}
+
+.card-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.card-header h2 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+@media (max-width: 640px) {
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.form-group label {
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+.form-group .required {
+    color: var(--danger-color, #ef4444);
+}
+
+.form-control {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-radius: 6px;
+    font-size: 0.875rem;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--primary-color, #3b82f6);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-actions {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color, #e5e7eb);
+}
+
+.form-checkboxes {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+}
+
+.form-submit {
+    margin-top: 1.5rem;
+}
+
+.card-danger {
+    margin-top: 2rem;
+    border-color: var(--danger-color, #ef4444);
+}
+
+.card-danger .card-header {
+    background-color: rgba(239, 68, 68, 0.1);
+    border-bottom-color: var(--danger-color, #ef4444);
+}
+
+.card-danger .card-header h2 {
+    color: var(--danger-color, #ef4444);
+}
+
+.imported-stats {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 1rem;
+}
+
+.stat-item {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.stat-label {
+    font-weight: 500;
+}
+
+.stat-value {
+    font-weight: 600;
+    color: var(--primary-color, #3b82f6);
+}
+
+.text-muted {
+    color: var(--text-muted, #6b7280);
+    margin: 0;
+}
+
+.btn-danger {
+    background-color: var(--danger-color, #ef4444);
+    color: white;
+    border: none;
+}
+
+.btn-danger:hover {
+    background-color: #dc2626;
+}
+</style>
+
+<script>
+function testConnection() {
+    const importForm = document.getElementById('import-form');
+    if (!importForm) return;
+
+    // Validate required fields first
+    const inputs = importForm.querySelectorAll('input[required]');
+    for (let i = 0; i < inputs.length; i++) {
+        if (!inputs[i].value.trim()) {
+            inputs[i].focus();
+            inputs[i].reportValidity();
+            return;
+        }
+    }
+
+    // Create a form for testing connection
+    const testForm = document.createElement('form');
+    testForm.method = 'POST';
+    testForm.action = '/admin/migrator/{{.Data.Source.Name}}/test';
+
+    // Copy all input fields from the import form (config fields only)
+    const configInputs = importForm.querySelectorAll('input[type="text"], input[type="password"], input[type="number"]');
+    configInputs.forEach(function(input) {
+        const hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = input.name;
+        hidden.value = input.value;
+        testForm.appendChild(hidden);
+    });
+
+    document.body.appendChild(testForm);
+    testForm.submit();
+}
+
+function confirmImport(event) {
+    if (!confirm('{{T .AdminLang "migrator.confirm_import"}}')) {
+        event.preventDefault();
+    }
+}
+
+function confirmDelete() {
+    return confirm('{{T .AdminLang "migrator.confirm_delete"}}');
+}
+</script>
+{{end}}

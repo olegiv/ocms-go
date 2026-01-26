@@ -1,0 +1,114 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{T .AdminLang "migrator.title"}}</h1>
+        <p class="page-description">{{T .AdminLang "migrator.description"}}</p>
+    </div>
+</div>
+
+<div class="migrator-sources">
+    <div class="section-header">
+        <h2>{{T .AdminLang "migrator.select_source"}}</h2>
+        <p>{{T .AdminLang "migrator.select_source_description"}}</p>
+    </div>
+
+    <div class="source-cards">
+        {{range .Data.Sources}}
+        <div class="card source-card">
+            <div class="card-body">
+                <div class="source-header">
+                    <div class="source-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                            <path d="M3 5V19A9 3 0 0 0 21 19V5"/>
+                            <path d="M3 12A9 3 0 0 0 21 12"/>
+                        </svg>
+                    </div>
+                    <div class="source-title">
+                        <h3>{{.DisplayName}}</h3>
+                        <p>{{.Description}}</p>
+                    </div>
+                </div>
+                <div class="source-actions">
+                    <a href="/admin/migrator/{{.Name}}" class="btn btn-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" x2="12" y1="15" y2="3"/>
+                        </svg>
+                        {{T $.AdminLang "migrator.import_button"}}
+                    </a>
+                </div>
+            </div>
+        </div>
+        {{else}}
+        <div class="empty-state">
+            <p>{{T .AdminLang "migrator.no_sources"}}</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+
+<style>
+.migrator-sources {
+    margin-top: 2rem;
+}
+
+.source-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+.source-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.source-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.source-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.source-icon {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary-color, #3b82f6);
+    color: white;
+    border-radius: 8px;
+}
+
+.source-title h3 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.125rem;
+}
+
+.source-title p {
+    margin: 0;
+    color: var(--text-muted, #6b7280);
+    font-size: 0.875rem;
+}
+
+.source-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-muted, #6b7280);
+}
+</style>
+{{end}}

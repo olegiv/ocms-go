@@ -42,6 +42,7 @@ import (
 	"github.com/olegiv/ocms-go/modules/developer"
 	"github.com/olegiv/ocms-go/modules/example"
 	"github.com/olegiv/ocms-go/modules/hcaptcha"
+	"github.com/olegiv/ocms-go/modules/migrator"
 	"github.com/olegiv/ocms-go/web"
 )
 
@@ -315,6 +316,9 @@ func run() error {
 	}
 	if err := moduleRegistry.Register(hcaptcha.New()); err != nil {
 		return fmt.Errorf("registering hcaptcha module: %w", err)
+	}
+	if err := moduleRegistry.Register(migrator.New()); err != nil {
+		return fmt.Errorf("registering migrator module: %w", err)
 	}
 
 	// Register internal analytics module (built-in analytics tracking)
