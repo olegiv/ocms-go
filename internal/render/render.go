@@ -494,37 +494,13 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		// Falls back to the default alt text if no translation exists for the language.
 		// Usage in theme templates: {{mediaAlt .FeaturedImage.ID .LangCode .FeaturedImage.Alt.String}}
 		"mediaAlt": func(mediaID int64, langCode string, defaultAlt string) string {
-			if r.db == nil || mediaID == 0 || langCode == "" {
-				return defaultAlt
-			}
-			var alt string
-			err := r.db.QueryRow(`
-				SELECT mt.alt FROM media_translations mt
-				JOIN languages l ON l.id = mt.language_id
-				WHERE mt.media_id = ? AND l.code = ? AND mt.alt != ''
-			`, mediaID, langCode).Scan(&alt)
-			if err != nil || alt == "" {
-				return defaultAlt
-			}
-			return alt
+			return r.getMediaTranslation(mediaID, langCode, "alt", defaultAlt)
 		},
 		// mediaCaption returns the translated caption for a media item.
 		// Falls back to the default caption if no translation exists for the language.
 		// Usage in theme templates: {{mediaCaption .FeaturedImage.ID .LangCode .FeaturedImage.Caption.String}}
 		"mediaCaption": func(mediaID int64, langCode string, defaultCaption string) string {
-			if r.db == nil || mediaID == 0 || langCode == "" {
-				return defaultCaption
-			}
-			var caption string
-			err := r.db.QueryRow(`
-				SELECT mt.caption FROM media_translations mt
-				JOIN languages l ON l.id = mt.language_id
-				WHERE mt.media_id = ? AND l.code = ? AND mt.caption != ''
-			`, mediaID, langCode).Scan(&caption)
-			if err != nil || caption == "" {
-				return defaultCaption
-			}
-			return caption
+			return r.getMediaTranslation(mediaID, langCode, "caption", defaultCaption)
 		},
 		// Placeholder functions for hCaptcha module (will be overwritten if module is loaded)
 		"hcaptchaEnabled": func() bool {
@@ -534,6 +510,26 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			return ""
 		},
 	}
+}
+
+// getMediaTranslation fetches a translated field for a media item.
+// Returns the default value if the database is unavailable, parameters are invalid,
+// or no translation exists.
+func (r *Renderer) getMediaTranslation(mediaID int64, langCode, field, defaultValue string) string {
+	if r.db == nil || mediaID == 0 || langCode == "" {
+		return defaultValue
+	}
+	var value string
+	query := fmt.Sprintf(`
+		SELECT mt.%s FROM media_translations mt
+		JOIN languages l ON l.id = mt.language_id
+		WHERE mt.media_id = ? AND l.code = ? AND mt.%s != ''
+	`, field, field)
+	err := r.db.QueryRow(query, mediaID, langCode).Scan(&value)
+	if err != nil || value == "" {
+		return defaultValue
+	}
+	return value
 }
 
 // Breadcrumb represents a single breadcrumb item.
