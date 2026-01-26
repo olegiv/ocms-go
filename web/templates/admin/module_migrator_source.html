@@ -117,8 +117,9 @@
             {{if .Data.ImportedCounts}}
                 {{$pageCount := index .Data.ImportedCounts "page"}}
                 {{$tagCount := index .Data.ImportedCounts "tag"}}
+                {{$mediaCount := index .Data.ImportedCounts "media"}}
                 {{$userCount := index .Data.ImportedCounts "user"}}
-                {{if or $pageCount $tagCount $userCount}}
+                {{if or $pageCount $tagCount $mediaCount $userCount}}
                 <div class="imported-stats">
                     <div class="stat-item">
                         <span class="stat-label">{{T .AdminLang "migrator.imported_pages"}}:</span>
@@ -127,6 +128,10 @@
                     <div class="stat-item">
                         <span class="stat-label">{{T .AdminLang "migrator.imported_tags"}}:</span>
                         <span class="stat-value">{{$tagCount}}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">{{T .AdminLang "migrator.imported_media"}}:</span>
+                        <span class="stat-value">{{$mediaCount}}</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">{{T .AdminLang "migrator.imported_users"}}:</span>

@@ -6,6 +6,10 @@ package elefant
 import (
 	"database/sql"
 	"fmt"
+	"mime"
+	"os"
+	"path/filepath"
+	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -327,4 +331,111 @@ func (r *Reader) GetTagCount() (int, error) {
 		return 0, fmt.Errorf("failed to count tags: %w", err)
 	}
 	return count, nil
+}
+
+// allowedMediaMimeTypes defines MIME types that can be imported.
+var allowedMediaMimeTypes = map[string]bool{
+	"image/jpeg":    true,
+	"image/png":     true,
+	"image/gif":     true,
+	"image/webp":    true,
+	"application/pdf": true,
+	"video/mp4":     true,
+	"video/webm":    true,
+}
+
+// ScanMediaFiles scans the Elefant files directory for media files.
+// It returns a list of MediaFile structs for files that match allowed MIME types.
+func ScanMediaFiles(filesPath string) ([]MediaFile, error) {
+	if filesPath == "" {
+		return nil, fmt.Errorf("files path is empty")
+	}
+
+	// Verify directory exists
+	info, err := os.Stat(filesPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to access files directory: %w", err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("files path is not a directory: %s", filesPath)
+	}
+
+	var files []MediaFile
+
+	err = filepath.Walk(filesPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip directories
+		if info.IsDir() {
+			return nil
+		}
+
+		// Get MIME type from extension
+		mimeType := getMimeTypeFromExt(path)
+		if mimeType == "" || !allowedMediaMimeTypes[mimeType] {
+			return nil
+		}
+
+		// Get relative path from filesPath
+		relPath, err := filepath.Rel(filesPath, path)
+		if err != nil {
+			relPath = filepath.Base(path)
+		}
+
+		files = append(files, MediaFile{
+			Path:     relPath,
+			FullPath: path,
+			Filename: info.Name(),
+			Size:     info.Size(),
+			MimeType: mimeType,
+		})
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan files directory: %w", err)
+	}
+
+	return files, nil
+}
+
+// getMimeTypeFromExt returns the MIME type for a file based on its extension.
+func getMimeTypeFromExt(path string) string {
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext == "" {
+		return ""
+	}
+
+	// Use standard library first
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType != "" {
+		// Strip charset suffix if present (e.g., "text/plain; charset=utf-8")
+		if idx := strings.Index(mimeType, ";"); idx != -1 {
+			mimeType = strings.TrimSpace(mimeType[:idx])
+		}
+		return mimeType
+	}
+
+	// Fallback for common types
+	switch ext {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".pdf":
+		return "application/pdf"
+	case ".mp4":
+		return "video/mp4"
+	case ".webm":
+		return "video/webm"
+	}
+
+	return ""
 }
