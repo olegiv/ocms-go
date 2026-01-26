@@ -7,6 +7,6 @@
   },
   "dependencies": {
     "htmx.org": "^2.0.8",
-    "alpinejs": "^3.15.3"
+    "alpinejs": "^3.15.4"
   }
 }
