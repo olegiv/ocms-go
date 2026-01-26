@@ -5,14 +5,18 @@ package analytics_int
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
+
+// dateFormat is the standard date format for analytics queries (YYYY-MM-DD).
+const dateFormat = "2006-01-02"
 
 // getOverviewStats returns summary statistics for the dashboard.
 func (m *Module) getOverviewStats(ctx context.Context, startDate, endDate time.Time) OverviewStats {
 	stats := OverviewStats{}
-	today := time.Now().Format("2006-01-02")
-	startDateStr := startDate.Format("2006-01-02")
+	today := time.Now().Format(dateFormat)
+	startDateStr := startDate.Format(dateFormat)
 
 	// Total views: combine aggregated daily data + today's raw views
 	var aggregatedViews int64
@@ -55,7 +59,7 @@ func (m *Module) getOverviewStats(ctx context.Context, startDate, endDate time.T
 		SELECT COALESCE(SUM(bounces), 0)
 		FROM page_analytics_daily
 		WHERE date >= ? AND date <= ?
-	`, startDate.Format("2006-01-02"), endDate.Format("2006-01-02")).Scan(&totalBounces)
+	`, startDate.Format(dateFormat), endDate.Format(dateFormat)).Scan(&totalBounces)
 
 	if stats.TotalViews > 0 {
 		stats.BounceRate = float64(totalBounces) / float64(stats.TotalViews) * 100
@@ -65,7 +69,7 @@ func (m *Module) getOverviewStats(ctx context.Context, startDate, endDate time.T
 	stats.ViewsToday = todayViews
 
 	// Views yesterday
-	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	yesterday := time.Now().AddDate(0, 0, -1).Format(dateFormat)
 	_ = m.ctx.DB.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(views), 0)
 		FROM page_analytics_daily
@@ -85,7 +89,7 @@ func (m *Module) getOverviewStats(ctx context.Context, startDate, endDate time.T
 
 // getTopPages returns the top pages by views.
 func (m *Module) getTopPages(ctx context.Context, startDate, endDate time.Time, limit int) []TopPage {
-	endDateStr := endDate.Format("2006-01-02")
+	endDateStr := endDate.Format(dateFormat)
 
 	// Combine aggregated daily data with today's raw views (with proper unique visitor count)
 	rows, err := m.ctx.DB.QueryContext(ctx, `
@@ -105,7 +109,7 @@ func (m *Module) getTopPages(ctx context.Context, startDate, endDate time.Time, 
 		GROUP BY path
 		ORDER BY total_views DESC
 		LIMIT ?
-	`, startDate.Format("2006-01-02"), endDateStr, endDateStr, limit)
+	`, startDate.Format(dateFormat), endDateStr, endDateStr, limit)
 	if err != nil {
 		return nil
 	}
@@ -152,7 +156,7 @@ func (m *Module) getPageTitle(ctx context.Context, path string) string {
 
 // getTopReferrers returns the top referrers by views.
 func (m *Module) getTopReferrers(ctx context.Context, startDate, endDate time.Time, limit int) []TopReferrer {
-	endDateStr := endDate.Format("2006-01-02")
+	endDateStr := endDate.Format(dateFormat)
 
 	// Combine aggregated data with end date's raw views
 	rows, err := m.ctx.DB.QueryContext(ctx, `
@@ -167,7 +171,7 @@ func (m *Module) getTopReferrers(ctx context.Context, startDate, endDate time.Ti
 		GROUP BY referrer_domain
 		ORDER BY total_views DESC
 		LIMIT ?
-	`, startDate.Format("2006-01-02"), endDateStr, endDateStr, limit)
+	`, startDate.Format(dateFormat), endDateStr, endDateStr, limit)
 	if err != nil {
 		return nil
 	}
@@ -180,62 +184,54 @@ func (m *Module) getTopReferrers(ctx context.Context, startDate, endDate time.Ti
 
 // getBrowserStats returns browser breakdown.
 func (m *Module) getBrowserStats(ctx context.Context, startDate, endDate time.Time) []BrowserStat {
-	endDateStr := endDate.Format("2006-01-02")
-
-	// Combine aggregated data with end date's raw views
-	rows, err := m.ctx.DB.QueryContext(ctx, `
-		SELECT browser, SUM(views) as total_views
-		FROM (
-			SELECT browser, views FROM page_analytics_tech
-			WHERE date >= ? AND date < ?
-			UNION ALL
-			SELECT browser, 1 as views FROM page_analytics_views
-			WHERE DATE(created_at) = ?
-		)
-		GROUP BY browser
-		ORDER BY total_views DESC
-		LIMIT 10
-	`, startDate.Format("2006-01-02"), endDateStr, endDateStr)
-	if err != nil {
-		return nil
-	}
-	defer func() { _ = rows.Close() }()
-
-	return scanViewStats[BrowserStat](rows, func(b *BrowserStat) []any {
-		return []any{&b.Browser, &b.Views}
-	})
+	return getTechStats(m, ctx, startDate, endDate, "browser", 10,
+		func(b *BrowserStat) []any { return []any{&b.Browser, &b.Views} })
 }
 
 // getDeviceStats returns device type breakdown.
 func (m *Module) getDeviceStats(ctx context.Context, startDate, endDate time.Time) []DeviceStat {
-	endDateStr := endDate.Format("2006-01-02")
+	return getTechStats(m, ctx, startDate, endDate, "device_type", 0,
+		func(d *DeviceStat) []any { return []any{&d.DeviceType, &d.Views} })
+}
 
-	// Combine aggregated data with end date's raw views
-	rows, err := m.ctx.DB.QueryContext(ctx, `
-		SELECT device_type, SUM(views) as total_views
+// getTechStats is a generic helper that queries and scans tech statistics.
+// It combines aggregated data from page_analytics_tech with the current day's raw views.
+func getTechStats[T any, PT interface {
+	*T
+	viewStat
+}](m *Module, ctx context.Context, startDate, endDate time.Time, column string, limit int, scanFunc func(*T) []any) []T {
+	startDateStr := startDate.Format(dateFormat)
+	endDateStr := endDate.Format(dateFormat)
+
+	limitClause := ""
+	if limit > 0 {
+		limitClause = fmt.Sprintf("LIMIT %d", limit)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT %s, SUM(views) as total_views
 		FROM (
-			SELECT device_type, views FROM page_analytics_tech
+			SELECT %s, views FROM page_analytics_tech
 			WHERE date >= ? AND date < ?
 			UNION ALL
-			SELECT device_type, 1 as views FROM page_analytics_views
+			SELECT %s, 1 as views FROM page_analytics_views
 			WHERE DATE(created_at) = ?
 		)
-		GROUP BY device_type
+		GROUP BY %s
 		ORDER BY total_views DESC
-	`, startDate.Format("2006-01-02"), endDateStr, endDateStr)
+		%s
+	`, column, column, column, column, limitClause)
+
+	rows, err := m.ctx.DB.QueryContext(ctx, query, startDateStr, endDateStr, endDateStr)
 	if err != nil {
 		return nil
 	}
-	defer func() { _ = rows.Close() }()
-
-	return scanViewStats[DeviceStat](rows, func(d *DeviceStat) []any {
-		return []any{&d.DeviceType, &d.Views}
-	})
+	return scanViewStats[T, PT](rows, scanFunc)
 }
 
 // getCountryStats returns country breakdown.
 func (m *Module) getCountryStats(ctx context.Context, startDate, endDate time.Time, limit int) []CountryStat {
-	endDateStr := endDate.Format("2006-01-02")
+	endDateStr := endDate.Format(dateFormat)
 
 	// Combine aggregated data with end date's raw views
 	rows, err := m.ctx.DB.QueryContext(ctx, `
@@ -250,7 +246,7 @@ func (m *Module) getCountryStats(ctx context.Context, startDate, endDate time.Ti
 		GROUP BY country_code
 		ORDER BY total_views DESC
 		LIMIT ?
-	`, startDate.Format("2006-01-02"), endDateStr, endDateStr, limit)
+	`, startDate.Format(dateFormat), endDateStr, endDateStr, limit)
 	if err != nil {
 		return nil
 	}
@@ -279,7 +275,7 @@ func (m *Module) getCountryStats(ctx context.Context, startDate, endDate time.Ti
 
 // getTimeSeries returns views/visitors per day for charts.
 func (m *Module) getTimeSeries(ctx context.Context, startDate, endDate time.Time) []TimeSeriesPoint {
-	endDateStr := endDate.Format("2006-01-02")
+	endDateStr := endDate.Format(dateFormat)
 
 	// Combine aggregated data with end date's raw views
 	rows, err := m.ctx.DB.QueryContext(ctx, `
@@ -293,7 +289,7 @@ func (m *Module) getTimeSeries(ctx context.Context, startDate, endDate time.Time
 		)
 		GROUP BY date
 		ORDER BY date
-	`, startDate.Format("2006-01-02"), endDateStr, endDateStr)
+	`, startDate.Format(dateFormat), endDateStr, endDateStr)
 	if err != nil {
 		return nil
 	}
