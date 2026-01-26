@@ -517,4 +517,6 @@ git commit -m "Update Claude Code shared submodule"
 
 ## License
 
-GPL-3.0 License
+Copyright (C) 2025-2026 Oleg Ivanchenko
+
+GNU General Public License v3.0 - see [LICENSE](LICENSE) file for details.
