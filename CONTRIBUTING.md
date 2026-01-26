@@ -89,6 +89,36 @@ If your change requires database modifications:
    sqlc generate
    ```
 
+## License Headers
+
+All new source files should include the SPDX short-form license identifier at the top of the file:
+
+**Go files:**
+```go
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+```
+
+**JavaScript/TypeScript files:**
+```javascript
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+```
+
+**CSS/SCSS files:**
+```css
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Copyright (c) 2025-2026 Oleg Ivanchenko */
+```
+
+**HTML templates:**
+```html
+{{/* SPDX-License-Identifier: GPL-3.0-or-later */}}
+{{/* Copyright (c) 2025-2026 Oleg Ivanchenko */}}
+```
+
+Using SPDX identifiers provides a standardized, machine-readable way to declare licensing. See [spdx.org/licenses](https://spdx.org/licenses/) for more information.
+
 ## License
 
 By contributing to oCMS, you agree that your contributions will be licensed under the GPL-3.0 License. All contributions must be compatible with this license.
