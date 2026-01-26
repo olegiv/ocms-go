@@ -17,12 +17,13 @@ const (
 
 // Event categories
 const (
-	EventCategoryAuth   = "auth"
-	EventCategoryPage   = "page"
-	EventCategoryUser   = "user"
-	EventCategoryConfig = "config"
-	EventCategorySystem = "system"
-	EventCategoryCache  = "cache"
+	EventCategoryAuth     = "auth"
+	EventCategoryPage     = "page"
+	EventCategoryUser     = "user"
+	EventCategoryConfig   = "config"
+	EventCategorySystem   = "system"
+	EventCategoryCache    = "cache"
+	EventCategoryMigrator = "migrator"
 )
 
 // Event represents a system event log entry.

@@ -235,6 +235,22 @@ func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
 		m.ctx.Logger.Error("import error", "source", sourceName, "index", i, "message", errMsg)
 	}
 
+	// Log event for audit trail
+	if m.ctx.Events != nil {
+		_ = m.ctx.Events.LogMigratorEvent(r.Context(), "info", "Content imported from "+sourceName, &user.ID, map[string]any{
+			"source":         sourceName,
+			"posts_imported": result.PostsImported,
+			"tags_imported":  result.TagsImported,
+			"media_imported": result.MediaImported,
+			"users_imported": result.UsersImported,
+			"posts_skipped":  result.PostsSkipped,
+			"tags_skipped":   result.TagsSkipped,
+			"media_skipped":  result.MediaSkipped,
+			"users_skipped":  result.UsersSkipped,
+			"errors":         len(result.Errors),
+		})
+	}
+
 	// Build success message
 	msg := i18n.T(lang, "migrator.success_import",
 		result.PostsImported, result.TagsImported, result.MediaImported)
@@ -287,6 +303,17 @@ func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
 		"media", deleted["media"],
 		"users", deleted["user"],
 	)
+
+	// Log event for audit trail
+	if m.ctx.Events != nil {
+		_ = m.ctx.Events.LogMigratorEvent(r.Context(), "info", "Imported content deleted from "+sourceName, &user.ID, map[string]any{
+			"source":        sourceName,
+			"pages_deleted": deleted["page"],
+			"tags_deleted":  deleted["tag"],
+			"media_deleted": deleted["media"],
+			"users_deleted": deleted["user"],
+		})
+	}
 
 	msg := i18n.T(lang, "migrator.success_delete", deleted["page"], deleted["tag"], deleted["media"], deleted["user"])
 	m.ctx.Render.SetFlash(r, msg, "success")
