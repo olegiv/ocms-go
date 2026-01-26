@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package theme
 
 import (
@@ -7,7 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/i18n"
 )
 
 // testLogger returns a logger configured for tests (errors only).

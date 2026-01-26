@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package service provides business logic services.
 package service
 
@@ -10,7 +13,7 @@ import (
 
 	"github.com/microcosm-cc/bluemonday"
 
-	"ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // htmlSanitizer provides a reusable HTML sanitization policy for widget content.

@@ -1,11 +1,14 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package api
 
 import (
 	"testing"
 	"time"
 
-	"ocms-go/internal/handler"
-	"ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/handler"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 func TestParseMediaIncludes(t *testing.T) {

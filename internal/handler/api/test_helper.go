@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package api
 
 import (
@@ -13,7 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	_ "github.com/mattn/go-sqlite3"
 
-	"ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // testDB creates an in-memory SQLite database with taxonomy tables for testing.

@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package module
 
 import (
@@ -6,7 +9,7 @@ import (
 	"html/template"
 	"testing"
 
-	"ocms-go/internal/testutil"
+	"github.com/olegiv/ocms-go/internal/testutil"
 
 	"github.com/go-chi/chi/v5"
 	_ "github.com/mattn/go-sqlite3"

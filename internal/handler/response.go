@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package handler
 
 import (
@@ -6,7 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/render"
 )
 
 // flashAndRedirect sets a flash message and redirects to the given URL.

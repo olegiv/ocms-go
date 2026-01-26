@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package module
 
 import (
@@ -13,8 +16,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"ocms-go/internal/i18n"
-	"ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/render"
 )
 
 // errModuleNotFound is the format string for module not found errors.

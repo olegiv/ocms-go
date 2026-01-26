@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package module provides a module system for extending oCMS functionality.
 // Modules can register routes, admin routes, template functions, and hooks
 // to integrate with the core application.
@@ -11,10 +14,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"ocms-go/internal/config"
-	"ocms-go/internal/render"
-	"ocms-go/internal/service"
-	"ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/config"
+	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/service"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // Context provides access to application services for modules.

@@ -1,9 +1,12 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package handler
 
 import (
 	"log/slog"
 
-	"ocms-go/internal/util"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // SlugExistsFunc is a function type for checking if a slug exists.

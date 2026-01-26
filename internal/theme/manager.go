@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package theme
 
 import (
@@ -10,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/i18n"
 )
 
 // Manager handles theme loading, switching, and rendering.

@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package middleware
 
 import (
@@ -6,7 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 func TestGetUser(t *testing.T) {

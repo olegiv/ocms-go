@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package main
 
 import (
@@ -19,27 +22,27 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
 
-	"ocms-go/internal/cache"
-	"ocms-go/internal/config"
-	"ocms-go/internal/handler"
-	"ocms-go/internal/handler/api"
-	"ocms-go/internal/i18n"
-	"ocms-go/internal/logging"
-	"ocms-go/internal/middleware"
-	"ocms-go/internal/module"
-	"ocms-go/internal/render"
-	"ocms-go/internal/scheduler"
-	"ocms-go/internal/service"
-	"ocms-go/internal/session"
-	"ocms-go/internal/store"
-	"ocms-go/internal/theme"
-	"ocms-go/internal/webhook"
-	"ocms-go/modules/analytics_ext"
-	"ocms-go/modules/analytics_int"
-	"ocms-go/modules/developer"
-	"ocms-go/modules/example"
-	"ocms-go/modules/hcaptcha"
-	"ocms-go/web"
+	"github.com/olegiv/ocms-go/internal/cache"
+	"github.com/olegiv/ocms-go/internal/config"
+	"github.com/olegiv/ocms-go/internal/handler"
+	"github.com/olegiv/ocms-go/internal/handler/api"
+	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/logging"
+	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/scheduler"
+	"github.com/olegiv/ocms-go/internal/service"
+	"github.com/olegiv/ocms-go/internal/session"
+	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/theme"
+	"github.com/olegiv/ocms-go/internal/webhook"
+	"github.com/olegiv/ocms-go/modules/analytics_ext"
+	"github.com/olegiv/ocms-go/modules/analytics_int"
+	"github.com/olegiv/ocms-go/modules/developer"
+	"github.com/olegiv/ocms-go/modules/example"
+	"github.com/olegiv/ocms-go/modules/hcaptcha"
+	"github.com/olegiv/ocms-go/web"
 )
 
 // Version information - injected at build time via ldflags

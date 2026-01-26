@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package middleware provides HTTP middleware for authentication,
 // authorization, and request context handling.
 package middleware
@@ -9,9 +12,9 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
-	"ocms-go/internal/cache"
-	"ocms-go/internal/i18n"
-	"ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/cache"
+	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // ContextKey is a type for context keys to avoid collisions.

@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package analytics_ext provides an external statistics tracking module for oCMS.
 // Supports Google Analytics 4 (GA4), Google Tag Manager (GTM), and Matomo.
 package analytics_ext
@@ -9,7 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/module"
 )
 
 //go:embed locales

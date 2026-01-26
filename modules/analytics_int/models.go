@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package analytics_int provides built-in server-side analytics for oCMS.
 // It tracks page views, unique visitors, referrers, browser/device stats,
 // and geographic data with privacy-focused anonymization.

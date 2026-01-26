@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package logging
 
 import (
@@ -8,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"ocms-go/internal/model"
-	"ocms-go/internal/store"
-	"ocms-go/internal/testutil"
+	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/testutil"
 )
 
 // discardHandler is a slog.Handler that discards all logs.

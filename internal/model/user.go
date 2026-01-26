@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package model defines domain models and types used throughout the application
 // including User, Page, Event, and configuration structures.
 package model

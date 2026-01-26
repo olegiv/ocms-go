@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package analytics_int
 
 import (
@@ -5,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"ocms-go/internal/testutil"
-	"ocms-go/internal/testutil/moduleutil"
+	"github.com/olegiv/ocms-go/internal/testutil"
+	"github.com/olegiv/ocms-go/internal/testutil/moduleutil"
 )
 
 // testModule creates a module instance with test database.

@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package transfer
 
 import (
@@ -12,7 +15,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // Exporter handles exporting CMS content to JSON format.
