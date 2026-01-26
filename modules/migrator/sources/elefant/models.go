@@ -40,3 +40,12 @@ type User struct {
 	Email string // Email address
 	Name  string // Display name
 }
+
+// MediaFile represents a file found in Elefant's files directory.
+type MediaFile struct {
+	Path     string // Relative path from files_path (e.g., "images/photo.jpg")
+	FullPath string // Absolute path
+	Filename string // Just the filename
+	Size     int64  // File size in bytes
+	MimeType string // MIME type (e.g., "image/jpeg")
+}

@@ -6,6 +6,7 @@ package migrator
 import (
 	"context"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -283,10 +284,11 @@ func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
 		"source", sourceName,
 		"pages", deleted["page"],
 		"tags", deleted["tag"],
+		"media", deleted["media"],
 		"users", deleted["user"],
 	)
 
-	msg := i18n.T(lang, "migrator.success_delete", deleted["page"], deleted["tag"], deleted["user"])
+	msg := i18n.T(lang, "migrator.success_delete", deleted["page"], deleted["tag"], deleted["media"], deleted["user"])
 	m.ctx.Render.SetFlash(r, msg, "success")
 	http.Redirect(w, r, "/admin/migrator/"+sourceName, http.StatusSeeOther)
 
@@ -383,6 +385,27 @@ func (m *Module) deleteImportedItems(ctx context.Context, source string) (map[st
 		}
 	}
 
+	// Delete media (and their files)
+	mediaIDs, err := m.getImportedItems(ctx, source, "media")
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range mediaIDs {
+		// Get media to delete files
+		media, err := queries.GetMediaByID(ctx, id)
+		if err == nil {
+			// Delete media files from disk
+			m.deleteMediaFiles(media.Uuid)
+			// Delete media variants from database
+			_ = queries.DeleteMediaVariants(ctx, id)
+		}
+		if err := queries.DeleteMedia(ctx, id); err != nil {
+			m.ctx.Logger.Warn("failed to delete media", "id", id, "error", err)
+		} else {
+			deleted["media"]++
+		}
+	}
+
 	// Delete users
 	userIDs, err := m.getImportedItems(ctx, source, "user")
 	if err != nil {
@@ -403,4 +426,17 @@ func (m *Module) deleteImportedItems(ctx context.Context, source string) (map[st
 	}
 
 	return deleted, nil
+}
+
+// deleteMediaFiles removes media files from disk.
+func (m *Module) deleteMediaFiles(mediaUUID string) {
+	uploadDir := "./uploads"
+	variants := []string{"originals", "thumbnail", "medium", "large"}
+
+	for _, variant := range variants {
+		dir := uploadDir + "/" + variant + "/" + mediaUUID
+		if err := os.RemoveAll(dir); err != nil {
+			m.ctx.Logger.Warn("failed to delete media directory", "dir", dir, "error", err)
+		}
+	}
 }

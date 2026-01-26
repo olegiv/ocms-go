@@ -8,10 +8,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
+	"github.com/olegiv/ocms-go/internal/imaging"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 	"github.com/olegiv/ocms-go/modules/migrator/types"
@@ -51,6 +55,7 @@ func (s *Source) ConfigFields() []types.ConfigField {
 		{Name: "mysql_password", Label: "MySQL Password", Type: "password", Required: true, Default: os.Getenv("ELEFANT_PASSWORD")},
 		{Name: "mysql_database", Label: "Database Name", Type: "text", Required: true, Default: os.Getenv("ELEFANT_DB")},
 		{Name: "table_prefix", Label: "Table Prefix", Type: "text", Required: false, Default: os.Getenv("ELEFANT_PREFIX"), Placeholder: "e.g. elefant_"},
+		{Name: "files_path", Label: "Elefant Files Path", Type: "text", Required: false, Default: os.Getenv("ELEFANT_FILES"), Placeholder: "/path/to/elefant/files"},
 	}
 }
 
@@ -100,6 +105,9 @@ func (s *Source) TestConnection(cfg map[string]string) error {
 	return nil
 }
 
+// defaultUploadDir is the default oCMS uploads directory.
+const defaultUploadDir = "./uploads"
+
 // Import imports content from Elefant CMS into oCMS.
 func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, opts types.ImportOptions, tracker types.ImportTracker) (*types.ImportResult, error) {
 	result := &types.ImportResult{}
@@ -137,9 +145,25 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 		}
 	}
 
+	// Import media files (before posts so we can replace URLs in body)
+	var mediaMap map[string]string
+	if opts.ImportMedia {
+		filesPath := cfg["files_path"]
+		if filesPath != "" {
+			uploadDir := cfg["upload_dir"]
+			if uploadDir == "" {
+				uploadDir = defaultUploadDir
+			}
+			mediaMap, err = s.importMedia(ctx, queries, filesPath, uploadDir, authorID, opts, result, tracker)
+			if err != nil {
+				result.Errors = append(result.Errors, fmt.Sprintf("Media import error: %v", err))
+			}
+		}
+	}
+
 	// Import posts
 	if opts.ImportPosts {
-		if err := s.importPosts(ctx, queries, reader, authorID, tagMap, opts, result, tracker); err != nil {
+		if err := s.importPosts(ctx, queries, reader, authorID, tagMap, mediaMap, opts, result, tracker); err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("Posts import error: %v", err))
 		}
 	}
@@ -237,8 +261,184 @@ func (s *Source) importTags(ctx context.Context, queries *store.Queries, reader 
 	return tagMap, nil
 }
 
+// importMedia imports media files from Elefant's files directory.
+// It returns a map of old Elefant paths to new oCMS media URLs for replacing in post bodies.
+func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesPath, uploadDir string,
+	userID int64, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) (map[string]string, error) {
+
+	// Map: old Elefant path → new oCMS URL
+	mediaMap := make(map[string]string)
+
+	// Scan Elefant files directory
+	files, err := ScanMediaFiles(filesPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan media files: %w", err)
+	}
+
+	if len(files) == 0 {
+		return mediaMap, nil
+	}
+
+	processor := imaging.NewProcessor(uploadDir)
+	now := time.Now()
+
+	for _, file := range files {
+		// Check context for cancellation
+		select {
+		case <-ctx.Done():
+			return mediaMap, ctx.Err()
+		default:
+		}
+
+		// Note: We don't skip existing media by filename because different files
+		// might have the same name. Each import creates new media entries.
+
+		// Open source file
+		srcFile, err := os.Open(file.FullPath)
+		if err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("Failed to open %s: %v", file.Path, err))
+			continue
+		}
+
+		fileUUID := uuid.New().String()
+
+		// Process based on type
+		if processor.IsImage(file.MimeType) {
+			// Process image - creates original and variants
+			processResult, err := processor.ProcessImage(srcFile, fileUUID, file.Filename)
+			srcFile.Close()
+			if err != nil {
+				result.Errors = append(result.Errors, fmt.Sprintf("Failed to process %s: %v", file.Path, err))
+				continue
+			}
+
+			// Create media record
+			media, err := queries.CreateMedia(ctx, store.CreateMediaParams{
+				Uuid:       fileUUID,
+				Filename:   file.Filename,
+				MimeType:   processResult.MimeType,
+				Size:       processResult.Size,
+				Width:      sql.NullInt64{Int64: int64(processResult.Width), Valid: true},
+				Height:     sql.NullInt64{Int64: int64(processResult.Height), Valid: true},
+				Alt:        sql.NullString{String: "", Valid: true},
+				Caption:    sql.NullString{String: "", Valid: true},
+				FolderID:   sql.NullInt64{Valid: false},
+				UploadedBy: userID,
+				CreatedAt:  now,
+				UpdatedAt:  now,
+			})
+			if err != nil {
+				result.Errors = append(result.Errors, fmt.Sprintf("Failed to create media record for %s: %v", file.Path, err))
+				continue
+			}
+
+			// Create variants (best effort - don't fail if variants fail)
+			variants, _ := processor.CreateAllVariants(processResult.FilePath, fileUUID, file.Filename)
+			for _, v := range variants {
+				_, _ = queries.CreateMediaVariant(ctx, store.CreateMediaVariantParams{
+					MediaID:   media.ID,
+					Type:      v.Type,
+					Width:     int64(v.Width),
+					Height:    int64(v.Height),
+					Size:      v.Size,
+					CreatedAt: now,
+				})
+			}
+
+			// Track imported media for later deletion
+			if tracker != nil {
+				_ = tracker.TrackImportedItem(ctx, s.Name(), "media", media.ID)
+			}
+
+			// Map old path to new URL
+			mediaMap["/files/"+file.Path] = fmt.Sprintf("/uploads/originals/%s/%s", fileUUID, file.Filename)
+
+		} else {
+			// Non-image file - save directly without processing
+			err := s.saveNonImageFile(srcFile, uploadDir, fileUUID, file.Filename)
+			srcFile.Close()
+			if err != nil {
+				result.Errors = append(result.Errors, fmt.Sprintf("Failed to save %s: %v", file.Path, err))
+				continue
+			}
+
+			// Create media record for non-image
+			media, err := queries.CreateMedia(ctx, store.CreateMediaParams{
+				Uuid:       fileUUID,
+				Filename:   file.Filename,
+				MimeType:   file.MimeType,
+				Size:       file.Size,
+				Width:      sql.NullInt64{Valid: false},
+				Height:     sql.NullInt64{Valid: false},
+				Alt:        sql.NullString{String: "", Valid: true},
+				Caption:    sql.NullString{String: "", Valid: true},
+				FolderID:   sql.NullInt64{Valid: false},
+				UploadedBy: userID,
+				CreatedAt:  now,
+				UpdatedAt:  now,
+			})
+			if err != nil {
+				result.Errors = append(result.Errors, fmt.Sprintf("Failed to create media record for %s: %v", file.Path, err))
+				continue
+			}
+
+			// Track imported media for later deletion
+			if tracker != nil {
+				_ = tracker.TrackImportedItem(ctx, s.Name(), "media", media.ID)
+			}
+
+			// Map old path to new URL
+			mediaMap["/files/"+file.Path] = fmt.Sprintf("/uploads/originals/%s/%s", fileUUID, file.Filename)
+		}
+
+		result.MediaImported++
+	}
+
+	return mediaMap, nil
+}
+
+// saveNonImageFile saves a non-image file to the uploads directory.
+func (s *Source) saveNonImageFile(src *os.File, uploadDir, fileUUID, filename string) error {
+	// Create directory structure
+	destDir := fmt.Sprintf("%s/originals/%s", uploadDir, fileUUID)
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// Create destination file
+	destPath := fmt.Sprintf("%s/%s", destDir, filename)
+	dest, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("failed to create destination file: %w", err)
+	}
+	defer dest.Close()
+
+	// Copy file content
+	if _, err := src.Seek(0, 0); err != nil {
+		return fmt.Errorf("failed to seek source file: %w", err)
+	}
+
+	buf := make([]byte, 32*1024)
+	for {
+		n, readErr := src.Read(buf)
+		if n > 0 {
+			if _, writeErr := dest.Write(buf[:n]); writeErr != nil {
+				return fmt.Errorf("failed to write file: %w", writeErr)
+			}
+		}
+		if readErr != nil {
+			if readErr == io.EOF {
+				break
+			}
+			return fmt.Errorf("failed to read file: %w", readErr)
+		}
+	}
+
+	return nil
+}
+
 // importPosts imports blog posts from Elefant.
-func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader *Reader, authorID int64, tagMap map[string]int64, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) error {
+func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader *Reader, authorID int64, tagMap map[string]int64, mediaMap map[string]string, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) error {
 	posts, err := reader.GetBlogPosts()
 	if err != nil {
 		return fmt.Errorf("failed to get posts from Elefant: %w", err)
@@ -269,11 +469,17 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 			status = "published"
 		}
 
+		// Replace Elefant file paths with oCMS media URLs in body
+		body := post.Body
+		if mediaMap != nil {
+			body = replaceMediaURLs(body, mediaMap)
+		}
+
 		// Create page
 		page, err := queries.CreatePage(ctx, store.CreatePageParams{
 			Title:           post.Title,
 			Slug:            slug,
-			Body:            post.Body,
+			Body:            body,
 			Status:          status,
 			AuthorID:        authorID,
 			MetaTitle:       post.Title,
@@ -307,8 +513,8 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 		if opts.ImportTags && post.Tags != "" {
 			tagSlugs := parseElefantTags(post.Tags)
 			for _, tagSlug := range tagSlugs {
-				slug := util.Slugify(tagSlug)
-				if tagID, ok := tagMap[slug]; ok {
+				tSlug := util.Slugify(tagSlug)
+				if tagID, ok := tagMap[tSlug]; ok {
 					if err := queries.AddTagToPage(ctx, store.AddTagToPageParams{
 						PageID: page.ID,
 						TagID:  tagID,
@@ -323,6 +529,14 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 	}
 
 	return nil
+}
+
+// replaceMediaURLs replaces Elefant file paths with oCMS media URLs in HTML content.
+func replaceMediaURLs(body string, mediaMap map[string]string) string {
+	for oldPath, newPath := range mediaMap {
+		body = strings.ReplaceAll(body, oldPath, newPath)
+	}
+	return body
 }
 
 // parseElefantTags parses the JSON array of tags from Elefant.
