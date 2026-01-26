@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package transfer
 
 import (
@@ -18,8 +21,8 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"ocms-go/internal/store"
-	"ocms-go/internal/util"
+	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // Importer handles importing CMS content from JSON format.

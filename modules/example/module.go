@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package example provides an example module demonstrating the oCMS module system.
 // This module serves as a reference implementation for creating custom modules.
 package example
@@ -10,7 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/module"
 )
 
 //go:embed locales

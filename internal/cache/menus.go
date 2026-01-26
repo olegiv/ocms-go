@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package cache
 
 import (
@@ -5,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // MenuWithItems represents a menu with its items for caching.

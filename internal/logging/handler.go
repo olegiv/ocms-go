@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package logging provides a custom slog handler that integrates with the Event Log system.
 // It forwards logs at WARN level and above to the database-backed Event Log for auditing.
 package logging
@@ -8,9 +11,9 @@ import (
 	"log/slog"
 	"strings"
 
-	"ocms-go/internal/middleware"
-	"ocms-go/internal/model"
-	"ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // EventLogHandler is a slog.Handler that wraps another handler and also writes

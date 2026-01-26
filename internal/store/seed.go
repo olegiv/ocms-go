@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package store
 
 import (
@@ -8,8 +11,8 @@ import (
 	"log/slog"
 	"time"
 
-	"ocms-go/internal/auth"
-	"ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/auth"
+	"github.com/olegiv/ocms-go/internal/model"
 )
 
 // Default admin credentials

@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package session provides HTTP session management using SCS with SQLite storage.
 // Sessions are used for user authentication and flash messages.
 package session

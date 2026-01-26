@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package cache
 
 import (
@@ -5,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"ocms-go/internal/seo"
-	"ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/seo"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // SitemapCache provides cached sitemap XML generation.

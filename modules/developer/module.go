@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package developer provides a developer module for generating test data in oCMS.
 // This module creates random tags, categories, media, and pages with translations,
 // tracks all generated items, and allows bulk deletion.
@@ -10,7 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/module"
 )
 
 //go:embed locales

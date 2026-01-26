@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package auth provides password hashing and verification utilities
 // using the argon2id algorithm for secure credential storage.
 package auth

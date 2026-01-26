@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package example
 
 import (
@@ -6,9 +9,9 @@ import (
 	"errors"
 	"testing"
 
-	"ocms-go/internal/module"
-	"ocms-go/internal/testutil"
-	"ocms-go/internal/testutil/moduleutil"
+	"github.com/olegiv/ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/testutil"
+	"github.com/olegiv/ocms-go/internal/testutil/moduleutil"
 )
 
 // testModule creates a test Module with database access.

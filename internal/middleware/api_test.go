@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package middleware
 
 import (
@@ -11,8 +14,8 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"ocms-go/internal/model"
-	"ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // setupTestDB creates a test database with the api_keys table.

@@ -1,12 +1,15 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package hcaptcha
 
 import (
 	"net/http"
 	"strings"
 
-	"ocms-go/internal/i18n"
-	"ocms-go/internal/middleware"
-	"ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/render"
 )
 
 // handleDashboard handles GET /admin/hcaptcha - shows the hCaptcha settings page.

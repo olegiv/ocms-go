@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package testutil provides shared test helpers for the oCMS project.
 package testutil
 
@@ -7,7 +10,7 @@ import (
 	"os"
 	"testing"
 
-	"ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/store"
 
 	_ "github.com/mattn/go-sqlite3"
 )

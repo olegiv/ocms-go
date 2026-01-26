@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package handler provides HTTP handlers for the application.
 package handler
 
@@ -16,12 +19,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"ocms-go/internal/cache"
-	"ocms-go/internal/middleware"
-	"ocms-go/internal/seo"
-	"ocms-go/internal/service"
-	"ocms-go/internal/store"
-	"ocms-go/internal/theme"
+	"github.com/olegiv/ocms-go/internal/cache"
+	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/seo"
+	"github.com/olegiv/ocms-go/internal/service"
+	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/theme"
 )
 
 // PageView represents a page with computed fields for template rendering.

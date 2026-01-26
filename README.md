@@ -134,7 +134,7 @@ sudo dnf install vips-devel
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/ocms-go.git
+   git clone https://github.com/olegiv/ocms-go.git
    cd ocms-go
    ```
 
@@ -517,4 +517,4 @@ git commit -m "Update Claude Code shared submodule"
 
 ## License
 
-MIT License
+GPL-3.0 License

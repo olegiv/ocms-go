@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package api provides REST API handlers for the CMS.
 package api
 
@@ -10,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"ocms-go/internal/handler"
-	"ocms-go/internal/middleware"
-	"ocms-go/internal/service"
-	"ocms-go/internal/store"
-	"ocms-go/internal/util"
+	"github.com/olegiv/ocms-go/internal/handler"
+	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/service"
+	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // MediaResponse represents a media item in API responses.

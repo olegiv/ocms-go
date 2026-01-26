@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package api
 
 import (
@@ -9,7 +12,7 @@ import (
 	"net/http"
 	"sync"
 
-	"ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // DocsHandler handles API documentation rendering.

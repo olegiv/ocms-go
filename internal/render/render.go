@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package render provides HTML template rendering with layout support,
 // flash message handling, and helper functions for the admin interface.
 package render
@@ -19,9 +22,9 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
-	"ocms-go/internal/i18n"
-	"ocms-go/internal/middleware"
-	"ocms-go/internal/service"
+	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/service"
 )
 
 // SessionKeyAdminLang is the session key for storing admin UI language preference.

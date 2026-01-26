@@ -1,12 +1,15 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package developer
 
 import (
 	"net/http"
 
-	"ocms-go/internal/i18n"
-	"ocms-go/internal/middleware"
-	"ocms-go/internal/render"
-	"ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // DashboardData contains data for the developer dashboard template

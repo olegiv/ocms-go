@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package scheduler
 
 import (
@@ -9,7 +12,7 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // Scheduler handles scheduled tasks like publishing pages.

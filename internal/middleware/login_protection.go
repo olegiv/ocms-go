@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package middleware provides HTTP middleware for authentication,
 // authorization, and request context handling.
 package middleware
@@ -9,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/i18n"
 )
 
 // LoginProtection provides combined IP rate limiting and account lockout protection.

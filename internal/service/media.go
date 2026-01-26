@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package service
 
 import (
@@ -13,10 +16,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"ocms-go/internal/imaging"
-	"ocms-go/internal/model"
-	"ocms-go/internal/store"
-	"ocms-go/internal/util"
+	"github.com/olegiv/ocms-go/internal/imaging"
+	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // Upload limits

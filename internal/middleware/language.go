@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package middleware provides HTTP middleware for authentication,
 // authorization, and request context handling.
 package middleware
@@ -10,7 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // Context keys for language data.

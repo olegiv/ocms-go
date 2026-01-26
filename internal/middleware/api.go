@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package middleware provides HTTP middleware for authentication,
 // authorization, and request context handling.
 package middleware
@@ -15,8 +18,8 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"ocms-go/internal/model"
-	"ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // ContextKeyAPIKey is the context key for API key data.

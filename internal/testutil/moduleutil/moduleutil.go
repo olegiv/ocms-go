@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package moduleutil provides module-specific test helpers for the oCMS project.
 package moduleutil
 
@@ -5,10 +8,10 @@ import (
 	"database/sql"
 	"testing"
 
-	"ocms-go/internal/config"
-	"ocms-go/internal/module"
-	"ocms-go/internal/store"
-	"ocms-go/internal/testutil"
+	"github.com/olegiv/ocms-go/internal/config"
+	"github.com/olegiv/ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/testutil"
 )
 
 // RunMigrations runs all migrations up for the given module.

@@ -1,9 +1,12 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package handler
 
 import (
 	"testing"
 
-	"ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/module"
 )
 
 func TestNewModulesHandler(t *testing.T) {

@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package handler
 
 import (
@@ -12,11 +15,11 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
-	"ocms-go/internal/i18n"
-	"ocms-go/internal/middleware"
-	"ocms-go/internal/model"
-	"ocms-go/internal/render"
-	"ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // APIKeysPerPage is the number of API keys to display per page.

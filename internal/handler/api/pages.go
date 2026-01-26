@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package api provides REST API handlers for the CMS.
 package api
 
@@ -13,11 +16,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"ocms-go/internal/handler"
-	"ocms-go/internal/middleware"
-	"ocms-go/internal/model"
-	"ocms-go/internal/store"
-	"ocms-go/internal/util"
+	"github.com/olegiv/ocms-go/internal/handler"
+	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // PageResponse represents a page in API responses.
