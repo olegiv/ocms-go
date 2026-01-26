@@ -4,9 +4,15 @@
 package elefant
 
 import (
+	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
+
+	_ "github.com/mattn/go-sqlite3"
+
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 func TestGetMimeTypeFromExt(t *testing.T) {
@@ -349,5 +355,97 @@ func TestConfigFields_FilesPath(t *testing.T) {
 
 	if !found {
 		t.Error("ConfigFields() missing files_path field")
+	}
+}
+
+func TestMakeUniqueSlug(t *testing.T) {
+	// Create test database with pages table
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open test database: %v", err)
+	}
+	defer db.Close()
+
+	// Create full pages table matching the schema
+	_, err = db.Exec(`
+		CREATE TABLE pages (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			title TEXT NOT NULL DEFAULT '',
+			slug TEXT NOT NULL UNIQUE,
+			body TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'draft',
+			author_id INTEGER NOT NULL DEFAULT 1,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			published_at DATETIME,
+			featured_image_id INTEGER,
+			meta_title TEXT NOT NULL DEFAULT '',
+			meta_description TEXT NOT NULL DEFAULT '',
+			meta_keywords TEXT NOT NULL DEFAULT '',
+			og_image_id INTEGER,
+			no_index INTEGER NOT NULL DEFAULT 0,
+			no_follow INTEGER NOT NULL DEFAULT 0,
+			canonical_url TEXT NOT NULL DEFAULT '',
+			scheduled_at DATETIME,
+			language_id INTEGER
+		)
+	`)
+	if err != nil {
+		t.Fatalf("failed to create pages table: %v", err)
+	}
+
+	queries := store.New(db)
+	ctx := context.Background()
+
+	tests := []struct {
+		name         string
+		baseSlug     string
+		existingSlugs []string
+		expected     string
+	}{
+		{
+			name:         "no existing slug",
+			baseSlug:     "my-post",
+			existingSlugs: nil,
+			expected:     "my-post",
+		},
+		{
+			name:         "one existing slug",
+			baseSlug:     "duplicate",
+			existingSlugs: []string{"duplicate"},
+			expected:     "duplicate-2",
+		},
+		{
+			name:         "multiple existing slugs",
+			baseSlug:     "popular",
+			existingSlugs: []string{"popular", "popular-2", "popular-3"},
+			expected:     "popular-4",
+		},
+		{
+			name:         "gap in sequence",
+			baseSlug:     "gap",
+			existingSlugs: []string{"gap", "gap-3"},
+			expected:     "gap-2",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clean up pages table
+			_, _ = db.Exec("DELETE FROM pages")
+
+			// Insert existing pages
+			for _, slug := range tt.existingSlugs {
+				_, err := db.Exec("INSERT INTO pages (slug, title) VALUES (?, ?)", slug, "Test")
+				if err != nil {
+					t.Fatalf("failed to insert existing page: %v", err)
+				}
+			}
+
+			got := makeUniqueSlug(ctx, queries, tt.baseSlug)
+			if got != tt.expected {
+				t.Errorf("makeUniqueSlug(%q) = %q, want %q", tt.baseSlug, got, tt.expected)
+			}
+		})
 	}
 }
