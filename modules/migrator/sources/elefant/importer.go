@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -448,20 +449,23 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 
 	for _, post := range posts {
 		// Generate slug from title if not present (older Elefant versions)
-		slug := post.Slug
-		if slug == "" {
-			slug = util.Slugify(post.Title)
+		baseSlug := post.Slug
+		if baseSlug == "" {
+			baseSlug = util.Slugify(post.Title)
 		}
 
 		// Check if page already exists by slug
 		if opts.SkipExisting {
-			_, err := queries.GetPageBySlug(ctx, slug)
+			_, err := queries.GetPageBySlug(ctx, baseSlug)
 			if err == nil {
 				// Page exists, skip it
 				result.PostsSkipped++
 				continue
 			}
 		}
+
+		// Make slug unique if it already exists (handles duplicates)
+		slug := makeUniqueSlug(ctx, queries, baseSlug)
 
 		// Map Elefant published status to oCMS status
 		status := "draft"
@@ -537,6 +541,31 @@ func replaceMediaURLs(body string, mediaMap map[string]string) string {
 		body = strings.ReplaceAll(body, oldPath, newPath)
 	}
 	return body
+}
+
+// makeUniqueSlug generates a unique slug by appending -2, -3, etc. if needed.
+func makeUniqueSlug(ctx context.Context, queries *store.Queries, baseSlug string) string {
+	slug := baseSlug
+
+	// Try the base slug first
+	_, err := queries.GetPageBySlug(ctx, slug)
+	if err != nil {
+		// Slug doesn't exist, use it
+		return slug
+	}
+
+	// Slug exists, try with suffix
+	for i := 2; i <= 100; i++ {
+		slug = baseSlug + "-" + strconv.Itoa(i)
+		_, err := queries.GetPageBySlug(ctx, slug)
+		if err != nil {
+			// This slug is available
+			return slug
+		}
+	}
+
+	// Fallback: append timestamp
+	return baseSlug + "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
 }
 
 // parseElefantTags parses the JSON array of tags from Elefant.
