@@ -17,7 +17,8 @@
         {"id": "migrator.option_import_tags", "message": "Import tags", "translation": "Import tags"},
         {"id": "migrator.option_import_media", "message": "Import media files", "translation": "Import media files"},
         {"id": "migrator.option_import_posts", "message": "Import blog posts", "translation": "Import blog posts"},
-        {"id": "migrator.option_skip_existing", "message": "Skip existing items (by slug)", "translation": "Skip existing items (by slug)"},
+        {"id": "migrator.option_import_users", "message": "Import users (as public users)", "translation": "Import users (as public users)"},
+        {"id": "migrator.option_skip_existing", "message": "Skip existing items (by slug/email)", "translation": "Skip existing items (by slug/email)"},
         {"id": "migrator.start_import", "message": "Start Import", "translation": "Start Import"},
         {"id": "migrator.confirm_import", "message": "Are you sure you want to start the import? This will create new content in oCMS.", "translation": "Are you sure you want to start the import? This will create new content in oCMS."},
 
@@ -34,10 +35,11 @@
         {"id": "migrator.imported_content", "message": "Imported Content", "translation": "Imported Content"},
         {"id": "migrator.imported_pages", "message": "Pages", "translation": "Pages"},
         {"id": "migrator.imported_tags", "message": "Tags", "translation": "Tags"},
+        {"id": "migrator.imported_users", "message": "Users", "translation": "Users"},
         {"id": "migrator.no_imported_content", "message": "No content has been imported from this source yet.", "translation": "No content has been imported from this source yet."},
         {"id": "migrator.delete_imported", "message": "Delete All Imported Content", "translation": "Delete All Imported Content"},
         {"id": "migrator.confirm_delete", "message": "Are you sure you want to delete ALL content imported from this source? This action cannot be undone.", "translation": "Are you sure you want to delete ALL content imported from this source? This action cannot be undone."},
         {"id": "migrator.error_delete", "message": "Failed to delete imported content", "translation": "Failed to delete imported content"},
-        {"id": "migrator.success_delete", "message": "Deleted %d pages and %d tags", "translation": "Deleted %d pages and %d tags"}
+        {"id": "migrator.success_delete", "message": "Deleted %d pages, %d tags, and %d users", "translation": "Deleted %d pages, %d tags, and %d users"}
     ]
 }
