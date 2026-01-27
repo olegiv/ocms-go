@@ -645,13 +645,18 @@ img {
 
 .dev-post-item {
     display: grid;
-    grid-template-columns: 200px 1fr;
+    grid-template-columns: 1fr;
     gap: var(--dev-space-lg);
     padding: var(--dev-space-lg);
     background-color: var(--dev-bg-secondary);
     border: 1px solid var(--dev-border);
     border-radius: var(--dev-radius-lg);
     transition: all 0.2s ease;
+}
+
+/* Two-column layout only when post has a featured image */
+.dev-post-item:has(.dev-post-image) {
+    grid-template-columns: 200px 1fr;
 }
 
 .dev-post-item:hover {

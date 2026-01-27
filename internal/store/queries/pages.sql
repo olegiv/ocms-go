@@ -273,25 +273,29 @@ WHERE slug = ? AND language_id = ? AND status = 'published';
 -- Note: ListPublishedPagesByLanguage and CountPublishedPagesByLanguage are in translations.sql
 
 -- name: ListPublishedPagesByCategoryAndLanguage :many
+-- Include pages with matching language_id OR NULL language_id (universal pages)
 SELECT DISTINCT p.* FROM pages p
 INNER JOIN page_categories pc ON pc.page_id = p.id
-WHERE pc.category_id = ? AND p.status = 'published' AND p.language_id = ?
+WHERE pc.category_id = ? AND p.status = 'published' AND (p.language_id = ? OR p.language_id IS NULL)
 ORDER BY p.published_at DESC
 LIMIT ? OFFSET ?;
 
 -- name: CountPublishedPagesByCategoryAndLanguage :one
+-- Include pages with matching language_id OR NULL language_id (universal pages)
 SELECT COUNT(DISTINCT p.id) FROM pages p
 INNER JOIN page_categories pc ON pc.page_id = p.id
-WHERE pc.category_id = ? AND p.status = 'published' AND p.language_id = ?;
+WHERE pc.category_id = ? AND p.status = 'published' AND (p.language_id = ? OR p.language_id IS NULL);
 
 -- name: ListPublishedPagesForTagAndLanguage :many
+-- Include pages with matching language_id OR NULL language_id (universal pages)
 SELECT p.* FROM pages p
 INNER JOIN page_tags pt ON pt.page_id = p.id
-WHERE pt.tag_id = ? AND p.status = 'published' AND p.language_id = ?
+WHERE pt.tag_id = ? AND p.status = 'published' AND (p.language_id = ? OR p.language_id IS NULL)
 ORDER BY p.published_at DESC
 LIMIT ? OFFSET ?;
 
 -- name: CountPublishedPagesForTagAndLanguage :one
+-- Include pages with matching language_id OR NULL language_id (universal pages)
 SELECT COUNT(*) FROM pages p
 INNER JOIN page_tags pt ON pt.page_id = p.id
-WHERE pt.tag_id = ? AND p.status = 'published' AND p.language_id = ?;
+WHERE pt.tag_id = ? AND p.status = 'published' AND (p.language_id = ? OR p.language_id IS NULL);
