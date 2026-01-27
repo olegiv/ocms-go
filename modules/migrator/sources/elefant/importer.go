@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -88,7 +89,11 @@ func (s *Source) TestConnection(cfg map[string]string) error {
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
+	defer func() {
+		if err := reader.Close(); err != nil {
+			slog.Error("failed to close elefant reader", "error", err)
+		}
+	}()
 
 	// Try to get counts to verify tables exist
 	postCount, err := reader.GetPostCount()
@@ -121,7 +126,11 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to Elefant database: %w", err)
 	}
-	defer reader.Close()
+	defer func() {
+		if err := reader.Close(); err != nil {
+			slog.Error("failed to close elefant reader", "error", err)
+		}
+	}()
 
 	// Get oCMS store
 	queries := store.New(db)
@@ -316,7 +325,9 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 		if processor.IsImage(file.MimeType) {
 			// Process image - creates original and variants
 			processResult, err := processor.ProcessImage(srcFile, fileUUID, file.Filename)
-			srcFile.Close()
+			if closeErr := srcFile.Close(); closeErr != nil {
+				slog.Error("failed to close source file", "path", file.Path, "error", closeErr)
+			}
 			if err != nil {
 				result.Errors = append(result.Errors, fmt.Sprintf("Failed to process %s: %v", file.Path, err))
 				continue
@@ -366,7 +377,9 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 		} else {
 			// Non-image file - save directly without processing
 			err := s.saveNonImageFile(srcFile, uploadDir, fileUUID, file.Filename)
-			srcFile.Close()
+			if closeErr := srcFile.Close(); closeErr != nil {
+				slog.Error("failed to close source file", "path", file.Path, "error", closeErr)
+			}
 			if err != nil {
 				result.Errors = append(result.Errors, fmt.Sprintf("Failed to save %s: %v", file.Path, err))
 				continue
@@ -421,7 +434,11 @@ func (s *Source) saveNonImageFile(src *os.File, uploadDir, fileUUID, filename st
 	if err != nil {
 		return fmt.Errorf("failed to create destination file: %w", err)
 	}
-	defer dest.Close()
+	defer func() {
+		if err := dest.Close(); err != nil {
+			slog.Error("failed to close destination file", "path", destPath, "error", err)
+		}
+	}()
 
 	// Copy file content
 	if _, err := src.Seek(0, 0); err != nil {

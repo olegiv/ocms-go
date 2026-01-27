@@ -31,16 +31,6 @@ func (m *mockTracker) TrackImportedItem(_ context.Context, source, entityType st
 	return nil
 }
 
-// mockReader implements a mock Elefant reader for testing.
-type mockReader struct {
-	users []User
-	err   error
-}
-
-func (m *mockReader) GetUsers() ([]User, error) {
-	return m.users, m.err
-}
-
 func setupTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 

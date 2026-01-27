@@ -5,6 +5,7 @@ package migrator
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -64,7 +65,7 @@ func (m *Module) handleSourceForm(w http.ResponseWriter, r *http.Request) {
 	sourceName := chi.URLParam(r, "source")
 
 	source, ok := GetSource(sourceName)
-	if !ok {
+	if !ok || source == nil {
 		m.ctx.Render.SetFlash(r, i18n.T(lang, "migrator.error_source_not_found"), "error")
 		http.Redirect(w, r, "/admin/migrator", http.StatusSeeOther)
 		return
@@ -108,83 +109,96 @@ func (m *Module) handleSourceForm(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleTestConnection handles POST /admin/migrator/{source}/test - tests connection.
-func (m *Module) handleTestConnection(w http.ResponseWriter, r *http.Request) {
+// sourceRequestContext holds common data extracted from migrator handler requests.
+type sourceRequestContext struct {
+	User       *store.User
+	Lang       string
+	SourceName string
+	Source     Source
+}
+
+// getSourceContext validates user auth and source, returning false if validation failed (response already sent).
+func (m *Module) getSourceContext(w http.ResponseWriter, r *http.Request) (sourceRequestContext, bool) {
 	user := middleware.GetUser(r)
 	if user == nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
+		return sourceRequestContext{}, false
 	}
 
 	lang := m.ctx.Render.GetAdminLang(r)
 	sourceName := chi.URLParam(r, "source")
 
 	source, ok := GetSource(sourceName)
-	if !ok {
+	if !ok || source == nil {
 		m.ctx.Render.SetFlash(r, i18n.T(lang, "migrator.error_source_not_found"), "error")
 		http.Redirect(w, r, "/admin/migrator", http.StatusSeeOther)
+		return sourceRequestContext{}, false
+	}
+
+	return sourceRequestContext{
+		User:       user,
+		Lang:       lang,
+		SourceName: sourceName,
+		Source:     source,
+	}, true
+}
+
+// collectSourceConfig collects config values from form based on source's config fields.
+func collectSourceConfig(r *http.Request, source Source) map[string]string {
+	cfg := make(map[string]string)
+	for _, field := range source.ConfigFields() {
+		cfg[field.Name] = r.FormValue(field.Name)
+	}
+	return cfg
+}
+
+// handleTestConnection handles POST /admin/migrator/{source}/test - tests connection.
+func (m *Module) handleTestConnection(w http.ResponseWriter, r *http.Request) {
+	ctx, ok := m.getSourceContext(w, r)
+	if !ok {
 		return
 	}
 
 	// Parse form
 	if err := r.ParseForm(); err != nil {
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "migrator.error_parse_form"), "error")
-		http.Redirect(w, r, "/admin/migrator/"+sourceName, http.StatusSeeOther)
+		m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "migrator.error_parse_form"), "error")
+		http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
 		return
 	}
 
-	// Collect config from form
-	cfg := make(map[string]string)
-	for _, field := range source.ConfigFields() {
-		cfg[field.Name] = r.FormValue(field.Name)
-	}
+	cfg := collectSourceConfig(r, ctx.Source)
 
 	// Test connection
-	if err := source.TestConnection(cfg); err != nil {
-		m.ctx.Logger.Error("connection test failed", "source", sourceName, "error", err)
+	if err := ctx.Source.TestConnection(cfg); err != nil {
+		m.ctx.Logger.Error("connection test failed", "source", ctx.SourceName, "error", err)
 		// Save config to session so form values are preserved
 		m.ctx.Render.SetSessionData(r, sessionKeyMigratorConfig, cfg)
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "migrator.error_connection")+": "+err.Error(), "error")
-		http.Redirect(w, r, "/admin/migrator/"+sourceName, http.StatusSeeOther)
+		m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "migrator.error_connection")+": "+err.Error(), "error")
+		http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
 		return
 	}
 
 	// Save config on success too, so user can proceed with import
 	m.ctx.Render.SetSessionData(r, sessionKeyMigratorConfig, cfg)
-	m.ctx.Render.SetFlash(r, i18n.T(lang, "migrator.success_connection"), "success")
-	http.Redirect(w, r, "/admin/migrator/"+sourceName, http.StatusSeeOther)
+	m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "migrator.success_connection"), "success")
+	http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
 }
 
 // handleImport handles POST /admin/migrator/{source}/import - runs import.
 func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	if user == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	lang := m.ctx.Render.GetAdminLang(r)
-	sourceName := chi.URLParam(r, "source")
-
-	source, ok := GetSource(sourceName)
+	ctx, ok := m.getSourceContext(w, r)
 	if !ok {
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "migrator.error_source_not_found"), "error")
-		http.Redirect(w, r, "/admin/migrator", http.StatusSeeOther)
 		return
 	}
 
 	// Parse form
 	if err := r.ParseForm(); err != nil {
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "migrator.error_parse_form"), "error")
-		http.Redirect(w, r, "/admin/migrator/"+sourceName, http.StatusSeeOther)
+		m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "migrator.error_parse_form"), "error")
+		http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
 		return
 	}
 
-	// Collect config from form
-	cfg := make(map[string]string)
-	for _, field := range source.ConfigFields() {
-		cfg[field.Name] = r.FormValue(field.Name)
-	}
+	cfg := collectSourceConfig(r, ctx.Source)
 
 	// Build import options
 	opts := ImportOptions{
@@ -196,8 +210,8 @@ func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	m.ctx.Logger.Info("starting import",
-		"source", sourceName,
-		"user", user.Email,
+		"source", ctx.SourceName,
+		"user", ctx.User.Email,
 		"import_tags", opts.ImportTags,
 		"import_media", opts.ImportMedia,
 		"import_posts", opts.ImportPosts,
@@ -206,19 +220,19 @@ func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
 	)
 
 	// Run import (pass module as tracker for recording imported items)
-	result, err := source.Import(r.Context(), m.ctx.DB, cfg, opts, m)
+	result, err := ctx.Source.Import(r.Context(), m.ctx.DB, cfg, opts, m)
 	if err != nil {
-		m.ctx.Logger.Error("import failed", "source", sourceName, "error", err)
+		m.ctx.Logger.Error("import failed", "source", ctx.SourceName, "error", err)
 		// Save config to session so form values are preserved
 		m.ctx.Render.SetSessionData(r, sessionKeyMigratorConfig, cfg)
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "migrator.error_import")+": "+err.Error(), "error")
-		http.Redirect(w, r, "/admin/migrator/"+sourceName, http.StatusSeeOther)
+		m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "migrator.error_import")+": "+err.Error(), "error")
+		http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
 		return
 	}
 
 	// Log results
 	m.ctx.Logger.Info("import completed",
-		"source", sourceName,
+		"source", ctx.SourceName,
 		"tags_imported", result.TagsImported,
 		"media_imported", result.MediaImported,
 		"posts_imported", result.PostsImported,
@@ -232,13 +246,13 @@ func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
 
 	// Log each error for debugging
 	for i, errMsg := range result.Errors {
-		m.ctx.Logger.Error("import error", "source", sourceName, "index", i, "message", errMsg)
+		m.ctx.Logger.Error("import error", "source", ctx.SourceName, "index", i, "message", errMsg)
 	}
 
 	// Log event for audit trail
 	if m.ctx.Events != nil {
-		_ = m.ctx.Events.LogMigratorEvent(r.Context(), "info", "Content imported from "+sourceName, &user.ID, map[string]any{
-			"source":         sourceName,
+		_ = m.ctx.Events.LogMigratorEvent(r.Context(), "info", "Content imported from "+ctx.SourceName, &ctx.User.ID, map[string]any{
+			"source":         ctx.SourceName,
 			"posts_imported": result.PostsImported,
 			"tags_imported":  result.TagsImported,
 			"media_imported": result.MediaImported,
@@ -252,52 +266,41 @@ func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build success message
-	msg := i18n.T(lang, "migrator.success_import",
+	msg := i18n.T(ctx.Lang, "migrator.success_import",
 		result.PostsImported, result.TagsImported, result.MediaImported)
 
 	if result.TotalSkipped() > 0 {
-		msg += " " + i18n.T(lang, "migrator.skipped_count", result.TotalSkipped())
+		msg += " " + i18n.T(ctx.Lang, "migrator.skipped_count", result.TotalSkipped())
 	}
 
 	if result.HasErrors() {
-		msg += " " + i18n.T(lang, "migrator.errors_count", len(result.Errors))
+		msg += " " + i18n.T(ctx.Lang, "migrator.errors_count", len(result.Errors))
 	}
 
 	m.ctx.Render.SetFlash(r, msg, "success")
-	http.Redirect(w, r, "/admin/migrator/"+sourceName, http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
 }
 
 // handleDeleteImported handles POST /admin/migrator/{source}/delete - deletes all imported content.
 func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	if user == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	lang := m.ctx.Render.GetAdminLang(r)
-	sourceName := chi.URLParam(r, "source")
-
-	source, ok := GetSource(sourceName)
+	ctx, ok := m.getSourceContext(w, r)
 	if !ok {
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "migrator.error_source_not_found"), "error")
-		http.Redirect(w, r, "/admin/migrator", http.StatusSeeOther)
 		return
 	}
 
-	m.ctx.Logger.Info("deleting imported content", "source", sourceName, "user", user.Email)
+	m.ctx.Logger.Info("deleting imported content", "source", ctx.SourceName, "user", ctx.User.Email)
 
 	// Delete all imported items for this source
-	deleted, err := m.deleteImportedItems(r.Context(), sourceName)
+	deleted, err := m.deleteImportedItems(r.Context(), ctx.SourceName)
 	if err != nil {
-		m.ctx.Logger.Error("delete failed", "source", sourceName, "error", err)
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "migrator.error_delete")+": "+err.Error(), "error")
-		http.Redirect(w, r, "/admin/migrator/"+sourceName, http.StatusSeeOther)
+		m.ctx.Logger.Error("delete failed", "source", ctx.SourceName, "error", err)
+		m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "migrator.error_delete")+": "+err.Error(), "error")
+		http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
 		return
 	}
 
 	m.ctx.Logger.Info("deleted imported content",
-		"source", sourceName,
+		"source", ctx.SourceName,
 		"pages", deleted["page"],
 		"tags", deleted["tag"],
 		"media", deleted["media"],
@@ -306,8 +309,8 @@ func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
 
 	// Log event for audit trail
 	if m.ctx.Events != nil {
-		_ = m.ctx.Events.LogMigratorEvent(r.Context(), "info", "Imported content deleted from "+sourceName, &user.ID, map[string]any{
-			"source":        sourceName,
+		_ = m.ctx.Events.LogMigratorEvent(r.Context(), "info", "Imported content deleted from "+ctx.SourceName, &ctx.User.ID, map[string]any{
+			"source":        ctx.SourceName,
 			"pages_deleted": deleted["page"],
 			"tags_deleted":  deleted["tag"],
 			"media_deleted": deleted["media"],
@@ -315,11 +318,9 @@ func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	msg := i18n.T(lang, "migrator.success_delete", deleted["page"], deleted["tag"], deleted["media"], deleted["user"])
+	msg := i18n.T(ctx.Lang, "migrator.success_delete", deleted["page"], deleted["tag"], deleted["media"], deleted["user"])
 	m.ctx.Render.SetFlash(r, msg, "success")
-	http.Redirect(w, r, "/admin/migrator/"+sourceName, http.StatusSeeOther)
-
-	_ = source // used for validation
+	http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
 }
 
 // TrackImportedItem records an imported item for later deletion.
@@ -342,7 +343,11 @@ func (m *Module) getImportedCounts(ctx context.Context, source string) (map[stri
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			slog.Error("failed to close rows", "error", err)
+		}
+	}()
 
 	counts := make(map[string]int)
 	for rows.Next() {
@@ -365,7 +370,11 @@ func (m *Module) getImportedItems(ctx context.Context, source, entityType string
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			slog.Error("failed to close rows", "error", err)
+		}
+	}()
 
 	var ids []int64
 	for rows.Next() {

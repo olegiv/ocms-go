@@ -310,7 +310,11 @@ func (m *Manager) ListThemes() []*Config {
 	// Build configs in sorted order
 	configs := make([]*Config, 0, len(m.themes))
 	for _, name := range names {
-		cfg := m.themes[name].Config
+		theme := m.themes[name]
+		if theme == nil {
+			continue
+		}
+		cfg := theme.Config
 		configs = append(configs, &cfg)
 	}
 	return configs
