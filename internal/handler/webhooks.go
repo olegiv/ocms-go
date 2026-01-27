@@ -6,7 +6,6 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -539,32 +538,15 @@ func (h *WebhooksHandler) sendDeleteError(w http.ResponseWriter, message string)
 
 // requireWebhookWithRedirect fetches a webhook by ID and redirects with flash on error.
 func (h *WebhooksHandler) requireWebhookWithRedirect(w http.ResponseWriter, r *http.Request, id int64) (store.Webhook, bool) {
-	webhook, err := h.queries.GetWebhookByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			flashError(w, r, h.renderer, redirectAdminWebhooks, "Webhook not found")
-		} else {
-			slog.Error("failed to get webhook", "error", err)
-			flashError(w, r, h.renderer, redirectAdminWebhooks, "Error loading webhook")
-		}
-		return store.Webhook{}, false
-	}
-	return webhook, true
+	return requireEntityWithRedirect(w, r, h.renderer, redirectAdminWebhooks, "Webhook", id,
+		func(id int64) (store.Webhook, error) { return h.queries.GetWebhookByID(r.Context(), id) })
 }
 
 // requireWebhookWithDeleteError fetches a webhook by ID and sends delete error on failure.
 func (h *WebhooksHandler) requireWebhookWithDeleteError(w http.ResponseWriter, r *http.Request, id int64) (store.Webhook, bool) {
-	webhook, err := h.queries.GetWebhookByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.sendDeleteError(w, "Webhook not found")
-		} else {
-			slog.Error("failed to get webhook", "error", err)
-			h.sendDeleteError(w, "Error loading webhook")
-		}
-		return store.Webhook{}, false
-	}
-	return webhook, true
+	return requireEntityWithCustomError(w, "Webhook", id,
+		func(id int64) (store.Webhook, error) { return h.queries.GetWebhookByID(r.Context(), id) },
+		h.sendDeleteError)
 }
 
 // webhookFormInput holds parsed form values for webhook create/update.
@@ -692,19 +674,11 @@ func (h *WebhooksHandler) renderNewWebhookForm(w http.ResponseWriter, r *http.Re
 
 // renderEditWebhookForm renders the edit webhook form with the given data.
 func (h *WebhooksHandler) renderEditWebhookForm(w http.ResponseWriter, r *http.Request, webhook store.Webhook, data WebhookFormData) {
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
-
-	h.renderer.RenderPage(w, r, "admin/webhooks_form", render.TemplateData{
-		Title: webhook.Name,
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.webhooks"), URL: redirectAdminWebhooks},
-			{Label: webhook.Name, URL: fmt.Sprintf(redirectAdminWebhooksID, webhook.ID), Active: true},
-		},
-	})
+	renderEntityEditPage(w, r, h.renderer, "admin/webhooks_form",
+		webhook.Name, data, lang,
+		"nav.webhooks", redirectAdminWebhooks,
+		webhook.Name, fmt.Sprintf(redirectAdminWebhooksID, webhook.ID))
 }
 
 // calculateHealthStatus determines the health status based on success rate.

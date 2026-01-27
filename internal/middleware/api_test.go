@@ -496,20 +496,17 @@ func TestGlobalRateLimiter(t *testing.T) {
 	}
 }
 
-func TestGlobalRateLimiter_DifferentIPs(t *testing.T) {
-	rl := NewGlobalRateLimiter(1, 1)
-	handler := rl.Middleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
+// testRateLimiterDifferentIPs is a helper for testing rate limiting with different IPs.
+func testRateLimiterDifferentIPs(t *testing.T, handler http.Handler, path string) {
+	t.Helper()
 	// First IP exhausts its limit
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := httptest.NewRequest("GET", path, nil)
 	req.RemoteAddr = "192.168.1.1:12345"
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
 	// Second IP should still be able to make requests
-	req = httptest.NewRequest("GET", "/api/test", nil)
+	req = httptest.NewRequest("GET", path, nil)
 	req.RemoteAddr = "192.168.1.2:12345"
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -519,44 +516,20 @@ func TestGlobalRateLimiter_DifferentIPs(t *testing.T) {
 	}
 }
 
-func TestGlobalRateLimiter_XRealIP(t *testing.T) {
+func TestGlobalRateLimiter_DifferentIPs(t *testing.T) {
 	rl := NewGlobalRateLimiter(1, 1)
-	handler := rl.Middleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := rl.Middleware()(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-
-	// First request with X-Real-IP
-	req := httptest.NewRequest("GET", "/api/test", nil)
-	req.Header.Set("X-Real-IP", "10.0.0.1")
-	req.RemoteAddr = "127.0.0.1:12345" // Proxy address
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
-	}
-
-	// Second request from same X-Real-IP should be limited
-	req = httptest.NewRequest("GET", "/api/test", nil)
-	req.Header.Set("X-Real-IP", "10.0.0.1")
-	req.RemoteAddr = "127.0.0.1:12346"
-	w = httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusTooManyRequests {
-		t.Errorf("expected status %d, got %d", http.StatusTooManyRequests, w.Code)
-	}
+	testRateLimiterDifferentIPs(t, handler, "/api/test")
 }
 
-func TestGlobalRateLimiter_XForwardedFor(t *testing.T) {
-	rl := NewGlobalRateLimiter(1, 1)
-	handler := rl.Middleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	// First request with X-Forwarded-For
+// testRateLimiterProxyHeader is a helper for testing rate limiting with proxy headers.
+func testRateLimiterProxyHeader(t *testing.T, handler http.Handler, headerName, headerValue string) {
+	t.Helper()
+	// First request with proxy header
 	req := httptest.NewRequest("GET", "/api/test", nil)
-	req.Header.Set("X-Forwarded-For", "10.0.0.2")
+	req.Header.Set(headerName, headerValue)
 	req.RemoteAddr = "127.0.0.1:12345"
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -565,9 +538,9 @@ func TestGlobalRateLimiter_XForwardedFor(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
-	// Second request from same X-Forwarded-For should be limited
+	// Second request from same proxy header should be limited
 	req = httptest.NewRequest("GET", "/api/test", nil)
-	req.Header.Set("X-Forwarded-For", "10.0.0.2")
+	req.Header.Set(headerName, headerValue)
 	req.RemoteAddr = "127.0.0.1:12346"
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -577,47 +550,49 @@ func TestGlobalRateLimiter_XForwardedFor(t *testing.T) {
 	}
 }
 
-func TestRequirePermission_EmptyPermissions(t *testing.T) {
-	handler := RequirePermission("pages:read")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestGlobalRateLimiter_XRealIP(t *testing.T) {
+	rl := NewGlobalRateLimiter(1, 1)
+	handler := rl.Middleware()(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-
-	// API key with empty permissions
-	apiKey := store.ApiKey{
-		ID:          1,
-		Permissions: "",
-	}
-	req := httptest.NewRequest("GET", "/api/test", nil)
-	ctx := context.WithValue(req.Context(), ContextKeyAPIKey, apiKey)
-	req = req.WithContext(ctx)
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusForbidden {
-		t.Errorf("expected status %d, got %d", http.StatusForbidden, w.Code)
-	}
+	testRateLimiterProxyHeader(t, handler, "X-Real-IP", "10.0.0.1")
 }
 
-func TestRequirePermission_EmptyArrayPermissions(t *testing.T) {
-	handler := RequirePermission("pages:read")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestGlobalRateLimiter_XForwardedFor(t *testing.T) {
+	rl := NewGlobalRateLimiter(1, 1)
+	handler := rl.Middleware()(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
+	testRateLimiterProxyHeader(t, handler, "X-Forwarded-For", "10.0.0.2")
+}
 
-	// API key with empty array permissions
-	apiKey := store.ApiKey{
-		ID:          1,
-		Permissions: "[]",
+func TestRequirePermission_NoPermissions(t *testing.T) {
+	tests := []struct {
+		name        string
+		permissions string
+	}{
+		{"empty string", ""},
+		{"empty array", "[]"},
 	}
-	req := httptest.NewRequest("GET", "/api/test", nil)
-	ctx := context.WithValue(req.Context(), ContextKeyAPIKey, apiKey)
-	req = req.WithContext(ctx)
-	w := httptest.NewRecorder()
 
-	handler.ServeHTTP(w, req)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := RequirePermission("pages:read")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
 
-	if w.Code != http.StatusForbidden {
-		t.Errorf("expected status %d, got %d", http.StatusForbidden, w.Code)
+			apiKey := store.ApiKey{ID: 1, Permissions: tt.permissions}
+			req := httptest.NewRequest("GET", "/api/test", nil)
+			ctx := context.WithValue(req.Context(), ContextKeyAPIKey, apiKey)
+			req = req.WithContext(ctx)
+			w := httptest.NewRecorder()
+
+			handler.ServeHTTP(w, req)
+
+			if w.Code != http.StatusForbidden {
+				t.Errorf("expected status %d, got %d", http.StatusForbidden, w.Code)
+			}
+		})
 	}
 }
 
@@ -663,25 +638,9 @@ func TestGlobalRateLimiter_HTMLMiddleware(t *testing.T) {
 }
 
 func TestGlobalRateLimiter_HTMLMiddleware_DifferentIPs(t *testing.T) {
-	// Match the working test exactly: rate=1, burst=1
 	rl := NewGlobalRateLimiter(1, 1)
-	handler := rl.HTMLMiddleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := rl.HTMLMiddleware()(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-
-	// First IP exhausts its limit
-	req := httptest.NewRequest("GET", "/login", nil)
-	req.RemoteAddr = "192.168.1.1:12345"
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	// Second IP should still be able to make requests
-	req = httptest.NewRequest("GET", "/login", nil)
-	req.RemoteAddr = "192.168.1.2:12345"
-	w = httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("second IP: expected status %d, got %d", http.StatusOK, w.Code)
-	}
+	testRateLimiterDifferentIPs(t, handler, "/login")
 }

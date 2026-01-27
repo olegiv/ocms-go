@@ -40,56 +40,55 @@ func TestGetUserRole(t *testing.T) {
 	}
 }
 
-func TestIsAdmin(t *testing.T) {
-	funcs := (&Renderer{}).TemplateFuncs()
-	isAdmin := funcs["isAdmin"].(func(any) bool)
-
-	tests := []struct {
-		name     string
-		user     any
-		expected bool
-	}{
-		{"nil user", nil, false},
-		{"admin user", testUser{Role: "admin"}, true},
-		{"editor user", testUser{Role: "editor"}, false},
-		{"public user", testUser{Role: "public"}, false},
-		{"unknown role", testUser{Role: "unknown"}, false},
-	}
-
+// runRoleCheckTests runs tests for role checking functions.
+func runRoleCheckTests(t *testing.T, checkFn func(any) bool, tests []struct {
+	name     string
+	user     any
+	expected bool
+}) {
+	t.Helper()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isAdmin(tt.user)
+			got := checkFn(tt.user)
 			if got != tt.expected {
-				t.Errorf("isAdmin(%v) = %v, want %v", tt.user, got, tt.expected)
+				t.Errorf("check(%v) = %v, want %v", tt.user, got, tt.expected)
 			}
 		})
 	}
 }
 
-func TestIsEditor(t *testing.T) {
+func TestRoleChecks(t *testing.T) {
 	funcs := (&Renderer{}).TemplateFuncs()
+	isAdmin := funcs["isAdmin"].(func(any) bool)
 	isEditor := funcs["isEditor"].(func(any) bool)
 
-	tests := []struct {
-		name     string
-		user     any
-		expected bool
-	}{
-		{"nil user", nil, false},
-		{"admin user", testUser{Role: "admin"}, true},
-		{"editor user", testUser{Role: "editor"}, true},
-		{"public user", testUser{Role: "public"}, false},
-		{"unknown role", testUser{Role: "unknown"}, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := isEditor(tt.user)
-			if got != tt.expected {
-				t.Errorf("isEditor(%v) = %v, want %v", tt.user, got, tt.expected)
-			}
+	t.Run("isAdmin", func(t *testing.T) {
+		runRoleCheckTests(t, isAdmin, []struct {
+			name     string
+			user     any
+			expected bool
+		}{
+			{"nil user", nil, false},
+			{"admin user", testUser{Role: "admin"}, true},
+			{"editor user", testUser{Role: "editor"}, false},
+			{"public user", testUser{Role: "public"}, false},
+			{"unknown role", testUser{Role: "unknown"}, false},
 		})
-	}
+	})
+
+	t.Run("isEditor", func(t *testing.T) {
+		runRoleCheckTests(t, isEditor, []struct {
+			name     string
+			user     any
+			expected bool
+		}{
+			{"nil user", nil, false},
+			{"admin user", testUser{Role: "admin"}, true},
+			{"editor user", testUser{Role: "editor"}, true},
+			{"public user", testUser{Role: "public"}, false},
+			{"unknown role", testUser{Role: "unknown"}, false},
+		})
+	})
 }
 
 func TestUserRole(t *testing.T) {

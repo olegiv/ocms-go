@@ -613,14 +613,10 @@ func TestUpdateTag(t *testing.T) {
 	})
 
 	t.Run("update slug", func(t *testing.T) {
-		req := newJSONRequest(t, http.MethodPut, "/api/v1/tags/1", `{"slug": "updated-slug"}`, map[string]string{"id": fmt.Sprintf("%d", tag.ID)})
-		w := executeHandler(t, h.UpdateTag, req)
-
+		w := executeHandler(t, h.UpdateTag, newJSONRequest(t, http.MethodPut, "/api/v1/tags/1", `{"slug": "updated-slug"}`, map[string]string{"id": fmt.Sprintf("%d", tag.ID)}))
 		assertStatusCode(t, w, http.StatusOK)
-
-		data := unmarshalData[TagAPIResponse](t, w)
-		if data.Slug != "updated-slug" {
-			t.Errorf("expected slug 'updated-slug', got %q", data.Slug)
+		if got := unmarshalData[TagAPIResponse](t, w).Slug; got != "updated-slug" {
+			t.Errorf("expected slug 'updated-slug', got %q", got)
 		}
 	})
 
@@ -840,29 +836,39 @@ func TestUpdateCategory(t *testing.T) {
 
 	cat := createTestCategory(t, db, "Original Cat", "original-cat-slug", nil)
 
-	t.Run("update name", func(t *testing.T) {
-		req := newJSONRequest(t, http.MethodPut, "/api/v1/categories/1", `{"name": "Updated Category"}`, map[string]string{"id": fmt.Sprintf("%d", cat.ID)})
-		w := executeHandler(t, h.UpdateCategory, req)
-
-		assertStatusCode(t, w, http.StatusOK)
-
-		data := unmarshalData[CategoryAPIResponse](t, w)
-		if data.Name != "Updated Category" {
-			t.Errorf("expected name 'Updated Category', got %q", data.Name)
-		}
-	})
-
-	t.Run("update description", func(t *testing.T) {
-		req := newJSONRequest(t, http.MethodPut, "/api/v1/categories/1", `{"description": "A new description"}`, map[string]string{"id": fmt.Sprintf("%d", cat.ID)})
-		w := executeHandler(t, h.UpdateCategory, req)
-
-		assertStatusCode(t, w, http.StatusOK)
-
-		data := unmarshalData[CategoryAPIResponse](t, w)
-		if data.Description != "A new description" {
-			t.Errorf("expected description 'A new description', got %q", data.Description)
-		}
-	})
+	// Test updating different fields with table-driven tests
+	updateTests := []struct {
+		name      string
+		body      string
+		checkFunc func(t *testing.T, data CategoryAPIResponse)
+	}{
+		{
+			name: "update name",
+			body: `{"name": "Updated Category"}`,
+			checkFunc: func(t *testing.T, data CategoryAPIResponse) {
+				if data.Name != "Updated Category" {
+					t.Errorf("expected name 'Updated Category', got %q", data.Name)
+				}
+			},
+		},
+		{
+			name: "update description",
+			body: `{"description": "A new description"}`,
+			checkFunc: func(t *testing.T, data CategoryAPIResponse) {
+				if data.Description != "A new description" {
+					t.Errorf("expected description 'A new description', got %q", data.Description)
+				}
+			},
+		},
+	}
+	for _, tc := range updateTests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := newJSONRequest(t, http.MethodPut, "/api/v1/categories/1", tc.body, map[string]string{"id": fmt.Sprintf("%d", cat.ID)})
+			w := executeHandler(t, h.UpdateCategory, req)
+			assertStatusCode(t, w, http.StatusOK)
+			tc.checkFunc(t, unmarshalData[CategoryAPIResponse](t, w))
+		})
+	}
 
 	t.Run("self as parent", func(t *testing.T) {
 		body := fmt.Sprintf(`{"parent_id": %d}`, cat.ID)

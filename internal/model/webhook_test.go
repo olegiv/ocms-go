@@ -29,46 +29,11 @@ func TestGenerateWebhookSecret(t *testing.T) {
 }
 
 func TestWebhookGetEvents(t *testing.T) {
-	tests := []struct {
-		name   string
-		events string
-		want   []string
-	}{
-		{
-			name:   "empty string",
-			events: "",
-			want:   []string{},
-		},
-		{
-			name:   "empty array",
-			events: "[]",
-			want:   []string{},
-		},
-		{
-			name:   "single event",
-			events: `["page.created"]`,
-			want:   []string{"page.created"},
-		},
-		{
-			name:   "multiple events",
-			events: `["page.created","page.updated","media.uploaded"]`,
-			want:   []string{"page.created", "page.updated", "media.uploaded"},
-		},
-	}
-
+	tests := standardJSONArrayParseTests("page.created", "page.created", "page.updated", "media.uploaded")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			w := &Webhook{Events: tt.events}
-			got := w.GetEvents()
-			if len(got) != len(tt.want) {
-				t.Errorf("GetEvents() = %v, want %v", got, tt.want)
-				return
-			}
-			for i, e := range got {
-				if e != tt.want[i] {
-					t.Errorf("GetEvents()[%d] = %q, want %q", i, e, tt.want[i])
-				}
-			}
+			w := &Webhook{Events: tt.input}
+			assertStringSliceEqual(t, "GetEvents()", w.GetEvents(), tt.want)
 		})
 	}
 }
@@ -113,27 +78,13 @@ func TestWebhookSetEvents(t *testing.T) {
 }
 
 func TestWebhookHasEvent(t *testing.T) {
-	w := &Webhook{
-		Events: `["page.created","page.updated"]`,
-	}
-
-	tests := []struct {
-		event string
-		want  bool
-	}{
+	w := &Webhook{Events: `["page.created","page.updated"]`}
+	runHasItemTests(t, []hasItemTest{
 		{"page.created", true},
 		{"page.updated", true},
 		{"page.deleted", false},
 		{"media.uploaded", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.event, func(t *testing.T) {
-			if got := w.HasEvent(tt.event); got != tt.want {
-				t.Errorf("HasEvent(%q) = %v, want %v", tt.event, got, tt.want)
-			}
-		})
-	}
+	}, w.HasEvent)
 }
 
 func TestWebhookGetHeaders(t *testing.T) {

@@ -4,11 +4,14 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"log/slog"
 	"net/http"
 
+	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/render"
 )
 
@@ -139,4 +142,139 @@ func requireEntityWithJSONError[T any](
 		return zero, false
 	}
 	return entity, true
+}
+
+// requireEntityWithCustomError fetches an entity by ID using the provided query function.
+// On error, it calls the provided error handler. Returns the entity and true if successful,
+// or zero value and false if an error occurred (error handler already called).
+//
+// Example usage:
+//
+//	apiKey, ok := requireEntityWithCustomError(w, "API key", id,
+//	    func(id int64) (store.ApiKey, error) { return h.queries.GetAPIKeyByID(r.Context(), id) },
+//	    h.sendDeleteError)
+func requireEntityWithCustomError[T any](
+	w http.ResponseWriter,
+	entityName string,
+	id int64,
+	queryFn func(id int64) (T, error),
+	errorHandler func(http.ResponseWriter, string),
+) (T, bool) {
+	var zero T
+	entity, err := queryFn(id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			errorHandler(w, entityName+" not found")
+		} else {
+			slog.Error("failed to get "+entityName, "error", err, entityName+"_id", id)
+			errorHandler(w, "Error loading "+entityName)
+		}
+		return zero, false
+	}
+	return entity, true
+}
+
+// =============================================================================
+// DELETE OPERATION HELPERS
+// =============================================================================
+
+// deleteEntityParams holds parameters for a generic delete operation.
+type deleteEntityParams[T any] struct {
+	EntityName     string                              // e.g., "tag", "category"
+	IDField        string                              // e.g., "tag_id", "category_id"
+	RedirectURL    string                              // URL to redirect after success
+	SuccessMessage string                              // Flash message on success
+	RequireFn      func(int64) (T, bool)               // function to fetch and validate entity
+	DeleteFn       func(context.Context, int64) error  // function to delete entity
+	GetSlug        func(T) string                      // function to get slug for logging
+}
+
+// handleDeleteEntity performs a generic delete operation with HTMX support.
+func handleDeleteEntity[T any](w http.ResponseWriter, r *http.Request, renderer *render.Renderer, p deleteEntityParams[T]) {
+	id, err := ParseIDParam(r)
+	if err != nil {
+		http.Error(w, "Invalid "+p.EntityName+" ID", http.StatusBadRequest)
+		return
+	}
+
+	entity, ok := p.RequireFn(id)
+	if !ok {
+		return
+	}
+
+	if err = p.DeleteFn(r.Context(), id); err != nil {
+		slog.Error("failed to delete "+p.EntityName, "error", err, p.IDField, id)
+		http.Error(w, "Error deleting "+p.EntityName, http.StatusInternalServerError)
+		return
+	}
+
+	slog.Info(p.EntityName+" deleted", p.IDField, id, "slug", p.GetSlug(entity), "deleted_by", middleware.GetUserID(r))
+
+	// For HTMX requests, return empty response (row removed)
+	if r.Header.Get("HX-Request") == "true" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// For regular requests, redirect
+	flashSuccess(w, r, renderer, p.RedirectURL, p.SuccessMessage)
+}
+
+// =============================================================================
+// ENTITY EDIT PAGE HELPERS
+// =============================================================================
+
+// renderEntityEditPage renders an edit page for an entity with standard breadcrumbs.
+// The breadcrumbs follow the pattern: Dashboard > Entity List > Entity Name (active).
+func renderEntityEditPage(
+	w http.ResponseWriter, r *http.Request,
+	renderer *render.Renderer,
+	template string,
+	title string,
+	data any,
+	lang string,
+	navKey string,
+	listURL string,
+	entityName string,
+	entityURL string,
+) {
+	renderer.RenderPage(w, r, template, render.TemplateData{
+		Title: title,
+		User:  middleware.GetUser(r),
+		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+			{Label: i18n.T(lang, navKey), URL: listURL},
+			{Label: entityName, URL: entityURL, Active: true},
+		},
+	})
+}
+
+// =============================================================================
+// LANGUAGE PREFERENCE HELPERS
+// =============================================================================
+
+// setLanguagePreference sets the admin UI language preference from a form value.
+// It validates the language code and redirects to the referer or the provided fallback URL.
+func setLanguagePreference(w http.ResponseWriter, r *http.Request, renderer *render.Renderer, fallbackURL string) {
+	lang := r.FormValue("lang")
+	if lang == "" {
+		lang = "en"
+	}
+
+	// Validate the language code
+	if !i18n.IsSupported(lang) {
+		lang = "en"
+	}
+
+	// Set the language preference in session
+	renderer.SetAdminLang(r, lang)
+
+	// Redirect back to the referring page, or fallback URL if not available
+	referer := r.Header.Get("Referer")
+	if referer == "" {
+		referer = fallbackURL
+	}
+
+	http.Redirect(w, r, referer, http.StatusSeeOther)
 }

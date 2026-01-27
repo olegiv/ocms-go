@@ -9,10 +9,25 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 )
 
+// runMimeTypeTests runs table-driven tests for mime type checking functions.
+func runMimeTypeTests(t *testing.T, checkFn func(string) bool, tests []struct {
+	mimeType string
+	want     bool
+}) {
+	t.Helper()
+	for _, tt := range tests {
+		t.Run(tt.mimeType, func(t *testing.T) {
+			if got := checkFn(tt.mimeType); got != tt.want {
+				t.Errorf("check(%q) = %v, want %v", tt.mimeType, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestProcessorIsImage(t *testing.T) {
 	p := NewProcessor("./uploads")
 
-	tests := []struct {
+	runMimeTypeTests(t, p.IsImage, []struct {
 		mimeType string
 		want     bool
 	}{
@@ -25,21 +40,13 @@ func TestProcessorIsImage(t *testing.T) {
 		{model.MimeTypeWebM, false},
 		{"application/octet-stream", false},
 		{"", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.mimeType, func(t *testing.T) {
-			if got := p.IsImage(tt.mimeType); got != tt.want {
-				t.Errorf("IsImage(%q) = %v, want %v", tt.mimeType, got, tt.want)
-			}
-		})
-	}
+	})
 }
 
 func TestProcessorIsSupportedType(t *testing.T) {
 	p := NewProcessor("./uploads")
 
-	tests := []struct {
+	runMimeTypeTests(t, p.IsSupportedType, []struct {
 		mimeType string
 		want     bool
 	}{
@@ -52,15 +59,7 @@ func TestProcessorIsSupportedType(t *testing.T) {
 		{model.MimeTypeWebM, true},
 		{"application/octet-stream", false},
 		{"text/plain", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.mimeType, func(t *testing.T) {
-			if got := p.IsSupportedType(tt.mimeType); got != tt.want {
-				t.Errorf("IsSupportedType(%q) = %v, want %v", tt.mimeType, got, tt.want)
-			}
-		})
-	}
+	})
 }
 
 func TestCalculateFitDimensions(t *testing.T) {

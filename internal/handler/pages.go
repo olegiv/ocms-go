@@ -395,30 +395,16 @@ type PageTranslationInfo struct {
 	Page     store.Page
 }
 
-// pageLanguageInfo holds language and translation info for a page.
-type pageLanguageInfo struct {
-	PageLanguage     *store.Language
-	AllLanguages     []store.Language
-	Translations     []PageTranslationInfo
-	MissingLanguages []store.Language
-}
+// pageLanguageInfo is an alias for entityLanguageInfo with PageTranslationInfo.
+type pageLanguageInfo = entityLanguageInfo[PageTranslationInfo]
 
 // loadPageLanguageInfo loads language and translation info for a page.
 func (h *PagesHandler) loadPageLanguageInfo(ctx context.Context, page store.Page) pageLanguageInfo {
-	base := loadTranslationBaseInfo(ctx, h.queries, model.EntityTypePage, page.ID, page.LanguageID)
-	result := loadEntityTranslations(
-		base,
-		func(id int64) (store.Page, error) { return h.queries.GetPageByID(ctx, id) },
-		func(lang store.Language, p store.Page) PageTranslationInfo {
-			return PageTranslationInfo{Language: lang, Page: p}
-		},
-	)
-	return pageLanguageInfo{
-		PageLanguage:     result.EntityLanguage,
-		AllLanguages:     result.AllLanguages,
-		Translations:     result.Translations,
-		MissingLanguages: result.MissingLanguages,
+	fetcher := func(id int64) (store.Page, error) { return h.queries.GetPageByID(ctx, id) }
+	maker := func(lang store.Language, p store.Page) PageTranslationInfo {
+		return PageTranslationInfo{Language: lang, Page: p}
 	}
+	return loadLanguageInfo(ctx, h.queries, model.EntityTypePage, page.ID, page.LanguageID, fetcher, maker)
 }
 
 // buildPageCategoryTree builds a flat list with depth for display.
@@ -626,7 +612,6 @@ func isValidPageStatus(status string) bool {
 
 // EditForm handles GET /admin/pages/{id} - displays the edit page form.
 func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	adminLang := h.renderer.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -691,7 +676,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		AllCategories:    categoryTree,
 		FeaturedImage:    featuredImage,
 		AllLanguages:     langInfo.AllLanguages,
-		Language:         langInfo.PageLanguage,
+		Language:         langInfo.EntityLanguage,
 		Translations:     langInfo.Translations,
 		MissingLanguages: langInfo.MissingLanguages,
 		Statuses:         ValidPageStatuses,
@@ -700,21 +685,11 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		IsEdit:           true,
 	}
 
-	h.renderer.RenderPage(w, r, "admin/pages_form", render.TemplateData{
-		Title: i18n.T(adminLang, "pages.edit"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(adminLang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(adminLang, "pages.title"), URL: redirectAdminPages},
-			{Label: page.Title, URL: fmt.Sprintf(redirectAdminPagesID, page.ID), Active: true},
-		},
-	})
+	renderEntityEditPage(w, r, h.renderer, "admin/pages_form", i18n.T(adminLang, "pages.edit"), data, adminLang, "pages.title", redirectAdminPages, page.Title, fmt.Sprintf(redirectAdminPagesID, page.ID))
 }
 
 // Update handles PUT /admin/pages/{id} - updates an existing page.
 func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -771,16 +746,10 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 			IsEdit:     true,
 		}
 
-		h.renderer.RenderPage(w, r, "admin/pages_form", render.TemplateData{
-			Title: i18n.T(lang, "pages.edit"),
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-				{Label: i18n.T(lang, "pages.title"), URL: redirectAdminPages},
-				{Label: existingPage.Title, URL: fmt.Sprintf(redirectAdminPagesID, id), Active: true},
-			},
-		})
+		renderEntityEditPage(w, r, h.renderer, "admin/pages_form",
+			i18n.T(lang, "pages.edit"), data, lang,
+			"pages.title", redirectAdminPages,
+			existingPage.Title, fmt.Sprintf(redirectAdminPagesID, id))
 		return
 	}
 

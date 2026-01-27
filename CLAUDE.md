@@ -221,7 +221,7 @@ Never tell the user to "restart the server and test" - always run the tests your
 
 **CRITICAL**: All code MUST be free of the following warnings and issues:
 
-- **Duplicate code**: Avoid copy-paste code blocks. Extract common logic into reusable functions.
+- **Duplicate code**: Avoid copy-paste code blocks. Extract common logic into reusable functions. **NEVER add `//nolint:dupl` comments** - always fix the duplication by refactoring.
 - **Unhandled errors**: All errors MUST be checked and handled appropriately. Never ignore returned errors.
 - **Condition is always 'false'/'true'**: Remove dead code and unreachable branches. Ensure all conditions can evaluate to both outcomes.
 - **Unused variables/imports**: Remove any unused declarations.

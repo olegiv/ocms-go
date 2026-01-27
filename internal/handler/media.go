@@ -394,7 +394,6 @@ type MediaEditData struct {
 
 // EditForm handles GET /admin/media/{id} - displays the edit form.
 func (h *MediaHandler) EditForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -468,21 +467,11 @@ func (h *MediaHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		FormValues:   make(map[string]string),
 	}
 
-	h.renderer.RenderPage(w, r, "admin/media_edit", render.TemplateData{
-		Title: i18n.T(lang, "media.edit_title"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.media"), URL: redirectAdminMedia},
-			{Label: media.Filename, URL: fmt.Sprintf(redirectAdminMediaID, media.ID), Active: true},
-		},
-	})
+	renderEntityEditPage(w, r, h.renderer, "admin/media_edit", i18n.T(lang, "media.edit_title"), data, lang, "nav.media", redirectAdminMedia, media.Filename, fmt.Sprintf(redirectAdminMediaID, media.ID))
 }
 
 // Update handles PUT /admin/media/{id} - updates media metadata.
 func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -541,16 +530,10 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 
-		h.renderer.RenderPage(w, r, "admin/media_edit", render.TemplateData{
-			Title: i18n.T(lang, "media.edit_title"),
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-				{Label: i18n.T(lang, "nav.media"), URL: redirectAdminMedia},
-				{Label: media.Filename, URL: fmt.Sprintf(redirectAdminMediaID, id), Active: true},
-			},
-		})
+		renderEntityEditPage(w, r, h.renderer, "admin/media_edit",
+			i18n.T(lang, "media.edit_title"), data, lang,
+			"nav.media", redirectAdminMedia,
+			media.Filename, fmt.Sprintf(redirectAdminMediaID, id))
 		return
 	}
 

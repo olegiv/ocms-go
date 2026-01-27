@@ -1720,26 +1720,12 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		}
 	}
 
-	// Load powered_by footer text (fallback to default if no translation)
+	// Load footer text values (fallback to database if cache unavailable)
 	if data.FooterText == "" {
-		if h.cacheManager != nil {
-			if poweredBy, err := h.cacheManager.GetConfig(ctx, "powered_by"); err == nil && poweredBy != "" {
-				data.FooterText = poweredBy
-			}
-		} else if cfg, err := h.queries.GetConfigByKey(ctx, "powered_by"); err == nil && cfg.Value != "" {
-			data.FooterText = cfg.Value
-		}
+		data.FooterText = h.getConfigValue(ctx, "powered_by")
 	}
-
-	// Load copyright footer text (fallback to default if no translation)
 	if data.CopyrightText == "" {
-		if h.cacheManager != nil {
-			if copyright, err := h.cacheManager.GetConfig(ctx, "copyright"); err == nil && copyright != "" {
-				data.CopyrightText = copyright
-			}
-		} else if cfg, err := h.queries.GetConfigByKey(ctx, "copyright"); err == nil && cfg.Value != "" {
-			data.CopyrightText = cfg.Value
-		}
+		data.CopyrightText = h.getConfigValue(ctx, "copyright")
 	}
 
 	return data
@@ -1774,6 +1760,19 @@ func (h *FrontendHandler) menuItemsToView(items []service.MenuItem, currentPath 
 		result = append(result, mi)
 	}
 	return result
+}
+
+// getConfigValue retrieves a config value, trying cache first then database.
+func (h *FrontendHandler) getConfigValue(ctx context.Context, key string) string {
+	if h.cacheManager != nil {
+		if value, err := h.cacheManager.GetConfig(ctx, key); err == nil && value != "" {
+			return value
+		}
+	}
+	if cfg, err := h.queries.GetConfigByKey(ctx, key); err == nil && cfg.Value != "" {
+		return cfg.Value
+	}
+	return ""
 }
 
 // getPageTranslations returns translation links for a page for the language switcher.

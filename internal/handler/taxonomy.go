@@ -235,7 +235,6 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 
 // EditTagForm handles GET /admin/tags/{id} - displays the edit tag form.
 func (h *TaxonomyHandler) EditTagForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -257,21 +256,15 @@ func (h *TaxonomyHandler) EditTagForm(w http.ResponseWriter, r *http.Request) {
 		FormValues:       make(map[string]string),
 		IsEdit:           true,
 		AllLanguages:     langInfo.AllLanguages,
-		Language:         langInfo.TagLanguage,
+		Language:         langInfo.EntityLanguage,
 		Translations:     langInfo.Translations,
 		MissingLanguages: langInfo.MissingLanguages,
 	}
 
-	h.renderer.RenderPage(w, r, "admin/tags_form", render.TemplateData{
-		Title: tag.Name,
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.tags"), URL: redirectAdminTags},
-			{Label: tag.Name, URL: fmt.Sprintf(redirectAdminTagsID, tag.ID), Active: true},
-		},
-	})
+	renderEntityEditPage(w, r, h.renderer, "admin/tags_form",
+		tag.Name, data, lang,
+		"nav.tags", redirectAdminTags,
+		tag.Name, fmt.Sprintf(redirectAdminTagsID, tag.ID))
 }
 
 // UpdateTag handles PUT /admin/tags/{id} - updates an existing tag.
@@ -325,7 +318,7 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 			FormValues:   formValues,
 			IsEdit:       true,
 			AllLanguages: langInfo.AllLanguages,
-			Language:     langInfo.TagLanguage,
+			Language:     langInfo.EntityLanguage,
 		}
 
 		h.renderer.RenderPage(w, r, "admin/tags_form", render.TemplateData{
@@ -362,35 +355,11 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 
 // DeleteTag handles DELETE /admin/tags/{id} - deletes a tag.
 func (h *TaxonomyHandler) DeleteTag(w http.ResponseWriter, r *http.Request) {
-	id, err := ParseIDParam(r)
-	if err != nil {
-		http.Error(w, "Invalid tag ID", http.StatusBadRequest)
-		return
-	}
-
-	tag, ok := h.requireTagWithError(w, r, id)
-	if !ok {
-		return
-	}
-
-	// Delete the tag (page_tags are cascade deleted by FK constraint)
-	err = h.queries.DeleteTag(r.Context(), id)
-	if err != nil {
-		slog.Error("failed to delete tag", "error", err, "tag_id", id)
-		http.Error(w, "Error deleting tag", http.StatusInternalServerError)
-		return
-	}
-
-	slog.Info("tag deleted", "tag_id", id, "slug", tag.Slug, "deleted_by", middleware.GetUserID(r))
-
-	// For HTMX requests, return empty response (row removed)
-	if r.Header.Get("HX-Request") == "true" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	// For regular requests, redirect
-	flashSuccess(w, r, h.renderer, redirectAdminTags, "Tag deleted successfully")
+	params := deleteEntityParams[store.Tag]{EntityName: "tag", IDField: "tag_id", RedirectURL: redirectAdminTags, SuccessMessage: "Tag deleted successfully"}
+	params.RequireFn = func(id int64) (store.Tag, bool) { return h.requireTagWithError(w, r, id) }
+	params.DeleteFn = h.queries.DeleteTag
+	params.GetSlug = func(t store.Tag) string { return t.Slug }
+	handleDeleteEntity(w, r, h.renderer, params)
 }
 
 // SearchTags handles GET /admin/tags/search - AJAX search for autocomplete.
@@ -815,7 +784,6 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 
 // EditCategoryForm handles GET /admin/categories/{id} - displays the edit category form.
 func (h *TaxonomyHandler) EditCategoryForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -840,21 +808,15 @@ func (h *TaxonomyHandler) EditCategoryForm(w http.ResponseWriter, r *http.Reques
 		FormValues:       make(map[string]string),
 		IsEdit:           true,
 		AllLanguages:     langInfo.AllLanguages,
-		Language:         langInfo.CategoryLanguage,
+		Language:         langInfo.EntityLanguage,
 		Translations:     langInfo.Translations,
 		MissingLanguages: langInfo.MissingLanguages,
 	}
 
-	h.renderer.RenderPage(w, r, "admin/categories_form", render.TemplateData{
-		Title: category.Name,
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.categories"), URL: redirectAdminCategories},
-			{Label: category.Name, URL: fmt.Sprintf(redirectAdminCategoriesID, category.ID), Active: true},
-		},
-	})
+	renderEntityEditPage(w, r, h.renderer, "admin/categories_form",
+		category.Name, data, lang,
+		"nav.categories", redirectAdminCategories,
+		category.Name, fmt.Sprintf(redirectAdminCategoriesID, category.ID))
 }
 
 // UpdateCategory handles PUT /admin/categories/{id} - updates an existing category.
@@ -933,7 +895,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 			FormValues:    formValues,
 			IsEdit:        true,
 			AllLanguages:  langInfo.AllLanguages,
-			Language:      langInfo.CategoryLanguage,
+			Language:      langInfo.EntityLanguage,
 		}
 
 		h.renderer.RenderPage(w, r, "admin/categories_form", render.TemplateData{
@@ -973,35 +935,15 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 
 // DeleteCategory handles DELETE /admin/categories/{id} - deletes a category.
 func (h *TaxonomyHandler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
-	id, err := ParseIDParam(r)
-	if err != nil {
-		http.Error(w, "Invalid category ID", http.StatusBadRequest)
-		return
-	}
-
-	category, ok := h.requireCategoryWithError(w, r, id)
-	if !ok {
-		return
-	}
-
-	// Delete the category (page_categories cascade, children get parent_id = NULL)
-	err = h.queries.DeleteCategory(r.Context(), id)
-	if err != nil {
-		slog.Error("failed to delete category", "error", err, "category_id", id)
-		http.Error(w, "Error deleting category", http.StatusInternalServerError)
-		return
-	}
-
-	slog.Info("category deleted", "category_id", id, "slug", category.Slug, "deleted_by", middleware.GetUserID(r))
-
-	// For HTMX requests, return empty response (row removed)
-	if r.Header.Get("HX-Request") == "true" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	// For regular requests, redirect
-	flashSuccess(w, r, h.renderer, redirectAdminCategories, "Category deleted successfully")
+	handleDeleteEntity(w, r, h.renderer, deleteEntityParams[store.Category]{
+		EntityName:     "category",
+		IDField:        "category_id",
+		RedirectURL:    redirectAdminCategories,
+		SuccessMessage: "Category deleted successfully",
+		RequireFn:      func(id int64) (store.Category, bool) { return h.requireCategoryWithError(w, r, id) },
+		DeleteFn:       h.queries.DeleteCategory,
+		GetSlug:        func(c store.Category) string { return c.Slug },
+	})
 }
 
 // TranslateCategory handles POST /admin/categories/{id}/translate/{langCode} - creates a translation.
@@ -1268,56 +1210,27 @@ func getTargetLanguageForTranslation(
 	return &translationContext{TargetLang: targetLang}, true
 }
 
-// tagLanguageInfo holds language and translation info for a tag.
-type tagLanguageInfo struct {
-	TagLanguage      *store.Language
-	AllLanguages     []store.Language
-	Translations     []TagTranslationInfo
-	MissingLanguages []store.Language
-}
+// tagLanguageInfo is an alias for entityLanguageInfo with TagTranslationInfo.
+type tagLanguageInfo = entityLanguageInfo[TagTranslationInfo]
 
 // loadTagLanguageInfo loads language and translation info for a tag.
 func (h *TaxonomyHandler) loadTagLanguageInfo(ctx context.Context, tag store.Tag) tagLanguageInfo {
-	base := loadTranslationBaseInfo(ctx, h.queries, model.EntityTypeTag, tag.ID, tag.LanguageID)
-	result := loadEntityTranslations(
-		base,
+	return loadLanguageInfo(
+		ctx, h.queries, model.EntityTypeTag, tag.ID, tag.LanguageID,
 		func(id int64) (store.Tag, error) { return h.queries.GetTagByID(ctx, id) },
-		func(lang store.Language, t store.Tag) TagTranslationInfo {
-			return TagTranslationInfo{Language: lang, Tag: t}
-		},
+		func(lang store.Language, t store.Tag) TagTranslationInfo { return TagTranslationInfo{Language: lang, Tag: t} },
 	)
-	return tagLanguageInfo{
-		TagLanguage:      result.EntityLanguage,
-		AllLanguages:     result.AllLanguages,
-		Translations:     result.Translations,
-		MissingLanguages: result.MissingLanguages,
-	}
 }
 
-// categoryLanguageInfo holds language and translation info for a category.
-type categoryLanguageInfo struct {
-	CategoryLanguage *store.Language
-	AllLanguages     []store.Language
-	Translations     []CategoryTranslationInfo
-	MissingLanguages []store.Language
-}
+// categoryLanguageInfo is an alias for entityLanguageInfo with CategoryTranslationInfo.
+type categoryLanguageInfo = entityLanguageInfo[CategoryTranslationInfo]
 
 // loadCategoryLanguageInfo loads language and translation info for a category.
 func (h *TaxonomyHandler) loadCategoryLanguageInfo(ctx context.Context, category store.Category) categoryLanguageInfo {
-	base := loadTranslationBaseInfo(ctx, h.queries, model.EntityTypeCategory, category.ID, category.LanguageID)
-	result := loadEntityTranslations(
-		base,
+	info := loadLanguageInfo(ctx, h.queries, model.EntityTypeCategory, category.ID, category.LanguageID,
 		func(id int64) (store.Category, error) { return h.queries.GetCategoryByID(ctx, id) },
-		func(lang store.Language, c store.Category) CategoryTranslationInfo {
-			return CategoryTranslationInfo{Language: lang, Category: c}
-		},
-	)
-	return categoryLanguageInfo{
-		CategoryLanguage: result.EntityLanguage,
-		AllLanguages:     result.AllLanguages,
-		Translations:     result.Translations,
-		MissingLanguages: result.MissingLanguages,
-	}
+		func(lang store.Language, c store.Category) CategoryTranslationInfo { return CategoryTranslationInfo{Language: lang, Category: c} })
+	return info
 }
 
 // SearchCategories handles GET /admin/categories/search - AJAX search.

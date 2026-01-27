@@ -116,42 +116,35 @@ func TestUsersHandler_Delete_SelfDelete(t *testing.T) {
 	}
 }
 
-func TestUsersHandler_Delete_InvalidID(t *testing.T) {
-	db, sm := testHandlerSetup(t)
+func TestUsersHandler_Delete_BadRequest(t *testing.T) {
+	tests := []struct {
+		name string
+		id   string
+	}{
+		{"InvalidID", "abc"},
+		{"UserNotFound", "9999"},
+	}
 
-	user := createTestUser(t, db, testUser{
-		Email: "admin@example.com",
-		Name:  "Admin User",
-		Role:  "admin",
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, sm := testHandlerSetup(t)
 
-	handler := NewUsersHandler(db, nil, sm)
+			user := createTestUser(t, db, testUser{
+				Email: "admin@example.com",
+				Name:  "Admin User",
+				Role:  "admin",
+			})
 
-	req, w := newAuthenticatedDeleteRequest(t, sm, "/admin/users/abc",
-		map[string]string{"id": "abc"}, &user)
+			handler := NewUsersHandler(db, nil, sm)
 
-	handler.Delete(w, req)
+			req, w := newAuthenticatedDeleteRequest(t, sm, "/admin/users/"+tt.id,
+				map[string]string{"id": tt.id}, &user)
 
-	assertStatus(t, w.Code, http.StatusBadRequest)
-}
+			handler.Delete(w, req)
 
-func TestUsersHandler_Delete_UserNotFound(t *testing.T) {
-	db, sm := testHandlerSetup(t)
-
-	user := createTestUser(t, db, testUser{
-		Email: "admin@example.com",
-		Name:  "Admin User",
-		Role:  "admin",
-	})
-
-	handler := NewUsersHandler(db, nil, sm)
-
-	req, w := newAuthenticatedDeleteRequest(t, sm, "/admin/users/9999",
-		map[string]string{"id": "9999"}, &user)
-
-	handler.Delete(w, req)
-
-	assertStatus(t, w.Code, http.StatusBadRequest)
+			assertStatus(t, w.Code, http.StatusBadRequest)
+		})
+	}
 }
 
 func TestUsersHandler_Delete_LastAdmin_Blocked(t *testing.T) {

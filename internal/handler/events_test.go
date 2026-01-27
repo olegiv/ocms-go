@@ -143,88 +143,91 @@ func TestEventGetByID(t *testing.T) {
 	}
 }
 
-func TestEventListByLevel(t *testing.T) {
-	db, _ := testHandlerSetup(t)
-
-	queries := store.New(db)
-
-	// Create events with different levels
-	for _, level := range []string{"info", "info", "warning", "error"} {
+// createTestEvents creates events with the given levels and categories.
+func createTestEvents(t *testing.T, queries *store.Queries, levels, categories []string) {
+	t.Helper()
+	for i := range levels {
 		_, err := queries.CreateEvent(context.Background(), store.CreateEventParams{
-			Level:    level,
-			Category: "system",
-			Message:  "Event " + level,
+			Level:    levels[i],
+			Category: categories[i],
+			Message:  "Event " + levels[i] + "-" + categories[i],
 			Metadata: "{}",
 		})
 		if err != nil {
 			t.Fatalf("CreateEvent failed: %v", err)
 		}
-	}
-
-	events, err := queries.ListEventsByLevel(context.Background(), store.ListEventsByLevelParams{
-		Level:  "info",
-		Limit:  100,
-		Offset: 0,
-	})
-	if err != nil {
-		t.Fatalf("ListEventsByLevel failed: %v", err)
-	}
-
-	if len(events) != 2 {
-		t.Errorf("got %d info events, want 2", len(events))
 	}
 }
 
-func TestEventListByCategory(t *testing.T) {
+// runEventListTest tests listing events with a given filter.
+func runEventListTest(t *testing.T, levels, categories []string, listFn func(*store.Queries) (int, error), expected int, filterName string) {
+	t.Helper()
 	db, _ := testHandlerSetup(t)
-
 	queries := store.New(db)
 
-	// Create events with different categories
-	categories := []string{"auth", "auth", "system", "page"}
-	for i, cat := range categories {
-		_, err := queries.CreateEvent(context.Background(), store.CreateEventParams{
-			Level:    "info",
-			Category: cat,
-			Message:  "Event " + string(rune('A'+i)),
-			Metadata: "{}",
-		})
-		if err != nil {
-			t.Fatalf("CreateEvent failed: %v", err)
-		}
-	}
+	createTestEvents(t, queries, levels, categories)
 
-	events, err := queries.ListEventsByCategory(context.Background(), store.ListEventsByCategoryParams{
-		Category: "auth",
-		Limit:    100,
-		Offset:   0,
-	})
+	count, err := listFn(queries)
 	if err != nil {
-		t.Fatalf("ListEventsByCategory failed: %v", err)
+		t.Fatalf("list events failed: %v", err)
 	}
 
-	if len(events) != 2 {
-		t.Errorf("got %d auth events, want 2", len(events))
+	if count != expected {
+		t.Errorf("got %d %s events, want %d", count, filterName, expected)
+	}
+}
+
+func TestEventListByFilter(t *testing.T) {
+	testCases := []struct {
+		name       string
+		levels     []string
+		categories []string
+		listFn     func(*store.Queries) (int, error)
+		expected   int
+		filterName string
+	}{
+		{
+			name:       "ByLevel",
+			levels:     []string{"info", "info", "warning", "error"},
+			categories: []string{"system", "system", "system", "system"},
+			listFn: func(q *store.Queries) (int, error) {
+				events, err := q.ListEventsByLevel(context.Background(), store.ListEventsByLevelParams{
+					Level: "info", Limit: 100, Offset: 0,
+				})
+				return len(events), err
+			},
+			expected:   2,
+			filterName: "info",
+		},
+		{
+			name:       "ByCategory",
+			levels:     []string{"info", "info", "info", "info"},
+			categories: []string{"auth", "auth", "system", "page"},
+			listFn: func(q *store.Queries) (int, error) {
+				events, err := q.ListEventsByCategory(context.Background(), store.ListEventsByCategoryParams{
+					Category: "auth", Limit: 100, Offset: 0,
+				})
+				return len(events), err
+			},
+			expected:   2,
+			filterName: "auth",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			runEventListTest(t, tc.levels, tc.categories, tc.listFn, tc.expected, tc.filterName)
+		})
 	}
 }
 
 func TestEventCountByLevel(t *testing.T) {
 	db, _ := testHandlerSetup(t)
-
 	queries := store.New(db)
 
-	// Create error events
-	for i := 0; i < 3; i++ {
-		_, err := queries.CreateEvent(context.Background(), store.CreateEventParams{
-			Level:    "error",
-			Category: "system",
-			Message:  "Error event",
-			Metadata: "{}",
-		})
-		if err != nil {
-			t.Fatalf("CreateEvent failed: %v", err)
-		}
-	}
+	createTestEvents(t, queries,
+		[]string{"error", "error", "error"},
+		[]string{"system", "system", "system"})
 
 	count, err := queries.CountEventsByLevel(context.Background(), "error")
 	if err != nil {

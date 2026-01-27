@@ -26,22 +26,17 @@ func TestNewMenusHandler(t *testing.T) {
 
 func TestMenuCreate(t *testing.T) {
 	db, _ := testHandlerSetup(t)
-
 	queries := store.New(db)
 
-	menu, err := queries.CreateMenu(context.Background(), store.CreateMenuParams{
-		Name: "Main Menu",
-		Slug: "main-menu",
-	})
+	menu, err := queries.CreateMenu(context.Background(), store.CreateMenuParams{Name: "Main Menu", Slug: "main-menu"})
 	if err != nil {
 		t.Fatalf("CreateMenu failed: %v", err)
 	}
-
-	if menu.Name != "Main Menu" {
-		t.Errorf("Name = %q, want %q", menu.Name, "Main Menu")
-	}
-	if menu.Slug != "main-menu" {
-		t.Errorf("Slug = %q, want %q", menu.Slug, "main-menu")
+	// Verify both fields in single block
+	if got, want := menu.Name, "Main Menu"; got != want {
+		t.Errorf("Name = %q, want %q", got, want)
+	} else if got, want := menu.Slug, "main-menu"; got != want {
+		t.Errorf("Slug = %q, want %q", got, want)
 	}
 }
 
@@ -97,56 +92,52 @@ func TestMenuGetBySlug(t *testing.T) {
 
 func TestMenuUpdate(t *testing.T) {
 	db, _ := testHandlerSetup(t)
-
 	queries := store.New(db)
+	ctx := context.Background()
 
-	menu, err := queries.CreateMenu(context.Background(), store.CreateMenuParams{
-		Name: "Original Menu",
-		Slug: "original-menu",
-	})
+	// Setup: create original menu
+	original, err := queries.CreateMenu(ctx, store.CreateMenuParams{Name: "Original Menu", Slug: "original-menu"})
 	if err != nil {
-		t.Fatalf("CreateMenu failed: %v", err)
+		t.Fatalf("CreateMenu: %v", err)
 	}
 
-	_, err = queries.UpdateMenu(context.Background(), store.UpdateMenuParams{
-		ID:   menu.ID,
-		Name: "Updated Menu",
-		Slug: "updated-menu",
-	})
+	// Execute: update the menu
+	_, err = queries.UpdateMenu(ctx, store.UpdateMenuParams{ID: original.ID, Name: "Updated Menu", Slug: "updated-menu"})
 	if err != nil {
-		t.Fatalf("UpdateMenu failed: %v", err)
+		t.Fatalf("UpdateMenu: %v", err)
 	}
 
-	updated, err := queries.GetMenuByID(context.Background(), menu.ID)
+	// Verify: check the update was persisted
+	result, err := queries.GetMenuByID(ctx, original.ID)
 	if err != nil {
-		t.Fatalf("GetMenuByID failed: %v", err)
+		t.Fatalf("GetMenuByID: %v", err)
 	}
-
-	if updated.Name != "Updated Menu" {
-		t.Errorf("Name = %q, want %q", updated.Name, "Updated Menu")
+	if result.Name != "Updated Menu" {
+		t.Errorf("got Name=%q, want Updated Menu", result.Name)
 	}
 }
 
 func TestMenuDelete(t *testing.T) {
 	db, _ := testHandlerSetup(t)
-
 	queries := store.New(db)
+	ctx := context.Background()
 
-	menu, err := queries.CreateMenu(context.Background(), store.CreateMenuParams{
-		Name: "To Delete",
-		Slug: "to-delete",
-	})
+	// Setup: create a menu to delete
+	toDelete, err := queries.CreateMenu(ctx, store.CreateMenuParams{Name: "To Delete", Slug: "to-delete"})
 	if err != nil {
-		t.Fatalf("CreateMenu failed: %v", err)
+		t.Fatalf("CreateMenu: %v", err)
 	}
 
-	if err := queries.DeleteMenu(context.Background(), menu.ID); err != nil {
-		t.Fatalf("DeleteMenu failed: %v", err)
+	// Execute: delete it
+	err = queries.DeleteMenu(ctx, toDelete.ID)
+	if err != nil {
+		t.Fatalf("DeleteMenu: %v", err)
 	}
 
-	_, err = queries.GetMenuByID(context.Background(), menu.ID)
+	// Verify: confirm it no longer exists
+	_, err = queries.GetMenuByID(ctx, toDelete.ID)
 	if err == nil {
-		t.Error("expected error when getting deleted menu")
+		t.Error("menu should not exist after deletion")
 	}
 }
 
@@ -374,34 +365,34 @@ func TestMenuItemDelete(t *testing.T) {
 
 func TestMenuSlugExists(t *testing.T) {
 	db, _ := testHandlerSetup(t)
-
 	queries := store.New(db)
+	ctx := context.Background()
 
-	_, err := queries.CreateMenu(context.Background(), store.CreateMenuParams{
-		Name: "Existing Menu",
-		Slug: "existing-menu",
-	})
+	// Create menu to test against
+	_, err := queries.CreateMenu(ctx, store.CreateMenuParams{Name: "Existing Menu", Slug: "existing-menu"})
 	if err != nil {
-		t.Fatalf("CreateMenu failed: %v", err)
+		t.Fatalf("setup CreateMenu: %v", err)
 	}
 
+	// Subtest for existing slug
 	t.Run("exists", func(t *testing.T) {
-		count, err := queries.MenuSlugExists(context.Background(), "existing-menu")
-		if err != nil {
-			t.Fatalf("MenuSlugExists failed: %v", err)
+		count, checkErr := queries.MenuSlugExists(ctx, "existing-menu")
+		if checkErr != nil {
+			t.Fatal(checkErr)
 		}
 		if count == 0 {
-			t.Error("expected slug to exist")
+			t.Error("slug should exist")
 		}
 	})
 
+	// Subtest for non-existing slug
 	t.Run("not exists", func(t *testing.T) {
-		count, err := queries.MenuSlugExists(context.Background(), "nonexistent-menu")
-		if err != nil {
-			t.Fatalf("MenuSlugExists failed: %v", err)
+		count, checkErr := queries.MenuSlugExists(ctx, "nonexistent-menu")
+		if checkErr != nil {
+			t.Fatal(checkErr)
 		}
 		if count != 0 {
-			t.Error("expected slug to not exist")
+			t.Error("slug should not exist")
 		}
 	})
 }
