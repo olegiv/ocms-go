@@ -10,17 +10,9 @@ import (
 	"testing"
 )
 
-// TestImportFromElefant tests importing from Elefant CMS.
-// Run with: go test -tags=integration -v ./modules/migrator/sources/elefant/...
-func TestImportFromElefant(t *testing.T) {
-	// Skip if env vars not set
-	if os.Getenv("ELEFANT_HOST") == "" {
-		t.Skip("ELEFANT_HOST not set, skipping integration test")
-	}
-
-	source := NewSource()
-
-	cfg := map[string]string{
+// buildTestConfig creates configuration from environment variables for integration tests.
+func buildTestConfig() map[string]string {
+	return map[string]string{
 		"mysql_host":     os.Getenv("ELEFANT_HOST"),
 		"mysql_port":     os.Getenv("ELEFANT_PORT"),
 		"mysql_user":     os.Getenv("ELEFANT_USER"),
@@ -28,6 +20,23 @@ func TestImportFromElefant(t *testing.T) {
 		"mysql_database": os.Getenv("ELEFANT_DB"),
 		"table_prefix":   os.Getenv("ELEFANT_PREFIX"),
 	}
+}
+
+// skipIfNoConfig skips the test if ELEFANT_HOST is not set.
+func skipIfNoConfig(t *testing.T) {
+	t.Helper()
+	if os.Getenv("ELEFANT_HOST") == "" {
+		t.Skip("ELEFANT_HOST not set, skipping integration test")
+	}
+}
+
+// TestImportFromElefant tests importing from Elefant CMS.
+// Run with: go test -tags=integration -v ./modules/migrator/sources/elefant/...
+func TestImportFromElefant(t *testing.T) {
+	skipIfNoConfig(t)
+
+	source := NewSource()
+	cfg := buildTestConfig()
 
 	t.Logf("Config: host=%s, port=%s, db=%s, prefix=%s",
 		cfg["mysql_host"], cfg["mysql_port"], cfg["mysql_database"], cfg["table_prefix"])
@@ -70,21 +79,10 @@ func TestImportFromElefant(t *testing.T) {
 
 // TestSlugGeneration tests that slugs are generated from titles.
 func TestSlugGeneration(t *testing.T) {
-	// Skip if env vars not set
-	if os.Getenv("ELEFANT_HOST") == "" {
-		t.Skip("ELEFANT_HOST not set, skipping integration test")
-	}
+	skipIfNoConfig(t)
 
 	source := NewSource()
-	cfg := map[string]string{
-		"mysql_host":     os.Getenv("ELEFANT_HOST"),
-		"mysql_port":     os.Getenv("ELEFANT_PORT"),
-		"mysql_user":     os.Getenv("ELEFANT_USER"),
-		"mysql_password": os.Getenv("ELEFANT_PASSWORD"),
-		"mysql_database": os.Getenv("ELEFANT_DB"),
-		"table_prefix":   os.Getenv("ELEFANT_PREFIX"),
-	}
-
+	cfg := buildTestConfig()
 	dsn := source.buildDSN(cfg)
 	reader, err := NewReader(dsn, cfg["table_prefix"])
 	if err != nil {
