@@ -140,34 +140,38 @@ const (
 
 // listPagesByFilter returns pages filtered by category or tag with published-only option.
 func (h *Handler) listPagesByFilter(ctx context.Context, publishedOnly bool, filterType pageFilterType, filterID, limit, offset int64) ([]store.Page, int64, error) {
-	// Build query functions based on filter type and published status
-	if filterType == filterByCategory {
-		if publishedOnly {
-			return handler.ListAndCount(
-				func() ([]store.Page, error) {
-					return h.queries.ListPublishedPagesByCategory(ctx, store.ListPublishedPagesByCategoryParams{CategoryID: filterID, Limit: limit, Offset: offset})
-				},
-				func() (int64, error) { return h.queries.CountPublishedPagesByCategory(ctx, filterID) })
+	// Select query functions based on filter type and published status
+	var listFn func() ([]store.Page, error)
+	var countFn func() (int64, error)
+
+	switch {
+	case filterType == filterByCategory && publishedOnly:
+		listFn = func() ([]store.Page, error) {
+			return h.queries.ListPublishedPagesByCategory(ctx, store.ListPublishedPagesByCategoryParams{
+				CategoryID: filterID, Limit: limit, Offset: offset})
 		}
-		return handler.ListAndCount(
-			func() ([]store.Page, error) {
-				return h.queries.ListPagesByCategory(ctx, store.ListPagesByCategoryParams{CategoryID: filterID, Limit: limit, Offset: offset})
-			},
-			func() (int64, error) { return h.queries.CountPagesByCategory(ctx, filterID) })
+		countFn = func() (int64, error) { return h.queries.CountPublishedPagesByCategory(ctx, filterID) }
+	case filterType == filterByCategory:
+		listFn = func() ([]store.Page, error) {
+			return h.queries.ListPagesByCategory(ctx, store.ListPagesByCategoryParams{
+				CategoryID: filterID, Limit: limit, Offset: offset})
+		}
+		countFn = func() (int64, error) { return h.queries.CountPagesByCategory(ctx, filterID) }
+	case publishedOnly: // filterByTag
+		listFn = func() ([]store.Page, error) {
+			return h.queries.ListPublishedPagesForTag(ctx, store.ListPublishedPagesForTagParams{
+				TagID: filterID, Limit: limit, Offset: offset})
+		}
+		countFn = func() (int64, error) { return h.queries.CountPublishedPagesForTag(ctx, filterID) }
+	default: // filterByTag, all pages
+		listFn = func() ([]store.Page, error) {
+			return h.queries.GetPagesForTag(ctx, store.GetPagesForTagParams{
+				TagID: filterID, Limit: limit, Offset: offset})
+		}
+		countFn = func() (int64, error) { return h.queries.CountPagesForTag(ctx, filterID) }
 	}
-	// filterByTag
-	if publishedOnly {
-		return handler.ListAndCount(
-			func() ([]store.Page, error) {
-				return h.queries.ListPublishedPagesForTag(ctx, store.ListPublishedPagesForTagParams{TagID: filterID, Limit: limit, Offset: offset})
-			},
-			func() (int64, error) { return h.queries.CountPublishedPagesForTag(ctx, filterID) })
-	}
-	return handler.ListAndCount(
-		func() ([]store.Page, error) {
-			return h.queries.GetPagesForTag(ctx, store.GetPagesForTagParams{TagID: filterID, Limit: limit, Offset: offset})
-		},
-		func() (int64, error) { return h.queries.CountPagesForTag(ctx, filterID) })
+
+	return handler.ListAndCount(listFn, countFn)
 }
 
 // storePageToResponse converts a store.Page to PageResponse.
