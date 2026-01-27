@@ -5346,6 +5346,11 @@
             "id": "editor.alt_hint",
             "message": "Describes the image for screen readers and SEO",
             "translation": "Describes the image for screen readers and SEO"
+        },
+        {
+            "id": "editor.code_block",
+            "message": "Code Block",
+            "translation": "Code Block"
         }
     ]
 }
