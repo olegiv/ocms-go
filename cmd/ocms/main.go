@@ -482,6 +482,7 @@ func run() error {
 		r.Get(handler.RouteRoot, frontendHandler.Home)
 		r.Get("/sitemap.xml", frontendHandler.Sitemap)
 		r.Get("/robots.txt", frontendHandler.Robots)
+		r.Get("/.well-known/security.txt", frontendHandler.Security)
 		r.Get(handler.RouteSuffixSearch, frontendHandler.Search)
 		r.Get(handler.RouteBlog, frontendHandler.Blog)
 		r.Get(handler.RouteCategorySlug, frontendHandler.Category)

@@ -1217,6 +1217,57 @@ func (h *FrontendHandler) Robots(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(robotsContent))
 }
 
+// Security generates and serves the security.txt file (RFC 9116).
+func (h *FrontendHandler) Security(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	siteURL := h.getSiteURL(ctx, r)
+
+	// Get security contact from config
+	var contact string
+	if h.cacheManager != nil {
+		contact, _ = h.cacheManager.GetConfig(ctx, "security_contact")
+	} else if cfg, err := h.queries.GetConfigByKey(ctx, "security_contact"); err == nil {
+		contact = cfg.Value
+	}
+
+	// If no contact configured, return 404
+	if contact == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Get optional security policy URL
+	var policy string
+	if h.cacheManager != nil {
+		policy, _ = h.cacheManager.GetConfig(ctx, "security_policy")
+	} else if cfg, err := h.queries.GetConfigByKey(ctx, "security_policy"); err == nil {
+		policy = cfg.Value
+	}
+
+	// Build security.txt with 1 year expiry
+	config := seo.SecurityTxtConfig{
+		Contact:            []string{contact},
+		PreferredLanguages: "en",
+	}
+
+	if policy != "" {
+		config.Policy = policy
+	}
+
+	// Set canonical URL
+	if siteURL != "" {
+		config.Canonical = siteURL + "/.well-known/security.txt"
+	}
+
+	builder := seo.NewSecurityTxtBuilder(config)
+	securityContent := builder.Build()
+
+	// Send response
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=86400") // Cache for 24 hours
+	_, _ = w.Write([]byte(securityContent))
+}
+
 // pageToView converts a store.Page to a PageView with computed fields.
 func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page) PageView {
 	pv := PageView{
