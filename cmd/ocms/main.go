@@ -362,10 +362,17 @@ func run() error {
 		slog.Warn("failed to load themes", "error", err)
 	}
 
+	// Determine active theme: database config takes priority over environment variable
+	activeTheme := cfg.ActiveTheme
+	if dbConfig, err := queries.GetConfigByKey(ctx, "active_theme"); err == nil && dbConfig.Value != "" {
+		activeTheme = dbConfig.Value
+		slog.Info("active theme loaded from database", "theme", activeTheme)
+	}
+
 	// Set active theme
-	if themeManager.HasTheme(cfg.ActiveTheme) {
-		if err := themeManager.SetActiveTheme(cfg.ActiveTheme); err != nil {
-			slog.Warn("failed to set active theme", "theme", cfg.ActiveTheme, "error", err)
+	if themeManager.HasTheme(activeTheme) {
+		if err := themeManager.SetActiveTheme(activeTheme); err != nil {
+			slog.Warn("failed to set active theme", "theme", activeTheme, "error", err)
 		}
 	} else if themeManager.ThemeCount() > 0 {
 		// Fall back to first available theme

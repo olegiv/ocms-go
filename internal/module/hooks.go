@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"sync"
 )
 
@@ -161,7 +162,7 @@ func (h *HookRegistry) HandlerCount(hookName string) int {
 	return len(h.hooks[hookName])
 }
 
-// ListHooks returns all registered hook names.
+// ListHooks returns all registered hook names, sorted alphabetically.
 func (h *HookRegistry) ListHooks() []string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -170,6 +171,7 @@ func (h *HookRegistry) ListHooks() []string {
 	for name := range h.hooks {
 		names = append(names, name)
 	}
+	sort.Strings(names)
 	return names
 }
 
@@ -186,7 +188,7 @@ type HookHandlerInfo struct {
 	Priority int
 }
 
-// ListHookInfo returns detailed information about all registered hooks.
+// ListHookInfo returns detailed information about all registered hooks, sorted by name.
 func (h *HookRegistry) ListHookInfo() []HookInfo {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -206,6 +208,12 @@ func (h *HookRegistry) ListHookInfo() []HookInfo {
 			Handlers: handlerInfos,
 		})
 	}
+
+	// Sort by hook name for consistent ordering
+	sort.Slice(infos, func(i, j int) bool {
+		return infos[i].Name < infos[j].Name
+	})
+
 	return infos
 }
 
