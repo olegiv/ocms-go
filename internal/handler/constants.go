@@ -43,6 +43,8 @@ const (
 	RouteLogin = "/login"
 	// RouteLogout is the logout route.
 	RouteLogout = "/logout"
+	// RouteLanguage is the public language switch route.
+	RouteLanguage = "/language"
 	// RouteBlog is the blog route.
 	RouteBlog = "/blog"
 

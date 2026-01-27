@@ -219,6 +219,31 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	flashAndRedirect(w, r, h.renderer, redirectLogin, i18n.T(lang, "auth.logged_out"), "info")
 }
 
+// SetLanguage changes the UI language preference on the login page.
+// POST /language
+func (h *AuthHandler) SetLanguage(w http.ResponseWriter, r *http.Request) {
+	lang := r.FormValue("lang")
+	if lang == "" {
+		lang = "en"
+	}
+
+	// Validate the language code
+	if !i18n.IsSupported(lang) {
+		lang = "en"
+	}
+
+	// Set the language preference in session
+	h.renderer.SetAdminLang(r, lang)
+
+	// Redirect back to the referring page, or login page if not available
+	referer := r.Header.Get("Referer")
+	if referer == "" {
+		referer = redirectLogin
+	}
+
+	http.Redirect(w, r, referer, http.StatusSeeOther)
+}
+
 // formatDuration formats a duration into a human-readable string.
 func formatDuration(d time.Duration) string {
 	if d < time.Minute {

@@ -508,6 +508,7 @@ func run() error {
 		r.With(loginProtection.Middleware()).Post(handler.RouteLogin, authHandler.Login)
 		r.Get(handler.RouteLogout, authHandler.Logout)
 		r.Post(handler.RouteLogout, authHandler.Logout)
+		r.Post(handler.RouteLanguage, authHandler.SetLanguage)
 	})
 
 	// Session test routes (development only)
