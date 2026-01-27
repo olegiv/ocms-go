@@ -84,7 +84,7 @@
                     {{end}}
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" x-data="passwordStrength()">
                     <label for="password" class="form-label">{{T .AdminLang "label.password"}}{{if not .Data.IsEdit}} <span class="required">*</span>{{end}}</label>
                     <input
                         type="password"
@@ -92,9 +92,17 @@
                         name="password"
                         class="form-input{{if index .Data.Errors "password"}} is-invalid{{end}}"
                         placeholder="{{if .Data.IsEdit}}{{T .AdminLang "users.new_password_placeholder"}}{{else}}{{T .AdminLang "users.password_placeholder"}}{{end}}"
-                        minlength="8"
+                        minlength="12"
                         {{if not .Data.IsEdit}}required{{end}}
+                        x-model="password"
+                        @input="checkStrength()"
                     >
+                    <div class="password-strength" x-show="password.length > 0">
+                        <div class="password-strength-bar">
+                            <div class="password-strength-fill" :class="strengthClass" :style="'width: ' + strengthPercent + '%'"></div>
+                        </div>
+                        <span class="password-strength-text" :class="strengthClass" x-text="strengthText"></span>
+                    </div>
                     {{if index .Data.Errors "password"}}
                     <span class="form-error">{{index .Data.Errors "password"}}</span>
                     {{else}}
@@ -110,7 +118,7 @@
                         name="password_confirm"
                         class="form-input{{if index .Data.Errors "password_confirm"}} is-invalid{{end}}"
                         placeholder="{{T .AdminLang "users.confirm_password_placeholder"}}"
-                        minlength="8"
+                        minlength="12"
                         {{if not .Data.IsEdit}}required{{end}}
                     >
                     {{if index .Data.Errors "password_confirm"}}

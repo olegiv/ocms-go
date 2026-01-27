@@ -2474,8 +2474,8 @@
         },
         {
             "id": "users.password_min_hint",
-            "message": "Minimum 8 characters",
-            "translation": "Минимум 8 символов"
+            "message": "Minimum 12 characters",
+            "translation": "Минимум 12 символов"
         },
         {
             "id": "users.confirm_password_placeholder",
