@@ -9,12 +9,12 @@ linters:
   disable-all: true
   enable:
     # Default linters
-    - errcheck      # Check for unchecked errors
+    - errcheck      # Check for unchecked errors (including in tests!)
     - gosimple      # Simplify code
     - govet         # Report suspicious constructs
     - ineffassign   # Detect unused assignments
     - staticcheck   # Static analysis checks
-    - unused        # Check for unused code
+    - unused        # Check for unused code (constants, variables, types)
 
     # Additional linters for issues IDE catches
     - unconvert     # Remove unnecessary type conversions
@@ -22,7 +22,7 @@ linters:
     - gocritic      # Checks for bugs, performance, style issues
 
     # Code quality
-    - dupl          # Code clone detection
+    - dupl          # Code clone detection (including tests!)
     - gocyclo       # Cyclomatic complexity
     - misspell      # Spelling mistakes in comments
 
@@ -52,6 +52,11 @@ linters-settings:
     fast-math: false
     safe: false
 
+  errcheck:
+    # Check for errors in deferred Close() calls
+    check-type-assertions: false
+    check-blank: false
+
 issues:
   exclude-dirs:
     - vendor
@@ -60,16 +65,13 @@ issues:
     - ".*\\.sql\\.go$"  # Exclude sqlc generated files
 
   exclude-rules:
-    # Exclude some linters from running on tests
+    # Exclude dupl and gocyclo from test files
+    # Test files commonly have similar patterns (table-driven tests, setup/teardown)
+    # and high complexity is acceptable for comprehensive test coverage
     - path: _test\.go
       linters:
         - dupl
         - gocyclo
-
-    # Exclude frontend.go dupl - category and tag handlers have similar structure
-    - path: internal/handler/frontend\.go
-      linters:
-        - dupl
 
     # Exclude some staticcheck messages
     - linters:
