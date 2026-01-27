@@ -112,7 +112,7 @@ func TestSource_ConfigFields(t *testing.T) {
 
 func TestImportUsers_Success(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	queries := store.New(db)
 	tracker := &mockTracker{}
@@ -187,7 +187,7 @@ func TestImportUsers_Success(t *testing.T) {
 
 func TestImportUsers_SkipExisting(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	queries := store.New(db)
 	ctx := context.Background()
@@ -221,7 +221,7 @@ func TestImportUsers_SkipExisting(t *testing.T) {
 
 func TestImportUsers_DuplicateEmail(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	queries := store.New(db)
 	ctx := context.Background()
@@ -256,7 +256,7 @@ func TestImportUsers_DuplicateEmail(t *testing.T) {
 
 func TestImportUsers_PublicRoleOnly(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	queries := store.New(db)
 	ctx := context.Background()

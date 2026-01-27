@@ -189,8 +189,8 @@ func TestScanMediaFiles_FileNotDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tempFile.Name())
-	tempFile.Close()
+	defer func() { _ = os.Remove(tempFile.Name()) }()
+	_ = tempFile.Close()
 
 	_, err = ScanMediaFiles(tempFile.Name())
 	if err == nil {
@@ -364,7 +364,7 @@ func TestMakeUniqueSlug(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open test database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Create full pages table matching the schema
 	_, err = db.Exec(`

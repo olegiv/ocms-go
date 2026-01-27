@@ -669,6 +669,49 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	h.render(w, "page", data)
 }
 
+// archivePageFetcher provides a generic interface for fetching archive pages.
+// This reduces duplication between category and tag archive handlers.
+type archivePageFetcher struct {
+	// listWithLang fetches pages with language filter
+	listWithLang func(ctx context.Context, langID int64, limit, offset int64) ([]store.Page, error)
+	// listAll fetches pages without language filter
+	listAll func(ctx context.Context, limit, offset int64) ([]store.Page, error)
+	// countWithLang counts pages with language filter
+	countWithLang func(ctx context.Context, langID int64) (int64, error)
+	// countAll counts pages without language filter
+	countAll func(ctx context.Context) (int64, error)
+}
+
+// fetch retrieves pages and total count based on language filter.
+func (f *archivePageFetcher) fetch(ctx context.Context, languageID int64, limit, offset int64) ([]store.Page, int64, error) {
+	var pages []store.Page
+	var total int64
+	var err error
+
+	if languageID > 0 {
+		pages, err = f.listWithLang(ctx, languageID, limit, offset)
+		if err != nil {
+			return nil, 0, err
+		}
+		total, err = f.countWithLang(ctx, languageID)
+		if err != nil {
+			// Non-fatal: log warning and continue with zero total
+			total = 0
+		}
+	} else {
+		pages, err = f.listAll(ctx, limit, offset)
+		if err != nil {
+			return nil, 0, err
+		}
+		total, err = f.countAll(ctx)
+		if err != nil {
+			total = 0
+		}
+	}
+
+	return pages, total, nil
+}
+
 // Category handles category archive display.
 func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -696,48 +739,40 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 	page := h.getPageNum(r)
 	offset := (page - 1) * defaultPerPage
 
-	// Get pages in category filtered by language
-	var pages []store.Page
-	var total int64
+	// Fetch pages using the archive fetcher pattern
+	//nolint:dupl // Category and Tag handlers have similar fetcher structure by design
+	fetcher := &archivePageFetcher{
+		listWithLang: func(ctx context.Context, langID int64, limit, offset int64) ([]store.Page, error) {
+			return h.queries.ListPublishedPagesByCategoryAndLanguage(ctx, store.ListPublishedPagesByCategoryAndLanguageParams{
+				CategoryID: category.ID,
+				LanguageID: sql.NullInt64{Int64: langID, Valid: true},
+				Limit:      limit,
+				Offset:     offset,
+			})
+		},
+		listAll: func(ctx context.Context, limit, offset int64) ([]store.Page, error) {
+			return h.queries.ListPublishedPagesByCategory(ctx, store.ListPublishedPagesByCategoryParams{
+				CategoryID: category.ID,
+				Limit:      limit,
+				Offset:     offset,
+			})
+		},
+		countWithLang: func(ctx context.Context, langID int64) (int64, error) {
+			return h.queries.CountPublishedPagesByCategoryAndLanguage(ctx, store.CountPublishedPagesByCategoryAndLanguageParams{
+				CategoryID: category.ID,
+				LanguageID: sql.NullInt64{Int64: langID, Valid: true},
+			})
+		},
+		countAll: func(ctx context.Context) (int64, error) {
+			return h.queries.CountPublishedPagesByCategory(ctx, category.ID)
+		},
+	}
 
-	if languageID > 0 {
-		pages, err = h.queries.ListPublishedPagesByCategoryAndLanguage(ctx, store.ListPublishedPagesByCategoryAndLanguageParams{
-			CategoryID: category.ID,
-			LanguageID: sql.NullInt64{Int64: languageID, Valid: true},
-			Limit:      int64(defaultPerPage),
-			Offset:     int64(offset),
-		})
-		if err != nil {
-			h.logger.Error("failed to get pages for category", "category", slug, "error", err)
-			h.renderInternalError(w)
-			return
-		}
-
-		total, err = h.queries.CountPublishedPagesByCategoryAndLanguage(ctx, store.CountPublishedPagesByCategoryAndLanguageParams{
-			CategoryID: category.ID,
-			LanguageID: sql.NullInt64{Int64: languageID, Valid: true},
-		})
-		if err != nil {
-			h.logger.Error("failed to count pages for category", "error", err)
-			total = 0
-		}
-	} else {
-		pages, err = h.queries.ListPublishedPagesByCategory(ctx, store.ListPublishedPagesByCategoryParams{
-			CategoryID: category.ID,
-			Limit:      int64(defaultPerPage),
-			Offset:     int64(offset),
-		})
-		if err != nil {
-			h.logger.Error("failed to get pages for category", "category", slug, "error", err)
-			h.renderInternalError(w)
-			return
-		}
-
-		total, err = h.queries.CountPublishedPagesByCategory(ctx, category.ID)
-		if err != nil {
-			h.logger.Error("failed to count pages for category", "error", err)
-			total = 0
-		}
+	pages, total, err := fetcher.fetch(ctx, languageID, int64(defaultPerPage), int64(offset))
+	if err != nil {
+		h.logger.Error("failed to get pages for category", "category", slug, "error", err)
+		h.renderInternalError(w)
+		return
 	}
 
 	// Convert to PageViews
@@ -806,48 +841,40 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 	page := h.getPageNum(r)
 	offset := (page - 1) * defaultPerPage
 
-	// Get pages with tag filtered by language
-	var pages []store.Page
-	var total int64
+	// Fetch pages using the archive fetcher pattern
+	//nolint:dupl // Category and Tag handlers have similar fetcher structure by design
+	fetcher := &archivePageFetcher{
+		listWithLang: func(ctx context.Context, langID int64, limit, offset int64) ([]store.Page, error) {
+			return h.queries.ListPublishedPagesForTagAndLanguage(ctx, store.ListPublishedPagesForTagAndLanguageParams{
+				TagID:      tag.ID,
+				LanguageID: sql.NullInt64{Int64: langID, Valid: true},
+				Limit:      limit,
+				Offset:     offset,
+			})
+		},
+		listAll: func(ctx context.Context, limit, offset int64) ([]store.Page, error) {
+			return h.queries.ListPublishedPagesForTag(ctx, store.ListPublishedPagesForTagParams{
+				TagID:  tag.ID,
+				Limit:  limit,
+				Offset: offset,
+			})
+		},
+		countWithLang: func(ctx context.Context, langID int64) (int64, error) {
+			return h.queries.CountPublishedPagesForTagAndLanguage(ctx, store.CountPublishedPagesForTagAndLanguageParams{
+				TagID:      tag.ID,
+				LanguageID: sql.NullInt64{Int64: langID, Valid: true},
+			})
+		},
+		countAll: func(ctx context.Context) (int64, error) {
+			return h.queries.CountPublishedPagesForTag(ctx, tag.ID)
+		},
+	}
 
-	if languageID > 0 {
-		pages, err = h.queries.ListPublishedPagesForTagAndLanguage(ctx, store.ListPublishedPagesForTagAndLanguageParams{
-			TagID:      tag.ID,
-			LanguageID: sql.NullInt64{Int64: languageID, Valid: true},
-			Limit:      int64(defaultPerPage),
-			Offset:     int64(offset),
-		})
-		if err != nil {
-			h.logger.Error("failed to get pages for tag", "tag", slug, "error", err)
-			h.renderInternalError(w)
-			return
-		}
-
-		total, err = h.queries.CountPublishedPagesForTagAndLanguage(ctx, store.CountPublishedPagesForTagAndLanguageParams{
-			TagID:      tag.ID,
-			LanguageID: sql.NullInt64{Int64: languageID, Valid: true},
-		})
-		if err != nil {
-			h.logger.Error("failed to count pages for tag", "error", err)
-			total = 0
-		}
-	} else {
-		pages, err = h.queries.ListPublishedPagesForTag(ctx, store.ListPublishedPagesForTagParams{
-			TagID:  tag.ID,
-			Limit:  int64(defaultPerPage),
-			Offset: int64(offset),
-		})
-		if err != nil {
-			h.logger.Error("failed to get pages for tag", "tag", slug, "error", err)
-			h.renderInternalError(w)
-			return
-		}
-
-		total, err = h.queries.CountPublishedPagesForTag(ctx, tag.ID)
-		if err != nil {
-			h.logger.Error("failed to count pages for tag", "error", err)
-			total = 0
-		}
+	pages, total, err := fetcher.fetch(ctx, languageID, int64(defaultPerPage), int64(offset))
+	if err != nil {
+		h.logger.Error("failed to get pages for tag", "tag", slug, "error", err)
+		h.renderInternalError(w)
+		return
 	}
 
 	// Convert to PageViews

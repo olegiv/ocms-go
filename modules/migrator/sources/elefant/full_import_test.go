@@ -49,7 +49,7 @@ func TestFullImport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open oCMS database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Verify database is accessible
 	var userCount int
@@ -106,7 +106,7 @@ func TestFullImport(t *testing.T) {
 	// Show some imported pages
 	rows, err := db.Query("SELECT id, title, slug, status FROM pages ORDER BY id DESC LIMIT 5")
 	if err == nil {
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		t.Logf("=== RECENT PAGES ===")
 		for rows.Next() {
 			var id int64

@@ -42,7 +42,7 @@ func setupEventTestDB(t *testing.T) *sql.DB {
 
 func TestNewEventService(t *testing.T) {
 	db := setupEventTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := NewEventService(db)
 	if svc == nil {
@@ -52,7 +52,7 @@ func TestNewEventService(t *testing.T) {
 
 func TestLogEvent(t *testing.T) {
 	db := setupEventTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := NewEventService(db)
 	ctx := context.Background()
@@ -102,7 +102,7 @@ func TestLogEvent(t *testing.T) {
 
 func TestLogEvent_NilUserID(t *testing.T) {
 	db := setupEventTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := NewEventService(db)
 	ctx := context.Background()
@@ -125,7 +125,7 @@ func TestLogEvent_NilUserID(t *testing.T) {
 
 func TestLogEvent_NilMetadata(t *testing.T) {
 	db := setupEventTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := NewEventService(db)
 	ctx := context.Background()
@@ -148,7 +148,7 @@ func TestLogEvent_NilMetadata(t *testing.T) {
 
 func TestLogInfo(t *testing.T) {
 	db := setupEventTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := NewEventService(db)
 	ctx := context.Background()
@@ -170,7 +170,7 @@ func TestLogInfo(t *testing.T) {
 
 func TestLogWarning(t *testing.T) {
 	db := setupEventTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := NewEventService(db)
 	ctx := context.Background()
@@ -192,7 +192,7 @@ func TestLogWarning(t *testing.T) {
 
 func TestLogError(t *testing.T) {
 	db := setupEventTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := NewEventService(db)
 	ctx := context.Background()
@@ -214,7 +214,7 @@ func TestLogError(t *testing.T) {
 
 func TestLogMigratorEvent(t *testing.T) {
 	db := setupEventTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := NewEventService(db)
 	ctx := context.Background()
@@ -249,7 +249,7 @@ func TestLogMigratorEvent(t *testing.T) {
 
 func TestLogAuthEvent(t *testing.T) {
 	db := setupEventTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := NewEventService(db)
 	ctx := context.Background()
@@ -271,7 +271,7 @@ func TestLogAuthEvent(t *testing.T) {
 
 func TestLogPageEvent(t *testing.T) {
 	db := setupEventTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := NewEventService(db)
 	ctx := context.Background()
@@ -293,7 +293,7 @@ func TestLogPageEvent(t *testing.T) {
 
 func TestLogUserEvent(t *testing.T) {
 	db := setupEventTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := NewEventService(db)
 	ctx := context.Background()
@@ -315,7 +315,7 @@ func TestLogUserEvent(t *testing.T) {
 
 func TestLogConfigEvent(t *testing.T) {
 	db := setupEventTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := NewEventService(db)
 	ctx := context.Background()
@@ -337,7 +337,7 @@ func TestLogConfigEvent(t *testing.T) {
 
 func TestLogSystemEvent(t *testing.T) {
 	db := setupEventTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := NewEventService(db)
 	ctx := context.Background()
@@ -359,7 +359,7 @@ func TestLogSystemEvent(t *testing.T) {
 
 func TestLogCacheEvent(t *testing.T) {
 	db := setupEventTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := NewEventService(db)
 	ctx := context.Background()
@@ -381,7 +381,7 @@ func TestLogCacheEvent(t *testing.T) {
 
 func TestDeleteOldEvents(t *testing.T) {
 	db := setupEventTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := NewEventService(db)
 	ctx := context.Background()

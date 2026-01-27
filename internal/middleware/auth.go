@@ -176,7 +176,6 @@ func GetRequestPath(ctx context.Context) string {
 const (
 	RoleAdmin  = "admin"
 	RoleEditor = "editor"
-	RolePublic = "public" // Public users have no admin access
 )
 
 // roleLevel returns a numeric level for role hierarchy.
