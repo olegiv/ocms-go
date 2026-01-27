@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/olegiv/ocms-go/internal/imaging"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 	"github.com/olegiv/ocms-go/modules/migrator/types"
@@ -173,6 +174,14 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	if opts.ImportUsers {
 		if err := s.importUsers(ctx, queries, reader, opts, result, tracker); err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("Users import error: %v", err))
+		}
+	}
+
+	// Rebuild FTS index to ensure imported pages are searchable
+	if opts.ImportPosts {
+		searchService := service.NewSearchService(db)
+		if err := searchService.RebuildIndex(ctx); err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("FTS index rebuild error: %v", err))
 		}
 	}
 
