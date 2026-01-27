@@ -956,6 +956,41 @@ select.form-control {
   }
 }
 
+// Editor code block styles
+.editor-content {
+  .ProseMirror {
+    pre {
+      background-color: $gray-900;
+      color: $gray-100;
+      font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+      font-size: $font-size-sm;
+      padding: $spacing-4;
+      border-radius: $radius-md;
+      margin: $spacing-4 0;
+      overflow-x: auto;
+      line-height: 1.6;
+
+      code {
+        background: none;
+        color: inherit;
+        font-size: inherit;
+        padding: 0;
+        border-radius: 0;
+      }
+    }
+
+    // Inline code
+    code {
+      background-color: $gray-100;
+      color: $gray-800;
+      font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+      font-size: 0.875em;
+      padding: 0.125em 0.375em;
+      border-radius: $radius-sm;
+    }
+  }
+}
+
 // Editor image styles
 .editor-content {
   .ProseMirror {
