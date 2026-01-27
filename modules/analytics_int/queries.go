@@ -226,6 +226,7 @@ func getTechStats[T any, PT interface {
 	if err != nil {
 		return nil
 	}
+	defer func() { _ = rows.Close() }()
 	return scanViewStats[T, PT](rows, scanFunc)
 }
 
