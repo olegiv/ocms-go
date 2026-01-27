@@ -6,6 +6,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -198,5 +199,78 @@ func TestTrustedOriginsFormat(t *testing.T) {
 		if !hasPort {
 			t.Errorf("TrustedOrigin '%s' should include port (e.g., localhost:8080)", origin)
 		}
+	}
+}
+
+func TestValidateTrustedOrigins(t *testing.T) {
+	tests := []struct {
+		name    string
+		origins []string
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "valid host:port format",
+			origins: []string{"localhost:8080", "127.0.0.1:8080"},
+			wantErr: false,
+		},
+		{
+			name:    "valid single origin",
+			origins: []string{"example.com:443"},
+			wantErr: false,
+		},
+		{
+			name:    "empty list",
+			origins: []string{},
+			wantErr: false,
+		},
+		{
+			name:    "nil list",
+			origins: nil,
+			wantErr: false,
+		},
+		{
+			name:    "http URL rejected",
+			origins: []string{"http://localhost:8080"},
+			wantErr: true,
+			errMsg:  "must be host:port format, not full URL",
+		},
+		{
+			name:    "https URL rejected",
+			origins: []string{"https://example.com:443"},
+			wantErr: true,
+			errMsg:  "must be host:port format, not full URL",
+		},
+		{
+			name:    "trailing slash rejected",
+			origins: []string{"localhost:8080/"},
+			wantErr: true,
+			errMsg:  "should not have trailing slash",
+		},
+		{
+			name:    "mixed valid and invalid",
+			origins: []string{"localhost:8080", "http://invalid:8080"},
+			wantErr: true,
+			errMsg:  "must be host:port format, not full URL",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateTrustedOrigins(tt.origins)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("ValidateTrustedOrigins() expected error, got nil")
+					return
+				}
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("ValidateTrustedOrigins() error = %q, want error containing %q", err.Error(), tt.errMsg)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("ValidateTrustedOrigins() unexpected error: %v", err)
+				}
+			}
+		})
 	}
 }
