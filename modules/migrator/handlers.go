@@ -152,21 +152,27 @@ func collectSourceConfig(r *http.Request, source Source) map[string]string {
 	return cfg
 }
 
-// handleTestConnection handles POST /admin/migrator/{source}/test - tests connection.
-func (m *Module) handleTestConnection(w http.ResponseWriter, r *http.Request) {
+// parseSourceForm validates context, parses form, and collects config.
+// Returns nil context if validation failed (response already written).
+func (m *Module) parseSourceForm(w http.ResponseWriter, r *http.Request) (*sourceRequestContext, map[string]string) {
 	ctx, ok := m.getSourceContext(w, r)
 	if !ok {
-		return
+		return nil, nil
 	}
-
-	// Parse form
 	if err := r.ParseForm(); err != nil {
 		m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "migrator.error_parse_form"), "error")
 		http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
+		return nil, nil
+	}
+	return &ctx, collectSourceConfig(r, ctx.Source)
+}
+
+// handleTestConnection handles POST /admin/migrator/{source}/test - tests connection.
+func (m *Module) handleTestConnection(w http.ResponseWriter, r *http.Request) {
+	ctx, cfg := m.parseSourceForm(w, r)
+	if ctx == nil {
 		return
 	}
-
-	cfg := collectSourceConfig(r, ctx.Source)
 
 	// Test connection
 	if err := ctx.Source.TestConnection(cfg); err != nil {
@@ -186,19 +192,10 @@ func (m *Module) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 
 // handleImport handles POST /admin/migrator/{source}/import - runs import.
 func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
-	ctx, ok := m.getSourceContext(w, r)
-	if !ok {
+	ctx, cfg := m.parseSourceForm(w, r)
+	if ctx == nil {
 		return
 	}
-
-	// Parse form
-	if err := r.ParseForm(); err != nil {
-		m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "migrator.error_parse_form"), "error")
-		http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
-		return
-	}
-
-	cfg := collectSourceConfig(r, ctx.Source)
 
 	// Build import options
 	opts := ImportOptions{
