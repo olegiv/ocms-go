@@ -95,13 +95,14 @@ func TestLoad_SessionSecretTooShort(t *testing.T) {
 	}{
 		{"empty", ""},
 		{"short", "short"},
-		{"31_bytes", "1234567890123456789012345678901"}, // 31 bytes
+		{"15_bytes", "123456789012345"}, // 15 bytes (below dev minimum of 16)
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			os.Clearenv()
 			setEnv(t, "OCMS_SESSION_SECRET", tt.secret)
+			// Default env is development
 
 			_, err := Load()
 			if err == nil {
@@ -111,15 +112,43 @@ func TestLoad_SessionSecretTooShort(t *testing.T) {
 	}
 }
 
-func TestLoad_SessionSecretMinimumLength(t *testing.T) {
+func TestLoad_SessionSecretMinimumLength_Dev(t *testing.T) {
 	os.Clearenv()
-	// Exactly 32 bytes should work
-	secret32 := "12345678901234567890123456789012"
-	setEnv(t, "OCMS_SESSION_SECRET", secret32)
+	// Exactly 16 bytes should work in development
+	secret16 := "1234567890123456"
+	setEnv(t, "OCMS_SESSION_SECRET", secret16)
+	// OCMS_ENV defaults to "development"
 
 	cfg, err := Load()
 	if err != nil {
-		t.Fatalf("Load() should succeed with 32-byte secret: %v", err)
+		t.Fatalf("Load() should succeed with 16-byte secret in dev: %v", err)
+	}
+	if cfg.SessionSecret != secret16 {
+		t.Errorf("SessionSecret = %q, want %q", cfg.SessionSecret, secret16)
+	}
+}
+
+func TestLoad_SessionSecretMinimumLength_Prod(t *testing.T) {
+	os.Clearenv()
+	// 31 bytes should fail in production
+	secret31 := "1234567890123456789012345678901"
+	setEnv(t, "OCMS_SESSION_SECRET", secret31)
+	setEnv(t, "OCMS_ENV", "production")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail with 31-byte secret in production")
+	}
+
+	// 32 bytes should work in production
+	os.Clearenv()
+	secret32 := "12345678901234567890123456789012"
+	setEnv(t, "OCMS_SESSION_SECRET", secret32)
+	setEnv(t, "OCMS_ENV", "production")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() should succeed with 32-byte secret in production: %v", err)
 	}
 	if cfg.SessionSecret != secret32 {
 		t.Errorf("SessionSecret = %q, want %q", cfg.SessionSecret, secret32)
