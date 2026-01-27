@@ -257,6 +257,64 @@ func TestNewSearchService(t *testing.T) {
 	}
 }
 
+func TestSanitizeHighlight(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "empty string",
+			input: "",
+			want:  "",
+		},
+		{
+			name:  "clean highlight preserved",
+			input: "This is a <mark>test</mark> highlight",
+			want:  "This is a <mark>test</mark> highlight",
+		},
+		{
+			name:  "multiple marks preserved",
+			input: "<mark>mysql</mark> server with <mark>mysql</mark> client",
+			want:  "<mark>mysql</mark> server with <mark>mysql</mark> client",
+		},
+		{
+			name:  "html tags stripped but mark preserved",
+			input: `View the <mark>mysql</mark> guide <a href="test">here</a>`,
+			want:  "View the <mark>mysql</mark> guide here",
+		},
+		{
+			name:  "br tags removed",
+			input: `Line 1<br>Line 2 <mark>test</mark>`,
+			want:  "Line 1Line 2 <mark>test</mark>",
+		},
+		{
+			name:  "div and p tags removed",
+			input: `<div><p><mark>test</mark> content</p></div>`,
+			want:  "<mark>test</mark> content",
+		},
+		{
+			name:  "nested html with mark",
+			input: `<strong>Bold</strong> and <mark>highlighted</mark> text`,
+			want:  "Bold and <mark>highlighted</mark> text",
+		},
+		{
+			name:  "whitespace normalized",
+			input: "  <mark>test</mark>   result  ",
+			want:  "<mark>test</mark> result",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sanitizeHighlight(tt.input)
+			if got != tt.want {
+				t.Errorf("sanitizeHighlight(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 // Helper function
 func contains(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {

@@ -102,6 +102,11 @@ img {
     gap: var(--dev-space-2xl);
 }
 
+/* When sidebar is empty/not rendered, use full width */
+.dev-page-layout:not(:has(.dev-sidebar)) {
+    grid-template-columns: 1fr;
+}
+
 @media (max-width: 900px) {
     .dev-page-layout {
         grid-template-columns: 1fr;
@@ -1133,6 +1138,16 @@ img {
     padding: var(--dev-space-sm);
     border-radius: var(--dev-radius-sm);
     border-left: 3px solid var(--dev-accent);
+}
+
+/* Search results should use single column layout (no image column) */
+.dev-search-result {
+    grid-template-columns: 1fr;
+}
+
+.dev-search-result .dev-post-image {
+    max-width: 250px;
+    margin-bottom: var(--dev-space-md);
 }
 
 .dev-search-suggestions {
