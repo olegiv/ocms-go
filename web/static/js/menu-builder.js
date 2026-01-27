@@ -8,20 +8,31 @@
 
 const menuBuilderMethods = {
     /**
+     * Parse a single server item into client-side format
+     */
+    parseItem(item) {
+        return {
+            id: item.id,
+            title: item.title,
+            url: typeof item.url === 'string' ? item.url : (item.url?.String || ''),
+            target: typeof item.target === 'string' ? item.target : (item.target?.String || '_self'),
+            page_id: item.page_id?.Valid ? item.page_id.Int64 : null,
+            css_class: typeof item.css_class === 'string' ? item.css_class : (item.css_class?.String || ''),
+            is_active: item.is_active,
+            children: []
+        };
+    },
+
+    /**
      * Parse server items into client-side format
      */
     parseItems(serverItems) {
         if (!serverItems) return [];
-        return serverItems.map(node => ({
-            id: node.Item.id,
-            title: node.Item.title,
-            url: typeof node.Item.url === 'string' ? node.Item.url : (node.Item.url?.String || ''),
-            target: typeof node.Item.target === 'string' ? node.Item.target : (node.Item.target?.String || '_self'),
-            page_id: node.Item.page_id?.Valid ? node.Item.page_id.Int64 : null,
-            css_class: typeof node.Item.css_class === 'string' ? node.Item.css_class : (node.Item.css_class?.String || ''),
-            is_active: node.Item.is_active,
-            children: node.Children ? this.parseItems(node.Children) : []
-        }));
+        return serverItems.map(node => {
+            const item = this.parseItem(node.Item);
+            item.children = node.Children ? this.parseItems(node.Children) : [];
+            return item;
+        });
     },
 
     /**
@@ -112,17 +123,7 @@ const menuBuilderMethods = {
 
             if (response.ok) {
                 const data = await response.json();
-                const item = data.item;
-                this.items.push({
-                    id: item.id,
-                    title: item.title,
-                    url: typeof item.url === 'string' ? item.url : (item.url?.String || ''),
-                    target: typeof item.target === 'string' ? item.target : (item.target?.String || '_self'),
-                    page_id: item.page_id?.Valid ? item.page_id.Int64 : null,
-                    css_class: typeof item.css_class === 'string' ? item.css_class : (item.css_class?.String || ''),
-                    is_active: item.is_active,
-                    children: []
-                });
+                this.items.push(this.parseItem(data.item));
                 this.customLink = { title: '', url: '', target: '_self' };
             }
         } catch (e) {
@@ -147,17 +148,7 @@ const menuBuilderMethods = {
 
                 if (response.ok) {
                     const data = await response.json();
-                    const item = data.item;
-                    this.items.push({
-                        id: item.id,
-                        title: item.title,
-                        url: typeof item.url === 'string' ? item.url : (item.url?.String || ''),
-                        target: typeof item.target === 'string' ? item.target : (item.target?.String || '_self'),
-                        page_id: item.page_id?.Valid ? item.page_id.Int64 : null,
-                        css_class: typeof item.css_class === 'string' ? item.css_class : (item.css_class?.String || ''),
-                        is_active: item.is_active,
-                        children: []
-                    });
+                    this.items.push(this.parseItem(data.item));
                 }
             } catch (e) {
                 console.error('Failed to add page:', e);
