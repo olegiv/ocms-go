@@ -811,7 +811,9 @@ func run() error {
 			http.NotFound(w, r)
 			return
 		}
-		// Add cache headers for theme static files
+		// Security headers for static files
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 		w.Header().Set("Cache-Control", "public, max-age=2592000")
 		// Strip the prefix to get the file path
 		path := r.URL.Path
