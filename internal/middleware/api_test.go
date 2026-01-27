@@ -65,8 +65,8 @@ func executeRequest(handler http.Handler, method, path string) *httptest.Respons
 }
 
 // executeAuthRequest creates a test request with an auth header and executes it.
-func executeAuthRequest(handler http.Handler, method, path, authHeader string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(method, path, nil)
+func executeAuthRequest(handler http.Handler, authHeader string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	req.Header.Set("Authorization", authHeader)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -74,8 +74,8 @@ func executeAuthRequest(handler http.Handler, method, path, authHeader string) *
 }
 
 // executeWithAPIKey creates a test request with an API key in context and executes it.
-func executeWithAPIKey(handler http.Handler, method, path string, apiKey store.ApiKey) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(method, path, nil)
+func executeWithAPIKey(handler http.Handler, apiKey store.ApiKey) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	ctx := context.WithValue(req.Context(), ContextKeyAPIKey, apiKey)
 	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
@@ -184,7 +184,7 @@ func TestAPIKeyAuth_InvalidFormat(t *testing.T) {
 	}
 
 	for _, authHeader := range testCases {
-		w := executeAuthRequest(handler, "GET", "/api/test", authHeader)
+		w := executeAuthRequest(handler, authHeader)
 
 		if w.Code != http.StatusUnauthorized {
 			t.Errorf("auth header '%s': expected status %d, got %d", authHeader, http.StatusUnauthorized, w.Code)
@@ -197,7 +197,7 @@ func TestAPIKeyAuth_InvalidKey(t *testing.T) {
 	defer func() { _ = db.Close() }()
 
 	handler := APIKeyAuth(db)(simpleOKHandler)
-	w := executeAuthRequest(handler, "GET", "/api/test", "Bearer invalid-key-that-does-not-exist")
+	w := executeAuthRequest(handler, "Bearer invalid-key-that-does-not-exist")
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
@@ -210,7 +210,7 @@ func TestAPIKeyAuth_InactiveKey(t *testing.T) {
 
 	rawKey := insertTestAPIKey(t, db, "Inactive Key", []string{"pages:read"}, false, nil)
 	handler := APIKeyAuth(db)(simpleOKHandler)
-	w := executeAuthRequest(handler, "GET", "/api/test", "Bearer "+rawKey)
+	w := executeAuthRequest(handler, "Bearer "+rawKey)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
@@ -224,7 +224,7 @@ func TestAPIKeyAuth_ExpiredKey(t *testing.T) {
 	expires := time.Now().Add(-1 * time.Hour) // Expired 1 hour ago
 	rawKey := insertTestAPIKey(t, db, "Expired Key", []string{"pages:read"}, true, &expires)
 	handler := APIKeyAuth(db)(simpleOKHandler)
-	w := executeAuthRequest(handler, "GET", "/api/test", "Bearer "+rawKey)
+	w := executeAuthRequest(handler, "Bearer "+rawKey)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
@@ -259,7 +259,7 @@ func TestAPIKeyAuth_ValidKeyWithFutureExpiry(t *testing.T) {
 	expires := time.Now().Add(24 * time.Hour) // Expires in 24 hours
 	rawKey := insertTestAPIKey(t, db, "Future Expiry", []string{"pages:read"}, true, &expires)
 	handler := APIKeyAuth(db)(simpleOKHandler)
-	w := executeAuthRequest(handler, "GET", "/api/test", "Bearer "+rawKey)
+	w := executeAuthRequest(handler, "Bearer "+rawKey)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
@@ -355,7 +355,7 @@ func TestRequirePermission_NoAPIKey(t *testing.T) {
 func TestRequirePermission_HasPermission(t *testing.T) {
 	handler := RequirePermission("pages:read")(simpleOKHandler)
 	apiKey := store.ApiKey{ID: 1, Permissions: `["pages:read", "pages:write"]`}
-	w := executeWithAPIKey(handler, "GET", "/api/test", apiKey)
+	w := executeWithAPIKey(handler, apiKey)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
@@ -365,7 +365,7 @@ func TestRequirePermission_HasPermission(t *testing.T) {
 func TestRequirePermission_LacksPermission(t *testing.T) {
 	handler := RequirePermission("pages:write")(simpleOKHandler)
 	apiKey := store.ApiKey{ID: 1, Permissions: `["pages:read"]`}
-	w := executeWithAPIKey(handler, "GET", "/api/test", apiKey)
+	w := executeWithAPIKey(handler, apiKey)
 
 	if w.Code != http.StatusForbidden {
 		t.Errorf("expected status %d, got %d", http.StatusForbidden, w.Code)
@@ -375,7 +375,7 @@ func TestRequirePermission_LacksPermission(t *testing.T) {
 func TestRequireAnyPermission_HasOnePermission(t *testing.T) {
 	handler := RequireAnyPermission("pages:read", "pages:write")(simpleOKHandler)
 	apiKey := store.ApiKey{ID: 1, Permissions: `["pages:read"]`}
-	w := executeWithAPIKey(handler, "GET", "/api/test", apiKey)
+	w := executeWithAPIKey(handler, apiKey)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
@@ -385,7 +385,7 @@ func TestRequireAnyPermission_HasOnePermission(t *testing.T) {
 func TestRequireAnyPermission_LacksAllPermissions(t *testing.T) {
 	handler := RequireAnyPermission("media:read", "media:write")(simpleOKHandler)
 	apiKey := store.ApiKey{ID: 1, Permissions: `["pages:read"]`}
-	w := executeWithAPIKey(handler, "GET", "/api/test", apiKey)
+	w := executeWithAPIKey(handler, apiKey)
 
 	if w.Code != http.StatusForbidden {
 		t.Errorf("expected status %d, got %d", http.StatusForbidden, w.Code)
@@ -657,7 +657,7 @@ func TestGlobalRateLimiter_HTMLMiddleware(t *testing.T) {
 		t.Error("expected non-empty response body")
 	}
 	// Should not be JSON (which starts with {)
-	if len(body) > 0 && body[0] == '{' {
+	if body != "" && body[0] == '{' {
 		t.Error("expected plain text response, got JSON")
 	}
 }

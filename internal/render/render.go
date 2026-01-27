@@ -198,15 +198,9 @@ func (r *Renderer) ReloadTemplates() error {
 // templateFuncs returns custom template functions.
 func (r *Renderer) templateFuncs() template.FuncMap {
 	return template.FuncMap{
-		"lower": func(s string) string {
-			return strings.ToLower(s)
-		},
-		"upper": func(s string) string {
-			return strings.ToUpper(s)
-		},
-		"now": func() time.Time {
-			return time.Now()
-		},
+		"lower": strings.ToLower,
+		"upper": strings.ToUpper,
+		"now":   time.Now,
 		"formatDate": func(t time.Time) string {
 			return t.Format("Jan 2, 2006")
 		},
@@ -246,9 +240,7 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		"multiply": func(a, b int) int {
 			return a * b
 		},
-		"repeat": func(s string, n int) string {
-			return strings.Repeat(s, n)
-		},
+		"repeat": strings.Repeat,
 		"seq": func(start, end int) []int {
 			var result []int
 			for i := start; i <= end; i++ {
@@ -342,9 +334,7 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			}
 			return false
 		},
-		"hasPrefix": func(s, prefix string) bool {
-			return strings.HasPrefix(s, prefix)
-		},
+		"hasPrefix": strings.HasPrefix,
 		"prettyJSON": func(s string) string {
 			var data any
 			if err := json.Unmarshal([]byte(s), &data); err != nil {
@@ -404,9 +394,7 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		// T translates a message key to the specified language.
 		// Usage in templates: {{T .AdminLang "btn.save"}}
 		// With arguments: {{T .AdminLang "msg.deleted" "Page"}}
-		"T": func(lang string, key string, args ...any) string {
-			return i18n.T(lang, key, args...)
-		},
+		"T": i18n.T,
 		// TDefault translates a message key, falling back to a default value if not found.
 		// Usage in templates: {{TDefault .AdminLang "key" "Default Value"}}
 		"TDefault": func(lang string, key string, defaultVal string) string {
@@ -524,9 +512,7 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		},
 		// userRole returns the user's role string.
 		// Usage: {{userRole .User}}
-		"userRole": func(user any) string {
-			return getUserRole(user)
-		},
+		"userRole": getUserRole,
 	}
 }
 

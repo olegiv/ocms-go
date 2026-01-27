@@ -45,7 +45,8 @@ func (b *RobotsBuilder) Build() string {
 		}
 
 		// Combine default and custom disallow paths
-		allPaths := append(defaultDisallow, b.config.DisallowPaths...)
+		allPaths := defaultDisallow
+		allPaths = append(allPaths, b.config.DisallowPaths...)
 
 		for _, path := range allPaths {
 			sb.WriteString("Disallow: ")

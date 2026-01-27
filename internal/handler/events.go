@@ -128,16 +128,17 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 	var totalEvents int64
 	var err error
 
-	if level != "" && category != "" {
+	switch {
+	case level != "" && category != "":
 		totalEvents, err = h.queries.CountEventsByLevelAndCategory(r.Context(), store.CountEventsByLevelAndCategoryParams{
 			Level:    level,
 			Category: category,
 		})
-	} else if level != "" {
+	case level != "":
 		totalEvents, err = h.queries.CountEventsByLevel(r.Context(), level)
-	} else if category != "" {
+	case category != "":
 		totalEvents, err = h.queries.CountEventsByCategory(r.Context(), category)
-	} else {
+	default:
 		totalEvents, err = h.queries.CountEvents(r.Context())
 	}
 
@@ -153,7 +154,8 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Fetch events for current page based on filters
 	var events []EventWithUser
 
-	if level != "" && category != "" {
+	switch {
+	case level != "" && category != "":
 		rows, err := h.queries.ListEventsWithUserByLevelAndCategory(r.Context(), store.ListEventsWithUserByLevelAndCategoryParams{
 			Level:    level,
 			Category: category,
@@ -165,7 +167,7 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		events = convertEventsWithUserByLevelAndCategory(rows)
-	} else if level != "" {
+	case level != "":
 		rows, err := h.queries.ListEventsWithUserByLevel(r.Context(), store.ListEventsWithUserByLevelParams{
 			Level:  level,
 			Limit:  EventsPerPage,
@@ -176,7 +178,7 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		events = convertEventsWithUserByLevel(rows)
-	} else if category != "" {
+	case category != "":
 		rows, err := h.queries.ListEventsWithUserByCategory(r.Context(), store.ListEventsWithUserByCategoryParams{
 			Category: category,
 			Limit:    EventsPerPage,
@@ -187,7 +189,7 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		events = convertEventsWithUserByCategory(rows)
-	} else {
+	default:
 		rows, err := h.queries.ListEventsWithUser(r.Context(), store.ListEventsWithUserParams{
 			Limit:  EventsPerPage,
 			Offset: offset,

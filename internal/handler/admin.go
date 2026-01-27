@@ -233,11 +233,12 @@ func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 			// Calculate health status
 			healthStatus := "unknown"
 			if wh.TotalDeliveries > 0 {
-				if successRate >= 95 {
+				switch {
+				case successRate >= 95:
 					healthStatus = "green"
-				} else if successRate >= 80 {
+				case successRate >= 80:
 					healthStatus = "yellow"
-				} else {
+				default:
 					healthStatus = "red"
 				}
 			}

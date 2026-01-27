@@ -431,7 +431,7 @@ func TestThemeCount(t *testing.T) {
 }
 
 // createTestThemeWithLocales creates a test theme with translation files.
-func createTestThemeWithLocales(t *testing.T, themesDir, themeName string, config Config, translations map[string]map[string]string) string {
+func createTestThemeWithLocales(t *testing.T, themesDir, themeName string, config Config, translations map[string]map[string]string) {
 	t.Helper()
 
 	// Create base theme first
@@ -468,8 +468,6 @@ func createTestThemeWithLocales(t *testing.T, themesDir, themeName string, confi
 			t.Fatalf("failed to write messages.json: %v", err)
 		}
 	}
-
-	return themePath
 }
 
 func TestThemeTranslate(t *testing.T) {

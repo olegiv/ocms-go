@@ -146,7 +146,7 @@ func TestImportUsers_Success(t *testing.T) {
 			t.Fatalf("failed to create user: %v", err)
 		}
 		result.UsersImported++
-		_ = tracker.TrackImportedItem(ctx, s.Name(), "user", int64(u.ID))
+		_ = tracker.TrackImportedItem(ctx, s.Name(), "user", u.ID)
 	}
 
 	// Verify results

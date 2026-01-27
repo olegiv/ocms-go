@@ -194,7 +194,8 @@ func (h *Handler) ListMedia(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	// Apply filters
-	if searchQuery != "" {
+	switch {
+	case searchQuery != "":
 		// Search by filename or alt text
 		searchPattern := "%" + searchQuery + "%"
 		media, err = h.queries.SearchMedia(ctx, store.SearchMediaParams{
@@ -206,7 +207,7 @@ func (h *Handler) ListMedia(w http.ResponseWriter, r *http.Request) {
 			// For search, we don't have a count query, so use the results length
 			total = int64(len(media))
 		}
-	} else if folderIDStr != "" {
+	case folderIDStr != "":
 		folderID, parseErr := strconv.ParseInt(folderIDStr, 10, 64)
 		if parseErr != nil {
 			WriteBadRequest(w, "Invalid folder ID", nil)
@@ -222,7 +223,7 @@ func (h *Handler) ListMedia(w http.ResponseWriter, r *http.Request) {
 			},
 			func() (int64, error) { return h.queries.CountMediaInFolder(ctx, util.NullInt64FromValue(folderID)) },
 		)
-	} else if typeFilter != "" {
+	case typeFilter != "":
 		// Filter by type (image, document, video)
 		var mimePattern string
 		switch typeFilter {
@@ -246,7 +247,7 @@ func (h *Handler) ListMedia(w http.ResponseWriter, r *http.Request) {
 			},
 			func() (int64, error) { return h.queries.CountMediaByType(ctx, mimePattern) },
 		)
-	} else {
+	default:
 		// List all media
 		media, total, err = handler.ListAndCount(
 			func() ([]store.Medium, error) {
@@ -388,11 +389,12 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 	// Return response
 	if len(files) == 1 {
 		// Single file upload - return the media directly
-		if len(responses) > 0 {
+		switch {
+		case len(responses) > 0:
 			WriteCreated(w, responses[0])
-		} else if len(uploadErrors) > 0 {
+		case len(uploadErrors) > 0:
 			WriteError(w, http.StatusBadRequest, "upload_failed", uploadErrors[0]["error"], nil)
-		} else {
+		default:
 			WriteError(w, http.StatusBadRequest, "upload_failed", "Unknown upload error", nil)
 		}
 	} else {

@@ -165,7 +165,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 			if uploadDir == "" {
 				uploadDir = defaultUploadDir
 			}
-			mediaMap, err = s.importMedia(ctx, queries, filesPath, uploadDir, authorID, opts, result, tracker)
+			mediaMap, err = s.importMedia(ctx, queries, filesPath, uploadDir, authorID, result, tracker)
 			if err != nil {
 				result.Errors = append(result.Errors, fmt.Sprintf("Media import error: %v", err))
 			}
@@ -283,7 +283,7 @@ func (s *Source) importTags(ctx context.Context, queries *store.Queries, reader 
 // importMedia imports media files from Elefant's files directory.
 // It returns a map of old Elefant paths to new oCMS media URLs for replacing in post bodies.
 func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesPath, uploadDir string,
-	userID int64, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) (map[string]string, error) {
+	userID int64, result *types.ImportResult, tracker types.ImportTracker) (map[string]string, error) {
 
 	// Map: old Elefant path → new oCMS URL
 	mediaMap := make(map[string]string)

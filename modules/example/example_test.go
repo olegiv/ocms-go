@@ -27,7 +27,7 @@ func testModule(t *testing.T, db *sql.DB) *Module {
 }
 
 // testModuleWithHooks creates a test Module and returns the hooks registry.
-func testModuleWithHooks(t *testing.T, db *sql.DB) (*Module, *module.HookRegistry) {
+func testModuleWithHooks(t *testing.T, db *sql.DB) *module.HookRegistry {
 	t.Helper()
 	m := New()
 	moduleutil.RunMigrations(t, db, m.Migrations())
@@ -35,7 +35,7 @@ func testModuleWithHooks(t *testing.T, db *sql.DB) (*Module, *module.HookRegistr
 	if err := m.Init(ctx); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
-	return m, hooks
+	return hooks
 }
 
 func TestModuleNew(t *testing.T) {
@@ -98,7 +98,7 @@ func TestModuleInit(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
-	_, hooks := testModuleWithHooks(t, db)
+	hooks := testModuleWithHooks(t, db)
 
 	if !hooks.HasHandlers(module.HookPageAfterSave) {
 		t.Error("HookPageAfterSave handler not registered")
@@ -242,7 +242,7 @@ func TestHookRegistration(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
-	_, hooks := testModuleWithHooks(t, db)
+	hooks := testModuleWithHooks(t, db)
 
 	result, err := hooks.Call(context.Background(), module.HookPageAfterSave, "test data")
 	if err != nil {
@@ -265,7 +265,7 @@ func TestHookHandlerInfo(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
 
-	_, hooks := testModuleWithHooks(t, db)
+	hooks := testModuleWithHooks(t, db)
 
 	afterSaveCount := hooks.HandlerCount(module.HookPageAfterSave)
 	if afterSaveCount != 1 {

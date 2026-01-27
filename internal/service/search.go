@@ -71,7 +71,7 @@ func (s *SearchService) escapeQuery(query string) string {
 	// Wrap each word in quotes for phrase matching and add wildcard for prefix matching
 	var terms []string
 	for _, word := range words {
-		if len(word) > 0 {
+		if word != "" {
 			// Use * for prefix matching to make search more forgiving
 			terms = append(terms, `"`+word+`"*`)
 		}
@@ -200,7 +200,7 @@ func (s *SearchService) generateExcerpt(body, query string, maxLen int) string {
 	// Strip HTML tags for plain text excerpt
 	body = stripHTMLTags(body)
 
-	if len(body) == 0 {
+	if body == "" {
 		return ""
 	}
 
@@ -241,7 +241,7 @@ func (s *SearchService) generateExcerpt(body, query string, maxLen int) string {
 			excerpt = "..." + excerpt
 		}
 		if end < len(body) {
-			excerpt = excerpt + "..."
+			excerpt += "..."
 		}
 	}
 

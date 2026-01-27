@@ -120,30 +120,29 @@ func (r *Reader) scanBlogPost(rows *sql.Rows) (BlogPost, error) {
 	var p BlogPost
 	var err error
 
-	if r.hasSlug {
-		// Schema v1.1.5+ with slug column
-		if r.hasDescription && r.hasKeywords {
-			err = rows.Scan(
-				&p.ID, &p.Title, &p.Slug, &p.Body, &p.Timestamp, &p.Author, &p.Published,
-				&p.Tags, &p.Thumbnail, &p.Description, &p.Keywords, &p.Extra,
-			)
-		} else if r.hasDescription {
-			err = rows.Scan(
-				&p.ID, &p.Title, &p.Slug, &p.Body, &p.Timestamp, &p.Author, &p.Published,
-				&p.Tags, &p.Thumbnail, &p.Description, &p.Extra,
-			)
-		} else if r.hasKeywords {
-			err = rows.Scan(
-				&p.ID, &p.Title, &p.Slug, &p.Body, &p.Timestamp, &p.Author, &p.Published,
-				&p.Tags, &p.Thumbnail, &p.Keywords, &p.Extra,
-			)
-		} else {
-			err = rows.Scan(
-				&p.ID, &p.Title, &p.Slug, &p.Body, &p.Timestamp, &p.Author, &p.Published,
-				&p.Tags, &p.Thumbnail, &p.Extra,
-			)
-		}
-	} else {
+	switch {
+	case r.hasSlug && r.hasDescription && r.hasKeywords:
+		// Schema v1.1.5+ with slug, description, and keywords columns
+		err = rows.Scan(
+			&p.ID, &p.Title, &p.Slug, &p.Body, &p.Timestamp, &p.Author, &p.Published,
+			&p.Tags, &p.Thumbnail, &p.Description, &p.Keywords, &p.Extra,
+		)
+	case r.hasSlug && r.hasDescription:
+		err = rows.Scan(
+			&p.ID, &p.Title, &p.Slug, &p.Body, &p.Timestamp, &p.Author, &p.Published,
+			&p.Tags, &p.Thumbnail, &p.Description, &p.Extra,
+		)
+	case r.hasSlug && r.hasKeywords:
+		err = rows.Scan(
+			&p.ID, &p.Title, &p.Slug, &p.Body, &p.Timestamp, &p.Author, &p.Published,
+			&p.Tags, &p.Thumbnail, &p.Keywords, &p.Extra,
+		)
+	case r.hasSlug:
+		err = rows.Scan(
+			&p.ID, &p.Title, &p.Slug, &p.Body, &p.Timestamp, &p.Author, &p.Published,
+			&p.Tags, &p.Thumbnail, &p.Extra,
+		)
+	default:
 		// Older schema without slug/description/keywords
 		err = rows.Scan(
 			&p.ID, &p.Title, &p.Body, &p.Timestamp, &p.Author, &p.Published,

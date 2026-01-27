@@ -1,0 +1,80 @@
+# golangci-lint configuration
+# https://golangci-lint.run/usage/configuration/
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  disable-all: true
+  enable:
+    # Default linters
+    - errcheck      # Check for unchecked errors
+    - gosimple      # Simplify code
+    - govet         # Report suspicious constructs
+    - ineffassign   # Detect unused assignments
+    - staticcheck   # Static analysis checks
+    - unused        # Check for unused code
+
+    # Additional linters for issues IDE catches
+    - unconvert     # Remove unnecessary type conversions
+    - unparam       # Reports unused function parameters
+    - gocritic      # Checks for bugs, performance, style issues
+
+    # Code quality
+    - dupl          # Code clone detection
+    - gocyclo       # Cyclomatic complexity
+    - misspell      # Spelling mistakes in comments
+
+linters-settings:
+  dupl:
+    threshold: 150  # Raised from 100 to reduce noise for similar handlers
+
+  gocyclo:
+    min-complexity: 55  # Main init functions are inherently complex
+
+  gocritic:
+    enabled-checks:
+      # These checks are not enabled by default
+      - boolExprSimplify      # Simplify boolean expressions
+      - emptyStringTest       # Empty string comparisons
+      - evalOrder             # Evaluation order issues
+      - nilValReturn          # Return nil in error return
+      - regexpPattern         # Regexp pattern issues
+      - truncateCmp           # Truncated comparisons
+      - unnecessaryBlock      # Unnecessary blocks
+      - weakCond              # Weak conditions (always true/false)
+
+  unparam:
+    check-exported: false
+
+  unconvert:
+    fast-math: false
+    safe: false
+
+issues:
+  exclude-dirs:
+    - vendor
+
+  exclude-files:
+    - ".*\\.sql\\.go$"  # Exclude sqlc generated files
+
+  exclude-rules:
+    # Exclude some linters from running on tests
+    - path: _test\.go
+      linters:
+        - dupl
+        - gocyclo
+
+    # Exclude frontend.go dupl - category and tag handlers have similar structure
+    - path: internal/handler/frontend\.go
+      linters:
+        - dupl
+
+    # Exclude some staticcheck messages
+    - linters:
+        - staticcheck
+      text: "SA9003:"  # Empty branch
+
+  max-issues-per-linter: 0
+  max-same-issues: 0

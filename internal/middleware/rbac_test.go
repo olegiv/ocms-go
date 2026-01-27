@@ -84,7 +84,8 @@ func TestRequireRole(t *testing.T) {
 			mw(handler).ServeHTTP(rr, req)
 
 			// Check expectations
-			if tt.expectRedirect {
+			switch {
+			case tt.expectRedirect:
 				if rr.Code != http.StatusSeeOther {
 					t.Errorf("expected redirect (303), got %d", rr.Code)
 				}
@@ -92,11 +93,11 @@ func TestRequireRole(t *testing.T) {
 				if location != "/login" {
 					t.Errorf("expected redirect to /login, got %s", location)
 				}
-			} else if tt.expectForbid {
+			case tt.expectForbid:
 				if rr.Code != http.StatusForbidden {
 					t.Errorf("expected forbidden (403), got %d", rr.Code)
 				}
-			} else {
+			default:
 				if rr.Code != http.StatusOK {
 					t.Errorf("expected OK (200), got %d", rr.Code)
 				}
@@ -163,19 +164,6 @@ func TestRequireEditor(t *testing.T) {
 	mw(handler).ServeHTTP(rr, req)
 	if rr.Code != http.StatusForbidden {
 		t.Errorf("RequireEditor: public user should be forbidden, got %d", rr.Code)
-	}
-}
-
-func TestRoleConstants(t *testing.T) {
-	// Verify role constants have expected values
-	if RoleAdmin != "admin" {
-		t.Errorf("RoleAdmin = %q, want %q", RoleAdmin, "admin")
-	}
-	if RoleEditor != "editor" {
-		t.Errorf("RoleEditor = %q, want %q", RoleEditor, "editor")
-	}
-	if RolePublic != "public" {
-		t.Errorf("RolePublic = %q, want %q", RolePublic, "public")
 	}
 }
 

@@ -146,29 +146,31 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	// Get total count based on filters
 	// Priority: search > language > category > status > all
-	if searchFilter != "" {
-		if languageFilter > 0 {
+	switch {
+	case searchFilter != "":
+		switch {
+		case languageFilter > 0:
 			totalCount, err = h.queries.CountSearchPagesByLanguage(r.Context(), store.CountSearchPagesByLanguageParams{
 				LanguageID: util.NullInt64FromValue(languageFilter),
 				Title:      searchPattern,
 				Body:       searchPattern,
 				Slug:       searchPattern,
 			})
-		} else if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
+		case statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled":
 			totalCount, err = h.queries.CountSearchPagesByStatus(r.Context(), store.CountSearchPagesByStatusParams{
 				Status: statusFilter,
 				Title:  searchPattern,
 				Body:   searchPattern,
 				Slug:   searchPattern,
 			})
-		} else {
+		default:
 			totalCount, err = h.queries.CountSearchPages(r.Context(), store.CountSearchPagesParams{
 				Title: searchPattern,
 				Body:  searchPattern,
 				Slug:  searchPattern,
 			})
 		}
-	} else if languageFilter > 0 {
+	case languageFilter > 0:
 		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
 			totalCount, err = h.queries.CountPagesByLanguageAndStatus(r.Context(), store.CountPagesByLanguageAndStatusParams{
 				LanguageID: util.NullInt64FromValue(languageFilter),
@@ -177,13 +179,13 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		} else {
 			totalCount, err = h.queries.CountPagesByLanguage(r.Context(), util.NullInt64FromValue(languageFilter))
 		}
-	} else if categoryFilter > 0 {
+	case categoryFilter > 0:
 		totalCount, err = h.queries.CountPagesByCategory(r.Context(), categoryFilter)
-	} else if statusFilter == "scheduled" {
+	case statusFilter == "scheduled":
 		totalCount, err = h.queries.CountScheduledPages(r.Context())
-	} else if statusFilter != "" && statusFilter != "all" {
+	case statusFilter != "" && statusFilter != "all":
 		totalCount, err = h.queries.CountPagesByStatus(r.Context(), statusFilter)
-	} else {
+	default:
 		totalCount, err = h.queries.CountPages(r.Context())
 	}
 	if err != nil {
@@ -198,8 +200,10 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch pages for current page
 	// Priority: search > language > category > status > all
-	if searchFilter != "" {
-		if languageFilter > 0 {
+	switch {
+	case searchFilter != "":
+		switch {
+		case languageFilter > 0:
 			pages, err = h.queries.SearchPagesByLanguage(r.Context(), store.SearchPagesByLanguageParams{
 				LanguageID: util.NullInt64FromValue(languageFilter),
 				Title:      searchPattern,
@@ -208,7 +212,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 				Limit:      PagesPerPage,
 				Offset:     offset,
 			})
-		} else if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
+		case statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled":
 			pages, err = h.queries.SearchPagesByStatus(r.Context(), store.SearchPagesByStatusParams{
 				Status: statusFilter,
 				Title:  searchPattern,
@@ -217,7 +221,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 				Limit:  PagesPerPage,
 				Offset: offset,
 			})
-		} else {
+		default:
 			pages, err = h.queries.SearchPages(r.Context(), store.SearchPagesParams{
 				Title:  searchPattern,
 				Body:   searchPattern,
@@ -226,7 +230,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 				Offset: offset,
 			})
 		}
-	} else if languageFilter > 0 {
+	case languageFilter > 0:
 		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
 			pages, err = h.queries.ListPagesByLanguageAndStatus(r.Context(), store.ListPagesByLanguageAndStatusParams{
 				LanguageID: util.NullInt64FromValue(languageFilter),
@@ -241,24 +245,24 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 				Offset:     offset,
 			})
 		}
-	} else if categoryFilter > 0 {
+	case categoryFilter > 0:
 		pages, err = h.queries.ListPagesByCategory(r.Context(), store.ListPagesByCategoryParams{
 			CategoryID: categoryFilter,
 			Limit:      PagesPerPage,
 			Offset:     offset,
 		})
-	} else if statusFilter == "scheduled" {
+	case statusFilter == "scheduled":
 		pages, err = h.queries.ListScheduledPages(r.Context(), store.ListScheduledPagesParams{
 			Limit:  PagesPerPage,
 			Offset: offset,
 		})
-	} else if statusFilter != "" && statusFilter != "all" {
+	case statusFilter != "" && statusFilter != "all":
 		pages, err = h.queries.ListPagesByStatus(r.Context(), store.ListPagesByStatusParams{
 			Status: statusFilter,
 			Limit:  PagesPerPage,
 			Offset: offset,
 		})
-	} else {
+	default:
 		pages, err = h.queries.ListPages(r.Context(), store.ListPagesParams{
 			Limit:  PagesPerPage,
 			Offset: offset,

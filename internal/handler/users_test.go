@@ -102,7 +102,7 @@ func TestUsersHandler_Delete_SelfDelete(t *testing.T) {
 	handler := NewUsersHandler(db, nil, sm)
 
 	// Try to delete self - requires user context
-	req, w := newAuthenticatedRequest(t, sm, http.MethodDelete, "/admin/users/1",
+	req, w := newAuthenticatedDeleteRequest(t, sm, "/admin/users/1",
 		map[string]string{"id": "1"}, &user)
 
 	handler.Delete(w, req)
@@ -127,7 +127,7 @@ func TestUsersHandler_Delete_InvalidID(t *testing.T) {
 
 	handler := NewUsersHandler(db, nil, sm)
 
-	req, w := newAuthenticatedRequest(t, sm, http.MethodDelete, "/admin/users/abc",
+	req, w := newAuthenticatedDeleteRequest(t, sm, "/admin/users/abc",
 		map[string]string{"id": "abc"}, &user)
 
 	handler.Delete(w, req)
@@ -146,7 +146,7 @@ func TestUsersHandler_Delete_UserNotFound(t *testing.T) {
 
 	handler := NewUsersHandler(db, nil, sm)
 
-	req, w := newAuthenticatedRequest(t, sm, http.MethodDelete, "/admin/users/9999",
+	req, w := newAuthenticatedDeleteRequest(t, sm, "/admin/users/9999",
 		map[string]string{"id": "9999"}, &user)
 
 	handler.Delete(w, req)
@@ -174,7 +174,7 @@ func TestUsersHandler_Delete_LastAdmin_Blocked(t *testing.T) {
 	handler := NewUsersHandler(db, nil, sm)
 
 	// Try to delete the last admin using HTMX request
-	req, w := newAuthenticatedRequest(t, sm, http.MethodDelete, "/admin/users/1",
+	req, w := newAuthenticatedDeleteRequest(t, sm, "/admin/users/1",
 		map[string]string{"id": "1"}, &deleter)
 	req.Header.Set("HX-Request", "true")
 
@@ -231,7 +231,7 @@ func TestUsersHandler_Delete_HTMX(t *testing.T) {
 
 	// Use the actual target ID
 	targetIDStr := fmt.Sprintf("%d", target.ID)
-	req, w := newAuthenticatedRequest(t, sm, http.MethodDelete, "/admin/users/"+targetIDStr,
+	req, w := newAuthenticatedDeleteRequest(t, sm, "/admin/users/"+targetIDStr,
 		map[string]string{"id": targetIDStr}, &admin)
 	req.Header.Set("HX-Request", "true")
 
