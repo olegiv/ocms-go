@@ -266,10 +266,8 @@ func TestValidateTrustedOrigins(t *testing.T) {
 				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
 					t.Errorf("ValidateTrustedOrigins() error = %q, want error containing %q", err.Error(), tt.errMsg)
 				}
-			} else {
-				if err != nil {
-					t.Errorf("ValidateTrustedOrigins() unexpected error: %v", err)
-				}
+			} else if err != nil {
+				t.Errorf("ValidateTrustedOrigins() unexpected error: %v", err)
 			}
 		})
 	}
