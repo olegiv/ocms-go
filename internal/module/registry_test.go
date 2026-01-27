@@ -261,46 +261,35 @@ func TestShutdownAll(t *testing.T) {
 	}
 }
 
-func TestRouteAll(t *testing.T) {
+// testRouteRegistration tests that route registration methods call the expected module methods.
+func testRouteRegistration(t *testing.T, namePrefix string, routeFn func(*Registry, chi.Router), checkFn func(*mockModule) bool) {
+	t.Helper()
 	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
-	m1 := newMockModule("route1", "1.0.0")
-	m2 := newMockModule("route2", "1.0.0")
+	m1 := newMockModule(namePrefix+"1", "1.0.0")
+	m2 := newMockModule(namePrefix+"2", "1.0.0")
 
 	_ = r.Register(m1)
 	_ = r.Register(m2)
 
 	router := chi.NewRouter()
-	r.RouteAll(router)
+	routeFn(r, router)
 
-	if !m1.routesCalled {
-		t.Error("expected m1 RegisterRoutes to be called")
+	if !checkFn(m1) {
+		t.Errorf("expected m1 %s to be called", namePrefix)
 	}
-	if !m2.routesCalled {
-		t.Error("expected m2 RegisterRoutes to be called")
+	if !checkFn(m2) {
+		t.Errorf("expected m2 %s to be called", namePrefix)
 	}
 }
 
+func TestRouteAll(t *testing.T) {
+	testRouteRegistration(t, "route", func(r *Registry, router chi.Router) { r.RouteAll(router) }, func(m *mockModule) bool { return m.routesCalled })
+}
+
 func TestAdminRouteAll(t *testing.T) {
-	logger := testutil.TestLoggerSilent()
-	r := NewRegistry(logger)
-
-	m1 := newMockModule("admin1", "1.0.0")
-	m2 := newMockModule("admin2", "1.0.0")
-
-	_ = r.Register(m1)
-	_ = r.Register(m2)
-
-	router := chi.NewRouter()
-	r.AdminRouteAll(router)
-
-	if !m1.adminCalled {
-		t.Error("expected m1 RegisterAdminRoutes to be called")
-	}
-	if !m2.adminCalled {
-		t.Error("expected m2 RegisterAdminRoutes to be called")
-	}
+	testRouteRegistration(t, "admin", func(r *Registry, router chi.Router) { r.AdminRouteAll(router) }, func(m *mockModule) bool { return m.adminCalled })
 }
 
 func TestAllTemplateFuncs(t *testing.T) {

@@ -43,44 +43,36 @@ func TestConfigGet(t *testing.T) {
 
 func TestConfigUpsert(t *testing.T) {
 	db, _ := testHandlerSetup(t)
-
 	queries := store.New(db)
 
-	t.Run("create new config", func(t *testing.T) {
-		_, err := queries.UpsertConfig(context.Background(), store.UpsertConfigParams{
-			Key:   "new_key",
-			Value: "new_value",
+	tests := []struct {
+		name  string
+		key   string
+		value string
+	}{
+		{"create new config", "new_key", "new_value"},
+		{"update existing config", "site_name", "Updated Site"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := queries.UpsertConfig(context.Background(), store.UpsertConfigParams{
+				Key:   tt.key,
+				Value: tt.value,
+			})
+			if err != nil {
+				t.Fatalf("UpsertConfig failed: %v", err)
+			}
+
+			config, err := queries.GetConfigByKey(context.Background(), tt.key)
+			if err != nil {
+				t.Fatalf("GetConfigByKey failed: %v", err)
+			}
+			if config.Value != tt.value {
+				t.Errorf("Value = %q, want %q", config.Value, tt.value)
+			}
 		})
-		if err != nil {
-			t.Fatalf("UpsertConfig failed: %v", err)
-		}
-
-		config, err := queries.GetConfigByKey(context.Background(), "new_key")
-		if err != nil {
-			t.Fatalf("GetConfigByKey failed: %v", err)
-		}
-		if config.Value != "new_value" {
-			t.Errorf("Value = %q, want %q", config.Value, "new_value")
-		}
-	})
-
-	t.Run("update existing config", func(t *testing.T) {
-		_, err := queries.UpsertConfig(context.Background(), store.UpsertConfigParams{
-			Key:   "site_name",
-			Value: "Updated Site",
-		})
-		if err != nil {
-			t.Fatalf("UpsertConfig failed: %v", err)
-		}
-
-		config, err := queries.GetConfigByKey(context.Background(), "site_name")
-		if err != nil {
-			t.Fatalf("GetConfigByKey failed: %v", err)
-		}
-		if config.Value != "Updated Site" {
-			t.Errorf("Value = %q, want %q", config.Value, "Updated Site")
-		}
-	})
+	}
 }
 
 func TestConfigList(t *testing.T) {

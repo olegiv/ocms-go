@@ -188,28 +188,19 @@ func TestRequireRole_ForbiddenMessage(t *testing.T) {
 	}
 }
 
-func TestRequireAdmin_AllRoles(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// runRoleTests runs role-based access control tests.
+func runRoleTests(t *testing.T, mw func(http.Handler) http.Handler, path string, tests []struct {
+	name       string
+	role       string
+	expectCode int
+}) {
+	t.Helper()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-
-	mw := RequireAdmin()
-
-	tests := []struct {
-		name       string
-		role       string
-		expectCode int
-	}{
-		{"admin allowed", "admin", http.StatusOK},
-		{"editor forbidden", "editor", http.StatusForbidden},
-		{"public forbidden", "public", http.StatusForbidden},
-		{"empty role forbidden", "", http.StatusForbidden},
-		{"unknown role forbidden", "superuser", http.StatusForbidden},
-	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/admin/users", nil)
+			req := httptest.NewRequest("GET", path, nil)
 			req = req.WithContext(context.WithValue(req.Context(), ContextKeyUser, store.User{ID: 1, Role: tt.role}))
 			rr := httptest.NewRecorder()
 			mw(handler).ServeHTTP(rr, req)
@@ -220,14 +211,22 @@ func TestRequireAdmin_AllRoles(t *testing.T) {
 	}
 }
 
-func TestRequireEditor_AllRoles(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
+func TestRequireAdmin_AllRoles(t *testing.T) {
+	runRoleTests(t, RequireAdmin(), "/admin/users", []struct {
+		name       string
+		role       string
+		expectCode int
+	}{
+		{"admin allowed", "admin", http.StatusOK},
+		{"editor forbidden", "editor", http.StatusForbidden},
+		{"public forbidden", "public", http.StatusForbidden},
+		{"empty role forbidden", "", http.StatusForbidden},
+		{"unknown role forbidden", "superuser", http.StatusForbidden},
 	})
+}
 
-	mw := RequireEditor()
-
-	tests := []struct {
+func TestRequireEditor_AllRoles(t *testing.T) {
+	runRoleTests(t, RequireEditor(), "/admin/pages", []struct {
 		name       string
 		role       string
 		expectCode int
@@ -237,19 +236,7 @@ func TestRequireEditor_AllRoles(t *testing.T) {
 		{"public forbidden", "public", http.StatusForbidden},
 		{"empty role forbidden", "", http.StatusForbidden},
 		{"unknown role forbidden", "guest", http.StatusForbidden},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/admin/pages", nil)
-			req = req.WithContext(context.WithValue(req.Context(), ContextKeyUser, store.User{ID: 1, Role: tt.role}))
-			rr := httptest.NewRecorder()
-			mw(handler).ServeHTTP(rr, req)
-			if rr.Code != tt.expectCode {
-				t.Errorf("role %q: got %d, want %d", tt.role, rr.Code, tt.expectCode)
-			}
-		})
-	}
+	})
 }
 
 func TestRequireRole_NoUserInContext(t *testing.T) {
@@ -285,64 +272,46 @@ func TestRequireRole_NoUserInContext(t *testing.T) {
 }
 
 func TestRequireRole_CaseSensitivity(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-
-	mw := RequireAdmin()
-
-	// Role names should be case-sensitive
-	tests := []struct {
+	runRoleTests(t, RequireAdmin(), "/admin/users", []struct {
+		name       string
 		role       string
 		expectCode int
 	}{
-		{"admin", http.StatusOK},
-		{"Admin", http.StatusForbidden},
-		{"ADMIN", http.StatusForbidden},
-		{"aDmIn", http.StatusForbidden},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.role, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/admin/users", nil)
-			req = req.WithContext(context.WithValue(req.Context(), ContextKeyUser, store.User{ID: 1, Role: tt.role}))
-			rr := httptest.NewRecorder()
-			mw(handler).ServeHTTP(rr, req)
-			if rr.Code != tt.expectCode {
-				t.Errorf("role %q: got %d, want %d", tt.role, rr.Code, tt.expectCode)
-			}
-		})
-	}
+		{"lowercase admin", "admin", http.StatusOK},
+		{"titlecase Admin", "Admin", http.StatusForbidden},
+		{"uppercase ADMIN", "ADMIN", http.StatusForbidden},
+		{"mixed case aDmIn", "aDmIn", http.StatusForbidden},
+	})
 }
 
 func TestRequireRole_DifferentHTTPMethods(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
 	mw := RequireEditor()
 	methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH"}
 
-	for _, method := range methods {
-		t.Run(method+"_editor", func(t *testing.T) {
-			req := httptest.NewRequest(method, "/admin/pages", nil)
-			req = req.WithContext(context.WithValue(req.Context(), ContextKeyUser, store.User{ID: 1, Role: "editor"}))
-			rr := httptest.NewRecorder()
-			mw(handler).ServeHTTP(rr, req)
-			if rr.Code != http.StatusOK {
-				t.Errorf("method %s with editor: got %d, want %d", method, rr.Code, http.StatusOK)
-			}
-		})
+	methodRoleTests := []struct {
+		role       string
+		expectCode int
+	}{
+		{"editor", http.StatusOK},
+		{"public", http.StatusForbidden},
+	}
 
-		t.Run(method+"_public", func(t *testing.T) {
-			req := httptest.NewRequest(method, "/admin/pages", nil)
-			req = req.WithContext(context.WithValue(req.Context(), ContextKeyUser, store.User{ID: 1, Role: "public"}))
-			rr := httptest.NewRecorder()
-			mw(handler).ServeHTTP(rr, req)
-			if rr.Code != http.StatusForbidden {
-				t.Errorf("method %s with public: got %d, want %d", method, rr.Code, http.StatusForbidden)
-			}
-		})
+	for _, method := range methods {
+		for _, rt := range methodRoleTests {
+			t.Run(method+"_"+rt.role, func(t *testing.T) {
+				req := httptest.NewRequest(method, "/admin/pages", nil)
+				req = req.WithContext(context.WithValue(req.Context(), ContextKeyUser, store.User{ID: 1, Role: rt.role}))
+				rr := httptest.NewRecorder()
+				mw(handler).ServeHTTP(rr, req)
+				if rr.Code != rt.expectCode {
+					t.Errorf("method %s with %s: got %d, want %d", method, rt.role, rr.Code, rt.expectCode)
+				}
+			})
+		}
 	}
 }
 

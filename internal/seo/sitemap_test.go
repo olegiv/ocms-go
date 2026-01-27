@@ -92,24 +92,29 @@ func TestSitemapBuilderAddPages(t *testing.T) {
 	}
 }
 
-func TestSitemapBuilderAddCategory(t *testing.T) {
+// testSitemapTaxonomyAdd tests adding a single taxonomy item (category or tag).
+func testSitemapTaxonomyAdd(t *testing.T, addFn func(*SitemapBuilder), expectedLoc, expectedPriority string) {
+	t.Helper()
 	builder := NewSitemapBuilder("https://example.com")
-
-	builder.AddCategory(SitemapCategory{
-		Slug: "technology",
-	})
+	addFn(builder)
 
 	if len(builder.urls) != 1 {
 		t.Fatalf("urls length = %d, want 1", len(builder.urls))
 	}
 
 	url := builder.urls[0]
-	if url.Loc != "https://example.com/category/technology" {
-		t.Errorf("Loc = %q, want %q", url.Loc, "https://example.com/category/technology")
+	if url.Loc != expectedLoc {
+		t.Errorf("Loc = %q, want %q", url.Loc, expectedLoc)
 	}
-	if url.Priority != "0.6" {
-		t.Errorf("Priority = %q, want %q", url.Priority, "0.6")
+	if url.Priority != expectedPriority {
+		t.Errorf("Priority = %q, want %q", url.Priority, expectedPriority)
 	}
+}
+
+func TestSitemapBuilderAddCategory(t *testing.T) {
+	testSitemapTaxonomyAdd(t, func(b *SitemapBuilder) {
+		b.AddCategory(SitemapCategory{Slug: "technology"})
+	}, "https://example.com/category/technology", "0.6")
 }
 
 func TestSitemapBuilderAddCategories(t *testing.T) {
@@ -127,23 +132,9 @@ func TestSitemapBuilderAddCategories(t *testing.T) {
 }
 
 func TestSitemapBuilderAddTag(t *testing.T) {
-	builder := NewSitemapBuilder("https://example.com")
-
-	builder.AddTag(SitemapTag{
-		Slug: "golang",
-	})
-
-	if len(builder.urls) != 1 {
-		t.Fatalf("urls length = %d, want 1", len(builder.urls))
-	}
-
-	url := builder.urls[0]
-	if url.Loc != "https://example.com/tag/golang" {
-		t.Errorf("Loc = %q, want %q", url.Loc, "https://example.com/tag/golang")
-	}
-	if url.Priority != "0.5" {
-		t.Errorf("Priority = %q, want %q", url.Priority, "0.5")
-	}
+	testSitemapTaxonomyAdd(t, func(b *SitemapBuilder) {
+		b.AddTag(SitemapTag{Slug: "golang"})
+	}, "https://example.com/tag/golang", "0.5")
 }
 
 func TestSitemapBuilderAddTags(t *testing.T) {

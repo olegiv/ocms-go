@@ -28,7 +28,7 @@ linters:
 
 linters-settings:
   dupl:
-    threshold: 150  # Raised from 100 to reduce noise for similar handlers
+    threshold: 75  # Balanced threshold for meaningful clone detection
 
   gocyclo:
     min-complexity: 55  # Main init functions are inherently complex
@@ -65,12 +65,10 @@ issues:
     - ".*\\.sql\\.go$"  # Exclude sqlc generated files
 
   exclude-rules:
-    # Exclude dupl and gocyclo from test files
-    # Test files commonly have similar patterns (table-driven tests, setup/teardown)
-    # and high complexity is acceptable for comprehensive test coverage
+    # Exclude gocyclo from test files
+    # Test complexity is acceptable for comprehensive test coverage
     - path: _test\.go
       linters:
-        - dupl
         - gocyclo
 
     # Exclude some staticcheck messages

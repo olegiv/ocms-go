@@ -205,59 +205,37 @@ func TestExportOptionsFiltering(t *testing.T) {
 	logger := slog.Default()
 	exporter := NewExporter(ts.Queries, logger)
 
-	t.Run("ExportOnlyPublished", func(t *testing.T) {
-		opts := ExportOptions{
-			IncludePages: true,
-			PageStatus:   "published",
-		}
+	pageStatusTests := []struct {
+		name      string
+		status    string
+		wantCount int
+		wantSlug  string
+	}{
+		{"ExportOnlyPublished", "published", 1, "published-page"},
+		{"ExportOnlyDraft", "draft", 1, "draft-page"},
+		{"ExportAllPages", "all", 2, ""},
+	}
 
-		data, err := exporter.Export(ts.Ctx, opts)
-		if err != nil {
-			t.Fatalf("Export failed: %v", err)
-		}
+	for _, tt := range pageStatusTests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := ExportOptions{
+				IncludePages: true,
+				PageStatus:   tt.status,
+			}
 
-		if len(data.Pages) != 1 {
-			t.Errorf("Expected 1 published page, got %d", len(data.Pages))
-		}
-		if len(data.Pages) > 0 && data.Pages[0].Slug != "published-page" {
-			t.Errorf("Expected 'published-page', got '%s'", data.Pages[0].Slug)
-		}
-	})
+			data, err := exporter.Export(ts.Ctx, opts)
+			if err != nil {
+				t.Fatalf("Export failed: %v", err)
+			}
 
-	t.Run("ExportOnlyDraft", func(t *testing.T) {
-		opts := ExportOptions{
-			IncludePages: true,
-			PageStatus:   "draft",
-		}
-
-		data, err := exporter.Export(ts.Ctx, opts)
-		if err != nil {
-			t.Fatalf("Export failed: %v", err)
-		}
-
-		if len(data.Pages) != 1 {
-			t.Errorf("Expected 1 draft page, got %d", len(data.Pages))
-		}
-		if len(data.Pages) > 0 && data.Pages[0].Slug != "draft-page" {
-			t.Errorf("Expected 'draft-page', got '%s'", data.Pages[0].Slug)
-		}
-	})
-
-	t.Run("ExportAllPages", func(t *testing.T) {
-		opts := ExportOptions{
-			IncludePages: true,
-			PageStatus:   "all",
-		}
-
-		data, err := exporter.Export(ts.Ctx, opts)
-		if err != nil {
-			t.Fatalf("Export failed: %v", err)
-		}
-
-		if len(data.Pages) != 2 {
-			t.Errorf("Expected 2 pages, got %d", len(data.Pages))
-		}
-	})
+			if len(data.Pages) != tt.wantCount {
+				t.Errorf("Expected %d pages, got %d", tt.wantCount, len(data.Pages))
+			}
+			if tt.wantSlug != "" && len(data.Pages) > 0 && data.Pages[0].Slug != tt.wantSlug {
+				t.Errorf("Expected '%s', got '%s'", tt.wantSlug, data.Pages[0].Slug)
+			}
+		})
+	}
 
 	t.Run("ExportWithoutPages", func(t *testing.T) {
 		opts := ExportOptions{

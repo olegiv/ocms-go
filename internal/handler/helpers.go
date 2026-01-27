@@ -114,6 +114,24 @@ func loadEntityTranslations[E, T any](
 	return result
 }
 
+// loadLanguageInfo combines base info loading and entity translation loading into a single call.
+// This is a convenience function for loading complete language info for translatable entities.
+func loadLanguageInfo[E, T any](
+	ctx context.Context,
+	queries *store.Queries,
+	entityType string,
+	entityID int64,
+	languageID sql.NullInt64,
+	fetcher func(int64) (E, error),
+	makeTranslation func(store.Language, E) T,
+) entityLanguageInfo[T] {
+	return loadEntityTranslations(
+		loadTranslationBaseInfo(ctx, queries, entityType, entityID, languageID),
+		fetcher,
+		makeTranslation,
+	)
+}
+
 // =============================================================================
 // LIST AND COUNT HELPERS
 // =============================================================================

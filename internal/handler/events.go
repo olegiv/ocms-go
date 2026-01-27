@@ -56,6 +56,35 @@ type EventWithUser struct {
 // detailsLengthThreshold is the max chars before details are collapsible
 const detailsLengthThreshold = 80
 
+// eventRowData holds the common fields from all event row types.
+type eventRowData struct {
+	ID        int64
+	Level     string
+	Category  string
+	Message   string
+	Metadata  string
+	CreatedAt string
+	UserName  string
+	UserEmail string
+}
+
+// toEventWithUser converts eventRowData to EventWithUser.
+func (d eventRowData) toEventWithUser() EventWithUser {
+	details := formatMetadata(d.Metadata)
+	return EventWithUser{
+		ID:          d.ID,
+		Level:       d.Level,
+		Category:    d.Category,
+		Message:     d.Message,
+		Metadata:    d.Metadata,
+		Details:     details,
+		DetailsLong: len(details) > detailsLengthThreshold,
+		CreatedAt:   d.CreatedAt,
+		UserName:    d.UserName,
+		UserEmail:   d.UserEmail,
+	}
+}
+
 // formatMetadata converts JSON metadata to readable text format.
 // Example: {"path":"/admin/pages","error":"not found"} -> "path: /admin/pages, error: not found"
 func formatMetadata(metadata string) string {
@@ -222,83 +251,38 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Helper functions to convert sqlc rows to EventWithUser
-func convertEventsWithUser(rows []store.ListEventsWithUserRow) []EventWithUser {
+// convertEventRows is a generic helper to convert sqlc rows to EventWithUser.
+func convertEventRows[T any](rows []T, extract func(T) eventRowData) []EventWithUser {
 	events := make([]EventWithUser, len(rows))
 	for i, row := range rows {
-		details := formatMetadata(row.Metadata)
-		events[i] = EventWithUser{
-			ID:          row.ID,
-			Level:       row.Level,
-			Category:    row.Category,
-			Message:     row.Message,
-			Metadata:    row.Metadata,
-			Details:     details,
-			DetailsLong: len(details) > detailsLengthThreshold,
-			CreatedAt:   row.CreatedAt.Format("2006-01-02 15:04:05"),
-			UserName:    row.UserName.String,
-			UserEmail:   row.UserEmail.String,
-		}
+		events[i] = extract(row).toEventWithUser()
 	}
 	return events
+}
+
+// Helper functions to convert sqlc rows to EventWithUser.
+// Each sqlc query returns a different type, so we need thin wrappers.
+
+func convertEventsWithUser(rows []store.ListEventsWithUserRow) []EventWithUser {
+	return convertEventRows(rows, func(r store.ListEventsWithUserRow) eventRowData {
+		return eventRowData{r.ID, r.Level, r.Category, r.Message, r.Metadata, r.CreatedAt.Format("2006-01-02 15:04:05"), r.UserName.String, r.UserEmail.String}
+	})
 }
 
 func convertEventsWithUserByLevel(rows []store.ListEventsWithUserByLevelRow) []EventWithUser {
-	events := make([]EventWithUser, len(rows))
-	for i, row := range rows {
-		details := formatMetadata(row.Metadata)
-		events[i] = EventWithUser{
-			ID:          row.ID,
-			Level:       row.Level,
-			Category:    row.Category,
-			Message:     row.Message,
-			Metadata:    row.Metadata,
-			Details:     details,
-			DetailsLong: len(details) > detailsLengthThreshold,
-			CreatedAt:   row.CreatedAt.Format("2006-01-02 15:04:05"),
-			UserName:    row.UserName.String,
-			UserEmail:   row.UserEmail.String,
-		}
-	}
-	return events
+	return convertEventRows(rows, func(r store.ListEventsWithUserByLevelRow) eventRowData {
+		return eventRowData{r.ID, r.Level, r.Category, r.Message, r.Metadata, r.CreatedAt.Format("2006-01-02 15:04:05"), r.UserName.String, r.UserEmail.String}
+	})
 }
 
 func convertEventsWithUserByCategory(rows []store.ListEventsWithUserByCategoryRow) []EventWithUser {
-	events := make([]EventWithUser, len(rows))
-	for i, row := range rows {
-		details := formatMetadata(row.Metadata)
-		events[i] = EventWithUser{
-			ID:          row.ID,
-			Level:       row.Level,
-			Category:    row.Category,
-			Message:     row.Message,
-			Metadata:    row.Metadata,
-			Details:     details,
-			DetailsLong: len(details) > detailsLengthThreshold,
-			CreatedAt:   row.CreatedAt.Format("2006-01-02 15:04:05"),
-			UserName:    row.UserName.String,
-			UserEmail:   row.UserEmail.String,
-		}
-	}
-	return events
+	return convertEventRows(rows, func(r store.ListEventsWithUserByCategoryRow) eventRowData {
+		return eventRowData{r.ID, r.Level, r.Category, r.Message, r.Metadata, r.CreatedAt.Format("2006-01-02 15:04:05"), r.UserName.String, r.UserEmail.String}
+	})
 }
 
 func convertEventsWithUserByLevelAndCategory(rows []store.ListEventsWithUserByLevelAndCategoryRow) []EventWithUser {
-	events := make([]EventWithUser, len(rows))
-	for i, row := range rows {
-		details := formatMetadata(row.Metadata)
-		events[i] = EventWithUser{
-			ID:          row.ID,
-			Level:       row.Level,
-			Category:    row.Category,
-			Message:     row.Message,
-			Metadata:    row.Metadata,
-			Details:     details,
-			DetailsLong: len(details) > detailsLengthThreshold,
-			CreatedAt:   row.CreatedAt.Format("2006-01-02 15:04:05"),
-			UserName:    row.UserName.String,
-			UserEmail:   row.UserEmail.String,
-		}
-	}
-	return events
+	return convertEventRows(rows, func(r store.ListEventsWithUserByLevelAndCategoryRow) eventRowData {
+		return eventRowData{r.ID, r.Level, r.Category, r.Message, r.Metadata, r.CreatedAt.Format("2006-01-02 15:04:05"), r.UserName.String, r.UserEmail.String}
+	})
 }

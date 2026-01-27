@@ -11,63 +11,14 @@ func TestImportResult_TotalImported(t *testing.T) {
 		result ImportResult
 		want   int
 	}{
-		{
-			name:   "empty result",
-			result: ImportResult{},
-			want:   0,
-		},
-		{
-			name: "tags only",
-			result: ImportResult{
-				TagsImported: 5,
-			},
-			want: 5,
-		},
-		{
-			name: "posts only",
-			result: ImportResult{
-				PostsImported: 10,
-			},
-			want: 10,
-		},
-		{
-			name: "users only",
-			result: ImportResult{
-				UsersImported: 15,
-			},
-			want: 15,
-		},
-		{
-			name: "media only",
-			result: ImportResult{
-				MediaImported: 20,
-			},
-			want: 20,
-		},
-		{
-			name: "all types",
-			result: ImportResult{
-				TagsImported:  5,
-				MediaImported: 10,
-				PostsImported: 15,
-				UsersImported: 20,
-			},
-			want: 50,
-		},
-		{
-			name: "with skipped (not counted)",
-			result: ImportResult{
-				TagsImported:  5,
-				PostsImported: 10,
-				UsersImported: 3,
-				TagsSkipped:   2,
-				PostsSkipped:  5,
-				UsersSkipped:  7,
-			},
-			want: 18, // Only imported counts
-		},
+		{"empty result", ImportResult{}, 0},
+		{"tags only", ImportResult{TagsImported: 5}, 5},
+		{"posts only", ImportResult{PostsImported: 10}, 10},
+		{"users only", ImportResult{UsersImported: 15}, 15},
+		{"media only", ImportResult{MediaImported: 20}, 20},
+		{"all types", ImportResult{TagsImported: 5, MediaImported: 10, PostsImported: 15, UsersImported: 20}, 50},
+		{"with skipped (not counted)", ImportResult{TagsImported: 5, PostsImported: 10, UsersImported: 3, TagsSkipped: 2, PostsSkipped: 5, UsersSkipped: 7}, 18},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.result.TotalImported(); got != tt.want {
@@ -78,74 +29,33 @@ func TestImportResult_TotalImported(t *testing.T) {
 }
 
 func TestImportResult_TotalSkipped(t *testing.T) {
-	tests := []struct {
-		name   string
-		result ImportResult
-		want   int
-	}{
-		{
-			name:   "empty result",
-			result: ImportResult{},
-			want:   0,
-		},
-		{
-			name: "tags skipped only",
-			result: ImportResult{
-				TagsSkipped: 5,
-			},
-			want: 5,
-		},
-		{
-			name: "posts skipped only",
-			result: ImportResult{
-				PostsSkipped: 10,
-			},
-			want: 10,
-		},
-		{
-			name: "users skipped only",
-			result: ImportResult{
-				UsersSkipped: 15,
-			},
-			want: 15,
-		},
-		{
-			name: "media skipped only",
-			result: ImportResult{
-				MediaSkipped: 20,
-			},
-			want: 20,
-		},
-		{
-			name: "all types skipped",
-			result: ImportResult{
-				TagsSkipped:  5,
-				MediaSkipped: 10,
-				PostsSkipped: 15,
-				UsersSkipped: 20,
-			},
-			want: 50,
-		},
-		{
-			name: "with imported (not counted)",
-			result: ImportResult{
-				TagsImported:  5,
-				PostsImported: 10,
-				UsersImported: 3,
-				TagsSkipped:   2,
-				PostsSkipped:  5,
-				UsersSkipped:  7,
-			},
-			want: 14, // Only skipped counts
-		},
+	r := &ImportResult{}
+	if got := r.TotalSkipped(); got != 0 {
+		t.Errorf("empty result: TotalSkipped() = %d, want 0", got)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.result.TotalSkipped(); got != tt.want {
-				t.Errorf("TotalSkipped() = %d, want %d", got, tt.want)
-			}
-		})
+	r = &ImportResult{TagsSkipped: 5}
+	if got := r.TotalSkipped(); got != 5 {
+		t.Errorf("tags skipped only: TotalSkipped() = %d, want 5", got)
+	}
+	r = &ImportResult{PostsSkipped: 10}
+	if got := r.TotalSkipped(); got != 10 {
+		t.Errorf("posts skipped only: TotalSkipped() = %d, want 10", got)
+	}
+	r = &ImportResult{UsersSkipped: 15}
+	if got := r.TotalSkipped(); got != 15 {
+		t.Errorf("users skipped only: TotalSkipped() = %d, want 15", got)
+	}
+	r = &ImportResult{MediaSkipped: 20}
+	if got := r.TotalSkipped(); got != 20 {
+		t.Errorf("media skipped only: TotalSkipped() = %d, want 20", got)
+	}
+	r = &ImportResult{TagsSkipped: 5, MediaSkipped: 10, PostsSkipped: 15, UsersSkipped: 20}
+	if got := r.TotalSkipped(); got != 50 {
+		t.Errorf("all types skipped: TotalSkipped() = %d, want 50", got)
+	}
+	r = &ImportResult{TagsImported: 5, PostsImported: 10, UsersImported: 3, TagsSkipped: 2, PostsSkipped: 5, UsersSkipped: 7}
+	if got := r.TotalSkipped(); got != 14 {
+		t.Errorf("with imported (not counted): TotalSkipped() = %d, want 14", got)
 	}
 }
 

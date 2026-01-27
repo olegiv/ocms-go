@@ -9,100 +9,51 @@ import (
 	"testing"
 )
 
-func TestExtractReferrerDomain(t *testing.T) {
-	tests := []struct {
-		name     string
-		referer  string
-		expected string
-	}{
-		{
-			name:     "full URL with path",
-			referer:  "https://www.google.com/search?q=test",
-			expected: "www.google.com",
-		},
-		{
-			name:     "URL with port",
-			referer:  "http://localhost:8080/page",
-			expected: "localhost",
-		},
-		{
-			name:     "simple domain",
-			referer:  "https://example.com",
-			expected: "example.com",
-		},
-		{
-			name:     "empty string",
-			referer:  "",
-			expected: "",
-		},
-		{
-			name:     "invalid URL",
-			referer:  "not-a-url",
-			expected: "",
-		},
-		{
-			name:     "subdomain",
-			referer:  "https://blog.example.com/article",
-			expected: "blog.example.com",
-		},
-	}
-
+// runStringExtractTests runs table-driven tests for string extraction functions.
+func runStringExtractTests(t *testing.T, extractFn func(string) string, tests []struct {
+	name     string
+	input    string
+	expected string
+}) {
+	t.Helper()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := extractReferrerDomain(tt.referer)
+			result := extractFn(tt.input)
 			if result != tt.expected {
-				t.Errorf("extractReferrerDomain(%q) = %q, want %q", tt.referer, result, tt.expected)
+				t.Errorf("extract(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
 	}
 }
 
-func TestParseAcceptLanguage(t *testing.T) {
-	tests := []struct {
+func TestExtractReferrerDomain(t *testing.T) {
+	runStringExtractTests(t, extractReferrerDomain, []struct {
 		name     string
-		header   string
+		input    string
 		expected string
 	}{
-		{
-			name:     "single language",
-			header:   "en-US",
-			expected: "en",
-		},
-		{
-			name:     "multiple languages with quality",
-			header:   "en-US,en;q=0.9,fr;q=0.8",
-			expected: "en",
-		},
-		{
-			name:     "just language code",
-			header:   "de",
-			expected: "de",
-		},
-		{
-			name:     "empty header",
-			header:   "",
-			expected: "",
-		},
-		{
-			name:     "complex header",
-			header:   "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
-			expected: "ru",
-		},
-		{
-			name:     "with spaces",
-			header:   "  en-GB  ",
-			expected: "en",
-		},
-	}
+		{"full URL with path", "https://www.google.com/search?q=test", "www.google.com"},
+		{"URL with port", "http://localhost:8080/page", "localhost"},
+		{"simple domain", "https://example.com", "example.com"},
+		{"empty string", "", ""},
+		{"invalid URL", "not-a-url", ""},
+		{"subdomain", "https://blog.example.com/article", "blog.example.com"},
+	})
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := parseAcceptLanguage(tt.header)
-			if result != tt.expected {
-				t.Errorf("parseAcceptLanguage(%q) = %q, want %q", tt.header, result, tt.expected)
-			}
-		})
-	}
+func TestParseAcceptLanguage(t *testing.T) {
+	runStringExtractTests(t, parseAcceptLanguage, []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"single language", "en-US", "en"},
+		{"multiple languages with quality", "en-US,en;q=0.9,fr;q=0.8", "en"},
+		{"just language code", "de", "de"},
+		{"empty header", "", ""},
+		{"complex header", "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7", "ru"},
+		{"with spaces", "  en-GB  ", "en"},
+	})
 }
 
 func TestGetRealIP(t *testing.T) {

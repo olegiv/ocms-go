@@ -108,37 +108,7 @@ type menuItemNodeJSON struct {
 
 // MarshalJSON implements custom JSON marshaling for MenuItemNode.
 func (n MenuItemNode) MarshalJSON() ([]byte, error) {
-	var parentID *int64
-	if n.Item.ParentID.Valid {
-		parentID = &n.Item.ParentID.Int64
-	}
-	var pageID *int64
-	if n.Item.PageID.Valid {
-		pageID = &n.Item.PageID.Int64
-	}
-
-	// Convert children recursively
-	children := make([]menuItemNodeJSON, 0, len(n.Children))
-	for _, child := range n.Children {
-		children = append(children, child.toJSON())
-	}
-
-	return json.Marshal(menuItemNodeJSON{
-		Item: menuItemJSON{
-			ID:       n.Item.ID,
-			MenuID:   n.Item.MenuID,
-			ParentID: parentID,
-			Title:    n.Item.Title,
-			URL:      n.Item.Url.String,
-			Target:   n.Item.Target.String,
-			PageID:   pageID,
-			Position: n.Item.Position,
-			CssClass: n.Item.CssClass.String,
-			IsActive: n.Item.IsActive,
-		},
-		Children: children,
-		PageSlug: n.PageSlug,
-	})
+	return json.Marshal(n.toJSON())
 }
 
 // toJSON converts MenuItemNode to its JSON-friendly representation.

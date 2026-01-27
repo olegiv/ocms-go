@@ -27,22 +27,14 @@ func TestNewTaxonomyHandler(t *testing.T) {
 
 func TestTagCreate(t *testing.T) {
 	db, _ := testHandlerSetup(t)
+	q := store.New(db)
 
-	queries := store.New(db)
-
-	tag, err := queries.CreateTag(context.Background(), store.CreateTagParams{
-		Name: "Test Tag",
-		Slug: "test-tag",
-	})
+	tag, err := q.CreateTag(context.Background(), store.CreateTagParams{Name: "Test Tag", Slug: "test-tag"})
 	if err != nil {
-		t.Fatalf("CreateTag failed: %v", err)
+		t.Fatalf("CreateTag: %v", err)
 	}
-
-	if tag.Name != "Test Tag" {
-		t.Errorf("Name = %q, want %q", tag.Name, "Test Tag")
-	}
-	if tag.Slug != "test-tag" {
-		t.Errorf("Slug = %q, want %q", tag.Slug, "test-tag")
+	if tag.Name != "Test Tag" || tag.Slug != "test-tag" {
+		t.Errorf("got Name=%q Slug=%q, want Test Tag/test-tag", tag.Name, tag.Slug)
 	}
 }
 
@@ -126,113 +118,82 @@ func TestTagList(t *testing.T) {
 
 func TestTagUpdate(t *testing.T) {
 	db, _ := testHandlerSetup(t)
+	q := store.New(db)
+	ctx := context.Background()
 
-	queries := store.New(db)
-
-	tag, err := queries.CreateTag(context.Background(), store.CreateTagParams{
-		Name: "Original",
-		Slug: "original",
-	})
+	// Create tag, then update it, then verify
+	tag, err := q.CreateTag(ctx, store.CreateTagParams{Name: "Original", Slug: "original"})
 	if err != nil {
-		t.Fatalf("CreateTag failed: %v", err)
+		t.Fatal(err)
 	}
-
-	_, err = queries.UpdateTag(context.Background(), store.UpdateTagParams{
-		ID:   tag.ID,
-		Name: "Updated",
-		Slug: "updated",
-	})
-	if err != nil {
-		t.Fatalf("UpdateTag failed: %v", err)
+	if _, err = q.UpdateTag(ctx, store.UpdateTagParams{ID: tag.ID, Name: "Updated", Slug: "updated"}); err != nil {
+		t.Fatal(err)
 	}
-
-	updated, err := queries.GetTagByID(context.Background(), tag.ID)
-	if err != nil {
-		t.Fatalf("GetTagByID failed: %v", err)
-	}
-
-	if updated.Name != "Updated" {
-		t.Errorf("Name = %q, want %q", updated.Name, "Updated")
+	if updated, err := q.GetTagByID(ctx, tag.ID); err != nil {
+		t.Fatal(err)
+	} else if updated.Name != "Updated" {
+		t.Errorf("got %q, want Updated", updated.Name)
 	}
 }
 
 func TestTagDelete(t *testing.T) {
 	db, _ := testHandlerSetup(t)
+	q := store.New(db)
+	ctx := context.Background()
 
-	queries := store.New(db)
-
-	tag, err := queries.CreateTag(context.Background(), store.CreateTagParams{
-		Name: "To Delete",
-		Slug: "to-delete",
-	})
+	tag, err := q.CreateTag(ctx, store.CreateTagParams{Name: "To Delete", Slug: "to-delete"})
 	if err != nil {
-		t.Fatalf("CreateTag failed: %v", err)
+		t.Fatal(err)
 	}
-
-	if err := queries.DeleteTag(context.Background(), tag.ID); err != nil {
-		t.Fatalf("DeleteTag failed: %v", err)
+	// Delete and verify it's gone
+	if err := q.DeleteTag(ctx, tag.ID); err != nil {
+		t.Fatal(err)
 	}
-
-	_, err = queries.GetTagByID(context.Background(), tag.ID)
-	if err == nil {
-		t.Error("expected error when getting deleted tag")
+	if _, err = q.GetTagByID(ctx, tag.ID); err == nil {
+		t.Error("tag should be deleted")
 	}
 }
 
 func TestTagSlugExists(t *testing.T) {
 	db, _ := testHandlerSetup(t)
+	q := store.New(db)
+	ctx := context.Background()
 
-	queries := store.New(db)
-
-	_, err := queries.CreateTag(context.Background(), store.CreateTagParams{
-		Name: "Existing",
-		Slug: "existing-tag",
-	})
-	if err != nil {
-		t.Fatalf("CreateTag failed: %v", err)
+	if _, err := q.CreateTag(ctx, store.CreateTagParams{Name: "Existing", Slug: "existing-tag"}); err != nil {
+		t.Fatal(err)
 	}
 
-	t.Run("exists", func(t *testing.T) {
-		count, err := queries.TagSlugExists(context.Background(), "existing-tag")
-		if err != nil {
-			t.Fatalf("TagSlugExists failed: %v", err)
-		}
-		if count == 0 {
-			t.Error("expected slug to exist")
-		}
-	})
+	// Test existing slug
+	if count, err := q.TagSlugExists(ctx, "existing-tag"); err != nil {
+		t.Fatalf("check existing: %v", err)
+	} else if count == 0 {
+		t.Error("slug should exist")
+	}
 
-	t.Run("not exists", func(t *testing.T) {
-		count, err := queries.TagSlugExists(context.Background(), "nonexistent")
-		if err != nil {
-			t.Fatalf("TagSlugExists failed: %v", err)
-		}
-		if count != 0 {
-			t.Error("expected slug to not exist")
-		}
-	})
+	// Test non-existing slug
+	if count, err := q.TagSlugExists(ctx, "nonexistent"); err != nil {
+		t.Fatalf("check nonexistent: %v", err)
+	} else if count != 0 {
+		t.Error("slug should not exist")
+	}
 }
 
 // Category Tests
 
 func TestCategoryCreate(t *testing.T) {
 	db, _ := testHandlerSetup(t)
-
 	queries := store.New(db)
+	ctx := context.Background()
 
-	cat, err := queries.CreateCategory(context.Background(), store.CreateCategoryParams{
-		Name: "Test Category",
-		Slug: "test-category",
-	})
+	cat, err := queries.CreateCategory(ctx, store.CreateCategoryParams{Name: "Test Category", Slug: "test-category"})
 	if err != nil {
-		t.Fatalf("CreateCategory failed: %v", err)
+		t.Fatal(err)
 	}
-
-	if cat.Name != "Test Category" {
-		t.Errorf("Name = %q, want %q", cat.Name, "Test Category")
-	}
-	if cat.Slug != "test-category" {
-		t.Errorf("Slug = %q, want %q", cat.Slug, "test-category")
+	switch {
+	case cat.Name != "Test Category":
+		t.Errorf("Name = %q, want Test Category", cat.Name)
+	case cat.Slug != "test-category":
+		t.Errorf("Slug = %q, want test-category", cat.Slug)
 	}
 }
 
@@ -305,91 +266,79 @@ func TestCategoryList(t *testing.T) {
 
 func TestCategoryUpdate(t *testing.T) {
 	db, _ := testHandlerSetup(t)
-
 	queries := store.New(db)
 
-	cat, err := queries.CreateCategory(context.Background(), store.CreateCategoryParams{
-		Name: "Original Cat",
-		Slug: "original-cat",
+	cat, createErr := queries.CreateCategory(context.Background(), store.CreateCategoryParams{
+		Name: "Original Cat", Slug: "original-cat",
 	})
-	if err != nil {
-		t.Fatalf("CreateCategory failed: %v", err)
+	if createErr != nil {
+		t.Fatalf("create: %v", createErr)
 	}
 
-	_, err = queries.UpdateCategory(context.Background(), store.UpdateCategoryParams{
-		ID:   cat.ID,
-		Name: "Updated Cat",
-		Slug: "updated-cat",
+	_, updateErr := queries.UpdateCategory(context.Background(), store.UpdateCategoryParams{
+		ID: cat.ID, Name: "Updated Cat", Slug: "updated-cat",
 	})
-	if err != nil {
-		t.Fatalf("UpdateCategory failed: %v", err)
+	if updateErr != nil {
+		t.Fatalf("update: %v", updateErr)
 	}
 
-	updated, err := queries.GetCategoryByID(context.Background(), cat.ID)
-	if err != nil {
-		t.Fatalf("GetCategoryByID failed: %v", err)
+	updated, getErr := queries.GetCategoryByID(context.Background(), cat.ID)
+	if getErr != nil {
+		t.Fatalf("get: %v", getErr)
 	}
-
 	if updated.Name != "Updated Cat" {
-		t.Errorf("Name = %q, want %q", updated.Name, "Updated Cat")
+		t.Errorf("Name = %q, want Updated Cat", updated.Name)
 	}
 }
 
 func TestCategoryDelete(t *testing.T) {
 	db, _ := testHandlerSetup(t)
-
 	queries := store.New(db)
 
-	cat, err := queries.CreateCategory(context.Background(), store.CreateCategoryParams{
-		Name: "To Delete Cat",
-		Slug: "to-delete-cat",
+	cat, createErr := queries.CreateCategory(context.Background(), store.CreateCategoryParams{
+		Name: "To Delete Cat", Slug: "to-delete-cat",
 	})
-	if err != nil {
-		t.Fatalf("CreateCategory failed: %v", err)
+	if createErr != nil {
+		t.Fatalf("create: %v", createErr)
 	}
 
-	if err := queries.DeleteCategory(context.Background(), cat.ID); err != nil {
-		t.Fatalf("DeleteCategory failed: %v", err)
+	deleteErr := queries.DeleteCategory(context.Background(), cat.ID)
+	if deleteErr != nil {
+		t.Fatalf("delete: %v", deleteErr)
 	}
 
-	_, err = queries.GetCategoryByID(context.Background(), cat.ID)
-	if err == nil {
-		t.Error("expected error when getting deleted category")
+	_, getErr := queries.GetCategoryByID(context.Background(), cat.ID)
+	if getErr == nil {
+		t.Error("category should not exist after deletion")
 	}
 }
 
 func TestCategorySlugExists(t *testing.T) {
 	db, _ := testHandlerSetup(t)
-
 	queries := store.New(db)
 
-	_, err := queries.CreateCategory(context.Background(), store.CreateCategoryParams{
-		Name: "Existing Cat",
-		Slug: "existing-cat",
+	_, createErr := queries.CreateCategory(context.Background(), store.CreateCategoryParams{
+		Name: "Existing Cat", Slug: "existing-cat",
 	})
-	if err != nil {
-		t.Fatalf("CreateCategory failed: %v", err)
+	if createErr != nil {
+		t.Fatal(createErr)
 	}
 
-	t.Run("exists", func(t *testing.T) {
-		count, err := queries.CategorySlugExists(context.Background(), "existing-cat")
+	testCases := []struct {
+		slug   string
+		exists bool
+	}{
+		{"existing-cat", true},
+		{"nonexistent-cat", false},
+	}
+	for _, tc := range testCases {
+		count, err := queries.CategorySlugExists(context.Background(), tc.slug)
 		if err != nil {
-			t.Fatalf("CategorySlugExists failed: %v", err)
+			t.Errorf("CategorySlugExists(%q): %v", tc.slug, err)
+		} else if (count > 0) != tc.exists {
+			t.Errorf("slug %q: got exists=%v, want %v", tc.slug, count > 0, tc.exists)
 		}
-		if count == 0 {
-			t.Error("expected slug to exist")
-		}
-	})
-
-	t.Run("not exists", func(t *testing.T) {
-		count, err := queries.CategorySlugExists(context.Background(), "nonexistent-cat")
-		if err != nil {
-			t.Fatalf("CategorySlugExists failed: %v", err)
-		}
-		if count != 0 {
-			t.Error("expected slug to not exist")
-		}
-	})
+	}
 }
 
 // Page-Tag/Category Association Tests

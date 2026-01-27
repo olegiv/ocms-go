@@ -107,6 +107,58 @@ func randomElement(slice []string) string {
 	return slice[rand.Intn(len(slice))]
 }
 
+// assignRandomTaxonomy assigns random items from sourceIDs to a page and returns the assigned IDs.
+// maxItems controls how many items to assign (e.g., 3 for tags, 2 for categories).
+func assignRandomTaxonomy(
+	sourceIDs []int64,
+	maxItems int,
+	assignFn func(int64) error,
+) []int64 {
+	if len(sourceIDs) == 0 {
+		return nil
+	}
+	var assigned []int64
+	numItems := rand.Intn(maxItems) + 1
+	usedIDs := make(map[int64]bool)
+	for j := 0; j < numItems && j < len(sourceIDs); j++ {
+		id := sourceIDs[rand.Intn(len(sourceIDs))]
+		if usedIDs[id] {
+			continue
+		}
+		usedIDs[id] = true
+		if err := assignFn(id); err == nil {
+			assigned = append(assigned, id)
+		}
+	}
+	return assigned
+}
+
+// assignTranslatedTaxonomy assigns translated versions of original items to a translated page.
+func assignTranslatedTaxonomy(
+	ctx context.Context,
+	queries *store.Queries,
+	entityType string,
+	origIDs []int64,
+	langID int64,
+	assignFn func(translatedID int64) error,
+	warnFn func(msg string, args ...any),
+) {
+	for _, origID := range origIDs {
+		translatedID, err := queries.GetTranslatedEntityID(ctx, store.GetTranslatedEntityIDParams{
+			EntityType: entityType,
+			EntityID:   origID,
+			LanguageID: langID,
+		})
+		if err != nil {
+			warnFn("failed to get translated "+entityType, "origID", origID, "langID", langID, "error", err)
+			continue
+		}
+		if err := assignFn(translatedID); err != nil {
+			warnFn("failed to add translated "+entityType, "error", err)
+		}
+	}
+}
+
 // generateLoremIpsum generates 3-5 paragraphs of Lorem Ipsum
 func generateLoremIpsum() string {
 	numParagraphs := rand.Intn(3) + 3 // 3-5 paragraphs
@@ -716,51 +768,13 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 		}
 		pageIDs = append(pageIDs, page.ID)
 
-		// Collect the tag and category IDs assigned to the original page
-		var assignedTagIDs []int64
-		var assignedCatIDs []int64
-
-		// Assign 1-3 random tags to original page and collect them
-		if len(tagIDs) > 0 {
-			numTags := rand.Intn(3) + 1
-			usedTagIDs := make(map[int64]bool)
-			for j := 0; j < numTags && j < len(tagIDs); j++ {
-				tagID := tagIDs[rand.Intn(len(tagIDs))]
-				if usedTagIDs[tagID] {
-					continue
-				}
-				usedTagIDs[tagID] = true
-				if err := queries.AddTagToPage(ctx, store.AddTagToPageParams{
-					PageID: page.ID,
-					TagID:  tagID,
-				}); err != nil {
-					m.ctx.Logger.Warn("failed to add tag to page", "error", err)
-				} else {
-					assignedTagIDs = append(assignedTagIDs, tagID)
-				}
-			}
-		}
-
-		// Assign 1-2 random categories to original page and collect them
-		if len(catIDs) > 0 {
-			numCats := rand.Intn(2) + 1
-			usedCatIDs := make(map[int64]bool)
-			for j := 0; j < numCats && j < len(catIDs); j++ {
-				catID := catIDs[rand.Intn(len(catIDs))]
-				if usedCatIDs[catID] {
-					continue
-				}
-				usedCatIDs[catID] = true
-				if err := queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{
-					PageID:     page.ID,
-					CategoryID: catID,
-				}); err != nil {
-					m.ctx.Logger.Warn("failed to add category to page", "error", err)
-				} else {
-					assignedCatIDs = append(assignedCatIDs, catID)
-				}
-			}
-		}
+		// Assign 1-3 random tags and 1-2 random categories to original page
+		assignedTagIDs := assignRandomTaxonomy(tagIDs, 3, func(tagID int64) error {
+			return queries.AddTagToPage(ctx, store.AddTagToPageParams{PageID: page.ID, TagID: tagID})
+		})
+		assignedCatIDs := assignRandomTaxonomy(catIDs, 2, func(catID int64) error {
+			return queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: page.ID, CategoryID: catID})
+		})
 
 		// Create translations for other languages
 		for _, lang := range languages {
@@ -809,43 +823,15 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 				return nil, fmt.Errorf("failed to track page translation: %w", err)
 			}
 
-			// Assign translated tags to the translated page
-			for _, origTagID := range assignedTagIDs {
-				translatedTagID, err := queries.GetTranslatedEntityID(ctx, store.GetTranslatedEntityIDParams{
-					EntityType: "tag",
-					EntityID:   origTagID,
-					LanguageID: lang.ID,
-				})
-				if err != nil {
-					m.ctx.Logger.Warn("failed to get translated tag", "origTagID", origTagID, "langID", lang.ID, "error", err)
-					continue
-				}
-				if err := queries.AddTagToPage(ctx, store.AddTagToPageParams{
-					PageID: transPage.ID,
-					TagID:  translatedTagID,
-				}); err != nil {
-					m.ctx.Logger.Warn("failed to add translated tag to page", "error", err)
-				}
-			}
-
-			// Assign translated categories to the translated page
-			for _, origCatID := range assignedCatIDs {
-				translatedCatID, err := queries.GetTranslatedEntityID(ctx, store.GetTranslatedEntityIDParams{
-					EntityType: "category",
-					EntityID:   origCatID,
-					LanguageID: lang.ID,
-				})
-				if err != nil {
-					m.ctx.Logger.Warn("failed to get translated category", "origCatID", origCatID, "langID", lang.ID, "error", err)
-					continue
-				}
-				if err := queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{
-					PageID:     transPage.ID,
-					CategoryID: translatedCatID,
-				}); err != nil {
-					m.ctx.Logger.Warn("failed to add translated category to page", "error", err)
-				}
-			}
+			// Assign translated tags and categories to the translated page
+			assignTranslatedTaxonomy(ctx, queries, "tag", assignedTagIDs, lang.ID,
+				func(tagID int64) error {
+					return queries.AddTagToPage(ctx, store.AddTagToPageParams{PageID: transPage.ID, TagID: tagID})
+				}, m.ctx.Logger.Warn)
+			assignTranslatedTaxonomy(ctx, queries, "category", assignedCatIDs, lang.ID,
+				func(catID int64) error {
+					return queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: transPage.ID, CategoryID: catID})
+				}, m.ctx.Logger.Warn)
 
 			// Create translation record
 			trans, err := queries.CreateTranslation(ctx, store.CreateTranslationParams{

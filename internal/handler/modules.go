@@ -93,52 +93,63 @@ type ToggleSidebarResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
-// ToggleActive handles POST /admin/modules/{name}/toggle - toggles module active status.
-func (h *ModulesHandler) ToggleActive(w http.ResponseWriter, r *http.Request) {
+// moduleToggleParams holds parameters for a generic module toggle operation.
+type moduleToggleParams struct {
+	fieldName string                            // JSON response field name (e.g., "active", "show")
+	logMsg    string                            // Log message (e.g., "module active status toggled")
+	setFn     func(name string, val bool) error // Registry setter function
+}
+
+// handleModuleToggle performs a generic toggle operation for a module boolean field.
+func (h *ModulesHandler) handleModuleToggle(w http.ResponseWriter, r *http.Request, p moduleToggleParams) {
 	moduleName := chi.URLParam(r, "name")
 	if moduleName == "" {
 		writeJSONError(w, http.StatusBadRequest, "Module name required")
 		return
 	}
 
-	var req ToggleActiveRequest
+	var req struct {
+		Value bool `json:"active"`
+		Show  bool `json:"show"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	if err := h.registry.SetActive(moduleName, req.Active); err != nil {
-		slog.Error("failed to toggle module active status", "module", moduleName, "error", err)
+	// Get the actual value based on field name
+	var value bool
+	switch p.fieldName {
+	case "active":
+		value = req.Value
+	case "show":
+		value = req.Show
+	}
+
+	if err := p.setFn(moduleName, value); err != nil {
+		slog.Error("failed to toggle module "+p.fieldName, "module", moduleName, "error", err)
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	slog.Info("module active status toggled", "module", moduleName, "active", req.Active)
+	slog.Info(p.logMsg, "module", moduleName, p.fieldName, value)
+	writeJSONSuccess(w, map[string]any{p.fieldName: value})
+}
 
-	writeJSONSuccess(w, map[string]any{"active": req.Active})
+// ToggleActive handles POST /admin/modules/{name}/toggle - toggles module active status.
+func (h *ModulesHandler) ToggleActive(w http.ResponseWriter, r *http.Request) {
+	h.handleModuleToggle(w, r, moduleToggleParams{
+		fieldName: "active",
+		logMsg:    "module active status toggled",
+		setFn:     h.registry.SetActive,
+	})
 }
 
 // ToggleSidebar handles POST /admin/modules/{name}/toggle-sidebar - toggles module sidebar visibility.
 func (h *ModulesHandler) ToggleSidebar(w http.ResponseWriter, r *http.Request) {
-	moduleName := chi.URLParam(r, "name")
-	if moduleName == "" {
-		writeJSONError(w, http.StatusBadRequest, "Module name required")
-		return
-	}
-
-	var req ToggleSidebarRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
-		return
-	}
-
-	if err := h.registry.SetShowInSidebar(moduleName, req.Show); err != nil {
-		slog.Error("failed to toggle module sidebar visibility", "module", moduleName, "error", err)
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	slog.Info("module sidebar visibility toggled", "module", moduleName, "show", req.Show)
-
-	writeJSONSuccess(w, map[string]any{"show": req.Show})
+	h.handleModuleToggle(w, r, moduleToggleParams{
+		fieldName: "show",
+		logMsg:    "module sidebar visibility toggled",
+		setFn:     h.registry.SetShowInSidebar,
+	})
 }

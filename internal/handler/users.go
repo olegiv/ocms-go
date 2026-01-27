@@ -265,7 +265,6 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // EditForm handles GET /admin/users/{id} - displays the edit user form.
 func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
-	currentUser := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -291,16 +290,10 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		IsEdit: true,
 	}
 
-	h.renderer.RenderPage(w, r, "admin/users_form", render.TemplateData{
-		Title: i18n.T(lang, "users.edit"),
-		User:  currentUser,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.users"), URL: redirectAdminUsers},
-			{Label: editUser.Name, URL: fmt.Sprintf(redirectAdminUsersID, editUser.ID), Active: true},
-		},
-	})
+	renderEntityEditPage(w, r, h.renderer, "admin/users_form",
+		i18n.T(lang, "users.edit"), data, lang,
+		"nav.users", redirectAdminUsers,
+		editUser.Name, fmt.Sprintf(redirectAdminUsersID, editUser.ID))
 }
 
 // Update handles PUT /admin/users/{id} - updates an existing user.
@@ -404,16 +397,10 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 			IsEdit:     true,
 		}
 
-		h.renderer.RenderPage(w, r, "admin/users_form", render.TemplateData{
-			Title: i18n.T(lang, "users.edit"),
-			User:  currentUser,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-				{Label: i18n.T(lang, "nav.users"), URL: redirectAdminUsers},
-				{Label: editUser.Name, URL: fmt.Sprintf(redirectAdminUsersID, id), Active: true},
-			},
-		})
+		renderEntityEditPage(w, r, h.renderer, "admin/users_form",
+			i18n.T(lang, "users.edit"), data, lang,
+			"nav.users", redirectAdminUsers,
+			editUser.Name, fmt.Sprintf(redirectAdminUsersID, id))
 		return
 	}
 

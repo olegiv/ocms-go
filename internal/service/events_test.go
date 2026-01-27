@@ -146,69 +146,44 @@ func TestLogEvent_NilMetadata(t *testing.T) {
 	}
 }
 
-func TestLogInfo(t *testing.T) {
-	db := setupEventTestDB(t)
-	defer func() { _ = db.Close() }()
-
+// testEventField tests that a logging function produces the expected field value in the database.
+func testEventField(t *testing.T, db *sql.DB, logFn func(*EventService, context.Context) error, fieldName, expected string) {
+	t.Helper()
 	svc := NewEventService(db)
 	ctx := context.Background()
 
-	err := svc.LogInfo(ctx, model.EventCategoryPage, "Page created", nil, nil)
+	err := logFn(svc, ctx)
 	if err != nil {
-		t.Fatalf("LogInfo failed: %v", err)
+		t.Fatalf("Log function failed: %v", err)
 	}
 
-	var level string
-	err = db.QueryRow("SELECT level FROM events").Scan(&level)
+	var got string
+	err = db.QueryRow("SELECT " + fieldName + " FROM events").Scan(&got)
 	if err != nil {
 		t.Fatalf("failed to read event: %v", err)
 	}
-	if level != "info" {
-		t.Errorf("level = %q, want %q", level, "info")
+	if got != expected {
+		t.Errorf("%s = %q, want %q", fieldName, got, expected)
 	}
 }
 
-func TestLogWarning(t *testing.T) {
-	db := setupEventTestDB(t)
-	defer func() { _ = db.Close() }()
-
-	svc := NewEventService(db)
-	ctx := context.Background()
-
-	err := svc.LogWarning(ctx, model.EventCategorySystem, "Low disk space", nil, nil)
-	if err != nil {
-		t.Fatalf("LogWarning failed: %v", err)
+func TestLogLevels(t *testing.T) {
+	tests := []struct {
+		name     string
+		logFn    func(*EventService, context.Context) error
+		expected string
+	}{
+		{"info", func(svc *EventService, ctx context.Context) error { return svc.LogInfo(ctx, model.EventCategoryPage, "Page created", nil, nil) }, "info"},
+		{"warning", func(svc *EventService, ctx context.Context) error { return svc.LogWarning(ctx, model.EventCategorySystem, "Low disk space", nil, nil) }, "warning"},
+		{"error", func(svc *EventService, ctx context.Context) error { return svc.LogError(ctx, model.EventCategoryAuth, "Login failed", nil, nil) }, "error"},
 	}
 
-	var level string
-	err = db.QueryRow("SELECT level FROM events").Scan(&level)
-	if err != nil {
-		t.Fatalf("failed to read event: %v", err)
-	}
-	if level != "warning" {
-		t.Errorf("level = %q, want %q", level, "warning")
-	}
-}
-
-func TestLogError(t *testing.T) {
-	db := setupEventTestDB(t)
-	defer func() { _ = db.Close() }()
-
-	svc := NewEventService(db)
-	ctx := context.Background()
-
-	err := svc.LogError(ctx, model.EventCategoryAuth, "Login failed", nil, nil)
-	if err != nil {
-		t.Fatalf("LogError failed: %v", err)
-	}
-
-	var level string
-	err = db.QueryRow("SELECT level FROM events").Scan(&level)
-	if err != nil {
-		t.Fatalf("failed to read event: %v", err)
-	}
-	if level != "error" {
-		t.Errorf("level = %q, want %q", level, "error")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := setupEventTestDB(t)
+			defer func() { _ = db.Close() }()
+			testEventField(t, db, tt.logFn, "level", tt.expected)
+		})
 	}
 }
 
@@ -247,135 +222,26 @@ func TestLogMigratorEvent(t *testing.T) {
 	}
 }
 
-func TestLogAuthEvent(t *testing.T) {
-	db := setupEventTestDB(t)
-	defer func() { _ = db.Close() }()
-
-	svc := NewEventService(db)
-	ctx := context.Background()
-
-	err := svc.LogAuthEvent(ctx, model.EventLevelInfo, "User logged in", nil, nil)
-	if err != nil {
-		t.Fatalf("LogAuthEvent failed: %v", err)
+func TestLogCategoryEvents(t *testing.T) {
+	tests := []struct {
+		name     string
+		logFn    func(*EventService, context.Context) error
+		expected string
+	}{
+		{"auth", func(svc *EventService, ctx context.Context) error { return svc.LogAuthEvent(ctx, model.EventLevelInfo, "User logged in", nil, nil) }, "auth"},
+		{"page", func(svc *EventService, ctx context.Context) error { return svc.LogPageEvent(ctx, model.EventLevelInfo, "Page published", nil, nil) }, "page"},
+		{"user", func(svc *EventService, ctx context.Context) error { return svc.LogUserEvent(ctx, model.EventLevelInfo, "User created", nil, nil) }, "user"},
+		{"config", func(svc *EventService, ctx context.Context) error { return svc.LogConfigEvent(ctx, model.EventLevelInfo, "Config updated", nil, nil) }, "config"},
+		{"system", func(svc *EventService, ctx context.Context) error { return svc.LogSystemEvent(ctx, model.EventLevelInfo, "System started", nil, nil) }, "system"},
+		{"cache", func(svc *EventService, ctx context.Context) error { return svc.LogCacheEvent(ctx, model.EventLevelInfo, "Cache cleared", nil, nil) }, "cache"},
 	}
 
-	var category string
-	err = db.QueryRow("SELECT category FROM events").Scan(&category)
-	if err != nil {
-		t.Fatalf("failed to read event: %v", err)
-	}
-	if category != "auth" {
-		t.Errorf("category = %q, want %q", category, "auth")
-	}
-}
-
-func TestLogPageEvent(t *testing.T) {
-	db := setupEventTestDB(t)
-	defer func() { _ = db.Close() }()
-
-	svc := NewEventService(db)
-	ctx := context.Background()
-
-	err := svc.LogPageEvent(ctx, model.EventLevelInfo, "Page published", nil, nil)
-	if err != nil {
-		t.Fatalf("LogPageEvent failed: %v", err)
-	}
-
-	var category string
-	err = db.QueryRow("SELECT category FROM events").Scan(&category)
-	if err != nil {
-		t.Fatalf("failed to read event: %v", err)
-	}
-	if category != "page" {
-		t.Errorf("category = %q, want %q", category, "page")
-	}
-}
-
-func TestLogUserEvent(t *testing.T) {
-	db := setupEventTestDB(t)
-	defer func() { _ = db.Close() }()
-
-	svc := NewEventService(db)
-	ctx := context.Background()
-
-	err := svc.LogUserEvent(ctx, model.EventLevelInfo, "User created", nil, nil)
-	if err != nil {
-		t.Fatalf("LogUserEvent failed: %v", err)
-	}
-
-	var category string
-	err = db.QueryRow("SELECT category FROM events").Scan(&category)
-	if err != nil {
-		t.Fatalf("failed to read event: %v", err)
-	}
-	if category != "user" {
-		t.Errorf("category = %q, want %q", category, "user")
-	}
-}
-
-func TestLogConfigEvent(t *testing.T) {
-	db := setupEventTestDB(t)
-	defer func() { _ = db.Close() }()
-
-	svc := NewEventService(db)
-	ctx := context.Background()
-
-	err := svc.LogConfigEvent(ctx, model.EventLevelInfo, "Config updated", nil, nil)
-	if err != nil {
-		t.Fatalf("LogConfigEvent failed: %v", err)
-	}
-
-	var category string
-	err = db.QueryRow("SELECT category FROM events").Scan(&category)
-	if err != nil {
-		t.Fatalf("failed to read event: %v", err)
-	}
-	if category != "config" {
-		t.Errorf("category = %q, want %q", category, "config")
-	}
-}
-
-func TestLogSystemEvent(t *testing.T) {
-	db := setupEventTestDB(t)
-	defer func() { _ = db.Close() }()
-
-	svc := NewEventService(db)
-	ctx := context.Background()
-
-	err := svc.LogSystemEvent(ctx, model.EventLevelInfo, "System started", nil, nil)
-	if err != nil {
-		t.Fatalf("LogSystemEvent failed: %v", err)
-	}
-
-	var category string
-	err = db.QueryRow("SELECT category FROM events").Scan(&category)
-	if err != nil {
-		t.Fatalf("failed to read event: %v", err)
-	}
-	if category != "system" {
-		t.Errorf("category = %q, want %q", category, "system")
-	}
-}
-
-func TestLogCacheEvent(t *testing.T) {
-	db := setupEventTestDB(t)
-	defer func() { _ = db.Close() }()
-
-	svc := NewEventService(db)
-	ctx := context.Background()
-
-	err := svc.LogCacheEvent(ctx, model.EventLevelInfo, "Cache cleared", nil, nil)
-	if err != nil {
-		t.Fatalf("LogCacheEvent failed: %v", err)
-	}
-
-	var category string
-	err = db.QueryRow("SELECT category FROM events").Scan(&category)
-	if err != nil {
-		t.Fatalf("failed to read event: %v", err)
-	}
-	if category != "cache" {
-		t.Errorf("category = %q, want %q", category, "cache")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := setupEventTestDB(t)
+			defer func() { _ = db.Close() }()
+			testEventField(t, db, tt.logFn, "category", tt.expected)
+		})
 	}
 }
 

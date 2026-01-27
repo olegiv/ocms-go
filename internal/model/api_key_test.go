@@ -64,72 +64,23 @@ func TestHashAPIKey(t *testing.T) {
 }
 
 func TestAPIKeyGetPermissions(t *testing.T) {
-	tests := []struct {
-		name        string
-		permissions string
-		want        []string
-	}{
-		{
-			name:        "empty string",
-			permissions: "",
-			want:        []string{},
-		},
-		{
-			name:        "empty array",
-			permissions: "[]",
-			want:        []string{},
-		},
-		{
-			name:        "single permission",
-			permissions: `["pages:read"]`,
-			want:        []string{"pages:read"},
-		},
-		{
-			name:        "multiple permissions",
-			permissions: `["pages:read","pages:write","media:read"]`,
-			want:        []string{"pages:read", "pages:write", "media:read"},
-		},
-	}
-
+	tests := standardJSONArrayParseTests("pages:read", "pages:read", "pages:write", "media:read")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			k := &APIKey{Permissions: tt.permissions}
-			got := k.GetPermissions()
-			if len(got) != len(tt.want) {
-				t.Errorf("GetPermissions() = %v, want %v", got, tt.want)
-				return
-			}
-			for i, p := range got {
-				if p != tt.want[i] {
-					t.Errorf("GetPermissions()[%d] = %q, want %q", i, p, tt.want[i])
-				}
-			}
+			k := &APIKey{Permissions: tt.input}
+			assertStringSliceEqual(t, "GetPermissions()", k.GetPermissions(), tt.want)
 		})
 	}
 }
 
 func TestAPIKeyHasPermission(t *testing.T) {
-	key := &APIKey{
-		Permissions: `["pages:read","pages:write"]`,
-	}
-
-	tests := []struct {
-		perm string
-		want bool
-	}{
+	key := &APIKey{Permissions: `["pages:read","pages:write"]`}
+	runHasItemTests(t, []hasItemTest{
 		{"pages:read", true},
 		{"pages:write", true},
 		{"media:read", false},
 		{"unknown", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.perm, func(t *testing.T) {
-			if got := key.HasPermission(tt.perm); got != tt.want {
-				t.Errorf("HasPermission(%q) = %v, want %v", tt.perm, got, tt.want)
-			}
-		})
-	}
+	}, key.HasPermission)
 }
 
 func TestAPIKeyHasAnyPermission(t *testing.T) {

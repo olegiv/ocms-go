@@ -5,7 +5,6 @@ package handler
 
 import (
 	"database/sql"
-	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -449,34 +448,17 @@ func parseAPIKeyID(r *http.Request) (int64, string, bool) {
 // fetchAPIKey fetches an API key by ID and handles common error cases.
 // Returns the API key and whether the fetch succeeded.
 func (h *APIKeysHandler) fetchAPIKey(w http.ResponseWriter, r *http.Request, id int64) (store.ApiKey, bool) {
-	apiKey, err := h.queries.GetAPIKeyByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			flashError(w, r, h.renderer, redirectAdminAPIKeys, "API key not found")
-		} else {
-			slog.Error("failed to get API key", "error", err)
-			flashError(w, r, h.renderer, redirectAdminAPIKeys, "Error loading API key")
-		}
-		return store.ApiKey{}, false
-	}
-	return apiKey, true
+	return requireEntityWithRedirect(w, r, h.renderer, redirectAdminAPIKeys, "API key", id,
+		func(id int64) (store.ApiKey, error) { return h.queries.GetAPIKeyByID(r.Context(), id) })
 }
 
 // fetchAPIKeyForDelete fetches an API key by ID for delete operations.
 // Uses sendDeleteError for error responses (HTMX-compatible).
 // Returns the API key and true if successful, or zero value and false if an error occurred.
 func (h *APIKeysHandler) fetchAPIKeyForDelete(w http.ResponseWriter, r *http.Request, id int64) (store.ApiKey, bool) {
-	apiKey, err := h.queries.GetAPIKeyByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			h.sendDeleteError(w, "API key not found")
-		} else {
-			slog.Error("failed to get API key", "error", err)
-			h.sendDeleteError(w, "Error loading API key")
-		}
-		return store.ApiKey{}, false
-	}
-	return apiKey, true
+	return requireEntityWithCustomError(w, "API key", id,
+		func(id int64) (store.ApiKey, error) { return h.queries.GetAPIKeyByID(r.Context(), id) },
+		h.sendDeleteError)
 }
 
 // renderAPIKeyForm renders the API key form with appropriate breadcrumbs.

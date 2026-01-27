@@ -62,12 +62,12 @@ func (e *Exporter) Export(ctx context.Context, opts ExportOptions) (*ExportData,
 	}
 
 	// Build lookup maps for reference resolution
-	userMap, err := e.buildUserMap(ctx)
+	userMap, err := e.buildIDLookupMap(ctx, exportUser)
 	if err != nil {
 		e.logger.Warn("failed to build user map", "error", err)
 	}
 
-	categoryMap, err := e.buildCategoryMap(ctx)
+	categoryMap, err := e.buildIDLookupMap(ctx, exportCategory)
 	if err != nil {
 		e.logger.Warn("failed to build category map", "error", err)
 	}
@@ -77,12 +77,12 @@ func (e *Exporter) Export(ctx context.Context, opts ExportOptions) (*ExportData,
 		e.logger.Warn("failed to build media map", "error", err)
 	}
 
-	languageMap, err := e.buildLanguageMap(ctx)
+	languageMap, err := e.buildIDLookupMap(ctx, exportLanguage)
 	if err != nil {
 		e.logger.Warn("failed to build language map", "error", err)
 	}
 
-	pageMap, err := e.buildPageSlugMap(ctx)
+	pageMap, err := e.buildIDLookupMap(ctx, exportPage)
 	if err != nil {
 		e.logger.Warn("failed to build page slug map", "error", err)
 	}
@@ -753,86 +753,68 @@ func (e *Exporter) exportForms(ctx context.Context, data *ExportData, includeSub
 
 // Helper methods for building lookup maps
 
-// buildUserMap creates a map of user ID to email.
-func (e *Exporter) buildUserMap(ctx context.Context) (map[int64]string, error) {
-	users, err := e.store.ListUsers(ctx, store.ListUsersParams{
-		Limit:  10000,
-		Offset: 0,
-	})
-	if err != nil {
-		return nil, err
+// buildIDToStringMap is a generic helper that builds a map from ID to string value.
+func buildIDToStringMap[T any](items []T, idFn func(T) int64, valueFn func(T) string) map[int64]string {
+	m := make(map[int64]string, len(items))
+	for _, item := range items {
+		m[idFn(item)] = valueFn(item)
 	}
-
-	userMap := make(map[int64]string, len(users))
-	for _, user := range users {
-		userMap[user.ID] = user.Email
-	}
-	return userMap, nil
+	return m
 }
 
-// buildCategoryMap creates a map of category ID to slug.
-func (e *Exporter) buildCategoryMap(ctx context.Context) (map[int64]string, error) {
-	categories, err := e.store.ListCategories(ctx)
-	if err != nil {
-		return nil, err
-	}
+// exportEntityType defines the type of entity for building export lookup maps.
+type exportEntityType int
 
-	categoryMap := make(map[int64]string, len(categories))
-	for _, cat := range categories {
-		categoryMap[cat.ID] = cat.Slug
+const (
+	exportUser exportEntityType = iota
+	exportCategory
+	exportLanguage
+	exportPage
+)
+
+// buildIDLookupMap builds an ID-to-string lookup map for the specified entity type.
+func (e *Exporter) buildIDLookupMap(ctx context.Context, entityType exportEntityType) (map[int64]string, error) {
+	switch entityType {
+	case exportUser:
+		users, err := e.store.ListUsers(ctx, store.ListUsersParams{Limit: 10000, Offset: 0})
+		if err != nil {
+			return nil, err
+		}
+		return buildIDToStringMap(users, func(u store.User) int64 { return u.ID }, func(u store.User) string { return u.Email }), nil
+	case exportCategory:
+		categories, err := e.store.ListCategories(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return buildIDToStringMap(categories, func(c store.Category) int64 { return c.ID }, func(c store.Category) string { return c.Slug }), nil
+	case exportLanguage:
+		languages, err := e.store.ListLanguages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return buildIDToStringMap(languages, func(l store.Language) int64 { return l.ID }, func(l store.Language) string { return l.Code }), nil
+	case exportPage:
+		pages, err := e.store.ListPages(ctx, store.ListPagesParams{Limit: 100000, Offset: 0})
+		if err != nil {
+			return nil, err
+		}
+		return buildIDToStringMap(pages, func(p store.Page) int64 { return p.ID }, func(p store.Page) string { return p.Slug }), nil
+	default:
+		return make(map[int64]string), nil
 	}
-	return categoryMap, nil
 }
 
 // buildMediaMap creates a map of media ID to media reference.
 func (e *Exporter) buildMediaMap(ctx context.Context) (map[int64]ExportMediaRef, error) {
-	media, err := e.store.ListMedia(ctx, store.ListMediaParams{
-		Limit:  100000,
-		Offset: 0,
-	})
+	media, err := e.store.ListMedia(ctx, store.ListMediaParams{Limit: 100000, Offset: 0})
 	if err != nil {
 		return nil, err
 	}
-
 	mediaMap := make(map[int64]ExportMediaRef, len(media))
 	for _, m := range media {
-		mediaMap[m.ID] = ExportMediaRef{
-			UUID:     m.Uuid,
-			Filename: m.Filename,
-		}
+		mediaMap[m.ID] = ExportMediaRef{UUID: m.Uuid, Filename: m.Filename}
 	}
 	return mediaMap, nil
-}
-
-// buildLanguageMap creates a map of language ID to code.
-func (e *Exporter) buildLanguageMap(ctx context.Context) (map[int64]string, error) {
-	languages, err := e.store.ListLanguages(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	languageMap := make(map[int64]string, len(languages))
-	for _, lang := range languages {
-		languageMap[lang.ID] = lang.Code
-	}
-	return languageMap, nil
-}
-
-// buildPageSlugMap creates a map of page ID to slug.
-func (e *Exporter) buildPageSlugMap(ctx context.Context) (map[int64]string, error) {
-	pages, err := e.store.ListPages(ctx, store.ListPagesParams{
-		Limit:  100000,
-		Offset: 0,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	pageMap := make(map[int64]string, len(pages))
-	for _, page := range pages {
-		pageMap[page.ID] = page.Slug
-	}
-	return pageMap, nil
 }
 
 // buildFolderPathMap creates a map of folder ID to full path.

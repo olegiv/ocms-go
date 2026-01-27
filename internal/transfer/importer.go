@@ -96,7 +96,7 @@ func (i *Importer) Import(ctx context.Context, data *ExportData, opts ImportOpti
 	}
 
 	// Build language code to ID map for later use
-	languageMap, err := i.buildLanguageCodeMap(ctx, queries)
+	languageMap, err := i.buildLookupMap(ctx, queries, entityLanguage)
 	if err != nil {
 		i.logger.Warn("failed to build language map", "error", err)
 		languageMap = make(map[string]int64)
@@ -108,7 +108,7 @@ func (i *Importer) Import(ctx context.Context, data *ExportData, opts ImportOpti
 	}
 
 	// Build user email to ID map for later use
-	userMap, err := i.buildUserEmailMap(ctx, queries)
+	userMap, err := i.buildLookupMap(ctx, queries, entityUser)
 	if err != nil {
 		i.logger.Warn("failed to build user map", "error", err)
 		userMap = make(map[string]int64)
@@ -120,7 +120,7 @@ func (i *Importer) Import(ctx context.Context, data *ExportData, opts ImportOpti
 	}
 
 	// Build category slug to ID map
-	categoryMap, err := i.buildCategorySlugMap(ctx, queries)
+	categoryMap, err := i.buildLookupMap(ctx, queries, entityCategory)
 	if err != nil {
 		i.logger.Warn("failed to build category map", "error", err)
 		categoryMap = make(map[string]int64)
@@ -132,7 +132,7 @@ func (i *Importer) Import(ctx context.Context, data *ExportData, opts ImportOpti
 	}
 
 	// Build tag slug to ID map
-	tagMap, err := i.buildTagSlugMap(ctx, queries)
+	tagMap, err := i.buildLookupMap(ctx, queries, entityTag)
 	if err != nil {
 		i.logger.Warn("failed to build tag map", "error", err)
 		tagMap = make(map[string]int64)
@@ -144,7 +144,7 @@ func (i *Importer) Import(ctx context.Context, data *ExportData, opts ImportOpti
 	}
 
 	// Build media UUID to ID map
-	mediaMap, err := i.buildMediaUUIDMap(ctx, queries)
+	mediaMap, err := i.buildLookupMap(ctx, queries, entityMedia)
 	if err != nil {
 		i.logger.Warn("failed to build media map", "error", err)
 		mediaMap = make(map[string]int64)
@@ -156,7 +156,7 @@ func (i *Importer) Import(ctx context.Context, data *ExportData, opts ImportOpti
 	}
 
 	// Build page slug to ID map
-	pageMap, err := i.buildPageSlugMap(ctx, queries)
+	pageMap, err := i.buildLookupMap(ctx, queries, entityPage)
 	if err != nil {
 		i.logger.Warn("failed to build page map", "error", err)
 		pageMap = make(map[string]int64)
@@ -1547,52 +1547,60 @@ func buildEntityMap[T any](items []T, keyFn func(T) string, idFn func(T) int64) 
 	return m
 }
 
-func (i *Importer) buildLanguageCodeMap(ctx context.Context, queries *store.Queries) (map[string]int64, error) {
-	languages, err := queries.ListLanguages(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return buildEntityMap(languages, func(l store.Language) string { return l.Code }, func(l store.Language) int64 { return l.ID }), nil
-}
+// importEntityType defines the type of entity for building lookup maps.
+type importEntityType int
 
-func (i *Importer) buildUserEmailMap(ctx context.Context, queries *store.Queries) (map[string]int64, error) {
-	users, err := queries.ListUsers(ctx, store.ListUsersParams{Limit: 10000, Offset: 0})
-	if err != nil {
-		return nil, err
-	}
-	return buildEntityMap(users, func(u store.User) string { return u.Email }, func(u store.User) int64 { return u.ID }), nil
-}
+const (
+	entityLanguage importEntityType = iota
+	entityUser
+	entityCategory
+	entityTag
+	entityMedia
+	entityPage
+)
 
-func (i *Importer) buildCategorySlugMap(ctx context.Context, queries *store.Queries) (map[string]int64, error) {
-	categories, err := queries.ListCategories(ctx)
-	if err != nil {
-		return nil, err
+// buildLookupMap builds a string-to-ID lookup map for the specified entity type.
+func (i *Importer) buildLookupMap(ctx context.Context, queries *store.Queries, entityType importEntityType) (map[string]int64, error) {
+	switch entityType {
+	case entityLanguage:
+		languages, err := queries.ListLanguages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return buildEntityMap(languages, func(l store.Language) string { return l.Code }, func(l store.Language) int64 { return l.ID }), nil
+	case entityUser:
+		users, err := queries.ListUsers(ctx, store.ListUsersParams{Limit: 10000, Offset: 0})
+		if err != nil {
+			return nil, err
+		}
+		return buildEntityMap(users, func(u store.User) string { return u.Email }, func(u store.User) int64 { return u.ID }), nil
+	case entityCategory:
+		categories, err := queries.ListCategories(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return buildEntityMap(categories, func(c store.Category) string { return c.Slug }, func(c store.Category) int64 { return c.ID }), nil
+	case entityTag:
+		tags, err := queries.ListAllTags(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return buildEntityMap(tags, func(t store.Tag) string { return t.Slug }, func(t store.Tag) int64 { return t.ID }), nil
+	case entityMedia:
+		media, err := queries.ListMedia(ctx, store.ListMediaParams{Limit: 100000, Offset: 0})
+		if err != nil {
+			return nil, err
+		}
+		return buildEntityMap(media, func(m store.Medium) string { return m.Uuid }, func(m store.Medium) int64 { return m.ID }), nil
+	case entityPage:
+		pages, err := queries.ListPages(ctx, store.ListPagesParams{Limit: 100000, Offset: 0})
+		if err != nil {
+			return nil, err
+		}
+		return buildEntityMap(pages, func(p store.Page) string { return p.Slug }, func(p store.Page) int64 { return p.ID }), nil
+	default:
+		return make(map[string]int64), nil
 	}
-	return buildEntityMap(categories, func(c store.Category) string { return c.Slug }, func(c store.Category) int64 { return c.ID }), nil
-}
-
-func (i *Importer) buildTagSlugMap(ctx context.Context, queries *store.Queries) (map[string]int64, error) {
-	tags, err := queries.ListAllTags(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return buildEntityMap(tags, func(t store.Tag) string { return t.Slug }, func(t store.Tag) int64 { return t.ID }), nil
-}
-
-func (i *Importer) buildMediaUUIDMap(ctx context.Context, queries *store.Queries) (map[string]int64, error) {
-	media, err := queries.ListMedia(ctx, store.ListMediaParams{Limit: 100000, Offset: 0})
-	if err != nil {
-		return nil, err
-	}
-	return buildEntityMap(media, func(m store.Medium) string { return m.Uuid }, func(m store.Medium) int64 { return m.ID }), nil
-}
-
-func (i *Importer) buildPageSlugMap(ctx context.Context, queries *store.Queries) (map[string]int64, error) {
-	pages, err := queries.ListPages(ctx, store.ListPagesParams{Limit: 100000, Offset: 0})
-	if err != nil {
-		return nil, err
-	}
-	return buildEntityMap(pages, func(p store.Page) string { return p.Slug }, func(p store.Page) int64 { return p.ID }), nil
 }
 
 func (i *Importer) buildOrCreateFolders(ctx context.Context, queries *store.Queries, media []ExportMedia) (map[string]int64, error) {

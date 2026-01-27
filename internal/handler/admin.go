@@ -369,26 +369,7 @@ func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 // SetLanguage changes the admin UI language preference.
 // POST /admin/language
 func (h *AdminHandler) SetLanguage(w http.ResponseWriter, r *http.Request) {
-	lang := r.FormValue("lang")
-	if lang == "" {
-		lang = "en"
-	}
-
-	// Validate the language code
-	if !i18n.IsSupported(lang) {
-		lang = "en"
-	}
-
-	// Set the language preference in session
-	h.renderer.SetAdminLang(r, lang)
-
-	// Redirect back to the referring page, or dashboard if not available
-	referer := r.Header.Get("Referer")
-	if referer == "" {
-		referer = redirectAdmin
-	}
-
-	http.Redirect(w, r, referer, http.StatusSeeOther)
+	setLanguagePreference(w, r, h.renderer, redirectAdmin)
 }
 
 // formatTimeAgo returns a human-readable relative time string.
