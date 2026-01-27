@@ -38,6 +38,9 @@ var ValidRoles = []string{RoleAdmin, RoleEditor, RolePublic}
 // UsersPerPage is the number of users to display per page.
 const UsersPerPage = 10
 
+// MinPasswordLength is the minimum required password length.
+const MinPasswordLength = 12
+
 // UsersHandler handles user management routes.
 type UsersHandler struct {
 	queries        *store.Queries
@@ -206,8 +209,8 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case password == "":
 		validationErrors["password"] = "Password is required"
-	case len(password) < 8:
-		validationErrors["password"] = "Password must be at least 8 characters"
+	case len(password) < MinPasswordLength:
+		validationErrors["password"] = fmt.Sprintf("Password must be at least %d characters", MinPasswordLength)
 	case password != passwordConfirm:
 		validationErrors["password_confirm"] = "Passwords do not match"
 	}
@@ -362,8 +365,8 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Password validation (optional on edit)
 	if password != "" {
-		if len(password) < 8 {
-			validationErrors["password"] = "Password must be at least 8 characters"
+		if len(password) < MinPasswordLength {
+			validationErrors["password"] = fmt.Sprintf("Password must be at least %d characters", MinPasswordLength)
 		} else if password != passwordConfirm {
 			validationErrors["password_confirm"] = "Passwords do not match"
 		}

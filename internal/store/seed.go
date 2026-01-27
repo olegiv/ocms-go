@@ -18,7 +18,7 @@ import (
 // Default admin credentials
 const (
 	DefaultAdminEmail    = "admin@example.com"
-	DefaultAdminPassword = "changeme"
+	DefaultAdminPassword = "changeme1234" // Must be at least 12 characters
 	DefaultAdminName     = "Administrator"
 )
 

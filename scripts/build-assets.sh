@@ -26,6 +26,16 @@ npm run copy-deps --silent
 echo "  -> $JS_DIR/htmx.min.js"
 echo "  -> $JS_DIR/alpine.min.js"
 
+# Copy source JS files to dist
+echo "Copying source JS files..."
+JS_SRC_DIR="$PROJECT_DIR/web/static/js"
+if [ -d "$JS_SRC_DIR" ] && [ "$(ls -A "$JS_SRC_DIR" 2>/dev/null)" ]; then
+    cp "$JS_SRC_DIR"/*.js "$JS_DIR/" 2>/dev/null || true
+    for f in "$JS_SRC_DIR"/*.js; do
+        [ -f "$f" ] && echo "  -> $JS_DIR/$(basename "$f")"
+    done
+fi
+
 # Check for outdated packages
 OUTDATED=$(npm outdated --json 2>/dev/null || true)
 if [ -n "$OUTDATED" ] && [ "$OUTDATED" != "{}" ]; then
