@@ -835,8 +835,8 @@ func run() error {
 		ReadTimeout:       15 * time.Second,
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      60 * time.Second, // Longer to allow for large uploads and slow connections
-		IdleTimeout:       120 * time.Second,
-		MaxHeaderBytes:    1 << 20, // 1MB max header size
+		IdleTimeout:       60 * time.Second, // Reduced from 120s to mitigate slowloris attacks
+		MaxHeaderBytes:    1 << 20,          // 1MB max header size
 	}
 
 	// Start server in goroutine

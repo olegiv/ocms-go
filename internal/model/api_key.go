@@ -51,20 +51,24 @@ type APIKey struct {
 	UpdatedAt   time.Time    `json:"updated_at"`
 }
 
+// APIKeyPrefixLength is the number of characters used for the key prefix.
+// Reduced from 8 to 4 to preserve more entropy in the key.
+const APIKeyPrefixLength = 4
+
 // GenerateAPIKey generates a new random API key.
 // Returns the raw key (to show user once) and the key prefix.
 func GenerateAPIKey() (rawKey string, prefix string, err error) {
-	// Generate 32 random bytes
+	// Generate 32 random bytes (256 bits of entropy)
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", "", err
 	}
 
-	// Encode as base64
+	// Encode as base64 URL-safe string
 	rawKey = base64.URLEncoding.EncodeToString(bytes)
 
-	// Get prefix (first 8 characters)
-	prefix = rawKey[:8]
+	// Use first 4 characters as prefix (reduced from 8 to preserve entropy)
+	prefix = rawKey[:APIKeyPrefixLength]
 
 	return rawKey, prefix, nil
 }

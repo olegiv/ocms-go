@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olegiv/ocms-go/internal/config"
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
@@ -52,6 +53,7 @@ func testModule(t *testing.T, db *sql.DB) *Module {
 	ctx := &module.Context{
 		DB:     db,
 		Logger: logger,
+		Config: &config.Config{Env: "development"},
 	}
 	if err := m.Init(ctx); err != nil {
 		t.Fatalf("Init: %v", err)
@@ -808,6 +810,28 @@ func TestModuleNew(t *testing.T) {
 func TestModuleMigrations(t *testing.T) {
 	m := New()
 	moduleutil.AssertMigrations(t, m.Migrations(), 1)
+}
+
+func TestModuleInitBlocksProduction(t *testing.T) {
+	m := New()
+	logger := testutil.TestLogger()
+
+	// Should fail in production
+	ctx := &module.Context{
+		Logger: logger,
+		Config: &config.Config{Env: "production"},
+	}
+	err := m.Init(ctx)
+	if err == nil {
+		t.Fatal("Init() should fail in production environment")
+	}
+
+	// Should succeed in development
+	ctx.Config.Env = "development"
+	err = m.Init(ctx)
+	if err != nil {
+		t.Fatalf("Init() failed in development: %v", err)
+	}
 }
 
 func TestMin(t *testing.T) {
