@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Run development server (requires OCMS_SESSION_SECRET env var)
-OCMS_SESSION_SECRET=your-secret-key-32-bytes make dev
+OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! make dev
 
 # Run without rebuilding assets
 make run
@@ -15,10 +15,10 @@ make run
 make build
 
 # Run tests (requires session secret)
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test ./...
+OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go test ./...
 
 # Run single package tests
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./internal/store/...
+OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go test -v ./internal/store/...
 
 # Check for vulnerabilities
 govulncheck ./...
@@ -150,7 +150,7 @@ cmd/ocms/main.go
 
 ## Default Credentials
 
-On first run, seeds admin user: `admin@example.com` / `changeme`
+On first run, seeds admin user: `admin@example.com` / `changeme1234`
 
 ## Key Endpoints
 
@@ -195,7 +195,7 @@ On first run, seeds admin user: `admin@example.com` / `changeme`
 Example testing workflow:
 ```bash
 # Start server in background
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go run ./cmd/ocms &
+OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go run ./cmd/ocms &
 
 # Wait for server to start
 sleep 3
@@ -422,19 +422,19 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) { ... }
 
 ```bash
 # Test cache layer
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./internal/cache/...
+OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go test -v ./internal/cache/...
 
 # Test theme system
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./internal/theme/...
+OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go test -v ./internal/theme/...
 
 # Test module system
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./internal/module/...
+OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go test -v ./internal/module/...
 
 # Test API middleware
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./internal/middleware/...
+OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go test -v ./internal/middleware/...
 
 # Test API handlers
-OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!! go test -v ./internal/handler/api/...
+OCMS_SESSION_SECRET=test-secret-key-32-bytes-long!!! go test -v ./internal/handler/api/...
 ```
 
 ## Documentation
