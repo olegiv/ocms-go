@@ -6,6 +6,7 @@ package elefant
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"mime"
 	"os"
 	"path/filepath"
@@ -35,7 +36,9 @@ func NewReader(dsn string, tablePrefix string) (*Reader, error) {
 
 	// Test connection
 	if err := db.Ping(); err != nil {
-		db.Close()
+		if closeErr := db.Close(); closeErr != nil {
+			slog.Error("failed to close database after ping failure", "error", closeErr)
+		}
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
@@ -66,7 +69,11 @@ func (r *Reader) detectColumns() error {
 	if err != nil {
 		return fmt.Errorf("failed to query column information: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			slog.Error("failed to close rows", "error", err)
+		}
+	}()
 
 	for rows.Next() {
 		var columnName string
@@ -92,14 +99,8 @@ func (r *Reader) detectColumns() error {
 	return nil
 }
 
-// GetBlogPosts retrieves all blog posts from the database.
-func (r *Reader) GetBlogPosts() ([]BlogPost, error) {
-	// Detect schema to know which columns exist
-	if err := r.detectColumns(); err != nil {
-		return nil, fmt.Errorf("failed to detect schema: %w", err)
-	}
-
-	// Build column list based on available columns
+// buildBlogPostColumns returns the column list for blog_post queries based on detected schema.
+func (r *Reader) buildBlogPostColumns() string {
 	cols := "id, title, body, ts, author, published, tags, thumbnail, extra"
 	if r.hasSlug {
 		cols = "id, title, slug, body, ts, author, published, tags, thumbnail"
@@ -111,52 +112,72 @@ func (r *Reader) GetBlogPosts() ([]BlogPost, error) {
 		}
 		cols += ", extra"
 	}
+	return cols
+}
 
-	query := fmt.Sprintf(`SELECT %s FROM %sblog_post ORDER BY ts DESC`, cols, r.prefix)
+// scanBlogPost scans a single blog post row based on the detected schema.
+func (r *Reader) scanBlogPost(rows *sql.Rows) (BlogPost, error) {
+	var p BlogPost
+	var err error
+
+	if r.hasSlug {
+		// Schema v1.1.5+ with slug column
+		if r.hasDescription && r.hasKeywords {
+			err = rows.Scan(
+				&p.ID, &p.Title, &p.Slug, &p.Body, &p.Timestamp, &p.Author, &p.Published,
+				&p.Tags, &p.Thumbnail, &p.Description, &p.Keywords, &p.Extra,
+			)
+		} else if r.hasDescription {
+			err = rows.Scan(
+				&p.ID, &p.Title, &p.Slug, &p.Body, &p.Timestamp, &p.Author, &p.Published,
+				&p.Tags, &p.Thumbnail, &p.Description, &p.Extra,
+			)
+		} else if r.hasKeywords {
+			err = rows.Scan(
+				&p.ID, &p.Title, &p.Slug, &p.Body, &p.Timestamp, &p.Author, &p.Published,
+				&p.Tags, &p.Thumbnail, &p.Keywords, &p.Extra,
+			)
+		} else {
+			err = rows.Scan(
+				&p.ID, &p.Title, &p.Slug, &p.Body, &p.Timestamp, &p.Author, &p.Published,
+				&p.Tags, &p.Thumbnail, &p.Extra,
+			)
+		}
+	} else {
+		// Older schema without slug/description/keywords
+		err = rows.Scan(
+			&p.ID, &p.Title, &p.Body, &p.Timestamp, &p.Author, &p.Published,
+			&p.Tags, &p.Thumbnail, &p.Extra,
+		)
+		// Slug will be generated from title in importer
+	}
+
+	return p, err
+}
+
+// queryBlogPosts executes a blog post query and returns the results.
+func (r *Reader) queryBlogPosts(whereClause string) ([]BlogPost, error) {
+	// Detect schema to know which columns exist
+	if err := r.detectColumns(); err != nil {
+		return nil, fmt.Errorf("failed to detect schema: %w", err)
+	}
+
+	cols := r.buildBlogPostColumns()
+	query := fmt.Sprintf(`SELECT %s FROM %sblog_post%s ORDER BY ts DESC`, cols, r.prefix, whereClause)
 
 	rows, err := r.db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query blog posts: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			slog.Error("failed to close rows", "error", err)
+		}
+	}()
 
 	var posts []BlogPost
 	for rows.Next() {
-		var p BlogPost
-		var err error
-
-		if r.hasSlug {
-			// Schema v1.1.5+ with slug column
-			if r.hasDescription && r.hasKeywords {
-				err = rows.Scan(
-					&p.ID, &p.Title, &p.Slug, &p.Body, &p.Timestamp, &p.Author, &p.Published,
-					&p.Tags, &p.Thumbnail, &p.Description, &p.Keywords, &p.Extra,
-				)
-			} else if r.hasDescription {
-				err = rows.Scan(
-					&p.ID, &p.Title, &p.Slug, &p.Body, &p.Timestamp, &p.Author, &p.Published,
-					&p.Tags, &p.Thumbnail, &p.Description, &p.Extra,
-				)
-			} else if r.hasKeywords {
-				err = rows.Scan(
-					&p.ID, &p.Title, &p.Slug, &p.Body, &p.Timestamp, &p.Author, &p.Published,
-					&p.Tags, &p.Thumbnail, &p.Keywords, &p.Extra,
-				)
-			} else {
-				err = rows.Scan(
-					&p.ID, &p.Title, &p.Slug, &p.Body, &p.Timestamp, &p.Author, &p.Published,
-					&p.Tags, &p.Thumbnail, &p.Extra,
-				)
-			}
-		} else {
-			// Older schema without slug/description/keywords
-			err = rows.Scan(
-				&p.ID, &p.Title, &p.Body, &p.Timestamp, &p.Author, &p.Published,
-				&p.Tags, &p.Thumbnail, &p.Extra,
-			)
-			// Slug will be generated from title in importer
-		}
-
+		p, err := r.scanBlogPost(rows)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan blog post: %w", err)
 		}
@@ -170,82 +191,14 @@ func (r *Reader) GetBlogPosts() ([]BlogPost, error) {
 	return posts, nil
 }
 
+// GetBlogPosts retrieves all blog posts from the database.
+func (r *Reader) GetBlogPosts() ([]BlogPost, error) {
+	return r.queryBlogPosts("")
+}
+
 // GetPublishedBlogPosts retrieves only published blog posts.
 func (r *Reader) GetPublishedBlogPosts() ([]BlogPost, error) {
-	// Detect schema to know which columns exist
-	if err := r.detectColumns(); err != nil {
-		return nil, fmt.Errorf("failed to detect schema: %w", err)
-	}
-
-	// Build column list based on available columns
-	cols := "id, title, body, ts, author, published, tags, thumbnail, extra"
-	if r.hasSlug {
-		cols = "id, title, slug, body, ts, author, published, tags, thumbnail"
-		if r.hasDescription {
-			cols += ", description"
-		}
-		if r.hasKeywords {
-			cols += ", keywords"
-		}
-		cols += ", extra"
-	}
-
-	query := fmt.Sprintf(`SELECT %s FROM %sblog_post WHERE published = 'yes' ORDER BY ts DESC`, cols, r.prefix)
-
-	rows, err := r.db.Query(query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query published blog posts: %w", err)
-	}
-	defer rows.Close()
-
-	var posts []BlogPost
-	for rows.Next() {
-		var p BlogPost
-		var err error
-
-		if r.hasSlug {
-			// Schema v1.1.5+ with slug column
-			if r.hasDescription && r.hasKeywords {
-				err = rows.Scan(
-					&p.ID, &p.Title, &p.Slug, &p.Body, &p.Timestamp, &p.Author, &p.Published,
-					&p.Tags, &p.Thumbnail, &p.Description, &p.Keywords, &p.Extra,
-				)
-			} else if r.hasDescription {
-				err = rows.Scan(
-					&p.ID, &p.Title, &p.Slug, &p.Body, &p.Timestamp, &p.Author, &p.Published,
-					&p.Tags, &p.Thumbnail, &p.Description, &p.Extra,
-				)
-			} else if r.hasKeywords {
-				err = rows.Scan(
-					&p.ID, &p.Title, &p.Slug, &p.Body, &p.Timestamp, &p.Author, &p.Published,
-					&p.Tags, &p.Thumbnail, &p.Keywords, &p.Extra,
-				)
-			} else {
-				err = rows.Scan(
-					&p.ID, &p.Title, &p.Slug, &p.Body, &p.Timestamp, &p.Author, &p.Published,
-					&p.Tags, &p.Thumbnail, &p.Extra,
-				)
-			}
-		} else {
-			// Older schema without slug/description/keywords
-			err = rows.Scan(
-				&p.ID, &p.Title, &p.Body, &p.Timestamp, &p.Author, &p.Published,
-				&p.Tags, &p.Thumbnail, &p.Extra,
-			)
-			// Slug will be generated from title in importer
-		}
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan blog post: %w", err)
-		}
-		posts = append(posts, p)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating blog posts: %w", err)
-	}
-
-	return posts, nil
+	return r.queryBlogPosts(" WHERE published = 'yes'")
 }
 
 // GetTags retrieves all unique tags from the blog_tag table.
@@ -256,7 +209,11 @@ func (r *Reader) GetTags() ([]BlogTag, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tags: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			slog.Error("failed to close rows", "error", err)
+		}
+	}()
 
 	var tags []BlogTag
 	for rows.Next() {
@@ -282,7 +239,11 @@ func (r *Reader) GetUsers() ([]User, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query users: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			slog.Error("failed to close rows", "error", err)
+		}
+	}()
 
 	var users []User
 	for rows.Next() {

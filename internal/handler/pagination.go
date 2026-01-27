@@ -216,3 +216,17 @@ func ParseURLParamInt64(r *http.Request, name string) (int64, error) {
 	str := chi.URLParam(r, name)
 	return strconv.ParseInt(str, 10, 64)
 }
+
+// ParseQueryInt64 parses a named query parameter as a positive int64.
+// Returns 0 if the parameter is missing, empty, invalid, or not positive.
+func ParseQueryInt64(r *http.Request, name string) int64 {
+	str := r.URL.Query().Get(name)
+	if str == "" {
+		return 0
+	}
+	val, err := strconv.ParseInt(str, 10, 64)
+	if err != nil || val <= 0 {
+		return 0
+	}
+	return val
+}

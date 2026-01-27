@@ -129,25 +129,13 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get category filter from query string
-	var categoryFilter int64
-	categoryFilterStr := r.URL.Query().Get("category")
-	if categoryFilterStr != "" {
-		if cid, err := strconv.ParseInt(categoryFilterStr, 10, 64); err == nil && cid > 0 {
-			categoryFilter = cid
-		}
-	}
+	categoryFilter := ParseQueryInt64(r, "category")
 
 	// Get search filter from query string
 	searchFilter := strings.TrimSpace(r.URL.Query().Get("search"))
 
 	// Get language filter from query string
-	var languageFilter int64
-	languageFilterStr := r.URL.Query().Get("language")
-	if languageFilterStr != "" {
-		if lid, err := strconv.ParseInt(languageFilterStr, 10, 64); err == nil && lid > 0 {
-			languageFilter = lid
-		}
-	}
+	languageFilter := ParseQueryInt64(r, "language")
 
 	var totalCount int64
 	var pages []store.Page
