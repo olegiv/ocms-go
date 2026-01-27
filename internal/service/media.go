@@ -272,7 +272,7 @@ func sanitizeFilename(filename string) string {
 
 	// Ensure we have an extension
 	if filepath.Ext(filename) == "" {
-		filename = filename + ".bin"
+		filename += ".bin"
 	}
 
 	return filename

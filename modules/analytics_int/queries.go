@@ -136,7 +136,7 @@ func (m *Module) getTopPages(ctx context.Context, startDate, endDate time.Time, 
 func (m *Module) getPageTitle(ctx context.Context, path string) string {
 	// Remove leading slash and try as slug
 	slug := path
-	if len(slug) > 0 && slug[0] == '/' {
+	if slug != "" && slug[0] == '/' {
 		slug = slug[1:]
 	}
 

@@ -142,13 +142,14 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch media
 	var mediaList []store.Medium
-	if search != "" {
+	switch {
+	case search != "":
 		mediaList, err = h.queries.SearchMedia(r.Context(), store.SearchMediaParams{
 			Filename: "%" + search + "%",
 			Alt:      util.NullStringFromValue("%" + search + "%"),
 			Limit:    MediaPerPage,
 		})
-	} else if filter != "all" {
+	case filter != "all":
 		var mimePattern string
 		switch filter {
 		case "images":
@@ -165,13 +166,13 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 			Limit:    MediaPerPage,
 			Offset:   offset,
 		})
-	} else if folderID != nil {
+	case folderID != nil:
 		mediaList, err = h.queries.ListMediaInFolder(r.Context(), store.ListMediaInFolderParams{
 			FolderID: util.NullInt64FromPtr(folderID),
 			Limit:    MediaPerPage,
 			Offset:   offset,
 		})
-	} else {
+	default:
 		mediaList, err = h.queries.ListMedia(r.Context(), store.ListMediaParams{
 			Limit:  MediaPerPage,
 			Offset: offset,

@@ -217,9 +217,7 @@ func (m *Manager) parseTemplates(templatesPath string) (*template.Template, erro
 
 	// Collect and parse partials (named by filename only for {{template "header.html" .}})
 	partialFiles := collectHTMLFiles(filepath.Join(templatesPath, "partials"))
-	if err := parseTemplateFiles(tmpl, templatesPath, partialFiles, "partial", func(f string) string {
-		return filepath.Base(f)
-	}); err != nil {
+	if err := parseTemplateFiles(tmpl, templatesPath, partialFiles, "partial", filepath.Base); err != nil {
 		return nil, err
 	}
 

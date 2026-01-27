@@ -203,11 +203,12 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Password validation
-	if password == "" {
+	switch {
+	case password == "":
 		validationErrors["password"] = "Password is required"
-	} else if len(password) < 8 {
+	case len(password) < 8:
 		validationErrors["password"] = "Password must be at least 8 characters"
-	} else if password != passwordConfirm {
+	case password != passwordConfirm:
 		validationErrors["password_confirm"] = "Passwords do not match"
 	}
 

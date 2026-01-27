@@ -174,7 +174,7 @@ func TestGenerateLoremIpsum(t *testing.T) {
 	text := generateLoremIpsum()
 
 	// Should contain at least one paragraph
-	if len(text) == 0 {
+	if text == "" {
 		t.Error("generateLoremIpsum returned empty string")
 	}
 

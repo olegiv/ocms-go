@@ -257,14 +257,15 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 	off := int64(offset)
 
 	// Filter by category
-	if categoryIDStr != "" {
+	switch {
+	case categoryIDStr != "":
 		categoryID, parseErr := strconv.ParseInt(categoryIDStr, 10, 64)
 		if parseErr != nil {
 			WriteBadRequest(w, "Invalid category ID", nil)
 			return
 		}
 		pages, total, err = h.listPagesByCategory(ctx, publishedOnly, categoryID, limit, off)
-	} else if tagIDStr != "" {
+	case tagIDStr != "":
 		// Filter by tag
 		tagID, parseErr := strconv.ParseInt(tagIDStr, 10, 64)
 		if parseErr != nil {
@@ -272,7 +273,7 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		pages, total, err = h.listPagesByTag(ctx, publishedOnly, tagID, limit, off)
-	} else if status != "" {
+	case status != "":
 		// Filter by status
 		pages, total, err = handler.ListAndCount(
 			func() ([]store.Page, error) {
@@ -282,7 +283,7 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 			},
 			func() (int64, error) { return h.queries.CountPagesByStatus(ctx, status) },
 		)
-	} else {
+	default:
 		// All pages (authenticated only - unauthenticated requests have status set to "published")
 		pages, total, err = handler.ListAndCount(
 			func() ([]store.Page, error) {

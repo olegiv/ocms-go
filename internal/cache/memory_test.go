@@ -253,12 +253,12 @@ func TestMemoryCache_ConcurrentAccess(t *testing.T) {
 	// Concurrent writes
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
-		go func(id int) {
+		go func() {
 			defer wg.Done()
 			for j := 0; j < numOperations; j++ {
 				_ = cache.Set(ctx, "key", []byte("value"), 0)
 			}
-		}(i)
+		}()
 	}
 
 	// Concurrent reads

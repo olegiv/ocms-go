@@ -308,7 +308,7 @@ func configKeyToLabel(key string, lang string) string {
 	// Fallback: replace underscores with spaces and capitalize each word
 	words := strings.Split(key, "_")
 	for i, word := range words {
-		if len(word) > 0 {
+		if word != "" {
 			words[i] = strings.ToUpper(string(word[0])) + word[1:]
 		}
 	}

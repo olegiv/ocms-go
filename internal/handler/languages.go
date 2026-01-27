@@ -233,11 +233,12 @@ func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	validationErrors := make(map[string]string)
 
 	// Validate code
-	if input.Code == "" {
+	switch {
+	case input.Code == "":
 		validationErrors["code"] = "Language code is required"
-	} else if len(input.Code) < 2 || len(input.Code) > 5 {
+	case len(input.Code) < 2 || len(input.Code) > 5:
 		validationErrors["code"] = "Language code must be 2-5 characters"
-	} else {
+	default:
 		exists, err := h.queries.LanguageCodeExists(r.Context(), input.Code)
 		if err != nil {
 			slog.Error("database error checking language code", "error", err)
@@ -361,11 +362,12 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	validationErrors := make(map[string]string)
 
 	// Validate code
-	if input.Code == "" {
+	switch {
+	case input.Code == "":
 		validationErrors["code"] = "Language code is required"
-	} else if len(input.Code) < 2 || len(input.Code) > 5 {
+	case len(input.Code) < 2 || len(input.Code) > 5:
 		validationErrors["code"] = "Language code must be 2-5 characters"
-	} else {
+	default:
 		exists, err := h.queries.LanguageCodeExistsExcluding(r.Context(), store.LanguageCodeExistsExcludingParams{
 			Code: input.Code,
 			ID:   existingLang.ID,

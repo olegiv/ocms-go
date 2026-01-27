@@ -88,11 +88,12 @@ func BuildMeta(page *PageData, site *SiteConfig) *Meta {
 		meta.Keywords = page.MetaKeywords
 
 		// OG Image: og_image → featured_image → site default
-		if page.OGImageURL != "" {
+		switch {
+		case page.OGImageURL != "":
 			meta.OGImage = makeAbsoluteURL(page.OGImageURL, site.SiteURL)
-		} else if page.FeaturedImage != "" {
+		case page.FeaturedImage != "":
 			meta.OGImage = makeAbsoluteURL(page.FeaturedImage, site.SiteURL)
-		} else if site.DefaultOGImage != "" {
+		case site.DefaultOGImage != "":
 			meta.OGImage = makeAbsoluteURL(site.DefaultOGImage, site.SiteURL)
 		}
 

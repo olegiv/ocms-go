@@ -255,9 +255,9 @@ func TestImporter_ImportFromFile_InvalidJSON(t *testing.T) {
 }
 
 func TestConflictStrategy_Values(t *testing.T) {
-	assert.Equal(t, ConflictStrategy("skip"), ConflictSkip)
-	assert.Equal(t, ConflictStrategy("overwrite"), ConflictOverwrite)
-	assert.Equal(t, ConflictStrategy("rename"), ConflictRename)
+	assert.Equal(t, "skip", string(ConflictSkip))
+	assert.Equal(t, "overwrite", string(ConflictOverwrite))
+	assert.Equal(t, "rename", string(ConflictRename))
 }
 
 func TestValidationResult_Structure(t *testing.T) {
@@ -345,10 +345,10 @@ func TestImporter_DryRun(t *testing.T) {
 func containsIgnoreCase(s, substr string) bool {
 	return len(s) >= len(substr) &&
 		(s == substr ||
-			(len(s) > 0 && len(substr) > 0 &&
+			(s != "" && substr != "" &&
 				(s[0] == substr[0] || s[0]+32 == substr[0] || s[0] == substr[0]+32) &&
 				containsIgnoreCase(s[1:], substr[1:])) ||
-			(len(s) > 0 && containsIgnoreCase(s[1:], substr)))
+			(s != "" && containsIgnoreCase(s[1:], substr)))
 }
 
 // Integration tests (require database)

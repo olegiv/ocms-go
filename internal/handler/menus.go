@@ -120,8 +120,7 @@ func (n MenuItemNode) MarshalJSON() ([]byte, error) {
 	// Convert children recursively
 	children := make([]menuItemNodeJSON, 0, len(n.Children))
 	for _, child := range n.Children {
-		childJSON, _ := child.toJSON()
-		children = append(children, childJSON)
+		children = append(children, child.toJSON())
 	}
 
 	return json.Marshal(menuItemNodeJSON{
@@ -143,7 +142,7 @@ func (n MenuItemNode) MarshalJSON() ([]byte, error) {
 }
 
 // toJSON converts MenuItemNode to its JSON-friendly representation.
-func (n MenuItemNode) toJSON() (menuItemNodeJSON, error) {
+func (n MenuItemNode) toJSON() menuItemNodeJSON {
 	var parentID *int64
 	if n.Item.ParentID.Valid {
 		parentID = &n.Item.ParentID.Int64
@@ -155,8 +154,7 @@ func (n MenuItemNode) toJSON() (menuItemNodeJSON, error) {
 
 	children := make([]menuItemNodeJSON, 0, len(n.Children))
 	for _, child := range n.Children {
-		childJSON, _ := child.toJSON()
-		children = append(children, childJSON)
+		children = append(children, child.toJSON())
 	}
 
 	return menuItemNodeJSON{
@@ -174,7 +172,7 @@ func (n MenuItemNode) toJSON() (menuItemNodeJSON, error) {
 		},
 		Children: children,
 		PageSlug: n.PageSlug,
-	}, nil
+	}
 }
 
 // MenuFormData holds data for the menu builder template.

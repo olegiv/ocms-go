@@ -263,11 +263,12 @@ func run() error {
 	if err := cacheManager.Config.Preload(ctx); err != nil {
 		slog.Warn("failed to preload config cache", "error", err)
 	}
-	if cacheManager.IsRedis() {
+	switch {
+	case cacheManager.IsRedis():
 		slog.Info(handler.LogCacheManagerInit, "backend", "redis", "url", cfg.RedisURL)
-	} else if cacheManager.Info().IsFallback {
+	case cacheManager.Info().IsFallback:
 		slog.Warn(handler.LogCacheManagerInit, "backend", "memory", "note", "Redis unavailable, using fallback")
-	} else {
+	default:
 		slog.Info(handler.LogCacheManagerInit, "backend", "memory")
 	}
 

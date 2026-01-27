@@ -448,10 +448,10 @@ func addUserToContext(r *http.Request, user *store.User) *http.Request {
 	return r.WithContext(context.WithValue(ctx, middleware.ContextKeyUser, *user))
 }
 
-// newAuthenticatedRequest creates a request with URL params, session, and user context.
-func newAuthenticatedRequest(t *testing.T, sm *scs.SessionManager, method, path string, params map[string]string, user *store.User) (*http.Request, *httptest.ResponseRecorder) {
+// newAuthenticatedDeleteRequest creates a DELETE request with URL params, session, and user context.
+func newAuthenticatedDeleteRequest(t *testing.T, sm *scs.SessionManager, path string, params map[string]string, user *store.User) (*http.Request, *httptest.ResponseRecorder) {
 	t.Helper()
-	req := httptest.NewRequest(method, path, nil)
+	req := httptest.NewRequest(http.MethodDelete, path, nil)
 	req = requestWithURLParams(req, params)
 	req = requestWithSession(sm, req)
 	req = addUserToContext(req, user)
