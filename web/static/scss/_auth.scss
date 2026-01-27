@@ -9,6 +9,54 @@
     min-height: 100vh;
     padding: $spacing-4;
     background: linear-gradient(135deg, $gray-100 0%, $gray-200 100%);
+    position: relative;
+}
+
+// Language selector for auth pages
+.auth-lang-form {
+    position: absolute;
+    top: $spacing-4;
+    right: $spacing-4;
+    margin: 0;
+}
+
+.auth-lang-selector {
+    display: flex;
+    align-items: center;
+    gap: $spacing-1;
+    padding: $spacing-2 $spacing-3;
+    color: $gray-600;
+    background: $white;
+    border-radius: $radius-md;
+    box-shadow: $shadow-sm;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &:hover {
+        color: $gray-900;
+        box-shadow: $shadow-md;
+    }
+
+    svg {
+        flex-shrink: 0;
+    }
+}
+
+.auth-lang-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background: transparent;
+    border: none;
+    padding: $spacing-1 $spacing-4 $spacing-1 $spacing-1;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: inherit;
+    cursor: pointer;
+
+    &:focus {
+        outline: none;
+    }
 }
 
 .auth-card {
