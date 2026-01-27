@@ -5,6 +5,7 @@ package cache
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -90,7 +91,7 @@ func (c *MenuCache) GetByID(ctx context.Context, id int64) (*MenuWithItems, erro
 	return nil, nil
 }
 
-// All returns all cached menus.
+// All returns all cached menus, sorted by slug.
 func (c *MenuCache) All(ctx context.Context) ([]*MenuWithItems, error) {
 	c.mu.RLock()
 	if !c.loaded {
@@ -106,6 +107,12 @@ func (c *MenuCache) All(ctx context.Context) ([]*MenuWithItems, error) {
 	for _, menu := range c.menus {
 		result = append(result, menu)
 	}
+
+	// Sort by slug for consistent ordering
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Menu.Slug < result[j].Menu.Slug
+	})
+
 	return result, nil
 }
 

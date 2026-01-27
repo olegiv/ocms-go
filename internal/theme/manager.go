@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -294,14 +295,22 @@ func (m *Manager) GetTheme(name string) (*Theme, error) {
 	return theme, nil
 }
 
-// ListThemes returns all loaded theme configs.
+// ListThemes returns all loaded theme configs, sorted by name.
 func (m *Manager) ListThemes() []*Config {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
+	// Collect theme names and sort them
+	names := make([]string, 0, len(m.themes))
+	for name := range m.themes {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	// Build configs in sorted order
 	configs := make([]*Config, 0, len(m.themes))
-	for _, theme := range m.themes {
-		cfg := theme.Config
+	for _, name := range names {
+		cfg := m.themes[name].Config
 		configs = append(configs, &cfg)
 	}
 	return configs
@@ -314,7 +323,7 @@ type Info struct {
 	IsActive bool
 }
 
-// ListThemesWithActive returns all themes with active status.
+// ListThemesWithActive returns all themes with active status, sorted by name.
 func (m *Manager) ListThemesWithActive() []Info {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -327,6 +336,12 @@ func (m *Manager) ListThemesWithActive() []Info {
 			IsActive: m.activeTheme != nil && m.activeTheme.Name == name,
 		})
 	}
+
+	// Sort by name for consistent ordering
+	sort.Slice(infos, func(i, j int) bool {
+		return infos[i].Name < infos[j].Name
+	})
+
 	return infos
 }
 
