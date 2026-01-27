@@ -51,13 +51,9 @@ func (c Config) HCaptchaEnabled() bool {
 	return c.HCaptchaSiteKey != "" && c.HCaptchaSecretKey != ""
 }
 
-// Session secret length requirements
-const (
-	// MinSessionSecretLengthProd is the minimum for production (AES-256).
-	MinSessionSecretLengthProd = 32
-	// MinSessionSecretLengthDev is the minimum for development (AES-128).
-	MinSessionSecretLengthDev = 16
-)
+// MinSessionSecretLength is the minimum required length for the session secret.
+// AES-256 requires 32 bytes minimum for secure encryption.
+const MinSessionSecretLength = 32
 
 // Load parses environment variables and returns a Config struct.
 func Load() (*Config, error) {
@@ -66,16 +62,11 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("parsing config: %w", err)
 	}
 
-	// Validate session secret length (stricter in production)
-	minLength := MinSessionSecretLengthDev
-	if !cfg.IsDevelopment() {
-		minLength = MinSessionSecretLengthProd
-	}
-
-	if len(cfg.SessionSecret) < minLength {
+	// Validate session secret length
+	if len(cfg.SessionSecret) < MinSessionSecretLength {
 		return nil, fmt.Errorf("OCMS_SESSION_SECRET must be at least %d bytes long, got %d bytes; "+
 			"generate a secure secret with: openssl rand -base64 32",
-			minLength, len(cfg.SessionSecret))
+			MinSessionSecretLength, len(cfg.SessionSecret))
 	}
 
 	return cfg, nil
