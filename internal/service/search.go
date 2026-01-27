@@ -100,7 +100,8 @@ func (s *SearchService) SearchPublishedPages(ctx context.Context, params SearchP
 	searchArgs = append(searchArgs, escapedQuery)
 
 	if params.LanguageID > 0 {
-		languageFilter = " AND p.language_id = ?"
+		// Include pages with matching language_id OR NULL language_id (universal pages)
+		languageFilter = " AND (p.language_id = ? OR p.language_id IS NULL)"
 		countArgs = append(countArgs, params.LanguageID)
 		searchArgs = append(searchArgs, params.LanguageID)
 	}
