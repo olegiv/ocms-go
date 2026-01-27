@@ -9,6 +9,7 @@ package developer
 import (
 	"database/sql"
 	"embed"
+	"fmt"
 	"html/template"
 
 	"github.com/go-chi/chi/v5"
@@ -37,9 +38,15 @@ func New() *Module {
 }
 
 // Init initializes the module with the given context.
+// The developer module is blocked in production environments for security.
 func (m *Module) Init(ctx *module.Context) error {
+	// Security: Developer module must never run in production
+	if ctx.Config.Env == "production" {
+		return fmt.Errorf("developer module cannot be enabled in production environment")
+	}
+
 	m.ctx = ctx
-	m.ctx.Logger.Info("Developer module initialized")
+	m.ctx.Logger.Info("Developer module initialized", "env", ctx.Config.Env)
 	return nil
 }
 

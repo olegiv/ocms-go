@@ -21,9 +21,9 @@ func TestGenerateAPIKey(t *testing.T) {
 		t.Errorf("GenerateAPIKey() rawKey length = %d, want >= 32", len(rawKey))
 	}
 
-	// Check prefix is 8 characters
-	if len(prefix) != 8 {
-		t.Errorf("GenerateAPIKey() prefix length = %d, want 8", len(prefix))
+	// Check prefix is APIKeyPrefixLength characters
+	if len(prefix) != APIKeyPrefixLength {
+		t.Errorf("GenerateAPIKey() prefix length = %d, want %d", len(prefix), APIKeyPrefixLength)
 	}
 
 	// Check prefix matches start of raw key
