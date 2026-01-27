@@ -232,6 +232,9 @@
                         <button type="button" class="toolbar-btn" data-action="link" title="Add Link">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                         </button>
+                        <button type="button" class="toolbar-btn" data-action="insertImage" title="{{T .AdminLang "editor.insert_image"}}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                        </button>
                         <button type="button" class="toolbar-btn" data-action="blockquote" title="Quote">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V21c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"/></svg>
                         </button>
@@ -252,6 +255,92 @@
                     <!-- Source HTML Editor -->
                     <textarea id="source-editor" class="source-editor hidden"></textarea>
                 </div>
+
+                <!-- Editor Image Picker Modal -->
+                <div id="editor-image-modal" class="editor-image-modal" style="display: none;">
+                    <div class="editor-image-modal-overlay"></div>
+                    <div class="editor-image-modal-dialog">
+                        <div class="editor-image-modal-header">
+                            <h3>{{T .AdminLang "editor.insert_image"}}</h3>
+                            <button type="button" class="editor-image-modal-close" id="editor-image-close-btn">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                            </button>
+                        </div>
+
+                        <!-- Search -->
+                        <div class="editor-image-modal-toolbar">
+                            <input type="text" id="editor-image-search" placeholder="{{T .AdminLang "media.search_media"}}" class="form-input">
+                        </div>
+
+                        <!-- Media Grid -->
+                        <div class="editor-image-modal-content" id="editor-image-grid">
+                            <!-- Populated via JavaScript -->
+                        </div>
+
+                        <!-- Image Options (shown after selection) -->
+                        <div id="editor-image-options" class="editor-image-options" style="display: none;">
+                            <div class="form-group">
+                                <label class="form-label">{{T .AdminLang "editor.alt_text"}} <span class="required">*</span></label>
+                                <input type="text" id="editor-image-alt" class="form-input" placeholder="{{T .AdminLang "media.alt_placeholder"}}">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">{{T .AdminLang "editor.image_size"}}</label>
+                                <select id="editor-image-size" class="form-select">
+                                    <option value="full">{{T .AdminLang "editor.size_full"}}</option>
+                                    <option value="medium" selected>{{T .AdminLang "editor.size_medium"}}</option>
+                                    <option value="small">{{T .AdminLang "editor.size_small"}}</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Footer Actions -->
+                        <div class="editor-image-modal-footer">
+                            <button type="button" class="btn btn-outline" id="editor-image-cancel-btn">{{T .AdminLang "btn.cancel"}}</button>
+                            <button type="button" class="btn btn-primary" id="editor-image-insert-btn" disabled>{{T .AdminLang "editor.insert_image"}}</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Editor Image Edit Modal -->
+                <div id="editor-image-edit-modal" class="editor-image-modal" style="display: none;">
+                    <div class="editor-image-modal-overlay"></div>
+                    <div class="editor-image-modal-dialog" style="max-width: 500px;">
+                        <div class="editor-image-modal-header">
+                            <h3>{{T .AdminLang "editor.edit_image"}}</h3>
+                            <button type="button" class="editor-image-modal-close" id="editor-image-edit-close-btn">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                            </button>
+                        </div>
+
+                        <!-- Image Preview -->
+                        <div class="editor-image-edit-preview">
+                            <img id="editor-image-edit-preview-img" src="" alt="">
+                        </div>
+
+                        <!-- Edit Options -->
+                        <div class="editor-image-options" style="display: block;">
+                            <div class="form-group">
+                                <label class="form-label">{{T .AdminLang "editor.alt_text"}} <span class="required">*</span></label>
+                                <input type="text" id="editor-image-edit-alt" class="form-input" placeholder="{{T .AdminLang "media.alt_placeholder"}}">
+                                <span class="form-hint">{{T .AdminLang "editor.alt_hint"}}</span>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">{{T .AdminLang "editor.image_title"}}</label>
+                                <input type="text" id="editor-image-edit-title" class="form-input" placeholder="{{T .AdminLang "editor.title_placeholder"}}">
+                                <span class="form-hint">{{T .AdminLang "editor.title_hint"}}</span>
+                            </div>
+                        </div>
+
+                        <!-- Footer Actions -->
+                        <div class="editor-image-modal-footer">
+                            <button type="button" class="btn btn-danger" id="editor-image-delete-btn">{{T .AdminLang "btn.delete"}}</button>
+                            <div style="flex: 1;"></div>
+                            <button type="button" class="btn btn-outline" id="editor-image-edit-cancel-btn">{{T .AdminLang "btn.cancel"}}</button>
+                            <button type="button" class="btn btn-primary" id="editor-image-edit-save-btn">{{T .AdminLang "btn.save"}}</button>
+                        </div>
+                    </div>
+                </div>
+
                 <input type="hidden" name="body" id="body-input" value="{{if .Data.FormValues.body}}{{.Data.FormValues.body}}{{else if .Data.Page}}{{.Data.Page.Body}}{{end}}">
                 {{if .Data.Errors.body}}
                 <span class="form-error">{{.Data.Errors.body}}</span>
@@ -446,6 +535,7 @@
 import { Editor } from 'https://esm.sh/@tiptap/core@2.1.13';
 import StarterKit from 'https://esm.sh/@tiptap/starter-kit@2.1.13';
 import Link from 'https://esm.sh/@tiptap/extension-link@2.1.13';
+import Image from 'https://esm.sh/@tiptap/extension-image@2.1.13';
 
 const initialContent = document.getElementById('body-input').value || '<p></p>';
 let isSourceMode = false;
@@ -462,6 +552,13 @@ const editor = new Editor({
             HTMLAttributes: {
                 rel: 'noopener noreferrer',
                 target: '_blank',
+            },
+        }),
+        Image.configure({
+            inline: false,
+            allowBase64: false,
+            HTMLAttributes: {
+                class: 'editor-image',
             },
         }),
     ],
@@ -511,6 +608,9 @@ document.querySelectorAll('.toolbar-btn').forEach(button => {
                 break;
             case 'blockquote':
                 editor.chain().focus().toggleBlockquote().run();
+                break;
+            case 'insertImage':
+                editorImagePicker.open();
                 break;
             case 'undo':
                 editor.chain().focus().undo().run();
@@ -599,6 +699,314 @@ editor.on('selectionUpdate', () => {
         button.classList.toggle('active', isActive);
     });
 });
+
+// Editor Image Picker
+const editorImagePicker = {
+    modal: null,
+    grid: null,
+    searchInput: null,
+    optionsPanel: null,
+    insertBtn: null,
+    altInput: null,
+    sizeSelect: null,
+    selectedImage: null,
+    currentPage: 1,
+    debounceTimer: null,
+
+    init() {
+        this.modal = document.getElementById('editor-image-modal');
+        this.grid = document.getElementById('editor-image-grid');
+        this.searchInput = document.getElementById('editor-image-search');
+        this.optionsPanel = document.getElementById('editor-image-options');
+        this.insertBtn = document.getElementById('editor-image-insert-btn');
+        this.altInput = document.getElementById('editor-image-alt');
+        this.sizeSelect = document.getElementById('editor-image-size');
+
+        // Search input handler with debounce
+        this.searchInput.addEventListener('input', () => {
+            clearTimeout(this.debounceTimer);
+            this.debounceTimer = setTimeout(() => {
+                this.currentPage = 1;
+                this.loadMedia();
+            }, 300);
+        });
+
+        // Close handlers
+        document.getElementById('editor-image-close-btn').addEventListener('click', () => this.close());
+        document.getElementById('editor-image-cancel-btn').addEventListener('click', () => this.close());
+        this.modal.querySelector('.editor-image-modal-overlay').addEventListener('click', () => this.close());
+
+        // Insert handler
+        this.insertBtn.addEventListener('click', () => this.insert());
+
+        // Close on escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.modal.style.display !== 'none') {
+                this.close();
+            }
+        });
+    },
+
+    open() {
+        this.selectedImage = null;
+        this.optionsPanel.style.display = 'none';
+        this.insertBtn.disabled = true;
+        this.altInput.value = '';
+        this.searchInput.value = '';
+        this.currentPage = 1;
+        this.modal.style.display = 'flex';
+        this.loadMedia();
+        this.searchInput.focus();
+    },
+
+    close() {
+        this.modal.style.display = 'none';
+        this.selectedImage = null;
+    },
+
+    async loadMedia() {
+        const search = this.searchInput.value.trim();
+        let url = `/admin/media/api?page=${this.currentPage}&limit=12&type=image`;
+        if (search) {
+            url += `&q=${encodeURIComponent(search)}`;
+        }
+
+        try {
+            this.grid.innerHTML = '<div class="editor-image-loading"><div class="spinner"></div><span>Loading...</span></div>';
+
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Failed to load media');
+
+            const data = await response.json();
+            this.renderGrid(data.items || []);
+        } catch (error) {
+            console.error('Failed to load media:', error);
+            this.grid.innerHTML = '<div class="editor-image-empty"><p>Error loading media</p></div>';
+        }
+    },
+
+    renderGrid(items) {
+        if (!items || items.length === 0) {
+            this.grid.innerHTML = `
+                <div class="editor-image-empty">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                    <p>No images found</p>
+                    <a href="/admin/media/upload" class="btn btn-primary btn-sm" target="_blank">Upload Images</a>
+                </div>
+            `;
+            return;
+        }
+
+        const gridHTML = items.map(item => {
+            const isSelected = this.selectedImage?.id === item.id;
+            const thumbnailUrl = item.thumbnail || item.filepath;
+            return `
+                <div class="editor-image-item ${isSelected ? 'is-selected' : ''}" data-id="${item.id}">
+                    <div class="editor-image-item-preview">
+                        <img src="${thumbnailUrl}" alt="${item.filename || ''}">
+                    </div>
+                    <div class="editor-image-item-info">
+                        <span class="editor-image-item-name">${item.filename || 'Untitled'}</span>
+                    </div>
+                    ${isSelected ? '<div class="editor-image-item-check"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>' : ''}
+                </div>
+            `;
+        }).join('');
+
+        this.grid.innerHTML = `<div class="editor-image-grid">${gridHTML}</div>`;
+
+        // Add click handlers to items
+        this.grid.querySelectorAll('.editor-image-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const id = parseInt(item.dataset.id, 10);
+                const selectedItem = items.find(i => i.id === id);
+                if (selectedItem) {
+                    this.selectImage(selectedItem);
+                }
+            });
+        });
+    },
+
+    selectImage(item) {
+        this.selectedImage = item;
+        this.optionsPanel.style.display = 'block';
+        this.insertBtn.disabled = false;
+        // Pre-fill alt text with filename (without extension)
+        const filenameWithoutExt = (item.filename || 'image').replace(/\.[^/.]+$/, '');
+        this.altInput.value = item.alt || filenameWithoutExt;
+        // Re-render to show selection
+        this.renderGrid(Array.from(this.grid.querySelectorAll('.editor-image-item')).length > 0 ?
+            [this.selectedImage] : [this.selectedImage]);
+        this.loadMedia(); // Refresh to show selection state
+    },
+
+    insert() {
+        if (!this.selectedImage) return;
+
+        const alt = this.altInput.value.trim() || this.selectedImage.filename || 'Image';
+        const size = this.sizeSelect.value;
+
+        // Determine which image URL to use based on size
+        let imageUrl = this.selectedImage.filepath; // original by default
+        if (size === 'medium' && this.selectedImage.filepath) {
+            // Use medium variant if available
+            imageUrl = this.selectedImage.filepath.replace('/originals/', '/medium/');
+        } else if (size === 'small' && this.selectedImage.thumbnail) {
+            // Use thumbnail
+            imageUrl = this.selectedImage.thumbnail;
+        }
+
+        // Insert into editor
+        editor.chain().focus().setImage({
+            src: imageUrl,
+            alt: alt,
+            title: alt,
+        }).run();
+
+        this.close();
+    }
+};
+
+// Initialize picker when DOM is ready
+editorImagePicker.init();
+
+// Editor Image Edit functionality
+const editorImageEditor = {
+    modal: null,
+    previewImg: null,
+    altInput: null,
+    titleInput: null,
+    currentImagePos: null,
+    currentImageNode: null,
+
+    init() {
+        this.modal = document.getElementById('editor-image-edit-modal');
+        this.previewImg = document.getElementById('editor-image-edit-preview-img');
+        this.altInput = document.getElementById('editor-image-edit-alt');
+        this.titleInput = document.getElementById('editor-image-edit-title');
+
+        // Close handlers
+        document.getElementById('editor-image-edit-close-btn').addEventListener('click', () => this.close());
+        document.getElementById('editor-image-edit-cancel-btn').addEventListener('click', () => this.close());
+        this.modal.querySelector('.editor-image-modal-overlay').addEventListener('click', () => this.close());
+
+        // Save handler
+        document.getElementById('editor-image-edit-save-btn').addEventListener('click', () => this.save());
+
+        // Delete handler
+        document.getElementById('editor-image-delete-btn').addEventListener('click', () => this.deleteImage());
+
+        // Close on escape (only if this modal is open)
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.modal.style.display !== 'none') {
+                this.close();
+            }
+        });
+
+        // Add double-click handler to editor for images
+        this.setupDoubleClickHandler();
+    },
+
+    setupDoubleClickHandler() {
+        const editorElement = document.getElementById('editor');
+        editorElement.addEventListener('dblclick', (e) => {
+            const img = e.target.closest('img');
+            if (img && editorElement.contains(img)) {
+                e.preventDefault();
+                this.openForImage(img);
+            }
+        });
+    },
+
+    openForImage(imgElement) {
+        // Get image attributes
+        const src = imgElement.getAttribute('src') || '';
+        const alt = imgElement.getAttribute('alt') || '';
+        const title = imgElement.getAttribute('title') || '';
+
+        // Find the node position in ProseMirror
+        const { state } = editor;
+        let foundPos = null;
+        let foundNode = null;
+
+        state.doc.descendants((node, pos) => {
+            if (node.type.name === 'image' && node.attrs.src === src) {
+                foundPos = pos;
+                foundNode = node;
+                return false; // Stop iteration
+            }
+        });
+
+        if (foundPos === null) {
+            console.warn('Could not find image node in editor');
+            return;
+        }
+
+        this.currentImagePos = foundPos;
+        this.currentImageNode = foundNode;
+
+        // Populate modal
+        this.previewImg.src = src;
+        this.previewImg.alt = alt;
+        this.altInput.value = alt;
+        this.titleInput.value = title;
+
+        // Show modal
+        this.modal.style.display = 'flex';
+        this.altInput.focus();
+    },
+
+    close() {
+        this.modal.style.display = 'none';
+        this.currentImagePos = null;
+        this.currentImageNode = null;
+    },
+
+    save() {
+        if (this.currentImagePos === null || !this.currentImageNode) {
+            this.close();
+            return;
+        }
+
+        const newAlt = this.altInput.value.trim();
+        const newTitle = this.titleInput.value.trim();
+
+        // Update the image attributes using TipTap's transaction
+        const { state, view } = editor;
+        const tr = state.tr.setNodeMarkup(this.currentImagePos, null, {
+            ...this.currentImageNode.attrs,
+            alt: newAlt,
+            title: newTitle || null,
+        });
+
+        view.dispatch(tr);
+
+        // Update hidden input
+        document.getElementById('body-input').value = editor.getHTML();
+
+        this.close();
+    },
+
+    deleteImage() {
+        if (this.currentImagePos === null) {
+            this.close();
+            return;
+        }
+
+        // Delete the image node
+        const { state, view } = editor;
+        const tr = state.tr.delete(this.currentImagePos, this.currentImagePos + 1);
+        view.dispatch(tr);
+
+        // Update hidden input
+        document.getElementById('body-input').value = editor.getHTML();
+
+        this.close();
+    }
+};
+
+// Initialize image editor
+editorImageEditor.init();
 </script>
 
 <script>

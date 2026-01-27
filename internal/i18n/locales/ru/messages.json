@@ -5291,6 +5291,61 @@
             "id": "frontend.no_posts",
             "message": "No posts found.",
             "translation": "Записей не найдено."
+        },
+        {
+            "id": "editor.insert_image",
+            "message": "Insert Image",
+            "translation": "Вставить изображение"
+        },
+        {
+            "id": "editor.alt_text",
+            "message": "Alt Text",
+            "translation": "Альтернативный текст"
+        },
+        {
+            "id": "editor.image_size",
+            "message": "Image Size",
+            "translation": "Размер изображения"
+        },
+        {
+            "id": "editor.size_full",
+            "message": "Full Width",
+            "translation": "Во всю ширину"
+        },
+        {
+            "id": "editor.size_medium",
+            "message": "Medium (centered)",
+            "translation": "Средний (по центру)"
+        },
+        {
+            "id": "editor.size_small",
+            "message": "Small (floating)",
+            "translation": "Маленький (обтекание)"
+        },
+        {
+            "id": "editor.edit_image",
+            "message": "Edit Image",
+            "translation": "Редактировать изображение"
+        },
+        {
+            "id": "editor.image_title",
+            "message": "Title",
+            "translation": "Заголовок"
+        },
+        {
+            "id": "editor.title_placeholder",
+            "message": "Image title (shown on hover)",
+            "translation": "Заголовок изображения (показывается при наведении)"
+        },
+        {
+            "id": "editor.title_hint",
+            "message": "Tooltip text shown when hovering over the image",
+            "translation": "Текст подсказки при наведении на изображение"
+        },
+        {
+            "id": "editor.alt_hint",
+            "message": "Describes the image for screen readers and SEO",
+            "translation": "Описание изображения для программ чтения с экрана и SEO"
         }
     ]
 }
