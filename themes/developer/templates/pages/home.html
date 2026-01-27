@@ -51,6 +51,13 @@
                 <div class="dev-posts-list">
                     {{range .RecentPages}}
                     <article class="dev-post-item">
+                        {{if .FeaturedImage}}
+                        <div class="dev-post-image">
+                            <a href="{{.URL}}">
+                                <img src="{{.FeaturedImage}}" alt="{{mediaAlt .FeaturedImageID $.LangCode .FeaturedImageAlt}}" loading="lazy">
+                            </a>
+                        </div>
+                        {{end}}
                         <div class="dev-post-content">
                             <h3 class="dev-post-title">
                                 <a href="{{.URL}}">{{.Title}}</a>

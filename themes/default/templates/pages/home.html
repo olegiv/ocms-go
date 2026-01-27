@@ -29,20 +29,27 @@
     {{if .RecentPages}}
     <section class="posts-list-section">
         <h2 class="section-title">{{TTheme $.LangCode "frontend.recent_posts"}}</h2>
-        <ul class="posts-list">
+        <div class="posts-list">
             {{range .RecentPages}}
-            <li class="post-item">
-                <article>
+            <article class="post-item">
+                {{if .FeaturedImage}}
+                <div class="post-thumbnail">
+                    <a href="{{.URL}}">
+                        <img src="{{.FeaturedImage}}" alt="{{.Title}}">
+                    </a>
+                </div>
+                {{end}}
+                <div class="post-content">
                     <h3 class="post-title"><a href="{{.URL}}">{{.Title}}</a></h3>
                     <div class="post-meta">
                         {{if .PublishedAt}}<time datetime="{{.PublishedAt}}">{{formatDateLocale .PublishedAt $.LangCode}}</time>{{end}}
                         {{if .Category}}<span class="post-category">in <a href="/category/{{.Category.Slug}}">{{.Category.Name}}</a></span>{{end}}
                     </div>
                     {{if .Excerpt}}<p class="post-excerpt">{{.Excerpt}}</p>{{end}}
-                </article>
-            </li>
+                </div>
+            </article>
             {{end}}
-        </ul>
+        </div>
         {{if .ShowAllPostsLink}}
         <div class="section-footer">
             <a href="{{.LangPrefix}}/blog" class="btn btn-secondary">{{TTheme $.LangCode "frontend.view_all_posts"}}</a>
