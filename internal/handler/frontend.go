@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"html/template"
 	"log/slog"
 	"net/http"
@@ -1326,11 +1327,11 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page) PageView
 }
 
 // generateExcerpt creates a text excerpt from HTML content.
-func (h *FrontendHandler) generateExcerpt(html string, maxLen int) string {
+func (h *FrontendHandler) generateExcerpt(htmlContent string, maxLen int) string {
 	// Simple HTML stripping (for a more robust solution, use a proper HTML parser)
 	var result strings.Builder
 	inTag := false
-	for _, r := range html {
+	for _, r := range htmlContent {
 		if r == '<' {
 			inTag = true
 			continue
@@ -1345,6 +1346,8 @@ func (h *FrontendHandler) generateExcerpt(html string, maxLen int) string {
 	}
 
 	text := strings.TrimSpace(result.String())
+	// Unescape HTML entities (e.g., &nbsp; -> actual space)
+	text = html.UnescapeString(text)
 	// Collapse whitespace
 	text = strings.Join(strings.Fields(text), " ")
 
