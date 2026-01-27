@@ -1,3 +1,4 @@
+{{if or .Categories .Tags .RecentPages}}
 <aside class="dev-sidebar">
     {{if .Categories}}
     <div class="dev-sidebar-widget">
@@ -48,3 +49,4 @@
     </div>
     {{end}}
 </aside>
+{{end}}

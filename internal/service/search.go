@@ -180,6 +180,9 @@ func (s *SearchService) SearchPublishedPages(ctx context.Context, params SearchP
 			return nil, 0, err
 		}
 
+		// Sanitize highlight to remove broken HTML from FTS snippet output
+		r.Highlight = sanitizeHighlight(r.Highlight)
+
 		// Generate excerpt from body if highlight is empty
 		r.Excerpt = s.generateExcerpt(r.Body, params.Query, 200)
 		results = append(results, r)
@@ -255,6 +258,26 @@ func stripHTMLTags(s string) string {
 	// Normalize whitespace
 	s = strings.Join(strings.Fields(s), " ")
 	return s
+}
+
+// sanitizeHighlight strips all HTML tags from FTS snippet output except <mark> tags.
+func sanitizeHighlight(highlight string) string {
+	if highlight == "" {
+		return ""
+	}
+
+	// Protect <mark> tags
+	highlight = strings.ReplaceAll(highlight, "<mark>", "\x00MARK_OPEN\x00")
+	highlight = strings.ReplaceAll(highlight, "</mark>", "\x00MARK_CLOSE\x00")
+
+	// Strip all HTML tags
+	highlight = stripHTMLTags(highlight)
+
+	// Restore <mark> tags
+	highlight = strings.ReplaceAll(highlight, "\x00MARK_OPEN\x00", "<mark>")
+	highlight = strings.ReplaceAll(highlight, "\x00MARK_CLOSE\x00", "</mark>")
+
+	return strings.TrimSpace(highlight)
 }
 
 // RebuildIndex rebuilds the FTS index from scratch.
