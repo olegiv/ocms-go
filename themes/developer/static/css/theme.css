@@ -386,6 +386,144 @@ img {
     background-color: var(--dev-accent);
 }
 
+/* Homepage Layout with Sidebar */
+.dev-home-layout {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: var(--dev-space-2xl);
+    margin-top: var(--dev-space-xl);
+}
+
+.dev-home-main {
+    min-width: 0;
+}
+
+.dev-home-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--dev-space-lg);
+}
+
+.dev-widget {
+    padding: var(--dev-space-lg);
+    background-color: var(--dev-bg-secondary);
+    border: 1px solid var(--dev-border);
+    border-radius: var(--dev-radius-lg);
+}
+
+.dev-widget .dev-widget-title {
+    font-family: var(--dev-font-mono), monospace;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--dev-text-bright);
+    margin: 0 0 var(--dev-space-md) 0;
+    padding-bottom: var(--dev-space-sm);
+    border-bottom: 1px solid var(--dev-border);
+}
+
+.dev-recent-posts {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.dev-recent-posts li {
+    padding: var(--dev-space-sm) 0;
+    border-bottom: 1px solid var(--dev-border);
+}
+
+.dev-recent-posts li:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.dev-recent-posts li:first-child {
+    padding-top: 0;
+}
+
+.dev-recent-posts a {
+    font-family: var(--dev-font-mono), monospace;
+    font-size: 0.875rem;
+    color: var(--dev-text);
+    display: block;
+}
+
+.dev-recent-posts a:hover {
+    color: var(--dev-accent);
+}
+
+.dev-post-date {
+    display: block;
+    font-family: var(--dev-font-mono), monospace;
+    font-size: 0.75rem;
+    color: var(--dev-text-muted);
+    margin-top: var(--dev-space-xs);
+}
+
+.dev-category-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.dev-category-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--dev-space-sm) 0;
+    border-bottom: 1px solid var(--dev-border);
+}
+
+.dev-category-list li:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.dev-category-list li:first-child {
+    padding-top: 0;
+}
+
+.dev-category-list a {
+    font-family: var(--dev-font-mono), monospace;
+    font-size: 0.875rem;
+    color: var(--dev-text);
+}
+
+.dev-category-list a:hover {
+    color: var(--dev-accent);
+}
+
+.dev-category-list .dev-count {
+    color: var(--dev-text-muted);
+    font-size: 0.75rem;
+}
+
+@media (max-width: 1024px) {
+    .dev-home-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .dev-home-sidebar {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .dev-widget {
+        flex: 1;
+        min-width: 280px;
+    }
+}
+
+@media (max-width: 640px) {
+    .dev-home-sidebar {
+        flex-direction: column;
+    }
+
+    .dev-widget {
+        min-width: auto;
+    }
+}
+
 /* Buttons */
 .dev-btn {
     font-family: var(--dev-font-mono), monospace;

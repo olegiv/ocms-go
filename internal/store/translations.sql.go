@@ -24,10 +24,11 @@ func (q *Queries) CountPagesByLanguage(ctx context.Context, languageID sql.NullI
 }
 
 const countPublishedPagesByLanguage = `-- name: CountPublishedPagesByLanguage :one
-SELECT COUNT(*) FROM pages WHERE language_id = ? AND status = 'published'
+SELECT COUNT(*) FROM pages WHERE (language_id = ? OR language_id IS NULL) AND status = 'published'
 `
 
 // Count published pages for a specific language
+// Include pages with matching language_id OR NULL language_id (universal pages)
 func (q *Queries) CountPublishedPagesByLanguage(ctx context.Context, languageID sql.NullInt64) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countPublishedPagesByLanguage, languageID)
 	var count int64
@@ -980,7 +981,7 @@ func (q *Queries) ListPagesByLanguage(ctx context.Context, arg ListPagesByLangua
 
 const listPublishedPagesByLanguage = `-- name: ListPublishedPagesByLanguage :many
 SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id FROM pages
-WHERE language_id = ? AND status = 'published'
+WHERE (language_id = ? OR language_id IS NULL) AND status = 'published'
 ORDER BY published_at DESC
 LIMIT ? OFFSET ?
 `
@@ -992,6 +993,7 @@ type ListPublishedPagesByLanguageParams struct {
 }
 
 // List published pages for a specific language
+// Include pages with matching language_id OR NULL language_id (universal pages)
 func (q *Queries) ListPublishedPagesByLanguage(ctx context.Context, arg ListPublishedPagesByLanguageParams) ([]Page, error) {
 	rows, err := q.db.QueryContext(ctx, listPublishedPagesByLanguage, arg.LanguageID, arg.Limit, arg.Offset)
 	if err != nil {

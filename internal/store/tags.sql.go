@@ -344,7 +344,7 @@ const getTagUsageCountsByLanguage = `-- name: GetTagUsageCountsByLanguage :many
 SELECT t.id, t.name, t.slug, t.created_at, t.updated_at, COUNT(p.id) as usage_count
 FROM tags t
 INNER JOIN page_tags pt ON pt.tag_id = t.id
-INNER JOIN pages p ON p.id = pt.page_id AND p.status = 'published' AND p.language_id = ?
+INNER JOIN pages p ON p.id = pt.page_id AND p.status = 'published' AND (p.language_id = ? OR p.language_id IS NULL)
 GROUP BY t.id, t.name, t.slug, t.created_at, t.updated_at
 ORDER BY t.name
 LIMIT ? OFFSET ?
@@ -366,6 +366,7 @@ type GetTagUsageCountsByLanguageRow struct {
 }
 
 // Tag usage counts filtered by page language (for frontend sidebar)
+// Include pages with matching language_id OR NULL language_id (universal pages)
 func (q *Queries) GetTagUsageCountsByLanguage(ctx context.Context, arg GetTagUsageCountsByLanguageParams) ([]GetTagUsageCountsByLanguageRow, error) {
 	rows, err := q.db.QueryContext(ctx, getTagUsageCountsByLanguage, arg.LanguageID, arg.Limit, arg.Offset)
 	if err != nil {

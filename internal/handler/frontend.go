@@ -238,6 +238,13 @@ type MenuItem struct {
 	IsActive bool
 }
 
+// RecentPost holds minimal data for sidebar recent posts widget.
+type RecentPost struct {
+	URL   string
+	Title string
+	Date  string
+}
+
 // HomeData holds data for the homepage template.
 type HomeData struct {
 	BaseTemplateData
@@ -246,6 +253,7 @@ type HomeData struct {
 	RecentPages      []PageView
 	Categories       []CategoryView
 	Tags             []TagView
+	RecentPosts      []RecentPost // For sidebar widget
 	HeroEnabled      bool
 	HeroTitle        string
 	HeroSubtitle     string
@@ -488,13 +496,21 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Split into featured (first 3) and recent (rest)
-	var featuredPages, restPages []PageView
-	if len(recentPageViews) > 3 {
-		featuredPages = recentPageViews[:3]
-		restPages = recentPageViews[3:]
-	} else {
-		featuredPages = recentPageViews
+	// Build RecentPosts for sidebar (first 5 posts)
+	recentPosts := make([]RecentPost, 0, 5)
+	for i, pv := range recentPageViews {
+		if i >= 5 {
+			break
+		}
+		date := ""
+		if pv.PublishedAt != nil {
+			date = pv.PublishedAt.Format("Jan 2, 2006")
+		}
+		recentPosts = append(recentPosts, RecentPost{
+			URL:   pv.URL,
+			Title: pv.Title,
+			Date:  date,
+		})
 	}
 
 	// Set language cookie if detected from URL
@@ -507,12 +523,15 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 		base.Translations = h.getHomepageTranslations(base.LangCode, base.Languages)
 	}
 
+	// Enable sidebar for homepage
+	base.ShowSidebar = true
+
 	data := HomeData{
 		BaseTemplateData: base,
-		FeaturedPages:    featuredPages,
-		RecentPages:      restPages,
+		RecentPages:      recentPageViews,
 		Categories:       categoryViews,
 		Tags:             tagViews,
+		RecentPosts:      recentPosts,
 		HeroEnabled:      true,
 		HeroTitle:        base.SiteName,
 		HeroSubtitle:     base.Site.Description,

@@ -1,6 +1,6 @@
 {{define "content"}}
 <div class="home-page">
-    {{/* Hero Section */}}
+    {{/* Hero/Welcome Section */}}
     {{if .HeroEnabled}}
     <section class="hero">
         <div class="hero-content">
@@ -18,71 +18,36 @@
     </section>
     {{end}}
 
-    {{/* Featured Content */}}
-    {{if .FeaturedPages}}
-    <section class="featured-section">
-        <h2 class="section-title">{{TTheme $.LangCode "frontend.featured"}}</h2>
-        <div class="featured-grid">
-            {{range .FeaturedPages}}
-            <article class="featured-card">
-                {{if .FeaturedImage}}
-                <div class="card-image">
-                    <a href="{{.URL}}">
-                        <img src="{{.FeaturedImage}}" alt="{{.Title}}">
-                    </a>
-                </div>
-                {{end}}
-                <div class="card-content">
-                    <h3><a href="{{.URL}}">{{.Title}}</a></h3>
-                    {{if .Excerpt}}<p class="excerpt">{{.Excerpt}}</p>{{end}}
-                    <a href="{{.URL}}" class="read-more">{{TTheme $.LangCode "frontend.read_more"}}</a>
-                </div>
-            </article>
-            {{end}}
-        </div>
+    {{/* Static Content (if any) */}}
+    {{if .Page}}
+    <section class="home-content">
+        {{.Page.Body}}
     </section>
     {{end}}
 
-    {{/* Recent Posts */}}
+    {{/* Pages List - sorted by date desc */}}
     {{if .RecentPages}}
-    <section class="recent-section">
+    <section class="posts-list-section">
         <h2 class="section-title">{{TTheme $.LangCode "frontend.recent_posts"}}</h2>
-        <div class="posts-grid">
+        <ul class="posts-list">
             {{range .RecentPages}}
-            <article class="post-card">
-                {{if .FeaturedImage}}
-                <div class="card-image">
-                    <a href="{{.URL}}">
-                        <img src="{{.FeaturedImage}}" alt="{{.Title}}">
-                    </a>
-                </div>
-                {{end}}
-                <div class="card-content">
-                    {{if .Category}}
-                    <span class="post-category"><a href="/category/{{.Category.Slug}}">{{.Category.Name}}</a></span>
-                    {{end}}
-                    <h3><a href="{{.URL}}">{{.Title}}</a></h3>
-                    {{if .Excerpt}}<p class="excerpt">{{.Excerpt}}</p>{{end}}
+            <li class="post-item">
+                <article>
+                    <h3 class="post-title"><a href="{{.URL}}">{{.Title}}</a></h3>
                     <div class="post-meta">
                         {{if .PublishedAt}}<time datetime="{{.PublishedAt}}">{{formatDateLocale .PublishedAt $.LangCode}}</time>{{end}}
-                        {{if .Author}}<span class="author">{{TTheme $.LangCode "frontend.by_author"}} {{.Author.Name}}</span>{{end}}
+                        {{if .Category}}<span class="post-category">in <a href="/category/{{.Category.Slug}}">{{.Category.Name}}</a></span>{{end}}
                     </div>
-                </div>
-            </article>
+                    {{if .Excerpt}}<p class="post-excerpt">{{.Excerpt}}</p>{{end}}
+                </article>
+            </li>
             {{end}}
-        </div>
+        </ul>
         {{if .ShowAllPostsLink}}
         <div class="section-footer">
             <a href="{{.LangPrefix}}/blog" class="btn btn-secondary">{{TTheme $.LangCode "frontend.view_all_posts"}}</a>
         </div>
         {{end}}
-    </section>
-    {{end}}
-
-    {{/* Static Content */}}
-    {{if .Page}}
-    <section class="home-content">
-        {{.Page.Body}}
     </section>
     {{end}}
 </div>

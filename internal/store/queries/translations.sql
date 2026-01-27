@@ -98,15 +98,17 @@ LIMIT ? OFFSET ?;
 SELECT COUNT(*) FROM pages WHERE language_id = ?;
 
 -- List published pages for a specific language
+-- Include pages with matching language_id OR NULL language_id (universal pages)
 -- name: ListPublishedPagesByLanguage :many
 SELECT * FROM pages
-WHERE language_id = ? AND status = 'published'
+WHERE (language_id = ? OR language_id IS NULL) AND status = 'published'
 ORDER BY published_at DESC
 LIMIT ? OFFSET ?;
 
 -- Count published pages for a specific language
+-- Include pages with matching language_id OR NULL language_id (universal pages)
 -- name: CountPublishedPagesByLanguage :one
-SELECT COUNT(*) FROM pages WHERE language_id = ? AND status = 'published';
+SELECT COUNT(*) FROM pages WHERE (language_id = ? OR language_id IS NULL) AND status = 'published';
 
 -- Get the translation of a page in a specific language (by slug for frontend)
 -- name: GetPageTranslationBySlug :one
