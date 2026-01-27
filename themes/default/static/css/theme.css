@@ -557,6 +557,7 @@ a.tag:hover {
 }
 
 .post-thumbnail img {
+    width: 100%;
     border-radius: var(--radius-md);
     aspect-ratio: 16/10;
     object-fit: cover;

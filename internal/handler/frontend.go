@@ -1252,11 +1252,11 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page) PageView
 		pv.ReadingTime = 1
 	}
 
-	// Get featured image (medium for listings - single page handlers can override to large)
+	// Get featured image (thumbnail for listings - single page handlers can override to large)
 	if p.FeaturedImageID.Valid {
 		media, err := h.queries.GetMediaByID(ctx, p.FeaturedImageID.Int64)
 		if err == nil {
-			pv.FeaturedImage = fmt.Sprintf("/uploads/medium/%s/%s", media.Uuid, media.Filename)
+			pv.FeaturedImage = fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename)
 			pv.FeaturedImageLarge = fmt.Sprintf("/uploads/large/%s/%s", media.Uuid, media.Filename)
 			pv.FeaturedImageID = media.ID
 			pv.FeaturedImageAlt = media.Alt.String
