@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -20,6 +21,40 @@ import (
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 )
+
+// configKeyOrder defines the display order for config keys.
+// Keys not in this list will appear after these, sorted alphabetically.
+var configKeyOrder = map[string]int{
+	model.ConfigKeySiteName:        1,
+	model.ConfigKeySiteDescription: 2,
+	model.ConfigKeyCopyright:       3,
+	model.ConfigKeyPoweredBy:       4,
+	model.ConfigKeyPostsPerPage:    5,
+	model.ConfigKeyAdminEmail:      6,
+}
+
+// sortConfigs sorts config items according to configKeyOrder.
+func sortConfigs(configs []store.Config) {
+	sort.Slice(configs, func(i, j int) bool {
+		orderI, hasI := configKeyOrder[configs[i].Key]
+		orderJ, hasJ := configKeyOrder[configs[j].Key]
+
+		// Both have defined order: sort by order
+		if hasI && hasJ {
+			return orderI < orderJ
+		}
+		// Only i has order: i comes first
+		if hasI {
+			return true
+		}
+		// Only j has order: j comes first
+		if hasJ {
+			return false
+		}
+		// Neither has order: sort alphabetically
+		return configs[i].Key < configs[j].Key
+	})
+}
 
 // ConfigHandler handles configuration management routes.
 type ConfigHandler struct {
@@ -94,6 +129,7 @@ func (h *ConfigHandler) List(w http.ResponseWriter, r *http.Request) {
 		logAndInternalError(w, "failed to list config", "error", err)
 		return
 	}
+	sortConfigs(configs)
 
 	// Get active languages
 	languages, err := h.queries.ListActiveLanguages(r.Context())
@@ -139,6 +175,7 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 		flashError(w, r, h.renderer, redirectAdminConfig, i18n.T(lang, "error.loading_config"))
 		return
 	}
+	sortConfigs(configs)
 
 	// Get active languages for translation handling
 	languages, err := h.queries.ListActiveLanguages(r.Context())

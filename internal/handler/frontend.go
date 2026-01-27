@@ -169,6 +169,7 @@ type BaseTemplateData struct {
 
 	// Footer
 	FooterText    string
+	CopyrightText string
 	FooterWidgets []FooterWidget
 	SocialLinks   []SocialLink
 
@@ -1645,6 +1646,20 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 			data.SiteTagline = translatedDesc.Value
 			data.Site.Description = translatedDesc.Value
 		}
+		// Get powered_by translation for footer
+		if translatedPoweredBy, err := h.queries.GetConfigTranslationByKeyAndLangCode(ctx, store.GetConfigTranslationByKeyAndLangCodeParams{
+			ConfigKey: "powered_by",
+			Code:      langInfo.Code,
+		}); err == nil && translatedPoweredBy.Value != "" {
+			data.FooterText = translatedPoweredBy.Value
+		}
+		// Get copyright translation for footer
+		if translatedCopyright, err := h.queries.GetConfigTranslationByKeyAndLangCode(ctx, store.GetConfigTranslationByKeyAndLangCodeParams{
+			ConfigKey: "copyright",
+			Code:      langInfo.Code,
+		}); err == nil && translatedCopyright.Value != "" {
+			data.CopyrightText = translatedCopyright.Value
+		}
 	}
 
 	// Load menus by slug and language
@@ -1675,6 +1690,28 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 				IsCurrent:  data.LangCode == lang.Code,
 			}
 			data.Languages = append(data.Languages, lv)
+		}
+	}
+
+	// Load powered_by footer text (fallback to default if no translation)
+	if data.FooterText == "" {
+		if h.cacheManager != nil {
+			if poweredBy, err := h.cacheManager.GetConfig(ctx, "powered_by"); err == nil && poweredBy != "" {
+				data.FooterText = poweredBy
+			}
+		} else if cfg, err := h.queries.GetConfigByKey(ctx, "powered_by"); err == nil && cfg.Value != "" {
+			data.FooterText = cfg.Value
+		}
+	}
+
+	// Load copyright footer text (fallback to default if no translation)
+	if data.CopyrightText == "" {
+		if h.cacheManager != nil {
+			if copyright, err := h.cacheManager.GetConfig(ctx, "copyright"); err == nil && copyright != "" {
+				data.CopyrightText = copyright
+			}
+		} else if cfg, err := h.queries.GetConfigByKey(ctx, "copyright"); err == nil && cfg.Value != "" {
+			data.CopyrightText = cfg.Value
 		}
 	}
 

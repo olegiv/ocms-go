@@ -27,12 +27,6 @@
             "type": "select",
             "default": "yes",
             "options": ["yes", "no"]
-        },
-        {
-            "key": "footer_text",
-            "label": "Footer Text",
-            "type": "text",
-            "default": "Powered by oCMS"
         }
     ],
     "widget_areas": [

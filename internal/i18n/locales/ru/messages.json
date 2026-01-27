@@ -3018,6 +3018,26 @@
             "translation": "Количество записей на одной странице"
         },
         {
+            "id": "config.powered_by",
+            "message": "Powered By",
+            "translation": "Работает на"
+        },
+        {
+            "id": "config.powered_by_hint",
+            "message": "Footer powered by text",
+            "translation": "Текст «Работает на» в подвале"
+        },
+        {
+            "id": "config.copyright",
+            "message": "Copyright",
+            "translation": "Авторские права"
+        },
+        {
+            "id": "config.copyright_hint",
+            "message": "Footer copyright text (leave empty for automatic)",
+            "translation": "Текст авторских прав в подвале (оставьте пустым для автоматического)"
+        },
+        {
             "id": "config.admin_email",
             "message": "Admin Email",
             "translation": "Email администратора"
