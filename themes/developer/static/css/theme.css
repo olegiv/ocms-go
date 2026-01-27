@@ -1460,6 +1460,10 @@ img {
     color: var(--dev-bg);
 }
 
+.dev-pagination-current:hover {
+    color: var(--dev-bg);
+}
+
 .dev-pagination-ellipsis {
     color: var(--dev-text-muted);
     padding: 0 var(--dev-space-sm);
