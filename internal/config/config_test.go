@@ -18,7 +18,7 @@ func setEnv(t *testing.T, key, value string) {
 func TestLoad_Defaults(t *testing.T) {
 	// Clear environment and set only required var
 	os.Clearenv()
-	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!")
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
 
 	cfg, err := Load()
 	if err != nil {
@@ -45,7 +45,8 @@ func TestLoad_Defaults(t *testing.T) {
 
 func TestLoad_CustomValues(t *testing.T) {
 	os.Clearenv()
-	setEnv(t, "OCMS_SESSION_SECRET", "my-secret")
+	customSecret := "custom-secret-key-32-bytes-long!"
+	setEnv(t, "OCMS_SESSION_SECRET", customSecret)
 	setEnv(t, "OCMS_DB_PATH", "/custom/path.db")
 	setEnv(t, "OCMS_SERVER_HOST", "0.0.0.0")
 	setEnv(t, "OCMS_SERVER_PORT", "3000")
@@ -57,8 +58,8 @@ func TestLoad_CustomValues(t *testing.T) {
 		t.Fatalf("Load() error: %v", err)
 	}
 
-	if cfg.SessionSecret != "my-secret" {
-		t.Errorf("SessionSecret = %q, want %q", cfg.SessionSecret, "my-secret")
+	if cfg.SessionSecret != customSecret {
+		t.Errorf("SessionSecret = %q, want %q", cfg.SessionSecret, customSecret)
 	}
 	if cfg.DBPath != "/custom/path.db" {
 		t.Errorf("DBPath = %q, want %q", cfg.DBPath, "/custom/path.db")
@@ -84,6 +85,44 @@ func TestLoad_RequiredSessionSecret(t *testing.T) {
 	_, err := Load()
 	if err == nil {
 		t.Fatal("Load() should fail when OCMS_SESSION_SECRET is not set")
+	}
+}
+
+func TestLoad_SessionSecretTooShort(t *testing.T) {
+	tests := []struct {
+		name   string
+		secret string
+	}{
+		{"empty", ""},
+		{"short", "short"},
+		{"31_bytes", "1234567890123456789012345678901"}, // 31 bytes
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Clearenv()
+			setEnv(t, "OCMS_SESSION_SECRET", tt.secret)
+
+			_, err := Load()
+			if err == nil {
+				t.Fatalf("Load() should fail with %d-byte secret", len(tt.secret))
+			}
+		})
+	}
+}
+
+func TestLoad_SessionSecretMinimumLength(t *testing.T) {
+	os.Clearenv()
+	// Exactly 32 bytes should work
+	secret32 := "12345678901234567890123456789012"
+	setEnv(t, "OCMS_SESSION_SECRET", secret32)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() should succeed with 32-byte secret: %v", err)
+	}
+	if cfg.SessionSecret != secret32 {
+		t.Errorf("SessionSecret = %q, want %q", cfg.SessionSecret, secret32)
 	}
 }
 
