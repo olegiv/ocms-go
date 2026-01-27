@@ -226,6 +226,7 @@ Never tell the user to "restart the server and test" - always run the tests your
 - **Condition is always 'false'/'true'**: Remove dead code and unreachable branches. Ensure all conditions can evaluate to both outcomes.
 - **Unused variables/imports**: Remove any unused declarations.
 - **Shadowed variables**: Avoid shadowing variables from outer scopes.
+- **Resource leaks**: Always defer `Close()` for `sql.Rows` in the caller, even if a helper also closes.
 
 Before submitting code, verify with:
 ```bash
@@ -267,6 +268,37 @@ url := p.PageURL(2)
 // GOOD: Use descriptive name that doesn't collide
 got := p.PageURL(2)
 ```
+
+**Detecting "Potential resource leak":** Always defer `Close()` in the caller when using `sql.Rows`.
+
+When `QueryContext` returns `rows`, always add `defer rows.Close()` in the same function, even if a helper function also closes it.
+
+Detection method:
+```bash
+grep -rn "QueryContext\|Query(" --include="*.go" . | grep -v "_test.go"
+```
+
+Check if `rows` is passed to a helper without a local defer.
+
+Example fix:
+```go
+// BAD: rows passed to helper without local defer - if helper panics, leak occurs
+rows, err := db.QueryContext(ctx, query)
+if err != nil {
+    return nil
+}
+return scanRows(rows)
+
+// GOOD: always defer close in caller
+rows, err := db.QueryContext(ctx, query)
+if err != nil {
+    return nil
+}
+defer func() { _ = rows.Close() }()
+return scanRows(rows)
+```
+
+Note: `rows.Close()` is idempotent - calling it twice is safe.
 
 ## Code Style
 
