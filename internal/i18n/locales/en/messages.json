@@ -3533,6 +3533,26 @@
             "translation": "Number of posts to display per page"
         },
         {
+            "id": "config.powered_by",
+            "message": "Powered By",
+            "translation": "Powered By"
+        },
+        {
+            "id": "config.powered_by_hint",
+            "message": "Footer powered by text",
+            "translation": "Footer powered by text"
+        },
+        {
+            "id": "config.copyright",
+            "message": "Copyright",
+            "translation": "Copyright"
+        },
+        {
+            "id": "config.copyright_hint",
+            "message": "Footer copyright text (leave empty for automatic)",
+            "translation": "Footer copyright text (leave empty for automatic)"
+        },
+        {
             "id": "config.admin_email",
             "message": "Admin Email",
             "translation": "Admin Email"

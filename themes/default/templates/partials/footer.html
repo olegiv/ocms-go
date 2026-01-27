@@ -45,10 +45,13 @@
 
             <div class="footer-bottom">
                 <div class="footer-copyright">
-                    {{if .FooterText}}
-                    <p>{{.FooterText}}</p>
+                    {{if .CopyrightText}}
+                    <p>{{safeHTML .CopyrightText}}</p>
                     {{else}}
                     <p>&copy; {{.Year}} {{.SiteName}}. {{TTheme .LangCode "frontend.all_rights_reserved"}}</p>
+                    {{end}}
+                    {{if .FooterText}}
+                    <p>{{safeHTML .FooterText}}</p>
                     {{end}}
                 </div>
 

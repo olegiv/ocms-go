@@ -33,6 +33,8 @@ var DefaultConfig = []struct {
 	{model.ConfigKeySiteDescription, "", model.ConfigTypeString, "A short description of your site"},
 	{model.ConfigKeyAdminEmail, "admin@example.com", model.ConfigTypeString, "Administrator email address"},
 	{model.ConfigKeyPostsPerPage, "10", model.ConfigTypeInt, "Number of posts to display per page"},
+	{model.ConfigKeyPoweredBy, "Powered by oCMS", model.ConfigTypeString, "Footer powered by text"},
+	{model.ConfigKeyCopyright, "", model.ConfigTypeString, "Footer copyright text (leave empty for automatic)"},
 }
 
 // Seed creates initial data in the database.

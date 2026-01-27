@@ -21,12 +21,16 @@ const (
 	ConfigKeySiteDescription = "site_description"
 	ConfigKeyAdminEmail      = "admin_email"
 	ConfigKeyPostsPerPage    = "posts_per_page"
+	ConfigKeyPoweredBy       = "powered_by"
+	ConfigKeyCopyright       = "copyright"
 )
 
 // TranslatableConfigKeys is the list of config keys that support per-language translations.
 var TranslatableConfigKeys = []string{
 	ConfigKeySiteName,
 	ConfigKeySiteDescription,
+	ConfigKeyPoweredBy,
+	ConfigKeyCopyright,
 }
 
 // IsTranslatableConfigKey checks if a config key supports translations.
