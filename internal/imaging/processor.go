@@ -4,13 +4,21 @@
 package imaging
 
 import (
+	"bytes"
 	"fmt"
+	"image"
+	"image/gif"
+	"image/jpeg"
+	"image/png"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/h2non/bimg"
+	"github.com/disintegration/imaging"
+	"github.com/rwcarlsen/goexif/exif"
+	_ "golang.org/x/image/webp" // WebP decoder
 
 	"github.com/olegiv/ocms-go/internal/model"
 )
@@ -33,7 +41,7 @@ type VariantResult struct {
 	FilePath string
 }
 
-// Processor handles image processing operations using libvips via bimg.
+// Processor handles image processing operations using pure Go libraries.
 type Processor struct {
 	uploadDir string
 }
@@ -54,27 +62,31 @@ func (p *Processor) ProcessImage(reader io.Reader, uuid, filename string) (*Proc
 		return nil, fmt.Errorf("failed to read image data: %w", err)
 	}
 
-	// Create bimg image to get metadata
-	img := bimg.NewImage(data)
-	metadata, err := img.Metadata()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read image metadata: %w", err)
+	// Detect format
+	format := detectFormat(data)
+	if format == "" {
+		return nil, fmt.Errorf("unsupported image format")
 	}
 
-	// Auto-rotate based on EXIF orientation
-	rotated, err := img.AutoRotate()
+	// Decode image
+	img, err := imaging.Decode(bytes.NewReader(data))
 	if err != nil {
-		// If auto-rotate fails, use original data
-		rotated = data
+		return nil, fmt.Errorf("failed to decode image: %w", err)
 	}
 
-	// Strip sensitive EXIF data while preserving orientation
-	processed, err := bimg.NewImage(rotated).Process(bimg.Options{
-		StripMetadata: true,
-	})
+	// Read EXIF orientation and auto-rotate
+	orientation := readExifOrientation(bytes.NewReader(data))
+	img = applyOrientation(img, orientation)
+
+	// Get final dimensions
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+
+	// Encode without EXIF (pure Go encoders don't preserve EXIF metadata)
+	processed, err := encodeImage(img, format, 95)
 	if err != nil {
-		// If processing fails, use rotated data
-		processed = rotated
+		return nil, fmt.Errorf("failed to encode image: %w", err)
 	}
 
 	// Save the processed original
@@ -84,18 +96,10 @@ func (p *Processor) ProcessImage(reader io.Reader, uuid, filename string) (*Proc
 		return nil, fmt.Errorf("failed to save original image: %w", err)
 	}
 
-	// Get final dimensions (may have changed due to rotation)
-	finalImg := bimg.NewImage(processed)
-	finalMeta, err := finalImg.Metadata()
-	if err != nil {
-		// Use original metadata if we can't get final
-		finalMeta = metadata
-	}
-
 	return &ProcessResult{
-		Width:    finalMeta.Size.Width,
-		Height:   finalMeta.Size.Height,
-		MimeType: bimgTypeToMimeType(finalMeta.Type),
+		Width:    width,
+		Height:   height,
+		MimeType: formatToMimeType(format),
 		Size:     int64(len(processed)),
 		FilePath: filePath,
 	}, nil
@@ -103,55 +107,44 @@ func (p *Processor) ProcessImage(reader io.Reader, uuid, filename string) (*Proc
 
 // CreateVariant creates a resized variant of an image.
 func (p *Processor) CreateVariant(sourcePath, uuid, filename string, config model.ImageVariantConfig, variantType string) (*VariantResult, error) {
-	// Read source image
-	data, err := os.ReadFile(sourcePath)
+	// Load source image
+	img, err := imaging.Open(sourcePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read source image: %w", err)
+		return nil, fmt.Errorf("failed to open source image: %w", err)
 	}
 
-	img := bimg.NewImage(data)
-	metadata, err := img.Metadata()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read image metadata: %w", err)
-	}
+	// Get source dimensions
+	bounds := img.Bounds()
+	srcWidth := bounds.Dx()
+	srcHeight := bounds.Dy()
 
-	// Calculate dimensions
-	var newWidth, newHeight int
-	if config.Crop {
-		// Crop to exact size
-		newWidth = config.Width
-		newHeight = config.Height
-	} else {
-		// Fit within bounds while maintaining aspect ratio
-		newWidth, newHeight = calculateFitDimensions(
-			metadata.Size.Width,
-			metadata.Size.Height,
-			config.Width,
-			config.Height,
-		)
-	}
-
-	// Skip if the source is smaller than the target
-	if metadata.Size.Width <= config.Width && metadata.Size.Height <= config.Height && !config.Crop {
+	// Skip if the source is smaller than the target (and not cropping)
+	if srcWidth <= config.Width && srcHeight <= config.Height && !config.Crop {
 		return nil, nil // No need to create this variant
 	}
 
-	// Process options
-	options := bimg.Options{
-		Width:   newWidth,
-		Height:  newHeight,
-		Quality: config.Quality,
-	}
-
+	// Process based on mode
+	var resized image.Image
 	if config.Crop {
-		options.Crop = true
-		options.Gravity = bimg.GravityCentre
+		// Crop to exact size from center
+		resized = imaging.Fill(img, config.Width, config.Height, imaging.Center, imaging.Lanczos)
+	} else {
+		// Fit within bounds while maintaining aspect ratio
+		resized = imaging.Fit(img, config.Width, config.Height, imaging.Lanczos)
 	}
 
-	// Process the image
-	processed, err := img.Process(options)
+	// Get final dimensions
+	resBounds := resized.Bounds()
+	newWidth := resBounds.Dx()
+	newHeight := resBounds.Dy()
+
+	// Determine output format from filename
+	format := detectFormatFromFilename(filename)
+
+	// Encode with quality
+	processed, err := encodeImage(resized, format, config.Quality)
 	if err != nil {
-		return nil, fmt.Errorf("failed to process image variant: %w", err)
+		return nil, fmt.Errorf("failed to encode variant: %w", err)
 	}
 
 	// Save the variant
@@ -161,19 +154,10 @@ func (p *Processor) CreateVariant(sourcePath, uuid, filename string, config mode
 		return nil, fmt.Errorf("failed to save %s variant: %w", variantType, err)
 	}
 
-	// Get final dimensions
-	finalImg := bimg.NewImage(processed)
-	finalMeta, err := finalImg.Metadata()
-	if err != nil {
-		finalMeta = bimg.ImageMetadata{
-			Size: bimg.ImageSize{Width: newWidth, Height: newHeight},
-		}
-	}
-
 	return &VariantResult{
 		Type:     variantType,
-		Width:    finalMeta.Size.Width,
-		Height:   finalMeta.Size.Height,
+		Width:    newWidth,
+		Height:   newHeight,
 		Size:     int64(len(processed)),
 		FilePath: variantPath,
 	}, nil
@@ -198,18 +182,19 @@ func (p *Processor) CreateAllVariants(sourcePath, uuid, filename string) ([]*Var
 
 // GetImageDimensions returns the dimensions of an image file.
 func (p *Processor) GetImageDimensions(path string) (width, height int, err error) {
-	data, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to read image: %w", err)
+		return 0, 0, fmt.Errorf("failed to open image: %w", err)
+	}
+	defer func() { _ = file.Close() }()
+
+	// Decode config only for efficiency (doesn't decode full image)
+	config, _, err := image.DecodeConfig(file)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to read image config: %w", err)
 	}
 
-	img := bimg.NewImage(data)
-	metadata, err := img.Metadata()
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to read metadata: %w", err)
-	}
-
-	return metadata.Size.Width, metadata.Size.Height, nil
+	return config.Width, config.Height, nil
 }
 
 // IsImage checks if a MIME type represents an image that can be processed.
@@ -229,12 +214,12 @@ func (p *Processor) IsSupportedType(mimeType string) bool {
 
 // DetectMimeType detects the MIME type of image data.
 func (p *Processor) DetectMimeType(data []byte) string {
-	img := bimg.NewImage(data)
-	metadata, err := img.Metadata()
-	if err != nil {
-		return ""
+	contentType := http.DetectContentType(data)
+	// http.DetectContentType returns types like "image/jpeg; charset=utf-8"
+	if idx := strings.Index(contentType, ";"); idx != -1 {
+		contentType = contentType[:idx]
 	}
-	return bimgTypeToMimeType(metadata.Type)
+	return contentType
 }
 
 // DeleteMediaFiles removes all files associated with a media item.
@@ -256,32 +241,128 @@ func (p *Processor) DeleteMediaFiles(uuid string) error {
 	return nil
 }
 
-// calculateFitDimensions calculates new dimensions to fit within bounds while maintaining aspect ratio.
-func calculateFitDimensions(srcWidth, srcHeight, maxWidth, maxHeight int) (int, int) {
-	if srcWidth <= maxWidth && srcHeight <= maxHeight {
-		return srcWidth, srcHeight
+// readExifOrientation reads the EXIF orientation tag from image data.
+// Returns 1 (normal) if orientation cannot be determined.
+func readExifOrientation(r io.Reader) int {
+	x, err := exif.Decode(r)
+	if err != nil {
+		return 1
 	}
 
-	ratio := float64(srcWidth) / float64(srcHeight)
-	maxRatio := float64(maxWidth) / float64(maxHeight)
-
-	var newWidth, newHeight int
-	if ratio > maxRatio {
-		// Width is the limiting factor
-		newWidth = maxWidth
-		newHeight = int(float64(maxWidth) / ratio)
-	} else {
-		// Height is the limiting factor
-		newHeight = maxHeight
-		newWidth = int(float64(maxHeight) * ratio)
+	tag, err := x.Get(exif.Orientation)
+	if err != nil {
+		return 1
 	}
 
-	return newWidth, newHeight
+	orientation, err := tag.Int(0)
+	if err != nil {
+		return 1
+	}
+
+	return orientation
 }
 
-// bimgTypeToMimeType converts bimg image type to MIME type string.
-func bimgTypeToMimeType(imgType string) string {
-	switch strings.ToLower(imgType) {
+// applyOrientation applies EXIF orientation transformation to an image.
+// Orientation values:
+// 1: Normal
+// 2: Flip horizontal
+// 3: Rotate 180°
+// 4: Flip vertical
+// 5: Rotate 90° CW + flip horizontal
+// 6: Rotate 90° CW
+// 7: Rotate 90° CCW + flip horizontal
+// 8: Rotate 90° CCW
+func applyOrientation(img image.Image, orientation int) image.Image {
+	switch orientation {
+	case 2:
+		return imaging.FlipH(img)
+	case 3:
+		return imaging.Rotate180(img)
+	case 4:
+		return imaging.FlipV(img)
+	case 5:
+		return imaging.FlipH(imaging.Rotate270(img))
+	case 6:
+		return imaging.Rotate270(img)
+	case 7:
+		return imaging.FlipH(imaging.Rotate90(img))
+	case 8:
+		return imaging.Rotate90(img)
+	default:
+		return img
+	}
+}
+
+// encodeImage encodes an image to bytes with the specified format and quality.
+func encodeImage(img image.Image, format string, quality int) ([]byte, error) {
+	var buf bytes.Buffer
+
+	switch format {
+	case "jpeg", "jpg":
+		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
+			return nil, err
+		}
+	case "png":
+		if err := png.Encode(&buf, img); err != nil {
+			return nil, err
+		}
+	case "gif":
+		if err := gif.Encode(&buf, img, nil); err != nil {
+			return nil, err
+		}
+	case "webp":
+		// WebP decoding is supported but encoding is not in pure Go
+		// Convert to JPEG for output
+		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
+			return nil, err
+		}
+	default:
+		// Default to JPEG
+		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
+}
+
+// detectFormat detects the image format from raw bytes.
+func detectFormat(data []byte) string {
+	contentType := http.DetectContentType(data)
+	switch {
+	case strings.Contains(contentType, "jpeg"):
+		return "jpeg"
+	case strings.Contains(contentType, "png"):
+		return "png"
+	case strings.Contains(contentType, "gif"):
+		return "gif"
+	case strings.Contains(contentType, "webp"):
+		return "webp"
+	default:
+		return ""
+	}
+}
+
+// detectFormatFromFilename extracts format from filename extension.
+func detectFormatFromFilename(filename string) string {
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch ext {
+	case ".jpg", ".jpeg":
+		return "jpeg"
+	case ".png":
+		return "png"
+	case ".gif":
+		return "gif"
+	case ".webp":
+		return "webp"
+	default:
+		return "jpeg"
+	}
+}
+
+// formatToMimeType converts format string to MIME type.
+func formatToMimeType(format string) string {
+	switch format {
 	case "jpeg", "jpg":
 		return model.MimeTypeJPEG
 	case "png":
