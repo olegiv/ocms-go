@@ -73,6 +73,15 @@ type Module interface {
 	TranslationsFS() embed.FS
 }
 
+// EnvironmentChecker is an optional interface modules can implement to
+// restrict which environments they can run in. When a module is first
+// registered in the database, if it implements this interface and the
+// current environment is not in the allowed list, it will be inserted
+// as inactive (is_active=0).
+type EnvironmentChecker interface {
+	AllowedEnvs() []string
+}
+
 // Migration represents a database migration for a module.
 type Migration struct {
 	Version     int64

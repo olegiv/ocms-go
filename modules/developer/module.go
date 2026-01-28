@@ -37,6 +37,13 @@ func New() *Module {
 	}
 }
 
+// AllowedEnvs restricts the developer module to non-production environments.
+// On first run, the module will be auto-inserted as inactive if the environment
+// is not in this list.
+func (m *Module) AllowedEnvs() []string {
+	return []string{"development"}
+}
+
 // Init initializes the module with the given context.
 // The developer module is blocked in production environments for security.
 func (m *Module) Init(ctx *module.Context) error {
