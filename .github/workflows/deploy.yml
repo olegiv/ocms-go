@@ -1,0 +1,187 @@
+# Copyright (c) 2025-2026 Oleg Ivanchenko
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# oCMS Deployment Workflow
+# Builds and deploys oCMS to a production server on tag push.
+#
+# Required secrets:
+#   SERVER_HOST     - Production server hostname/IP
+#   SERVER_USER     - SSH username
+#   SSH_PRIVATE_KEY - SSH private key for authentication
+#
+# Optional secrets:
+#   SERVER_PORT     - SSH port (default: 22)
+#   DEPLOY_PATH     - Path to deployment script (default: /opt/ocms/deploy.sh)
+
+name: Deploy to Production
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+env:
+  GO_VERSION: '1.23'
+  BINARY_NAME: ocms-linux-amd64
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Needed for version tag
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install libvips
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libvips-dev
+
+      - name: Get version info
+        id: version
+        run: |
+          VERSION=${GITHUB_REF_NAME:-$(git describe --tags --always --dirty 2>/dev/null || echo "dev")}
+          GIT_COMMIT=$(git rev-parse --short HEAD)
+          BUILD_TIME=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "GIT_COMMIT=$GIT_COMMIT" >> $GITHUB_OUTPUT
+          echo "BUILD_TIME=$BUILD_TIME" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION (commit: $GIT_COMMIT)"
+
+      - name: Build binary
+        run: |
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
+            -ldflags="-s -w -X main.version=${{ steps.version.outputs.VERSION }} -X main.gitCommit=${{ steps.version.outputs.GIT_COMMIT }} -X main.buildTime=${{ steps.version.outputs.BUILD_TIME }}" \
+            -trimpath \
+            -o ${{ env.BINARY_NAME }} \
+            ./cmd/ocms
+
+      - name: Verify binary
+        run: |
+          file ${{ env.BINARY_NAME }}
+          ls -lh ${{ env.BINARY_NAME }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}
+          path: ${{ env.BINARY_NAME }}
+          retention-days: 7
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: build
+    environment: ${{ github.event.inputs.environment || 'production' }}
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}
+
+      - name: Deploy to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          source: ${{ env.BINARY_NAME }}
+          target: /tmp/
+
+      - name: Run deployment script
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            echo "Starting deployment..."
+            sudo ${{ secrets.DEPLOY_PATH || '/opt/ocms/deploy.sh' }} /tmp/${{ env.BINARY_NAME }}
+            echo "Deployment complete!"
+
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            echo "Checking service status..."
+            sudo systemctl status ocms --no-pager -l | head -20
+            echo ""
+            echo "Health check:"
+            curl -sf http://127.0.0.1:8080/health && echo " OK" || echo " FAILED"
+
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs: [build, deploy]
+    if: always()
+
+    steps:
+      - name: Get deployment status
+        id: status
+        run: |
+          if [ "${{ needs.deploy.result }}" == "success" ]; then
+            echo "STATUS=success" >> $GITHUB_OUTPUT
+            echo "MESSAGE=Deployment of ${{ github.ref_name }} completed successfully" >> $GITHUB_OUTPUT
+          else
+            echo "STATUS=failure" >> $GITHUB_OUTPUT
+            echo "MESSAGE=Deployment of ${{ github.ref_name }} failed" >> $GITHUB_OUTPUT
+          fi
+
+      # Uncomment and configure for Slack notifications
+      # - name: Send Slack notification
+      #   if: always()
+      #   uses: slackapi/slack-github-action@v1.25.0
+      #   with:
+      #     payload: |
+      #       {
+      #         "text": "${{ steps.status.outputs.MESSAGE }}",
+      #         "blocks": [
+      #           {
+      #             "type": "section",
+      #             "text": {
+      #               "type": "mrkdwn",
+      #               "text": "*oCMS Deployment*\n${{ steps.status.outputs.MESSAGE }}\n\n*Version:* ${{ github.ref_name }}\n*Environment:* ${{ github.event.inputs.environment || 'production' }}\n*Triggered by:* ${{ github.actor }}"
+      #             }
+      #           }
+      #         ]
+      #       }
+      #   env:
+      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      #     SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+      - name: Summary
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** ${{ github.event.inputs.environment || 'production' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ${{ steps.status.outputs.STATUS }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
