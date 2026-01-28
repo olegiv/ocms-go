@@ -51,7 +51,7 @@ build-prod:
 	@mkdir -p $(BUILD_DIR)
 	$(GO) build -ldflags="-s -w $(LDFLAGS_VERSION)" -trimpath -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_DIR)
 
-# Build for Linux AMD64 (Debian 12/Ubuntu 24)
+# Build for Linux AMD64
 build-linux-amd64:
 	@echo "Building $(BINARY_NAME) $(VERSION) for Linux AMD64..."
 	@mkdir -p $(BUILD_DIR)
