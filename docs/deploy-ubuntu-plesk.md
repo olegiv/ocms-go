@@ -159,6 +159,37 @@ sudo systemctl status ocms
 curl http://127.0.0.1:8081/health
 ```
 
+### 2.5 Alternative: Running Without Systemd
+
+If you prefer not to use systemd, here are other ways to run oCMS in background:
+
+**Using nohup (simple, persists after logout):**
+```bash
+cd /var/lib/ocms
+nohup /opt/ocms/bin/ocms > /var/log/ocms.log 2>&1 &
+```
+
+**Using screen (interactive, can reattach):**
+```bash
+screen -dmS ocms /opt/ocms/bin/ocms
+# Reattach later: screen -r ocms
+# Detach: Ctrl+A, then D
+```
+
+**Using tmux (similar to screen):**
+```bash
+tmux new-session -d -s ocms '/opt/ocms/bin/ocms'
+# Reattach later: tmux attach -t ocms
+```
+
+**Simple background:**
+```bash
+/opt/ocms/bin/ocms &
+disown  # prevents termination when shell closes
+```
+
+> **Recommendation:** Use systemd for production servers. It provides auto-restart on crash, boot startup, centralized logging via journalctl, and security sandboxing.
+
 ---
 
 ## Part 3: Plesk Configuration (Nginx Only)
