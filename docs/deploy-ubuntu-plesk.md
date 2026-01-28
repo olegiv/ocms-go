@@ -192,29 +192,9 @@ disown  # prevents termination when shell closes
 
 ---
 
-## Part 3: Plesk Configuration (Nginx Only)
+## Part 3: Plesk Configuration
 
-### 3.1 Disable Apache for Your Domain
-
-Plesk can run Nginx alone without Apache. This is more efficient for reverse proxy setups.
-
-**Option A: Disable Apache globally (if you don't need it for any site)**
-
-1. Log in to Plesk
-2. Go to **Tools & Settings** → **Updates and Upgrades**
-3. Click **Add/Remove Components**
-4. Find **Web hosting** → **Apache web server**
-5. Set to "Remove" and apply
-
-**Option B: Disable Apache per-domain (recommended)**
-
-1. Go to **Websites & Domains**
-2. Click on your domain (e.g., `cms.example.com`)
-3. Click **Hosting Settings**
-4. Uncheck **Apache support** (or set to "Nginx only")
-5. Click **OK**
-
-### 3.2 Configure SSL Certificate
+### 3.1 Configure SSL Certificate
 
 1. Go to **Websites & Domains** → your domain
 2. Click **SSL/TLS Certificates**
@@ -224,13 +204,10 @@ Plesk can run Nginx alone without Apache. This is more efficient for reverse pro
 6. After installation, go back to **Hosting Settings**
 7. Enable **Permanent SEO-safe 301 redirect from HTTP to HTTPS**
 
-### 3.3 Configure Nginx Reverse Proxy
+### 3.2 Configure Nginx Reverse Proxy
 
 1. Go to **Websites & Domains** → your domain
-2. Click **Apache & nginx Settings**
-
-   > Note: Even with Apache disabled, Plesk still shows this panel for nginx configuration.
-
+2. Click **Hosting & DNS** tab → **Apache & nginx**
 3. Ensure **Proxy mode** is **unchecked** (we don't want nginx proxying to Apache)
 
 4. Scroll down to **Additional nginx directives**
@@ -266,7 +243,7 @@ location ~ /\. {
 
 6. Click **OK** to apply
 
-### 3.4 Verify Configuration
+### 3.3 Verify Configuration
 
 ```bash
 # Test nginx configuration
