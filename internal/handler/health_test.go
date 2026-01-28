@@ -4,37 +4,122 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
-func TestHealthHandler_Health(t *testing.T) {
-	db := testDB(t)
-	uploadsDir := t.TempDir()
+// createTestAPIKey creates an API key in the test DB and returns the raw key string.
+func createTestAPIKey(t *testing.T, h *HealthHandler) string {
+	t.Helper()
 
-	handler := NewHealthHandler(db, uploadsDir)
+	rawKey := "test-health-api-key-12345"
+	keyHash := model.HashAPIKey(rawKey)
+
+	_, err := h.queries.CreateAPIKey(context.Background(), store.CreateAPIKeyParams{
+		Name:        "Health Test Key",
+		KeyHash:     keyHash,
+		KeyPrefix:   "test_",
+		Permissions: `["pages:read"]`,
+		IsActive:    true,
+		CreatedBy:   1,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("CreateAPIKey failed: %v", err)
+	}
+
+	return rawKey
+}
+
+// addAPIKeyAuth adds a Bearer token to the request for authenticated health checks.
+func addAPIKeyAuth(r *http.Request, rawKey string) *http.Request {
+	r.Header.Set("Authorization", "Bearer "+rawKey)
+	return r
+}
+
+func TestHealthHandler_Health_Public(t *testing.T) {
+	handler := newTestHealthHandler(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+
+	handler.Health(w, req)
+
+	assertStatus(t, w.Code, http.StatusOK)
+
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q; want application/json", ct)
+	}
+
+	// Public response should be minimal
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp["status"] != "healthy" {
+		t.Errorf("status = %v; want healthy", resp["status"])
+	}
+
+	// Should NOT contain detailed fields
+	if _, ok := resp["uptime"]; ok {
+		t.Error("public response should not contain uptime")
+	}
+	if _, ok := resp["version"]; ok {
+		t.Error("public response should not contain version")
+	}
+	if _, ok := resp["checks"]; ok {
+		t.Error("public response should not contain checks")
+	}
+	if _, ok := resp["timestamp"]; ok {
+		t.Error("public response should not contain timestamp")
+	}
+}
+
+func TestHealthHandler_Health_Public_Verbose(t *testing.T) {
+	handler := newTestHealthHandler(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/health?verbose=true", nil)
+	w := httptest.NewRecorder()
+
+	handler.Health(w, req)
+
+	// Public response should still be minimal even with verbose=true
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if _, ok := resp["system"]; ok {
+		t.Error("public response should not contain system info even with verbose=true")
+	}
+}
+
+func TestHealthHandler_Health_Authenticated(t *testing.T) {
+	handler := newTestHealthHandler(t)
+	rawKey := createTestAPIKey(t, handler)
 
 	tests := []struct {
 		name           string
 		queryVerbose   bool
-		wantStatus     int
-		wantHealthy    bool
 		wantSystemInfo bool
 	}{
 		{
-			name:        "healthy response",
-			wantStatus:  http.StatusOK,
-			wantHealthy: true,
+			name: "full details without verbose",
 		},
 		{
-			name:           "verbose includes system info",
+			name:           "full details with verbose",
 			queryVerbose:   true,
-			wantStatus:     http.StatusOK,
-			wantHealthy:    true,
 			wantSystemInfo: true,
 		},
 	}
@@ -47,37 +132,27 @@ func TestHealthHandler_Health(t *testing.T) {
 			}
 
 			req := httptest.NewRequest(http.MethodGet, path, nil)
+			addAPIKeyAuth(req, rawKey)
 			w := httptest.NewRecorder()
 
 			handler.Health(w, req)
 
-			assertStatus(t, w.Code, tt.wantStatus)
+			assertStatus(t, w.Code, http.StatusOK)
 
-			// Check Content-Type
 			if ct := w.Header().Get("Content-Type"); ct != "application/json" {
 				t.Errorf("Content-Type = %q; want application/json", ct)
 			}
 
-			// Parse response
 			var resp HealthStatus
 			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 				t.Fatalf("failed to unmarshal response: %v", err)
 			}
 
-			// Check status
-			if tt.wantHealthy && resp.Status != "healthy" {
+			if resp.Status != "healthy" {
 				t.Errorf("status = %q; want healthy", resp.Status)
 			}
 
-			// Check system info presence
-			if tt.wantSystemInfo && resp.System == nil {
-				t.Error("expected system info in response")
-			}
-			if !tt.wantSystemInfo && resp.System != nil {
-				t.Error("unexpected system info in response")
-			}
-
-			// Check required fields
+			// Authenticated response should include detailed fields
 			if resp.Timestamp.IsZero() {
 				t.Error("timestamp should not be zero")
 			}
@@ -88,7 +163,6 @@ func TestHealthHandler_Health(t *testing.T) {
 				t.Error("version should not be empty")
 			}
 
-			// Check database check
 			if dbCheck, ok := resp.Checks["database"]; ok {
 				if dbCheck.Status != "healthy" {
 					t.Errorf("database check status = %q; want healthy", dbCheck.Status)
@@ -96,18 +170,21 @@ func TestHealthHandler_Health(t *testing.T) {
 			} else {
 				t.Error("expected database check in response")
 			}
+
+			if tt.wantSystemInfo && resp.System == nil {
+				t.Error("expected system info in response")
+			}
+			if !tt.wantSystemInfo && resp.System != nil {
+				t.Error("unexpected system info in response")
+			}
 		})
 	}
 }
 
-func TestHealthHandler_Health_UnhealthyDatabase(t *testing.T) {
-	// Create a database and close it to simulate unhealthy state
+func TestHealthHandler_Health_UnhealthyDatabase_Public(t *testing.T) {
 	db := testDB(t)
-	uploadsDir := t.TempDir()
+	handler := NewHealthHandler(db, nil, t.TempDir())
 
-	handler := NewHealthHandler(db, uploadsDir)
-
-	// Close the database to make it unhealthy
 	_ = db.Close()
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -115,22 +192,47 @@ func TestHealthHandler_Health_UnhealthyDatabase(t *testing.T) {
 
 	handler.Health(w, req)
 
-	// Should return degraded status
 	assertStatus(t, w.Code, http.StatusServiceUnavailable)
 
-	var resp HealthStatus
+	// Public response should be minimal even when degraded
+	var resp map[string]interface{}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
-	if resp.Status != "degraded" {
-		t.Errorf("status = %q; want degraded", resp.Status)
+	if resp["status"] != "degraded" {
+		t.Errorf("status = %v; want degraded", resp["status"])
 	}
 
-	if dbCheck, ok := resp.Checks["database"]; ok {
-		if dbCheck.Status != "unhealthy" {
-			t.Errorf("database check status = %q; want unhealthy", dbCheck.Status)
-		}
+	// Should NOT expose check details
+	if _, ok := resp["checks"]; ok {
+		t.Error("public degraded response should not contain checks")
+	}
+}
+
+func TestHealthHandler_Health_UnhealthyDatabase_Authenticated(t *testing.T) {
+	handler := newTestHealthHandler(t)
+	rawKey := createTestAPIKey(t, handler)
+
+	// Close DB after creating the API key
+	_ = handler.db.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	addAPIKeyAuth(req, rawKey)
+	w := httptest.NewRecorder()
+
+	handler.Health(w, req)
+
+	assertStatus(t, w.Code, http.StatusServiceUnavailable)
+
+	// Authenticated callers can't auth when DB is closed, so they get public response
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp["status"] != "degraded" {
+		t.Errorf("status = %v; want degraded", resp["status"])
 	}
 }
 
@@ -157,47 +259,27 @@ func TestHealthHandler_Liveness(t *testing.T) {
 func TestHealthHandler_Readiness(t *testing.T) {
 	handler := newTestHealthHandler(t)
 
-	tests := []struct {
-		name       string
-		closeDB    bool
-		wantStatus int
-		wantReady  bool
-	}{
-		{
-			name:       "ready when database is healthy",
-			wantStatus: http.StatusOK,
-			wantReady:  true,
-		},
+	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+	w := httptest.NewRecorder()
+
+	handler.Readiness(w, req)
+
+	assertStatus(t, w.Code, http.StatusOK)
+
+	var resp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
-			w := httptest.NewRecorder()
-
-			handler.Readiness(w, req)
-
-			assertStatus(t, w.Code, tt.wantStatus)
-
-			var resp map[string]string
-			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-				t.Fatalf("failed to unmarshal response: %v", err)
-			}
-
-			if tt.wantReady && resp["status"] != "ready" {
-				t.Errorf("status = %q; want ready", resp["status"])
-			}
-		})
+	if resp["status"] != "ready" {
+		t.Errorf("status = %q; want ready", resp["status"])
 	}
 }
 
-func TestHealthHandler_Readiness_NotReady(t *testing.T) {
-	// Need separate db to close it
+func TestHealthHandler_Readiness_NotReady_Public(t *testing.T) {
 	db := testDB(t)
+	handler := NewHealthHandler(db, nil, t.TempDir())
 
-	handler := NewHealthHandler(db, t.TempDir())
-
-	// Close database to make it not ready
 	_ = db.Close()
 
 	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
@@ -215,10 +297,44 @@ func TestHealthHandler_Readiness_NotReady(t *testing.T) {
 	if resp["status"] != "not_ready" {
 		t.Errorf("status = %q; want not_ready", resp["status"])
 	}
+
+	// Public response should NOT contain error message
+	if _, ok := resp["message"]; ok {
+		t.Error("public not_ready response should not contain error message")
+	}
 }
 
-func TestHealthHandler_DiskCheck(t *testing.T) {
-	db := testDB(t)
+func TestHealthHandler_Readiness_NotReady_Authenticated(t *testing.T) {
+	handler := newTestHealthHandler(t)
+	rawKey := createTestAPIKey(t, handler)
+
+	// Close DB after creating the API key
+	_ = handler.db.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+	addAPIKeyAuth(req, rawKey)
+	w := httptest.NewRecorder()
+
+	handler.Readiness(w, req)
+
+	assertStatus(t, w.Code, http.StatusServiceUnavailable)
+
+	var resp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp["status"] != "not_ready" {
+		t.Errorf("status = %q; want not_ready", resp["status"])
+	}
+
+	// When DB is closed, API key validation also fails, so auth falls through
+	// This is expected: when the DB is down, authentication can't be verified
+}
+
+func TestHealthHandler_DiskCheck_Authenticated(t *testing.T) {
+	handler := newTestHealthHandler(t)
+	rawKey := createTestAPIKey(t, handler)
 
 	tests := []struct {
 		name        string
@@ -243,10 +359,10 @@ func TestHealthHandler_DiskCheck(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			uploadsDir := tt.setupDir(t)
-			handler := NewHealthHandler(db, uploadsDir)
+			handler.uploadsDir = tt.setupDir(t)
 
 			req := httptest.NewRequest(http.MethodGet, "/health", nil)
+			addAPIKeyAuth(req, rawKey)
 			w := httptest.NewRecorder()
 
 			handler.Health(w, req)
@@ -293,10 +409,12 @@ func TestFormatBytes(t *testing.T) {
 	}
 }
 
-func TestHealthHandler_SystemInfo(t *testing.T) {
+func TestHealthHandler_SystemInfo_Authenticated(t *testing.T) {
 	handler := newTestHealthHandler(t)
+	rawKey := createTestAPIKey(t, handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/health?verbose=true", nil)
+	addAPIKeyAuth(req, rawKey)
 	w := httptest.NewRecorder()
 
 	handler.Health(w, req)
@@ -329,15 +447,22 @@ func TestHealthHandler_SystemInfo(t *testing.T) {
 
 func TestNewHealthHandler(t *testing.T) {
 	db := testDB(t)
+	sm := testSessionManager(t)
 	uploadsDir := t.TempDir()
 
-	handler := NewHealthHandler(db, uploadsDir)
+	handler := NewHealthHandler(db, sm, uploadsDir)
 
 	if handler == nil {
 		t.Fatal("NewHealthHandler returned nil")
 	}
 	if handler.db != db {
 		t.Error("db not set correctly")
+	}
+	if handler.sm != sm {
+		t.Error("sm not set correctly")
+	}
+	if handler.queries == nil {
+		t.Error("queries should not be nil")
 	}
 	if handler.uploadsDir != uploadsDir {
 		t.Error("uploadsDir not set correctly")
@@ -347,10 +472,26 @@ func TestNewHealthHandler(t *testing.T) {
 	}
 }
 
-func TestHealthHandler_UptimeCalculation(t *testing.T) {
+func TestNewHealthHandler_NilSessionManager(t *testing.T) {
+	db := testDB(t)
+	uploadsDir := t.TempDir()
+
+	handler := NewHealthHandler(db, nil, uploadsDir)
+
+	if handler == nil {
+		t.Fatal("NewHealthHandler returned nil")
+	}
+	if handler.sm != nil {
+		t.Error("sm should be nil when passed nil")
+	}
+}
+
+func TestHealthHandler_UptimeCalculation_Authenticated(t *testing.T) {
 	handler := newTestHealthHandler(t)
+	rawKey := createTestAPIKey(t, handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	addAPIKeyAuth(req, rawKey)
 	w := httptest.NewRecorder()
 
 	handler.Health(w, req)
@@ -366,20 +507,17 @@ func TestHealthHandler_UptimeCalculation(t *testing.T) {
 
 	// Uptime should be very short (just created)
 	if resp.Uptime != "0s" && len(resp.Uptime) > 10 {
-		// Allow for small delays in test execution
 		t.Logf("uptime = %s (expected very short duration)", resp.Uptime)
 	}
 }
 
-// Ensure uploads dir can be an environment variable path
 func TestHealthHandler_EnvUploadsDir(t *testing.T) {
 	db := testDB(t)
 
-	// Create a temp directory and set it as env var
 	tempDir := t.TempDir()
 	t.Setenv("UPLOADS_DIR", tempDir)
 
-	handler := NewHealthHandler(db, os.Getenv("UPLOADS_DIR"))
+	handler := NewHealthHandler(db, nil, os.Getenv("UPLOADS_DIR"))
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	w := httptest.NewRecorder()
@@ -387,4 +525,56 @@ func TestHealthHandler_EnvUploadsDir(t *testing.T) {
 	handler.Health(w, req)
 
 	assertStatus(t, w.Code, http.StatusOK)
+}
+
+func TestHealthHandler_IsAuthenticated_InvalidBearerToken(t *testing.T) {
+	handler := newTestHealthHandler(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.Header.Set("Authorization", "Bearer invalid-key-that-does-not-exist")
+	w := httptest.NewRecorder()
+
+	handler.Health(w, req)
+
+	// Should get public (minimal) response since the key is invalid
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if _, ok := resp["uptime"]; ok {
+		t.Error("invalid bearer token should not grant access to detailed response")
+	}
+}
+
+func TestHealthHandler_IsAuthenticated_MalformedAuth(t *testing.T) {
+	handler := newTestHealthHandler(t)
+
+	tests := []struct {
+		name   string
+		header string
+	}{
+		{name: "empty bearer", header: "Bearer "},
+		{name: "basic auth", header: "Basic dXNlcjpwYXNz"},
+		{name: "no space", header: "Bearertoken123"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/health", nil)
+			req.Header.Set("Authorization", tt.header)
+			w := httptest.NewRecorder()
+
+			handler.Health(w, req)
+
+			var resp map[string]interface{}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to unmarshal response: %v", err)
+			}
+
+			if _, ok := resp["uptime"]; ok {
+				t.Errorf("malformed auth %q should not grant access to detailed response", tt.header)
+			}
+		})
+	}
 }

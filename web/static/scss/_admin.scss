@@ -4326,3 +4326,107 @@ tr.unread {
     margin-top: $spacing-6;
   }
 }
+
+// =====================================================
+// Docs Content (rendered markdown)
+// =====================================================
+
+.docs-content {
+  line-height: 1.7;
+
+  h1, h2, h3, h4, h5, h6 {
+    margin-top: $spacing-6;
+    margin-bottom: $spacing-3;
+    font-weight: 600;
+
+    &:first-child {
+      margin-top: 0;
+    }
+  }
+
+  h1 { font-size: $font-size-2xl; }
+  h2 { font-size: $font-size-xl; border-bottom: 1px solid $gray-200; padding-bottom: $spacing-2; }
+  h3 { font-size: $font-size-lg; }
+
+  p {
+    margin-bottom: $spacing-4;
+  }
+
+  ul, ol {
+    margin-bottom: $spacing-4;
+    padding-left: $spacing-6;
+  }
+
+  li {
+    margin-bottom: $spacing-1;
+  }
+
+  code {
+    font-family: $font-family-mono;
+    font-size: $font-size-sm;
+    background: $gray-100;
+    padding: 0.125rem $spacing-1;
+    border-radius: $radius-sm;
+  }
+
+  pre {
+    background: $gray-900;
+    color: $gray-100;
+    padding: $spacing-4;
+    border-radius: $radius-md;
+    overflow-x: auto;
+    margin-bottom: $spacing-4;
+
+    code {
+      background: none;
+      padding: 0;
+      font-size: $font-size-sm;
+      color: inherit;
+    }
+  }
+
+  blockquote {
+    border-left: 4px solid $primary;
+    padding: $spacing-2 $spacing-4;
+    margin: 0 0 $spacing-4;
+    background: $gray-50;
+    color: $gray-600;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: $spacing-4;
+
+    th, td {
+      padding: $spacing-2 $spacing-3;
+      border: 1px solid $gray-200;
+      text-align: left;
+    }
+
+    th {
+      background: $gray-50;
+      font-weight: 600;
+    }
+  }
+
+  a {
+    color: $primary;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid $gray-200;
+    margin: $spacing-6 0;
+  }
+
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+}
