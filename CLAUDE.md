@@ -71,6 +71,38 @@ sqlc generate            # Regenerate store/*.sql.go from queries/*.sql
 templ generate           # Regenerate template Go code (if using templ)
 ```
 
+## Git Pre-Commit Hook
+
+**CRITICAL**: This repository has a pre-commit hook installed at `.git/hooks/pre-commit` that **prevents automated commits** without explicit user approval.
+
+### What It Does
+
+The hook blocks ALL commit attempts from Claude Code and requires interactive user approval:
+- ✅ **Interactive mode**: Prompts for "YES" (all caps) confirmation before allowing commit
+- ❌ **Non-interactive mode**: Always blocks automated commits
+- 🔒 **Cannot be bypassed**: Claude Code physically cannot create commits
+
+### How It Works
+
+```bash
+# When user commits manually:
+git add .
+git commit -m "Your message"
+# Hook asks: "Type 'YES' to approve this commit"
+# User types: YES
+# Commit proceeds
+```
+
+### Hook Location
+
+The hook is stored in `.git/hooks/pre-commit` (executable). This file is NOT tracked by git (git ignores the `.git/` directory), so each developer must install it manually if they want this protection.
+
+### Installing the Hook in Other Repositories
+
+The hook is also available in the shared Claude Code submodule for use in other projects:
+- Global hook: `.claude/shared/global/hooks/pre-commit`
+- Installation script: See `.claude/shared/global/hooks/README.md`
+
 ## Architecture Overview
 
 **Request Flow**: HTTP Request → chi router → middleware chain → handler → store (sqlc) → SQLite

@@ -1,0 +1,69 @@
+# Copyright (c) 2025-2026 Oleg Ivanchenko
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# oCMS Multi-Instance Systemd Template Service
+#
+# Installation:
+#   sudo cp ocms@.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#
+# Per-instance overrides are created by setup-site.sh at:
+#   /etc/systemd/system/ocms@<site_id>.service.d/instance.conf
+#
+# Usage:
+#   sudo systemctl start ocms@example_com
+#   sudo systemctl enable ocms@example_com
+#   sudo journalctl -u ocms@example_com -f
+
+[Unit]
+Description=oCMS Instance (%i)
+Documentation=https://github.com/olegiv/ocms-go
+After=network.target
+Wants=network-online.target
+StartLimitBurst=5
+
+[Service]
+Type=simple
+
+# Per-instance User, Group, WorkingDirectory, EnvironmentFile,
+# and ReadWritePaths are set via drop-in overrides created by
+# setup-site.sh at:
+#   /etc/systemd/system/ocms@%i.service.d/instance.conf
+
+# Application binary (shared across all instances)
+ExecStart=/opt/ocms/bin/ocms
+
+# Restart policy
+Restart=always
+RestartSec=5
+#StartLimitIntervalSec=60
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=false
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+
+# Resource limits (adjust per site as needed via drop-in overrides)
+# LimitNOFILE=65535
+# MemoryMax=512M
+# CPUQuota=100%
+
+# Graceful shutdown
+TimeoutStopSec=30
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ocms-%i
+
+[Install]
+WantedBy=multi-user.target

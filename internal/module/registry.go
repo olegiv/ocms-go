@@ -109,13 +109,20 @@ func (r *Registry) InitAll(ctx *Context) error {
 		return fmt.Errorf("loading module active status: %w", err)
 	}
 
-	// Finally, initialize modules in order
+	// Finally, initialize active modules in order
 	for _, name := range r.order {
 		m, ok := r.modules[name]
 		if !ok || m == nil {
 			return fmt.Errorf(errModuleNotFoundFmt, name)
 		}
-		r.logger.Info("initializing module", "name", name, "active", r.activeStatus[name])
+
+		// Skip initialization of inactive modules
+		if !r.activeStatus[name] {
+			r.logger.Info("skipping inactive module", "name", name)
+			continue
+		}
+
+		r.logger.Info("initializing module", "name", name)
 
 		if err := m.Init(ctx); err != nil {
 			return fmt.Errorf("initializing module %q: %w", name, err)
@@ -248,17 +255,37 @@ func (r *Registry) loadActiveStatus(db *sql.DB) error {
 		var isActive, showInSidebar bool
 		err := db.QueryRow("SELECT is_active, show_in_sidebar FROM modules WHERE name = ?", name).Scan(&isActive, &showInSidebar)
 		if errors.Is(err, sql.ErrNoRows) {
-			// Module not in database, insert with active=true, show_in_sidebar=false
+			// Module not in database — check if it restricts environments
+			defaultActive := true
+			if checker, ok := r.modules[name].(EnvironmentChecker); ok && r.ctx != nil {
+				allowed := false
+				for _, env := range checker.AllowedEnvs() {
+					if env == r.ctx.Config.Env {
+						allowed = true
+						break
+					}
+				}
+				if !allowed {
+					defaultActive = false
+					r.logger.Info("module not allowed in current environment",
+						"module", name, "env", r.ctx.Config.Env)
+				}
+			}
+
+			activeInt := 0
+			if defaultActive {
+				activeInt = 1
+			}
 			_, err = db.Exec(
-				"INSERT INTO modules (name, is_active, show_in_sidebar, updated_at) VALUES (?, 1, 0, CURRENT_TIMESTAMP)",
-				name,
+				"INSERT INTO modules (name, is_active, show_in_sidebar, updated_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP)",
+				name, activeInt,
 			)
 			if err != nil {
 				return fmt.Errorf("inserting module %s: %w", name, err)
 			}
-			r.activeStatus[name] = true
+			r.activeStatus[name] = defaultActive
 			r.sidebarStatus[name] = false
-			r.logger.Debug("module registered in database", "module", name, "active", true, "sidebar", false)
+			r.logger.Debug("module registered in database", "module", name, "active", defaultActive, "sidebar", false)
 			continue
 		}
 		if err != nil {
