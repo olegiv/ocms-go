@@ -50,9 +50,22 @@ func NewAuthHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManage
 }
 
 // LoginForm renders the login page.
+// Redirects already-authenticated users: admin/editor → dashboard, others → homepage.
 func (h *AuthHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
+	// Redirect already-authenticated users
+	if userID := h.sessionManager.GetInt64(r.Context(), SessionKeyUserID); userID > 0 {
+		user, err := h.queries.GetUserByID(r.Context(), userID)
+		if err == nil {
+			if user.Role == RoleAdmin || user.Role == RoleEditor {
+				http.Redirect(w, r, redirectAdmin, http.StatusSeeOther)
+				return
+			}
+			http.Redirect(w, r, RouteRoot, http.StatusSeeOther)
+			return
+		}
+	}
+
 	lang := middleware.GetAdminLang(r)
-	// If already logged in, just show login page (let user decide where to go)
 	h.renderer.RenderPage(w, r, "auth/login", render.TemplateData{
 		Title: i18n.T(lang, "auth.login"),
 	})

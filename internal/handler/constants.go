@@ -76,6 +76,10 @@ const (
 	RouteImport = "/import"
 	// RouteConfig is the config admin route.
 	RouteConfig = "/config"
+	// RouteDocs is the site docs admin route.
+	RouteDocs = "/docs"
+	// RouteDocsSlug is the site docs guide route pattern.
+	RouteDocsSlug = RouteDocs + RouteParamSlug
 
 	// RouteUsersID is the users ID route pattern.
 	RouteUsersID = RouteUsers + RouteParamID
@@ -132,6 +136,7 @@ const (
 	redirectAdminFormsNew      = redirectAdminForms + RouteSuffixNew
 	redirectAdminCache         = "/admin/cache"
 	redirectAdminConfig        = redirectAdmin + RouteConfig
+	redirectAdminDocs          = redirectAdmin + RouteDocs
 	redirectAdminEvents        = "/admin/events"
 	redirectLogin              = RouteLogin
 	redirectTag                = "/tag/"

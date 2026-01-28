@@ -439,7 +439,7 @@ func testHandlerSetup(t *testing.T) (*sql.DB, *scs.SessionManager) {
 // newTestHealthHandler creates a HealthHandler with a test database and temp uploads directory.
 func newTestHealthHandler(t *testing.T) *HealthHandler {
 	t.Helper()
-	return NewHealthHandler(testDB(t), t.TempDir())
+	return NewHealthHandler(testDB(t), testSessionManager(t), t.TempDir())
 }
 
 // addUserToContext adds a user to the request context (simulating middleware).

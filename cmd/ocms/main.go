@@ -457,7 +457,8 @@ func run() error {
 	apiKeysHandler := handler.NewAPIKeysHandler(db, renderer, sessionManager)
 	webhooksHandler := handler.NewWebhooksHandler(db, renderer, sessionManager)
 	importExportHandler := handler.NewImportExportHandler(db, renderer, sessionManager)
-	healthHandler := handler.NewHealthHandler(db, handler.UploadsDirPath)
+	healthHandler := handler.NewHealthHandler(db, sessionManager, handler.UploadsDirPath)
+	docsHandler := handler.NewDocsHandler(renderer, cfg, moduleRegistry, healthHandler.StartTime())
 
 	// Set webhook dispatcher on handlers that dispatch events
 	pagesHandler.SetDispatcher(webhookDispatcher)
@@ -465,7 +466,7 @@ func run() error {
 	usersHandler.SetDispatcher(webhookDispatcher)
 	formsHandler.SetDispatcher(webhookDispatcher)
 
-	// Health check routes (should be early, before session middleware for some endpoints)
+	// Health check routes (public, returns additional details for authenticated callers)
 	r.Get("/health", healthHandler.Health)
 	r.Get("/health/live", healthHandler.Liveness)
 	r.Get("/health/ready", healthHandler.Readiness)
@@ -693,6 +694,10 @@ func run() error {
 			r.Get(handler.RouteImport, importExportHandler.ImportForm)
 			r.Post(handler.RouteImport+"/validate", importExportHandler.ImportValidate)
 			r.Post(handler.RouteImport, importExportHandler.Import)
+
+			// Site documentation routes
+			r.Get(handler.RouteDocs, docsHandler.Overview)
+			r.Get(handler.RouteDocsSlug, docsHandler.Guide)
 		})
 
 		// Register module admin routes (module-specific permissions)

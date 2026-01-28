@@ -143,6 +143,11 @@
             "translation": "Widgets"
         },
         {
+            "id": "nav.site_docs",
+            "message": "Site Docs",
+            "translation": "Site Docs"
+        },
+        {
             "id": "breadcrumb.aria_label",
             "message": "Breadcrumb",
             "translation": "Breadcrumb"
@@ -5351,6 +5356,261 @@
             "id": "editor.code_block",
             "message": "Code Block",
             "translation": "Code Block"
+        },
+        {
+            "id": "docs.title",
+            "message": "Site Documentation",
+            "translation": "Site Documentation"
+        },
+        {
+            "id": "docs.description",
+            "message": "System information, endpoint reference, and guides",
+            "translation": "System information, endpoint reference, and guides"
+        },
+        {
+            "id": "docs.system_info",
+            "message": "System Information",
+            "translation": "System Information"
+        },
+        {
+            "id": "docs.go_version",
+            "message": "Go Version",
+            "translation": "Go Version"
+        },
+        {
+            "id": "docs.environment",
+            "message": "Environment",
+            "translation": "Environment"
+        },
+        {
+            "id": "docs.server_port",
+            "message": "Server Port",
+            "translation": "Server Port"
+        },
+        {
+            "id": "docs.db_path",
+            "message": "Database Path",
+            "translation": "Database Path"
+        },
+        {
+            "id": "docs.active_theme",
+            "message": "Active Theme",
+            "translation": "Active Theme"
+        },
+        {
+            "id": "docs.cache_type",
+            "message": "Cache Type",
+            "translation": "Cache Type"
+        },
+        {
+            "id": "docs.enabled_modules",
+            "message": "Enabled Modules",
+            "translation": "Enabled Modules"
+        },
+        {
+            "id": "docs.uptime",
+            "message": "Uptime",
+            "translation": "Uptime"
+        },
+        {
+            "id": "docs.method",
+            "message": "Method",
+            "translation": "Method"
+        },
+        {
+            "id": "docs.path",
+            "message": "Path",
+            "translation": "Path"
+        },
+        {
+            "id": "docs.ep_description",
+            "message": "Description",
+            "translation": "Description"
+        },
+        {
+            "id": "docs.auth",
+            "message": "Auth",
+            "translation": "Auth"
+        },
+        {
+            "id": "docs.guides",
+            "message": "Guides",
+            "translation": "Guides"
+        },
+        {
+            "id": "docs.back_to_docs",
+            "message": "Back to Docs",
+            "translation": "Back to Docs"
+        },
+        {
+            "id": "docs.group_health",
+            "message": "Health Check",
+            "translation": "Health Check"
+        },
+        {
+            "id": "docs.group_public",
+            "message": "Public Routes",
+            "translation": "Public Routes"
+        },
+        {
+            "id": "docs.group_api",
+            "message": "REST API",
+            "translation": "REST API"
+        },
+        {
+            "id": "docs.group_admin",
+            "message": "Admin Panel",
+            "translation": "Admin Panel"
+        },
+        {
+            "id": "docs.auth_none",
+            "message": "None",
+            "translation": "None"
+        },
+        {
+            "id": "docs.auth_public_or_key",
+            "message": "Public / API Key",
+            "translation": "Public / API Key"
+        },
+        {
+            "id": "docs.auth_api_key",
+            "message": "API Key",
+            "translation": "API Key"
+        },
+        {
+            "id": "docs.auth_session",
+            "message": "Session",
+            "translation": "Session"
+        },
+        {
+            "id": "docs.auth_editor",
+            "message": "Editor+",
+            "translation": "Editor+"
+        },
+        {
+            "id": "docs.auth_admin",
+            "message": "Admin",
+            "translation": "Admin"
+        },
+        {
+            "id": "docs.ep_health",
+            "message": "Overall health status (detailed with auth)",
+            "translation": "Overall health status (detailed with auth)"
+        },
+        {
+            "id": "docs.ep_health_live",
+            "message": "Liveness probe",
+            "translation": "Liveness probe"
+        },
+        {
+            "id": "docs.ep_health_ready",
+            "message": "Readiness probe (checks DB)",
+            "translation": "Readiness probe (checks DB)"
+        },
+        {
+            "id": "docs.ep_homepage",
+            "message": "Homepage",
+            "translation": "Homepage"
+        },
+        {
+            "id": "docs.ep_blog",
+            "message": "Blog listing",
+            "translation": "Blog listing"
+        },
+        {
+            "id": "docs.ep_sitemap",
+            "message": "XML sitemap",
+            "translation": "XML sitemap"
+        },
+        {
+            "id": "docs.ep_robots",
+            "message": "Robots configuration",
+            "translation": "Robots configuration"
+        },
+        {
+            "id": "docs.ep_api_pages_list",
+            "message": "List pages",
+            "translation": "List pages"
+        },
+        {
+            "id": "docs.ep_api_pages_create",
+            "message": "Create page",
+            "translation": "Create page"
+        },
+        {
+            "id": "docs.ep_api_pages_get",
+            "message": "Get page by ID",
+            "translation": "Get page by ID"
+        },
+        {
+            "id": "docs.ep_api_pages_update",
+            "message": "Update page",
+            "translation": "Update page"
+        },
+        {
+            "id": "docs.ep_api_pages_delete",
+            "message": "Delete page",
+            "translation": "Delete page"
+        },
+        {
+            "id": "docs.ep_api_media",
+            "message": "List media files",
+            "translation": "List media files"
+        },
+        {
+            "id": "docs.ep_api_tags",
+            "message": "List tags",
+            "translation": "List tags"
+        },
+        {
+            "id": "docs.ep_api_categories",
+            "message": "List categories (tree)",
+            "translation": "List categories (tree)"
+        },
+        {
+            "id": "docs.ep_api_docs",
+            "message": "API documentation",
+            "translation": "API documentation"
+        },
+        {
+            "id": "docs.ep_admin_dashboard",
+            "message": "Admin dashboard",
+            "translation": "Admin dashboard"
+        },
+        {
+            "id": "docs.ep_admin_pages",
+            "message": "Page management",
+            "translation": "Page management"
+        },
+        {
+            "id": "docs.ep_admin_media",
+            "message": "Media library",
+            "translation": "Media library"
+        },
+        {
+            "id": "docs.ep_admin_users",
+            "message": "User management",
+            "translation": "User management"
+        },
+        {
+            "id": "docs.ep_admin_config",
+            "message": "Site configuration",
+            "translation": "Site configuration"
+        },
+        {
+            "id": "docs.ep_admin_api_keys",
+            "message": "API key management",
+            "translation": "API key management"
+        },
+        {
+            "id": "docs.ep_admin_webhooks",
+            "message": "Webhook management",
+            "translation": "Webhook management"
+        },
+        {
+            "id": "docs.ep_admin_cache",
+            "message": "Cache management",
+            "translation": "Cache management"
         }
     ]
 }

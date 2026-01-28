@@ -143,6 +143,11 @@
             "translation": "Виджеты"
         },
         {
+            "id": "nav.site_docs",
+            "message": "Site Docs",
+            "translation": "Документация"
+        },
+        {
             "id": "breadcrumb.aria_label",
             "message": "Breadcrumb",
             "translation": "Навигация"
@@ -5351,6 +5356,261 @@
             "id": "editor.code_block",
             "message": "Code Block",
             "translation": "Блок кода"
+        },
+        {
+            "id": "docs.title",
+            "message": "Site Documentation",
+            "translation": "Документация сайта"
+        },
+        {
+            "id": "docs.description",
+            "message": "System information, endpoint reference, and guides",
+            "translation": "Информация о системе, справочник эндпоинтов и руководства"
+        },
+        {
+            "id": "docs.system_info",
+            "message": "System Information",
+            "translation": "Информация о системе"
+        },
+        {
+            "id": "docs.go_version",
+            "message": "Go Version",
+            "translation": "Версия Go"
+        },
+        {
+            "id": "docs.environment",
+            "message": "Environment",
+            "translation": "Окружение"
+        },
+        {
+            "id": "docs.server_port",
+            "message": "Server Port",
+            "translation": "Порт сервера"
+        },
+        {
+            "id": "docs.db_path",
+            "message": "Database Path",
+            "translation": "Путь к базе данных"
+        },
+        {
+            "id": "docs.active_theme",
+            "message": "Active Theme",
+            "translation": "Активная тема"
+        },
+        {
+            "id": "docs.cache_type",
+            "message": "Cache Type",
+            "translation": "Тип кеша"
+        },
+        {
+            "id": "docs.enabled_modules",
+            "message": "Enabled Modules",
+            "translation": "Активные модули"
+        },
+        {
+            "id": "docs.uptime",
+            "message": "Uptime",
+            "translation": "Время работы"
+        },
+        {
+            "id": "docs.method",
+            "message": "Method",
+            "translation": "Метод"
+        },
+        {
+            "id": "docs.path",
+            "message": "Path",
+            "translation": "Путь"
+        },
+        {
+            "id": "docs.ep_description",
+            "message": "Description",
+            "translation": "Описание"
+        },
+        {
+            "id": "docs.auth",
+            "message": "Auth",
+            "translation": "Авторизация"
+        },
+        {
+            "id": "docs.guides",
+            "message": "Guides",
+            "translation": "Руководства"
+        },
+        {
+            "id": "docs.back_to_docs",
+            "message": "Back to Docs",
+            "translation": "К документации"
+        },
+        {
+            "id": "docs.group_health",
+            "message": "Health Check",
+            "translation": "Проверка состояния"
+        },
+        {
+            "id": "docs.group_public",
+            "message": "Public Routes",
+            "translation": "Публичные маршруты"
+        },
+        {
+            "id": "docs.group_api",
+            "message": "REST API",
+            "translation": "REST API"
+        },
+        {
+            "id": "docs.group_admin",
+            "message": "Admin Panel",
+            "translation": "Панель администратора"
+        },
+        {
+            "id": "docs.auth_none",
+            "message": "None",
+            "translation": "Нет"
+        },
+        {
+            "id": "docs.auth_public_or_key",
+            "message": "Public / API Key",
+            "translation": "Публичный / API-ключ"
+        },
+        {
+            "id": "docs.auth_api_key",
+            "message": "API Key",
+            "translation": "API-ключ"
+        },
+        {
+            "id": "docs.auth_session",
+            "message": "Session",
+            "translation": "Сессия"
+        },
+        {
+            "id": "docs.auth_editor",
+            "message": "Editor+",
+            "translation": "Редактор+"
+        },
+        {
+            "id": "docs.auth_admin",
+            "message": "Admin",
+            "translation": "Администратор"
+        },
+        {
+            "id": "docs.ep_health",
+            "message": "Overall health status (detailed with auth)",
+            "translation": "Общее состояние (подробности с авторизацией)"
+        },
+        {
+            "id": "docs.ep_health_live",
+            "message": "Liveness probe",
+            "translation": "Проверка жизнеспособности"
+        },
+        {
+            "id": "docs.ep_health_ready",
+            "message": "Readiness probe (checks DB)",
+            "translation": "Проверка готовности (проверяет БД)"
+        },
+        {
+            "id": "docs.ep_homepage",
+            "message": "Homepage",
+            "translation": "Главная страница"
+        },
+        {
+            "id": "docs.ep_blog",
+            "message": "Blog listing",
+            "translation": "Список записей блога"
+        },
+        {
+            "id": "docs.ep_sitemap",
+            "message": "XML sitemap",
+            "translation": "XML карта сайта"
+        },
+        {
+            "id": "docs.ep_robots",
+            "message": "Robots configuration",
+            "translation": "Конфигурация robots.txt"
+        },
+        {
+            "id": "docs.ep_api_pages_list",
+            "message": "List pages",
+            "translation": "Список страниц"
+        },
+        {
+            "id": "docs.ep_api_pages_create",
+            "message": "Create page",
+            "translation": "Создать страницу"
+        },
+        {
+            "id": "docs.ep_api_pages_get",
+            "message": "Get page by ID",
+            "translation": "Получить страницу по ID"
+        },
+        {
+            "id": "docs.ep_api_pages_update",
+            "message": "Update page",
+            "translation": "Обновить страницу"
+        },
+        {
+            "id": "docs.ep_api_pages_delete",
+            "message": "Delete page",
+            "translation": "Удалить страницу"
+        },
+        {
+            "id": "docs.ep_api_media",
+            "message": "List media files",
+            "translation": "Список медиафайлов"
+        },
+        {
+            "id": "docs.ep_api_tags",
+            "message": "List tags",
+            "translation": "Список тегов"
+        },
+        {
+            "id": "docs.ep_api_categories",
+            "message": "List categories (tree)",
+            "translation": "Список категорий (дерево)"
+        },
+        {
+            "id": "docs.ep_api_docs",
+            "message": "API documentation",
+            "translation": "Документация API"
+        },
+        {
+            "id": "docs.ep_admin_dashboard",
+            "message": "Admin dashboard",
+            "translation": "Панель управления"
+        },
+        {
+            "id": "docs.ep_admin_pages",
+            "message": "Page management",
+            "translation": "Управление страницами"
+        },
+        {
+            "id": "docs.ep_admin_media",
+            "message": "Media library",
+            "translation": "Медиатека"
+        },
+        {
+            "id": "docs.ep_admin_users",
+            "message": "User management",
+            "translation": "Управление пользователями"
+        },
+        {
+            "id": "docs.ep_admin_config",
+            "message": "Site configuration",
+            "translation": "Настройки сайта"
+        },
+        {
+            "id": "docs.ep_admin_api_keys",
+            "message": "API key management",
+            "translation": "Управление API-ключами"
+        },
+        {
+            "id": "docs.ep_admin_webhooks",
+            "message": "Webhook management",
+            "translation": "Управление вебхуками"
+        },
+        {
+            "id": "docs.ep_admin_cache",
+            "message": "Cache management",
+            "translation": "Управление кешем"
         }
     ]
 }

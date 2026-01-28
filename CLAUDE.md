@@ -188,10 +188,29 @@ On first run, seeds admin user: `admin@example.com` / `changeme1234`
 - `GET /api/v1/categories` - List categories (tree)
 - `GET /api/v1/docs` - API documentation
 
+### Health Check Routes
+- `GET /health` - Overall health status (200 OK / 503 Service Unavailable)
+- `GET /health/live` - Liveness probe (always returns `{"status":"alive"}`)
+- `GET /health/ready` - Readiness probe (checks database connectivity)
+
+**Public (unauthenticated):** Returns only `{"status":"healthy"}` or `{"status":"degraded"}` — no internal details exposed.
+
+**Authenticated (admin session or API key):** Returns full details including uptime, version, database latency, disk space. Add `?verbose=true` for Go runtime info (goroutines, memory, CPU count).
+
+```bash
+# Public — minimal status only
+curl http://localhost:8080/health
+
+# Authenticated — full details via API key
+curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/health
+
+# Authenticated with system info
+curl -H "Authorization: Bearer YOUR_API_KEY" "http://localhost:8080/health?verbose=true"
+```
+
 ### SEO Routes
 - `/sitemap.xml` - Auto-generated sitemap
 - `/robots.txt` - Robots configuration
-- `/health` - Health check endpoint
 
 ## Testing Requirements
 

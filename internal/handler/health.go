@@ -10,27 +10,47 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
+
+	"github.com/alexedwards/scs/v2"
+
+	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // HealthHandler handles health check requests.
 type HealthHandler struct {
 	db         *sql.DB
+	queries    *store.Queries
+	sm         *scs.SessionManager
 	uploadsDir string
 	startTime  time.Time
 }
 
 // NewHealthHandler creates a new health handler.
-func NewHealthHandler(db *sql.DB, uploadsDir string) *HealthHandler {
+func NewHealthHandler(db *sql.DB, sm *scs.SessionManager, uploadsDir string) *HealthHandler {
 	return &HealthHandler{
 		db:         db,
+		queries:    store.New(db),
+		sm:         sm,
 		uploadsDir: uploadsDir,
 		startTime:  time.Now(),
 	}
 }
 
-// HealthStatus represents the overall health status.
+// StartTime returns when the handler (and application) was started.
+func (h *HealthHandler) StartTime() time.Time {
+	return h.startTime
+}
+
+// HealthStatusPublic is the minimal health response for unauthenticated callers.
+type HealthStatusPublic struct {
+	Status string `json:"status"`
+}
+
+// HealthStatus represents the overall health status (authenticated callers only).
 type HealthStatus struct {
 	Status    string           `json:"status"`
 	Timestamp time.Time        `json:"timestamp"`
@@ -57,48 +77,48 @@ type SystemInfo struct {
 }
 
 // Health handles GET /health requests.
+// Returns minimal status for unauthenticated callers, full details for authenticated ones.
 func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
-	status := HealthStatus{
-		Timestamp: time.Now().UTC(),
-		Uptime:    time.Since(h.startTime).Round(time.Second).String(),
-		Version:   "1.0.0",
-		Checks:    make(map[string]Check),
-	}
-
-	// Check database connectivity
 	dbCheck := h.checkDatabase()
-	status.Checks["database"] = dbCheck
-
-	// Check disk space for uploads
 	diskCheck := h.checkDiskSpace()
-	status.Checks["disk"] = diskCheck
 
-	// Determine overall status
-	allHealthy := true
-	for _, check := range status.Checks {
-		if check.Status != "healthy" {
-			allHealthy = false
-			break
-		}
-	}
+	allHealthy := dbCheck.Status == "healthy" && diskCheck.Status == "healthy"
 
-	if allHealthy {
-		status.Status = "healthy"
-	} else {
-		status.Status = "degraded"
-	}
-
-	// Include system info if requested via query param
-	if r.URL.Query().Get("verbose") == "true" {
-		status.System = h.getSystemInfo()
+	overallStatus := "healthy"
+	if !allHealthy {
+		overallStatus = "degraded"
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 
-	if status.Status != "healthy" {
+	if overallStatus != "healthy" {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	} else {
 		w.WriteHeader(http.StatusOK)
+	}
+
+	// Unauthenticated callers get minimal response
+	if !h.isAuthenticated(r) {
+		_ = json.NewEncoder(w).Encode(HealthStatusPublic{
+			Status: overallStatus,
+		})
+		return
+	}
+
+	// Authenticated callers get full details
+	status := HealthStatus{
+		Status:    overallStatus,
+		Timestamp: time.Now().UTC(),
+		Uptime:    time.Since(h.startTime).Round(time.Second).String(),
+		Version:   "1.0.0",
+		Checks: map[string]Check{
+			"database": dbCheck,
+			"disk":     diskCheck,
+		},
+	}
+
+	if r.URL.Query().Get("verbose") == "true" {
+		status.System = h.getSystemInfo()
 	}
 
 	_ = json.NewEncoder(w).Encode(status)
@@ -114,8 +134,7 @@ func (h *HealthHandler) Liveness(w http.ResponseWriter, _ *http.Request) {
 }
 
 // Readiness handles GET /health/ready - checks if the service is ready to accept traffic.
-func (h *HealthHandler) Readiness(w http.ResponseWriter, _ *http.Request) {
-	// Check database
+func (h *HealthHandler) Readiness(w http.ResponseWriter, r *http.Request) {
 	dbCheck := h.checkDatabase()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -127,11 +146,63 @@ func (h *HealthHandler) Readiness(w http.ResponseWriter, _ *http.Request) {
 		})
 	} else {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"status":  "not_ready",
-			"message": dbCheck.Message,
-		})
+		resp := map[string]string{
+			"status": "not_ready",
+		}
+		// Only include error details for authenticated callers
+		if h.isAuthenticated(r) {
+			resp["message"] = dbCheck.Message
+		}
+		_ = json.NewEncoder(w).Encode(resp)
 	}
+}
+
+// isAuthenticated checks if the request comes from an authenticated admin/editor
+// session or a valid API key holder.
+func (h *HealthHandler) isAuthenticated(r *http.Request) bool {
+	// Check session-based auth (admin/editor users).
+	// SCS panics if session data is not loaded into context, so recover gracefully.
+	if h.sm != nil {
+		if h.checkSessionAuth(r) {
+			return true
+		}
+	}
+
+	// Check API key auth (Bearer token)
+	authHeader := r.Header.Get("Authorization")
+	if authHeader != "" {
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
+			keyHash := model.HashAPIKey(parts[1])
+			apiKey, err := h.queries.GetAPIKeyByHash(r.Context(), keyHash)
+			if err == nil && apiKey.IsActive {
+				if !apiKey.ExpiresAt.Valid || !time.Now().After(apiKey.ExpiresAt.Time) {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+// checkSessionAuth checks if the request has a valid admin/editor session.
+// Returns false (without panicking) if session data is not loaded into context.
+func (h *HealthHandler) checkSessionAuth(r *http.Request) (authenticated bool) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			authenticated = false
+		}
+	}()
+
+	userID := h.sm.GetInt64(r.Context(), SessionKeyUserID)
+	if userID > 0 {
+		user, err := h.queries.GetUserByID(r.Context(), userID)
+		if err == nil && (user.Role == RoleAdmin || user.Role == RoleEditor) {
+			return true
+		}
+	}
+	return false
 }
 
 // checkDatabase verifies database connectivity.
