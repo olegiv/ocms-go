@@ -200,73 +200,29 @@ Plesk can run Nginx alone without Apache. This is more efficient for reverse pro
 
    > Note: Even with Apache disabled, Plesk still shows this panel for nginx configuration.
 
-3. Scroll down to **Additional nginx directives**
+3. Ensure **Proxy mode** is **unchecked** (we don't want nginx proxying to Apache)
 
-4. Paste the following configuration:
+4. Scroll down to **Additional nginx directives**
+
+5. Paste the following configuration:
 
 ```nginx
-# oCMS Reverse Proxy Configuration
-# Application runs on 127.0.0.1:8081
-
-# Main application
-location / {
-    proxy_pass http://127.0.0.1:8081;
+# oCMS Reverse Proxy to Go app on port 8081
+# IMPORTANT: Use regex location to avoid "duplicate location /" error
+# Plesk generates its own "location /" block, so we use a regex pattern
+location ~ ^/(.*)$ {
+    proxy_pass http://127.0.0.1:8081/$1$is_args$args;
     proxy_http_version 1.1;
-
-    # Pass original host and client info
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
-
-    # WebSocket support (for future features)
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
-
-    # Timeouts
     proxy_connect_timeout 60s;
     proxy_send_timeout 60s;
     proxy_read_timeout 60s;
-
-    # File uploads (100MB max)
     client_max_body_size 100M;
-}
-
-# Static assets - aggressive caching
-location /static/ {
-    proxy_pass http://127.0.0.1:8081;
-    expires 1y;
-    add_header Cache-Control "public, immutable";
-}
-
-# Theme assets
-location /themes/ {
-    proxy_pass http://127.0.0.1:8081;
-    expires 1y;
-    add_header Cache-Control "public, immutable";
-}
-
-# User uploads
-location /uploads/ {
-    proxy_pass http://127.0.0.1:8081;
-    expires 30d;
-    add_header Cache-Control "public";
-}
-
-# Health check endpoint (no logging for monitoring)
-location /health {
-    proxy_pass http://127.0.0.1:8081;
-    access_log off;
-}
-
-# API endpoints
-location /api/ {
-    proxy_pass http://127.0.0.1:8081;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
 }
 
 # Block access to hidden files
@@ -275,7 +231,9 @@ location ~ /\. {
 }
 ```
 
-5. Click **OK** to apply
+> **Note:** Do NOT use `location /` in Plesk's additional nginx directives. Plesk generates its own `location /` block, which causes a "duplicate location" error. The regex pattern `~ ^/(.*)$` captures all paths and has higher priority than Plesk's prefix location.
+
+6. Click **OK** to apply
 
 ### 3.4 Verify Configuration
 
@@ -405,6 +363,30 @@ sudo nginx -t
 # Check nginx logs
 tail -f /var/log/nginx/error.log
 ```
+
+### Duplicate Location "/" Error
+
+If you see this error when saving nginx settings:
+```
+nginx: [emerg] duplicate location "/" in .../vhost_nginx.conf
+```
+
+**Cause:** Plesk generates its own `location /` block, and your configuration also contains `location /`.
+
+**Solution:** Use regex location instead of prefix location:
+```nginx
+# WRONG - causes duplicate location error
+location / {
+    proxy_pass http://127.0.0.1:8081;
+}
+
+# CORRECT - regex pattern avoids conflict
+location ~ ^/(.*)$ {
+    proxy_pass http://127.0.0.1:8081/$1$is_args$args;
+}
+```
+
+Also ensure **Proxy mode** is unchecked in Apache & nginx Settings.
 
 ### Permission Errors
 
