@@ -21,11 +21,25 @@
                  x-data="{
                      mobileOpen: false,
                      openMenus: {},
+                     isMobile() {
+                         const toggle = document.getElementById('menu-toggle');
+                         return toggle && getComputedStyle(toggle).display !== 'none';
+                     },
                      toggle(key) {
                          if (this.openMenus[key]) {
                              this.openMenus[key] = false;
                          } else {
                              this.openMenus[key] = true;
+                         }
+                     },
+                     open(key) {
+                         if (!this.isMobile()) {
+                             this.openMenus[key] = true;
+                         }
+                     },
+                     close(key) {
+                         if (!this.isMobile()) {
+                             this.openMenus[key] = false;
                          }
                      },
                      isOpen(key) {
@@ -41,6 +55,7 @@
                     {{/* Level 1 - Top nav items */}}
                     <li class="dev-nav-item{{if $item.IsActive}} active{{end}}{{if $item.Children}} has-children{{end}}"
                         :class="{ 'open': isOpen('l1-{{$i}}') }"
+                        {{if $item.Children}}@mouseenter="open('l1-{{$i}}')" @mouseleave="close('l1-{{$i}}')"{{end}}
                         role="none">
                         {{if $item.Children}}
                         {{/* Item with children - split: link navigates, button toggles */}}
@@ -74,6 +89,7 @@
                             {{/* Level 2 - First dropdown */}}
                             <li class="dev-nav-item{{if $child.IsActive}} active{{end}}{{if $child.Children}} has-children{{end}}"
                                 :class="{ 'open': isOpen('l2-{{$i}}-{{$j}}') }"
+                                {{if $child.Children}}@mouseenter="open('l2-{{$i}}-{{$j}}')" @mouseleave="close('l2-{{$i}}-{{$j}}')"{{end}}
                                 role="none">
                                 {{if $child.Children}}
                                 <div class="dev-nav-link-wrapper">
