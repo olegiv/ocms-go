@@ -49,10 +49,9 @@ func testDB(t *testing.T) *sql.DB {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
 			slug TEXT NOT NULL UNIQUE,
-			language_id INTEGER NOT NULL DEFAULT 1,
+			language_code TEXT NOT NULL DEFAULT 'en',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (language_id) REFERENCES languages(id)
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
 		CREATE INDEX idx_tags_slug ON tags(slug);
 
@@ -63,11 +62,10 @@ func testDB(t *testing.T) *sql.DB {
 			description TEXT,
 			parent_id INTEGER,
 			position INTEGER NOT NULL DEFAULT 0,
-			language_id INTEGER NOT NULL DEFAULT 1,
+			language_code TEXT NOT NULL DEFAULT 'en',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL,
-			FOREIGN KEY (language_id) REFERENCES languages(id)
+			FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL
 		);
 		CREATE INDEX idx_categories_slug ON categories(slug);
 		CREATE INDEX idx_categories_parent_id ON categories(parent_id);
@@ -125,7 +123,7 @@ func createTestTag(t *testing.T, db *sql.DB, name, slug string) store.Tag {
 	now := time.Now()
 
 	result, err := db.Exec(
-		`INSERT INTO tags (name, slug, language_id, created_at, updated_at) VALUES (?, ?, 1, ?, ?)`,
+		`INSERT INTO tags (name, slug, language_code, created_at, updated_at) VALUES (?, ?, 'en', ?, ?)`,
 		name, slug, now, now,
 	)
 	if err != nil {
@@ -134,12 +132,12 @@ func createTestTag(t *testing.T, db *sql.DB, name, slug string) store.Tag {
 
 	id, _ := result.LastInsertId()
 	return store.Tag{
-		ID:         id,
-		Name:       name,
-		Slug:       slug,
-		LanguageID: 1,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		ID:           id,
+		Name:         name,
+		Slug:         slug,
+		LanguageCode: "en",
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 }
 
@@ -153,12 +151,12 @@ func createTestCategory(t *testing.T, db *sql.DB, name, slug string, parentID *i
 
 	if parentID != nil {
 		result, err = db.Exec(
-			`INSERT INTO categories (name, slug, parent_id, language_id, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)`,
+			`INSERT INTO categories (name, slug, parent_id, language_code, created_at, updated_at) VALUES (?, ?, ?, 'en', ?, ?)`,
 			name, slug, *parentID, now, now,
 		)
 	} else {
 		result, err = db.Exec(
-			`INSERT INTO categories (name, slug, language_id, created_at, updated_at) VALUES (?, ?, 1, ?, ?)`,
+			`INSERT INTO categories (name, slug, language_code, created_at, updated_at) VALUES (?, ?, 'en', ?, ?)`,
 			name, slug, now, now,
 		)
 	}
@@ -168,12 +166,12 @@ func createTestCategory(t *testing.T, db *sql.DB, name, slug string, parentID *i
 
 	id, _ := result.LastInsertId()
 	cat := store.Category{
-		ID:         id,
-		Name:       name,
-		Slug:       slug,
-		LanguageID: 1,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		ID:           id,
+		Name:         name,
+		Slug:         slug,
+		LanguageCode: "en",
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 	if parentID != nil {
 		cat.ParentID = sql.NullInt64{Int64: *parentID, Valid: true}

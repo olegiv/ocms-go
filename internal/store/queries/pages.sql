@@ -1,5 +1,5 @@
 -- name: CreatePage :one
-INSERT INTO pages (title, slug, body, status, author_id, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id, created_at, updated_at)
+INSERT INTO pages (title, slug, body, status, author_id, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
@@ -17,7 +17,7 @@ SELECT * FROM pages WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?;
 
 -- name: UpdatePage :one
 UPDATE pages
-SET title = ?, slug = ?, body = ?, status = ?, featured_image_id = ?, meta_title = ?, meta_description = ?, meta_keywords = ?, og_image_id = ?, no_index = ?, no_follow = ?, canonical_url = ?, scheduled_at = ?, language_id = ?, updated_at = ?
+SET title = ?, slug = ?, body = ?, status = ?, featured_image_id = ?, meta_title = ?, meta_description = ?, meta_keywords = ?, og_image_id = ?, no_index = ?, no_follow = ?, canonical_url = ?, scheduled_at = ?, language_code = ?, updated_at = ?
 WHERE id = ?
 RETURNING *;
 
@@ -209,89 +209,56 @@ LIMIT ? OFFSET ?;
 SELECT COUNT(*) FROM pages
 WHERE status = ? AND (title LIKE ? OR body LIKE ? OR slug LIKE ?);
 
--- Language-related page queries
-
--- name: ListPagesWithLanguage :many
-SELECT
-    p.*,
-    l.code as language_code,
-    l.name as language_name,
-    l.native_name as language_native_name
-FROM pages p
-INNER JOIN languages l ON l.id = p.language_id
-ORDER BY p.created_at DESC
-LIMIT ? OFFSET ?;
-
--- name: ListPagesByStatusWithLanguage :many
-SELECT
-    p.*,
-    l.code as language_code,
-    l.name as language_name,
-    l.native_name as language_native_name
-FROM pages p
-INNER JOIN languages l ON l.id = p.language_id
-WHERE p.status = ?
-ORDER BY p.created_at DESC
-LIMIT ? OFFSET ?;
+-- Language-related page queries (no JOINs needed - language_code is directly on the table)
 
 -- name: ListPagesByLanguageAndStatus :many
 SELECT * FROM pages
-WHERE language_id = ? AND status = ?
+WHERE language_code = ? AND status = ?
 ORDER BY created_at DESC
 LIMIT ? OFFSET ?;
 
 -- name: CountPagesByLanguageAndStatus :one
-SELECT COUNT(*) FROM pages WHERE language_id = ? AND status = ?;
-
--- name: SearchPagesWithLanguage :many
-SELECT
-    p.*,
-    l.code as language_code,
-    l.name as language_name,
-    l.native_name as language_native_name
-FROM pages p
-INNER JOIN languages l ON l.id = p.language_id
-WHERE p.title LIKE ? OR p.body LIKE ? OR p.slug LIKE ?
-ORDER BY p.updated_at DESC
-LIMIT ? OFFSET ?;
+SELECT COUNT(*) FROM pages WHERE language_code = ? AND status = ?;
 
 -- name: SearchPagesByLanguage :many
 SELECT * FROM pages
-WHERE language_id = ? AND (title LIKE ? OR body LIKE ? OR slug LIKE ?)
+WHERE language_code = ? AND (title LIKE ? OR body LIKE ? OR slug LIKE ?)
 ORDER BY updated_at DESC
 LIMIT ? OFFSET ?;
 
 -- name: CountSearchPagesByLanguage :one
 SELECT COUNT(*) FROM pages
-WHERE language_id = ? AND (title LIKE ? OR body LIKE ? OR slug LIKE ?);
+WHERE language_code = ? AND (title LIKE ? OR body LIKE ? OR slug LIKE ?);
 
 -- name: GetPublishedPageBySlugAndLanguage :one
 SELECT * FROM pages
-WHERE slug = ? AND language_id = ? AND status = 'published';
+WHERE slug = ? AND language_code = ? AND status = 'published';
 
 -- Frontend queries filtered by language (for showing pages in current language only)
--- Note: ListPublishedPagesByLanguage and CountPublishedPagesByLanguage are in translations.sql
 
 -- name: ListPublishedPagesByCategoryAndLanguage :many
 SELECT DISTINCT p.* FROM pages p
 INNER JOIN page_categories pc ON pc.page_id = p.id
-WHERE pc.category_id = ? AND p.status = 'published' AND p.language_id = ?
+WHERE pc.category_id = ? AND p.status = 'published' AND p.language_code = ?
 ORDER BY p.published_at DESC
 LIMIT ? OFFSET ?;
 
 -- name: CountPublishedPagesByCategoryAndLanguage :one
 SELECT COUNT(DISTINCT p.id) FROM pages p
 INNER JOIN page_categories pc ON pc.page_id = p.id
-WHERE pc.category_id = ? AND p.status = 'published' AND p.language_id = ?;
+WHERE pc.category_id = ? AND p.status = 'published' AND p.language_code = ?;
 
 -- name: ListPublishedPagesForTagAndLanguage :many
 SELECT p.* FROM pages p
 INNER JOIN page_tags pt ON pt.page_id = p.id
-WHERE pt.tag_id = ? AND p.status = 'published' AND p.language_id = ?
+WHERE pt.tag_id = ? AND p.status = 'published' AND p.language_code = ?
 ORDER BY p.published_at DESC
 LIMIT ? OFFSET ?;
 
 -- name: CountPublishedPagesForTagAndLanguage :one
 SELECT COUNT(*) FROM pages p
 INNER JOIN page_tags pt ON pt.page_id = p.id
-WHERE pt.tag_id = ? AND p.status = 'published' AND p.language_id = ?;
+WHERE pt.tag_id = ? AND p.status = 'published' AND p.language_code = ?;
+
+-- name: CountPagesByLanguageCode :one
+SELECT COUNT(*) FROM pages WHERE language_code = ?;

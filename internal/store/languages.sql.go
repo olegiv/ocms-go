@@ -41,17 +41,6 @@ func (q *Queries) CountLanguages(ctx context.Context) (int64, error) {
 	return count, err
 }
 
-const countPagesByLanguageID = `-- name: CountPagesByLanguageID :one
-SELECT COUNT(*) FROM pages WHERE language_id = ?
-`
-
-func (q *Queries) CountPagesByLanguageID(ctx context.Context, languageID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPagesByLanguageID, languageID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const createLanguage = `-- name: CreateLanguage :one
 INSERT INTO languages (code, name, native_name, is_default, is_active, direction, position, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)

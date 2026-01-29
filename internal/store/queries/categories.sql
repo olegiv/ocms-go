@@ -1,5 +1,5 @@
 -- name: CreateCategory :one
-INSERT INTO categories (name, slug, description, parent_id, position, language_id, created_at, updated_at)
+INSERT INTO categories (name, slug, description, parent_id, position, language_code, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
@@ -19,7 +19,7 @@ SELECT * FROM categories WHERE parent_id IS NULL ORDER BY position, name;
 SELECT * FROM categories WHERE parent_id = ? ORDER BY position, name;
 
 -- name: UpdateCategory :one
-UPDATE categories SET name = ?, slug = ?, description = ?, parent_id = ?, position = ?, language_id = ?, updated_at = ?
+UPDATE categories SET name = ?, slug = ?, description = ?, parent_id = ?, position = ?, language_code = ?, updated_at = ?
 WHERE id = ?
 RETURNING *;
 
@@ -70,7 +70,7 @@ ORDER BY name LIMIT 20;
 SELECT c.*, COUNT(pc.page_id) as usage_count
 FROM categories c
 LEFT JOIN page_categories pc ON pc.category_id = c.id
-GROUP BY c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.language_id, c.created_at, c.updated_at
+GROUP BY c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.language_code, c.created_at, c.updated_at
 ORDER BY c.position, c.name;
 
 -- name: UpdateCategoryPosition :exec
@@ -100,49 +100,18 @@ WHERE pc.category_id = ?;
 -- name: ListCategoriesForSitemap :many
 SELECT id, slug, updated_at FROM categories ORDER BY updated_at DESC;
 
--- Language-specific category queries
-
--- name: GetCategoryWithLanguage :one
-SELECT
-    c.*,
-    COALESCE(l.code, '') as language_code,
-    COALESCE(l.name, '') as language_name,
-    COALESCE(l.native_name, '') as language_native_name,
-    COALESCE(l.direction, 'ltr') as language_direction
-FROM categories c
-INNER JOIN languages l ON l.id = c.language_id
-WHERE c.id = ?;
+-- Language-specific category queries (no JOINs needed - language_code is directly on the table)
 
 -- name: ListCategoriesByLanguage :many
 SELECT * FROM categories
-WHERE language_id = ?
+WHERE language_code = ?
 ORDER BY position, name;
 
--- name: ListCategoriesWithLanguage :many
-SELECT
-    c.*,
-    COALESCE(l.code, '') as language_code,
-    COALESCE(l.name, '') as language_name
-FROM categories c
-INNER JOIN languages l ON l.id = c.language_id
-ORDER BY c.position, c.name;
-
--- name: GetCategoryUsageCountsWithLanguage :many
-SELECT
-    c.*,
-    COUNT(pc.page_id) as usage_count,
-    COALESCE(l.code, '') as language_code,
-    COALESCE(l.name, '') as language_name
-FROM categories c
-LEFT JOIN page_categories pc ON pc.category_id = c.id
-INNER JOIN languages l ON l.id = c.language_id
-GROUP BY c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.language_id, c.created_at, c.updated_at, l.code, l.name
-ORDER BY c.position, c.name;
-
 -- name: UpdateCategoryLanguage :exec
-UPDATE categories SET language_id = ?, updated_at = ? WHERE id = ?;
+UPDATE categories SET language_code = ?, updated_at = ? WHERE id = ?;
 
 -- Get all available translations for a category (for language switcher)
+-- Note: translations table still uses language_id to reference the target language
 -- name: GetCategoryAvailableTranslations :many
 SELECT
     l.id as language_id,
@@ -157,37 +126,37 @@ SELECT
 FROM languages l
 LEFT JOIN (
     -- Get categories that are translations of the source category
-    SELECT c.id, c.slug, c.name, t.language_id
+    SELECT c.id, c.slug, c.name, c.language_code
     FROM categories c
     INNER JOIN translations t ON t.translation_id = c.id
     WHERE t.entity_type = 'category' AND t.entity_id = ?
     UNION
     -- Get the source category itself
-    SELECT c.id, c.slug, c.name, c.language_id
+    SELECT c.id, c.slug, c.name, c.language_code
     FROM categories c
     WHERE c.id = ?
     UNION
     -- Get categories where current category is a translation (sibling translations)
-    SELECT c2.id, c2.slug, c2.name, c2.language_id
+    SELECT c2.id, c2.slug, c2.name, c2.language_code
     FROM translations t
     INNER JOIN categories c2 ON (c2.id = t.entity_id OR c2.id = t.translation_id)
     WHERE t.entity_type = 'category'
     AND (t.entity_id = ? OR t.translation_id = ?)
-) c ON c.language_id = l.id
+) c ON c.language_code = l.code
 WHERE l.is_active = 1
 ORDER BY l.position;
 
 -- name: CategorySlugExistsForLanguage :one
-SELECT COUNT(*) FROM categories WHERE slug = ? AND language_id = ?;
+SELECT COUNT(*) FROM categories WHERE slug = ? AND language_code = ?;
 
 -- name: CategorySlugExistsExcludingForLanguage :one
-SELECT COUNT(*) FROM categories WHERE slug = ? AND id != ? AND language_id = ?;
+SELECT COUNT(*) FROM categories WHERE slug = ? AND id != ? AND language_code = ?;
 
 -- Category usage counts filtered by page language (for frontend sidebar)
 -- name: GetCategoryUsageCountsByLanguage :many
 SELECT c.*, COUNT(p.id) as usage_count
 FROM categories c
 INNER JOIN page_categories pc ON pc.category_id = c.id
-INNER JOIN pages p ON p.id = pc.page_id AND p.status = 'published' AND p.language_id = ?
-GROUP BY c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.language_id, c.created_at, c.updated_at
+INNER JOIN pages p ON p.id = pc.page_id AND p.status = 'published' AND p.language_code = ?
+GROUP BY c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.language_code, c.created_at, c.updated_at
 ORDER BY c.position, c.name;

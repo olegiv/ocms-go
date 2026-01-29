@@ -66,14 +66,14 @@ func createTestUser(t *testing.T, q *Queries, ctx context.Context, email string)
 	return user
 }
 
-// getDefaultLangID returns the default language ID for testing.
-func getDefaultLangID(t *testing.T, q *Queries, ctx context.Context) int64 {
+// getDefaultLangCode returns the default language code for testing.
+func getDefaultLangCode(t *testing.T, q *Queries, ctx context.Context) string {
 	t.Helper()
 	lang, err := q.GetDefaultLanguage(ctx)
 	if err != nil {
 		t.Fatalf("GetDefaultLanguage: %v", err)
 	}
-	return lang.ID
+	return lang.Code
 }
 
 // createTestPage creates a page with default values for testing.
@@ -86,7 +86,7 @@ func createTestPage(t *testing.T, q *Queries, ctx context.Context, authorID int6
 		Body:       "<p>Test content</p>",
 		Status:     "published",
 		AuthorID:   authorID,
-		LanguageID: getDefaultLangID(t, q, ctx),
+		LanguageCode: getDefaultLangCode(t, q, ctx),
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	})
@@ -103,7 +103,7 @@ func createTestTag(t *testing.T, q *Queries, ctx context.Context, slug string) T
 	tag, err := q.CreateTag(ctx, CreateTagParams{
 		Name:       "Test Tag",
 		Slug:       slug,
-		LanguageID: getDefaultLangID(t, q, ctx),
+		LanguageCode: getDefaultLangCode(t, q, ctx),
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	})
@@ -120,7 +120,7 @@ func createTestMenu(t *testing.T, q *Queries, ctx context.Context, slug string) 
 	menu, err := q.CreateMenu(ctx, CreateMenuParams{
 		Name:       "Test Menu",
 		Slug:       slug,
-		LanguageID: getDefaultLangID(t, q, ctx),
+		LanguageCode: getDefaultLangCode(t, q, ctx),
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	})
@@ -139,7 +139,7 @@ func createTestForm(t *testing.T, q *Queries, ctx context.Context, slug string) 
 		Slug:       slug,
 		Title:      "Test Form",
 		IsActive:   true,
-		LanguageID: getDefaultLangID(t, q, ctx),
+		LanguageCode: getDefaultLangCode(t, q, ctx),
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	})
@@ -355,12 +355,12 @@ func TestCreatePage(t *testing.T) {
 	defer cleanup()
 
 	user := createTestUser(t, q, ctx, "author@example.com")
-	langID := getDefaultLangID(t, q, ctx)
+	langCode := getDefaultLangCode(t, q, ctx)
 	now := time.Now()
 
 	page, err := q.CreatePage(ctx, CreatePageParams{
 		Title: "Test Page", Slug: "test-page", Body: "<p>Hello World</p>",
-		Status: "draft", AuthorID: user.ID, LanguageID: langID,
+		Status: "draft", AuthorID: user.ID, LanguageCode: langCode,
 		CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
@@ -423,13 +423,13 @@ func TestUpdatePage(t *testing.T) {
 	created := createTestPage(t, q, ctx, user.ID, "original-slug")
 
 	updated, err := q.UpdatePage(ctx, UpdatePageParams{
-		ID:         created.ID,
-		Title:      "Updated Title",
-		Slug:       "updated-slug",
-		Body:       "<p>Updated</p>",
-		Status:     "published",
-		LanguageID: created.LanguageID,
-		UpdatedAt:  time.Now(),
+		ID:           created.ID,
+		Title:        "Updated Title",
+		Slug:         "updated-slug",
+		Body:         "<p>Updated</p>",
+		Status:       "published",
+		LanguageCode: created.LanguageCode,
+		UpdatedAt:    time.Now(),
 	})
 	if err != nil {
 		t.Fatalf("UpdatePage: %v", err)
@@ -512,12 +512,12 @@ func TestPublishPage(t *testing.T) {
 	defer cleanup()
 
 	user := createTestUser(t, q, ctx, "author@example.com")
-	langID := getDefaultLangID(t, q, ctx)
+	langCode := getDefaultLangCode(t, q, ctx)
 	now := time.Now()
 
 	created, err := q.CreatePage(ctx, CreatePageParams{
 		Title: "Publish Test", Slug: "publish-test", Body: "<p>Content</p>",
-		Status: "draft", AuthorID: user.ID, LanguageID: langID,
+		Status: "draft", AuthorID: user.ID, LanguageCode: langCode,
 		CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
@@ -550,10 +550,10 @@ func TestCreateTag(t *testing.T) {
 	_, cleanup, ctx, q := testSetup(t)
 	defer cleanup()
 
-	langID := getDefaultLangID(t, q, ctx)
+	langCode := getDefaultLangCode(t, q, ctx)
 	now := time.Now()
 	tag, err := q.CreateTag(ctx, CreateTagParams{
-		Name: "Test Tag", Slug: "test-tag", LanguageID: langID,
+		Name: "Test Tag", Slug: "test-tag", LanguageCode: langCode,
 		CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
@@ -618,12 +618,12 @@ func TestCreateCategory(t *testing.T) {
 	_, cleanup, ctx, q := testSetup(t)
 	defer cleanup()
 
-	langID := getDefaultLangID(t, q, ctx)
+	langCode := getDefaultLangCode(t, q, ctx)
 	now := time.Now()
 	cat, err := q.CreateCategory(ctx, CreateCategoryParams{
 		Name: "Test Category", Slug: "test-category",
 		Description: sql.NullString{String: "A test category", Valid: true},
-		ParentID: sql.NullInt64{Valid: false}, LanguageID: langID, Position: 0,
+		ParentID: sql.NullInt64{Valid: false}, LanguageCode: langCode, Position: 0,
 		CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
@@ -642,10 +642,10 @@ func TestCategoryHierarchy(t *testing.T) {
 	_, cleanup, ctx, q := testSetup(t)
 	defer cleanup()
 
-	langID := getDefaultLangID(t, q, ctx)
+	langCode := getDefaultLangCode(t, q, ctx)
 	now := time.Now()
 	parent, err := q.CreateCategory(ctx, CreateCategoryParams{
-		Name: "Parent", Slug: "parent", LanguageID: langID,
+		Name: "Parent", Slug: "parent", LanguageCode: langCode,
 		Position: 0, CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
@@ -653,7 +653,7 @@ func TestCategoryHierarchy(t *testing.T) {
 	}
 
 	child, err := q.CreateCategory(ctx, CreateCategoryParams{
-		Name: "Child", Slug: "child", LanguageID: langID,
+		Name: "Child", Slug: "child", LanguageCode: langCode,
 		ParentID: sql.NullInt64{Int64: parent.ID, Valid: true},
 		Position: 0, CreatedAt: now, UpdatedAt: now,
 	})
@@ -679,10 +679,10 @@ func TestCreateMenu(t *testing.T) {
 	_, cleanup, ctx, q := testSetup(t)
 	defer cleanup()
 
-	langID := getDefaultLangID(t, q, ctx)
+	langCode := getDefaultLangCode(t, q, ctx)
 	now := time.Now()
 	menu, err := q.CreateMenu(ctx, CreateMenuParams{
-		Name: "Main Menu", Slug: "main", LanguageID: langID,
+		Name: "Main Menu", Slug: "main", LanguageCode: langCode,
 		CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
@@ -743,7 +743,7 @@ func TestCreateForm(t *testing.T) {
 	_, cleanup, ctx, q := testSetup(t)
 	defer cleanup()
 
-	langID := getDefaultLangID(t, q, ctx)
+	langCode := getDefaultLangCode(t, q, ctx)
 	now := time.Now()
 	form, err := q.CreateForm(ctx, CreateFormParams{
 		Name: "Contact Form", Slug: "contact", Title: "Contact Us",
@@ -751,7 +751,7 @@ func TestCreateForm(t *testing.T) {
 		SuccessMessage: sql.NullString{String: "Thank you!", Valid: true},
 		EmailTo:        sql.NullString{String: "test@example.com", Valid: true},
 		IsActive:       true,
-		LanguageID:     langID,
+		LanguageCode:   langCode,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	})
@@ -776,7 +776,7 @@ func TestFormFields(t *testing.T) {
 
 	_, err := q.CreateFormField(ctx, CreateFormFieldParams{
 		FormID: form.ID, Type: "text", Name: "name", Label: "Your Name",
-		IsRequired: true, Position: 0, LanguageID: form.LanguageID,
+		IsRequired: true, Position: 0, LanguageCode: form.LanguageCode,
 		CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
@@ -785,7 +785,7 @@ func TestFormFields(t *testing.T) {
 
 	_, err = q.CreateFormField(ctx, CreateFormFieldParams{
 		FormID: form.ID, Type: "email", Name: "email", Label: "Your Email",
-		IsRequired: true, Position: 1, LanguageID: form.LanguageID,
+		IsRequired: true, Position: 1, LanguageCode: form.LanguageCode,
 		CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
@@ -813,7 +813,7 @@ func TestFormSubmission(t *testing.T) {
 		IpAddress:  sql.NullString{String: "127.0.0.1", Valid: true},
 		UserAgent:  sql.NullString{String: "Mozilla/5.0", Valid: true},
 		IsRead:     false,
-		LanguageID: form.LanguageID,
+		LanguageCode: form.LanguageCode,
 		CreatedAt:  now,
 	})
 	if err != nil {
@@ -851,7 +851,7 @@ func TestCountUnreadSubmissions(t *testing.T) {
 			FormID:     form.ID,
 			Data:       `{"test":"data"}`,
 			IsRead:     false,
-			LanguageID: form.LanguageID,
+			LanguageCode: form.LanguageCode,
 			CreatedAt:  now,
 		})
 		if err != nil {

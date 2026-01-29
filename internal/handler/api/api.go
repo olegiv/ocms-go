@@ -213,14 +213,14 @@ func capitalizeFirst(s string) string {
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
-// resolveLanguageID returns the provided language ID or defaults to the system default language.
-func (h *Handler) resolveLanguageID(ctx context.Context, langID *int64) (int64, error) {
-	if langID != nil {
-		return *langID, nil
+// resolveLanguageCode returns the provided language code or defaults to the system default language.
+func (h *Handler) resolveLanguageCode(ctx context.Context, langCode *string) (string, error) {
+	if langCode != nil && *langCode != "" {
+		return *langCode, nil
 	}
 	defaultLang, err := h.queries.GetDefaultLanguage(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get default language: %w", err)
+		return "", fmt.Errorf("failed to get default language: %w", err)
 	}
-	return defaultLang.ID, nil
+	return defaultLang.Code, nil
 }

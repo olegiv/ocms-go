@@ -28,7 +28,7 @@ type translationBaseInfo struct {
 }
 
 // loadTranslationBaseInfo loads common language and translation info for any entity.
-func loadTranslationBaseInfo(ctx context.Context, queries *store.Queries, entityType string, entityID int64, languageID int64) translationBaseInfo {
+func loadTranslationBaseInfo(ctx context.Context, queries *store.Queries, entityType string, entityID int64, languageCode string) translationBaseInfo {
 	info := translationBaseInfo{
 		TranslatedIDs:        make(map[int64]bool),
 		TranslationLanguages: make(map[int64]store.Language),
@@ -38,15 +38,17 @@ func loadTranslationBaseInfo(ctx context.Context, queries *store.Queries, entity
 	allLanguages := ListActiveLanguagesWithFallback(ctx, queries)
 	info.AllLanguages = allLanguages
 
-	// Build language lookup map
+	// Build language lookup maps (by ID and by code)
 	langByID := make(map[int64]store.Language, len(allLanguages))
+	langByCode := make(map[string]store.Language, len(allLanguages))
 	for _, lang := range allLanguages {
 		langByID[lang.ID] = lang
+		langByCode[lang.Code] = lang
 	}
 
 	// Load entity's language
-	if languageID > 0 {
-		if lang, ok := langByID[languageID]; ok {
+	if languageCode != "" {
+		if lang, ok := langByCode[languageCode]; ok {
 			info.EntityLanguage = &lang
 			info.TranslatedIDs[lang.ID] = true
 		}
@@ -121,12 +123,12 @@ func loadLanguageInfo[E, T any](
 	queries *store.Queries,
 	entityType string,
 	entityID int64,
-	languageID int64,
+	languageCode string,
 	fetcher func(int64) (E, error),
 	makeTranslation func(store.Language, E) T,
 ) entityLanguageInfo[T] {
 	return loadEntityTranslations(
-		loadTranslationBaseInfo(ctx, queries, entityType, entityID, languageID),
+		loadTranslationBaseInfo(ctx, queries, entityType, entityID, languageCode),
 		fetcher,
 		makeTranslation,
 	)

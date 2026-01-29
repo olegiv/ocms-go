@@ -31,7 +31,7 @@ type PageResponse struct {
 	Body            string             `json:"body"`
 	Status          string             `json:"status"`
 	AuthorID        int64              `json:"author_id"`
-	LanguageID      int64              `json:"language_id"`
+	LanguageCode    string             `json:"language_code"`
 	CreatedAt       time.Time          `json:"created_at"`
 	UpdatedAt       time.Time          `json:"updated_at"`
 	PublishedAt     *time.Time         `json:"published_at,omitempty"`
@@ -77,7 +77,7 @@ type CreatePageRequest struct {
 	Slug            string  `json:"slug"`
 	Body            string  `json:"body"`
 	Status          string  `json:"status"`
-	LanguageID      *int64  `json:"language_id,omitempty"`
+	LanguageCode    *string `json:"language_code,omitempty"`
 	FeaturedImageID *int64  `json:"featured_image_id,omitempty"`
 	MetaTitle       string  `json:"meta_title,omitempty"`
 	MetaDescription string  `json:"meta_description,omitempty"`
@@ -185,7 +185,7 @@ func storePageToResponse(p store.Page) PageResponse {
 		Body:            p.Body,
 		Status:          p.Status,
 		AuthorID:        p.AuthorID,
-		LanguageID:      p.LanguageID,
+		LanguageCode:    p.LanguageCode,
 		CreatedAt:       p.CreatedAt,
 		UpdatedAt:       p.UpdatedAt,
 		MetaTitle:       p.MetaTitle,
@@ -456,29 +456,23 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 
-	// Resolve language ID (default to system default language if not provided)
-	var langID int64
-	if req.LanguageID != nil {
-		langID = *req.LanguageID
-	} else {
-		defaultLang, langErr := h.queries.GetDefaultLanguage(ctx)
-		if langErr != nil {
-			WriteInternalError(w, "Failed to resolve default language")
-			return
-		}
-		langID = defaultLang.ID
+	// Resolve language code (default to system default language if not provided)
+	langCode, langErr := h.resolveLanguageCode(ctx, req.LanguageCode)
+	if langErr != nil {
+		WriteInternalError(w, "Failed to resolve default language")
+		return
 	}
 
 	// Prepare create params
 	params := store.CreatePageParams{
-		Title:      req.Title,
-		Slug:       req.Slug,
-		Body:       req.Body,
-		Status:     req.Status,
-		AuthorID:   apiKey.CreatedBy, // Use API key creator as author
-		LanguageID: langID,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		Title:        req.Title,
+		Slug:         req.Slug,
+		Body:         req.Body,
+		Status:       req.Status,
+		AuthorID:     apiKey.CreatedBy, // Use API key creator as author
+		LanguageCode: langCode,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 
 	if req.FeaturedImageID != nil {
@@ -580,7 +574,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		NoIndex:         existing.NoIndex,
 		NoFollow:        existing.NoFollow,
 		ScheduledAt:     existing.ScheduledAt,
-		LanguageID:      existing.LanguageID,
+		LanguageCode:    existing.LanguageCode,
 		UpdatedAt:       time.Now(),
 	}
 

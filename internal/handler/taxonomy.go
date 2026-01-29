@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -47,7 +46,7 @@ func NewTaxonomyHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionMa
 
 // TagsListData holds data for the tags list template.
 type TagsListData struct {
-	Tags       []store.GetTagUsageCountsWithLanguageRow
+	Tags       []store.GetTagUsageCountsRow
 	TotalCount int64
 	Pagination AdminPagination
 }
@@ -71,8 +70,8 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 	page, _ = NormalizePagination(page, int(totalCount), TagsPerPage)
 	offset := int64((page - 1) * TagsPerPage)
 
-	// Fetch tags with usage counts and language info
-	tags, err := h.queries.GetTagUsageCountsWithLanguage(r.Context(), store.GetTagUsageCountsWithLanguageParams{
+	// Fetch tags with usage counts
+	tags, err := h.queries.GetTagUsageCounts(r.Context(), store.GetTagUsageCountsParams{
 		Limit:  TagsPerPage,
 		Offset: offset,
 	})
@@ -160,15 +159,15 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	// Get form values
 	name := strings.TrimSpace(r.FormValue("name"))
 	slug := strings.TrimSpace(r.FormValue("slug"))
-	languageIDStr := r.FormValue("language_id")
+	languageCode := strings.TrimSpace(r.FormValue("language_code"))
 
-	languageID := h.parseLanguageIDWithDefault(r.Context(), languageIDStr)
+	languageCode = h.parseLanguageCodeWithDefault(r.Context(), languageCode)
 
 	// Store form values for re-rendering on error
 	formValues := map[string]string{
-		"name":        name,
-		"slug":        slug,
-		"language_id": languageIDStr,
+		"name":          name,
+		"slug":          slug,
+		"language_code": languageCode,
 	}
 
 	slug = autoGenerateSlug(name, slug, formValues)
@@ -187,8 +186,8 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 		// Load all active languages for the form
 		allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 		var currentLanguage *store.Language
-		if languageID > 0 {
-			langObj, err := h.queries.GetLanguageByID(r.Context(), languageID)
+		if languageCode != "" {
+			langObj, err := h.queries.GetLanguageByCode(r.Context(), languageCode)
 			if err == nil {
 				currentLanguage = &langObj
 			}
@@ -218,11 +217,11 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	// Create tag
 	now := time.Now()
 	newTag, err := h.queries.CreateTag(r.Context(), store.CreateTagParams{
-		Name:       name,
-		Slug:       slug,
-		LanguageID: languageID,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		Name:         name,
+		Slug:         slug,
+		LanguageCode: languageCode,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		slog.Error("failed to create tag", "error", err)
@@ -335,14 +334,14 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update tag (keep existing language_id - language cannot be changed after creation)
+	// Update tag (keep existing language_code - language cannot be changed after creation)
 	now := time.Now()
 	updatedTag, err := h.queries.UpdateTag(r.Context(), store.UpdateTagParams{
-		ID:         id,
-		Name:       name,
-		Slug:       slug,
-		LanguageID: existingTag.LanguageID,
-		UpdatedAt:  now,
+		ID:           id,
+		Name:         name,
+		Slug:         slug,
+		LanguageCode: existingTag.LanguageCode,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		slog.Error("failed to update tag", "error", err, "tag_id", id)
@@ -418,10 +417,10 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 
 	// Create the translated tag with same name
 	translatedTag, err := h.queries.CreateTag(r.Context(), store.CreateTagParams{
-		Name:       sourceTag.Name, // Keep same name (user will translate)
-		Slug:       setup.TranslatedSlug,
-		LanguageID: setup.TargetContext.TargetLang.ID,
-		CreatedAt:  setup.Now,
+		Name:         sourceTag.Name, // Keep same name (user will translate)
+		Slug:         setup.TranslatedSlug,
+		LanguageCode: setup.TargetContext.TargetLang.Code,
+		CreatedAt:    setup.Now,
 		UpdatedAt:  setup.Now,
 	})
 	if err != nil {
@@ -539,7 +538,7 @@ func (h *TaxonomyHandler) buildFilteredCategoryTree(ctx context.Context, exclude
 }
 
 // buildCategoryTreeWithUsage builds a tree structure from categories with usage counts.
-func buildCategoryTreeWithUsage(categories []store.GetCategoryUsageCountsWithLanguageRow, parentID *int64, depth int) []CategoryTreeNode {
+func buildCategoryTreeWithUsage(categories []store.GetCategoryUsageCountsRow, parentID *int64, depth int) []CategoryTreeNode {
 	var nodes []CategoryTreeNode
 
 	for _, cat := range categories {
@@ -555,22 +554,22 @@ func buildCategoryTreeWithUsage(categories []store.GetCategoryUsageCountsWithLan
 		if parentMatch {
 			// Convert to store.Category for compatibility
 			storeCat := store.Category{
-				ID:          cat.ID,
-				Name:        cat.Name,
-				Slug:        cat.Slug,
-				Description: cat.Description,
-				ParentID:    cat.ParentID,
-				Position:    cat.Position,
-				LanguageID:  cat.LanguageID,
-				CreatedAt:   cat.CreatedAt,
-				UpdatedAt:   cat.UpdatedAt,
+				ID:           cat.ID,
+				Name:         cat.Name,
+				Slug:         cat.Slug,
+				Description:  cat.Description,
+				ParentID:     cat.ParentID,
+				Position:     cat.Position,
+				LanguageCode: cat.LanguageCode,
+				CreatedAt:    cat.CreatedAt,
+				UpdatedAt:    cat.UpdatedAt,
 			}
 			node := CategoryTreeNode{
 				Category:     storeCat,
 				Depth:        depth,
 				UsageCount:   cat.UsageCount,
 				LanguageCode: cat.LanguageCode,
-				LanguageName: cat.LanguageName,
+				LanguageName: "", // Language name not included in new query
 				Children:     buildCategoryTreeWithUsage(categories, &cat.ID, depth+1),
 			}
 			nodes = append(nodes, node)
@@ -585,8 +584,8 @@ func (h *TaxonomyHandler) ListCategories(w http.ResponseWriter, r *http.Request)
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	// Get all categories with usage counts and language info
-	categories, err := h.queries.GetCategoryUsageCountsWithLanguage(r.Context())
+	// Get all categories with usage counts
+	categories, err := h.queries.GetCategoryUsageCounts(r.Context())
 	if err != nil {
 		slog.Error("failed to list categories", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -695,20 +694,20 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 	slug := strings.TrimSpace(r.FormValue("slug"))
 	description := strings.TrimSpace(r.FormValue("description"))
 	parentIDStr := r.FormValue("parent_id")
-	languageIDStr := r.FormValue("language_id")
+	languageCode := strings.TrimSpace(r.FormValue("language_code"))
 
 	// Parse parent ID
 	parentID := util.ParseNullInt64(parentIDStr)
 
-	languageID := h.parseLanguageIDWithDefault(r.Context(), languageIDStr)
+	languageCode = h.parseLanguageCodeWithDefault(r.Context(), languageCode)
 
 	// Store form values for re-rendering on error
 	formValues := map[string]string{
-		"name":        name,
-		"slug":        slug,
-		"description": description,
-		"parent_id":   parentIDStr,
-		"language_id": languageIDStr,
+		"name":          name,
+		"slug":          slug,
+		"description":   description,
+		"parent_id":     parentIDStr,
+		"language_code": languageCode,
 	}
 
 	slug = autoGenerateSlug(name, slug, formValues)
@@ -732,8 +731,8 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 		// Load all active languages for the form
 		allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 		var currentLanguage *store.Language
-		if languageID > 0 {
-			langObj, err := h.queries.GetLanguageByID(r.Context(), languageID)
+		if languageCode != "" {
+			langObj, err := h.queries.GetLanguageByCode(r.Context(), languageCode)
 			if err == nil {
 				currentLanguage = &langObj
 			}
@@ -764,14 +763,14 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 	// Create category
 	now := time.Now()
 	newCategory, err := h.queries.CreateCategory(r.Context(), store.CreateCategoryParams{
-		Name:        name,
-		Slug:        slug,
-		Description: util.NullStringFromValue(description),
-		ParentID:    parentID,
-		Position:    0,
-		LanguageID:  languageID,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		Name:         name,
+		Slug:         slug,
+		Description:  util.NullStringFromValue(description),
+		ParentID:     parentID,
+		Position:     0,
+		LanguageCode: languageCode,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		slog.Error("failed to create category", "error", err)
@@ -912,17 +911,17 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Update category (keep existing language_id - language cannot be changed after creation)
+	// Update category (keep existing language_code - language cannot be changed after creation)
 	now := time.Now()
 	updatedCategory, err := h.queries.UpdateCategory(r.Context(), store.UpdateCategoryParams{
-		ID:          id,
-		Name:        name,
-		Slug:        slug,
-		Description: util.NullStringFromValue(description),
-		ParentID:    parentID,
-		Position:    existingCategory.Position,
-		LanguageID:  existingCategory.LanguageID,
-		UpdatedAt:   now,
+		ID:           id,
+		Name:         name,
+		Slug:         slug,
+		Description:  util.NullStringFromValue(description),
+		ParentID:     parentID,
+		Position:     existingCategory.Position,
+		LanguageCode: existingCategory.LanguageCode,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		slog.Error("failed to update category", "error", err, "category_id", id)
@@ -971,14 +970,14 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 
 	// Create the translated category with same name
 	translatedCategory, err := h.queries.CreateCategory(r.Context(), store.CreateCategoryParams{
-		Name:        sourceCategory.Name, // Keep same name (user will translate)
-		Slug:        setup.TranslatedSlug,
-		Description: sourceCategory.Description,
-		ParentID:    sql.NullInt64{}, // No parent by default for translations
-		Position:    0,
-		LanguageID:  setup.TargetContext.TargetLang.ID,
-		CreatedAt:   setup.Now,
-		UpdatedAt:   setup.Now,
+		Name:         sourceCategory.Name, // Keep same name (user will translate)
+		Slug:         setup.TranslatedSlug,
+		Description:  sourceCategory.Description,
+		ParentID:     sql.NullInt64{}, // No parent by default for translations
+		Position:     0,
+		LanguageCode: setup.TargetContext.TargetLang.Code,
+		CreatedAt:    setup.Now,
+		UpdatedAt:    setup.Now,
 	})
 	if err != nil {
 		slog.Error("failed to create translated category", "error", err)
@@ -1036,24 +1035,17 @@ func (h *TaxonomyHandler) requireCategoryWithError(w http.ResponseWriter, r *htt
 		func(id int64) (store.Category, error) { return h.queries.GetCategoryByID(r.Context(), id) })
 }
 
-// parseLanguageIDWithDefault parses language ID from string and falls back to default language.
-func (h *TaxonomyHandler) parseLanguageIDWithDefault(ctx context.Context, languageIDStr string) int64 {
-	var languageID int64
-	if languageIDStr != "" {
-		if parsed, err := strconv.ParseInt(languageIDStr, 10, 64); err == nil {
-			languageID = parsed
-		}
-	}
-
+// parseLanguageCodeWithDefault parses language code from string and falls back to default language.
+func (h *TaxonomyHandler) parseLanguageCodeWithDefault(ctx context.Context, languageCode string) string {
 	// If no language specified, use default
-	if languageID == 0 {
+	if languageCode == "" {
 		defaultLang, err := h.queries.GetDefaultLanguage(ctx)
 		if err == nil {
-			languageID = defaultLang.ID
+			languageCode = defaultLang.Code
 		}
 	}
 
-	return languageID
+	return languageCode
 }
 
 // autoGenerateSlug generates a slug from name if slug is empty, updating formValues.
@@ -1222,7 +1214,7 @@ type tagLanguageInfo = entityLanguageInfo[TagTranslationInfo]
 // loadTagLanguageInfo loads language and translation info for a tag.
 func (h *TaxonomyHandler) loadTagLanguageInfo(ctx context.Context, tag store.Tag) tagLanguageInfo {
 	return loadLanguageInfo(
-		ctx, h.queries, model.EntityTypeTag, tag.ID, tag.LanguageID,
+		ctx, h.queries, model.EntityTypeTag, tag.ID, tag.LanguageCode,
 		func(id int64) (store.Tag, error) { return h.queries.GetTagByID(ctx, id) },
 		func(lang store.Language, t store.Tag) TagTranslationInfo { return TagTranslationInfo{Language: lang, Tag: t} },
 	)
@@ -1233,7 +1225,7 @@ type categoryLanguageInfo = entityLanguageInfo[CategoryTranslationInfo]
 
 // loadCategoryLanguageInfo loads language and translation info for a category.
 func (h *TaxonomyHandler) loadCategoryLanguageInfo(ctx context.Context, category store.Category) categoryLanguageInfo {
-	info := loadLanguageInfo(ctx, h.queries, model.EntityTypeCategory, category.ID, category.LanguageID,
+	info := loadLanguageInfo(ctx, h.queries, model.EntityTypeCategory, category.ID, category.LanguageCode,
 		func(id int64) (store.Category, error) { return h.queries.GetCategoryByID(ctx, id) },
 		func(lang store.Language, c store.Category) CategoryTranslationInfo { return CategoryTranslationInfo{Language: lang, Category: c} })
 	return info

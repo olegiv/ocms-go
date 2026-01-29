@@ -150,7 +150,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	// Import tags first (posts reference them)
 	var tagMap map[string]int64
 	if opts.ImportTags {
-		tagMap, err = s.importTags(ctx, queries, reader, defaultLang.ID, opts, result, tracker)
+		tagMap, err = s.importTags(ctx, queries, reader, defaultLang.Code, opts, result, tracker)
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("Tags import error: %v", err))
 		}
@@ -180,7 +180,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 
 	// Import posts
 	if opts.ImportPosts {
-		if err := s.importPosts(ctx, queries, reader, authorID, defaultLang.ID, tagMap, mediaMap, opts, result, tracker); err != nil {
+		if err := s.importPosts(ctx, queries, reader, authorID, defaultLang.Code, tagMap, mediaMap, opts, result, tracker); err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("Posts import error: %v", err))
 		}
 	}
@@ -233,7 +233,7 @@ func (s *Source) buildExistingTagMap(ctx context.Context, queries *store.Queries
 }
 
 // importTags imports tags from Elefant.
-func (s *Source) importTags(ctx context.Context, queries *store.Queries, reader *Reader, defaultLangID int64, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) (map[string]int64, error) {
+func (s *Source) importTags(ctx context.Context, queries *store.Queries, reader *Reader, defaultLangCode string, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) (map[string]int64, error) {
 	elefantTags, err := reader.GetTags()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tags from Elefant: %w", err)
@@ -264,11 +264,11 @@ func (s *Source) importTags(ctx context.Context, queries *store.Queries, reader 
 
 		// Create new tag
 		tag, err := queries.CreateTag(ctx, store.CreateTagParams{
-			Name:       name,
-			Slug:       slug,
-			LanguageID: defaultLangID,
-			CreatedAt:  now,
-			UpdatedAt:  now,
+			Name:         name,
+			Slug:         slug,
+			LanguageCode: defaultLangCode,
+			CreatedAt:    now,
+			UpdatedAt:    now,
 		})
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("Failed to create tag '%s': %v", name, err))
@@ -348,19 +348,19 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 
 			// Create media record
 			media, err := queries.CreateMedia(ctx, store.CreateMediaParams{
-				Uuid:       fileUUID,
-				Filename:   file.Filename,
-				MimeType:   processResult.MimeType,
-				Size:       processResult.Size,
-				Width:      sql.NullInt64{Int64: int64(processResult.Width), Valid: true},
-				Height:     sql.NullInt64{Int64: int64(processResult.Height), Valid: true},
-				Alt:        sql.NullString{String: "", Valid: true},
-				Caption:    sql.NullString{String: "", Valid: true},
-				FolderID:   sql.NullInt64{Valid: false},
-				UploadedBy: userID,
-				LanguageID: defaultLang.ID,
-				CreatedAt:  now,
-				UpdatedAt:  now,
+				Uuid:         fileUUID,
+				Filename:     file.Filename,
+				MimeType:     processResult.MimeType,
+				Size:         processResult.Size,
+				Width:        sql.NullInt64{Int64: int64(processResult.Width), Valid: true},
+				Height:       sql.NullInt64{Int64: int64(processResult.Height), Valid: true},
+				Alt:          sql.NullString{String: "", Valid: true},
+				Caption:      sql.NullString{String: "", Valid: true},
+				FolderID:     sql.NullInt64{Valid: false},
+				UploadedBy:   userID,
+				LanguageCode: defaultLang.Code,
+				CreatedAt:    now,
+				UpdatedAt:    now,
 			})
 			if err != nil {
 				result.Errors = append(result.Errors, fmt.Sprintf("Failed to create media record for %s: %v", file.Path, err))
@@ -401,19 +401,19 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 
 			// Create media record for non-image
 			media, err := queries.CreateMedia(ctx, store.CreateMediaParams{
-				Uuid:       fileUUID,
-				Filename:   file.Filename,
-				MimeType:   file.MimeType,
-				Size:       file.Size,
-				Width:      sql.NullInt64{Valid: false},
-				Height:     sql.NullInt64{Valid: false},
-				Alt:        sql.NullString{String: "", Valid: true},
-				Caption:    sql.NullString{String: "", Valid: true},
-				FolderID:   sql.NullInt64{Valid: false},
-				UploadedBy: userID,
-				LanguageID: defaultLang.ID,
-				CreatedAt:  now,
-				UpdatedAt:  now,
+				Uuid:         fileUUID,
+				Filename:     file.Filename,
+				MimeType:     file.MimeType,
+				Size:         file.Size,
+				Width:        sql.NullInt64{Valid: false},
+				Height:       sql.NullInt64{Valid: false},
+				Alt:          sql.NullString{String: "", Valid: true},
+				Caption:      sql.NullString{String: "", Valid: true},
+				FolderID:     sql.NullInt64{Valid: false},
+				UploadedBy:   userID,
+				LanguageCode: defaultLang.Code,
+				CreatedAt:    now,
+				UpdatedAt:    now,
 			})
 			if err != nil {
 				result.Errors = append(result.Errors, fmt.Sprintf("Failed to create media record for %s: %v", file.Path, err))
@@ -480,7 +480,7 @@ func (s *Source) saveNonImageFile(src *os.File, uploadDir, fileUUID, filename st
 }
 
 // importPosts imports blog posts from Elefant.
-func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader *Reader, authorID int64, defaultLangID int64, tagMap map[string]int64, mediaMap map[string]string, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) error {
+func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader *Reader, authorID int64, defaultLangCode string, tagMap map[string]int64, mediaMap map[string]string, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) error {
 	posts, err := reader.GetBlogPosts()
 	if err != nil {
 		return fmt.Errorf("failed to get posts from Elefant: %w", err)
@@ -527,7 +527,7 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 			Body:            body,
 			Status:          status,
 			AuthorID:        authorID,
-			LanguageID:      defaultLangID,
+			LanguageCode:    defaultLangCode,
 			MetaTitle:       post.Title,
 			MetaDescription: nullStringToString(post.Description),
 			MetaKeywords:    nullStringToString(post.Keywords),

@@ -74,39 +74,38 @@ SELECT p.* FROM pages p
 INNER JOIN translations t ON t.translation_id = p.id
 WHERE t.entity_type = 'page' AND t.entity_id = ? AND t.language_id = ?;
 
--- Get page with its language information
+-- Get page with its language information (no JOIN needed - language_code is on pages)
 -- name: GetPageWithLanguage :one
 SELECT
     p.*,
-    l.code as language_code,
     l.name as language_name,
     l.native_name as language_native_name,
     l.direction as language_direction
 FROM pages p
-INNER JOIN languages l ON l.id = p.language_id
+INNER JOIN languages l ON l.code = p.language_code
 WHERE p.id = ?;
 
 -- List all pages for a specific language
 -- name: ListPagesByLanguage :many
 SELECT * FROM pages
-WHERE language_id = ?
+WHERE language_code = ?
 ORDER BY created_at DESC
 LIMIT ? OFFSET ?;
 
 -- Count pages for a specific language
 -- name: CountPagesByLanguage :one
-SELECT COUNT(*) FROM pages WHERE language_id = ?;
+SELECT COUNT(*) FROM pages WHERE language_code = ?;
 
 -- List published pages for a specific language
 -- name: ListPublishedPagesByLanguage :many
 SELECT * FROM pages
-WHERE language_id = ? AND status = 'published'
+WHERE language_code = ? AND status = 'published'
 ORDER BY published_at DESC
 LIMIT ? OFFSET ?;
 
 -- Count published pages for a specific language
 -- name: CountPublishedPagesByLanguage :one
-SELECT COUNT(*) FROM pages WHERE language_id = ? AND status = 'published';
+SELECT COUNT(*) FROM pages WHERE language_code = ? AND status = 'published';
 
 -- Get the translation of a page in a specific language (by slug for frontend)
 -- name: GetPageTranslationBySlug :one
@@ -135,7 +134,7 @@ ORDER BY l.position;
 
 -- Update page language
 -- name: UpdatePageLanguage :exec
-UPDATE pages SET language_id = ?, updated_at = ? WHERE id = ?;
+UPDATE pages SET language_code = ?, updated_at = ? WHERE id = ?;
 
 -- Get all available translations for a page (for language switcher)
 -- Returns the page itself plus all its translations with language info and page slugs
@@ -153,38 +152,37 @@ SELECT
 FROM languages l
 LEFT JOIN (
     -- Get pages that are translations of the source page
-    SELECT p.id, p.slug, p.title, t.language_id
+    SELECT p.id, p.slug, p.title, p.language_code
     FROM pages p
     INNER JOIN translations t ON t.translation_id = p.id
     WHERE t.entity_type = 'page' AND t.entity_id = ? AND p.status = 'published'
     UNION
     -- Get the source page itself
-    SELECT p.id, p.slug, p.title, p.language_id
+    SELECT p.id, p.slug, p.title, p.language_code
     FROM pages p
     WHERE p.id = ? AND p.status = 'published'
     UNION
     -- Get pages where current page is a translation (sibling translations)
-    SELECT p2.id, p2.slug, p2.title, p2.language_id
+    SELECT p2.id, p2.slug, p2.title, p2.language_code
     FROM translations t
     INNER JOIN pages p2 ON (p2.id = t.entity_id OR p2.id = t.translation_id)
     WHERE t.entity_type = 'page'
     AND (t.entity_id = ? OR t.translation_id = ?)
     AND p2.status = 'published'
-) p ON p.language_id = l.id
+) p ON p.language_code = l.code
 WHERE l.is_active = 1
 ORDER BY l.position;
 
--- Get page with language info by slug
+-- Get page with language info by slug (no JOIN needed - language_code is on pages)
 -- name: GetPublishedPageWithLanguageBySlug :one
 SELECT
     p.*,
-    COALESCE(l.code, '') as language_code,
-    COALESCE(l.name, '') as language_name,
-    COALESCE(l.native_name, '') as language_native_name,
-    COALESCE(l.direction, 'ltr') as language_direction,
-    COALESCE(l.is_default, 1) as language_is_default
+    l.name as language_name,
+    l.native_name as language_native_name,
+    l.direction as language_direction,
+    l.is_default as language_is_default
 FROM pages p
-INNER JOIN languages l ON l.id = p.language_id
+INNER JOIN languages l ON l.code = p.language_code
 WHERE p.slug = ? AND p.status = 'published';
 
 -- Get page count per active language for translation coverage dashboard widget
@@ -196,7 +194,7 @@ SELECT
     l.is_default as is_default,
     COUNT(p.id) as page_count
 FROM languages l
-LEFT JOIN pages p ON p.language_id = l.id
+LEFT JOIN pages p ON p.language_code = l.code
 WHERE l.is_active = 1
 GROUP BY l.id, l.code, l.name, l.is_default, l.position
 ORDER BY l.is_default DESC, l.position;

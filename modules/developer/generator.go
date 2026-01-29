@@ -234,10 +234,10 @@ func (m *Module) generateTags(ctx context.Context, languages []store.Language) (
 	queries := store.New(m.ctx.DB)
 
 	// Find default language
-	var defaultLangID int64
+	var defaultLangCode string
 	for _, lang := range languages {
 		if lang.IsDefault {
-			defaultLangID = lang.ID
+			defaultLangCode = lang.Code
 			break
 		}
 	}
@@ -265,11 +265,11 @@ func (m *Module) generateTags(ctx context.Context, languages []store.Language) (
 
 		// Create tag in default language
 		tag, err := queries.CreateTag(ctx, store.CreateTagParams{
-			Name:       name,
-			Slug:       tagSlug,
-			LanguageID: defaultLangID,
-			CreatedAt:  now,
-			UpdatedAt:  now,
+			Name:         name,
+			Slug:         tagSlug,
+			LanguageCode: defaultLangCode,
+			CreatedAt:    now,
+			UpdatedAt:    now,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create tag: %w", err)
@@ -282,7 +282,7 @@ func (m *Module) generateTags(ctx context.Context, languages []store.Language) (
 
 		// Create translations for other languages
 		for _, lang := range languages {
-			if lang.ID == defaultLangID {
+			if lang.Code == defaultLangCode {
 				continue
 			}
 
@@ -290,11 +290,11 @@ func (m *Module) generateTags(ctx context.Context, languages []store.Language) (
 			translatedSlug := fmt.Sprintf("%s-%s", tagSlug, lang.Code)
 
 			transTag, err := queries.CreateTag(ctx, store.CreateTagParams{
-				Name:       translatedName,
-				Slug:       translatedSlug,
-				LanguageID: lang.ID,
-				CreatedAt:  now,
-				UpdatedAt:  now,
+				Name:         translatedName,
+				Slug:         translatedSlug,
+				LanguageCode: lang.Code,
+				CreatedAt:    now,
+				UpdatedAt:    now,
 			})
 			if err != nil {
 				return nil, fmt.Errorf("failed to create tag translation: %w", err)
@@ -332,10 +332,10 @@ func (m *Module) generateCategories(ctx context.Context, languages []store.Langu
 	queries := store.New(m.ctx.DB)
 
 	// Find default language
-	var defaultLangID int64
+	var defaultLangCode string
 	for _, lang := range languages {
 		if lang.IsDefault {
-			defaultLangID = lang.ID
+			defaultLangCode = lang.Code
 			break
 		}
 	}
@@ -357,13 +357,13 @@ func (m *Module) generateCategories(ctx context.Context, languages []store.Langu
 	for i := 0; i < numRoot; i++ {
 		position++
 		catID, err := m.createSingleCategory(ctx, createCategoryParams{
-			queries:       queries,
-			usedNames:     usedNames,
-			parentID:      sql.NullInt64{Valid: false},
-			position:      position,
-			defaultLangID: defaultLangID,
-			languages:     languages,
-			isRoot:        true,
+			queries:         queries,
+			usedNames:       usedNames,
+			parentID:        sql.NullInt64{Valid: false},
+			position:        position,
+			defaultLangCode: defaultLangCode,
+			languages:       languages,
+			isRoot:          true,
 		})
 		if err != nil {
 			return nil, err
@@ -379,13 +379,13 @@ func (m *Module) generateCategories(ctx context.Context, languages []store.Langu
 		position++
 		parentID := rootCats[rand.Intn(len(rootCats))]
 		catID, err := m.createSingleCategory(ctx, createCategoryParams{
-			queries:       queries,
-			usedNames:     usedNames,
-			parentID:      sql.NullInt64{Int64: parentID, Valid: true},
-			position:      position,
-			defaultLangID: defaultLangID,
-			languages:     languages,
-			isRoot:        false,
+			queries:         queries,
+			usedNames:       usedNames,
+			parentID:        sql.NullInt64{Int64: parentID, Valid: true},
+			position:        position,
+			defaultLangCode: defaultLangCode,
+			languages:       languages,
+			isRoot:          false,
 		})
 		if err != nil {
 			return nil, err
@@ -399,13 +399,13 @@ func (m *Module) generateCategories(ctx context.Context, languages []store.Langu
 		position++
 		parentID := childCats[rand.Intn(len(childCats))]
 		catID, err := m.createSingleCategory(ctx, createCategoryParams{
-			queries:       queries,
-			usedNames:     usedNames,
-			parentID:      sql.NullInt64{Int64: parentID, Valid: true},
-			position:      position,
-			defaultLangID: defaultLangID,
-			languages:     languages,
-			isRoot:        false,
+			queries:         queries,
+			usedNames:       usedNames,
+			parentID:        sql.NullInt64{Int64: parentID, Valid: true},
+			position:        position,
+			defaultLangCode: defaultLangCode,
+			languages:       languages,
+			isRoot:          false,
 		})
 		if err != nil {
 			return nil, err
@@ -418,13 +418,13 @@ func (m *Module) generateCategories(ctx context.Context, languages []store.Langu
 
 // createCategoryParams holds parameters for creating a single category.
 type createCategoryParams struct {
-	queries       *store.Queries
-	usedNames     map[string]bool
-	parentID      sql.NullInt64
-	position      int64
-	defaultLangID int64
-	languages     []store.Language
-	isRoot        bool
+	queries         *store.Queries
+	usedNames       map[string]bool
+	parentID        sql.NullInt64
+	position        int64
+	defaultLangCode string
+	languages       []store.Language
+	isRoot          bool
 }
 
 // createSingleCategory creates a category with tracking and translations.
@@ -446,14 +446,14 @@ func (m *Module) createSingleCategory(ctx context.Context, p createCategoryParam
 	now := time.Now()
 
 	cat, err := p.queries.CreateCategory(ctx, store.CreateCategoryParams{
-		Name:        name,
-		Slug:        catSlug,
-		Description: sql.NullString{String: desc, Valid: true},
-		ParentID:    p.parentID,
-		Position:    p.position,
-		LanguageID:  p.defaultLangID,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		Name:         name,
+		Slug:         catSlug,
+		Description:  sql.NullString{String: desc, Valid: true},
+		ParentID:     p.parentID,
+		Position:     p.position,
+		LanguageCode: p.defaultLangCode,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("failed to create category: %w", err)
@@ -464,13 +464,13 @@ func (m *Module) createSingleCategory(ctx context.Context, p createCategoryParam
 	}
 
 	if err := m.createCategoryTranslations(ctx, categoryTranslationParams{
-		queries:       p.queries,
-		cat:           cat,
-		name:          name,
-		catSlug:       catSlug,
-		desc:          desc,
-		languages:     p.languages,
-		defaultLangID: p.defaultLangID,
+		queries:         p.queries,
+		cat:             cat,
+		name:            name,
+		catSlug:         catSlug,
+		desc:            desc,
+		languages:       p.languages,
+		defaultLangCode: p.defaultLangCode,
 	}); err != nil {
 		return 0, err
 	}
@@ -480,13 +480,13 @@ func (m *Module) createSingleCategory(ctx context.Context, p createCategoryParam
 
 // categoryTranslationParams holds parameters for creating category translations.
 type categoryTranslationParams struct {
-	queries       *store.Queries
-	cat           store.Category
-	name          string
-	catSlug       string
-	desc          string
-	languages     []store.Language
-	defaultLangID int64
+	queries         *store.Queries
+	cat             store.Category
+	name            string
+	catSlug         string
+	desc            string
+	languages       []store.Language
+	defaultLangCode string
 }
 
 // createCategoryTranslations creates translations for a category
@@ -494,7 +494,7 @@ func (m *Module) createCategoryTranslations(ctx context.Context, p categoryTrans
 	now := time.Now()
 
 	for _, lang := range p.languages {
-		if lang.ID == p.defaultLangID {
+		if lang.Code == p.defaultLangCode {
 			continue
 		}
 
@@ -503,14 +503,14 @@ func (m *Module) createCategoryTranslations(ctx context.Context, p categoryTrans
 		translatedDesc := fmt.Sprintf("%s [%s]", p.desc, lang.Code)
 
 		transCat, err := p.queries.CreateCategory(ctx, store.CreateCategoryParams{
-			Name:        translatedName,
-			Slug:        translatedSlug,
-			Description: sql.NullString{String: translatedDesc, Valid: true},
-			ParentID:    p.cat.ParentID,
-			Position:    p.cat.Position,
-			LanguageID:  lang.ID,
-			CreatedAt:   now,
-			UpdatedAt:   now,
+			Name:         translatedName,
+			Slug:         translatedSlug,
+			Description:  sql.NullString{String: translatedDesc, Valid: true},
+			ParentID:     p.cat.ParentID,
+			Position:     p.cat.Position,
+			LanguageCode: lang.Code,
+			CreatedAt:    now,
+			UpdatedAt:    now,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create category translation: %w", err)
@@ -611,19 +611,19 @@ func (m *Module) generateMedia(ctx context.Context, uploaderID int64) ([]int64, 
 
 		// Create media record
 		media, err := queries.CreateMedia(ctx, store.CreateMediaParams{
-			Uuid:       mediaUUID,
-			Filename:   filename,
-			MimeType:   model.MimeTypeJPEG,
-			Size:       int64(len(imgData)),
-			Width:      sql.NullInt64{Int64: 800, Valid: true},
-			Height:     sql.NullInt64{Int64: 600, Valid: true},
-			Alt:        sql.NullString{String: alt, Valid: true},
-			Caption:    sql.NullString{String: caption, Valid: true},
-			FolderID:   sql.NullInt64{Valid: false},
-			UploadedBy: uploaderID,
-			LanguageID: defaultLang.ID,
-			CreatedAt:  now,
-			UpdatedAt:  now,
+			Uuid:         mediaUUID,
+			Filename:     filename,
+			MimeType:     model.MimeTypeJPEG,
+			Size:         int64(len(imgData)),
+			Width:        sql.NullInt64{Int64: 800, Valid: true},
+			Height:       sql.NullInt64{Int64: 600, Valid: true},
+			Alt:          sql.NullString{String: alt, Valid: true},
+			Caption:      sql.NullString{String: caption, Valid: true},
+			FolderID:     sql.NullInt64{Valid: false},
+			UploadedBy:   uploaderID,
+			LanguageCode: defaultLang.Code,
+			CreatedAt:    now,
+			UpdatedAt:    now,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create media record: %w", err)
@@ -705,10 +705,10 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 	queries := store.New(m.ctx.DB)
 
 	// Find default language
-	var defaultLangID int64
+	var defaultLangCode string
 	for _, lang := range languages {
 		if lang.IsDefault {
-			defaultLangID = lang.ID
+			defaultLangCode = lang.Code
 			break
 		}
 	}
@@ -752,7 +752,7 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 			NoFollow:        0,
 			CanonicalUrl:    "",
 			ScheduledAt:     sql.NullTime{Valid: false},
-			LanguageID:      defaultLangID,
+			LanguageCode:    defaultLangCode,
 			CreatedAt:       now,
 			UpdatedAt:       now,
 		})
@@ -785,7 +785,7 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 
 		// Create translations for other languages
 		for _, lang := range languages {
-			if lang.ID == defaultLangID {
+			if lang.Code == defaultLangCode {
 				continue
 			}
 
@@ -808,7 +808,7 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 				NoFollow:        0,
 				CanonicalUrl:    "",
 				ScheduledAt:     sql.NullTime{Valid: false},
-				LanguageID:      lang.ID,
+				LanguageCode:    lang.Code,
 				CreatedAt:       now,
 				UpdatedAt:       now,
 			})
@@ -862,8 +862,8 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 }
 
 // generateMenuItems creates random menu items for all menus with nested structure pointing to pages
-// For menus with a language_id, it links to pages in the same language
-// For menus without a language_id (global menus), it links to pages in the default language
+// For menus with a language_code, it links to pages in the same language
+// For menus without a language_code (global menus), it links to pages in the default language
 func (m *Module) generateMenuItems(ctx context.Context, languages []store.Language) ([]int64, error) {
 	var menuItemIDs []int64
 	queries := store.New(m.ctx.DB)
@@ -880,29 +880,29 @@ func (m *Module) generateMenuItems(ctx context.Context, languages []store.Langua
 		return menuItemIDs, nil
 	}
 
-	// Find default language
-	var defaultLangID int64
+	// Find default language code
+	var defaultLangCode string
 	for _, lang := range languages {
 		if lang.IsDefault {
-			defaultLangID = lang.ID
+			defaultLangCode = lang.Code
 			break
 		}
 	}
 
-	// Build a map of language ID to pages for that language
-	pagesByLang := make(map[int64][]int64)
+	// Build a map of language code to pages for that language
+	pagesByLang := make(map[string][]int64)
 	for _, lang := range languages {
 		pages, err := queries.ListPagesByLanguage(ctx, store.ListPagesByLanguageParams{
-			LanguageID: lang.ID,
-			Limit:      1000,
-			Offset:     0,
+			LanguageCode: lang.Code,
+			Limit:        1000,
+			Offset:       0,
 		})
 		if err != nil {
 			m.ctx.Logger.Warn("failed to get pages for language", "lang", lang.Code, "error", err)
 			continue
 		}
 		for _, page := range pages {
-			pagesByLang[lang.ID] = append(pagesByLang[lang.ID], page.ID)
+			pagesByLang[lang.Code] = append(pagesByLang[lang.Code], page.ID)
 		}
 	}
 
@@ -910,16 +910,16 @@ func (m *Module) generateMenuItems(ctx context.Context, languages []store.Langua
 	for _, menu := range menus {
 		// Determine which pages to use for this menu
 		var pagesForMenu []int64
-		if menu.LanguageID != 0 {
+		if menu.LanguageCode != "" {
 			// Menu is language-specific, use pages for that language
-			pagesForMenu = pagesByLang[menu.LanguageID]
+			pagesForMenu = pagesByLang[menu.LanguageCode]
 		} else {
 			// Menu is global (no language), use pages from default language
-			pagesForMenu = pagesByLang[defaultLangID]
+			pagesForMenu = pagesByLang[defaultLangCode]
 		}
 
 		if len(pagesForMenu) == 0 {
-			m.ctx.Logger.Info("no pages found for menu, skipping", "menu", menu.Name, "langID", menu.LanguageID)
+			m.ctx.Logger.Info("no pages found for menu, skipping", "menu", menu.Name, "langCode", menu.LanguageCode)
 			continue
 		}
 

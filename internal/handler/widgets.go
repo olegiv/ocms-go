@@ -166,15 +166,15 @@ func (h *WidgetsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	maxPos := h.getMaxWidgetPosition(r, req.Theme, req.Area)
 
 	widget, err := h.queries.CreateWidget(r.Context(), store.CreateWidgetParams{
-		Theme:      req.Theme,
-		Area:       req.Area,
-		WidgetType: req.WidgetType,
-		Title:      util.NullStringFromValue(req.Title),
-		Content:    util.NullStringFromValue(req.Content),
-		Settings:   util.NullStringFromValue(req.Settings),
-		Position:   maxPos + 1,
-		IsActive:   1,
-		LanguageID: defaultLang.ID,
+		Theme:        req.Theme,
+		Area:         req.Area,
+		WidgetType:   req.WidgetType,
+		Title:        util.NullStringFromValue(req.Title),
+		Content:      util.NullStringFromValue(req.Content),
+		Settings:     util.NullStringFromValue(req.Settings),
+		Position:     maxPos + 1,
+		IsActive:     1,
+		LanguageCode: defaultLang.Code,
 	})
 	if err != nil {
 		slog.Error("failed to create widget", "error", err)
@@ -221,14 +221,14 @@ func (h *WidgetsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updatedWidget, err := h.queries.UpdateWidget(r.Context(), store.UpdateWidgetParams{
-		ID:         id,
-		WidgetType: req.WidgetType,
-		Title:      util.NullStringFromValue(req.Title),
-		Content:    util.NullStringFromValue(req.Content),
-		Settings:   util.NullStringFromValue(req.Settings),
-		Position:   widget.Position,
-		IsActive:   isActive,
-		LanguageID: widget.LanguageID,
+		ID:           id,
+		WidgetType:   req.WidgetType,
+		Title:        util.NullStringFromValue(req.Title),
+		Content:      util.NullStringFromValue(req.Content),
+		Settings:     util.NullStringFromValue(req.Settings),
+		Position:     widget.Position,
+		IsActive:     isActive,
+		LanguageCode: widget.LanguageCode,
 	})
 	if err != nil {
 		slog.Error("failed to update widget", "error", err, "widget_id", id)
@@ -344,14 +344,14 @@ func (h *WidgetsHandler) MoveWidget(w http.ResponseWriter, r *http.Request) {
 
 	// Update widget with new area and position
 	updatedWidget, err := h.queries.UpdateWidget(r.Context(), store.UpdateWidgetParams{
-		ID:         id,
-		WidgetType: widget.WidgetType,
-		Title:      widget.Title,
-		Content:    widget.Content,
-		Settings:   widget.Settings,
-		Position:   maxPos + 1,
-		IsActive:   widget.IsActive,
-		LanguageID: widget.LanguageID,
+		ID:           id,
+		WidgetType:   widget.WidgetType,
+		Title:        widget.Title,
+		Content:      widget.Content,
+		Settings:     widget.Settings,
+		Position:     maxPos + 1,
+		IsActive:     widget.IsActive,
+		LanguageCode: widget.LanguageCode,
 	})
 	if err != nil {
 		slog.Error("failed to move widget", "error", err, "widget_id", id)

@@ -373,8 +373,8 @@ func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Check slug uniqueness for this language
 	if validationErrors["slug"] == "" && input.Slug != "" {
 		exists, err := h.queries.FormSlugExistsForLanguage(r.Context(), store.FormSlugExistsForLanguageParams{
-			Slug:       input.Slug,
-			LanguageID: defaultLang.ID,
+			Slug:         input.Slug,
+			LanguageCode: defaultLang.Code,
 		})
 		if err != nil {
 			slog.Error("database error checking slug", "error", err)
@@ -408,7 +408,7 @@ func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		SuccessMessage: sql.NullString{String: input.SuccessMessage, Valid: true}, // Always valid - has default
 		EmailTo:        util.NullStringFromValue(input.EmailTo),
 		IsActive:       input.IsActive,
-		LanguageID:     defaultLang.ID,
+		LanguageCode:   defaultLang.Code,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	})
@@ -481,9 +481,9 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Check slug uniqueness for this language (Update: only if slug changed)
 	if validationErrors["slug"] == "" && input.Slug != "" && input.Slug != form.Slug {
 		exists, err := h.queries.FormSlugExistsExcludingForLanguage(r.Context(), store.FormSlugExistsExcludingForLanguageParams{
-			Slug:       input.Slug,
-			LanguageID: form.LanguageID,
-			ID:         id,
+			Slug:         input.Slug,
+			LanguageCode: form.LanguageCode,
+			ID:           id,
 		})
 		if err != nil {
 			slog.Error("database error checking slug", "error", err)
@@ -522,7 +522,7 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		SuccessMessage: sql.NullString{String: input.SuccessMessage, Valid: true}, // Always valid - has default
 		EmailTo:        util.NullStringFromValue(input.EmailTo),
 		IsActive:       input.IsActive,
-		LanguageID:     form.LanguageID,
+		LanguageCode:   form.LanguageCode,
 		UpdatedAt:      now,
 	})
 	if err != nil {
@@ -610,19 +610,19 @@ func (h *FormsHandler) AddField(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	field, err := h.queries.CreateFormField(r.Context(), store.CreateFormFieldParams{
-		FormID:      formID,
-		Type:        req.Type,
-		Name:        req.Name,
-		Label:       req.Label,
-		Placeholder: util.NullStringFromValue(req.Placeholder),
-		HelpText:    util.NullStringFromValue(req.HelpText),
-		Options:     util.NullStringFromValue(req.Options),
-		Validation:  util.NullStringFromValue(req.Validation),
-		IsRequired:  req.IsRequired,
-		Position:    maxPos + 1,
-		LanguageID:  form.LanguageID,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		FormID:       formID,
+		Type:         req.Type,
+		Name:         req.Name,
+		Label:        req.Label,
+		Placeholder:  util.NullStringFromValue(req.Placeholder),
+		HelpText:     util.NullStringFromValue(req.HelpText),
+		Options:      util.NullStringFromValue(req.Options),
+		Validation:   util.NullStringFromValue(req.Validation),
+		IsRequired:   req.IsRequired,
+		Position:     maxPos + 1,
+		LanguageCode: form.LanguageCode,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		slog.Error("failed to create form field", "error", err)
@@ -675,18 +675,18 @@ func (h *FormsHandler) UpdateField(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	updatedField, err := h.queries.UpdateFormField(r.Context(), store.UpdateFormFieldParams{
-		ID:          fieldID,
-		Type:        req.Type,
-		Name:        req.Name,
-		Label:       req.Label,
-		Placeholder: util.NullStringFromValue(req.Placeholder),
-		HelpText:    util.NullStringFromValue(req.HelpText),
-		Options:     util.NullStringFromValue(req.Options),
-		Validation:  util.NullStringFromValue(req.Validation),
-		IsRequired:  req.IsRequired,
-		Position:    field.Position,
-		LanguageID:  field.LanguageID,
-		UpdatedAt:   now,
+		ID:           fieldID,
+		Type:         req.Type,
+		Name:         req.Name,
+		Label:        req.Label,
+		Placeholder:  util.NullStringFromValue(req.Placeholder),
+		HelpText:     util.NullStringFromValue(req.HelpText),
+		Options:      util.NullStringFromValue(req.Options),
+		Validation:   util.NullStringFromValue(req.Validation),
+		IsRequired:   req.IsRequired,
+		Position:     field.Position,
+		LanguageCode: field.LanguageCode,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		slog.Error("failed to update form field", "error", err)
@@ -756,18 +756,18 @@ func (h *FormsHandler) ReorderFields(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if _, err = h.queries.UpdateFormField(r.Context(), store.UpdateFormFieldParams{
-			ID:          fieldID,
-			Type:        field.Type,
-			Name:        field.Name,
-			Label:       field.Label,
-			Placeholder: field.Placeholder,
-			HelpText:    field.HelpText,
-			Options:     field.Options,
-			Validation:  field.Validation,
-			IsRequired:  field.IsRequired,
-			Position:    int64(i),
-			LanguageID:  field.LanguageID,
-			UpdatedAt:   now,
+			ID:           fieldID,
+			Type:         field.Type,
+			Name:         field.Name,
+			Label:        field.Label,
+			Placeholder:  field.Placeholder,
+			HelpText:     field.HelpText,
+			Options:      field.Options,
+			Validation:   field.Validation,
+			IsRequired:   field.IsRequired,
+			Position:     int64(i),
+			LanguageCode: field.LanguageCode,
+			UpdatedAt:    now,
 		}); err != nil {
 			slog.Error("failed to update field position", "error", err, "field_id", fieldID)
 		}
@@ -931,13 +931,13 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 
 	// Save submission
 	submission, err := h.queries.CreateFormSubmission(r.Context(), store.CreateFormSubmissionParams{
-		FormID:     form.ID,
-		Data:       string(dataJSON),
-		IpAddress:  sql.NullString{String: middleware.GetClientIP(r), Valid: true},
-		UserAgent:  sql.NullString{String: r.UserAgent(), Valid: true},
-		IsRead:     false,
-		LanguageID: form.LanguageID,
-		CreatedAt:  time.Now(),
+		FormID:       form.ID,
+		Data:         string(dataJSON),
+		IpAddress:    sql.NullString{String: middleware.GetClientIP(r), Valid: true},
+		UserAgent:    sql.NullString{String: r.UserAgent(), Valid: true},
+		IsRead:       false,
+		LanguageCode: form.LanguageCode,
+		CreatedAt:    time.Now(),
 	})
 	if err != nil {
 		slog.Error("failed to save form submission", "error", err, "form_id", form.ID)

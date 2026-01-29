@@ -66,12 +66,11 @@ func testDB(t *testing.T) *sql.DB {
 			no_follow INTEGER NOT NULL DEFAULT 0,
 			canonical_url TEXT NOT NULL DEFAULT '',
 			scheduled_at DATETIME,
-			language_id INTEGER NOT NULL DEFAULT 1,
+			language_code TEXT NOT NULL DEFAULT 'en',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			published_at DATETIME,
-			FOREIGN KEY (author_id) REFERENCES users(id),
-			FOREIGN KEY (language_id) REFERENCES languages(id)
+			FOREIGN KEY (author_id) REFERENCES users(id)
 		);
 		CREATE INDEX idx_pages_slug ON pages(slug);
 		CREATE INDEX idx_pages_status ON pages(status);
@@ -131,12 +130,11 @@ func testDB(t *testing.T) *sql.DB {
 			caption TEXT,
 			folder_id INTEGER,
 			uploaded_by INTEGER NOT NULL,
-			language_id INTEGER NOT NULL DEFAULT 1,
+			language_code TEXT NOT NULL DEFAULT 'en',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (uploaded_by) REFERENCES users(id),
-			FOREIGN KEY (folder_id) REFERENCES media_folders(id) ON DELETE SET NULL,
-			FOREIGN KEY (language_id) REFERENCES languages(id)
+			FOREIGN KEY (folder_id) REFERENCES media_folders(id) ON DELETE SET NULL
 		);
 
 		CREATE TABLE forms (
@@ -148,11 +146,10 @@ func testDB(t *testing.T) *sql.DB {
 			success_message TEXT DEFAULT 'Thank you for your submission.',
 			email_to TEXT DEFAULT '',
 			is_active BOOLEAN NOT NULL DEFAULT 1,
-			language_id INTEGER NOT NULL DEFAULT 1,
+			language_code TEXT NOT NULL DEFAULT 'en',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (language_id) REFERENCES languages(id),
-			UNIQUE(slug, language_id)
+			UNIQUE(slug, language_code)
 		);
 
 		CREATE TABLE form_fields (
@@ -167,10 +164,9 @@ func testDB(t *testing.T) *sql.DB {
 			validation TEXT DEFAULT '{}',
 			is_required BOOLEAN NOT NULL DEFAULT 0,
 			position INTEGER NOT NULL DEFAULT 0,
-			language_id INTEGER NOT NULL DEFAULT 1,
+			language_code TEXT NOT NULL DEFAULT 'en',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (language_id) REFERENCES languages(id)
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
 
 		CREATE TABLE form_submissions (
@@ -180,10 +176,9 @@ func testDB(t *testing.T) *sql.DB {
 			is_read BOOLEAN NOT NULL DEFAULT 0,
 			ip_address TEXT DEFAULT '',
 			user_agent TEXT DEFAULT '',
-			language_id INTEGER NOT NULL DEFAULT 1,
+			language_code TEXT NOT NULL DEFAULT 'en',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (form_id) REFERENCES forms(id) ON DELETE CASCADE,
-			FOREIGN KEY (language_id) REFERENCES languages(id)
+			FOREIGN KEY (form_id) REFERENCES forms(id) ON DELETE CASCADE
 		);
 
 		CREATE TABLE webhooks (
@@ -220,23 +215,21 @@ func testDB(t *testing.T) *sql.DB {
 			value TEXT NOT NULL DEFAULT '',
 			type TEXT NOT NULL DEFAULT 'string',
 			description TEXT NOT NULL DEFAULT '',
-			language_id INTEGER NOT NULL DEFAULT 1,
+			language_code TEXT NOT NULL DEFAULT 'en',
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_by INTEGER,
-			FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL,
-			FOREIGN KEY (language_id) REFERENCES languages(id)
+			FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
 		);
 
-		INSERT INTO config (key, value, type, language_id) VALUES ('site_name', 'Test Site', 'string', 1);
+		INSERT INTO config (key, value, type, language_code) VALUES ('site_name', 'Test Site', 'string', 'en');
 
 		CREATE TABLE tags (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
 			slug TEXT NOT NULL UNIQUE,
-			language_id INTEGER NOT NULL DEFAULT 1,
+			language_code TEXT NOT NULL DEFAULT 'en',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (language_id) REFERENCES languages(id)
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
 		CREATE INDEX idx_tags_slug ON tags(slug);
 
@@ -247,11 +240,10 @@ func testDB(t *testing.T) *sql.DB {
 			description TEXT,
 			parent_id INTEGER,
 			position INTEGER NOT NULL DEFAULT 0,
-			language_id INTEGER NOT NULL DEFAULT 1,
+			language_code TEXT NOT NULL DEFAULT 'en',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL,
-			FOREIGN KEY (language_id) REFERENCES languages(id)
+			FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL
 		);
 		CREATE INDEX idx_categories_slug ON categories(slug);
 		CREATE INDEX idx_categories_parent ON categories(parent_id);
@@ -286,10 +278,11 @@ func testDB(t *testing.T) *sql.DB {
 		CREATE TABLE menus (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
-			slug TEXT NOT NULL UNIQUE,
-			language_id INTEGER NOT NULL DEFAULT 1 REFERENCES languages(id),
+			slug TEXT NOT NULL,
+			language_code TEXT NOT NULL DEFAULT 'en',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(slug, language_code)
 		);
 
 		CREATE TABLE menu_items (
@@ -341,10 +334,9 @@ func testDB(t *testing.T) *sql.DB {
 			settings TEXT,
 			position INTEGER NOT NULL DEFAULT 0,
 			is_active INTEGER NOT NULL DEFAULT 1,
-			language_id INTEGER NOT NULL DEFAULT 1,
+			language_code TEXT NOT NULL DEFAULT 'en',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (language_id) REFERENCES languages(id)
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
 		CREATE INDEX idx_widgets_theme ON widgets(theme);
 		CREATE INDEX idx_widgets_area ON widgets(area);

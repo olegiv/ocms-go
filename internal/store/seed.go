@@ -116,13 +116,13 @@ func seedConfig(ctx context.Context, queries *Queries) error {
 	now := time.Now()
 	for _, cfg := range DefaultConfig {
 		_, err := queries.UpsertConfig(ctx, UpsertConfigParams{
-			Key:         cfg.Key,
-			Value:       cfg.Value,
-			Type:        cfg.Type,
-			Description: cfg.Description,
-			LanguageID:  defaultLang.ID,
-			UpdatedAt:   now,
-			UpdatedBy:   sql.NullInt64{Valid: false},
+			Key:          cfg.Key,
+			Value:        cfg.Value,
+			Type:         cfg.Type,
+			Description:  cfg.Description,
+			LanguageCode: defaultLang.Code,
+			UpdatedAt:    now,
+			UpdatedBy:    sql.NullInt64{Valid: false},
 		})
 		if err != nil {
 			return fmt.Errorf("seeding config %s: %w", cfg.Key, err)
@@ -164,11 +164,11 @@ func seedMenus(ctx context.Context, queries *Queries) error {
 	now := time.Now()
 	for _, menu := range DefaultMenus {
 		_, err := queries.CreateMenu(ctx, CreateMenuParams{
-			Name:       menu.Name,
-			Slug:       menu.Slug,
-			LanguageID: defaultLang.ID,
-			CreatedAt:  now,
-			UpdatedAt:  now,
+			Name:         menu.Name,
+			Slug:         menu.Slug,
+			LanguageCode: defaultLang.Code,
+			CreatedAt:    now,
+			UpdatedAt:    now,
 		})
 		if err != nil {
 			return fmt.Errorf("seeding menu %s: %w", menu.Slug, err)

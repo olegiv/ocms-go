@@ -8,11 +8,11 @@ SELECT * FROM config WHERE key = ?;
 SELECT * FROM config ORDER BY key;
 
 -- name: UpsertConfig :one
-INSERT INTO config (key, value, type, description, language_id, updated_at, updated_by)
+INSERT INTO config (key, value, type, description, language_code, updated_at, updated_by)
 VALUES (?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(key) DO UPDATE SET
     value = excluded.value,
-    language_id = excluded.language_id,
+    language_code = excluded.language_code,
     updated_at = excluded.updated_at,
     updated_by = excluded.updated_by
 RETURNING *;
@@ -29,7 +29,7 @@ DELETE FROM config WHERE key = ?;
 -- name: CountConfig :one
 SELECT COUNT(*) FROM config;
 
--- Config Translations
+-- Config Translations (uses language_id as FK to languages table)
 
 -- name: GetConfigTranslation :one
 SELECT ct.*, l.code as language_code, l.name as language_name

@@ -19,35 +19,35 @@ import (
 
 // TagAPIResponse represents a tag in API responses.
 type TagAPIResponse struct {
-	ID         int64     `json:"id"`
-	Name       string    `json:"name"`
-	Slug       string    `json:"slug"`
-	LanguageID int64     `json:"language_id"`
-	PageCount  int64     `json:"page_count"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID           int64     `json:"id"`
+	Name         string    `json:"name"`
+	Slug         string    `json:"slug"`
+	LanguageCode string    `json:"language_code"`
+	PageCount    int64     `json:"page_count"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // CategoryAPIResponse represents a category in API responses.
 type CategoryAPIResponse struct {
-	ID          int64                  `json:"id"`
-	Name        string                 `json:"name"`
-	Slug        string                 `json:"slug"`
-	Description string                 `json:"description,omitempty"`
-	ParentID    *int64                 `json:"parent_id,omitempty"`
-	Position    int64                  `json:"position"`
-	LanguageID  int64                  `json:"language_id"`
-	PageCount   int64                  `json:"page_count"`
-	Children    []*CategoryAPIResponse `json:"children,omitempty"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
+	ID           int64                  `json:"id"`
+	Name         string                 `json:"name"`
+	Slug         string                 `json:"slug"`
+	Description  string                 `json:"description,omitempty"`
+	ParentID     *int64                 `json:"parent_id,omitempty"`
+	Position     int64                  `json:"position"`
+	LanguageCode string                 `json:"language_code"`
+	PageCount    int64                  `json:"page_count"`
+	Children     []*CategoryAPIResponse `json:"children,omitempty"`
+	CreatedAt    time.Time              `json:"created_at"`
+	UpdatedAt    time.Time              `json:"updated_at"`
 }
 
 // CreateTagRequest represents the request body for creating a tag.
 type CreateTagRequest struct {
-	Name       string `json:"name"`
-	Slug       string `json:"slug"`
-	LanguageID *int64 `json:"language_id,omitempty"`
+	Name         string  `json:"name"`
+	Slug         string  `json:"slug"`
+	LanguageCode *string `json:"language_code,omitempty"`
 }
 
 // GetName returns the name field.
@@ -64,12 +64,12 @@ type UpdateTagRequest struct {
 
 // CreateCategoryRequest represents the request body for creating a category.
 type CreateCategoryRequest struct {
-	Name        string `json:"name"`
-	Slug        string `json:"slug"`
-	Description string `json:"description,omitempty"`
-	ParentID    *int64 `json:"parent_id,omitempty"`
-	Position    *int64 `json:"position,omitempty"`
-	LanguageID  *int64 `json:"language_id,omitempty"`
+	Name         string  `json:"name"`
+	Slug         string  `json:"slug"`
+	Description  string  `json:"description,omitempty"`
+	ParentID     *int64  `json:"parent_id,omitempty"`
+	Position     *int64  `json:"position,omitempty"`
+	LanguageCode *string `json:"language_code,omitempty"`
 }
 
 // GetName returns the name field.
@@ -122,13 +122,13 @@ func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
 	responses := make([]TagAPIResponse, 0, len(tags))
 	for _, t := range tags {
 		responses = append(responses, TagAPIResponse{
-			ID:         t.ID,
-			Name:       t.Name,
-			Slug:       t.Slug,
-			LanguageID: t.LanguageID,
-			PageCount:  t.UsageCount,
-			CreatedAt:  t.CreatedAt,
-			UpdatedAt:  t.UpdatedAt,
+			ID:           t.ID,
+			Name:         t.Name,
+			Slug:         t.Slug,
+			LanguageCode: t.LanguageCode,
+			PageCount:    t.UsageCount,
+			CreatedAt:    t.CreatedAt,
+			UpdatedAt:    t.UpdatedAt,
 		})
 	}
 
@@ -157,13 +157,13 @@ func (h *Handler) GetTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := TagAPIResponse{
-		ID:         tag.ID,
-		Name:       tag.Name,
-		Slug:       tag.Slug,
-		LanguageID: tag.LanguageID,
-		PageCount:  pageCount,
-		CreatedAt:  tag.CreatedAt,
-		UpdatedAt:  tag.UpdatedAt,
+		ID:           tag.ID,
+		Name:         tag.Name,
+		Slug:         tag.Slug,
+		LanguageCode: tag.LanguageCode,
+		PageCount:    pageCount,
+		CreatedAt:    tag.CreatedAt,
+		UpdatedAt:    tag.UpdatedAt,
 	}
 
 	WriteSuccess(w, resp, nil)
@@ -184,8 +184,8 @@ func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve language ID
-	langID, langErr := h.resolveLanguageID(ctx, req.LanguageID)
+	// Resolve language code
+	langCode, langErr := h.resolveLanguageCode(ctx, req.LanguageCode)
 	if langErr != nil {
 		WriteInternalError(w, "Failed to resolve default language")
 		return
@@ -193,11 +193,11 @@ func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	tag, err := h.queries.CreateTag(ctx, store.CreateTagParams{
-		Name:       req.Name,
-		Slug:       req.Slug,
-		LanguageID: langID,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		Name:         req.Name,
+		Slug:         req.Slug,
+		LanguageCode: langCode,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		WriteInternalError(w, "Failed to create tag")
@@ -205,13 +205,13 @@ func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := TagAPIResponse{
-		ID:         tag.ID,
-		Name:       tag.Name,
-		Slug:       tag.Slug,
-		LanguageID: tag.LanguageID,
-		PageCount:  0,
-		CreatedAt:  tag.CreatedAt,
-		UpdatedAt:  tag.UpdatedAt,
+		ID:           tag.ID,
+		Name:         tag.Name,
+		Slug:         tag.Slug,
+		LanguageCode: tag.LanguageCode,
+		PageCount:    0,
+		CreatedAt:    tag.CreatedAt,
+		UpdatedAt:    tag.UpdatedAt,
 	}
 
 	WriteCreated(w, resp)
@@ -262,13 +262,13 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := TagAPIResponse{
-		ID:         tag.ID,
-		Name:       tag.Name,
-		Slug:       tag.Slug,
-		LanguageID: tag.LanguageID,
-		PageCount:  pageCount,
-		CreatedAt:  tag.CreatedAt,
-		UpdatedAt:  tag.UpdatedAt,
+		ID:           tag.ID,
+		Name:         tag.Name,
+		Slug:         tag.Slug,
+		LanguageCode: tag.LanguageCode,
+		PageCount:    pageCount,
+		CreatedAt:    tag.CreatedAt,
+		UpdatedAt:    tag.UpdatedAt,
 	}
 
 	WriteSuccess(w, resp, nil)
@@ -399,8 +399,8 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Resolve language ID
-	langID, langErr := h.resolveLanguageID(ctx, req.LanguageID)
+	// Resolve language code
+	langCode, langErr := h.resolveLanguageCode(ctx, req.LanguageCode)
 	if langErr != nil {
 		WriteInternalError(w, "Failed to resolve default language")
 		return
@@ -408,11 +408,11 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	params := store.CreateCategoryParams{
-		Name:       req.Name,
-		Slug:       req.Slug,
-		LanguageID: langID,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		Name:         req.Name,
+		Slug:         req.Slug,
+		LanguageCode: langCode,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 
 	if req.Description != "" {
@@ -611,14 +611,14 @@ func applyOptionalSlugUpdate(reqSlug *string, currentSlug *string, checkSlug fun
 // categoryToAPIResponse converts a store.Category to CategoryAPIResponse.
 func categoryToAPIResponse(c store.Category, pageCount int64) CategoryAPIResponse {
 	resp := CategoryAPIResponse{
-		ID:         c.ID,
-		Name:       c.Name,
-		Slug:       c.Slug,
-		Position:   c.Position,
-		LanguageID: c.LanguageID,
-		PageCount:  pageCount,
-		CreatedAt:  c.CreatedAt,
-		UpdatedAt:  c.UpdatedAt,
+		ID:           c.ID,
+		Name:         c.Name,
+		Slug:         c.Slug,
+		Position:     c.Position,
+		LanguageCode: c.LanguageCode,
+		PageCount:    pageCount,
+		CreatedAt:    c.CreatedAt,
+		UpdatedAt:    c.UpdatedAt,
 	}
 	if c.Description.Valid {
 		resp.Description = c.Description.String
@@ -632,14 +632,14 @@ func categoryToAPIResponse(c store.Category, pageCount int64) CategoryAPIRespons
 // categoryRowToResponse converts a GetCategoryUsageCountsRow to CategoryAPIResponse.
 func categoryRowToResponse(c store.GetCategoryUsageCountsRow) CategoryAPIResponse {
 	resp := CategoryAPIResponse{
-		ID:         c.ID,
-		Name:       c.Name,
-		Slug:       c.Slug,
-		Position:   c.Position,
-		LanguageID: c.LanguageID,
-		PageCount:  c.UsageCount,
-		CreatedAt:  c.CreatedAt,
-		UpdatedAt:  c.UpdatedAt,
+		ID:           c.ID,
+		Name:         c.Name,
+		Slug:         c.Slug,
+		Position:     c.Position,
+		LanguageCode: c.LanguageCode,
+		PageCount:    c.UsageCount,
+		CreatedAt:    c.CreatedAt,
+		UpdatedAt:    c.UpdatedAt,
 	}
 
 	if c.Description.Valid {

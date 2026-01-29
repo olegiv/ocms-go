@@ -26,14 +26,14 @@ func NewEvent(eventType string, data any) *Event {
 
 // PageEventData contains data for page-related events.
 type PageEventData struct {
-	ID          int64   `json:"id"`
-	Title       string  `json:"title"`
-	Slug        string  `json:"slug"`
-	Status      string  `json:"status"`
-	AuthorID    int64   `json:"author_id"`
-	AuthorEmail string  `json:"author_email,omitempty"`
-	LanguageID  *int64  `json:"language_id,omitempty"`
-	PublishedAt *string `json:"published_at,omitempty"`
+	ID           int64   `json:"id"`
+	Title        string  `json:"title"`
+	Slug         string  `json:"slug"`
+	Status       string  `json:"status"`
+	AuthorID     int64   `json:"author_id"`
+	AuthorEmail  string  `json:"author_email,omitempty"`
+	LanguageCode *string `json:"language_code,omitempty"`
+	PublishedAt  *string `json:"published_at,omitempty"`
 }
 
 // MediaEventData contains data for media-related events.

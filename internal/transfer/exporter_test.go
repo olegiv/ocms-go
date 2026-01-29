@@ -97,7 +97,7 @@ func TestExportWithData(t *testing.T) {
 		Body:       "Test content",
 		Status:     "published",
 		AuthorID:   ts.User.ID,
-		LanguageID: lang.ID,
+		LanguageCode: lang.Code,
 		CreatedAt:  ts.Now,
 		UpdatedAt:  ts.Now,
 	})
@@ -109,7 +109,7 @@ func TestExportWithData(t *testing.T) {
 	_, err = ts.Queries.CreateCategory(ts.Ctx, store.CreateCategoryParams{
 		Name:       "Test Category",
 		Slug:       "test-category",
-		LanguageID: lang.ID,
+		LanguageCode: lang.Code,
 		Position:   0,
 		CreatedAt:  ts.Now,
 		UpdatedAt:  ts.Now,
@@ -122,7 +122,7 @@ func TestExportWithData(t *testing.T) {
 	_, err = ts.Queries.CreateTag(ts.Ctx, store.CreateTagParams{
 		Name:       "Test Tag",
 		Slug:       "test-tag",
-		LanguageID: lang.ID,
+		LanguageCode: lang.Code,
 		CreatedAt:  ts.Now,
 		UpdatedAt:  ts.Now,
 	})
@@ -189,7 +189,7 @@ func TestExportOptionsFiltering(t *testing.T) {
 		Body:       "Published content",
 		Status:     "published",
 		AuthorID:   ts.User.ID,
-		LanguageID: lang.ID,
+		LanguageCode: lang.Code,
 		CreatedAt:  ts.Now,
 		UpdatedAt:  ts.Now,
 	})
@@ -203,7 +203,7 @@ func TestExportOptionsFiltering(t *testing.T) {
 		Body:       "Draft content",
 		Status:     "draft",
 		AuthorID:   ts.User.ID,
-		LanguageID: lang.ID,
+		LanguageCode: lang.Code,
 		CreatedAt:  ts.Now,
 		UpdatedAt:  ts.Now,
 	})
@@ -321,7 +321,7 @@ func TestExportCategoryHierarchy(t *testing.T) {
 	parent, err := queries.CreateCategory(ctx, store.CreateCategoryParams{
 		Name:       "Parent Category",
 		Slug:       "parent-category",
-		LanguageID: lang.ID,
+		LanguageCode: lang.Code,
 		Position:   0,
 		CreatedAt:  now,
 		UpdatedAt:  now,
@@ -334,7 +334,7 @@ func TestExportCategoryHierarchy(t *testing.T) {
 	_, err = queries.CreateCategory(ctx, store.CreateCategoryParams{
 		Name:       "Child Category",
 		Slug:       "child-category",
-		LanguageID: lang.ID,
+		LanguageCode: lang.Code,
 		ParentID:   sql.NullInt64{Int64: parent.ID, Valid: true},
 		Position:   0,
 		CreatedAt:  now,
@@ -394,7 +394,7 @@ func TestExportMenuWithItems(t *testing.T) {
 	menu, err := queries.CreateMenu(ctx, store.CreateMenuParams{
 		Name:       "Test Menu",
 		Slug:       "test-menu",
-		LanguageID: lang.ID,
+		LanguageCode: lang.Code,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	})
@@ -474,7 +474,7 @@ func TestExportFormWithFields(t *testing.T) {
 		Slug:       "contact",
 		Title:      "Contact Us",
 		IsActive:   true,
-		LanguageID: lang.ID,
+		LanguageCode: lang.Code,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	})
@@ -490,7 +490,7 @@ func TestExportFormWithFields(t *testing.T) {
 		Label:      "Your Name",
 		IsRequired: true,
 		Position:   0,
-		LanguageID: lang.ID,
+		LanguageCode: lang.Code,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	})
@@ -505,7 +505,7 @@ func TestExportFormWithFields(t *testing.T) {
 		Label:      "Your Email",
 		IsRequired: true,
 		Position:   1,
-		LanguageID: lang.ID,
+		LanguageCode: lang.Code,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	})
@@ -571,7 +571,7 @@ func TestExportPageWithTranslations(t *testing.T) {
 		Body:       "English content",
 		Status:     "published",
 		AuthorID:   ts.User.ID,
-		LanguageID: enLang.ID,
+		LanguageCode: enLang.Code,
 		CreatedAt:  ts.Now,
 		UpdatedAt:  ts.Now,
 	})
@@ -586,7 +586,7 @@ func TestExportPageWithTranslations(t *testing.T) {
 		Body:       "Russian content",
 		Status:     "published",
 		AuthorID:   ts.User.ID,
-		LanguageID: ruLang.ID,
+		LanguageCode: ruLang.Code,
 		CreatedAt:  ts.Now,
 		UpdatedAt:  ts.Now,
 	})

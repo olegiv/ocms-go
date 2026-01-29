@@ -66,10 +66,10 @@ func (h *PagesHandler) dispatchPageEvent(ctx context.Context, eventType string, 
 		return
 	}
 
-	var languageID *int64
-	if page.LanguageID != 0 {
-		langID := page.LanguageID
-		languageID = &langID
+	var languageCode *string
+	if page.LanguageCode != "" {
+		langCode := page.LanguageCode
+		languageCode = &langCode
 	}
 
 	var publishedAt *string
@@ -79,14 +79,14 @@ func (h *PagesHandler) dispatchPageEvent(ctx context.Context, eventType string, 
 	}
 
 	data := webhook.PageEventData{
-		ID:          page.ID,
-		Title:       page.Title,
-		Slug:        page.Slug,
-		Status:      page.Status,
-		AuthorID:    page.AuthorID,
-		AuthorEmail: authorEmail,
-		LanguageID:  languageID,
-		PublishedAt: publishedAt,
+		ID:           page.ID,
+		Title:        page.Title,
+		Slug:         page.Slug,
+		Status:       page.Status,
+		AuthorID:     page.AuthorID,
+		AuthorEmail:  authorEmail,
+		LanguageCode: languageCode,
+		PublishedAt:  publishedAt,
 	}
 
 	if err := h.dispatcher.DispatchEvent(ctx, eventType, data); err != nil {
@@ -107,7 +107,7 @@ type PagesListData struct {
 	TotalCount         int64
 	StatusFilter       string
 	CategoryFilter     int64
-	LanguageFilter     int64              // Language filter
+	LanguageFilter     string             // Language code filter
 	SearchFilter       string             // Search query filter
 	AllCategories      []PageCategoryNode // For category filter dropdown
 	AllLanguages       []store.Language   // All active languages for filter dropdown
@@ -135,8 +135,8 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Get search filter from query string
 	searchFilter := strings.TrimSpace(r.URL.Query().Get("search"))
 
-	// Get language filter from query string
-	languageFilter := ParseQueryInt64(r, "language")
+	// Get language filter from query string (accepts language code)
+	languageFilter := strings.TrimSpace(r.URL.Query().Get("language"))
 
 	var totalCount int64
 	var pages []store.Page
@@ -150,12 +150,12 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case searchFilter != "":
 		switch {
-		case languageFilter > 0:
+		case languageFilter != "":
 			totalCount, err = h.queries.CountSearchPagesByLanguage(r.Context(), store.CountSearchPagesByLanguageParams{
-				LanguageID: languageFilter,
-				Title:      searchPattern,
-				Body:       searchPattern,
-				Slug:       searchPattern,
+				LanguageCode: languageFilter,
+				Title:        searchPattern,
+				Body:         searchPattern,
+				Slug:         searchPattern,
 			})
 		case statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled":
 			totalCount, err = h.queries.CountSearchPagesByStatus(r.Context(), store.CountSearchPagesByStatusParams{
@@ -171,11 +171,11 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 				Slug:  searchPattern,
 			})
 		}
-	case languageFilter > 0:
+	case languageFilter != "":
 		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
 			totalCount, err = h.queries.CountPagesByLanguageAndStatus(r.Context(), store.CountPagesByLanguageAndStatusParams{
-				LanguageID: languageFilter,
-				Status:     statusFilter,
+				LanguageCode: languageFilter,
+				Status:       statusFilter,
 			})
 		} else {
 			totalCount, err = h.queries.CountPagesByLanguage(r.Context(), languageFilter)
@@ -204,14 +204,14 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case searchFilter != "":
 		switch {
-		case languageFilter > 0:
+		case languageFilter != "":
 			pages, err = h.queries.SearchPagesByLanguage(r.Context(), store.SearchPagesByLanguageParams{
-				LanguageID: languageFilter,
-				Title:      searchPattern,
-				Body:       searchPattern,
-				Slug:       searchPattern,
-				Limit:      PagesPerPage,
-				Offset:     offset,
+				LanguageCode: languageFilter,
+				Title:        searchPattern,
+				Body:         searchPattern,
+				Slug:         searchPattern,
+				Limit:        PagesPerPage,
+				Offset:       offset,
 			})
 		case statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled":
 			pages, err = h.queries.SearchPagesByStatus(r.Context(), store.SearchPagesByStatusParams{
@@ -231,19 +231,19 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 				Offset: offset,
 			})
 		}
-	case languageFilter > 0:
+	case languageFilter != "":
 		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
 			pages, err = h.queries.ListPagesByLanguageAndStatus(r.Context(), store.ListPagesByLanguageAndStatusParams{
-				LanguageID: languageFilter,
-				Status:     statusFilter,
-				Limit:      PagesPerPage,
-				Offset:     offset,
+				LanguageCode: languageFilter,
+				Status:       statusFilter,
+				Limit:        PagesPerPage,
+				Offset:       offset,
 			})
 		} else {
 			pages, err = h.queries.ListPagesByLanguage(r.Context(), store.ListPagesByLanguageParams{
-				LanguageID: languageFilter,
-				Limit:      PagesPerPage,
-				Offset:     offset,
+				LanguageCode: languageFilter,
+				Limit:        PagesPerPage,
+				Offset:       offset,
 			})
 		}
 	case categoryFilter > 0:
@@ -313,15 +313,15 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Fetch languages for all displayed pages
 	pageLanguages := make(map[int64]*store.Language, len(pages))
 	for _, p := range pages {
-		if p.LanguageID != 0 {
-			lang, err := h.queries.GetLanguageByID(r.Context(), p.LanguageID)
+		if p.LanguageCode != "" {
+			language, err := h.queries.GetLanguageByCode(r.Context(), p.LanguageCode)
 			if err != nil {
 				if !errors.Is(err, sql.ErrNoRows) {
-					slog.Error("failed to fetch language for page", "error", err, "page_id", p.ID, "language_id", p.LanguageID)
+					slog.Error("failed to fetch language for page", "error", err, "page_id", p.ID, "language_code", p.LanguageCode)
 				}
 				continue
 			}
-			pageLanguages[p.ID] = &lang
+			pageLanguages[p.ID] = &language
 		}
 	}
 
@@ -412,7 +412,7 @@ func (h *PagesHandler) loadPageLanguageInfo(ctx context.Context, page store.Page
 	maker := func(lang store.Language, p store.Page) PageTranslationInfo {
 		return PageTranslationInfo{Language: lang, Page: p}
 	}
-	return loadLanguageInfo(ctx, h.queries, model.EntityTypePage, page.ID, page.LanguageID, fetcher, maker)
+	return loadLanguageInfo(ctx, h.queries, model.EntityTypePage, page.ID, page.LanguageCode, fetcher, maker)
 }
 
 // buildPageCategoryTree builds a flat list with depth for display.
@@ -496,10 +496,10 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	input := parsePageFormInput(r)
 
 	// Default to the default language if not specified
-	if input.LanguageID == 0 {
+	if input.LanguageCode == "" {
 		defaultLang, err := h.queries.GetDefaultLanguage(r.Context())
 		if err == nil {
-			input.LanguageID = defaultLang.ID
+			input.LanguageCode = defaultLang.Code
 		}
 	}
 
@@ -573,7 +573,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		NoFollow:        input.NoFollow,
 		CanonicalUrl:    input.CanonicalURL,
 		ScheduledAt:     input.ScheduledAt,
-		LanguageID:      input.LanguageID,
+		LanguageCode:    input.LanguageCode,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	})
@@ -778,7 +778,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		NoFollow:        input.NoFollow,
 		CanonicalUrl:    input.CanonicalURL,
 		ScheduledAt:     input.ScheduledAt,
-		LanguageID:      existingPage.LanguageID,
+		LanguageCode:    existingPage.LanguageCode,
 		UpdatedAt:       now,
 	})
 	if err != nil {
@@ -1040,8 +1040,8 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		NoIndex:         page.NoIndex,
 		NoFollow:        page.NoFollow,
 		CanonicalUrl:    page.CanonicalUrl,
-		ScheduledAt:     page.ScheduledAt, // Keep scheduling intact
-		LanguageID:      page.LanguageID,  // Keep language intact
+		ScheduledAt:     page.ScheduledAt,   // Keep scheduling intact
+		LanguageCode:    page.LanguageCode,  // Keep language intact
 		UpdatedAt:       now,
 	})
 	if err != nil {
@@ -1121,7 +1121,7 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		NoFollow:        0,
 		CanonicalUrl:    "",
 		ScheduledAt:     sql.NullTime{},
-		LanguageID:      tc.TargetLang.ID,
+		LanguageCode:    tc.TargetLang.Code,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	})
@@ -1195,7 +1195,7 @@ type pageFormInput struct {
 	NoFollow        int64
 	CanonicalURL    string
 	ScheduledAt     sql.NullTime
-	LanguageID      int64
+	LanguageCode    string
 	FormValues      map[string]string
 }
 
@@ -1216,7 +1216,7 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 	noFollowStr := r.FormValue("no_follow")
 	canonicalURL := strings.TrimSpace(r.FormValue("canonical_url"))
 	scheduledAtStr := strings.TrimSpace(r.FormValue("scheduled_at"))
-	languageIDStr := r.FormValue("language_id")
+	languageCode := strings.TrimSpace(r.FormValue("language_code"))
 
 	// Parse featured image ID
 	featuredImageID := util.ParseNullInt64Positive(featuredImageIDStr)
@@ -1242,14 +1242,6 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 		}
 	}
 
-	// Parse language_id
-	var languageID int64
-	if languageIDStr != "" {
-		if parsed, parseErr := strconv.ParseInt(languageIDStr, 10, 64); parseErr == nil && parsed > 0 {
-			languageID = parsed
-		}
-	}
-
 	formValues := map[string]string{
 		"title":             title,
 		"slug":              slug,
@@ -1264,7 +1256,7 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 		"no_follow":         noFollowStr,
 		"canonical_url":     canonicalURL,
 		"scheduled_at":      scheduledAtStr,
-		"language_id":       languageIDStr,
+		"language_code":     languageCode,
 	}
 
 	return pageFormInput{
@@ -1281,7 +1273,7 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 		NoFollow:        noFollow,
 		CanonicalURL:    canonicalURL,
 		ScheduledAt:     scheduledAt,
-		LanguageID:      languageID,
+		LanguageCode:    languageCode,
 		FormValues:      formValues,
 	}
 }

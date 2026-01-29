@@ -65,7 +65,7 @@ func NewMediaService(db *sql.DB, uploadDir string) *MediaService {
 }
 
 // Upload handles file upload, processing, and database storage.
-func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *multipart.FileHeader, userID int64, folderID *int64, languageID int64) (*UploadResult, error) {
+func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *multipart.FileHeader, userID int64, folderID *int64, languageCode string) (*UploadResult, error) {
 	// Validate file size
 	if header.Size > MaxUploadSize {
 		return nil, fmt.Errorf("file size exceeds maximum allowed (%d bytes)", MaxUploadSize)
@@ -102,19 +102,19 @@ func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *
 
 		// Create media record
 		media, err := queries.CreateMedia(ctx, store.CreateMediaParams{
-			Uuid:       fileUUID,
-			Filename:   filename,
-			MimeType:   processResult.MimeType,
-			Size:       processResult.Size,
-			Width:      sql.NullInt64{Int64: int64(processResult.Width), Valid: true},
-			Height:     sql.NullInt64{Int64: int64(processResult.Height), Valid: true},
-			Alt:        sql.NullString{String: "", Valid: true},
-			Caption:    sql.NullString{String: "", Valid: true},
-			FolderID:   util.NullInt64FromPtr(folderID),
-			UploadedBy: userID,
-			LanguageID: languageID,
-			CreatedAt:  now,
-			UpdatedAt:  now,
+			Uuid:         fileUUID,
+			Filename:     filename,
+			MimeType:     processResult.MimeType,
+			Size:         processResult.Size,
+			Width:        sql.NullInt64{Int64: int64(processResult.Width), Valid: true},
+			Height:       sql.NullInt64{Int64: int64(processResult.Height), Valid: true},
+			Alt:          sql.NullString{String: "", Valid: true},
+			Caption:      sql.NullString{String: "", Valid: true},
+			FolderID:     util.NullInt64FromPtr(folderID),
+			UploadedBy:   userID,
+			LanguageCode: languageCode,
+			CreatedAt:    now,
+			UpdatedAt:    now,
 		})
 		if err != nil {
 			// Clean up uploaded files on error
@@ -155,19 +155,19 @@ func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *
 		}
 
 		media, err := queries.CreateMedia(ctx, store.CreateMediaParams{
-			Uuid:       fileUUID,
-			Filename:   filename,
-			MimeType:   mimeType,
-			Size:       size,
-			Width:      sql.NullInt64{Valid: false},
-			Height:     sql.NullInt64{Valid: false},
-			Alt:        sql.NullString{String: "", Valid: true},
-			Caption:    sql.NullString{String: "", Valid: true},
-			FolderID:   util.NullInt64FromPtr(folderID),
-			UploadedBy: userID,
-			LanguageID: languageID,
-			CreatedAt:  now,
-			UpdatedAt:  now,
+			Uuid:         fileUUID,
+			Filename:     filename,
+			MimeType:     mimeType,
+			Size:         size,
+			Width:        sql.NullInt64{Valid: false},
+			Height:       sql.NullInt64{Valid: false},
+			Alt:          sql.NullString{String: "", Valid: true},
+			Caption:      sql.NullString{String: "", Valid: true},
+			FolderID:     util.NullInt64FromPtr(folderID),
+			UploadedBy:   userID,
+			LanguageCode: languageCode,
+			CreatedAt:    now,
+			UpdatedAt:    now,
 		})
 		if err != nil {
 			// Clean up on error
