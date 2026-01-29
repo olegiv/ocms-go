@@ -82,6 +82,7 @@ body {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    overflow-x: hidden;
 }
 
 img {
@@ -127,6 +128,8 @@ p {
     max-width: var(--container-max);
     margin: 0 auto;
     padding: 0 var(--spacing-md);
+    width: 100%;
+    box-sizing: border-box;
 }
 
 /* ========================================
@@ -366,6 +369,8 @@ p {
 .content-wrapper .content-main.full-width {
     max-width: 800px;
     margin: 0 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .content-sidebar {
@@ -382,12 +387,16 @@ p {
 
 .page-title {
     margin-bottom: var(--spacing-sm);
+    word-break: break-all;
+    overflow-wrap: anywhere;
 }
 
 .page-excerpt {
     font-size: 1.125rem;
     color: var(--text-muted);
     margin-bottom: 0;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 /* Hero banner with title overlay */
@@ -451,6 +460,8 @@ p {
 /* Prose content */
 .prose {
     max-width: 65ch;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 .prose h2,
@@ -485,6 +496,9 @@ p {
     margin: var(--spacing-lg) 0;
     font-family: var(--font-family-mono), monospace;
     font-size: 0.875rem;
+    max-width: 100%;
+    white-space: pre-wrap;
+    word-break: break-all;
 }
 
 .prose code {
@@ -493,6 +507,8 @@ p {
     border-radius: var(--radius-sm);
     font-family: var(--font-family-mono), monospace;
     font-size: 0.875em;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 .prose pre code {
