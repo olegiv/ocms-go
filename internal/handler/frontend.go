@@ -46,6 +46,7 @@ type PageView struct {
 	FeaturedImageLarge   string // Large variant for single page views
 	FeaturedImageID      int64  // Media ID for translation lookup
 	FeaturedImageAlt     string // Alt text (default language)
+	HideFeaturedImage    bool   // Show image below title instead of hero banner
 	ReadingTime          int    // Estimated reading time in minutes
 	Highlight            string // Search result highlight
 	Author               *AuthorView
@@ -1253,6 +1254,9 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page) PageView
 			pv.FeaturedImageAlt = media.Alt.String
 		}
 	}
+
+	// Set hide featured image option
+	pv.HideFeaturedImage = p.HideFeaturedImage == 1
 
 	// Get author
 	author, err := h.queries.GetPageAuthor(ctx, p.ID)

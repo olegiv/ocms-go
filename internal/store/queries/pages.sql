@@ -1,6 +1,6 @@
 -- name: CreatePage :one
-INSERT INTO pages (title, slug, body, status, author_id, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO pages (title, slug, body, status, author_id, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetPageByID :one
@@ -17,7 +17,7 @@ SELECT * FROM pages WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?;
 
 -- name: UpdatePage :one
 UPDATE pages
-SET title = ?, slug = ?, body = ?, status = ?, featured_image_id = ?, meta_title = ?, meta_description = ?, meta_keywords = ?, og_image_id = ?, no_index = ?, no_follow = ?, canonical_url = ?, scheduled_at = ?, language_code = ?, updated_at = ?
+SET title = ?, slug = ?, body = ?, status = ?, featured_image_id = ?, meta_title = ?, meta_description = ?, meta_keywords = ?, og_image_id = ?, no_index = ?, no_follow = ?, canonical_url = ?, scheduled_at = ?, language_code = ?, hide_featured_image = ?, updated_at = ?
 WHERE id = ?
 RETURNING *;
 

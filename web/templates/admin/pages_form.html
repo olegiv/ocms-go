@@ -353,6 +353,16 @@
                 {{template "media_picker" .}}
             </div>
 
+            <!-- Hide Featured Image Option -->
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="hide_featured_image" value="1"
+                        {{if eq .Data.FormValues.hide_featured_image "1"}}checked{{else if and .Data.Page (eq .Data.Page.HideFeaturedImage 1)}}checked{{end}}>
+                    <span>{{T .AdminLang "pages.hide_featured_image"}}</span>
+                </label>
+                <span class="form-hint">{{T .AdminLang "pages.hide_featured_image_hint"}}</span>
+            </div>
+
             <!-- Tags -->
             <div class="form-group form-group-full">
                 {{template "tag_selector" .}}

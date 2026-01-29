@@ -25,28 +25,29 @@ import (
 
 // PageResponse represents a page in API responses.
 type PageResponse struct {
-	ID              int64              `json:"id"`
-	Title           string             `json:"title"`
-	Slug            string             `json:"slug"`
-	Body            string             `json:"body"`
-	Status          string             `json:"status"`
-	AuthorID        int64              `json:"author_id"`
-	LanguageCode    string             `json:"language_code"`
-	CreatedAt       time.Time          `json:"created_at"`
-	UpdatedAt       time.Time          `json:"updated_at"`
-	PublishedAt     *time.Time         `json:"published_at,omitempty"`
-	FeaturedImageID *int64             `json:"featured_image_id,omitempty"`
-	MetaTitle       string             `json:"meta_title,omitempty"`
-	MetaDescription string             `json:"meta_description,omitempty"`
-	MetaKeywords    string             `json:"meta_keywords,omitempty"`
-	OGImageID       *int64             `json:"og_image_id,omitempty"`
-	NoIndex         bool               `json:"no_index"`
-	NoFollow        bool               `json:"no_follow"`
-	CanonicalURL    string             `json:"canonical_url,omitempty"`
-	ScheduledAt     *time.Time         `json:"scheduled_at,omitempty"`
-	Author          *AuthorResponse    `json:"author,omitempty"`
-	Categories      []CategoryResponse `json:"categories,omitempty"`
-	Tags            []TagResponse      `json:"tags,omitempty"`
+	ID                int64              `json:"id"`
+	Title             string             `json:"title"`
+	Slug              string             `json:"slug"`
+	Body              string             `json:"body"`
+	Status            string             `json:"status"`
+	AuthorID          int64              `json:"author_id"`
+	LanguageCode      string             `json:"language_code"`
+	CreatedAt         time.Time          `json:"created_at"`
+	UpdatedAt         time.Time          `json:"updated_at"`
+	PublishedAt       *time.Time         `json:"published_at,omitempty"`
+	FeaturedImageID   *int64             `json:"featured_image_id,omitempty"`
+	HideFeaturedImage bool               `json:"hide_featured_image"`
+	MetaTitle         string             `json:"meta_title,omitempty"`
+	MetaDescription   string             `json:"meta_description,omitempty"`
+	MetaKeywords      string             `json:"meta_keywords,omitempty"`
+	OGImageID         *int64             `json:"og_image_id,omitempty"`
+	NoIndex           bool               `json:"no_index"`
+	NoFollow          bool               `json:"no_follow"`
+	CanonicalURL      string             `json:"canonical_url,omitempty"`
+	ScheduledAt       *time.Time         `json:"scheduled_at,omitempty"`
+	Author            *AuthorResponse    `json:"author,omitempty"`
+	Categories        []CategoryResponse `json:"categories,omitempty"`
+	Tags              []TagResponse      `json:"tags,omitempty"`
 }
 
 // AuthorResponse represents an author in API responses.
@@ -73,41 +74,43 @@ type TagResponse struct {
 
 // CreatePageRequest represents the request body for creating a page.
 type CreatePageRequest struct {
-	Title           string  `json:"title"`
-	Slug            string  `json:"slug"`
-	Body            string  `json:"body"`
-	Status          string  `json:"status"`
-	LanguageCode    *string `json:"language_code,omitempty"`
-	FeaturedImageID *int64  `json:"featured_image_id,omitempty"`
-	MetaTitle       string  `json:"meta_title,omitempty"`
-	MetaDescription string  `json:"meta_description,omitempty"`
-	MetaKeywords    string  `json:"meta_keywords,omitempty"`
-	OGImageID       *int64  `json:"og_image_id,omitempty"`
-	NoIndex         bool    `json:"no_index"`
-	NoFollow        bool    `json:"no_follow"`
-	CanonicalURL    string  `json:"canonical_url,omitempty"`
-	ScheduledAt     *string `json:"scheduled_at,omitempty"`
-	CategoryIDs     []int64 `json:"category_ids,omitempty"`
-	TagIDs          []int64 `json:"tag_ids,omitempty"`
+	Title             string  `json:"title"`
+	Slug              string  `json:"slug"`
+	Body              string  `json:"body"`
+	Status            string  `json:"status"`
+	LanguageCode      *string `json:"language_code,omitempty"`
+	FeaturedImageID   *int64  `json:"featured_image_id,omitempty"`
+	HideFeaturedImage bool    `json:"hide_featured_image"`
+	MetaTitle         string  `json:"meta_title,omitempty"`
+	MetaDescription   string  `json:"meta_description,omitempty"`
+	MetaKeywords      string  `json:"meta_keywords,omitempty"`
+	OGImageID         *int64  `json:"og_image_id,omitempty"`
+	NoIndex           bool    `json:"no_index"`
+	NoFollow          bool    `json:"no_follow"`
+	CanonicalURL      string  `json:"canonical_url,omitempty"`
+	ScheduledAt       *string `json:"scheduled_at,omitempty"`
+	CategoryIDs       []int64 `json:"category_ids,omitempty"`
+	TagIDs            []int64 `json:"tag_ids,omitempty"`
 }
 
 // UpdatePageRequest represents the request body for updating a page.
 type UpdatePageRequest struct {
-	Title           *string  `json:"title,omitempty"`
-	Slug            *string  `json:"slug,omitempty"`
-	Body            *string  `json:"body,omitempty"`
-	Status          *string  `json:"status,omitempty"`
-	FeaturedImageID *int64   `json:"featured_image_id,omitempty"`
-	MetaTitle       *string  `json:"meta_title,omitempty"`
-	MetaDescription *string  `json:"meta_description,omitempty"`
-	MetaKeywords    *string  `json:"meta_keywords,omitempty"`
-	OGImageID       *int64   `json:"og_image_id,omitempty"`
-	NoIndex         *bool    `json:"no_index,omitempty"`
-	NoFollow        *bool    `json:"no_follow,omitempty"`
-	CanonicalURL    *string  `json:"canonical_url,omitempty"`
-	ScheduledAt     *string  `json:"scheduled_at,omitempty"`
-	CategoryIDs     *[]int64 `json:"category_ids,omitempty"`
-	TagIDs          *[]int64 `json:"tag_ids,omitempty"`
+	Title             *string  `json:"title,omitempty"`
+	Slug              *string  `json:"slug,omitempty"`
+	Body              *string  `json:"body,omitempty"`
+	Status            *string  `json:"status,omitempty"`
+	FeaturedImageID   *int64   `json:"featured_image_id,omitempty"`
+	HideFeaturedImage *bool    `json:"hide_featured_image,omitempty"`
+	MetaTitle         *string  `json:"meta_title,omitempty"`
+	MetaDescription   *string  `json:"meta_description,omitempty"`
+	MetaKeywords      *string  `json:"meta_keywords,omitempty"`
+	OGImageID         *int64   `json:"og_image_id,omitempty"`
+	NoIndex           *bool    `json:"no_index,omitempty"`
+	NoFollow          *bool    `json:"no_follow,omitempty"`
+	CanonicalURL      *string  `json:"canonical_url,omitempty"`
+	ScheduledAt       *string  `json:"scheduled_at,omitempty"`
+	CategoryIDs       *[]int64 `json:"category_ids,omitempty"`
+	TagIDs            *[]int64 `json:"tag_ids,omitempty"`
 }
 
 // storeCategoryToResponse converts a store.Category to CategoryResponse.
@@ -179,21 +182,22 @@ func (h *Handler) listPagesByFilter(ctx context.Context, publishedOnly bool, fil
 // storePageToResponse converts a store.Page to PageResponse.
 func storePageToResponse(p store.Page) PageResponse {
 	resp := PageResponse{
-		ID:              p.ID,
-		Title:           p.Title,
-		Slug:            p.Slug,
-		Body:            p.Body,
-		Status:          p.Status,
-		AuthorID:        p.AuthorID,
-		LanguageCode:    p.LanguageCode,
-		CreatedAt:       p.CreatedAt,
-		UpdatedAt:       p.UpdatedAt,
-		MetaTitle:       p.MetaTitle,
-		MetaDescription: p.MetaDescription,
-		MetaKeywords:    p.MetaKeywords,
-		NoIndex:         p.NoIndex != 0,
-		NoFollow:        p.NoFollow != 0,
-		CanonicalURL:    p.CanonicalUrl,
+		ID:                p.ID,
+		Title:             p.Title,
+		Slug:              p.Slug,
+		Body:              p.Body,
+		Status:            p.Status,
+		AuthorID:          p.AuthorID,
+		LanguageCode:      p.LanguageCode,
+		CreatedAt:         p.CreatedAt,
+		UpdatedAt:         p.UpdatedAt,
+		MetaTitle:         p.MetaTitle,
+		MetaDescription:   p.MetaDescription,
+		MetaKeywords:      p.MetaKeywords,
+		HideFeaturedImage: p.HideFeaturedImage != 0,
+		NoIndex:           p.NoIndex != 0,
+		NoFollow:          p.NoFollow != 0,
+		CanonicalURL:      p.CanonicalUrl,
 	}
 
 	if p.PublishedAt.Valid {
@@ -501,6 +505,9 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	if req.NoFollow {
 		params.NoFollow = 1
 	}
+	if req.HideFeaturedImage {
+		params.HideFeaturedImage = 1
+	}
 
 	// Create page
 	page, err := h.queries.CreatePage(ctx, params)
@@ -560,22 +567,23 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 
 	// Build update params, starting with existing values
 	params := store.UpdatePageParams{
-		ID:              existing.ID,
-		Title:           existing.Title,
-		Slug:            existing.Slug,
-		Body:            existing.Body,
-		Status:          existing.Status,
-		FeaturedImageID: existing.FeaturedImageID,
-		OgImageID:       existing.OgImageID,
-		MetaTitle:       existing.MetaTitle,
-		MetaDescription: existing.MetaDescription,
-		MetaKeywords:    existing.MetaKeywords,
-		CanonicalUrl:    existing.CanonicalUrl,
-		NoIndex:         existing.NoIndex,
-		NoFollow:        existing.NoFollow,
-		ScheduledAt:     existing.ScheduledAt,
-		LanguageCode:    existing.LanguageCode,
-		UpdatedAt:       time.Now(),
+		ID:                existing.ID,
+		Title:             existing.Title,
+		Slug:              existing.Slug,
+		Body:              existing.Body,
+		Status:            existing.Status,
+		FeaturedImageID:   existing.FeaturedImageID,
+		OgImageID:         existing.OgImageID,
+		MetaTitle:         existing.MetaTitle,
+		MetaDescription:   existing.MetaDescription,
+		MetaKeywords:      existing.MetaKeywords,
+		CanonicalUrl:      existing.CanonicalUrl,
+		NoIndex:           existing.NoIndex,
+		NoFollow:          existing.NoFollow,
+		ScheduledAt:       existing.ScheduledAt,
+		LanguageCode:      existing.LanguageCode,
+		HideFeaturedImage: existing.HideFeaturedImage,
+		UpdatedAt:         time.Now(),
 	}
 
 	// Apply updates
@@ -629,6 +637,13 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 			params.NoFollow = 1
 		} else {
 			params.NoFollow = 0
+		}
+	}
+	if req.HideFeaturedImage != nil {
+		if *req.HideFeaturedImage {
+			params.HideFeaturedImage = 1
+		} else {
+			params.HideFeaturedImage = 0
 		}
 	}
 	if req.ScheduledAt != nil {
