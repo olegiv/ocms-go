@@ -21,6 +21,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/olegiv/ocms-go/internal/imaging"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -31,6 +32,7 @@ type Importer struct {
 	db        *sql.DB
 	logger    *slog.Logger
 	uploadDir string
+	processor *imaging.Processor
 }
 
 // NewImporter creates a new Importer instance.
@@ -46,6 +48,21 @@ func NewImporter(queries *store.Queries, db *sql.DB, logger *slog.Logger) *Impor
 // SetUploadDir sets the upload directory for media files.
 func (i *Importer) SetUploadDir(dir string) {
 	i.uploadDir = dir
+	// Create processor with the new upload directory
+	i.processor = imaging.NewProcessor(dir)
+}
+
+// SetProcessor sets the imaging processor for generating image variants.
+func (i *Importer) SetProcessor(p *imaging.Processor) {
+	i.processor = p
+}
+
+// getProcessor returns the imaging processor, creating one if needed.
+func (i *Importer) getProcessor() *imaging.Processor {
+	if i.processor == nil {
+		i.processor = imaging.NewProcessor(i.uploadDir)
+	}
+	return i.processor
 }
 
 // Import performs the import operation based on the provided options.
@@ -275,9 +292,12 @@ func (i *Importer) ImportFromZipBytes(ctx context.Context, data []byte, opts Imp
 	return i.ImportFromZip(ctx, zipReader, opts)
 }
 
-// extractMediaFiles extracts media files from the zip to the uploads directory.
+// extractMediaFiles extracts media files from the zip to the uploads directory
+// and generates any missing image variants.
 func (i *Importer) extractMediaFiles(zipReader *zip.Reader) map[string]string {
 	mediaFileMap := make(map[string]string)
+	// Track originals for variant generation: uuid -> filename
+	originals := make(map[string]string)
 
 	for _, f := range zipReader.File {
 		// Check if this is a media file (in media/ directory)
@@ -298,9 +318,67 @@ func (i *Importer) extractMediaFiles(zipReader *zip.Reader) map[string]string {
 		}
 
 		mediaFileMap[f.Name] = extractedPath
+
+		// Track originals for variant generation
+		parts := strings.Split(f.Name, "/")
+		if len(parts) >= 4 && parts[1] == "originals" {
+			originals[parts[2]] = parts[3] // uuid -> filename
+		}
+	}
+
+	// Generate missing variants for extracted originals
+	if len(originals) > 0 {
+		i.generateMissingVariants(originals)
 	}
 
 	return mediaFileMap
+}
+
+// generateMissingVariants creates any missing image variants for the given originals.
+func (i *Importer) generateMissingVariants(originals map[string]string) {
+	processor := i.getProcessor()
+
+	for uuid, filename := range originals {
+		originalPath := filepath.Join(i.uploadDir, "originals", uuid, filename)
+
+		// Check if original exists
+		if _, err := os.Stat(originalPath); os.IsNotExist(err) {
+			continue
+		}
+
+		// Check if this is an image that can have variants
+		if !processor.IsImage(i.detectMimeType(filename)) {
+			continue
+		}
+
+		// Generate all variants (processor skips existing ones and ones where source is smaller)
+		variants, err := processor.CreateAllVariants(originalPath, uuid, filename)
+		if err != nil {
+			i.logger.Warn("failed to generate variants", "uuid", uuid, "filename", filename, "error", err)
+			continue
+		}
+
+		if len(variants) > 0 {
+			i.logger.Info("generated image variants", "uuid", uuid, "filename", filename, "count", len(variants))
+		}
+	}
+}
+
+// detectMimeType returns the MIME type based on file extension.
+func (i *Importer) detectMimeType(filename string) string {
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch ext {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	default:
+		return "application/octet-stream"
+	}
 }
 
 // extractMediaFile extracts a single media file from the zip.
