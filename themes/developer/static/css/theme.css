@@ -60,6 +60,7 @@ body {
     background-color: var(--dev-bg);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
 }
 
 a {
@@ -89,6 +90,7 @@ img {
     max-width: var(--dev-container);
     margin: 0 auto;
     padding: 0 var(--dev-space-lg);
+    box-sizing: border-box;
 }
 
 .dev-main {
@@ -1027,6 +1029,8 @@ img {
     font-size: 1rem;
     line-height: 1.75;
     color: var(--dev-text);
+    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 .dev-prose h1,
@@ -1065,6 +1069,8 @@ img {
     background-color: var(--dev-bg-tertiary);
     padding: 0.15em 0.4em;
     border-radius: var(--dev-radius-sm);
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 .dev-prose pre {
@@ -1076,6 +1082,9 @@ img {
     padding: var(--dev-space-lg);
     overflow-x: auto;
     margin: 1.5em 0;
+    max-width: 100%;
+    white-space: pre-wrap;
+    word-break: break-all;
 }
 
 .dev-prose pre code {
