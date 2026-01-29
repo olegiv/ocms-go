@@ -1288,6 +1288,16 @@
             "translation": "Цель"
         },
         {
+            "id": "menus.parent_item",
+            "message": "Parent Item",
+            "translation": "Родительский пункт"
+        },
+        {
+            "id": "menus.top_level",
+            "message": "Top Level",
+            "translation": "Верхний уровень"
+        },
+        {
             "id": "forms.title",
             "message": "Forms",
             "translation": "Формы"
