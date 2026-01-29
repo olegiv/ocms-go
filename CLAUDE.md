@@ -171,14 +171,31 @@ On first run, seeds admin user: `admin@example.com` / `changeme1234`
 ## Key Endpoints
 
 ### Admin Routes
+
+**Editor Routes (editor + admin access):**
 - `/admin/` - Dashboard
-- `/admin/pages` - Page management
-- `/admin/media` - Media library
-- `/admin/themes` - Theme management
-- `/admin/modules` - Module list
-- `/admin/api-keys` - API key management
-- `/admin/cache` - Cache management
-- `/admin/hcaptcha` - hCaptcha settings
+- `/admin/events` - Event log
+- `/admin/pages` - Page management (list, new, edit)
+- `/admin/tags` - Tag management (list, new, edit)
+- `/admin/categories` - Category management (list, new, edit)
+- `/admin/media` - Media library (list, upload, edit)
+- `/admin/menus` - Menu management (list, new, edit)
+- `/admin/forms` - Form builder (list, new, edit, submissions)
+- `/admin/widgets` - Widget management
+- `/admin/themes/settings` - Theme settings (for active theme)
+
+**Admin-Only Routes:**
+- `/admin/users` - User management (list, new, edit)
+- `/admin/languages` - Language management (list, new, edit)
+- `/admin/config` - Site configuration
+- `/admin/themes` - Theme list and activation
+- `/admin/modules` - Module list and toggle
+- `/admin/api-keys` - API key management (list, new, edit)
+- `/admin/webhooks` - Webhook management (list, new, edit, deliveries)
+- `/admin/cache` - Cache statistics and clear
+- `/admin/export` - Content export
+- `/admin/import` - Content import
+- `/admin/docs` - Site documentation
 
 ### REST API
 - `GET /api/v1/pages` - List pages (public: published only)
