@@ -559,23 +559,24 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	userID := middleware.GetUserID(r)
 	newPage, err := h.queries.CreatePage(r.Context(), store.CreatePageParams{
-		Title:           input.Title,
-		Slug:            input.Slug,
-		Body:            input.Body,
-		Status:          input.Status,
-		AuthorID:        userID,
-		FeaturedImageID: input.FeaturedImageID,
-		MetaTitle:       input.MetaTitle,
-		MetaDescription: input.MetaDescription,
-		MetaKeywords:    input.MetaKeywords,
-		OgImageID:       input.OgImageID,
-		NoIndex:         input.NoIndex,
-		NoFollow:        input.NoFollow,
-		CanonicalUrl:    input.CanonicalURL,
-		ScheduledAt:     input.ScheduledAt,
-		LanguageCode:    input.LanguageCode,
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		Title:             input.Title,
+		Slug:              input.Slug,
+		Body:              input.Body,
+		Status:            input.Status,
+		AuthorID:          userID,
+		FeaturedImageID:   input.FeaturedImageID,
+		MetaTitle:         input.MetaTitle,
+		MetaDescription:   input.MetaDescription,
+		MetaKeywords:      input.MetaKeywords,
+		OgImageID:         input.OgImageID,
+		NoIndex:           input.NoIndex,
+		NoFollow:          input.NoFollow,
+		CanonicalUrl:      input.CanonicalURL,
+		ScheduledAt:       input.ScheduledAt,
+		LanguageCode:      input.LanguageCode,
+		HideFeaturedImage: input.HideFeaturedImage,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	})
 	if err != nil {
 		slog.Error("failed to create page", "error", err)
@@ -764,22 +765,23 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Update page
 	now := time.Now()
 	updatedPage, err := h.queries.UpdatePage(r.Context(), store.UpdatePageParams{
-		ID:              id,
-		Title:           input.Title,
-		Slug:            input.Slug,
-		Body:            input.Body,
-		Status:          status,
-		FeaturedImageID: input.FeaturedImageID,
-		MetaTitle:       input.MetaTitle,
-		MetaDescription: input.MetaDescription,
-		MetaKeywords:    input.MetaKeywords,
-		OgImageID:       input.OgImageID,
-		NoIndex:         input.NoIndex,
-		NoFollow:        input.NoFollow,
-		CanonicalUrl:    input.CanonicalURL,
-		ScheduledAt:     input.ScheduledAt,
-		LanguageCode:    existingPage.LanguageCode,
-		UpdatedAt:       now,
+		ID:                id,
+		Title:             input.Title,
+		Slug:              input.Slug,
+		Body:              input.Body,
+		Status:            status,
+		FeaturedImageID:   input.FeaturedImageID,
+		MetaTitle:         input.MetaTitle,
+		MetaDescription:   input.MetaDescription,
+		MetaKeywords:      input.MetaKeywords,
+		OgImageID:         input.OgImageID,
+		NoIndex:           input.NoIndex,
+		NoFollow:          input.NoFollow,
+		CanonicalUrl:      input.CanonicalURL,
+		ScheduledAt:       input.ScheduledAt,
+		LanguageCode:      existingPage.LanguageCode,
+		HideFeaturedImage: input.HideFeaturedImage,
+		UpdatedAt:         now,
 	})
 	if err != nil {
 		slog.Error("failed to update page", "error", err, "page_id", id)
@@ -1027,22 +1029,23 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 	// Update page with version content (keeping SEO fields and scheduling intact)
 	now := time.Now()
 	_, err = h.queries.UpdatePage(r.Context(), store.UpdatePageParams{
-		ID:              id,
-		Title:           version.Title,
-		Slug:            page.Slug, // Keep the current slug
-		Body:            version.Body,
-		Status:          page.Status, // Keep the current status
-		FeaturedImageID: page.FeaturedImageID,
-		MetaTitle:       page.MetaTitle,
-		MetaDescription: page.MetaDescription,
-		MetaKeywords:    page.MetaKeywords,
-		OgImageID:       page.OgImageID,
-		NoIndex:         page.NoIndex,
-		NoFollow:        page.NoFollow,
-		CanonicalUrl:    page.CanonicalUrl,
-		ScheduledAt:     page.ScheduledAt,   // Keep scheduling intact
-		LanguageCode:    page.LanguageCode,  // Keep language intact
-		UpdatedAt:       now,
+		ID:                id,
+		Title:             version.Title,
+		Slug:              page.Slug, // Keep the current slug
+		Body:              version.Body,
+		Status:            page.Status, // Keep the current status
+		FeaturedImageID:   page.FeaturedImageID,
+		MetaTitle:         page.MetaTitle,
+		MetaDescription:   page.MetaDescription,
+		MetaKeywords:      page.MetaKeywords,
+		OgImageID:         page.OgImageID,
+		NoIndex:           page.NoIndex,
+		NoFollow:          page.NoFollow,
+		CanonicalUrl:      page.CanonicalUrl,
+		ScheduledAt:       page.ScheduledAt,        // Keep scheduling intact
+		LanguageCode:      page.LanguageCode,       // Keep language intact
+		HideFeaturedImage: page.HideFeaturedImage,  // Keep setting intact
+		UpdatedAt:         now,
 	})
 	if err != nil {
 		slog.Error("failed to restore page version", "error", err, "page_id", id, "version_id", versionId)
@@ -1107,23 +1110,24 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	userID := middleware.GetUserID(r)
 	translatedPage, err := h.queries.CreatePage(r.Context(), store.CreatePageParams{
-		Title:           sourcePage.Title, // Keep same title (user will translate)
-		Slug:            translatedSlug,
-		Body:            "",              // Empty body for translation
-		Status:          PageStatusDraft, // Always start as draft
-		AuthorID:        userID,
-		FeaturedImageID: sourcePage.FeaturedImageID,
-		MetaTitle:       "",
-		MetaDescription: "",
-		MetaKeywords:    "",
-		OgImageID:       sql.NullInt64{},
-		NoIndex:         0,
-		NoFollow:        0,
-		CanonicalUrl:    "",
-		ScheduledAt:     sql.NullTime{},
-		LanguageCode:    tc.TargetLang.Code,
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		Title:             sourcePage.Title, // Keep same title (user will translate)
+		Slug:              translatedSlug,
+		Body:              "",              // Empty body for translation
+		Status:            PageStatusDraft, // Always start as draft
+		AuthorID:          userID,
+		FeaturedImageID:   sourcePage.FeaturedImageID,
+		MetaTitle:         "",
+		MetaDescription:   "",
+		MetaKeywords:      "",
+		OgImageID:         sql.NullInt64{},
+		NoIndex:           0,
+		NoFollow:          0,
+		CanonicalUrl:      "",
+		ScheduledAt:       sql.NullTime{},
+		LanguageCode:      tc.TargetLang.Code,
+		HideFeaturedImage: sourcePage.HideFeaturedImage,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	})
 	if err != nil {
 		slog.Error("failed to create translated page", "error", err)
@@ -1182,21 +1186,22 @@ func (h *PagesHandler) requirePageWithError(w http.ResponseWriter, r *http.Reque
 
 // pageFormInput holds parsed page form input values.
 type pageFormInput struct {
-	Title           string
-	Slug            string
-	Body            string
-	Status          string
-	FeaturedImageID sql.NullInt64
-	MetaTitle       string
-	MetaDescription string
-	MetaKeywords    string
-	OgImageID       sql.NullInt64
-	NoIndex         int64
-	NoFollow        int64
-	CanonicalURL    string
-	ScheduledAt     sql.NullTime
-	LanguageCode    string
-	FormValues      map[string]string
+	Title             string
+	Slug              string
+	Body              string
+	Status            string
+	FeaturedImageID   sql.NullInt64
+	MetaTitle         string
+	MetaDescription   string
+	MetaKeywords      string
+	OgImageID         sql.NullInt64
+	NoIndex           int64
+	NoFollow          int64
+	CanonicalURL      string
+	ScheduledAt       sql.NullTime
+	LanguageCode      string
+	HideFeaturedImage int64
+	FormValues        map[string]string
 }
 
 // parsePageFormInput parses common page form values from request.
@@ -1217,6 +1222,7 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 	canonicalURL := strings.TrimSpace(r.FormValue("canonical_url"))
 	scheduledAtStr := strings.TrimSpace(r.FormValue("scheduled_at"))
 	languageCode := strings.TrimSpace(r.FormValue("language_code"))
+	hideFeaturedImageStr := r.FormValue("hide_featured_image")
 
 	// Parse featured image ID
 	featuredImageID := util.ParseNullInt64Positive(featuredImageIDStr)
@@ -1233,6 +1239,10 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 	if noFollowStr == "1" || noFollowStr == "on" {
 		noFollow = 1
 	}
+	var hideFeaturedImage int64
+	if hideFeaturedImageStr == "1" || hideFeaturedImageStr == "on" {
+		hideFeaturedImage = 1
+	}
 
 	// Parse scheduled_at
 	var scheduledAt sql.NullTime
@@ -1243,38 +1253,40 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 	}
 
 	formValues := map[string]string{
-		"title":             title,
-		"slug":              slug,
-		"body":              body,
-		"status":            status,
-		"featured_image_id": featuredImageIDStr,
-		"meta_title":        metaTitle,
-		"meta_description":  metaDescription,
-		"meta_keywords":     metaKeywords,
-		"og_image_id":       ogImageIDStr,
-		"no_index":          noIndexStr,
-		"no_follow":         noFollowStr,
-		"canonical_url":     canonicalURL,
-		"scheduled_at":      scheduledAtStr,
-		"language_code":     languageCode,
+		"title":               title,
+		"slug":                slug,
+		"body":                body,
+		"status":              status,
+		"featured_image_id":   featuredImageIDStr,
+		"meta_title":          metaTitle,
+		"meta_description":    metaDescription,
+		"meta_keywords":       metaKeywords,
+		"og_image_id":         ogImageIDStr,
+		"no_index":            noIndexStr,
+		"no_follow":           noFollowStr,
+		"canonical_url":       canonicalURL,
+		"scheduled_at":        scheduledAtStr,
+		"language_code":       languageCode,
+		"hide_featured_image": hideFeaturedImageStr,
 	}
 
 	return pageFormInput{
-		Title:           title,
-		Slug:            slug,
-		Body:            body,
-		Status:          status,
-		FeaturedImageID: featuredImageID,
-		MetaTitle:       metaTitle,
-		MetaDescription: metaDescription,
-		MetaKeywords:    metaKeywords,
-		OgImageID:       ogImageID,
-		NoIndex:         noIndex,
-		NoFollow:        noFollow,
-		CanonicalURL:    canonicalURL,
-		ScheduledAt:     scheduledAt,
-		LanguageCode:    languageCode,
-		FormValues:      formValues,
+		Title:             title,
+		Slug:              slug,
+		Body:              body,
+		Status:            status,
+		FeaturedImageID:   featuredImageID,
+		MetaTitle:         metaTitle,
+		MetaDescription:   metaDescription,
+		MetaKeywords:      metaKeywords,
+		OgImageID:         ogImageID,
+		NoIndex:           noIndex,
+		NoFollow:          noFollow,
+		CanonicalURL:      canonicalURL,
+		ScheduledAt:       scheduledAt,
+		LanguageCode:      languageCode,
+		HideFeaturedImage: hideFeaturedImage,
+		FormValues:        formValues,
 	}
 }
 

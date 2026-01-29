@@ -423,6 +423,16 @@
             "translation": "Выберите язык для этой страницы"
         },
         {
+            "id": "pages.hide_featured_image",
+            "message": "Hide featured image",
+            "translation": "Скрыть изображение"
+        },
+        {
+            "id": "pages.hide_featured_image_hint",
+            "message": "Do not display the featured image on the page",
+            "translation": "Не показывать изображение на странице"
+        },
+        {
             "id": "categories.title",
             "message": "Categories",
             "translation": "Категории"

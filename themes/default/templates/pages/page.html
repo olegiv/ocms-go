@@ -1,16 +1,26 @@
 {{define "content"}}
 <article class="page single-page">
+    {{if and .Page.FeaturedImage (not .Page.HideFeaturedImage)}}
+    {{/* Hero banner with title overlay */}}
+    <div class="page-hero">
+        <img src="{{.Page.FeaturedImage}}" alt="{{mediaAlt .Page.FeaturedImageID $.LangCode .Page.FeaturedImageAlt}}">
+        <div class="page-hero-overlay">
+            <header class="page-header">
+                <h1 class="page-title">{{.Page.Title}}</h1>
+                {{if .Page.Excerpt}}
+                <p class="page-excerpt">{{.Page.Excerpt}}</p>
+                {{end}}
+            </header>
+        </div>
+    </div>
+    {{else}}
+    {{/* Standard header (no image or image hidden) */}}
     <header class="page-header">
         <h1 class="page-title">{{.Page.Title}}</h1>
         {{if .Page.Excerpt}}
         <p class="page-excerpt">{{.Page.Excerpt}}</p>
         {{end}}
     </header>
-
-    {{if .Page.FeaturedImage}}
-    <div class="page-featured-image">
-        <img src="{{.Page.FeaturedImage}}" alt="{{mediaAlt .Page.FeaturedImageID $.LangCode .Page.FeaturedImageAlt}}">
-    </div>
     {{end}}
 
     <div class="page-content prose">

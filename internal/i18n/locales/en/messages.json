@@ -423,6 +423,16 @@
             "translation": "Select the language for this page"
         },
         {
+            "id": "pages.hide_featured_image",
+            "message": "Hide featured image",
+            "translation": "Hide featured image"
+        },
+        {
+            "id": "pages.hide_featured_image_hint",
+            "message": "Do not display the featured image on the page",
+            "translation": "Do not display the featured image on the page"
+        },
+        {
             "id": "categories.title",
             "message": "Categories",
             "translation": "Categories"
