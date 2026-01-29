@@ -276,6 +276,19 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get default language for media creation
+	defaultLang, err := h.queries.GetDefaultLanguage(r.Context())
+	if err != nil {
+		slog.Error("failed to get default language", "error", err)
+		if r.Header.Get("HX-Request") == "true" {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("Error uploading file"))
+			return
+		}
+		flashError(w, r, h.renderer, redirectAdminMediaUpload, "Error uploading file")
+		return
+	}
+
 	// Get folder ID
 	var folderID *int64
 	folderIDStr := r.FormValue("folder_id")
@@ -302,7 +315,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		defer func() { _ = file.Close() }()
 
 		// Process single file
-		result, err := h.mediaService.Upload(r.Context(), file, header, userID, folderID)
+		result, err := h.mediaService.Upload(r.Context(), file, header, userID, folderID, defaultLang.ID)
 		if err != nil {
 			slog.Error("failed to upload file", "error", err, "filename", header.Filename)
 			if r.Header.Get("HX-Request") == "true" {
@@ -341,7 +354,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		result, err := h.mediaService.Upload(r.Context(), file, header, userID, folderID)
+		result, err := h.mediaService.Upload(r.Context(), file, header, userID, folderID, defaultLang.ID)
 		_ = file.Close()
 
 		if err != nil {
@@ -540,12 +553,13 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Update media
 	now := time.Now()
 	_, err = h.queries.UpdateMedia(r.Context(), store.UpdateMediaParams{
-		ID:        id,
-		Filename:  filename,
-		Alt:       util.NullStringFromValue(alt),
-		Caption:   util.NullStringFromValue(caption),
-		FolderID:  folderID,
-		UpdatedAt: now,
+		ID:         id,
+		Filename:   filename,
+		Alt:        util.NullStringFromValue(alt),
+		Caption:    util.NullStringFromValue(caption),
+		FolderID:   folderID,
+		LanguageID: media.LanguageID,
+		UpdatedAt:  now,
 	})
 	if err != nil {
 		slog.Error("failed to update media", "error", err, "media_id", id)

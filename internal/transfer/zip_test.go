@@ -24,6 +24,12 @@ func TestExportWithMediaToZip(t *testing.T) {
 	ts := setupTest(t)
 	defer ts.Cleanup()
 
+	// Get default language
+	lang, err := ts.Queries.GetDefaultLanguage(ts.Ctx)
+	if err != nil {
+		t.Fatalf("failed to get default language: %v", err)
+	}
+
 	// Create temp upload directory
 	uploadDir, err := os.MkdirTemp("", "ocms-test-uploads-*")
 	if err != nil {
@@ -51,6 +57,7 @@ func TestExportWithMediaToZip(t *testing.T) {
 		MimeType:   "image/jpeg",
 		Size:       int64(len(testContent)),
 		UploadedBy: ts.User.ID,
+		LanguageID: lang.ID,
 		CreatedAt:  ts.Now,
 		UpdatedAt:  ts.Now,
 	})
@@ -155,6 +162,12 @@ func TestImportFromZip(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 
+	// Get default language
+	lang, err := srcQueries.GetDefaultLanguage(ctx)
+	if err != nil {
+		t.Fatalf("failed to get default language: %v", err)
+	}
+
 	// Create test user in source DB
 	user, err := srcQueries.CreateUser(ctx, store.CreateUserParams{
 		Email:        "test@example.com",
@@ -195,6 +208,7 @@ func TestImportFromZip(t *testing.T) {
 		MimeType:   "image/png",
 		Size:       int64(len(testContent)),
 		UploadedBy: user.ID,
+		LanguageID: lang.ID,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	})

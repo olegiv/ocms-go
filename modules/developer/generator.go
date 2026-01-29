@@ -267,7 +267,7 @@ func (m *Module) generateTags(ctx context.Context, languages []store.Language) (
 		tag, err := queries.CreateTag(ctx, store.CreateTagParams{
 			Name:       name,
 			Slug:       tagSlug,
-			LanguageID: sql.NullInt64{Int64: defaultLangID, Valid: true},
+			LanguageID: defaultLangID,
 			CreatedAt:  now,
 			UpdatedAt:  now,
 		})
@@ -292,7 +292,7 @@ func (m *Module) generateTags(ctx context.Context, languages []store.Language) (
 			transTag, err := queries.CreateTag(ctx, store.CreateTagParams{
 				Name:       translatedName,
 				Slug:       translatedSlug,
-				LanguageID: sql.NullInt64{Int64: lang.ID, Valid: true},
+				LanguageID: lang.ID,
 				CreatedAt:  now,
 				UpdatedAt:  now,
 			})
@@ -451,7 +451,7 @@ func (m *Module) createSingleCategory(ctx context.Context, p createCategoryParam
 		Description: sql.NullString{String: desc, Valid: true},
 		ParentID:    p.parentID,
 		Position:    p.position,
-		LanguageID:  sql.NullInt64{Int64: p.defaultLangID, Valid: true},
+		LanguageID:  p.defaultLangID,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	})
@@ -508,7 +508,7 @@ func (m *Module) createCategoryTranslations(ctx context.Context, p categoryTrans
 			Description: sql.NullString{String: translatedDesc, Valid: true},
 			ParentID:    p.cat.ParentID,
 			Position:    p.cat.Position,
-			LanguageID:  sql.NullInt64{Int64: lang.ID, Valid: true},
+			LanguageID:  lang.ID,
 			CreatedAt:   now,
 			UpdatedAt:   now,
 		})
@@ -544,6 +544,12 @@ func (m *Module) generateMedia(ctx context.Context, uploaderID int64) ([]int64, 
 	count := generateRandomCount()
 	var mediaIDs []int64
 	queries := store.New(m.ctx.DB)
+
+	// Get default language for media creation
+	defaultLang, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get default language: %w", err)
+	}
 
 	uploadDir := "./uploads"
 
@@ -615,6 +621,7 @@ func (m *Module) generateMedia(ctx context.Context, uploaderID int64) ([]int64, 
 			Caption:    sql.NullString{String: caption, Valid: true},
 			FolderID:   sql.NullInt64{Valid: false},
 			UploadedBy: uploaderID,
+			LanguageID: defaultLang.ID,
 			CreatedAt:  now,
 			UpdatedAt:  now,
 		})
@@ -745,7 +752,7 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 			NoFollow:        0,
 			CanonicalUrl:    "",
 			ScheduledAt:     sql.NullTime{Valid: false},
-			LanguageID:      sql.NullInt64{Int64: defaultLangID, Valid: true},
+			LanguageID:      defaultLangID,
 			CreatedAt:       now,
 			UpdatedAt:       now,
 		})
@@ -801,7 +808,7 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 				NoFollow:        0,
 				CanonicalUrl:    "",
 				ScheduledAt:     sql.NullTime{Valid: false},
-				LanguageID:      sql.NullInt64{Int64: lang.ID, Valid: true},
+				LanguageID:      lang.ID,
 				CreatedAt:       now,
 				UpdatedAt:       now,
 			})
@@ -886,7 +893,7 @@ func (m *Module) generateMenuItems(ctx context.Context, languages []store.Langua
 	pagesByLang := make(map[int64][]int64)
 	for _, lang := range languages {
 		pages, err := queries.ListPagesByLanguage(ctx, store.ListPagesByLanguageParams{
-			LanguageID: sql.NullInt64{Int64: lang.ID, Valid: true},
+			LanguageID: lang.ID,
 			Limit:      1000,
 			Offset:     0,
 		})
@@ -903,9 +910,9 @@ func (m *Module) generateMenuItems(ctx context.Context, languages []store.Langua
 	for _, menu := range menus {
 		// Determine which pages to use for this menu
 		var pagesForMenu []int64
-		if menu.LanguageID.Valid {
+		if menu.LanguageID != 0 {
 			// Menu is language-specific, use pages for that language
-			pagesForMenu = pagesByLang[menu.LanguageID.Int64]
+			pagesForMenu = pagesByLang[menu.LanguageID]
 		} else {
 			// Menu is global (no language), use pages from default language
 			pagesForMenu = pagesByLang[defaultLangID]

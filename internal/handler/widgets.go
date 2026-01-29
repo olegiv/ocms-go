@@ -155,6 +155,14 @@ func (h *WidgetsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get default language for widget creation
+	defaultLang, err := h.queries.GetDefaultLanguage(r.Context())
+	if err != nil {
+		slog.Error("failed to get default language", "error", err)
+		writeJSONError(w, http.StatusInternalServerError, "Error creating widget")
+		return
+	}
+
 	maxPos := h.getMaxWidgetPosition(r, req.Theme, req.Area)
 
 	widget, err := h.queries.CreateWidget(r.Context(), store.CreateWidgetParams{
@@ -166,6 +174,7 @@ func (h *WidgetsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Settings:   util.NullStringFromValue(req.Settings),
 		Position:   maxPos + 1,
 		IsActive:   1,
+		LanguageID: defaultLang.ID,
 	})
 	if err != nil {
 		slog.Error("failed to create widget", "error", err)
@@ -219,6 +228,7 @@ func (h *WidgetsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Settings:   util.NullStringFromValue(req.Settings),
 		Position:   widget.Position,
 		IsActive:   isActive,
+		LanguageID: widget.LanguageID,
 	})
 	if err != nil {
 		slog.Error("failed to update widget", "error", err, "widget_id", id)
@@ -341,6 +351,7 @@ func (h *WidgetsHandler) MoveWidget(w http.ResponseWriter, r *http.Request) {
 		Settings:   widget.Settings,
 		Position:   maxPos + 1,
 		IsActive:   widget.IsActive,
+		LanguageID: widget.LanguageID,
 	})
 	if err != nil {
 		slog.Error("failed to move widget", "error", err, "widget_id", id)

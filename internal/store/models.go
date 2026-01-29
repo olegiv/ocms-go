@@ -32,7 +32,7 @@ type Category struct {
 	Position    int64          `json:"position"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
-	LanguageID  sql.NullInt64  `json:"language_id"`
+	LanguageID  int64          `json:"language_id"`
 }
 
 type Config struct {
@@ -42,6 +42,7 @@ type Config struct {
 	Description string        `json:"description"`
 	UpdatedAt   time.Time     `json:"updated_at"`
 	UpdatedBy   sql.NullInt64 `json:"updated_by"`
+	LanguageID  int64         `json:"language_id"`
 }
 
 type ConfigTranslation struct {
@@ -72,6 +73,7 @@ type Form struct {
 	SuccessMessage sql.NullString `json:"success_message"`
 	EmailTo        sql.NullString `json:"email_to"`
 	IsActive       bool           `json:"is_active"`
+	LanguageID     int64          `json:"language_id"`
 	CreatedAt      time.Time      `json:"created_at"`
 	UpdatedAt      time.Time      `json:"updated_at"`
 }
@@ -88,18 +90,20 @@ type FormField struct {
 	Validation  sql.NullString `json:"validation"`
 	IsRequired  bool           `json:"is_required"`
 	Position    int64          `json:"position"`
+	LanguageID  int64          `json:"language_id"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 }
 
 type FormSubmission struct {
-	ID        int64          `json:"id"`
-	FormID    int64          `json:"form_id"`
-	Data      string         `json:"data"`
-	IpAddress sql.NullString `json:"ip_address"`
-	UserAgent sql.NullString `json:"user_agent"`
-	IsRead    bool           `json:"is_read"`
-	CreatedAt time.Time      `json:"created_at"`
+	ID         int64          `json:"id"`
+	FormID     int64          `json:"form_id"`
+	Data       string         `json:"data"`
+	IpAddress  sql.NullString `json:"ip_address"`
+	UserAgent  sql.NullString `json:"user_agent"`
+	IsRead     bool           `json:"is_read"`
+	LanguageID int64          `json:"language_id"`
+	CreatedAt  time.Time      `json:"created_at"`
 }
 
 type Language struct {
@@ -155,17 +159,18 @@ type Medium struct {
 	Caption    sql.NullString `json:"caption"`
 	FolderID   sql.NullInt64  `json:"folder_id"`
 	UploadedBy int64          `json:"uploaded_by"`
+	LanguageID int64          `json:"language_id"`
 	CreatedAt  time.Time      `json:"created_at"`
 	UpdatedAt  time.Time      `json:"updated_at"`
 }
 
 type Menu struct {
-	ID         int64         `json:"id"`
-	Name       string        `json:"name"`
-	Slug       string        `json:"slug"`
-	CreatedAt  time.Time     `json:"created_at"`
-	UpdatedAt  time.Time     `json:"updated_at"`
-	LanguageID sql.NullInt64 `json:"language_id"`
+	ID         int64     `json:"id"`
+	Name       string    `json:"name"`
+	Slug       string    `json:"slug"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	LanguageID int64     `json:"language_id"`
 }
 
 type MenuItem struct {
@@ -209,7 +214,7 @@ type Page struct {
 	NoFollow        int64         `json:"no_follow"`
 	CanonicalUrl    string        `json:"canonical_url"`
 	ScheduledAt     sql.NullTime  `json:"scheduled_at"`
-	LanguageID      sql.NullInt64 `json:"language_id"`
+	LanguageID      int64         `json:"language_id"`
 }
 
 type PageCategory struct {
@@ -246,12 +251,12 @@ type Session struct {
 }
 
 type Tag struct {
-	ID         int64         `json:"id"`
-	Name       string        `json:"name"`
-	Slug       string        `json:"slug"`
-	CreatedAt  time.Time     `json:"created_at"`
-	UpdatedAt  time.Time     `json:"updated_at"`
-	LanguageID sql.NullInt64 `json:"language_id"`
+	ID         int64     `json:"id"`
+	Name       string    `json:"name"`
+	Slug       string    `json:"slug"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	LanguageID int64     `json:"language_id"`
 }
 
 type Translation struct {
@@ -313,6 +318,7 @@ type Widget struct {
 	Settings   sql.NullString `json:"settings"`
 	Position   int64          `json:"position"`
 	IsActive   int64          `json:"is_active"`
+	LanguageID int64          `json:"language_id"`
 	CreatedAt  time.Time      `json:"created_at"`
 	UpdatedAt  time.Time      `json:"updated_at"`
 }

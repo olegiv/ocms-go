@@ -57,9 +57,9 @@ SELECT COUNT(*) FROM categories WHERE slug = ? AND id != ? AND language_id = ?
 `
 
 type CategorySlugExistsExcludingForLanguageParams struct {
-	Slug       string        `json:"slug"`
-	ID         int64         `json:"id"`
-	LanguageID sql.NullInt64 `json:"language_id"`
+	Slug       string `json:"slug"`
+	ID         int64  `json:"id"`
+	LanguageID int64  `json:"language_id"`
 }
 
 func (q *Queries) CategorySlugExistsExcludingForLanguage(ctx context.Context, arg CategorySlugExistsExcludingForLanguageParams) (int64, error) {
@@ -74,8 +74,8 @@ SELECT COUNT(*) FROM categories WHERE slug = ? AND language_id = ?
 `
 
 type CategorySlugExistsForLanguageParams struct {
-	Slug       string        `json:"slug"`
-	LanguageID sql.NullInt64 `json:"language_id"`
+	Slug       string `json:"slug"`
+	LanguageID int64  `json:"language_id"`
 }
 
 func (q *Queries) CategorySlugExistsForLanguage(ctx context.Context, arg CategorySlugExistsForLanguageParams) (int64, error) {
@@ -130,7 +130,7 @@ type CreateCategoryParams struct {
 	Description sql.NullString `json:"description"`
 	ParentID    sql.NullInt64  `json:"parent_id"`
 	Position    int64          `json:"position"`
-	LanguageID  sql.NullInt64  `json:"language_id"`
+	LanguageID  int64          `json:"language_id"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 }
@@ -411,7 +411,7 @@ type GetCategoryUsageCountsRow struct {
 	Position    int64          `json:"position"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
-	LanguageID  sql.NullInt64  `json:"language_id"`
+	LanguageID  int64          `json:"language_id"`
 	UsageCount  int64          `json:"usage_count"`
 }
 
@@ -453,7 +453,7 @@ const getCategoryUsageCountsByLanguage = `-- name: GetCategoryUsageCountsByLangu
 SELECT c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.created_at, c.updated_at, c.language_id, COUNT(p.id) as usage_count
 FROM categories c
 INNER JOIN page_categories pc ON pc.category_id = c.id
-INNER JOIN pages p ON p.id = pc.page_id AND p.status = 'published' AND (p.language_id = ? OR p.language_id IS NULL)
+INNER JOIN pages p ON p.id = pc.page_id AND p.status = 'published' AND p.language_id = ?
 GROUP BY c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.language_id, c.created_at, c.updated_at
 ORDER BY c.position, c.name
 `
@@ -467,13 +467,12 @@ type GetCategoryUsageCountsByLanguageRow struct {
 	Position    int64          `json:"position"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
-	LanguageID  sql.NullInt64  `json:"language_id"`
+	LanguageID  int64          `json:"language_id"`
 	UsageCount  int64          `json:"usage_count"`
 }
 
 // Category usage counts filtered by page language (for frontend sidebar)
-// Include pages with matching language_id OR NULL language_id (universal pages)
-func (q *Queries) GetCategoryUsageCountsByLanguage(ctx context.Context, languageID sql.NullInt64) ([]GetCategoryUsageCountsByLanguageRow, error) {
+func (q *Queries) GetCategoryUsageCountsByLanguage(ctx context.Context, languageID int64) ([]GetCategoryUsageCountsByLanguageRow, error) {
 	rows, err := q.db.QueryContext(ctx, getCategoryUsageCountsByLanguage, languageID)
 	if err != nil {
 		return nil, err
@@ -515,7 +514,7 @@ SELECT
     COALESCE(l.name, '') as language_name
 FROM categories c
 LEFT JOIN page_categories pc ON pc.category_id = c.id
-LEFT JOIN languages l ON l.id = c.language_id
+INNER JOIN languages l ON l.id = c.language_id
 GROUP BY c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.language_id, c.created_at, c.updated_at, l.code, l.name
 ORDER BY c.position, c.name
 `
@@ -529,7 +528,7 @@ type GetCategoryUsageCountsWithLanguageRow struct {
 	Position     int64          `json:"position"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
-	LanguageID   sql.NullInt64  `json:"language_id"`
+	LanguageID   int64          `json:"language_id"`
 	UsageCount   int64          `json:"usage_count"`
 	LanguageCode string         `json:"language_code"`
 	LanguageName string         `json:"language_name"`
@@ -580,7 +579,7 @@ SELECT
     COALESCE(l.native_name, '') as language_native_name,
     COALESCE(l.direction, 'ltr') as language_direction
 FROM categories c
-LEFT JOIN languages l ON l.id = c.language_id
+INNER JOIN languages l ON l.id = c.language_id
 WHERE c.id = ?
 `
 
@@ -593,7 +592,7 @@ type GetCategoryWithLanguageRow struct {
 	Position           int64          `json:"position"`
 	CreatedAt          time.Time      `json:"created_at"`
 	UpdatedAt          time.Time      `json:"updated_at"`
-	LanguageID         sql.NullInt64  `json:"language_id"`
+	LanguageID         int64          `json:"language_id"`
 	LanguageCode       string         `json:"language_code"`
 	LanguageName       string         `json:"language_name"`
 	LanguageNativeName string         `json:"language_native_name"`
@@ -698,7 +697,7 @@ WHERE language_id = ?
 ORDER BY position, name
 `
 
-func (q *Queries) ListCategoriesByLanguage(ctx context.Context, languageID sql.NullInt64) ([]Category, error) {
+func (q *Queries) ListCategoriesByLanguage(ctx context.Context, languageID int64) ([]Category, error) {
 	rows, err := q.db.QueryContext(ctx, listCategoriesByLanguage, languageID)
 	if err != nil {
 		return nil, err
@@ -770,7 +769,7 @@ SELECT
     COALESCE(l.code, '') as language_code,
     COALESCE(l.name, '') as language_name
 FROM categories c
-LEFT JOIN languages l ON l.id = c.language_id
+INNER JOIN languages l ON l.id = c.language_id
 ORDER BY c.position, c.name
 `
 
@@ -783,7 +782,7 @@ type ListCategoriesWithLanguageRow struct {
 	Position     int64          `json:"position"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
-	LanguageID   sql.NullInt64  `json:"language_id"`
+	LanguageID   int64          `json:"language_id"`
 	LanguageCode string         `json:"language_code"`
 	LanguageName string         `json:"language_name"`
 }
@@ -1019,7 +1018,7 @@ type UpdateCategoryParams struct {
 	Description sql.NullString `json:"description"`
 	ParentID    sql.NullInt64  `json:"parent_id"`
 	Position    int64          `json:"position"`
-	LanguageID  sql.NullInt64  `json:"language_id"`
+	LanguageID  int64          `json:"language_id"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 	ID          int64          `json:"id"`
 }
@@ -1055,9 +1054,9 @@ UPDATE categories SET language_id = ?, updated_at = ? WHERE id = ?
 `
 
 type UpdateCategoryLanguageParams struct {
-	LanguageID sql.NullInt64 `json:"language_id"`
-	UpdatedAt  time.Time     `json:"updated_at"`
-	ID         int64         `json:"id"`
+	LanguageID int64     `json:"language_id"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	ID         int64     `json:"id"`
 }
 
 func (q *Queries) UpdateCategoryLanguage(ctx context.Context, arg UpdateCategoryLanguageParams) error {

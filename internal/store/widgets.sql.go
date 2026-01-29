@@ -11,9 +11,9 @@ import (
 )
 
 const createWidget = `-- name: CreateWidget :one
-INSERT INTO widgets (theme, area, widget_type, title, content, settings, position, is_active)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, theme, area, widget_type, title, content, settings, position, is_active, created_at, updated_at
+INSERT INTO widgets (theme, area, widget_type, title, content, settings, position, is_active, language_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, theme, area, widget_type, title, content, settings, position, is_active, language_id, created_at, updated_at
 `
 
 type CreateWidgetParams struct {
@@ -25,6 +25,7 @@ type CreateWidgetParams struct {
 	Settings   sql.NullString `json:"settings"`
 	Position   int64          `json:"position"`
 	IsActive   int64          `json:"is_active"`
+	LanguageID int64          `json:"language_id"`
 }
 
 func (q *Queries) CreateWidget(ctx context.Context, arg CreateWidgetParams) (Widget, error) {
@@ -37,6 +38,7 @@ func (q *Queries) CreateWidget(ctx context.Context, arg CreateWidgetParams) (Wid
 		arg.Settings,
 		arg.Position,
 		arg.IsActive,
+		arg.LanguageID,
 	)
 	var i Widget
 	err := row.Scan(
@@ -49,6 +51,7 @@ func (q *Queries) CreateWidget(ctx context.Context, arg CreateWidgetParams) (Wid
 		&i.Settings,
 		&i.Position,
 		&i.IsActive,
+		&i.LanguageID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -74,7 +77,7 @@ func (q *Queries) DeleteWidgetsByTheme(ctx context.Context, theme string) error 
 }
 
 const getAllWidgets = `-- name: GetAllWidgets :many
-SELECT id, theme, area, widget_type, title, content, settings, position, is_active, created_at, updated_at FROM widgets ORDER BY theme, area, position
+SELECT id, theme, area, widget_type, title, content, settings, position, is_active, language_id, created_at, updated_at FROM widgets ORDER BY theme, area, position
 `
 
 func (q *Queries) GetAllWidgets(ctx context.Context) ([]Widget, error) {
@@ -96,6 +99,7 @@ func (q *Queries) GetAllWidgets(ctx context.Context) ([]Widget, error) {
 			&i.Settings,
 			&i.Position,
 			&i.IsActive,
+			&i.LanguageID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -113,7 +117,7 @@ func (q *Queries) GetAllWidgets(ctx context.Context) ([]Widget, error) {
 }
 
 const getAllWidgetsByTheme = `-- name: GetAllWidgetsByTheme :many
-SELECT id, theme, area, widget_type, title, content, settings, position, is_active, created_at, updated_at FROM widgets
+SELECT id, theme, area, widget_type, title, content, settings, position, is_active, language_id, created_at, updated_at FROM widgets
 WHERE theme = ?
 ORDER BY area, position
 `
@@ -137,6 +141,54 @@ func (q *Queries) GetAllWidgetsByTheme(ctx context.Context, theme string) ([]Wid
 			&i.Settings,
 			&i.Position,
 			&i.IsActive,
+			&i.LanguageID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAllWidgetsByThemeAndLanguage = `-- name: GetAllWidgetsByThemeAndLanguage :many
+SELECT id, theme, area, widget_type, title, content, settings, position, is_active, language_id, created_at, updated_at FROM widgets
+WHERE theme = ? AND language_id = ?
+ORDER BY area, position
+`
+
+type GetAllWidgetsByThemeAndLanguageParams struct {
+	Theme      string `json:"theme"`
+	LanguageID int64  `json:"language_id"`
+}
+
+func (q *Queries) GetAllWidgetsByThemeAndLanguage(ctx context.Context, arg GetAllWidgetsByThemeAndLanguageParams) ([]Widget, error) {
+	rows, err := q.db.QueryContext(ctx, getAllWidgetsByThemeAndLanguage, arg.Theme, arg.LanguageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Widget{}
+	for rows.Next() {
+		var i Widget
+		if err := rows.Scan(
+			&i.ID,
+			&i.Theme,
+			&i.Area,
+			&i.WidgetType,
+			&i.Title,
+			&i.Content,
+			&i.Settings,
+			&i.Position,
+			&i.IsActive,
+			&i.LanguageID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -172,7 +224,7 @@ func (q *Queries) GetMaxWidgetPosition(ctx context.Context, arg GetMaxWidgetPosi
 }
 
 const getWidget = `-- name: GetWidget :one
-SELECT id, theme, area, widget_type, title, content, settings, position, is_active, created_at, updated_at FROM widgets WHERE id = ?
+SELECT id, theme, area, widget_type, title, content, settings, position, is_active, language_id, created_at, updated_at FROM widgets WHERE id = ?
 `
 
 func (q *Queries) GetWidget(ctx context.Context, id int64) (Widget, error) {
@@ -188,6 +240,7 @@ func (q *Queries) GetWidget(ctx context.Context, id int64) (Widget, error) {
 		&i.Settings,
 		&i.Position,
 		&i.IsActive,
+		&i.LanguageID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -195,18 +248,19 @@ func (q *Queries) GetWidget(ctx context.Context, id int64) (Widget, error) {
 }
 
 const getWidgetsByThemeAndArea = `-- name: GetWidgetsByThemeAndArea :many
-SELECT id, theme, area, widget_type, title, content, settings, position, is_active, created_at, updated_at FROM widgets
-WHERE theme = ? AND area = ? AND is_active = 1
+SELECT id, theme, area, widget_type, title, content, settings, position, is_active, language_id, created_at, updated_at FROM widgets
+WHERE theme = ? AND area = ? AND language_id = ? AND is_active = 1
 ORDER BY position
 `
 
 type GetWidgetsByThemeAndAreaParams struct {
-	Theme string `json:"theme"`
-	Area  string `json:"area"`
+	Theme      string `json:"theme"`
+	Area       string `json:"area"`
+	LanguageID int64  `json:"language_id"`
 }
 
 func (q *Queries) GetWidgetsByThemeAndArea(ctx context.Context, arg GetWidgetsByThemeAndAreaParams) ([]Widget, error) {
-	rows, err := q.db.QueryContext(ctx, getWidgetsByThemeAndArea, arg.Theme, arg.Area)
+	rows, err := q.db.QueryContext(ctx, getWidgetsByThemeAndArea, arg.Theme, arg.Area, arg.LanguageID)
 	if err != nil {
 		return nil, err
 	}
@@ -224,6 +278,7 @@ func (q *Queries) GetWidgetsByThemeAndArea(ctx context.Context, arg GetWidgetsBy
 			&i.Settings,
 			&i.Position,
 			&i.IsActive,
+			&i.LanguageID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -248,9 +303,10 @@ SET widget_type = ?,
     settings = ?,
     position = ?,
     is_active = ?,
+    language_id = ?,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, theme, area, widget_type, title, content, settings, position, is_active, created_at, updated_at
+RETURNING id, theme, area, widget_type, title, content, settings, position, is_active, language_id, created_at, updated_at
 `
 
 type UpdateWidgetParams struct {
@@ -260,6 +316,7 @@ type UpdateWidgetParams struct {
 	Settings   sql.NullString `json:"settings"`
 	Position   int64          `json:"position"`
 	IsActive   int64          `json:"is_active"`
+	LanguageID int64          `json:"language_id"`
 	ID         int64          `json:"id"`
 }
 
@@ -271,6 +328,7 @@ func (q *Queries) UpdateWidget(ctx context.Context, arg UpdateWidgetParams) (Wid
 		arg.Settings,
 		arg.Position,
 		arg.IsActive,
+		arg.LanguageID,
 		arg.ID,
 	)
 	var i Widget
@@ -284,6 +342,7 @@ func (q *Queries) UpdateWidget(ctx context.Context, arg UpdateWidgetParams) (Wid
 		&i.Settings,
 		&i.Position,
 		&i.IsActive,
+		&i.LanguageID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

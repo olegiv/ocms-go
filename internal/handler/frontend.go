@@ -396,7 +396,7 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if languageID > 0 {
 		recentPages, err = h.queries.ListPublishedPagesByLanguage(ctx, store.ListPublishedPagesByLanguageParams{
-			LanguageID: sql.NullInt64{Int64: languageID, Valid: true},
+			LanguageID: languageID,
 			Limit:      10,
 			Offset:     0,
 		})
@@ -425,7 +425,7 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 
 	if languageID > 0 {
 		// Get categories with usage counts filtered by language
-		categoriesWithCount, err := h.queries.GetCategoryUsageCountsByLanguage(ctx, sql.NullInt64{Int64: languageID, Valid: true})
+		categoriesWithCount, err := h.queries.GetCategoryUsageCountsByLanguage(ctx, languageID)
 		if err != nil {
 			h.logger.Error("failed to get categories", "error", err)
 		}
@@ -443,7 +443,7 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 
 		// Get tags with usage counts filtered by language
 		tagsWithCount, err := h.queries.GetTagUsageCountsByLanguage(ctx, store.GetTagUsageCountsByLanguageParams{
-			LanguageID: sql.NullInt64{Int64: languageID, Valid: true},
+			LanguageID: languageID,
 			Limit:      20,
 			Offset:     0,
 		})
@@ -561,8 +561,8 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 
 	// Update language context based on page's language (fixes translated pages like /slug-ru)
 	// This ensures that when visiting a translated page directly, the UI language matches the content
-	if page.LanguageID.Valid {
-		if pageLang, err := h.queries.GetLanguageByID(ctx, page.LanguageID.Int64); err == nil {
+	if page.LanguageID > 0 {
+		if pageLang, err := h.queries.GetLanguageByID(ctx, page.LanguageID); err == nil {
 			// Update the request context with the page's language
 			langInfo := middleware.LanguageInfo{
 				ID:         pageLang.ID,
@@ -670,10 +670,7 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch sidebar data for themes that show sidebar on single pages
-	var languageID int64
-	if page.LanguageID.Valid {
-		languageID = page.LanguageID.Int64
-	}
+	languageID := page.LanguageID
 	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageID)
 
 	data := PageData{
@@ -687,11 +684,6 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.render(w, "page", data)
-}
-
-// nullLangID creates a sql.NullInt64 for language ID parameters.
-func nullLangID(id int64) sql.NullInt64 {
-	return sql.NullInt64{Int64: id, Valid: true}
 }
 
 // Category handles category archive display.
@@ -726,12 +718,11 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 	var pages []store.Page
 	var total int64
 	catID := category.ID
-	langID := nullLangID(languageID)
 	if languageID > 0 {
 		pages, err = h.queries.ListPublishedPagesByCategoryAndLanguage(ctx, store.ListPublishedPagesByCategoryAndLanguageParams{
-			CategoryID: catID, LanguageID: langID, Limit: limit, Offset: int64(offset)})
+			CategoryID: catID, LanguageID: languageID, Limit: limit, Offset: int64(offset)})
 		total, _ = h.queries.CountPublishedPagesByCategoryAndLanguage(ctx, store.CountPublishedPagesByCategoryAndLanguageParams{
-			CategoryID: catID, LanguageID: langID})
+			CategoryID: catID, LanguageID: languageID})
 	} else {
 		pages, err = h.queries.ListPublishedPagesByCategory(ctx, store.ListPublishedPagesByCategoryParams{
 			CategoryID: catID, Limit: limit, Offset: int64(offset)})
@@ -815,11 +806,10 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 	var total int64
 	tID := tag.ID
 	if languageID > 0 {
-		langID := nullLangID(languageID)
 		pages, err = h.queries.ListPublishedPagesForTagAndLanguage(ctx, store.ListPublishedPagesForTagAndLanguageParams{
-			TagID: tID, LanguageID: langID, Limit: limit, Offset: int64(offset)})
+			TagID: tID, LanguageID: languageID, Limit: limit, Offset: int64(offset)})
 		total, _ = h.queries.CountPublishedPagesForTagAndLanguage(ctx, store.CountPublishedPagesForTagAndLanguageParams{
-			TagID: tID, LanguageID: langID})
+			TagID: tID, LanguageID: languageID})
 	} else {
 		pages, err = h.queries.ListPublishedPagesForTag(ctx, store.ListPublishedPagesForTagParams{
 			TagID: tID, Limit: limit, Offset: int64(offset)})
@@ -890,7 +880,7 @@ func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
 
 	if languageID > 0 {
 		pages, err = h.queries.ListPublishedPagesByLanguage(ctx, store.ListPublishedPagesByLanguageParams{
-			LanguageID: sql.NullInt64{Int64: languageID, Valid: true},
+			LanguageID: languageID,
 			Limit:      int64(defaultPerPage),
 			Offset:     int64(offset),
 		})
@@ -900,7 +890,7 @@ func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		total, err = h.queries.CountPublishedPagesByLanguage(ctx, sql.NullInt64{Int64: languageID, Valid: true})
+		total, err = h.queries.CountPublishedPagesByLanguage(ctx, languageID)
 		if err != nil {
 			h.logger.Error("failed to count blog pages", "error", err)
 			total = 0
@@ -1374,7 +1364,7 @@ func (h *FrontendHandler) getSidebarData(ctx context.Context, languageID int64) 
 
 	if languageID > 0 {
 		// Get categories with usage counts filtered by language
-		categoriesWithCount, err := h.queries.GetCategoryUsageCountsByLanguage(ctx, sql.NullInt64{Int64: languageID, Valid: true})
+		categoriesWithCount, err := h.queries.GetCategoryUsageCountsByLanguage(ctx, languageID)
 		if err != nil {
 			h.logger.Error("failed to get sidebar categories", "error", err)
 		}
@@ -1392,7 +1382,7 @@ func (h *FrontendHandler) getSidebarData(ctx context.Context, languageID int64) 
 
 		// Get tags with usage counts filtered by language
 		tagsWithCount, err := h.queries.GetTagUsageCountsByLanguage(ctx, store.GetTagUsageCountsByLanguageParams{
-			LanguageID: sql.NullInt64{Int64: languageID, Valid: true},
+			LanguageID: languageID,
 			Limit:      20,
 			Offset:     0,
 		})
@@ -1412,7 +1402,7 @@ func (h *FrontendHandler) getSidebarData(ctx context.Context, languageID int64) 
 
 		// Get recent pages filtered by language
 		recentPages, err := h.queries.ListPublishedPagesByLanguage(ctx, store.ListPublishedPagesByLanguageParams{
-			LanguageID: sql.NullInt64{Int64: languageID, Valid: true},
+			LanguageID: languageID,
 			Limit:      5,
 			Offset:     0,
 		})

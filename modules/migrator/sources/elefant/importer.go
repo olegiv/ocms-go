@@ -141,10 +141,16 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 		return nil, fmt.Errorf("failed to get default author: %w", err)
 	}
 
+	// Get the default language for imported content
+	defaultLang, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get default language: %w", err)
+	}
+
 	// Import tags first (posts reference them)
 	var tagMap map[string]int64
 	if opts.ImportTags {
-		tagMap, err = s.importTags(ctx, queries, reader, opts, result, tracker)
+		tagMap, err = s.importTags(ctx, queries, reader, defaultLang.ID, opts, result, tracker)
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("Tags import error: %v", err))
 		}
@@ -174,7 +180,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 
 	// Import posts
 	if opts.ImportPosts {
-		if err := s.importPosts(ctx, queries, reader, authorID, tagMap, mediaMap, opts, result, tracker); err != nil {
+		if err := s.importPosts(ctx, queries, reader, authorID, defaultLang.ID, tagMap, mediaMap, opts, result, tracker); err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("Posts import error: %v", err))
 		}
 	}
@@ -227,7 +233,7 @@ func (s *Source) buildExistingTagMap(ctx context.Context, queries *store.Queries
 }
 
 // importTags imports tags from Elefant.
-func (s *Source) importTags(ctx context.Context, queries *store.Queries, reader *Reader, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) (map[string]int64, error) {
+func (s *Source) importTags(ctx context.Context, queries *store.Queries, reader *Reader, defaultLangID int64, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) (map[string]int64, error) {
 	elefantTags, err := reader.GetTags()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tags from Elefant: %w", err)
@@ -258,10 +264,11 @@ func (s *Source) importTags(ctx context.Context, queries *store.Queries, reader 
 
 		// Create new tag
 		tag, err := queries.CreateTag(ctx, store.CreateTagParams{
-			Name:      name,
-			Slug:      slug,
-			CreatedAt: now,
-			UpdatedAt: now,
+			Name:       name,
+			Slug:       slug,
+			LanguageID: defaultLangID,
+			CreatedAt:  now,
+			UpdatedAt:  now,
 		})
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("Failed to create tag '%s': %v", name, err))
@@ -296,6 +303,12 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 
 	if len(files) == 0 {
 		return mediaMap, nil
+	}
+
+	// Get default language for media creation
+	defaultLang, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get default language: %w", err)
 	}
 
 	processor := imaging.NewProcessor(uploadDir)
@@ -345,6 +358,7 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 				Caption:    sql.NullString{String: "", Valid: true},
 				FolderID:   sql.NullInt64{Valid: false},
 				UploadedBy: userID,
+				LanguageID: defaultLang.ID,
 				CreatedAt:  now,
 				UpdatedAt:  now,
 			})
@@ -397,6 +411,7 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 				Caption:    sql.NullString{String: "", Valid: true},
 				FolderID:   sql.NullInt64{Valid: false},
 				UploadedBy: userID,
+				LanguageID: defaultLang.ID,
 				CreatedAt:  now,
 				UpdatedAt:  now,
 			})
@@ -465,7 +480,7 @@ func (s *Source) saveNonImageFile(src *os.File, uploadDir, fileUUID, filename st
 }
 
 // importPosts imports blog posts from Elefant.
-func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader *Reader, authorID int64, tagMap map[string]int64, mediaMap map[string]string, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) error {
+func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader *Reader, authorID int64, defaultLangID int64, tagMap map[string]int64, mediaMap map[string]string, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) error {
 	posts, err := reader.GetBlogPosts()
 	if err != nil {
 		return fmt.Errorf("failed to get posts from Elefant: %w", err)
@@ -512,6 +527,7 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 			Body:            body,
 			Status:          status,
 			AuthorID:        authorID,
+			LanguageID:      defaultLangID,
 			MetaTitle:       post.Title,
 			MetaDescription: nullStringToString(post.Description),
 			MetaKeywords:    nullStringToString(post.Keywords),

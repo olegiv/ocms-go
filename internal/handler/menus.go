@@ -715,7 +715,7 @@ func (h *MenusHandler) requireMenuWithError(w http.ResponseWriter, r *http.Reque
 type menuFormInput struct {
 	Name       string
 	Slug       string
-	LanguageID sql.NullInt64
+	LanguageID int64
 	FormValues map[string]string
 	Errors     map[string]string
 }
@@ -735,13 +735,13 @@ func parseMenuFormInput(r *http.Request) menuFormInput {
 	validationErrors := make(map[string]string)
 
 	// Parse language_id
-	var languageID sql.NullInt64
+	var languageID int64
 	if languageIDStr != "" {
 		langID, err := strconv.ParseInt(languageIDStr, 10, 64)
 		if err != nil {
 			validationErrors["language_id"] = "Invalid language"
 		} else {
-			languageID = util.NullInt64FromValue(langID)
+			languageID = langID
 		}
 	}
 
@@ -890,17 +890,7 @@ func (h *MenusHandler) getMaxMenuItemPosition(r *http.Request, menuID int64, par
 }
 
 // validateMenuSlugCreate validates a menu slug for creation within a language.
-func (h *MenusHandler) validateMenuSlugCreate(ctx context.Context, slug string, languageID sql.NullInt64) string {
-	if !languageID.Valid {
-		// No language specified, use basic validation without uniqueness check
-		if slug == "" {
-			return "Slug is required"
-		}
-		if !util.IsValidSlug(slug) {
-			return "Invalid slug format"
-		}
-		return ""
-	}
+func (h *MenusHandler) validateMenuSlugCreate(ctx context.Context, slug string, languageID int64) string {
 	return ValidateSlugWithChecker(slug, func() (int64, error) {
 		return h.queries.MenuSlugExistsForLanguage(ctx, store.MenuSlugExistsForLanguageParams{
 			Slug:       slug,
@@ -911,7 +901,7 @@ func (h *MenusHandler) validateMenuSlugCreate(ctx context.Context, slug string, 
 
 // validateMenuSlugUpdate validates a menu slug for update within a language.
 // Only validates if slug or language has changed.
-func (h *MenusHandler) validateMenuSlugUpdate(ctx context.Context, slug string, languageID sql.NullInt64, currentSlug string, currentLanguageID sql.NullInt64, menuID int64) string {
+func (h *MenusHandler) validateMenuSlugUpdate(ctx context.Context, slug string, languageID int64, currentSlug string, currentLanguageID int64, menuID int64) string {
 	// If neither slug nor language changed, no validation needed
 	if slug == currentSlug && languageID == currentLanguageID {
 		return ""

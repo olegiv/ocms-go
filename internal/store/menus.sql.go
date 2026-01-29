@@ -40,11 +40,11 @@ RETURNING id, name, slug, created_at, updated_at, language_id
 `
 
 type CreateMenuParams struct {
-	Name       string        `json:"name"`
-	Slug       string        `json:"slug"`
-	LanguageID sql.NullInt64 `json:"language_id"`
-	CreatedAt  time.Time     `json:"created_at"`
-	UpdatedAt  time.Time     `json:"updated_at"`
+	Name       string    `json:"name"`
+	Slug       string    `json:"slug"`
+	LanguageID int64     `json:"language_id"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 func (q *Queries) CreateMenu(ctx context.Context, arg CreateMenuParams) (Menu, error) {
@@ -203,23 +203,23 @@ func (q *Queries) GetMenuBySlug(ctx context.Context, slug string) (Menu, error) 
 const getMenuBySlugAndLanguage = `-- name: GetMenuBySlugAndLanguage :one
 SELECT m.id, m.name, m.slug, m.created_at, m.updated_at, m.language_id, l.code as language_code
 FROM menus m
-LEFT JOIN languages l ON m.language_id = l.id
+INNER JOIN languages l ON m.language_id = l.id
 WHERE m.slug = ? AND m.language_id = ?
 `
 
 type GetMenuBySlugAndLanguageParams struct {
-	Slug       string        `json:"slug"`
-	LanguageID sql.NullInt64 `json:"language_id"`
+	Slug       string `json:"slug"`
+	LanguageID int64  `json:"language_id"`
 }
 
 type GetMenuBySlugAndLanguageRow struct {
-	ID           int64          `json:"id"`
-	Name         string         `json:"name"`
-	Slug         string         `json:"slug"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	LanguageID   sql.NullInt64  `json:"language_id"`
-	LanguageCode sql.NullString `json:"language_code"`
+	ID           int64     `json:"id"`
+	Name         string    `json:"name"`
+	Slug         string    `json:"slug"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	LanguageID   int64     `json:"language_id"`
+	LanguageCode string    `json:"language_code"`
 }
 
 func (q *Queries) GetMenuBySlugAndLanguage(ctx context.Context, arg GetMenuBySlugAndLanguageParams) (GetMenuBySlugAndLanguageRow, error) {
@@ -240,19 +240,19 @@ func (q *Queries) GetMenuBySlugAndLanguage(ctx context.Context, arg GetMenuBySlu
 const getMenuBySlugWithLanguage = `-- name: GetMenuBySlugWithLanguage :one
 SELECT m.id, m.name, m.slug, m.created_at, m.updated_at, m.language_id, l.code as language_code, l.name as language_name
 FROM menus m
-LEFT JOIN languages l ON m.language_id = l.id
+INNER JOIN languages l ON m.language_id = l.id
 WHERE m.slug = ?
 `
 
 type GetMenuBySlugWithLanguageRow struct {
-	ID           int64          `json:"id"`
-	Name         string         `json:"name"`
-	Slug         string         `json:"slug"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	LanguageID   sql.NullInt64  `json:"language_id"`
-	LanguageCode sql.NullString `json:"language_code"`
-	LanguageName sql.NullString `json:"language_name"`
+	ID           int64     `json:"id"`
+	Name         string    `json:"name"`
+	Slug         string    `json:"slug"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	LanguageID   int64     `json:"language_id"`
+	LanguageCode string    `json:"language_code"`
+	LanguageName string    `json:"language_name"`
 }
 
 func (q *Queries) GetMenuBySlugWithLanguage(ctx context.Context, slug string) (GetMenuBySlugWithLanguageRow, error) {
@@ -274,25 +274,25 @@ func (q *Queries) GetMenuBySlugWithLanguage(ctx context.Context, slug string) (G
 const getMenuForLanguageOrDefault = `-- name: GetMenuForLanguageOrDefault :one
 SELECT m.id, m.name, m.slug, m.created_at, m.updated_at, m.language_id, l.code as language_code
 FROM menus m
-LEFT JOIN languages l ON m.language_id = l.id
+INNER JOIN languages l ON m.language_id = l.id
 WHERE m.slug = ? AND (m.language_id = ? OR l.is_default = 1)
 ORDER BY CASE WHEN m.language_id = ? THEN 0 ELSE 1 END
 LIMIT 1
 `
 
 type GetMenuForLanguageOrDefaultParams struct {
-	Slug       string        `json:"slug"`
-	LanguageID sql.NullInt64 `json:"language_id"`
+	Slug       string `json:"slug"`
+	LanguageID int64  `json:"language_id"`
 }
 
 type GetMenuForLanguageOrDefaultRow struct {
-	ID           int64          `json:"id"`
-	Name         string         `json:"name"`
-	Slug         string         `json:"slug"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	LanguageID   sql.NullInt64  `json:"language_id"`
-	LanguageCode sql.NullString `json:"language_code"`
+	ID           int64     `json:"id"`
+	Name         string    `json:"name"`
+	Slug         string    `json:"slug"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	LanguageID   int64     `json:"language_id"`
+	LanguageCode string    `json:"language_code"`
 }
 
 func (q *Queries) GetMenuForLanguageOrDefault(ctx context.Context, arg GetMenuForLanguageOrDefaultParams) (GetMenuForLanguageOrDefaultRow, error) {
@@ -520,25 +520,25 @@ const listMenusByLanguage = `-- name: ListMenusByLanguage :many
 
 SELECT m.id, m.name, m.slug, m.created_at, m.updated_at, m.language_id, l.code as language_code, l.name as language_name, l.native_name as language_native_name
 FROM menus m
-LEFT JOIN languages l ON m.language_id = l.id
+INNER JOIN languages l ON m.language_id = l.id
 WHERE m.language_id = ?
 ORDER BY m.name
 `
 
 type ListMenusByLanguageRow struct {
-	ID                 int64          `json:"id"`
-	Name               string         `json:"name"`
-	Slug               string         `json:"slug"`
-	CreatedAt          time.Time      `json:"created_at"`
-	UpdatedAt          time.Time      `json:"updated_at"`
-	LanguageID         sql.NullInt64  `json:"language_id"`
-	LanguageCode       sql.NullString `json:"language_code"`
-	LanguageName       sql.NullString `json:"language_name"`
-	LanguageNativeName sql.NullString `json:"language_native_name"`
+	ID                 int64     `json:"id"`
+	Name               string    `json:"name"`
+	Slug               string    `json:"slug"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+	LanguageID         int64     `json:"language_id"`
+	LanguageCode       string    `json:"language_code"`
+	LanguageName       string    `json:"language_name"`
+	LanguageNativeName string    `json:"language_native_name"`
 }
 
 // Language-specific menu queries
-func (q *Queries) ListMenusByLanguage(ctx context.Context, languageID sql.NullInt64) ([]ListMenusByLanguageRow, error) {
+func (q *Queries) ListMenusByLanguage(ctx context.Context, languageID int64) ([]ListMenusByLanguageRow, error) {
 	rows, err := q.db.QueryContext(ctx, listMenusByLanguage, languageID)
 	if err != nil {
 		return nil, err
@@ -574,20 +574,20 @@ func (q *Queries) ListMenusByLanguage(ctx context.Context, languageID sql.NullIn
 const listMenusWithLanguage = `-- name: ListMenusWithLanguage :many
 SELECT m.id, m.name, m.slug, m.created_at, m.updated_at, m.language_id, l.code as language_code, l.name as language_name, l.native_name as language_native_name
 FROM menus m
-LEFT JOIN languages l ON m.language_id = l.id
+INNER JOIN languages l ON m.language_id = l.id
 ORDER BY m.name
 `
 
 type ListMenusWithLanguageRow struct {
-	ID                 int64          `json:"id"`
-	Name               string         `json:"name"`
-	Slug               string         `json:"slug"`
-	CreatedAt          time.Time      `json:"created_at"`
-	UpdatedAt          time.Time      `json:"updated_at"`
-	LanguageID         sql.NullInt64  `json:"language_id"`
-	LanguageCode       sql.NullString `json:"language_code"`
-	LanguageName       sql.NullString `json:"language_name"`
-	LanguageNativeName sql.NullString `json:"language_native_name"`
+	ID                 int64     `json:"id"`
+	Name               string    `json:"name"`
+	Slug               string    `json:"slug"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+	LanguageID         int64     `json:"language_id"`
+	LanguageCode       string    `json:"language_code"`
+	LanguageName       string    `json:"language_name"`
+	LanguageNativeName string    `json:"language_native_name"`
 }
 
 func (q *Queries) ListMenusWithLanguage(ctx context.Context) ([]ListMenusWithLanguageRow, error) {
@@ -695,8 +695,8 @@ SELECT EXISTS(SELECT 1 FROM menus WHERE slug = ? AND language_id = ?)
 `
 
 type MenuSlugExistsForLanguageParams struct {
-	Slug       string        `json:"slug"`
-	LanguageID sql.NullInt64 `json:"language_id"`
+	Slug       string `json:"slug"`
+	LanguageID int64  `json:"language_id"`
 }
 
 func (q *Queries) MenuSlugExistsForLanguage(ctx context.Context, arg MenuSlugExistsForLanguageParams) (int64, error) {
@@ -711,9 +711,9 @@ SELECT EXISTS(SELECT 1 FROM menus WHERE slug = ? AND language_id = ? AND id != ?
 `
 
 type MenuSlugExistsForLanguageExcludingParams struct {
-	Slug       string        `json:"slug"`
-	LanguageID sql.NullInt64 `json:"language_id"`
-	ID         int64         `json:"id"`
+	Slug       string `json:"slug"`
+	LanguageID int64  `json:"language_id"`
+	ID         int64  `json:"id"`
 }
 
 func (q *Queries) MenuSlugExistsForLanguageExcluding(ctx context.Context, arg MenuSlugExistsForLanguageExcludingParams) (int64, error) {
@@ -730,11 +730,11 @@ RETURNING id, name, slug, created_at, updated_at, language_id
 `
 
 type UpdateMenuParams struct {
-	Name       string        `json:"name"`
-	Slug       string        `json:"slug"`
-	LanguageID sql.NullInt64 `json:"language_id"`
-	UpdatedAt  time.Time     `json:"updated_at"`
-	ID         int64         `json:"id"`
+	Name       string    `json:"name"`
+	Slug       string    `json:"slug"`
+	LanguageID int64     `json:"language_id"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	ID         int64     `json:"id"`
 }
 
 func (q *Queries) UpdateMenu(ctx context.Context, arg UpdateMenuParams) (Menu, error) {

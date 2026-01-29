@@ -1,6 +1,6 @@
 -- name: CreateMedia :one
-INSERT INTO media (uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO media (uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_id, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetMediaByID :one
@@ -25,7 +25,7 @@ SELECT * FROM media WHERE mime_type LIKE ? ORDER BY created_at DESC LIMIT ? OFFS
 SELECT * FROM media WHERE filename LIKE ? OR alt LIKE ? ORDER BY created_at DESC LIMIT ?;
 
 -- name: UpdateMedia :one
-UPDATE media SET filename = ?, alt = ?, caption = ?, folder_id = ?, updated_at = ?
+UPDATE media SET filename = ?, alt = ?, caption = ?, folder_id = ?, language_id = ?, updated_at = ?
 WHERE id = ?
 RETURNING *;
 

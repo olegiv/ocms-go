@@ -115,19 +115,20 @@ type ExportTag struct {
 
 // ExportMedia represents media metadata (not the actual file).
 type ExportMedia struct {
-	UUID       string          `json:"uuid"`
-	Filename   string          `json:"filename"`
-	MimeType   string          `json:"mime_type"`
-	Size       int64           `json:"size"`
-	Width      *int64          `json:"width,omitempty"`
-	Height     *int64          `json:"height,omitempty"`
-	Alt        string          `json:"alt,omitempty"`
-	Caption    string          `json:"caption,omitempty"`
-	FolderPath string          `json:"folder_path,omitempty"`
-	UploadedBy string          `json:"uploaded_by"`
-	Variants   []ExportVariant `json:"variants,omitempty"`
-	FilePath   string          `json:"file_path,omitempty"` // Path within zip archive (e.g., "media/originals/{uuid}/{filename}")
-	CreatedAt  time.Time       `json:"created_at"`
+	UUID         string          `json:"uuid"`
+	Filename     string          `json:"filename"`
+	MimeType     string          `json:"mime_type"`
+	Size         int64           `json:"size"`
+	Width        *int64          `json:"width,omitempty"`
+	Height       *int64          `json:"height,omitempty"`
+	Alt          string          `json:"alt,omitempty"`
+	Caption      string          `json:"caption,omitempty"`
+	FolderPath   string          `json:"folder_path,omitempty"`
+	UploadedBy   string          `json:"uploaded_by"`
+	LanguageCode string          `json:"language_code,omitempty"` // Language code for this media item
+	Variants     []ExportVariant `json:"variants,omitempty"`
+	FilePath     string          `json:"file_path,omitempty"` // Path within zip archive (e.g., "media/originals/{uuid}/{filename}")
+	CreatedAt    time.Time       `json:"created_at"`
 }
 
 // ExportVariant represents a media variant (thumbnail, etc.).
@@ -173,6 +174,7 @@ type ExportForm struct {
 	SuccessMessage string                 `json:"success_message,omitempty"`
 	EmailTo        string                 `json:"email_to,omitempty"`
 	IsActive       bool                   `json:"is_active"`
+	LanguageCode   string                 `json:"language_code,omitempty"` // Language code for this form
 	Fields         []ExportFormField      `json:"fields,omitempty"`
 	Submissions    []ExportFormSubmission `json:"submissions,omitempty"`
 	CreatedAt      time.Time              `json:"created_at"`

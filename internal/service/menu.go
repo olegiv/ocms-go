@@ -120,7 +120,7 @@ func (s *MenuService) GetMenuForLanguage(slug string, langCode string) []MenuIte
 	// Try to get menu for specific language first
 	menu, err := s.queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
 		Slug:       slug,
-		LanguageID: sql.NullInt64{Int64: lang.ID, Valid: true},
+		LanguageID: lang.ID,
 	})
 	if err != nil {
 		// Menu not found for this language, try default language
@@ -133,7 +133,7 @@ func (s *MenuService) GetMenuForLanguage(slug string, langCode string) []MenuIte
 			// Try with default language
 			menu, err = s.queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
 				Slug:       slug,
-				LanguageID: sql.NullInt64{Int64: defaultLang.ID, Valid: true},
+				LanguageID: defaultLang.ID,
 			})
 			if err != nil {
 				// Still not found, try without language filter as last resort
@@ -190,7 +190,7 @@ func (s *MenuService) GetMenuForLanguageID(slug string, langID int64) []MenuItem
 	// Try to get menu for specific language first
 	menu, err := s.queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
 		Slug:       slug,
-		LanguageID: sql.NullInt64{Int64: langID, Valid: true},
+		LanguageID: langID,
 	})
 	if err != nil {
 		// Menu not found for this language, try default language
@@ -202,7 +202,7 @@ func (s *MenuService) GetMenuForLanguageID(slug string, langID int64) []MenuItem
 		if defaultLang.ID != langID {
 			menu, err = s.queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
 				Slug:       slug,
-				LanguageID: sql.NullInt64{Int64: defaultLang.ID, Valid: true},
+				LanguageID: defaultLang.ID,
 			})
 			if err != nil {
 				// Fall back to basic lookup

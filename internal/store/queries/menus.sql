@@ -92,32 +92,32 @@ ORDER BY mi.position;
 -- name: ListMenusByLanguage :many
 SELECT m.*, l.code as language_code, l.name as language_name, l.native_name as language_native_name
 FROM menus m
-LEFT JOIN languages l ON m.language_id = l.id
+INNER JOIN languages l ON m.language_id = l.id
 WHERE m.language_id = ?
 ORDER BY m.name;
 
 -- name: ListMenusWithLanguage :many
 SELECT m.*, l.code as language_code, l.name as language_name, l.native_name as language_native_name
 FROM menus m
-LEFT JOIN languages l ON m.language_id = l.id
+INNER JOIN languages l ON m.language_id = l.id
 ORDER BY m.name;
 
 -- name: GetMenuBySlugAndLanguage :one
 SELECT m.*, l.code as language_code
 FROM menus m
-LEFT JOIN languages l ON m.language_id = l.id
+INNER JOIN languages l ON m.language_id = l.id
 WHERE m.slug = ? AND m.language_id = ?;
 
 -- name: GetMenuBySlugWithLanguage :one
 SELECT m.*, l.code as language_code, l.name as language_name
 FROM menus m
-LEFT JOIN languages l ON m.language_id = l.id
+INNER JOIN languages l ON m.language_id = l.id
 WHERE m.slug = ?;
 
 -- name: GetMenuForLanguageOrDefault :one
 SELECT m.*, l.code as language_code
 FROM menus m
-LEFT JOIN languages l ON m.language_id = l.id
+INNER JOIN languages l ON m.language_id = l.id
 WHERE m.slug = ? AND (m.language_id = ? OR l.is_default = 1)
 ORDER BY CASE WHEN m.language_id = ? THEN 0 ELSE 1 END
 LIMIT 1;

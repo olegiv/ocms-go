@@ -551,9 +551,7 @@ func (e *Exporter) exportPages(
 		}
 
 		// Handle language
-		if page.LanguageID.Valid {
-			exportPage.LanguageCode = languageMap[page.LanguageID.Int64]
-		}
+		exportPage.LanguageCode = languageMap[page.LanguageID]
 
 		// Get categories for page
 		categories, err := e.store.GetCategoriesForPage(ctx, page.ID)

@@ -28,7 +28,7 @@ type translationBaseInfo struct {
 }
 
 // loadTranslationBaseInfo loads common language and translation info for any entity.
-func loadTranslationBaseInfo(ctx context.Context, queries *store.Queries, entityType string, entityID int64, languageID sql.NullInt64) translationBaseInfo {
+func loadTranslationBaseInfo(ctx context.Context, queries *store.Queries, entityType string, entityID int64, languageID int64) translationBaseInfo {
 	info := translationBaseInfo{
 		TranslatedIDs:        make(map[int64]bool),
 		TranslationLanguages: make(map[int64]store.Language),
@@ -45,8 +45,8 @@ func loadTranslationBaseInfo(ctx context.Context, queries *store.Queries, entity
 	}
 
 	// Load entity's language
-	if languageID.Valid {
-		if lang, ok := langByID[languageID.Int64]; ok {
+	if languageID > 0 {
+		if lang, ok := langByID[languageID]; ok {
 			info.EntityLanguage = &lang
 			info.TranslatedIDs[lang.ID] = true
 		}
@@ -121,7 +121,7 @@ func loadLanguageInfo[E, T any](
 	queries *store.Queries,
 	entityType string,
 	entityID int64,
-	languageID sql.NullInt64,
+	languageID int64,
 	fetcher func(int64) (E, error),
 	makeTranslation func(store.Language, E) T,
 ) entityLanguageInfo[T] {

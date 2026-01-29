@@ -7,6 +7,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"html/template"
 	"sync"
 	"time"
@@ -50,14 +51,14 @@ func NewWidgetService(db *sql.DB) *WidgetService {
 	}
 }
 
-// cacheKey creates a cache key for theme and area.
-func cacheKey(theme, area string) string {
-	return theme + ":" + area
+// cacheKey creates a cache key for theme, area, and language.
+func cacheKey(theme, area string, languageID int64) string {
+	return fmt.Sprintf("%s:%s:%d", theme, area, languageID)
 }
 
-// GetWidgetsForArea returns active widgets for a specific theme and area.
-func (s *WidgetService) GetWidgetsForArea(ctx context.Context, theme, area string) []WidgetView {
-	key := cacheKey(theme, area)
+// GetWidgetsForArea returns active widgets for a specific theme, area, and language.
+func (s *WidgetService) GetWidgetsForArea(ctx context.Context, theme, area string, languageID int64) []WidgetView {
+	key := cacheKey(theme, area, languageID)
 
 	// Check cache
 	s.cacheMu.RLock()
@@ -69,8 +70,9 @@ func (s *WidgetService) GetWidgetsForArea(ctx context.Context, theme, area strin
 
 	// Fetch from database
 	dbWidgets, err := s.queries.GetWidgetsByThemeAndArea(ctx, store.GetWidgetsByThemeAndAreaParams{
-		Theme: theme,
-		Area:  area,
+		Theme:      theme,
+		Area:       area,
+		LanguageID: languageID,
 	})
 	if err != nil {
 		return nil

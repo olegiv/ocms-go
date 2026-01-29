@@ -16,7 +16,7 @@ SELECT COUNT(*) FROM pages WHERE language_id = ?
 `
 
 // Count pages for a specific language
-func (q *Queries) CountPagesByLanguage(ctx context.Context, languageID sql.NullInt64) (int64, error) {
+func (q *Queries) CountPagesByLanguage(ctx context.Context, languageID int64) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countPagesByLanguage, languageID)
 	var count int64
 	err := row.Scan(&count)
@@ -24,12 +24,11 @@ func (q *Queries) CountPagesByLanguage(ctx context.Context, languageID sql.NullI
 }
 
 const countPublishedPagesByLanguage = `-- name: CountPublishedPagesByLanguage :one
-SELECT COUNT(*) FROM pages WHERE (language_id = ? OR language_id IS NULL) AND status = 'published'
+SELECT COUNT(*) FROM pages WHERE language_id = ? AND status = 'published'
 `
 
 // Count published pages for a specific language
-// Include pages with matching language_id OR NULL language_id (universal pages)
-func (q *Queries) CountPublishedPagesByLanguage(ctx context.Context, languageID sql.NullInt64) (int64, error) {
+func (q *Queries) CountPublishedPagesByLanguage(ctx context.Context, languageID int64) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countPublishedPagesByLanguage, languageID)
 	var count int64
 	err := row.Scan(&count)
@@ -423,34 +422,34 @@ SELECT
     l.native_name as language_native_name,
     l.direction as language_direction
 FROM pages p
-LEFT JOIN languages l ON l.id = p.language_id
+INNER JOIN languages l ON l.id = p.language_id
 WHERE p.id = ?
 `
 
 type GetPageWithLanguageRow struct {
-	ID                 int64          `json:"id"`
-	Title              string         `json:"title"`
-	Slug               string         `json:"slug"`
-	Body               string         `json:"body"`
-	Status             string         `json:"status"`
-	AuthorID           int64          `json:"author_id"`
-	CreatedAt          time.Time      `json:"created_at"`
-	UpdatedAt          time.Time      `json:"updated_at"`
-	PublishedAt        sql.NullTime   `json:"published_at"`
-	FeaturedImageID    sql.NullInt64  `json:"featured_image_id"`
-	MetaTitle          string         `json:"meta_title"`
-	MetaDescription    string         `json:"meta_description"`
-	MetaKeywords       string         `json:"meta_keywords"`
-	OgImageID          sql.NullInt64  `json:"og_image_id"`
-	NoIndex            int64          `json:"no_index"`
-	NoFollow           int64          `json:"no_follow"`
-	CanonicalUrl       string         `json:"canonical_url"`
-	ScheduledAt        sql.NullTime   `json:"scheduled_at"`
-	LanguageID         sql.NullInt64  `json:"language_id"`
-	LanguageCode       sql.NullString `json:"language_code"`
-	LanguageName       sql.NullString `json:"language_name"`
-	LanguageNativeName sql.NullString `json:"language_native_name"`
-	LanguageDirection  sql.NullString `json:"language_direction"`
+	ID                 int64         `json:"id"`
+	Title              string        `json:"title"`
+	Slug               string        `json:"slug"`
+	Body               string        `json:"body"`
+	Status             string        `json:"status"`
+	AuthorID           int64         `json:"author_id"`
+	CreatedAt          time.Time     `json:"created_at"`
+	UpdatedAt          time.Time     `json:"updated_at"`
+	PublishedAt        sql.NullTime  `json:"published_at"`
+	FeaturedImageID    sql.NullInt64 `json:"featured_image_id"`
+	MetaTitle          string        `json:"meta_title"`
+	MetaDescription    string        `json:"meta_description"`
+	MetaKeywords       string        `json:"meta_keywords"`
+	OgImageID          sql.NullInt64 `json:"og_image_id"`
+	NoIndex            int64         `json:"no_index"`
+	NoFollow           int64         `json:"no_follow"`
+	CanonicalUrl       string        `json:"canonical_url"`
+	ScheduledAt        sql.NullTime  `json:"scheduled_at"`
+	LanguageID         int64         `json:"language_id"`
+	LanguageCode       string        `json:"language_code"`
+	LanguageName       string        `json:"language_name"`
+	LanguageNativeName string        `json:"language_native_name"`
+	LanguageDirection  string        `json:"language_direction"`
 }
 
 // Get page with its language information
@@ -494,7 +493,7 @@ SELECT
     COALESCE(l.direction, 'ltr') as language_direction,
     COALESCE(l.is_default, 1) as language_is_default
 FROM pages p
-LEFT JOIN languages l ON l.id = p.language_id
+INNER JOIN languages l ON l.id = p.language_id
 WHERE p.slug = ? AND p.status = 'published'
 `
 
@@ -517,7 +516,7 @@ type GetPublishedPageWithLanguageBySlugRow struct {
 	NoFollow           int64         `json:"no_follow"`
 	CanonicalUrl       string        `json:"canonical_url"`
 	ScheduledAt        sql.NullTime  `json:"scheduled_at"`
-	LanguageID         sql.NullInt64 `json:"language_id"`
+	LanguageID         int64         `json:"language_id"`
 	LanguageCode       string        `json:"language_code"`
 	LanguageName       string        `json:"language_name"`
 	LanguageNativeName string        `json:"language_native_name"`
@@ -930,9 +929,9 @@ LIMIT ? OFFSET ?
 `
 
 type ListPagesByLanguageParams struct {
-	LanguageID sql.NullInt64 `json:"language_id"`
-	Limit      int64         `json:"limit"`
-	Offset     int64         `json:"offset"`
+	LanguageID int64 `json:"language_id"`
+	Limit      int64 `json:"limit"`
+	Offset     int64 `json:"offset"`
 }
 
 // List all pages for a specific language
@@ -981,19 +980,18 @@ func (q *Queries) ListPagesByLanguage(ctx context.Context, arg ListPagesByLangua
 
 const listPublishedPagesByLanguage = `-- name: ListPublishedPagesByLanguage :many
 SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id FROM pages
-WHERE (language_id = ? OR language_id IS NULL) AND status = 'published'
+WHERE language_id = ? AND status = 'published'
 ORDER BY published_at DESC
 LIMIT ? OFFSET ?
 `
 
 type ListPublishedPagesByLanguageParams struct {
-	LanguageID sql.NullInt64 `json:"language_id"`
-	Limit      int64         `json:"limit"`
-	Offset     int64         `json:"offset"`
+	LanguageID int64 `json:"language_id"`
+	Limit      int64 `json:"limit"`
+	Offset     int64 `json:"offset"`
 }
 
 // List published pages for a specific language
-// Include pages with matching language_id OR NULL language_id (universal pages)
 func (q *Queries) ListPublishedPagesByLanguage(ctx context.Context, arg ListPublishedPagesByLanguageParams) ([]Page, error) {
 	rows, err := q.db.QueryContext(ctx, listPublishedPagesByLanguage, arg.LanguageID, arg.Limit, arg.Offset)
 	if err != nil {
@@ -1063,9 +1061,9 @@ UPDATE pages SET language_id = ?, updated_at = ? WHERE id = ?
 `
 
 type UpdatePageLanguageParams struct {
-	LanguageID sql.NullInt64 `json:"language_id"`
-	UpdatedAt  time.Time     `json:"updated_at"`
-	ID         int64         `json:"id"`
+	LanguageID int64     `json:"language_id"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	ID         int64     `json:"id"`
 }
 
 // Update page language
