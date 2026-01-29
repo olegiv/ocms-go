@@ -177,6 +177,8 @@ func (s *MenuService) GetMenuForLanguageCode(slug string, langCode string) []Men
 }
 
 // InvalidateCache clears the cache for a specific menu or all menus.
+// When a slug is provided, it clears both the base slug and all
+// language-specific variants (e.g., "main", "main:en", "main:ru").
 func (s *MenuService) InvalidateCache(slug string) {
 	if slug == "" {
 		// Clear all
@@ -185,7 +187,15 @@ func (s *MenuService) InvalidateCache(slug string) {
 			return true
 		})
 	} else {
-		s.cache.Delete(slug)
+		// Clear slug and all language-specific variants (slug:langCode)
+		prefix := slug + ":"
+		s.cache.Range(func(key, _ any) bool {
+			keyStr := key.(string)
+			if keyStr == slug || len(keyStr) > len(prefix) && keyStr[:len(prefix)] == prefix {
+				s.cache.Delete(key)
+			}
+			return true
+		})
 	}
 }
 
@@ -193,9 +203,10 @@ func (s *MenuService) InvalidateCache(slug string) {
 func (s *MenuService) buildMenuTree(items []store.ListMenuItemsWithPageRow) []MenuItem {
 	// Create a map of ID to MenuItem for quick lookup
 	itemMap := make(map[int64]*MenuItem)
-	var roots []MenuItem
+	parentMap := make(map[int64]int64) // child ID -> parent ID
+	var rootIDs []int64
 
-	// First pass: create all menu items
+	// First pass: create all menu items and record parent relationships
 	for _, item := range items {
 		if !item.IsActive {
 			continue
@@ -229,36 +240,43 @@ func (s *MenuService) buildMenuTree(items []store.ListMenuItemsWithPageRow) []Me
 		}
 
 		itemMap[item.ID] = &mi
-	}
-
-	// Second pass: build tree structure
-	for _, item := range items {
-		if !item.IsActive {
-			continue
-		}
-
-		mi := itemMap[item.ID]
-		if mi == nil {
-			continue
-		}
 
 		if item.ParentID.Valid {
-			// Has parent - add as child
-			parent := itemMap[item.ParentID.Int64]
-			if parent != nil {
-				parent.Children = append(parent.Children, *mi)
-			}
+			parentMap[item.ID] = item.ParentID.Int64
 		} else {
-			// Root item
-			roots = append(roots, *mi)
+			rootIDs = append(rootIDs, item.ID)
 		}
 	}
 
-	// Update root items with proper children (since we copied values)
-	for i := range roots {
-		if children := itemMap[roots[i].ID]; children != nil {
-			roots[i].Children = children.Children
+	// Second pass: build tree using pointers (children reference the map items)
+	for childID, parentID := range parentMap {
+		child := itemMap[childID]
+		parent := itemMap[parentID]
+		if child != nil && parent != nil {
+			parent.Children = append(parent.Children, *child)
 		}
+	}
+
+	// Third pass: recursively copy children to ensure deep nesting works
+	// This is needed because when we appended children above, grandchildren weren't populated yet
+	var copyWithChildren func(id int64) MenuItem
+	copyWithChildren = func(id int64) MenuItem {
+		item := itemMap[id]
+		if item == nil {
+			return MenuItem{}
+		}
+		result := *item
+		result.Children = make([]MenuItem, 0, len(item.Children))
+		for _, child := range item.Children {
+			result.Children = append(result.Children, copyWithChildren(child.ID))
+		}
+		return result
+	}
+
+	// Build roots with fully populated children
+	roots := make([]MenuItem, 0, len(rootIDs))
+	for _, id := range rootIDs {
+		roots = append(roots, copyWithChildren(id))
 	}
 
 	return roots

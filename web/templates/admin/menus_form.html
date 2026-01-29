@@ -213,12 +213,12 @@
                                         </button>
                                     </div>
                                 </div>
-                                <!-- Nested children -->
-                                <div class="menu-item-children" x-show="item.children && item.children.length > 0">
-                                    <template x-for="(child, childIndex) in item.children" :key="child.id || child.tempId">
-                                        <div class="menu-item menu-item-nested" :data-id="child.id || child.tempId">
+                                <!-- Nested children (Level 2) -->
+                                <div class="menu-item-children" x-show="item.children && item.children.length > 0" x-sort="(key, pos) => handleChildSort(item, key, pos)">
+                                    <template x-for="(child, childIndex) in item.children" :key="`${child.id || child.tempId}-${sortIteration}`">
+                                        <div class="menu-item menu-item-nested" :data-id="child.id || child.tempId" x-sort:item="child.id || child.tempId">
                                             <div class="menu-item-header">
-                                                <div class="menu-item-handle">
+                                                <div class="menu-item-handle" x-sort:handle>
                                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>
                                                 </div>
                                                 <div class="menu-item-info">
@@ -235,11 +235,11 @@
                                                 </div>
                                             </div>
                                             <!-- Level 3: Grandchildren -->
-                                            <div class="menu-item-children" x-show="child.children && child.children.length > 0">
-                                                <template x-for="(grandchild, grandchildIndex) in child.children" :key="grandchild.id || grandchild.tempId">
-                                                    <div class="menu-item menu-item-nested menu-item-level-3" :data-id="grandchild.id || grandchild.tempId">
+                                            <div class="menu-item-children" x-show="child.children && child.children.length > 0" x-sort="(key, pos) => handleGrandchildSort(child, key, pos)">
+                                                <template x-for="(grandchild, grandchildIndex) in child.children" :key="`${grandchild.id || grandchild.tempId}-${sortIteration}`">
+                                                    <div class="menu-item menu-item-nested menu-item-level-3" :data-id="grandchild.id || grandchild.tempId" x-sort:item="grandchild.id || grandchild.tempId">
                                                         <div class="menu-item-header">
-                                                            <div class="menu-item-handle">
+                                                            <div class="menu-item-handle" x-sort:handle>
                                                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>
                                                             </div>
                                                             <div class="menu-item-info">
@@ -356,7 +356,7 @@ function menuBuilder() {
             this.items = this.parseItems({{toJSON .Data.Items}});
         },
 
-        // Handle @alpinejs/sort drag-drop reordering
+        // Handle @alpinejs/sort drag-drop reordering for root items
         // Uses sortIteration to force Alpine DOM recreation (fixes x-for + x-sort conflict)
         handleSort(itemKey, newPosition) {
             const oldIndex = this.items.findIndex(i => (i.id || i.tempId) == itemKey);
@@ -364,6 +364,34 @@ function menuBuilder() {
                 const item = this.items.splice(oldIndex, 1)[0];
                 this.items.splice(newPosition, 0, item);
                 this.sortIteration++;  // Force Alpine to recreate DOM elements
+                this.hasChanges = true;
+            }
+        },
+
+        // Handle sorting for level 2 children
+        handleChildSort(parentItem, childKey, newPosition) {
+            // Find parent in the current items array to avoid stale references
+            const parent = this.findItemById(parentItem.id || parentItem.tempId);
+            if (!parent || !parent.children) return;
+            const oldIndex = parent.children.findIndex(c => (c.id || c.tempId) == childKey);
+            if (oldIndex !== -1 && oldIndex !== newPosition) {
+                const child = parent.children.splice(oldIndex, 1)[0];
+                parent.children.splice(newPosition, 0, child);
+                this.sortIteration++;
+                this.hasChanges = true;
+            }
+        },
+
+        // Handle sorting for level 3 grandchildren
+        handleGrandchildSort(parentChild, grandchildKey, newPosition) {
+            // Find parent in the current items array to avoid stale references
+            const parent = this.findItemById(parentChild.id || parentChild.tempId);
+            if (!parent || !parent.children) return;
+            const oldIndex = parent.children.findIndex(g => (g.id || g.tempId) == grandchildKey);
+            if (oldIndex !== -1 && oldIndex !== newPosition) {
+                const grandchild = parent.children.splice(oldIndex, 1)[0];
+                parent.children.splice(newPosition, 0, grandchild);
+                this.sortIteration++;
                 this.hasChanges = true;
             }
         },
