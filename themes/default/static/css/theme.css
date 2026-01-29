@@ -232,7 +232,7 @@ p {
 .site-nav {
     flex: 1 1 auto;
     min-width: 0;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .nav-menu {
@@ -242,7 +242,7 @@ p {
     list-style: none;
     justify-content: flex-end;
     flex-wrap: nowrap;
-    overflow: hidden;
+    overflow: visible;
 }
 
 /* Nav Items - Pill Style */
@@ -360,6 +360,8 @@ p {
 }
 
 .sub-menu .nav-item:hover > .sub-menu {
+    opacity: 1;
+    visibility: visible;
     transform: translateX(0);
 }
 

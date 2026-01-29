@@ -143,7 +143,8 @@ const menuBuilderMethods = {
                     body: JSON.stringify({
                         title: page.title,
                         page_id: page.id,
-                        parent_id: parentId
+                        parent_id: parentId,
+                        target: '_self'
                     })
                 });
 
