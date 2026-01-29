@@ -145,7 +145,7 @@
                             {{range .Data.Pages}}
                             <div class="menu-page-item">
                                 <label class="checkbox-label">
-                                    <input type="checkbox" :checked="isPageSelected({{.ID}})" @change="togglePage({{.ID}}, '{{.Title}}', '{{.Slug}}')">
+                                    <input type="checkbox" :checked="isPageSelected({{.ID}})" @change="togglePage({{.ID}}, '{{js .Title}}', '{{js .Slug}}')">
                                     <span>{{.Title}}</span>
                                 </label>
                             </div>
@@ -175,11 +175,11 @@
                         </div>
                     </template>
 
-                    <div id="menu-items" class="menu-items-container">
-                        <template x-for="(item, index) in items" :key="item.id || item.tempId">
-                            <div class="menu-item" :data-id="item.id || item.tempId">
+                    <div id="menu-items" class="menu-items-container" x-sort="handleSort" x-sort:config="{ handle: '.menu-item-handle' }">
+                        <template x-for="(item, index) in items" :key="`${item.id || item.tempId}-${sortIteration}`">
+                            <div class="menu-item" x-sort:item="item.id || item.tempId">
                                 <div class="menu-item-header">
-                                    <div class="menu-item-handle">
+                                    <div class="menu-item-handle" x-sort:handle>
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>
                                     </div>
                                     <div class="menu-item-info">
@@ -279,7 +279,6 @@
     </template>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script src="/static/dist/js/menu-builder.js"></script>
 <script>
 function menuBuilder() {
@@ -287,6 +286,7 @@ function menuBuilder() {
         // Template data
         menuId: {{.Data.Menu.ID}},
         items: [],
+        sortIteration: 0,
         customLink: { title: '', url: '', target: '_self' },
         selectedPages: [],
         editingItem: null,
@@ -302,11 +302,18 @@ function menuBuilder() {
         init() {
             // Load existing items from server data
             this.items = this.parseItems({{toJSON .Data.Items}});
+        },
 
-            // Initialize Sortable after DOM is ready
-            this.$nextTick(() => {
-                this.initSortable();
-            });
+        // Handle @alpinejs/sort drag-drop reordering
+        // Uses sortIteration to force Alpine DOM recreation (fixes x-for + x-sort conflict)
+        handleSort(itemKey, newPosition) {
+            const oldIndex = this.items.findIndex(i => (i.id || i.tempId) == itemKey);
+            if (oldIndex !== -1 && oldIndex !== newPosition) {
+                const item = this.items.splice(oldIndex, 1)[0];
+                this.items.splice(newPosition, 0, item);
+                this.sortIteration++;  // Force Alpine to recreate DOM elements
+                this.hasChanges = true;
+            }
         },
 
         // Spread external methods
