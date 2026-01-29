@@ -43,6 +43,7 @@ type PageView struct {
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
 	FeaturedImage        string
+	FeaturedImageMedium  string // Medium variant for mobile grid views
 	FeaturedImageLarge   string // Large variant for single page views
 	FeaturedImageID      int64  // Media ID for translation lookup
 	FeaturedImageAlt     string // Alt text (default language)
@@ -1249,6 +1250,7 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page) PageView
 		media, err := h.queries.GetMediaByID(ctx, p.FeaturedImageID.Int64)
 		if err == nil {
 			pv.FeaturedImage = fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename)
+			pv.FeaturedImageMedium = fmt.Sprintf("/uploads/medium/%s/%s", media.Uuid, media.Filename)
 			pv.FeaturedImageLarge = fmt.Sprintf("/uploads/large/%s/%s", media.Uuid, media.Filename)
 			pv.FeaturedImageID = media.ID
 			pv.FeaturedImageAlt = media.Alt.String
