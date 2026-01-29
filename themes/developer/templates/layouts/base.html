@@ -66,6 +66,10 @@
         {{template "footer.html" .}}
     </div>
 
+    <!-- Alpine.js Collapse Plugin (must load before Alpine) -->
+    <script defer src="/static/dist/js/alpine-collapse.min.js"></script>
+    <!-- Alpine.js -->
+    <script defer src="/static/dist/js/alpine.min.js"></script>
     <!-- Theme JavaScript -->
     <script src="/themes/developer/static/js/theme.js"></script>
     {{block "scripts" .}}{{end}}

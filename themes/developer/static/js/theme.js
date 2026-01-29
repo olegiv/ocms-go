@@ -3,87 +3,25 @@
 (function() {
     'use strict';
 
-    // Mobile menu toggle
+    // Mobile menu - close when clicking outside
     const menuToggle = document.getElementById('menu-toggle');
     const mainNav = document.getElementById('main-nav');
 
     if (menuToggle && mainNav) {
-        menuToggle.addEventListener('click', function() {
-            mainNav.classList.toggle('active');
-            this.setAttribute('aria-expanded',
-                this.getAttribute('aria-expanded') === 'true' ? 'false' : 'true'
-            );
-            // Close all submenus when closing main menu
-            if (!mainNav.classList.contains('active')) {
-                closeAllSubmenus();
-            }
-        });
-
         // Close menu when clicking outside
         document.addEventListener('click', function(e) {
             if (!menuToggle.contains(e.target) && !mainNav.contains(e.target)) {
-                mainNav.classList.remove('active');
-                menuToggle.setAttribute('aria-expanded', 'false');
-                closeAllSubmenus();
+                // Dispatch event to close Alpine.js menu
+                window.dispatchEvent(new CustomEvent('close-mobile-menu'));
             }
         });
 
         // Close menu on escape key
         document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && mainNav.classList.contains('active')) {
-                mainNav.classList.remove('active');
-                menuToggle.setAttribute('aria-expanded', 'false');
-                closeAllSubmenus();
+            if (e.key === 'Escape') {
+                window.dispatchEvent(new CustomEvent('close-mobile-menu'));
                 menuToggle.focus();
             }
-        });
-    }
-
-    // Close all submenus helper
-    function closeAllSubmenus() {
-        document.querySelectorAll('.dev-nav-item.open').forEach(function(item) {
-            item.classList.remove('open');
-            const link = item.querySelector(':scope > .dev-nav-link');
-            if (link) {
-                link.setAttribute('aria-expanded', 'false');
-            }
-        });
-    }
-
-    // Mobile accordion for nested menu items
-    function initMobileAccordion() {
-        const hasChildrenItems = document.querySelectorAll('.dev-nav-item.has-children');
-
-        hasChildrenItems.forEach(function(item) {
-            const link = item.querySelector(':scope > .dev-nav-link');
-            if (!link) return;
-
-            link.addEventListener('click', function(e) {
-                // Only handle accordion on mobile
-                if (window.innerWidth > 768) return;
-
-                e.preventDefault();
-                e.stopPropagation();
-
-                // Close siblings at the same level
-                const parent = item.parentElement;
-                if (parent) {
-                    parent.querySelectorAll(':scope > .dev-nav-item.has-children.open').forEach(function(sibling) {
-                        if (sibling !== item) {
-                            sibling.classList.remove('open');
-                            const siblingLink = sibling.querySelector(':scope > .dev-nav-link');
-                            if (siblingLink) {
-                                siblingLink.setAttribute('aria-expanded', 'false');
-                            }
-                        }
-                    });
-                }
-
-                // Toggle current item
-                item.classList.toggle('open');
-                const isOpen = item.classList.contains('open');
-                link.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-            });
         });
     }
 
@@ -93,7 +31,9 @@
 
         level2Items.forEach(function(item) {
             item.addEventListener('mouseenter', function() {
-                if (window.innerWidth <= 768) return;
+                // Skip flyout positioning on mobile (when hamburger menu is visible)
+                const menuToggle = document.getElementById('menu-toggle');
+                if (menuToggle && getComputedStyle(menuToggle).display !== 'none') return;
 
                 const flyout = item.querySelector(':scope > .dev-sub-menu');
                 if (!flyout) return;
@@ -114,7 +54,6 @@
     }
 
     // Initialize menu functionality
-    initMobileAccordion();
     initFlyoutPosition();
 
     // Smooth scroll for anchor links
