@@ -1288,6 +1288,16 @@
             "translation": "Target"
         },
         {
+            "id": "menus.parent_item",
+            "message": "Parent Item",
+            "translation": "Parent Item"
+        },
+        {
+            "id": "menus.top_level",
+            "message": "Top Level",
+            "translation": "Top Level"
+        },
+        {
             "id": "forms.title",
             "message": "Forms",
             "translation": "Forms"

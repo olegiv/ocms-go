@@ -132,6 +132,15 @@
                                 {{end}}
                             </select>
                         </div>
+                        <div class="form-group">
+                            <label class="form-label">{{T .AdminLang "menus.parent_item"}}</label>
+                            <select class="form-select" x-model="customLink.parent_id">
+                                <option value="0">— {{T .AdminLang "menus.top_level"}} —</option>
+                                <template x-for="opt in flattenItems()" :key="opt.id">
+                                    <option :value="opt.id" x-text="'—'.repeat(opt.depth) + (opt.depth ? ' ' : '') + opt.title"></option>
+                                </template>
+                            </select>
+                        </div>
                         <button type="button" class="btn btn-primary btn-sm" @click="addCustomLink()" :disabled="!customLink.title || !customLink.url">
                             {{T .AdminLang "menus.add_to_menu"}}
                         </button>
@@ -150,6 +159,15 @@
                                 </label>
                             </div>
                             {{end}}
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">{{T .AdminLang "menus.parent_item"}}</label>
+                            <select class="form-select" x-model="pagesParentId">
+                                <option value="0">— {{T .AdminLang "menus.top_level"}} —</option>
+                                <template x-for="opt in flattenItems()" :key="opt.id">
+                                    <option :value="opt.id" x-text="'—'.repeat(opt.depth) + (opt.depth ? ' ' : '') + opt.title"></option>
+                                </template>
+                            </select>
                         </div>
                         <button type="button" class="btn btn-primary btn-sm" @click="addSelectedPages()" :disabled="selectedPages.length === 0">
                             {{T .AdminLang "menus.add_selected"}}
@@ -216,6 +234,30 @@
                                                     </button>
                                                 </div>
                                             </div>
+                                            <!-- Level 3: Grandchildren -->
+                                            <div class="menu-item-children" x-show="child.children && child.children.length > 0">
+                                                <template x-for="(grandchild, grandchildIndex) in child.children" :key="grandchild.id || grandchild.tempId">
+                                                    <div class="menu-item menu-item-nested menu-item-level-3" :data-id="grandchild.id || grandchild.tempId">
+                                                        <div class="menu-item-header">
+                                                            <div class="menu-item-handle">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+                                                            </div>
+                                                            <div class="menu-item-info">
+                                                                <span class="menu-item-title" x-text="grandchild.title"></span>
+                                                                <span class="menu-item-type" x-text="grandchild.page_id ? '{{T .AdminLang "menus.item_page"}}' : '{{T .AdminLang "menus.item_custom"}}'"></span>
+                                                            </div>
+                                                            <div class="menu-item-actions">
+                                                                <button type="button" class="btn btn-sm btn-icon" @click="editItem(grandchild)" title="{{T .AdminLang "btn.edit"}}">
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                                                                </button>
+                                                                <button type="button" class="btn btn-sm btn-icon btn-danger" @click="deleteGrandchildItem(child, grandchildIndex)" title="{{T .AdminLang "btn.delete"}}">
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
                                         </div>
                                     </template>
                                 </div>
@@ -260,6 +302,15 @@
                         </select>
                     </div>
                     <div class="form-group">
+                        <label class="form-label">{{T .AdminLang "menus.parent_item"}}</label>
+                        <select class="form-select" x-model="editingItem.parent_id">
+                            <option value="0">— {{T .AdminLang "menus.top_level"}} —</option>
+                            <template x-for="opt in flattenItems()" :key="opt.id">
+                                <option :value="String(opt.id)" x-text="'—'.repeat(opt.depth) + (opt.depth ? ' ' : '') + opt.title" :disabled="opt.id === editingItem.id"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div class="form-group">
                         <label class="form-label">{{T .AdminLang "menus.css_class"}}</label>
                         <input type="text" class="form-input" x-model="editingItem.css_class" placeholder="{{T .AdminLang "menus.css_class_placeholder"}}">
                     </div>
@@ -287,7 +338,8 @@ function menuBuilder() {
         menuId: {{.Data.Menu.ID}},
         items: [],
         sortIteration: 0,
-        customLink: { title: '', url: '', target: '_self' },
+        customLink: { title: '', url: '', target: '_self', parent_id: 0 },
+        pagesParentId: 0,
         selectedPages: [],
         editingItem: null,
         hasChanges: false,
@@ -314,6 +366,21 @@ function menuBuilder() {
                 this.sortIteration++;  // Force Alpine to recreate DOM elements
                 this.hasChanges = true;
             }
+        },
+
+        // Flatten items tree for parent dropdown (includes nested children)
+        flattenItems() {
+            const flatten = (items, depth = 0) => {
+                let result = [];
+                for (const item of items) {
+                    result.push({ id: item.id, title: item.title, depth });
+                    if (item.children && item.children.length > 0) {
+                        result = result.concat(flatten(item.children, depth + 1));
+                    }
+                }
+                return result;
+            };
+            return flatten(this.items);
         },
 
         // Spread external methods

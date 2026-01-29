@@ -539,6 +539,7 @@ type UpdateItemRequest struct {
 	URL      string `json:"url"`
 	Target   string `json:"target"`
 	PageID   *int64 `json:"page_id"`
+	ParentID *int64 `json:"parent_id"`
 	CSSClass string `json:"css_class"`
 	IsActive bool   `json:"is_active"`
 }
@@ -567,15 +568,40 @@ func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Determine parent_id and position
+	parentID := item.ParentID
+	position := item.Position
+
+	// If parent_id is explicitly provided in the request, use it
+	// parent_id: 0 means "move to root level" (no parent)
+	// parent_id: N means "move under item N"
+	// parent_id: nil (not in request) means "keep existing parent"
+	if req.ParentID != nil {
+		var newParentID sql.NullInt64
+		if *req.ParentID == 0 {
+			// Explicitly move to root level
+			newParentID = sql.NullInt64{Valid: false}
+		} else {
+			newParentID = sql.NullInt64{Int64: *req.ParentID, Valid: true}
+		}
+		// Check if parent is changing
+		if newParentID.Valid != parentID.Valid ||
+			(newParentID.Valid && newParentID.Int64 != parentID.Int64) {
+			parentID = newParentID
+			// When moving to a new parent, put at end of that parent's children
+			position = h.getMaxMenuItemPosition(r, menu.ID, parentID) + 1
+		}
+	}
+
 	now := time.Now()
 	updatedItem, err := h.queries.UpdateMenuItem(r.Context(), store.UpdateMenuItemParams{
 		ID:        item.ID,
-		ParentID:  item.ParentID, // Keep existing parent
+		ParentID:  parentID,
 		Title:     req.Title,
 		Url:       validated.URL,
 		Target:    util.NullStringFromValue(validated.Target),
 		PageID:    validated.PageID,
-		Position:  item.Position, // Keep existing position
+		Position:  position,
 		CssClass:  validated.CSSClass,
 		IsActive:  req.IsActive,
 		UpdatedAt: now,
