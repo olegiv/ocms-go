@@ -38,40 +38,6 @@ const menuBuilderMethods = {
     },
 
     /**
-     * Initialize Sortable.js for drag-drop reordering
-     */
-    initSortable() {
-        const container = document.getElementById('menu-items');
-        if (!container) return;
-
-        new Sortable(container, {
-            animation: 150,
-            handle: '.menu-item-handle',
-            ghostClass: 'menu-item-ghost',
-            onEnd: () => {
-                this.hasChanges = true;
-                this.updateItemsFromDOM();
-            }
-        });
-    },
-
-    /**
-     * Sync items array with DOM order after drag-drop
-     */
-    updateItemsFromDOM() {
-        const container = document.getElementById('menu-items');
-        const newOrder = [];
-        container.querySelectorAll(':scope > .menu-item').forEach(el => {
-            const id = el.dataset.id;
-            const item = this.findItemById(id);
-            if (item) {
-                newOrder.push(item);
-            }
-        });
-        this.items = newOrder;
-    },
-
-    /**
      * Find an item by ID (supports both real IDs and temp IDs)
      */
     findItemById(id) {

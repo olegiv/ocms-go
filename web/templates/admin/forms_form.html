@@ -120,126 +120,275 @@
 
         {{if .Data.IsEdit}}
         <!-- Field Builder -->
-        <div class="card mt-4">
+        <div class="card mt-4" x-data="formFieldBuilder()">
             <div class="card-header">
                 <h3>{{T .AdminLang "forms.form_fields"}}</h3>
-                <button type="button" class="btn btn-primary btn-sm" onclick="openAddFieldModal()">
+                <button type="button" class="btn btn-primary btn-sm" @click="openAddModal()">
                     {{T .AdminLang "forms.add_field"}}
                 </button>
             </div>
             <div class="card-body">
-                <div id="fields-list" class="fields-list">
-                    {{if .Data.Fields}}
-                    {{range .Data.Fields}}
-                    <div class="field-item" data-field-id="{{.ID}}">
-                        <div class="field-item-handle">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="8" y1="6" x2="16" y2="6"></line>
-                                <line x1="8" y1="12" x2="16" y2="12"></line>
-                                <line x1="8" y1="18" x2="16" y2="18"></line>
-                            </svg>
-                        </div>
-                        <div class="field-item-content">
-                            <div class="field-item-label">{{.Label}}</div>
-                            <div class="field-item-meta">
-                                <span class="badge badge-secondary">{{.Type}}</span>
-                                <code>{{.Name}}</code>
-                                {{if .IsRequired}}<span class="badge badge-primary">{{T $.AdminLang "forms.required"}}</span>{{end}}
-                            </div>
-                        </div>
-                        <div class="field-item-actions">
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="openEditFieldModal({{.ID}}, {{toJSON .Type}}, {{toJSON .Name}}, {{toJSON .Label}}, {{toJSON .Placeholder.String}}, {{toJSON .HelpText.String}}, {{toJSON .Options.String}}, {{toJSON .Validation.String}}, {{.IsRequired}})">
-                                {{T $.AdminLang "btn.edit"}}
-                            </button>
-                            <button type="button" class="btn btn-sm btn-danger" onclick="deleteField({{.ID}})">
-                                {{T $.AdminLang "btn.delete"}}
-                            </button>
-                        </div>
-                    </div>
-                    {{end}}
-                    {{else}}
-                    <div class="empty-state" id="no-fields-message">
+                <template x-if="fields.length === 0">
+                    <div class="empty-state">
                         <p>{{T .AdminLang "forms.no_fields"}}</p>
                     </div>
-                    {{end}}
+                </template>
+
+                <div id="fields-list" class="fields-list" x-sort="handleSort" x-sort:config="{ handle: '.field-item-handle' }">
+                    <template x-for="field in fields" :key="`${field.id}-${sortIteration}`">
+                        <div class="field-item" x-sort:item="field.id">
+                            <div class="field-item-handle" x-sort:handle>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="8" y1="6" x2="16" y2="6"></line>
+                                    <line x1="8" y1="12" x2="16" y2="12"></line>
+                                    <line x1="8" y1="18" x2="16" y2="18"></line>
+                                </svg>
+                            </div>
+                            <div class="field-item-content">
+                                <div class="field-item-label" x-text="field.label"></div>
+                                <div class="field-item-meta">
+                                    <span class="badge badge-secondary" x-text="field.type"></span>
+                                    <code x-text="field.name"></code>
+                                    <span class="badge badge-primary" x-show="field.is_required">{{T .AdminLang "forms.required"}}</span>
+                                </div>
+                            </div>
+                            <div class="field-item-actions">
+                                <button type="button" class="btn btn-sm btn-secondary" @click="openEditModal(field)">
+                                    {{T .AdminLang "btn.edit"}}
+                                </button>
+                                <button type="button" class="btn btn-sm btn-danger" @click="deleteField(field.id)">
+                                    {{T .AdminLang "btn.delete"}}
+                                </button>
+                            </div>
+                        </div>
+                    </template>
                 </div>
             </div>
+
+            <!-- Add/Edit Field Modal (inside Alpine component) -->
+            <template x-if="showModal">
+                <div class="modal-overlay" x-show="showModal" @click.self="closeModal()" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;">
+                    <div class="modal" @click.stop style="background:white;border-radius:8px;max-width:500px;width:100%;max-height:90vh;overflow-y:auto;">
+                        <div class="modal-header" style="padding:1rem;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;">
+                            <h3 class="modal-title" x-text="editingField?.id ? '{{T .AdminLang "forms.edit_field"}}' : '{{T .AdminLang "forms.add_field"}}'"></h3>
+                            <button type="button" class="modal-close" @click="closeModal()" aria-label="{{T .AdminLang "btn.close"}}">&times;</button>
+                        </div>
+                        <div class="modal-body" style="padding:1rem;">
+                            <div class="form-group">
+                                <label class="form-label">{{T .AdminLang "forms.field_type"}} *</label>
+                                <select class="form-input" x-model="editingField.type">
+                                    <template x-for="t in fieldTypes" :key="t">
+                                        <option :value="t" x-text="t"></option>
+                                    </template>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">{{T .AdminLang "forms.field_label"}} *</label>
+                                <input type="text" class="form-input" x-model="editingField.label">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">{{T .AdminLang "forms.field_name"}}</label>
+                                <input type="text" class="form-input" x-model="editingField.name" placeholder="auto-generated">
+                                <small class="form-text">{{T .AdminLang "forms.field_name_hint"}}</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">{{T .AdminLang "forms.field_placeholder"}}</label>
+                                <input type="text" class="form-input" x-model="editingField.placeholder">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">{{T .AdminLang "forms.field_help_text"}}</label>
+                                <input type="text" class="form-input" x-model="editingField.help_text">
+                                <small class="form-text">{{T .AdminLang "forms.field_help_hint"}}</small>
+                            </div>
+
+                            <div class="form-group" x-show="showOptionsField()">
+                                <label class="form-label">{{T .AdminLang "forms.field_options"}}</label>
+                                <textarea class="form-input" rows="4" x-model="editingField.options" placeholder="Option 1&#10;Option 2&#10;Option 3"></textarea>
+                                <small class="form-text">{{T .AdminLang "forms.field_options_hint"}}</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" x-model="editingField.is_required">
+                                    <span>{{T .AdminLang "forms.field_required"}}</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="modal-footer" style="padding:1rem;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:0.5rem;">
+                            <button type="button" class="btn btn-outline" @click="closeModal()">{{T .AdminLang "btn.cancel"}}</button>
+                            <button type="button" class="btn btn-primary" @click="saveField()">{{T .AdminLang "forms.save_field"}}</button>
+                        </div>
+                    </div>
+                </div>
+            </template>
         </div>
         {{end}}
     </div>
 </div>
 
 {{if .Data.IsEdit}}
-<!-- Add/Edit Field Modal -->
-<div id="field-modal" class="forms-modal hidden">
-    <div class="modal-backdrop" onclick="closeFieldModal()"></div>
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3 id="field-modal-title">{{T .AdminLang "forms.add_field"}}</h3>
-            <button type="button" class="modal-close" onclick="closeFieldModal()" aria-label="{{T .AdminLang "btn.close"}}">&times;</button>
-        </div>
-        <div class="modal-body">
-            <form id="field-form">
-                <input type="hidden" id="field-id" value="">
-
-                <div class="form-group">
-                    <label for="field-type" class="form-label">{{T .AdminLang "forms.field_type"}} *</label>
-                    <select id="field-type" name="type" class="form-input" required onchange="toggleOptionsField()">
-                        {{range .Data.FieldTypes}}
-                        <option value="{{.}}">{{.}}</option>
-                        {{end}}
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="field-label" class="form-label">{{T .AdminLang "forms.field_label"}} *</label>
-                    <input type="text" id="field-label" name="label" class="form-input" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="field-name" class="form-label">{{T .AdminLang "forms.field_name"}}</label>
-                    <input type="text" id="field-name" name="name" class="form-input" placeholder="auto-generated">
-                    <small class="form-text">{{T .AdminLang "forms.field_name_hint"}}</small>
-                </div>
-
-                <div class="form-group">
-                    <label for="field-placeholder" class="form-label">{{T .AdminLang "forms.field_placeholder"}}</label>
-                    <input type="text" id="field-placeholder" name="placeholder" class="form-input">
-                </div>
-
-                <div class="form-group">
-                    <label for="field-help-text" class="form-label">{{T .AdminLang "forms.field_help_text"}}</label>
-                    <input type="text" id="field-help-text" name="help_text" class="form-input">
-                    <small class="form-text">{{T .AdminLang "forms.field_help_hint"}}</small>
-                </div>
-
-                <div class="form-group hidden" id="options-group">
-                    <label for="field-options" class="form-label">{{T .AdminLang "forms.field_options"}}</label>
-                    <textarea id="field-options" name="options" class="form-input" rows="4" placeholder="Option 1&#10;Option 2&#10;Option 3"></textarea>
-                    <small class="form-text">{{T .AdminLang "forms.field_options_hint"}}</small>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-checkbox">
-                        <input type="checkbox" id="field-required" name="is_required">
-                        <span>{{T .AdminLang "forms.field_required"}}</span>
-                    </label>
-                </div>
-            </form>
-        </div>
-        <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" onclick="closeFieldModal()">{{T .AdminLang "btn.cancel"}}</button>
-            <button type="button" class="btn btn-primary" onclick="saveField()">{{T .AdminLang "forms.save_field"}}</button>
-        </div>
-    </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-<script src="/static/dist/js/form-builder.js"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        initFormBuilder({{.Data.Form.ID}});
-    });
+function formFieldBuilder() {
+    return {
+        formId: {{.Data.Form.ID}},
+        fields: {{toJSON .Data.Fields}},
+        sortIteration: 0,
+        showModal: false,
+        editingField: null,
+        fieldTypes: [{{range $i, $t := .Data.FieldTypes}}{{if $i}},{{end}}'{{$t}}'{{end}}],
+
+        init() {
+            // Parse fields to ensure correct format
+            this.fields = (this.fields || []).map(f => ({
+                id: f.ID || f.id,
+                type: f.Type || f.type,
+                name: f.Name || f.name,
+                label: f.Label || f.label,
+                placeholder: f.Placeholder?.String || f.placeholder || '',
+                help_text: f.HelpText?.String || f.help_text || '',
+                options: f.Options?.String || f.options || '[]',
+                validation: f.Validation?.String || f.validation || '{}',
+                is_required: f.IsRequired ?? f.is_required ?? false
+            }));
+        },
+
+        handleSort(fieldId, newPosition) {
+            const oldIndex = this.fields.findIndex(f => f.id == fieldId);
+            if (oldIndex !== -1 && oldIndex !== newPosition) {
+                const [field] = this.fields.splice(oldIndex, 1);
+                this.fields.splice(newPosition, 0, field);
+                this.sortIteration++;  // Force Alpine to recreate DOM elements
+                this.saveOrder();
+            }
+        },
+
+        async saveOrder() {
+            const fieldIds = this.fields.map(f => f.id);
+            try {
+                await fetch(`/admin/forms/${this.formId}/fields/reorder`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ field_ids: fieldIds })
+                });
+            } catch (e) {
+                console.error('Failed to save field order:', e);
+            }
+        },
+
+        openAddModal() {
+            this.editingField = {
+                id: null,
+                type: this.fieldTypes[0],
+                name: '',
+                label: '',
+                placeholder: '',
+                help_text: '',
+                options: '',
+                is_required: false
+            };
+            this.showModal = true;
+        },
+
+        openEditModal(field) {
+            let optionsText = '';
+            if (field.options && field.options !== '[]') {
+                try {
+                    const arr = JSON.parse(field.options);
+                    optionsText = arr.join('\n');
+                } catch (e) {}
+            }
+            this.editingField = {
+                id: field.id,
+                type: field.type,
+                name: field.name,
+                label: field.label,
+                placeholder: field.placeholder,
+                help_text: field.help_text,
+                options: optionsText,
+                is_required: field.is_required
+            };
+            this.showModal = true;
+        },
+
+        closeModal() {
+            this.showModal = false;
+            this.editingField = null;
+        },
+
+        showOptionsField() {
+            return this.editingField && ['select', 'radio', 'checkbox'].includes(this.editingField.type);
+        },
+
+        async saveField() {
+            if (!this.editingField || !this.editingField.label.trim()) {
+                alert('Label is required');
+                return;
+            }
+
+            let options = '[]';
+            if (this.editingField.options.trim()) {
+                const arr = this.editingField.options.split('\n').map(o => o.trim()).filter(o => o);
+                options = JSON.stringify(arr);
+            }
+
+            const data = {
+                type: this.editingField.type,
+                label: this.editingField.label,
+                name: this.editingField.name,
+                placeholder: this.editingField.placeholder,
+                help_text: this.editingField.help_text,
+                options: options,
+                validation: '{}',
+                is_required: this.editingField.is_required
+            };
+
+            const url = this.editingField.id
+                ? `/admin/forms/${this.formId}/fields/${this.editingField.id}`
+                : `/admin/forms/${this.formId}/fields`;
+            const method = this.editingField.id ? 'PUT' : 'POST';
+
+            try {
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                if (result.success) {
+                    window.location.reload();
+                } else {
+                    alert('Error saving field');
+                }
+            } catch (e) {
+                console.error('Failed to save field:', e);
+                alert('Error saving field');
+            }
+        },
+
+        async deleteField(fieldId) {
+            if (!confirm('{{T .AdminLang "label.confirm_delete"}}')) return;
+
+            try {
+                const response = await fetch(`/admin/forms/${this.formId}/fields/${fieldId}`, {
+                    method: 'DELETE'
+                });
+                const result = await response.json();
+                if (result.success) {
+                    this.fields = this.fields.filter(f => f.id !== fieldId);
+                } else {
+                    alert('Error deleting field');
+                }
+            } catch (e) {
+                console.error('Failed to delete field:', e);
+                alert('Error deleting field');
+            }
+        }
+    };
+}
 </script>
 {{end}}
 {{end}}

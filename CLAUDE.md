@@ -100,6 +100,8 @@ The hook source is in `.claude/shared/global/hooks/`.
 
 2. **Embedded Assets**: Templates and static files are embedded using `//go:embed` in `web/embed.go`. JS dependencies (htmx, Alpine.js) are managed via `package.json` and copied to `web/static/dist/js/` during build. Run `make assets` to compile SCSS and install JS deps. After modifying JS dependencies, use `go build -a` to force re-embedding.
 
+   **Frontend JS Policy**: Always prefer official Alpine.js plugins (`@alpinejs/*`) over third-party libraries. For example, use `@alpinejs/sort` instead of Sortable.js, `@alpinejs/mask` instead of input mask libraries. This reduces external dependencies and ensures consistent integration with Alpine's reactivity system.
+
 3. **Handler Pattern**: Each handler struct (in `internal/handler/`) receives `*sql.DB`, `*render.Renderer`, and `*scs.SessionManager`. Handlers call `store.New(db)` to get sqlc queries.
 
 4. **Middleware Chain**: Protected routes use middleware in order:
