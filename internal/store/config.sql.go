@@ -55,7 +55,7 @@ func (q *Queries) DeleteConfigTranslationsForKey(ctx context.Context, configKey 
 }
 
 const getConfig = `-- name: GetConfig :one
-SELECT "key", value, type, description, updated_at, updated_by, language_id FROM config WHERE key = ?
+SELECT "key", value, type, description, updated_at, updated_by, language_code FROM config WHERE key = ?
 `
 
 func (q *Queries) GetConfig(ctx context.Context, key string) (Config, error) {
@@ -68,13 +68,13 @@ func (q *Queries) GetConfig(ctx context.Context, key string) (Config, error) {
 		&i.Description,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
-		&i.LanguageID,
+		&i.LanguageCode,
 	)
 	return i, err
 }
 
 const getConfigByKey = `-- name: GetConfigByKey :one
-SELECT "key", value, type, description, updated_at, updated_by, language_id FROM config WHERE key = ?
+SELECT "key", value, type, description, updated_at, updated_by, language_code FROM config WHERE key = ?
 `
 
 func (q *Queries) GetConfigByKey(ctx context.Context, key string) (Config, error) {
@@ -87,7 +87,7 @@ func (q *Queries) GetConfigByKey(ctx context.Context, key string) (Config, error
 		&i.Description,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
-		&i.LanguageID,
+		&i.LanguageCode,
 	)
 	return i, err
 }
@@ -116,7 +116,7 @@ type GetConfigTranslationRow struct {
 	LanguageName string        `json:"language_name"`
 }
 
-// Config Translations
+// Config Translations (uses language_id as FK to languages table)
 func (q *Queries) GetConfigTranslation(ctx context.Context, arg GetConfigTranslationParams) (GetConfigTranslationRow, error) {
 	row := q.db.QueryRowContext(ctx, getConfigTranslation, arg.ConfigKey, arg.LanguageID)
 	var i GetConfigTranslationRow
@@ -223,7 +223,7 @@ func (q *Queries) ListAllConfigTranslations(ctx context.Context) ([]ListAllConfi
 }
 
 const listConfig = `-- name: ListConfig :many
-SELECT "key", value, type, description, updated_at, updated_by, language_id FROM config ORDER BY key
+SELECT "key", value, type, description, updated_at, updated_by, language_code FROM config ORDER BY key
 `
 
 func (q *Queries) ListConfig(ctx context.Context) ([]Config, error) {
@@ -242,7 +242,7 @@ func (q *Queries) ListConfig(ctx context.Context) ([]Config, error) {
 			&i.Description,
 			&i.UpdatedAt,
 			&i.UpdatedBy,
-			&i.LanguageID,
+			&i.LanguageCode,
 		); err != nil {
 			return nil, err
 		}
@@ -312,7 +312,7 @@ const updateConfigValue = `-- name: UpdateConfigValue :one
 UPDATE config
 SET value = ?, updated_at = ?, updated_by = ?
 WHERE key = ?
-RETURNING "key", value, type, description, updated_at, updated_by, language_id
+RETURNING "key", value, type, description, updated_at, updated_by, language_code
 `
 
 type UpdateConfigValueParams struct {
@@ -337,30 +337,30 @@ func (q *Queries) UpdateConfigValue(ctx context.Context, arg UpdateConfigValuePa
 		&i.Description,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
-		&i.LanguageID,
+		&i.LanguageCode,
 	)
 	return i, err
 }
 
 const upsertConfig = `-- name: UpsertConfig :one
-INSERT INTO config (key, value, type, description, language_id, updated_at, updated_by)
+INSERT INTO config (key, value, type, description, language_code, updated_at, updated_by)
 VALUES (?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(key) DO UPDATE SET
     value = excluded.value,
-    language_id = excluded.language_id,
+    language_code = excluded.language_code,
     updated_at = excluded.updated_at,
     updated_by = excluded.updated_by
-RETURNING "key", value, type, description, updated_at, updated_by, language_id
+RETURNING "key", value, type, description, updated_at, updated_by, language_code
 `
 
 type UpsertConfigParams struct {
-	Key         string        `json:"key"`
-	Value       string        `json:"value"`
-	Type        string        `json:"type"`
-	Description string        `json:"description"`
-	LanguageID  int64         `json:"language_id"`
-	UpdatedAt   time.Time     `json:"updated_at"`
-	UpdatedBy   sql.NullInt64 `json:"updated_by"`
+	Key          string        `json:"key"`
+	Value        string        `json:"value"`
+	Type         string        `json:"type"`
+	Description  string        `json:"description"`
+	LanguageCode string        `json:"language_code"`
+	UpdatedAt    time.Time     `json:"updated_at"`
+	UpdatedBy    sql.NullInt64 `json:"updated_by"`
 }
 
 func (q *Queries) UpsertConfig(ctx context.Context, arg UpsertConfigParams) (Config, error) {
@@ -369,7 +369,7 @@ func (q *Queries) UpsertConfig(ctx context.Context, arg UpsertConfigParams) (Con
 		arg.Value,
 		arg.Type,
 		arg.Description,
-		arg.LanguageID,
+		arg.LanguageCode,
 		arg.UpdatedAt,
 		arg.UpdatedBy,
 	)
@@ -381,7 +381,7 @@ func (q *Queries) UpsertConfig(ctx context.Context, arg UpsertConfigParams) (Con
 		&i.Description,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
-		&i.LanguageID,
+		&i.LanguageCode,
 	)
 	return i, err
 }

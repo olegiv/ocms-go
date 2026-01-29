@@ -36,10 +36,10 @@ type SearchResult struct {
 
 // SearchParams holds search parameters.
 type SearchParams struct {
-	Query      string
-	Limit      int
-	Offset     int
-	LanguageID int64 // Optional: filter by language ID (0 = all languages)
+	Query        string
+	Limit        int
+	Offset       int
+	LanguageCode string // Optional: filter by language code ("" = all languages)
 }
 
 // NewSearchService creates a new search service.
@@ -99,10 +99,10 @@ func (s *SearchService) SearchPublishedPages(ctx context.Context, params SearchP
 	countArgs = append(countArgs, escapedQuery)
 	searchArgs = append(searchArgs, escapedQuery)
 
-	if params.LanguageID > 0 {
-		languageFilter = " AND p.language_id = ?"
-		countArgs = append(countArgs, params.LanguageID)
-		searchArgs = append(searchArgs, params.LanguageID)
+	if params.LanguageCode != "" {
+		languageFilter = " AND p.language_code = ?"
+		countArgs = append(countArgs, params.LanguageCode)
+		searchArgs = append(searchArgs, params.LanguageCode)
 	}
 
 	// Count total results

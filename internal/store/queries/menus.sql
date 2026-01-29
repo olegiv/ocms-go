@@ -1,5 +1,5 @@
 -- name: CreateMenu :one
-INSERT INTO menus (name, slug, language_id, created_at, updated_at)
+INSERT INTO menus (name, slug, language_code, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?)
 RETURNING *;
 
@@ -13,7 +13,7 @@ SELECT * FROM menus WHERE slug = ?;
 SELECT * FROM menus ORDER BY name;
 
 -- name: UpdateMenu :one
-UPDATE menus SET name = ?, slug = ?, language_id = ?, updated_at = ?
+UPDATE menus SET name = ?, slug = ?, language_code = ?, updated_at = ?
 WHERE id = ?
 RETURNING *;
 
@@ -30,10 +30,10 @@ SELECT EXISTS(SELECT 1 FROM menus WHERE slug = ?);
 SELECT EXISTS(SELECT 1 FROM menus WHERE slug = ? AND id != ?);
 
 -- name: MenuSlugExistsForLanguage :one
-SELECT EXISTS(SELECT 1 FROM menus WHERE slug = ? AND language_id = ?);
+SELECT EXISTS(SELECT 1 FROM menus WHERE slug = ? AND language_code = ?);
 
 -- name: MenuSlugExistsForLanguageExcluding :one
-SELECT EXISTS(SELECT 1 FROM menus WHERE slug = ? AND language_id = ? AND id != ?);
+SELECT EXISTS(SELECT 1 FROM menus WHERE slug = ? AND language_code = ? AND id != ?);
 
 -- Menu Item queries
 
@@ -87,37 +87,22 @@ LEFT JOIN pages p ON mi.page_id = p.id
 WHERE mi.menu_id = ?
 ORDER BY mi.position;
 
--- Language-specific menu queries
+-- Language-specific menu queries (no JOINs needed for most - language_code is directly on the table)
 
 -- name: ListMenusByLanguage :many
-SELECT m.*, l.code as language_code, l.name as language_name, l.native_name as language_native_name
-FROM menus m
-INNER JOIN languages l ON m.language_id = l.id
-WHERE m.language_id = ?
-ORDER BY m.name;
-
--- name: ListMenusWithLanguage :many
-SELECT m.*, l.code as language_code, l.name as language_name, l.native_name as language_native_name
-FROM menus m
-INNER JOIN languages l ON m.language_id = l.id
-ORDER BY m.name;
+SELECT * FROM menus
+WHERE language_code = ?
+ORDER BY name;
 
 -- name: GetMenuBySlugAndLanguage :one
-SELECT m.*, l.code as language_code
-FROM menus m
-INNER JOIN languages l ON m.language_id = l.id
-WHERE m.slug = ? AND m.language_id = ?;
+SELECT * FROM menus
+WHERE slug = ? AND language_code = ?;
 
--- name: GetMenuBySlugWithLanguage :one
-SELECT m.*, l.code as language_code, l.name as language_name
-FROM menus m
-INNER JOIN languages l ON m.language_id = l.id
-WHERE m.slug = ?;
-
+-- Get menu by slug, preferring specified language, falling back to default
 -- name: GetMenuForLanguageOrDefault :one
-SELECT m.*, l.code as language_code
+SELECT m.*
 FROM menus m
-INNER JOIN languages l ON m.language_id = l.id
-WHERE m.slug = ? AND (m.language_id = ? OR l.is_default = 1)
-ORDER BY CASE WHEN m.language_id = ? THEN 0 ELSE 1 END
+LEFT JOIN languages l ON m.language_code = l.code
+WHERE m.slug = ? AND (m.language_code = ? OR l.is_default = 1)
+ORDER BY CASE WHEN m.language_code = ? THEN 0 ELSE 1 END
 LIMIT 1;

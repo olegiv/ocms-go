@@ -45,11 +45,11 @@ func (q *Queries) CountForms(ctx context.Context) (int64, error) {
 }
 
 const countFormsByLanguage = `-- name: CountFormsByLanguage :one
-SELECT COUNT(*) FROM forms WHERE language_id = ?
+SELECT COUNT(*) FROM forms WHERE language_code = ?
 `
 
-func (q *Queries) CountFormsByLanguage(ctx context.Context, languageID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countFormsByLanguage, languageID)
+func (q *Queries) CountFormsByLanguage(ctx context.Context, languageCode string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countFormsByLanguage, languageCode)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -67,9 +67,9 @@ func (q *Queries) CountUnreadSubmissions(ctx context.Context, formID int64) (int
 }
 
 const createForm = `-- name: CreateForm :one
-INSERT INTO forms (name, slug, title, description, success_message, email_to, is_active, language_id, created_at, updated_at)
+INSERT INTO forms (name, slug, title, description, success_message, email_to, is_active, language_code, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, name, slug, title, description, success_message, email_to, is_active, language_id, created_at, updated_at
+RETURNING id, name, slug, title, description, success_message, email_to, is_active, language_code, created_at, updated_at
 `
 
 type CreateFormParams struct {
@@ -80,7 +80,7 @@ type CreateFormParams struct {
 	SuccessMessage sql.NullString `json:"success_message"`
 	EmailTo        sql.NullString `json:"email_to"`
 	IsActive       bool           `json:"is_active"`
-	LanguageID     int64          `json:"language_id"`
+	LanguageCode   string         `json:"language_code"`
 	CreatedAt      time.Time      `json:"created_at"`
 	UpdatedAt      time.Time      `json:"updated_at"`
 }
@@ -94,7 +94,7 @@ func (q *Queries) CreateForm(ctx context.Context, arg CreateFormParams) (Form, e
 		arg.SuccessMessage,
 		arg.EmailTo,
 		arg.IsActive,
-		arg.LanguageID,
+		arg.LanguageCode,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -108,7 +108,7 @@ func (q *Queries) CreateForm(ctx context.Context, arg CreateFormParams) (Form, e
 		&i.SuccessMessage,
 		&i.EmailTo,
 		&i.IsActive,
-		&i.LanguageID,
+		&i.LanguageCode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -116,25 +116,25 @@ func (q *Queries) CreateForm(ctx context.Context, arg CreateFormParams) (Form, e
 }
 
 const createFormField = `-- name: CreateFormField :one
-INSERT INTO form_fields (form_id, type, name, label, placeholder, help_text, options, validation, is_required, position, language_id, created_at, updated_at)
+INSERT INTO form_fields (form_id, type, name, label, placeholder, help_text, options, validation, is_required, position, language_code, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, form_id, type, name, label, placeholder, help_text, options, validation, is_required, position, language_id, created_at, updated_at
+RETURNING id, form_id, type, name, label, placeholder, help_text, options, validation, is_required, position, language_code, created_at, updated_at
 `
 
 type CreateFormFieldParams struct {
-	FormID      int64          `json:"form_id"`
-	Type        string         `json:"type"`
-	Name        string         `json:"name"`
-	Label       string         `json:"label"`
-	Placeholder sql.NullString `json:"placeholder"`
-	HelpText    sql.NullString `json:"help_text"`
-	Options     sql.NullString `json:"options"`
-	Validation  sql.NullString `json:"validation"`
-	IsRequired  bool           `json:"is_required"`
-	Position    int64          `json:"position"`
-	LanguageID  int64          `json:"language_id"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
+	FormID       int64          `json:"form_id"`
+	Type         string         `json:"type"`
+	Name         string         `json:"name"`
+	Label        string         `json:"label"`
+	Placeholder  sql.NullString `json:"placeholder"`
+	HelpText     sql.NullString `json:"help_text"`
+	Options      sql.NullString `json:"options"`
+	Validation   sql.NullString `json:"validation"`
+	IsRequired   bool           `json:"is_required"`
+	Position     int64          `json:"position"`
+	LanguageCode string         `json:"language_code"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
 }
 
 func (q *Queries) CreateFormField(ctx context.Context, arg CreateFormFieldParams) (FormField, error) {
@@ -149,7 +149,7 @@ func (q *Queries) CreateFormField(ctx context.Context, arg CreateFormFieldParams
 		arg.Validation,
 		arg.IsRequired,
 		arg.Position,
-		arg.LanguageID,
+		arg.LanguageCode,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -166,7 +166,7 @@ func (q *Queries) CreateFormField(ctx context.Context, arg CreateFormFieldParams
 		&i.Validation,
 		&i.IsRequired,
 		&i.Position,
-		&i.LanguageID,
+		&i.LanguageCode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -174,19 +174,19 @@ func (q *Queries) CreateFormField(ctx context.Context, arg CreateFormFieldParams
 }
 
 const createFormSubmission = `-- name: CreateFormSubmission :one
-INSERT INTO form_submissions (form_id, data, ip_address, user_agent, is_read, language_id, created_at)
+INSERT INTO form_submissions (form_id, data, ip_address, user_agent, is_read, language_code, created_at)
 VALUES (?, ?, ?, ?, ?, ?, ?)
-RETURNING id, form_id, data, ip_address, user_agent, is_read, language_id, created_at
+RETURNING id, form_id, data, ip_address, user_agent, is_read, language_code, created_at
 `
 
 type CreateFormSubmissionParams struct {
-	FormID     int64          `json:"form_id"`
-	Data       string         `json:"data"`
-	IpAddress  sql.NullString `json:"ip_address"`
-	UserAgent  sql.NullString `json:"user_agent"`
-	IsRead     bool           `json:"is_read"`
-	LanguageID int64          `json:"language_id"`
-	CreatedAt  time.Time      `json:"created_at"`
+	FormID       int64          `json:"form_id"`
+	Data         string         `json:"data"`
+	IpAddress    sql.NullString `json:"ip_address"`
+	UserAgent    sql.NullString `json:"user_agent"`
+	IsRead       bool           `json:"is_read"`
+	LanguageCode string         `json:"language_code"`
+	CreatedAt    time.Time      `json:"created_at"`
 }
 
 func (q *Queries) CreateFormSubmission(ctx context.Context, arg CreateFormSubmissionParams) (FormSubmission, error) {
@@ -196,7 +196,7 @@ func (q *Queries) CreateFormSubmission(ctx context.Context, arg CreateFormSubmis
 		arg.IpAddress,
 		arg.UserAgent,
 		arg.IsRead,
-		arg.LanguageID,
+		arg.LanguageCode,
 		arg.CreatedAt,
 	)
 	var i FormSubmission
@@ -207,7 +207,7 @@ func (q *Queries) CreateFormSubmission(ctx context.Context, arg CreateFormSubmis
 		&i.IpAddress,
 		&i.UserAgent,
 		&i.IsRead,
-		&i.LanguageID,
+		&i.LanguageCode,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -250,40 +250,40 @@ func (q *Queries) DeleteFormSubmission(ctx context.Context, id int64) error {
 }
 
 const formSlugExistsExcludingForLanguage = `-- name: FormSlugExistsExcludingForLanguage :one
-SELECT EXISTS(SELECT 1 FROM forms WHERE slug = ? AND language_id = ? AND id != ?)
+SELECT EXISTS(SELECT 1 FROM forms WHERE slug = ? AND language_code = ? AND id != ?)
 `
 
 type FormSlugExistsExcludingForLanguageParams struct {
-	Slug       string `json:"slug"`
-	LanguageID int64  `json:"language_id"`
-	ID         int64  `json:"id"`
+	Slug         string `json:"slug"`
+	LanguageCode string `json:"language_code"`
+	ID           int64  `json:"id"`
 }
 
 func (q *Queries) FormSlugExistsExcludingForLanguage(ctx context.Context, arg FormSlugExistsExcludingForLanguageParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, formSlugExistsExcludingForLanguage, arg.Slug, arg.LanguageID, arg.ID)
+	row := q.db.QueryRowContext(ctx, formSlugExistsExcludingForLanguage, arg.Slug, arg.LanguageCode, arg.ID)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
 }
 
 const formSlugExistsForLanguage = `-- name: FormSlugExistsForLanguage :one
-SELECT EXISTS(SELECT 1 FROM forms WHERE slug = ? AND language_id = ?)
+SELECT EXISTS(SELECT 1 FROM forms WHERE slug = ? AND language_code = ?)
 `
 
 type FormSlugExistsForLanguageParams struct {
-	Slug       string `json:"slug"`
-	LanguageID int64  `json:"language_id"`
+	Slug         string `json:"slug"`
+	LanguageCode string `json:"language_code"`
 }
 
 func (q *Queries) FormSlugExistsForLanguage(ctx context.Context, arg FormSlugExistsForLanguageParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, formSlugExistsForLanguage, arg.Slug, arg.LanguageID)
+	row := q.db.QueryRowContext(ctx, formSlugExistsForLanguage, arg.Slug, arg.LanguageCode)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
 }
 
 const getFormByID = `-- name: GetFormByID :one
-SELECT id, name, slug, title, description, success_message, email_to, is_active, language_id, created_at, updated_at FROM forms WHERE id = ?
+SELECT id, name, slug, title, description, success_message, email_to, is_active, language_code, created_at, updated_at FROM forms WHERE id = ?
 `
 
 func (q *Queries) GetFormByID(ctx context.Context, id int64) (Form, error) {
@@ -298,7 +298,7 @@ func (q *Queries) GetFormByID(ctx context.Context, id int64) (Form, error) {
 		&i.SuccessMessage,
 		&i.EmailTo,
 		&i.IsActive,
-		&i.LanguageID,
+		&i.LanguageCode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -306,7 +306,7 @@ func (q *Queries) GetFormByID(ctx context.Context, id int64) (Form, error) {
 }
 
 const getFormBySlug = `-- name: GetFormBySlug :one
-SELECT id, name, slug, title, description, success_message, email_to, is_active, language_id, created_at, updated_at FROM forms WHERE slug = ?
+SELECT id, name, slug, title, description, success_message, email_to, is_active, language_code, created_at, updated_at FROM forms WHERE slug = ?
 `
 
 func (q *Queries) GetFormBySlug(ctx context.Context, slug string) (Form, error) {
@@ -321,7 +321,7 @@ func (q *Queries) GetFormBySlug(ctx context.Context, slug string) (Form, error) 
 		&i.SuccessMessage,
 		&i.EmailTo,
 		&i.IsActive,
-		&i.LanguageID,
+		&i.LanguageCode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -329,16 +329,16 @@ func (q *Queries) GetFormBySlug(ctx context.Context, slug string) (Form, error) 
 }
 
 const getFormBySlugAndLanguage = `-- name: GetFormBySlugAndLanguage :one
-SELECT id, name, slug, title, description, success_message, email_to, is_active, language_id, created_at, updated_at FROM forms WHERE slug = ? AND language_id = ?
+SELECT id, name, slug, title, description, success_message, email_to, is_active, language_code, created_at, updated_at FROM forms WHERE slug = ? AND language_code = ?
 `
 
 type GetFormBySlugAndLanguageParams struct {
-	Slug       string `json:"slug"`
-	LanguageID int64  `json:"language_id"`
+	Slug         string `json:"slug"`
+	LanguageCode string `json:"language_code"`
 }
 
 func (q *Queries) GetFormBySlugAndLanguage(ctx context.Context, arg GetFormBySlugAndLanguageParams) (Form, error) {
-	row := q.db.QueryRowContext(ctx, getFormBySlugAndLanguage, arg.Slug, arg.LanguageID)
+	row := q.db.QueryRowContext(ctx, getFormBySlugAndLanguage, arg.Slug, arg.LanguageCode)
 	var i Form
 	err := row.Scan(
 		&i.ID,
@@ -349,7 +349,7 @@ func (q *Queries) GetFormBySlugAndLanguage(ctx context.Context, arg GetFormBySlu
 		&i.SuccessMessage,
 		&i.EmailTo,
 		&i.IsActive,
-		&i.LanguageID,
+		&i.LanguageCode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -357,7 +357,7 @@ func (q *Queries) GetFormBySlugAndLanguage(ctx context.Context, arg GetFormBySlu
 }
 
 const getFormFieldByID = `-- name: GetFormFieldByID :one
-SELECT id, form_id, type, name, label, placeholder, help_text, options, validation, is_required, position, language_id, created_at, updated_at FROM form_fields WHERE id = ?
+SELECT id, form_id, type, name, label, placeholder, help_text, options, validation, is_required, position, language_code, created_at, updated_at FROM form_fields WHERE id = ?
 `
 
 func (q *Queries) GetFormFieldByID(ctx context.Context, id int64) (FormField, error) {
@@ -375,7 +375,7 @@ func (q *Queries) GetFormFieldByID(ctx context.Context, id int64) (FormField, er
 		&i.Validation,
 		&i.IsRequired,
 		&i.Position,
-		&i.LanguageID,
+		&i.LanguageCode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -383,7 +383,7 @@ func (q *Queries) GetFormFieldByID(ctx context.Context, id int64) (FormField, er
 }
 
 const getFormFields = `-- name: GetFormFields :many
-SELECT id, form_id, type, name, label, placeholder, help_text, options, validation, is_required, position, language_id, created_at, updated_at FROM form_fields WHERE form_id = ? ORDER BY position
+SELECT id, form_id, type, name, label, placeholder, help_text, options, validation, is_required, position, language_code, created_at, updated_at FROM form_fields WHERE form_id = ? ORDER BY position
 `
 
 func (q *Queries) GetFormFields(ctx context.Context, formID int64) ([]FormField, error) {
@@ -407,7 +407,7 @@ func (q *Queries) GetFormFields(ctx context.Context, formID int64) ([]FormField,
 			&i.Validation,
 			&i.IsRequired,
 			&i.Position,
-			&i.LanguageID,
+			&i.LanguageCode,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -425,7 +425,7 @@ func (q *Queries) GetFormFields(ctx context.Context, formID int64) ([]FormField,
 }
 
 const getFormSubmissionByID = `-- name: GetFormSubmissionByID :one
-SELECT id, form_id, data, ip_address, user_agent, is_read, language_id, created_at FROM form_submissions WHERE id = ?
+SELECT id, form_id, data, ip_address, user_agent, is_read, language_code, created_at FROM form_submissions WHERE id = ?
 `
 
 func (q *Queries) GetFormSubmissionByID(ctx context.Context, id int64) (FormSubmission, error) {
@@ -438,14 +438,14 @@ func (q *Queries) GetFormSubmissionByID(ctx context.Context, id int64) (FormSubm
 		&i.IpAddress,
 		&i.UserAgent,
 		&i.IsRead,
-		&i.LanguageID,
+		&i.LanguageCode,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getFormSubmissions = `-- name: GetFormSubmissions :many
-SELECT id, form_id, data, ip_address, user_agent, is_read, language_id, created_at FROM form_submissions WHERE form_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, form_id, data, ip_address, user_agent, is_read, language_code, created_at FROM form_submissions WHERE form_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type GetFormSubmissionsParams struct {
@@ -470,7 +470,7 @@ func (q *Queries) GetFormSubmissions(ctx context.Context, arg GetFormSubmissions
 			&i.IpAddress,
 			&i.UserAgent,
 			&i.IsRead,
-			&i.LanguageID,
+			&i.LanguageCode,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -488,7 +488,7 @@ func (q *Queries) GetFormSubmissions(ctx context.Context, arg GetFormSubmissions
 
 const getRecentSubmissionsWithForm = `-- name: GetRecentSubmissionsWithForm :many
 SELECT
-    fs.id, fs.form_id, fs.data, fs.ip_address, fs.user_agent, fs.is_read, fs.language_id, fs.created_at,
+    fs.id, fs.form_id, fs.data, fs.ip_address, fs.user_agent, fs.is_read, fs.language_code, fs.created_at,
     f.name as form_name, f.slug as form_slug
 FROM form_submissions fs
 JOIN forms f ON f.id = fs.form_id
@@ -497,16 +497,16 @@ LIMIT ?
 `
 
 type GetRecentSubmissionsWithFormRow struct {
-	ID         int64          `json:"id"`
-	FormID     int64          `json:"form_id"`
-	Data       string         `json:"data"`
-	IpAddress  sql.NullString `json:"ip_address"`
-	UserAgent  sql.NullString `json:"user_agent"`
-	IsRead     bool           `json:"is_read"`
-	LanguageID int64          `json:"language_id"`
-	CreatedAt  time.Time      `json:"created_at"`
-	FormName   string         `json:"form_name"`
-	FormSlug   string         `json:"form_slug"`
+	ID           int64          `json:"id"`
+	FormID       int64          `json:"form_id"`
+	Data         string         `json:"data"`
+	IpAddress    sql.NullString `json:"ip_address"`
+	UserAgent    sql.NullString `json:"user_agent"`
+	IsRead       bool           `json:"is_read"`
+	LanguageCode string         `json:"language_code"`
+	CreatedAt    time.Time      `json:"created_at"`
+	FormName     string         `json:"form_name"`
+	FormSlug     string         `json:"form_slug"`
 }
 
 func (q *Queries) GetRecentSubmissionsWithForm(ctx context.Context, limit int64) ([]GetRecentSubmissionsWithFormRow, error) {
@@ -525,7 +525,7 @@ func (q *Queries) GetRecentSubmissionsWithForm(ctx context.Context, limit int64)
 			&i.IpAddress,
 			&i.UserAgent,
 			&i.IsRead,
-			&i.LanguageID,
+			&i.LanguageCode,
 			&i.CreatedAt,
 			&i.FormName,
 			&i.FormSlug,
@@ -544,7 +544,7 @@ func (q *Queries) GetRecentSubmissionsWithForm(ctx context.Context, limit int64)
 }
 
 const listForms = `-- name: ListForms :many
-SELECT id, name, slug, title, description, success_message, email_to, is_active, language_id, created_at, updated_at FROM forms ORDER BY name LIMIT ? OFFSET ?
+SELECT id, name, slug, title, description, success_message, email_to, is_active, language_code, created_at, updated_at FROM forms ORDER BY name LIMIT ? OFFSET ?
 `
 
 type ListFormsParams struct {
@@ -570,7 +570,7 @@ func (q *Queries) ListForms(ctx context.Context, arg ListFormsParams) ([]Form, e
 			&i.SuccessMessage,
 			&i.EmailTo,
 			&i.IsActive,
-			&i.LanguageID,
+			&i.LanguageCode,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -588,17 +588,17 @@ func (q *Queries) ListForms(ctx context.Context, arg ListFormsParams) ([]Form, e
 }
 
 const listFormsByLanguage = `-- name: ListFormsByLanguage :many
-SELECT id, name, slug, title, description, success_message, email_to, is_active, language_id, created_at, updated_at FROM forms WHERE language_id = ? ORDER BY name LIMIT ? OFFSET ?
+SELECT id, name, slug, title, description, success_message, email_to, is_active, language_code, created_at, updated_at FROM forms WHERE language_code = ? ORDER BY name LIMIT ? OFFSET ?
 `
 
 type ListFormsByLanguageParams struct {
-	LanguageID int64 `json:"language_id"`
-	Limit      int64 `json:"limit"`
-	Offset     int64 `json:"offset"`
+	LanguageCode string `json:"language_code"`
+	Limit        int64  `json:"limit"`
+	Offset       int64  `json:"offset"`
 }
 
 func (q *Queries) ListFormsByLanguage(ctx context.Context, arg ListFormsByLanguageParams) ([]Form, error) {
-	rows, err := q.db.QueryContext(ctx, listFormsByLanguage, arg.LanguageID, arg.Limit, arg.Offset)
+	rows, err := q.db.QueryContext(ctx, listFormsByLanguage, arg.LanguageCode, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -615,7 +615,7 @@ func (q *Queries) ListFormsByLanguage(ctx context.Context, arg ListFormsByLangua
 			&i.SuccessMessage,
 			&i.EmailTo,
 			&i.IsActive,
-			&i.LanguageID,
+			&i.LanguageCode,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -642,9 +642,9 @@ func (q *Queries) MarkSubmissionRead(ctx context.Context, id int64) error {
 }
 
 const updateForm = `-- name: UpdateForm :one
-UPDATE forms SET name = ?, slug = ?, title = ?, description = ?, success_message = ?, email_to = ?, is_active = ?, language_id = ?, updated_at = ?
+UPDATE forms SET name = ?, slug = ?, title = ?, description = ?, success_message = ?, email_to = ?, is_active = ?, language_code = ?, updated_at = ?
 WHERE id = ?
-RETURNING id, name, slug, title, description, success_message, email_to, is_active, language_id, created_at, updated_at
+RETURNING id, name, slug, title, description, success_message, email_to, is_active, language_code, created_at, updated_at
 `
 
 type UpdateFormParams struct {
@@ -655,7 +655,7 @@ type UpdateFormParams struct {
 	SuccessMessage sql.NullString `json:"success_message"`
 	EmailTo        sql.NullString `json:"email_to"`
 	IsActive       bool           `json:"is_active"`
-	LanguageID     int64          `json:"language_id"`
+	LanguageCode   string         `json:"language_code"`
 	UpdatedAt      time.Time      `json:"updated_at"`
 	ID             int64          `json:"id"`
 }
@@ -669,7 +669,7 @@ func (q *Queries) UpdateForm(ctx context.Context, arg UpdateFormParams) (Form, e
 		arg.SuccessMessage,
 		arg.EmailTo,
 		arg.IsActive,
-		arg.LanguageID,
+		arg.LanguageCode,
 		arg.UpdatedAt,
 		arg.ID,
 	)
@@ -683,7 +683,7 @@ func (q *Queries) UpdateForm(ctx context.Context, arg UpdateFormParams) (Form, e
 		&i.SuccessMessage,
 		&i.EmailTo,
 		&i.IsActive,
-		&i.LanguageID,
+		&i.LanguageCode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -691,24 +691,24 @@ func (q *Queries) UpdateForm(ctx context.Context, arg UpdateFormParams) (Form, e
 }
 
 const updateFormField = `-- name: UpdateFormField :one
-UPDATE form_fields SET type = ?, name = ?, label = ?, placeholder = ?, help_text = ?, options = ?, validation = ?, is_required = ?, position = ?, language_id = ?, updated_at = ?
+UPDATE form_fields SET type = ?, name = ?, label = ?, placeholder = ?, help_text = ?, options = ?, validation = ?, is_required = ?, position = ?, language_code = ?, updated_at = ?
 WHERE id = ?
-RETURNING id, form_id, type, name, label, placeholder, help_text, options, validation, is_required, position, language_id, created_at, updated_at
+RETURNING id, form_id, type, name, label, placeholder, help_text, options, validation, is_required, position, language_code, created_at, updated_at
 `
 
 type UpdateFormFieldParams struct {
-	Type        string         `json:"type"`
-	Name        string         `json:"name"`
-	Label       string         `json:"label"`
-	Placeholder sql.NullString `json:"placeholder"`
-	HelpText    sql.NullString `json:"help_text"`
-	Options     sql.NullString `json:"options"`
-	Validation  sql.NullString `json:"validation"`
-	IsRequired  bool           `json:"is_required"`
-	Position    int64          `json:"position"`
-	LanguageID  int64          `json:"language_id"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	ID          int64          `json:"id"`
+	Type         string         `json:"type"`
+	Name         string         `json:"name"`
+	Label        string         `json:"label"`
+	Placeholder  sql.NullString `json:"placeholder"`
+	HelpText     sql.NullString `json:"help_text"`
+	Options      sql.NullString `json:"options"`
+	Validation   sql.NullString `json:"validation"`
+	IsRequired   bool           `json:"is_required"`
+	Position     int64          `json:"position"`
+	LanguageCode string         `json:"language_code"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	ID           int64          `json:"id"`
 }
 
 func (q *Queries) UpdateFormField(ctx context.Context, arg UpdateFormFieldParams) (FormField, error) {
@@ -722,7 +722,7 @@ func (q *Queries) UpdateFormField(ctx context.Context, arg UpdateFormFieldParams
 		arg.Validation,
 		arg.IsRequired,
 		arg.Position,
-		arg.LanguageID,
+		arg.LanguageCode,
 		arg.UpdatedAt,
 		arg.ID,
 	)
@@ -739,7 +739,7 @@ func (q *Queries) UpdateFormField(ctx context.Context, arg UpdateFormFieldParams
 		&i.Validation,
 		&i.IsRequired,
 		&i.Position,
-		&i.LanguageID,
+		&i.LanguageCode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

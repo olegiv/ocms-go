@@ -369,7 +369,7 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		result, err := mediaService.Upload(ctx, file, fileHeader, apiKey.CreatedBy, folderID, defaultLang.ID)
+		result, err := mediaService.Upload(ctx, file, fileHeader, apiKey.CreatedBy, folderID, defaultLang.Code)
 		_ = file.Close()
 
 		if err != nil {
@@ -436,13 +436,13 @@ func (h *Handler) UpdateMedia(w http.ResponseWriter, r *http.Request) {
 
 	// Build update params, starting with existing values
 	params := store.UpdateMediaParams{
-		ID:         existing.ID,
-		Filename:   existing.Filename,
-		Alt:        existing.Alt,
-		Caption:    existing.Caption,
-		FolderID:   existing.FolderID,
-		LanguageID: existing.LanguageID,
-		UpdatedAt:  time.Now(),
+		ID:           existing.ID,
+		Filename:     existing.Filename,
+		Alt:          existing.Alt,
+		Caption:      existing.Caption,
+		FolderID:     existing.FolderID,
+		LanguageCode: existing.LanguageCode,
+		UpdatedAt:    time.Now(),
 	}
 
 	// Apply updates

@@ -12,24 +12,24 @@ import (
 )
 
 const countPagesByLanguage = `-- name: CountPagesByLanguage :one
-SELECT COUNT(*) FROM pages WHERE language_id = ?
+SELECT COUNT(*) FROM pages WHERE language_code = ?
 `
 
 // Count pages for a specific language
-func (q *Queries) CountPagesByLanguage(ctx context.Context, languageID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPagesByLanguage, languageID)
+func (q *Queries) CountPagesByLanguage(ctx context.Context, languageCode string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPagesByLanguage, languageCode)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const countPublishedPagesByLanguage = `-- name: CountPublishedPagesByLanguage :one
-SELECT COUNT(*) FROM pages WHERE language_id = ? AND status = 'published'
+SELECT COUNT(*) FROM pages WHERE language_code = ? AND status = 'published'
 `
 
 // Count published pages for a specific language
-func (q *Queries) CountPublishedPagesByLanguage(ctx context.Context, languageID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPublishedPagesByLanguage, languageID)
+func (q *Queries) CountPublishedPagesByLanguage(ctx context.Context, languageCode string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPublishedPagesByLanguage, languageCode)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -197,24 +197,24 @@ SELECT
 FROM languages l
 LEFT JOIN (
     -- Get pages that are translations of the source page
-    SELECT p.id, p.slug, p.title, t.language_id
+    SELECT p.id, p.slug, p.title, p.language_code
     FROM pages p
     INNER JOIN translations t ON t.translation_id = p.id
     WHERE t.entity_type = 'page' AND t.entity_id = ? AND p.status = 'published'
     UNION
     -- Get the source page itself
-    SELECT p.id, p.slug, p.title, p.language_id
+    SELECT p.id, p.slug, p.title, p.language_code
     FROM pages p
     WHERE p.id = ? AND p.status = 'published'
     UNION
     -- Get pages where current page is a translation (sibling translations)
-    SELECT p2.id, p2.slug, p2.title, p2.language_id
+    SELECT p2.id, p2.slug, p2.title, p2.language_code
     FROM translations t
     INNER JOIN pages p2 ON (p2.id = t.entity_id OR p2.id = t.translation_id)
     WHERE t.entity_type = 'page'
     AND (t.entity_id = ? OR t.translation_id = ?)
     AND p2.status = 'published'
-) p ON p.language_id = l.id
+) p ON p.language_code = l.code
 WHERE l.is_active = 1
 ORDER BY l.position
 `
@@ -280,7 +280,7 @@ func (q *Queries) GetPageAvailableTranslations(ctx context.Context, arg GetPageA
 
 const getPageByLanguageFromTranslation = `-- name: GetPageByLanguageFromTranslation :one
 
-SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_id FROM pages p
+SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code FROM pages p
 INNER JOIN translations t ON t.translation_id = p.id
 WHERE t.entity_type = 'page' AND t.entity_id = ? AND t.language_id = ?
 `
@@ -313,13 +313,13 @@ func (q *Queries) GetPageByLanguageFromTranslation(ctx context.Context, arg GetP
 		&i.NoFollow,
 		&i.CanonicalUrl,
 		&i.ScheduledAt,
-		&i.LanguageID,
+		&i.LanguageCode,
 	)
 	return i, err
 }
 
 const getPageTranslationBySlug = `-- name: GetPageTranslationBySlug :one
-SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_id FROM pages p
+SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code FROM pages p
 INNER JOIN translations t ON t.translation_id = p.id
 INNER JOIN pages source ON source.id = t.entity_id
 WHERE t.entity_type = 'page'
@@ -356,7 +356,7 @@ func (q *Queries) GetPageTranslationBySlug(ctx context.Context, arg GetPageTrans
 		&i.NoFollow,
 		&i.CanonicalUrl,
 		&i.ScheduledAt,
-		&i.LanguageID,
+		&i.LanguageCode,
 	)
 	return i, err
 }
@@ -416,13 +416,12 @@ func (q *Queries) GetPageTranslationLinks(ctx context.Context, entityID int64) (
 
 const getPageWithLanguage = `-- name: GetPageWithLanguage :one
 SELECT
-    p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_id,
-    l.code as language_code,
+    p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code,
     l.name as language_name,
     l.native_name as language_native_name,
     l.direction as language_direction
 FROM pages p
-INNER JOIN languages l ON l.id = p.language_id
+INNER JOIN languages l ON l.code = p.language_code
 WHERE p.id = ?
 `
 
@@ -445,14 +444,13 @@ type GetPageWithLanguageRow struct {
 	NoFollow           int64         `json:"no_follow"`
 	CanonicalUrl       string        `json:"canonical_url"`
 	ScheduledAt        sql.NullTime  `json:"scheduled_at"`
-	LanguageID         int64         `json:"language_id"`
 	LanguageCode       string        `json:"language_code"`
 	LanguageName       string        `json:"language_name"`
 	LanguageNativeName string        `json:"language_native_name"`
 	LanguageDirection  string        `json:"language_direction"`
 }
 
-// Get page with its language information
+// Get page with its language information (no JOIN needed - language_code is on pages)
 func (q *Queries) GetPageWithLanguage(ctx context.Context, id int64) (GetPageWithLanguageRow, error) {
 	row := q.db.QueryRowContext(ctx, getPageWithLanguage, id)
 	var i GetPageWithLanguageRow
@@ -475,7 +473,6 @@ func (q *Queries) GetPageWithLanguage(ctx context.Context, id int64) (GetPageWit
 		&i.NoFollow,
 		&i.CanonicalUrl,
 		&i.ScheduledAt,
-		&i.LanguageID,
 		&i.LanguageCode,
 		&i.LanguageName,
 		&i.LanguageNativeName,
@@ -486,14 +483,13 @@ func (q *Queries) GetPageWithLanguage(ctx context.Context, id int64) (GetPageWit
 
 const getPublishedPageWithLanguageBySlug = `-- name: GetPublishedPageWithLanguageBySlug :one
 SELECT
-    p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_id,
-    COALESCE(l.code, '') as language_code,
-    COALESCE(l.name, '') as language_name,
-    COALESCE(l.native_name, '') as language_native_name,
-    COALESCE(l.direction, 'ltr') as language_direction,
-    COALESCE(l.is_default, 1) as language_is_default
+    p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code,
+    l.name as language_name,
+    l.native_name as language_native_name,
+    l.direction as language_direction,
+    l.is_default as language_is_default
 FROM pages p
-INNER JOIN languages l ON l.id = p.language_id
+INNER JOIN languages l ON l.code = p.language_code
 WHERE p.slug = ? AND p.status = 'published'
 `
 
@@ -516,7 +512,6 @@ type GetPublishedPageWithLanguageBySlugRow struct {
 	NoFollow           int64         `json:"no_follow"`
 	CanonicalUrl       string        `json:"canonical_url"`
 	ScheduledAt        sql.NullTime  `json:"scheduled_at"`
-	LanguageID         int64         `json:"language_id"`
 	LanguageCode       string        `json:"language_code"`
 	LanguageName       string        `json:"language_name"`
 	LanguageNativeName string        `json:"language_native_name"`
@@ -524,7 +519,7 @@ type GetPublishedPageWithLanguageBySlugRow struct {
 	LanguageIsDefault  bool          `json:"language_is_default"`
 }
 
-// Get page with language info by slug
+// Get page with language info by slug (no JOIN needed - language_code is on pages)
 func (q *Queries) GetPublishedPageWithLanguageBySlug(ctx context.Context, slug string) (GetPublishedPageWithLanguageBySlugRow, error) {
 	row := q.db.QueryRowContext(ctx, getPublishedPageWithLanguageBySlug, slug)
 	var i GetPublishedPageWithLanguageBySlugRow
@@ -547,7 +542,6 @@ func (q *Queries) GetPublishedPageWithLanguageBySlug(ctx context.Context, slug s
 		&i.NoFollow,
 		&i.CanonicalUrl,
 		&i.ScheduledAt,
-		&i.LanguageID,
 		&i.LanguageCode,
 		&i.LanguageName,
 		&i.LanguageNativeName,
@@ -736,7 +730,7 @@ SELECT
     l.is_default as is_default,
     COUNT(p.id) as page_count
 FROM languages l
-LEFT JOIN pages p ON p.language_id = l.id
+LEFT JOIN pages p ON p.language_code = l.code
 WHERE l.is_active = 1
 GROUP BY l.id, l.code, l.name, l.is_default, l.position
 ORDER BY l.is_default DESC, l.position
@@ -922,21 +916,21 @@ func (q *Queries) GetTranslationsForPagesBatch(ctx context.Context) ([]GetTransl
 }
 
 const listPagesByLanguage = `-- name: ListPagesByLanguage :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id FROM pages
-WHERE language_id = ?
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code FROM pages
+WHERE language_code = ?
 ORDER BY created_at DESC
 LIMIT ? OFFSET ?
 `
 
 type ListPagesByLanguageParams struct {
-	LanguageID int64 `json:"language_id"`
-	Limit      int64 `json:"limit"`
-	Offset     int64 `json:"offset"`
+	LanguageCode string `json:"language_code"`
+	Limit        int64  `json:"limit"`
+	Offset       int64  `json:"offset"`
 }
 
 // List all pages for a specific language
 func (q *Queries) ListPagesByLanguage(ctx context.Context, arg ListPagesByLanguageParams) ([]Page, error) {
-	rows, err := q.db.QueryContext(ctx, listPagesByLanguage, arg.LanguageID, arg.Limit, arg.Offset)
+	rows, err := q.db.QueryContext(ctx, listPagesByLanguage, arg.LanguageCode, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -963,7 +957,7 @@ func (q *Queries) ListPagesByLanguage(ctx context.Context, arg ListPagesByLangua
 			&i.NoFollow,
 			&i.CanonicalUrl,
 			&i.ScheduledAt,
-			&i.LanguageID,
+			&i.LanguageCode,
 		); err != nil {
 			return nil, err
 		}
@@ -979,21 +973,21 @@ func (q *Queries) ListPagesByLanguage(ctx context.Context, arg ListPagesByLangua
 }
 
 const listPublishedPagesByLanguage = `-- name: ListPublishedPagesByLanguage :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_id FROM pages
-WHERE language_id = ? AND status = 'published'
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code FROM pages
+WHERE language_code = ? AND status = 'published'
 ORDER BY published_at DESC
 LIMIT ? OFFSET ?
 `
 
 type ListPublishedPagesByLanguageParams struct {
-	LanguageID int64 `json:"language_id"`
-	Limit      int64 `json:"limit"`
-	Offset     int64 `json:"offset"`
+	LanguageCode string `json:"language_code"`
+	Limit        int64  `json:"limit"`
+	Offset       int64  `json:"offset"`
 }
 
 // List published pages for a specific language
 func (q *Queries) ListPublishedPagesByLanguage(ctx context.Context, arg ListPublishedPagesByLanguageParams) ([]Page, error) {
-	rows, err := q.db.QueryContext(ctx, listPublishedPagesByLanguage, arg.LanguageID, arg.Limit, arg.Offset)
+	rows, err := q.db.QueryContext(ctx, listPublishedPagesByLanguage, arg.LanguageCode, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -1020,7 +1014,7 @@ func (q *Queries) ListPublishedPagesByLanguage(ctx context.Context, arg ListPubl
 			&i.NoFollow,
 			&i.CanonicalUrl,
 			&i.ScheduledAt,
-			&i.LanguageID,
+			&i.LanguageCode,
 		); err != nil {
 			return nil, err
 		}
@@ -1057,17 +1051,17 @@ func (q *Queries) TranslationExists(ctx context.Context, arg TranslationExistsPa
 }
 
 const updatePageLanguage = `-- name: UpdatePageLanguage :exec
-UPDATE pages SET language_id = ?, updated_at = ? WHERE id = ?
+UPDATE pages SET language_code = ?, updated_at = ? WHERE id = ?
 `
 
 type UpdatePageLanguageParams struct {
-	LanguageID int64     `json:"language_id"`
-	UpdatedAt  time.Time `json:"updated_at"`
-	ID         int64     `json:"id"`
+	LanguageCode string    `json:"language_code"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	ID           int64     `json:"id"`
 }
 
 // Update page language
 func (q *Queries) UpdatePageLanguage(ctx context.Context, arg UpdatePageLanguageParams) error {
-	_, err := q.db.ExecContext(ctx, updatePageLanguage, arg.LanguageID, arg.UpdatedAt, arg.ID)
+	_, err := q.db.ExecContext(ctx, updatePageLanguage, arg.LanguageCode, arg.UpdatedAt, arg.ID)
 	return err
 }

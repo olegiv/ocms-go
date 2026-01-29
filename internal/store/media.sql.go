@@ -67,25 +67,25 @@ func (q *Queries) CountMediaInRootFolder(ctx context.Context) (int64, error) {
 }
 
 const createMedia = `-- name: CreateMedia :one
-INSERT INTO media (uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_id, created_at, updated_at)
+INSERT INTO media (uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_code, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_id, created_at, updated_at
+RETURNING id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_code, created_at, updated_at
 `
 
 type CreateMediaParams struct {
-	Uuid       string         `json:"uuid"`
-	Filename   string         `json:"filename"`
-	MimeType   string         `json:"mime_type"`
-	Size       int64          `json:"size"`
-	Width      sql.NullInt64  `json:"width"`
-	Height     sql.NullInt64  `json:"height"`
-	Alt        sql.NullString `json:"alt"`
-	Caption    sql.NullString `json:"caption"`
-	FolderID   sql.NullInt64  `json:"folder_id"`
-	UploadedBy int64          `json:"uploaded_by"`
-	LanguageID int64          `json:"language_id"`
-	CreatedAt  time.Time      `json:"created_at"`
-	UpdatedAt  time.Time      `json:"updated_at"`
+	Uuid         string         `json:"uuid"`
+	Filename     string         `json:"filename"`
+	MimeType     string         `json:"mime_type"`
+	Size         int64          `json:"size"`
+	Width        sql.NullInt64  `json:"width"`
+	Height       sql.NullInt64  `json:"height"`
+	Alt          sql.NullString `json:"alt"`
+	Caption      sql.NullString `json:"caption"`
+	FolderID     sql.NullInt64  `json:"folder_id"`
+	UploadedBy   int64          `json:"uploaded_by"`
+	LanguageCode string         `json:"language_code"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
 }
 
 func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error) {
@@ -100,7 +100,7 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Mediu
 		arg.Caption,
 		arg.FolderID,
 		arg.UploadedBy,
-		arg.LanguageID,
+		arg.LanguageCode,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -117,7 +117,7 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Mediu
 		&i.Caption,
 		&i.FolderID,
 		&i.UploadedBy,
-		&i.LanguageID,
+		&i.LanguageCode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -243,7 +243,7 @@ func (q *Queries) DeleteMediaVariants(ctx context.Context, mediaID int64) error 
 }
 
 const getMediaByID = `-- name: GetMediaByID :one
-SELECT id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_id, created_at, updated_at FROM media WHERE id = ?
+SELECT id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_code, created_at, updated_at FROM media WHERE id = ?
 `
 
 func (q *Queries) GetMediaByID(ctx context.Context, id int64) (Medium, error) {
@@ -261,7 +261,7 @@ func (q *Queries) GetMediaByID(ctx context.Context, id int64) (Medium, error) {
 		&i.Caption,
 		&i.FolderID,
 		&i.UploadedBy,
-		&i.LanguageID,
+		&i.LanguageCode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -269,7 +269,7 @@ func (q *Queries) GetMediaByID(ctx context.Context, id int64) (Medium, error) {
 }
 
 const getMediaByUUID = `-- name: GetMediaByUUID :one
-SELECT id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_id, created_at, updated_at FROM media WHERE uuid = ?
+SELECT id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_code, created_at, updated_at FROM media WHERE uuid = ?
 `
 
 func (q *Queries) GetMediaByUUID(ctx context.Context, uuid string) (Medium, error) {
@@ -287,7 +287,7 @@ func (q *Queries) GetMediaByUUID(ctx context.Context, uuid string) (Medium, erro
 		&i.Caption,
 		&i.FolderID,
 		&i.UploadedBy,
-		&i.LanguageID,
+		&i.LanguageCode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -322,7 +322,7 @@ type GetMediaTranslationParams struct {
 	LanguageID int64 `json:"language_id"`
 }
 
-// Media Translations
+// Media Translations (uses language_id as FK to languages table)
 func (q *Queries) GetMediaTranslation(ctx context.Context, arg GetMediaTranslationParams) (MediaTranslation, error) {
 	row := q.db.QueryRowContext(ctx, getMediaTranslation, arg.MediaID, arg.LanguageID)
 	var i MediaTranslation
@@ -451,7 +451,7 @@ func (q *Queries) GetMediaVariants(ctx context.Context, mediaID int64) ([]MediaV
 }
 
 const getRecentMedia = `-- name: GetRecentMedia :many
-SELECT id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_id, created_at, updated_at FROM media ORDER BY created_at DESC LIMIT ?
+SELECT id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_code, created_at, updated_at FROM media ORDER BY created_at DESC LIMIT ?
 `
 
 func (q *Queries) GetRecentMedia(ctx context.Context, limit int64) ([]Medium, error) {
@@ -475,7 +475,7 @@ func (q *Queries) GetRecentMedia(ctx context.Context, limit int64) ([]Medium, er
 			&i.Caption,
 			&i.FolderID,
 			&i.UploadedBy,
-			&i.LanguageID,
+			&i.LanguageCode,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -526,7 +526,7 @@ func (q *Queries) ListChildMediaFolders(ctx context.Context, parentID sql.NullIn
 }
 
 const listMedia = `-- name: ListMedia :many
-SELECT id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_id, created_at, updated_at FROM media ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_code, created_at, updated_at FROM media ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type ListMediaParams struct {
@@ -555,7 +555,7 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium,
 			&i.Caption,
 			&i.FolderID,
 			&i.UploadedBy,
-			&i.LanguageID,
+			&i.LanguageCode,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -573,7 +573,7 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium,
 }
 
 const listMediaByType = `-- name: ListMediaByType :many
-SELECT id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_id, created_at, updated_at FROM media WHERE mime_type LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_code, created_at, updated_at FROM media WHERE mime_type LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type ListMediaByTypeParams struct {
@@ -603,7 +603,7 @@ func (q *Queries) ListMediaByType(ctx context.Context, arg ListMediaByTypeParams
 			&i.Caption,
 			&i.FolderID,
 			&i.UploadedBy,
-			&i.LanguageID,
+			&i.LanguageCode,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -654,7 +654,7 @@ func (q *Queries) ListMediaFolders(ctx context.Context) ([]MediaFolder, error) {
 }
 
 const listMediaInFolder = `-- name: ListMediaInFolder :many
-SELECT id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_id, created_at, updated_at FROM media WHERE folder_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_code, created_at, updated_at FROM media WHERE folder_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type ListMediaInFolderParams struct {
@@ -684,7 +684,7 @@ func (q *Queries) ListMediaInFolder(ctx context.Context, arg ListMediaInFolderPa
 			&i.Caption,
 			&i.FolderID,
 			&i.UploadedBy,
-			&i.LanguageID,
+			&i.LanguageCode,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -702,7 +702,7 @@ func (q *Queries) ListMediaInFolder(ctx context.Context, arg ListMediaInFolderPa
 }
 
 const listMediaInRootFolder = `-- name: ListMediaInRootFolder :many
-SELECT id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_id, created_at, updated_at FROM media WHERE folder_id IS NULL ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_code, created_at, updated_at FROM media WHERE folder_id IS NULL ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type ListMediaInRootFolderParams struct {
@@ -731,7 +731,7 @@ func (q *Queries) ListMediaInRootFolder(ctx context.Context, arg ListMediaInRoot
 			&i.Caption,
 			&i.FolderID,
 			&i.UploadedBy,
-			&i.LanguageID,
+			&i.LanguageCode,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -797,7 +797,7 @@ func (q *Queries) MoveMediaToFolder(ctx context.Context, arg MoveMediaToFolderPa
 }
 
 const searchMedia = `-- name: SearchMedia :many
-SELECT id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_id, created_at, updated_at FROM media WHERE filename LIKE ? OR alt LIKE ? ORDER BY created_at DESC LIMIT ?
+SELECT id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_code, created_at, updated_at FROM media WHERE filename LIKE ? OR alt LIKE ? ORDER BY created_at DESC LIMIT ?
 `
 
 type SearchMediaParams struct {
@@ -827,7 +827,7 @@ func (q *Queries) SearchMedia(ctx context.Context, arg SearchMediaParams) ([]Med
 			&i.Caption,
 			&i.FolderID,
 			&i.UploadedBy,
-			&i.LanguageID,
+			&i.LanguageCode,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -845,19 +845,19 @@ func (q *Queries) SearchMedia(ctx context.Context, arg SearchMediaParams) ([]Med
 }
 
 const updateMedia = `-- name: UpdateMedia :one
-UPDATE media SET filename = ?, alt = ?, caption = ?, folder_id = ?, language_id = ?, updated_at = ?
+UPDATE media SET filename = ?, alt = ?, caption = ?, folder_id = ?, language_code = ?, updated_at = ?
 WHERE id = ?
-RETURNING id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_id, created_at, updated_at
+RETURNING id, uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_code, created_at, updated_at
 `
 
 type UpdateMediaParams struct {
-	Filename   string         `json:"filename"`
-	Alt        sql.NullString `json:"alt"`
-	Caption    sql.NullString `json:"caption"`
-	FolderID   sql.NullInt64  `json:"folder_id"`
-	LanguageID int64          `json:"language_id"`
-	UpdatedAt  time.Time      `json:"updated_at"`
-	ID         int64          `json:"id"`
+	Filename     string         `json:"filename"`
+	Alt          sql.NullString `json:"alt"`
+	Caption      sql.NullString `json:"caption"`
+	FolderID     sql.NullInt64  `json:"folder_id"`
+	LanguageCode string         `json:"language_code"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	ID           int64          `json:"id"`
 }
 
 func (q *Queries) UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Medium, error) {
@@ -866,7 +866,7 @@ func (q *Queries) UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Mediu
 		arg.Alt,
 		arg.Caption,
 		arg.FolderID,
-		arg.LanguageID,
+		arg.LanguageCode,
 		arg.UpdatedAt,
 		arg.ID,
 	)
@@ -883,7 +883,7 @@ func (q *Queries) UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Mediu
 		&i.Caption,
 		&i.FolderID,
 		&i.UploadedBy,
-		&i.LanguageID,
+		&i.LanguageCode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -43,7 +42,7 @@ func NewMenusHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 
 // MenusListData holds data for the menus list template.
 type MenusListData struct {
-	Menus     []store.ListMenusWithLanguageRow
+	Menus     []store.Menu
 	Languages []store.Language
 }
 
@@ -52,7 +51,7 @@ func (h *MenusHandler) List(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	menus, err := h.queries.ListMenusWithLanguage(r.Context())
+	menus, err := h.queries.ListMenus(r.Context())
 	if err != nil {
 		slog.Error("failed to list menus", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -255,7 +254,7 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 	input := parseMenuFormInput(r)
 
 	// Validate slug
-	if errMsg := h.validateMenuSlugCreate(r.Context(), input.Slug, input.LanguageID); errMsg != "" {
+	if errMsg := h.validateMenuSlugCreate(r.Context(), input.Slug, input.LanguageCode); errMsg != "" {
 		input.Errors["slug"] = errMsg
 	}
 
@@ -286,11 +285,11 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	menu, err := h.queries.CreateMenu(r.Context(), store.CreateMenuParams{
-		Name:       input.Name,
-		Slug:       input.Slug,
-		LanguageID: input.LanguageID,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		Name:         input.Name,
+		Slug:         input.Slug,
+		LanguageCode: input.LanguageCode,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		slog.Error("failed to create menu", "error", err)
@@ -376,7 +375,7 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 	input := parseMenuFormInput(r)
 
 	// Validate slug
-	if errMsg := h.validateMenuSlugUpdate(r.Context(), input.Slug, input.LanguageID, menu.Slug, menu.LanguageID, id); errMsg != "" {
+	if errMsg := h.validateMenuSlugUpdate(r.Context(), input.Slug, input.LanguageCode, menu.Slug, menu.LanguageCode, id); errMsg != "" {
 		input.Errors["slug"] = errMsg
 	}
 
@@ -402,11 +401,11 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	_, err = h.queries.UpdateMenu(r.Context(), store.UpdateMenuParams{
-		ID:         id,
-		Name:       input.Name,
-		Slug:       input.Slug,
-		LanguageID: input.LanguageID,
-		UpdatedAt:  now,
+		ID:           id,
+		Name:         input.Name,
+		Slug:         input.Slug,
+		LanguageCode: input.LanguageCode,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		slog.Error("failed to update menu", "error", err, "menu_id", id)
@@ -713,37 +712,26 @@ func (h *MenusHandler) requireMenuWithError(w http.ResponseWriter, r *http.Reque
 
 // menuFormInput holds parsed and validated menu form input.
 type menuFormInput struct {
-	Name       string
-	Slug       string
-	LanguageID int64
-	FormValues map[string]string
-	Errors     map[string]string
+	Name         string
+	Slug         string
+	LanguageCode string
+	FormValues   map[string]string
+	Errors       map[string]string
 }
 
-// parseMenuFormInput parses and validates menu form input (name, slug, language_id).
+// parseMenuFormInput parses and validates menu form input (name, slug, language_code).
 func parseMenuFormInput(r *http.Request) menuFormInput {
 	name := strings.TrimSpace(r.FormValue("name"))
 	slug := strings.TrimSpace(r.FormValue("slug"))
-	languageIDStr := r.FormValue("language_id")
+	languageCode := strings.TrimSpace(r.FormValue("language_code"))
 
 	formValues := map[string]string{
-		"name":        name,
-		"slug":        slug,
-		"language_id": languageIDStr,
+		"name":          name,
+		"slug":          slug,
+		"language_code": languageCode,
 	}
 
 	validationErrors := make(map[string]string)
-
-	// Parse language_id
-	var languageID int64
-	if languageIDStr != "" {
-		langID, err := strconv.ParseInt(languageIDStr, 10, 64)
-		if err != nil {
-			validationErrors["language_id"] = "Invalid language"
-		} else {
-			languageID = langID
-		}
-	}
 
 	// Validate name
 	if name == "" {
@@ -759,11 +747,11 @@ func parseMenuFormInput(r *http.Request) menuFormInput {
 	}
 
 	return menuFormInput{
-		Name:       name,
-		Slug:       slug,
-		LanguageID: languageID,
-		FormValues: formValues,
-		Errors:     validationErrors,
+		Name:         name,
+		Slug:         slug,
+		LanguageCode: languageCode,
+		FormValues:   formValues,
+		Errors:       validationErrors,
 	}
 }
 
@@ -890,27 +878,27 @@ func (h *MenusHandler) getMaxMenuItemPosition(r *http.Request, menuID int64, par
 }
 
 // validateMenuSlugCreate validates a menu slug for creation within a language.
-func (h *MenusHandler) validateMenuSlugCreate(ctx context.Context, slug string, languageID int64) string {
+func (h *MenusHandler) validateMenuSlugCreate(ctx context.Context, slug string, languageCode string) string {
 	return ValidateSlugWithChecker(slug, func() (int64, error) {
 		return h.queries.MenuSlugExistsForLanguage(ctx, store.MenuSlugExistsForLanguageParams{
-			Slug:       slug,
-			LanguageID: languageID,
+			Slug:         slug,
+			LanguageCode: languageCode,
 		})
 	})
 }
 
 // validateMenuSlugUpdate validates a menu slug for update within a language.
 // Only validates if slug or language has changed.
-func (h *MenusHandler) validateMenuSlugUpdate(ctx context.Context, slug string, languageID int64, currentSlug string, currentLanguageID int64, menuID int64) string {
+func (h *MenusHandler) validateMenuSlugUpdate(ctx context.Context, slug string, languageCode string, currentSlug string, currentLanguageCode string, menuID int64) string {
 	// If neither slug nor language changed, no validation needed
-	if slug == currentSlug && languageID == currentLanguageID {
+	if slug == currentSlug && languageCode == currentLanguageCode {
 		return ""
 	}
 	return ValidateSlugWithChecker(slug, func() (int64, error) {
 		return h.queries.MenuSlugExistsForLanguageExcluding(ctx, store.MenuSlugExistsForLanguageExcludingParams{
-			Slug:       slug,
-			LanguageID: languageID,
-			ID:         menuID,
+			Slug:         slug,
+			LanguageCode: languageCode,
+			ID:           menuID,
 		})
 	})
 }

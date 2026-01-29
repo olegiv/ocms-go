@@ -1,5 +1,5 @@
 -- name: CreateMedia :one
-INSERT INTO media (uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_id, created_at, updated_at)
+INSERT INTO media (uuid, filename, mime_type, size, width, height, alt, caption, folder_id, uploaded_by, language_code, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
@@ -25,7 +25,7 @@ SELECT * FROM media WHERE mime_type LIKE ? ORDER BY created_at DESC LIMIT ? OFFS
 SELECT * FROM media WHERE filename LIKE ? OR alt LIKE ? ORDER BY created_at DESC LIMIT ?;
 
 -- name: UpdateMedia :one
-UPDATE media SET filename = ?, alt = ?, caption = ?, folder_id = ?, language_id = ?, updated_at = ?
+UPDATE media SET filename = ?, alt = ?, caption = ?, folder_id = ?, language_code = ?, updated_at = ?
 WHERE id = ?
 RETURNING *;
 
@@ -92,7 +92,7 @@ UPDATE media SET folder_id = ?, updated_at = ? WHERE id = ?;
 -- name: GetRecentMedia :many
 SELECT * FROM media ORDER BY created_at DESC LIMIT ?;
 
--- Media Translations
+-- Media Translations (uses language_id as FK to languages table)
 
 -- name: GetMediaTranslation :one
 SELECT * FROM media_translations

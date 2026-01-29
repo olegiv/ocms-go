@@ -315,7 +315,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		defer func() { _ = file.Close() }()
 
 		// Process single file
-		result, err := h.mediaService.Upload(r.Context(), file, header, userID, folderID, defaultLang.ID)
+		result, err := h.mediaService.Upload(r.Context(), file, header, userID, folderID, defaultLang.Code)
 		if err != nil {
 			slog.Error("failed to upload file", "error", err, "filename", header.Filename)
 			if r.Header.Get("HX-Request") == "true" {
@@ -354,7 +354,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		result, err := h.mediaService.Upload(r.Context(), file, header, userID, folderID, defaultLang.ID)
+		result, err := h.mediaService.Upload(r.Context(), file, header, userID, folderID, defaultLang.Code)
 		_ = file.Close()
 
 		if err != nil {
@@ -553,13 +553,13 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Update media
 	now := time.Now()
 	_, err = h.queries.UpdateMedia(r.Context(), store.UpdateMediaParams{
-		ID:         id,
-		Filename:   filename,
-		Alt:        util.NullStringFromValue(alt),
-		Caption:    util.NullStringFromValue(caption),
-		FolderID:   folderID,
-		LanguageID: media.LanguageID,
-		UpdatedAt:  now,
+		ID:           id,
+		Filename:     filename,
+		Alt:          util.NullStringFromValue(alt),
+		Caption:      util.NullStringFromValue(caption),
+		FolderID:     folderID,
+		LanguageCode: media.LanguageCode,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		slog.Error("failed to update media", "error", err, "media_id", id)

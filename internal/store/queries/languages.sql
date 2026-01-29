@@ -50,5 +50,3 @@ SELECT COALESCE(MAX(position), 0) FROM languages;
 -- name: UpdateLanguagePosition :exec
 UPDATE languages SET position = ?, updated_at = ? WHERE id = ?;
 
--- name: CountPagesByLanguageID :one
-SELECT COUNT(*) FROM pages WHERE language_id = ?;

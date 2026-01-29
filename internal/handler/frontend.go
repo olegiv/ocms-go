@@ -381,9 +381,9 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get current language for filtering
-	var languageID int64
+	var languageCode string
 	if langInfo := middleware.GetLanguage(r); langInfo != nil {
-		languageID = langInfo.ID
+		languageCode = langInfo.Code
 	}
 
 	// Get base template data
@@ -394,11 +394,11 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 	// Get recent published pages filtered by language
 	var recentPages []store.Page
 	var err error
-	if languageID > 0 {
+	if languageCode != "" {
 		recentPages, err = h.queries.ListPublishedPagesByLanguage(ctx, store.ListPublishedPagesByLanguageParams{
-			LanguageID: languageID,
-			Limit:      10,
-			Offset:     0,
+			LanguageCode: languageCode,
+			Limit:        10,
+			Offset:       0,
 		})
 	} else {
 		recentPages, err = h.queries.ListPublishedPages(ctx, store.ListPublishedPagesParams{
@@ -423,9 +423,9 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 	var categoryViews []CategoryView
 	var tagViews []TagView
 
-	if languageID > 0 {
+	if languageCode != "" {
 		// Get categories with usage counts filtered by language
-		categoriesWithCount, err := h.queries.GetCategoryUsageCountsByLanguage(ctx, languageID)
+		categoriesWithCount, err := h.queries.GetCategoryUsageCountsByLanguage(ctx, languageCode)
 		if err != nil {
 			h.logger.Error("failed to get categories", "error", err)
 		}
@@ -443,9 +443,9 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 
 		// Get tags with usage counts filtered by language
 		tagsWithCount, err := h.queries.GetTagUsageCountsByLanguage(ctx, store.GetTagUsageCountsByLanguageParams{
-			LanguageID: languageID,
-			Limit:      20,
-			Offset:     0,
+			LanguageCode: languageCode,
+			Limit:        20,
+			Offset:       0,
 		})
 		if err != nil {
 			h.logger.Error("failed to get tags", "error", err)
@@ -561,8 +561,8 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 
 	// Update language context based on page's language (fixes translated pages like /slug-ru)
 	// This ensures that when visiting a translated page directly, the UI language matches the content
-	if page.LanguageID > 0 {
-		if pageLang, err := h.queries.GetLanguageByID(ctx, page.LanguageID); err == nil {
+	if page.LanguageCode != "" {
+		if pageLang, err := h.queries.GetLanguageByCode(ctx, page.LanguageCode); err == nil {
 			// Update the request context with the page's language
 			langInfo := middleware.LanguageInfo{
 				ID:         pageLang.ID,
@@ -670,8 +670,8 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch sidebar data for themes that show sidebar on single pages
-	languageID := page.LanguageID
-	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageID)
+	languageCode := page.LanguageCode
+	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageCode)
 
 	data := PageData{
 		BaseTemplateData: base,
@@ -692,9 +692,9 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 
 	// Get current language for filtering
-	var languageID int64
+	var languageCode string
 	if langInfo := middleware.GetLanguage(r); langInfo != nil {
-		languageID = langInfo.ID
+		languageCode = langInfo.Code
 	}
 
 	// Get category
@@ -718,11 +718,11 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 	var pages []store.Page
 	var total int64
 	catID := category.ID
-	if languageID > 0 {
+	if languageCode != "" {
 		pages, err = h.queries.ListPublishedPagesByCategoryAndLanguage(ctx, store.ListPublishedPagesByCategoryAndLanguageParams{
-			CategoryID: catID, LanguageID: languageID, Limit: limit, Offset: int64(offset)})
+			CategoryID: catID, LanguageCode: languageCode, Limit: limit, Offset: int64(offset)})
 		total, _ = h.queries.CountPublishedPagesByCategoryAndLanguage(ctx, store.CountPublishedPagesByCategoryAndLanguageParams{
-			CategoryID: catID, LanguageID: languageID})
+			CategoryID: catID, LanguageCode: languageCode})
 	} else {
 		pages, err = h.queries.ListPublishedPagesByCategory(ctx, store.ListPublishedPagesByCategoryParams{
 			CategoryID: catID, Limit: limit, Offset: int64(offset)})
@@ -757,7 +757,7 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 	pagination := h.buildPagination(page, int(total), fmt.Sprintf("%s/category/%s", base.LangPrefix, slug))
 
 	// Fetch sidebar data for themes that show sidebar on category pages
-	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageID)
+	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageCode)
 
 	data := CategoryPageData{
 		BaseTemplateData: base,
@@ -779,9 +779,9 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 
 	// Get current language for filtering
-	var languageID int64
+	var languageCode string
 	if langInfo := middleware.GetLanguage(r); langInfo != nil {
-		languageID = langInfo.ID
+		languageCode = langInfo.Code
 	}
 
 	// Get tag
@@ -805,11 +805,11 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 	var pages []store.Page
 	var total int64
 	tID := tag.ID
-	if languageID > 0 {
+	if languageCode != "" {
 		pages, err = h.queries.ListPublishedPagesForTagAndLanguage(ctx, store.ListPublishedPagesForTagAndLanguageParams{
-			TagID: tID, LanguageID: languageID, Limit: limit, Offset: int64(offset)})
+			TagID: tID, LanguageCode: languageCode, Limit: limit, Offset: int64(offset)})
 		total, _ = h.queries.CountPublishedPagesForTagAndLanguage(ctx, store.CountPublishedPagesForTagAndLanguageParams{
-			TagID: tID, LanguageID: languageID})
+			TagID: tID, LanguageCode: languageCode})
 	} else {
 		pages, err = h.queries.ListPublishedPagesForTag(ctx, store.ListPublishedPagesForTagParams{
 			TagID: tID, Limit: limit, Offset: int64(offset)})
@@ -843,7 +843,7 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 	pagination := h.buildPagination(page, int(total), fmt.Sprintf("%s/tag/%s", base.LangPrefix, slug))
 
 	// Fetch sidebar data for themes that show sidebar on tag pages
-	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageID)
+	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageCode)
 
 	data := TagPageData{
 		BaseTemplateData: base,
@@ -864,9 +864,9 @@ func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get current language for filtering
-	var languageID int64
+	var languageCode string
 	if langInfo := middleware.GetLanguage(r); langInfo != nil {
-		languageID = langInfo.ID
+		languageCode = langInfo.Code
 	}
 
 	// Pagination
@@ -878,11 +878,11 @@ func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
 	var total int64
 	var err error
 
-	if languageID > 0 {
+	if languageCode != "" {
 		pages, err = h.queries.ListPublishedPagesByLanguage(ctx, store.ListPublishedPagesByLanguageParams{
-			LanguageID: languageID,
-			Limit:      int64(defaultPerPage),
-			Offset:     int64(offset),
+			LanguageCode: languageCode,
+			Limit:        int64(defaultPerPage),
+			Offset:       int64(offset),
 		})
 		if err != nil {
 			h.logger.Error("failed to get blog pages", "error", err)
@@ -890,7 +890,7 @@ func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		total, err = h.queries.CountPublishedPagesByLanguage(ctx, languageID)
+		total, err = h.queries.CountPublishedPagesByLanguage(ctx, languageCode)
 		if err != nil {
 			h.logger.Error("failed to count blog pages", "error", err)
 			total = 0
@@ -927,7 +927,7 @@ func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
 	pagination := h.buildPagination(page, int(total), base.LangPrefix+"/blog")
 
 	// Fetch sidebar data for themes that show sidebar on list pages
-	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageID)
+	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageCode)
 
 	data := ListData{
 		BaseTemplateData: base,
@@ -947,13 +947,13 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
 
 	// Get current language for filtering
-	var languageID int64
+	var languageCode string
 	if langInfo := middleware.GetLanguage(r); langInfo != nil {
-		languageID = langInfo.ID
+		languageCode = langInfo.Code
 	}
 
 	// Fetch sidebar data (categories, tags, recent pages) filtered by language
-	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageID)
+	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageCode)
 
 	// If no query, show empty search page
 	if query == "" {
@@ -977,10 +977,10 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 
 	// Use FTS5 search service with language filtering
 	searchResults, total, err := h.searchService.SearchPublishedPages(ctx, service.SearchParams{
-		Query:      query,
-		Limit:      defaultPerPage,
-		Offset:     offset,
-		LanguageID: languageID,
+		Query:        query,
+		Limit:        defaultPerPage,
+		Offset:       offset,
+		LanguageCode: languageCode,
 	})
 	if err != nil {
 		h.logger.Error("failed to search pages", "query", query, "error", err)
@@ -1356,15 +1356,15 @@ func (h *FrontendHandler) generateExcerpt(htmlContent string, maxLen int) string
 }
 
 // getSidebarData fetches categories, tags, and recent pages for sidebar display.
-// languageID: if > 0, filters by language; if 0, shows all languages.
-func (h *FrontendHandler) getSidebarData(ctx context.Context, languageID int64) ([]CategoryView, []TagView, []PageView) {
+// languageCode: if non-empty, filters by language; if empty, shows all languages.
+func (h *FrontendHandler) getSidebarData(ctx context.Context, languageCode string) ([]CategoryView, []TagView, []PageView) {
 	var categoryViews []CategoryView
 	var tagViews []TagView
 	var recentPageViews []PageView
 
-	if languageID > 0 {
+	if languageCode != "" {
 		// Get categories with usage counts filtered by language
-		categoriesWithCount, err := h.queries.GetCategoryUsageCountsByLanguage(ctx, languageID)
+		categoriesWithCount, err := h.queries.GetCategoryUsageCountsByLanguage(ctx, languageCode)
 		if err != nil {
 			h.logger.Error("failed to get sidebar categories", "error", err)
 		}
@@ -1382,9 +1382,9 @@ func (h *FrontendHandler) getSidebarData(ctx context.Context, languageID int64) 
 
 		// Get tags with usage counts filtered by language
 		tagsWithCount, err := h.queries.GetTagUsageCountsByLanguage(ctx, store.GetTagUsageCountsByLanguageParams{
-			LanguageID: languageID,
-			Limit:      20,
-			Offset:     0,
+			LanguageCode: languageCode,
+			Limit:        20,
+			Offset:       0,
 		})
 		if err != nil {
 			h.logger.Error("failed to get sidebar tags", "error", err)
@@ -1402,9 +1402,9 @@ func (h *FrontendHandler) getSidebarData(ctx context.Context, languageID int64) 
 
 		// Get recent pages filtered by language
 		recentPages, err := h.queries.ListPublishedPagesByLanguage(ctx, store.ListPublishedPagesByLanguageParams{
-			LanguageID: languageID,
-			Limit:      5,
-			Offset:     0,
+			LanguageCode: languageCode,
+			Limit:        5,
+			Offset:       0,
 		})
 		if err != nil {
 			h.logger.Error("failed to get sidebar recent pages", "error", err)

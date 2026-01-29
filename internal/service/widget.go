@@ -52,13 +52,13 @@ func NewWidgetService(db *sql.DB) *WidgetService {
 }
 
 // cacheKey creates a cache key for theme, area, and language.
-func cacheKey(theme, area string, languageID int64) string {
-	return fmt.Sprintf("%s:%s:%d", theme, area, languageID)
+func cacheKey(theme, area, languageCode string) string {
+	return fmt.Sprintf("%s:%s:%s", theme, area, languageCode)
 }
 
 // GetWidgetsForArea returns active widgets for a specific theme, area, and language.
-func (s *WidgetService) GetWidgetsForArea(ctx context.Context, theme, area string, languageID int64) []WidgetView {
-	key := cacheKey(theme, area, languageID)
+func (s *WidgetService) GetWidgetsForArea(ctx context.Context, theme, area, languageCode string) []WidgetView {
+	key := cacheKey(theme, area, languageCode)
 
 	// Check cache
 	s.cacheMu.RLock()
@@ -70,9 +70,9 @@ func (s *WidgetService) GetWidgetsForArea(ctx context.Context, theme, area strin
 
 	// Fetch from database
 	dbWidgets, err := s.queries.GetWidgetsByThemeAndArea(ctx, store.GetWidgetsByThemeAndAreaParams{
-		Theme:      theme,
-		Area:       area,
-		LanguageID: languageID,
+		Theme:        theme,
+		Area:         area,
+		LanguageCode: languageCode,
 	})
 	if err != nil {
 		return nil

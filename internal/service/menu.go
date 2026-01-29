@@ -106,21 +106,22 @@ func (s *MenuService) GetMenuForLanguage(slug string, langCode string) []MenuIte
 		s.cache.Delete(cacheKey)
 	}
 
-	// Get the language by code
-	lang, err := s.queries.GetLanguageByCode(ctx, langCode)
+	// Validate language code exists
+	_, err := s.queries.GetLanguageByCode(ctx, langCode)
 	if err != nil {
 		// Language not found, try default
-		lang, err = s.queries.GetDefaultLanguage(ctx)
+		defaultLang, err := s.queries.GetDefaultLanguage(ctx)
 		if err != nil {
 			// No default language, fall back to basic GetMenu
 			return s.GetMenu(slug)
 		}
+		langCode = defaultLang.Code
 	}
 
 	// Try to get menu for specific language first
 	menu, err := s.queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
-		Slug:       slug,
-		LanguageID: lang.ID,
+		Slug:         slug,
+		LanguageCode: langCode,
 	})
 	if err != nil {
 		// Menu not found for this language, try default language
@@ -129,27 +130,25 @@ func (s *MenuService) GetMenuForLanguage(slug string, langCode string) []MenuIte
 			return nil
 		}
 
-		if defaultLang.ID != lang.ID {
+		if defaultLang.Code != langCode {
 			// Try with default language
 			menu, err = s.queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
-				Slug:       slug,
-				LanguageID: defaultLang.ID,
+				Slug:         slug,
+				LanguageCode: defaultLang.Code,
 			})
 			if err != nil {
 				// Still not found, try without language filter as last resort
-				basicMenu, err := s.queries.GetMenuBySlug(ctx, slug)
+				menu, err = s.queries.GetMenuBySlug(ctx, slug)
 				if err != nil {
 					return nil
 				}
-				menu = menuToRow(basicMenu)
 			}
 		} else {
 			// Already tried with default language, try basic lookup
-			basicMenu, err := s.queries.GetMenuBySlug(ctx, slug)
+			menu, err = s.queries.GetMenuBySlug(ctx, slug)
 			if err != nil {
 				return nil
 			}
-			menu = menuToRow(basicMenu)
 		}
 	}
 
@@ -170,70 +169,11 @@ func (s *MenuService) GetMenuForLanguage(slug string, langCode string) []MenuIte
 	return menuItems
 }
 
-// GetMenuForLanguageID fetches a menu by slug for a specific language ID.
-// This is useful when you have the language ID already (e.g., from a page).
-func (s *MenuService) GetMenuForLanguageID(slug string, langID int64) []MenuItem {
-	ctx := context.Background()
-
-	// Build cache key that includes language ID
-	cacheKey := fmt.Sprintf("%s:id:%d", slug, langID)
-
-	// Check cache
-	if cached, ok := s.cache.Load(cacheKey); ok {
-		cm := cached.(cachedMenu)
-		if time.Now().Before(cm.expiry) {
-			return cm.items
-		}
-		s.cache.Delete(cacheKey)
-	}
-
-	// Try to get menu for specific language first
-	menu, err := s.queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
-		Slug:       slug,
-		LanguageID: langID,
-	})
-	if err != nil {
-		// Menu not found for this language, try default language
-		defaultLang, err := s.queries.GetDefaultLanguage(ctx)
-		if err != nil {
-			return nil
-		}
-
-		if defaultLang.ID != langID {
-			menu, err = s.queries.GetMenuBySlugAndLanguage(ctx, store.GetMenuBySlugAndLanguageParams{
-				Slug:       slug,
-				LanguageID: defaultLang.ID,
-			})
-			if err != nil {
-				// Fall back to basic lookup
-				basicMenu, err := s.queries.GetMenuBySlug(ctx, slug)
-				if err != nil {
-					return nil
-				}
-				menu = menuToRow(basicMenu)
-			}
-		} else {
-			basicMenu, err := s.queries.GetMenuBySlug(ctx, slug)
-			if err != nil {
-				return nil
-			}
-			menu = menuToRow(basicMenu)
-		}
-	}
-
-	items, err := s.queries.ListMenuItemsWithPage(ctx, menu.ID)
-	if err != nil {
-		return nil
-	}
-
-	menuItems := s.buildMenuTree(items)
-
-	s.cache.Store(cacheKey, cachedMenu{
-		items:  menuItems,
-		expiry: time.Now().Add(s.cacheTTL),
-	})
-
-	return menuItems
+// GetMenuForLanguageCode fetches a menu by slug for a specific language code.
+// This is the preferred method when you have the language code (e.g., from a page).
+func (s *MenuService) GetMenuForLanguageCode(slug string, langCode string) []MenuItem {
+	// Delegate to GetMenuForLanguage which already handles language code
+	return s.GetMenuForLanguage(slug, langCode)
 }
 
 // InvalidateCache clears the cache for a specific menu or all menus.
@@ -324,13 +264,3 @@ func (s *MenuService) buildMenuTree(items []store.ListMenuItemsWithPageRow) []Me
 	return roots
 }
 
-// menuToRow converts a basic Menu to GetMenuBySlugAndLanguageRow.
-func menuToRow(m store.Menu) store.GetMenuBySlugAndLanguageRow {
-	return store.GetMenuBySlugAndLanguageRow{
-		ID:        m.ID,
-		Name:      m.Name,
-		Slug:      m.Slug,
-		CreatedAt: m.CreatedAt,
-		UpdatedAt: m.UpdatedAt,
-	}
-}

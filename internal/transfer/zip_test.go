@@ -57,7 +57,7 @@ func TestExportWithMediaToZip(t *testing.T) {
 		MimeType:   "image/jpeg",
 		Size:       int64(len(testContent)),
 		UploadedBy: ts.User.ID,
-		LanguageID: lang.ID,
+		LanguageCode: lang.Code,
 		CreatedAt:  ts.Now,
 		UpdatedAt:  ts.Now,
 	})
@@ -208,7 +208,7 @@ func TestImportFromZip(t *testing.T) {
 		MimeType:   "image/png",
 		Size:       int64(len(testContent)),
 		UploadedBy: user.ID,
-		LanguageID: lang.ID,
+		LanguageCode: lang.Code,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	})

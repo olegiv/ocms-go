@@ -479,9 +479,9 @@ func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if there are pages linked to this language
-	pageCount, err := h.queries.CountPagesByLanguageID(r.Context(), id)
+	pageCount, err := h.queries.CountPagesByLanguageCode(r.Context(), lang.Code)
 	if err != nil {
-		slog.Error("failed to count pages for language", "error", err, "language_id", id)
+		slog.Error("failed to count pages for language", "error", err, "language_code", lang.Code)
 		if r.Header.Get("HX-Request") == "true" {
 			w.Header().Set("HX-Reswap", "none")
 			http.Error(w, "Failed to check language usage", http.StatusInternalServerError)

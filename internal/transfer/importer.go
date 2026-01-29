@@ -95,13 +95,6 @@ func (i *Importer) Import(ctx context.Context, data *ExportData, opts ImportOpti
 		i.importLanguages(ctx, queries, data.Languages, opts, result)
 	}
 
-	// Build language code to ID map for later use
-	languageMap, err := i.buildLookupMap(ctx, queries, entityLanguage)
-	if err != nil {
-		i.logger.Warn("failed to build language map", "error", err)
-		languageMap = make(map[string]int64)
-	}
-
 	// Import users
 	if opts.ImportUsers && len(data.Users) > 0 {
 		i.importUsers(ctx, queries, data.Users, opts, result)
@@ -138,15 +131,15 @@ func (i *Importer) Import(ctx context.Context, data *ExportData, opts ImportOpti
 		tagMap = make(map[string]int64)
 	}
 
-	// Get default language ID for entities that need it
-	defaultLangID := int64(1)
+	// Get default language code for entities that need it
+	defaultLangCode := "en"
 	if defaultLang, err := queries.GetDefaultLanguage(ctx); err == nil {
-		defaultLangID = defaultLang.ID
+		defaultLangCode = defaultLang.Code
 	}
 
 	// Import media metadata
 	if opts.ImportMedia && len(data.Media) > 0 {
-		i.importMedia(ctx, queries, data.Media, userMap, languageMap, defaultLangID, opts, result)
+		i.importMedia(ctx, queries, data.Media, userMap, defaultLangCode, opts, result)
 	}
 
 	// Build media UUID to ID map
@@ -158,7 +151,7 @@ func (i *Importer) Import(ctx context.Context, data *ExportData, opts ImportOpti
 
 	// Import pages
 	if opts.ImportPages && len(data.Pages) > 0 {
-		i.importPages(ctx, queries, data.Pages, userMap, categoryMap, tagMap, mediaMap, languageMap, opts, result)
+		i.importPages(ctx, queries, data.Pages, userMap, categoryMap, tagMap, mediaMap, defaultLangCode, opts, result)
 	}
 
 	// Build page slug to ID map
@@ -175,12 +168,12 @@ func (i *Importer) Import(ctx context.Context, data *ExportData, opts ImportOpti
 
 	// Import forms
 	if opts.ImportForms && len(data.Forms) > 0 {
-		i.importForms(ctx, queries, data.Forms, languageMap, defaultLangID, opts, result)
+		i.importForms(ctx, queries, data.Forms, defaultLangCode, opts, result)
 	}
 
 	// Import config
 	if opts.ImportConfig && len(data.Config) > 0 {
-		i.importConfig(ctx, queries, data.Config, userMap, defaultLangID, result)
+		i.importConfig(ctx, queries, data.Config, userMap, defaultLangCode, result)
 	}
 
 	// Commit transaction
@@ -981,7 +974,7 @@ func (i *Importer) importTags(ctx context.Context, queries *store.Queries, tags 
 	}
 }
 
-func (i *Importer) importMedia(ctx context.Context, queries *store.Queries, media []ExportMedia, userMap map[string]int64, languageMap map[string]int64, defaultLangID int64, opts ImportOptions, result *ImportResult) {
+func (i *Importer) importMedia(ctx context.Context, queries *store.Queries, media []ExportMedia, userMap map[string]int64, defaultLangCode string, opts ImportOptions, result *ImportResult) {
 	now := time.Now()
 
 	// Build folder path to ID map
@@ -992,12 +985,10 @@ func (i *Importer) importMedia(ctx context.Context, queries *store.Queries, medi
 	}
 
 	for _, m := range media {
-		// Resolve language ID from code or use default
-		langID := defaultLangID
+		// Use language code from import data or default
+		langCode := defaultLangCode
 		if m.LanguageCode != "" {
-			if id, ok := languageMap[m.LanguageCode]; ok {
-				langID = id
-			}
+			langCode = m.LanguageCode
 		}
 
 		// Check if media exists
@@ -1018,13 +1009,13 @@ func (i *Importer) importMedia(ctx context.Context, queries *store.Queries, medi
 					}
 				}
 				_, err = queries.UpdateMedia(ctx, store.UpdateMediaParams{
-					ID:         existing.ID,
-					Filename:   m.Filename,
-					Alt:        toNullString(m.Alt),
-					Caption:    toNullString(m.Caption),
-					FolderID:   folderID,
-					LanguageID: existing.LanguageID,
-					UpdatedAt:  now,
+					ID:           existing.ID,
+					Filename:     m.Filename,
+					Alt:          toNullString(m.Alt),
+					Caption:      toNullString(m.Caption),
+					FolderID:     folderID,
+					LanguageCode: existing.LanguageCode,
+					UpdatedAt:    now,
 				})
 				if err != nil {
 					result.AddError("media", m.UUID, err.Error())
@@ -1059,19 +1050,19 @@ func (i *Importer) importMedia(ctx context.Context, queries *store.Queries, medi
 		// Note: This only creates metadata. Actual file import would require
 		// copying files which is handled in Iteration 19.
 		created, err := queries.CreateMedia(ctx, store.CreateMediaParams{
-			Uuid:       m.UUID,
-			Filename:   m.Filename,
-			MimeType:   m.MimeType,
-			Size:       m.Size,
-			Width:      util.NullInt64FromPtr(m.Width),
-			Height:     util.NullInt64FromPtr(m.Height),
-			Alt:        toNullString(m.Alt),
-			Caption:    toNullString(m.Caption),
-			FolderID:   folderID,
-			UploadedBy: uploaderID,
-			LanguageID: langID,
-			CreatedAt:  now,
-			UpdatedAt:  now,
+			Uuid:         m.UUID,
+			Filename:     m.Filename,
+			MimeType:     m.MimeType,
+			Size:         m.Size,
+			Width:        util.NullInt64FromPtr(m.Width),
+			Height:       util.NullInt64FromPtr(m.Height),
+			Alt:          toNullString(m.Alt),
+			Caption:      toNullString(m.Caption),
+			FolderID:     folderID,
+			UploadedBy:   uploaderID,
+			LanguageCode: langCode,
+			CreatedAt:    now,
+			UpdatedAt:    now,
 		})
 		if err != nil {
 			result.AddError("media", m.UUID, err.Error())
@@ -1091,7 +1082,7 @@ func (i *Importer) importPages(
 	categoryMap map[string]int64,
 	tagMap map[string]int64,
 	mediaMap map[string]int64,
-	languageMap map[string]int64,
+	defaultLangCode string,
 	opts ImportOptions,
 	result *ImportResult,
 ) {
@@ -1115,7 +1106,7 @@ func (i *Importer) importPages(
 				result.IncrementSkipped("pages")
 				continue
 			case ConflictOverwrite:
-				pageID, existsErr = i.updateExistingPage(ctx, queries, page, existing.ID, mediaMap, languageMap, now)
+				pageID, existsErr = i.updateExistingPage(ctx, queries, page, existing.ID, mediaMap, defaultLangCode, now)
 				if existsErr != nil {
 					result.AddError("page", page.Slug, existsErr.Error())
 					continue
@@ -1137,7 +1128,7 @@ func (i *Importer) importPages(
 
 		if shouldCreate {
 			var createErr error
-			pageID, createErr = i.createNewPage(ctx, queries, page, userMap, mediaMap, languageMap, now)
+			pageID, createErr = i.createNewPage(ctx, queries, page, userMap, mediaMap, defaultLangCode, now)
 			if createErr != nil {
 				result.AddError("page", page.Slug, createErr.Error())
 				continue
@@ -1177,7 +1168,7 @@ func (i *Importer) importPages(
 type pageImportFields struct {
 	FeaturedImageID sql.NullInt64
 	OgImageID       sql.NullInt64
-	LanguageID      int64
+	LanguageCode    string
 	MetaTitle       string
 	MetaDescription string
 	MetaKeywords    string
@@ -1188,7 +1179,7 @@ type pageImportFields struct {
 }
 
 // extractPageFields extracts common fields from an ExportPage using the provided maps.
-func extractPageFields(page ExportPage, mediaMap, languageMap map[string]int64) pageImportFields {
+func extractPageFields(page ExportPage, mediaMap map[string]int64, defaultLangCode string) pageImportFields {
 	f := pageImportFields{}
 
 	// Get featured image ID
@@ -1205,11 +1196,11 @@ func extractPageFields(page ExportPage, mediaMap, languageMap map[string]int64) 
 		}
 	}
 
-	// Get language ID
+	// Get language code from import data or use default
 	if page.LanguageCode != "" {
-		if id, ok := languageMap[page.LanguageCode]; ok {
-			f.LanguageID = id
-		}
+		f.LanguageCode = page.LanguageCode
+	} else {
+		f.LanguageCode = defaultLangCode
 	}
 
 	// Build SEO fields
@@ -1241,10 +1232,10 @@ func (i *Importer) updateExistingPage(
 	page ExportPage,
 	existingID int64,
 	mediaMap map[string]int64,
-	languageMap map[string]int64,
+	defaultLangCode string,
 	now time.Time,
 ) (int64, error) {
-	f := extractPageFields(page, mediaMap, languageMap)
+	f := extractPageFields(page, mediaMap, defaultLangCode)
 
 	updated, err := queries.UpdatePage(ctx, store.UpdatePageParams{
 		ID:              existingID,
@@ -1261,7 +1252,7 @@ func (i *Importer) updateExistingPage(
 		NoFollow:        f.NoFollow,
 		CanonicalUrl:    f.CanonicalURL,
 		ScheduledAt:     f.ScheduledAt,
-		LanguageID:      f.LanguageID,
+		LanguageCode:    f.LanguageCode,
 		UpdatedAt:       now,
 	})
 	if err != nil {
@@ -1278,7 +1269,7 @@ func (i *Importer) createNewPage(
 	page ExportPage,
 	userMap map[string]int64,
 	mediaMap map[string]int64,
-	languageMap map[string]int64,
+	defaultLangCode string,
 	now time.Time,
 ) (int64, error) {
 	// Get author ID
@@ -1289,7 +1280,7 @@ func (i *Importer) createNewPage(
 		}
 	}
 
-	f := extractPageFields(page, mediaMap, languageMap)
+	f := extractPageFields(page, mediaMap, defaultLangCode)
 
 	created, err := queries.CreatePage(ctx, store.CreatePageParams{
 		Title:           page.Title,
@@ -1306,7 +1297,7 @@ func (i *Importer) createNewPage(
 		NoFollow:        f.NoFollow,
 		CanonicalUrl:    f.CanonicalURL,
 		ScheduledAt:     f.ScheduledAt,
-		LanguageID:      f.LanguageID,
+		LanguageCode:    f.LanguageCode,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	})
@@ -1420,16 +1411,14 @@ func (i *Importer) importMenuItems(ctx context.Context, queries *store.Queries, 
 	return nil
 }
 
-func (i *Importer) importForms(ctx context.Context, queries *store.Queries, forms []ExportForm, languageMap map[string]int64, defaultLangID int64, opts ImportOptions, result *ImportResult) {
+func (i *Importer) importForms(ctx context.Context, queries *store.Queries, forms []ExportForm, defaultLangCode string, opts ImportOptions, result *ImportResult) {
 	now := time.Now()
 
 	for _, form := range forms {
-		// Resolve language ID from code or use default
-		langID := defaultLangID
+		// Use language code from import data or default
+		langCode := defaultLangCode
 		if form.LanguageCode != "" {
-			if id, ok := languageMap[form.LanguageCode]; ok {
-				langID = id
-			}
+			langCode = form.LanguageCode
 		}
 
 		// Check if form exists
@@ -1437,11 +1426,11 @@ func (i *Importer) importForms(ctx context.Context, queries *store.Queries, form
 		formExists := existsErr == nil
 
 		var formID int64
-		var formLangID int64 = langID
+		formLangCode := langCode
 		shouldCreate := false
 
 		if formExists {
-			formLangID = existing.LanguageID
+			formLangCode = existing.LanguageCode
 			// Form exists - handle based on conflict strategy
 			switch opts.ConflictStrategy {
 			case ConflictSkip:
@@ -1457,7 +1446,7 @@ func (i *Importer) importForms(ctx context.Context, queries *store.Queries, form
 					SuccessMessage: toNullString(form.SuccessMessage),
 					EmailTo:        toNullString(form.EmailTo),
 					IsActive:       form.IsActive,
-					LanguageID:     existing.LanguageID,
+					LanguageCode:   existing.LanguageCode,
 					UpdatedAt:      now,
 				})
 				if updateErr != nil {
@@ -1487,7 +1476,7 @@ func (i *Importer) importForms(ctx context.Context, queries *store.Queries, form
 				SuccessMessage: toNullString(form.SuccessMessage),
 				EmailTo:        toNullString(form.EmailTo),
 				IsActive:       form.IsActive,
-				LanguageID:     langID,
+				LanguageCode:   langCode,
 				CreatedAt:      now,
 				UpdatedAt:      now,
 			})
@@ -1496,26 +1485,26 @@ func (i *Importer) importForms(ctx context.Context, queries *store.Queries, form
 				continue
 			}
 			formID = created.ID
-			formLangID = langID
+			formLangCode = langCode
 			result.IncrementCreated("forms")
 		}
 
 		// Import form fields
 		for _, field := range form.Fields {
 			_, err := queries.CreateFormField(ctx, store.CreateFormFieldParams{
-				FormID:      formID,
-				Type:        field.Type,
-				Name:        field.Name,
-				Label:       field.Label,
-				Placeholder: toNullString(field.Placeholder),
-				HelpText:    toNullString(field.HelpText),
-				Options:     toNullString(field.Options),
-				Validation:  toNullString(field.Validation),
-				IsRequired:  field.IsRequired,
-				Position:    field.Position,
-				LanguageID:  formLangID,
-				CreatedAt:   now,
-				UpdatedAt:   now,
+				FormID:       formID,
+				Type:         field.Type,
+				Name:         field.Name,
+				Label:        field.Label,
+				Placeholder:  toNullString(field.Placeholder),
+				HelpText:     toNullString(field.HelpText),
+				Options:      toNullString(field.Options),
+				Validation:   toNullString(field.Validation),
+				IsRequired:   field.IsRequired,
+				Position:     field.Position,
+				LanguageCode: formLangCode,
+				CreatedAt:    now,
+				UpdatedAt:    now,
 			})
 			if err != nil {
 				i.logger.Warn("failed to create form field", "form", form.Slug, "field", field.Name, "error", err)
@@ -1525,13 +1514,13 @@ func (i *Importer) importForms(ctx context.Context, queries *store.Queries, form
 		// Import submissions if present
 		for _, sub := range form.Submissions {
 			_, err := queries.CreateFormSubmission(ctx, store.CreateFormSubmissionParams{
-				FormID:     formID,
-				Data:       sub.Data,
-				IpAddress:  toNullString(sub.IPAddress),
-				UserAgent:  toNullString(sub.UserAgent),
-				IsRead:     sub.IsRead,
-				LanguageID: formLangID,
-				CreatedAt:  sub.CreatedAt,
+				FormID:       formID,
+				Data:         sub.Data,
+				IpAddress:    toNullString(sub.IPAddress),
+				UserAgent:    toNullString(sub.UserAgent),
+				IsRead:       sub.IsRead,
+				LanguageCode: formLangCode,
+				CreatedAt:    sub.CreatedAt,
 			})
 			if err != nil {
 				i.logger.Warn("failed to create form submission", "form", form.Slug, "error", err)
@@ -1540,7 +1529,7 @@ func (i *Importer) importForms(ctx context.Context, queries *store.Queries, form
 	}
 }
 
-func (i *Importer) importConfig(ctx context.Context, queries *store.Queries, config map[string]string, userMap map[string]int64, defaultLangID int64, result *ImportResult) {
+func (i *Importer) importConfig(ctx context.Context, queries *store.Queries, config map[string]string, userMap map[string]int64, defaultLangCode string, result *ImportResult) {
 	now := time.Now()
 
 	// Get a default user ID for the updated_by field
@@ -1552,13 +1541,13 @@ func (i *Importer) importConfig(ctx context.Context, queries *store.Queries, con
 
 	for key, value := range config {
 		_, err := queries.UpsertConfig(ctx, store.UpsertConfigParams{
-			Key:         key,
-			Value:       value,
-			Type:        "string",
-			Description: "",
-			LanguageID:  defaultLangID,
-			UpdatedAt:   now,
-			UpdatedBy:   sql.NullInt64{Int64: updatedBy, Valid: true},
+			Key:          key,
+			Value:        value,
+			Type:         "string",
+			Description:  "",
+			LanguageCode: defaultLangCode,
+			UpdatedAt:    now,
+			UpdatedBy:    sql.NullInt64{Int64: updatedBy, Valid: true},
 		})
 		if err != nil {
 			result.AddError("config", key, err.Error())
