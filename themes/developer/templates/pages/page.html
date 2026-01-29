@@ -25,7 +25,7 @@
             </div>
         </header>
 
-        {{if .Page.FeaturedImage}}
+        {{if and .Page.FeaturedImage (not .Page.HideFeaturedImage)}}
         <div class="dev-article-image">
             <img src="{{.Page.FeaturedImage}}" alt="{{mediaAlt .Page.FeaturedImageID $.LangCode .Page.FeaturedImageAlt}}">
         </div>
