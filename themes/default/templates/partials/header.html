@@ -21,9 +21,6 @@
 
             <nav class="site-nav" aria-label="Main navigation">
                 <ul class="nav-menu">
-                    <li class="nav-item{{if eq .CurrentPath "/"}} active{{end}}">
-                        <a href="/">{{TTheme .LangCode "frontend.home"}}</a>
-                    </li>
                     {{range .Navigation}}
                     <li class="nav-item{{if eq $.CurrentPath .URL}} active{{end}}">
                         <a href="{{.URL}}">{{.Title}}</a>
