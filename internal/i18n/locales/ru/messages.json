@@ -4973,6 +4973,21 @@
             "translation": "Популярные запросы:"
         },
         {
+            "id": "sidebar.categories",
+            "message": "Categories",
+            "translation": "Категории"
+        },
+        {
+            "id": "sidebar.tags",
+            "message": "Tags",
+            "translation": "Теги"
+        },
+        {
+            "id": "sidebar.recent_posts",
+            "message": "Recent Posts",
+            "translation": "Последние записи"
+        },
+        {
             "id": "language.en",
             "message": "English",
             "translation": "Английский"
@@ -5296,6 +5311,41 @@
             "id": "frontend.no_posts",
             "message": "No posts found.",
             "translation": "Записей не найдено."
+        },
+        {
+            "id": "frontend.file",
+            "message": "file",
+            "translation": "файл"
+        },
+        {
+            "id": "frontend.files",
+            "message": "files",
+            "translation": "файлов"
+        },
+        {
+            "id": "frontend.match",
+            "message": "match",
+            "translation": "совпадение"
+        },
+        {
+            "id": "frontend.matches",
+            "message": "matches",
+            "translation": "совпадений"
+        },
+        {
+            "id": "frontend.error_404_message",
+            "message": "The file you're looking for doesn't exist or has been moved to /dev/null.",
+            "translation": "Запрашиваемый файл не существует или был перемещён в /dev/null."
+        },
+        {
+            "id": "frontend.search_placeholder_404",
+            "message": "grep -r 'query'",
+            "translation": "grep -r 'запрос'"
+        },
+        {
+            "id": "frontend.did_you_mean",
+            "message": "Did you mean:",
+            "translation": "Возможно, вы искали:"
         },
         {
             "id": "editor.insert_image",

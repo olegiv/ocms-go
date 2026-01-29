@@ -4943,6 +4943,21 @@
             "translation": "Popular Searches:"
         },
         {
+            "id": "sidebar.categories",
+            "message": "Categories",
+            "translation": "Categories"
+        },
+        {
+            "id": "sidebar.tags",
+            "message": "Tags",
+            "translation": "Tags"
+        },
+        {
+            "id": "sidebar.recent_posts",
+            "message": "Recent Posts",
+            "translation": "Recent Posts"
+        },
+        {
             "id": "language.en",
             "message": "English",
             "translation": "English"
@@ -5266,6 +5281,41 @@
             "id": "frontend.no_posts",
             "message": "No posts found.",
             "translation": "No posts found."
+        },
+        {
+            "id": "frontend.file",
+            "message": "file",
+            "translation": "file"
+        },
+        {
+            "id": "frontend.files",
+            "message": "files",
+            "translation": "files"
+        },
+        {
+            "id": "frontend.match",
+            "message": "match",
+            "translation": "match"
+        },
+        {
+            "id": "frontend.matches",
+            "message": "matches",
+            "translation": "matches"
+        },
+        {
+            "id": "frontend.error_404_message",
+            "message": "The file you're looking for doesn't exist or has been moved to /dev/null.",
+            "translation": "The file you're looking for doesn't exist or has been moved to /dev/null."
+        },
+        {
+            "id": "frontend.search_placeholder_404",
+            "message": "grep -r 'query'",
+            "translation": "grep -r 'query'"
+        },
+        {
+            "id": "frontend.did_you_mean",
+            "message": "Did you mean:",
+            "translation": "Did you mean:"
         },
         {
             "id": "webhooks.delete",

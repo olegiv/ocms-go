@@ -3,10 +3,10 @@
     {{/* Search Widget */}}
     {{if .ShowSearch}}
     <div class="widget widget-search">
-        <h3 class="widget-title">Search</h3>
+        <h3 class="widget-title">{{TTheme .LangCode "search.title"}}</h3>
         <form action="{{$.LangPrefix}}/search" method="get" class="search-form">
-            <input type="search" name="q" placeholder="Search..." value="{{.SearchQuery}}" aria-label="Search">
-            <button type="submit">Search</button>
+            <input type="search" name="q" placeholder="{{TTheme .LangCode "search.placeholder"}}" value="{{.SearchQuery}}" aria-label="{{TTheme .LangCode "search.title"}}">
+            <button type="submit">{{TTheme .LangCode "search.button"}}</button>
         </form>
     </div>
     {{end}}
@@ -14,7 +14,7 @@
     {{/* Categories Widget */}}
     {{if .Categories}}
     <div class="widget widget-categories">
-        <h3 class="widget-title">Categories</h3>
+        <h3 class="widget-title">{{TTheme .LangCode "sidebar.categories"}}</h3>
         <ul class="category-list">
             {{range .Categories}}
             <li>
@@ -29,7 +29,7 @@
     {{/* Tags Widget */}}
     {{if .Tags}}
     <div class="widget widget-tags">
-        <h3 class="widget-title">Tags</h3>
+        <h3 class="widget-title">{{TTheme .LangCode "sidebar.tags"}}</h3>
         <div class="tag-cloud">
             {{range .Tags}}
             <a href="{{$.LangPrefix}}/tag/{{.Slug}}" class="tag">{{.Name}}</a>
@@ -41,7 +41,7 @@
     {{/* Recent Posts Widget */}}
     {{if .RecentPosts}}
     <div class="widget widget-recent-posts">
-        <h3 class="widget-title">Recent Posts</h3>
+        <h3 class="widget-title">{{TTheme .LangCode "sidebar.recent_posts"}}</h3>
         <ul class="recent-posts-list">
             {{range .RecentPosts}}
             <li>

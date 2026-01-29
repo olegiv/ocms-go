@@ -30,7 +30,7 @@
 
                 {{if .ShowSearch}}
                 <form action="{{.LangPrefix}}/search" method="GET" class="dev-search">
-                    <input type="text" name="q" placeholder="Search..." class="dev-search-input" aria-label="Search" value="{{.SearchQuery}}">
+                    <input type="text" name="q" placeholder="{{TTheme .LangCode "search.placeholder"}}" class="dev-search-input" aria-label="{{TTheme .LangCode "search.title"}}" value="{{.SearchQuery}}">
                     <button type="submit" class="dev-search-btn" aria-label="Submit search">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="11" cy="11" r="8"></circle>
