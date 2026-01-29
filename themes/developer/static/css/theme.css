@@ -155,6 +155,13 @@ img {
     color: inherit;
 }
 
+/* Navigation */
+.dev-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--dev-space-lg);
+}
+
 /* Mobile menu toggle */
 .dev-menu-toggle {
     display: none;
@@ -185,18 +192,12 @@ img {
 
     .dev-nav.active {
         display: flex;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     }
 
     .dev-nav-list {
         flex-direction: column;
     }
-}
-
-/* Navigation */
-.dev-nav {
-    display: flex;
-    align-items: center;
-    gap: var(--dev-space-lg);
 }
 
 .dev-nav-list {
