@@ -66,28 +66,28 @@
             </div>
 
             <div class="form-group">
-                <label for="language_id" class="form-label">
+                <label for="language_code" class="form-label">
                     {{T .AdminLang "label.language"}}
                 </label>
                 <select
-                    id="language_id"
-                    name="language_id"
-                    class="form-select {{if .Data.Errors.language_id}}is-invalid{{end}}"
+                    id="language_code"
+                    name="language_code"
+                    class="form-select {{if .Data.Errors.language_code}}is-invalid{{end}}"
                 >
-                    {{$currentLangID := ""}}
-                    {{if .Data.FormValues.language_id}}
-                        {{$currentLangID = .Data.FormValues.language_id}}
-                    {{else if and .Data.Menu .Data.Menu.LanguageID.Valid}}
-                        {{$currentLangID = printf "%d" .Data.Menu.LanguageID.Int64}}
+                    {{$currentLangCode := ""}}
+                    {{if .Data.FormValues.language_code}}
+                        {{$currentLangCode = .Data.FormValues.language_code}}
+                    {{else if .Data.Menu}}
+                        {{$currentLangCode = .Data.Menu.LanguageCode}}
                     {{end}}
                     {{range .Data.Languages}}
-                    <option value="{{.ID}}" {{if eq (printf "%d" .ID) $currentLangID}}selected{{end}}>
+                    <option value="{{.Code}}" {{if eq .Code $currentLangCode}}selected{{end}}>
                         {{.NativeName}} ({{.Code}})
                     </option>
                     {{end}}
                 </select>
-                {{if .Data.Errors.language_id}}
-                <span class="form-error">{{.Data.Errors.language_id}}</span>
+                {{if .Data.Errors.language_code}}
+                <span class="form-error">{{.Data.Errors.language_code}}</span>
                 {{else}}
                 <span class="form-hint">{{T .AdminLang "menus.language_hint"}}</span>
                 {{end}}

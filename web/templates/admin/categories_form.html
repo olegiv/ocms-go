@@ -146,38 +146,36 @@
             <!-- Language -->
             {{if gt (len .Data.AllLanguages) 1}}
             <div class="form-group">
-                <label for="language_id" class="form-label">{{T .AdminLang "label.language"}}</label>
+                <label for="language_code" class="form-label">{{T .AdminLang "label.language"}}</label>
                 <select
-                    id="language_id"
-                    name="language_id"
+                    id="language_code"
+                    name="language_code"
                     class="form-select"
                     {{if .Data.IsEdit}}disabled{{end}}
                 >
-                    {{$currentLanguageID := int64 0}}
-                    {{if .Data.FormValues.language_id}}
-                        {{$currentLanguageID = atoi .Data.FormValues.language_id}}
+                    {{$currentLanguageCode := ""}}
+                    {{if .Data.FormValues.language_code}}
+                        {{$currentLanguageCode = .Data.FormValues.language_code}}
                     {{else if .Data.Language}}
-                        {{$currentLanguageID = .Data.Language.ID}}
+                        {{$currentLanguageCode = .Data.Language.Code}}
                     {{else if .Data.Category}}
-                        {{if .Data.Category.LanguageID.Valid}}
-                            {{$currentLanguageID = .Data.Category.LanguageID.Int64}}
-                        {{end}}
+                        {{$currentLanguageCode = .Data.Category.LanguageCode}}
                     {{end}}
                     {{range .Data.AllLanguages}}
-                    <option value="{{.ID}}" {{if eq .ID $currentLanguageID}}selected{{end}}>
+                    <option value="{{.Code}}" {{if eq .Code $currentLanguageCode}}selected{{end}}>
                         {{.Name}} ({{.Code}})
                     </option>
                     {{end}}
                 </select>
                 {{if .Data.IsEdit}}
-                <input type="hidden" name="language_id" value="{{if .Data.Language}}{{.Data.Language.ID}}{{end}}">
+                <input type="hidden" name="language_code" value="{{if .Data.Language}}{{.Data.Language.Code}}{{end}}">
                 <span class="form-hint">{{T .AdminLang "categories.language_readonly"}}</span>
                 {{else}}
                 <span class="form-hint">{{T .AdminLang "categories.select_language"}}</span>
                 {{end}}
             </div>
             {{else if .Data.Language}}
-            <input type="hidden" name="language_id" value="{{.Data.Language.ID}}">
+            <input type="hidden" name="language_code" value="{{.Data.Language.Code}}">
             {{end}}
         </div>
 

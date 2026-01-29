@@ -50,7 +50,7 @@
         <select class="form-select form-select-sm" onchange="window.location.href=this.value">
             <option value="/admin/pages?{{if .Data.StatusFilter}}status={{.Data.StatusFilter}}&{{end}}{{if gt .Data.CategoryFilter 0}}category={{.Data.CategoryFilter}}&{{end}}{{if .Data.SearchFilter}}search={{.Data.SearchFilter}}{{end}}">{{T .AdminLang "pages.all_languages"}}</option>
             {{range .Data.AllLanguages}}
-            <option value="/admin/pages?{{if $.Data.StatusFilter}}status={{$.Data.StatusFilter}}&{{end}}{{if gt $.Data.CategoryFilter 0}}category={{$.Data.CategoryFilter}}&{{end}}language={{.ID}}{{if $.Data.SearchFilter}}&search={{$.Data.SearchFilter}}{{end}}" {{if eq $.Data.LanguageFilter .ID}}selected{{end}}>
+            <option value="/admin/pages?{{if $.Data.StatusFilter}}status={{$.Data.StatusFilter}}&{{end}}{{if gt $.Data.CategoryFilter 0}}category={{$.Data.CategoryFilter}}&{{end}}language={{.Code}}{{if $.Data.SearchFilter}}&search={{$.Data.SearchFilter}}{{end}}" {{if eq $.Data.LanguageFilter .Code}}selected{{end}}>
                 {{.Name}} ({{.Code}})
             </option>
             {{end}}
