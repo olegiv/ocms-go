@@ -1,5 +1,5 @@
 {{define "header.html"}}
-<header class="site-header">
+<header class="site-header" id="site-header">
     <div class="container">
         <div class="header-inner">
             <div class="site-branding">
@@ -15,19 +15,51 @@
                 {{end}}
             </div>
 
-            <button class="mobile-menu-toggle" aria-label="Toggle menu" aria-expanded="false">
-                <span class="hamburger"></span>
+            <button class="mobile-menu-toggle" aria-label="Toggle menu" aria-expanded="false" aria-controls="main-nav">
+                <span class="hamburger-box">
+                    <span class="hamburger-inner"></span>
+                </span>
             </button>
 
-            <nav class="site-nav" aria-label="Main navigation">
-                <ul class="nav-menu">
+            <nav class="site-nav" id="main-nav" aria-label="Main navigation">
+                <ul class="nav-menu" role="menubar">
                     {{range .Navigation}}
-                    <li class="nav-item{{if eq $.CurrentPath .URL}} active{{end}}">
-                        <a href="{{.URL}}">{{.Title}}</a>
+                    {{/* Level 1 - Top nav items */}}
+                    <li class="nav-item{{if .IsActive}} active{{end}}{{if .Children}} has-children{{end}}">
+                        <a href="{{.URL}}" title="{{.Title}}"{{if and .Target (ne .Target "_self")}} target="{{.Target}}" rel="noopener noreferrer"{{end}}>
+                            <span>{{.Title}}</span>
+                            {{if .Children}}
+                            <svg class="nav-chevron" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                            {{end}}
+                        </a>
                         {{if .Children}}
-                        <ul class="sub-menu">
+                        <ul class="sub-menu" role="menu">
                             {{range .Children}}
-                            <li><a href="{{.URL}}">{{.Title}}</a></li>
+                            {{/* Level 2 - First dropdown */}}
+                            <li class="nav-item{{if .IsActive}} active{{end}}{{if .Children}} has-children{{end}}">
+                                <a href="{{.URL}}" title="{{.Title}}"{{if and .Target (ne .Target "_self")}} target="{{.Target}}" rel="noopener noreferrer"{{end}}>
+                                    <span>{{.Title}}</span>
+                                    {{if .Children}}
+                                    <svg class="nav-chevron" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                    {{end}}
+                                </a>
+                                {{if .Children}}
+                                <ul class="sub-menu" role="menu">
+                                    {{range .Children}}
+                                    {{/* Level 3 - Flyout submenu */}}
+                                    <li class="nav-item{{if .IsActive}} active{{end}}">
+                                        <a href="{{.URL}}" title="{{.Title}}"{{if and .Target (ne .Target "_self")}} target="{{.Target}}" rel="noopener noreferrer"{{end}}>
+                                            <span>{{.Title}}</span>
+                                        </a>
+                                    </li>
+                                    {{end}}
+                                </ul>
+                                {{end}}
+                            </li>
                             {{end}}
                         </ul>
                         {{end}}
@@ -36,22 +68,30 @@
                 </ul>
             </nav>
 
-            {{if .ShowSearch}}
-            <div class="header-search">
-                <form action="{{.LangPrefix}}/search" method="get" class="search-form">
-                    <input type="search" name="q" placeholder="{{TTheme .LangCode "search.placeholder"}}" aria-label="{{TTheme .LangCode "search.title"}}" value="{{.SearchQuery}}">
-                    <button type="submit" aria-label="Submit search">
+            <div class="header-actions">
+                {{if .ShowSearch}}
+                <div class="header-search">
+                    <button class="search-toggle" aria-label="{{TTheme .LangCode "search.title"}}" aria-expanded="false">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="11" cy="11" r="8"></circle>
                             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                         </svg>
                     </button>
-                </form>
-            </div>
-            {{end}}
+                    <form action="{{.LangPrefix}}/search" method="get" class="search-form" role="search">
+                        <input type="search" name="q" placeholder="{{TTheme .LangCode "search.placeholder"}}" aria-label="{{TTheme .LangCode "search.title"}}" value="{{.SearchQuery}}">
+                        <button type="submit" aria-label="{{TTheme .LangCode "search.button"}}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                        </button>
+                    </form>
+                </div>
+                {{end}}
 
-            {{/* Language Switcher */}}
-            {{template "language-switcher.html" .}}
+                {{/* Language Switcher */}}
+                {{template "language-switcher.html" .}}
+            </div>
         </div>
     </div>
 </header>
