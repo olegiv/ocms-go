@@ -30,7 +30,11 @@
                     {{if .FeaturedImage}}
                     <div class="dev-post-image">
                         <a href="{{.URL}}">
-                            <img src="{{.FeaturedImage}}" alt="{{mediaAlt .FeaturedImageID $.LangCode .FeaturedImageAlt}}" loading="lazy">
+                            <img src="{{.FeaturedImageMedium}}"
+                                 srcset="{{.FeaturedImage}} 150w, {{.FeaturedImageMedium}} 800w"
+                                 sizes="(max-width: 768px) 100vw, 200px"
+                                 alt="{{mediaAlt .FeaturedImageID $.LangCode .FeaturedImageAlt}}"
+                                 loading="lazy">
                         </a>
                     </div>
                     {{end}}
