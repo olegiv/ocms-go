@@ -176,6 +176,13 @@ img {
     padding: var(--dev-space-sm);
 }
 
+/* Base submenu styles (both mobile and desktop) */
+.dev-sub-menu {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
 @media (max-width: 768px) {
     .dev-menu-toggle {
         display: block;
@@ -207,27 +214,96 @@ img {
     /* Mobile multi-level menu - accordion style */
     .dev-nav-item {
         width: 100%;
+        display: flex;
+        flex-direction: column;
     }
 
-    .dev-nav-item.has-children > .dev-nav-link {
-        justify-content: space-between;
+    /* All nav links: full width, single line, truncated */
+    .dev-nav-item > .dev-nav-link {
+        display: flex;
         width: 100%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        box-sizing: border-box;
+    }
+
+    .dev-nav-link > span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex: 1;
+    }
+
+    /* Split link/toggle pattern for items with children */
+    .dev-nav-link-wrapper {
+        display: flex;
+        width: 100%;
+        align-items: stretch;
+    }
+
+    .dev-nav-link-wrapper > .dev-nav-link {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Hide desktop chevron on mobile (toggle button has its own) */
+    .dev-nav-chevron-desktop {
+        display: none;
+    }
+
+    /* Toggle button for expanding submenus */
+    .dev-nav-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--dev-space-sm) var(--dev-space-md);
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        color: var(--dev-text-muted);
+        transition: color 0.2s ease;
+        flex-shrink: 0;
+    }
+
+    .dev-nav-toggle:hover {
+        color: var(--dev-accent);
     }
 
     .dev-nav-chevron {
         transition: transform 0.3s ease;
     }
 
-    .dev-nav-item.has-children.open > .dev-nav-link .dev-nav-chevron {
+    /* Chevron rotation in toggle button when open */
+    .dev-nav-item.has-children.open > .dev-nav-link-wrapper > .dev-nav-toggle .dev-nav-chevron {
         transform: rotate(180deg);
     }
 
-    /* Level 2 chevron rotates down when open */
-    .dev-sub-menu .dev-nav-item.has-children.open > .dev-nav-link .dev-nav-chevron {
-        transform: rotate(90deg);
+    /* Level 2 toggle chevron rotates down when open */
+    .dev-sub-menu .dev-nav-item.has-children.open > .dev-nav-link-wrapper > .dev-nav-toggle .dev-nav-chevron {
+        transform: rotate(180deg);
     }
 
-    /* Mobile submenus - static accordion */
+    /* Level 2 link wrapper styling */
+    .dev-sub-menu .dev-nav-link-wrapper {
+        margin-left: var(--dev-space-md);
+        border-left: 2px solid var(--dev-border);
+    }
+
+    .dev-sub-menu .dev-nav-link-wrapper > .dev-nav-link {
+        padding-left: var(--dev-space-lg);
+        flex: 1;
+        min-width: 0;
+    }
+
+    .dev-sub-menu .dev-nav-link-wrapper:hover {
+        border-left-color: var(--dev-accent);
+    }
+
+    /* Mobile submenus - static accordion (Alpine.js x-collapse handles animation) */
     .dev-sub-menu {
         position: static;
         opacity: 1;
@@ -238,31 +314,32 @@ img {
         box-shadow: none;
         padding: 0;
         background-color: transparent;
-        max-height: 0;
         overflow: hidden;
-        transition: max-height 0.3s ease;
     }
 
-    .dev-nav-item.open > .dev-sub-menu {
-        max-height: 500px;
-    }
-
-    /* Indent level 2 items */
-    .dev-sub-menu .dev-nav-link {
+    /* Level 2 items (direct links without children) */
+    .dev-sub-menu > .dev-nav-item > .dev-nav-link {
         padding-left: var(--dev-space-xl);
-        background-color: var(--dev-bg-tertiary);
         border-left: 2px solid var(--dev-border);
         margin-left: var(--dev-space-md);
+        margin-right: 0;
     }
 
-    .dev-sub-menu .dev-nav-link:hover {
+    .dev-sub-menu > .dev-nav-item > .dev-nav-link:hover {
         border-left-color: var(--dev-accent);
     }
 
-    /* Indent level 3 items further */
-    .dev-sub-menu .dev-sub-menu .dev-nav-link {
+    /* Level 3 items */
+    .dev-sub-menu .dev-sub-menu > .dev-nav-item > .dev-nav-link {
         padding-left: calc(var(--dev-space-xl) + var(--dev-space-lg));
-        background-color: var(--dev-bg);
+        margin-left: calc(var(--dev-space-md) * 2);
+        margin-right: 0;
+    }
+
+    /* Level 3 wrapper (if has children) */
+    .dev-sub-menu .dev-sub-menu .dev-nav-link-wrapper {
+        margin-left: calc(var(--dev-space-md) * 2);
+        margin-right: 0;
     }
 
     /* Nested submenu - also accordion */
@@ -295,24 +372,26 @@ img {
     text-decoration: none;
 }
 
-/* Level 1 nav items - truncate long titles */
-.dev-nav-list > .dev-nav-item {
-    flex: 0 1 auto;
-    min-width: 0;
-    max-width: 160px;
-}
+/* Level 1 nav items - truncate long titles (desktop only) */
+@media (min-width: 769px) {
+    .dev-nav-list > .dev-nav-item {
+        flex: 0 1 auto;
+        min-width: 0;
+        max-width: 160px;
+    }
 
-.dev-nav-list > .dev-nav-item > .dev-nav-link {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: flex;
-    align-items: center;
-}
+    .dev-nav-list > .dev-nav-item > .dev-nav-link {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: flex;
+        align-items: center;
+    }
 
-.dev-nav-list > .dev-nav-item > .dev-nav-link > span {
-    overflow: hidden;
-    text-overflow: ellipsis;
+    .dev-nav-list > .dev-nav-item > .dev-nav-link > span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
 }
 
 .dev-nav-link:hover {
@@ -325,7 +404,21 @@ img {
     position: relative;
 }
 
-.dev-nav-item.has-children > .dev-nav-link {
+/* Desktop: wrapper for split link/toggle */
+.dev-nav-link-wrapper {
+    display: flex;
+    align-items: center;
+}
+
+/* Hide toggle button on desktop (min-width to ensure mobile rules win) */
+@media (min-width: 769px) {
+    .dev-nav-toggle {
+        display: none;
+    }
+}
+
+.dev-nav-item.has-children > .dev-nav-link,
+.dev-nav-item.has-children > .dev-nav-link-wrapper > .dev-nav-link {
     display: flex;
     align-items: center;
     gap: var(--dev-space-xs);
@@ -336,85 +429,94 @@ img {
     flex-shrink: 0;
 }
 
-.dev-nav-item.has-children:hover > .dev-nav-link .dev-nav-chevron {
+.dev-nav-item.has-children:hover > .dev-nav-link .dev-nav-chevron,
+.dev-nav-item.has-children:hover > .dev-nav-link-wrapper > .dev-nav-link .dev-nav-chevron {
     transform: rotate(180deg);
 }
 
 /* Level 2 items have right-pointing chevron */
-.dev-sub-menu .dev-nav-item.has-children:hover > .dev-nav-link .dev-nav-chevron {
+.dev-sub-menu .dev-nav-item.has-children:hover > .dev-nav-link .dev-nav-chevron,
+.dev-sub-menu .dev-nav-item.has-children:hover > .dev-nav-link-wrapper > .dev-nav-link .dev-nav-chevron {
     transform: rotate(0deg);
 }
 
-/* Dropdown menu (Level 2) */
-.dev-sub-menu {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    min-width: 200px;
-    background-color: var(--dev-bg-secondary);
-    border: 1px solid var(--dev-border);
-    border-radius: var(--dev-radius-md);
-    padding: var(--dev-space-xs) 0;
-    list-style: none;
-    margin: 0;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-10px);
-    transition: all 0.2s ease;
-    z-index: 100;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
+/* Desktop dropdown styles (min-width to not override mobile) */
+@media (min-width: 769px) {
+    /* Dropdown menu (Level 2) */
+    .dev-sub-menu {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        min-width: 200px;
+        background-color: var(--dev-bg-secondary);
+        border: 1px solid var(--dev-border);
+        border-radius: var(--dev-radius-md);
+        padding: var(--dev-space-xs) 0;
+        list-style: none;
+        margin: 0;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-10px);
+        transition: all 0.2s ease;
+        z-index: 100;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        /* Override Alpine x-collapse inline styles on desktop */
+        height: auto !important;
+        overflow: visible !important;
+    }
 
-.dev-nav-item:hover > .dev-sub-menu {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-}
+    .dev-nav-item:hover > .dev-sub-menu,
+    .dev-nav-item:hover > .dev-nav-link-wrapper + .dev-sub-menu {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+    }
 
-.dev-sub-menu .dev-nav-item {
-    display: block;
-}
+    .dev-sub-menu .dev-nav-item {
+        display: block;
+    }
 
-.dev-sub-menu .dev-nav-link {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--dev-space-sm) var(--dev-space-md);
-    border-radius: 0;
-    white-space: nowrap;
-    max-width: none;
-    overflow: visible;
-    text-overflow: clip;
-}
+    .dev-sub-menu .dev-nav-link {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--dev-space-sm) var(--dev-space-md);
+        border-radius: 0;
+        white-space: nowrap;
+        max-width: none;
+        overflow: visible;
+        text-overflow: clip;
+    }
 
-.dev-sub-menu .dev-nav-link > span {
-    overflow: visible;
-    text-overflow: clip;
-}
+    .dev-sub-menu .dev-nav-link > span {
+        overflow: visible;
+        text-overflow: clip;
+    }
 
-.dev-sub-menu .dev-nav-link:hover {
-    background-color: rgba(16, 185, 129, 0.15);
-}
+    .dev-sub-menu .dev-nav-link:hover {
+        background-color: rgba(16, 185, 129, 0.15);
+    }
 
-.dev-sub-menu .dev-nav-item.active > .dev-nav-link {
-    color: var(--dev-accent);
-}
+    .dev-sub-menu .dev-nav-item.active > .dev-nav-link {
+        color: var(--dev-accent);
+    }
 
-/* Flyout menu (Level 3) */
-.dev-sub-menu .dev-sub-menu {
-    position: absolute;
-    top: 0;
-    left: 100%;
-    margin-left: 0;
-    margin-top: -1px;
-}
+    /* Flyout menu (Level 3) */
+    .dev-sub-menu .dev-sub-menu {
+        position: absolute;
+        top: 0;
+        left: 100%;
+        margin-left: 0;
+        margin-top: -1px;
+    }
 
-/* Flip flyout to left when near viewport edge */
-.dev-sub-menu .dev-sub-menu.flip-left {
-    left: auto;
-    right: 100%;
-    margin-left: 0;
-    margin-right: 0;
+    /* Flip flyout to left when near viewport edge */
+    .dev-sub-menu .dev-sub-menu.flip-left {
+        left: auto;
+        right: 100%;
+        margin-left: 0;
+        margin-right: 0;
+    }
 }
 
 /* Search */

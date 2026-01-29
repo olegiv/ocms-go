@@ -7,7 +7,9 @@
                 <span class="dev-logo-bracket">}</span>
             </a>
 
-            <button class="dev-menu-toggle" id="menu-toggle" aria-label="Toggle menu">
+            <button class="dev-menu-toggle" id="menu-toggle" aria-label="Toggle menu"
+                    x-data
+                    @click="$dispatch('toggle-mobile-menu')">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="3" y1="6" x2="21" y2="6"></line>
                     <line x1="3" y1="12" x2="21" y2="12"></line>
@@ -15,36 +17,91 @@
                 </svg>
             </button>
 
-            <nav class="dev-nav" id="main-nav" aria-label="Main navigation">
+            <nav class="dev-nav" id="main-nav" aria-label="Main navigation"
+                 x-data="{
+                     mobileOpen: false,
+                     openMenus: {},
+                     toggle(key) {
+                         if (this.openMenus[key]) {
+                             this.openMenus[key] = false;
+                         } else {
+                             this.openMenus[key] = true;
+                         }
+                     },
+                     isOpen(key) {
+                         return this.openMenus[key] === true;
+                     }
+                 }"
+                 @toggle-mobile-menu.window="mobileOpen = !mobileOpen"
+                 @close-mobile-menu.window="mobileOpen = false; openMenus = {}"
+                 :class="{ 'active': mobileOpen }">
                 {{if .Navigation}}
                 <ul class="dev-nav-list" role="menubar">
-                    {{range .Navigation}}
+                    {{range $i, $item := .Navigation}}
                     {{/* Level 1 - Top nav items */}}
-                    <li class="dev-nav-item{{if .IsActive}} active{{end}}{{if .Children}} has-children{{end}}" role="none">
-                        <a href="{{.URL}}" class="dev-nav-link" role="menuitem" title="{{.Title}}" {{if eq .Target "_blank"}}target="_blank" rel="noopener"{{end}}{{if .Children}} aria-haspopup="true" aria-expanded="false"{{end}}>
-                            <span>{{.Title}}</span>
-                            {{if .Children}}
-                            <svg class="dev-nav-chevron" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="6 9 12 15 18 9"></polyline>
-                            </svg>
-                            {{end}}
-                        </a>
-                        {{if .Children}}
-                        <ul class="dev-sub-menu" role="menu">
-                            {{range .Children}}
+                    <li class="dev-nav-item{{if $item.IsActive}} active{{end}}{{if $item.Children}} has-children{{end}}"
+                        :class="{ 'open': isOpen('l1-{{$i}}') }"
+                        role="none">
+                        {{if $item.Children}}
+                        {{/* Item with children - split: link navigates, button toggles */}}
+                        <div class="dev-nav-link-wrapper">
+                            <a href="{{$item.URL}}"
+                               class="dev-nav-link"
+                               role="menuitem"
+                               title="{{$item.Title}}"
+                               {{if eq $item.Target "_blank"}}target="_blank" rel="noopener"{{end}}
+                               aria-haspopup="true">
+                                <span>{{$item.Title}}</span>
+                                {{/* Desktop-only chevron (hidden on mobile, toggle button used instead) */}}
+                                <svg class="dev-nav-chevron dev-nav-chevron-desktop" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </a>
+                            <button type="button"
+                                    class="dev-nav-toggle"
+                                    :aria-expanded="isOpen('l1-{{$i}}') ? 'true' : 'false'"
+                                    aria-label="Toggle submenu"
+                                    @click="toggle('l1-{{$i}}')">
+                                <svg class="dev-nav-chevron" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </button>
+                        </div>
+                        <ul class="dev-sub-menu" role="menu"
+                            x-show="isOpen('l1-{{$i}}')"
+                            x-collapse.duration.200ms>
+                            {{range $j, $child := $item.Children}}
                             {{/* Level 2 - First dropdown */}}
-                            <li class="dev-nav-item{{if .IsActive}} active{{end}}{{if .Children}} has-children{{end}}" role="none">
-                                <a href="{{.URL}}" class="dev-nav-link" role="menuitem" title="{{.Title}}" {{if eq .Target "_blank"}}target="_blank" rel="noopener"{{end}}{{if .Children}} aria-haspopup="true" aria-expanded="false"{{end}}>
-                                    <span>{{.Title}}</span>
-                                    {{if .Children}}
-                                    <svg class="dev-nav-chevron" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <polyline points="9 6 15 12 9 18"></polyline>
-                                    </svg>
-                                    {{end}}
-                                </a>
-                                {{if .Children}}
-                                <ul class="dev-sub-menu" role="menu">
-                                    {{range .Children}}
+                            <li class="dev-nav-item{{if $child.IsActive}} active{{end}}{{if $child.Children}} has-children{{end}}"
+                                :class="{ 'open': isOpen('l2-{{$i}}-{{$j}}') }"
+                                role="none">
+                                {{if $child.Children}}
+                                <div class="dev-nav-link-wrapper">
+                                    <a href="{{$child.URL}}"
+                                       class="dev-nav-link"
+                                       role="menuitem"
+                                       title="{{$child.Title}}"
+                                       {{if eq $child.Target "_blank"}}target="_blank" rel="noopener"{{end}}
+                                       aria-haspopup="true">
+                                        <span>{{$child.Title}}</span>
+                                        <svg class="dev-nav-chevron dev-nav-chevron-desktop" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <polyline points="9 6 15 12 9 18"></polyline>
+                                        </svg>
+                                    </a>
+                                    <button type="button"
+                                            class="dev-nav-toggle"
+                                            :aria-expanded="isOpen('l2-{{$i}}-{{$j}}') ? 'true' : 'false'"
+                                            aria-label="Toggle submenu"
+                                            @click="toggle('l2-{{$i}}-{{$j}}')">
+                                        <svg class="dev-nav-chevron" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <polyline points="6 9 12 15 18 9"></polyline>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <ul class="dev-sub-menu" role="menu"
+                                    x-show="isOpen('l2-{{$i}}-{{$j}}')"
+                                    x-collapse.duration.200ms>
+                                    {{range $child.Children}}
                                     {{/* Level 3 - Flyout submenu */}}
                                     <li class="dev-nav-item{{if .IsActive}} active{{end}}" role="none">
                                         <a href="{{.URL}}" class="dev-nav-link" role="menuitem" title="{{.Title}}" {{if eq .Target "_blank"}}target="_blank" rel="noopener"{{end}}>
@@ -53,10 +110,18 @@
                                     </li>
                                     {{end}}
                                 </ul>
+                                {{else}}
+                                <a href="{{$child.URL}}" class="dev-nav-link" role="menuitem" title="{{$child.Title}}" {{if eq $child.Target "_blank"}}target="_blank" rel="noopener"{{end}}>
+                                    <span>{{$child.Title}}</span>
+                                </a>
                                 {{end}}
                             </li>
                             {{end}}
                         </ul>
+                        {{else}}
+                        <a href="{{$item.URL}}" class="dev-nav-link" role="menuitem" title="{{$item.Title}}" {{if eq $item.Target "_blank"}}target="_blank" rel="noopener"{{end}}>
+                            <span>{{$item.Title}}</span>
+                        </a>
                         {{end}}
                     </li>
                     {{end}}
