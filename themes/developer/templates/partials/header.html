@@ -15,14 +15,49 @@
                 </svg>
             </button>
 
-            <nav class="dev-nav" id="main-nav">
+            <nav class="dev-nav" id="main-nav" aria-label="Main navigation">
                 {{if .Navigation}}
-                <ul class="dev-nav-list">
+                <ul class="dev-nav-list" role="menubar">
                     {{range .Navigation}}
-                    <li class="dev-nav-item{{if .IsActive}} active{{end}}">
-                        <a href="{{.URL}}" class="dev-nav-link" {{if eq .Target "_blank"}}target="_blank" rel="noopener"{{end}}>
-                            {{.Title}}
+                    {{/* Level 1 - Top nav items */}}
+                    <li class="dev-nav-item{{if .IsActive}} active{{end}}{{if .Children}} has-children{{end}}" role="none">
+                        <a href="{{.URL}}" class="dev-nav-link" role="menuitem" title="{{.Title}}" {{if eq .Target "_blank"}}target="_blank" rel="noopener"{{end}}{{if .Children}} aria-haspopup="true" aria-expanded="false"{{end}}>
+                            <span>{{.Title}}</span>
+                            {{if .Children}}
+                            <svg class="dev-nav-chevron" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                            {{end}}
                         </a>
+                        {{if .Children}}
+                        <ul class="dev-sub-menu" role="menu">
+                            {{range .Children}}
+                            {{/* Level 2 - First dropdown */}}
+                            <li class="dev-nav-item{{if .IsActive}} active{{end}}{{if .Children}} has-children{{end}}" role="none">
+                                <a href="{{.URL}}" class="dev-nav-link" role="menuitem" title="{{.Title}}" {{if eq .Target "_blank"}}target="_blank" rel="noopener"{{end}}{{if .Children}} aria-haspopup="true" aria-expanded="false"{{end}}>
+                                    <span>{{.Title}}</span>
+                                    {{if .Children}}
+                                    <svg class="dev-nav-chevron" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="9 6 15 12 9 18"></polyline>
+                                    </svg>
+                                    {{end}}
+                                </a>
+                                {{if .Children}}
+                                <ul class="dev-sub-menu" role="menu">
+                                    {{range .Children}}
+                                    {{/* Level 3 - Flyout submenu */}}
+                                    <li class="dev-nav-item{{if .IsActive}} active{{end}}" role="none">
+                                        <a href="{{.URL}}" class="dev-nav-link" role="menuitem" title="{{.Title}}" {{if eq .Target "_blank"}}target="_blank" rel="noopener"{{end}}>
+                                            <span>{{.Title}}</span>
+                                        </a>
+                                    </li>
+                                    {{end}}
+                                </ul>
+                                {{end}}
+                            </li>
+                            {{end}}
+                        </ul>
+                        {{end}}
                     </li>
                     {{end}}
                 </ul>
