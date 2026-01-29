@@ -16,7 +16,9 @@ const menuBuilderMethods = {
             title: item.title,
             url: typeof item.url === 'string' ? item.url : (item.url?.String || ''),
             target: typeof item.target === 'string' ? item.target : (item.target?.String || '_self'),
-            page_id: item.page_id?.Valid ? item.page_id.Int64 : null,
+            page_id: (item.page_id !== null && typeof item.page_id === 'object')
+            ? (item.page_id.Valid ? item.page_id.Int64 : null)
+            : item.page_id,
             css_class: typeof item.css_class === 'string' ? item.css_class : (item.css_class?.String || ''),
             is_active: item.is_active,
             children: []
