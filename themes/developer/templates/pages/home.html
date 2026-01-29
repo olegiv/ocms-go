@@ -46,7 +46,7 @@
             {{if .RecentPages}}
             <section class="dev-section">
                 <h2 class="dev-section-title">
-                    <span class="dev-comment">// </span>Recent Posts
+                    <span class="dev-comment">// </span>{{TTheme $.LangCode "sidebar.recent_posts"}}
                 </h2>
                 <div class="dev-posts-list">
                     {{range .RecentPages}}
@@ -98,7 +98,7 @@
             {{if .Tags}}
             <div class="dev-widget">
                 <h3 class="dev-widget-title">
-                    <span class="dev-comment">// </span>Tags
+                    <span class="dev-comment">// </span>{{TTheme $.LangCode "sidebar.tags"}}
                 </h3>
                 <div class="dev-tag-cloud">
                     {{range .Tags}}
@@ -112,7 +112,7 @@
             {{if .RecentPosts}}
             <div class="dev-widget">
                 <h3 class="dev-widget-title">
-                    <span class="dev-comment">// </span>Recent Posts
+                    <span class="dev-comment">// </span>{{TTheme $.LangCode "sidebar.recent_posts"}}
                 </h3>
                 <ul class="dev-recent-posts">
                     {{range .RecentPosts}}
@@ -129,7 +129,7 @@
             {{if .Categories}}
             <div class="dev-widget">
                 <h3 class="dev-widget-title">
-                    <span class="dev-comment">// </span>Categories
+                    <span class="dev-comment">// </span>{{TTheme $.LangCode "sidebar.categories"}}
                 </h3>
                 <ul class="dev-category-list">
                     {{range .Categories}}

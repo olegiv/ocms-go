@@ -30,10 +30,10 @@ Error: ENOENT: no such file or directory
 
     <div class="dev-error-content">
         <h1 class="dev-error-title">
-            <span class="dev-comment">// </span>Page Not Found
+            <span class="dev-comment">// </span>{{TTheme $.LangCode "frontend.page_not_found"}}
         </h1>
         <p class="dev-error-message">
-            The file you're looking for doesn't exist or has been moved to /dev/null.
+            {{TTheme $.LangCode "frontend.error_404_message"}}
         </p>
 
         <div class="dev-error-actions">
@@ -43,7 +43,7 @@ Error: ENOENT: no such file or directory
             {{if .ShowSearch}}
             <span class="dev-or">||</span>
             <form action="{{.LangPrefix}}/search" method="get" class="dev-inline-search">
-                <input type="search" name="q" placeholder="grep -r 'query'" class="dev-search-input" aria-label="Search">
+                <input type="search" name="q" placeholder="{{TTheme $.LangCode "frontend.search_placeholder_404"}}" class="dev-search-input" aria-label="{{TTheme $.LangCode "search.title"}}">
                 <button type="submit" class="dev-btn dev-btn-secondary">find</button>
             </form>
             {{end}}
@@ -53,7 +53,7 @@ Error: ENOENT: no such file or directory
     {{if .SuggestedPages}}
     <div class="dev-suggestions">
         <h3 class="dev-section-title">
-            <span class="dev-comment">// </span>Did you mean:
+            <span class="dev-comment">// </span>{{TTheme $.LangCode "frontend.did_you_mean"}}
         </h3>
         <ul class="dev-suggestions-list">
             {{range .SuggestedPages}}

@@ -6,14 +6,14 @@
                 <span class="dev-prompt">$</span>
                 <span class="dev-command">grep -r "#{{.Tag.Name}}" ./posts</span>
             </div>
-            <span class="dev-archive-label">tag</span>
+            <span class="dev-archive-label">{{TTheme $.LangCode "frontend.tag"}}</span>
             <h1 class="dev-archive-title">#{{.Tag.Name}}</h1>
             {{if .Tag.Description}}
             <p class="dev-archive-description">{{.Tag.Description}}</p>
             {{end}}
             {{if .PageCount}}
             <p class="dev-archive-count">
-                <span class="dev-comment">// </span>{{.PageCount}} {{if eq .PageCount 1}}match{{else}}matches{{end}}
+                <span class="dev-comment">// </span>{{.PageCount}} {{if eq .PageCount 1}}{{TTheme $.LangCode "frontend.match"}}{{else}}{{TTheme $.LangCode "frontend.matches"}}{{end}}
             </p>
             {{end}}
         </header>
@@ -67,7 +67,7 @@
                     <span class="dev-terminal-dot green"></span>
                 </div>
                 <div class="dev-terminal-body">
-                    <p class="dev-output">No matches found for this tag.</p>
+                    <p class="dev-output">{{TTheme $.LangCode "frontend.no_posts_tag"}}</p>
                     <a href="/" class="dev-btn dev-btn-secondary">
                         <span class="dev-arrow">&gt;</span> cd ~
                     </a>
@@ -80,7 +80,7 @@
         {{if .RelatedTags}}
         <section class="dev-related-tags">
             <h3 class="dev-section-title">
-                <span class="dev-comment">// </span>Related Tags
+                <span class="dev-comment">// </span>{{TTheme $.LangCode "frontend.related_tags"}}
             </h3>
             <div class="dev-tag-cloud">
                 {{range .RelatedTags}}
