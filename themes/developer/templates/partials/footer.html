@@ -1,5 +1,35 @@
 <footer class="dev-footer">
     <div class="dev-container">
+        {{if .FooterNav}}
+        <nav class="dev-footer-nav" aria-label="Footer navigation">
+            {{range .FooterNav}}
+            <div class="dev-footer-nav-column">
+                {{/* Level 1 - Column header */}}
+                <a href="{{.URL}}" class="dev-footer-nav-header" title="{{.Title}}">{{.Title}}</a>
+
+                {{if .Children}}
+                <ul class="dev-footer-nav-list">
+                    {{range .Children}}
+                    {{/* Level 2 */}}
+                    <li>
+                        <a href="{{.URL}}" title="{{.Title}}">{{.Title}}</a>
+                        {{if .Children}}
+                        <ul class="dev-footer-nav-sublist">
+                            {{range .Children}}
+                            {{/* Level 3 */}}
+                            <li><a href="{{.URL}}" title="{{.Title}}">{{.Title}}</a></li>
+                            {{end}}
+                        </ul>
+                        {{end}}
+                    </li>
+                    {{end}}
+                </ul>
+                {{end}}
+            </div>
+            {{end}}
+        </nav>
+        {{end}}
+
         <div class="dev-footer-inner">
             <div class="dev-footer-left">
                 <span class="dev-footer-text">// {{.SiteName}} &copy; {{now.Year}}</span>
