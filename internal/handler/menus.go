@@ -218,8 +218,8 @@ func (h *MenusHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	formValues := make(map[string]string)
-	if defaultLang.ID > 0 {
-		formValues["language_id"] = fmt.Sprintf("%d", defaultLang.ID)
+	if defaultLang.Code != "" {
+		formValues["language_code"] = defaultLang.Code
 	}
 
 	data := MenuFormData{

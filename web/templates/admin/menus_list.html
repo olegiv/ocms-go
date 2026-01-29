@@ -38,8 +38,8 @@
                         <code class="slug-code">{{.Slug}}</code>
                     </td>
                     <td>
-                        {{if .LanguageCode.Valid}}
-                        <span class="badge badge-outline" title="{{.LanguageName.String}}">{{.LanguageCode.String}}</span>
+                        {{if .LanguageCode}}
+                        <span class="badge badge-outline">{{.LanguageCode}}</span>
                         {{else}}
                         <span class="badge badge-muted">—</span>
                         {{end}}
