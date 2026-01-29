@@ -346,6 +346,7 @@
             "body": "Content here...",
             "status": "published",
             "author_id": 1,
+            "language_id": 1,
             "created_at": "2024-01-01T12:00:00Z",
             "updated_at": "2024-01-01T12:00:00Z",
             "published_at": "2024-01-01T12:00:00Z",
@@ -438,6 +439,7 @@
                                 <tr><td class="param-name">slug <span class="param-required">required</span></td><td class="param-type">string</td><td>URL slug (must be unique)</td></tr>
                                 <tr><td class="param-name">body</td><td class="param-type">string</td><td>Page content (HTML/Markdown)</td></tr>
                                 <tr><td class="param-name">status</td><td class="param-type">string</td><td><code>draft</code> or <code>published</code> (default: draft)</td></tr>
+                                <tr><td class="param-name">language_id</td><td class="param-type">integer</td><td>Language ID (defaults to system default language)</td></tr>
                                 <tr><td class="param-name">featured_image_id</td><td class="param-type">integer</td><td>Media ID for featured image</td></tr>
                                 <tr><td class="param-name">meta_title</td><td class="param-type">string</td><td>SEO title (recommended ~60 chars)</td></tr>
                                 <tr><td class="param-name">meta_description</td><td class="param-type">string</td><td>SEO description (recommended ~160 chars)</td></tr>
@@ -713,6 +715,7 @@
             "id": 1,
             "name": "Technology",
             "slug": "technology",
+            "language_id": 1,
             "page_count": 15,
             "created_at": "2024-01-01T12:00:00Z"
         }
@@ -756,6 +759,7 @@
                             <tbody>
                                 <tr><td class="param-name">name <span class="param-required">required</span></td><td class="param-type">string</td><td>Tag name</td></tr>
                                 <tr><td class="param-name">slug <span class="param-required">required</span></td><td class="param-type">string</td><td>URL slug (must be unique)</td></tr>
+                                <tr><td class="param-name">language_id</td><td class="param-type">integer</td><td>Language ID (defaults to system default language)</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -820,6 +824,7 @@
             "description": "Tech-related posts",
             "parent_id": null,
             "position": 0,
+            "language_id": 1,
             "page_count": 10,
             "children": [
                 {
@@ -869,6 +874,7 @@
                                 <tr><td class="param-name">description</td><td class="param-type">string</td><td>Category description</td></tr>
                                 <tr><td class="param-name">parent_id</td><td class="param-type">integer</td><td>Parent category ID (null for root)</td></tr>
                                 <tr><td class="param-name">position</td><td class="param-type">integer</td><td>Sort order (default: 0)</td></tr>
+                                <tr><td class="param-name">language_id</td><td class="param-type">integer</td><td>Language ID (defaults to system default language)</td></tr>
                             </tbody>
                         </table>
                     </div>

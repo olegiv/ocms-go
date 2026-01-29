@@ -67,8 +67,9 @@ func (h *PagesHandler) dispatchPageEvent(ctx context.Context, eventType string, 
 	}
 
 	var languageID *int64
-	if page.LanguageID.Valid {
-		languageID = &page.LanguageID.Int64
+	if page.LanguageID != 0 {
+		langID := page.LanguageID
+		languageID = &langID
 	}
 
 	var publishedAt *string
@@ -151,7 +152,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case languageFilter > 0:
 			totalCount, err = h.queries.CountSearchPagesByLanguage(r.Context(), store.CountSearchPagesByLanguageParams{
-				LanguageID: util.NullInt64FromValue(languageFilter),
+				LanguageID: languageFilter,
 				Title:      searchPattern,
 				Body:       searchPattern,
 				Slug:       searchPattern,
@@ -173,11 +174,11 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	case languageFilter > 0:
 		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
 			totalCount, err = h.queries.CountPagesByLanguageAndStatus(r.Context(), store.CountPagesByLanguageAndStatusParams{
-				LanguageID: util.NullInt64FromValue(languageFilter),
+				LanguageID: languageFilter,
 				Status:     statusFilter,
 			})
 		} else {
-			totalCount, err = h.queries.CountPagesByLanguage(r.Context(), util.NullInt64FromValue(languageFilter))
+			totalCount, err = h.queries.CountPagesByLanguage(r.Context(), languageFilter)
 		}
 	case categoryFilter > 0:
 		totalCount, err = h.queries.CountPagesByCategory(r.Context(), categoryFilter)
@@ -205,7 +206,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case languageFilter > 0:
 			pages, err = h.queries.SearchPagesByLanguage(r.Context(), store.SearchPagesByLanguageParams{
-				LanguageID: util.NullInt64FromValue(languageFilter),
+				LanguageID: languageFilter,
 				Title:      searchPattern,
 				Body:       searchPattern,
 				Slug:       searchPattern,
@@ -233,14 +234,14 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	case languageFilter > 0:
 		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
 			pages, err = h.queries.ListPagesByLanguageAndStatus(r.Context(), store.ListPagesByLanguageAndStatusParams{
-				LanguageID: util.NullInt64FromValue(languageFilter),
+				LanguageID: languageFilter,
 				Status:     statusFilter,
 				Limit:      PagesPerPage,
 				Offset:     offset,
 			})
 		} else {
 			pages, err = h.queries.ListPagesByLanguage(r.Context(), store.ListPagesByLanguageParams{
-				LanguageID: util.NullInt64FromValue(languageFilter),
+				LanguageID: languageFilter,
 				Limit:      PagesPerPage,
 				Offset:     offset,
 			})
@@ -310,12 +311,19 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch languages for all displayed pages
-	pageLanguages := batchFetchOptional(r.Context(), pages,
-		func(p store.Page) int64 { return p.ID },
-		func(p store.Page) sql.NullInt64 { return p.LanguageID },
-		func(ctx context.Context, id int64) (store.Language, error) { return h.queries.GetLanguageByID(ctx, id) },
-		"page_languages",
-	)
+	pageLanguages := make(map[int64]*store.Language, len(pages))
+	for _, p := range pages {
+		if p.LanguageID != 0 {
+			lang, err := h.queries.GetLanguageByID(r.Context(), p.LanguageID)
+			if err != nil {
+				if !errors.Is(err, sql.ErrNoRows) {
+					slog.Error("failed to fetch language for page", "error", err, "page_id", p.ID, "language_id", p.LanguageID)
+				}
+				continue
+			}
+			pageLanguages[p.ID] = &lang
+		}
+	}
 
 	// Load all categories for filter dropdown
 	allCategories, err := h.queries.ListCategories(r.Context())
@@ -488,10 +496,10 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	input := parsePageFormInput(r)
 
 	// Default to the default language if not specified
-	if !input.LanguageID.Valid {
+	if input.LanguageID == 0 {
 		defaultLang, err := h.queries.GetDefaultLanguage(r.Context())
 		if err == nil {
-			input.LanguageID = util.NullInt64FromValue(defaultLang.ID)
+			input.LanguageID = defaultLang.ID
 		}
 	}
 
@@ -1113,7 +1121,7 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		NoFollow:        0,
 		CanonicalUrl:    "",
 		ScheduledAt:     sql.NullTime{},
-		LanguageID:      util.NullInt64FromValue(tc.TargetLang.ID),
+		LanguageID:      tc.TargetLang.ID,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	})
@@ -1187,7 +1195,7 @@ type pageFormInput struct {
 	NoFollow        int64
 	CanonicalURL    string
 	ScheduledAt     sql.NullTime
-	LanguageID      sql.NullInt64
+	LanguageID      int64
 	FormValues      map[string]string
 }
 
@@ -1235,7 +1243,12 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 	}
 
 	// Parse language_id
-	languageID := util.ParseNullInt64Positive(languageIDStr)
+	var languageID int64
+	if languageIDStr != "" {
+		if parsed, parseErr := strconv.ParseInt(languageIDStr, 10, 64); parseErr == nil && parsed > 0 {
+			languageID = parsed
+		}
+	}
 
 	formValues := map[string]string{
 		"title":             title,

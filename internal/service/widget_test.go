@@ -10,21 +10,22 @@ import (
 
 func TestCacheKey(t *testing.T) {
 	tests := []struct {
-		theme string
-		area  string
-		want  string
+		theme      string
+		area       string
+		languageID int64
+		want       string
 	}{
-		{"default", "sidebar", "default:sidebar"},
-		{"custom", "footer", "custom:footer"},
-		{"", "header", ":header"},
-		{"theme", "", "theme:"},
+		{"default", "sidebar", 1, "default:sidebar:1"},
+		{"custom", "footer", 2, "custom:footer:2"},
+		{"", "header", 1, ":header:1"},
+		{"theme", "", 1, "theme::1"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.theme+"-"+tt.area, func(t *testing.T) {
-			got := cacheKey(tt.theme, tt.area)
+			got := cacheKey(tt.theme, tt.area, tt.languageID)
 			if got != tt.want {
-				t.Errorf("cacheKey(%q, %q) = %q, want %q", tt.theme, tt.area, got, tt.want)
+				t.Errorf("cacheKey(%q, %q, %d) = %q, want %q", tt.theme, tt.area, tt.languageID, got, tt.want)
 			}
 		})
 	}

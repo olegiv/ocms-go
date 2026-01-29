@@ -107,6 +107,12 @@ func seedConfig(ctx context.Context, queries *Queries) error {
 		return nil
 	}
 
+	// Get default language for config creation
+	defaultLang, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		return fmt.Errorf("getting default language for config: %w", err)
+	}
+
 	now := time.Now()
 	for _, cfg := range DefaultConfig {
 		_, err := queries.UpsertConfig(ctx, UpsertConfigParams{
@@ -114,6 +120,7 @@ func seedConfig(ctx context.Context, queries *Queries) error {
 			Value:       cfg.Value,
 			Type:        cfg.Type,
 			Description: cfg.Description,
+			LanguageID:  defaultLang.ID,
 			UpdatedAt:   now,
 			UpdatedBy:   sql.NullInt64{Valid: false},
 		})
@@ -148,13 +155,20 @@ func seedMenus(ctx context.Context, queries *Queries) error {
 		return nil
 	}
 
+	// Get default language for menu creation
+	defaultLang, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		return fmt.Errorf("getting default language for menus: %w", err)
+	}
+
 	now := time.Now()
 	for _, menu := range DefaultMenus {
 		_, err := queries.CreateMenu(ctx, CreateMenuParams{
-			Name:      menu.Name,
-			Slug:      menu.Slug,
-			CreatedAt: now,
-			UpdatedAt: now,
+			Name:       menu.Name,
+			Slug:       menu.Slug,
+			LanguageID: defaultLang.ID,
+			CreatedAt:  now,
+			UpdatedAt:  now,
 		})
 		if err != nil {
 			return fmt.Errorf("seeding menu %s: %w", menu.Slug, err)

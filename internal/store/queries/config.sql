@@ -8,10 +8,11 @@ SELECT * FROM config WHERE key = ?;
 SELECT * FROM config ORDER BY key;
 
 -- name: UpsertConfig :one
-INSERT INTO config (key, value, type, description, updated_at, updated_by)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO config (key, value, type, description, language_id, updated_at, updated_by)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(key) DO UPDATE SET
     value = excluded.value,
+    language_id = excluded.language_id,
     updated_at = excluded.updated_at,
     updated_by = excluded.updated_by
 RETURNING *;

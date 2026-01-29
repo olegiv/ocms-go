@@ -125,10 +125,11 @@ func createTestFixtures(t *testing.T, db *sql.DB) *testFixtures {
 	menu, err := q.GetMenuBySlug(ctx, "main")
 	if err != nil {
 		menu, err = q.CreateMenu(ctx, store.CreateMenuParams{
-			Name:      "Main Menu",
-			Slug:      "main",
-			CreatedAt: now,
-			UpdatedAt: now,
+			Name:       "Main Menu",
+			Slug:       "main",
+			LanguageID: lang.ID,
+			CreatedAt:  now,
+			UpdatedAt:  now,
 		})
 		if err != nil {
 			t.Fatalf("CreateMenu: %v", err)
@@ -491,14 +492,14 @@ func TestGeneratePages(t *testing.T) {
 	// Create some tags and categories first
 	now := time.Now()
 	tag1, err := q.CreateTag(ctx, store.CreateTagParams{
-		Name: "Tag1", Slug: "tag1", LanguageID: sql.NullInt64{Int64: fixtures.Language.ID, Valid: true},
+		Name: "Tag1", Slug: "tag1", LanguageID: fixtures.Language.ID,
 		CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
 		t.Fatalf("CreateTag: %v", err)
 	}
 	cat1, err := q.CreateCategory(ctx, store.CreateCategoryParams{
-		Name: "Cat1", Slug: "cat1", LanguageID: sql.NullInt64{Int64: fixtures.Language.ID, Valid: true},
+		Name: "Cat1", Slug: "cat1", LanguageID: fixtures.Language.ID,
 		Position: 1, CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
@@ -559,7 +560,7 @@ func TestGenerateMenuItems(t *testing.T) {
 		_, err := q.CreatePage(ctx, store.CreatePageParams{
 			Title: "Test Page", Slug: "test-page-" + string(rune('0'+i)),
 			Body: "<p>Content</p>", Status: "published", AuthorID: fixtures.User.ID,
-			LanguageID: sql.NullInt64{Int64: fixtures.Language.ID, Valid: true},
+			LanguageID: fixtures.Language.ID,
 			CreatedAt:  now, UpdatedAt: now,
 		})
 		if err != nil {
@@ -613,7 +614,7 @@ func TestGenerateMenuItemsWithLanguageSpecificMenus(t *testing.T) {
 	menuEN, err := q.CreateMenu(ctx, store.CreateMenuParams{
 		Name:       "Main EN",
 		Slug:       "main-en",
-		LanguageID: sql.NullInt64{Int64: fixtures.Language.ID, Valid: true},
+		LanguageID: fixtures.Language.ID,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	})
@@ -624,7 +625,7 @@ func TestGenerateMenuItemsWithLanguageSpecificMenus(t *testing.T) {
 	menuRU, err := q.CreateMenu(ctx, store.CreateMenuParams{
 		Name:       "Main RU",
 		Slug:       "main-ru",
-		LanguageID: sql.NullInt64{Int64: fixtures.Language2.ID, Valid: true},
+		LanguageID: fixtures.Language2.ID,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	})
@@ -637,7 +638,7 @@ func TestGenerateMenuItemsWithLanguageSpecificMenus(t *testing.T) {
 		_, err := q.CreatePage(ctx, store.CreatePageParams{
 			Title: "EN Page", Slug: "en-page-" + string(rune('a'+i)),
 			Body: "<p>Content</p>", Status: "published", AuthorID: fixtures.User.ID,
-			LanguageID: sql.NullInt64{Int64: fixtures.Language.ID, Valid: true},
+			LanguageID: fixtures.Language.ID,
 			CreatedAt:  now, UpdatedAt: now,
 		})
 		if err != nil {
@@ -647,7 +648,7 @@ func TestGenerateMenuItemsWithLanguageSpecificMenus(t *testing.T) {
 		_, err = q.CreatePage(ctx, store.CreatePageParams{
 			Title: "RU Page", Slug: "ru-page-" + string(rune('a'+i)),
 			Body: "<p>Content</p>", Status: "published", AuthorID: fixtures.User.ID,
-			LanguageID: sql.NullInt64{Int64: fixtures.Language2.ID, Valid: true},
+			LanguageID: fixtures.Language2.ID,
 			CreatedAt:  now, UpdatedAt: now,
 		})
 		if err != nil {

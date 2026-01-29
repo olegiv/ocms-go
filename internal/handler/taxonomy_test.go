@@ -52,14 +52,14 @@ func TestTagWithLanguage(t *testing.T) {
 	tag, err := queries.CreateTag(context.Background(), store.CreateTagParams{
 		Name:       "English Tag",
 		Slug:       "english-tag",
-		LanguageID: sql.NullInt64{Int64: lang.ID, Valid: true},
+		LanguageID: lang.ID,
 	})
 	if err != nil {
 		t.Fatalf("CreateTag failed: %v", err)
 	}
 
-	if !tag.LanguageID.Valid || tag.LanguageID.Int64 != lang.ID {
-		t.Errorf("LanguageID = %v, want %d", tag.LanguageID, lang.ID)
+	if tag.LanguageID != lang.ID {
+		t.Errorf("LanguageID = %d, want %d", tag.LanguageID, lang.ID)
 	}
 }
 

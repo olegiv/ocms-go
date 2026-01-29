@@ -333,6 +333,14 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 	// Create media service
 	mediaService := service.NewMediaService(h.db, "./uploads")
 
+	// Get default language for media creation
+	queries := store.New(h.db)
+	defaultLang, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		WriteInternalError(w, "Failed to get default language")
+		return
+	}
+
 	// Handle file(s) - support both single "file" and multiple "files[]"
 	files := r.MultipartForm.File["file"]
 	if len(files) == 0 {
@@ -361,7 +369,7 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		result, err := mediaService.Upload(ctx, file, fileHeader, apiKey.CreatedBy, folderID)
+		result, err := mediaService.Upload(ctx, file, fileHeader, apiKey.CreatedBy, folderID, defaultLang.ID)
 		_ = file.Close()
 
 		if err != nil {
@@ -428,12 +436,13 @@ func (h *Handler) UpdateMedia(w http.ResponseWriter, r *http.Request) {
 
 	// Build update params, starting with existing values
 	params := store.UpdateMediaParams{
-		ID:        existing.ID,
-		Filename:  existing.Filename,
-		Alt:       existing.Alt,
-		Caption:   existing.Caption,
-		FolderID:  existing.FolderID,
-		UpdatedAt: time.Now(),
+		ID:         existing.ID,
+		Filename:   existing.Filename,
+		Alt:        existing.Alt,
+		Caption:    existing.Caption,
+		FolderID:   existing.FolderID,
+		LanguageID: existing.LanguageID,
+		UpdatedAt:  time.Now(),
 	}
 
 	// Apply updates

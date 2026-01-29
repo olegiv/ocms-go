@@ -507,7 +507,7 @@ func TestRequireEntityByID_InternalError(t *testing.T) {
 	}
 
 	// Create minimal schema
-	_, err = db.Exec(`CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT, slug TEXT, language_id INTEGER, created_at DATETIME, updated_at DATETIME)`)
+	_, err = db.Exec(`CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT, slug TEXT, language_id INTEGER NOT NULL DEFAULT 1, created_at DATETIME, updated_at DATETIME)`)
 	if err != nil {
 		t.Fatalf("failed to create schema: %v", err)
 	}

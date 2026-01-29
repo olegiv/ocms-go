@@ -55,7 +55,7 @@ func (q *Queries) DeleteConfigTranslationsForKey(ctx context.Context, configKey 
 }
 
 const getConfig = `-- name: GetConfig :one
-SELECT "key", value, type, description, updated_at, updated_by FROM config WHERE key = ?
+SELECT "key", value, type, description, updated_at, updated_by, language_id FROM config WHERE key = ?
 `
 
 func (q *Queries) GetConfig(ctx context.Context, key string) (Config, error) {
@@ -68,12 +68,13 @@ func (q *Queries) GetConfig(ctx context.Context, key string) (Config, error) {
 		&i.Description,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.LanguageID,
 	)
 	return i, err
 }
 
 const getConfigByKey = `-- name: GetConfigByKey :one
-SELECT "key", value, type, description, updated_at, updated_by FROM config WHERE key = ?
+SELECT "key", value, type, description, updated_at, updated_by, language_id FROM config WHERE key = ?
 `
 
 func (q *Queries) GetConfigByKey(ctx context.Context, key string) (Config, error) {
@@ -86,6 +87,7 @@ func (q *Queries) GetConfigByKey(ctx context.Context, key string) (Config, error
 		&i.Description,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.LanguageID,
 	)
 	return i, err
 }
@@ -221,7 +223,7 @@ func (q *Queries) ListAllConfigTranslations(ctx context.Context) ([]ListAllConfi
 }
 
 const listConfig = `-- name: ListConfig :many
-SELECT "key", value, type, description, updated_at, updated_by FROM config ORDER BY key
+SELECT "key", value, type, description, updated_at, updated_by, language_id FROM config ORDER BY key
 `
 
 func (q *Queries) ListConfig(ctx context.Context) ([]Config, error) {
@@ -240,6 +242,7 @@ func (q *Queries) ListConfig(ctx context.Context) ([]Config, error) {
 			&i.Description,
 			&i.UpdatedAt,
 			&i.UpdatedBy,
+			&i.LanguageID,
 		); err != nil {
 			return nil, err
 		}
@@ -309,7 +312,7 @@ const updateConfigValue = `-- name: UpdateConfigValue :one
 UPDATE config
 SET value = ?, updated_at = ?, updated_by = ?
 WHERE key = ?
-RETURNING "key", value, type, description, updated_at, updated_by
+RETURNING "key", value, type, description, updated_at, updated_by, language_id
 `
 
 type UpdateConfigValueParams struct {
@@ -334,18 +337,20 @@ func (q *Queries) UpdateConfigValue(ctx context.Context, arg UpdateConfigValuePa
 		&i.Description,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.LanguageID,
 	)
 	return i, err
 }
 
 const upsertConfig = `-- name: UpsertConfig :one
-INSERT INTO config (key, value, type, description, updated_at, updated_by)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO config (key, value, type, description, language_id, updated_at, updated_by)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(key) DO UPDATE SET
     value = excluded.value,
+    language_id = excluded.language_id,
     updated_at = excluded.updated_at,
     updated_by = excluded.updated_by
-RETURNING "key", value, type, description, updated_at, updated_by
+RETURNING "key", value, type, description, updated_at, updated_by, language_id
 `
 
 type UpsertConfigParams struct {
@@ -353,6 +358,7 @@ type UpsertConfigParams struct {
 	Value       string        `json:"value"`
 	Type        string        `json:"type"`
 	Description string        `json:"description"`
+	LanguageID  int64         `json:"language_id"`
 	UpdatedAt   time.Time     `json:"updated_at"`
 	UpdatedBy   sql.NullInt64 `json:"updated_by"`
 }
@@ -363,6 +369,7 @@ func (q *Queries) UpsertConfig(ctx context.Context, arg UpsertConfigParams) (Con
 		arg.Value,
 		arg.Type,
 		arg.Description,
+		arg.LanguageID,
 		arg.UpdatedAt,
 		arg.UpdatedBy,
 	)
@@ -374,6 +381,7 @@ func (q *Queries) UpsertConfig(ctx context.Context, arg UpsertConfigParams) (Con
 		&i.Description,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.LanguageID,
 	)
 	return i, err
 }

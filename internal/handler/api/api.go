@@ -5,9 +5,11 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -209,4 +211,16 @@ func capitalizeFirst(s string) string {
 		return s
 	}
 	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// resolveLanguageID returns the provided language ID or defaults to the system default language.
+func (h *Handler) resolveLanguageID(ctx context.Context, langID *int64) (int64, error) {
+	if langID != nil {
+		return *langID, nil
+	}
+	defaultLang, err := h.queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get default language: %w", err)
+	}
+	return defaultLang.ID, nil
 }

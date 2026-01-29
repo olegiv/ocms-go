@@ -19,7 +19,6 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
-	"github.com/olegiv/ocms-go/internal/util"
 
 	"github.com/alexedwards/scs/v2"
 )
@@ -480,7 +479,7 @@ func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if there are pages linked to this language
-	pageCount, err := h.queries.CountPagesByLanguageID(r.Context(), util.NullInt64FromValue(id))
+	pageCount, err := h.queries.CountPagesByLanguageID(r.Context(), id)
 	if err != nil {
 		slog.Error("failed to count pages for language", "error", err, "language_id", id)
 		if r.Header.Get("HX-Request") == "true" {

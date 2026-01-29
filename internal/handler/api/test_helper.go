@@ -49,10 +49,10 @@ func testDB(t *testing.T) *sql.DB {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
 			slug TEXT NOT NULL UNIQUE,
-			language_id INTEGER,
+			language_id INTEGER NOT NULL DEFAULT 1,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (language_id) REFERENCES languages(id) ON DELETE SET NULL
+			FOREIGN KEY (language_id) REFERENCES languages(id)
 		);
 		CREATE INDEX idx_tags_slug ON tags(slug);
 
@@ -63,11 +63,11 @@ func testDB(t *testing.T) *sql.DB {
 			description TEXT,
 			parent_id INTEGER,
 			position INTEGER NOT NULL DEFAULT 0,
-			language_id INTEGER,
+			language_id INTEGER NOT NULL DEFAULT 1,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL,
-			FOREIGN KEY (language_id) REFERENCES languages(id) ON DELETE SET NULL
+			FOREIGN KEY (language_id) REFERENCES languages(id)
 		);
 		CREATE INDEX idx_categories_slug ON categories(slug);
 		CREATE INDEX idx_categories_parent_id ON categories(parent_id);
@@ -137,7 +137,7 @@ func createTestTag(t *testing.T, db *sql.DB, name, slug string) store.Tag {
 		ID:         id,
 		Name:       name,
 		Slug:       slug,
-		LanguageID: sql.NullInt64{Int64: 1, Valid: true},
+		LanguageID: 1,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}
@@ -171,7 +171,7 @@ func createTestCategory(t *testing.T, db *sql.DB, name, slug string, parentID *i
 		ID:         id,
 		Name:       name,
 		Slug:       slug,
-		LanguageID: sql.NullInt64{Int64: 1, Valid: true},
+		LanguageID: 1,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}

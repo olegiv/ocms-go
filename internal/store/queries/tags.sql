@@ -63,10 +63,10 @@ SELECT COUNT(*) FROM page_tags WHERE tag_id = ?;
 DELETE FROM page_tags WHERE page_id = ?;
 
 -- name: GetTagUsageCounts :many
-SELECT t.id, t.name, t.slug, t.created_at, t.updated_at, COUNT(pt.page_id) as usage_count
+SELECT t.id, t.name, t.slug, t.language_id, t.created_at, t.updated_at, COUNT(pt.page_id) as usage_count
 FROM tags t
 LEFT JOIN page_tags pt ON pt.tag_id = t.id
-GROUP BY t.id, t.name, t.slug, t.created_at, t.updated_at
+GROUP BY t.id, t.name, t.slug, t.language_id, t.created_at, t.updated_at
 ORDER BY t.name
 LIMIT ? OFFSET ?;
 
@@ -83,7 +83,7 @@ SELECT
     COALESCE(l.native_name, '') as language_native_name,
     COALESCE(l.direction, 'ltr') as language_direction
 FROM tags t
-LEFT JOIN languages l ON l.id = t.language_id
+INNER JOIN languages l ON l.id = t.language_id
 WHERE t.id = ?;
 
 -- name: ListTagsByLanguage :many
@@ -97,7 +97,7 @@ SELECT
     COALESCE(l.code, '') as language_code,
     COALESCE(l.name, '') as language_name
 FROM tags t
-LEFT JOIN languages l ON l.id = t.language_id
+INNER JOIN languages l ON l.id = t.language_id
 ORDER BY t.name;
 
 -- name: GetTagUsageCountsWithLanguage :many
@@ -108,7 +108,7 @@ SELECT
     COALESCE(l.name, '') as language_name
 FROM tags t
 LEFT JOIN page_tags pt ON pt.tag_id = t.id
-LEFT JOIN languages l ON l.id = t.language_id
+INNER JOIN languages l ON l.id = t.language_id
 GROUP BY t.id, t.name, t.slug, t.language_id, t.created_at, t.updated_at, l.code, l.name
 ORDER BY t.name
 LIMIT ? OFFSET ?;
@@ -158,12 +158,11 @@ SELECT EXISTS(SELECT 1 FROM tags WHERE slug = ? AND language_id = ?);
 SELECT EXISTS(SELECT 1 FROM tags WHERE slug = ? AND id != ? AND language_id = ?);
 
 -- Tag usage counts filtered by page language (for frontend sidebar)
--- Include pages with matching language_id OR NULL language_id (universal pages)
 -- name: GetTagUsageCountsByLanguage :many
 SELECT t.id, t.name, t.slug, t.created_at, t.updated_at, COUNT(p.id) as usage_count
 FROM tags t
 INNER JOIN page_tags pt ON pt.tag_id = t.id
-INNER JOIN pages p ON p.id = pt.page_id AND p.status = 'published' AND (p.language_id = ? OR p.language_id IS NULL)
+INNER JOIN pages p ON p.id = pt.page_id AND p.status = 'published' AND p.language_id = ?
 GROUP BY t.id, t.name, t.slug, t.created_at, t.updated_at
 ORDER BY t.name
 LIMIT ? OFFSET ?;

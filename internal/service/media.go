@@ -65,7 +65,7 @@ func NewMediaService(db *sql.DB, uploadDir string) *MediaService {
 }
 
 // Upload handles file upload, processing, and database storage.
-func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *multipart.FileHeader, userID int64, folderID *int64) (*UploadResult, error) {
+func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *multipart.FileHeader, userID int64, folderID *int64, languageID int64) (*UploadResult, error) {
 	// Validate file size
 	if header.Size > MaxUploadSize {
 		return nil, fmt.Errorf("file size exceeds maximum allowed (%d bytes)", MaxUploadSize)
@@ -112,6 +112,7 @@ func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *
 			Caption:    sql.NullString{String: "", Valid: true},
 			FolderID:   util.NullInt64FromPtr(folderID),
 			UploadedBy: userID,
+			LanguageID: languageID,
 			CreatedAt:  now,
 			UpdatedAt:  now,
 		})
@@ -164,6 +165,7 @@ func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *
 			Caption:    sql.NullString{String: "", Valid: true},
 			FolderID:   util.NullInt64FromPtr(folderID),
 			UploadedBy: userID,
+			LanguageID: languageID,
 			CreatedAt:  now,
 			UpdatedAt:  now,
 		})

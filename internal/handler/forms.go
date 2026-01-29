@@ -362,14 +362,25 @@ func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	input := parseFormInput(r)
 	validationErrors := validateFormInput(&input)
 
-	// Check slug uniqueness (Create: any existing slug is a conflict)
+	// Get default language for form creation
+	defaultLang, err := h.queries.GetDefaultLanguage(r.Context())
+	if err != nil {
+		slog.Error("failed to get default language", "error", err)
+		flashError(w, r, h.renderer, redirectAdminFormsNew, "Error creating form")
+		return
+	}
+
+	// Check slug uniqueness for this language
 	if validationErrors["slug"] == "" && input.Slug != "" {
-		existing, err := h.queries.GetFormBySlug(r.Context(), input.Slug)
-		if err == nil && existing.ID > 0 {
-			validationErrors["slug"] = "Slug already exists"
-		} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		exists, err := h.queries.FormSlugExistsForLanguage(r.Context(), store.FormSlugExistsForLanguageParams{
+			Slug:       input.Slug,
+			LanguageID: defaultLang.ID,
+		})
+		if err != nil {
 			slog.Error("database error checking slug", "error", err)
 			validationErrors["slug"] = "Error checking slug"
+		} else if exists != 0 {
+			validationErrors["slug"] = "Slug already exists"
 		}
 	}
 
@@ -397,6 +408,7 @@ func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		SuccessMessage: sql.NullString{String: input.SuccessMessage, Valid: true}, // Always valid - has default
 		EmailTo:        util.NullStringFromValue(input.EmailTo),
 		IsActive:       input.IsActive,
+		LanguageID:     defaultLang.ID,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	})
@@ -466,14 +478,18 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	input := parseFormInput(r)
 	validationErrors := validateFormInput(&input)
 
-	// Check slug uniqueness (Update: only if slug changed and not own ID)
+	// Check slug uniqueness for this language (Update: only if slug changed)
 	if validationErrors["slug"] == "" && input.Slug != "" && input.Slug != form.Slug {
-		existing, err := h.queries.GetFormBySlug(r.Context(), input.Slug)
-		if err == nil && existing.ID > 0 && existing.ID != id {
-			validationErrors["slug"] = "Slug already exists"
-		} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		exists, err := h.queries.FormSlugExistsExcludingForLanguage(r.Context(), store.FormSlugExistsExcludingForLanguageParams{
+			Slug:       input.Slug,
+			LanguageID: form.LanguageID,
+			ID:         id,
+		})
+		if err != nil {
 			slog.Error("database error checking slug", "error", err)
 			validationErrors["slug"] = "Error checking slug"
+		} else if exists != 0 {
+			validationErrors["slug"] = "Slug already exists"
 		}
 	}
 
@@ -506,6 +522,7 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		SuccessMessage: sql.NullString{String: input.SuccessMessage, Valid: true}, // Always valid - has default
 		EmailTo:        util.NullStringFromValue(input.EmailTo),
 		IsActive:       input.IsActive,
+		LanguageID:     form.LanguageID,
 		UpdatedAt:      now,
 	})
 	if err != nil {
@@ -566,7 +583,15 @@ func (h *FormsHandler) AddField(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.checkFormExistsJSON(w, r, formID) {
+	// Get the form to inherit its language_id
+	form, err := h.queries.GetFormByID(r.Context(), formID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSONError(w, http.StatusNotFound, "Form not found")
+		} else {
+			slog.Error("failed to get form", "error", err, "form_id", formID)
+			writeJSONError(w, http.StatusInternalServerError, "Internal Server Error")
+		}
 		return
 	}
 
@@ -595,6 +620,7 @@ func (h *FormsHandler) AddField(w http.ResponseWriter, r *http.Request) {
 		Validation:  util.NullStringFromValue(req.Validation),
 		IsRequired:  req.IsRequired,
 		Position:    maxPos + 1,
+		LanguageID:  form.LanguageID,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	})
@@ -659,6 +685,7 @@ func (h *FormsHandler) UpdateField(w http.ResponseWriter, r *http.Request) {
 		Validation:  util.NullStringFromValue(req.Validation),
 		IsRequired:  req.IsRequired,
 		Position:    field.Position,
+		LanguageID:  field.LanguageID,
 		UpdatedAt:   now,
 	})
 	if err != nil {
@@ -739,6 +766,7 @@ func (h *FormsHandler) ReorderFields(w http.ResponseWriter, r *http.Request) {
 			Validation:  field.Validation,
 			IsRequired:  field.IsRequired,
 			Position:    int64(i),
+			LanguageID:  field.LanguageID,
 			UpdatedAt:   now,
 		}); err != nil {
 			slog.Error("failed to update field position", "error", err, "field_id", fieldID)
@@ -903,12 +931,13 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 
 	// Save submission
 	submission, err := h.queries.CreateFormSubmission(r.Context(), store.CreateFormSubmissionParams{
-		FormID:    form.ID,
-		Data:      string(dataJSON),
-		IpAddress: sql.NullString{String: middleware.GetClientIP(r), Valid: true},
-		UserAgent: sql.NullString{String: r.UserAgent(), Valid: true},
-		IsRead:    false,
-		CreatedAt: time.Now(),
+		FormID:     form.ID,
+		Data:       string(dataJSON),
+		IpAddress:  sql.NullString{String: middleware.GetClientIP(r), Valid: true},
+		UserAgent:  sql.NullString{String: r.UserAgent(), Valid: true},
+		IsRead:     false,
+		LanguageID: form.LanguageID,
+		CreatedAt:  time.Now(),
 	})
 	if err != nil {
 		slog.Error("failed to save form submission", "error", err, "form_id", form.ID)

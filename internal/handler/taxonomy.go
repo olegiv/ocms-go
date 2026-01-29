@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -186,8 +187,8 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 		// Load all active languages for the form
 		allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 		var currentLanguage *store.Language
-		if languageID.Valid {
-			langObj, err := h.queries.GetLanguageByID(r.Context(), languageID.Int64)
+		if languageID > 0 {
+			langObj, err := h.queries.GetLanguageByID(r.Context(), languageID)
 			if err == nil {
 				currentLanguage = &langObj
 			}
@@ -419,7 +420,7 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 	translatedTag, err := h.queries.CreateTag(r.Context(), store.CreateTagParams{
 		Name:       sourceTag.Name, // Keep same name (user will translate)
 		Slug:       setup.TranslatedSlug,
-		LanguageID: util.NullInt64FromValue(setup.TargetContext.TargetLang.ID),
+		LanguageID: setup.TargetContext.TargetLang.ID,
 		CreatedAt:  setup.Now,
 		UpdatedAt:  setup.Now,
 	})
@@ -731,10 +732,10 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 		// Load all active languages for the form
 		allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 		var currentLanguage *store.Language
-		if languageID.Valid {
-			lang, err := h.queries.GetLanguageByID(r.Context(), languageID.Int64)
+		if languageID > 0 {
+			langObj, err := h.queries.GetLanguageByID(r.Context(), languageID)
 			if err == nil {
-				currentLanguage = &lang
+				currentLanguage = &langObj
 			}
 		}
 
@@ -975,7 +976,7 @@ func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Reque
 		Description: sourceCategory.Description,
 		ParentID:    sql.NullInt64{}, // No parent by default for translations
 		Position:    0,
-		LanguageID:  util.NullInt64FromValue(setup.TargetContext.TargetLang.ID),
+		LanguageID:  setup.TargetContext.TargetLang.ID,
 		CreatedAt:   setup.Now,
 		UpdatedAt:   setup.Now,
 	})
@@ -1036,14 +1037,19 @@ func (h *TaxonomyHandler) requireCategoryWithError(w http.ResponseWriter, r *htt
 }
 
 // parseLanguageIDWithDefault parses language ID from string and falls back to default language.
-func (h *TaxonomyHandler) parseLanguageIDWithDefault(ctx context.Context, languageIDStr string) sql.NullInt64 {
-	languageID := util.ParseNullInt64(languageIDStr)
+func (h *TaxonomyHandler) parseLanguageIDWithDefault(ctx context.Context, languageIDStr string) int64 {
+	var languageID int64
+	if languageIDStr != "" {
+		if parsed, err := strconv.ParseInt(languageIDStr, 10, 64); err == nil {
+			languageID = parsed
+		}
+	}
 
 	// If no language specified, use default
-	if !languageID.Valid {
+	if languageID == 0 {
 		defaultLang, err := h.queries.GetDefaultLanguage(ctx)
 		if err == nil {
-			languageID = util.NullInt64FromValue(defaultLang.ID)
+			languageID = defaultLang.ID
 		}
 	}
 

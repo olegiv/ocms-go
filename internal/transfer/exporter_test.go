@@ -97,7 +97,7 @@ func TestExportWithData(t *testing.T) {
 		Body:       "Test content",
 		Status:     "published",
 		AuthorID:   ts.User.ID,
-		LanguageID: sql.NullInt64{Int64: lang.ID, Valid: true},
+		LanguageID: lang.ID,
 		CreatedAt:  ts.Now,
 		UpdatedAt:  ts.Now,
 	})
@@ -107,11 +107,12 @@ func TestExportWithData(t *testing.T) {
 
 	// Create test category
 	_, err = ts.Queries.CreateCategory(ts.Ctx, store.CreateCategoryParams{
-		Name:      "Test Category",
-		Slug:      "test-category",
-		Position:  0,
-		CreatedAt: ts.Now,
-		UpdatedAt: ts.Now,
+		Name:       "Test Category",
+		Slug:       "test-category",
+		LanguageID: lang.ID,
+		Position:   0,
+		CreatedAt:  ts.Now,
+		UpdatedAt:  ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create category: %v", err)
@@ -119,10 +120,11 @@ func TestExportWithData(t *testing.T) {
 
 	// Create test tag
 	_, err = ts.Queries.CreateTag(ts.Ctx, store.CreateTagParams{
-		Name:      "Test Tag",
-		Slug:      "test-tag",
-		CreatedAt: ts.Now,
-		UpdatedAt: ts.Now,
+		Name:       "Test Tag",
+		Slug:       "test-tag",
+		LanguageID: lang.ID,
+		CreatedAt:  ts.Now,
+		UpdatedAt:  ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create tag: %v", err)
@@ -175,28 +177,35 @@ func TestExportOptionsFiltering(t *testing.T) {
 	ts := setupTest(t)
 	defer ts.Cleanup()
 
+	lang, err := ts.Queries.GetDefaultLanguage(ts.Ctx)
+	if err != nil {
+		t.Fatalf("failed to get default language: %v", err)
+	}
+
 	// Create pages with different statuses
-	_, err := ts.Queries.CreatePage(ts.Ctx, store.CreatePageParams{
-		Title:     "Published Page",
-		Slug:      "published-page",
-		Body:      "Published content",
-		Status:    "published",
-		AuthorID:  ts.User.ID,
-		CreatedAt: ts.Now,
-		UpdatedAt: ts.Now,
+	_, err = ts.Queries.CreatePage(ts.Ctx, store.CreatePageParams{
+		Title:      "Published Page",
+		Slug:       "published-page",
+		Body:       "Published content",
+		Status:     "published",
+		AuthorID:   ts.User.ID,
+		LanguageID: lang.ID,
+		CreatedAt:  ts.Now,
+		UpdatedAt:  ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create published page: %v", err)
 	}
 
 	_, err = ts.Queries.CreatePage(ts.Ctx, store.CreatePageParams{
-		Title:     "Draft Page",
-		Slug:      "draft-page",
-		Body:      "Draft content",
-		Status:    "draft",
-		AuthorID:  ts.User.ID,
-		CreatedAt: ts.Now,
-		UpdatedAt: ts.Now,
+		Title:      "Draft Page",
+		Slug:       "draft-page",
+		Body:       "Draft content",
+		Status:     "draft",
+		AuthorID:   ts.User.ID,
+		LanguageID: lang.ID,
+		CreatedAt:  ts.Now,
+		UpdatedAt:  ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create draft page: %v", err)
@@ -303,13 +312,19 @@ func TestExportCategoryHierarchy(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 
+	lang, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		t.Fatalf("failed to get default language: %v", err)
+	}
+
 	// Create parent category
 	parent, err := queries.CreateCategory(ctx, store.CreateCategoryParams{
-		Name:      "Parent Category",
-		Slug:      "parent-category",
-		Position:  0,
-		CreatedAt: now,
-		UpdatedAt: now,
+		Name:       "Parent Category",
+		Slug:       "parent-category",
+		LanguageID: lang.ID,
+		Position:   0,
+		CreatedAt:  now,
+		UpdatedAt:  now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create parent category: %v", err)
@@ -317,12 +332,13 @@ func TestExportCategoryHierarchy(t *testing.T) {
 
 	// Create child category
 	_, err = queries.CreateCategory(ctx, store.CreateCategoryParams{
-		Name:      "Child Category",
-		Slug:      "child-category",
-		ParentID:  sql.NullInt64{Int64: parent.ID, Valid: true},
-		Position:  0,
-		CreatedAt: now,
-		UpdatedAt: now,
+		Name:       "Child Category",
+		Slug:       "child-category",
+		LanguageID: lang.ID,
+		ParentID:   sql.NullInt64{Int64: parent.ID, Valid: true},
+		Position:   0,
+		CreatedAt:  now,
+		UpdatedAt:  now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create child category: %v", err)
@@ -369,12 +385,18 @@ func TestExportMenuWithItems(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 
+	lang, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		t.Fatalf("failed to get default language: %v", err)
+	}
+
 	// Create menu
 	menu, err := queries.CreateMenu(ctx, store.CreateMenuParams{
-		Name:      "Test Menu",
-		Slug:      "test-menu",
-		CreatedAt: now,
-		UpdatedAt: now,
+		Name:       "Test Menu",
+		Slug:       "test-menu",
+		LanguageID: lang.ID,
+		CreatedAt:  now,
+		UpdatedAt:  now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create menu: %v", err)
@@ -440,14 +462,21 @@ func TestExportFormWithFields(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 
+	// Get default language
+	lang, err := queries.GetDefaultLanguage(ctx)
+	if err != nil {
+		t.Fatalf("failed to get default language: %v", err)
+	}
+
 	// Create form
 	form, err := queries.CreateForm(ctx, store.CreateFormParams{
-		Name:      "Contact Form",
-		Slug:      "contact",
-		Title:     "Contact Us",
-		IsActive:  true,
-		CreatedAt: now,
-		UpdatedAt: now,
+		Name:       "Contact Form",
+		Slug:       "contact",
+		Title:      "Contact Us",
+		IsActive:   true,
+		LanguageID: lang.ID,
+		CreatedAt:  now,
+		UpdatedAt:  now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create form: %v", err)
@@ -461,6 +490,7 @@ func TestExportFormWithFields(t *testing.T) {
 		Label:      "Your Name",
 		IsRequired: true,
 		Position:   0,
+		LanguageID: lang.ID,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	})
@@ -475,6 +505,7 @@ func TestExportFormWithFields(t *testing.T) {
 		Label:      "Your Email",
 		IsRequired: true,
 		Position:   1,
+		LanguageID: lang.ID,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	})
@@ -540,7 +571,7 @@ func TestExportPageWithTranslations(t *testing.T) {
 		Body:       "English content",
 		Status:     "published",
 		AuthorID:   ts.User.ID,
-		LanguageID: sql.NullInt64{Int64: enLang.ID, Valid: true},
+		LanguageID: enLang.ID,
 		CreatedAt:  ts.Now,
 		UpdatedAt:  ts.Now,
 	})
@@ -555,7 +586,7 @@ func TestExportPageWithTranslations(t *testing.T) {
 		Body:       "Russian content",
 		Status:     "published",
 		AuthorID:   ts.User.ID,
-		LanguageID: sql.NullInt64{Int64: ruLang.ID, Valid: true},
+		LanguageID: ruLang.ID,
 		CreatedAt:  ts.Now,
 		UpdatedAt:  ts.Now,
 	})

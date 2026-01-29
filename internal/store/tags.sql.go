@@ -7,7 +7,6 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"time"
 )
 
@@ -65,11 +64,11 @@ RETURNING id, name, slug, created_at, updated_at, language_id
 `
 
 type CreateTagParams struct {
-	Name       string        `json:"name"`
-	Slug       string        `json:"slug"`
-	LanguageID sql.NullInt64 `json:"language_id"`
-	CreatedAt  time.Time     `json:"created_at"`
-	UpdatedAt  time.Time     `json:"updated_at"`
+	Name       string    `json:"name"`
+	Slug       string    `json:"slug"`
+	LanguageID int64     `json:"language_id"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 func (q *Queries) CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error) {
@@ -288,10 +287,10 @@ func (q *Queries) GetTagBySlug(ctx context.Context, slug string) (Tag, error) {
 }
 
 const getTagUsageCounts = `-- name: GetTagUsageCounts :many
-SELECT t.id, t.name, t.slug, t.created_at, t.updated_at, COUNT(pt.page_id) as usage_count
+SELECT t.id, t.name, t.slug, t.language_id, t.created_at, t.updated_at, COUNT(pt.page_id) as usage_count
 FROM tags t
 LEFT JOIN page_tags pt ON pt.tag_id = t.id
-GROUP BY t.id, t.name, t.slug, t.created_at, t.updated_at
+GROUP BY t.id, t.name, t.slug, t.language_id, t.created_at, t.updated_at
 ORDER BY t.name
 LIMIT ? OFFSET ?
 `
@@ -305,6 +304,7 @@ type GetTagUsageCountsRow struct {
 	ID         int64     `json:"id"`
 	Name       string    `json:"name"`
 	Slug       string    `json:"slug"`
+	LanguageID int64     `json:"language_id"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 	UsageCount int64     `json:"usage_count"`
@@ -323,6 +323,7 @@ func (q *Queries) GetTagUsageCounts(ctx context.Context, arg GetTagUsageCountsPa
 			&i.ID,
 			&i.Name,
 			&i.Slug,
+			&i.LanguageID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.UsageCount,
@@ -344,16 +345,16 @@ const getTagUsageCountsByLanguage = `-- name: GetTagUsageCountsByLanguage :many
 SELECT t.id, t.name, t.slug, t.created_at, t.updated_at, COUNT(p.id) as usage_count
 FROM tags t
 INNER JOIN page_tags pt ON pt.tag_id = t.id
-INNER JOIN pages p ON p.id = pt.page_id AND p.status = 'published' AND (p.language_id = ? OR p.language_id IS NULL)
+INNER JOIN pages p ON p.id = pt.page_id AND p.status = 'published' AND p.language_id = ?
 GROUP BY t.id, t.name, t.slug, t.created_at, t.updated_at
 ORDER BY t.name
 LIMIT ? OFFSET ?
 `
 
 type GetTagUsageCountsByLanguageParams struct {
-	LanguageID sql.NullInt64 `json:"language_id"`
-	Limit      int64         `json:"limit"`
-	Offset     int64         `json:"offset"`
+	LanguageID int64 `json:"language_id"`
+	Limit      int64 `json:"limit"`
+	Offset     int64 `json:"offset"`
 }
 
 type GetTagUsageCountsByLanguageRow struct {
@@ -366,7 +367,6 @@ type GetTagUsageCountsByLanguageRow struct {
 }
 
 // Tag usage counts filtered by page language (for frontend sidebar)
-// Include pages with matching language_id OR NULL language_id (universal pages)
 func (q *Queries) GetTagUsageCountsByLanguage(ctx context.Context, arg GetTagUsageCountsByLanguageParams) ([]GetTagUsageCountsByLanguageRow, error) {
 	rows, err := q.db.QueryContext(ctx, getTagUsageCountsByLanguage, arg.LanguageID, arg.Limit, arg.Offset)
 	if err != nil {
@@ -405,7 +405,7 @@ SELECT
     COALESCE(l.name, '') as language_name
 FROM tags t
 LEFT JOIN page_tags pt ON pt.tag_id = t.id
-LEFT JOIN languages l ON l.id = t.language_id
+INNER JOIN languages l ON l.id = t.language_id
 GROUP BY t.id, t.name, t.slug, t.language_id, t.created_at, t.updated_at, l.code, l.name
 ORDER BY t.name
 LIMIT ? OFFSET ?
@@ -417,15 +417,15 @@ type GetTagUsageCountsWithLanguageParams struct {
 }
 
 type GetTagUsageCountsWithLanguageRow struct {
-	ID           int64         `json:"id"`
-	Name         string        `json:"name"`
-	Slug         string        `json:"slug"`
-	LanguageID   sql.NullInt64 `json:"language_id"`
-	CreatedAt    time.Time     `json:"created_at"`
-	UpdatedAt    time.Time     `json:"updated_at"`
-	UsageCount   int64         `json:"usage_count"`
-	LanguageCode string        `json:"language_code"`
-	LanguageName string        `json:"language_name"`
+	ID           int64     `json:"id"`
+	Name         string    `json:"name"`
+	Slug         string    `json:"slug"`
+	LanguageID   int64     `json:"language_id"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	UsageCount   int64     `json:"usage_count"`
+	LanguageCode string    `json:"language_code"`
+	LanguageName string    `json:"language_name"`
 }
 
 func (q *Queries) GetTagUsageCountsWithLanguage(ctx context.Context, arg GetTagUsageCountsWithLanguageParams) ([]GetTagUsageCountsWithLanguageRow, error) {
@@ -470,21 +470,21 @@ SELECT
     COALESCE(l.native_name, '') as language_native_name,
     COALESCE(l.direction, 'ltr') as language_direction
 FROM tags t
-LEFT JOIN languages l ON l.id = t.language_id
+INNER JOIN languages l ON l.id = t.language_id
 WHERE t.id = ?
 `
 
 type GetTagWithLanguageRow struct {
-	ID                 int64         `json:"id"`
-	Name               string        `json:"name"`
-	Slug               string        `json:"slug"`
-	CreatedAt          time.Time     `json:"created_at"`
-	UpdatedAt          time.Time     `json:"updated_at"`
-	LanguageID         sql.NullInt64 `json:"language_id"`
-	LanguageCode       string        `json:"language_code"`
-	LanguageName       string        `json:"language_name"`
-	LanguageNativeName string        `json:"language_native_name"`
-	LanguageDirection  string        `json:"language_direction"`
+	ID                 int64     `json:"id"`
+	Name               string    `json:"name"`
+	Slug               string    `json:"slug"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+	LanguageID         int64     `json:"language_id"`
+	LanguageCode       string    `json:"language_code"`
+	LanguageName       string    `json:"language_name"`
+	LanguageNativeName string    `json:"language_native_name"`
+	LanguageDirection  string    `json:"language_direction"`
 }
 
 // Language-specific tag queries
@@ -622,7 +622,7 @@ WHERE language_id = ?
 ORDER BY name
 `
 
-func (q *Queries) ListTagsByLanguage(ctx context.Context, languageID sql.NullInt64) ([]Tag, error) {
+func (q *Queries) ListTagsByLanguage(ctx context.Context, languageID int64) ([]Tag, error) {
 	rows, err := q.db.QueryContext(ctx, listTagsByLanguage, languageID)
 	if err != nil {
 		return nil, err
@@ -691,19 +691,19 @@ SELECT
     COALESCE(l.code, '') as language_code,
     COALESCE(l.name, '') as language_name
 FROM tags t
-LEFT JOIN languages l ON l.id = t.language_id
+INNER JOIN languages l ON l.id = t.language_id
 ORDER BY t.name
 `
 
 type ListTagsWithLanguageRow struct {
-	ID           int64         `json:"id"`
-	Name         string        `json:"name"`
-	Slug         string        `json:"slug"`
-	CreatedAt    time.Time     `json:"created_at"`
-	UpdatedAt    time.Time     `json:"updated_at"`
-	LanguageID   sql.NullInt64 `json:"language_id"`
-	LanguageCode string        `json:"language_code"`
-	LanguageName string        `json:"language_name"`
+	ID           int64     `json:"id"`
+	Name         string    `json:"name"`
+	Slug         string    `json:"slug"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	LanguageID   int64     `json:"language_id"`
+	LanguageCode string    `json:"language_code"`
+	LanguageName string    `json:"language_name"`
 }
 
 func (q *Queries) ListTagsWithLanguage(ctx context.Context) ([]ListTagsWithLanguageRow, error) {
@@ -823,9 +823,9 @@ SELECT EXISTS(SELECT 1 FROM tags WHERE slug = ? AND id != ? AND language_id = ?)
 `
 
 type TagSlugExistsExcludingForLanguageParams struct {
-	Slug       string        `json:"slug"`
-	ID         int64         `json:"id"`
-	LanguageID sql.NullInt64 `json:"language_id"`
+	Slug       string `json:"slug"`
+	ID         int64  `json:"id"`
+	LanguageID int64  `json:"language_id"`
 }
 
 func (q *Queries) TagSlugExistsExcludingForLanguage(ctx context.Context, arg TagSlugExistsExcludingForLanguageParams) (int64, error) {
@@ -840,8 +840,8 @@ SELECT EXISTS(SELECT 1 FROM tags WHERE slug = ? AND language_id = ?)
 `
 
 type TagSlugExistsForLanguageParams struct {
-	Slug       string        `json:"slug"`
-	LanguageID sql.NullInt64 `json:"language_id"`
+	Slug       string `json:"slug"`
+	LanguageID int64  `json:"language_id"`
 }
 
 func (q *Queries) TagSlugExistsForLanguage(ctx context.Context, arg TagSlugExistsForLanguageParams) (int64, error) {
@@ -858,11 +858,11 @@ RETURNING id, name, slug, created_at, updated_at, language_id
 `
 
 type UpdateTagParams struct {
-	Name       string        `json:"name"`
-	Slug       string        `json:"slug"`
-	LanguageID sql.NullInt64 `json:"language_id"`
-	UpdatedAt  time.Time     `json:"updated_at"`
-	ID         int64         `json:"id"`
+	Name       string    `json:"name"`
+	Slug       string    `json:"slug"`
+	LanguageID int64     `json:"language_id"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	ID         int64     `json:"id"`
 }
 
 func (q *Queries) UpdateTag(ctx context.Context, arg UpdateTagParams) (Tag, error) {
@@ -890,9 +890,9 @@ UPDATE tags SET language_id = ?, updated_at = ? WHERE id = ?
 `
 
 type UpdateTagLanguageParams struct {
-	LanguageID sql.NullInt64 `json:"language_id"`
-	UpdatedAt  time.Time     `json:"updated_at"`
-	ID         int64         `json:"id"`
+	LanguageID int64     `json:"language_id"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	ID         int64     `json:"id"`
 }
 
 func (q *Queries) UpdateTagLanguage(ctx context.Context, arg UpdateTagLanguageParams) error {
