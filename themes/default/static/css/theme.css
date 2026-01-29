@@ -1256,19 +1256,90 @@ a.tag:hover {
     margin-bottom: 0;
 }
 
-.footer-nav ul {
+/* Footer Navigation - Column Layout */
+.footer-nav-columns {
     display: flex;
-    gap: var(--spacing-lg);
-    list-style: none;
+    flex-wrap: wrap;
+    gap: var(--spacing-xl);
+    justify-content: flex-start;
+    margin-bottom: var(--spacing-xl);
+    padding-bottom: var(--spacing-lg);
+    border-bottom: 1px solid var(--border-light);
 }
 
-.footer-nav a {
+.footer-nav-column {
+    flex: 0 0 auto;
+    min-width: 150px;
+    max-width: 200px;
+}
+
+/* Level 1 - Column header with truncation */
+.footer-nav-header {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-sm);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-decoration: none;
+}
+
+.footer-nav-header:hover {
+    color: var(--primary-color);
+}
+
+/* Level 2 list */
+.footer-nav-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.footer-nav-list > li {
+    margin-bottom: var(--spacing-xs);
+}
+
+.footer-nav-list > li > a {
+    display: block;
     color: var(--text-muted);
     font-size: 0.875rem;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.footer-nav a:hover {
+.footer-nav-list > li > a:hover {
     color: var(--primary-color);
+}
+
+/* Level 3 sublist */
+.footer-nav-sublist {
+    list-style: none;
+    padding-left: var(--spacing-sm);
+    margin: var(--spacing-xs) 0 0 0;
+}
+
+.footer-nav-sublist li {
+    margin-bottom: 2px;
+}
+
+.footer-nav-sublist a {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    opacity: 0.85;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.footer-nav-sublist a:hover {
+    color: var(--primary-color);
+    opacity: 1;
 }
 
 .social-links {
@@ -1473,6 +1544,16 @@ a.tag:hover {
 
     .error-code {
         font-size: 5rem;
+    }
+
+    /* Mobile Footer Navigation */
+    .footer-nav-columns {
+        flex-direction: column;
+        gap: var(--spacing-lg);
+    }
+
+    .footer-nav-column {
+        max-width: 100%;
     }
 
     .footer-bottom {

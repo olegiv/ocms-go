@@ -43,6 +43,36 @@
             </div>
             {{end}}
 
+            {{if .FooterNav}}
+            <nav class="footer-nav footer-nav-columns" aria-label="Footer navigation">
+                {{range .FooterNav}}
+                <div class="footer-nav-column">
+                    {{/* Level 1 - Column header (truncated) */}}
+                    <a href="{{.URL}}" class="footer-nav-header">{{.Title}}</a>
+
+                    {{if .Children}}
+                    <ul class="footer-nav-list">
+                        {{range .Children}}
+                        {{/* Level 2 */}}
+                        <li>
+                            <a href="{{.URL}}">{{.Title}}</a>
+                            {{if .Children}}
+                            <ul class="footer-nav-sublist">
+                                {{range .Children}}
+                                {{/* Level 3 */}}
+                                <li><a href="{{.URL}}">{{.Title}}</a></li>
+                                {{end}}
+                            </ul>
+                            {{end}}
+                        </li>
+                        {{end}}
+                    </ul>
+                    {{end}}
+                </div>
+                {{end}}
+            </nav>
+            {{end}}
+
             <div class="footer-bottom">
                 <div class="footer-copyright">
                     {{if .CopyrightText}}
@@ -54,16 +84,6 @@
                     <p>{{safeHTML .FooterText}}</p>
                     {{end}}
                 </div>
-
-                {{if .FooterNav}}
-                <nav class="footer-nav" aria-label="Footer navigation">
-                    <ul>
-                        {{range .FooterNav}}
-                        <li><a href="{{.URL}}">{{.Title}}</a></li>
-                        {{end}}
-                    </ul>
-                </nav>
-                {{end}}
 
                 {{if .SocialLinks}}
                 <div class="social-links">
