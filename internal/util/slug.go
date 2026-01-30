@@ -10,6 +10,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/mozillazg/go-unidecode"
 	"golang.org/x/text/runes"
 	"golang.org/x/text/transform"
 	"golang.org/x/text/unicode/norm"
@@ -22,13 +23,17 @@ var (
 	multipleHyphens = regexp.MustCompile(`-{2,}`)
 )
 
-// Slugify converts a string to a URL-friendly slug.
-// It converts to lowercase, removes accents, replaces spaces with hyphens,
-// and removes all non-alphanumeric characters except hyphens.
+// Slugify converts a string to a URL-friendly ASCII slug.
+// Non-ASCII characters (Cyrillic, CJK, etc.) are transliterated to their
+// closest ASCII equivalent. Accents are removed, spaces become hyphens,
+// and only alphanumeric characters and hyphens are kept.
 func Slugify(s string) string {
-	// Normalize unicode characters (decompose accents)
+	// Transliterate non-ASCII to ASCII (Cyrillic, CJK, etc.)
+	result := unidecode.Unidecode(s)
+
+	// Normalize remaining unicode characters (decompose accents)
 	t := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
-	result, _, _ := transform.String(t, s)
+	result, _, _ = transform.String(t, result)
 
 	// Convert to lowercase
 	result = strings.ToLower(result)

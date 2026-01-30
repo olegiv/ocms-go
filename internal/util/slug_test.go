@@ -52,15 +52,175 @@ func TestSlugify(t *testing.T) {
 			expected: "",
 		},
 		{
-			name:     "unicode characters",
+			name:     "japanese characters",
 			input:    "日本語タイトル",
-			expected: "",
+			expected: "ri-ben-yu-taitoru",
 		},
 		{
 			name:     "german umlauts",
 			input:    "Über München",
 			expected: "uber-munchen",
 		},
+		{
+			name:     "cyrillic russian",
+			input:    "Привет мир",
+			expected: "privet-mir",
+		},
+		{
+			name:     "cyrillic russian article",
+			input:    "статья о программировании",
+			expected: "statia-o-programmirovanii",
+		},
+		{
+			name:     "chinese",
+			input:    "北京欢迎你",
+			expected: "bei-jing-huan-ying-ni",
+		},
+		{
+			name:     "mixed latin and cyrillic",
+			input:    "Hello Мир",
+			expected: "hello-mir",
+		},
+		{
+			name:     "ukrainian",
+			input:    "Київ столиця",
+			expected: "kiyiv-stolitsia",
+		},
+		// Additional Slavic languages
+		{
+			name:     "serbian cyrillic",
+			input:    "Београд Србија",
+			expected: "beograd-srbija",
+		},
+		{
+			name:     "bulgarian",
+			input:    "София България",
+			expected: "sofiia-blgariia",
+		},
+		{
+			name:     "belarusian",
+			input:    "Мінск Беларусь",
+			expected: "minsk-belarus",
+		},
+		{
+			name:     "polish",
+			input:    "Żółć gęślą",
+			expected: "zolc-gesla",
+		},
+		{
+			name:     "czech",
+			input:    "Příliš žluťoučký",
+			expected: "prilis-zlutoucky",
+		},
+		// Greek
+		{
+			name:     "greek",
+			input:    "Αθήνα Ελλάδα",
+			expected: "athena-ellada",
+		},
+		// Asian languages
+		{
+			name:     "korean",
+			input:    "서울 한국",
+			expected: "seoul-hangug",
+		},
+		{
+			name:     "vietnamese",
+			input:    "Xin chào thế giới",
+			expected: "xin-chao-the-gioi",
+		},
+		{
+			name:     "hindi",
+			input:    "नमस्ते दुनिया",
+			expected: "nmste-duniyaa",
+		},
+		{
+			name:     "thai",
+			input:    "สวัสดีโลก",
+			expected: "swasdiiolk",
+		},
+		// Middle Eastern
+		{
+			name:     "arabic",
+			input:    "مرحبا بالعالم",
+			expected: "mrhb-bllm",
+		},
+		{
+			name:     "hebrew",
+			input:    "שלום עולם",
+			expected: "shlvm-vlm",
+		},
+		// Turkish
+		{
+			name:     "turkish",
+			input:    "İstanbul Türkiye",
+			expected: "istanbul-turkiye",
+		},
+		// Romance languages
+		{
+			name:     "spanish",
+			input:    "España año",
+			expected: "espana-ano",
+		},
+		{
+			name:     "portuguese",
+			input:    "São Paulo coração",
+			expected: "sao-paulo-coracao",
+		},
+		{
+			name:     "french",
+			input:    "Français être naïf",
+			expected: "francais-etre-naif",
+		},
+		{
+			name:     "romanian",
+			input:    "București România",
+			expected: "bucuresti-romania",
+		},
+		// Nordic/Scandinavian
+		{
+			name:     "swedish",
+			input:    "Göteborg Malmö",
+			expected: "goteborg-malmo",
+		},
+		{
+			name:     "norwegian",
+			input:    "Trondheim Ålesund",
+			expected: "trondheim-alesund",
+		},
+		{
+			name:     "danish",
+			input:    "København Århus",
+			expected: "kobenhavn-arhus",
+		},
+		{
+			name:     "finnish",
+			input:    "Hämeenlinna Jyväskylä",
+			expected: "hameenlinna-jyvaskyla",
+		},
+		{
+			name:     "icelandic",
+			input:    "Reykjavík Ísland",
+			expected: "reykjavik-island",
+		},
+		// Baltic
+		{
+			name:     "latvian",
+			input:    "Rīga Latvija",
+			expected: "riga-latvija",
+		},
+		{
+			name:     "lithuanian",
+			input:    "Vilnius Lietuva",
+			expected: "vilnius-lietuva",
+		},
+		// Hungarian
+		{
+			name:     "hungarian",
+			input:    "Magyarország főváros",
+			expected: "magyarorszag-fovaros",
+		},
+		// Edge cases
 		{
 			name:     "empty string",
 			input:    "",
