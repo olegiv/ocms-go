@@ -6,6 +6,9 @@ RETURNING *;
 -- name: GetPageByID :one
 SELECT * FROM pages WHERE id = ?;
 
+-- name: GetPublishedPageByID :one
+SELECT * FROM pages WHERE id = ? AND status = 'published';
+
 -- name: GetPageBySlug :one
 SELECT * FROM pages WHERE slug = ?;
 

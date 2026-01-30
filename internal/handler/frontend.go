@@ -15,6 +15,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -694,6 +695,42 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.render(w, "page", data)
+}
+
+// PageByID handles /page/{id} - redirects to the canonical slug URL.
+// This provides a permanent, stable URL that won't break if the page slug changes.
+func (h *FrontendHandler) PageByID(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	idStr := chi.URLParam(r, "id")
+
+	// Parse the page ID
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		h.renderNotFound(w, r)
+		return
+	}
+
+	// Get published page by ID
+	page, err := h.queries.GetPublishedPageByID(ctx, id)
+	if err != nil {
+		h.renderNotFound(w, r)
+		return
+	}
+
+	// Build the redirect URL
+	// Check if language prefix is needed (non-default language)
+	redirectURL := "/" + page.Slug
+	if page.LanguageCode != "" {
+		// Check if this is the default language
+		if defaultLang, err := h.queries.GetDefaultLanguage(ctx); err == nil {
+			if page.LanguageCode != defaultLang.Code {
+				redirectURL = "/" + page.LanguageCode + "/" + page.Slug
+			}
+		}
+	}
+
+	// HTTP 301 Moved Permanently - signals that this URL permanently redirects to the canonical
+	http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
 }
 
 // Category handles category archive display.

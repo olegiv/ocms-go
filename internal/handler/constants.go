@@ -26,6 +26,8 @@ const (
 	RouteParamID = "/{id}"
 	// RouteParamSlug is the slug parameter pattern.
 	RouteParamSlug = "/{slug}"
+	// RoutePageByID is the page by ID route pattern (redirects to slug URL).
+	RoutePageByID = "/page/{id}"
 	// RouteTagSlug is the tag slug route pattern.
 	RouteTagSlug = "/tag/{slug}"
 	// RouteCategorySlug is the category slug route pattern.
