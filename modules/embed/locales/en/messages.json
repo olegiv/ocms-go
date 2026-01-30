@@ -1,0 +1,30 @@
+{
+    "$schema": "../../../../.schema/i18n-schema.json",
+    "language": "en",
+    "messages": [
+        {"id": "embed.title", "message": "External Embed", "translation": "External Embed"},
+        {"id": "embed.description", "message": "Embed third-party services and widgets on your website", "translation": "Embed third-party services and widgets on your website"},
+        {"id": "embed.providers_title", "message": "Available Providers", "translation": "Available Providers"},
+        {"id": "embed.providers_description", "message": "Configure and enable embed providers for your website", "translation": "Configure and enable embed providers for your website"},
+        {"id": "embed.settings_title", "message": "Provider Settings", "translation": "Provider Settings"},
+        {"id": "embed.settings_description", "message": "Configure the embed provider settings below", "translation": "Configure the embed provider settings below"},
+        {"id": "embed.status_enabled", "message": "Enabled", "translation": "Enabled"},
+        {"id": "embed.status_configured", "message": "Configured", "translation": "Configured"},
+        {"id": "embed.status_not_configured", "message": "Not Configured", "translation": "Not Configured"},
+        {"id": "embed.configure_button", "message": "Configure", "translation": "Configure"},
+        {"id": "embed.enable_button", "message": "Enable", "translation": "Enable"},
+        {"id": "embed.disable_button", "message": "Disable", "translation": "Disable"},
+        {"id": "embed.save_button", "message": "Save Settings", "translation": "Save Settings"},
+        {"id": "embed.back_button", "message": "Back", "translation": "Back"},
+        {"id": "embed.no_providers", "message": "No embed providers available", "translation": "No embed providers available"},
+        {"id": "embed.success_save", "message": "Embed settings saved successfully", "translation": "Embed settings saved successfully"},
+        {"id": "embed.success_enabled", "message": "Provider enabled successfully", "translation": "Provider enabled successfully"},
+        {"id": "embed.success_disabled", "message": "Provider disabled successfully", "translation": "Provider disabled successfully"},
+        {"id": "embed.error_save", "message": "Failed to save embed settings", "translation": "Failed to save embed settings"},
+        {"id": "embed.error_toggle", "message": "Failed to toggle provider", "translation": "Failed to toggle provider"},
+        {"id": "embed.error_parse_form", "message": "Failed to parse form data", "translation": "Failed to parse form data"},
+        {"id": "embed.error_provider_not_found", "message": "Provider not found", "translation": "Provider not found"},
+        {"id": "embed.error_not_configured", "message": "Provider is not configured", "translation": "Provider is not configured"},
+        {"id": "embed.error_configure_first", "message": "Please configure the provider settings first", "translation": "Please configure the provider settings first"}
+    ]
+}

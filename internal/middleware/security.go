@@ -60,12 +60,12 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 		// More permissive in development for easier debugging
 		cfg.ContentSecurityPolicy = buildCSP(map[string]string{
 			"default-src": "'self'",
-			"script-src":  "'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://esm.sh https://hcaptcha.com https://*.hcaptcha.com",
+			"script-src":  "'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://esm.sh https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
 			"style-src":   "'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com",
 			"img-src":     "'self' data: blob: https:",
 			"font-src":    "'self' data:",
-			"connect-src": "'self' https://esm.sh https://hcaptcha.com https://*.hcaptcha.com",
-			"frame-src":   "'self' https://hcaptcha.com https://*.hcaptcha.com",
+			"connect-src": "'self' https://esm.sh https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
+			"frame-src":   "'self' https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
 			"object-src":  "'none'",
 			"base-uri":    "'self'",
 			"form-action": "'self'",
@@ -74,12 +74,12 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 		// Strict CSP for production
 		cfg.ContentSecurityPolicy = buildCSP(map[string]string{
 			"default-src": "'self'",
-			"script-src":  "'self' 'unsafe-inline' https://unpkg.com https://esm.sh https://www.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com",
+			"script-src":  "'self' 'unsafe-inline' https://unpkg.com https://esm.sh https://www.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
 			"style-src":   "'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com",
 			"img-src":     "'self' data: blob: https:",
 			"font-src":    "'self' data:",
-			"connect-src": "'self' https://esm.sh https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com",
-			"frame-src":   "'self' https://hcaptcha.com https://*.hcaptcha.com",
+			"connect-src": "'self' https://esm.sh https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
+			"frame-src":   "'self' https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
 			"object-src":  "'none'",
 			"base-uri":    "'self'",
 			"form-action": "'self'",

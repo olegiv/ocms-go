@@ -1,0 +1,30 @@
+{
+    "$schema": "../../../../.schema/i18n-schema.json",
+    "language": "ru",
+    "messages": [
+        {"id": "embed.title", "message": "External Embed", "translation": "Внешние виджеты"},
+        {"id": "embed.description", "message": "Embed third-party services and widgets on your website", "translation": "Встраивайте сторонние сервисы и виджеты на ваш сайт"},
+        {"id": "embed.providers_title", "message": "Available Providers", "translation": "Доступные провайдеры"},
+        {"id": "embed.providers_description", "message": "Configure and enable embed providers for your website", "translation": "Настройте и включите провайдеры встраивания для вашего сайта"},
+        {"id": "embed.settings_title", "message": "Provider Settings", "translation": "Настройки провайдера"},
+        {"id": "embed.settings_description", "message": "Configure the embed provider settings below", "translation": "Настройте параметры провайдера ниже"},
+        {"id": "embed.status_enabled", "message": "Enabled", "translation": "Включено"},
+        {"id": "embed.status_configured", "message": "Configured", "translation": "Настроено"},
+        {"id": "embed.status_not_configured", "message": "Not Configured", "translation": "Не настроено"},
+        {"id": "embed.configure_button", "message": "Configure", "translation": "Настроить"},
+        {"id": "embed.enable_button", "message": "Enable", "translation": "Включить"},
+        {"id": "embed.disable_button", "message": "Disable", "translation": "Отключить"},
+        {"id": "embed.save_button", "message": "Save Settings", "translation": "Сохранить"},
+        {"id": "embed.back_button", "message": "Back", "translation": "Назад"},
+        {"id": "embed.no_providers", "message": "No embed providers available", "translation": "Нет доступных провайдеров"},
+        {"id": "embed.success_save", "message": "Embed settings saved successfully", "translation": "Настройки успешно сохранены"},
+        {"id": "embed.success_enabled", "message": "Provider enabled successfully", "translation": "Провайдер успешно включен"},
+        {"id": "embed.success_disabled", "message": "Provider disabled successfully", "translation": "Провайдер успешно отключен"},
+        {"id": "embed.error_save", "message": "Failed to save embed settings", "translation": "Не удалось сохранить настройки"},
+        {"id": "embed.error_toggle", "message": "Failed to toggle provider", "translation": "Не удалось переключить провайдер"},
+        {"id": "embed.error_parse_form", "message": "Failed to parse form data", "translation": "Не удалось обработать данные формы"},
+        {"id": "embed.error_provider_not_found", "message": "Provider not found", "translation": "Провайдер не найден"},
+        {"id": "embed.error_not_configured", "message": "Provider is not configured", "translation": "Провайдер не настроен"},
+        {"id": "embed.error_configure_first", "message": "Please configure the provider settings first", "translation": "Сначала настройте параметры провайдера"}
+    ]
+}
