@@ -57,56 +57,16 @@ func loadProviderSettings(db *sql.DB, providerID string) (*ProviderSettings, err
 	return ps, nil
 }
 
-// loadAllEnabledSettings loads all enabled provider settings.
-func loadAllEnabledSettings(db *sql.DB) ([]*ProviderSettings, error) {
-	rows, err := db.Query(`
-		SELECT id, provider, settings, is_enabled, position, created_at, updated_at
-		FROM embed_settings
-		WHERE is_enabled = 1
-		ORDER BY position ASC
-	`)
-	if err != nil {
-		return nil, fmt.Errorf("querying enabled settings: %w", err)
+// loadSettings loads provider settings with an optional enabled-only filter.
+func loadSettings(db *sql.DB, enabledOnly bool) ([]*ProviderSettings, error) {
+	query := `SELECT id, provider, settings, is_enabled, position, created_at, updated_at
+		FROM embed_settings`
+	if enabledOnly {
+		query += ` WHERE is_enabled = 1`
 	}
-	defer func() { _ = rows.Close() }()
+	query += ` ORDER BY position ASC`
 
-	var result []*ProviderSettings
-	for rows.Next() {
-		ps := &ProviderSettings{
-			Settings: make(map[string]string),
-		}
-
-		var settingsJSON string
-		var isEnabled int
-		if err := rows.Scan(&ps.ID, &ps.ProviderID, &settingsJSON, &isEnabled, &ps.Position, &ps.CreatedAt, &ps.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scanning row: %w", err)
-		}
-
-		ps.IsEnabled = isEnabled == 1
-
-		if settingsJSON != "" {
-			if err := json.Unmarshal([]byte(settingsJSON), &ps.Settings); err != nil {
-				return nil, fmt.Errorf("unmarshaling settings JSON: %w", err)
-			}
-		}
-
-		result = append(result, ps)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterating rows: %w", err)
-	}
-
-	return result, nil
-}
-
-// loadAllSettings loads settings for all providers.
-func loadAllSettings(db *sql.DB) ([]*ProviderSettings, error) {
-	rows, err := db.Query(`
-		SELECT id, provider, settings, is_enabled, position, created_at, updated_at
-		FROM embed_settings
-		ORDER BY position ASC
-	`)
+	rows, err := db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("querying settings: %w", err)
 	}
@@ -140,6 +100,16 @@ func loadAllSettings(db *sql.DB) ([]*ProviderSettings, error) {
 	}
 
 	return result, nil
+}
+
+// loadAllEnabledSettings loads all enabled provider settings.
+func loadAllEnabledSettings(db *sql.DB) ([]*ProviderSettings, error) {
+	return loadSettings(db, true)
+}
+
+// loadAllSettings loads settings for all providers.
+func loadAllSettings(db *sql.DB) ([]*ProviderSettings, error) {
+	return loadSettings(db, false)
 }
 
 // saveProviderSettings saves provider settings to the database.

@@ -77,11 +77,6 @@ func (e *Exporter) Export(ctx context.Context, opts ExportOptions) (*ExportData,
 		e.logger.Warn("failed to build media map", "error", err)
 	}
 
-	languageMap, err := e.buildIDLookupMap(ctx, exportLanguage)
-	if err != nil {
-		e.logger.Warn("failed to build language map", "error", err)
-	}
-
 	pageMap, err := e.buildIDLookupMap(ctx, exportPage)
 	if err != nil {
 		e.logger.Warn("failed to build page slug map", "error", err)
@@ -117,7 +112,7 @@ func (e *Exporter) Export(ctx context.Context, opts ExportOptions) (*ExportData,
 
 	// Export pages
 	if opts.IncludePages {
-		if err := e.exportPages(ctx, data, opts, userMap, mediaMap, languageMap); err != nil {
+		if err := e.exportPages(ctx, data, opts, userMap, mediaMap); err != nil {
 			e.logger.Warn("failed to export pages", "error", err)
 		}
 	}
@@ -497,7 +492,6 @@ func (e *Exporter) exportPages(
 	opts ExportOptions,
 	userMap map[int64]string,
 	mediaMap map[int64]ExportMediaRef,
-	languageMap map[int64]string,
 ) error {
 	var pages []store.Page
 	var err error

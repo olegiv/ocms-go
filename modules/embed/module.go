@@ -116,8 +116,8 @@ func (m *Module) TemplateFuncs() template.FuncMap {
 	}
 }
 
-// renderHead generates all enabled provider head scripts.
-func (m *Module) renderHead() template.HTML {
+// renderScripts generates all enabled provider scripts using the provided render function.
+func (m *Module) renderScripts(renderFn func(providers.Provider, map[string]string) template.HTML) template.HTML {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -127,25 +127,23 @@ func (m *Module) renderHead() template.HTML {
 		if provider == nil {
 			continue
 		}
-		scripts.WriteString(string(provider.RenderHead(ps.Settings)))
+		scripts.WriteString(string(renderFn(provider, ps.Settings)))
 	}
 	return template.HTML(scripts.String())
 }
 
+// renderHead generates all enabled provider head scripts.
+func (m *Module) renderHead() template.HTML {
+	return m.renderScripts(func(p providers.Provider, s map[string]string) template.HTML {
+		return p.RenderHead(s)
+	})
+}
+
 // renderBody generates all enabled provider body scripts.
 func (m *Module) renderBody() template.HTML {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	var scripts strings.Builder
-	for _, ps := range m.settings {
-		provider := m.getProvider(ps.ProviderID)
-		if provider == nil {
-			continue
-		}
-		scripts.WriteString(string(provider.RenderBody(ps.Settings)))
-	}
-	return template.HTML(scripts.String())
+	return m.renderScripts(func(p providers.Provider, s map[string]string) template.HTML {
+		return p.RenderBody(s)
+	})
 }
 
 // AdminURL returns the admin dashboard URL for the module.
