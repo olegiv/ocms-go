@@ -1169,6 +1169,8 @@ img {
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 .dev-read-more {
@@ -1186,6 +1188,8 @@ img {
     display: flex;
     flex-direction: column;
     gap: var(--dev-space-lg);
+    min-width: 0;
+    overflow: hidden;
 }
 
 .dev-post-item {
@@ -1197,6 +1201,8 @@ img {
     border: 1px solid var(--dev-border);
     border-radius: var(--dev-radius-lg);
     transition: all 0.2s ease;
+    overflow: hidden;
+    min-width: 0;
 }
 
 /* Two-column layout only when post has a featured image */
@@ -1229,6 +1235,8 @@ img {
 .dev-post-content {
     display: flex;
     flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .dev-post-category {
@@ -1262,6 +1270,12 @@ img {
     color: var(--dev-text-muted);
     margin: 0 0 var(--dev-space-md) 0;
     flex: 1;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 .dev-post-meta {
@@ -1287,6 +1301,9 @@ img {
 /* Article page */
 .dev-article {
     max-width: var(--dev-content);
+    min-width: 0;
+    overflow-wrap: break-word;
+    word-break: break-word;
 }
 
 .dev-article-header {
@@ -1317,6 +1334,12 @@ img {
     font-size: 1.125rem;
     color: var(--dev-text-muted);
     margin: 0 0 var(--dev-space-md) 0;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 .dev-article-meta {
