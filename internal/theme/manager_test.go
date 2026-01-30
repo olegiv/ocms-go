@@ -669,3 +669,27 @@ func TestInvalidThemeLocaleJson(t *testing.T) {
 		t.Error("expected no translations loaded for theme with invalid locale")
 	}
 }
+
+func TestBlankLinesRegex(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"no blank lines", "line1\nline2\nline3", "line1\nline2\nline3"},
+		{"one blank line", "line1\n\nline2", "line1\nline2"},
+		{"multiple blank lines", "line1\n\n\n\nline2", "line1\nline2"},
+		{"blank lines with spaces", "line1\n  \n\t\nline2", "line1\nline2"},
+		{"windows line endings", "line1\r\n\r\n\r\nline2", "line1\nline2"},
+		{"html output", "<div>\n\n\n<p>text</p>\n\n\n</div>", "<div>\n<p>text</p>\n</div>"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := string(blankLinesRegex.ReplaceAll([]byte(tt.input), []byte("\n")))
+			if got != tt.expected {
+				t.Errorf("blankLinesRegex.ReplaceAll(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
