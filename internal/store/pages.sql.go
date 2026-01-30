@@ -598,6 +598,38 @@ func (q *Queries) GetPageVersionWithUser(ctx context.Context, id int64) (GetPage
 	return i, err
 }
 
+const getPublishedPageByID = `-- name: GetPublishedPageByID :one
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image FROM pages WHERE id = ? AND status = 'published'
+`
+
+func (q *Queries) GetPublishedPageByID(ctx context.Context, id int64) (Page, error) {
+	row := q.db.QueryRowContext(ctx, getPublishedPageByID, id)
+	var i Page
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Slug,
+		&i.Body,
+		&i.Status,
+		&i.AuthorID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PublishedAt,
+		&i.FeaturedImageID,
+		&i.MetaTitle,
+		&i.MetaDescription,
+		&i.MetaKeywords,
+		&i.OgImageID,
+		&i.NoIndex,
+		&i.NoFollow,
+		&i.CanonicalUrl,
+		&i.ScheduledAt,
+		&i.LanguageCode,
+		&i.HideFeaturedImage,
+	)
+	return i, err
+}
+
 const getPublishedPageBySlug = `-- name: GetPublishedPageBySlug :one
 SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image FROM pages WHERE slug = ? AND status = 'published'
 `

@@ -488,6 +488,7 @@ func run() error {
 		r.Get(handler.RouteBlog, frontendHandler.Blog)
 		r.Get(handler.RouteCategorySlug, frontendHandler.Category)
 		r.Get(handler.RouteTagSlug, frontendHandler.Tag)
+		r.Get(handler.RoutePageByID, frontendHandler.PageByID)
 		r.Get(handler.RouteParamSlug, frontendHandler.Page) // Must be last - catch-all for page slugs
 
 		// Language-prefixed routes (e.g., /ru/, /ru/page-slug)
@@ -497,6 +498,7 @@ func run() error {
 			r.Get(handler.RouteBlog, frontendHandler.Blog)
 			r.Get(handler.RouteCategorySlug, frontendHandler.Category)
 			r.Get(handler.RouteTagSlug, frontendHandler.Tag)
+			r.Get(handler.RoutePageByID, frontendHandler.PageByID)
 			r.Get(handler.RouteParamSlug, frontendHandler.Page)
 		})
 	})
