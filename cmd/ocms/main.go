@@ -36,6 +36,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/session"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/theme"
+	"github.com/olegiv/ocms-go/internal/version"
 	"github.com/olegiv/ocms-go/internal/webhook"
 	"github.com/olegiv/ocms-go/modules/analytics_ext"
 	"github.com/olegiv/ocms-go/modules/analytics_int"
@@ -48,9 +49,9 @@ import (
 
 // Version information - injected at build time via ldflags
 var (
-	version   = "dev"
-	gitCommit = "unknown"
-	buildTime = "unknown"
+	appVersion   = "dev"
+	appGitCommit = "unknown"
+	appBuildTime = "unknown"
 )
 
 // crudHandlers defines the standard CRUD handler methods.
@@ -108,7 +109,7 @@ func main() {
 
 	// Handle -v/-version flag
 	if *showVersion {
-		_, _ = fmt.Printf("ocms %s (commit: %s, built: %s)\n", version, gitCommit, buildTime)
+		_, _ = fmt.Printf("ocms %s (commit: %s, built: %s)\n", appVersion, appGitCommit, appBuildTime)
 		os.Exit(0)
 	}
 
@@ -127,6 +128,13 @@ func run() error {
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
+	}
+
+	// Create version info from build-time injected values
+	versionInfo := &version.Info{
+		Version:   appVersion,
+		GitCommit: appGitCommit,
+		BuildTime: appBuildTime,
 	}
 
 	// Setup logger
@@ -458,7 +466,7 @@ func run() error {
 	webhooksHandler := handler.NewWebhooksHandler(db, renderer, sessionManager)
 	importExportHandler := handler.NewImportExportHandler(db, renderer, sessionManager)
 	healthHandler := handler.NewHealthHandler(db, sessionManager, handler.UploadsDirPath)
-	docsHandler := handler.NewDocsHandler(renderer, cfg, moduleRegistry, healthHandler.StartTime())
+	docsHandler := handler.NewDocsHandler(renderer, cfg, moduleRegistry, healthHandler.StartTime(), versionInfo)
 
 	// Set webhook dispatcher on handlers that dispatch events
 	pagesHandler.SetDispatcher(webhookDispatcher)

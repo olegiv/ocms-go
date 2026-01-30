@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/config"
+	"github.com/olegiv/ocms-go/internal/version"
 )
 
 func TestNewDocsHandler(t *testing.T) {
@@ -19,8 +20,13 @@ func TestNewDocsHandler(t *testing.T) {
 		DBPath:     "./data/test.db",
 	}
 	startTime := time.Now()
+	verInfo := &version.Info{
+		Version:   "v1.0.0",
+		GitCommit: "abc1234",
+		BuildTime: "2025-01-01T00:00:00Z",
+	}
 
-	h := NewDocsHandler(nil, cfg, nil, startTime)
+	h := NewDocsHandler(nil, cfg, nil, startTime, verInfo)
 	if h == nil {
 		t.Fatal("NewDocsHandler returned nil")
 	}
@@ -33,11 +39,17 @@ func TestNewDocsHandler(t *testing.T) {
 	if h.startTime != startTime {
 		t.Error("startTime not set correctly")
 	}
+	if h.versionInfo != verInfo {
+		t.Error("versionInfo not set correctly")
+	}
 }
 
 func TestDocsPageData(t *testing.T) {
 	data := DocsPageData{
 		System: DocsSystemInfo{
+			Version:        "v1.0.0",
+			GitCommit:      "abc1234",
+			BuildTime:      "2025-01-01T00:00:00Z",
 			GoVersion:      "go1.24.0",
 			Environment:    "production",
 			ServerPort:     8080,
@@ -61,6 +73,12 @@ func TestDocsPageData(t *testing.T) {
 		},
 	}
 
+	if data.System.Version != "v1.0.0" {
+		t.Errorf("Version = %q; want v1.0.0", data.System.Version)
+	}
+	if data.System.GitCommit != "abc1234" {
+		t.Errorf("GitCommit = %q; want abc1234", data.System.GitCommit)
+	}
 	if data.System.GoVersion != "go1.24.0" {
 		t.Errorf("GoVersion = %q; want go1.24.0", data.System.GoVersion)
 	}
@@ -193,10 +211,24 @@ func TestDocsHandler_GetSystemInfo(t *testing.T) {
 		DBPath:      "/var/data/ocms.db",
 		ActiveTheme: "custom",
 	}
+	verInfo := &version.Info{
+		Version:   "v2.0.0",
+		GitCommit: "def5678",
+		BuildTime: "2025-06-15T12:30:00Z",
+	}
 
-	h := NewDocsHandler(nil, cfg, nil, time.Now().Add(-time.Hour))
+	h := NewDocsHandler(nil, cfg, nil, time.Now().Add(-time.Hour), verInfo)
 	info := h.getSystemInfo()
 
+	if info.Version != "v2.0.0" {
+		t.Errorf("Version = %q; want v2.0.0", info.Version)
+	}
+	if info.GitCommit != "def5678" {
+		t.Errorf("GitCommit = %q; want def5678", info.GitCommit)
+	}
+	if info.BuildTime != "2025-06-15T12:30:00Z" {
+		t.Errorf("BuildTime = %q; want 2025-06-15T12:30:00Z", info.BuildTime)
+	}
 	if info.GoVersion == "" {
 		t.Error("GoVersion should not be empty")
 	}
@@ -226,17 +258,21 @@ func TestDocsHandler_GetSystemInfo_Redis(t *testing.T) {
 		RedisURL: "redis://localhost:6379",
 	}
 
-	h := NewDocsHandler(nil, cfg, nil, time.Now())
+	h := NewDocsHandler(nil, cfg, nil, time.Now(), nil)
 	info := h.getSystemInfo()
 
 	if info.CacheType != "Redis" {
 		t.Errorf("CacheType = %q; want Redis", info.CacheType)
 	}
+	// With nil versionInfo, defaults should be used
+	if info.Version != "dev" {
+		t.Errorf("Version = %q; want dev (default)", info.Version)
+	}
 }
 
 func TestDocsHandler_GetEndpoints(t *testing.T) {
 	cfg := &config.Config{Env: "development"}
-	h := NewDocsHandler(nil, cfg, nil, time.Now())
+	h := NewDocsHandler(nil, cfg, nil, time.Now(), nil)
 
 	groups := h.getEndpoints("en")
 

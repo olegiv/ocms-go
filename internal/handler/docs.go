@@ -22,6 +22,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/version"
 )
 
 // DocsDir is the default directory containing documentation files.
@@ -29,21 +30,23 @@ const DocsDir = "./docs"
 
 // DocsHandler handles the site documentation admin page.
 type DocsHandler struct {
-	renderer  *render.Renderer
-	cfg       *config.Config
-	registry  *module.Registry
-	docsDir   string
-	startTime time.Time
+	renderer    *render.Renderer
+	cfg         *config.Config
+	registry    *module.Registry
+	versionInfo *version.Info
+	docsDir     string
+	startTime   time.Time
 }
 
 // NewDocsHandler creates a new DocsHandler.
-func NewDocsHandler(renderer *render.Renderer, cfg *config.Config, registry *module.Registry, startTime time.Time) *DocsHandler {
+func NewDocsHandler(renderer *render.Renderer, cfg *config.Config, registry *module.Registry, startTime time.Time, versionInfo *version.Info) *DocsHandler {
 	return &DocsHandler{
-		renderer:  renderer,
-		cfg:       cfg,
-		registry:  registry,
-		docsDir:   DocsDir,
-		startTime: startTime,
+		renderer:    renderer,
+		cfg:         cfg,
+		registry:    registry,
+		versionInfo: versionInfo,
+		docsDir:     DocsDir,
+		startTime:   startTime,
 	}
 }
 
@@ -56,6 +59,9 @@ type DocsPageData struct {
 
 // DocsSystemInfo contains system-level information for display.
 type DocsSystemInfo struct {
+	Version        string
+	GitCommit      string
+	BuildTime      string
 	GoVersion      string
 	Environment    string
 	ServerPort     int
@@ -243,7 +249,18 @@ func (h *DocsHandler) getSystemInfo() DocsSystemInfo {
 		}
 	}
 
+	// Get version info with defaults if not set
+	ver, commit, buildTime := "dev", "unknown", "unknown"
+	if h.versionInfo != nil {
+		ver = h.versionInfo.Version
+		commit = h.versionInfo.GitCommit
+		buildTime = h.versionInfo.BuildTime
+	}
+
 	return DocsSystemInfo{
+		Version:        ver,
+		GitCommit:      commit,
+		BuildTime:      buildTime,
 		GoVersion:      runtime.Version(),
 		Environment:    h.cfg.Env,
 		ServerPort:     h.cfg.ServerPort,
