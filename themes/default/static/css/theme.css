@@ -566,8 +566,8 @@ p {
 
 .page-title {
     margin-bottom: var(--spacing-sm);
-    word-break: break-all;
-    overflow-wrap: anywhere;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 .page-excerpt {
@@ -677,7 +677,7 @@ p {
     font-size: 0.875rem;
     max-width: 100%;
     white-space: pre-wrap;
-    word-break: break-all;
+    word-break: break-word;
 }
 
 .prose code {

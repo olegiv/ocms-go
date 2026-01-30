@@ -1544,7 +1544,7 @@ img {
     margin: 1.5em 0;
     max-width: 100%;
     white-space: pre-wrap;
-    word-break: break-all;
+    word-break: break-word;
 }
 
 .dev-prose pre code {
