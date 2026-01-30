@@ -62,7 +62,7 @@ resolve_site() {
     SITE_DIR="$SITE_VHOST/ocms"
     SITE_PID="$SITE_DIR/ocms.pid"
     SITE_LOG="$SITE_DIR/logs/ocms.log"
-    SITE_ENV="$SITE_DIR/ocms.env"
+    SITE_ENV="$SITE_DIR/.env"
 }
 
 is_pid_running() {

@@ -18,7 +18,7 @@ Per site:
 ├── themes/                     ← theme files
 ├── backups/                    ← automated backups
 ├── logs/ocms.log               ← app log (ocmsctl mode)
-├── ocms.env                    ← environment config
+├── .env                        ← environment config
 └── ocms.pid                    ← PID file (ocmsctl mode)
 
 /etc/systemd/system/ocms@example_com.service.d/
@@ -195,7 +195,7 @@ Auto-restarts failed systemd-managed instances (max 3 attempts, 5-min cooldown).
 | `/opt/ocms/bin/ocmsctl` | `root:root` | `755` |
 | `/opt/ocms/themes/` | `root:root` | `755` |
 | `{vhost}/ocms/` | `{user}:psaserv` | `750` |
-| `{vhost}/ocms/ocms.env` | `{user}:psaserv` | `600` |
+| `{vhost}/ocms/.env` | `{user}:psaserv` | `600` |
 | `{vhost}/ocms/data/` | `{user}:psaserv` | `755` |
 | `{vhost}/ocms/uploads/` | `{user}:psaserv` | `755` |
 

@@ -17,7 +17,7 @@
 
 [Unit]
 Description=oCMS Instance (%i)
-Documentation=https://github.com/olegiv/ocms-go
+Documentation=https://ocms.tech
 After=network.target
 Wants=network-online.target
 StartLimitBurst=5

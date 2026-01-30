@@ -69,7 +69,7 @@ sudo chown ocms:ocms /opt/ocms/bin/ocms
 Create the environment file:
 
 ```bash
-sudo nano /etc/ocms/ocms.env
+sudo nano /etc/ocms/.env
 ```
 
 Add the following (generate secret with `openssl rand -base64 32`):
@@ -100,8 +100,8 @@ OCMS_ACTIVE_THEME=default
 Secure the file:
 
 ```bash
-sudo chmod 600 /etc/ocms/ocms.env
-sudo chown ocms:ocms /etc/ocms/ocms.env
+sudo chmod 600 /etc/ocms/.env
+sudo chown ocms:ocms /etc/ocms/.env
 ```
 
 ### 2.4 Create Systemd Service
@@ -122,7 +122,7 @@ Type=simple
 User=ocms
 Group=ocms
 WorkingDirectory=/var/lib/ocms
-EnvironmentFile=/etc/ocms/ocms.env
+EnvironmentFile=/etc/ocms/.env
 ExecStart=/opt/ocms/bin/ocms
 Restart=always
 RestartSec=5
@@ -354,7 +354,7 @@ sudo systemctl status ocms
 sudo journalctl -u ocms -n 50
 
 # Common issues:
-# - Missing OCMS_SESSION_SECRET in /etc/ocms/ocms.env
+# - Missing OCMS_SESSION_SECRET in /etc/ocms/.env
 # - Permission denied on /var/lib/ocms
 # - Port 8081 already in use
 ```
@@ -402,7 +402,7 @@ Also ensure **Proxy mode** is unchecked in Apache & nginx Settings.
 # Reset ownership
 sudo chown -R ocms:ocms /var/lib/ocms
 sudo chown ocms:ocms /opt/ocms/bin/ocms
-sudo chmod 600 /etc/ocms/ocms.env
+sudo chmod 600 /etc/ocms/.env
 ```
 
 ### Database Corruption
@@ -445,7 +445,7 @@ sudo systemctl start ocms
 - [ ] Set `OCMS_ENV=production`
 - [ ] SSL/TLS enabled with valid certificate
 - [ ] HTTP redirects to HTTPS
-- [ ] `/etc/ocms/ocms.env` permissions set to 600
+- [ ] `/etc/ocms/.env` permissions set to 600
 - [ ] Firewall configured (only 80/443 open)
 - [ ] Regular backups scheduled
 - [ ] Health monitoring enabled
