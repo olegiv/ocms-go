@@ -1362,6 +1362,7 @@ func (h *PagesHandler) savePageCategories(ctx context.Context, pageID int64, cat
 }
 
 // savePageAliases saves URL aliases for a page from form values.
+// Aliases can be simple slugs or path-like strings with slashes (e.g., "blog/post/55").
 func (h *PagesHandler) savePageAliases(ctx context.Context, pageID int64, aliasStrs []string) {
 	now := time.Now()
 	for _, alias := range aliasStrs {
@@ -1369,8 +1370,8 @@ func (h *PagesHandler) savePageAliases(ctx context.Context, pageID int64, aliasS
 		if alias == "" {
 			continue
 		}
-		// Validate slug format
-		if !util.IsValidSlug(alias) {
+		// Validate alias format (allows path-like aliases with slashes)
+		if !util.IsValidAlias(alias) {
 			slog.Warn("skipping invalid alias format", "page_id", pageID, "alias", alias)
 			continue
 		}

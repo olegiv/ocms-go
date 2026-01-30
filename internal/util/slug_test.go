@@ -320,3 +320,121 @@ func TestIsValidSlug(t *testing.T) {
 		})
 	}
 }
+
+func TestIsValidAlias(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		// Valid aliases - simple slugs (same as IsValidSlug)
+		{
+			name:     "valid simple slug",
+			input:    "hello-world",
+			expected: true,
+		},
+		{
+			name:     "valid slug with numbers",
+			input:    "page-123",
+			expected: true,
+		},
+		// Valid aliases - path-like with slashes
+		{
+			name:     "valid path - blog post",
+			input:    "blog/post/55",
+			expected: true,
+		},
+		{
+			name:     "valid path - two segments",
+			input:    "category/subcategory",
+			expected: true,
+		},
+		{
+			name:     "valid path - deep nesting",
+			input:    "a/b/c/d/e",
+			expected: true,
+		},
+		{
+			name:     "valid path - with hyphens",
+			input:    "blog/my-post/section-1",
+			expected: true,
+		},
+		{
+			name:     "valid path - numbers in segments",
+			input:    "2024/01/my-article",
+			expected: true,
+		},
+		// Invalid aliases - empty
+		{
+			name:     "invalid - empty",
+			input:    "",
+			expected: false,
+		},
+		// Invalid aliases - leading/trailing slashes
+		{
+			name:     "invalid - leading slash",
+			input:    "/blog/post",
+			expected: false,
+		},
+		{
+			name:     "invalid - trailing slash",
+			input:    "blog/post/",
+			expected: false,
+		},
+		{
+			name:     "invalid - only slash",
+			input:    "/",
+			expected: false,
+		},
+		// Invalid aliases - consecutive slashes
+		{
+			name:     "invalid - double slash",
+			input:    "blog//post",
+			expected: false,
+		},
+		// Invalid aliases - invalid segment (uppercase)
+		{
+			name:     "invalid - uppercase in segment",
+			input:    "blog/Post",
+			expected: false,
+		},
+		// Invalid aliases - invalid segment (special chars)
+		{
+			name:     "invalid - special chars in segment",
+			input:    "blog/post!",
+			expected: false,
+		},
+		// Invalid aliases - invalid segment (spaces)
+		{
+			name:     "invalid - space in segment",
+			input:    "blog/my post",
+			expected: false,
+		},
+		// Invalid aliases - segment starts/ends with hyphen
+		{
+			name:     "invalid - segment starts with hyphen",
+			input:    "blog/-post",
+			expected: false,
+		},
+		{
+			name:     "invalid - segment ends with hyphen",
+			input:    "blog/post-",
+			expected: false,
+		},
+		// Invalid aliases - empty segment
+		{
+			name:     "invalid - empty segment at start",
+			input:    "/post",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsValidAlias(tt.input)
+			if result != tt.expected {
+				t.Errorf("IsValidAlias(%q) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+}

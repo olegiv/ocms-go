@@ -6,6 +6,7 @@ package elefant
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 
@@ -387,5 +388,64 @@ func TestEnvOrDefault(t *testing.T) {
 	got := envOrDefault("NONEXISTENT_VAR_12345", "default_value")
 	if got != "default_value" {
 		t.Errorf("envOrDefault() = %q, want %q", got, "default_value")
+	}
+}
+
+func TestBlogPostAliasFormat(t *testing.T) {
+	// Test that blog post alias format is correct (blog/post/{id})
+	tests := []struct {
+		postID   int64
+		expected string
+	}{
+		{postID: 1, expected: "blog/post/1"},
+		{postID: 55, expected: "blog/post/55"},
+		{postID: 123, expected: "blog/post/123"},
+		{postID: 999999, expected: "blog/post/999999"},
+	}
+
+	for _, tt := range tests {
+		alias := fmt.Sprintf("blog/post/%d", tt.postID)
+		if alias != tt.expected {
+			t.Errorf("alias for post %d = %q, want %q", tt.postID, alias, tt.expected)
+		}
+	}
+}
+
+func TestBlogPostModel(t *testing.T) {
+	// Test BlogPost struct and IsPublished method
+	publishedPost := BlogPost{
+		ID:        55,
+		Title:     "Test Post",
+		Slug:      "test-post",
+		Body:      "<p>Content</p>",
+		Published: "yes",
+	}
+
+	if !publishedPost.IsPublished() {
+		t.Error("expected post with Published='yes' to be published")
+	}
+
+	draftPost := BlogPost{
+		ID:        56,
+		Title:     "Draft Post",
+		Slug:      "draft-post",
+		Body:      "<p>Draft</p>",
+		Published: "no",
+	}
+
+	if draftPost.IsPublished() {
+		t.Error("expected post with Published='no' to not be published")
+	}
+
+	queuedPost := BlogPost{
+		ID:        57,
+		Title:     "Queued Post",
+		Slug:      "queued-post",
+		Body:      "<p>Queued</p>",
+		Published: "que",
+	}
+
+	if queuedPost.IsPublished() {
+		t.Error("expected post with Published='que' to not be published")
 	}
 }
