@@ -272,7 +272,7 @@ func (p *DifyProvider) RenderBody(settings map[string]string) template.HTML {
 .dify-openers{display:flex;flex-direction:column;gap:8px;margin-top:12px}
 .dify-opener{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:10px 14px;font-size:13px;text-align:left;cursor:pointer;transition:all .2s;color:#374151}
 .dify-opener:hover{border-color:%s;background:#f9fafb}
-@media(max-width:480px){#dify-chat-window{width:calc(100vw - 40px);height:calc(100vh - 100px);bottom:70px;right:20px;left:20px}}
+@media(max-width:480px){#dify-chat-window{position:fixed;top:80px;left:20px;right:20px;width:auto;height:auto;max-height:350px;bottom:auto;transform:none}}
 </style>
 <script>
 (function(){
