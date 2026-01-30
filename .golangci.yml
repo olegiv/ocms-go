@@ -28,7 +28,7 @@ linters:
 
 linters-settings:
   dupl:
-    threshold: 75  # Balanced threshold for meaningful clone detection
+    threshold: 200  # Allow type-safe patterns with different query types
 
   gocyclo:
     min-complexity: 55  # Main init functions are inherently complex

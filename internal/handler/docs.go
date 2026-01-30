@@ -189,7 +189,7 @@ func slugToTitle(slug string) string {
 	// Capitalize first letter of each word
 	words := strings.Fields(title)
 	for idx, word := range words {
-		if len(word) > 0 {
+		if word != "" {
 			words[idx] = strings.ToUpper(word[:1]) + word[1:]
 		}
 	}

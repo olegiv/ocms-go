@@ -42,9 +42,8 @@ func createTestAPIKey(t *testing.T, h *HealthHandler) string {
 }
 
 // addAPIKeyAuth adds a Bearer token to the request for authenticated health checks.
-func addAPIKeyAuth(r *http.Request, rawKey string) *http.Request {
+func addAPIKeyAuth(r *http.Request, rawKey string) {
 	r.Header.Set("Authorization", "Bearer "+rawKey)
-	return r
 }
 
 func TestHealthHandler_Health_Public(t *testing.T) {
@@ -236,13 +235,14 @@ func TestHealthHandler_Health_UnhealthyDatabase_Authenticated(t *testing.T) {
 	}
 }
 
-func TestHealthHandler_Liveness(t *testing.T) {
-	handler := newTestHealthHandler(t)
+// testHealthProbe tests a health probe endpoint for expected status response.
+func testHealthProbe(t *testing.T, path string, handlerFn func(http.ResponseWriter, *http.Request), expectedStatus string) {
+	t.Helper()
 
-	req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
+	req := httptest.NewRequest(http.MethodGet, path, nil)
 	w := httptest.NewRecorder()
 
-	handler.Liveness(w, req)
+	handlerFn(w, req)
 
 	assertStatus(t, w.Code, http.StatusOK)
 
@@ -251,29 +251,19 @@ func TestHealthHandler_Liveness(t *testing.T) {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
-	if resp["status"] != "alive" {
-		t.Errorf("status = %q; want alive", resp["status"])
+	if resp["status"] != expectedStatus {
+		t.Errorf("status = %q; want %s", resp["status"], expectedStatus)
 	}
+}
+
+func TestHealthHandler_Liveness(t *testing.T) {
+	handler := newTestHealthHandler(t)
+	testHealthProbe(t, "/health/live", handler.Liveness, "alive")
 }
 
 func TestHealthHandler_Readiness(t *testing.T) {
 	handler := newTestHealthHandler(t)
-
-	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
-	w := httptest.NewRecorder()
-
-	handler.Readiness(w, req)
-
-	assertStatus(t, w.Code, http.StatusOK)
-
-	var resp map[string]string
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to unmarshal response: %v", err)
-	}
-
-	if resp["status"] != "ready" {
-		t.Errorf("status = %q; want ready", resp["status"])
-	}
+	testHealthProbe(t, "/health/ready", handler.Readiness, "ready")
 }
 
 func TestHealthHandler_Readiness_NotReady_Public(t *testing.T) {

@@ -96,38 +96,38 @@ func createTestPage(t *testing.T, q *Queries, ctx context.Context, authorID int6
 	return page
 }
 
+// createTestEntity is a generic helper for creating test entities.
+func createTestEntity[T any](t *testing.T, entityName, slug string, createFn func() (T, error)) T {
+	t.Helper()
+	entity, err := createFn()
+	if err != nil {
+		t.Fatalf("Create%s(%s): %v", entityName, slug, err)
+	}
+	return entity
+}
+
 // createTestTag creates a tag with default values for testing.
 func createTestTag(t *testing.T, q *Queries, ctx context.Context, slug string) Tag {
 	t.Helper()
 	now := time.Now()
-	tag, err := q.CreateTag(ctx, CreateTagParams{
-		Name:       "Test Tag",
-		Slug:       slug,
-		LanguageCode: getDefaultLangCode(t, q, ctx),
-		CreatedAt:  now,
-		UpdatedAt:  now,
+	langCode := getDefaultLangCode(t, q, ctx)
+	return createTestEntity(t, "Tag", slug, func() (Tag, error) {
+		return q.CreateTag(ctx, CreateTagParams{
+			Name: "Test Tag", Slug: slug, LanguageCode: langCode, CreatedAt: now, UpdatedAt: now,
+		})
 	})
-	if err != nil {
-		t.Fatalf("CreateTag(%s): %v", slug, err)
-	}
-	return tag
 }
 
 // createTestMenu creates a menu with default values for testing.
 func createTestMenu(t *testing.T, q *Queries, ctx context.Context, slug string) Menu {
 	t.Helper()
 	now := time.Now()
-	menu, err := q.CreateMenu(ctx, CreateMenuParams{
-		Name:       "Test Menu",
-		Slug:       slug,
-		LanguageCode: getDefaultLangCode(t, q, ctx),
-		CreatedAt:  now,
-		UpdatedAt:  now,
+	langCode := getDefaultLangCode(t, q, ctx)
+	return createTestEntity(t, "Menu", slug, func() (Menu, error) {
+		return q.CreateMenu(ctx, CreateMenuParams{
+			Name: "Test Menu", Slug: slug, LanguageCode: langCode, CreatedAt: now, UpdatedAt: now,
+		})
 	})
-	if err != nil {
-		t.Fatalf("CreateMenu(%s): %v", slug, err)
-	}
-	return menu
 }
 
 // createTestForm creates a form with default values for testing.
