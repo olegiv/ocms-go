@@ -2537,7 +2537,7 @@ tr.unread {
 .api-key-value {
   flex: 1;
   color: $success;
-  word-break: break-all;
+  word-break: break-word;
 }
 
 .copy-btn {
@@ -2957,7 +2957,7 @@ tr.unread {
   pre {
     margin: 0;
     white-space: pre-wrap;
-    word-break: break-all;
+    word-break: break-word;
   }
 }
 
@@ -3350,7 +3350,7 @@ tr.unread {
   pre {
     margin: 0;
     white-space: pre-wrap;
-    word-break: break-all;
+    word-break: break-word;
   }
 }
 
@@ -3373,7 +3373,7 @@ tr.unread {
   font-size: $font-size-sm;
   color: $gray-500;
   font-family: $font-family-mono;
-  word-break: break-all;
+  word-break: break-word;
 }
 
 // =====================================================
@@ -3599,7 +3599,7 @@ tr.unread {
 
   span {
     color: $gray-600;
-    word-break: break-all;
+    word-break: break-word;
   }
 }
 
