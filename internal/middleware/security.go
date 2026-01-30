@@ -78,7 +78,7 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 			"style-src":   "'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com",
 			"img-src":     "'self' data: blob: https:",
 			"font-src":    "'self' data:",
-			"connect-src": "'self' https://esm.sh https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
+			"connect-src": "'self' https://esm.sh https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
 			"frame-src":   "'self' https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
 			"object-src":  "'none'",
 			"base-uri":    "'self'",
