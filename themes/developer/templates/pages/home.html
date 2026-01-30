@@ -15,17 +15,18 @@
                     <span class="dev-prompt">$</span>
                     <span class="dev-command">cat welcome.txt</span>
                 </div>
-                <h1 class="dev-hero-title">{{if .HeroTitle}}{{.HeroTitle}}{{else}}{{.SiteName}}{{end}}</h1>
-                {{if .HeroSubtitle}}
-                <p class="dev-hero-subtitle">{{.HeroSubtitle}}</p>
-                {{end}}
-                {{if .HeroCTA}}
-                <div class="dev-terminal-line">
-                    <span class="dev-prompt">$</span>
-                    <a href="{{.HeroCTAURL}}" class="dev-btn dev-btn-primary">{{.HeroCTA}} <span class="dev-cursor">_</span></a>
-                </div>
-                {{end}}
-            </div>
+<!--                <h1 class="dev-hero-title">{{if .HeroTitle}}{{.HeroTitle}}{{else}}{{.SiteName}}{{end}}</h1>-->
+<!--                {{if .HeroSubtitle}}-->
+<!--                <p class="dev-hero-subtitle">{{.HeroSubtitle}}</p>-->
+<!--                {{end}}-->
+<!--                {{if .HeroCTA}}-->
+<!--                <div class="dev-terminal-line">-->
+<!--                    <span class="dev-prompt">$</span>-->
+<!--                    <a href="{{.HeroCTAURL}}" class="dev-btn dev-btn-primary">{{.HeroCTA}} <span class="dev-cursor">_</span></a>-->
+<!--                </div>-->
+<!--                {{end}}-->
+                <img src="/themes/developer/static/pix/top.jpg" width=100%
+                     alt="{{if .HeroSubtitle}}{{.HeroSubtitle}}{{end}}" /></div>
         </div>
     </section>
     {{end}}
