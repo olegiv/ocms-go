@@ -553,6 +553,14 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	page, err := h.queries.GetPublishedPageBySlug(ctx, slug)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			// Slug not found - check if it's an alias
+			aliasPage, aliasErr := h.queries.GetPublishedPageByAlias(ctx, slug)
+			if aliasErr == nil {
+				// Alias found - redirect to canonical URL (HTTP 301 Moved Permanently)
+				http.Redirect(w, r, "/"+aliasPage.Slug, http.StatusMovedPermanently)
+				return
+			}
+			// Not a slug, not an alias - render 404
 			h.renderNotFound(w, r)
 			return
 		}

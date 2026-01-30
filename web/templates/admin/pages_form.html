@@ -373,6 +373,54 @@
                 {{template "category_selector" .}}
             </div>
 
+            <!-- URL Aliases Section -->
+            <div class="form-group form-group-full">
+                <details class="collapsible-section" x-data="aliasManager()" :open="aliases.length > 0">
+                    <summary class="collapsible-header" @click.prevent="$el.parentElement.open = !$el.parentElement.open">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                        <span>{{T .AdminLang "pages.aliases"}}</span>
+                        <template x-if="aliases.length > 0">
+                            <span class="badge badge-info ml-2" x-text="aliases.length"></span>
+                        </template>
+                    </summary>
+                    <div class="collapsible-content">
+                        <!-- Existing Aliases List -->
+                        <div class="aliases-list" x-show="aliases.length > 0">
+                            <template x-for="(alias, index) in aliases" :key="index">
+                                <div class="alias-item">
+                                    <div class="input-with-prefix" style="flex: 1;">
+                                        <span class="input-prefix">/</span>
+                                        <input
+                                            type="text"
+                                            class="form-input"
+                                            x-model="alias.value"
+                                            name="aliases[]"
+                                            placeholder="{{T .AdminLang "pages.alias_placeholder"}}"
+                                            @input="validateAlias(index)"
+                                        >
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline btn-danger" @click="removeAlias(index)" title="{{T .AdminLang "btn.remove"}}">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Add New Alias Button -->
+                        <button type="button" class="btn btn-sm btn-outline mt-2" @click="addAlias()">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                            {{T .AdminLang "pages.add_alias"}}
+                        </button>
+
+                        {{if .Data.Errors.aliases}}
+                        <span class="form-error mt-2">{{.Data.Errors.aliases}}</span>
+                        {{end}}
+
+                        <span class="form-hint mt-2">{{T .AdminLang "pages.aliases_hint"}}</span>
+                    </div>
+                </details>
+            </div>
+
             <!-- SEO Settings Section -->
             <div class="form-group form-group-full">
                 <details class="collapsible-section" x-data="{ open: {{if or .Data.FormValues.meta_title .Data.FormValues.meta_description (and .Data.Page .Data.Page.MetaTitle) (and .Data.Page .Data.Page.MetaDescription)}}true{{else}}false{{end}} }" :open="open">
@@ -1062,6 +1110,44 @@ function pageForm() {
                 .replace(/[^\w\s-]/g, '')
                 .replace(/[\s_-]+/g, '-')
                 .replace(/^-+|-+$/g, '');
+        }
+    };
+}
+
+// Alias manager component for URL aliases
+function aliasManager() {
+    return {
+        aliases: [],
+
+        init() {
+            // Initialize with existing aliases from server
+            {{if .Data.Aliases}}
+            const existingAliases = [
+                {{range .Data.Aliases}}
+                { value: '{{.Alias}}', id: {{.ID}} },
+                {{end}}
+            ];
+            this.aliases = existingAliases;
+            {{end}}
+        },
+
+        addAlias() {
+            this.aliases.push({ value: '', id: null });
+        },
+
+        removeAlias(index) {
+            this.aliases.splice(index, 1);
+        },
+
+        validateAlias(index) {
+            // Client-side slugify
+            let value = this.aliases[index].value;
+            value = value.toLowerCase()
+                .trim()
+                .replace(/[^\w\s-]/g, '')
+                .replace(/[\s_-]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+            this.aliases[index].value = value;
         }
     };
 }

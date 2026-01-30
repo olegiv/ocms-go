@@ -218,6 +218,13 @@ type Page struct {
 	HideFeaturedImage int64         `json:"hide_featured_image"`
 }
 
+type PageAlias struct {
+	ID        int64     `json:"id"`
+	PageID    int64     `json:"page_id"`
+	Alias     string    `json:"alias"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type PageCategory struct {
 	PageID     int64 `json:"page_id"`
 	CategoryID int64 `json:"category_id"`

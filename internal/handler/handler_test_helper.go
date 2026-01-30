@@ -67,6 +67,7 @@ func testDB(t *testing.T) *sql.DB {
 			canonical_url TEXT NOT NULL DEFAULT '',
 			scheduled_at DATETIME,
 			language_code TEXT NOT NULL DEFAULT 'en',
+			hide_featured_image INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			published_at DATETIME,
@@ -75,6 +76,15 @@ func testDB(t *testing.T) *sql.DB {
 		CREATE INDEX idx_pages_slug ON pages(slug);
 		CREATE INDEX idx_pages_status ON pages(status);
 		CREATE INDEX idx_pages_author_id ON pages(author_id);
+
+		CREATE TABLE page_aliases (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			page_id INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+			alias TEXT NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE UNIQUE INDEX idx_page_aliases_alias ON page_aliases(alias);
+		CREATE INDEX idx_page_aliases_page_id ON page_aliases(page_id);
 
 		CREATE TABLE events (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -433,6 +433,26 @@
             "translation": "Не показывать изображение на странице"
         },
         {
+            "id": "pages.aliases",
+            "message": "URL Aliases",
+            "translation": "Псевдонимы URL"
+        },
+        {
+            "id": "pages.add_alias",
+            "message": "Add Alias",
+            "translation": "Добавить псевдоним"
+        },
+        {
+            "id": "pages.alias_placeholder",
+            "message": "old-page-url",
+            "translation": "старый-url-страницы"
+        },
+        {
+            "id": "pages.aliases_hint",
+            "message": "Alternative URLs that redirect to this page (useful for preserving old URLs after renaming)",
+            "translation": "Альтернативные URL-адреса, перенаправляющие на эту страницу (полезно при переименовании)"
+        },
+        {
             "id": "categories.title",
             "message": "Categories",
             "translation": "Категории"

@@ -788,6 +788,23 @@ select.form-control {
   }
 }
 
+// Aliases list for page URL aliases
+.aliases-list {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+}
+
+.alias-item {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+
+  .btn-danger {
+    flex-shrink: 0;
+  }
+}
+
 // Editor container
 .editor-container {
   border: 1px solid $gray-300;
