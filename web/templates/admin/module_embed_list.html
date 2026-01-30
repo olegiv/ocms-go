@@ -1,0 +1,194 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{T .AdminLang "embed.title"}}</h1>
+        <p class="page-description">{{T .AdminLang "embed.description"}}</p>
+    </div>
+</div>
+
+<div class="embed-providers">
+    <div class="section-header">
+        <h2>{{T .AdminLang "embed.providers_title"}}</h2>
+        <p>{{T .AdminLang "embed.providers_description"}}</p>
+    </div>
+
+    <div class="provider-cards">
+        {{range .Data.Providers}}
+        <div class="card provider-card {{if .IsEnabled}}provider-enabled{{end}}">
+            <div class="card-body">
+                <div class="provider-header">
+                    <div class="provider-icon">
+                        {{if eq .ID "dify"}}
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                            <path d="M8 10h.01"/>
+                            <path d="M12 10h.01"/>
+                            <path d="M16 10h.01"/>
+                        </svg>
+                        {{else}}
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect width="18" height="18" x="3" y="3" rx="2"/>
+                            <path d="M7 7h10"/>
+                            <path d="M7 12h10"/>
+                            <path d="M7 17h10"/>
+                        </svg>
+                        {{end}}
+                    </div>
+                    <div class="provider-info">
+                        <h3>{{.Name}}</h3>
+                        <p>{{.Description}}</p>
+                    </div>
+                    <div class="provider-status">
+                        {{if .IsEnabled}}
+                        <span class="badge badge-success">{{T $.AdminLang "embed.status_enabled"}}</span>
+                        {{else if .IsConfigured}}
+                        <span class="badge badge-warning">{{T $.AdminLang "embed.status_configured"}}</span>
+                        {{else}}
+                        <span class="badge badge-secondary">{{T $.AdminLang "embed.status_not_configured"}}</span>
+                        {{end}}
+                    </div>
+                </div>
+                <div class="provider-actions">
+                    <a href="/admin/embed/{{.ID}}" class="btn btn-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                        {{T $.AdminLang "embed.configure_button"}}
+                    </a>
+                    {{if .IsConfigured}}
+                    <form method="POST" action="/admin/embed/{{.ID}}/toggle" class="toggle-form">
+                        {{$.CSRFField}}
+                        <input type="hidden" name="enabled" value="{{if .IsEnabled}}0{{else}}1{{end}}">
+                        <button type="submit" class="btn {{if .IsEnabled}}btn-outline-danger{{else}}btn-outline-success{{end}}">
+                            {{if .IsEnabled}}
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+                                <line x1="12" x2="12" y1="2" y2="12"/>
+                            </svg>
+                            {{T $.AdminLang "embed.disable_button"}}
+                            {{else}}
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <polyline points="16 12 12 8 8 12"/>
+                                <line x1="12" x2="12" y1="16" y2="8"/>
+                            </svg>
+                            {{T $.AdminLang "embed.enable_button"}}
+                            {{end}}
+                        </button>
+                    </form>
+                    {{end}}
+                </div>
+            </div>
+        </div>
+        {{else}}
+        <div class="empty-state">
+            <p>{{T .AdminLang "embed.no_providers"}}</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+
+<style>
+.embed-providers {
+    margin-top: 2rem;
+}
+
+.provider-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+.provider-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.provider-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.provider-card.provider-enabled {
+    border-left: 4px solid var(--success-color, #10b981);
+}
+
+.provider-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.provider-icon {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary-color, #3b82f6);
+    color: white;
+    border-radius: 8px;
+}
+
+.provider-info {
+    flex: 1;
+}
+
+.provider-info h3 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.125rem;
+}
+
+.provider-info p {
+    margin: 0;
+    color: var(--text-muted, #6b7280);
+    font-size: 0.875rem;
+}
+
+.provider-status {
+    flex-shrink: 0;
+}
+
+.provider-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+}
+
+.toggle-form {
+    display: inline;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-muted, #6b7280);
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: 4px;
+}
+
+.badge-success {
+    background: var(--success-bg, #d1fae5);
+    color: var(--success-color, #059669);
+}
+
+.badge-warning {
+    background: var(--warning-bg, #fef3c7);
+    color: var(--warning-color, #d97706);
+}
+
+.badge-secondary {
+    background: var(--secondary-bg, #f3f4f6);
+    color: var(--secondary-color, #6b7280);
+}
+</style>
+{{end}}

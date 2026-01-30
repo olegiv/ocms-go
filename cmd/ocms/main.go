@@ -41,6 +41,7 @@ import (
 	"github.com/olegiv/ocms-go/modules/analytics_ext"
 	"github.com/olegiv/ocms-go/modules/analytics_int"
 	"github.com/olegiv/ocms-go/modules/developer"
+	"github.com/olegiv/ocms-go/modules/embed"
 	"github.com/olegiv/ocms-go/modules/example"
 	"github.com/olegiv/ocms-go/modules/hcaptcha"
 	"github.com/olegiv/ocms-go/modules/migrator"
@@ -323,6 +324,9 @@ func run() error {
 	}
 	if err := moduleRegistry.Register(analytics_ext.New()); err != nil {
 		return fmt.Errorf("registering analytics_ext module: %w", err)
+	}
+	if err := moduleRegistry.Register(embed.New()); err != nil {
+		return fmt.Errorf("registering embed module: %w", err)
 	}
 	if err := moduleRegistry.Register(hcaptcha.New()); err != nil {
 		return fmt.Errorf("registering hcaptcha module: %w", err)

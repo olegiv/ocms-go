@@ -63,6 +63,9 @@
     {{/* External analytics tracking scripts (head) */}}
     {{if analyticsExtHead}}{{analyticsExtHead}}{{end}}
 
+    {{/* External embed scripts (head) */}}
+    {{if embedHead}}{{embedHead}}{{end}}
+
     {{/* Additional head content */}}
     {{block "head" .}}{{end}}
 </head>
@@ -100,5 +103,8 @@
 
     {{/* Additional scripts */}}
     {{block "scripts" .}}{{end}}
+
+    {{/* External embed scripts (body - chat widgets, etc.) */}}
+    {{if embedBody}}{{embedBody}}{{end}}
 </body>
 </html>

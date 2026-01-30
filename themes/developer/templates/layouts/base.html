@@ -48,6 +48,9 @@
     <!-- External analytics tracking scripts (head) -->
     {{if analyticsExtHead}}{{analyticsExtHead}}{{end}}
 
+    <!-- External embed scripts (head) -->
+    {{if embedHead}}{{embedHead}}{{end}}
+
     {{block "head" .}}{{end}}
 </head>
 <body class="{{if .BodyClass}}{{.BodyClass}}{{end}}">
@@ -73,5 +76,8 @@
     <!-- Theme JavaScript -->
     <script src="/themes/developer/static/js/theme.js"></script>
     {{block "scripts" .}}{{end}}
+
+    <!-- External embed scripts (body - chat widgets, etc.) -->
+    {{if embedBody}}{{embedBody}}{{end}}
 </body>
 </html>
