@@ -14,6 +14,12 @@ JS_DIR="$PROJECT_DIR/web/static/dist/js"
 # Ensure directories exist
 mkdir -p "$DIST_DIR" "$JS_DIR"
 
+# Copy favicon
+if [ -f "$PROJECT_DIR/web/static/favicon.ico" ]; then
+    cp "$PROJECT_DIR/web/static/favicon.ico" "$DIST_DIR/"
+    echo "Copied favicon.ico"
+fi
+
 # Install and copy npm dependencies
 echo "Installing npm dependencies..."
 cd "$PROJECT_DIR"
