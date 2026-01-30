@@ -3,7 +3,10 @@
     {{if and .Page.FeaturedImage (not .Page.HideFeaturedImage)}}
     {{/* Hero banner with title overlay */}}
     <div class="page-hero">
-        <img src="{{.Page.FeaturedImage}}" alt="{{mediaAlt .Page.FeaturedImageID $.LangCode .Page.FeaturedImageAlt}}">
+        <img src="{{.Page.FeaturedImage}}"
+             srcset="{{.Page.FeaturedImageMedium}} 800w, {{.Page.FeaturedImageLarge}} 1600w"
+             sizes="100vw"
+             alt="{{mediaAlt .Page.FeaturedImageID $.LangCode .Page.FeaturedImageAlt}}">
         <div class="page-hero-overlay">
             <header class="page-header">
                 <h1 class="page-title">{{.Page.Title}}</h1>
