@@ -74,7 +74,7 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 		// Strict CSP for production
 		cfg.ContentSecurityPolicy = buildCSP(map[string]string{
 			"default-src": "'self'",
-			"script-src":  "'self' 'unsafe-inline' https://unpkg.com https://esm.sh https://www.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
+			"script-src":  "'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://esm.sh https://www.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
 			"style-src":   "'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com",
 			"img-src":     "'self' data: blob: https:",
 			"font-src":    "'self' data:",
