@@ -1633,13 +1633,8 @@ func (h *FrontendHandler) getSiteData(ctx context.Context) SiteData {
 				site.Settings = settings
 			}
 		}
-
-		// Fill in defaults for any missing settings
-		for _, setting := range activeTheme.Config.Settings {
-			if _, ok := site.Settings[setting.Key]; !ok {
-				site.Settings[setting.Key] = setting.Default
-			}
-		}
+		// Note: defaults from theme.json are NOT merged here.
+		// The CSS file contains defaults; ThemeSettings only holds user overrides.
 	}
 
 	return site

@@ -29,11 +29,11 @@
     <link rel="stylesheet" href="/themes/developer/static/css/theme.css">
 
     <!-- Theme Settings CSS Variables -->
-    {{if .ThemeSettings}}
+    {{if index .ThemeSettings "accent_color"}}
     <style>
         :root {
-            {{if index .ThemeSettings "accent_color"}}--dev-accent: {{index .ThemeSettings "accent_color"}};{{end}}
-            {{if index .ThemeSettings "accent_color"}}--dev-link: {{index .ThemeSettings "accent_color"}};{{end}}
+            --dev-accent: {{index .ThemeSettings "accent_color"}};
+            --dev-link: {{index .ThemeSettings "accent_color"}};
         }
     </style>
     {{end}}
