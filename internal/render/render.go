@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -30,6 +31,9 @@ import (
 
 // SessionKeyAdminLang is the session key for storing admin UI language preference.
 const SessionKeyAdminLang = "admin_lang"
+
+// blankLinesRegex matches two or more consecutive newlines (with optional whitespace between).
+var blankLinesRegex = regexp.MustCompile(`(\r?\n\s*){2,}`)
 
 // SidebarModule represents a module to display in the admin sidebar.
 type SidebarModule struct {
@@ -626,8 +630,11 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 		return fmt.Errorf("executing template %s: %w", name, err)
 	}
 
+	// Strip consecutive blank lines from the rendered HTML
+	compacted := blankLinesRegex.ReplaceAll(buf.Bytes(), []byte("\n"))
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = buf.WriteTo(w)
+	_, _ = w.Write(compacted)
 	return nil
 }
 

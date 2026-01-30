@@ -9,8 +9,12 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"regexp"
 	"strings"
 )
+
+// blankLinesRegex matches two or more consecutive newlines (with optional whitespace between).
+var blankLinesRegex = regexp.MustCompile(`(\r?\n\s*){2,}`)
 
 // Config represents the configuration loaded from theme.json.
 type Config struct {
@@ -118,7 +122,15 @@ func (t *Theme) RenderPage(w io.Writer, pageName string, data any) error {
 	}
 
 	// Execute the base layout which will include the content
-	return clone.ExecuteTemplate(w, "layouts/base.html", data)
+	var buf bytes.Buffer
+	if err := clone.ExecuteTemplate(&buf, "layouts/base.html", data); err != nil {
+		return err
+	}
+
+	// Strip consecutive blank lines from the rendered HTML
+	compacted := blankLinesRegex.ReplaceAll(buf.Bytes(), []byte("\n"))
+	_, err = w.Write(compacted)
+	return err
 }
 
 // RenderContent renders just the content portion (for AJAX/partial rendering).
@@ -134,7 +146,10 @@ func (t *Theme) RenderContent(w io.Writer, pageName string, data any) error {
 	if err := t.Templates.ExecuteTemplate(&buf, contentName, data); err != nil {
 		return err
 	}
-	_, err := buf.WriteTo(w)
+
+	// Strip consecutive blank lines from the rendered HTML
+	compacted := blankLinesRegex.ReplaceAll(buf.Bytes(), []byte("\n"))
+	_, err := w.Write(compacted)
 	return err
 }
 
