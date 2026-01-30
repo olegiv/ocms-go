@@ -12,6 +12,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/modules/embed/providers"
 )
 
@@ -133,33 +134,21 @@ func (m *Module) handleProviderSettings(w http.ResponseWriter, r *http.Request) 
 
 // handleSaveProviderSettings handles POST /admin/embed/{provider} - saves provider settings.
 func (m *Module) handleSaveProviderSettings(w http.ResponseWriter, r *http.Request) {
-	providerID := chi.URLParam(r, "provider")
-	user := middleware.GetUser(r)
-	lang := m.ctx.Render.GetAdminLang(r)
-
-	if user == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	// Find provider
-	provider := m.getProvider(providerID)
-	if provider == nil {
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "embed.error_provider_not_found"), "error")
-		http.Redirect(w, r, "/admin/embed", http.StatusSeeOther)
+	ctx, ok := m.getProviderContext(w, r)
+	if !ok {
 		return
 	}
 
 	if err := r.ParseForm(); err != nil {
 		m.ctx.Logger.Error("failed to parse form", "error", err)
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "embed.error_parse_form"), "error")
-		http.Redirect(w, r, "/admin/embed/"+providerID, http.StatusSeeOther)
+		m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "embed.error_parse_form"), "error")
+		http.Redirect(w, r, "/admin/embed/"+ctx.ProviderID, http.StatusSeeOther)
 		return
 	}
 
 	// Build settings from form
 	settings := make(map[string]string)
-	for _, field := range provider.SettingsSchema() {
+	for _, field := range ctx.Provider.SettingsSchema() {
 		settings[field.ID] = strings.TrimSpace(r.FormValue(field.ID))
 	}
 
@@ -167,15 +156,15 @@ func (m *Module) handleSaveProviderSettings(w http.ResponseWriter, r *http.Reque
 
 	// Validate if enabling
 	if isEnabled {
-		if err := provider.Validate(settings); err != nil {
+		if err := ctx.Provider.Validate(settings); err != nil {
 			m.ctx.Render.SetFlash(r, err.Error(), "error")
-			http.Redirect(w, r, "/admin/embed/"+providerID, http.StatusSeeOther)
+			http.Redirect(w, r, "/admin/embed/"+ctx.ProviderID, http.StatusSeeOther)
 			return
 		}
 	}
 
 	// Load existing settings to preserve position
-	existingPS, _ := loadProviderSettings(m.ctx.DB, providerID)
+	existingPS, _ := loadProviderSettings(m.ctx.DB, ctx.ProviderID)
 	position := 0
 	if existingPS != nil {
 		position = existingPS.Position
@@ -183,16 +172,16 @@ func (m *Module) handleSaveProviderSettings(w http.ResponseWriter, r *http.Reque
 
 	// Save settings
 	ps := &ProviderSettings{
-		ProviderID: providerID,
+		ProviderID: ctx.ProviderID,
 		Settings:   settings,
 		IsEnabled:  isEnabled,
 		Position:   position,
 	}
 
 	if err := saveProviderSettings(m.ctx.DB, ps); err != nil {
-		m.ctx.Logger.Error("failed to save provider settings", "error", err, "provider", providerID)
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "embed.error_save"), "error")
-		http.Redirect(w, r, "/admin/embed/"+providerID, http.StatusSeeOther)
+		m.ctx.Logger.Error("failed to save provider settings", "error", err, "provider", ctx.ProviderID)
+		m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "embed.error_save"), "error")
+		http.Redirect(w, r, "/admin/embed/"+ctx.ProviderID, http.StatusSeeOther)
 		return
 	}
 
@@ -202,37 +191,25 @@ func (m *Module) handleSaveProviderSettings(w http.ResponseWriter, r *http.Reque
 	}
 
 	m.ctx.Logger.Info("embed provider settings updated",
-		"user", user.Email,
-		"provider", providerID,
+		"user", ctx.User.Email,
+		"provider", ctx.ProviderID,
 		"enabled", isEnabled,
 	)
 
-	m.ctx.Render.SetFlash(r, i18n.T(lang, "embed.success_save"), "success")
-	http.Redirect(w, r, "/admin/embed/"+providerID, http.StatusSeeOther)
+	m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "embed.success_save"), "success")
+	http.Redirect(w, r, "/admin/embed/"+ctx.ProviderID, http.StatusSeeOther)
 }
 
 // handleToggleProvider handles POST /admin/embed/{provider}/toggle - toggles provider.
 func (m *Module) handleToggleProvider(w http.ResponseWriter, r *http.Request) {
-	providerID := chi.URLParam(r, "provider")
-	user := middleware.GetUser(r)
-	lang := m.ctx.Render.GetAdminLang(r)
-
-	if user == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	// Find provider
-	provider := m.getProvider(providerID)
-	if provider == nil {
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "embed.error_provider_not_found"), "error")
-		http.Redirect(w, r, "/admin/embed", http.StatusSeeOther)
+	ctx, ok := m.getProviderContext(w, r)
+	if !ok {
 		return
 	}
 
 	if err := r.ParseForm(); err != nil {
 		m.ctx.Logger.Error("failed to parse form", "error", err)
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "embed.error_parse_form"), "error")
+		m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "embed.error_parse_form"), "error")
 		http.Redirect(w, r, "/admin/embed", http.StatusSeeOther)
 		return
 	}
@@ -241,23 +218,23 @@ func (m *Module) handleToggleProvider(w http.ResponseWriter, r *http.Request) {
 
 	// If enabling, validate settings first
 	if enabled {
-		ps, err := loadProviderSettings(m.ctx.DB, providerID)
+		ps, err := loadProviderSettings(m.ctx.DB, ctx.ProviderID)
 		if err != nil || ps == nil {
-			m.ctx.Render.SetFlash(r, i18n.T(lang, "embed.error_not_configured"), "error")
-			http.Redirect(w, r, "/admin/embed/"+providerID, http.StatusSeeOther)
+			m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "embed.error_not_configured"), "error")
+			http.Redirect(w, r, "/admin/embed/"+ctx.ProviderID, http.StatusSeeOther)
 			return
 		}
 
-		if err := provider.Validate(ps.Settings); err != nil {
-			m.ctx.Render.SetFlash(r, i18n.T(lang, "embed.error_configure_first"), "error")
-			http.Redirect(w, r, "/admin/embed/"+providerID, http.StatusSeeOther)
+		if err := ctx.Provider.Validate(ps.Settings); err != nil {
+			m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "embed.error_configure_first"), "error")
+			http.Redirect(w, r, "/admin/embed/"+ctx.ProviderID, http.StatusSeeOther)
 			return
 		}
 	}
 
-	if err := toggleProvider(m.ctx.DB, providerID, enabled); err != nil {
-		m.ctx.Logger.Error("failed to toggle provider", "error", err, "provider", providerID)
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "embed.error_toggle"), "error")
+	if err := toggleProvider(m.ctx.DB, ctx.ProviderID, enabled); err != nil {
+		m.ctx.Logger.Error("failed to toggle provider", "error", err, "provider", ctx.ProviderID)
+		m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "embed.error_toggle"), "error")
 		http.Redirect(w, r, "/admin/embed", http.StatusSeeOther)
 		return
 	}
@@ -268,8 +245,8 @@ func (m *Module) handleToggleProvider(w http.ResponseWriter, r *http.Request) {
 	}
 
 	m.ctx.Logger.Info("embed provider toggled",
-		"user", user.Email,
-		"provider", providerID,
+		"user", ctx.User.Email,
+		"provider", ctx.ProviderID,
 		"enabled", enabled,
 	)
 
@@ -277,7 +254,7 @@ func (m *Module) handleToggleProvider(w http.ResponseWriter, r *http.Request) {
 	if enabled {
 		statusKey = "embed.success_enabled"
 	}
-	m.ctx.Render.SetFlash(r, i18n.T(lang, statusKey), "success")
+	m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, statusKey), "success")
 	http.Redirect(w, r, "/admin/embed", http.StatusSeeOther)
 }
 
@@ -289,4 +266,39 @@ func (m *Module) getProvider(id string) providers.Provider {
 		}
 	}
 	return nil
+}
+
+// providerRequestContext holds common request context for provider handlers.
+type providerRequestContext struct {
+	ProviderID string
+	Provider   providers.Provider
+	User       *store.User
+	Lang       string
+}
+
+// getProviderContext extracts and validates common provider request context.
+// Returns false if validation failed (response already written).
+func (m *Module) getProviderContext(w http.ResponseWriter, r *http.Request) (providerRequestContext, bool) {
+	providerID := chi.URLParam(r, "provider")
+	user := middleware.GetUser(r)
+	lang := m.ctx.Render.GetAdminLang(r)
+
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return providerRequestContext{}, false
+	}
+
+	provider := m.getProvider(providerID)
+	if provider == nil {
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "embed.error_provider_not_found"), "error")
+		http.Redirect(w, r, "/admin/embed", http.StatusSeeOther)
+		return providerRequestContext{}, false
+	}
+
+	return providerRequestContext{
+		ProviderID: providerID,
+		Provider:   provider,
+		User:       user,
+		Lang:       lang,
+	}, true
 }

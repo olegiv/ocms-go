@@ -347,7 +347,7 @@ func TestTemplateFuncs_Int64(t *testing.T) {
 		{"int", 42, 42},
 		{"int32", int32(42), 42},
 		{"int64", int64(42), 42},
-		{"float64", float64(42.9), 42},
+		{"float64", 42.9, 42},
 		{"string", "42", 42},
 		{"invalid string", "abc", 0},
 		{"nil", nil, 0},

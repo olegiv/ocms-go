@@ -77,6 +77,24 @@ func registerCRUD(r chi.Router, base, baseID string, h crudHandlers) {
 	r.Delete(baseID, h.Delete)
 }
 
+// registerSettingsRoutes registers a settings page with Get, Put, and Post (for HTML forms).
+func registerSettingsRoutes(r chi.Router, route string, get, update http.HandlerFunc) {
+	r.Get(route, get)
+	r.Put(route, update)
+	r.Post(route, update) // HTML forms can't send PUT
+}
+
+// registerFrontendRoutes registers common frontend public routes on the given router.
+func registerFrontendRoutes(r chi.Router, h *handler.FrontendHandler) {
+	r.Get(handler.RouteRoot, h.Home)
+	r.Get(handler.RouteSuffixSearch, h.Search)
+	r.Get(handler.RouteBlog, h.Blog)
+	r.Get(handler.RouteCategorySlug, h.Category)
+	r.Get(handler.RouteTagSlug, h.Tag)
+	r.Get(handler.RoutePageByID, h.PageByID)
+	r.Get(handler.RouteParamSlug, h.Page)
+}
+
 func main() {
 	// Parse CLI flags
 	showVersion := flag.Bool("version", false, "Show version information")
@@ -492,26 +510,16 @@ func run() error {
 		}
 
 		// Default language routes (no prefix)
-		r.Get(handler.RouteRoot, frontendHandler.Home)
+		// Specific routes first (before catch-all in registerFrontendRoutes)
 		r.Get("/sitemap.xml", frontendHandler.Sitemap)
 		r.Get("/robots.txt", frontendHandler.Robots)
 		r.Get("/.well-known/security.txt", frontendHandler.Security)
-		r.Get(handler.RouteSuffixSearch, frontendHandler.Search)
-		r.Get(handler.RouteBlog, frontendHandler.Blog)
-		r.Get(handler.RouteCategorySlug, frontendHandler.Category)
-		r.Get(handler.RouteTagSlug, frontendHandler.Tag)
-		r.Get(handler.RoutePageByID, frontendHandler.PageByID)
-		r.Get(handler.RouteParamSlug, frontendHandler.Page) // Must be last - catch-all for page slugs
+		// Common frontend routes (RouteParamSlug catch-all is registered last)
+		registerFrontendRoutes(r, frontendHandler)
 
 		// Language-prefixed routes (e.g., /ru/, /ru/page-slug)
 		r.Route("/{lang:[a-z]{2}}", func(r chi.Router) {
-			r.Get(handler.RouteRoot, frontendHandler.Home)
-			r.Get(handler.RouteSuffixSearch, frontendHandler.Search)
-			r.Get(handler.RouteBlog, frontendHandler.Blog)
-			r.Get(handler.RouteCategorySlug, frontendHandler.Category)
-			r.Get(handler.RouteTagSlug, frontendHandler.Tag)
-			r.Get(handler.RoutePageByID, frontendHandler.PageByID)
-			r.Get(handler.RouteParamSlug, frontendHandler.Page)
+			registerFrontendRoutes(r, frontendHandler)
 		})
 	})
 
@@ -636,9 +644,7 @@ func run() error {
 			r.Post(handler.RouteFormsID+"/submissions/export", formsHandler.ExportSubmissions)
 
 			// Theme settings (not activation - that's admin only)
-			r.Get(handler.RouteThemeSettings, themesHandler.Settings)
-			r.Put(handler.RouteThemeSettings, themesHandler.SaveSettings)
-			r.Post(handler.RouteThemeSettings, themesHandler.SaveSettings) // HTML forms can't send PUT
+			registerSettingsRoutes(r, handler.RouteThemeSettings, themesHandler.Settings, themesHandler.SaveSettings)
 
 			// Widget management routes
 			r.Get(handler.RouteWidgets, widgetsHandler.List)
@@ -668,9 +674,7 @@ func run() error {
 			r.Post(handler.RouteLanguagesID+"/default", languagesHandler.SetDefault)
 
 			// Configuration routes
-			r.Get(handler.RouteConfig, configHandler.List)
-			r.Put(handler.RouteConfig, configHandler.Update)
-			r.Post(handler.RouteConfig, configHandler.Update) // HTML forms can't send PUT
+			registerSettingsRoutes(r, handler.RouteConfig, configHandler.List, configHandler.Update)
 
 			// Theme management routes (activation is admin only)
 			r.Get("/themes", themesHandler.List)
