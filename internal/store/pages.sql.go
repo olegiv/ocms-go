@@ -1703,6 +1703,55 @@ func (q *Queries) SlugExistsExcluding(ctx context.Context, arg SlugExistsExcludi
 	return column_1, err
 }
 
+const slugOrAliasExists = `-- name: SlugOrAliasExists :one
+
+SELECT EXISTS(
+    SELECT 1 FROM pages p WHERE p.slug = ?
+    UNION ALL
+    SELECT 1 FROM page_aliases pa WHERE pa.alias = ?
+)
+`
+
+type SlugOrAliasExistsParams struct {
+	Slug  string `json:"slug"`
+	Alias string `json:"alias"`
+}
+
+// Cross-table uniqueness checks (slug vs page_aliases)
+func (q *Queries) SlugOrAliasExists(ctx context.Context, arg SlugOrAliasExistsParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, slugOrAliasExists, arg.Slug, arg.Alias)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const slugOrAliasExistsExcluding = `-- name: SlugOrAliasExistsExcluding :one
+SELECT EXISTS(
+    SELECT 1 FROM pages p WHERE p.slug = ? AND p.id != ?
+    UNION ALL
+    SELECT 1 FROM page_aliases pa WHERE pa.alias = ? AND pa.page_id != ?
+)
+`
+
+type SlugOrAliasExistsExcludingParams struct {
+	Slug   string `json:"slug"`
+	ID     int64  `json:"id"`
+	Alias  string `json:"alias"`
+	PageID int64  `json:"page_id"`
+}
+
+func (q *Queries) SlugOrAliasExistsExcluding(ctx context.Context, arg SlugOrAliasExistsExcludingParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, slugOrAliasExistsExcluding,
+		arg.Slug,
+		arg.ID,
+		arg.Alias,
+		arg.PageID,
+	)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const unpublishPage = `-- name: UnpublishPage :one
 UPDATE pages
 SET status = 'draft', published_at = NULL, updated_at = ?

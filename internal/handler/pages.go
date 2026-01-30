@@ -386,6 +386,7 @@ type PageFormData struct {
 	Categories    []store.Category   // Selected categories for the page
 	AllCategories []PageCategoryNode // All categories for selection (with tree structure)
 	FeaturedImage *FeaturedImageData
+	Aliases       []store.PageAlias // URL aliases for the page
 	Statuses      []string
 	Errors        map[string]string
 	FormValues    map[string]string
@@ -597,9 +598,10 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		// Page was created but version failed - log but don't fail the request
 	}
 
-	// Save tags and categories
+	// Save tags, categories, and aliases
 	h.savePageTags(r.Context(), newPage.ID, r.Form["tags[]"])
 	h.savePageCategories(r.Context(), newPage.ID, r.Form["categories[]"])
+	h.savePageAliases(r.Context(), newPage.ID, r.Form["aliases[]"])
 
 	slog.Info("page created", "page_id", newPage.ID, "slug", newPage.Slug, "created_by", middleware.GetUserID(r))
 
@@ -675,6 +677,13 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Load aliases for this page
+	aliases, err := h.queries.GetAliasesForPage(r.Context(), id)
+	if err != nil {
+		slog.Error("failed to get aliases for page", "error", err, "page_id", id)
+		aliases = []store.PageAlias{} // Continue with empty aliases on error
+	}
+
 	// Load language and translation info
 	langInfo := h.loadPageLanguageInfo(r.Context(), page)
 
@@ -684,6 +693,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		Categories:       categories,
 		AllCategories:    categoryTree,
 		FeaturedImage:    featuredImage,
+		Aliases:          aliases,
 		AllLanguages:     langInfo.AllLanguages,
 		Language:         langInfo.EntityLanguage,
 		Translations:     langInfo.Translations,
@@ -815,6 +825,12 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		slog.Error("failed to clear page categories", "error", err, "page_id", id)
 	}
 	h.savePageCategories(r.Context(), id, r.Form["categories[]"])
+
+	// Update aliases - clear existing and add new
+	if err = h.queries.ClearPageAliases(r.Context(), id); err != nil {
+		slog.Error("failed to clear page aliases", "error", err, "page_id", id)
+	}
+	h.savePageAliases(r.Context(), id, r.Form["aliases[]"])
 
 	slog.Info("page updated", "page_id", updatedPage.ID, "slug", updatedPage.Slug, "updated_by", middleware.GetUserID(r))
 
@@ -1302,18 +1318,25 @@ func validatePageTitle(title string) string {
 }
 
 // validatePageSlugCreate validates a page slug for creation.
+// Checks against both existing page slugs and page aliases.
 func (h *PagesHandler) validatePageSlugCreate(ctx context.Context, slug string) string {
 	return ValidateSlugWithChecker(slug, func() (int64, error) {
-		return h.queries.SlugExists(ctx, slug)
+		return h.queries.SlugOrAliasExists(ctx, store.SlugOrAliasExistsParams{
+			Slug:  slug,
+			Alias: slug,
+		})
 	})
 }
 
 // validatePageSlugUpdate validates the page slug for update (checks uniqueness excluding current page).
+// Checks against both existing page slugs and page aliases.
 func (h *PagesHandler) validatePageSlugUpdate(ctx context.Context, slug string, currentSlug string, pageID int64) string {
 	return ValidateSlugForUpdate(slug, currentSlug, func() (int64, error) {
-		return h.queries.SlugExistsExcluding(ctx, store.SlugExistsExcludingParams{
-			Slug: slug,
-			ID:   pageID,
+		return h.queries.SlugOrAliasExistsExcluding(ctx, store.SlugOrAliasExistsExcludingParams{
+			Slug:   slug,
+			ID:     pageID,
+			Alias:  slug,
+			PageID: pageID,
 		})
 	})
 }
@@ -1336,4 +1359,31 @@ func (h *PagesHandler) savePageCategories(ctx context.Context, pageID int64, cat
 			CategoryID: categoryID,
 		})
 	}, "page_categories")
+}
+
+// savePageAliases saves URL aliases for a page from form values.
+func (h *PagesHandler) savePageAliases(ctx context.Context, pageID int64, aliasStrs []string) {
+	now := time.Now()
+	for _, alias := range aliasStrs {
+		alias = strings.TrimSpace(alias)
+		if alias == "" {
+			continue
+		}
+		// Validate slug format
+		if !util.IsValidSlug(alias) {
+			slog.Warn("skipping invalid alias format", "page_id", pageID, "alias", alias)
+			continue
+		}
+		_, err := h.queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
+			PageID:    pageID,
+			Alias:     alias,
+			CreatedAt: now,
+		})
+		if err != nil {
+			slog.Error("failed to add alias to page",
+				"error", err,
+				"page_id", pageID,
+				"alias", alias)
+		}
+	}
 }

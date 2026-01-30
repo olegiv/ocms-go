@@ -433,6 +433,26 @@
             "translation": "Do not display the featured image on the page"
         },
         {
+            "id": "pages.aliases",
+            "message": "URL Aliases",
+            "translation": "URL Aliases"
+        },
+        {
+            "id": "pages.add_alias",
+            "message": "Add Alias",
+            "translation": "Add Alias"
+        },
+        {
+            "id": "pages.alias_placeholder",
+            "message": "old-page-url",
+            "translation": "old-page-url"
+        },
+        {
+            "id": "pages.aliases_hint",
+            "message": "Alternative URLs that redirect to this page (useful for preserving old URLs after renaming)",
+            "translation": "Alternative URLs that redirect to this page (useful for preserving old URLs after renaming)"
+        },
+        {
             "id": "categories.title",
             "message": "Categories",
             "translation": "Categories"

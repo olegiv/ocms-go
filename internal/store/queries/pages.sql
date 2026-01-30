@@ -48,6 +48,22 @@ SELECT EXISTS(SELECT 1 FROM pages WHERE slug = ?);
 -- name: SlugExistsExcluding :one
 SELECT EXISTS(SELECT 1 FROM pages WHERE slug = ? AND id != ?);
 
+-- Cross-table uniqueness checks (slug vs page_aliases)
+
+-- name: SlugOrAliasExists :one
+SELECT EXISTS(
+    SELECT 1 FROM pages p WHERE p.slug = ?
+    UNION ALL
+    SELECT 1 FROM page_aliases pa WHERE pa.alias = ?
+);
+
+-- name: SlugOrAliasExistsExcluding :one
+SELECT EXISTS(
+    SELECT 1 FROM pages p WHERE p.slug = ? AND p.id != ?
+    UNION ALL
+    SELECT 1 FROM page_aliases pa WHERE pa.alias = ? AND pa.page_id != ?
+);
+
 -- Page Version queries
 
 -- name: CreatePageVersion :one
