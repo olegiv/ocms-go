@@ -5463,6 +5463,21 @@
             "translation": "Информация о системе"
         },
         {
+            "id": "docs.ocms_version",
+            "message": "oCMS Version",
+            "translation": "Версия oCMS"
+        },
+        {
+            "id": "docs.git_commit",
+            "message": "Git Commit",
+            "translation": "Git коммит"
+        },
+        {
+            "id": "docs.build_time",
+            "message": "Build Time",
+            "translation": "Время сборки"
+        },
+        {
             "id": "docs.go_version",
             "message": "Go Version",
             "translation": "Версия Go"

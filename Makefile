@@ -13,7 +13,7 @@ GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME ?= $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 
 # Linker flags for version injection
-LDFLAGS_VERSION=-X main.version=$(VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.buildTime=$(BUILD_TIME)
+LDFLAGS_VERSION=-X main.appVersion=$(VERSION) -X main.appGitCommit=$(GIT_COMMIT) -X main.appBuildTime=$(BUILD_TIME)
 
 # Database migrations (using goose CLI)
 MIGRATIONS_DIR := internal/store/migrations
