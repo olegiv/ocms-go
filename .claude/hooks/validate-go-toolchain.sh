@@ -1,0 +1,1 @@
+../shared/stacks/go/hooks/validate-go-toolchain.sh
