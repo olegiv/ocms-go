@@ -256,6 +256,32 @@ func testHealthProbe(t *testing.T, path string, handlerFn func(http.ResponseWrit
 	}
 }
 
+// testNotReadyProbe tests the readiness probe with a closed database and returns the response.
+func testNotReadyProbe(t *testing.T, handler *HealthHandler, rawKey string) map[string]string {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+	if rawKey != "" {
+		addAPIKeyAuth(req, rawKey)
+	}
+	w := httptest.NewRecorder()
+
+	handler.Readiness(w, req)
+
+	assertStatus(t, w.Code, http.StatusServiceUnavailable)
+
+	var resp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp["status"] != "not_ready" {
+		t.Errorf("status = %q; want not_ready", resp["status"])
+	}
+
+	return resp
+}
+
 func TestHealthHandler_Liveness(t *testing.T) {
 	handler := newTestHealthHandler(t)
 	testHealthProbe(t, "/health/live", handler.Liveness, "alive")
@@ -272,21 +298,7 @@ func TestHealthHandler_Readiness_NotReady_Public(t *testing.T) {
 
 	_ = db.Close()
 
-	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
-	w := httptest.NewRecorder()
-
-	handler.Readiness(w, req)
-
-	assertStatus(t, w.Code, http.StatusServiceUnavailable)
-
-	var resp map[string]string
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to unmarshal response: %v", err)
-	}
-
-	if resp["status"] != "not_ready" {
-		t.Errorf("status = %q; want not_ready", resp["status"])
-	}
+	resp := testNotReadyProbe(t, handler, "")
 
 	// Public response should NOT contain error message
 	if _, ok := resp["message"]; ok {
@@ -301,25 +313,9 @@ func TestHealthHandler_Readiness_NotReady_Authenticated(t *testing.T) {
 	// Close DB after creating the API key
 	_ = handler.db.Close()
 
-	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
-	addAPIKeyAuth(req, rawKey)
-	w := httptest.NewRecorder()
-
-	handler.Readiness(w, req)
-
-	assertStatus(t, w.Code, http.StatusServiceUnavailable)
-
-	var resp map[string]string
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to unmarshal response: %v", err)
-	}
-
-	if resp["status"] != "not_ready" {
-		t.Errorf("status = %q; want not_ready", resp["status"])
-	}
-
 	// When DB is closed, API key validation also fails, so auth falls through
 	// This is expected: when the DB is down, authentication can't be verified
+	_ = testNotReadyProbe(t, handler, rawKey)
 }
 
 func TestHealthHandler_DiskCheck_Authenticated(t *testing.T) {
