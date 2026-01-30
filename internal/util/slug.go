@@ -78,3 +78,32 @@ func IsValidSlug(s string) bool {
 
 	return true
 }
+
+// IsValidAlias checks if a string is a valid alias format.
+// Aliases can contain path segments separated by forward slashes (e.g., "blog/post/55").
+// Each segment must be a valid slug: lowercase letters, numbers, and hyphens.
+func IsValidAlias(s string) bool {
+	if s == "" {
+		return false
+	}
+
+	// Check for leading or trailing slashes
+	if s[0] == '/' || s[len(s)-1] == '/' {
+		return false
+	}
+
+	// Check for consecutive slashes
+	if strings.Contains(s, "//") {
+		return false
+	}
+
+	// Split into segments and validate each
+	segments := strings.Split(s, "/")
+	for _, segment := range segments {
+		if !IsValidSlug(segment) {
+			return false
+		}
+	}
+
+	return true
+}

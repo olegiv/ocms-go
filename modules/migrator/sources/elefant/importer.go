@@ -544,6 +544,21 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 			_ = tracker.TrackImportedItem(ctx, s.Name(), "page", page.ID)
 		}
 
+		// Create page alias for old Elefant URL (blog/post/{id})
+		alias := fmt.Sprintf("blog/post/%d", post.ID)
+		_, aliasErr := queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
+			PageID:    page.ID,
+			Alias:     alias,
+			CreatedAt: now,
+		})
+		if aliasErr != nil {
+			// Log warning but continue - alias is not critical
+			slog.Warn("failed to create blog alias for page",
+				"page_id", page.ID,
+				"alias", alias,
+				"error", aliasErr)
+		}
+
 		// Set published_at if published
 		if status == "published" {
 			if _, err := queries.PublishPage(ctx, store.PublishPageParams{

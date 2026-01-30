@@ -2064,7 +2064,20 @@ func (h *FrontendHandler) render(w http.ResponseWriter, templateName string, dat
 }
 
 // renderNotFound renders the 404 page.
+// Before rendering 404, it checks if the requested path is a registered page alias.
+// If so, it redirects to the canonical page URL (HTTP 301).
 func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request) {
+	// Check if the path (without leading slash) is a page alias
+	path := strings.TrimPrefix(r.URL.Path, "/")
+	if path != "" {
+		aliasPage, aliasErr := h.queries.GetPublishedPageByAlias(r.Context(), path)
+		if aliasErr == nil {
+			// Alias found - redirect to canonical URL (HTTP 301 Moved Permanently)
+			http.Redirect(w, r, "/"+aliasPage.Slug, http.StatusMovedPermanently)
+			return
+		}
+	}
+
 	base := h.getBaseTemplateData(r, "Page Not Found", "")
 	base.BodyClass = "error-404"
 
