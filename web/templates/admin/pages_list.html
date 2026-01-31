@@ -34,27 +34,37 @@
     {{if .Data.AllCategories}}
     <div class="filter-group">
         <label class="filter-label">{{T .AdminLang "label.category"}}:</label>
-        <select class="form-select form-select-sm" onchange="window.location.href=this.value">
-            <option value="{{pagesListURL .Data.StatusFilter 0 .Data.SearchFilter 0}}">{{T .AdminLang "pages.all_categories"}}</option>
-            {{range .Data.AllCategories}}
-            <option value="{{pagesListURL $.Data.StatusFilter .Category.ID $.Data.SearchFilter 0}}" {{if eq $.Data.CategoryFilter .Category.ID}}selected{{end}}>
-                {{if gt .Depth 0}}{{repeat "— " .Depth}}{{end}}{{.Category.Name}}
-            </option>
-            {{end}}
-        </select>
+        <form action="/admin/pages" method="get" class="filter-form">
+            {{if .Data.StatusFilter}}<input type="hidden" name="status" value="{{.Data.StatusFilter}}">{{end}}
+            {{if .Data.SearchFilter}}<input type="hidden" name="search" value="{{.Data.SearchFilter}}">{{end}}
+            {{if .Data.LanguageFilter}}<input type="hidden" name="language" value="{{.Data.LanguageFilter}}">{{end}}
+            <select name="category" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">{{T .AdminLang "pages.all_categories"}}</option>
+                {{range .Data.AllCategories}}
+                <option value="{{.Category.ID}}" {{if eq $.Data.CategoryFilter .Category.ID}}selected{{end}}>
+                    {{if gt .Depth 0}}{{repeat "— " .Depth}}{{end}}{{.Category.Name}}
+                </option>
+                {{end}}
+            </select>
+        </form>
     </div>
     {{end}}
     {{if gt (len .Data.AllLanguages) 1}}
     <div class="filter-group">
         <label class="filter-label">{{T .AdminLang "label.language"}}:</label>
-        <select class="form-select form-select-sm" onchange="window.location.href=this.value">
-            <option value="/admin/pages?{{if .Data.StatusFilter}}status={{.Data.StatusFilter}}&{{end}}{{if gt .Data.CategoryFilter 0}}category={{.Data.CategoryFilter}}&{{end}}{{if .Data.SearchFilter}}search={{.Data.SearchFilter}}{{end}}">{{T .AdminLang "pages.all_languages"}}</option>
-            {{range .Data.AllLanguages}}
-            <option value="/admin/pages?{{if $.Data.StatusFilter}}status={{$.Data.StatusFilter}}&{{end}}{{if gt $.Data.CategoryFilter 0}}category={{$.Data.CategoryFilter}}&{{end}}language={{.Code}}{{if $.Data.SearchFilter}}&search={{$.Data.SearchFilter}}{{end}}" {{if eq $.Data.LanguageFilter .Code}}selected{{end}}>
-                {{.Name}} ({{.Code}})
-            </option>
-            {{end}}
-        </select>
+        <form action="/admin/pages" method="get" class="filter-form">
+            {{if .Data.StatusFilter}}<input type="hidden" name="status" value="{{.Data.StatusFilter}}">{{end}}
+            {{if gt .Data.CategoryFilter 0}}<input type="hidden" name="category" value="{{.Data.CategoryFilter}}">{{end}}
+            {{if .Data.SearchFilter}}<input type="hidden" name="search" value="{{.Data.SearchFilter}}">{{end}}
+            <select name="language" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">{{T .AdminLang "pages.all_languages"}}</option>
+                {{range .Data.AllLanguages}}
+                <option value="{{.Code}}" {{if eq $.Data.LanguageFilter .Code}}selected{{end}}>
+                    {{.Name}} ({{.Code}})
+                </option>
+                {{end}}
+            </select>
+        </form>
     </div>
     {{end}}
     <div class="filter-group filter-group-search">

@@ -189,10 +189,17 @@
     if (document.documentElement.dataset.lineNumbers === 'yes') {
         document.querySelectorAll('.dev-prose pre code').forEach(code => {
             const lines = code.textContent.split('\n');
-            const numbered = lines.map((line, i) => {
-                return `<span class="line-number">${i + 1}</span>${line}`;
-            }).join('\n');
-            code.innerHTML = numbered;
+            code.textContent = ''; // Clear safely
+            lines.forEach((line, i) => {
+                const lineNum = document.createElement('span');
+                lineNum.className = 'line-number';
+                lineNum.textContent = (i + 1).toString();
+                code.appendChild(lineNum);
+                code.appendChild(document.createTextNode(line));
+                if (i < lines.length - 1) {
+                    code.appendChild(document.createTextNode('\n'));
+                }
+            });
         });
     }
 
