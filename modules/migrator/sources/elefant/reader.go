@@ -10,10 +10,15 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
 )
+
+// validTablePrefix matches only safe SQL identifier characters.
+// CodeQL recognizes regexp.MustCompile + MatchString as a sanitizer.
+var validTablePrefix = regexp.MustCompile(`^[a-zA-Z0-9_]*$`)
 
 // Reader reads data from an Elefant CMS MySQL database.
 type Reader struct {
@@ -29,12 +34,10 @@ type Reader struct {
 
 // sanitizeTablePrefix validates that a table prefix contains only safe SQL identifier characters
 // and returns the sanitized value. This prevents SQL injection when the prefix is used in query building.
+// Uses regexp.MustCompile + MatchString pattern that CodeQL recognizes as a sanitizer.
 func sanitizeTablePrefix(prefix string) (string, error) {
-	for _, c := range prefix {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-			(c >= '0' && c <= '9') || c == '_') {
-			return "", fmt.Errorf("invalid table prefix: contains invalid character")
-		}
+	if !validTablePrefix.MatchString(prefix) {
+		return "", fmt.Errorf("invalid table prefix: contains invalid character")
 	}
 	return prefix, nil
 }
@@ -314,9 +317,15 @@ func (r *Reader) GetPostCount() (int, error) {
 
 // GetPublishedPostCount returns the number of published blog posts.
 func (r *Reader) GetPublishedPostCount() (int, error) {
+	// Sanitize prefix for SQL injection protection (CodeQL requires returned value)
+	safePrefix, err := sanitizeTablePrefix(r.prefix)
+	if err != nil {
+		return 0, fmt.Errorf("invalid table prefix: %w", err)
+	}
+
 	var count int
-	query := fmt.Sprintf(`SELECT COUNT(*) FROM %sblog_post WHERE published = 'yes'`, r.prefix)
-	err := r.db.QueryRow(query).Scan(&count)
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM %sblog_post WHERE published = 'yes'`, safePrefix)
+	err = r.db.QueryRow(query).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count published posts: %w", err)
 	}
