@@ -27,8 +27,25 @@ type Reader struct {
 	schemaDetected bool
 }
 
+// isValidTablePrefix validates that a table prefix contains only safe SQL identifier characters.
+// This prevents SQL injection when the prefix is used in query building.
+func isValidTablePrefix(prefix string) bool {
+	for _, c := range prefix {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '_') {
+			return false
+		}
+	}
+	return true
+}
+
 // NewReader creates a new Elefant database reader.
 func NewReader(dsn string, tablePrefix string) (*Reader, error) {
+	// Validate table prefix to prevent SQL injection
+	if !isValidTablePrefix(tablePrefix) {
+		return nil, fmt.Errorf("invalid table prefix: must contain only alphanumeric characters and underscores")
+	}
+
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
