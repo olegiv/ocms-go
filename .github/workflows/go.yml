@@ -17,12 +17,26 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version: '1.25.6'
 
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+        cache: 'npm'
+
+    - name: Install Dart Sass
+      run: npm install -g sass
+
+    - name: Build assets
+      run: make assets
+
     - name: Build
-      run: go build -v ./...
+      run: go build -v ./cmd/ocms
 
     - name: Test
       run: go test -v ./...
+      env:
+        OCMS_SESSION_SECRET: test-secret-key-32-bytes-long!!!
