@@ -204,7 +204,10 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 	return template.FuncMap{
 		"lower": strings.ToLower,
 		"upper": strings.ToUpper,
-		"now":   time.Now,
+		"now": time.Now,
+		"timeBefore": func(t1, t2 time.Time) bool {
+			return t1.Before(t2)
+		},
 		"formatDate": func(t time.Time) string {
 			return t.Format("Jan 2, 2006")
 		},

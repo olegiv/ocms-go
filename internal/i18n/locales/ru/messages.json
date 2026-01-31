@@ -2068,6 +2068,36 @@
             "translation": "Обновить API ключ"
         },
         {
+            "id": "api_keys.important",
+            "message": "Important",
+            "translation": "Важно"
+        },
+        {
+            "id": "api_keys.copy_warning",
+            "message": "Copy this key now. It will not be shown again.",
+            "translation": "Скопируйте этот ключ сейчас. Он больше не будет показан."
+        },
+        {
+            "id": "api_keys.create_new",
+            "message": "Create a new API key for external access",
+            "translation": "Создать новый API-ключ для внешнего доступа"
+        },
+        {
+            "id": "api_keys.expiration_date",
+            "message": "Expiration Date",
+            "translation": "Дата истечения"
+        },
+        {
+            "id": "api_keys.revoke_hint",
+            "message": "Uncheck to revoke this key",
+            "translation": "Снимите флажок, чтобы отозвать ключ"
+        },
+        {
+            "id": "api_keys.update",
+            "message": "Update API Key",
+            "translation": "Обновить API-ключ"
+        },
+        {
             "id": "languages.title",
             "message": "Languages",
             "translation": "Языки"

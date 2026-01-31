@@ -306,23 +306,31 @@ var allowedMediaMimeTypes = map[string]bool{
 
 // ScanMediaFiles scans the Elefant files directory for media files.
 // It returns a list of MediaFile structs for files that match allowed MIME types.
+// Note: filesPath comes from admin configuration, reducing injection risk,
+// but we still validate it for defense in depth.
 func ScanMediaFiles(filesPath string) ([]MediaFile, error) {
 	if filesPath == "" {
 		return nil, fmt.Errorf("files path is empty")
 	}
 
+	// Clean the path and check for traversal attempts
+	cleanPath := filepath.Clean(filesPath)
+	if strings.Contains(cleanPath, "..") {
+		return nil, fmt.Errorf("invalid files path: path traversal detected")
+	}
+
 	// Verify directory exists
-	info, err := os.Stat(filesPath)
+	info, err := os.Stat(cleanPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to access files directory: %w", err)
 	}
 	if !info.IsDir() {
-		return nil, fmt.Errorf("files path is not a directory: %s", filesPath)
+		return nil, fmt.Errorf("files path is not a directory: %s", cleanPath)
 	}
 
 	var files []MediaFile
 
-	err = filepath.Walk(filesPath, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(cleanPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -338,8 +346,8 @@ func ScanMediaFiles(filesPath string) ([]MediaFile, error) {
 			return nil
 		}
 
-		// Get relative path from filesPath
-		relPath, err := filepath.Rel(filesPath, path)
+		// Get relative path from cleanPath
+		relPath, err := filepath.Rel(cleanPath, path)
 		if err != nil {
 			relPath = filepath.Base(path)
 		}

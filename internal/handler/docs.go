@@ -134,6 +134,9 @@ func (h *DocsHandler) Guide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// filePath is safe because isValidDocsSlug() above validates that slug
+	// contains only [a-zA-Z0-9_-], preventing path traversal attacks.
+	// The slug cannot contain '.', '/', or '\' characters.
 	filePath := filepath.Join(h.docsDir, slug+".md")
 
 	content, err := os.ReadFile(filePath)
