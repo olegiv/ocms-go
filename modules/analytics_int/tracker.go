@@ -29,6 +29,10 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 	if !rw.wroteHeader {
 		rw.status = http.StatusOK
 		rw.wroteHeader = true
+		// If no Content-Type set, default to plain text to prevent XSS
+		if rw.ResponseWriter.Header().Get("Content-Type") == "" {
+			rw.ResponseWriter.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		}
 	}
 	return rw.ResponseWriter.Write(b)
 }

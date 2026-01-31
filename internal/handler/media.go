@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -765,7 +766,7 @@ func (h *MediaHandler) UpdateFolder(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Trigger", "folderUpdated")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(name))
+		_, _ = w.Write([]byte(html.EscapeString(name)))
 		return
 	}
 

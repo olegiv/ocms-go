@@ -71,6 +71,10 @@ func (tw *timeoutWriter) Write(b []byte) (int, error) {
 	defer tw.mu.Unlock()
 	if !tw.wroteHeader {
 		tw.wroteHeader = true
+		// If no Content-Type set, default to plain text to prevent XSS
+		if tw.ResponseWriter.Header().Get("Content-Type") == "" {
+			tw.ResponseWriter.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		}
 		tw.ResponseWriter.WriteHeader(http.StatusOK)
 	}
 	return tw.ResponseWriter.Write(b)
