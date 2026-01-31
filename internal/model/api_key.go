@@ -6,12 +6,15 @@ package model
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
+
+	"golang.org/x/crypto/argon2"
 )
 
 // API permissions
@@ -55,6 +58,15 @@ type APIKey struct {
 // Reduced from 8 to 4 to preserve more entropy in the key.
 const APIKeyPrefixLength = 4
 
+// Argon2 parameters for API key hashing (consistent with password.go).
+const (
+	apiKeyArgon2Time    = 1
+	apiKeyArgon2Memory  = 64 * 1024 // 64 MB
+	apiKeyArgon2Threads = 4
+	apiKeyArgon2KeyLen  = 32
+	apiKeyArgon2SaltLen = 16
+)
+
 // GenerateAPIKey generates a new random API key.
 // Returns the raw key (to show user once) and the key prefix.
 func GenerateAPIKey() (rawKey string, prefix string, err error) {
@@ -73,10 +85,64 @@ func GenerateAPIKey() (rawKey string, prefix string, err error) {
 	return rawKey, prefix, nil
 }
 
-// HashAPIKey creates a SHA-256 hash of the API key for storage.
-func HashAPIKey(key string) string {
-	hash := sha256.Sum256([]byte(key))
-	return hex.EncodeToString(hash[:])
+// HashAPIKey creates an Argon2id hash of the API key for storage.
+// Returns encoded hash string in format: $argon2id$v=19$m=65536,t=1,p=4$salt$hash
+func HashAPIKey(key string) (string, error) {
+	salt := make([]byte, apiKeyArgon2SaltLen)
+	if _, err := rand.Read(salt); err != nil {
+		return "", fmt.Errorf("generating salt: %w", err)
+	}
+
+	hash := argon2.IDKey([]byte(key), salt, apiKeyArgon2Time, apiKeyArgon2Memory,
+		apiKeyArgon2Threads, apiKeyArgon2KeyLen)
+
+	b64Salt := base64.RawStdEncoding.EncodeToString(salt)
+	b64Hash := base64.RawStdEncoding.EncodeToString(hash)
+
+	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
+		argon2.Version, apiKeyArgon2Memory, apiKeyArgon2Time, apiKeyArgon2Threads,
+		b64Salt, b64Hash), nil
+}
+
+// CheckAPIKeyHash verifies an API key against its Argon2id hash.
+// Uses constant-time comparison to prevent timing attacks.
+func CheckAPIKeyHash(key, encodedHash string) bool {
+	parts := strings.Split(encodedHash, "$")
+	if len(parts) != 6 || parts[1] != "argon2id" {
+		return false
+	}
+
+	var version int
+	if _, err := fmt.Sscanf(parts[2], "v=%d", &version); err != nil {
+		return false
+	}
+
+	var memory, time uint32
+	var threads uint8
+	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &time, &threads); err != nil {
+		return false
+	}
+
+	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
+	if err != nil {
+		return false
+	}
+
+	expectedHash, err := base64.RawStdEncoding.DecodeString(parts[5])
+	if err != nil {
+		return false
+	}
+
+	hash := argon2.IDKey([]byte(key), salt, time, memory, threads, uint32(len(expectedHash)))
+	return subtle.ConstantTimeCompare(hash, expectedHash) == 1
+}
+
+// ExtractAPIKeyPrefix extracts the prefix from a raw API key.
+func ExtractAPIKeyPrefix(rawKey string) string {
+	if len(rawKey) < APIKeyPrefixLength {
+		return rawKey
+	}
+	return rawKey[:APIKeyPrefixLength]
 }
 
 // GetPermissions parses the JSON permissions string into a slice.

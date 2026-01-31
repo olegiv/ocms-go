@@ -173,11 +173,19 @@ func (h *HealthHandler) isAuthenticated(r *http.Request) bool {
 	if authHeader != "" {
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
-			keyHash := model.HashAPIKey(parts[1])
-			apiKey, err := h.queries.GetAPIKeyByHash(r.Context(), keyHash)
-			if err == nil && apiKey.IsActive {
-				if !apiKey.ExpiresAt.Valid || !time.Now().After(apiKey.ExpiresAt.Time) {
-					return true
+			rawKey := parts[1]
+			prefix := model.ExtractAPIKeyPrefix(rawKey)
+			apiKeys, err := h.queries.GetAPIKeysByPrefix(r.Context(), prefix)
+			if err == nil && len(apiKeys) > 0 {
+				for i := range apiKeys {
+					if model.CheckAPIKeyHash(rawKey, apiKeys[i].KeyHash) {
+						if apiKeys[i].IsActive {
+							if !apiKeys[i].ExpiresAt.Valid || !time.Now().After(apiKeys[i].ExpiresAt.Time) {
+								return true
+							}
+						}
+						break
+					}
 				}
 			}
 		}

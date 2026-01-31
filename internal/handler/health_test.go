@@ -21,13 +21,20 @@ import (
 func createTestAPIKey(t *testing.T, h *HealthHandler) string {
 	t.Helper()
 
-	rawKey := "test-health-api-key-12345"
-	keyHash := model.HashAPIKey(rawKey)
+	rawKey, keyPrefix, err := model.GenerateAPIKey()
+	if err != nil {
+		t.Fatalf("GenerateAPIKey failed: %v", err)
+	}
 
-	_, err := h.queries.CreateAPIKey(context.Background(), store.CreateAPIKeyParams{
+	keyHash, err := model.HashAPIKey(rawKey)
+	if err != nil {
+		t.Fatalf("HashAPIKey failed: %v", err)
+	}
+
+	_, err = h.queries.CreateAPIKey(context.Background(), store.CreateAPIKeyParams{
 		Name:        "Health Test Key",
 		KeyHash:     keyHash,
-		KeyPrefix:   "test_",
+		KeyPrefix:   keyPrefix,
 		Permissions: `["pages:read"]`,
 		IsActive:    true,
 		CreatedBy:   1,

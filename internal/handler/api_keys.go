@@ -174,7 +174,12 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Hash the key for storage
-	keyHash := model.HashAPIKey(rawKey)
+	keyHash, err := model.HashAPIKey(rawKey)
+	if err != nil {
+		slog.Error("failed to hash API key", "error", err)
+		flashError(w, r, h.renderer, redirectAdminAPIKeysNew, "Error creating API key")
+		return
+	}
 
 	// Convert permissions to JSON
 	permissionsJSON := model.PermissionsToJSON(permissions)
