@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -24,6 +25,7 @@ type MenuItem struct {
 	PageSlug string
 	CSSClass string
 	IsActive bool
+	Position int
 	Children []MenuItem
 }
 
@@ -217,6 +219,7 @@ func (s *MenuService) buildMenuTree(items []store.ListMenuItemsWithPageRow) []Me
 			Title:    item.Title,
 			Target:   "_self",
 			IsActive: item.IsActive,
+			Position: int(item.Position),
 			Children: []MenuItem{},
 		}
 
@@ -257,6 +260,13 @@ func (s *MenuService) buildMenuTree(items []store.ListMenuItemsWithPageRow) []Me
 		}
 	}
 
+	// Sort children by position for deterministic ordering
+	for _, item := range itemMap {
+		sort.Slice(item.Children, func(i, j int) bool {
+			return item.Children[i].Position < item.Children[j].Position
+		})
+	}
+
 	// Third pass: recursively copy children to ensure deep nesting works
 	// This is needed because when we appended children above, grandchildren weren't populated yet
 	var copyWithChildren func(id int64) MenuItem
@@ -278,6 +288,11 @@ func (s *MenuService) buildMenuTree(items []store.ListMenuItemsWithPageRow) []Me
 	for _, id := range rootIDs {
 		roots = append(roots, copyWithChildren(id))
 	}
+
+	// Sort roots by position for deterministic ordering
+	sort.Slice(roots, func(i, j int) bool {
+		return roots[i].Position < roots[j].Position
+	})
 
 	return roots
 }
