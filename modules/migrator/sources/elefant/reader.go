@@ -27,23 +27,23 @@ type Reader struct {
 	schemaDetected bool
 }
 
-// isValidTablePrefix validates that a table prefix contains only safe SQL identifier characters.
-// This prevents SQL injection when the prefix is used in query building.
-func isValidTablePrefix(prefix string) bool {
+// sanitizeTablePrefix validates that a table prefix contains only safe SQL identifier characters
+// and returns the sanitized value. This prevents SQL injection when the prefix is used in query building.
+func sanitizeTablePrefix(prefix string) (string, error) {
 	for _, c := range prefix {
 		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
 			(c >= '0' && c <= '9') || c == '_') {
-			return false
+			return "", fmt.Errorf("invalid table prefix: contains invalid character")
 		}
 	}
-	return true
+	return prefix, nil
 }
 
 // NewReader creates a new Elefant database reader.
 func NewReader(dsn string, tablePrefix string) (*Reader, error) {
 	// Validate table prefix to prevent SQL injection
-	if !isValidTablePrefix(tablePrefix) {
-		return nil, fmt.Errorf("invalid table prefix: must contain only alphanumeric characters and underscores")
+	if _, err := sanitizeTablePrefix(tablePrefix); err != nil {
+		return nil, fmt.Errorf("invalid table prefix: %w", err)
 	}
 
 	db, err := sql.Open("mysql", dsn)
@@ -173,9 +173,10 @@ func (r *Reader) scanBlogPost(rows *sql.Rows) (BlogPost, error) {
 
 // queryBlogPosts executes a blog post query and returns the results.
 func (r *Reader) queryBlogPosts(whereClause string) ([]BlogPost, error) {
-	// Validate prefix inline for SQL injection protection (CodeQL requirement)
-	if !isValidTablePrefix(r.prefix) {
-		return nil, fmt.Errorf("invalid table prefix")
+	// Sanitize prefix for SQL injection protection (CodeQL requires returned value)
+	safePrefix, err := sanitizeTablePrefix(r.prefix)
+	if err != nil {
+		return nil, fmt.Errorf("invalid table prefix: %w", err)
 	}
 
 	// Detect schema to know which columns exist
@@ -184,7 +185,7 @@ func (r *Reader) queryBlogPosts(whereClause string) ([]BlogPost, error) {
 	}
 
 	cols := r.buildBlogPostColumns()
-	query := fmt.Sprintf(`SELECT %s FROM %sblog_post%s ORDER BY ts DESC`, cols, r.prefix, whereClause)
+	query := fmt.Sprintf(`SELECT %s FROM %sblog_post%s ORDER BY ts DESC`, cols, safePrefix, whereClause)
 
 	rows, err := r.db.Query(query)
 	if err != nil {
@@ -224,12 +225,13 @@ func (r *Reader) GetPublishedBlogPosts() ([]BlogPost, error) {
 
 // GetTags retrieves all unique tags from the blog_tag table.
 func (r *Reader) GetTags() ([]BlogTag, error) {
-	// Validate prefix inline for SQL injection protection (CodeQL requirement)
-	if !isValidTablePrefix(r.prefix) {
-		return nil, fmt.Errorf("invalid table prefix")
+	// Sanitize prefix for SQL injection protection (CodeQL requires returned value)
+	safePrefix, err := sanitizeTablePrefix(r.prefix)
+	if err != nil {
+		return nil, fmt.Errorf("invalid table prefix: %w", err)
 	}
 
-	query := fmt.Sprintf(`SELECT id FROM %sblog_tag ORDER BY id`, r.prefix)
+	query := fmt.Sprintf(`SELECT id FROM %sblog_tag ORDER BY id`, safePrefix)
 
 	rows, err := r.db.Query(query)
 	if err != nil {
@@ -259,12 +261,13 @@ func (r *Reader) GetTags() ([]BlogTag, error) {
 
 // GetUsers retrieves all users from the database.
 func (r *Reader) GetUsers() ([]User, error) {
-	// Validate prefix inline for SQL injection protection (CodeQL requirement)
-	if !isValidTablePrefix(r.prefix) {
-		return nil, fmt.Errorf("invalid table prefix")
+	// Sanitize prefix for SQL injection protection (CodeQL requires returned value)
+	safePrefix, err := sanitizeTablePrefix(r.prefix)
+	if err != nil {
+		return nil, fmt.Errorf("invalid table prefix: %w", err)
 	}
 
-	query := fmt.Sprintf(`SELECT id, email, name FROM %suser ORDER BY id`, r.prefix)
+	query := fmt.Sprintf(`SELECT id, email, name FROM %suser ORDER BY id`, safePrefix)
 
 	rows, err := r.db.Query(query)
 	if err != nil {
@@ -294,14 +297,15 @@ func (r *Reader) GetUsers() ([]User, error) {
 
 // GetPostCount returns the total number of blog posts.
 func (r *Reader) GetPostCount() (int, error) {
-	// Validate prefix inline for SQL injection protection (CodeQL requirement)
-	if !isValidTablePrefix(r.prefix) {
-		return 0, fmt.Errorf("invalid table prefix")
+	// Sanitize prefix for SQL injection protection (CodeQL requires returned value)
+	safePrefix, err := sanitizeTablePrefix(r.prefix)
+	if err != nil {
+		return 0, fmt.Errorf("invalid table prefix: %w", err)
 	}
 
 	var count int
-	query := fmt.Sprintf(`SELECT COUNT(*) FROM %sblog_post`, r.prefix)
-	err := r.db.QueryRow(query).Scan(&count)
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM %sblog_post`, safePrefix)
+	err = r.db.QueryRow(query).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count posts: %w", err)
 	}
@@ -321,14 +325,15 @@ func (r *Reader) GetPublishedPostCount() (int, error) {
 
 // GetTagCount returns the total number of tags.
 func (r *Reader) GetTagCount() (int, error) {
-	// Validate prefix inline for SQL injection protection (CodeQL requirement)
-	if !isValidTablePrefix(r.prefix) {
-		return 0, fmt.Errorf("invalid table prefix")
+	// Sanitize prefix for SQL injection protection (CodeQL requires returned value)
+	safePrefix, err := sanitizeTablePrefix(r.prefix)
+	if err != nil {
+		return 0, fmt.Errorf("invalid table prefix: %w", err)
 	}
 
 	var count int
-	query := fmt.Sprintf(`SELECT COUNT(*) FROM %sblog_tag`, r.prefix)
-	err := r.db.QueryRow(query).Scan(&count)
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM %sblog_tag`, safePrefix)
+	err = r.db.QueryRow(query).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count tags: %w", err)
 	}
