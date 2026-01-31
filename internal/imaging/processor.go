@@ -90,8 +90,8 @@ func (p *Processor) ProcessImage(reader io.Reader, uuid, filename string) (*Proc
 	}
 
 	// Save the processed original
-	originalsDir := filepath.Join(p.uploadDir, "originals", uuid)
-	filePath, err := saveImageFile(originalsDir, filename, processed)
+	subDir := filepath.Join("originals", uuid)
+	filePath, err := saveImageFile(p.uploadDir, subDir, filename, processed)
 	if err != nil {
 		return nil, fmt.Errorf("failed to save original image: %w", err)
 	}
@@ -148,8 +148,8 @@ func (p *Processor) CreateVariant(sourcePath, uuid, filename string, config mode
 	}
 
 	// Save the variant
-	variantDir := filepath.Join(p.uploadDir, variantType, uuid)
-	variantPath, err := saveImageFile(variantDir, filename, processed)
+	variantSubDir := filepath.Join(variantType, uuid)
+	variantPath, err := saveImageFile(p.uploadDir, variantSubDir, filename, processed)
 	if err != nil {
 		return nil, fmt.Errorf("failed to save %s variant: %w", variantType, err)
 	}
@@ -381,22 +381,35 @@ func formatToMimeType(format string) string {
 }
 
 // saveImageFile creates the directory if needed and saves image data to a file.
-// The filename is sanitized to prevent path traversal attacks.
-func saveImageFile(dir, filename string, data []byte) (string, error) {
+// The filename is sanitized and the target directory is validated to be within baseDir.
+func saveImageFile(baseDir, subDir, filename string, data []byte) (string, error) {
 	// Sanitize filename to prevent path traversal
 	safeFilename := filepath.Base(filename)
 	if safeFilename == "." || safeFilename == ".." || safeFilename == "" {
 		return "", fmt.Errorf("invalid filename")
 	}
 
-	// Clean the directory path
-	cleanDir := filepath.Clean(dir)
+	// Build the target directory and validate it's within baseDir
+	targetDir := filepath.Join(baseDir, subDir)
+	absBase, err := filepath.Abs(baseDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve base directory: %w", err)
+	}
+	absTarget, err := filepath.Abs(targetDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve target directory: %w", err)
+	}
 
-	if err := os.MkdirAll(cleanDir, 0755); err != nil {
+	// Ensure target is within base directory (prevents path traversal)
+	if !strings.HasPrefix(absTarget, absBase+string(filepath.Separator)) && absTarget != absBase {
+		return "", fmt.Errorf("path traversal detected")
+	}
+
+	if err := os.MkdirAll(absTarget, 0755); err != nil {
 		return "", fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	filePath := filepath.Join(cleanDir, safeFilename)
+	filePath := filepath.Join(absTarget, safeFilename)
 	if err := os.WriteFile(filePath, data, 0644); err != nil {
 		return "", fmt.Errorf("failed to save image: %w", err)
 	}
