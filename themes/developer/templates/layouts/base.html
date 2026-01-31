@@ -15,12 +15,14 @@
     <meta property="og:title" content="{{if .Title}}{{.Title}}{{else}}{{.SiteName}}{{end}}">
     <meta property="og:site_name" content="{{.SiteName}}">
     {{if .SiteURL}}<meta property="og:url" content="{{.SiteURL}}{{.RequestURI}}">{{end}}
-    {{if .FeaturedImage}}<meta property="og:image" content="{{.FeaturedImage}}">{{end}}
+    {{if .OGImage}}<meta property="og:image" content="{{.OGImage}}">{{else if .FeaturedImage}}<meta property="og:image" content="{{.FeaturedImage}}">{{end}}
+    {{if .MetaDescription}}<meta property="og:description" content="{{.MetaDescription}}">{{end}}
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{if .Title}}{{.Title}}{{else}}{{.SiteName}}{{end}}">
     {{if .MetaDescription}}<meta name="twitter:description" content="{{.MetaDescription}}">{{end}}
+    {{if .OGImage}}<meta name="twitter:image" content="{{.OGImage}}">{{else if .FeaturedImage}}<meta name="twitter:image" content="{{.FeaturedImage}}">{{end}}
 
     <!-- Canonical URL -->
     {{if .Canonical}}<link rel="canonical" href="{{.Canonical}}">{{end}}

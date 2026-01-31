@@ -3053,6 +3053,16 @@
             "translation": "Полный URL вашего сайта"
         },
         {
+            "id": "config.default_og_image",
+            "message": "Default OG Image",
+            "translation": "OG-изображение по умолчанию"
+        },
+        {
+            "id": "config.default_og_image_hint",
+            "message": "Default Open Graph image URL for social sharing (1200x630px recommended)",
+            "translation": "URL изображения Open Graph для соцсетей (рекомендуется 1200x630px)"
+        },
+        {
             "id": "config.posts_per_page",
             "message": "Posts Per Page",
             "translation": "Записей на странице"

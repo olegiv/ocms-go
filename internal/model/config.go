@@ -19,6 +19,8 @@ const (
 const (
 	ConfigKeySiteName        = "site_name"
 	ConfigKeySiteDescription = "site_description"
+	ConfigKeySiteURL         = "site_url"
+	ConfigKeyDefaultOGImage  = "default_og_image"
 	ConfigKeyAdminEmail      = "admin_email"
 	ConfigKeyPostsPerPage    = "posts_per_page"
 	ConfigKeyPoweredBy       = "powered_by"

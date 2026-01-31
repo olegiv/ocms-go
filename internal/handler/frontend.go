@@ -121,12 +121,13 @@ type PaginationPage struct {
 
 // SiteData holds site-wide data for templates.
 type SiteData struct {
-	SiteName    string
-	Description string
-	URL         string
-	Theme       *theme.Config
-	Settings    map[string]string
-	CurrentYear int
+	SiteName       string
+	Description    string
+	URL            string
+	DefaultOGImage string
+	Theme          *theme.Config
+	Settings       map[string]string
+	CurrentYear    int
 }
 
 // BaseTemplateData contains common fields expected by all frontend templates.
@@ -629,6 +630,7 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 		SiteName:        base.SiteName,
 		SiteURL:         base.SiteURL,
 		SiteDescription: base.Site.Description,
+		DefaultOGImage:  base.Site.DefaultOGImage,
 	}
 
 	var authorName string
@@ -1574,7 +1576,10 @@ func (h *FrontendHandler) getSiteData(ctx context.Context) SiteData {
 			site.Description = desc
 		}
 		if url, err := h.cacheManager.GetConfig(ctx, "site_url"); err == nil && url != "" {
-			site.URL = url
+			site.URL = strings.TrimSuffix(url, "/")
+		}
+		if ogImage, err := h.cacheManager.GetConfig(ctx, "default_og_image"); err == nil && ogImage != "" {
+			site.DefaultOGImage = ogImage
 		}
 	} else {
 		// Fallback to direct DB queries if cache not available
@@ -1585,7 +1590,10 @@ func (h *FrontendHandler) getSiteData(ctx context.Context) SiteData {
 			site.Description = cfg.Value
 		}
 		if cfg, err := h.queries.GetConfigByKey(ctx, "site_url"); err == nil {
-			site.URL = cfg.Value
+			site.URL = strings.TrimSuffix(cfg.Value, "/")
+		}
+		if cfg, err := h.queries.GetConfigByKey(ctx, "default_og_image"); err == nil && cfg.Value != "" {
+			site.DefaultOGImage = cfg.Value
 		}
 	}
 
@@ -1627,6 +1635,7 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		SiteName:        site.SiteName,
 		SiteTagline:     site.Description,
 		SiteURL:         site.URL,
+		OGImage:         site.DefaultOGImage, // Default OG image for all pages
 		RequestURI:      r.URL.RequestURI(),
 		CurrentPath:     r.URL.Path,
 		Year:            site.CurrentYear,

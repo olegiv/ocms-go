@@ -27,10 +27,12 @@ import (
 var configKeyOrder = map[string]int{
 	model.ConfigKeySiteName:        1,
 	model.ConfigKeySiteDescription: 2,
-	model.ConfigKeyCopyright:       3,
-	model.ConfigKeyPoweredBy:       4,
-	model.ConfigKeyPostsPerPage:    5,
-	model.ConfigKeyAdminEmail:      6,
+	model.ConfigKeySiteURL:         3,
+	model.ConfigKeyDefaultOGImage:  4,
+	model.ConfigKeyCopyright:       5,
+	model.ConfigKeyPoweredBy:       6,
+	model.ConfigKeyPostsPerPage:    7,
+	model.ConfigKeyAdminEmail:      8,
 }
 
 // sortConfigs sorts config items according to configKeyOrder.
