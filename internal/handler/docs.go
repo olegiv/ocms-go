@@ -134,6 +134,12 @@ func (h *DocsHandler) Guide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Additional inline validation for CodeQL (isValidDocsSlug already ensures this)
+	if strings.Contains(slug, "..") || strings.Contains(slug, "/") || strings.Contains(slug, "\\") {
+		http.NotFound(w, r)
+		return
+	}
+
 	// filePath is safe because isValidDocsSlug() above validates that slug
 	// contains only [a-zA-Z0-9_-], preventing path traversal attacks.
 	// The slug cannot contain '.', '/', or '\' characters.

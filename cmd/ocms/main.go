@@ -877,6 +877,13 @@ func run() error {
 			return
 		}
 
+		// Verify containment using filepath.Rel (CodeQL-recognized pattern)
+		rel, err := filepath.Rel(absStaticPath, absFilePath)
+		if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
+			http.NotFound(w, r)
+			return
+		}
+
 		http.ServeFile(w, r, absFilePath)
 	})
 
