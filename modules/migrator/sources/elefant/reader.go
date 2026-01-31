@@ -173,6 +173,11 @@ func (r *Reader) scanBlogPost(rows *sql.Rows) (BlogPost, error) {
 
 // queryBlogPosts executes a blog post query and returns the results.
 func (r *Reader) queryBlogPosts(whereClause string) ([]BlogPost, error) {
+	// Validate prefix inline for SQL injection protection (CodeQL requirement)
+	if !isValidTablePrefix(r.prefix) {
+		return nil, fmt.Errorf("invalid table prefix")
+	}
+
 	// Detect schema to know which columns exist
 	if err := r.detectColumns(); err != nil {
 		return nil, fmt.Errorf("failed to detect schema: %w", err)
@@ -219,6 +224,11 @@ func (r *Reader) GetPublishedBlogPosts() ([]BlogPost, error) {
 
 // GetTags retrieves all unique tags from the blog_tag table.
 func (r *Reader) GetTags() ([]BlogTag, error) {
+	// Validate prefix inline for SQL injection protection (CodeQL requirement)
+	if !isValidTablePrefix(r.prefix) {
+		return nil, fmt.Errorf("invalid table prefix")
+	}
+
 	query := fmt.Sprintf(`SELECT id FROM %sblog_tag ORDER BY id`, r.prefix)
 
 	rows, err := r.db.Query(query)
@@ -249,6 +259,11 @@ func (r *Reader) GetTags() ([]BlogTag, error) {
 
 // GetUsers retrieves all users from the database.
 func (r *Reader) GetUsers() ([]User, error) {
+	// Validate prefix inline for SQL injection protection (CodeQL requirement)
+	if !isValidTablePrefix(r.prefix) {
+		return nil, fmt.Errorf("invalid table prefix")
+	}
+
 	query := fmt.Sprintf(`SELECT id, email, name FROM %suser ORDER BY id`, r.prefix)
 
 	rows, err := r.db.Query(query)
@@ -279,6 +294,11 @@ func (r *Reader) GetUsers() ([]User, error) {
 
 // GetPostCount returns the total number of blog posts.
 func (r *Reader) GetPostCount() (int, error) {
+	// Validate prefix inline for SQL injection protection (CodeQL requirement)
+	if !isValidTablePrefix(r.prefix) {
+		return 0, fmt.Errorf("invalid table prefix")
+	}
+
 	var count int
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM %sblog_post`, r.prefix)
 	err := r.db.QueryRow(query).Scan(&count)
@@ -301,6 +321,11 @@ func (r *Reader) GetPublishedPostCount() (int, error) {
 
 // GetTagCount returns the total number of tags.
 func (r *Reader) GetTagCount() (int, error) {
+	// Validate prefix inline for SQL injection protection (CodeQL requirement)
+	if !isValidTablePrefix(r.prefix) {
+		return 0, fmt.Errorf("invalid table prefix")
+	}
+
 	var count int
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM %sblog_tag`, r.prefix)
 	err := r.db.QueryRow(query).Scan(&count)
