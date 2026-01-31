@@ -329,6 +329,10 @@ func encodeImage(img image.Image, format string, quality int) ([]byte, error) {
 // detectFormat detects the image format from raw bytes.
 func detectFormat(data []byte) string {
 	contentType := http.DetectContentType(data)
+	// Explicitly reject TIFF (CVE-2023-36308 in disintegration/imaging)
+	if strings.Contains(contentType, "tiff") {
+		return ""
+	}
 	switch {
 	case strings.Contains(contentType, "jpeg"):
 		return "jpeg"
