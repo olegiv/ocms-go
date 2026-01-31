@@ -381,11 +381,22 @@ func formatToMimeType(format string) string {
 }
 
 // saveImageFile creates the directory if needed and saves image data to a file.
+// The filename is sanitized to prevent path traversal attacks.
 func saveImageFile(dir, filename string, data []byte) (string, error) {
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	// Sanitize filename to prevent path traversal
+	safeFilename := filepath.Base(filename)
+	if safeFilename == "." || safeFilename == ".." || safeFilename == "" {
+		return "", fmt.Errorf("invalid filename")
+	}
+
+	// Clean the directory path
+	cleanDir := filepath.Clean(dir)
+
+	if err := os.MkdirAll(cleanDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create directory: %w", err)
 	}
-	filePath := filepath.Join(dir, filename)
+
+	filePath := filepath.Join(cleanDir, safeFilename)
 	if err := os.WriteFile(filePath, data, 0644); err != nil {
 		return "", fmt.Errorf("failed to save image: %w", err)
 	}

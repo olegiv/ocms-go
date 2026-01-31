@@ -2068,6 +2068,36 @@
             "translation": "Update API Key"
         },
         {
+            "id": "api_keys.important",
+            "message": "Important",
+            "translation": "Important"
+        },
+        {
+            "id": "api_keys.copy_warning",
+            "message": "Copy this key now. It will not be shown again.",
+            "translation": "Copy this key now. It will not be shown again."
+        },
+        {
+            "id": "api_keys.create_new",
+            "message": "Create a new API key for external access",
+            "translation": "Create a new API key for external access"
+        },
+        {
+            "id": "api_keys.expiration_date",
+            "message": "Expiration Date",
+            "translation": "Expiration Date"
+        },
+        {
+            "id": "api_keys.revoke_hint",
+            "message": "Uncheck to revoke this key",
+            "translation": "Uncheck to revoke this key"
+        },
+        {
+            "id": "api_keys.update",
+            "message": "Update API Key",
+            "translation": "Update API Key"
+        },
+        {
             "id": "languages.title",
             "message": "Languages",
             "translation": "Languages"

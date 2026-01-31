@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -840,10 +841,42 @@ func run() error {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 		w.Header().Set("Cache-Control", "public, max-age=2592000")
-		// Strip the prefix to get the file path
+
+		// Strip the prefix to get the requested file path
 		path := r.URL.Path
 		prefix := fmt.Sprintf("/themes/%s/static/", themeName)
-		filePath := filepath.Join(thm.StaticPath, path[len(prefix):])
+		requestedPath := path[len(prefix):]
+
+		// Clean the path to resolve any .. sequences
+		cleanPath := filepath.Clean(requestedPath)
+
+		// Reject paths that try to escape (start with .. or are absolute)
+		if strings.HasPrefix(cleanPath, "..") || filepath.IsAbs(cleanPath) {
+			http.NotFound(w, r)
+			return
+		}
+
+		// Construct full path
+		filePath := filepath.Join(thm.StaticPath, cleanPath)
+
+		// Verify the resolved path is within the static directory
+		absStaticPath, err := filepath.Abs(thm.StaticPath)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		absFilePath, err := filepath.Abs(filePath)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+
+		// Check that file is within static directory
+		if !strings.HasPrefix(absFilePath, absStaticPath+string(filepath.Separator)) && absFilePath != absStaticPath {
+			http.NotFound(w, r)
+			return
+		}
+
 		http.ServeFile(w, r, filePath)
 	})
 

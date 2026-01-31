@@ -49,7 +49,7 @@
                     </td>
                     <td>
                         {{if .IsActive}}
-                            {{if and .ExpiresAt.Valid (lt .ExpiresAt.Time now)}}
+                            {{if and .ExpiresAt.Valid (timeBefore .ExpiresAt.Time now)}}
                             <span class="badge badge-warning">{{T $.AdminLang "api_keys.expired"}}</span>
                             {{else}}
                             <span class="badge badge-success">{{T $.AdminLang "label.active"}}</span>

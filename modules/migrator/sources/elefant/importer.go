@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -436,15 +437,34 @@ func (s *Source) importMedia(ctx context.Context, queries *store.Queries, filesP
 }
 
 // saveNonImageFile saves a non-image file to the uploads directory.
+// The filename is sanitized to prevent path traversal attacks.
 func (s *Source) saveNonImageFile(src *os.File, uploadDir, fileUUID, filename string) error {
-	// Create directory structure
-	destDir := fmt.Sprintf("%s/originals/%s", uploadDir, fileUUID)
+	// Sanitize filename to prevent path traversal (e.g., "../../../etc/passwd")
+	safeFilename, err := util.SanitizeFilename(filename)
+	if err != nil {
+		return fmt.Errorf("invalid filename %q: %w", filename, err)
+	}
+
+	// Create directory structure using safe path construction
+	destDir := filepath.Join(uploadDir, "originals", fileUUID)
+
+	// Validate destination is within upload directory
+	if err := util.ValidatePathWithinBase(uploadDir, destDir); err != nil {
+		return fmt.Errorf("invalid destination directory: %w", err)
+	}
+
 	if err := os.MkdirAll(destDir, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// Create destination file
-	destPath := fmt.Sprintf("%s/%s", destDir, filename)
+	// Create destination file with sanitized filename
+	destPath := filepath.Join(destDir, safeFilename)
+
+	// Double-check the final path is still within uploadDir
+	if err := util.ValidatePathWithinBase(uploadDir, destPath); err != nil {
+		return fmt.Errorf("invalid destination path: %w", err)
+	}
+
 	dest, err := os.Create(destPath)
 	if err != nil {
 		return fmt.Errorf("failed to create destination file: %w", err)
