@@ -107,7 +107,10 @@ func insertTestAPIKey(t *testing.T, db *sql.DB, name string, permissions []strin
 	if err != nil {
 		t.Fatalf("failed to generate API key: %v", err)
 	}
-	keyHash := model.HashAPIKey(rawKey)
+	keyHash, err := model.HashAPIKey(rawKey)
+	if err != nil {
+		t.Fatalf("failed to hash API key: %v", err)
+	}
 
 	permJSON, _ := json.Marshal(permissions)
 

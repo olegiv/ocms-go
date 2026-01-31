@@ -172,6 +172,45 @@ func (q *Queries) GetAPIKeyByPrefix(ctx context.Context, keyPrefix string) (ApiK
 	return i, err
 }
 
+const getAPIKeysByPrefix = `-- name: GetAPIKeysByPrefix :many
+SELECT id, name, key_hash, key_prefix, permissions, last_used_at, expires_at, is_active, created_by, created_at, updated_at FROM api_keys WHERE key_prefix = ? AND is_active = 1
+`
+
+func (q *Queries) GetAPIKeysByPrefix(ctx context.Context, keyPrefix string) ([]ApiKey, error) {
+	rows, err := q.db.QueryContext(ctx, getAPIKeysByPrefix, keyPrefix)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ApiKey{}
+	for rows.Next() {
+		var i ApiKey
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.KeyHash,
+			&i.KeyPrefix,
+			&i.Permissions,
+			&i.LastUsedAt,
+			&i.ExpiresAt,
+			&i.IsActive,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAPIKeys = `-- name: ListAPIKeys :many
 SELECT id, name, key_hash, key_prefix, permissions, last_used_at, expires_at, is_active, created_by, created_at, updated_at FROM api_keys ORDER BY created_at DESC LIMIT ? OFFSET ?
 `

@@ -43,23 +43,138 @@ func TestGenerateAPIKey(t *testing.T) {
 
 func TestHashAPIKey(t *testing.T) {
 	key := "test-api-key-12345"
-	hash := HashAPIKey(key)
-
-	// Hash should be 64 characters (SHA-256 hex)
-	if len(hash) != 64 {
-		t.Errorf("HashAPIKey() length = %d, want 64", len(hash))
+	hash, err := HashAPIKey(key)
+	if err != nil {
+		t.Fatalf("HashAPIKey() error = %v", err)
 	}
 
-	// Same input should produce same hash
-	hash2 := HashAPIKey(key)
-	if hash != hash2 {
-		t.Error("HashAPIKey() is not deterministic")
+	// Hash should be in Argon2id format: $argon2id$v=19$m=65536,t=1,p=4$salt$hash
+	if !strings.HasPrefix(hash, "$argon2id$") {
+		t.Errorf("HashAPIKey() = %q, want prefix $argon2id$", hash)
 	}
 
-	// Different input should produce different hash
-	hash3 := HashAPIKey("different-key")
-	if hash == hash3 {
-		t.Error("HashAPIKey() produced same hash for different inputs")
+	// Hash should be around 97 characters for default parameters
+	if len(hash) < 80 || len(hash) > 120 {
+		t.Errorf("HashAPIKey() length = %d, expected between 80 and 120", len(hash))
+	}
+
+	// Same input produces DIFFERENT hashes (due to random salt)
+	hash2, err := HashAPIKey(key)
+	if err != nil {
+		t.Fatalf("HashAPIKey() second call error = %v", err)
+	}
+	if hash == hash2 {
+		t.Error("HashAPIKey() produced identical hashes (expected random salt)")
+	}
+
+	// Both hashes should verify against the same key
+	if !CheckAPIKeyHash(key, hash) {
+		t.Error("CheckAPIKeyHash() failed for first hash")
+	}
+	if !CheckAPIKeyHash(key, hash2) {
+		t.Error("CheckAPIKeyHash() failed for second hash")
+	}
+
+	// Wrong key should not verify
+	if CheckAPIKeyHash("wrong-key", hash) {
+		t.Error("CheckAPIKeyHash() passed for wrong key")
+	}
+}
+
+func TestCheckAPIKeyHash(t *testing.T) {
+	key := "test-api-key-12345"
+	hash, err := HashAPIKey(key)
+	if err != nil {
+		t.Fatalf("HashAPIKey() error = %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		testKey  string
+		testHash string
+		want     bool
+	}{
+		{
+			name:     "correct key",
+			testKey:  key,
+			testHash: hash,
+			want:     true,
+		},
+		{
+			name:     "wrong key",
+			testKey:  "wrong-key",
+			testHash: hash,
+			want:     false,
+		},
+		{
+			name:     "empty key",
+			testKey:  "",
+			testHash: hash,
+			want:     false,
+		},
+		{
+			name:     "invalid hash format",
+			testKey:  key,
+			testHash: "invalid-hash",
+			want:     false,
+		},
+		{
+			name:     "empty hash",
+			testKey:  key,
+			testHash: "",
+			want:     false,
+		},
+		{
+			name:     "wrong algorithm prefix",
+			testKey:  key,
+			testHash: "$bcrypt$...",
+			want:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := CheckAPIKeyHash(tt.testKey, tt.testHash); got != tt.want {
+				t.Errorf("CheckAPIKeyHash() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExtractAPIKeyPrefix(t *testing.T) {
+	tests := []struct {
+		name   string
+		rawKey string
+		want   string
+	}{
+		{
+			name:   "normal key",
+			rawKey: "abcdEFGH12345678",
+			want:   "abcd",
+		},
+		{
+			name:   "exactly prefix length",
+			rawKey: "abcd",
+			want:   "abcd",
+		},
+		{
+			name:   "shorter than prefix",
+			rawKey: "ab",
+			want:   "ab",
+		},
+		{
+			name:   "empty key",
+			rawKey: "",
+			want:   "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ExtractAPIKeyPrefix(tt.rawKey); got != tt.want {
+				t.Errorf("ExtractAPIKeyPrefix(%q) = %q, want %q", tt.rawKey, got, tt.want)
+			}
+		})
 	}
 }
 

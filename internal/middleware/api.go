@@ -9,7 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -79,22 +78,44 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 		return nil, false
 	}
 
-	keyHash := model.HashAPIKey(rawKey)
-	apiKey, err := queries.GetAPIKeyByHash(r.Context(), keyHash)
+	// Look up API keys by prefix (since Argon2 hashes are salted, we can't query by hash)
+	prefix := model.ExtractAPIKeyPrefix(rawKey)
+	apiKeys, err := queries.GetAPIKeysByPrefix(r.Context(), prefix)
 	if err != nil {
 		if required {
-			if errors.Is(err, sql.ErrNoRows) {
-				WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "Invalid API key", nil)
-			} else {
-				slog.Error("failed to validate API key", "error", err)
-				WriteAPIError(w, http.StatusInternalServerError, "internal_error", "Failed to validate API key", nil)
-			}
+			slog.Error("failed to query API keys by prefix", "error", err)
+			WriteAPIError(w, http.StatusInternalServerError, "internal_error", "Failed to validate API key", nil)
 			return nil, true
 		}
 		return nil, false
 	}
 
-	if !apiKey.IsActive {
+	if len(apiKeys) == 0 {
+		if required {
+			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "Invalid API key", nil)
+			return nil, true
+		}
+		return nil, false
+	}
+
+	// Find matching key by verifying hash
+	var matchedKey *store.ApiKey
+	for i := range apiKeys {
+		if model.CheckAPIKeyHash(rawKey, apiKeys[i].KeyHash) {
+			matchedKey = &apiKeys[i]
+			break
+		}
+	}
+
+	if matchedKey == nil {
+		if required {
+			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "Invalid API key", nil)
+			return nil, true
+		}
+		return nil, false
+	}
+
+	if !matchedKey.IsActive {
 		if required {
 			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key is inactive", nil)
 			return nil, true
@@ -102,7 +123,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 		return nil, false
 	}
 
-	if apiKey.ExpiresAt.Valid && time.Now().After(apiKey.ExpiresAt.Time) {
+	if matchedKey.ExpiresAt.Valid && time.Now().After(matchedKey.ExpiresAt.Time) {
 		if required {
 			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key has expired", nil)
 			return nil, true
@@ -110,7 +131,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 		return nil, false
 	}
 
-	return &apiKey, false
+	return matchedKey, false
 }
 
 // APIKeyAuth creates middleware that validates API key authentication.

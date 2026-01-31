@@ -9,6 +9,9 @@ SELECT * FROM api_keys WHERE id = ?;
 -- name: GetAPIKeyByPrefix :one
 SELECT * FROM api_keys WHERE key_prefix = ? AND is_active = 1;
 
+-- name: GetAPIKeysByPrefix :many
+SELECT * FROM api_keys WHERE key_prefix = ? AND is_active = 1;
+
 -- name: GetAPIKeyByHash :one
 SELECT * FROM api_keys WHERE key_hash = ? AND is_active = 1;
 
