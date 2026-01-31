@@ -91,7 +91,7 @@ func (p *Processor) ProcessImage(reader io.Reader, uuid, filename string) (*Proc
 
 	// Save the processed original
 	subDir := filepath.Join("originals", uuid)
-	filePath, err := saveImageFile(p.uploadDir, subDir, filename, processed)
+	filePath, err := p.saveImageFile(subDir, filename, processed)
 	if err != nil {
 		return nil, fmt.Errorf("failed to save original image: %w", err)
 	}
@@ -149,7 +149,7 @@ func (p *Processor) CreateVariant(sourcePath, uuid, filename string, config mode
 
 	// Save the variant
 	variantSubDir := filepath.Join(variantType, uuid)
-	variantPath, err := saveImageFile(p.uploadDir, variantSubDir, filename, processed)
+	variantPath, err := p.saveImageFile(variantSubDir, filename, processed)
 	if err != nil {
 		return nil, fmt.Errorf("failed to save %s variant: %w", variantType, err)
 	}
@@ -381,17 +381,17 @@ func formatToMimeType(format string) string {
 }
 
 // saveImageFile creates the directory if needed and saves image data to a file.
-// The filename is sanitized and the target directory is validated to be within baseDir.
-func saveImageFile(baseDir, subDir, filename string, data []byte) (string, error) {
+// The filename is sanitized and the target directory is validated to be within uploadDir.
+func (p *Processor) saveImageFile(subDir, filename string, data []byte) (string, error) {
 	// Sanitize filename to prevent path traversal
 	safeFilename := filepath.Base(filename)
 	if safeFilename == "." || safeFilename == ".." || safeFilename == "" {
 		return "", fmt.Errorf("invalid filename")
 	}
 
-	// Build the target directory and validate it's within baseDir
-	targetDir := filepath.Join(baseDir, subDir)
-	absBase, err := filepath.Abs(baseDir)
+	// Build the target directory and validate it's within uploadDir
+	targetDir := filepath.Join(p.uploadDir, subDir)
+	absBase, err := filepath.Abs(p.uploadDir)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve base directory: %w", err)
 	}

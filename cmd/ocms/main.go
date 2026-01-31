@@ -877,7 +877,7 @@ func run() error {
 			return
 		}
 
-		http.ServeFile(w, r, filePath)
+		http.ServeFile(w, r, absFilePath)
 	})
 
 	// Register module public routes
