@@ -389,19 +389,24 @@ func (p *Processor) saveImageFile(subDir, filename string, data []byte) (string,
 		return "", fmt.Errorf("invalid filename")
 	}
 
-	// Build the target directory and validate it's within uploadDir
-	targetDir := filepath.Join(p.uploadDir, subDir)
+	// Validate subDir doesn't contain path traversal sequences
+	cleanSubDir := filepath.Clean(subDir)
+	if strings.Contains(cleanSubDir, "..") || filepath.IsAbs(cleanSubDir) {
+		return "", fmt.Errorf("invalid subdirectory path")
+	}
+
+	// Resolve base directory to absolute path
 	absBase, err := filepath.Abs(p.uploadDir)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve base directory: %w", err)
 	}
-	absTarget, err := filepath.Abs(targetDir)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve target directory: %w", err)
-	}
 
-	// Ensure target is within base directory (prevents path traversal)
-	if !strings.HasPrefix(absTarget, absBase+string(filepath.Separator)) && absTarget != absBase {
+	// Build target path using validated subDir
+	absTarget := filepath.Join(absBase, cleanSubDir)
+
+	// Verify containment using filepath.Rel
+	rel, err := filepath.Rel(absBase, absTarget)
+	if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
 		return "", fmt.Errorf("path traversal detected")
 	}
 
