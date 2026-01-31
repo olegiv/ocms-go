@@ -3568,6 +3568,16 @@
             "translation": "The full URL of your website"
         },
         {
+            "id": "config.default_og_image",
+            "message": "Default OG Image",
+            "translation": "Default OG Image"
+        },
+        {
+            "id": "config.default_og_image_hint",
+            "message": "Default Open Graph image URL for social sharing (1200x630px recommended)",
+            "translation": "Default Open Graph image URL for social sharing (1200x630px recommended)"
+        },
+        {
             "id": "config.posts_per_page",
             "message": "Posts Per Page",
             "translation": "Posts Per Page"
