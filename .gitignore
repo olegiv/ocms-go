@@ -6,7 +6,6 @@
 *.log
 .audit
 node_modules/
-package-lock.json
 
 # IDE specific files
 .idea/
