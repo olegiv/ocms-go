@@ -10,15 +10,10 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
 )
-
-// validTablePrefix matches only safe SQL identifier characters.
-// CodeQL recognizes regexp.MustCompile + MatchString as a sanitizer.
-var validTablePrefix = regexp.MustCompile(`^[a-zA-Z0-9_]*$`)
 
 // Reader reads data from an Elefant CMS MySQL database.
 type Reader struct {
@@ -34,10 +29,12 @@ type Reader struct {
 
 // sanitizeTablePrefix validates that a table prefix contains only safe SQL identifier characters
 // and returns the sanitized value. This prevents SQL injection when the prefix is used in query building.
-// Uses regexp.MustCompile + MatchString pattern that CodeQL recognizes as a sanitizer.
 func sanitizeTablePrefix(prefix string) (string, error) {
-	if !validTablePrefix.MatchString(prefix) {
-		return "", fmt.Errorf("invalid table prefix: contains invalid character")
+	for _, c := range prefix {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '_') {
+			return "", fmt.Errorf("invalid table prefix: contains invalid character")
+		}
 	}
 	return prefix, nil
 }
