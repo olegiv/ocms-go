@@ -2770,6 +2770,18 @@ tr.unread {
   &.active-badge {
     background: $success;
   }
+
+  &.core-badge {
+    background: $primary;
+    top: auto;
+    bottom: $spacing-2;
+  }
+
+  &.custom-badge {
+    background: $gray-600;
+    top: auto;
+    bottom: $spacing-2;
+  }
 }
 
 .theme-info {

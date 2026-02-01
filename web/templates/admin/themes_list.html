@@ -25,6 +25,11 @@
             {{if .IsActive}}
             <span class="theme-badge active-badge">{{T $.AdminLang "themes.active"}}</span>
             {{end}}
+            {{if .IsEmbedded}}
+            <span class="theme-badge core-badge">{{T $.AdminLang "themes.core"}}</span>
+            {{else}}
+            <span class="theme-badge custom-badge">{{T $.AdminLang "themes.custom"}}</span>
+            {{end}}
         </div>
         <div class="theme-info">
             <h3 class="theme-name">{{.Config.Name}}</h3>

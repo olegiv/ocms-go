@@ -1788,6 +1788,16 @@
             "translation": "Активна"
         },
         {
+            "id": "themes.core",
+            "message": "Core",
+            "translation": "Базовая"
+        },
+        {
+            "id": "themes.custom",
+            "message": "Custom",
+            "translation": "Пользовательская"
+        },
+        {
             "id": "themes.activate",
             "message": "Activate",
             "translation": "Активировать"
@@ -1814,8 +1824,8 @@
         },
         {
             "id": "themes.no_themes_hint",
-            "message": "Create a theme directory in ./themes with a theme.json file.",
-            "translation": "Создайте директорию темы в ./themes с файлом theme.json."
+            "message": "Core themes are embedded. Add custom themes to ./custom/themes/",
+            "translation": "Базовые темы встроены. Добавьте пользовательские темы в ./custom/themes/"
         },
         {
             "id": "themes.settings_title",
