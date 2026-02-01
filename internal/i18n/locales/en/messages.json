@@ -1873,6 +1873,16 @@
             "translation": "Browse"
         },
         {
+            "id": "theme_settings.favicon",
+            "message": "Favicon",
+            "translation": "Favicon"
+        },
+        {
+            "id": "theme_settings.favicon_hint",
+            "message": "Custom favicon for the site (recommended: .ico, 32x32 or 16x16 pixels)",
+            "translation": "Custom favicon for the site (recommended: .ico, 32x32 or 16x16 pixels)"
+        },
+        {
             "id": "theme_settings.primary_color",
             "message": "Primary Color",
             "translation": "Primary Color"

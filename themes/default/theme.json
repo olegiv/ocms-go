@@ -16,6 +16,12 @@
     },
     "settings": [
         {
+            "key": "favicon",
+            "label": "Favicon",
+            "type": "image",
+            "default": ""
+        },
+        {
             "key": "primary_color",
             "label": "Primary Color",
             "type": "color",
