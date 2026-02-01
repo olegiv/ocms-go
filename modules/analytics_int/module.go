@@ -65,17 +65,32 @@ func (m *Module) Init(ctx *module.Context) error {
 		_ = m.saveSettings()
 	}
 
-	// Initialize GeoIP lookup
-	if err := m.geoIP.Init(); err != nil {
-		ctx.Logger.Warn("GeoIP database not available, country detection disabled", "error", err)
+	// Initialize GeoIP lookup with path from config
+	geoIPPath := ""
+	if ctx.Config != nil {
+		geoIPPath = ctx.Config.GeoIPDBPath
+	}
+	if err := m.geoIP.Init(geoIPPath); err != nil {
+		ctx.Logger.Warn("GeoIP database not available, country detection disabled",
+			"error", err,
+			"path", geoIPPath,
+		)
+	} else if geoIPPath == "" {
+		ctx.Logger.Info("GeoIP not configured, country detection disabled. Set OCMS_GEOIP_DB_PATH to enable.")
+	} else {
+		ctx.Logger.Info("GeoIP database loaded", "path", geoIPPath)
 	}
 
 	// Start aggregation scheduler
 	m.StartAggregator()
 
+	// Schedule periodic GeoIP database reload (check for updates every hour)
+	m.scheduleGeoIPReload()
+
 	ctx.Logger.Info("Internal Analytics module initialized",
 		"enabled", settings.Enabled,
 		"retention_days", settings.RetentionDays,
+		"geoip_enabled", m.geoIP.IsEnabled(),
 	)
 
 	return nil
@@ -86,10 +101,31 @@ func (m *Module) Shutdown() error {
 	if m.cron != nil {
 		m.cron.Stop()
 	}
+	if m.geoIP != nil {
+		_ = m.geoIP.Close()
+	}
 	if m.ctx != nil {
 		m.ctx.Logger.Info("Internal Analytics module shutting down")
 	}
 	return nil
+}
+
+// scheduleGeoIPReload schedules periodic GeoIP database reloads.
+// This allows the database to be updated without restarting the application.
+func (m *Module) scheduleGeoIPReload() {
+	if m.cron == nil || !m.geoIP.IsEnabled() {
+		return
+	}
+
+	// Check for GeoIP database updates every hour
+	_, err := m.cron.AddFunc("0 * * * *", func() {
+		if err := m.geoIP.Reload(); err != nil {
+			m.ctx.Logger.Debug("GeoIP reload check", "error", err)
+		}
+	})
+	if err != nil {
+		m.ctx.Logger.Warn("failed to schedule GeoIP reload", "error", err)
+	}
 }
 
 // RegisterRoutes registers public routes (none for this module).

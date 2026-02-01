@@ -29,6 +29,9 @@ type Config struct {
 	// hCaptcha configuration
 	HCaptchaSiteKey   string `env:"OCMS_HCAPTCHA_SITE_KEY"`   // hCaptcha site key
 	HCaptchaSecretKey string `env:"OCMS_HCAPTCHA_SECRET_KEY"` // hCaptcha secret key
+
+	// GeoIP configuration
+	GeoIPDBPath string `env:"OCMS_GEOIP_DB_PATH"` // Path to GeoLite2-Country.mmdb file
 }
 
 // IsDevelopment returns true if the application is running in development mode.
@@ -49,6 +52,11 @@ func (c Config) UseRedisCache() bool {
 // HCaptchaEnabled returns true if hCaptcha is configured.
 func (c Config) HCaptchaEnabled() bool {
 	return c.HCaptchaSiteKey != "" && c.HCaptchaSecretKey != ""
+}
+
+// GeoIPEnabled returns true if GeoIP database is configured.
+func (c Config) GeoIPEnabled() bool {
+	return c.GeoIPDBPath != ""
 }
 
 // MinSessionSecretLength is the minimum required length for the session secret.
