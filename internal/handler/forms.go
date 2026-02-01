@@ -960,7 +960,7 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 }
 
 // renderFormWithErrors renders the form with validation errors.
-func (h *FormsHandler) renderFormWithErrors(w http.ResponseWriter, r *http.Request, form store.Form, fields []store.FormField, errors map[string]string, formData map[string][]string) {
+func (h *FormsHandler) renderFormWithErrors(w http.ResponseWriter, r *http.Request, form store.Form, fields []store.FormField, fieldErrors map[string]string, formData map[string][]string) {
 	values := make(map[string]string)
 	for key, vals := range formData {
 		if len(vals) > 0 {
@@ -971,7 +971,7 @@ func (h *FormsHandler) renderFormWithErrors(w http.ResponseWriter, r *http.Reque
 	data := PublicFormData{
 		Form:      form,
 		Fields:    fields,
-		Errors:    errors,
+		Errors:    fieldErrors,
 		Values:    values,
 		Success:   false,
 		CSRFToken: h.sessionManager.Token(r.Context()),

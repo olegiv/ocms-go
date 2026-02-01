@@ -227,9 +227,9 @@ func (s *MediaService) GetThumbnailURL(media store.Medium) string {
 }
 
 // saveNonImageFile saves a non-image file to the uploads directory.
-func (s *MediaService) saveNonImageFile(file io.Reader, uuid, filename string) (string, int64, error) {
+func (s *MediaService) saveNonImageFile(file io.Reader, fileUUID, filename string) (string, int64, error) {
 	// Create directory
-	dir := filepath.Join(s.uploadDir, "originals", uuid)
+	dir := filepath.Join(s.uploadDir, "originals", fileUUID)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", 0, fmt.Errorf("failed to create directory: %w", err)
 	}

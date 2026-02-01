@@ -117,9 +117,9 @@ func CheckAPIKeyHash(key, encodedHash string) bool {
 		return false
 	}
 
-	var memory, time uint32
+	var memory, timeCost uint32
 	var threads uint8
-	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &time, &threads); err != nil {
+	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &timeCost, &threads); err != nil {
 		return false
 	}
 
@@ -133,7 +133,7 @@ func CheckAPIKeyHash(key, encodedHash string) bool {
 		return false
 	}
 
-	hash := argon2.IDKey([]byte(key), salt, time, memory, threads, uint32(len(expectedHash)))
+	hash := argon2.IDKey([]byte(key), salt, timeCost, memory, threads, uint32(len(expectedHash)))
 	return subtle.ConstantTimeCompare(hash, expectedHash) == 1
 }
 

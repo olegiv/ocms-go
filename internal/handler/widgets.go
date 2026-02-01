@@ -380,9 +380,9 @@ func (h *WidgetsHandler) requireWidgetWithJSONError(w http.ResponseWriter, r *ht
 }
 
 // getMaxWidgetPosition returns the max position for widgets in a theme/area.
-func (h *WidgetsHandler) getMaxWidgetPosition(r *http.Request, theme, area string) int64 {
+func (h *WidgetsHandler) getMaxWidgetPosition(r *http.Request, themeName, area string) int64 {
 	maxPosResult, err := h.queries.GetMaxWidgetPosition(r.Context(), store.GetMaxWidgetPositionParams{
-		Theme: theme,
+		Theme: themeName,
 		Area:  area,
 	})
 	if err != nil {

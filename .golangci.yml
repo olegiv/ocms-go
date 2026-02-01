@@ -25,6 +25,7 @@ linters:
     - dupl          # Code clone detection (including tests!)
     - gocyclo       # Cyclomatic complexity
     - misspell      # Spelling mistakes in comments
+    - revive        # Import shadowing detection
 
 linters-settings:
   dupl:
@@ -56,6 +57,12 @@ linters-settings:
     # Check for errors in deferred Close() calls
     check-type-assertions: false
     check-blank: false
+
+  revive:
+    rules:
+      - name: import-shadowing
+        severity: warning
+        disabled: false
 
 issues:
   exclude-dirs:
