@@ -37,6 +37,7 @@ type MediaHandler struct {
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
 	mediaService   *service.MediaService
+	eventService   *service.EventService
 	uploadDir      string
 	dispatcher     *webhook.Dispatcher
 }
@@ -52,6 +53,7 @@ func NewMediaHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 		renderer:       renderer,
 		sessionManager: sm,
 		mediaService:   service.NewMediaService(db, uploadDir),
+		eventService:   service.NewEventService(db),
 		uploadDir:      uploadDir,
 	}
 }
@@ -329,6 +331,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 
 		slog.Info("media uploaded", "media_id", result.Media.ID, "filename", result.Media.Filename, "uploaded_by", middleware.GetUserID(r))
+		_ = h.eventService.LogMediaEvent(r.Context(), model.EventLevelInfo, "Media uploaded", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"media_id": result.Media.ID, "filename": result.Media.Filename})
 
 		// Dispatch media.uploaded webhook event
 		h.dispatchMediaEvent(r.Context(), model.EventMediaUploaded, result.Media)
@@ -627,6 +630,7 @@ func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("media deleted", "media_id", id, "filename", media.Filename, "deleted_by", middleware.GetUserID(r))
+	_ = h.eventService.LogMediaEvent(r.Context(), model.EventLevelInfo, "Media deleted", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"media_id": id, "filename": media.Filename})
 
 	// Dispatch media.deleted webhook event
 	h.dispatchMediaEvent(r.Context(), model.EventMediaDeleted, media)

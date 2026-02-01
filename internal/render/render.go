@@ -274,6 +274,20 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			}
 			return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 		},
+		"formatNumber": func(n int64) string {
+			if n < 1000 {
+				return strconv.FormatInt(n, 10)
+			}
+			s := strconv.FormatInt(n, 10)
+			var result strings.Builder
+			for i, c := range s {
+				if i > 0 && (len(s)-i)%3 == 0 {
+					result.WriteRune(',')
+				}
+				result.WriteRune(c)
+			}
+			return result.String()
+		},
 		"deref": func(p *int64) int64 {
 			if p == nil {
 				return 0

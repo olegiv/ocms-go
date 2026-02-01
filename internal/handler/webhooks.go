@@ -20,6 +20,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -31,6 +32,7 @@ type WebhooksHandler struct {
 	queries        *store.Queries
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
+	eventService   *service.EventService
 }
 
 // NewWebhooksHandler creates a new WebhooksHandler.
@@ -39,6 +41,7 @@ func NewWebhooksHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionMa
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
+		eventService:   service.NewEventService(db),
 	}
 }
 
@@ -256,6 +259,7 @@ func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("webhook created", "webhook_id", webhook.ID, "name", webhook.Name, "created_by", middleware.GetUserID(r))
+	_ = h.eventService.LogWebhookEvent(r.Context(), model.EventLevelInfo, "Webhook created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"webhook_id": webhook.ID, "name": webhook.Name, "url": webhook.Url})
 	flashSuccess(w, r, h.renderer, redirectAdminWebhooks, "Webhook created successfully")
 }
 
@@ -355,6 +359,7 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("webhook updated", "webhook_id", id, "updated_by", middleware.GetUserID(r))
+	_ = h.eventService.LogWebhookEvent(r.Context(), model.EventLevelInfo, "Webhook updated", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"webhook_id": id})
 	flashSuccess(w, r, h.renderer, redirectAdminWebhooks, "Webhook updated successfully")
 }
 
@@ -378,6 +383,7 @@ func (h *WebhooksHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("webhook deleted", "webhook_id", id, "name", webhook.Name, "deleted_by", middleware.GetUserID(r))
+	_ = h.eventService.LogWebhookEvent(r.Context(), model.EventLevelInfo, "Webhook deleted", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"webhook_id": id, "name": webhook.Name})
 
 	// Check if this is an HTMX request
 	if r.Header.Get("HX-Request") == "true" {

@@ -24,16 +24,23 @@ const (
 	EventCategorySystem   = "system"
 	EventCategoryCache    = "cache"
 	EventCategoryMigrator = "migrator"
+	EventCategoryMedia    = "media"
+	EventCategoryTag      = "tag"
+	EventCategoryCategory = "category"
+	EventCategoryMenu     = "menu"
+	EventCategoryAPIKey   = "api_key"
+	EventCategoryWebhook  = "webhook"
 )
 
 // Event represents a system event log entry.
 type Event struct {
-	ID        int64
-	Level     string
-	Category  string
-	Message   string
-	UserID    sql.NullInt64
-	Metadata  string // JSON string
-	IPAddress string
-	CreatedAt time.Time
+	ID         int64
+	Level      string
+	Category   string
+	Message    string
+	UserID     sql.NullInt64
+	Metadata   string // JSON string
+	IPAddress  string
+	RequestURL string
+	CreatedAt  time.Time
 }

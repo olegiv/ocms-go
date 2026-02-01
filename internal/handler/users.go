@@ -21,6 +21,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/webhook"
 )
@@ -47,6 +48,7 @@ type UsersHandler struct {
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
 	dispatcher     *webhook.Dispatcher
+	eventService   *service.EventService
 }
 
 // NewUsersHandler creates a new UsersHandler.
@@ -55,6 +57,7 @@ func NewUsersHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
+		eventService:   service.NewEventService(db),
 	}
 }
 
@@ -259,6 +262,7 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("user created", "user_id", newUser.ID, "email", newUser.Email, "created_by", middleware.GetUserID(r))
+	_ = h.eventService.LogUserEvent(r.Context(), model.EventLevelInfo, "User created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"user_id": newUser.ID, "email": newUser.Email, "role": newUser.Role})
 
 	// Dispatch user.created webhook event
 	h.dispatchUserEvent(r.Context(), model.EventUserCreated, newUser)
@@ -444,6 +448,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("user updated", "user_id", id, "updated_by", currentUser.ID)
+	_ = h.eventService.LogUserEvent(r.Context(), model.EventLevelInfo, "User updated", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"user_id": id})
 	flashSuccess(w, r, h.renderer, redirectAdminUsers, "User updated successfully")
 }
 
@@ -503,6 +508,7 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("user deleted", "user_id", id, "email", deleteUser.Email, "deleted_by", currentUser.ID)
+	_ = h.eventService.LogUserEvent(r.Context(), model.EventLevelInfo, "User deleted", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"user_id": id, "email": deleteUser.Email})
 
 	// Dispatch user.deleted webhook event
 	h.dispatchUserEvent(r.Context(), model.EventUserDeleted, deleteUser)

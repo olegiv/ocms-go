@@ -249,7 +249,7 @@ func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
 	// Log event for audit trail
 	if m.ctx.Events != nil {
 		clientIP := middleware.GetClientIP(r)
-		_ = m.ctx.Events.LogMigratorEvent(r.Context(), "info", "Content imported from "+ctx.SourceName, &ctx.User.ID, clientIP, map[string]any{
+		_ = m.ctx.Events.LogMigratorEvent(r.Context(), "info", "Content imported from "+ctx.SourceName, &ctx.User.ID, clientIP, middleware.GetRequestURL(r), map[string]any{
 			"source":         ctx.SourceName,
 			"posts_imported": result.PostsImported,
 			"tags_imported":  result.TagsImported,
@@ -308,7 +308,7 @@ func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
 	// Log event for audit trail
 	if m.ctx.Events != nil {
 		clientIP := middleware.GetClientIP(r)
-		_ = m.ctx.Events.LogMigratorEvent(r.Context(), "info", "Imported content deleted from "+ctx.SourceName, &ctx.User.ID, clientIP, map[string]any{
+		_ = m.ctx.Events.LogMigratorEvent(r.Context(), "info", "Imported content deleted from "+ctx.SourceName, &ctx.User.ID, clientIP, middleware.GetRequestURL(r), map[string]any{
 			"source":        ctx.SourceName,
 			"pages_deleted": deleted["page"],
 			"tags_deleted":  deleted["tag"],

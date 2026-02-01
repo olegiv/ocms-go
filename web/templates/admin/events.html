@@ -49,6 +49,7 @@
                     <th>{{T .AdminLang "events.category"}}</th>
                     <th>{{T .AdminLang "events.message"}}</th>
                     <th>{{T .AdminLang "events.details"}}</th>
+                    <th>{{T .AdminLang "events.url"}}</th>
                     <th>{{T .AdminLang "events.ip_address"}}</th>
                     <th>{{T .AdminLang "events.user"}}</th>
                 </tr>
@@ -69,6 +70,13 @@
                     <td class="event-details">
                         {{if .Details}}
                             <span class="details-text">{{.Details}}</span>
+                        {{else}}
+                            <span class="text-muted">-</span>
+                        {{end}}
+                    </td>
+                    <td class="event-url">
+                        {{if .RequestURL}}
+                            <code class="text-muted">{{.RequestURL}}</code>
                         {{else}}
                             <span class="text-muted">-</span>
                         {{end}}
