@@ -181,8 +181,10 @@ echo_info "  Port:       $PORT"
 echo_info "  Directory:  $INSTANCE_DIR"
 
 # Create directory structure
+# Note: Core themes (default, developer) are embedded in the binary.
+# The custom/ directory is for user-created themes that override or extend core themes.
 echo_info "Creating directories..."
-mkdir -p "$INSTANCE_DIR"/{data,uploads,themes,backups,logs}
+mkdir -p "$INSTANCE_DIR"/{data,uploads,custom/themes,backups,logs}
 
 # Generate session secret
 SESSION_SECRET=$(openssl rand -base64 32)
@@ -205,8 +207,10 @@ OCMS_LOG_LEVEL=warn
 # Database (relative to WorkingDirectory)
 OCMS_DB_PATH=./data/ocms.db
 
-# Themes (relative to WorkingDirectory)
-OCMS_THEMES_DIR=./themes
+# Custom content directory (for theme overrides and custom modules)
+# Core themes (default, developer) are embedded in the binary.
+# Place custom themes in ./custom/themes/ to override or extend them.
+OCMS_CUSTOM_DIR=./custom
 OCMS_ACTIVE_THEME=default
 
 # Optional: Redis for distributed caching
@@ -224,7 +228,8 @@ chmod 750 "$INSTANCE_DIR"
 chmod 600 "$INSTANCE_DIR/.env"
 chmod 755 "$INSTANCE_DIR/data"
 chmod 755 "$INSTANCE_DIR/uploads"
-chmod 755 "$INSTANCE_DIR/themes"
+chmod 755 "$INSTANCE_DIR/custom"
+chmod 755 "$INSTANCE_DIR/custom/themes"
 chmod 755 "$INSTANCE_DIR/backups"
 chmod 755 "$INSTANCE_DIR/logs"
 
@@ -259,28 +264,6 @@ HEADER
 fi
 echo "$SITE_ID $VHOST_PATH $SYSTEM_USER $PORT" >> "$SITES_CONF"
 
-# Copy all themes if available
-if [ -d "/opt/ocms/themes" ] && [ "$(ls -A /opt/ocms/themes 2>/dev/null)" ]; then
-    echo_info "Copying themes..."
-    cp -r /opt/ocms/themes/* "$INSTANCE_DIR/themes/"
-    chown -R "$SYSTEM_USER:$GROUP" "$INSTANCE_DIR/themes/"
-else
-    echo ""
-    echo_error "WARNING: No themes found at /opt/ocms/themes/"
-    echo "       The site will show 'No active theme' until themes are deployed."
-    echo "       Copy themes from your local repo to the server:"
-    echo ""
-    echo "         # On local machine:"
-    echo "         scp -r themes user@server:/tmp/ocms-themes"
-    echo ""
-    echo "         # On server:"
-    echo "         sudo mkdir -p /opt/ocms/themes"
-    echo "         sudo cp -r /tmp/ocms-themes/* /opt/ocms/themes/"
-    echo "         sudo cp -r /opt/ocms/themes/* $INSTANCE_DIR/themes/"
-    echo "         sudo chown -R $SYSTEM_USER:$GROUP $INSTANCE_DIR/themes/"
-    echo ""
-fi
-
 # --- Summary ---
 
 echo ""
@@ -291,6 +274,9 @@ echo "  User:       $SYSTEM_USER:$GROUP"
 echo "  Port:       $PORT"
 echo "  Env file:   $INSTANCE_DIR/.env"
 echo "  Systemd:    ocms@$SITE_ID"
+echo ""
+echo "Core themes (default, developer) are embedded in the binary."
+echo "To use a custom theme, place it in: $INSTANCE_DIR/custom/themes/"
 echo ""
 echo "Next steps:"
 echo "  1. Configure Plesk nginx (paste the snippet below)"

@@ -2,7 +2,7 @@
 # Copyright (c) 2025-2026 Oleg Ivanchenko
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Sync production data (DB, uploads, logs) to local development environment
+# Sync production data (DB, uploads, logs, custom) to local development environment
 # Usage: ./scripts/deploy/sync-prod-to-dev.sh <server> <instance> [options]
 
 set -euo pipefail
@@ -16,6 +16,7 @@ REMOTE_BIN_DIR="/opt/ocms/bin"
 LOCAL_DATA_DIR="./data"
 LOCAL_UPLOADS_DIR="./uploads"
 LOCAL_LOGS_DIR="./logs"
+LOCAL_CUSTOM_DIR="./custom"
 
 # Defaults
 SSH_USER="root"
@@ -24,6 +25,7 @@ DRY_RUN=false
 SYNC_DB=true
 SYNC_UPLOADS=true
 SYNC_LOGS=true
+SYNC_CUSTOM=false
 LOCAL_PORT=8080
 
 usage() {
@@ -46,12 +48,14 @@ Options:
   --no-db                Skip database sync
   --no-uploads           Skip uploads sync
   --no-logs              Skip logs sync
+  --sync-custom          Also sync custom/ directory (themes, modules)
   --dry-run              Print commands without executing
   -h, --help             Show this help message
 
 Examples:
   $(basename "$0") server.example.com my_site -v /var/www/vhosts/example.com
   $(basename "$0") server.example.com my_site -v /var/www/vhosts/example.com --no-logs
+  $(basename "$0") server.example.com my_site -v /var/www/vhosts/example.com --sync-custom
   $(basename "$0") server.example.com my_site -v /var/www/vhosts/example.com --dry-run
 
 WARNING: This will OVERWRITE your local data with production data!
@@ -90,6 +94,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-logs)
             SYNC_LOGS=false
+            shift
+            ;;
+        --sync-custom)
+            SYNC_CUSTOM=true
             shift
             ;;
         --dry-run)
@@ -133,6 +141,7 @@ REMOTE_INSTANCE_DIR="${VHOST}/ocms"
 REMOTE_DATA_DIR="${REMOTE_INSTANCE_DIR}/data"
 REMOTE_UPLOADS_DIR="${REMOTE_INSTANCE_DIR}/uploads"
 REMOTE_LOGS_DIR="${REMOTE_INSTANCE_DIR}/logs"
+REMOTE_CUSTOM_DIR="${REMOTE_INSTANCE_DIR}/custom"
 
 # Helper for running or printing commands
 run() {
@@ -248,6 +257,34 @@ sync_logs() {
     echo_ok "Logs synced"
 }
 
+sync_custom() {
+    if [[ "$SYNC_CUSTOM" != true ]]; then
+        return
+    fi
+
+    echo_step "Syncing custom directory..."
+
+    # Check if remote custom directory exists
+    if ! ssh_cmd "test -d ${REMOTE_CUSTOM_DIR}" 2>/dev/null; then
+        echo_warn "Remote custom directory not found: ${REMOTE_CUSTOM_DIR} (skipping)"
+        return
+    fi
+
+    # Create local custom directory if it doesn't exist
+    if [[ "$DRY_RUN" != true ]]; then
+        mkdir -p "${LOCAL_CUSTOM_DIR}"
+    else
+        echo_dry_run "mkdir -p ${LOCAL_CUSTOM_DIR}"
+    fi
+
+    # Sync custom directory (no delete - preserve local custom content)
+    rsync_cmd -avz --progress \
+        "${SSH_USER}@${SERVER}:${REMOTE_CUSTOM_DIR}/" \
+        "${LOCAL_CUSTOM_DIR}/"
+
+    echo_ok "Custom directory synced"
+}
+
 # Display configuration
 echo ""
 echo_info "Sync Configuration:"
@@ -257,6 +294,7 @@ echo "  Vhost:         ${VHOST}"
 echo "  Sync DB:       ${SYNC_DB}"
 echo "  Sync Uploads:  ${SYNC_UPLOADS}"
 echo "  Sync Logs:     ${SYNC_LOGS}"
+echo "  Sync Custom:   ${SYNC_CUSTOM}"
 echo ""
 
 if [[ "$DRY_RUN" == true ]]; then
@@ -291,6 +329,7 @@ fi
 sync_database
 sync_uploads
 sync_logs
+sync_custom
 
 # Step 5: Start remote server
 start_remote_server

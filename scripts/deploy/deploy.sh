@@ -13,7 +13,7 @@ source "${SCRIPT_DIR}/helper.sh"
 
 # Hardcoded values
 LOCAL_BINARY="bin/ocms-linux-amd64"
-LOCAL_THEMES_DIR="themes/"
+LOCAL_CUSTOM_DIR="custom/"
 REMOTE_BIN_DIR="/opt/ocms/bin"
 REMOTE_BINARY="ocms-linux-amd64"
 
@@ -24,32 +24,40 @@ VHOST_USER=""
 VHOST_GROUP="psaserv"
 SKIP_BUILD=false
 DRY_RUN=false
+SYNC_CUSTOM=false
 
 usage() {
     cat <<EOF
-Usage: $(basename "$0") <server> <instance> -v <vhost> [options]
+Usage: $(basename "$0") <server> <instance> [options]
 
 Deploy oCMS binary to a remote server.
+
+Core themes (default, developer) are embedded in the binary and don't need syncing.
+Use -v and -o options only if you have custom themes in custom/themes/.
 
 Arguments:
   server      Remote server hostname (e.g., server.example.com)
   instance    Instance name for ocmsctl (e.g., my_site)
 
-Required Options:
-  -v, --vhost PATH       Vhost path for themes (e.g., /var/www/vhosts/example.com/domain)
-  -o, --owner USER       Vhost owner for chown (e.g., hosting)
-
 Options:
-  -g, --group GROUP  Vhost group for chown (default: psaserv)
-  -u, --user USER    SSH user (default: root)
-  --skip-build       Skip 'make build-linux-amd64', use existing binary
-  --dry-run          Print commands without executing
-  -h, --help         Show this help message
+  -v, --vhost PATH     Vhost path for custom content sync (e.g., /var/www/vhosts/example.com/domain)
+  -o, --owner USER     Vhost owner for chown (required if -v is provided)
+  -g, --group GROUP    Vhost group for chown (default: psaserv)
+  -u, --user USER      SSH user (default: root)
+  --sync-custom        Force sync custom/ directory even if empty
+  --skip-build         Skip 'make build-linux-amd64', use existing binary
+  --dry-run            Print commands without executing
+  -h, --help           Show this help message
 
 Examples:
+  # Deploy binary only (no custom themes)
+  $(basename "$0") server.example.com my_site
+
+  # Deploy binary and sync custom themes
   $(basename "$0") server.example.com my_site -v /var/www/vhosts/example.com -o hosting
-  $(basename "$0") server.example.com my_site -v /var/www/vhosts/example.com -o hosting --skip-build
-  $(basename "$0") server.example.com my_site -v /var/www/vhosts/example.com -o hosting -g mygroup --dry-run
+
+  # Skip build, dry run
+  $(basename "$0") server.example.com my_site --skip-build --dry-run
 EOF
     exit 0
 }
@@ -78,6 +86,10 @@ while [[ $# -gt 0 ]]; do
         -g|--group)
             VHOST_GROUP="$2"
             shift 2
+            ;;
+        --sync-custom)
+            SYNC_CUSTOM=true
+            shift
             ;;
         --skip-build)
             SKIP_BUILD=true
@@ -113,20 +125,40 @@ if [[ -z "$SERVER" ]] || [[ -z "$INSTANCE" ]]; then
     exit 1
 fi
 
-if [[ -z "$VHOST" ]]; then
-    echo_error "Missing required option: --vhost"
+# Validate vhost/owner combination
+if [[ -n "$VHOST" ]] && [[ -z "$VHOST_USER" ]]; then
+    echo_error "--owner is required when --vhost is provided"
     echo "Use --help for usage information."
     exit 1
 fi
 
-if [[ -z "$VHOST_USER" ]]; then
-    echo_error "Missing required option: --owner"
-    echo "Use --help for usage information."
-    exit 1
-fi
+# Check if custom directory has content
+has_custom_content() {
+    if [[ -d "$LOCAL_CUSTOM_DIR" ]]; then
+        # Check for any non-empty subdirectories (themes, modules, etc.)
+        local content_count
+        content_count=$(find "$LOCAL_CUSTOM_DIR" -mindepth 2 -maxdepth 2 -type f 2>/dev/null | head -1 | wc -l)
+        [[ "$content_count" -gt 0 ]]
+    else
+        return 1
+    fi
+}
 
-# Construct remote themes directory from vhost
-REMOTE_THEMES_DIR="${VHOST}/ocms/themes"
+# Determine if we should sync custom content
+should_sync_custom() {
+    if [[ "$SYNC_CUSTOM" == true ]]; then
+        return 0
+    fi
+    if [[ -n "$VHOST" ]] && has_custom_content; then
+        return 0
+    fi
+    return 1
+}
+
+# Construct remote custom directory from vhost
+if [[ -n "$VHOST" ]]; then
+    REMOTE_CUSTOM_DIR="${VHOST}/ocms/custom"
+fi
 
 # Helper for running or printing commands
 run() {
@@ -155,7 +187,16 @@ echo_info "Deployment Configuration:"
 echo "  Server:   ${SSH_USER}@${SERVER}"
 echo "  Instance: ${INSTANCE}"
 echo "  Binary:   ${LOCAL_BINARY}"
-echo "  Themes:   ${REMOTE_THEMES_DIR}"
+if [[ -n "$VHOST" ]]; then
+    echo "  Custom:   ${REMOTE_CUSTOM_DIR}"
+    if should_sync_custom; then
+        echo "  Sync:     Custom content will be synced"
+    else
+        echo "  Sync:     No custom content to sync"
+    fi
+else
+    echo "  Custom:   Not configured (embedded themes only)"
+fi
 echo ""
 
 # Step 1: Build binary
@@ -188,15 +229,24 @@ echo_step "Transferring binary to server..."
 scp_cmd "${LOCAL_BINARY}" "${SSH_USER}@${SERVER}:${REMOTE_BIN_DIR}/"
 echo_ok "Binary transferred"
 
-# Step 5: Sync themes
-echo_step "Syncing themes directory..."
-rsync_cmd -avz --delete "${LOCAL_THEMES_DIR}" "${SSH_USER}@${SERVER}:${REMOTE_THEMES_DIR}/"
-echo_ok "Themes synced"
+# Step 5: Sync custom content (if configured and has content)
+if should_sync_custom && [[ -n "$VHOST" ]]; then
+    echo_step "Syncing custom content directory..."
 
-# Step 6: Fix themes ownership
-echo_step "Setting themes ownership to ${VHOST_USER}:${VHOST_GROUP}..."
-ssh_cmd "chown -R ${VHOST_USER}:${VHOST_GROUP} ${REMOTE_THEMES_DIR}"
-echo_ok "Ownership set"
+    # Create remote custom directory if it doesn't exist
+    ssh_cmd "mkdir -p ${REMOTE_CUSTOM_DIR}"
+
+    # Sync custom directory
+    rsync_cmd -avz --delete "${LOCAL_CUSTOM_DIR}" "${SSH_USER}@${SERVER}:${REMOTE_CUSTOM_DIR}/"
+    echo_ok "Custom content synced"
+
+    # Step 6: Fix custom content ownership
+    echo_step "Setting custom content ownership to ${VHOST_USER}:${VHOST_GROUP}..."
+    ssh_cmd "chown -R ${VHOST_USER}:${VHOST_GROUP} ${REMOTE_CUSTOM_DIR}"
+    echo_ok "Ownership set"
+elif [[ -n "$VHOST" ]]; then
+    echo_info "Skipping custom sync (no custom content found in ${LOCAL_CUSTOM_DIR})"
+fi
 
 # Step 7: Start instance
 echo_step "Starting instance '${INSTANCE}'..."
