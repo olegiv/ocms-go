@@ -831,6 +831,7 @@ func run() error {
 	r.Handle("/uploads/*", uploadsHandler)
 
 	// Serve theme static files with caching (1 month = 2592000 seconds)
+	// Supports both embedded themes (from binary) and external themes (from filesystem)
 	r.Get("/themes/{themeName}/static/*", func(w http.ResponseWriter, r *http.Request) {
 		themeName := chi.URLParam(r, "themeName")
 		thm, err := themeManager.GetTheme(themeName)
@@ -838,15 +839,16 @@ func run() error {
 			http.NotFound(w, r)
 			return
 		}
+
 		// Security headers for static files
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 		w.Header().Set("Cache-Control", "public, max-age=2592000")
 
 		// Strip the prefix to get the requested file path
-		path := r.URL.Path
+		reqPath := r.URL.Path
 		prefix := fmt.Sprintf("/themes/%s/static/", themeName)
-		requestedPath := path[len(prefix):]
+		requestedPath := reqPath[len(prefix):]
 
 		// Clean the path to resolve any .. sequences
 		cleanPath := filepath.Clean(requestedPath)
@@ -857,7 +859,25 @@ func run() error {
 			return
 		}
 
-		// Construct full path
+		// Handle embedded vs external themes
+		if thm.IsEmbedded && thm.EmbeddedFS != nil {
+			// Serve from embedded filesystem
+			embeddedPath := "static/" + cleanPath
+			data, err := fs.ReadFile(thm.EmbeddedFS, embeddedPath)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+
+			// Set content type based on file extension
+			contentType := handler.ContentTypeByExtension(cleanPath)
+			w.Header().Set("Content-Type", contentType)
+			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
+			_, _ = w.Write(data)
+			return
+		}
+
+		// Serve from filesystem for external themes
 		filePath := filepath.Join(thm.StaticPath, cleanPath)
 
 		// Verify the resolved path is within the static directory

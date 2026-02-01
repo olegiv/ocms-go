@@ -3,6 +3,11 @@
 
 package handler
 
+import (
+	"mime"
+	"path/filepath"
+)
+
 // Route pattern constants for chi router registration.
 const (
 	// RouteRoot is the root path.
@@ -168,3 +173,17 @@ const (
 	// HeaderContentType is the Content-Type HTTP header name.
 	HeaderContentType = "Content-Type"
 )
+
+// ContentTypeByExtension returns the MIME content type for a file based on its extension.
+// Falls back to "application/octet-stream" for unknown extensions.
+func ContentTypeByExtension(filename string) string {
+	ext := filepath.Ext(filename)
+	if ext == "" {
+		return "application/octet-stream"
+	}
+	contentType := mime.TypeByExtension(ext)
+	if contentType == "" {
+		return "application/octet-stream"
+	}
+	return contentType
+}
