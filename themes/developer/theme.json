@@ -16,6 +16,12 @@
     },
     "settings": [
         {
+            "key": "favicon",
+            "label": "Favicon",
+            "type": "image",
+            "default": ""
+        },
+        {
             "key": "accent_color",
             "label": "Accent Color",
             "type": "color",

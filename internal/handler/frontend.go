@@ -2166,3 +2166,45 @@ func (h *FrontendHandler) renderInternalError(w http.ResponseWriter) {
 </body>
 </html>`)
 }
+
+// Favicon serves the favicon from theme settings or falls back to the default.
+// It checks the active theme's "favicon" setting first, then theme's static favicon,
+// and finally falls back to the embedded default favicon.
+func (h *FrontendHandler) Favicon(w http.ResponseWriter, r *http.Request, defaultFavicon []byte) {
+	ctx := r.Context()
+
+	// Check active theme's settings for custom favicon
+	if h.themeManager != nil {
+		activeTheme := h.themeManager.GetActiveTheme()
+		if activeTheme != nil {
+			configKey := "theme_settings_" + activeTheme.Name
+			var settingsJSON string
+			if h.cacheManager != nil {
+				settingsJSON, _ = h.cacheManager.GetConfig(ctx, configKey)
+			} else {
+				if cfg, err := h.queries.GetConfigByKey(ctx, configKey); err == nil {
+					settingsJSON = cfg.Value
+				}
+			}
+
+			if settingsJSON != "" {
+				var settings map[string]string
+				if err := json.Unmarshal([]byte(settingsJSON), &settings); err == nil {
+					if faviconPath := settings["favicon"]; faviconPath != "" {
+						// Check if it's a URL to uploaded media (starts with /uploads/)
+						if strings.HasPrefix(faviconPath, "/uploads/") {
+							// Redirect to the uploaded file for proper caching
+							http.Redirect(w, r, faviconPath, http.StatusMovedPermanently)
+							return
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Serve the default embedded favicon
+	w.Header().Set(HeaderContentType, "image/x-icon")
+	w.Header().Set("Cache-Control", "public, max-age=31536000")
+	_, _ = w.Write(defaultFavicon)
+}
