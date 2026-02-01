@@ -23,3 +23,9 @@ Thumbs.db
 
 /cookies.txt
 /ocms
+
+# User content directory
+custom/themes/*
+custom/modules/*
+!custom/themes/.gitkeep
+!custom/modules/.gitkeep

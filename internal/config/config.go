@@ -16,9 +16,9 @@ type Config struct {
 	ServerHost    string `env:"OCMS_SERVER_HOST" envDefault:"localhost"`
 	ServerPort    int    `env:"OCMS_SERVER_PORT" envDefault:"8080"`
 	Env           string `env:"OCMS_ENV" envDefault:"development"`
-	LogLevel      string `env:"OCMS_LOG_LEVEL" envDefault:"info"`
-	ThemesDir     string `env:"OCMS_THEMES_DIR" envDefault:"./themes"`
-	ActiveTheme   string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`
+	LogLevel    string `env:"OCMS_LOG_LEVEL" envDefault:"info"`
+	CustomDir   string `env:"OCMS_CUSTOM_DIR" envDefault:"./custom"`
+	ActiveTheme string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`
 
 	// Cache configuration
 	RedisURL     string `env:"OCMS_REDIS_URL"`                         // Optional Redis URL for distributed caching

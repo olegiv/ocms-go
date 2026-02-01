@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # oCMS Multi-Instance Backup Script
-# Backs up database and uploads for all registered oCMS instances.
+# Backs up database, uploads, and custom content for all registered oCMS instances.
 #
 # Usage: sudo ./backup-multi.sh [site-id]
 #
@@ -44,6 +44,7 @@ backup_site() {
     local backup_dir="$instance_dir/backups"
     local db_path="$instance_dir/data/ocms.db"
     local uploads_path="$instance_dir/uploads"
+    local custom_path="$instance_dir/custom"
 
     echo_info "Backing up site: $site_id"
 
@@ -86,12 +87,22 @@ backup_site() {
         echo "  Uploads: empty (skipping)"
     fi
 
+    # Backup custom content (themes, modules)
+    if [ -d "$custom_path" ] && [ "$(find "$custom_path" -mindepth 2 -type f 2>/dev/null | head -1)" ]; then
+        local custom_backup="$backup_dir/custom_${TIMESTAMP}.tar.gz"
+        tar -czf "$custom_backup" -C "$instance_dir" custom
+        echo "  Custom: $custom_backup ($(ls -lh "$custom_backup" | awk '{print $5}'))"
+    else
+        echo "  Custom: empty (skipping)"
+    fi
+
     # Set ownership
     chown -R "$user" "$backup_dir" 2>/dev/null || true
 
     # Cleanup old backups
     find "$backup_dir" -name "ocms_*.db.gz" -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
     find "$backup_dir" -name "uploads_*.tar.gz" -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
+    find "$backup_dir" -name "custom_*.tar.gz" -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
 
     echo_info "  Done."
     return 0

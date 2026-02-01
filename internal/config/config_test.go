@@ -205,3 +205,35 @@ func TestLoad_GeoIPDBPath(t *testing.T) {
 		t.Error("GeoIPEnabled() = false, want true")
 	}
 }
+
+func TestLoad_CustomDir(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		os.Clearenv()
+		setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load() error: %v", err)
+		}
+
+		if cfg.CustomDir != "./custom" {
+			t.Errorf("CustomDir = %q, want %q", cfg.CustomDir, "./custom")
+		}
+	})
+
+	t.Run("custom_value", func(t *testing.T) {
+		os.Clearenv()
+		setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+		setEnv(t, "OCMS_CUSTOM_DIR", "/var/www/custom")
+
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load() error: %v", err)
+		}
+
+		if cfg.CustomDir != "/var/www/custom" {
+			t.Errorf("CustomDir = %q, want %q", cfg.CustomDir, "/var/www/custom")
+		}
+	})
+}
+

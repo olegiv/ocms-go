@@ -1,87 +1,79 @@
 # golangci-lint configuration
 # https://golangci-lint.run/usage/configuration/
 
+version: "2"
 run:
-  timeout: 5m
   tests: true
-
 linters:
-  disable-all: true
+  default: none
   enable:
-    # Default linters
-    - errcheck      # Check for unchecked errors (including in tests!)
-    - gosimple      # Simplify code
-    - govet         # Report suspicious constructs
-    - ineffassign   # Detect unused assignments
-    - staticcheck   # Static analysis checks
-    - unused        # Check for unused code (constants, variables, types)
-
-    # Additional linters for issues IDE catches
-    - unconvert     # Remove unnecessary type conversions
-    - unparam       # Reports unused function parameters
-    - gocritic      # Checks for bugs, performance, style issues
-
-    # Code quality
-    - dupl          # Code clone detection (including tests!)
-    - gocyclo       # Cyclomatic complexity
-    - misspell      # Spelling mistakes in comments
-    - revive        # Import shadowing detection
-
-linters-settings:
-  dupl:
-    threshold: 200  # Allow type-safe patterns with different query types
-
-  gocyclo:
-    min-complexity: 55  # Main init functions are inherently complex
-
-  gocritic:
-    enabled-checks:
-      # These checks are not enabled by default
-      - boolExprSimplify      # Simplify boolean expressions
-      - emptyStringTest       # Empty string comparisons
-      - evalOrder             # Evaluation order issues
-      - nilValReturn          # Return nil in error return
-      - regexpPattern         # Regexp pattern issues
-      - truncateCmp           # Truncated comparisons
-      - unnecessaryBlock      # Unnecessary blocks
-      - weakCond              # Weak conditions (always true/false)
-
-  unparam:
-    check-exported: false
-
-  unconvert:
-    fast-math: false
-    safe: false
-
-  errcheck:
-    # Check for errors in deferred Close() calls
-    check-type-assertions: false
-    check-blank: false
-
-  revive:
+    - dupl
+    - errcheck
+    - gocritic
+    - gocyclo
+    - govet
+    - ineffassign
+    - misspell
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+  settings:
+    dupl:
+      threshold: 200
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+    gocritic:
+      enabled-checks:
+        - boolExprSimplify
+        - emptyStringTest
+        - evalOrder
+        - nilValReturn
+        - regexpPattern
+        - truncateCmp
+        - unnecessaryBlock
+        - weakCond
+    gocyclo:
+      min-complexity: 55
+    revive:
+      rules:
+        - name: import-shadowing
+          severity: warning
+          disabled: false
+    unconvert:
+      fast-math: false
+      safe: false
+    unparam:
+      check-exported: false
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
-      - name: import-shadowing
-        severity: warning
-        disabled: false
-
+      - linters:
+          - gocyclo
+        path: _test\.go
+      - linters:
+          - staticcheck
+        text: 'SA9003:'
+    paths:
+      - .*\.sql\.go$
+      - vendor
+      - third_party$
+      - builtin$
+      - examples$
 issues:
-  exclude-dirs:
-    - vendor
-
-  exclude-files:
-    - ".*\\.sql\\.go$"  # Exclude sqlc generated files
-
-  exclude-rules:
-    # Exclude gocyclo from test files
-    # Test complexity is acceptable for comprehensive test coverage
-    - path: _test\.go
-      linters:
-        - gocyclo
-
-    # Exclude some staticcheck messages
-    - linters:
-        - staticcheck
-      text: "SA9003:"  # Empty branch
-
   max-issues-per-linter: 0
   max-same-issues: 0
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
