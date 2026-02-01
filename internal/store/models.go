@@ -62,6 +62,7 @@ type Event struct {
 	UserID    sql.NullInt64 `json:"user_id"`
 	Metadata  string        `json:"metadata"`
 	CreatedAt time.Time     `json:"created_at"`
+	IpAddress string        `json:"ip_address"`
 }
 
 type Form struct {
