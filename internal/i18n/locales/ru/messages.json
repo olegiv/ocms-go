@@ -1718,6 +1718,31 @@
             "translation": "Выберите язык для этой формы"
         },
         {
+            "id": "forms.captcha_info_title",
+            "message": "Captcha Field",
+            "translation": "Поле Captcha"
+        },
+        {
+            "id": "forms.captcha_info_text",
+            "message": "This field will display an hCaptcha challenge. Users must complete it before submitting the form.",
+            "translation": "Это поле отобразит проверку hCaptcha. Пользователи должны пройти её перед отправкой формы."
+        },
+        {
+            "id": "forms.captcha_warning_title",
+            "message": "Warning:",
+            "translation": "Внимание:"
+        },
+        {
+            "id": "forms.captcha_warning_text",
+            "message": "hCaptcha is not currently enabled. The captcha will not be verified until you configure it.",
+            "translation": "hCaptcha в данный момент не включена. Captcha не будет проверяться, пока вы не настроите её."
+        },
+        {
+            "id": "forms.captcha_configure_link",
+            "message": "Configure hCaptcha",
+            "translation": "Настроить hCaptcha"
+        },
+        {
             "id": "themes.title",
             "message": "Themes",
             "translation": "Темы"

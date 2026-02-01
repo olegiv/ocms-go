@@ -1718,6 +1718,31 @@
             "translation": "Select the language for this form"
         },
         {
+            "id": "forms.captcha_info_title",
+            "message": "Captcha Field",
+            "translation": "Captcha Field"
+        },
+        {
+            "id": "forms.captcha_info_text",
+            "message": "This field will display an hCaptcha challenge. Users must complete it before submitting the form.",
+            "translation": "This field will display an hCaptcha challenge. Users must complete it before submitting the form."
+        },
+        {
+            "id": "forms.captcha_warning_title",
+            "message": "Warning:",
+            "translation": "Warning:"
+        },
+        {
+            "id": "forms.captcha_warning_text",
+            "message": "hCaptcha is not currently enabled. The captcha will not be verified until you configure it.",
+            "translation": "hCaptcha is not currently enabled. The captcha will not be verified until you configure it."
+        },
+        {
+            "id": "forms.captcha_configure_link",
+            "message": "Configure hCaptcha",
+            "translation": "Configure hCaptcha"
+        },
+        {
             "id": "themes.title",
             "message": "Themes",
             "translation": "Themes"

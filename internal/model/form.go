@@ -15,6 +15,7 @@ const (
 	FieldTypeCheckbox = "checkbox"
 	FieldTypeDate     = "date"
 	FieldTypeFile     = "file"
+	FieldTypeCaptcha  = "captcha"
 )
 
 // ValidFieldTypes returns all valid form field types.
@@ -29,6 +30,7 @@ func ValidFieldTypes() []string {
 		FieldTypeCheckbox,
 		FieldTypeDate,
 		FieldTypeFile,
+		FieldTypeCaptcha,
 	}
 }
 

@@ -25,6 +25,10 @@ const (
 	HookAuthLoginWidget = "auth.login_widget"
 	// HookAuthBeforeLogin is called before login to verify captcha.
 	HookAuthBeforeLogin = "auth.before_login"
+	// HookFormCaptchaWidget is called to render captcha widget in public forms.
+	HookFormCaptchaWidget = "form.captcha_widget"
+	// HookFormCaptchaVerify is called to verify captcha on form submission.
+	HookFormCaptchaVerify = "form.captcha_verify"
 )
 
 // Module implements the module.Module interface for the hCaptcha module.
@@ -79,7 +83,7 @@ func (m *Module) Init(ctx *module.Context) error {
 
 // registerHooks registers the module's hooks.
 func (m *Module) registerHooks() {
-	// Register hook for rendering captcha widget
+	// Register hook for rendering captcha widget in login form
 	m.ctx.Hooks.Register(HookAuthLoginWidget, module.HookHandler{
 		Name:     "hcaptcha_widget",
 		Module:   m.Name(),
@@ -92,6 +96,30 @@ func (m *Module) registerHooks() {
 	// Register hook for verifying captcha before login
 	m.ctx.Hooks.Register(HookAuthBeforeLogin, module.HookHandler{
 		Name:     "hcaptcha_verify",
+		Module:   m.Name(),
+		Priority: 0,
+		Fn: func(ctx context.Context, data any) (any, error) {
+			req, ok := data.(*VerifyRequest)
+			if !ok {
+				return data, nil
+			}
+			return m.VerifyFromRequest(req)
+		},
+	})
+
+	// Register hook for rendering captcha widget in public forms
+	m.ctx.Hooks.Register(HookFormCaptchaWidget, module.HookHandler{
+		Name:     "hcaptcha_form_widget",
+		Module:   m.Name(),
+		Priority: 0,
+		Fn: func(ctx context.Context, data any) (any, error) {
+			return m.RenderWidget(), nil
+		},
+	})
+
+	// Register hook for verifying captcha in form submissions
+	m.ctx.Hooks.Register(HookFormCaptchaVerify, module.HookHandler{
+		Name:     "hcaptcha_form_verify",
 		Module:   m.Name(),
 		Priority: 0,
 		Fn: func(ctx context.Context, data any) (any, error) {

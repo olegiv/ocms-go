@@ -23,10 +23,12 @@ import (
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 	"github.com/olegiv/ocms-go/internal/webhook"
+	"github.com/olegiv/ocms-go/modules/hcaptcha"
 )
 
 // FormsHandler handles form management routes.
@@ -35,14 +37,16 @@ type FormsHandler struct {
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
 	dispatcher     *webhook.Dispatcher
+	hookRegistry   *module.HookRegistry
 }
 
 // NewFormsHandler creates a new FormsHandler.
-func NewFormsHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager) *FormsHandler {
+func NewFormsHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, hr *module.HookRegistry) *FormsHandler {
 	return &FormsHandler{
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
+		hookRegistry:   hr,
 	}
 }
 
@@ -224,6 +228,76 @@ func validateFieldRequest(req *AddFieldRequest) string {
 		req.Validation = "{}"
 	}
 	return ""
+}
+
+// validateCaptchaFieldLimit checks that only one captcha field exists per form.
+// Returns an error message if validation fails, empty string on success.
+func (h *FormsHandler) validateCaptchaFieldLimit(ctx context.Context, formID int64, fieldType string, excludeFieldID int64) string {
+	if fieldType != model.FieldTypeCaptcha {
+		return ""
+	}
+
+	fields, err := h.queries.GetFormFields(ctx, formID)
+	if err != nil {
+		return ""
+	}
+
+	for _, field := range fields {
+		if field.Type == model.FieldTypeCaptcha && field.ID != excludeFieldID {
+			return "Only one captcha field is allowed per form"
+		}
+	}
+	return ""
+}
+
+// hasCaptchaField checks if the form has a captcha field.
+func hasCaptchaField(fields []store.FormField) bool {
+	for _, field := range fields {
+		if field.Type == model.FieldTypeCaptcha {
+			return true
+		}
+	}
+	return false
+}
+
+// verifyCaptcha verifies the captcha response using hooks.
+// Returns error message if verification fails, empty string on success.
+func (h *FormsHandler) verifyCaptcha(ctx context.Context, r *http.Request, lang string) string {
+	if h.hookRegistry == nil {
+		return "" // No hook registry, skip verification
+	}
+
+	// Check if captcha hooks are registered (hCaptcha module is active)
+	if !h.hookRegistry.HasHandlers(hcaptcha.HookFormCaptchaVerify) {
+		slog.Warn("captcha field present but hCaptcha module not active")
+		return "" // Module not active, skip verification
+	}
+
+	// Build verification request
+	verifyReq := &hcaptcha.VerifyRequest{
+		Response: hcaptcha.GetResponseFromForm(r),
+		RemoteIP: hcaptcha.GetRemoteIP(r),
+	}
+
+	// Call verification hook
+	result, err := h.hookRegistry.Call(ctx, hcaptcha.HookFormCaptchaVerify, verifyReq)
+	if err != nil {
+		slog.Error("captcha verification hook error", "error", err)
+		return i18n.T(lang, "hcaptcha.error_verification")
+	}
+
+	// Check result
+	if verifiedReq, ok := result.(*hcaptcha.VerifyRequest); ok {
+		if !verifiedReq.Verified {
+			// Use i18n message from ErrorCode if available
+			if verifiedReq.ErrorCode != "" {
+				return i18n.T(lang, verifiedReq.ErrorCode)
+			}
+			return verifiedReq.Error
+		}
+	}
+
+	return "" // Success
 }
 
 // getActiveFormBySlug retrieves a form by slug and checks if it's active.
@@ -636,6 +710,12 @@ func (h *FormsHandler) AddField(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check captcha field limit (only one per form)
+	if errMsg := h.validateCaptchaFieldLimit(r.Context(), formID, req.Type, 0); errMsg != "" {
+		writeJSONError(w, http.StatusBadRequest, errMsg)
+		return
+	}
+
 	maxPos := h.getMaxFieldPosition(r, formID)
 
 	now := time.Now()
@@ -699,6 +779,12 @@ func (h *FormsHandler) UpdateField(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if errMsg := validateFieldRequest(&req); errMsg != "" {
+		writeJSONError(w, http.StatusBadRequest, errMsg)
+		return
+	}
+
+	// Check captcha field limit (only one per form, exclude current field)
+	if errMsg := h.validateCaptchaFieldLimit(r.Context(), formID, req.Type, fieldID); errMsg != "" {
 		writeJSONError(w, http.StatusBadRequest, errMsg)
 		return
 	}
@@ -885,11 +971,25 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	// Note: CSRF protection is handled by the middleware (filippo.io/csrf/gorilla)
 	// which uses Fetch metadata headers - no form token validation needed here.
 
+	// Verify captcha if form has captcha field
+	if hasCaptchaField(fields) {
+		if errMsg := h.verifyCaptcha(r.Context(), r, form.LanguageCode); errMsg != "" {
+			validationErrors := map[string]string{"_captcha": errMsg}
+			h.renderFormWithErrors(w, r, *form, fields, validationErrors, r.Form)
+			return
+		}
+	}
+
 	// Collect values and validate
 	values := make(map[string]string)
 	validationErrors := make(map[string]string)
 
 	for _, field := range fields {
+		// Skip captcha fields - don't store their values
+		if field.Type == model.FieldTypeCaptcha {
+			continue
+		}
+
 		value := strings.TrimSpace(r.FormValue(field.Name))
 		values[field.Name] = value
 
