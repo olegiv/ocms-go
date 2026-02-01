@@ -27,6 +27,12 @@
         </div>
         {{end}}
 
+        {{if index .Data.Errors "_captcha"}}
+        <div class="alert alert-error">
+            {{index .Data.Errors "_captcha"}}
+        </div>
+        {{end}}
+
         <form method="POST" action="/forms/{{.Data.Form.Slug}}" class="public-form">
             {{.CSRFField}}
 
@@ -37,6 +43,14 @@
             </div>
 
             {{range .Data.Fields}}
+            {{if eq .Type "captcha"}}
+            <!-- Captcha field - render hCaptcha widget -->
+            {{if hcaptchaEnabled}}
+            <div class="form-group captcha-group">
+                {{hcaptchaWidget}}
+            </div>
+            {{end}}
+            {{else}}
             <div class="form-group{{if index $.Data.Errors .Name}} has-error{{end}}">
                 <label for="field_{{.ID}}">
                     {{.Label}}
@@ -162,6 +176,7 @@
                 {{end}}
             </div>
             {{end}}
+            {{end}}
 
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary btn-lg">Submit</button>
@@ -180,10 +195,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Title}} - {{.Data.SiteName}}</title>
     <link rel="stylesheet" href="/static/dist/main.css">
-    
 </head>
 <body>
     {{template "content" .}}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Fix hCaptcha iframe height to show test mode warning text properly
+        // hCaptcha sets inline height of 76px which clips the warning message
+        function fixHCaptchaHeight() {
+            const iframe = document.querySelector('.h-captcha iframe');
+            if (iframe && iframe.offsetHeight < 115) {
+                iframe.style.setProperty('height', '115px', 'important');
+                iframe.style.setProperty('min-height', '115px', 'important');
+            }
+        }
+        // Poll until hCaptcha is loaded and fixed (hCaptcha loads async)
+        let hcaptchaAttempts = 0;
+        const hcaptchaInterval = setInterval(function() {
+            fixHCaptchaHeight();
+            if (++hcaptchaAttempts > 50) clearInterval(hcaptchaInterval);
+        }, 100);
+    });
+    </script>
 </body>
 </html>
 {{end}}

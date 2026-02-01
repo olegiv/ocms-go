@@ -473,7 +473,7 @@ func run() error {
 	taxonomyHandler := handler.NewTaxonomyHandler(db, renderer, sessionManager)
 	mediaHandler := handler.NewMediaHandler(db, renderer, sessionManager, handler.UploadsDirPath)
 	menusHandler := handler.NewMenusHandler(db, renderer, sessionManager)
-	formsHandler := handler.NewFormsHandler(db, renderer, sessionManager)
+	formsHandler := handler.NewFormsHandler(db, renderer, sessionManager, hookRegistry)
 	themesHandler := handler.NewThemesHandler(db, renderer, sessionManager, themeManager, cacheManager)
 	widgetsHandler := handler.NewWidgetsHandler(db, renderer, sessionManager, themeManager)
 	modulesHandler := handler.NewModulesHandler(db, renderer, sessionManager, moduleRegistry, hookRegistry)

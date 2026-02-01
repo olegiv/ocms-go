@@ -211,7 +211,7 @@
                             <div class="form-group">
                                 <label class="form-label">{{T .AdminLang "forms.field_type"}} *</label>
                                 <select class="form-input" x-model="editingField.type">
-                                    <template x-for="t in fieldTypes" :key="t">
+                                    <template x-for="t in (editingField && editingField.id ? fieldTypes : getAvailableFieldTypes())" :key="t">
                                         <option :value="t" x-text="t"></option>
                                     </template>
                                 </select>
@@ -222,18 +222,18 @@
                                 <input type="text" class="form-input" x-model="editingField.label">
                             </div>
 
-                            <div class="form-group">
+                            <div class="form-group" x-show="editingField && editingField.type !== 'captcha'">
                                 <label class="form-label">{{T .AdminLang "forms.field_name"}}</label>
                                 <input type="text" class="form-input" x-model="editingField.name" placeholder="auto-generated">
                                 <small class="form-text">{{T .AdminLang "forms.field_name_hint"}}</small>
                             </div>
 
-                            <div class="form-group">
+                            <div class="form-group" x-show="editingField && editingField.type !== 'captcha'">
                                 <label class="form-label">{{T .AdminLang "forms.field_placeholder"}}</label>
                                 <input type="text" class="form-input" x-model="editingField.placeholder">
                             </div>
 
-                            <div class="form-group">
+                            <div class="form-group" x-show="editingField && editingField.type !== 'captcha'">
                                 <label class="form-label">{{T .AdminLang "forms.field_help_text"}}</label>
                                 <input type="text" class="form-input" x-model="editingField.help_text">
                                 <small class="form-text">{{T .AdminLang "forms.field_help_hint"}}</small>
@@ -245,7 +245,22 @@
                                 <small class="form-text">{{T .AdminLang "forms.field_options_hint"}}</small>
                             </div>
 
-                            <div class="form-group">
+                            <!-- Captcha field info -->
+                            <template x-if="editingField && editingField.type === 'captcha'">
+                                <div class="alert alert-info" style="margin-bottom: 1rem;">
+                                    <strong>{{T .AdminLang "forms.captcha_info_title"}}</strong>
+                                    <p style="margin: 0.5rem 0 0 0;">{{T .AdminLang "forms.captcha_info_text"}}</p>
+                                    {{if not (hcaptchaEnabled)}}
+                                    <div class="alert alert-warning" style="margin-top: 0.5rem; margin-bottom: 0;">
+                                        <strong>{{T .AdminLang "forms.captcha_warning_title"}}</strong>
+                                        {{T .AdminLang "forms.captcha_warning_text"}}
+                                        <a href="/admin/hcaptcha">{{T .AdminLang "forms.captcha_configure_link"}}</a>
+                                    </div>
+                                    {{end}}
+                                </div>
+                            </template>
+
+                            <div class="form-group" x-show="editingField && editingField.type !== 'captcha'">
                                 <label class="checkbox-label">
                                     <input type="checkbox" x-model="editingField.is_required">
                                     <span>{{T .AdminLang "forms.field_required"}}</span>
@@ -381,6 +396,18 @@ function formFieldBuilder() {
                 is_required: false
             };
             this.showModal = true;
+        },
+
+        hasCaptchaField() {
+            return this.fields.some(f => f.type === 'captcha');
+        },
+
+        getAvailableFieldTypes() {
+            // Filter out captcha if one already exists
+            if (this.hasCaptchaField()) {
+                return this.fieldTypes.filter(t => t !== 'captcha');
+            }
+            return this.fieldTypes;
         },
 
         openEditModal(field) {
