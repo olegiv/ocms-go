@@ -1915,34 +1915,23 @@ func (h *FrontendHandler) getPageNum(r *http.Request) int {
 	return ParsePageParam(r)
 }
 
-// fetchPagesWithOptionalLang fetches pages using provided query functions based on language filter.
-func fetchPagesWithOptionalLang(
-	langCode string,
-	listWithLang func() ([]store.Page, error),
-	countWithLang func() (int64, error),
-	listWithoutLang func() ([]store.Page, error),
-	countWithoutLang func() (int64, error),
-) ([]store.Page, int64, error) {
-	if langCode != "" {
-		pages, err := listWithLang()
-		if err != nil {
-			return nil, 0, err
-		}
-		total, _ := countWithLang()
-		return pages, total, nil
-	}
-	pages, err := listWithoutLang()
+// fetchAndCount lists pages and counts total using the provided functions.
+func fetchAndCount(list func() ([]store.Page, error), count func() (int64, error)) ([]store.Page, int64, error) {
+	pages, err := list()
 	if err != nil {
 		return nil, 0, err
 	}
-	total, _ := countWithoutLang()
+	total, _ := count()
 	return pages, total, nil
 }
 
 // fetchPagesForEntity fetches published pages for a category or tag with optional language filter.
 func (h *FrontendHandler) fetchPagesForEntity(ctx context.Context, entityID int64, langCode string, limit, offset int64, isTag bool) ([]store.Page, int64, error) {
-	if isTag {
-		return fetchPagesWithOptionalLang(langCode,
+	hasLang := langCode != ""
+
+	switch {
+	case isTag && hasLang:
+		return fetchAndCount(
 			func() ([]store.Page, error) {
 				return h.queries.ListPublishedPagesForTagAndLanguage(ctx, store.ListPublishedPagesForTagAndLanguageParams{
 					TagID: entityID, LanguageCode: langCode, Limit: limit, Offset: offset})
@@ -1951,29 +1940,35 @@ func (h *FrontendHandler) fetchPagesForEntity(ctx context.Context, entityID int6
 				return h.queries.CountPublishedPagesForTagAndLanguage(ctx, store.CountPublishedPagesForTagAndLanguageParams{
 					TagID: entityID, LanguageCode: langCode})
 			},
+		)
+	case isTag:
+		return fetchAndCount(
 			func() ([]store.Page, error) {
 				return h.queries.ListPublishedPagesForTag(ctx, store.ListPublishedPagesForTagParams{
 					TagID: entityID, Limit: limit, Offset: offset})
 			},
 			func() (int64, error) { return h.queries.CountPublishedPagesForTag(ctx, entityID) },
 		)
+	case hasLang:
+		return fetchAndCount(
+			func() ([]store.Page, error) {
+				return h.queries.ListPublishedPagesByCategoryAndLanguage(ctx, store.ListPublishedPagesByCategoryAndLanguageParams{
+					CategoryID: entityID, LanguageCode: langCode, Limit: limit, Offset: offset})
+			},
+			func() (int64, error) {
+				return h.queries.CountPublishedPagesByCategoryAndLanguage(ctx, store.CountPublishedPagesByCategoryAndLanguageParams{
+					CategoryID: entityID, LanguageCode: langCode})
+			},
+		)
+	default:
+		return fetchAndCount(
+			func() ([]store.Page, error) {
+				return h.queries.ListPublishedPagesByCategory(ctx, store.ListPublishedPagesByCategoryParams{
+					CategoryID: entityID, Limit: limit, Offset: offset})
+			},
+			func() (int64, error) { return h.queries.CountPublishedPagesByCategory(ctx, entityID) },
+		)
 	}
-
-	return fetchPagesWithOptionalLang(langCode,
-		func() ([]store.Page, error) {
-			return h.queries.ListPublishedPagesByCategoryAndLanguage(ctx, store.ListPublishedPagesByCategoryAndLanguageParams{
-				CategoryID: entityID, LanguageCode: langCode, Limit: limit, Offset: offset})
-		},
-		func() (int64, error) {
-			return h.queries.CountPublishedPagesByCategoryAndLanguage(ctx, store.CountPublishedPagesByCategoryAndLanguageParams{
-				CategoryID: entityID, LanguageCode: langCode})
-		},
-		func() ([]store.Page, error) {
-			return h.queries.ListPublishedPagesByCategory(ctx, store.ListPublishedPagesByCategoryParams{
-				CategoryID: entityID, Limit: limit, Offset: offset})
-		},
-		func() (int64, error) { return h.queries.CountPublishedPagesByCategory(ctx, entityID) },
-	)
 }
 
 // defaultPerPage is the default number of items per page for pagination.

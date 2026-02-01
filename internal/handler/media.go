@@ -336,7 +336,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("HX-Request") == "true" {
 			// Return success HTML for HTMX
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(fmt.Sprintf(`<div class="upload-success">Uploaded: %s</div>`, result.Media.Filename)))
+			_, _ = fmt.Fprintf(w, `<div class="upload-success">Uploaded: %s</div>`, result.Media.Filename)
 			return
 		}
 
@@ -374,7 +374,7 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(fmt.Sprintf(`<div class="upload-success">Uploaded %d files</div>`, uploadedCount)))
+		_, _ = fmt.Fprintf(w, `<div class="upload-success">Uploaded %d files</div>`, uploadedCount)
 		return
 	}
 

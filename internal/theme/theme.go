@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"io/fs"
 	"regexp"
 	"strings"
 )
@@ -47,11 +48,13 @@ type WidgetArea struct {
 // Theme represents a loaded theme with its templates and configuration.
 type Theme struct {
 	Name         string                       // directory name (used as identifier)
-	Path         string                       // filesystem path to theme directory
+	Path         string                       // filesystem path to theme directory (empty for embedded)
 	Config       Config                       // parsed theme.json
 	Templates    *template.Template           // parsed templates
-	StaticPath   string                       // path to static files
+	StaticPath   string                       // path to static files (empty for embedded)
 	Translations map[string]map[string]string // lang -> key -> translation (optional overrides)
+	IsEmbedded   bool                         // true if theme is embedded in binary
+	EmbeddedFS   fs.FS                        // embedded filesystem for static files (nil for external themes)
 }
 
 // GetTemplate returns the template file path for a given template name.

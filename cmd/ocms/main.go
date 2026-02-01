@@ -37,6 +37,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/session"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/theme"
+	"github.com/olegiv/ocms-go/internal/themes"
 	"github.com/olegiv/ocms-go/internal/version"
 	"github.com/olegiv/ocms-go/internal/webhook"
 	"github.com/olegiv/ocms-go/modules/analytics_ext"
@@ -113,7 +114,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_DB_PATH           SQLite database path (default: ./data/ocms.db)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SERVER_PORT       Server port (default: 8080)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_ENV               Environment: development|production (default: development)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_THEMES_DIR        Themes directory (default: ./themes)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_CUSTOM_DIR        Custom content directory (default: ./custom)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_ACTIVE_THEME      Active theme name (default: default)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REDIS_URL         Redis URL for distributed caching (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "\nFor more information, see: https://github.com/olegiv/ocms-go\n")
@@ -264,8 +265,8 @@ func run() error {
 	}
 	slog.Info("template renderer initialized")
 
-	// Initialize theme manager
-	themeManager := theme.NewManager(cfg.ThemesDir, logger)
+	// Initialize theme manager with embedded core themes and custom directory
+	themeManager := theme.NewManager(themes.FS, cfg.CustomDir, logger)
 
 	// Add theme manager's template functions (TTheme) to renderer
 	renderer.AddTemplateFuncs(themeManager.TemplateFuncs())
@@ -411,9 +412,9 @@ func run() error {
 		}
 	} else if themeManager.ThemeCount() > 0 {
 		// Fall back to first available theme
-		themes := themeManager.ListThemesWithActive()
-		if len(themes) > 0 {
-			if err := themeManager.SetActiveTheme(themes[0].Name); err != nil {
+		availableThemes := themeManager.ListThemesWithActive()
+		if len(availableThemes) > 0 {
+			if err := themeManager.SetActiveTheme(availableThemes[0].Name); err != nil {
 				slog.Warn("failed to set fallback theme", "error", err)
 			}
 		}
@@ -830,6 +831,7 @@ func run() error {
 	r.Handle("/uploads/*", uploadsHandler)
 
 	// Serve theme static files with caching (1 month = 2592000 seconds)
+	// Supports both embedded themes (from binary) and external themes (from filesystem)
 	r.Get("/themes/{themeName}/static/*", func(w http.ResponseWriter, r *http.Request) {
 		themeName := chi.URLParam(r, "themeName")
 		thm, err := themeManager.GetTheme(themeName)
@@ -837,15 +839,16 @@ func run() error {
 			http.NotFound(w, r)
 			return
 		}
+
 		// Security headers for static files
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 		w.Header().Set("Cache-Control", "public, max-age=2592000")
 
 		// Strip the prefix to get the requested file path
-		path := r.URL.Path
+		reqPath := r.URL.Path
 		prefix := fmt.Sprintf("/themes/%s/static/", themeName)
-		requestedPath := path[len(prefix):]
+		requestedPath := reqPath[len(prefix):]
 
 		// Clean the path to resolve any .. sequences
 		cleanPath := filepath.Clean(requestedPath)
@@ -856,7 +859,25 @@ func run() error {
 			return
 		}
 
-		// Construct full path
+		// Handle embedded vs external themes
+		if thm.IsEmbedded && thm.EmbeddedFS != nil {
+			// Serve from embedded filesystem
+			embeddedPath := "static/" + cleanPath
+			data, err := fs.ReadFile(thm.EmbeddedFS, embeddedPath)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+
+			// Set content type based on file extension
+			contentType := handler.ContentTypeByExtension(cleanPath)
+			w.Header().Set("Content-Type", contentType)
+			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
+			_, _ = w.Write(data)
+			return
+		}
+
+		// Serve from filesystem for external themes
 		filePath := filepath.Join(thm.StaticPath, cleanPath)
 
 		// Verify the resolved path is within the static directory
