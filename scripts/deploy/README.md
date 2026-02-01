@@ -116,6 +116,48 @@ Commands:
 
 ## Deploying Updates
 
+### Single Instance (from local machine)
+
+Use `deploy.sh` to build, transfer, and restart a single instance:
+
+```bash
+./scripts/deploy/deploy.sh <server> <instance> -v <vhost> -o <owner> [options]
+
+# Examples:
+./scripts/deploy/deploy.sh server.example.com my_site \
+  -v /var/www/vhosts/example.com -o hosting
+
+./scripts/deploy/deploy.sh server.example.com my_site \
+  -v /var/www/vhosts/example.com -o hosting --skip-build
+
+./scripts/deploy/deploy.sh server.example.com my_site \
+  -v /var/www/vhosts/example.com -o hosting -g mygroup --dry-run
+```
+
+Required:
+- `-v, --vhost PATH` — vhost path for themes sync (e.g., `/var/www/vhosts/example.com`)
+- `-o, --owner USER` — vhost owner for chown (e.g., `hosting`)
+
+Options:
+- `-g, --group GROUP` — vhost group for chown (default: `psaserv`)
+- `-u, --user USER` — SSH user (default: `root`)
+- `--skip-build` — skip `make build-linux-amd64`, use existing binary
+- `--dry-run` — print commands without executing
+
+The script:
+1. Builds `bin/ocms-linux-amd64`
+2. Backs up current binary on server
+3. Stops the instance via `ocmsctl`
+4. Transfers binary via `scp`
+5. Syncs themes to `{vhost}/ocms/themes/` via `rsync --delete`
+6. Sets themes ownership to `{owner}:{group}`
+7. Starts the instance
+8. Checks instance status
+
+### Multi-Instance (on server)
+
+For updating all instances on a server:
+
 ```bash
 # Local machine:
 make build-linux-amd64
