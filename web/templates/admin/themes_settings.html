@@ -136,12 +136,14 @@ document.querySelectorAll('.color-input').forEach(function(colorInput) {
     });
 });
 
-// Validate URL to prevent XSS - only allow safe schemes
+// Validate URL to prevent XSS - only allow safe schemes and paths
 function isValidImageUrl(url) {
     if (!url || typeof url !== 'string') return false;
-    // Allow relative paths starting with /
-    if (url.startsWith('/')) return true;
-    // Allow http and https URLs
+    // Allow /uploads/ paths (media API returns these)
+    if (url.startsWith('/uploads/')) return true;
+    // Allow /static/ paths (theme assets)
+    if (url.startsWith('/static/')) return true;
+    // Allow http and https URLs for external images
     if (url.startsWith('http://') || url.startsWith('https://')) return true;
     return false;
 }
@@ -149,6 +151,7 @@ function isValidImageUrl(url) {
 // Safely set image src with validation
 function safeSetImageSrc(img, url) {
     if (isValidImageUrl(url)) {
+        // lgtm[js/xss-through-dom] - img.src doesn't execute JS, URL scheme validated by isValidImageUrl
         img.src = url;
         return true;
     }
