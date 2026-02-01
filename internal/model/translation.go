@@ -10,6 +10,7 @@ const (
 	EntityTypePage     = "page"
 	EntityTypeCategory = "category"
 	EntityTypeTag      = "tag"
+	EntityTypeForm     = "form"
 )
 
 // Translation represents a link between content entities across languages.

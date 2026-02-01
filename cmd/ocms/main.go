@@ -648,6 +648,9 @@ func run() error {
 			r.Delete(handler.RouteFormsID+handler.RouteSubmissionsSubID, formsHandler.DeleteSubmission)
 			r.Post(handler.RouteFormsID+"/submissions/export", formsHandler.ExportSubmissions)
 
+			// Form translation route
+			r.Post(handler.RouteFormsID+handler.RouteSuffixTranslate, formsHandler.TranslateForm)
+
 			// Theme settings (not activation - that's admin only)
 			registerSettingsRoutes(r, handler.RouteThemeSettings, themesHandler.Settings, themesHandler.SaveSettings)
 

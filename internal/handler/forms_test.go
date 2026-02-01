@@ -496,3 +496,137 @@ func TestFormField(t *testing.T) {
 		t.Errorf("got %d fields, want 1", len(fields))
 	}
 }
+
+func TestFormWithLanguage(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+
+	queries := store.New(db)
+
+	// Get the default English language
+	lang, err := queries.GetDefaultLanguage(context.Background())
+	if err != nil {
+		t.Fatalf("GetDefaultLanguage failed: %v", err)
+	}
+
+	now := time.Now()
+	form, err := queries.CreateForm(context.Background(), store.CreateFormParams{
+		Name:         "English Form",
+		Slug:         "english-form",
+		Title:        "English Form Title",
+		LanguageCode: lang.Code,
+		IsActive:     true,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+	if err != nil {
+		t.Fatalf("CreateForm failed: %v", err)
+	}
+
+	if form.LanguageCode != lang.Code {
+		t.Errorf("LanguageCode = %q, want %q", form.LanguageCode, lang.Code)
+	}
+}
+
+func TestFormSlugExists(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+
+	queries := store.New(db)
+	now := time.Now()
+
+	// Create a form
+	_, err := queries.CreateForm(context.Background(), store.CreateFormParams{
+		Name:         "Test Form",
+		Slug:         "test-form-slug",
+		Title:        "Test Form",
+		LanguageCode: "en",
+		IsActive:     true,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+	if err != nil {
+		t.Fatalf("CreateForm failed: %v", err)
+	}
+
+	t.Run("existing slug", func(t *testing.T) {
+		exists, err := queries.FormSlugExists(context.Background(), "test-form-slug")
+		if err != nil {
+			t.Fatalf("FormSlugExists failed: %v", err)
+		}
+		if exists == 0 {
+			t.Error("FormSlugExists should return non-zero for existing slug")
+		}
+	})
+
+	t.Run("non-existing slug", func(t *testing.T) {
+		exists, err := queries.FormSlugExists(context.Background(), "non-existing-slug")
+		if err != nil {
+			t.Fatalf("FormSlugExists failed: %v", err)
+		}
+		if exists != 0 {
+			t.Error("FormSlugExists should return 0 for non-existing slug")
+		}
+	})
+}
+
+func TestFormTranslationInfo(t *testing.T) {
+	info := FormTranslationInfo{
+		Language: store.Language{
+			ID:   1,
+			Code: "en",
+			Name: "English",
+		},
+		Form: store.Form{
+			ID:   1,
+			Name: "Test Form",
+			Slug: "test-form",
+		},
+	}
+
+	if info.Language.Code != "en" {
+		t.Errorf("Language.Code = %q, want %q", info.Language.Code, "en")
+	}
+	if info.Form.Name != "Test Form" {
+		t.Errorf("Form.Name = %q, want %q", info.Form.Name, "Test Form")
+	}
+}
+
+func TestFormFormDataWithTranslations(t *testing.T) {
+	data := FormFormData{
+		Form: &store.Form{
+			ID:           1,
+			Name:         "Contact Form",
+			Slug:         "contact",
+			LanguageCode: "en",
+		},
+		IsEdit: true,
+		Language: &store.Language{
+			ID:   1,
+			Code: "en",
+			Name: "English",
+		},
+		AllLanguages: []store.Language{
+			{ID: 1, Code: "en", Name: "English"},
+			{ID: 2, Code: "ru", Name: "Russian"},
+		},
+		Translations: []FormTranslationInfo{
+			{
+				Language: store.Language{ID: 2, Code: "ru", Name: "Russian"},
+				Form:     store.Form{ID: 2, Name: "Contact Form", Slug: "contact-ru"},
+			},
+		},
+		MissingLanguages: []store.Language{},
+	}
+
+	if data.Language.Code != "en" {
+		t.Errorf("Language.Code = %q, want %q", data.Language.Code, "en")
+	}
+	if len(data.AllLanguages) != 2 {
+		t.Errorf("AllLanguages count = %d, want 2", len(data.AllLanguages))
+	}
+	if len(data.Translations) != 1 {
+		t.Errorf("Translations count = %d, want 1", len(data.Translations))
+	}
+	if data.Translations[0].Language.Code != "ru" {
+		t.Errorf("Translation language = %q, want %q", data.Translations[0].Language.Code, "ru")
+	}
+}

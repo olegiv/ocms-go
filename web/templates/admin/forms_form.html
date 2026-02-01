@@ -108,6 +108,40 @@
                         </label>
                     </div>
 
+                    {{if gt (len .Data.AllLanguages) 1}}
+                    <div class="form-group">
+                        <label for="language_code" class="form-label">{{T .AdminLang "label.language"}}</label>
+                        <select
+                            id="language_code"
+                            name="language_code"
+                            class="form-select"
+                            {{if .Data.IsEdit}}disabled{{end}}
+                        >
+                            {{$currentLanguageCode := ""}}
+                            {{if .Data.FormValues.language_code}}
+                                {{$currentLanguageCode = .Data.FormValues.language_code}}
+                            {{else if .Data.Language}}
+                                {{$currentLanguageCode = .Data.Language.Code}}
+                            {{else if .Data.Form}}
+                                {{$currentLanguageCode = .Data.Form.LanguageCode}}
+                            {{end}}
+                            {{range .Data.AllLanguages}}
+                            <option value="{{.Code}}" {{if eq .Code $currentLanguageCode}}selected{{end}}>
+                                {{.Name}} ({{.Code}})
+                            </option>
+                            {{end}}
+                        </select>
+                        {{if .Data.IsEdit}}
+                        <input type="hidden" name="language_code" value="{{if .Data.Language}}{{.Data.Language.Code}}{{end}}">
+                        <small class="form-text">{{T .AdminLang "forms.language_readonly"}}</small>
+                        {{else}}
+                        <small class="form-text">{{T .AdminLang "forms.select_language"}}</small>
+                        {{end}}
+                    </div>
+                    {{else if .Data.Language}}
+                    <input type="hidden" name="language_code" value="{{.Data.Language.Code}}">
+                    {{end}}
+
                     <div class="form-actions">
                         <button type="submit" class="btn btn-primary">
                             {{if .Data.IsEdit}}{{T .AdminLang "forms.update_form"}}{{else}}{{T .AdminLang "forms.create_form"}}{{end}}
@@ -227,6 +261,61 @@
             </template>
         </div>
         {{end}}
+
+        <!-- Translations Panel (Edit mode only) - Outside main form to avoid nested forms -->
+        {{if and .Data.IsEdit (gt (len .Data.AllLanguages) 1)}}
+        <div class="card mt-4">
+            <div class="card-header">
+                <h3>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
+                    {{T .AdminLang "forms.translations"}}
+                </h3>
+                {{if .Data.Language}}
+                <span class="current-language-badge">
+                    {{T .AdminLang "forms.current_language"}}: {{.Data.Language.Name}}
+                </span>
+                {{end}}
+            </div>
+            <div class="card-body">
+                {{if .Data.Translations}}
+                <div class="translations-list">
+                    <h4 class="translations-subtitle">{{T .AdminLang "forms.existing_translations"}}</h4>
+                    {{range .Data.Translations}}
+                    <div class="translation-item">
+                        <div class="translation-info">
+                            <span class="translation-lang-badge" title="{{.Language.NativeName}}">{{.Language.Code}}</span>
+                            <a href="/admin/forms/{{.Form.ID}}" class="translation-link">
+                                {{.Form.Name}}
+                            </a>
+                        </div>
+                    </div>
+                    {{end}}
+                </div>
+                {{end}}
+
+                {{if .Data.MissingLanguages}}
+                <div class="translations-add">
+                    <h4 class="translations-subtitle">{{T .AdminLang "forms.add_translation"}}</h4>
+                    <div class="translation-buttons">
+                        {{range .Data.MissingLanguages}}
+                        <form action="/admin/forms/{{$.Data.Form.ID}}/translate/{{.Code}}" method="POST" class="inline-form">
+                            {{$.CSRFField}}
+                            <button type="submit" class="btn btn-sm btn-outline translation-add-btn" title="Create {{.Name}} translation">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                                {{.Code}} - {{.Name}}
+                            </button>
+                        </form>
+                        {{end}}
+                    </div>
+                </div>
+                {{end}}
+
+                {{if and (not .Data.Translations) (not .Data.MissingLanguages)}}
+                <p class="translations-empty">{{T .AdminLang "forms.all_translations_exist"}}</p>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
     </div>
 </div>
 
@@ -243,16 +332,17 @@ function formFieldBuilder() {
 
         init() {
             // Parse fields to ensure correct format
+            // Note: Go sql.NullString serializes as {"String": "value", "Valid": true}
             this.fields = (this.fields || []).map(f => ({
-                id: f.ID || f.id,
-                type: f.Type || f.type,
-                name: f.Name || f.name,
-                label: f.Label || f.label,
-                placeholder: f.Placeholder?.String || f.placeholder || '',
-                help_text: f.HelpText?.String || f.help_text || '',
-                options: f.Options?.String || f.options || '[]',
-                validation: f.Validation?.String || f.validation || '{}',
-                is_required: f.IsRequired ?? f.is_required ?? false
+                id: f.id,
+                type: f.type,
+                name: f.name,
+                label: f.label,
+                placeholder: f.placeholder?.String || '',
+                help_text: f.help_text?.String || '',
+                options: f.options?.String || '[]',
+                validation: f.validation?.String || '{}',
+                is_required: f.is_required ?? false
             }));
         },
 

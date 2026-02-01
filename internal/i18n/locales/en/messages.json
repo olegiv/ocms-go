@@ -1683,6 +1683,41 @@
             "translation": "No content"
         },
         {
+            "id": "forms.translations",
+            "message": "Translations",
+            "translation": "Translations"
+        },
+        {
+            "id": "forms.current_language",
+            "message": "Current language",
+            "translation": "Current language"
+        },
+        {
+            "id": "forms.existing_translations",
+            "message": "Existing translations",
+            "translation": "Existing translations"
+        },
+        {
+            "id": "forms.add_translation",
+            "message": "Add translation",
+            "translation": "Add translation"
+        },
+        {
+            "id": "forms.all_translations_exist",
+            "message": "All languages have translations",
+            "translation": "All languages have translations"
+        },
+        {
+            "id": "forms.language_readonly",
+            "message": "Language cannot be changed after creation. Use translations to add other languages.",
+            "translation": "Language cannot be changed after creation. Use translations to add other languages."
+        },
+        {
+            "id": "forms.select_language",
+            "message": "Select the language for this form",
+            "translation": "Select the language for this form"
+        },
+        {
             "id": "themes.title",
             "message": "Themes",
             "translation": "Themes"

@@ -14,6 +14,7 @@
                 <th>{{T .AdminLang "label.name"}}</th>
                 <th>{{T .AdminLang "label.title"}}</th>
                 <th>{{T .AdminLang "label.slug"}}</th>
+                <th>{{T .AdminLang "label.language"}}</th>
                 <th>{{T .AdminLang "forms.submissions"}}</th>
                 <th>{{T .AdminLang "label.status"}}</th>
                 <th>{{T .AdminLang "label.actions"}}</th>
@@ -27,6 +28,13 @@
                 </td>
                 <td>{{.Form.Title}}</td>
                 <td><code>{{.Form.Slug}}</code></td>
+                <td>
+                    {{if .Form.LanguageCode}}
+                    <span class="badge badge-outline">{{.Form.LanguageCode}}</span>
+                    {{else}}
+                    <span class="text-muted">-</span>
+                    {{end}}
+                </td>
                 <td>
                     <a href="/admin/forms/{{.Form.ID}}/submissions" class="link-secondary">
                         {{.SubmissionCount}} {{if ne .SubmissionCount 1}}{{T $.AdminLang "forms.submissions_plural"}}{{else}}{{T $.AdminLang "forms.submission"}}{{end}}
