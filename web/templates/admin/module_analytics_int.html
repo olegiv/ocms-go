@@ -205,7 +205,7 @@
                 <div class="breakdown-item">
                     <div class="breakdown-info">
                         <span class="breakdown-name">{{.Browser}}</span>
-                        <span class="breakdown-value">{{printf "%.1f" .Percent}}%</span>
+                        <span class="breakdown-value">{{formatNumber .Views}} ({{printf "%.1f" .Percent}}%)</span>
                     </div>
                     <div class="breakdown-bar">
                         <div class="breakdown-fill" style="width: {{printf "%.0f" .Percent}}%"></div>
@@ -283,7 +283,7 @@
                 <div class="breakdown-item">
                     <div class="breakdown-info">
                         <span class="breakdown-name">{{.CountryName}}</span>
-                        <span class="breakdown-value">{{printf "%.1f" .Percent}}%</span>
+                        <span class="breakdown-value">{{formatNumber .Views}} ({{printf "%.1f" .Percent}}%)</span>
                     </div>
                     <div class="breakdown-bar">
                         <div class="breakdown-fill breakdown-fill-geo" style="width: {{printf "%.0f" .Percent}}%"></div>

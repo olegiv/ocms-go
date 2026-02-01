@@ -21,6 +21,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 	"github.com/olegiv/ocms-go/internal/webhook"
@@ -44,6 +45,7 @@ type PagesHandler struct {
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
 	dispatcher     *webhook.Dispatcher
+	eventService   *service.EventService
 }
 
 // NewPagesHandler creates a new PagesHandler.
@@ -52,6 +54,7 @@ func NewPagesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
+		eventService:   service.NewEventService(db),
 	}
 }
 
@@ -604,6 +607,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	h.savePageAliases(r.Context(), newPage.ID, r.Form["aliases[]"])
 
 	slog.Info("page created", "page_id", newPage.ID, "slug", newPage.Slug, "created_by", middleware.GetUserID(r))
+	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": newPage.ID, "slug": newPage.Slug})
 
 	// Dispatch page.created webhook event
 	h.dispatchPageEvent(r.Context(), model.EventPageCreated, newPage, middleware.GetUserEmail(r))
@@ -833,6 +837,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	h.savePageAliases(r.Context(), id, r.Form["aliases[]"])
 
 	slog.Info("page updated", "page_id", updatedPage.ID, "slug", updatedPage.Slug, "updated_by", middleware.GetUserID(r))
+	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page updated", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": updatedPage.ID, "slug": updatedPage.Slug})
 
 	// Dispatch page.updated webhook event
 	h.dispatchPageEvent(r.Context(), model.EventPageUpdated, updatedPage, middleware.GetUserEmail(r))
@@ -862,6 +867,7 @@ func (h *PagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("page deleted", "page_id", id, "slug", page.Slug, "deleted_by", middleware.GetUserID(r))
+	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page deleted", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": id, "slug": page.Slug})
 
 	// Dispatch page.deleted webhook event
 	h.dispatchPageEvent(r.Context(), model.EventPageDeleted, page, middleware.GetUserEmail(r))
@@ -902,6 +908,7 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 		message = "Page unpublished successfully"
 		eventType = model.EventPageUnpublished
 		slog.Info("page unpublished", "page_id", id, "slug", page.Slug, "unpublished_by", middleware.GetUserID(r))
+		_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page unpublished", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": id, "slug": page.Slug})
 	} else {
 		// Publish
 		_, err = h.queries.PublishPage(r.Context(), store.PublishPageParams{
@@ -912,6 +919,7 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 		message = "Page published successfully"
 		eventType = model.EventPagePublished
 		slog.Info("page published", "page_id", id, "slug", page.Slug, "published_by", middleware.GetUserID(r))
+		_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page published", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": id, "slug": page.Slug})
 	}
 
 	if err != nil {
@@ -1083,6 +1091,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("page version restored", "page_id", id, "version_id", versionId, "restored_by", middleware.GetUserID(r))
+	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page version restored", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": id, "version_id": versionId})
 	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id), "Version restored successfully")
 }
 
@@ -1182,6 +1191,7 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		"translated_page_id", translatedPage.ID,
 		"language", langCode,
 		"created_by", userID)
+	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page translation created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"source_id": id, "translation_id": translatedPage.ID, "language": langCode})
 
 	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, translatedPage.ID), fmt.Sprintf("Translation created for %s. Please translate the content.", tc.TargetLang.Name))
 }

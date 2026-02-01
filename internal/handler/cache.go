@@ -84,7 +84,7 @@ func (h *CacheHandler) clearCacheHelper(w http.ResponseWriter, r *http.Request, 
 
 	if h.eventService != nil {
 		clientIP := middleware.GetClientIP(r)
-		_ = h.eventService.LogCacheEvent(r.Context(), model.EventLevelInfo, eventMsg, middleware.GetUserIDPtr(r), clientIP, nil)
+		_ = h.eventService.LogCacheEvent(r.Context(), model.EventLevelInfo, eventMsg, middleware.GetUserIDPtr(r), clientIP, middleware.GetRequestURL(r), nil)
 	}
 
 	flashSuccess(w, r, h.renderer, redirectAdminCache, flashMsg)

@@ -2998,6 +2998,11 @@
             "translation": "IP Address"
         },
         {
+            "id": "events.url",
+            "message": "URL",
+            "translation": "URL"
+        },
+        {
             "id": "events.user",
             "message": "User",
             "translation": "User"

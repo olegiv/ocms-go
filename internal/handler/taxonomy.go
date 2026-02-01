@@ -21,6 +21,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -33,6 +34,7 @@ type TaxonomyHandler struct {
 	queries        *store.Queries
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
+	eventService   *service.EventService
 }
 
 // NewTaxonomyHandler creates a new TaxonomyHandler.
@@ -41,6 +43,7 @@ func NewTaxonomyHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionMa
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
+		eventService:   service.NewEventService(db),
 	}
 }
 
@@ -230,6 +233,7 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("tag created", "tag_id", newTag.ID, "slug", newTag.Slug, "created_by", middleware.GetUserID(r))
+	_ = h.eventService.LogTagEvent(r.Context(), model.EventLevelInfo, "Tag created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"tag_id": newTag.ID, "name": newTag.Name, "slug": newTag.Slug})
 	flashSuccess(w, r, h.renderer, redirectAdminTags, "Tag created successfully")
 }
 
@@ -350,6 +354,7 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("tag updated", "tag_id", updatedTag.ID, "slug", updatedTag.Slug, "updated_by", middleware.GetUserID(r))
+	_ = h.eventService.LogTagEvent(r.Context(), model.EventLevelInfo, "Tag updated", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"tag_id": updatedTag.ID, "name": updatedTag.Name, "slug": updatedTag.Slug})
 	flashSuccess(w, r, h.renderer, redirectAdminTags, "Tag updated successfully")
 }
 
@@ -779,6 +784,7 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 	}
 
 	slog.Info("category created", "category_id", newCategory.ID, "slug", newCategory.Slug, "created_by", middleware.GetUserID(r))
+	_ = h.eventService.LogCategoryEvent(r.Context(), model.EventLevelInfo, "Category created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"category_id": newCategory.ID, "name": newCategory.Name, "slug": newCategory.Slug})
 	flashSuccess(w, r, h.renderer, redirectAdminCategories, "Category created successfully")
 }
 
@@ -930,6 +936,7 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 	}
 
 	slog.Info("category updated", "category_id", updatedCategory.ID, "slug", updatedCategory.Slug, "updated_by", middleware.GetUserID(r))
+	_ = h.eventService.LogCategoryEvent(r.Context(), model.EventLevelInfo, "Category updated", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"category_id": updatedCategory.ID, "name": updatedCategory.Name, "slug": updatedCategory.Slug})
 	flashSuccess(w, r, h.renderer, redirectAdminCategories, "Category updated successfully")
 }
 
