@@ -49,6 +49,8 @@ for script in setup-site.sh deploy-multi.sh backup-multi.sh healthcheck-multi.sh
     sudo cp /tmp/ocms-setup/$script /opt/ocms/
     sudo chmod 755 /opt/ocms/$script
 done
+sudo cp /tmp/ocms-setup/ocms-logrotate.conf /opt/ocms/
+sudo cp /opt/ocms/ocms-logrotate.conf /etc/logrotate.d/ocms
 sudo cp -r /tmp/ocms-themes/* /opt/ocms/themes/
 sudo systemctl daemon-reload
 ```
@@ -268,6 +270,30 @@ Auto-restarts failed systemd-managed instances (max 3 attempts, 5-min cooldown).
 0 3 * * * root /opt/ocms/backup-multi.sh >> /var/log/ocms-backup.log 2>&1
 */5 * * * * root /opt/ocms/healthcheck-multi.sh 2>&1 | grep -v "^$"
 ```
+
+## Log Rotation
+
+Install the logrotate configuration to automatically rotate oCMS logs:
+
+```bash
+# Copy configuration
+sudo cp /opt/ocms/ocms-logrotate.conf /etc/logrotate.d/ocms
+
+# Test configuration (dry-run)
+sudo logrotate -d /etc/logrotate.d/ocms
+
+# Force rotation (for testing)
+sudo logrotate -f /etc/logrotate.d/ocms
+```
+
+The configuration:
+- Rotates logs daily
+- Keeps 30 days of history
+- Compresses old logs (gzip)
+- Creates new log files with proper permissions
+- Handles all instances via wildcard pattern
+
+Log files are stored at `{vhost}/ocms/logs/ocms.log`.
 
 ## File Permissions
 
