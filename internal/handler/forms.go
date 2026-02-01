@@ -852,14 +852,8 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate CSRF token
-	csrfToken := r.FormValue("_csrf")
-	if csrfToken == "" || csrfToken != h.sessionManager.Token(r.Context()) {
-		slog.Warn("invalid CSRF token", "form_slug", slug, "ip", r.RemoteAddr)
-		// Don't reveal it's a CSRF issue, just show generic error
-		h.renderFormWithErrors(w, r, *form, fields, map[string]string{"_form": "Session expired. Please try again."}, r.Form)
-		return
-	}
+	// Note: CSRF protection is handled by the middleware (filippo.io/csrf/gorilla)
+	// which uses Fetch metadata headers - no form token validation needed here.
 
 	// Collect values and validate
 	values := make(map[string]string)
