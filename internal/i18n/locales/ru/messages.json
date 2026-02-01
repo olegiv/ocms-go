@@ -1683,6 +1683,41 @@
             "translation": "Нет содержимого"
         },
         {
+            "id": "forms.translations",
+            "message": "Translations",
+            "translation": "Переводы"
+        },
+        {
+            "id": "forms.current_language",
+            "message": "Current language",
+            "translation": "Текущий язык"
+        },
+        {
+            "id": "forms.existing_translations",
+            "message": "Existing translations",
+            "translation": "Существующие переводы"
+        },
+        {
+            "id": "forms.add_translation",
+            "message": "Add translation",
+            "translation": "Добавить перевод"
+        },
+        {
+            "id": "forms.all_translations_exist",
+            "message": "All languages have translations",
+            "translation": "Все языки имеют переводы"
+        },
+        {
+            "id": "forms.language_readonly",
+            "message": "Language cannot be changed after creation. Use translations to add other languages.",
+            "translation": "Язык нельзя изменить после создания. Используйте переводы для добавления других языков."
+        },
+        {
+            "id": "forms.select_language",
+            "message": "Select the language for this form",
+            "translation": "Выберите язык для этой формы"
+        },
+        {
             "id": "themes.title",
             "message": "Themes",
             "translation": "Темы"

@@ -94,3 +94,42 @@ FROM form_submissions fs
 JOIN forms f ON f.id = fs.form_id
 ORDER BY fs.created_at DESC
 LIMIT ?;
+
+-- name: FormSlugExists :one
+SELECT EXISTS(SELECT 1 FROM forms WHERE slug = ?);
+
+-- Get all available translations for a form (for language switcher)
+-- Note: translations table still uses language_id to reference the target language
+-- name: GetFormAvailableTranslations :many
+SELECT
+    l.id as language_id,
+    l.code as language_code,
+    l.name as language_name,
+    l.native_name as language_native_name,
+    l.direction as language_direction,
+    l.is_default as is_default,
+    COALESCE(f.id, 0) as form_id,
+    COALESCE(f.slug, '') as form_slug,
+    COALESCE(f.name, '') as form_name
+FROM languages l
+LEFT JOIN (
+    -- Get forms that are translations of the source form
+    SELECT f.id, f.slug, f.name, f.language_code
+    FROM forms f
+    INNER JOIN translations t ON t.translation_id = f.id
+    WHERE t.entity_type = 'form' AND t.entity_id = ?
+    UNION
+    -- Get the source form itself
+    SELECT f.id, f.slug, f.name, f.language_code
+    FROM forms f
+    WHERE f.id = ?
+    UNION
+    -- Get forms where current form is a translation (sibling translations)
+    SELECT f2.id, f2.slug, f2.name, f2.language_code
+    FROM translations t
+    INNER JOIN forms f2 ON (f2.id = t.entity_id OR f2.id = t.translation_id)
+    WHERE t.entity_type = 'form'
+    AND (t.entity_id = ? OR t.translation_id = ?)
+) f ON f.language_code = l.code
+WHERE l.is_active = 1
+ORDER BY l.position;

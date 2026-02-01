@@ -321,19 +321,33 @@ func (h *FormsHandler) List(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// FormTranslationInfo holds information about a form translation.
+type FormTranslationInfo struct {
+	Language store.Language
+	Form     store.Form
+}
+
 // FormFormData holds data for the form create/edit template.
 type FormFormData struct {
-	Form       *store.Form
-	Fields     []store.FormField
-	FieldTypes []string
-	Errors     map[string]string
-	FormValues map[string]string
-	IsEdit     bool
+	Form             *store.Form
+	Fields           []store.FormField
+	FieldTypes       []string
+	Errors           map[string]string
+	FormValues       map[string]string
+	IsEdit           bool
+	Language         *store.Language       // Current form language
+	AllLanguages     []store.Language      // All active languages for selection
+	Translations     []FormTranslationInfo // Existing translations
+	MissingLanguages []store.Language      // Languages without translations
 }
 
 // NewForm handles GET /admin/forms/new - displays the new form form.
 func (h *FormsHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 	lang := h.renderer.GetAdminLang(r)
+
+	// Load all active languages
+	allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
+	defaultLanguage := FindDefaultLanguage(allLanguages)
 
 	data := FormFormData{
 		FieldTypes: model.ValidFieldTypes(),
@@ -342,7 +356,9 @@ func (h *FormsHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 			"success_message": "Thank you for your submission.",
 			"is_active":       "true",
 		},
-		IsEdit: false,
+		IsEdit:       false,
+		AllLanguages: allLanguages,
+		Language:     defaultLanguage,
 	}
 
 	breadcrumbs := append(formsBreadcrumbs(lang),
@@ -442,13 +458,20 @@ func (h *FormsHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		fields = []store.FormField{}
 	}
 
+	// Load language and translation info
+	langInfo := h.loadFormLanguageInfo(r.Context(), *form)
+
 	data := FormFormData{
-		Form:       form,
-		Fields:     fields,
-		FieldTypes: model.ValidFieldTypes(),
-		Errors:     make(map[string]string),
-		FormValues: make(map[string]string),
-		IsEdit:     true,
+		Form:             form,
+		Fields:           fields,
+		FieldTypes:       model.ValidFieldTypes(),
+		Errors:           make(map[string]string),
+		FormValues:       make(map[string]string),
+		IsEdit:           true,
+		Language:         langInfo.EntityLanguage,
+		AllLanguages:     langInfo.AllLanguages,
+		Translations:     langInfo.Translations,
+		MissingLanguages: langInfo.MissingLanguages,
 	}
 
 	breadcrumbs := append(formsBreadcrumbs(lang),
@@ -496,13 +519,20 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if len(validationErrors) > 0 {
 		fields, _ := h.queries.GetFormFields(r.Context(), id)
 
+		// Load language and translation info for re-rendering
+		langInfo := h.loadFormLanguageInfo(r.Context(), *form)
+
 		data := FormFormData{
-			Form:       form,
-			Fields:     fields,
-			FieldTypes: model.ValidFieldTypes(),
-			Errors:     validationErrors,
-			FormValues: input.FormValues,
-			IsEdit:     true,
+			Form:             form,
+			Fields:           fields,
+			FieldTypes:       model.ValidFieldTypes(),
+			Errors:           validationErrors,
+			FormValues:       input.FormValues,
+			IsEdit:           true,
+			Language:         langInfo.EntityLanguage,
+			AllLanguages:     langInfo.AllLanguages,
+			Translations:     langInfo.Translations,
+			MissingLanguages: langInfo.MissingLanguages,
 		}
 
 		breadcrumbs := append(formsBreadcrumbs(lang),
@@ -1435,4 +1465,148 @@ func (h *FormsHandler) getMaxFieldPosition(r *http.Request, formID int64) int64 
 		}
 	}
 	return maxPos
+}
+
+// =============================================================================
+// FORM TRANSLATION HELPERS
+// =============================================================================
+
+// formLanguageInfo is an alias for entityLanguageInfo with FormTranslationInfo.
+type formLanguageInfo = entityLanguageInfo[FormTranslationInfo]
+
+// loadFormLanguageInfo loads language and translation info for a form.
+func (h *FormsHandler) loadFormLanguageInfo(ctx context.Context, form store.Form) formLanguageInfo {
+	return loadLanguageInfo(
+		ctx, h.queries, model.EntityTypeForm, form.ID, form.LanguageCode,
+		func(id int64) (store.Form, error) { return h.queries.GetFormByID(ctx, id) },
+		func(lang store.Language, f store.Form) FormTranslationInfo {
+			return FormTranslationInfo{Language: lang, Form: f}
+		},
+	)
+}
+
+// setupFormTranslation validates langCode, gets target language, and generates unique slug.
+// Returns nil, false if validation failed (flash message sent).
+func (h *FormsHandler) setupFormTranslation(
+	w http.ResponseWriter,
+	r *http.Request,
+	entityID int64,
+	sourceSlug string,
+	redirectURL string,
+) (*translationSetupResult, bool) {
+	langCode := chi.URLParam(r, "langCode")
+	if langCode == "" {
+		flashError(w, r, h.renderer, redirectURL, "Language code is required")
+		return nil, false
+	}
+
+	// Validate language and check for existing translation
+	tc, ok := getTargetLanguageForTranslation(w, r, h.queries, h.renderer, langCode, redirectURL, model.EntityTypeForm, entityID)
+	if !ok {
+		return nil, false
+	}
+
+	// Generate a unique slug using FormSlugExists
+	translatedSlug, err := generateUniqueSlug(sourceSlug, langCode, func(slug string) (int64, error) {
+		return h.queries.FormSlugExists(r.Context(), slug)
+	})
+	if err != nil {
+		slog.Error("database error checking slug", "error", err)
+		flashError(w, r, h.renderer, redirectURL, "Error creating translation")
+		return nil, false
+	}
+
+	return &translationSetupResult{
+		TargetContext:  tc,
+		TranslatedSlug: translatedSlug,
+		Now:            time.Now(),
+	}, true
+}
+
+// TranslateForm handles POST /admin/forms/{id}/translate/{langCode} - creates a translation.
+func (h *FormsHandler) TranslateForm(w http.ResponseWriter, r *http.Request) {
+	id := h.parseFormIDParam(w, r)
+	if id == 0 {
+		return
+	}
+
+	redirectURL := fmt.Sprintf(redirectAdminFormsID, id)
+	sourceForm := h.fetchFormByID(w, r, id)
+	if sourceForm == nil {
+		return
+	}
+
+	// Validate language, check for existing translation, and generate unique slug
+	setup, ok := h.setupFormTranslation(w, r, id, sourceForm.Slug, redirectURL)
+	if !ok {
+		return
+	}
+
+	// Create the translated form with same properties
+	translatedForm, err := h.queries.CreateForm(r.Context(), store.CreateFormParams{
+		Name:           sourceForm.Name, // Keep same name (user will translate)
+		Slug:           setup.TranslatedSlug,
+		Title:          sourceForm.Title,
+		Description:    sourceForm.Description,
+		SuccessMessage: sourceForm.SuccessMessage,
+		EmailTo:        sourceForm.EmailTo,
+		IsActive:       false, // Start as inactive until translated
+		LanguageCode:   setup.TargetContext.TargetLang.Code,
+		CreatedAt:      setup.Now,
+		UpdatedAt:      setup.Now,
+	})
+	if err != nil {
+		slog.Error("failed to create translated form", "error", err)
+		flashError(w, r, h.renderer, redirectURL, "Error creating translation")
+		return
+	}
+
+	// Copy all form fields to the translated form
+	sourceFields, err := h.queries.GetFormFields(r.Context(), id)
+	if err != nil {
+		slog.Error("failed to get source form fields", "error", err, "form_id", id)
+	} else {
+		for _, field := range sourceFields {
+			_, err := h.queries.CreateFormField(r.Context(), store.CreateFormFieldParams{
+				FormID:       translatedForm.ID,
+				Type:         field.Type,
+				Name:         field.Name,
+				Label:        field.Label,
+				Placeholder:  field.Placeholder,
+				HelpText:     field.HelpText,
+				Options:      field.Options,
+				Validation:   field.Validation,
+				IsRequired:   field.IsRequired,
+				Position:     field.Position,
+				LanguageCode: setup.TargetContext.TargetLang.Code,
+				CreatedAt:    setup.Now,
+				UpdatedAt:    setup.Now,
+			})
+			if err != nil {
+				slog.Error("failed to copy form field", "error", err, "field_id", field.ID)
+			}
+		}
+	}
+
+	// Create translation link from source to translated form
+	_, err = h.queries.CreateTranslation(r.Context(), store.CreateTranslationParams{
+		EntityType:    model.EntityTypeForm,
+		EntityID:      id,
+		LanguageID:    setup.TargetContext.TargetLang.ID,
+		TranslationID: translatedForm.ID,
+		CreatedAt:     setup.Now,
+	})
+	if err != nil {
+		slog.Error("failed to create translation link", "error", err)
+		// Form was created, so we should still redirect to it
+	}
+
+	slog.Info("form translation created",
+		"source_form_id", id,
+		"translated_form_id", translatedForm.ID,
+		"language", setup.TargetContext.TargetLang.Code,
+		"created_by", middleware.GetUserID(r))
+
+	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminFormsID, translatedForm.ID),
+		fmt.Sprintf("Translation created for %s. Please translate the form content.", setup.TargetContext.TargetLang.Name))
 }

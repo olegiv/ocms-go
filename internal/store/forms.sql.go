@@ -249,6 +249,17 @@ func (q *Queries) DeleteFormSubmission(ctx context.Context, id int64) error {
 	return err
 }
 
+const formSlugExists = `-- name: FormSlugExists :one
+SELECT EXISTS(SELECT 1 FROM forms WHERE slug = ?)
+`
+
+func (q *Queries) FormSlugExists(ctx context.Context, slug string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, formSlugExists, slug)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const formSlugExistsExcludingForLanguage = `-- name: FormSlugExistsExcludingForLanguage :one
 SELECT EXISTS(SELECT 1 FROM forms WHERE slug = ? AND language_code = ? AND id != ?)
 `
@@ -280,6 +291,100 @@ func (q *Queries) FormSlugExistsForLanguage(ctx context.Context, arg FormSlugExi
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const getFormAvailableTranslations = `-- name: GetFormAvailableTranslations :many
+SELECT
+    l.id as language_id,
+    l.code as language_code,
+    l.name as language_name,
+    l.native_name as language_native_name,
+    l.direction as language_direction,
+    l.is_default as is_default,
+    COALESCE(f.id, 0) as form_id,
+    COALESCE(f.slug, '') as form_slug,
+    COALESCE(f.name, '') as form_name
+FROM languages l
+LEFT JOIN (
+    -- Get forms that are translations of the source form
+    SELECT f.id, f.slug, f.name, f.language_code
+    FROM forms f
+    INNER JOIN translations t ON t.translation_id = f.id
+    WHERE t.entity_type = 'form' AND t.entity_id = ?
+    UNION
+    -- Get the source form itself
+    SELECT f.id, f.slug, f.name, f.language_code
+    FROM forms f
+    WHERE f.id = ?
+    UNION
+    -- Get forms where current form is a translation (sibling translations)
+    SELECT f2.id, f2.slug, f2.name, f2.language_code
+    FROM translations t
+    INNER JOIN forms f2 ON (f2.id = t.entity_id OR f2.id = t.translation_id)
+    WHERE t.entity_type = 'form'
+    AND (t.entity_id = ? OR t.translation_id = ?)
+) f ON f.language_code = l.code
+WHERE l.is_active = 1
+ORDER BY l.position
+`
+
+type GetFormAvailableTranslationsParams struct {
+	EntityID      int64 `json:"entity_id"`
+	ID            int64 `json:"id"`
+	EntityID_2    int64 `json:"entity_id_2"`
+	TranslationID int64 `json:"translation_id"`
+}
+
+type GetFormAvailableTranslationsRow struct {
+	LanguageID         int64  `json:"language_id"`
+	LanguageCode       string `json:"language_code"`
+	LanguageName       string `json:"language_name"`
+	LanguageNativeName string `json:"language_native_name"`
+	LanguageDirection  string `json:"language_direction"`
+	IsDefault          bool   `json:"is_default"`
+	FormID             int64  `json:"form_id"`
+	FormSlug           string `json:"form_slug"`
+	FormName           string `json:"form_name"`
+}
+
+// Get all available translations for a form (for language switcher)
+// Note: translations table still uses language_id to reference the target language
+func (q *Queries) GetFormAvailableTranslations(ctx context.Context, arg GetFormAvailableTranslationsParams) ([]GetFormAvailableTranslationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getFormAvailableTranslations,
+		arg.EntityID,
+		arg.ID,
+		arg.EntityID_2,
+		arg.TranslationID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetFormAvailableTranslationsRow{}
+	for rows.Next() {
+		var i GetFormAvailableTranslationsRow
+		if err := rows.Scan(
+			&i.LanguageID,
+			&i.LanguageCode,
+			&i.LanguageName,
+			&i.LanguageNativeName,
+			&i.LanguageDirection,
+			&i.IsDefault,
+			&i.FormID,
+			&i.FormSlug,
+			&i.FormName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getFormByID = `-- name: GetFormByID :one
