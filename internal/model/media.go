@@ -21,6 +21,7 @@ const (
 	MimeTypePNG  = "image/png"
 	MimeTypeGIF  = "image/gif"
 	MimeTypeWebP = "image/webp"
+	MimeTypeICO  = "image/x-icon"
 	MimeTypePDF  = "application/pdf"
 	MimeTypeMP4  = "video/mp4"
 	MimeTypeWebM = "video/webm"

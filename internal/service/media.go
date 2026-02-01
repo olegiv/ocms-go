@@ -34,6 +34,8 @@ var AllowedMimeTypes = map[string]bool{
 	model.MimeTypePNG:  true,
 	model.MimeTypeGIF:  true,
 	model.MimeTypeWebP: true,
+	model.MimeTypeICO:  true,
+	"image/vnd.microsoft.icon": true,
 	model.MimeTypePDF:  true,
 	model.MimeTypeMP4:  true,
 	model.MimeTypeWebM: true,
@@ -291,6 +293,8 @@ func getMimeTypeFromExtension(filename string) string {
 		return model.MimeTypeGIF
 	case ".webp":
 		return model.MimeTypeWebP
+	case ".ico":
+		return model.MimeTypeICO
 	case ".pdf":
 		return model.MimeTypePDF
 	case ".mp4":

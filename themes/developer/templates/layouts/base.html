@@ -45,8 +45,8 @@
     <style>{{.CustomCSS | safeHTML}}</style>
     {{end}}
 
-    <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="/themes/developer/static/favicon.ico">
+    <!-- Favicon (served from theme settings or default) -->
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
 
     <!-- External analytics tracking scripts (head) -->
     {{if analyticsExtHead}}{{analyticsExtHead}}{{end}}

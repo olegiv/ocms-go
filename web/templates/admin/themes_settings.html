@@ -60,19 +60,38 @@
 
                 {{else if eq .Type "image"}}
                 <div class="image-input-wrapper">
+                    {{$imageValue := index $.Data.Settings .Key}}
+                    {{if $imageValue}}
+                    <div class="image-preview" id="preview-{{.Key}}">
+                        <img src="{{$imageValue}}" alt="{{.Label}}" style="max-height: 48px; max-width: 120px; object-fit: contain; border-radius: 4px; border: 1px solid var(--color-border);">
+                    </div>
+                    {{else}}
+                    <div class="image-preview" id="preview-{{.Key}}" style="display: none;">
+                        <img src="" alt="{{.Label}}" style="max-height: 48px; max-width: 120px; object-fit: contain; border-radius: 4px; border: 1px solid var(--color-border);">
+                    </div>
+                    {{end}}
                     <input
                         type="text"
                         id="{{.Key}}"
                         name="{{.Key}}"
                         class="form-input {{if index $.Data.Errors .Key}}is-invalid{{end}}"
-                        value="{{index $.Data.Settings .Key}}"
+                        value="{{$imageValue}}"
                         placeholder="{{T $.AdminLang "themes.image_placeholder"}}"
+                        onchange="updateImagePreview('{{.Key}}')"
                     >
                     <button type="button" class="btn btn-secondary btn-sm" onclick="openMediaPicker('{{.Key}}')">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
                         {{T $.AdminLang "themes.browse"}}
                     </button>
+                    {{if $imageValue}}
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="clearImageField('{{.Key}}')" title="{{T $.AdminLang "btn.clear"}}">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </button>
+                    {{end}}
                 </div>
+                {{if eq .Key "favicon"}}
+                <span class="form-hint">{{T $.AdminLang "theme_settings.favicon_hint"}}</span>
+                {{end}}
 
                 {{else}}
                 <input
@@ -117,9 +136,230 @@ document.querySelectorAll('.color-input').forEach(function(colorInput) {
     });
 });
 
-// Media picker placeholder (would integrate with actual media library)
+// Validate URL to prevent XSS - only allow safe schemes and paths
+function isValidImageUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+
+    // Allow /uploads/ paths (media API returns these)
+    if (url.startsWith('/uploads/')) return true;
+
+    // Allow /static/ paths (theme assets)
+    if (url.startsWith('/static/')) return true;
+
+    // For other values, only allow absolute HTTP(S) URLs
+    try {
+        var parsed = new URL(url, window.location.origin);
+        if (parsed.origin === window.location.origin) {
+            // Relative URL resolved against current origin but not under allowed paths
+            return false;
+        }
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch (e) {
+        // Invalid URL
+        return false;
+    }
+}
+
+// Safely set image src with validation
+function safeSetImageSrc(img, url) {
+    if (isValidImageUrl(url)) {
+        // Use URL constructor to sanitize and escape meta-characters (satisfies CodeQL js/xss-through-dom)
+        try {
+            var sanitized = new URL(url, window.location.origin);
+            img.src = sanitized.href;
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+    return false;
+}
+
+// Update image preview when URL changes
+function updateImagePreview(fieldId) {
+    const input = document.getElementById(fieldId);
+    const preview = document.getElementById('preview-' + fieldId);
+    if (preview && input) {
+        const img = preview.querySelector('img');
+        if (input.value && safeSetImageSrc(img, input.value)) {
+            preview.style.display = 'block';
+        } else {
+            preview.style.display = 'none';
+        }
+    }
+}
+
+// Clear image field and hide preview
+function clearImageField(fieldId) {
+    const input = document.getElementById(fieldId);
+    const preview = document.getElementById('preview-' + fieldId);
+    if (input) {
+        input.value = '';
+    }
+    if (preview) {
+        preview.style.display = 'none';
+    }
+}
+
+// Escape HTML to prevent XSS in dynamic content
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Open media picker modal
 function openMediaPicker(fieldId) {
-    alert('{{T .AdminLang "themes.media_picker_coming"}}');
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.id = 'media-picker-overlay';
+    overlay.onclick = function(e) {
+        if (e.target === overlay) closeMediaPicker();
+    };
+
+    // Create modal content
+    const modal = document.createElement('div');
+    modal.className = 'modal media-picker-modal';
+    modal.innerHTML = `
+        <div class="modal-header">
+            <h3>{{T .AdminLang "media.select_image"}}</h3>
+            <button type="button" class="modal-close" onclick="closeMediaPicker()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="media-picker-content" class="media-picker-loading">
+                {{T .AdminLang "media.loading"}}...
+            </div>
+        </div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    document.body.classList.add('modal-open');
+
+    // Load media items using correct API endpoint and field names
+    fetch('/admin/media/api?type=image&limit=50')
+        .then(response => response.json())
+        .then(data => {
+            const content = document.getElementById('media-picker-content');
+            if (data.items && data.items.length > 0) {
+                content.className = 'media-picker-grid';
+                content.innerHTML = '';
+                data.items.forEach(item => {
+                    // Validate URLs before using them
+                    const filepath = item.filepath || '';
+                    const thumbnail = item.thumbnail || filepath;
+                    const filename = item.filename || '';
+
+                    if (!isValidImageUrl(filepath)) return;
+
+                    const div = document.createElement('div');
+                    div.className = 'media-picker-item';
+                    div.onclick = function() { selectMedia(fieldId, filepath); };
+
+                    const img = document.createElement('img');
+                    safeSetImageSrc(img, thumbnail);
+                    img.alt = escapeHtml(filename);
+
+                    const span = document.createElement('span');
+                    span.className = 'media-picker-filename';
+                    span.textContent = filename;
+
+                    div.appendChild(img);
+                    div.appendChild(span);
+                    content.appendChild(div);
+                });
+                if (content.children.length === 0) {
+                    content.innerHTML = '<p style="text-align: center; padding: 2rem;">{{T .AdminLang "media.no_media"}}</p>';
+                }
+            } else {
+                content.innerHTML = '<p style="text-align: center; padding: 2rem;">{{T .AdminLang "media.no_media"}}</p>';
+            }
+        })
+        .catch(() => {
+            document.getElementById('media-picker-content').innerHTML = '<p style="text-align: center; padding: 2rem; color: var(--color-danger);">{{T .AdminLang "error.loading_failed"}}</p>';
+        });
+}
+
+function closeMediaPicker() {
+    const overlay = document.getElementById('media-picker-overlay');
+    if (overlay) {
+        overlay.remove();
+        document.body.classList.remove('modal-open');
+    }
+}
+
+function selectMedia(fieldId, url) {
+    if (!isValidImageUrl(url)) return;
+    const input = document.getElementById(fieldId);
+    if (input) {
+        input.value = url;
+        updateImagePreview(fieldId);
+    }
+    closeMediaPicker();
 }
 </script>
+<style>
+.media-picker-modal {
+    width: 90%;
+    max-width: 800px;
+    max-height: 80vh;
+}
+.media-picker-modal .modal-body {
+    overflow-y: auto;
+    max-height: 60vh;
+}
+.media-picker-loading {
+    text-align: center;
+    padding: 2rem;
+    color: var(--color-text-muted);
+}
+.media-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 1rem;
+    padding: 0.5rem;
+}
+.media-picker-item {
+    cursor: pointer;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    padding: 0.5rem;
+    text-align: center;
+    transition: border-color 0.2s, background-color 0.2s;
+}
+.media-picker-item:hover {
+    border-color: var(--color-primary);
+    background-color: var(--color-bg-secondary);
+}
+.media-picker-item img {
+    width: 100%;
+    height: 80px;
+    object-fit: contain;
+    border-radius: 4px;
+    background: var(--color-bg-tertiary);
+}
+.media-picker-filename {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    margin-top: 0.25rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.image-input-wrapper {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.image-preview {
+    flex-shrink: 0;
+}
+.image-input-wrapper .form-input {
+    flex: 1;
+    min-width: 200px;
+}
+</style>
 {{end}}

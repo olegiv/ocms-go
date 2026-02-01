@@ -1109,8 +1109,8 @@
         },
         {
             "id": "media.supported_formats",
-            "message": "Supported: JPG, PNG, GIF, WebP, PDF, MP4, WebM",
-            "translation": "Поддерживаются: JPG, PNG, GIF, WebP, PDF, MP4, WebM"
+            "message": "Supported: JPG, PNG, GIF, WebP, ICO, PDF, MP4, WebM",
+            "translation": "Поддерживаются: JPG, PNG, GIF, WebP, ICO, PDF, MP4, WebM"
         },
         {
             "id": "media.max_size",
@@ -1871,6 +1871,16 @@
             "id": "themes.browse",
             "message": "Browse",
             "translation": "Обзор"
+        },
+        {
+            "id": "theme_settings.favicon",
+            "message": "Favicon",
+            "translation": "Фавикон"
+        },
+        {
+            "id": "theme_settings.favicon_hint",
+            "message": "Custom favicon for the site (recommended: .ico, 32x32 or 16x16 pixels)",
+            "translation": "Иконка сайта (рекомендуется: .ico, 32x32 или 16x16 пикселей)"
         },
         {
             "id": "theme_settings.primary_color",
