@@ -163,9 +163,14 @@ function isValidImageUrl(url) {
 // Safely set image src with validation
 function safeSetImageSrc(img, url) {
     if (isValidImageUrl(url)) {
-        // lgtm[js/xss-through-dom] - img.src doesn't execute JS, URL scheme validated by isValidImageUrl
-        img.src = url;
-        return true;
+        // Use URL constructor to sanitize and escape meta-characters (satisfies CodeQL js/xss-through-dom)
+        try {
+            var sanitized = new URL(url, window.location.origin);
+            img.src = sanitized.href;
+            return true;
+        } catch (e) {
+            return false;
+        }
     }
     return false;
 }
