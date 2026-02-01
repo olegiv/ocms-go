@@ -25,6 +25,17 @@ const (
 // LanguageCookieName is the cookie name for language preference.
 const LanguageCookieName = "ocms_lang"
 
+// secureCookies controls whether cookies are set with the Secure flag.
+// In production mode (HTTPS), this should be true.
+// In development mode (HTTP), this should be false.
+var secureCookies = true // Default to secure (production mode)
+
+// InitLanguageCookies configures the Secure flag for language cookies.
+// Call this during application startup with isDev=true for development mode.
+func InitLanguageCookies(isDev bool) {
+	secureCookies = !isDev
+}
+
 // LanguageInfo holds language data for the request context.
 type LanguageInfo struct {
 	ID         int64
@@ -185,6 +196,7 @@ func GetLanguage(r *http.Request) *LanguageInfo {
 }
 
 // SetLanguageCookie sets the language preference cookie.
+// The Secure flag is set based on the configuration from InitLanguageCookies.
 func SetLanguageCookie(w http.ResponseWriter, langCode string) {
 	cookie := &http.Cookie{
 		Name:     LanguageCookieName,
@@ -193,6 +205,7 @@ func SetLanguageCookie(w http.ResponseWriter, langCode string) {
 		MaxAge:   365 * 24 * 60 * 60, // 1 year
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   secureCookies,
 	}
 	http.SetCookie(w, cookie)
 }

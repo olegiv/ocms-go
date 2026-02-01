@@ -244,6 +244,9 @@ func run() error {
 	middleware.SetSessionManager(sessionManager)
 	slog.Info("session manager initialized")
 
+	// Initialize language cookie security settings
+	middleware.InitLanguageCookies(cfg.IsDevelopment())
+
 	// Initialize template renderer
 	templatesFS, err := fs.Sub(web.Templates, "templates")
 	if err != nil {
