@@ -171,7 +171,7 @@ sudo dnf install vips-devel
 | `OCMS_SERVER_PORT` | Server port number | `8080` | No |
 | `OCMS_ENV` | Environment mode (`development`/`production`) | `development` | No |
 | `OCMS_LOG_LEVEL` | Log level (`debug`/`info`/`warn`/`error`) | `info` | No |
-| `OCMS_THEMES_DIR` | Directory containing themes | `./themes` | No |
+| `OCMS_CUSTOM_DIR` | Directory for custom themes and modules | `./custom` | No |
 | `OCMS_ACTIVE_THEME` | Name of the active theme | `default` | No |
 | `OCMS_API_RATE_LIMIT` | API requests per minute per key | `100` | No |
 | `OCMS_CACHE_TTL` | Default cache TTL in seconds | `3600` | No |
@@ -250,17 +250,15 @@ ocms-go/
 │   │   ├── migrations/   # Goose SQL migrations
 │   │   └── queries/      # sqlc query definitions
 │   ├── theme/            # Theme loading and management
+│   ├── themes/           # Embedded core themes (default, developer)
 │   ├── transfer/         # Import/export functionality
 │   ├── util/             # Utility functions (slug generation)
 │   └── webhook/          # Webhook system
 ├── modules/              # Custom modules directory
 │   └── example/          # Example module implementation
-├── themes/               # Theme directory
-│   ├── default/          # Default theme
-│   │   ├── theme.json    # Theme configuration
-│   │   ├── templates/    # Theme templates
-│   │   └── static/       # Theme static assets
-│   └── developer/        # Developer theme (dark mode)
+├── custom/               # User content directory (gitignored)
+│   ├── themes/           # Custom themes (override or extend core)
+│   └── modules/          # Custom modules (future use)
 ├── web/
 │   ├── static/           # Static assets (CSS, JS)
 │   │   └── scss/         # SCSS source files
@@ -336,10 +334,10 @@ Create API keys in the admin panel under **Settings > API Keys**.
 
 ## Theme Development
 
-Create a new theme by adding a directory in `themes/`:
+Core themes (`default`, `developer`) are embedded in the binary. To create a custom theme, add a directory in `custom/themes/`:
 
 ```
-themes/my-theme/
+custom/themes/my-theme/
 ├── theme.json          # Theme configuration
 ├── templates/
 │   ├── layouts/
@@ -355,6 +353,13 @@ themes/my-theme/
     ├── css/
     └── js/
 ```
+
+To override an embedded theme, create a custom theme with the same name:
+```
+custom/themes/default/    # Overrides the embedded 'default' theme
+```
+
+Custom themes with the same name as core themes take priority.
 
 ### theme.json
 
