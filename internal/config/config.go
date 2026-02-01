@@ -5,8 +5,6 @@ package config
 
 import (
 	"fmt"
-	"log/slog"
-	"path/filepath"
 
 	"github.com/caarlos0/env/v11"
 )
@@ -21,10 +19,6 @@ type Config struct {
 	LogLevel    string `env:"OCMS_LOG_LEVEL" envDefault:"info"`
 	CustomDir   string `env:"OCMS_CUSTOM_DIR" envDefault:"./custom"`
 	ActiveTheme string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`
-
-	// Deprecated: ThemesDir is deprecated, use CustomDir instead.
-	// If set, it will be used as the custom themes directory for backward compatibility.
-	ThemesDir string `env:"OCMS_THEMES_DIR"`
 
 	// Cache configuration
 	RedisURL     string `env:"OCMS_REDIS_URL"`                         // Optional Redis URL for distributed caching
@@ -84,16 +78,6 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("OCMS_SESSION_SECRET must be at least %d bytes long, got %d bytes; "+
 			"generate a secure secret with: openssl rand -base64 32",
 			MinSessionSecretLength, len(cfg.SessionSecret))
-	}
-
-	// Handle backward compatibility with OCMS_THEMES_DIR
-	if cfg.ThemesDir != "" {
-		slog.Warn("OCMS_THEMES_DIR is deprecated, use OCMS_CUSTOM_DIR instead",
-			"themes_dir", cfg.ThemesDir,
-			"migration", "set OCMS_CUSTOM_DIR to the parent directory of your themes folder")
-		// If ThemesDir is set, derive CustomDir from it (parent directory)
-		// e.g., ./themes -> ./  or  ./custom/themes -> ./custom
-		cfg.CustomDir = filepath.Dir(cfg.ThemesDir)
 	}
 
 	return cfg, nil

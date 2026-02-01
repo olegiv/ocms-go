@@ -237,33 +237,3 @@ func TestLoad_CustomDir(t *testing.T) {
 	})
 }
 
-func TestLoad_ThemesDirBackwardCompatibility(t *testing.T) {
-	// OCMS_THEMES_DIR is deprecated but should still work for backward compatibility
-	// It derives CustomDir from the parent directory of ThemesDir
-	tests := []struct {
-		name          string
-		themesDir     string
-		wantCustomDir string
-	}{
-		{"relative_themes", "./themes", "."},
-		{"relative_custom_themes", "./custom/themes", "custom"},
-		{"absolute_path", "/var/www/vhosts/example.com/ocms/themes", "/var/www/vhosts/example.com/ocms"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			os.Clearenv()
-			setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
-			setEnv(t, "OCMS_THEMES_DIR", tt.themesDir)
-
-			cfg, err := Load()
-			if err != nil {
-				t.Fatalf("Load() error: %v", err)
-			}
-
-			if cfg.CustomDir != tt.wantCustomDir {
-				t.Errorf("CustomDir = %q, want %q (derived from ThemesDir=%q)", cfg.CustomDir, tt.wantCustomDir, tt.themesDir)
-			}
-		})
-	}
-}
