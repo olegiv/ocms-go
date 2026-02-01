@@ -808,16 +808,10 @@ func run() error {
 		r.Post(handler.RouteFormsSlug, formsHandler.Submit)
 	})
 
-	// Favicon route - serve from embedded static files
+	// Favicon route - serve from theme settings or embedded default
+	defaultFavicon, _ := web.Static.ReadFile("static/dist/favicon.ico")
 	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
-		data, err := web.Static.ReadFile("static/dist/favicon.ico")
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set(handler.HeaderContentType, "image/x-icon")
-		w.Header().Set("Cache-Control", "public, max-age=31536000")
-		_, _ = w.Write(data)
+		frontendHandler.Favicon(w, r, defaultFavicon)
 	})
 
 	// Static file serving
