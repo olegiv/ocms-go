@@ -37,6 +37,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/session"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/theme"
+	"github.com/olegiv/ocms-go/internal/themes"
 	"github.com/olegiv/ocms-go/internal/version"
 	"github.com/olegiv/ocms-go/internal/webhook"
 	"github.com/olegiv/ocms-go/modules/analytics_ext"
@@ -264,8 +265,8 @@ func run() error {
 	}
 	slog.Info("template renderer initialized")
 
-	// Initialize theme manager
-	themeManager := theme.NewManager(cfg.ThemesDir, logger)
+	// Initialize theme manager with embedded core themes and custom directory
+	themeManager := theme.NewManager(themes.FS, cfg.CustomDir, logger)
 
 	// Add theme manager's template functions (TTheme) to renderer
 	renderer.AddTemplateFuncs(themeManager.TemplateFuncs())
