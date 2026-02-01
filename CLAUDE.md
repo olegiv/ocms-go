@@ -118,7 +118,7 @@ The hook source is in `.claude/shared/global/hooks/`.
    - `middleware.RequirePermission` - checks API key permissions
    - `middleware.APIRateLimit` - per-key rate limiting
 
-7. **Theme System** (`internal/theme/`): Loads themes from `themes/` directory with templates, static assets, and optional locale overrides (`themes/{name}/locales/`). Use `TTheme` in theme templates for translations with theme→global fallback.
+7. **Theme System** (`internal/theme/`): Core themes (default, developer) are embedded in the binary (`internal/themes/`). Custom themes can be placed in `custom/themes/` to override or extend core themes. Each theme has templates, static assets, and optional locale overrides. Use `TTheme` in theme templates for translations with theme→global fallback.
 
 8. **Module System** (`internal/module/`): Extensible plugin architecture with lifecycle management, migrations, active status toggle, and embedded i18n translations.
 
@@ -143,9 +143,10 @@ cmd/ocms/main.go
     ├── internal/seo         (sitemap, robots.txt, meta)
     ├── internal/session     (SCS session manager)
     ├── internal/theme       (theme loading/rendering)
-    ├── modules/             (custom modules)
-    ├── themes/              (frontend themes)
-    └── web                  (embedded templates/static)
+    ├── internal/themes      (embedded core themes)
+    ├── modules/             (built-in modules)
+    ├── custom/              (user content: themes, modules)
+    └── web                  (embedded admin templates/static)
 ```
 
 ## Environment Variables
@@ -156,8 +157,9 @@ cmd/ocms/main.go
 | `OCMS_DB_PATH` | No | `./data/ocms.db` | SQLite database path |
 | `OCMS_SERVER_PORT` | No | `8080` | Server port |
 | `OCMS_ENV` | No | `development` | Set to `production` for prod |
-| `OCMS_THEMES_DIR` | No | `./themes` | Directory containing themes |
+| `OCMS_CUSTOM_DIR` | No | `./custom` | Directory for custom themes/modules |
 | `OCMS_ACTIVE_THEME` | No | `default` | Name of active theme |
+| `OCMS_THEMES_DIR` | No | - | **Deprecated**: Use `OCMS_CUSTOM_DIR` instead |
 | `OCMS_API_RATE_LIMIT` | No | `100` | API requests per minute per key |
 | `OCMS_REDIS_URL` | No | - | Redis URL for distributed cache (e.g., `redis://localhost:6379/0`) |
 | `OCMS_CACHE_PREFIX` | No | `ocms:` | Key prefix for Redis cache entries |
