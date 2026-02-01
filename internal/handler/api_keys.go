@@ -19,6 +19,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -30,6 +31,7 @@ type APIKeysHandler struct {
 	queries        *store.Queries
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
+	eventService   *service.EventService
 }
 
 // NewAPIKeysHandler creates a new APIKeysHandler.
@@ -38,6 +40,7 @@ func NewAPIKeysHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionMan
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
+		eventService:   service.NewEventService(db),
 	}
 }
 
@@ -191,6 +194,7 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("API key created", "key_id", apiKey.ID, "name", apiKey.Name, "created_by", middleware.GetUserID(r))
+	_ = h.eventService.LogAPIKeyEvent(r.Context(), model.EventLevelInfo, "API key created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"key_id": apiKey.ID, "name": apiKey.Name})
 
 	// Render success page showing the generated key once
 	data := APIKeyFormData{
@@ -337,6 +341,7 @@ func (h *APIKeysHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("API key revoked", "key_id", id, "name", apiKey.Name, "revoked_by", middleware.GetUserID(r))
+	_ = h.eventService.LogAPIKeyEvent(r.Context(), model.EventLevelInfo, "API key revoked", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"key_id": id, "name": apiKey.Name})
 
 	// Check if this is an HTMX request
 	if r.Header.Get("HX-Request") == "true" {

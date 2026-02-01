@@ -20,6 +20,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -29,6 +30,7 @@ type MenusHandler struct {
 	queries        *store.Queries
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
+	eventService   *service.EventService
 }
 
 // NewMenusHandler creates a new MenusHandler.
@@ -37,6 +39,7 @@ func NewMenusHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
+		eventService:   service.NewEventService(db),
 	}
 }
 
@@ -298,6 +301,7 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("menu created", "menu_id", menu.ID, "slug", menu.Slug)
+	_ = h.eventService.LogMenuEvent(r.Context(), model.EventLevelInfo, "Menu created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"menu_id": menu.ID, "name": menu.Name, "slug": menu.Slug})
 	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminMenusID, menu.ID), "Menu created successfully")
 }
 
@@ -420,6 +424,7 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("menu updated", "menu_id", id, "updated_by", middleware.GetUserID(r))
+	_ = h.eventService.LogMenuEvent(r.Context(), model.EventLevelInfo, "Menu updated", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"menu_id": id})
 	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminMenusID, id), "Menu updated successfully")
 }
 
@@ -453,6 +458,7 @@ func (h *MenusHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	h.renderer.InvalidateMenuCache(menu.Slug)
 
 	slog.Info("menu deleted", "menu_id", id, "slug", menu.Slug, "deleted_by", middleware.GetUserID(r))
+	_ = h.eventService.LogMenuEvent(r.Context(), model.EventLevelInfo, "Menu deleted", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"menu_id": id, "slug": menu.Slug})
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.WriteHeader(http.StatusOK)

@@ -119,7 +119,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// Check if account is locked
 	if h.loginProtection != nil {
 		if locked, remaining := h.loginProtection.IsAccountLocked(email); locked {
-			_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login attempt on locked account", nil, clientIP, map[string]any{"email": email})
+			_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login attempt on locked account", nil, clientIP, middleware.GetRequestURL(r), map[string]any{"email": email})
 			flashError(w, r, h.renderer, redirectLogin, i18n.T(lang, "auth.account_locked", formatDuration(remaining)))
 			return
 		}
@@ -130,7 +130,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			slog.Debug("login attempt for non-existent user", "email", email)
-			_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login failed: user not found", nil, clientIP, map[string]any{"email": email})
+			_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login failed: user not found", nil, clientIP, middleware.GetRequestURL(r), map[string]any{"email": email})
 		} else {
 			slog.Error("database error during login", "error", err)
 		}
@@ -160,11 +160,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	if !valid {
 		slog.Debug("invalid password attempt", "email", email)
-		_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login failed: invalid password", &user.ID, clientIP, map[string]any{"email": email})
+		_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Login failed: invalid password", &user.ID, clientIP, middleware.GetRequestURL(r), map[string]any{"email": email})
 		// Record failed attempt
 		if h.loginProtection != nil {
 			if locked, lockDuration := h.loginProtection.RecordFailedAttempt(email); locked {
-				_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Account locked due to failed attempts", &user.ID, clientIP, map[string]any{"email": email, "duration": lockDuration.String()})
+				_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelWarning, "Account locked due to failed attempts", &user.ID, clientIP, middleware.GetRequestURL(r), map[string]any{"email": email, "duration": lockDuration.String()})
 				flashError(w, r, h.renderer, redirectLogin, i18n.T(lang, "auth.too_many_attempts", formatDuration(lockDuration)))
 				return
 			}
@@ -202,7 +202,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	h.sessionManager.Put(r.Context(), SessionKeyUserID, user.ID)
 
 	slog.Info("user logged in", "user_id", user.ID, "email", user.Email)
-	_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelInfo, "User logged in", &user.ID, clientIP, map[string]any{"email": user.Email})
+	_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelInfo, "User logged in", &user.ID, clientIP, middleware.GetRequestURL(r), map[string]any{"email": user.Email})
 
 	h.renderer.SetFlash(r, i18n.T(lang, "auth.welcome_back", user.Name), "success")
 
@@ -222,7 +222,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	// Log the event before destroying session
 	if userID > 0 {
 		clientIP := hcaptcha.GetRemoteIP(r)
-		_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelInfo, "User logged out", &userID, clientIP, nil)
+		_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelInfo, "User logged out", &userID, clientIP, middleware.GetRequestURL(r), nil)
 	}
 
 	// Destroy the session
