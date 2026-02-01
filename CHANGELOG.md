@@ -7,7 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-02-01
+
 ### Added
+
+#### Embedded Themes Architecture
+- Core themes (default, developer) embedded directly in binary
+- Custom themes supported in `custom/themes/` directory
+- Dual-source theme loading (embedded + custom)
+- Core/Custom badges in admin theme list
+- Windows compatibility for embedded theme static files
+
+#### Event Logging Enhancements
+- Request URL column in events table tracks which admin page triggered actions
+- Expanded event coverage for all admin operations:
+  - Media: upload, delete
+  - Tags/Categories: create, update
+  - Menus: create, update, delete
+  - API Keys: create, revoke
+  - Webhooks: create, update, delete
+- URL column displayed in admin events list
+
+#### Analytics Dashboard
+- View counts with percentages in Browser and Countries sections
+- `formatNumber` template function for thousand separators
 
 #### Module System Enhancements
 - Module active status management with toggle on/off functionality
@@ -33,15 +56,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Confirmation dialog before generating test data
 - i18n support for all UI text and messages
 
-#### Navigation
-- Conditional active state highlighting for sidebar navigation links
+#### Theme Settings
+- Favicon upload option in theme settings
+- ICO file upload support
+
+#### Database
+- Opt-in database seeding via `OCMS_DO_SEED` environment variable
+- Production-to-development sync script for development workflow
 
 ### Changed
 - Refactored user retrieval in handlers to use `middleware.GetUserID` helpers
 - Improved error handling by explicitly handling encoding/writing errors
 - Suppressed resource cleanup errors using anonymous functions for consistency
+- Refactored `fetchPagesForEntity` to eliminate duplicate code
+- Migrated golangci-lint config to v2 format
+- Updated Alpine.js packages to 3.15.6
 
-## [0.3.0] - 2024-XX-XX
+### Fixed
+- Alpine.js SRI integrity hash mismatch
+- Nil pointer panic in Favicon handler
+- CodeQL alert #28: sanitize URL before img.src assignment
+- Security and API issues in media picker
+
+### Security
+- URL sanitization before img.src assignment
+- Media picker API security improvements
+
+## [0.3.0] - Future
 
 ### Added
 
@@ -165,7 +206,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SCSS styling framework
 - HTMX and Alpine.js frontend
 
-[Unreleased]: https://github.com/yourusername/ocms-go/compare/v0.3.0...HEAD
-[0.3.0]: https://github.com/yourusername/ocms-go/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/yourusername/ocms-go/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/yourusername/ocms-go/releases/tag/v0.1.0
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/olegiv/ocms-go/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/olegiv/ocms-go/releases/tag/v0.1.0
