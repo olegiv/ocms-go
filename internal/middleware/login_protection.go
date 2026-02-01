@@ -265,6 +265,12 @@ func (lp *LoginProtection) Middleware() func(http.Handler) http.Handler {
 	}
 }
 
+// GetRequestURL extracts the request URL path from the request.
+// Returns the URL path without query string for cleaner logging.
+func GetRequestURL(r *http.Request) string {
+	return r.URL.Path
+}
+
 // GetClientIP extracts the client IP from the request.
 // It checks X-Forwarded-For and X-Real-IP headers for proxied requests,
 // and falls back to RemoteAddr with port stripped.

@@ -19,6 +19,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -64,6 +65,7 @@ type ConfigHandler struct {
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
 	cacheManager   *cache.Manager
+	eventService   *service.EventService
 }
 
 // NewConfigHandler creates a new ConfigHandler.
@@ -73,6 +75,7 @@ func NewConfigHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionMana
 		renderer:       renderer,
 		sessionManager: sm,
 		cacheManager:   cm,
+		eventService:   service.NewEventService(db),
 	}
 }
 
@@ -292,6 +295,7 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("config updated", "updated_by", middleware.GetUserID(r))
+	_ = h.eventService.LogConfigEvent(r.Context(), model.EventLevelInfo, "Configuration updated", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), nil)
 	flashSuccess(w, r, h.renderer, redirectAdminConfig, i18n.T(lang, "msg.config_saved"))
 }
 

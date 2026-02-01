@@ -61,19 +61,20 @@ func (q *Queries) CountEventsByLevelAndCategory(ctx context.Context, arg CountEv
 }
 
 const createEvent = `-- name: CreateEvent :one
-INSERT INTO events (level, category, message, user_id, metadata, ip_address, created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-RETURNING id, level, category, message, user_id, metadata, created_at, ip_address
+INSERT INTO events (level, category, message, user_id, metadata, ip_address, request_url, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, level, category, message, user_id, metadata, created_at, ip_address, request_url
 `
 
 type CreateEventParams struct {
-	Level     string        `json:"level"`
-	Category  string        `json:"category"`
-	Message   string        `json:"message"`
-	UserID    sql.NullInt64 `json:"user_id"`
-	Metadata  string        `json:"metadata"`
-	IpAddress string        `json:"ip_address"`
-	CreatedAt time.Time     `json:"created_at"`
+	Level      string        `json:"level"`
+	Category   string        `json:"category"`
+	Message    string        `json:"message"`
+	UserID     sql.NullInt64 `json:"user_id"`
+	Metadata   string        `json:"metadata"`
+	IpAddress  string        `json:"ip_address"`
+	RequestUrl string        `json:"request_url"`
+	CreatedAt  time.Time     `json:"created_at"`
 }
 
 func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (Event, error) {
@@ -84,6 +85,7 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (Event
 		arg.UserID,
 		arg.Metadata,
 		arg.IpAddress,
+		arg.RequestUrl,
 		arg.CreatedAt,
 	)
 	var i Event
@@ -96,6 +98,7 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (Event
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.IpAddress,
+		&i.RequestUrl,
 	)
 	return i, err
 }
@@ -110,7 +113,7 @@ func (q *Queries) DeleteOldEvents(ctx context.Context, createdAt time.Time) erro
 }
 
 const getEvent = `-- name: GetEvent :one
-SELECT id, level, category, message, user_id, metadata, created_at, ip_address FROM events WHERE id = ?
+SELECT id, level, category, message, user_id, metadata, created_at, ip_address, request_url FROM events WHERE id = ?
 `
 
 func (q *Queries) GetEvent(ctx context.Context, id int64) (Event, error) {
@@ -125,12 +128,13 @@ func (q *Queries) GetEvent(ctx context.Context, id int64) (Event, error) {
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.IpAddress,
+		&i.RequestUrl,
 	)
 	return i, err
 }
 
 const listEvents = `-- name: ListEvents :many
-SELECT id, level, category, message, user_id, metadata, created_at, ip_address FROM events
+SELECT id, level, category, message, user_id, metadata, created_at, ip_address, request_url FROM events
 ORDER BY created_at DESC
 LIMIT ? OFFSET ?
 `
@@ -158,6 +162,7 @@ func (q *Queries) ListEvents(ctx context.Context, arg ListEventsParams) ([]Event
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.IpAddress,
+			&i.RequestUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -173,7 +178,7 @@ func (q *Queries) ListEvents(ctx context.Context, arg ListEventsParams) ([]Event
 }
 
 const listEventsByCategory = `-- name: ListEventsByCategory :many
-SELECT id, level, category, message, user_id, metadata, created_at, ip_address FROM events
+SELECT id, level, category, message, user_id, metadata, created_at, ip_address, request_url FROM events
 WHERE category = ?
 ORDER BY created_at DESC
 LIMIT ? OFFSET ?
@@ -203,6 +208,7 @@ func (q *Queries) ListEventsByCategory(ctx context.Context, arg ListEventsByCate
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.IpAddress,
+			&i.RequestUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -218,7 +224,7 @@ func (q *Queries) ListEventsByCategory(ctx context.Context, arg ListEventsByCate
 }
 
 const listEventsByLevel = `-- name: ListEventsByLevel :many
-SELECT id, level, category, message, user_id, metadata, created_at, ip_address FROM events
+SELECT id, level, category, message, user_id, metadata, created_at, ip_address, request_url FROM events
 WHERE level = ?
 ORDER BY created_at DESC
 LIMIT ? OFFSET ?
@@ -248,6 +254,7 @@ func (q *Queries) ListEventsByLevel(ctx context.Context, arg ListEventsByLevelPa
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.IpAddress,
+			&i.RequestUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -263,7 +270,7 @@ func (q *Queries) ListEventsByLevel(ctx context.Context, arg ListEventsByLevelPa
 }
 
 const listEventsByLevelAndCategory = `-- name: ListEventsByLevelAndCategory :many
-SELECT id, level, category, message, user_id, metadata, created_at, ip_address FROM events
+SELECT id, level, category, message, user_id, metadata, created_at, ip_address, request_url FROM events
 WHERE level = ? AND category = ?
 ORDER BY created_at DESC
 LIMIT ? OFFSET ?
@@ -299,6 +306,7 @@ func (q *Queries) ListEventsByLevelAndCategory(ctx context.Context, arg ListEven
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.IpAddress,
+			&i.RequestUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -314,7 +322,7 @@ func (q *Queries) ListEventsByLevelAndCategory(ctx context.Context, arg ListEven
 }
 
 const listEventsWithUser = `-- name: ListEventsWithUser :many
-SELECT e.id, e.level, e.category, e.message, e.user_id, e.metadata, e.ip_address, e.created_at,
+SELECT e.id, e.level, e.category, e.message, e.user_id, e.metadata, e.ip_address, e.request_url, e.created_at,
        u.name as user_name, u.email as user_email
 FROM events e
 LEFT JOIN users u ON e.user_id = u.id
@@ -328,16 +336,17 @@ type ListEventsWithUserParams struct {
 }
 
 type ListEventsWithUserRow struct {
-	ID        int64          `json:"id"`
-	Level     string         `json:"level"`
-	Category  string         `json:"category"`
-	Message   string         `json:"message"`
-	UserID    sql.NullInt64  `json:"user_id"`
-	Metadata  string         `json:"metadata"`
-	IpAddress string         `json:"ip_address"`
-	CreatedAt time.Time      `json:"created_at"`
-	UserName  sql.NullString `json:"user_name"`
-	UserEmail sql.NullString `json:"user_email"`
+	ID         int64          `json:"id"`
+	Level      string         `json:"level"`
+	Category   string         `json:"category"`
+	Message    string         `json:"message"`
+	UserID     sql.NullInt64  `json:"user_id"`
+	Metadata   string         `json:"metadata"`
+	IpAddress  string         `json:"ip_address"`
+	RequestUrl string         `json:"request_url"`
+	CreatedAt  time.Time      `json:"created_at"`
+	UserName   sql.NullString `json:"user_name"`
+	UserEmail  sql.NullString `json:"user_email"`
 }
 
 func (q *Queries) ListEventsWithUser(ctx context.Context, arg ListEventsWithUserParams) ([]ListEventsWithUserRow, error) {
@@ -357,6 +366,7 @@ func (q *Queries) ListEventsWithUser(ctx context.Context, arg ListEventsWithUser
 			&i.UserID,
 			&i.Metadata,
 			&i.IpAddress,
+			&i.RequestUrl,
 			&i.CreatedAt,
 			&i.UserName,
 			&i.UserEmail,
@@ -375,7 +385,7 @@ func (q *Queries) ListEventsWithUser(ctx context.Context, arg ListEventsWithUser
 }
 
 const listEventsWithUserByCategory = `-- name: ListEventsWithUserByCategory :many
-SELECT e.id, e.level, e.category, e.message, e.user_id, e.metadata, e.ip_address, e.created_at,
+SELECT e.id, e.level, e.category, e.message, e.user_id, e.metadata, e.ip_address, e.request_url, e.created_at,
        u.name as user_name, u.email as user_email
 FROM events e
 LEFT JOIN users u ON e.user_id = u.id
@@ -391,16 +401,17 @@ type ListEventsWithUserByCategoryParams struct {
 }
 
 type ListEventsWithUserByCategoryRow struct {
-	ID        int64          `json:"id"`
-	Level     string         `json:"level"`
-	Category  string         `json:"category"`
-	Message   string         `json:"message"`
-	UserID    sql.NullInt64  `json:"user_id"`
-	Metadata  string         `json:"metadata"`
-	IpAddress string         `json:"ip_address"`
-	CreatedAt time.Time      `json:"created_at"`
-	UserName  sql.NullString `json:"user_name"`
-	UserEmail sql.NullString `json:"user_email"`
+	ID         int64          `json:"id"`
+	Level      string         `json:"level"`
+	Category   string         `json:"category"`
+	Message    string         `json:"message"`
+	UserID     sql.NullInt64  `json:"user_id"`
+	Metadata   string         `json:"metadata"`
+	IpAddress  string         `json:"ip_address"`
+	RequestUrl string         `json:"request_url"`
+	CreatedAt  time.Time      `json:"created_at"`
+	UserName   sql.NullString `json:"user_name"`
+	UserEmail  sql.NullString `json:"user_email"`
 }
 
 func (q *Queries) ListEventsWithUserByCategory(ctx context.Context, arg ListEventsWithUserByCategoryParams) ([]ListEventsWithUserByCategoryRow, error) {
@@ -420,6 +431,7 @@ func (q *Queries) ListEventsWithUserByCategory(ctx context.Context, arg ListEven
 			&i.UserID,
 			&i.Metadata,
 			&i.IpAddress,
+			&i.RequestUrl,
 			&i.CreatedAt,
 			&i.UserName,
 			&i.UserEmail,
@@ -438,7 +450,7 @@ func (q *Queries) ListEventsWithUserByCategory(ctx context.Context, arg ListEven
 }
 
 const listEventsWithUserByLevel = `-- name: ListEventsWithUserByLevel :many
-SELECT e.id, e.level, e.category, e.message, e.user_id, e.metadata, e.ip_address, e.created_at,
+SELECT e.id, e.level, e.category, e.message, e.user_id, e.metadata, e.ip_address, e.request_url, e.created_at,
        u.name as user_name, u.email as user_email
 FROM events e
 LEFT JOIN users u ON e.user_id = u.id
@@ -454,16 +466,17 @@ type ListEventsWithUserByLevelParams struct {
 }
 
 type ListEventsWithUserByLevelRow struct {
-	ID        int64          `json:"id"`
-	Level     string         `json:"level"`
-	Category  string         `json:"category"`
-	Message   string         `json:"message"`
-	UserID    sql.NullInt64  `json:"user_id"`
-	Metadata  string         `json:"metadata"`
-	IpAddress string         `json:"ip_address"`
-	CreatedAt time.Time      `json:"created_at"`
-	UserName  sql.NullString `json:"user_name"`
-	UserEmail sql.NullString `json:"user_email"`
+	ID         int64          `json:"id"`
+	Level      string         `json:"level"`
+	Category   string         `json:"category"`
+	Message    string         `json:"message"`
+	UserID     sql.NullInt64  `json:"user_id"`
+	Metadata   string         `json:"metadata"`
+	IpAddress  string         `json:"ip_address"`
+	RequestUrl string         `json:"request_url"`
+	CreatedAt  time.Time      `json:"created_at"`
+	UserName   sql.NullString `json:"user_name"`
+	UserEmail  sql.NullString `json:"user_email"`
 }
 
 func (q *Queries) ListEventsWithUserByLevel(ctx context.Context, arg ListEventsWithUserByLevelParams) ([]ListEventsWithUserByLevelRow, error) {
@@ -483,6 +496,7 @@ func (q *Queries) ListEventsWithUserByLevel(ctx context.Context, arg ListEventsW
 			&i.UserID,
 			&i.Metadata,
 			&i.IpAddress,
+			&i.RequestUrl,
 			&i.CreatedAt,
 			&i.UserName,
 			&i.UserEmail,
@@ -501,7 +515,7 @@ func (q *Queries) ListEventsWithUserByLevel(ctx context.Context, arg ListEventsW
 }
 
 const listEventsWithUserByLevelAndCategory = `-- name: ListEventsWithUserByLevelAndCategory :many
-SELECT e.id, e.level, e.category, e.message, e.user_id, e.metadata, e.ip_address, e.created_at,
+SELECT e.id, e.level, e.category, e.message, e.user_id, e.metadata, e.ip_address, e.request_url, e.created_at,
        u.name as user_name, u.email as user_email
 FROM events e
 LEFT JOIN users u ON e.user_id = u.id
@@ -518,16 +532,17 @@ type ListEventsWithUserByLevelAndCategoryParams struct {
 }
 
 type ListEventsWithUserByLevelAndCategoryRow struct {
-	ID        int64          `json:"id"`
-	Level     string         `json:"level"`
-	Category  string         `json:"category"`
-	Message   string         `json:"message"`
-	UserID    sql.NullInt64  `json:"user_id"`
-	Metadata  string         `json:"metadata"`
-	IpAddress string         `json:"ip_address"`
-	CreatedAt time.Time      `json:"created_at"`
-	UserName  sql.NullString `json:"user_name"`
-	UserEmail sql.NullString `json:"user_email"`
+	ID         int64          `json:"id"`
+	Level      string         `json:"level"`
+	Category   string         `json:"category"`
+	Message    string         `json:"message"`
+	UserID     sql.NullInt64  `json:"user_id"`
+	Metadata   string         `json:"metadata"`
+	IpAddress  string         `json:"ip_address"`
+	RequestUrl string         `json:"request_url"`
+	CreatedAt  time.Time      `json:"created_at"`
+	UserName   sql.NullString `json:"user_name"`
+	UserEmail  sql.NullString `json:"user_email"`
 }
 
 func (q *Queries) ListEventsWithUserByLevelAndCategory(ctx context.Context, arg ListEventsWithUserByLevelAndCategoryParams) ([]ListEventsWithUserByLevelAndCategoryRow, error) {
@@ -552,6 +567,7 @@ func (q *Queries) ListEventsWithUserByLevelAndCategory(ctx context.Context, arg 
 			&i.UserID,
 			&i.Metadata,
 			&i.IpAddress,
+			&i.RequestUrl,
 			&i.CreatedAt,
 			&i.UserName,
 			&i.UserEmail,

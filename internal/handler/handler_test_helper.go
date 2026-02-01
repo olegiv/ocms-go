@@ -94,6 +94,7 @@ func testDB(t *testing.T) *sql.DB {
 			user_id INTEGER,
 			metadata TEXT NOT NULL DEFAULT '{}',
 			ip_address TEXT NOT NULL DEFAULT '',
+			request_url TEXT NOT NULL DEFAULT '',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 		);

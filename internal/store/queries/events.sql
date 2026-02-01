@@ -1,6 +1,6 @@
 -- name: CreateEvent :one
-INSERT INTO events (level, category, message, user_id, metadata, ip_address, created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO events (level, category, message, user_id, metadata, ip_address, request_url, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetEvent :one
@@ -30,7 +30,7 @@ ORDER BY created_at DESC
 LIMIT ? OFFSET ?;
 
 -- name: ListEventsWithUser :many
-SELECT e.id, e.level, e.category, e.message, e.user_id, e.metadata, e.ip_address, e.created_at,
+SELECT e.id, e.level, e.category, e.message, e.user_id, e.metadata, e.ip_address, e.request_url, e.created_at,
        u.name as user_name, u.email as user_email
 FROM events e
 LEFT JOIN users u ON e.user_id = u.id
@@ -38,7 +38,7 @@ ORDER BY e.created_at DESC
 LIMIT ? OFFSET ?;
 
 -- name: ListEventsWithUserByLevel :many
-SELECT e.id, e.level, e.category, e.message, e.user_id, e.metadata, e.ip_address, e.created_at,
+SELECT e.id, e.level, e.category, e.message, e.user_id, e.metadata, e.ip_address, e.request_url, e.created_at,
        u.name as user_name, u.email as user_email
 FROM events e
 LEFT JOIN users u ON e.user_id = u.id
@@ -47,7 +47,7 @@ ORDER BY e.created_at DESC
 LIMIT ? OFFSET ?;
 
 -- name: ListEventsWithUserByCategory :many
-SELECT e.id, e.level, e.category, e.message, e.user_id, e.metadata, e.ip_address, e.created_at,
+SELECT e.id, e.level, e.category, e.message, e.user_id, e.metadata, e.ip_address, e.request_url, e.created_at,
        u.name as user_name, u.email as user_email
 FROM events e
 LEFT JOIN users u ON e.user_id = u.id
@@ -56,7 +56,7 @@ ORDER BY e.created_at DESC
 LIMIT ? OFFSET ?;
 
 -- name: ListEventsWithUserByLevelAndCategory :many
-SELECT e.id, e.level, e.category, e.message, e.user_id, e.metadata, e.ip_address, e.created_at,
+SELECT e.id, e.level, e.category, e.message, e.user_id, e.metadata, e.ip_address, e.request_url, e.created_at,
        u.name as user_name, u.email as user_email
 FROM events e
 LEFT JOIN users u ON e.user_id = u.id

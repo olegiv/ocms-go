@@ -49,6 +49,7 @@ type EventWithUser struct {
 	Details     string // Formatted metadata as readable text
 	DetailsLong bool   // True if details exceed display threshold
 	IPAddress   string
+	RequestURL  string
 	CreatedAt   string
 	UserName    string
 	UserEmail   string
@@ -59,15 +60,16 @@ const detailsLengthThreshold = 80
 
 // eventRowData holds the common fields from all event row types.
 type eventRowData struct {
-	ID        int64
-	Level     string
-	Category  string
-	Message   string
-	Metadata  string
-	IPAddress string
-	CreatedAt string
-	UserName  string
-	UserEmail string
+	ID         int64
+	Level      string
+	Category   string
+	Message    string
+	Metadata   string
+	IPAddress  string
+	RequestURL string
+	CreatedAt  string
+	UserName   string
+	UserEmail  string
 }
 
 // toEventWithUser converts eventRowData to EventWithUser.
@@ -82,6 +84,7 @@ func (d eventRowData) toEventWithUser() EventWithUser {
 		Details:     details,
 		DetailsLong: len(details) > detailsLengthThreshold,
 		IPAddress:   d.IPAddress,
+		RequestURL:  d.RequestURL,
 		CreatedAt:   d.CreatedAt,
 		UserName:    d.UserName,
 		UserEmail:   d.UserEmail,
@@ -238,8 +241,22 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 		TotalEvents: totalEvents,
 		Level:       level,
 		Category:    category,
-		Levels:      []string{model.EventLevelInfo, model.EventLevelWarning, model.EventLevelError},
-		Categories:  []string{model.EventCategoryAuth, model.EventCategoryPage, model.EventCategoryUser, model.EventCategoryConfig, model.EventCategorySystem},
+		Levels: []string{model.EventLevelInfo, model.EventLevelWarning, model.EventLevelError},
+		Categories: []string{
+			model.EventCategoryAuth,
+			model.EventCategoryPage,
+			model.EventCategoryUser,
+			model.EventCategoryConfig,
+			model.EventCategorySystem,
+			model.EventCategoryCache,
+			model.EventCategoryMigrator,
+			model.EventCategoryMedia,
+			model.EventCategoryTag,
+			model.EventCategoryCategory,
+			model.EventCategoryMenu,
+			model.EventCategoryAPIKey,
+			model.EventCategoryWebhook,
+		},
 		Pagination:  BuildAdminPagination(page, int(totalEvents), EventsPerPage, redirectAdminEvents, r.URL.Query()),
 	}
 
@@ -268,24 +285,24 @@ func convertEventRows[T any](rows []T, extract func(T) eventRowData) []EventWith
 
 func convertEventsWithUser(rows []store.ListEventsWithUserRow) []EventWithUser {
 	return convertEventRows(rows, func(r store.ListEventsWithUserRow) eventRowData {
-		return eventRowData{r.ID, r.Level, r.Category, r.Message, r.Metadata, r.IpAddress, r.CreatedAt.Format("2006-01-02 15:04:05"), r.UserName.String, r.UserEmail.String}
+		return eventRowData{r.ID, r.Level, r.Category, r.Message, r.Metadata, r.IpAddress, r.RequestUrl, r.CreatedAt.Format("2006-01-02 15:04:05"), r.UserName.String, r.UserEmail.String}
 	})
 }
 
 func convertEventsWithUserByLevel(rows []store.ListEventsWithUserByLevelRow) []EventWithUser {
 	return convertEventRows(rows, func(r store.ListEventsWithUserByLevelRow) eventRowData {
-		return eventRowData{r.ID, r.Level, r.Category, r.Message, r.Metadata, r.IpAddress, r.CreatedAt.Format("2006-01-02 15:04:05"), r.UserName.String, r.UserEmail.String}
+		return eventRowData{r.ID, r.Level, r.Category, r.Message, r.Metadata, r.IpAddress, r.RequestUrl, r.CreatedAt.Format("2006-01-02 15:04:05"), r.UserName.String, r.UserEmail.String}
 	})
 }
 
 func convertEventsWithUserByCategory(rows []store.ListEventsWithUserByCategoryRow) []EventWithUser {
 	return convertEventRows(rows, func(r store.ListEventsWithUserByCategoryRow) eventRowData {
-		return eventRowData{r.ID, r.Level, r.Category, r.Message, r.Metadata, r.IpAddress, r.CreatedAt.Format("2006-01-02 15:04:05"), r.UserName.String, r.UserEmail.String}
+		return eventRowData{r.ID, r.Level, r.Category, r.Message, r.Metadata, r.IpAddress, r.RequestUrl, r.CreatedAt.Format("2006-01-02 15:04:05"), r.UserName.String, r.UserEmail.String}
 	})
 }
 
 func convertEventsWithUserByLevelAndCategory(rows []store.ListEventsWithUserByLevelAndCategoryRow) []EventWithUser {
 	return convertEventRows(rows, func(r store.ListEventsWithUserByLevelAndCategoryRow) eventRowData {
-		return eventRowData{r.ID, r.Level, r.Category, r.Message, r.Metadata, r.IpAddress, r.CreatedAt.Format("2006-01-02 15:04:05"), r.UserName.String, r.UserEmail.String}
+		return eventRowData{r.ID, r.Level, r.Category, r.Message, r.Metadata, r.IpAddress, r.RequestUrl, r.CreatedAt.Format("2006-01-02 15:04:05"), r.UserName.String, r.UserEmail.String}
 	})
 }
