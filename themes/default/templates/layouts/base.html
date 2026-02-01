@@ -40,8 +40,8 @@
 
     <title>{{if .Title}}{{.Title}} - {{end}}{{.SiteName}}</title>
 
-    {{/* Favicon */}}
-    <link rel="icon" type="image/x-icon" href="/themes/default/static/favicon.ico">
+    {{/* Favicon (served from theme settings or default) */}}
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
 
     {{/* Theme Styles */}}
     <link rel="stylesheet" href="/themes/default/static/css/theme.css">
