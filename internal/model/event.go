@@ -34,5 +34,6 @@ type Event struct {
 	Message   string
 	UserID    sql.NullInt64
 	Metadata  string // JSON string
+	IPAddress string
 	CreatedAt time.Time
 }

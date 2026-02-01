@@ -29,7 +29,7 @@ func NewEventService(db *sql.DB) *EventService {
 }
 
 // LogEvent creates a new event log entry.
-func (s *EventService) LogEvent(ctx context.Context, level, category, message string, userID *int64, metadata map[string]any) error {
+func (s *EventService) LogEvent(ctx context.Context, level, category, message string, userID *int64, ipAddress string, metadata map[string]any) error {
 	var nullUserID sql.NullInt64
 	if userID != nil {
 		nullUserID = sql.NullInt64{Int64: *userID, Valid: true}
@@ -49,6 +49,7 @@ func (s *EventService) LogEvent(ctx context.Context, level, category, message st
 		Message:   message,
 		UserID:    nullUserID,
 		Metadata:  metadataJSON,
+		IpAddress: ipAddress,
 		CreatedAt: time.Now(),
 	})
 	if err != nil {
@@ -60,53 +61,53 @@ func (s *EventService) LogEvent(ctx context.Context, level, category, message st
 }
 
 // LogInfo logs an info-level event.
-func (s *EventService) LogInfo(ctx context.Context, category, message string, userID *int64, metadata map[string]any) error {
-	return s.LogEvent(ctx, model.EventLevelInfo, category, message, userID, metadata)
+func (s *EventService) LogInfo(ctx context.Context, category, message string, userID *int64, ipAddress string, metadata map[string]any) error {
+	return s.LogEvent(ctx, model.EventLevelInfo, category, message, userID, ipAddress, metadata)
 }
 
 // LogWarning logs a warning-level event.
-func (s *EventService) LogWarning(ctx context.Context, category, message string, userID *int64, metadata map[string]any) error {
-	return s.LogEvent(ctx, model.EventLevelWarning, category, message, userID, metadata)
+func (s *EventService) LogWarning(ctx context.Context, category, message string, userID *int64, ipAddress string, metadata map[string]any) error {
+	return s.LogEvent(ctx, model.EventLevelWarning, category, message, userID, ipAddress, metadata)
 }
 
 // LogError logs an error-level event.
-func (s *EventService) LogError(ctx context.Context, category, message string, userID *int64, metadata map[string]any) error {
-	return s.LogEvent(ctx, model.EventLevelError, category, message, userID, metadata)
+func (s *EventService) LogError(ctx context.Context, category, message string, userID *int64, ipAddress string, metadata map[string]any) error {
+	return s.LogEvent(ctx, model.EventLevelError, category, message, userID, ipAddress, metadata)
 }
 
 // LogAuthEvent logs an authentication-related event.
-func (s *EventService) LogAuthEvent(ctx context.Context, level, message string, userID *int64, metadata map[string]any) error {
-	return s.LogEvent(ctx, level, model.EventCategoryAuth, message, userID, metadata)
+func (s *EventService) LogAuthEvent(ctx context.Context, level, message string, userID *int64, ipAddress string, metadata map[string]any) error {
+	return s.LogEvent(ctx, level, model.EventCategoryAuth, message, userID, ipAddress, metadata)
 }
 
 // LogPageEvent logs a page-related event.
-func (s *EventService) LogPageEvent(ctx context.Context, level, message string, userID *int64, metadata map[string]any) error {
-	return s.LogEvent(ctx, level, model.EventCategoryPage, message, userID, metadata)
+func (s *EventService) LogPageEvent(ctx context.Context, level, message string, userID *int64, ipAddress string, metadata map[string]any) error {
+	return s.LogEvent(ctx, level, model.EventCategoryPage, message, userID, ipAddress, metadata)
 }
 
 // LogUserEvent logs a user-related event.
-func (s *EventService) LogUserEvent(ctx context.Context, level, message string, userID *int64, metadata map[string]any) error {
-	return s.LogEvent(ctx, level, model.EventCategoryUser, message, userID, metadata)
+func (s *EventService) LogUserEvent(ctx context.Context, level, message string, userID *int64, ipAddress string, metadata map[string]any) error {
+	return s.LogEvent(ctx, level, model.EventCategoryUser, message, userID, ipAddress, metadata)
 }
 
 // LogConfigEvent logs a config-related event.
-func (s *EventService) LogConfigEvent(ctx context.Context, level, message string, userID *int64, metadata map[string]any) error {
-	return s.LogEvent(ctx, level, model.EventCategoryConfig, message, userID, metadata)
+func (s *EventService) LogConfigEvent(ctx context.Context, level, message string, userID *int64, ipAddress string, metadata map[string]any) error {
+	return s.LogEvent(ctx, level, model.EventCategoryConfig, message, userID, ipAddress, metadata)
 }
 
 // LogSystemEvent logs a system-related event.
-func (s *EventService) LogSystemEvent(ctx context.Context, level, message string, userID *int64, metadata map[string]any) error {
-	return s.LogEvent(ctx, level, model.EventCategorySystem, message, userID, metadata)
+func (s *EventService) LogSystemEvent(ctx context.Context, level, message string, userID *int64, ipAddress string, metadata map[string]any) error {
+	return s.LogEvent(ctx, level, model.EventCategorySystem, message, userID, ipAddress, metadata)
 }
 
 // LogCacheEvent logs a cache-related event.
-func (s *EventService) LogCacheEvent(ctx context.Context, level, message string, userID *int64, metadata map[string]any) error {
-	return s.LogEvent(ctx, level, model.EventCategoryCache, message, userID, metadata)
+func (s *EventService) LogCacheEvent(ctx context.Context, level, message string, userID *int64, ipAddress string, metadata map[string]any) error {
+	return s.LogEvent(ctx, level, model.EventCategoryCache, message, userID, ipAddress, metadata)
 }
 
 // LogMigratorEvent logs a migrator-related event.
-func (s *EventService) LogMigratorEvent(ctx context.Context, level, message string, userID *int64, metadata map[string]any) error {
-	return s.LogEvent(ctx, level, model.EventCategoryMigrator, message, userID, metadata)
+func (s *EventService) LogMigratorEvent(ctx context.Context, level, message string, userID *int64, ipAddress string, metadata map[string]any) error {
+	return s.LogEvent(ctx, level, model.EventCategoryMigrator, message, userID, ipAddress, metadata)
 }
 
 // DeleteOldEvents removes events older than the specified duration.

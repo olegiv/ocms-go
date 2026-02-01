@@ -31,11 +31,12 @@ func TestEventCreate(t *testing.T) {
 	queries := store.New(db)
 
 	event, err := queries.CreateEvent(context.Background(), store.CreateEventParams{
-		Level:    "info",
-		Category: "system",
-		Message:  "Test event message",
-		UserID:   sql.NullInt64{Int64: user.ID, Valid: true},
-		Metadata: `{"key": "value"}`,
+		Level:     "info",
+		Category:  "system",
+		Message:   "Test event message",
+		UserID:    sql.NullInt64{Int64: user.ID, Valid: true},
+		Metadata:  `{"key": "value"}`,
+		IpAddress: "192.168.1.100",
 	})
 	if err != nil {
 		t.Fatalf("CreateEvent failed: %v", err)

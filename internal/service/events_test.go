@@ -30,6 +30,7 @@ func setupEventTestDB(t *testing.T) *sql.DB {
 			message TEXT NOT NULL,
 			user_id INTEGER,
 			metadata TEXT NOT NULL DEFAULT '{}',
+			ip_address TEXT NOT NULL DEFAULT '',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)
 	`)
@@ -58,7 +59,7 @@ func TestLogEvent(t *testing.T) {
 	ctx := context.Background()
 
 	userID := int64(123)
-	err := svc.LogEvent(ctx, model.EventLevelInfo, model.EventCategoryMigrator, "Test message", &userID, map[string]any{
+	err := svc.LogEvent(ctx, model.EventLevelInfo, model.EventCategoryMigrator, "Test message", &userID, "192.168.1.100", map[string]any{
 		"key": "value",
 	})
 	if err != nil {
@@ -107,7 +108,7 @@ func TestLogEvent_NilUserID(t *testing.T) {
 	svc := NewEventService(db)
 	ctx := context.Background()
 
-	err := svc.LogEvent(ctx, model.EventLevelWarning, model.EventCategorySystem, "No user", nil, nil)
+	err := svc.LogEvent(ctx, model.EventLevelWarning, model.EventCategorySystem, "No user", nil, "", nil)
 	if err != nil {
 		t.Fatalf("LogEvent failed: %v", err)
 	}
@@ -130,7 +131,7 @@ func TestLogEvent_NilMetadata(t *testing.T) {
 	svc := NewEventService(db)
 	ctx := context.Background()
 
-	err := svc.LogEvent(ctx, model.EventLevelInfo, model.EventCategoryAuth, "Test", nil, nil)
+	err := svc.LogEvent(ctx, model.EventLevelInfo, model.EventCategoryAuth, "Test", nil, "", nil)
 	if err != nil {
 		t.Fatalf("LogEvent failed: %v", err)
 	}
@@ -173,9 +174,9 @@ func TestLogLevels(t *testing.T) {
 		logFn    func(*EventService, context.Context) error
 		expected string
 	}{
-		{"info", func(svc *EventService, ctx context.Context) error { return svc.LogInfo(ctx, model.EventCategoryPage, "Page created", nil, nil) }, "info"},
-		{"warning", func(svc *EventService, ctx context.Context) error { return svc.LogWarning(ctx, model.EventCategorySystem, "Low disk space", nil, nil) }, "warning"},
-		{"error", func(svc *EventService, ctx context.Context) error { return svc.LogError(ctx, model.EventCategoryAuth, "Login failed", nil, nil) }, "error"},
+		{"info", func(svc *EventService, ctx context.Context) error { return svc.LogInfo(ctx, model.EventCategoryPage, "Page created", nil, "", nil) }, "info"},
+		{"warning", func(svc *EventService, ctx context.Context) error { return svc.LogWarning(ctx, model.EventCategorySystem, "Low disk space", nil, "", nil) }, "warning"},
+		{"error", func(svc *EventService, ctx context.Context) error { return svc.LogError(ctx, model.EventCategoryAuth, "Login failed", nil, "", nil) }, "error"},
 	}
 
 	for _, tt := range tests {
@@ -195,7 +196,7 @@ func TestLogMigratorEvent(t *testing.T) {
 	ctx := context.Background()
 
 	userID := int64(1)
-	err := svc.LogMigratorEvent(ctx, model.EventLevelInfo, "Content imported from elefant", &userID, map[string]any{
+	err := svc.LogMigratorEvent(ctx, model.EventLevelInfo, "Content imported from elefant", &userID, "10.0.0.1", map[string]any{
 		"source":         "elefant",
 		"posts_imported": 10,
 		"tags_imported":  5,
@@ -228,12 +229,12 @@ func TestLogCategoryEvents(t *testing.T) {
 		logFn    func(*EventService, context.Context) error
 		expected string
 	}{
-		{"auth", func(svc *EventService, ctx context.Context) error { return svc.LogAuthEvent(ctx, model.EventLevelInfo, "User logged in", nil, nil) }, "auth"},
-		{"page", func(svc *EventService, ctx context.Context) error { return svc.LogPageEvent(ctx, model.EventLevelInfo, "Page published", nil, nil) }, "page"},
-		{"user", func(svc *EventService, ctx context.Context) error { return svc.LogUserEvent(ctx, model.EventLevelInfo, "User created", nil, nil) }, "user"},
-		{"config", func(svc *EventService, ctx context.Context) error { return svc.LogConfigEvent(ctx, model.EventLevelInfo, "Config updated", nil, nil) }, "config"},
-		{"system", func(svc *EventService, ctx context.Context) error { return svc.LogSystemEvent(ctx, model.EventLevelInfo, "System started", nil, nil) }, "system"},
-		{"cache", func(svc *EventService, ctx context.Context) error { return svc.LogCacheEvent(ctx, model.EventLevelInfo, "Cache cleared", nil, nil) }, "cache"},
+		{"auth", func(svc *EventService, ctx context.Context) error { return svc.LogAuthEvent(ctx, model.EventLevelInfo, "User logged in", nil, "", nil) }, "auth"},
+		{"page", func(svc *EventService, ctx context.Context) error { return svc.LogPageEvent(ctx, model.EventLevelInfo, "Page published", nil, "", nil) }, "page"},
+		{"user", func(svc *EventService, ctx context.Context) error { return svc.LogUserEvent(ctx, model.EventLevelInfo, "User created", nil, "", nil) }, "user"},
+		{"config", func(svc *EventService, ctx context.Context) error { return svc.LogConfigEvent(ctx, model.EventLevelInfo, "Config updated", nil, "", nil) }, "config"},
+		{"system", func(svc *EventService, ctx context.Context) error { return svc.LogSystemEvent(ctx, model.EventLevelInfo, "System started", nil, "", nil) }, "system"},
+		{"cache", func(svc *EventService, ctx context.Context) error { return svc.LogCacheEvent(ctx, model.EventLevelInfo, "Cache cleared", nil, "", nil) }, "cache"},
 	}
 
 	for _, tt := range tests {
@@ -262,7 +263,7 @@ func TestDeleteOldEvents(t *testing.T) {
 	}
 
 	// Insert a recent event
-	err = svc.LogInfo(ctx, "test", "Recent event", nil, nil)
+	err = svc.LogInfo(ctx, "test", "Recent event", nil, "", nil)
 	if err != nil {
 		t.Fatalf("LogInfo failed: %v", err)
 	}

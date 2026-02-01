@@ -2883,6 +2883,11 @@
             "translation": "Детали"
         },
         {
+            "id": "events.ip_address",
+            "message": "IP Address",
+            "translation": "IP-адрес"
+        },
+        {
             "id": "events.user",
             "message": "User",
             "translation": "Пользователь"
