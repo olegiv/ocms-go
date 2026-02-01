@@ -1788,6 +1788,16 @@
             "translation": "Active"
         },
         {
+            "id": "themes.core",
+            "message": "Core",
+            "translation": "Core"
+        },
+        {
+            "id": "themes.custom",
+            "message": "Custom",
+            "translation": "Custom"
+        },
+        {
             "id": "themes.activate",
             "message": "Activate",
             "translation": "Activate"
@@ -1814,8 +1824,8 @@
         },
         {
             "id": "themes.no_themes_hint",
-            "message": "Create a theme directory in ./themes with a theme.json file.",
-            "translation": "Create a theme directory in ./themes with a theme.json file."
+            "message": "Core themes are embedded. Add custom themes to ./custom/themes/",
+            "translation": "Core themes are embedded. Add custom themes to ./custom/themes/"
         },
         {
             "id": "themes.settings_title",
