@@ -366,22 +366,8 @@ func (m *Manager) parseTemplatesFromFS(themeFS fs.FS, templatesDir string) (*tem
 			if err != nil {
 				return nil, fmt.Errorf("reading page %s: %w", entry.Name(), err)
 			}
-
-			// Create a unique template name for each page's content
-			baseName := strings.TrimSuffix(entry.Name(), ".html")
-			contentName := "content_" + baseName
-
-			// Wrap the content definition with a unique name
-			wrappedContent := strings.Replace(
-				string(content),
-				`{{define "content"}}`,
-				fmt.Sprintf(`{{define "%s"}}`, contentName),
-				1,
-			)
-
-			relPath := "pages/" + entry.Name()
-			if _, err := tmpl.New(relPath).Parse(wrappedContent); err != nil {
-				return nil, fmt.Errorf("parsing page %s: %w", relPath, err)
+			if err := parsePageTemplate(tmpl, entry.Name(), content); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -428,22 +414,8 @@ func (m *Manager) parseTemplatesFromFilesystem(templatesPath string) (*template.
 			if err != nil {
 				return nil, fmt.Errorf("reading page %s: %w", entry.Name(), err)
 			}
-
-			// Create a unique template name for each page's content
-			baseName := strings.TrimSuffix(entry.Name(), ".html")
-			contentName := "content_" + baseName
-
-			// Wrap the content definition with a unique name
-			wrappedContent := strings.Replace(
-				string(content),
-				`{{define "content"}}`,
-				fmt.Sprintf(`{{define "%s"}}`, contentName),
-				1,
-			)
-
-			relPath := "pages/" + entry.Name()
-			if _, err := tmpl.New(relPath).Parse(wrappedContent); err != nil {
-				return nil, fmt.Errorf("parsing page %s: %w", relPath, err)
+			if err := parsePageTemplate(tmpl, entry.Name(), content); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -464,6 +436,25 @@ func collectHTMLFiles(dir string) []string {
 		}
 	}
 	return files
+}
+
+// parsePageTemplate parses a single page template, wrapping its content block with a unique name.
+func parsePageTemplate(tmpl *template.Template, entryName string, content []byte) error {
+	baseName := strings.TrimSuffix(entryName, ".html")
+	contentName := "content_" + baseName
+
+	wrappedContent := strings.Replace(
+		string(content),
+		`{{define "content"}}`,
+		fmt.Sprintf(`{{define "%s"}}`, contentName),
+		1,
+	)
+
+	relPath := "pages/" + entryName
+	if _, err := tmpl.New(relPath).Parse(wrappedContent); err != nil {
+		return fmt.Errorf("parsing page %s: %w", relPath, err)
+	}
+	return nil
 }
 
 // parseTemplateFiles parses template files into the given template.

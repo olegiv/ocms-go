@@ -413,9 +413,9 @@ func run() error {
 		}
 	} else if themeManager.ThemeCount() > 0 {
 		// Fall back to first available theme
-		themes := themeManager.ListThemesWithActive()
-		if len(themes) > 0 {
-			if err := themeManager.SetActiveTheme(themes[0].Name); err != nil {
+		availableThemes := themeManager.ListThemesWithActive()
+		if len(availableThemes) > 0 {
+			if err := themeManager.SetActiveTheme(availableThemes[0].Name); err != nil {
 				slog.Warn("failed to set fallback theme", "error", err)
 			}
 		}
