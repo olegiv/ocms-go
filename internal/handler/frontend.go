@@ -764,7 +764,7 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 	limit := int64(defaultPerPage)
 
 	// Fetch pages for this category (with optional language filter)
-	pages, total, err := h.fetchCategoryPages(ctx, category.ID, languageCode, limit, int64(offset))
+	pages, total, err := h.fetchPagesForEntity(ctx, category.ID, languageCode, limit, int64(offset), false)
 	if err != nil {
 		h.logger.Error("failed to get pages for category", "category", slug, "error", err)
 		h.renderInternalError(w)
@@ -839,7 +839,7 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 	limit := int64(defaultPerPage)
 
 	// Fetch pages for this tag (with optional language filter)
-	pages, total, err := h.fetchTagPages(ctx, tag.ID, languageCode, limit, int64(offset))
+	pages, total, err := h.fetchPagesForEntity(ctx, tag.ID, languageCode, limit, int64(offset), true)
 	if err != nil {
 		h.logger.Error("failed to get pages for tag", "tag", slug, "error", err)
 		h.renderInternalError(w)
@@ -1939,41 +1939,40 @@ func fetchPagesWithOptionalLang(
 	return pages, total, nil
 }
 
-// fetchCategoryPages fetches published pages for a category with optional language filter.
-func (h *FrontendHandler) fetchCategoryPages(ctx context.Context, categoryID int64, langCode string, limit, offset int64) ([]store.Page, int64, error) {
+// fetchPagesForEntity fetches published pages for a category or tag with optional language filter.
+func (h *FrontendHandler) fetchPagesForEntity(ctx context.Context, entityID int64, langCode string, limit, offset int64, isTag bool) ([]store.Page, int64, error) {
+	if isTag {
+		return fetchPagesWithOptionalLang(langCode,
+			func() ([]store.Page, error) {
+				return h.queries.ListPublishedPagesForTagAndLanguage(ctx, store.ListPublishedPagesForTagAndLanguageParams{
+					TagID: entityID, LanguageCode: langCode, Limit: limit, Offset: offset})
+			},
+			func() (int64, error) {
+				return h.queries.CountPublishedPagesForTagAndLanguage(ctx, store.CountPublishedPagesForTagAndLanguageParams{
+					TagID: entityID, LanguageCode: langCode})
+			},
+			func() ([]store.Page, error) {
+				return h.queries.ListPublishedPagesForTag(ctx, store.ListPublishedPagesForTagParams{
+					TagID: entityID, Limit: limit, Offset: offset})
+			},
+			func() (int64, error) { return h.queries.CountPublishedPagesForTag(ctx, entityID) },
+		)
+	}
+
 	return fetchPagesWithOptionalLang(langCode,
 		func() ([]store.Page, error) {
 			return h.queries.ListPublishedPagesByCategoryAndLanguage(ctx, store.ListPublishedPagesByCategoryAndLanguageParams{
-				CategoryID: categoryID, LanguageCode: langCode, Limit: limit, Offset: offset})
+				CategoryID: entityID, LanguageCode: langCode, Limit: limit, Offset: offset})
 		},
 		func() (int64, error) {
 			return h.queries.CountPublishedPagesByCategoryAndLanguage(ctx, store.CountPublishedPagesByCategoryAndLanguageParams{
-				CategoryID: categoryID, LanguageCode: langCode})
+				CategoryID: entityID, LanguageCode: langCode})
 		},
 		func() ([]store.Page, error) {
 			return h.queries.ListPublishedPagesByCategory(ctx, store.ListPublishedPagesByCategoryParams{
-				CategoryID: categoryID, Limit: limit, Offset: offset})
+				CategoryID: entityID, Limit: limit, Offset: offset})
 		},
-		func() (int64, error) { return h.queries.CountPublishedPagesByCategory(ctx, categoryID) },
-	)
-}
-
-// fetchTagPages fetches published pages for a tag with optional language filter.
-func (h *FrontendHandler) fetchTagPages(ctx context.Context, tagID int64, langCode string, limit, offset int64) ([]store.Page, int64, error) {
-	return fetchPagesWithOptionalLang(langCode,
-		func() ([]store.Page, error) {
-			return h.queries.ListPublishedPagesForTagAndLanguage(ctx, store.ListPublishedPagesForTagAndLanguageParams{
-				TagID: tagID, LanguageCode: langCode, Limit: limit, Offset: offset})
-		},
-		func() (int64, error) {
-			return h.queries.CountPublishedPagesForTagAndLanguage(ctx, store.CountPublishedPagesForTagAndLanguageParams{
-				TagID: tagID, LanguageCode: langCode})
-		},
-		func() ([]store.Page, error) {
-			return h.queries.ListPublishedPagesForTag(ctx, store.ListPublishedPagesForTagParams{
-				TagID: tagID, Limit: limit, Offset: offset})
-		},
-		func() (int64, error) { return h.queries.CountPublishedPagesForTag(ctx, tagID) },
+		func() (int64, error) { return h.queries.CountPublishedPagesByCategory(ctx, entityID) },
 	)
 }
 
