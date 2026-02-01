@@ -167,3 +167,41 @@ func TestConfig_ServerAddr(t *testing.T) {
 		})
 	}
 }
+
+func TestConfig_GeoIPEnabled(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		enabled bool
+	}{
+		{"empty path", "", false},
+		{"path set", "/path/to/GeoLite2-Country.mmdb", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Config{GeoIPDBPath: tt.path}
+			if got := cfg.GeoIPEnabled(); got != tt.enabled {
+				t.Errorf("GeoIPEnabled() = %v, want %v", got, tt.enabled)
+			}
+		})
+	}
+}
+
+func TestLoad_GeoIPDBPath(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_GEOIP_DB_PATH", "/path/to/GeoLite2-Country.mmdb")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	if cfg.GeoIPDBPath != "/path/to/GeoLite2-Country.mmdb" {
+		t.Errorf("GeoIPDBPath = %q, want %q", cfg.GeoIPDBPath, "/path/to/GeoLite2-Country.mmdb")
+	}
+	if !cfg.GeoIPEnabled() {
+		t.Error("GeoIPEnabled() = false, want true")
+	}
+}

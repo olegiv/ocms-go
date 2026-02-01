@@ -165,6 +165,7 @@ cmd/ocms/main.go
 | `OCMS_CACHE_MAX_SIZE` | No | `10000` | Max entries for in-memory cache |
 | `OCMS_HCAPTCHA_SITE_KEY` | No | - | hCaptcha site key (overrides database setting) |
 | `OCMS_HCAPTCHA_SECRET_KEY` | No | - | hCaptcha secret key (overrides database setting) |
+| `OCMS_GEOIP_DB_PATH` | No | - | Path to GeoLite2-Country.mmdb for country detection |
 
 ## Default Credentials
 

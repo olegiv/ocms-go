@@ -4,16 +4,51 @@
 package analytics_int
 
 import (
+	"fmt"
 	"net"
+	"os"
 	"sync"
+	"time"
+
+	"github.com/oschwald/maxminddb-golang"
 )
 
-// GeoIPLookup handles IP to country lookup.
-// This is a simple implementation that can be enhanced with MaxMind GeoLite2
-// or IP2Location database for more accurate results.
+// privateCIDRs contains parsed CIDR blocks for private IP ranges.
+// Initialized once at package load time for efficiency.
+var privateCIDRs []*net.IPNet
+
+func init() {
+	privateBlocks := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"fc00::/7",  // IPv6 unique local
+		"fe80::/10", // IPv6 link-local
+	}
+
+	for _, block := range privateBlocks {
+		_, cidr, err := net.ParseCIDR(block)
+		if err == nil {
+			privateCIDRs = append(privateCIDRs, cidr)
+		}
+	}
+}
+
+// GeoIPLookup handles IP to country lookup using MaxMind GeoLite2-Country database.
 type GeoIPLookup struct {
+	db          *maxminddb.Reader
+	dbPath      string
+	dbModTime   time.Time
 	initialized bool
+	enabled     bool
 	mu          sync.RWMutex
+}
+
+// geoRecord matches the GeoLite2-Country database structure.
+type geoRecord struct {
+	Country struct {
+		ISOCode string `maxminddb:"iso_code"`
+	} `maxminddb:"country"`
 }
 
 // NewGeoIPLookup creates a new GeoIP lookup instance.
@@ -21,18 +56,81 @@ func NewGeoIPLookup() *GeoIPLookup {
 	return &GeoIPLookup{}
 }
 
-// Init initializes the GeoIP database.
-// In a production environment, this would load a GeoIP database file.
-// For now, we provide a basic implementation that returns empty for unknown IPs.
-func (g *GeoIPLookup) Init() error {
+// Init initializes the GeoIP database from the given path.
+// If path is empty, GeoIP lookups are disabled (graceful degradation).
+// Returns an error if the database cannot be loaded (logs warning instead).
+func (g *GeoIPLookup) Init(dbPath string) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+
 	g.initialized = true
+	g.dbPath = dbPath
+
+	if dbPath == "" {
+		g.enabled = false
+		return nil
+	}
+
+	return g.loadDatabase()
+}
+
+// loadDatabase loads or reloads the MaxMind database.
+// Caller must hold g.mu write lock.
+func (g *GeoIPLookup) loadDatabase() error {
+	// Check if file exists and get mod time
+	info, err := os.Stat(g.dbPath)
+	if err != nil {
+		g.enabled = false
+		if os.IsNotExist(err) {
+			return fmt.Errorf("GeoIP database not found: %s", g.dbPath)
+		}
+		return fmt.Errorf("GeoIP database stat error: %w", err)
+	}
+
+	// Skip reload if not modified
+	if g.db != nil && info.ModTime().Equal(g.dbModTime) {
+		return nil
+	}
+
+	// Close existing database if any
+	if g.db != nil {
+		_ = g.db.Close()
+		g.db = nil
+	}
+
+	// Open the database
+	db, err := maxminddb.Open(g.dbPath)
+	if err != nil {
+		g.enabled = false
+		return fmt.Errorf("failed to open GeoIP database: %w", err)
+	}
+
+	g.db = db
+	g.dbModTime = info.ModTime()
+	g.enabled = true
+
 	return nil
 }
 
-// LookupCountry returns the 2-letter country code for an IP address.
-// Returns empty string if the country cannot be determined.
+// Reload reloads the GeoIP database if it has been updated.
+// Safe to call periodically (e.g., from a cron job).
+func (g *GeoIPLookup) Reload() error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	if g.dbPath == "" {
+		return nil
+	}
+
+	return g.loadDatabase()
+}
+
+// LookupCountry returns the 2-letter ISO country code for an IP address.
+// Returns empty string if:
+// - GeoIP is not enabled/initialized
+// - IP address is invalid
+// - Country cannot be determined
+// Returns "LOCAL" for private/local IPs.
 func (g *GeoIPLookup) LookupCountry(ip string) string {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
@@ -56,34 +154,44 @@ func (g *GeoIPLookup) LookupCountry(ip string) string {
 		return "LOCAL"
 	}
 
-	// For a full implementation, integrate with:
-	// - MaxMind GeoLite2 (free): https://dev.maxmind.com/geoip/geolite2-free-geolocation-data
-	// - IP2Location LITE (free): https://lite.ip2location.com/
-	//
-	// Example with oschwald/maxminddb-golang:
-	// db, _ := maxminddb.Open("GeoLite2-Country.mmdb")
-	// var record struct { Country struct { ISOCode string `maxminddb:"iso_code"` } `maxminddb:"country"` }
-	// db.Lookup(parsedIP, &record)
-	// return record.Country.ISOCode
+	// If database not enabled, return empty
+	if !g.enabled || g.db == nil {
+		return ""
+	}
 
-	return ""
+	// Lookup in MaxMind database
+	var record geoRecord
+	if err := g.db.Lookup(parsedIP, &record); err != nil {
+		return ""
+	}
+
+	return record.Country.ISOCode
+}
+
+// IsEnabled returns whether GeoIP lookups are available.
+func (g *GeoIPLookup) IsEnabled() bool {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.enabled
+}
+
+// Close closes the GeoIP database.
+func (g *GeoIPLookup) Close() error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	if g.db != nil {
+		err := g.db.Close()
+		g.db = nil
+		g.enabled = false
+		return err
+	}
+	return nil
 }
 
 // isPrivateIP checks if an IP address is in a private range.
 func isPrivateIP(ip net.IP) bool {
-	privateBlocks := []string{
-		"10.0.0.0/8",
-		"172.16.0.0/12",
-		"192.168.0.0/16",
-		"fc00::/7",   // IPv6 unique local
-		"fe80::/10",  // IPv6 link-local
-	}
-
-	for _, block := range privateBlocks {
-		_, cidr, err := net.ParseCIDR(block)
-		if err != nil {
-			continue
-		}
+	for _, cidr := range privateCIDRs {
 		if cidr.Contains(ip) {
 			return true
 		}

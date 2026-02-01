@@ -255,10 +255,13 @@ func TestGetRealTimeVisitorCount(t *testing.T) {
 
 func TestGeoIPLookup(t *testing.T) {
 	g := NewGeoIPLookup()
-	if err := g.Init(); err != nil {
+
+	// Test without database (graceful degradation)
+	if err := g.Init(""); err != nil {
 		t.Fatalf("GeoIPLookup.Init failed: %v", err)
 	}
 
+	// Without database, only private IPs should return LOCAL
 	// Test private IP detection
 	result := g.LookupCountry("192.168.1.1")
 	if result != "LOCAL" {
@@ -280,6 +283,36 @@ func TestGeoIPLookup(t *testing.T) {
 	result = g.LookupCountry("invalid")
 	if result != "" {
 		t.Errorf("LookupCountry(invalid) = %q, want empty", result)
+	}
+
+	// Test public IP without database - should return empty
+	result = g.LookupCountry("8.8.8.8")
+	if result != "" {
+		t.Errorf("LookupCountry(8.8.8.8) without DB = %q, want empty", result)
+	}
+
+	// Test IsEnabled
+	if g.IsEnabled() {
+		t.Error("GeoIP should not be enabled without database path")
+	}
+}
+
+func TestGeoIPLookup_InvalidPath(t *testing.T) {
+	g := NewGeoIPLookup()
+
+	err := g.Init("/nonexistent/path/GeoLite2-Country.mmdb")
+	if err == nil {
+		t.Error("Init with invalid path should return error")
+	}
+
+	if g.IsEnabled() {
+		t.Error("GeoIP should not be enabled with invalid path")
+	}
+
+	// Lookups should still work (graceful degradation)
+	result := g.LookupCountry("192.168.1.1")
+	if result != "LOCAL" {
+		t.Errorf("LookupCountry(192.168.1.1) = %q, want LOCAL", result)
 	}
 }
 
