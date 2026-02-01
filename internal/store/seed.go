@@ -37,8 +37,15 @@ var DefaultConfig = []struct {
 	{model.ConfigKeyCopyright, "", model.ConfigTypeString, "Footer copyright text (leave empty for automatic)"},
 }
 
-// Seed creates initial data in the database.
-func Seed(ctx context.Context, db *sql.DB) error {
+// Seed creates initial data in the database if doSeed is true.
+// When doSeed is false, seeding is skipped to prevent automatic recreation
+// of deleted data (e.g., default admin user) on application restart.
+func Seed(ctx context.Context, db *sql.DB, doSeed bool) error {
+	if !doSeed {
+		slog.Info("seeding disabled (set OCMS_DO_SEED=true to enable)")
+		return nil
+	}
+
 	queries := New(db)
 
 	// Check if admin user already exists

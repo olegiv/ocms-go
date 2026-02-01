@@ -214,7 +214,7 @@ func run() error {
 
 	// Seed default data
 	ctx := context.Background()
-	if err := store.Seed(ctx, db); err != nil {
+	if err := store.Seed(ctx, db, cfg.DoSeed); err != nil {
 		return fmt.Errorf("seeding database: %w", err)
 	}
 

@@ -32,6 +32,9 @@ type Config struct {
 
 	// GeoIP configuration
 	GeoIPDBPath string `env:"OCMS_GEOIP_DB_PATH"` // Path to GeoLite2-Country.mmdb file
+
+	// Seeding configuration
+	DoSeed bool `env:"OCMS_DO_SEED" envDefault:"false"` // Enable database seeding
 }
 
 // IsDevelopment returns true if the application is running in development mode.

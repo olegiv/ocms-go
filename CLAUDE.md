@@ -166,10 +166,13 @@ cmd/ocms/main.go
 | `OCMS_HCAPTCHA_SITE_KEY` | No | - | hCaptcha site key (overrides database setting) |
 | `OCMS_HCAPTCHA_SECRET_KEY` | No | - | hCaptcha secret key (overrides database setting) |
 | `OCMS_GEOIP_DB_PATH` | No | - | Path to GeoLite2-Country.mmdb for country detection |
+| `OCMS_DO_SEED` | No | `false` | Enable database seeding (admin user, config, menus) |
 
 ## Default Credentials
 
-On first run, seeds admin user: `admin@example.com` / `changeme1234`
+When `OCMS_DO_SEED=true`, seeds admin user: `admin@example.com` / `changeme1234`
+
+Seeding is opt-in to prevent automatic recreation of deleted data on restart.
 
 ## Key Endpoints
 

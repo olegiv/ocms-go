@@ -319,7 +319,7 @@ func TestSeed(t *testing.T) {
 	db, cleanup, ctx, q := testSetup(t)
 	defer cleanup()
 
-	if err := Seed(ctx, db); err != nil {
+	if err := Seed(ctx, db, true); err != nil {
 		t.Fatalf("Seed: %v", err)
 	}
 
@@ -335,7 +335,7 @@ func TestSeed(t *testing.T) {
 	}
 
 	// Second seed should skip (no error, no duplicate)
-	if err := Seed(ctx, db); err != nil {
+	if err := Seed(ctx, db, true); err != nil {
 		t.Fatalf("Second Seed: %v", err)
 	}
 
@@ -345,6 +345,31 @@ func TestSeed(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("count = %d, want 1 (seed should skip if exists)", count)
+	}
+}
+
+func TestSeedDisabled(t *testing.T) {
+	db, cleanup, ctx, q := testSetup(t)
+	defer cleanup()
+
+	// Seed with doSeed=false should skip and create nothing
+	if err := Seed(ctx, db, false); err != nil {
+		t.Fatalf("Seed with doSeed=false: %v", err)
+	}
+
+	// No admin user should exist
+	_, err := q.GetUserByEmail(ctx, DefaultAdminEmail)
+	if err == nil {
+		t.Error("expected no admin user when doSeed=false, but found one")
+	}
+
+	// No menus should exist
+	menuCount, err := q.CountMenus(ctx)
+	if err != nil {
+		t.Fatalf("CountMenus: %v", err)
+	}
+	if menuCount != 0 {
+		t.Errorf("menu count = %d, want 0 when doSeed=false", menuCount)
 	}
 }
 
