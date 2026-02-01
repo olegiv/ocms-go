@@ -589,7 +589,13 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 		data.SiteName = middleware.GetSiteName(req)
 	}
 
-	// Get admin language from session if not already set
+	// Get language from context (set by page/form handlers based on content language)
+	if data.AdminLang == "" {
+		if langInfo := middleware.GetLanguage(req); langInfo != nil {
+			data.AdminLang = langInfo.Code
+		}
+	}
+	// Fall back to admin language from session if not already set
 	if data.AdminLang == "" && r.sessionManager != nil {
 		data.AdminLang = r.sessionManager.GetString(req.Context(), SessionKeyAdminLang)
 	}

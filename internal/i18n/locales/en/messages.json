@@ -1743,6 +1743,36 @@
             "translation": "Configure hCaptcha"
         },
         {
+            "id": "forms.public.thank_you",
+            "message": "Thank you!",
+            "translation": "Thank you!"
+        },
+        {
+            "id": "forms.public.default_success",
+            "message": "Thank you for your submission.",
+            "translation": "Thank you for your submission."
+        },
+        {
+            "id": "forms.public.submit_another",
+            "message": "Submit Another Response",
+            "translation": "Submit Another Response"
+        },
+        {
+            "id": "forms.public.honeypot_label",
+            "message": "Leave this field empty",
+            "translation": "Leave this field empty"
+        },
+        {
+            "id": "forms.public.select_default",
+            "message": "-- Select --",
+            "translation": "-- Select --"
+        },
+        {
+            "id": "forms.public.submit",
+            "message": "Submit",
+            "translation": "Submit"
+        },
+        {
             "id": "themes.title",
             "message": "Themes",
             "translation": "Themes"

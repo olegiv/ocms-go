@@ -329,6 +329,36 @@ func (h *FormsHandler) getSiteName(ctx context.Context) string {
 	return "oCMS"
 }
 
+// updateLanguageContext updates the request context with the form's language.
+// This ensures UI translations match the form's language, consistent with page handler behavior.
+func (h *FormsHandler) updateLanguageContext(w http.ResponseWriter, r *http.Request, languageCode string) *http.Request {
+	if languageCode == "" {
+		return r
+	}
+
+	formLang, err := h.queries.GetLanguageByCode(r.Context(), languageCode)
+	if err != nil {
+		return r
+	}
+
+	langInfo := middleware.LanguageInfo{
+		ID:         formLang.ID,
+		Code:       formLang.Code,
+		Name:       formLang.Name,
+		NativeName: formLang.NativeName,
+		Direction:  formLang.Direction,
+		IsDefault:  formLang.IsDefault,
+	}
+
+	ctx := r.Context()
+	ctx = context.WithValue(ctx, middleware.ContextKeyLanguage, langInfo)
+	ctx = context.WithValue(ctx, middleware.ContextKeyLanguageCode, formLang.Code)
+
+	middleware.SetLanguageCookie(w, formLang.Code)
+
+	return r.WithContext(ctx)
+}
+
 // formsBreadcrumbs returns the base breadcrumbs for forms pages.
 func formsBreadcrumbs(lang string) []render.Breadcrumb {
 	return []render.Breadcrumb{
@@ -914,6 +944,9 @@ func (h *FormsHandler) Show(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Update language context to match form's language
+	r = h.updateLanguageContext(w, r, form.LanguageCode)
+
 	fields, err := h.queries.GetFormFields(r.Context(), form.ID)
 	if err != nil {
 		slog.Error("failed to get form fields", "error", err, "form_id", form.ID)
@@ -944,6 +977,9 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	if form == nil {
 		return
 	}
+
+	// Update language context to match form's language
+	r = h.updateLanguageContext(w, r, form.LanguageCode)
 
 	fields, err := h.queries.GetFormFields(r.Context(), form.ID)
 	if err != nil {

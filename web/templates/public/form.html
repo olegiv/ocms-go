@@ -7,9 +7,9 @@
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
                 <polyline points="22 4 12 14.01 9 11.01"/>
             </svg>
-            <h2>Thank you!</h2>
-            <p>{{if .Data.Form.SuccessMessage.Valid}}{{.Data.Form.SuccessMessage.String}}{{else}}Thank you for your submission.{{end}}</p>
-            <a href="/forms/{{.Data.Form.Slug}}" class="btn btn-primary">Submit Another Response</a>
+            <h2>{{T .AdminLang "forms.public.thank_you"}}</h2>
+            <p>{{if .Data.Form.SuccessMessage.Valid}}{{.Data.Form.SuccessMessage.String}}{{else}}{{T .AdminLang "forms.public.default_success"}}{{end}}</p>
+            <a href="/forms/{{.Data.Form.Slug}}" class="btn btn-primary">{{T .AdminLang "forms.public.submit_another"}}</a>
         </div>
         {{else}}
         <div class="form-header">
@@ -38,7 +38,7 @@
 
             <!-- Honeypot field (hidden from real users, bots will fill it) -->
             <div class="sr-only">
-                <label for="_website">Leave this field empty</label>
+                <label for="_website">{{T .AdminLang "forms.public.honeypot_label"}}</label>
                 <input type="text" name="_website" id="_website" tabindex="-1" autocomplete="off">
             </div>
 
@@ -105,7 +105,7 @@
                         name="{{.Name}}"
                         {{if .IsRequired}}required{{end}}
                         class="form-control">
-                    <option value="">-- Select --</option>
+                    <option value="">{{T $.AdminLang "forms.public.select_default"}}</option>
                     {{$selectedValue := index $.Data.Values .Name}}
                     {{$options := parseJSON .Options.String}}
                     {{range $options}}
@@ -179,7 +179,7 @@
             {{end}}
 
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary btn-lg">Submit</button>
+                <button type="submit" class="btn btn-primary btn-lg">{{T .AdminLang "forms.public.submit"}}</button>
             </div>
         </form>
         {{end}}
