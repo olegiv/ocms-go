@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -132,33 +133,19 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	permissions := r.Form["permissions"]
 	expiresAtStr := r.FormValue("expires_at")
 
-	// Store form values for re-rendering on error
-	formValues := map[string]string{
-		"name":       name,
-		"expires_at": expiresAtStr,
-	}
-
-	// Validate
-	validationErrors := make(map[string]string)
-
-	if err := validateAPIKeyName(name); err != "" {
-		validationErrors["name"] = err
-	}
-	if err := validateAPIKeyPermissions(permissions); err != "" {
-		validationErrors["permissions"] = err
-	}
-	expiresAt, expiresErr := parseAPIKeyExpiration(expiresAtStr, true)
-	if expiresErr != "" {
-		validationErrors["expires_at"] = expiresErr
-	}
+	// Validate form input
+	input, validationErrors := validateAPIKeyForm(name, permissions, expiresAtStr, true)
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
 		data := APIKeyFormData{
 			Permissions: model.AllPermissions(),
 			Errors:      validationErrors,
-			FormValues:  formValues,
-			IsEdit:      false,
+			FormValues: map[string]string{
+				"name":       name,
+				"expires_at": expiresAtStr,
+			},
+			IsEdit: false,
 		}
 		h.renderAPIKeyForm(w, r, user, lang, i18n.T(lang, "api_keys.new_key"), data,
 			i18n.T(lang, "api_keys.new_key"), redirectAdminAPIKeysNew)
@@ -182,16 +169,16 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Convert permissions to JSON
-	permissionsJSON := model.PermissionsToJSON(permissions)
+	permissionsJSON := model.PermissionsToJSON(input.Permissions)
 
 	// Create API key
 	now := time.Now()
 	apiKey, err := h.queries.CreateAPIKey(r.Context(), store.CreateAPIKeyParams{
-		Name:        name,
+		Name:        input.Name,
 		KeyHash:     keyHash,
 		KeyPrefix:   prefix,
 		Permissions: permissionsJSON,
-		ExpiresAt:   expiresAt,
+		ExpiresAt:   input.ExpiresAt,
 		IsActive:    true,
 		CreatedBy:   middleware.GetUserID(r),
 		CreatedAt:   now,
@@ -280,25 +267,8 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 	expiresAtStr := r.FormValue("expires_at")
 	isActive := r.FormValue("is_active") == "on" || r.FormValue("is_active") == "true"
 
-	// Store form values for re-rendering on error
-	formValues := map[string]string{
-		"name":       name,
-		"expires_at": expiresAtStr,
-	}
-
-	// Validate
-	validationErrors := make(map[string]string)
-
-	if err := validateAPIKeyName(name); err != "" {
-		validationErrors["name"] = err
-	}
-	if err := validateAPIKeyPermissions(permissions); err != "" {
-		validationErrors["permissions"] = err
-	}
-	expiresAt, expiresErr := parseAPIKeyExpiration(expiresAtStr, false) // Don't require future for edits
-	if expiresErr != "" {
-		validationErrors["expires_at"] = expiresErr
-	}
+	// Validate form input (don't require future expiry for edits)
+	input, validationErrors := validateAPIKeyForm(name, permissions, expiresAtStr, false)
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
@@ -306,8 +276,11 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 			APIKey:      &apiKey,
 			Permissions: model.AllPermissions(),
 			Errors:      validationErrors,
-			FormValues:  formValues,
-			IsEdit:      true,
+			FormValues: map[string]string{
+				"name":       name,
+				"expires_at": expiresAtStr,
+			},
+			IsEdit: true,
 		}
 		h.renderAPIKeyForm(w, r, user, lang, i18n.T(lang, "api_keys.edit_key"), data,
 			apiKey.Name, redirectAdminAPIKeysSlash+idStr)
@@ -315,14 +288,14 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Convert permissions to JSON
-	permissionsJSON := model.PermissionsToJSON(permissions)
+	permissionsJSON := model.PermissionsToJSON(input.Permissions)
 
 	// Update API key
 	now := time.Now()
 	_, err := h.queries.UpdateAPIKey(r.Context(), store.UpdateAPIKeyParams{
-		Name:        name,
+		Name:        input.Name,
 		Permissions: permissionsJSON,
-		ExpiresAt:   expiresAt,
+		ExpiresAt:   input.ExpiresAt,
 		IsActive:    isActive,
 		UpdatedAt:   now,
 		ID:          id,
@@ -384,6 +357,36 @@ func (h *APIKeysHandler) sendDeleteError(w http.ResponseWriter, message string) 
 	w.WriteHeader(http.StatusBadRequest)
 }
 
+// apiKeyFormInput holds parsed form input for API key creation/update.
+type apiKeyFormInput struct {
+	Name        string
+	Permissions []string
+	ExpiresAt   sql.NullTime
+}
+
+// validateAPIKeyForm validates the API key form and returns validation errors.
+// requireFutureExpiry controls whether expiration date must be in the future.
+func validateAPIKeyForm(name string, permissions []string, expiresAtStr string, requireFutureExpiry bool) (apiKeyFormInput, map[string]string) {
+	errors := make(map[string]string)
+
+	if err := validateAPIKeyName(name); err != "" {
+		errors["name"] = err
+	}
+	if err := validateAPIKeyPermissions(permissions); err != "" {
+		errors["permissions"] = err
+	}
+	expiresAt, expiresErr := parseAPIKeyExpiration(expiresAtStr, requireFutureExpiry)
+	if expiresErr != "" {
+		errors["expires_at"] = expiresErr
+	}
+
+	return apiKeyFormInput{
+		Name:        name,
+		Permissions: permissions,
+		ExpiresAt:   expiresAt,
+	}, errors
+}
+
 // validateAPIKeyName validates the name field and returns an error message if invalid.
 func validateAPIKeyName(name string) string {
 	if name == "" {
@@ -405,14 +408,7 @@ func validateAPIKeyPermissions(permissions []string) string {
 	}
 	validPerms := model.AllPermissions()
 	for _, p := range permissions {
-		valid := false
-		for _, vp := range validPerms {
-			if p == vp {
-				valid = true
-				break
-			}
-		}
-		if !valid {
+		if !slices.Contains(validPerms, p) {
 			return "Invalid permission: " + p
 		}
 	}
