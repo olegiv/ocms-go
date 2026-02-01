@@ -194,16 +194,10 @@ sync_database() {
         echo_dry_run "mkdir -p ${LOCAL_DATA_DIR}"
     fi
 
-    # Sync main database file
-    rsync_cmd -avz --progress \
-        "${SSH_USER}@${SERVER}:${REMOTE_DATA_DIR}/ocms.db" \
+    # Sync entire data directory
+    rsync_cmd -avz --progress --delete \
+        "${SSH_USER}@${SERVER}:${REMOTE_DATA_DIR}/" \
         "${LOCAL_DATA_DIR}/"
-
-    # Sync WAL and SHM files if they exist (shouldn't after checkpoint, but just in case)
-    rsync_cmd -avz --progress --ignore-missing-args \
-        "${SSH_USER}@${SERVER}:${REMOTE_DATA_DIR}/ocms.db-wal" \
-        "${SSH_USER}@${SERVER}:${REMOTE_DATA_DIR}/ocms.db-shm" \
-        "${LOCAL_DATA_DIR}/" 2>/dev/null || true
 
     echo_ok "Database synced"
 }
