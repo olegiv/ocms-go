@@ -176,32 +176,60 @@ func TestGetLanguage(t *testing.T) {
 }
 
 func TestSetLanguageCookie(t *testing.T) {
-	rr := httptest.NewRecorder()
+	t.Run("production mode (secure)", func(t *testing.T) {
+		// Reset to production mode (default)
+		InitLanguageCookies(false)
 
-	SetLanguageCookie(rr, "ru")
+		rr := httptest.NewRecorder()
+		SetLanguageCookie(rr, "ru")
 
-	cookies := rr.Result().Cookies()
-	if len(cookies) != 1 {
-		t.Fatalf("Expected 1 cookie, got %d", len(cookies))
-	}
+		cookies := rr.Result().Cookies()
+		if len(cookies) != 1 {
+			t.Fatalf("Expected 1 cookie, got %d", len(cookies))
+		}
 
-	cookie := cookies[0]
-	if cookie.Name != LanguageCookieName {
-		t.Errorf("Cookie name = %q, want %q", cookie.Name, LanguageCookieName)
-	}
-	if cookie.Value != "ru" {
-		t.Errorf("Cookie value = %q, want %q", cookie.Value, "ru")
-	}
-	if cookie.Path != "/" {
-		t.Errorf("Cookie path = %q, want %q", cookie.Path, "/")
-	}
-	if !cookie.HttpOnly {
-		t.Error("Cookie should be HttpOnly")
-	}
-	if cookie.SameSite != http.SameSiteLaxMode {
-		t.Errorf("Cookie SameSite = %v, want %v", cookie.SameSite, http.SameSiteLaxMode)
-	}
-	if cookie.MaxAge <= 0 {
-		t.Error("Cookie MaxAge should be positive (1 year)")
-	}
+		cookie := cookies[0]
+		if cookie.Name != LanguageCookieName {
+			t.Errorf("Cookie name = %q, want %q", cookie.Name, LanguageCookieName)
+		}
+		if cookie.Value != "ru" {
+			t.Errorf("Cookie value = %q, want %q", cookie.Value, "ru")
+		}
+		if cookie.Path != "/" {
+			t.Errorf("Cookie path = %q, want %q", cookie.Path, "/")
+		}
+		if !cookie.HttpOnly {
+			t.Error("Cookie should be HttpOnly")
+		}
+		if cookie.SameSite != http.SameSiteLaxMode {
+			t.Errorf("Cookie SameSite = %v, want %v", cookie.SameSite, http.SameSiteLaxMode)
+		}
+		if cookie.MaxAge <= 0 {
+			t.Error("Cookie MaxAge should be positive (1 year)")
+		}
+		if !cookie.Secure {
+			t.Error("Cookie should be Secure in production mode")
+		}
+	})
+
+	t.Run("development mode (not secure)", func(t *testing.T) {
+		// Set to development mode
+		InitLanguageCookies(true)
+
+		rr := httptest.NewRecorder()
+		SetLanguageCookie(rr, "en")
+
+		cookies := rr.Result().Cookies()
+		if len(cookies) != 1 {
+			t.Fatalf("Expected 1 cookie, got %d", len(cookies))
+		}
+
+		cookie := cookies[0]
+		if cookie.Secure {
+			t.Error("Cookie should NOT be Secure in development mode")
+		}
+
+		// Reset to production mode for other tests
+		InitLanguageCookies(false)
+	})
 }
