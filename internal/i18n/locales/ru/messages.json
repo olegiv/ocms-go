@@ -1873,6 +1873,16 @@
             "translation": "Обзор"
         },
         {
+            "id": "theme_settings.favicon",
+            "message": "Favicon",
+            "translation": "Фавикон"
+        },
+        {
+            "id": "theme_settings.favicon_hint",
+            "message": "Custom favicon for the site (recommended: .ico, 32x32 or 16x16 pixels)",
+            "translation": "Иконка сайта (рекомендуется: .ico, 32x32 или 16x16 пикселей)"
+        },
+        {
             "id": "theme_settings.primary_color",
             "message": "Primary Color",
             "translation": "Основной цвет"
