@@ -4,10 +4,11 @@ Deploy multiple oCMS instances on a single Plesk server, one per vhost/domain.
 
 ## Architecture
 
+**Core themes are embedded in the binary.** The `default` and `developer` themes are compiled into the binary and don't need to be deployed separately. Custom themes can optionally be placed in the `custom/themes/` directory to override or extend core themes.
+
 ```
-/opt/ocms/bin/ocms              ← shared binary (all sites)
+/opt/ocms/bin/ocms              ← shared binary (includes embedded themes)
 /opt/ocms/bin/ocmsctl           ← CLI management tool
-/opt/ocms/themes/               ← shared theme source (copied per site)
 /etc/ocms/sites.conf            ← site registry (auto-managed)
 /etc/systemd/system/ocms@.service  ← systemd template
 
@@ -15,7 +16,8 @@ Per site:
 /var/www/vhosts/example.com/ocms/
 ├── data/ocms.db                ← SQLite database
 ├── uploads/                    ← media files
-├── themes/                     ← theme files
+├── custom/                     ← user content (optional)
+│   └── themes/                 ← custom themes (override embedded)
 ├── backups/                    ← automated backups
 ├── logs/ocms.log               ← app log (ocmsctl mode)
 ├── .env                        ← environment config
@@ -29,17 +31,16 @@ Each site runs on its own port (8081, 8082, ...) behind Nginx reverse proxy.
 
 ## Quick Start
 
-### 1. Install shared binary, tools, and themes
+### 1. Install shared binary and tools
 
 ```bash
 # Local machine:
 make build-linux-amd64
 scp bin/ocms-linux-amd64 user@server:/tmp/ocms
 scp scripts/deploy/* user@server:/tmp/ocms-setup/
-scp -r themes user@server:/tmp/ocms-themes
 
 # On the server:
-sudo mkdir -p /opt/ocms/bin /etc/ocms /opt/ocms/themes
+sudo mkdir -p /opt/ocms/bin /etc/ocms
 sudo cp /tmp/ocms /opt/ocms/bin/ocms
 sudo chmod 755 /opt/ocms/bin/ocms
 sudo cp /tmp/ocms-setup/ocmsctl /opt/ocms/bin/
@@ -51,11 +52,10 @@ for script in setup-site.sh deploy-multi.sh backup-multi.sh healthcheck-multi.sh
 done
 sudo cp /tmp/ocms-setup/ocms-logrotate.conf /opt/ocms/
 sudo cp /opt/ocms/ocms-logrotate.conf /etc/logrotate.d/ocms
-sudo cp -r /tmp/ocms-themes/* /opt/ocms/themes/
 sudo systemctl daemon-reload
 ```
 
-**Important:** Themes are loaded from disk at runtime, not embedded in the binary. Without themes at `/opt/ocms/themes/`, new sites will show "No active theme". The `setup-site.sh` script copies themes from `/opt/ocms/themes/` into each site's `themes/` directory during provisioning.
+**Note:** Core themes (`default`, `developer`) are embedded in the binary. No separate theme deployment is required unless you have custom themes.
 
 ### 2. Provision a site
 
@@ -123,26 +123,25 @@ Commands:
 Use `deploy.sh` to build, transfer, and restart a single instance:
 
 ```bash
-./scripts/deploy/deploy.sh <server> <instance> -v <vhost> -o <owner> [options]
+./scripts/deploy/deploy.sh <server> <instance> [options]
 
-# Examples:
+# Deploy binary only (embedded themes, no custom content)
+./scripts/deploy/deploy.sh server.example.com my_site
+
+# Deploy binary and sync custom themes
 ./scripts/deploy/deploy.sh server.example.com my_site \
   -v /var/www/vhosts/example.com -o hosting
 
-./scripts/deploy/deploy.sh server.example.com my_site \
-  -v /var/www/vhosts/example.com -o hosting --skip-build
-
-./scripts/deploy/deploy.sh server.example.com my_site \
-  -v /var/www/vhosts/example.com -o hosting -g mygroup --dry-run
+# Skip build, dry run
+./scripts/deploy/deploy.sh server.example.com my_site --skip-build --dry-run
 ```
 
-Required:
-- `-v, --vhost PATH` — vhost path for themes sync (e.g., `/var/www/vhosts/example.com`)
-- `-o, --owner USER` — vhost owner for chown (e.g., `hosting`)
-
 Options:
+- `-v, --vhost PATH` — vhost path for custom content sync (only needed if you have custom themes)
+- `-o, --owner USER` — vhost owner for chown (required if -v is provided)
 - `-g, --group GROUP` — vhost group for chown (default: `psaserv`)
 - `-u, --user USER` — SSH user (default: `root`)
+- `--sync-custom` — force sync custom/ directory even if empty
 - `--skip-build` — skip `make build-linux-amd64`, use existing binary
 - `--dry-run` — print commands without executing
 
@@ -151,8 +150,8 @@ The script:
 2. Backs up current binary on server
 3. Stops the instance via `ocmsctl`
 4. Transfers binary via `scp`
-5. Syncs themes to `{vhost}/ocms/themes/` via `rsync --delete`
-6. Sets themes ownership to `{owner}:{group}`
+5. (If custom themes exist) Syncs `custom/` to `{vhost}/ocms/custom/` via `rsync --delete`
+6. (If custom themes exist) Sets ownership to `{owner}:{group}`
 7. Starts the instance
 8. Checks instance status
 
@@ -176,6 +175,25 @@ Or manually:
 sudo cp /tmp/ocms /opt/ocms/bin/ocms
 sudo systemctl restart 'ocms@*'
 ```
+
+## Custom Themes
+
+Core themes (`default`, `developer`) are embedded in the binary. To use a custom theme:
+
+1. Create your theme in `custom/themes/mytheme/`
+2. Deploy with the `-v` and `-o` options:
+   ```bash
+   ./scripts/deploy/deploy.sh server.example.com my_site \
+     -v /var/www/vhosts/example.com -o hosting
+   ```
+3. Set `OCMS_ACTIVE_THEME=mytheme` in the site's `.env` file
+
+To override an embedded theme, create a custom theme with the same name:
+```
+custom/themes/default/    # Overrides the embedded 'default' theme
+```
+
+Custom themes with the same name as core themes take priority.
 
 ## Copying Local Data
 
@@ -214,6 +232,9 @@ Use `sync-prod-to-dev.sh` to pull production data (database, uploads, logs) to y
   -v /var/www/vhosts/example.com --no-logs
 
 ./scripts/deploy/sync-prod-to-dev.sh server.example.com my_site \
+  -v /var/www/vhosts/example.com --sync-custom
+
+./scripts/deploy/sync-prod-to-dev.sh server.example.com my_site \
   -v /var/www/vhosts/example.com --dry-run
 ```
 
@@ -226,6 +247,7 @@ Options:
 - `--no-db` — Skip database sync
 - `--no-uploads` — Skip uploads sync
 - `--no-logs` — Skip logs sync
+- `--sync-custom` — Also sync custom/ directory (themes, modules)
 - `--dry-run` — Print commands without executing
 
 The script:
@@ -235,7 +257,8 @@ The script:
 4. Syncs database via `rsync`
 5. Syncs uploads via `rsync --delete` (mirrors production exactly)
 6. Syncs logs via `rsync` (keeps local logs not on prod)
-7. Restarts remote instance
+7. (If --sync-custom) Syncs custom directory
+8. Restarts remote instance
 
 **WARNING:** This overwrites your local `data/`, `uploads/`, and `logs/` directories with production data!
 
@@ -248,6 +271,11 @@ sudo /opt/ocms/backup-multi.sh
 # Backup one site
 sudo /opt/ocms/backup-multi.sh example_com
 ```
+
+Backups include:
+- Database (`ocms_TIMESTAMP.db.gz`)
+- Uploads (`uploads_TIMESTAMP.tar.gz`)
+- Custom content (`custom_TIMESTAMP.tar.gz`) — only if custom themes exist
 
 Backups are stored in each site's `backups/` directory with 30-day retention.
 
@@ -301,11 +329,11 @@ Log files are stored at `{vhost}/ocms/logs/ocms.log`.
 |------|-------|------|
 | `/opt/ocms/bin/ocms` | `root:root` | `755` |
 | `/opt/ocms/bin/ocmsctl` | `root:root` | `755` |
-| `/opt/ocms/themes/` | `root:root` | `755` |
 | `{vhost}/ocms/` | `{user}:psaserv` | `750` |
 | `{vhost}/ocms/.env` | `{user}:psaserv` | `600` |
 | `{vhost}/ocms/data/` | `{user}:psaserv` | `755` |
 | `{vhost}/ocms/uploads/` | `{user}:psaserv` | `755` |
+| `{vhost}/ocms/custom/` | `{user}:psaserv` | `755` |
 
 ## Site Registry
 
@@ -333,3 +361,30 @@ sudo rm -rf /var/www/vhosts/example.com/ocms
 # Remove from sites.conf (manually edit the file)
 sudo nano /etc/ocms/sites.conf
 ```
+
+## Migration from Separate Theme Directory
+
+If you're upgrading from a version that used a separate `themes/` directory:
+
+1. **Update the binary** — new versions have core themes embedded
+2. **Move custom themes** — if you have custom themes:
+   ```bash
+   # On the server, for each site:
+   mkdir -p /var/www/vhosts/example.com/ocms/custom/themes
+   # Move only custom themes (not default or developer)
+   mv /var/www/vhosts/example.com/ocms/themes/mytheme \
+      /var/www/vhosts/example.com/ocms/custom/themes/
+   # Remove old themes directory
+   rm -rf /var/www/vhosts/example.com/ocms/themes
+   ```
+3. **Update .env** — change `OCMS_THEMES_DIR` to `OCMS_CUSTOM_DIR`:
+   ```bash
+   # In .env file, replace:
+   # OCMS_THEMES_DIR=./themes
+   # With:
+   OCMS_CUSTOM_DIR=./custom
+   ```
+4. **Remove /opt/ocms/themes/** — no longer needed:
+   ```bash
+   sudo rm -rf /opt/ocms/themes
+   ```
