@@ -246,7 +246,7 @@ func (h *MediaHandler) UploadForm(w http.ResponseWriter, r *http.Request) {
 	data := UploadFormData{
 		Folders:    folders,
 		MaxSize:    service.MaxUploadSize,
-		AllowedExt: ".jpg,.jpeg,.png,.gif,.webp,.pdf,.mp4,.webm",
+		AllowedExt: ".jpg,.jpeg,.png,.gif,.webp,.ico,.pdf,.mp4,.webm",
 	}
 
 	h.renderer.RenderPage(w, r, "admin/media_upload", render.TemplateData{
