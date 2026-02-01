@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -851,10 +852,13 @@ func run() error {
 		requestedPath := reqPath[len(prefix):]
 
 		// Clean the path to resolve any .. sequences
-		cleanPath := filepath.Clean(requestedPath)
+		// Use path.Clean (not filepath.Clean) for URL paths - filepath.Clean uses
+		// OS-specific separators (backslashes on Windows), which breaks embed.FS
+		// lookups that require forward slashes.
+		cleanPath := path.Clean(requestedPath)
 
 		// Reject paths that try to escape (start with .. or are absolute)
-		if strings.HasPrefix(cleanPath, "..") || filepath.IsAbs(cleanPath) {
+		if strings.HasPrefix(cleanPath, "..") || path.IsAbs(cleanPath) {
 			http.NotFound(w, r)
 			return
 		}
