@@ -49,6 +49,8 @@ for script in setup-site.sh deploy-multi.sh backup-multi.sh healthcheck-multi.sh
     sudo cp /tmp/ocms-setup/$script /opt/ocms/
     sudo chmod 755 /opt/ocms/$script
 done
+sudo cp /tmp/ocms-setup/ocms-logrotate.conf /opt/ocms/
+sudo cp /opt/ocms/ocms-logrotate.conf /etc/logrotate.d/ocms
 sudo cp -r /tmp/ocms-themes/* /opt/ocms/themes/
 sudo systemctl daemon-reload
 ```
@@ -197,6 +199,46 @@ sudo ocmsctl start example_com
 
 The service must be stopped before replacing the database. If using systemd, use `systemctl stop/start` instead of `ocmsctl`.
 
+## Syncing Production to Development
+
+Use `sync-prod-to-dev.sh` to pull production data (database, uploads, logs) to your local development environment:
+
+```bash
+./scripts/deploy/sync-prod-to-dev.sh <server> <instance> -v <vhost> [options]
+
+# Examples:
+./scripts/deploy/sync-prod-to-dev.sh server.example.com my_site \
+  -v /var/www/vhosts/example.com
+
+./scripts/deploy/sync-prod-to-dev.sh server.example.com my_site \
+  -v /var/www/vhosts/example.com --no-logs
+
+./scripts/deploy/sync-prod-to-dev.sh server.example.com my_site \
+  -v /var/www/vhosts/example.com --dry-run
+```
+
+Required:
+- `-v, --vhost PATH` — vhost path on server (e.g., `/var/www/vhosts/example.com`)
+
+Options:
+- `-u, --user USER` — SSH user (default: `root`)
+- `-p, --port PORT` — Local server port to stop (default: `8080`)
+- `--no-db` — Skip database sync
+- `--no-uploads` — Skip uploads sync
+- `--no-logs` — Skip logs sync
+- `--dry-run` — Print commands without executing
+
+The script:
+1. Stops local development server (port 8080)
+2. Stops remote instance via `ocmsctl`
+3. Checkpoints SQLite WAL on server (flushes to main file)
+4. Syncs database via `rsync`
+5. Syncs uploads via `rsync --delete` (mirrors production exactly)
+6. Syncs logs via `rsync` (keeps local logs not on prod)
+7. Restarts remote instance
+
+**WARNING:** This overwrites your local `data/`, `uploads/`, and `logs/` directories with production data!
+
 ## Backups
 
 ```bash
@@ -228,6 +270,30 @@ Auto-restarts failed systemd-managed instances (max 3 attempts, 5-min cooldown).
 0 3 * * * root /opt/ocms/backup-multi.sh >> /var/log/ocms-backup.log 2>&1
 */5 * * * * root /opt/ocms/healthcheck-multi.sh 2>&1 | grep -v "^$"
 ```
+
+## Log Rotation
+
+Install the logrotate configuration to automatically rotate oCMS logs:
+
+```bash
+# Copy configuration
+sudo cp /opt/ocms/ocms-logrotate.conf /etc/logrotate.d/ocms
+
+# Test configuration (dry-run)
+sudo logrotate -d /etc/logrotate.d/ocms
+
+# Force rotation (for testing)
+sudo logrotate -f /etc/logrotate.d/ocms
+```
+
+The configuration:
+- Rotates logs daily
+- Keeps 30 days of history
+- Compresses old logs (gzip)
+- Creates new log files with proper permissions
+- Handles all instances via wildcard pattern
+
+Log files are stored at `{vhost}/ocms/logs/ocms.log`.
 
 ## File Permissions
 
