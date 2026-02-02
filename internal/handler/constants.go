@@ -22,6 +22,8 @@ const (
 	RouteSuffixReorder = "/reorder"
 	// RouteSuffixMove is the suffix for move routes.
 	RouteSuffixMove = "/move"
+	// RouteSuffixRegenerate is the suffix for variant regeneration routes.
+	RouteSuffixRegenerate = "/regenerate"
 	// RouteSuffixTranslate is the suffix for translation routes.
 	RouteSuffixTranslate = "/translate/{langCode}"
 	// RouteSuffixFolders is the suffix for folder routes.

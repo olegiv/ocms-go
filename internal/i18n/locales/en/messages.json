@@ -1043,6 +1043,16 @@
             "translation": "Copy URL"
         },
         {
+            "id": "media.regenerate_variants",
+            "message": "Regenerate Variants",
+            "translation": "Regenerate Variants"
+        },
+        {
+            "id": "media.variants_regenerated",
+            "message": "Variants regenerated successfully",
+            "translation": "Variants regenerated successfully"
+        },
+        {
             "id": "media.filename",
             "message": "Filename",
             "translation": "Filename"

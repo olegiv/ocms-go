@@ -621,6 +621,7 @@ func run() error {
 			r.Post(handler.RouteMediaID, mediaHandler.Update) // HTML forms can't send PUT
 			r.Delete(handler.RouteMediaID, mediaHandler.Delete)
 			r.Post(handler.RouteMediaID+handler.RouteSuffixMove, mediaHandler.MoveMedia)
+			r.Post(handler.RouteMediaID+handler.RouteSuffixRegenerate, mediaHandler.RegenerateVariants)
 
 			// Media folders
 			r.Post(handler.RouteMedia+handler.RouteSuffixFolders, mediaHandler.CreateFolder)

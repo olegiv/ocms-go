@@ -228,6 +228,67 @@ func (s *MediaService) GetThumbnailURL(media store.Medium) string {
 	return s.GetURL(media, model.VariantThumbnail)
 }
 
+// RegenerateVariants regenerates all image variants for a media item.
+// It deletes existing variants and creates new ones from the original image.
+func (s *MediaService) RegenerateVariants(ctx context.Context, mediaID int64) ([]store.MediaVariant, error) {
+	queries := store.New(s.db)
+
+	// Get media record
+	media, err := queries.GetMediaByID(ctx, mediaID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get media: %w", err)
+	}
+
+	// Check if it's an image
+	if !s.processor.IsImage(media.MimeType) {
+		return nil, fmt.Errorf("media is not an image")
+	}
+
+	// Find original file
+	originalPath := filepath.Join(s.uploadDir, "originals", media.Uuid, media.Filename)
+	if _, err := os.Stat(originalPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("original file not found")
+	}
+
+	// Delete existing variant files
+	for variantType := range model.ImageVariants {
+		variantDir := filepath.Join(s.uploadDir, variantType, media.Uuid)
+		_ = os.RemoveAll(variantDir)
+	}
+
+	// Delete existing variant records
+	if err := queries.DeleteMediaVariants(ctx, mediaID); err != nil {
+		return nil, fmt.Errorf("failed to delete variant records: %w", err)
+	}
+
+	// Regenerate variants
+	variants, err := s.processor.CreateAllVariants(originalPath, media.Uuid, media.Filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create variants: %w", err)
+	}
+
+	// Store new variant records
+	now := time.Now()
+	var result []store.MediaVariant
+	for _, v := range variants {
+		variant, err := queries.CreateMediaVariant(ctx, store.CreateMediaVariantParams{
+			MediaID:   mediaID,
+			Type:      v.Type,
+			Width:     int64(v.Width),
+			Height:    int64(v.Height),
+			Size:      v.Size,
+			CreatedAt: now,
+		})
+		if err != nil {
+			fmt.Printf("Warning: failed to store variant record: %v\n", err)
+			continue
+		}
+		result = append(result, variant)
+	}
+
+	return result, nil
+}
+
 // saveNonImageFile saves a non-image file to the uploads directory.
 func (s *MediaService) saveNonImageFile(file io.Reader, fileUUID, filename string) (string, int64, error) {
 	// Create directory
