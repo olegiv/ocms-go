@@ -293,7 +293,7 @@ SELECT t.id, t.name, t.slug, t.language_code, t.created_at, t.updated_at, COUNT(
 FROM tags t
 LEFT JOIN page_tags pt ON pt.tag_id = t.id
 GROUP BY t.id, t.name, t.slug, t.language_code, t.created_at, t.updated_at
-ORDER BY t.name
+ORDER BY usage_count DESC, t.name
 LIMIT ? OFFSET ?
 `
 
@@ -349,7 +349,7 @@ FROM tags t
 INNER JOIN page_tags pt ON pt.tag_id = t.id
 INNER JOIN pages p ON p.id = pt.page_id AND p.status = 'published' AND p.language_code = ?
 GROUP BY t.id, t.name, t.slug, t.created_at, t.updated_at
-ORDER BY t.name
+ORDER BY usage_count DESC, t.name
 LIMIT ? OFFSET ?
 `
 
