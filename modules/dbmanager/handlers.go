@@ -46,6 +46,10 @@ type DashboardData struct {
 // handleDashboard handles GET /admin/dbmanager - shows the database manager dashboard.
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
+	if user == nil || user.Role != middleware.RoleAdmin {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	lang := m.ctx.Render.GetAdminLang(r)
 
 	history, err := m.getQueryHistory(r.Context(), 10)
@@ -75,8 +79,8 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 // handleExecute handles POST /admin/dbmanager/execute - executes a SQL query.
 func (m *Module) handleExecute(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
-	if user == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	if user == nil || user.Role != middleware.RoleAdmin {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	lang := m.ctx.Render.GetAdminLang(r)
