@@ -77,8 +77,8 @@
         <span class="today-label">{{T .AdminLang "analytics_int.today"}}</span>
         <span class="today-value">{{.Data.Overview.ViewsToday}}</span>
         {{if ne .Data.Overview.ViewsYesterday 0}}
-        <span class="today-trend {{if gt .Data.Overview.TrendPercent 0}}trend-up{{else if lt .Data.Overview.TrendPercent 0}}trend-down{{else}}trend-neutral{{end}}">
-            {{if gt .Data.Overview.TrendPercent 0}}+{{end}}{{printf "%.1f" .Data.Overview.TrendPercent}}%
+        <span class="today-trend {{if gt .Data.Overview.TrendPercent 0.0}}trend-up{{else if lt .Data.Overview.TrendPercent 0.0}}trend-down{{else}}trend-neutral{{end}}">
+            {{if gt .Data.Overview.TrendPercent 0.0}}+{{end}}{{printf "%.1f" .Data.Overview.TrendPercent}}%
         </span>
         {{end}}
     </div>
