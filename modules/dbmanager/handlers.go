@@ -271,12 +271,12 @@ func formatValue(v any) string {
 		return val.Format("2006-01-02 15:04:05")
 	default:
 		return strings.ReplaceAll(strings.TrimSpace(
-			strings.Replace(
-				strings.Replace(
-					strings.Replace(
-						formatAny(v), "\n", " ", -1,
-					), "\r", "", -1,
-				), "\t", " ", -1,
+			strings.ReplaceAll(
+				strings.ReplaceAll(
+					strings.ReplaceAll(
+						formatAny(v), "\n", " ",
+					), "\r", "",
+				), "\t", " ",
 			),
 		), "  ", " ")
 	}
@@ -293,20 +293,20 @@ func formatAny(v any) string {
 		}
 		return "false"
 	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-		return strings.TrimSpace(strings.Replace(
-			strings.Replace(
-				strings.Replace(
-					formatInt(v), "\n", " ", -1,
-				), "\r", "", -1,
-			), "\t", " ", -1,
+		return strings.TrimSpace(strings.ReplaceAll(
+			strings.ReplaceAll(
+				strings.ReplaceAll(
+					formatInt(v), "\n", " ",
+				), "\r", "",
+			), "\t", " ",
 		))
 	case float32, float64:
-		return strings.TrimSpace(strings.Replace(
-			strings.Replace(
-				strings.Replace(
-					formatFloat(v), "\n", " ", -1,
-				), "\r", "", -1,
-			), "\t", " ", -1,
+		return strings.TrimSpace(strings.ReplaceAll(
+			strings.ReplaceAll(
+				strings.ReplaceAll(
+					formatFloat(v), "\n", " ",
+				), "\r", "",
+			), "\t", " ",
 		))
 	case string:
 		return val
@@ -315,12 +315,12 @@ func formatAny(v any) string {
 	case time.Time:
 		return val.Format("2006-01-02 15:04:05")
 	default:
-		return strings.TrimSpace(strings.Replace(
-			strings.Replace(
-				strings.Replace(
-					formatDefault(v), "\n", " ", -1,
-				), "\r", "", -1,
-			), "\t", " ", -1,
+		return strings.TrimSpace(strings.ReplaceAll(
+			strings.ReplaceAll(
+				strings.ReplaceAll(
+					formatDefault(v), "\n", " ",
+				), "\r", "",
+			), "\t", " ",
 		))
 	}
 }
