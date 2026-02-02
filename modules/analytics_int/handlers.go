@@ -9,11 +9,34 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/store"
 )
+
+// requireAPIAuth checks if the user is authenticated and returns 401 if not.
+// Returns the user if authenticated, nil otherwise.
+func (m *Module) requireAPIAuth(w http.ResponseWriter, r *http.Request) *store.User {
+	user := middleware.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return nil
+	}
+	return user
+}
+
+// parseDateRangeParam extracts the date range from query params and returns start/end dates.
+func parseDateRangeParam(r *http.Request) (string, time.Time, time.Time) {
+	dateRange := r.URL.Query().Get("range")
+	if dateRange == "" {
+		dateRange = "30d"
+	}
+	startDate, endDate := parseDateRange(dateRange)
+	return dateRange, startDate, endDate
+}
 
 // handleDashboard renders the analytics dashboard.
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
@@ -24,14 +47,7 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lang := m.ctx.Render.GetAdminLang(r)
-
-	// Parse date range
-	dateRange := r.URL.Query().Get("range")
-	if dateRange == "" {
-		dateRange = "30d"
-	}
-
-	startDate, endDate := parseDateRange(dateRange)
+	dateRange, startDate, endDate := parseDateRangeParam(r)
 
 	// Fetch all dashboard data
 	data := DashboardData{
@@ -63,18 +79,11 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 // handleAPIStats returns JSON stats for HTMX updates.
 func (m *Module) handleAPIStats(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	if user == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	if m.requireAPIAuth(w, r) == nil {
 		return
 	}
 
-	dateRange := r.URL.Query().Get("range")
-	if dateRange == "" {
-		dateRange = "30d"
-	}
-
-	startDate, endDate := parseDateRange(dateRange)
+	_, startDate, endDate := parseDateRangeParam(r)
 
 	data := map[string]any{
 		"overview":   m.getOverviewStats(r.Context(), startDate, endDate),
@@ -88,9 +97,7 @@ func (m *Module) handleAPIStats(w http.ResponseWriter, r *http.Request) {
 
 // handleRealtime returns real-time visitor count.
 func (m *Module) handleRealtime(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	if user == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	if m.requireAPIAuth(w, r) == nil {
 		return
 	}
 
@@ -102,9 +109,8 @@ func (m *Module) handleRealtime(w http.ResponseWriter, r *http.Request) {
 
 // handleSaveSettings saves module settings.
 func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
+	user := m.requireAPIAuth(w, r)
 	if user == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
@@ -152,9 +158,8 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 
 // handleRunAggregation triggers full aggregation of historical data.
 func (m *Module) handleRunAggregation(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
+	user := m.requireAPIAuth(w, r)
 	if user == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 

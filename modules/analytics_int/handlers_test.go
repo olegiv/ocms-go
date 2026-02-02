@@ -84,6 +84,40 @@ func TestHandleRunAggregation_Authorized(t *testing.T) {
 	}
 }
 
+// testAuthorizedJSONHandler tests that a handler returns OK with JSON content-type when authorized.
+func testAuthorizedJSONHandler(t *testing.T, url string, handler http.HandlerFunc) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	user := store.User{ID: 1, Email: "admin@test.com", Role: "admin"}
+	ctx := context.WithValue(req.Context(), middleware.ContextKeyUser, user)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	contentType := rr.Header().Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %s", contentType)
+	}
+}
+
+// testUnauthorizedHandler tests that a handler returns Unauthorized when no user context is set.
+func testUnauthorizedHandler(t *testing.T, url string, handler http.HandlerFunc) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	rr := httptest.NewRecorder()
+
+	handler(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("expected status %d, got %d", http.StatusUnauthorized, rr.Code)
+	}
+}
+
 func TestHandleAPIStats_Unauthorized(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
@@ -91,14 +125,7 @@ func TestHandleAPIStats_Unauthorized(t *testing.T) {
 	m := testModule(t, db)
 	defer func() { _ = m.Shutdown() }()
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/internal-analytics/api/stats", nil)
-	rr := httptest.NewRecorder()
-
-	m.handleAPIStats(rr, req)
-
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status %d, got %d", http.StatusUnauthorized, rr.Code)
-	}
+	testUnauthorizedHandler(t, "/admin/internal-analytics/api/stats", m.handleAPIStats)
 }
 
 func TestHandleAPIStats_Authorized(t *testing.T) {
@@ -108,22 +135,7 @@ func TestHandleAPIStats_Authorized(t *testing.T) {
 	m := testModule(t, db)
 	defer func() { _ = m.Shutdown() }()
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/internal-analytics/api/stats?range=7d", nil)
-	user := store.User{ID: 1, Email: "admin@test.com", Role: "admin"}
-	ctx := context.WithValue(req.Context(), middleware.ContextKeyUser, user)
-	req = req.WithContext(ctx)
-
-	rr := httptest.NewRecorder()
-	m.handleAPIStats(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rr.Code)
-	}
-
-	contentType := rr.Header().Get("Content-Type")
-	if contentType != "application/json" {
-		t.Errorf("expected Content-Type application/json, got %s", contentType)
-	}
+	testAuthorizedJSONHandler(t, "/admin/internal-analytics/api/stats?range=7d", m.handleAPIStats)
 }
 
 func TestHandleRealtime_Unauthorized(t *testing.T) {
@@ -133,14 +145,7 @@ func TestHandleRealtime_Unauthorized(t *testing.T) {
 	m := testModule(t, db)
 	defer func() { _ = m.Shutdown() }()
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/internal-analytics/api/realtime", nil)
-	rr := httptest.NewRecorder()
-
-	m.handleRealtime(rr, req)
-
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status %d, got %d", http.StatusUnauthorized, rr.Code)
-	}
+	testUnauthorizedHandler(t, "/admin/internal-analytics/api/realtime", m.handleRealtime)
 }
 
 func TestHandleRealtime_Authorized(t *testing.T) {
@@ -150,20 +155,5 @@ func TestHandleRealtime_Authorized(t *testing.T) {
 	m := testModule(t, db)
 	defer func() { _ = m.Shutdown() }()
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/internal-analytics/api/realtime", nil)
-	user := store.User{ID: 1, Email: "admin@test.com", Role: "admin"}
-	ctx := context.WithValue(req.Context(), middleware.ContextKeyUser, user)
-	req = req.WithContext(ctx)
-
-	rr := httptest.NewRecorder()
-	m.handleRealtime(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rr.Code)
-	}
-
-	contentType := rr.Header().Get("Content-Type")
-	if contentType != "application/json" {
-		t.Errorf("expected Content-Type application/json, got %s", contentType)
-	}
+	testAuthorizedJSONHandler(t, "/admin/internal-analytics/api/realtime", m.handleRealtime)
 }

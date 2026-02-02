@@ -13,6 +13,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // QueryResult contains the result of a SQL query execution.
@@ -43,6 +44,23 @@ type DashboardData struct {
 	History []QueryHistoryItem
 }
 
+// renderDashboard renders the database manager dashboard with the given data.
+func (m *Module) renderDashboard(w http.ResponseWriter, r *http.Request, lang string, user *store.User, data DashboardData) {
+	if err := m.ctx.Render.Render(w, r, "admin/module_dbmanager", render.TemplateData{
+		Title: i18n.T(lang, "dbmanager.title"),
+		User:  user,
+		Data:  data,
+		Breadcrumbs: []render.Breadcrumb{
+			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
+			{Label: i18n.T(lang, "dbmanager.title"), URL: "/admin/dbmanager", Active: true},
+		},
+	}); err != nil {
+		m.ctx.Logger.Error("render error", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
 // handleDashboard handles GET /admin/dbmanager - shows the database manager dashboard.
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
@@ -61,19 +79,7 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		History: history,
 	}
 
-	if err := m.ctx.Render.Render(w, r, "admin/module_dbmanager", render.TemplateData{
-		Title: i18n.T(lang, "dbmanager.title"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
-			{Label: i18n.T(lang, "dbmanager.title"), URL: "/admin/dbmanager", Active: true},
-		},
-	}); err != nil {
-		m.ctx.Logger.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	m.renderDashboard(w, r, lang, user, data)
 }
 
 // handleExecute handles POST /admin/dbmanager/execute - executes a SQL query.
@@ -108,19 +114,7 @@ func (m *Module) handleExecute(w http.ResponseWriter, r *http.Request) {
 		History: history,
 	}
 
-	if err := m.ctx.Render.Render(w, r, "admin/module_dbmanager", render.TemplateData{
-		Title: i18n.T(lang, "dbmanager.title"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
-			{Label: i18n.T(lang, "dbmanager.title"), URL: "/admin/dbmanager", Active: true},
-		},
-	}); err != nil {
-		m.ctx.Logger.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	m.renderDashboard(w, r, lang, user, data)
 }
 
 // executeQuery executes a SQL query and returns the result.
