@@ -5,13 +5,12 @@ package analytics_int
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
-	"	"fmt"
-
-	"github.com/olegiv/ocms-go/internal/i18n""
+	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/render"
 )
