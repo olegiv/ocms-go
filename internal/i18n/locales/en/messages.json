@@ -433,6 +433,36 @@
             "translation": "Do not display the featured image on the page"
         },
         {
+            "id": "pages.page_type",
+            "message": "Page Type",
+            "translation": "Page Type"
+        },
+        {
+            "id": "pages.page_type_hint",
+            "message": "Posts appear in blog feeds and recent posts. Pages are static content.",
+            "translation": "Posts appear in blog feeds and recent posts. Pages are static content."
+        },
+        {
+            "id": "pages.type_post",
+            "message": "Post",
+            "translation": "Post"
+        },
+        {
+            "id": "pages.type_page",
+            "message": "Page",
+            "translation": "Page"
+        },
+        {
+            "id": "pages.exclude_from_lists",
+            "message": "Exclude from lists",
+            "translation": "Exclude from lists"
+        },
+        {
+            "id": "pages.exclude_from_lists_hint",
+            "message": "Hide this page from recent posts and blog listings while keeping it published",
+            "translation": "Hide this page from recent posts and blog listings while keeping it published"
+        },
+        {
             "id": "pages.aliases",
             "message": "URL Aliases",
             "translation": "URL Aliases"
@@ -921,6 +951,11 @@
             "id": "media.select_from_library",
             "message": "Select an image from the media library",
             "translation": "Select an image from the media library"
+        },
+        {
+            "id": "media.featured_image_requirements",
+            "message": "JPEG, PNG, GIF, or WebP. Minimum size: 1200×800 pixels.",
+            "translation": "JPEG, PNG, GIF, or WebP. Minimum size: 1200×800 pixels."
         },
         {
             "id": "media.select_media",
@@ -3823,6 +3858,11 @@
             "translation": "Error saving value"
         },
         {
+            "id": "pages.error.featured_image_too_small",
+            "message": "Featured image must be at least {{.min_width}}x{{.min_height}} pixels. Selected image is {{.width}}x{{.height}}.",
+            "translation": "Featured image must be at least {{.min_width}}x{{.min_height}} pixels. Selected image is {{.width}}x{{.height}}."
+        },
+        {
             "id": "msg.config_saved",
             "message": "Configuration saved successfully",
             "translation": "Configuration saved successfully"
@@ -5876,6 +5916,26 @@
             "id": "docs.ep_admin_cache",
             "message": "Cache management",
             "translation": "Cache management"
+        },
+        {
+            "id": "uploader.drag_drop",
+            "message": "Drag and drop files here",
+            "translation": "Drag and drop files here"
+        },
+        {
+            "id": "uploader.or_click",
+            "message": "or click to browse",
+            "translation": "or click to browse"
+        },
+        {
+            "id": "uploader.clear_all",
+            "message": "Clear All",
+            "translation": "Clear All"
+        },
+        {
+            "id": "uploader.uploading",
+            "message": "Uploading...",
+            "translation": "Uploading..."
         }
     ]
 }
