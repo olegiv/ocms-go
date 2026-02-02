@@ -3,13 +3,12 @@
 
 // Package dbmanager provides a database management module for executing SQL queries.
 // This module allows administrators to run arbitrary SQL queries and view results.
-// It is restricted to admin users and non-production environments for security.
+// Access is restricted to admin users only.
 package dbmanager
 
 import (
 	"database/sql"
 	"embed"
-	"fmt"
 	"html/template"
 
 	"github.com/go-chi/chi/v5"
@@ -37,21 +36,8 @@ func New() *Module {
 	}
 }
 
-// AllowedEnvs restricts the database manager module to non-production environments.
-// On first run, the module will be auto-inserted as inactive if the environment
-// is not in this list.
-func (m *Module) AllowedEnvs() []string {
-	return []string{"development"}
-}
-
 // Init initializes the module with the given context.
-// The database manager module is blocked in production environments for security.
 func (m *Module) Init(ctx *module.Context) error {
-	// Security: Database manager module must never run in production
-	if ctx.Config.Env == "production" {
-		return fmt.Errorf("dbmanager module cannot be enabled in production environment")
-	}
-
 	m.ctx = ctx
 	m.ctx.Logger.Info("Database Manager module initialized", "env", ctx.Config.Env)
 	return nil
