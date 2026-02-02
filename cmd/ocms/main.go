@@ -250,33 +250,7 @@ func run() error {
 	// Initialize language cookie security settings
 	middleware.InitLanguageCookies(cfg.IsDevelopment())
 
-	// Initialize template renderer
-	templatesFS, err := fs.Sub(web.Templates, "templates")
-	if err != nil {
-		return fmt.Errorf("getting templates fs: %w", err)
-	}
-
-	renderer, err := render.New(render.Config{
-		TemplatesFS:    templatesFS,
-		SessionManager: sessionManager,
-		DB:             db,
-		IsDev:          cfg.IsDevelopment(),
-	})
-	if err != nil {
-		return fmt.Errorf("initializing renderer: %w", err)
-	}
-	slog.Info("template renderer initialized")
-
-	// Initialize theme manager with embedded core themes and custom directory
-	themeManager := theme.NewManager(themes.FS, cfg.CustomDir, logger)
-
-	// Add theme manager's template functions (TTheme) to renderer
-	renderer.AddTemplateFuncs(themeManager.TemplateFuncs())
-
-	// Note: Theme loading is deferred until after modules are initialized
-	// so that module template functions (like analyticsHead) are available
-
-	// Initialize cache manager with config
+	// Initialize cache manager with config (must be before renderer for shared MenuService)
 	cacheConfig := cache.Config{
 		Type:             "memory",
 		RedisURL:         cfg.RedisURL,
@@ -293,9 +267,9 @@ func run() error {
 	cacheManager.Start()
 	defer cacheManager.Stop()
 
-	// Preload caches
-	if err := cacheManager.Config.Preload(ctx); err != nil {
-		slog.Warn("failed to preload config cache", "error", err)
+	// Preload caches (config, menus, languages)
+	if err := cacheManager.Preload(ctx, ""); err != nil {
+		slog.Warn("failed to preload caches", "error", err)
 	}
 	switch {
 	case cacheManager.IsRedis():
@@ -305,6 +279,36 @@ func run() error {
 	default:
 		slog.Info(handler.LogCacheManagerInit, "backend", "memory")
 	}
+
+	// Create shared MenuService using cache manager's MenuCache
+	menuService := service.NewMenuService(db, cacheManager.Menus)
+
+	// Initialize template renderer
+	templatesFS, err := fs.Sub(web.Templates, "templates")
+	if err != nil {
+		return fmt.Errorf("getting templates fs: %w", err)
+	}
+
+	renderer, err := render.New(render.Config{
+		TemplatesFS:    templatesFS,
+		SessionManager: sessionManager,
+		DB:             db,
+		IsDev:          cfg.IsDevelopment(),
+		MenuService:    menuService,
+	})
+	if err != nil {
+		return fmt.Errorf("initializing renderer: %w", err)
+	}
+	slog.Info("template renderer initialized")
+
+	// Initialize theme manager with embedded core themes and custom directory
+	themeManager := theme.NewManager(themes.FS, cfg.CustomDir, logger)
+
+	// Add theme manager's template functions (TTheme) to renderer
+	renderer.AddTemplateFuncs(themeManager.TemplateFuncs())
+
+	// Note: Theme loading is deferred until after modules are initialized
+	// so that module template functions (like analyticsHead) are available
 
 	// Initialize and start scheduler
 	sched := scheduler.New(db, logger)
@@ -507,6 +511,10 @@ func run() error {
 	usersHandler.SetDispatcher(webhookDispatcher)
 	formsHandler.SetDispatcher(webhookDispatcher)
 
+	// Set cache manager on handlers that need cache invalidation
+	pagesHandler.SetCacheManager(cacheManager)
+	apiHandler.SetCacheManager(cacheManager)
+
 	// Health check routes (public, returns additional details for authenticated callers)
 	r.Get("/health", healthHandler.Health)
 	r.Get("/health/live", healthHandler.Liveness)
@@ -515,6 +523,8 @@ func run() error {
 	// Public frontend routes (with language detection and analytics tracking)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Language(db))
+		// Optionally load user for context-aware caching (doesn't require login)
+		r.Use(middleware.OptionalLoadUser(sessionManager, db))
 		// Add internal analytics tracking middleware (if module is enabled)
 		if internalAnalyticsModule.IsEnabled() {
 			r.Use(internalAnalyticsModule.GetTrackingMiddleware())
@@ -574,7 +584,7 @@ func run() error {
 		r.Use(csrfMiddleware)
 		r.Use(middleware.Auth(sessionManager))
 		r.Use(middleware.LoadUser(sessionManager, db))
-		r.Use(middleware.LoadSiteConfig(db, cacheManager))
+		r.Use(middleware.LoadSiteConfig(db, nil)) // Admin: always query DB, no cache
 
 		// Editor routes (editor + admin) - public users have no admin access
 		r.Group(func(r chi.Router) {
@@ -720,6 +730,9 @@ func run() error {
 			r.Post("/cache/clear", cacheHandler.Clear)
 			r.Post("/cache/clear/config", cacheHandler.ClearConfig)
 			r.Post("/cache/clear/sitemap", cacheHandler.ClearSitemap)
+			r.Post("/cache/clear/pages", cacheHandler.ClearPages)
+			r.Post("/cache/clear/menus", cacheHandler.ClearMenus)
+			r.Post("/cache/clear/languages", cacheHandler.ClearLanguages)
 
 			// Import/Export routes
 			r.Get(handler.RouteExport, importExportHandler.ExportForm)

@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/handler"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -20,8 +21,9 @@ import (
 
 // Handler holds shared dependencies for all API handlers.
 type Handler struct {
-	db      *sql.DB
-	queries *store.Queries
+	db           *sql.DB
+	queries      *store.Queries
+	cacheManager *cache.Manager
 }
 
 // NewHandler creates a new API handler.
@@ -29,6 +31,18 @@ func NewHandler(db *sql.DB) *Handler {
 	return &Handler{
 		db:      db,
 		queries: store.New(db),
+	}
+}
+
+// SetCacheManager sets the cache manager for cache invalidation.
+func (h *Handler) SetCacheManager(cm *cache.Manager) {
+	h.cacheManager = cm
+}
+
+// invalidatePageCache invalidates the page cache after a page is modified.
+func (h *Handler) invalidatePageCache(pageID int64) {
+	if h.cacheManager != nil {
+		h.cacheManager.InvalidatePage(pageID)
 	}
 }
 

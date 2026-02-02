@@ -2978,9 +2978,49 @@
             "translation": "Переводы"
         },
         {
+            "id": "cache.name_pages",
+            "message": "Pages",
+            "translation": "Страницы"
+        },
+        {
+            "id": "cache.clear_pages",
+            "message": "Clear pages cache",
+            "translation": "Очистить кэш страниц"
+        },
+        {
+            "id": "cache.clear_menus",
+            "message": "Clear menus cache",
+            "translation": "Очистить кэш меню"
+        },
+        {
+            "id": "cache.clear_languages",
+            "message": "Clear languages cache",
+            "translation": "Очистить кэш языков"
+        },
+        {
             "id": "cache.name_general",
             "message": "General Cache",
             "translation": "Общий кэш"
+        },
+        {
+            "id": "cache.pages_cache",
+            "message": "Page Cache",
+            "translation": "Кэш страниц"
+        },
+        {
+            "id": "cache.pages_description",
+            "message": "Published pages are cached by language and user role for fast frontend rendering. Cache is automatically invalidated when pages are created, updated, or deleted.",
+            "translation": "Опубликованные страницы кэшируются по языку и роли пользователя для быстрой отрисовки. Кэш автоматически сбрасывается при создании, обновлении или удалении страниц."
+        },
+        {
+            "id": "cache.translations_cache",
+            "message": "Translation Cache",
+            "translation": "Кэш переводов"
+        },
+        {
+            "id": "cache.translations_description",
+            "message": "Content translations are cached per entity (pages, categories, tags) for multi-language support. Cache is invalidated when translations are modified.",
+            "translation": "Переводы контента кэшируются по сущностям (страницы, категории, теги) для мультиязычности. Кэш сбрасывается при изменении переводов."
         },
         {
             "id": "events.title",

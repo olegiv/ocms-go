@@ -10,8 +10,13 @@ import (
 	"time"
 )
 
-// RoleAdmin is the admin user role.
-const RoleAdmin = "admin"
+// User role constants.
+const (
+	RoleAnonymous = "anonymous" // Not logged in (used for cache context)
+	RolePublic    = "public"    // Logged in, no special permissions
+	RoleEditor    = "editor"    // Can edit content
+	RoleAdmin     = "admin"     // Full system access
+)
 
 // User represents a CMS user.
 type User struct {
