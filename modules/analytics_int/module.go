@@ -139,6 +139,7 @@ func (m *Module) RegisterAdminRoutes(r chi.Router) {
 	r.Get("/internal-analytics/api/stats", m.handleAPIStats)
 	r.Get("/internal-analytics/api/realtime", m.handleRealtime)
 	r.Post("/internal-analytics/settings", m.handleSaveSettings)
+	r.Post("/internal-analytics/aggregate", m.handleRunAggregation)
 }
 
 // TemplateFuncs returns template functions provided by the module.
