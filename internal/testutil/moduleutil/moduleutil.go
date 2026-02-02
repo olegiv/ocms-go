@@ -10,6 +10,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/config"
 	"github.com/olegiv/ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/testutil"
 )
@@ -44,6 +45,7 @@ func TestModuleContext(t *testing.T, db *sql.DB) (*module.Context, *module.HookR
 		DB:     db,
 		Logger: logger,
 		Config: &config.Config{},
+		Render: &render.Renderer{},
 		Hooks:  hooks,
 	}, hooks
 }
@@ -59,6 +61,7 @@ func TestModuleContextWithStore(t *testing.T, db *sql.DB) (*module.Context, *mod
 		Store:  store.New(db),
 		Logger: logger,
 		Config: &config.Config{},
+		Render: &render.Renderer{},
 		Hooks:  hooks,
 	}, hooks
 }
