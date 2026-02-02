@@ -43,6 +43,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/webhook"
 	"github.com/olegiv/ocms-go/modules/analytics_ext"
 	"github.com/olegiv/ocms-go/modules/analytics_int"
+	"github.com/olegiv/ocms-go/modules/dbmanager"
 	"github.com/olegiv/ocms-go/modules/developer"
 	"github.com/olegiv/ocms-go/modules/embed"
 	"github.com/olegiv/ocms-go/modules/example"
@@ -357,6 +358,9 @@ func run() error {
 	}
 	if err := moduleRegistry.Register(migrator.New()); err != nil {
 		return fmt.Errorf("registering migrator module: %w", err)
+	}
+	if err := moduleRegistry.Register(dbmanager.New()); err != nil {
+		return fmt.Errorf("registering dbmanager module: %w", err)
 	}
 
 	// Register internal analytics module (built-in analytics tracking)
