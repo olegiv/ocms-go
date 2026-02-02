@@ -36,6 +36,15 @@ const (
 // ValidPageStatuses contains all valid page statuses.
 var ValidPageStatuses = []string{PageStatusDraft, PageStatusPublished}
 
+// Page types
+const (
+	PageTypePost = "post"
+	PageTypePage = "page"
+)
+
+// ValidPageTypes contains all valid page types.
+var ValidPageTypes = []string{PageTypePost, PageTypePage}
+
 // PagesPerPage is the number of pages to display per page.
 const PagesPerPage = 10
 
@@ -391,6 +400,7 @@ type PageFormData struct {
 	FeaturedImage *FeaturedImageData
 	Aliases       []store.PageAlias // URL aliases for the page
 	Statuses      []string
+	PageTypes     []string
 	Errors        map[string]string
 	FormValues    map[string]string
 	IsEdit        bool
@@ -470,6 +480,7 @@ func (h *PagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 		AllLanguages:  allLanguages,
 		Language:      defaultLanguage,
 		Statuses:      ValidPageStatuses,
+		PageTypes:     ValidPageTypes,
 		Errors:        make(map[string]string),
 		FormValues:    make(map[string]string),
 		IsEdit:        false,
@@ -533,6 +544,16 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		validationErrors["status"] = "Invalid status"
 	}
 
+	// Page type validation (already defaulted in parsePageFormInput)
+	if !isValidPageType(input.PageType) {
+		validationErrors["page_type"] = "Invalid page type"
+	}
+
+	// Featured image size validation
+	if errMsg := h.validateFeaturedImageSize(r.Context(), input.FeaturedImageID, lang); errMsg != "" {
+		validationErrors["featured_image_id"] = errMsg
+	}
+
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
 		// Load languages for re-rendering
@@ -541,6 +562,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		data := PageFormData{
 			AllLanguages: allLanguages,
 			Statuses:     ValidPageStatuses,
+			PageTypes:    ValidPageTypes,
 			Errors:       validationErrors,
 			FormValues:   input.FormValues,
 			IsEdit:       false,
@@ -562,6 +584,13 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Create page
 	now := time.Now()
 	userID := middleware.GetUserID(r)
+
+	// Set published_at if status is published
+	var publishedAt sql.NullTime
+	if input.Status == PageStatusPublished {
+		publishedAt = sql.NullTime{Time: now, Valid: true}
+	}
+
 	newPage, err := h.queries.CreatePage(r.Context(), store.CreatePageParams{
 		Title:             input.Title,
 		Slug:              input.Slug,
@@ -579,6 +608,9 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		ScheduledAt:       input.ScheduledAt,
 		LanguageCode:      input.LanguageCode,
 		HideFeaturedImage: input.HideFeaturedImage,
+		PageType:          input.PageType,
+		ExcludeFromLists:  input.ExcludeFromLists,
+		PublishedAt:       publishedAt,
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	})
@@ -619,6 +651,16 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 func isValidPageStatus(status string) bool {
 	for _, s := range ValidPageStatuses {
 		if s == status {
+			return true
+		}
+	}
+	return false
+}
+
+// isValidPageType checks if a page type is valid.
+func isValidPageType(pageType string) bool {
+	for _, t := range ValidPageTypes {
+		if t == pageType {
 			return true
 		}
 	}
@@ -703,6 +745,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		Translations:     langInfo.Translations,
 		MissingLanguages: langInfo.MissingLanguages,
 		Statuses:         ValidPageStatuses,
+		PageTypes:        ValidPageTypes,
 		Errors:           make(map[string]string),
 		FormValues:       make(map[string]string),
 		IsEdit:           true,
@@ -759,11 +802,22 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		validationErrors["status"] = "Invalid status"
 	}
 
+	// Page type validation (already defaulted in parsePageFormInput)
+	if !isValidPageType(input.PageType) {
+		validationErrors["page_type"] = "Invalid page type"
+	}
+
+	// Featured image size validation
+	if errMsg := h.validateFeaturedImageSize(r.Context(), input.FeaturedImageID, lang); errMsg != "" {
+		validationErrors["featured_image_id"] = errMsg
+	}
+
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
 		data := PageFormData{
 			Page:       &existingPage,
 			Statuses:   ValidPageStatuses,
+			PageTypes:  ValidPageTypes,
 			Errors:     validationErrors,
 			FormValues: input.FormValues,
 			IsEdit:     true,
@@ -778,6 +832,17 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Update page
 	now := time.Now()
+
+	// Determine published_at: set if becoming published, preserve if already published, clear if unpublishing
+	publishedAt := existingPage.PublishedAt
+	if status == PageStatusPublished && existingPage.Status != PageStatusPublished {
+		// Transitioning to published - set published_at
+		publishedAt = sql.NullTime{Time: now, Valid: true}
+	} else if status != PageStatusPublished {
+		// Unpublishing - clear published_at
+		publishedAt = sql.NullTime{Valid: false}
+	}
+
 	updatedPage, err := h.queries.UpdatePage(r.Context(), store.UpdatePageParams{
 		ID:                id,
 		Title:             input.Title,
@@ -795,6 +860,9 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		ScheduledAt:       input.ScheduledAt,
 		LanguageCode:      existingPage.LanguageCode,
 		HideFeaturedImage: input.HideFeaturedImage,
+		PageType:          input.PageType,
+		ExcludeFromLists:  input.ExcludeFromLists,
+		PublishedAt:       publishedAt,
 		UpdatedAt:         now,
 	})
 	if err != nil {
@@ -1151,6 +1219,9 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		ScheduledAt:       sql.NullTime{},
 		LanguageCode:      tc.TargetLang.Code,
 		HideFeaturedImage: sourcePage.HideFeaturedImage,
+		PageType:          sourcePage.PageType,        // Inherit page type from source
+		ExcludeFromLists:  sourcePage.ExcludeFromLists, // Inherit exclude flag from source
+		PublishedAt:       sql.NullTime{},             // Not published yet
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	})
@@ -1227,6 +1298,8 @@ type pageFormInput struct {
 	ScheduledAt       sql.NullTime
 	LanguageCode      string
 	HideFeaturedImage int64
+	PageType          string
+	ExcludeFromLists  int64
 	FormValues        map[string]string
 }
 
@@ -1249,6 +1322,13 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 	scheduledAtStr := strings.TrimSpace(r.FormValue("scheduled_at"))
 	languageCode := strings.TrimSpace(r.FormValue("language_code"))
 	hideFeaturedImageStr := r.FormValue("hide_featured_image")
+	pageType := strings.TrimSpace(r.FormValue("page_type"))
+	excludeFromListsStr := r.FormValue("exclude_from_lists")
+
+	// Default page_type to "post" if empty
+	if pageType == "" {
+		pageType = PageTypePost
+	}
 
 	// Parse featured image ID
 	featuredImageID := util.ParseNullInt64Positive(featuredImageIDStr)
@@ -1268,6 +1348,10 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 	var hideFeaturedImage int64
 	if hideFeaturedImageStr == "1" || hideFeaturedImageStr == "on" {
 		hideFeaturedImage = 1
+	}
+	var excludeFromLists int64
+	if excludeFromListsStr == "1" || excludeFromListsStr == "on" {
+		excludeFromLists = 1
 	}
 
 	// Parse scheduled_at
@@ -1294,6 +1378,8 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 		"scheduled_at":        scheduledAtStr,
 		"language_code":       languageCode,
 		"hide_featured_image": hideFeaturedImageStr,
+		"page_type":           pageType,
+		"exclude_from_lists":  excludeFromListsStr,
 	}
 
 	return pageFormInput{
@@ -1312,6 +1398,8 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 		ScheduledAt:       scheduledAt,
 		LanguageCode:      languageCode,
 		HideFeaturedImage: hideFeaturedImage,
+		PageType:          pageType,
+		ExcludeFromLists:  excludeFromLists,
 		FormValues:        formValues,
 	}
 }
@@ -1349,6 +1437,38 @@ func (h *PagesHandler) validatePageSlugUpdate(ctx context.Context, slug string, 
 			PageID: pageID,
 		})
 	})
+}
+
+// validateFeaturedImageSize checks if a featured image meets minimum size requirements.
+// Returns an error message if the image is too small, empty string if valid or no image set.
+func (h *PagesHandler) validateFeaturedImageSize(ctx context.Context, featuredImageID sql.NullInt64, lang string) string {
+	if !featuredImageID.Valid {
+		return "" // No featured image set, valid
+	}
+
+	media, err := h.queries.GetMediaByID(ctx, featuredImageID.Int64)
+	if err != nil {
+		// If we can't find the media, let other validation handle it
+		return ""
+	}
+
+	// Check if media has dimensions (it's an image)
+	if !media.Width.Valid || !media.Height.Valid {
+		return "" // Not an image or dimensions not available
+	}
+
+	width := media.Width.Int64
+	height := media.Height.Int64
+
+	if width < model.MinFeaturedImageWidth || height < model.MinFeaturedImageHeight {
+		return i18n.T(lang, "pages.error.featured_image_too_small",
+			"width", width,
+			"height", height,
+			"min_width", model.MinFeaturedImageWidth,
+			"min_height", model.MinFeaturedImageHeight)
+	}
+
+	return ""
 }
 
 // savePageTags saves tag associations for a page from form values.

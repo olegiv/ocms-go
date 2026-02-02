@@ -38,11 +38,11 @@
         <h3 class="dev-widget-title">
             <span class="dev-comment">// </span>{{TTheme .LangCode "sidebar.recent_posts"}}
         </h3>
-        <ul class="dev-recent-list">
+        <ul class="dev-recent-posts">
             {{range .RecentPages}}
-            <li class="dev-recent-item">
-                <a href="/{{.Slug}}" class="dev-recent-link">{{.Title}}</a>
-                <time class="dev-recent-date">{{formatDate .CreatedAt}}</time>
+            <li>
+                <a href="{{.URL}}">{{.Title}}</a>
+                {{if .PublishedAt}}<span class="dev-post-date">{{formatDateLocale .PublishedAt $.LangCode}}</span>{{end}}
             </li>
             {{end}}
         </ul>

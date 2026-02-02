@@ -1,0 +1,48 @@
+<article class="dev-post-item">
+    {{if .FeaturedImage}}
+    <div class="dev-post-image">
+        <a href="{{.URL}}">
+            <img src="{{.FeaturedImage}}"
+                 srcset="{{.FeaturedImage}} 150w, {{.FeaturedImageSmall}} 400w, {{.FeaturedImageMedium}} 800w"
+                 sizes="(max-width: 768px) 100vw, 200px"
+                 alt="{{mediaAlt .FeaturedImageID $.LangCode .FeaturedImageAlt}}"
+                 loading="lazy">
+        </a>
+    </div>
+    {{end}}
+    <div class="dev-post-content">
+        {{if .Category}}
+        <span class="dev-post-category">
+            <a href="{{$.LangPrefix}}/category/{{.Category.Slug}}">{{.Category.Name}}</a>
+        </span>
+        {{end}}
+        <h3 class="dev-post-title">
+            <a href="{{.URL}}">{{.Title}}</a>
+        </h3>
+        {{if .Highlight}}
+        <p class="dev-post-excerpt">{{safeHTML .Highlight}}</p>
+        {{else if .Excerpt}}
+        <p class="dev-post-excerpt">{{.Excerpt}}</p>
+        {{end}}
+        <div class="dev-post-meta">
+            {{if .PublishedAt}}
+            <time datetime="{{.PublishedAt}}" class="dev-meta-item">
+                {{formatDateLocale .PublishedAt $.LangCode}}
+            </time>
+            {{end}}
+            {{if .Author}}
+            <span class="dev-meta-item">@{{.Author.Name}}</span>
+            {{end}}
+            {{if .ReadingTime}}
+            <span class="dev-meta-item">~{{.ReadingTime}} min</span>
+            {{end}}
+        </div>
+        {{if .Tags}}
+        <div class="dev-post-tags">
+            {{range .Tags}}
+            <a href="{{$.LangPrefix}}/tag/{{.Slug}}" class="dev-tag">#{{.Name}}</a>
+            {{end}}
+        </div>
+        {{end}}
+    </div>
+</article>

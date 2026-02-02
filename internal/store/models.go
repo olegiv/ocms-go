@@ -218,6 +218,8 @@ type Page struct {
 	ScheduledAt       sql.NullTime  `json:"scheduled_at"`
 	LanguageCode      string        `json:"language_code"`
 	HideFeaturedImage int64         `json:"hide_featured_image"`
+	PageType          string        `json:"page_type"`
+	ExcludeFromLists  int64         `json:"exclude_from_lists"`
 }
 
 type PageAlias struct {

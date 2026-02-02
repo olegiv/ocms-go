@@ -35,6 +35,18 @@ func (q *Queries) CountPublishedPagesByLanguage(ctx context.Context, languageCod
 	return count, err
 }
 
+const countPublishedPostsByLanguage = `-- name: CountPublishedPostsByLanguage :one
+SELECT COUNT(*) FROM pages WHERE language_code = ? AND status = 'published' AND page_type = 'post' AND exclude_from_lists = 0
+`
+
+// Count published posts for a specific language
+func (q *Queries) CountPublishedPostsByLanguage(ctx context.Context, languageCode string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPublishedPostsByLanguage, languageCode)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countTranslationsForEntity = `-- name: CountTranslationsForEntity :one
 SELECT COUNT(*) FROM translations WHERE entity_type = ? AND entity_id = ?
 `
@@ -280,7 +292,7 @@ func (q *Queries) GetPageAvailableTranslations(ctx context.Context, arg GetPageA
 
 const getPageByLanguageFromTranslation = `-- name: GetPageByLanguageFromTranslation :one
 
-SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image FROM pages p
+SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists FROM pages p
 INNER JOIN translations t ON t.translation_id = p.id
 WHERE t.entity_type = 'page' AND t.entity_id = ? AND t.language_id = ?
 `
@@ -315,12 +327,14 @@ func (q *Queries) GetPageByLanguageFromTranslation(ctx context.Context, arg GetP
 		&i.ScheduledAt,
 		&i.LanguageCode,
 		&i.HideFeaturedImage,
+		&i.PageType,
+		&i.ExcludeFromLists,
 	)
 	return i, err
 }
 
 const getPageTranslationBySlug = `-- name: GetPageTranslationBySlug :one
-SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image FROM pages p
+SELECT p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists FROM pages p
 INNER JOIN translations t ON t.translation_id = p.id
 INNER JOIN pages source ON source.id = t.entity_id
 WHERE t.entity_type = 'page'
@@ -359,6 +373,8 @@ func (q *Queries) GetPageTranslationBySlug(ctx context.Context, arg GetPageTrans
 		&i.ScheduledAt,
 		&i.LanguageCode,
 		&i.HideFeaturedImage,
+		&i.PageType,
+		&i.ExcludeFromLists,
 	)
 	return i, err
 }
@@ -418,7 +434,7 @@ func (q *Queries) GetPageTranslationLinks(ctx context.Context, entityID int64) (
 
 const getPageWithLanguage = `-- name: GetPageWithLanguage :one
 SELECT
-    p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image,
+    p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists,
     l.name as language_name,
     l.native_name as language_native_name,
     l.direction as language_direction
@@ -448,6 +464,8 @@ type GetPageWithLanguageRow struct {
 	ScheduledAt        sql.NullTime  `json:"scheduled_at"`
 	LanguageCode       string        `json:"language_code"`
 	HideFeaturedImage  int64         `json:"hide_featured_image"`
+	PageType           string        `json:"page_type"`
+	ExcludeFromLists   int64         `json:"exclude_from_lists"`
 	LanguageName       string        `json:"language_name"`
 	LanguageNativeName string        `json:"language_native_name"`
 	LanguageDirection  string        `json:"language_direction"`
@@ -478,6 +496,8 @@ func (q *Queries) GetPageWithLanguage(ctx context.Context, id int64) (GetPageWit
 		&i.ScheduledAt,
 		&i.LanguageCode,
 		&i.HideFeaturedImage,
+		&i.PageType,
+		&i.ExcludeFromLists,
 		&i.LanguageName,
 		&i.LanguageNativeName,
 		&i.LanguageDirection,
@@ -487,7 +507,7 @@ func (q *Queries) GetPageWithLanguage(ctx context.Context, id int64) (GetPageWit
 
 const getPublishedPageWithLanguageBySlug = `-- name: GetPublishedPageWithLanguageBySlug :one
 SELECT
-    p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image,
+    p.id, p.title, p.slug, p.body, p.status, p.author_id, p.created_at, p.updated_at, p.published_at, p.featured_image_id, p.meta_title, p.meta_description, p.meta_keywords, p.og_image_id, p.no_index, p.no_follow, p.canonical_url, p.scheduled_at, p.language_code, p.hide_featured_image, p.page_type, p.exclude_from_lists,
     l.name as language_name,
     l.native_name as language_native_name,
     l.direction as language_direction,
@@ -518,6 +538,8 @@ type GetPublishedPageWithLanguageBySlugRow struct {
 	ScheduledAt        sql.NullTime  `json:"scheduled_at"`
 	LanguageCode       string        `json:"language_code"`
 	HideFeaturedImage  int64         `json:"hide_featured_image"`
+	PageType           string        `json:"page_type"`
+	ExcludeFromLists   int64         `json:"exclude_from_lists"`
 	LanguageName       string        `json:"language_name"`
 	LanguageNativeName string        `json:"language_native_name"`
 	LanguageDirection  string        `json:"language_direction"`
@@ -549,6 +571,8 @@ func (q *Queries) GetPublishedPageWithLanguageBySlug(ctx context.Context, slug s
 		&i.ScheduledAt,
 		&i.LanguageCode,
 		&i.HideFeaturedImage,
+		&i.PageType,
+		&i.ExcludeFromLists,
 		&i.LanguageName,
 		&i.LanguageNativeName,
 		&i.LanguageDirection,
@@ -922,7 +946,7 @@ func (q *Queries) GetTranslationsForPagesBatch(ctx context.Context) ([]GetTransl
 }
 
 const listPagesByLanguage = `-- name: ListPagesByLanguage :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image FROM pages
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists FROM pages
 WHERE language_code = ?
 ORDER BY created_at DESC
 LIMIT ? OFFSET ?
@@ -965,6 +989,8 @@ func (q *Queries) ListPagesByLanguage(ctx context.Context, arg ListPagesByLangua
 			&i.ScheduledAt,
 			&i.LanguageCode,
 			&i.HideFeaturedImage,
+			&i.PageType,
+			&i.ExcludeFromLists,
 		); err != nil {
 			return nil, err
 		}
@@ -980,7 +1006,7 @@ func (q *Queries) ListPagesByLanguage(ctx context.Context, arg ListPagesByLangua
 }
 
 const listPublishedPagesByLanguage = `-- name: ListPublishedPagesByLanguage :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image FROM pages
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists FROM pages
 WHERE language_code = ? AND status = 'published'
 ORDER BY published_at DESC
 LIMIT ? OFFSET ?
@@ -1023,6 +1049,68 @@ func (q *Queries) ListPublishedPagesByLanguage(ctx context.Context, arg ListPubl
 			&i.ScheduledAt,
 			&i.LanguageCode,
 			&i.HideFeaturedImage,
+			&i.PageType,
+			&i.ExcludeFromLists,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublishedPostsByLanguage = `-- name: ListPublishedPostsByLanguage :many
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists FROM pages
+WHERE language_code = ? AND status = 'published' AND page_type = 'post' AND exclude_from_lists = 0
+ORDER BY published_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListPublishedPostsByLanguageParams struct {
+	LanguageCode string `json:"language_code"`
+	Limit        int64  `json:"limit"`
+	Offset       int64  `json:"offset"`
+}
+
+// Posts only for a specific language (for recent posts, blog feeds - excludes static pages)
+func (q *Queries) ListPublishedPostsByLanguage(ctx context.Context, arg ListPublishedPostsByLanguageParams) ([]Page, error) {
+	rows, err := q.db.QueryContext(ctx, listPublishedPostsByLanguage, arg.LanguageCode, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Page{}
+	for rows.Next() {
+		var i Page
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Slug,
+			&i.Body,
+			&i.Status,
+			&i.AuthorID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PublishedAt,
+			&i.FeaturedImageID,
+			&i.MetaTitle,
+			&i.MetaDescription,
+			&i.MetaKeywords,
+			&i.OgImageID,
+			&i.NoIndex,
+			&i.NoFollow,
+			&i.CanonicalUrl,
+			&i.ScheduledAt,
+			&i.LanguageCode,
+			&i.HideFeaturedImage,
+			&i.PageType,
+			&i.ExcludeFromLists,
 		); err != nil {
 			return nil, err
 		}

@@ -51,39 +51,7 @@
                 </h2>
                 <div class="dev-posts-list">
                     {{range .RecentPages}}
-                    <article class="dev-post-item">
-                        {{if .FeaturedImage}}
-                        <div class="dev-post-image">
-                            <a href="{{.URL}}">
-                                <img src="{{.FeaturedImageMedium}}"
-                                     srcset="{{.FeaturedImage}} 150w, {{.FeaturedImageMedium}} 800w"
-                                     sizes="(max-width: 768px) 100vw, 200px"
-                                     alt="{{mediaAlt .FeaturedImageID $.LangCode .FeaturedImageAlt}}"
-                                     loading="lazy">
-                            </a>
-                        </div>
-                        {{end}}
-                        <div class="dev-post-content">
-                            <h3 class="dev-post-title">
-                                <a href="{{.URL}}">{{.Title}}</a>
-                            </h3>
-                            <div class="dev-post-meta">
-                                {{if .PublishedAt}}
-                                <time datetime="{{.PublishedAt}}" class="dev-meta-item">
-                                    <span class="dev-comment">/*</span> {{formatDateLocale .PublishedAt $.LangCode}} <span class="dev-comment">*/</span>
-                                </time>
-                                {{end}}
-                                {{if .Category}}
-                                <span class="dev-meta-item">
-                                    in <a href="/category/{{.Category.Slug}}">{{.Category.Name}}</a>
-                                </span>
-                                {{end}}
-                            </div>
-                            {{if .Excerpt}}
-                            <p class="dev-post-excerpt">{{.Excerpt}}</p>
-                            {{end}}
-                        </div>
-                    </article>
+                    {{template "post-card.html" .}}
                     {{end}}
                 </div>
                 {{if .ShowAllPostsLink}}
