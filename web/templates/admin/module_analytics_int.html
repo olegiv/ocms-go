@@ -329,6 +329,14 @@
                 </div>
                 <button type="submit" class="btn btn-primary">{{T .AdminLang "analytics_int.save_settings"}}</button>
             </form>
+            <hr class="mt-4 mb-4">
+            <form method="POST" action="/admin/internal-analytics/aggregate">
+                {{.CSRFField}}
+                <div class="form-group">
+                    <p class="form-hint mb-2">{{T .AdminLang "analytics_int.run_aggregation_hint"}}</p>
+                    <button type="submit" class="btn btn-outline">{{T .AdminLang "analytics_int.run_aggregation"}}</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>

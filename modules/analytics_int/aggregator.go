@@ -258,3 +258,76 @@ func (m *Module) RunAggregationNow() error {
 
 	return nil
 }
+
+// RunFullAggregation aggregates all historical raw data into daily stats.
+// This backfills page_analytics_daily from page_analytics_views for all past dates.
+func (m *Module) RunFullAggregation(ctx context.Context) (int, error) {
+	m.ctx.Logger.Info("starting full aggregation of all historical data")
+
+	// Get all distinct dates from raw views (excluding today)
+	rows, err := m.ctx.DB.QueryContext(ctx, `
+		SELECT DISTINCT DATE(created_at) as date
+		FROM page_analytics_views
+		WHERE DATE(created_at) < DATE('now')
+		ORDER BY date
+	`)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var dates []string
+	for rows.Next() {
+		var date string
+		if err := rows.Scan(&date); err != nil {
+			return 0, err
+		}
+		dates = append(dates, date)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	if len(dates) == 0 {
+		m.ctx.Logger.Info("no historical data to aggregate")
+		return 0, nil
+	}
+
+	m.ctx.Logger.Info("found dates to aggregate", "count", len(dates))
+
+	// Aggregate daily stats directly from raw views (bypass hourly)
+	_, err = m.ctx.DB.ExecContext(ctx, `
+		INSERT OR REPLACE INTO page_analytics_daily (date, path, views, unique_visitors, bounces)
+		SELECT
+			DATE(created_at) as date,
+			path,
+			COUNT(*) as views,
+			COUNT(DISTINCT visitor_hash) as unique_visitors,
+			0 as bounces
+		FROM page_analytics_views
+		WHERE DATE(created_at) < DATE('now')
+		GROUP BY DATE(created_at), path
+	`)
+	if err != nil {
+		return 0, err
+	}
+
+	// Aggregate other stats for each date
+	for _, dateStr := range dates {
+		if err := m.aggregateReferrers(ctx, dateStr); err != nil {
+			m.ctx.Logger.Warn("referrer aggregation failed", "date", dateStr, "error", err)
+		}
+		if err := m.aggregateTechStats(ctx, dateStr); err != nil {
+			m.ctx.Logger.Warn("tech stats aggregation failed", "date", dateStr, "error", err)
+		}
+		if err := m.aggregateGeoStats(ctx, dateStr); err != nil {
+			m.ctx.Logger.Warn("geo stats aggregation failed", "date", dateStr, "error", err)
+		}
+		if err := m.calculateBounceRates(ctx, dateStr); err != nil {
+			m.ctx.Logger.Warn("bounce rate calculation failed", "date", dateStr, "error", err)
+		}
+	}
+
+	m.ctx.Logger.Info("full aggregation complete", "dates_processed", len(dates))
+	return len(dates), nil
+}
