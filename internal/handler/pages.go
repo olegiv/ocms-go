@@ -17,6 +17,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
@@ -55,6 +56,7 @@ type PagesHandler struct {
 	sessionManager *scs.SessionManager
 	dispatcher     *webhook.Dispatcher
 	eventService   *service.EventService
+	cacheManager   *cache.Manager
 }
 
 // NewPagesHandler creates a new PagesHandler.
@@ -70,6 +72,18 @@ func NewPagesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 // SetDispatcher sets the webhook dispatcher for event dispatching.
 func (h *PagesHandler) SetDispatcher(d *webhook.Dispatcher) {
 	h.dispatcher = d
+}
+
+// SetCacheManager sets the cache manager for cache invalidation.
+func (h *PagesHandler) SetCacheManager(cm *cache.Manager) {
+	h.cacheManager = cm
+}
+
+// invalidatePageCache invalidates the page cache after a page is modified.
+func (h *PagesHandler) invalidatePageCache(pageID int64) {
+	if h.cacheManager != nil {
+		h.cacheManager.InvalidatePage(pageID)
+	}
 }
 
 // dispatchPageEvent dispatches a page-related webhook event.
@@ -644,6 +658,9 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Dispatch page.created webhook event
 	h.dispatchPageEvent(r.Context(), model.EventPageCreated, newPage, middleware.GetUserEmail(r))
 
+	// Invalidate page cache (for sitemap regeneration on next request)
+	h.invalidatePageCache(newPage.ID)
+
 	flashSuccess(w, r, h.renderer, redirectAdminPages, "Page created successfully")
 }
 
@@ -910,6 +927,9 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Dispatch page.updated webhook event
 	h.dispatchPageEvent(r.Context(), model.EventPageUpdated, updatedPage, middleware.GetUserEmail(r))
 
+	// Invalidate page cache
+	h.invalidatePageCache(updatedPage.ID)
+
 	flashSuccess(w, r, h.renderer, redirectAdminPages, "Page updated successfully")
 }
 
@@ -939,6 +959,9 @@ func (h *PagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	// Dispatch page.deleted webhook event
 	h.dispatchPageEvent(r.Context(), model.EventPageDeleted, page, middleware.GetUserEmail(r))
+
+	// Invalidate page cache
+	h.invalidatePageCache(id)
 
 	// For HTMX requests, return empty response (row removed)
 	if r.Header.Get("HX-Request") == "true" {

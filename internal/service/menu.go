@@ -7,11 +7,9 @@ package service
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"sort"
-	"sync"
-	"time"
 
+	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -29,44 +27,38 @@ type MenuItem struct {
 	Children []MenuItem
 }
 
-// cachedMenu holds a menu with its expiry time.
-type cachedMenu struct {
-	items  []MenuItem
-	expiry time.Time
-}
-
-// MenuService provides menu loading with caching.
+// MenuService provides menu loading with tree building.
+// It uses cache.MenuCache for data storage and statistics tracking.
 type MenuService struct {
-	db       *sql.DB
-	cache    sync.Map
-	cacheTTL time.Duration
-	queries  *store.Queries
+	db        *sql.DB
+	queries   *store.Queries
+	menuCache *cache.MenuCache
 }
 
 // NewMenuService creates a new MenuService.
-func NewMenuService(db *sql.DB) *MenuService {
+// If menuCache is nil, a standalone service without caching is created.
+func NewMenuService(db *sql.DB, menuCache *cache.MenuCache) *MenuService {
 	return &MenuService{
-		db:       db,
-		cacheTTL: 5 * time.Minute,
-		queries:  store.New(db),
+		db:        db,
+		queries:   store.New(db),
+		menuCache: menuCache,
 	}
 }
 
-// GetMenu fetches a menu by slug with caching.
-// This is the basic method that returns any menu with the given slug.
+// GetMenu fetches a menu by slug.
+// Uses MenuCache for data storage if available, otherwise fetches directly from database.
 func (s *MenuService) GetMenu(slug string) []MenuItem {
-	// Check cache
-	if cached, ok := s.cache.Load(slug); ok {
-		cm := cached.(cachedMenu)
-		if time.Now().Before(cm.expiry) {
-			return cm.items
+	ctx := context.Background()
+
+	// Try to get from cache first
+	if s.menuCache != nil {
+		cached, err := s.menuCache.Get(ctx, slug)
+		if err == nil && cached != nil {
+			return s.buildMenuTree(cached.Items)
 		}
-		// Cache expired, delete it
-		s.cache.Delete(slug)
 	}
 
-	// Fetch from database
-	ctx := context.Background()
+	// Cache miss or no cache - fetch directly from database
 	menu, err := s.queries.GetMenuBySlug(ctx, slug)
 	if err != nil {
 		return nil
@@ -77,36 +69,16 @@ func (s *MenuService) GetMenu(slug string) []MenuItem {
 		return nil
 	}
 
-	// Build tree structure
-	menuItems := s.buildMenuTree(items)
-
-	// Cache the result
-	s.cache.Store(slug, cachedMenu{
-		items:  menuItems,
-		expiry: time.Now().Add(s.cacheTTL),
-	})
-
-	return menuItems
+	return s.buildMenuTree(items)
 }
 
 // GetMenuForLanguage fetches a menu by slug for a specific language.
 // It first tries to find a menu with the given slug and language,
 // then falls back to the default language menu if not found.
+// Note: Language-specific menus are fetched directly from database since
+// MenuCache only caches by slug (not by slug+language).
 func (s *MenuService) GetMenuForLanguage(slug string, langCode string) []MenuItem {
 	ctx := context.Background()
-
-	// Build cache key that includes language
-	cacheKey := fmt.Sprintf("%s:%s", slug, langCode)
-
-	// Check cache
-	if cached, ok := s.cache.Load(cacheKey); ok {
-		cm := cached.(cachedMenu)
-		if time.Now().Before(cm.expiry) {
-			return cm.items
-		}
-		// Cache expired, delete it
-		s.cache.Delete(cacheKey)
-	}
 
 	// Validate language code exists
 	_, err := s.queries.GetLanguageByCode(ctx, langCode)
@@ -159,16 +131,7 @@ func (s *MenuService) GetMenuForLanguage(slug string, langCode string) []MenuIte
 		return nil
 	}
 
-	// Build tree structure
-	menuItems := s.buildMenuTree(items)
-
-	// Cache the result with language key
-	s.cache.Store(cacheKey, cachedMenu{
-		items:  menuItems,
-		expiry: time.Now().Add(s.cacheTTL),
-	})
-
-	return menuItems
+	return s.buildMenuTree(items)
 }
 
 // GetMenuForLanguageCode fetches a menu by slug for a specific language code.
@@ -178,26 +141,17 @@ func (s *MenuService) GetMenuForLanguageCode(slug string, langCode string) []Men
 	return s.GetMenuForLanguage(slug, langCode)
 }
 
-// InvalidateCache clears the cache for a specific menu or all menus.
-// When a slug is provided, it clears both the base slug and all
-// language-specific variants (e.g., "main", "main:en", "main:ru").
+// InvalidateCache clears the menu cache.
+// When a slug is provided, it invalidates that specific menu.
+// When empty, it invalidates all menus.
 func (s *MenuService) InvalidateCache(slug string) {
+	if s.menuCache == nil {
+		return
+	}
 	if slug == "" {
-		// Clear all
-		s.cache.Range(func(key, _ any) bool {
-			s.cache.Delete(key)
-			return true
-		})
+		s.menuCache.Invalidate()
 	} else {
-		// Clear slug and all language-specific variants (slug:langCode)
-		prefix := slug + ":"
-		s.cache.Range(func(key, _ any) bool {
-			keyStr := key.(string)
-			if keyStr == slug || len(keyStr) > len(prefix) && keyStr[:len(prefix)] == prefix {
-				s.cache.Delete(key)
-			}
-			return true
-		})
+		s.menuCache.InvalidateBySlug(slug)
 	}
 }
 
