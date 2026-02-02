@@ -1,5 +1,9 @@
 # oCMS
 
+[![Go](https://github.com/olegiv/ocms-go/actions/workflows/go.yml/badge.svg)](https://github.com/olegiv/ocms-go/actions/workflows/go.yml)
+[![CodeQL](https://github.com/olegiv/ocms-go/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/olegiv/ocms-go/actions/workflows/github-code-scanning/codeql)
+[![Dependency review](https://github.com/olegiv/ocms-go/actions/workflows/dependency-review.yml/badge.svg)](https://github.com/olegiv/ocms-go/actions/workflows/dependency-review.yml)
+
 A lightweight content management system built with Go, featuring a modern admin interface, session-based authentication, SQLite storage, and extensible architecture with themes and modules.
 
 ## Features
