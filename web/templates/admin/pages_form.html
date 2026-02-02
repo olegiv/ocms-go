@@ -103,6 +103,33 @@
                 {{end}}
             </div>
 
+            <!-- Page Type -->
+            <div class="form-group">
+                <label for="page_type" class="form-label">{{T .AdminLang "pages.page_type"}}</label>
+                <select
+                    id="page_type"
+                    name="page_type"
+                    class="form-select {{if .Data.Errors.page_type}}is-invalid{{end}}"
+                >
+                    {{$currentPageType := "post"}}
+                    {{if .Data.FormValues.page_type}}
+                        {{$currentPageType = .Data.FormValues.page_type}}
+                    {{else if .Data.Page}}
+                        {{$currentPageType = .Data.Page.PageType}}
+                    {{end}}
+                    {{range .Data.PageTypes}}
+                    <option value="{{.}}" {{if eq . $currentPageType}}selected{{end}}>
+                        {{if eq . "post"}}{{T $.AdminLang "pages.type_post"}}{{else if eq . "page"}}{{T $.AdminLang "pages.type_page"}}{{else}}{{.}}{{end}}
+                    </option>
+                    {{end}}
+                </select>
+                {{if .Data.Errors.page_type}}
+                <span class="form-error">{{.Data.Errors.page_type}}</span>
+                {{else}}
+                <span class="form-hint">{{T .AdminLang "pages.page_type_hint"}}</span>
+                {{end}}
+            </div>
+
             <!-- Language -->
             {{if gt (len .Data.AllLanguages) 1}}
             <div class="form-group">
@@ -350,7 +377,24 @@
 
             <!-- Featured Image -->
             <div class="form-group form-group-full">
-                {{template "media_picker" .}}
+                {{if .Data.FeaturedImage}}
+                {{template "media_dropzone" dict
+                    "Mode" "select"
+                    "Lang" .AdminLang
+                    "Label" (T .AdminLang "media.featured_image")
+                    "Hint" (T .AdminLang "media.featured_image_requirements")
+                    "InputName" "featured_image_id"
+                    "InitialImage" (printf `{"id":%d,"filename":"%s","filepath":"%s","thumbnail":"%s","mimetype":"%s"}` .Data.FeaturedImage.ID .Data.FeaturedImage.Filename .Data.FeaturedImage.Filepath .Data.FeaturedImage.Thumbnail .Data.FeaturedImage.Mimetype)
+                }}
+                {{else}}
+                {{template "media_dropzone" dict
+                    "Mode" "select"
+                    "Lang" .AdminLang
+                    "Label" (T .AdminLang "media.featured_image")
+                    "Hint" (T .AdminLang "media.featured_image_requirements")
+                    "InputName" "featured_image_id"
+                }}
+                {{end}}
             </div>
 
             <!-- Hide Featured Image Option -->
@@ -361,6 +405,16 @@
                     <span>{{T .AdminLang "pages.hide_featured_image"}}</span>
                 </label>
                 <span class="form-hint">{{T .AdminLang "pages.hide_featured_image_hint"}}</span>
+            </div>
+
+            <!-- Exclude from Lists -->
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="exclude_from_lists" value="1"
+                        {{if eq .Data.FormValues.exclude_from_lists "1"}}checked{{else if and .Data.Page (eq .Data.Page.ExcludeFromLists 1)}}checked{{end}}>
+                    <span>{{T .AdminLang "pages.exclude_from_lists"}}</span>
+                </label>
+                <span class="form-hint">{{T .AdminLang "pages.exclude_from_lists_hint"}}</span>
             </div>
 
             <!-- Tags -->

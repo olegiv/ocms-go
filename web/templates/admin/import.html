@@ -9,20 +9,63 @@
 {{/* Step 1: File Upload */}}
 {{if and (not .Data.ValidationResult) (not .Data.ImportResult)}}
 <div class="card">
-    <form method="POST" action="/admin/import/validate" enctype="multipart/form-data" class="card-body">
+    <form method="POST" action="/admin/import/validate" enctype="multipart/form-data" class="card-body"
+          x-data="importUploader()" @submit="handleSubmit($event)">
         {{.CSRFField}}
-        <div class="import-upload-section">
-            <div class="upload-area" id="upload-area">
-                <input type="file" id="import_file" name="import_file" accept=".json,.zip" class="upload-input">
-                <div class="upload-content" id="upload-content">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-                    <p class="upload-text">{{T .AdminLang "import.drop_file"}}</p>
-                    <p class="upload-hint">{{T .AdminLang "import.file_hint_extended"}}</p>
+        <div class="media-dropzone">
+            <div class="media-dropzone-area"
+                 :class="{ 'is-dragover': dragover, 'has-content': selectedFile }"
+                 @dragover.prevent="dragover = true"
+                 @dragleave.prevent="dragover = false"
+                 @drop.prevent="handleDrop($event)"
+                 @click="$refs.fileInput.click()">
+
+                <input type="file"
+                       x-ref="fileInput"
+                       name="import_file"
+                       accept=".json,.zip"
+                       class="media-dropzone-input"
+                       @change="handleFileSelect($event)">
+
+                <!-- Empty state -->
+                <div class="media-dropzone-empty" x-show="!selectedFile">
+                    <div class="media-dropzone-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" x2="12" y1="3" y2="15"/>
+                        </svg>
+                    </div>
+                    <p class="media-dropzone-title">{{T .AdminLang "import.drop_file"}}</p>
+                    <p class="media-dropzone-subtitle">{{T .AdminLang "uploader.or_click"}}</p>
+                    <p class="media-dropzone-hint">{{T .AdminLang "import.file_hint_extended"}}</p>
                 </div>
-                <div class="upload-selected hidden" id="upload-selected">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-                    <p class="upload-text" id="selected-filename"></p>
-                    <p class="upload-hint">{{T .AdminLang "import.click_to_change"}}</p>
+
+                <!-- Selected file state -->
+                <div class="media-dropzone-files" x-show="selectedFile" @click.stop>
+                    <div class="media-dropzone-file is-success">
+                        <div class="media-dropzone-file-preview">
+                            <div class="media-dropzone-file-icon-small">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+                                    <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="media-dropzone-file-info">
+                            <span class="media-dropzone-file-name" x-text="selectedFile?.name"></span>
+                            <span class="media-dropzone-file-size" x-text="formatSize(selectedFile?.size || 0)"></span>
+                        </div>
+                        <button type="button"
+                                class="media-dropzone-file-remove"
+                                @click.stop="clearFile()"
+                                title="{{T .AdminLang "btn.remove"}}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M18 6 6 18"/>
+                                <path d="m6 6 12 12"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -32,14 +75,58 @@
             <p>{{T .AdminLang "import.info"}}</p>
         </div>
 
-        <div class="form-actions">
-            <button type="submit" class="btn btn-primary">
+        <div class="media-dropzone-buttons">
+            <button type="submit" class="btn btn-primary" :disabled="!selectedFile">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
                 {{T .AdminLang "import.validate"}}
             </button>
         </div>
     </form>
 </div>
+<script>
+function importUploader() {
+    return {
+        selectedFile: null,
+        dragover: false,
+
+        handleFileSelect(event) {
+            const files = event.target.files;
+            if (files && files.length > 0) {
+                this.selectedFile = files[0];
+            }
+        },
+
+        handleDrop(event) {
+            this.dragover = false;
+            const files = event.dataTransfer.files;
+            if (files && files.length > 0) {
+                this.selectedFile = files[0];
+                this.$refs.fileInput.files = files;
+            }
+        },
+
+        clearFile() {
+            this.selectedFile = null;
+            this.$refs.fileInput.value = '';
+        },
+
+        handleSubmit(event) {
+            if (!this.selectedFile) {
+                event.preventDefault();
+                this.$refs.fileInput.click();
+            }
+        },
+
+        formatSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+    };
+}
+</script>
 {{end}}
 
 {{/* Step 2: Validation Results & Import Options */}}

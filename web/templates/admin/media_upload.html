@@ -14,258 +14,32 @@
 
 <div class="card">
     <div class="card-body">
-        <form
-            action="/admin/media/upload"
-            method="POST"
-            enctype="multipart/form-data"
-            id="upload-form"
-            x-data="uploadForm()"
-            @dragover.prevent="dragover = true"
-            @dragleave.prevent="dragover = false"
-            @drop.prevent="handleDrop($event)"
-        >
-            {{.CSRFField}}
-            <!-- Folder Selection -->
-            {{if .Data.Folders}}
-            <div class="form-group">
-                <label for="folder_id" class="form-label">{{T .AdminLang "media.folder_optional"}}</label>
-                <select id="folder_id" name="folder_id" class="form-select">
-                    <option value="">{{T .AdminLang "media.no_folder"}}</option>
-                    {{range .Data.Folders}}
-                    <option value="{{.ID}}">{{.Name}}</option>
-                    {{end}}
-                </select>
-            </div>
-            {{end}}
+        {{.CSRFField}}
+        <!-- Folder Selection -->
+        {{if .Data.Folders}}
+        <div class="form-group">
+            <label for="folder_id" class="form-label">{{T .AdminLang "media.folder_optional"}}</label>
+            <select id="folder_id" name="folder_id" class="form-select">
+                <option value="">{{T .AdminLang "media.no_folder"}}</option>
+                {{range .Data.Folders}}
+                <option value="{{.ID}}">{{.Name}}</option>
+                {{end}}
+            </select>
+        </div>
+        {{end}}
 
-            <!-- Drop Zone -->
-            <div
-                class="upload-dropzone"
-                :class="{ 'dragover': dragover, 'has-files': files.length > 0 }"
-                @click="$refs.fileInput.click()"
-            >
-                <input
-                    type="file"
-                    name="files"
-                    id="files"
-                    multiple
-                    accept="{{.Data.AllowedExt}}"
-                    class="upload-input"
-                    x-ref="fileInput"
-                    @change="handleFiles($event)"
-                >
-
-                <template x-if="files.length === 0">
-                    <div class="upload-placeholder">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-                        <p class="upload-text">{{T .AdminLang "media.drag_and_drop"}}</p>
-                        <p class="upload-hint">{{T .AdminLang "media.or_click_browse"}}</p>
-                        <p class="upload-formats">
-                            {{T .AdminLang "media.supported_formats"}}
-                            <br>Max: {{formatBytes .Data.MaxSize}}
-                        </p>
-                    </div>
-                </template>
-
-                <template x-if="files.length > 0">
-                    <div class="upload-files-preview">
-                        <template x-for="(file, index) in files" :key="index">
-                            <div class="upload-file-item" :class="{ 'error': file.error, 'success': file.success }">
-                                <div class="upload-file-preview">
-                                    <template x-if="file.preview">
-                                        <img :src="file.preview" alt="">
-                                    </template>
-                                    <template x-if="!file.preview">
-                                        <div class="upload-file-icon">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
-                                        </div>
-                                    </template>
-                                </div>
-                                <div class="upload-file-info">
-                                    <span class="upload-file-name" x-text="file.name"></span>
-                                    <span class="upload-file-size" x-text="formatSize(file.size)"></span>
-                                    <template x-if="file.error">
-                                        <span class="upload-file-error" x-text="file.error"></span>
-                                    </template>
-                                </div>
-                                <button
-                                    type="button"
-                                    class="upload-file-remove"
-                                    @click.stop="removeFile(index)"
-                                    title="{{T .AdminLang "btn.remove"}}"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                                </button>
-                            </div>
-                        </template>
-                    </div>
-                </template>
-            </div>
-
-            <!-- Upload Progress -->
-            <div class="upload-progress" x-show="uploading" x-cloak>
-                <div class="progress-bar">
-                    <div class="progress-fill" :style="'width: ' + progress + '%'"></div>
-                </div>
-                <span class="progress-text" x-text="progress + '%'"></span>
-            </div>
-
-            <!-- Actions -->
-            <div class="form-actions">
-                <button
-                    type="button"
-                    class="btn btn-outline"
-                    @click="clearFiles()"
-                    x-show="files.length > 0"
-                >
-                    {{T .AdminLang "media.clear_all"}}
-                </button>
-                <button
-                    type="submit"
-                    class="btn btn-primary"
-                    :disabled="files.length === 0 || uploading || hasErrors"
-                    @click.prevent="uploadFiles()"
-                >
-                    <template x-if="!uploading">
-                        <span>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-                            {{T .AdminLang "btn.upload"}} <span x-show="files.length > 0">(<span x-text="files.length"></span>)</span>
-                        </span>
-                    </template>
-                    <template x-if="uploading">
-                        <span>{{T .AdminLang "media.uploading"}}</span>
-                    </template>
-                </button>
-            </div>
-        </form>
+        <!-- Media Dropzone Component (Upload Mode) -->
+        {{template "media_dropzone" dict
+            "Mode" "upload"
+            "Lang" .AdminLang
+            "Accept" .Data.AllowedExt
+            "MaxSize" .Data.MaxSize
+            "Multiple" true
+            "UploadURL" "/admin/media/upload"
+            "RedirectURL" "/admin/media"
+            "AllowedTypes" "image/jpeg,image/png,image/gif,image/webp,image/x-icon,image/vnd.microsoft.icon,application/pdf,video/mp4,video/webm"
+            "FormatsHint" (T .AdminLang "media.supported_formats")
+        }}
     </div>
 </div>
-
-<script>
-function uploadForm() {
-    return {
-        files: [],
-        dragover: false,
-        uploading: false,
-        progress: 0,
-        maxSize: {{.Data.MaxSize}},
-        allowedTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/x-icon', 'image/vnd.microsoft.icon', 'application/pdf', 'video/mp4', 'video/webm'],
-
-        get hasErrors() {
-            return this.files.some(f => f.error);
-        },
-
-        handleFiles(event) {
-            const newFiles = Array.from(event.target.files);
-            this.addFiles(newFiles);
-        },
-
-        handleDrop(event) {
-            this.dragover = false;
-            const newFiles = Array.from(event.dataTransfer.files);
-            this.addFiles(newFiles);
-        },
-
-        addFiles(newFiles) {
-            for (const file of newFiles) {
-                const fileData = {
-                    file: file,
-                    name: file.name,
-                    size: file.size,
-                    type: file.type,
-                    preview: null,
-                    error: null,
-                    success: false
-                };
-
-                // Validate size
-                if (file.size > this.maxSize) {
-                    fileData.error = 'File too large';
-                }
-
-                // Validate type
-                if (!this.allowedTypes.includes(file.type)) {
-                    fileData.error = 'Unsupported file type';
-                }
-
-                // Create preview for images
-                if (file.type.startsWith('image/') && !fileData.error) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        fileData.preview = e.target.result;
-                    };
-                    reader.readAsDataURL(file);
-                }
-
-                this.files.push(fileData);
-            }
-        },
-
-        removeFile(index) {
-            this.files.splice(index, 1);
-        },
-
-        clearFiles() {
-            this.files = [];
-            this.$refs.fileInput.value = '';
-        },
-
-        formatSize(bytes) {
-            if (bytes === 0) return '0 Bytes';
-            const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-        },
-
-        async uploadFiles() {
-            if (this.files.length === 0 || this.hasErrors) return;
-
-            this.uploading = true;
-            this.progress = 0;
-
-            const formData = new FormData();
-            const folderSelect = document.getElementById('folder_id');
-            if (folderSelect && folderSelect.value) {
-                formData.append('folder_id', folderSelect.value);
-            }
-
-            const validFiles = this.files.filter(f => !f.error);
-            validFiles.forEach(f => {
-                formData.append('files', f.file);
-            });
-
-            try {
-                const xhr = new XMLHttpRequest();
-
-                xhr.upload.onprogress = (e) => {
-                    if (e.lengthComputable) {
-                        this.progress = Math.round((e.loaded / e.total) * 100);
-                    }
-                };
-
-                xhr.onload = () => {
-                    if (xhr.status >= 200 && xhr.status < 300) {
-                        window.location.href = '/admin/media';
-                    } else {
-                        alert('Upload failed: ' + xhr.responseText);
-                        this.uploading = false;
-                    }
-                };
-
-                xhr.onerror = () => {
-                    alert('Upload failed. Please try again.');
-                    this.uploading = false;
-                };
-
-                xhr.open('POST', '/admin/media/upload');
-                xhr.send(formData);
-            } catch (error) {
-                alert('Upload failed: ' + error.message);
-                this.uploading = false;
-            }
-        }
-    };
-}
-</script>
 {{end}}

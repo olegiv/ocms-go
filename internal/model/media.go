@@ -11,8 +11,15 @@ import (
 // Supported image variant types
 const (
 	VariantThumbnail = "thumbnail"
+	VariantSmall     = "small"
 	VariantMedium    = "medium"
 	VariantLarge     = "large"
+)
+
+// Minimum dimensions for featured images
+const (
+	MinFeaturedImageWidth  = 1200
+	MinFeaturedImageHeight = 800
 )
 
 // Supported MIME types
@@ -38,6 +45,7 @@ type ImageVariantConfig struct {
 // ImageVariants defines the default image variant configurations.
 var ImageVariants = map[string]ImageVariantConfig{
 	VariantThumbnail: {Width: 150, Height: 150, Quality: 80, Crop: true},
+	VariantSmall:     {Width: 400, Height: 300, Quality: 85, Crop: false},
 	VariantMedium:    {Width: 800, Height: 600, Quality: 85, Crop: false},
 	VariantLarge:     {Width: 1920, Height: 1080, Quality: 90, Crop: false},
 }
