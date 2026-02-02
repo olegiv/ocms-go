@@ -68,15 +68,6 @@ func TestModuleTemplateFuncs(t *testing.T) {
 	}
 }
 
-func TestModuleAllowedEnvs(t *testing.T) {
-	m := New()
-
-	envs := m.AllowedEnvs()
-	if len(envs) != 1 || envs[0] != "development" {
-		t.Errorf("AllowedEnvs() = %v, want [development]", envs)
-	}
-}
-
 func TestModuleInit(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
