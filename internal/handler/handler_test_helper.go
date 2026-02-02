@@ -71,11 +71,14 @@ func testDB(t *testing.T) *sql.DB {
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			published_at DATETIME,
+			page_type TEXT NOT NULL DEFAULT 'post',
+			exclude_from_lists INTEGER NOT NULL DEFAULT 0,
 			FOREIGN KEY (author_id) REFERENCES users(id)
 		);
 		CREATE INDEX idx_pages_slug ON pages(slug);
 		CREATE INDEX idx_pages_status ON pages(status);
 		CREATE INDEX idx_pages_author_id ON pages(author_id);
+		CREATE INDEX idx_pages_page_type ON pages(page_type);
 
 		CREATE TABLE page_aliases (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,

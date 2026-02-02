@@ -1,6 +1,6 @@
 -- name: CreatePage :one
-INSERT INTO pages (title, slug, body, status, author_id, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO pages (title, slug, body, status, author_id, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, published_at, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetPageByID :one
@@ -20,7 +20,7 @@ SELECT * FROM pages WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?;
 
 -- name: UpdatePage :one
 UPDATE pages
-SET title = ?, slug = ?, body = ?, status = ?, featured_image_id = ?, meta_title = ?, meta_description = ?, meta_keywords = ?, og_image_id = ?, no_index = ?, no_follow = ?, canonical_url = ?, scheduled_at = ?, language_code = ?, hide_featured_image = ?, updated_at = ?
+SET title = ?, slug = ?, body = ?, status = ?, featured_image_id = ?, meta_title = ?, meta_description = ?, meta_keywords = ?, og_image_id = ?, no_index = ?, no_follow = ?, canonical_url = ?, scheduled_at = ?, language_code = ?, hide_featured_image = ?, page_type = ?, exclude_from_lists = ?, published_at = ?, updated_at = ?
 WHERE id = ?
 RETURNING *;
 
@@ -139,6 +139,15 @@ SELECT * FROM pages WHERE status = 'published' ORDER BY published_at DESC LIMIT 
 
 -- name: CountPublishedPages :one
 SELECT COUNT(*) FROM pages WHERE status = 'published';
+
+-- Posts only (for recent posts, blog feeds - excludes static pages)
+-- name: ListPublishedPosts :many
+SELECT * FROM pages
+WHERE status = 'published' AND page_type = 'post' AND exclude_from_lists = 0
+ORDER BY published_at DESC LIMIT ? OFFSET ?;
+
+-- name: CountPublishedPosts :one
+SELECT COUNT(*) FROM pages WHERE status = 'published' AND page_type = 'post' AND exclude_from_lists = 0;
 
 -- name: GetPublishedPageBySlug :one
 SELECT * FROM pages WHERE slug = ? AND status = 'published';

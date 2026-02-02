@@ -30,6 +30,7 @@ type PageResponse struct {
 	Slug              string             `json:"slug"`
 	Body              string             `json:"body"`
 	Status            string             `json:"status"`
+	PageType          string             `json:"page_type"`
 	AuthorID          int64              `json:"author_id"`
 	LanguageCode      string             `json:"language_code"`
 	CreatedAt         time.Time          `json:"created_at"`
@@ -37,6 +38,7 @@ type PageResponse struct {
 	PublishedAt       *time.Time         `json:"published_at,omitempty"`
 	FeaturedImageID   *int64             `json:"featured_image_id,omitempty"`
 	HideFeaturedImage bool               `json:"hide_featured_image"`
+	ExcludeFromLists  bool               `json:"exclude_from_lists"`
 	MetaTitle         string             `json:"meta_title,omitempty"`
 	MetaDescription   string             `json:"meta_description,omitempty"`
 	MetaKeywords      string             `json:"meta_keywords,omitempty"`
@@ -78,9 +80,11 @@ type CreatePageRequest struct {
 	Slug              string  `json:"slug"`
 	Body              string  `json:"body"`
 	Status            string  `json:"status"`
+	PageType          string  `json:"page_type,omitempty"`
 	LanguageCode      *string `json:"language_code,omitempty"`
 	FeaturedImageID   *int64  `json:"featured_image_id,omitempty"`
 	HideFeaturedImage bool    `json:"hide_featured_image"`
+	ExcludeFromLists  bool    `json:"exclude_from_lists"`
 	MetaTitle         string  `json:"meta_title,omitempty"`
 	MetaDescription   string  `json:"meta_description,omitempty"`
 	MetaKeywords      string  `json:"meta_keywords,omitempty"`
@@ -99,8 +103,10 @@ type UpdatePageRequest struct {
 	Slug              *string  `json:"slug,omitempty"`
 	Body              *string  `json:"body,omitempty"`
 	Status            *string  `json:"status,omitempty"`
+	PageType          *string  `json:"page_type,omitempty"`
 	FeaturedImageID   *int64   `json:"featured_image_id,omitempty"`
 	HideFeaturedImage *bool    `json:"hide_featured_image,omitempty"`
+	ExcludeFromLists  *bool    `json:"exclude_from_lists,omitempty"`
 	MetaTitle         *string  `json:"meta_title,omitempty"`
 	MetaDescription   *string  `json:"meta_description,omitempty"`
 	MetaKeywords      *string  `json:"meta_keywords,omitempty"`
@@ -187,6 +193,7 @@ func storePageToResponse(p store.Page) PageResponse {
 		Slug:              p.Slug,
 		Body:              p.Body,
 		Status:            p.Status,
+		PageType:          p.PageType,
 		AuthorID:          p.AuthorID,
 		LanguageCode:      p.LanguageCode,
 		CreatedAt:         p.CreatedAt,
@@ -195,6 +202,7 @@ func storePageToResponse(p store.Page) PageResponse {
 		MetaDescription:   p.MetaDescription,
 		MetaKeywords:      p.MetaKeywords,
 		HideFeaturedImage: p.HideFeaturedImage != 0,
+		ExcludeFromLists:  p.ExcludeFromLists != 0,
 		NoIndex:           p.NoIndex != 0,
 		NoFollow:          p.NoFollow != 0,
 		CanonicalURL:      p.CanonicalUrl,
@@ -508,6 +516,20 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	if req.HideFeaturedImage {
 		params.HideFeaturedImage = 1
 	}
+	if req.ExcludeFromLists {
+		params.ExcludeFromLists = 1
+	}
+
+	// Set page type (default to "post" if not provided)
+	params.PageType = req.PageType
+	if params.PageType == "" {
+		params.PageType = "post"
+	}
+
+	// Set published_at if status is published
+	if req.Status == model.PageStatusPublished {
+		params.PublishedAt = sql.NullTime{Time: now, Valid: true}
+	}
 
 	// Create page
 	page, err := h.queries.CreatePage(ctx, params)
@@ -572,6 +594,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		Slug:              existing.Slug,
 		Body:              existing.Body,
 		Status:            existing.Status,
+		PageType:          existing.PageType,
 		FeaturedImageID:   existing.FeaturedImageID,
 		OgImageID:         existing.OgImageID,
 		MetaTitle:         existing.MetaTitle,
@@ -583,6 +606,8 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		ScheduledAt:       existing.ScheduledAt,
 		LanguageCode:      existing.LanguageCode,
 		HideFeaturedImage: existing.HideFeaturedImage,
+		ExcludeFromLists:  existing.ExcludeFromLists,
+		PublishedAt:       existing.PublishedAt,
 		UpdatedAt:         time.Now(),
 	}
 
@@ -645,6 +670,26 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		} else {
 			params.HideFeaturedImage = 0
 		}
+	}
+	if req.ExcludeFromLists != nil {
+		if *req.ExcludeFromLists {
+			params.ExcludeFromLists = 1
+		} else {
+			params.ExcludeFromLists = 0
+		}
+	}
+	if req.PageType != nil {
+		if *req.PageType != "post" && *req.PageType != "page" {
+			WriteValidationError(w, map[string]string{"page_type": "Page type must be 'post' or 'page'"})
+			return
+		}
+		params.PageType = *req.PageType
+	}
+	// Handle published_at when status changes to published
+	if req.Status != nil && *req.Status == model.PageStatusPublished && existing.Status != model.PageStatusPublished {
+		params.PublishedAt = sql.NullTime{Time: time.Now(), Valid: true}
+	} else if req.Status != nil && *req.Status != model.PageStatusPublished {
+		params.PublishedAt = sql.NullTime{Valid: false}
 	}
 	if req.ScheduledAt != nil {
 		if *req.ScheduledAt == "" {

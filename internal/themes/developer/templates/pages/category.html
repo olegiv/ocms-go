@@ -25,8 +25,8 @@
                 {{if .FeaturedImage}}
                 <div class="dev-post-image">
                     <a href="{{.URL}}">
-                        <img src="{{.FeaturedImageMedium}}"
-                             srcset="{{.FeaturedImage}} 150w, {{.FeaturedImageMedium}} 800w"
+                        <img src="{{.FeaturedImage}}"
+                             srcset="{{.FeaturedImage}} 150w, {{.FeaturedImageSmall}} 400w, {{.FeaturedImageMedium}} 800w"
                              sizes="(max-width: 768px) 100vw, 200px"
                              alt="{{mediaAlt .FeaturedImageID $.LangCode .FeaturedImageAlt}}"
                              loading="lazy">

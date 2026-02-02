@@ -15,52 +15,7 @@
         {{if .Pages}}
         <div class="dev-posts-list">
             {{range .Pages}}
-            <article class="dev-post-item">
-                {{if .FeaturedImage}}
-                <div class="dev-post-image">
-                    <a href="{{.URL}}">
-                        <img src="{{.FeaturedImageMedium}}"
-                             srcset="{{.FeaturedImage}} 150w, {{.FeaturedImageMedium}} 800w"
-                             sizes="(max-width: 768px) 100vw, 200px"
-                             alt="{{mediaAlt .FeaturedImageID $.LangCode .FeaturedImageAlt}}"
-                             loading="lazy">
-                    </a>
-                </div>
-                {{end}}
-                <div class="dev-post-content">
-                    {{if .Category}}
-                    <span class="dev-post-category">
-                        <a href="/category/{{.Category.Slug}}">{{.Category.Name}}</a>
-                    </span>
-                    {{end}}
-                    <h2 class="dev-post-title">
-                        <a href="{{.URL}}">{{.Title}}</a>
-                    </h2>
-                    {{if .Excerpt}}
-                    <p class="dev-post-excerpt">{{.Excerpt}}</p>
-                    {{end}}
-                    <div class="dev-post-meta">
-                        {{if .PublishedAt}}
-                        <time datetime="{{.PublishedAt}}" class="dev-meta-item">
-                            {{.PublishedAtFormatted}}
-                        </time>
-                        {{end}}
-                        {{if .Author}}
-                        <span class="dev-meta-item">@{{.Author.Name}}</span>
-                        {{end}}
-                        {{if .ReadingTime}}
-                        <span class="dev-meta-item">~{{.ReadingTime}} min</span>
-                        {{end}}
-                    </div>
-                    {{if .Tags}}
-                    <div class="dev-post-tags">
-                        {{range .Tags}}
-                        <a href="/tag/{{.Slug}}" class="dev-tag">#{{.Name}}</a>
-                        {{end}}
-                    </div>
-                    {{end}}
-                </div>
-            </article>
+            {{template "post-card.html" .}}
             {{end}}
         </div>
 

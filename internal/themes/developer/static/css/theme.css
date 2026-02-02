@@ -1208,6 +1208,7 @@ img {
 /* Two-column layout only when post has a featured image */
 .dev-post-item:has(.dev-post-image) {
     grid-template-columns: 200px 1fr;
+    align-items: center;
 }
 
 .dev-post-item:hover {
@@ -1764,25 +1765,6 @@ img {
 
 .dev-results-header code {
     color: var(--dev-accent);
-}
-
-.dev-search-highlight {
-    font-size: 0.875rem;
-    color: var(--dev-text);
-    background-color: var(--dev-bg-tertiary);
-    padding: var(--dev-space-sm);
-    border-radius: var(--dev-radius-sm);
-    border-left: 3px solid var(--dev-accent);
-}
-
-/* Search results should use single column layout (no image column) */
-.dev-search-result {
-    grid-template-columns: 1fr;
-}
-
-.dev-search-result .dev-post-image {
-    max-width: 250px;
-    margin-bottom: var(--dev-space-md);
 }
 
 .dev-search-suggestions {

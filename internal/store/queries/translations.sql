@@ -107,6 +107,17 @@ LIMIT ? OFFSET ?;
 -- name: CountPublishedPagesByLanguage :one
 SELECT COUNT(*) FROM pages WHERE language_code = ? AND status = 'published';
 
+-- Posts only for a specific language (for recent posts, blog feeds - excludes static pages)
+-- name: ListPublishedPostsByLanguage :many
+SELECT * FROM pages
+WHERE language_code = ? AND status = 'published' AND page_type = 'post' AND exclude_from_lists = 0
+ORDER BY published_at DESC
+LIMIT ? OFFSET ?;
+
+-- Count published posts for a specific language
+-- name: CountPublishedPostsByLanguage :one
+SELECT COUNT(*) FROM pages WHERE language_code = ? AND status = 'published' AND page_type = 'post' AND exclude_from_lists = 0;
+
 -- Get the translation of a page in a specific language (by slug for frontend)
 -- name: GetPageTranslationBySlug :one
 SELECT p.* FROM pages p

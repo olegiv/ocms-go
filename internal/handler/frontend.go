@@ -44,6 +44,7 @@ type PageView struct {
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
 	FeaturedImage        string
+	FeaturedImageSmall   string // Small variant for grid views (~400px)
 	FeaturedImageMedium  string // Medium variant for mobile grid views
 	FeaturedImageLarge   string // Large variant for single page views
 	FeaturedImageID      int64  // Media ID for translation lookup
@@ -55,6 +56,9 @@ type PageView struct {
 	Category             *CategoryView
 	Categories           []CategoryView
 	Tags                 []TagView
+	// Language context for partials
+	LangCode   string
+	LangPrefix string
 	// SEO fields
 	MetaTitle       string
 	MetaDescription string
@@ -395,17 +399,17 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 	base.MetaDescription = base.Site.Description
 	base.BodyClass = "home"
 
-	// Get recent published pages filtered by language
+	// Get recent published posts (not pages) filtered by language
 	var recentPages []store.Page
 	var err error
 	if languageCode != "" {
-		recentPages, err = h.queries.ListPublishedPagesByLanguage(ctx, store.ListPublishedPagesByLanguageParams{
+		recentPages, err = h.queries.ListPublishedPostsByLanguage(ctx, store.ListPublishedPostsByLanguageParams{
 			LanguageCode: languageCode,
 			Limit:        10,
 			Offset:       0,
 		})
 	} else {
-		recentPages, err = h.queries.ListPublishedPages(ctx, store.ListPublishedPagesParams{
+		recentPages, err = h.queries.ListPublishedPosts(ctx, store.ListPublishedPostsParams{
 			Limit:  10,
 			Offset: 0,
 		})
@@ -419,7 +423,7 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 	// Convert to PageViews
 	recentPageViews := make([]PageView, 0, len(recentPages))
 	for _, p := range recentPages {
-		pv := h.pageToView(ctx, p)
+		pv := h.pageToView(ctx, p, languageCode, base.LangPrefix)
 		recentPageViews = append(recentPageViews, pv)
 	}
 
@@ -593,8 +597,16 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Get base template data first (for site info and language context)
+	// Note: We use empty title/excerpt initially, will update after pageView is created
+	base := h.getBaseTemplateData(r, "", "")
+
 	// Convert to PageView
-	pageView := h.pageToView(ctx, page)
+	pageView := h.pageToView(ctx, page, base.LangCode, base.LangPrefix)
+
+	// Update base data with page title and excerpt
+	base.Title = pageView.Title
+	base.MetaDescription = pageView.Excerpt
 
 	// Use large variant for single page featured image
 	if pageView.FeaturedImageLarge != "" {
@@ -612,7 +624,7 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			for _, p := range related {
 				if p.ID != page.ID {
-					relatedPages = append(relatedPages, h.pageToView(ctx, p))
+					relatedPages = append(relatedPages, h.pageToView(ctx, p, base.LangCode, base.LangPrefix))
 				}
 			}
 			// Limit to 3 related pages
@@ -621,9 +633,6 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-
-	// Get base template data first (for site info)
-	base := h.getBaseTemplateData(r, pageView.Title, pageView.Excerpt)
 
 	// Build SEO meta with fallbacks
 	siteConfig := &seo.SiteConfig{
@@ -684,7 +693,7 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch sidebar data for themes that show sidebar on single pages
 	languageCode := page.LanguageCode
-	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageCode)
+	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageCode, base.LangPrefix)
 
 	data := PageData{
 		BaseTemplateData: base,
@@ -763,6 +772,10 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 	offset := (page - 1) * defaultPerPage
 	limit := int64(defaultPerPage)
 
+	// Get base template data first to access LangPrefix
+	title := "Category: " + category.Name
+	base := h.getBaseTemplateData(r, title, category.Description.String)
+
 	// Fetch pages for this category (with optional language filter)
 	pages, total, err := h.fetchPagesForEntity(ctx, category.ID, languageCode, limit, int64(offset), false)
 	if err != nil {
@@ -774,7 +787,7 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 	// Convert to PageViews
 	pageViews := make([]PageView, 0, len(pages))
 	for _, p := range pages {
-		pageViews = append(pageViews, h.pageToView(ctx, p))
+		pageViews = append(pageViews, h.pageToView(ctx, p, base.LangCode, base.LangPrefix))
 	}
 
 	categoryView := CategoryView{
@@ -784,17 +797,13 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 		Description: category.Description.String,
 		URL:         redirectCategory + category.Slug,
 	}
-
-	// Get base template data first to access LangPrefix
-	title := "Category: " + category.Name
-	base := h.getBaseTemplateData(r, title, category.Description.String)
 	base.BodyClass = "archive category"
 
 	// Build pagination with language prefix
 	pagination := h.buildPagination(page, int(total), fmt.Sprintf("%s/category/%s", base.LangPrefix, slug))
 
 	// Fetch sidebar data for themes that show sidebar on category pages
-	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageCode)
+	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageCode, base.LangPrefix)
 
 	data := CategoryPageData{
 		BaseTemplateData: base,
@@ -838,6 +847,10 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 	offset := (page - 1) * defaultPerPage
 	limit := int64(defaultPerPage)
 
+	// Get base template data first to access LangPrefix
+	title := "Tag: " + tag.Name
+	base := h.getBaseTemplateData(r, title, "")
+
 	// Fetch pages for this tag (with optional language filter)
 	pages, total, err := h.fetchPagesForEntity(ctx, tag.ID, languageCode, limit, int64(offset), true)
 	if err != nil {
@@ -849,7 +862,7 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 	// Convert to PageViews
 	pageViews := make([]PageView, 0, len(pages))
 	for _, p := range pages {
-		pageViews = append(pageViews, h.pageToView(ctx, p))
+		pageViews = append(pageViews, h.pageToView(ctx, p, base.LangCode, base.LangPrefix))
 	}
 
 	tagView := TagView{
@@ -858,17 +871,13 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 		Slug: tag.Slug,
 		URL:  redirectTag + tag.Slug,
 	}
-
-	// Get base template data first to access LangPrefix
-	title := "Tag: " + tag.Name
-	base := h.getBaseTemplateData(r, title, "")
 	base.BodyClass = "archive tag"
 
 	// Build pagination with language prefix
 	pagination := h.buildPagination(page, int(total), fmt.Sprintf("%s/tag/%s", base.LangPrefix, slug))
 
 	// Fetch sidebar data for themes that show sidebar on tag pages
-	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageCode)
+	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageCode, base.LangPrefix)
 
 	data := TagPageData{
 		BaseTemplateData: base,
@@ -898,42 +907,45 @@ func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
 	page := h.getPageNum(r)
 	offset := (page - 1) * defaultPerPage
 
-	// Get published pages filtered by language
+	// Get base template data first to access LangPrefix
+	base := h.getBaseTemplateData(r, "Blog", "")
+
+	// Get published posts (not pages) filtered by language
 	var pages []store.Page
 	var total int64
 	var err error
 
 	if languageCode != "" {
-		pages, err = h.queries.ListPublishedPagesByLanguage(ctx, store.ListPublishedPagesByLanguageParams{
+		pages, err = h.queries.ListPublishedPostsByLanguage(ctx, store.ListPublishedPostsByLanguageParams{
 			LanguageCode: languageCode,
 			Limit:        int64(defaultPerPage),
 			Offset:       int64(offset),
 		})
 		if err != nil {
-			h.logger.Error("failed to get blog pages", "error", err)
+			h.logger.Error("failed to get blog posts", "error", err)
 			h.renderInternalError(w)
 			return
 		}
 
-		total, err = h.queries.CountPublishedPagesByLanguage(ctx, languageCode)
+		total, err = h.queries.CountPublishedPostsByLanguage(ctx, languageCode)
 		if err != nil {
-			h.logger.Error("failed to count blog pages", "error", err)
+			h.logger.Error("failed to count blog posts", "error", err)
 			total = 0
 		}
 	} else {
-		pages, err = h.queries.ListPublishedPages(ctx, store.ListPublishedPagesParams{
+		pages, err = h.queries.ListPublishedPosts(ctx, store.ListPublishedPostsParams{
 			Limit:  int64(defaultPerPage),
 			Offset: int64(offset),
 		})
 		if err != nil {
-			h.logger.Error("failed to get blog pages", "error", err)
+			h.logger.Error("failed to get blog posts", "error", err)
 			h.renderInternalError(w)
 			return
 		}
 
-		total, err = h.queries.CountPublishedPages(ctx)
+		total, err = h.queries.CountPublishedPosts(ctx)
 		if err != nil {
-			h.logger.Error("failed to count blog pages", "error", err)
+			h.logger.Error("failed to count blog posts", "error", err)
 			total = 0
 		}
 	}
@@ -941,18 +953,15 @@ func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
 	// Convert to PageViews
 	pageViews := make([]PageView, 0, len(pages))
 	for _, p := range pages {
-		pageViews = append(pageViews, h.pageToView(ctx, p))
+		pageViews = append(pageViews, h.pageToView(ctx, p, base.LangCode, base.LangPrefix))
 	}
-
-	// Get base template data first to access LangPrefix
-	base := h.getBaseTemplateData(r, "Blog", "")
 	base.BodyClass = "archive blog"
 
 	// Build pagination with language prefix
 	pagination := h.buildPagination(page, int(total), base.LangPrefix+"/blog")
 
 	// Fetch sidebar data for themes that show sidebar on list pages
-	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageCode)
+	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageCode, base.LangPrefix)
 
 	data := ListData{
 		BaseTemplateData: base,
@@ -977,12 +986,15 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 		languageCode = langInfo.Code
 	}
 
+	// Get base template data early for language prefix
+	base := h.getBaseTemplateData(r, "Search", "")
+	base.BodyClass = "search"
+
 	// Fetch sidebar data (categories, tags, recent pages) filtered by language
-	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageCode)
+	sidebarCategories, sidebarTags, sidebarRecent := h.getSidebarData(ctx, languageCode, base.LangPrefix)
 
 	// If no query, show empty search page
 	if query == "" {
-		base := h.getBaseTemplateData(r, "Search", "")
 		base.BodyClass = "search"
 		data := SearchData{
 			BaseTemplateData: base,
@@ -1045,6 +1057,8 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 			media, err := h.queries.GetMediaByID(ctx, sr.FeaturedImageID.Int64)
 			if err == nil {
 				pv.FeaturedImage = fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename)
+				pv.FeaturedImageSmall = fmt.Sprintf("/uploads/small/%s/%s", media.Uuid, media.Filename)
+				pv.FeaturedImageMedium = fmt.Sprintf("/uploads/medium/%s/%s", media.Uuid, media.Filename)
 				pv.FeaturedImageID = media.ID
 				pv.FeaturedImageAlt = media.Alt.String
 			}
@@ -1053,10 +1067,8 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 		pageViews = append(pageViews, pv)
 	}
 
-	// Get base template data first to access LangPrefix
-	title := fmt.Sprintf("Search: %s", query)
-	base := h.getBaseTemplateData(r, title, "")
-	base.BodyClass = "search"
+	// Update base template title with search query
+	base.Title = fmt.Sprintf("Search: %s", query)
 
 	// Build pagination with language prefix
 	pagination := h.buildPagination(page, int(total), fmt.Sprintf("%s/search?q=%s", base.LangPrefix, query))
@@ -1238,17 +1250,19 @@ func (h *FrontendHandler) Security(w http.ResponseWriter, r *http.Request) {
 }
 
 // pageToView converts a store.Page to a PageView with computed fields.
-func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page) PageView {
+func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode, langPrefix string) PageView {
 	pv := PageView{
-		ID:        p.ID,
-		Title:     p.Title,
-		Slug:      p.Slug,
-		Body:      template.HTML(p.Body),
-		URL:       "/" + p.Slug,
-		Status:    p.Status,
-		Type:      "page",
-		CreatedAt: p.CreatedAt,
-		UpdatedAt: p.UpdatedAt,
+		ID:         p.ID,
+		Title:      p.Title,
+		Slug:       p.Slug,
+		Body:       template.HTML(p.Body),
+		URL:        "/" + p.Slug,
+		Status:     p.Status,
+		Type:       "page",
+		CreatedAt:  p.CreatedAt,
+		UpdatedAt:  p.UpdatedAt,
+		LangCode:   langCode,
+		LangPrefix: langPrefix,
 	}
 
 	// Set published date
@@ -1273,6 +1287,7 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page) PageView
 		media, err := h.queries.GetMediaByID(ctx, p.FeaturedImageID.Int64)
 		if err == nil {
 			pv.FeaturedImage = fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename)
+			pv.FeaturedImageSmall = fmt.Sprintf("/uploads/small/%s/%s", media.Uuid, media.Filename)
 			pv.FeaturedImageMedium = fmt.Sprintf("/uploads/medium/%s/%s", media.Uuid, media.Filename)
 			pv.FeaturedImageLarge = fmt.Sprintf("/uploads/large/%s/%s", media.Uuid, media.Filename)
 			pv.FeaturedImageID = media.ID
@@ -1386,7 +1401,8 @@ func (h *FrontendHandler) generateExcerpt(htmlContent string, maxLen int) string
 
 // getSidebarData fetches categories, tags, and recent pages for sidebar display.
 // languageCode: if non-empty, filters by language; if empty, shows all languages.
-func (h *FrontendHandler) getSidebarData(ctx context.Context, languageCode string) ([]CategoryView, []TagView, []PageView) {
+// langPrefix: URL prefix for current language (used in PageView for template context).
+func (h *FrontendHandler) getSidebarData(ctx context.Context, languageCode, langPrefix string) ([]CategoryView, []TagView, []PageView) {
 	var categoryViews []CategoryView
 	var tagViews []TagView
 	var recentPageViews []PageView
@@ -1429,18 +1445,18 @@ func (h *FrontendHandler) getSidebarData(ctx context.Context, languageCode strin
 			})
 		}
 
-		// Get recent pages filtered by language
-		recentPages, err := h.queries.ListPublishedPagesByLanguage(ctx, store.ListPublishedPagesByLanguageParams{
+		// Get recent posts (not pages) filtered by language
+		recentPages, err := h.queries.ListPublishedPostsByLanguage(ctx, store.ListPublishedPostsByLanguageParams{
 			LanguageCode: languageCode,
 			Limit:        5,
 			Offset:       0,
 		})
 		if err != nil {
-			h.logger.Error("failed to get sidebar recent pages", "error", err)
+			h.logger.Error("failed to get sidebar recent posts", "error", err)
 		}
 		recentPageViews = make([]PageView, 0, len(recentPages))
 		for _, p := range recentPages {
-			recentPageViews = append(recentPageViews, h.pageToView(ctx, p))
+			recentPageViews = append(recentPageViews, h.pageToView(ctx, p, languageCode, langPrefix))
 		}
 	} else {
 		// Fallback to all languages (for single-language sites)
@@ -1478,16 +1494,16 @@ func (h *FrontendHandler) getSidebarData(ctx context.Context, languageCode strin
 			})
 		}
 
-		recentPages, err := h.queries.ListPublishedPages(ctx, store.ListPublishedPagesParams{
+		recentPages, err := h.queries.ListPublishedPosts(ctx, store.ListPublishedPostsParams{
 			Limit:  5,
 			Offset: 0,
 		})
 		if err != nil {
-			h.logger.Error("failed to get sidebar recent pages", "error", err)
+			h.logger.Error("failed to get sidebar recent posts", "error", err)
 		}
 		recentPageViews = make([]PageView, 0, len(recentPages))
 		for _, p := range recentPages {
-			recentPageViews = append(recentPageViews, h.pageToView(ctx, p))
+			recentPageViews = append(recentPageViews, h.pageToView(ctx, p, languageCode, langPrefix))
 		}
 	}
 
@@ -2130,7 +2146,7 @@ func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request)
 	})
 	if err == nil {
 		for _, p := range pages {
-			suggestedPages = append(suggestedPages, h.pageToView(r.Context(), p))
+			suggestedPages = append(suggestedPages, h.pageToView(r.Context(), p, base.LangCode, base.LangPrefix))
 		}
 	}
 

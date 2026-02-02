@@ -14,8 +14,8 @@
             {{if .FeaturedImage}}
             <div class="post-thumbnail">
                 <a href="{{.URL}}">
-                    <img src="{{.FeaturedImageMedium}}"
-                         srcset="{{.FeaturedImage}} 150w, {{.FeaturedImageMedium}} 800w"
+                    <img src="{{.FeaturedImage}}"
+                         srcset="{{.FeaturedImage}} 150w, {{.FeaturedImageSmall}} 400w, {{.FeaturedImageMedium}} 800w"
                          sizes="(max-width: 768px) 100vw, 200px"
                          alt="{{.Title}}"
                          loading="lazy">
