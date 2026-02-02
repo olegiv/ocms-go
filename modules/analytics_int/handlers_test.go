@@ -4,6 +4,7 @@
 package analytics_int
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -55,8 +56,9 @@ func TestHandleRunAggregation_Authorized(t *testing.T) {
 
 	// Create request with user context
 	req := httptest.NewRequest(http.MethodPost, "/admin/internal-analytics/aggregate", nil)
-	user := &store.User{ID: 1, Email: "admin@test.com", Role: "admin"}
-	req = req.WithContext(middleware.WithUser(req.Context(), user))
+	user := store.User{ID: 1, Email: "admin@test.com", Role: "admin"}
+	ctx := context.WithValue(req.Context(), middleware.ContextKeyUser, user)
+	req = req.WithContext(ctx)
 
 	rr := httptest.NewRecorder()
 	m.handleRunAggregation(rr, req)
@@ -107,8 +109,9 @@ func TestHandleAPIStats_Authorized(t *testing.T) {
 	defer func() { _ = m.Shutdown() }()
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/internal-analytics/api/stats?range=7d", nil)
-	user := &store.User{ID: 1, Email: "admin@test.com", Role: "admin"}
-	req = req.WithContext(middleware.WithUser(req.Context(), user))
+	user := store.User{ID: 1, Email: "admin@test.com", Role: "admin"}
+	ctx := context.WithValue(req.Context(), middleware.ContextKeyUser, user)
+	req = req.WithContext(ctx)
 
 	rr := httptest.NewRecorder()
 	m.handleAPIStats(rr, req)
@@ -148,8 +151,9 @@ func TestHandleRealtime_Authorized(t *testing.T) {
 	defer func() { _ = m.Shutdown() }()
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/internal-analytics/api/realtime", nil)
-	user := &store.User{ID: 1, Email: "admin@test.com", Role: "admin"}
-	req = req.WithContext(middleware.WithUser(req.Context(), user))
+	user := store.User{ID: 1, Email: "admin@test.com", Role: "admin"}
+	ctx := context.WithValue(req.Context(), middleware.ContextKeyUser, user)
+	req = req.WithContext(ctx)
 
 	rr := httptest.NewRecorder()
 	m.handleRealtime(rr, req)
