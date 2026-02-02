@@ -831,6 +831,52 @@ func (h *MediaHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 	flashSuccess(w, r, h.renderer, redirectAdminMedia, "Folder deleted successfully")
 }
 
+// RegenerateVariants handles POST /admin/media/{id}/regenerate - regenerates image variants.
+func (h *MediaHandler) RegenerateVariants(w http.ResponseWriter, r *http.Request) {
+	lang := h.renderer.GetAdminLang(r)
+
+	id, err := ParseIDParam(r)
+	if err != nil {
+		http.Error(w, "Invalid media ID", http.StatusBadRequest)
+		return
+	}
+
+	media, ok := h.requireMediaWithError(w, r, id)
+	if !ok {
+		return
+	}
+
+	// Check if it's an image
+	if !IsImageMime(media.MimeType) {
+		http.Error(w, "Only images can have variants regenerated", http.StatusBadRequest)
+		return
+	}
+
+	// Regenerate variants
+	variants, err := h.mediaService.RegenerateVariants(r.Context(), id)
+	if err != nil {
+		slog.Error("failed to regenerate variants", "error", err, "media_id", id)
+		if r.Header.Get("HX-Request") == "true" {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(err.Error()))
+			return
+		}
+		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminMediaID, id), "Error regenerating variants: "+err.Error())
+		return
+	}
+
+	slog.Info("variants regenerated", "media_id", id, "variants_count", len(variants), "regenerated_by", middleware.GetUserID(r))
+
+	// For HTMX requests, return success message
+	if r.Header.Get("HX-Request") == "true" {
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprintf(w, `<span class="text-success">%s</span>`, i18n.T(lang, "media.variants_regenerated"))
+		return
+	}
+
+	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminMediaID, id), "Variants regenerated successfully")
+}
+
 // MoveMedia handles POST /admin/media/{id}/move - moves media to a different folder.
 func (h *MediaHandler) MoveMedia(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)
