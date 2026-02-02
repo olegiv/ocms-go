@@ -31,6 +31,10 @@
         {"id": "analytics_int.exclude_hint", "message": "One path prefix per line. Pages matching these paths will not be tracked", "translation": "По одному префиксу пути в строке. Страницы с этими путями не будут отслеживаться"},
         {"id": "analytics_int.save_settings", "message": "Save Settings", "translation": "Сохранить настройки"},
         {"id": "analytics_int.success_save", "message": "Analytics settings saved successfully", "translation": "Настройки аналитики успешно сохранены"},
-        {"id": "analytics_int.error_save", "message": "Failed to save analytics settings", "translation": "Не удалось сохранить настройки аналитики"}
+        {"id": "analytics_int.error_save", "message": "Failed to save analytics settings", "translation": "Не удалось сохранить настройки аналитики"},
+        {"id": "analytics_int.run_aggregation", "message": "Run Aggregation", "translation": "Запустить агрегацию"},
+        {"id": "analytics_int.run_aggregation_hint", "message": "Manually aggregate all historical raw data into daily statistics", "translation": "Вручную агрегировать все исторические данные в дневную статистику"},
+        {"id": "analytics_int.success_aggregation", "message": "Aggregation complete. Processed %d date(s).", "translation": "Агрегация завершена. Обработано дат: %d."},
+        {"id": "analytics_int.error_aggregation", "message": "Failed to run aggregation", "translation": "Не удалось выполнить агрегацию"}
     ]
 }
