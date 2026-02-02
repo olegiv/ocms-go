@@ -652,6 +652,7 @@ import Image from 'https://esm.sh/@tiptap/extension-image@2.1.13';
 
 const initialContent = document.getElementById('body-input').value || '<p></p>';
 let isSourceMode = false;
+let lastEditMode = 'visual'; // Track where last edit happened: 'visual' or 'source'
 const sourceEditor = document.getElementById('source-editor');
 const editorElement = document.getElementById('editor');
 const sourceToggleBtn = document.getElementById('source-toggle-btn');
@@ -683,6 +684,7 @@ const editor = new Editor({
     },
     onUpdate: ({ editor }) => {
         document.getElementById('body-input').value = editor.getHTML();
+        lastEditMode = 'visual';
     },
 });
 
@@ -746,8 +748,11 @@ function toggleSourceMode() {
     isSourceMode = !isSourceMode;
 
     if (isSourceMode) {
-        // Switch to source mode: show textarea with current HTML
-        sourceEditor.value = editor.getHTML();
+        // Switch to source mode: only update from TipTap if last edit was in visual mode
+        if (lastEditMode === 'visual') {
+            sourceEditor.value = editor.getHTML();
+        }
+        // If lastEditMode === 'source', keep current sourceEditor.value unchanged
         editorElement.style.display = 'none';
         sourceEditor.style.display = 'block';
         sourceToggleBtn.classList.add('active');
@@ -774,6 +779,7 @@ function toggleSourceMode() {
 // Sync source editor changes to hidden input
 sourceEditor.addEventListener('input', () => {
     document.getElementById('body-input').value = sourceEditor.value;
+    lastEditMode = 'source';
 });
 
 // Update toolbar button active states
