@@ -5,6 +5,7 @@ package analytics_int
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -144,6 +145,29 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	} else {
 		m.ctx.Logger.Info("internal analytics settings updated", "user", user.Email)
 		m.ctx.Render.SetFlash(r, i18n.T(lang, "analytics_int.success_save"), "success")
+	}
+
+	http.Redirect(w, r, "/admin/internal-analytics", http.StatusSeeOther)
+}
+
+// handleRunAggregation triggers full aggregation of historical data.
+func (m *Module) handleRunAggregation(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	lang := m.ctx.Render.GetAdminLang(r)
+
+	datesProcessed, err := m.RunFullAggregation(r.Context())
+	if err != nil {
+		m.ctx.Logger.Error("full aggregation failed", "error", err, "user", user.Email)
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "analytics_int.error_aggregation"), "error")
+	} else {
+		m.ctx.Logger.Info("full aggregation completed", "dates_processed", datesProcessed, "user", user.Email)
+		msg := fmt.Sprintf(i18n.T(lang, "analytics_int.success_aggregation"), datesProcessed)
+		m.ctx.Render.SetFlash(r, msg, "success")
 	}
 
 	http.Redirect(w, r, "/admin/internal-analytics", http.StatusSeeOther)

@@ -31,6 +31,10 @@
         {"id": "analytics_int.exclude_hint", "message": "One path prefix per line. Pages matching these paths will not be tracked", "translation": "One path prefix per line. Pages matching these paths will not be tracked"},
         {"id": "analytics_int.save_settings", "message": "Save Settings", "translation": "Save Settings"},
         {"id": "analytics_int.success_save", "message": "Analytics settings saved successfully", "translation": "Analytics settings saved successfully"},
-        {"id": "analytics_int.error_save", "message": "Failed to save analytics settings", "translation": "Failed to save analytics settings"}
+        {"id": "analytics_int.error_save", "message": "Failed to save analytics settings", "translation": "Failed to save analytics settings"},
+        {"id": "analytics_int.run_aggregation", "message": "Run Aggregation", "translation": "Run Aggregation"},
+        {"id": "analytics_int.run_aggregation_hint", "message": "Manually aggregate all historical raw data into daily statistics", "translation": "Manually aggregate all historical raw data into daily statistics"},
+        {"id": "analytics_int.success_aggregation", "message": "Aggregation complete. Processed %d date(s).", "translation": "Aggregation complete. Processed %d date(s)."},
+        {"id": "analytics_int.error_aggregation", "message": "Failed to run aggregation", "translation": "Failed to run aggregation"}
     ]
 }
