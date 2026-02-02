@@ -264,13 +264,16 @@ func (m *Module) RunAggregationNow() error {
 func (m *Module) RunFullAggregation(ctx context.Context) (int, error) {
 	m.ctx.Logger.Info("starting full aggregation of all historical data")
 
+	// Use local date to match created_at storage (which uses local time)
+	todayStr := time.Now().Format(dateFormat)
+
 	// Get all distinct dates from raw views (excluding today)
 	rows, err := m.ctx.DB.QueryContext(ctx, `
 		SELECT DISTINCT DATE(created_at) as date
 		FROM page_analytics_views
-		WHERE DATE(created_at) < DATE('now')
+		WHERE DATE(created_at) < ?
 		ORDER BY date
-	`)
+	`, todayStr)
 	if err != nil {
 		return 0, err
 	}
@@ -305,9 +308,9 @@ func (m *Module) RunFullAggregation(ctx context.Context) (int, error) {
 			COUNT(DISTINCT visitor_hash) as unique_visitors,
 			0 as bounces
 		FROM page_analytics_views
-		WHERE DATE(created_at) < DATE('now')
+		WHERE DATE(created_at) < ?
 		GROUP BY DATE(created_at), path
-	`)
+	`, todayStr)
 	if err != nil {
 		return 0, err
 	}
