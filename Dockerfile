@@ -14,6 +14,9 @@ ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_TIME=unknown
 
+# Enable automatic toolchain download for newer Go versions
+ENV GOTOOLCHAIN=auto
+
 # Install build dependencies
 RUN apk add --no-cache \
     git \
