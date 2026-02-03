@@ -1,0 +1,72 @@
+# Copyright (c) 2025-2026 Oleg Ivanchenko
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Docker build context exclusions
+# Keep the build context small for faster builds
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Build outputs
+bin/
+data/
+uploads/
+
+# Node modules (will be installed fresh in container)
+node_modules/
+
+# Compiled assets (will be built in container)
+web/static/dist/
+
+# Environment files (secrets should be passed via env vars)
+.env
+.env.*
+!.env.example
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Claude Code settings
+.claude/
+cookies.txt
+
+# Documentation (not needed at runtime)
+docs/
+*.md
+!README.md
+LICENSE
+
+# Audit files
+.audit/
+
+# Test files
+*_test.go
+testdata/
+
+# Log files
+*.log
+
+# Docker files (avoid recursive builds)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Custom content (mounted as volume)
+custom/themes/*
+custom/modules/*
+!custom/themes/.gitkeep
+!custom/modules/.gitkeep
+
+# Development scripts
+scripts/
+Makefile
