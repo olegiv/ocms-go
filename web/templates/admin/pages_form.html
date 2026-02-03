@@ -776,6 +776,26 @@ document.addEventListener('DOMContentLoaded', function() {
         `,
         link_default_target: '_blank',
         link_assume_external_targets: true,
+        link_attributes_postprocess: (attrs) => {
+            // Add noopener noreferrer to links with target="_blank"
+            if (attrs.target === '_blank') {
+                if (attrs.rel) {
+                    // Add to existing rel attribute if not already present
+                    const relValues = attrs.rel.split(' ');
+                    if (!relValues.includes('noopener')) {
+                        relValues.push('noopener');
+                    }
+                    if (!relValues.includes('noreferrer')) {
+                        relValues.push('noreferrer');
+                    }
+                    attrs.rel = relValues.join(' ');
+                } else {
+                    // Create new rel attribute
+                    attrs.rel = 'noopener noreferrer';
+                }
+            }
+            return attrs;
+        },
         image_advtab: true,
         image_title: true,
         automatic_uploads: false,
