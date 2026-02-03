@@ -10,6 +10,6 @@
     "@alpinejs/sort": "^3.15.6",
     "alpinejs": "^3.15.6",
     "htmx.org": "^2.0.8",
-    "tinymce": "^7.6.1"
+    "tinymce": "^8.3.2"
   }
 }
