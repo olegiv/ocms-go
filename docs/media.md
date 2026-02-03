@@ -94,8 +94,6 @@ In theme templates, use the appropriate variant:
 <meta property="og:image" content="{{ .OGImage }}">
 ```
 
-## Environment Variables
+## Storage Location
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OCMS_UPLOADS_DIR` | `./uploads` | Base directory for uploaded files |
+Uploaded files are stored in the `./uploads` directory relative to the application root. This path is not configurable via environment variables.
