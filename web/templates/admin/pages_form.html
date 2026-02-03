@@ -650,10 +650,10 @@ import StarterKit from 'https://esm.sh/@tiptap/starter-kit@2.1.13';
 import Link from 'https://esm.sh/@tiptap/extension-link@2.1.13';
 import Image from 'https://esm.sh/@tiptap/extension-image@2.1.13';
 
-// CodeMirror imports for source editing - use bundle to avoid multiple @codemirror/state instances
-import { EditorView, basicSetup } from 'https://esm.sh/codemirror@6.0.1?bundle';
-import { html } from 'https://esm.sh/@codemirror/lang-html@6.4.9?bundle';
-import { oneDark } from 'https://esm.sh/@codemirror/theme-one-dark@6.1.2?bundle';
+// CodeMirror imports for source editing - use jsdelivr for consistent bundling
+import { EditorView, basicSetup } from 'https://cdn.jsdelivr.net/npm/codemirror@6.0.1/+esm';
+import { html } from 'https://cdn.jsdelivr.net/npm/@codemirror/lang-html@6.4.9/+esm';
+import { oneDark } from 'https://cdn.jsdelivr.net/npm/@codemirror/theme-one-dark@6.1.2/+esm';
 
 const initialContent = document.getElementById('body-input').value || '<p></p>';
 let isSourceMode = false;
