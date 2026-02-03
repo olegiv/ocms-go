@@ -383,19 +383,6 @@ func run() error {
 		}
 	}()
 
-	// Ensure internal analytics module is always active (cannot be disabled)
-	if !moduleRegistry.IsActive("analytics_int") {
-		slog.Warn("analytics_int module was inactive, forcing it active")
-		if err := moduleRegistry.SetActive("analytics_int", true); err != nil {
-			slog.Error("failed to activate analytics_int module", "error", err)
-		} else {
-			// Re-initialize the module now that it's active
-			if err := internalAnalyticsModule.Init(moduleCtx); err != nil {
-				slog.Error("failed to initialize analytics_int module", "error", err)
-			}
-		}
-	}
-
 	// Set module registry on renderer for sidebar modules
 	renderer.SetSidebarModuleProvider(moduleRegistry)
 

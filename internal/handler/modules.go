@@ -126,12 +126,6 @@ func (h *ModulesHandler) handleModuleToggle(w http.ResponseWriter, r *http.Reque
 		value = req.Show
 	}
 
-	// Prevent disabling critical system modules
-	if p.fieldName == "active" && !value && moduleName == "analytics_int" {
-		writeJSONError(w, http.StatusBadRequest, "Cannot disable internal analytics module - it's required for system analytics")
-		return
-	}
-
 	if err := p.setFn(moduleName, value); err != nil {
 		slog.Error("failed to toggle module "+p.fieldName, "module", moduleName, "error", err)
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
