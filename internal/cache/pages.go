@@ -42,7 +42,7 @@ func NewPageCache(queries *store.Queries) *PageCache {
 
 // GetBySlug retrieves a published page by slug with context awareness.
 // Returns the page if found in cache or database, nil if not found.
-func (c *PageCache) GetBySlug(ctx context.Context, cacheCtx CacheContext, slug string) (*store.Page, error) {
+func (c *PageCache) GetBySlug(ctx context.Context, cacheCtx Context, slug string) (*store.Page, error) {
 	key := cacheCtx.PageKey(slug)
 
 	c.mu.RLock()
@@ -69,7 +69,7 @@ func (c *PageCache) GetBySlug(ctx context.Context, cacheCtx CacheContext, slug s
 
 // GetByID retrieves a published page by ID with context awareness.
 // Returns the page if found in cache or database, nil if not found.
-func (c *PageCache) GetByID(ctx context.Context, cacheCtx CacheContext, id int64) (*store.Page, error) {
+func (c *PageCache) GetByID(ctx context.Context, cacheCtx Context, id int64) (*store.Page, error) {
 	key := cacheCtx.PageIDKey(id)
 
 	c.mu.RLock()
@@ -95,7 +95,7 @@ func (c *PageCache) GetByID(ctx context.Context, cacheCtx CacheContext, id int64
 }
 
 // store adds a page to caches with context-aware keys.
-func (c *PageCache) store(page *store.Page, cacheCtx CacheContext) {
+func (c *PageCache) store(page *store.Page, cacheCtx Context) {
 	slugKey := cacheCtx.PageKey(page.Slug)
 	idKey := cacheCtx.PageIDKey(page.ID)
 
@@ -194,7 +194,7 @@ func (c *PageCache) ResetStats() {
 
 // Preload loads popular pages into cache for a specific context.
 // This can be called on startup to warm the cache with frequently accessed pages.
-func (c *PageCache) Preload(ctx context.Context, cacheCtx CacheContext, limit int) error {
+func (c *PageCache) Preload(ctx context.Context, cacheCtx Context, limit int) error {
 	if limit <= 0 {
 		limit = 20 // Default to top 20 pages
 	}
