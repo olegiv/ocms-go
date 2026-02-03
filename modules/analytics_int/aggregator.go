@@ -11,14 +11,19 @@ import (
 )
 
 // addCronJob registers a cron job with timeout and error logging.
-func (m *Module) addCronJob(schedule string, timeout time.Duration, jobFunc func(context.Context) error, errMsg string) {
-	_, _ = m.cron.AddFunc(schedule, func() {
+func (m *Module) addCronJob(schedule string, timeout time.Duration, jobFunc func(context.Context) error, jobName, errMsg string) {
+	_, err := m.cron.AddFunc(schedule, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 		if err := jobFunc(ctx); err != nil {
 			m.ctx.Logger.Error(errMsg, "error", err)
 		}
 	})
+	if err != nil {
+		m.ctx.Logger.Error("failed to add cron job", "job", jobName, "schedule", schedule, "error", err)
+	} else {
+		m.ctx.Logger.Info("cron job scheduled", "job", jobName, "schedule", schedule)
+	}
 }
 
 // StartAggregator starts background aggregation jobs.
@@ -26,19 +31,19 @@ func (m *Module) StartAggregator() {
 	m.cron = cron.New()
 
 	// Every hour at minute 5: aggregate raw views into hourly stats
-	m.addCronJob("5 * * * *", 5*time.Minute, m.aggregateHourly, "hourly aggregation failed")
+	m.addCronJob("5 * * * *", 5*time.Minute, m.aggregateHourly, "hourly_aggregation", "hourly aggregation failed")
 
 	// Daily at 00:15: aggregate hourly into daily stats
-	m.addCronJob("15 0 * * *", 10*time.Minute, m.aggregateDaily, "daily aggregation failed")
+	m.addCronJob("15 0 * * *", 10*time.Minute, m.aggregateDaily, "daily_aggregation", "daily aggregation failed")
 
 	// Daily at 00:30: cleanup old raw data (keep 7 days)
-	m.addCronJob("30 0 * * *", 5*time.Minute, m.cleanupOldRawData, "raw data cleanup failed")
+	m.addCronJob("30 0 * * *", 5*time.Minute, m.cleanupOldRawData, "raw_data_cleanup", "raw data cleanup failed")
 
 	// Monthly on 1st at 01:00: cleanup expired aggregate data
-	m.addCronJob("0 1 1 * *", 30*time.Minute, m.cleanupExpiredData, "expired data cleanup failed")
+	m.addCronJob("0 1 1 * *", 30*time.Minute, m.cleanupExpiredData, "expired_data_cleanup", "expired data cleanup failed")
 
 	m.cron.Start()
-	m.ctx.Logger.Debug("Page Analytics aggregator started")
+	m.ctx.Logger.Info("Page Analytics aggregator started")
 }
 
 // aggregateHourly processes raw views into hourly stats.
@@ -48,7 +53,7 @@ func (m *Module) aggregateHourly(ctx context.Context) error {
 	hourStart := time.Date(now.Year(), now.Month(), now.Day(), now.Hour()-1, 0, 0, 0, now.Location())
 	hourEnd := hourStart.Add(time.Hour)
 
-	m.ctx.Logger.Debug("aggregating hourly stats", "hour", hourStart.Format("2006-01-02 15:00"))
+	m.ctx.Logger.Info("aggregating hourly stats", "hour", hourStart.Format("2006-01-02 15:00"))
 
 	// Aggregate by path
 	_, err := m.ctx.DB.ExecContext(ctx, `
@@ -67,7 +72,7 @@ func (m *Module) aggregateHourly(ctx context.Context) error {
 		return err
 	}
 
-	m.ctx.Logger.Debug("hourly aggregation complete", "hour", hourStart.Format("2006-01-02 15:00"))
+	m.ctx.Logger.Info("hourly aggregation complete", "hour", hourStart.Format("2006-01-02 15:00"))
 	return nil
 }
 
@@ -76,7 +81,7 @@ func (m *Module) aggregateDaily(ctx context.Context) error {
 	yesterday := time.Now().AddDate(0, 0, -1)
 	dateStr := yesterday.Format("2006-01-02")
 
-	m.ctx.Logger.Debug("aggregating daily stats", "date", dateStr)
+	m.ctx.Logger.Info("aggregating daily stats", "date", dateStr)
 
 	// Aggregate page views into daily stats
 	_, err := m.ctx.DB.ExecContext(ctx, `
@@ -115,7 +120,7 @@ func (m *Module) aggregateDaily(ctx context.Context) error {
 		m.ctx.Logger.Warn("bounce rate calculation failed", "error", err)
 	}
 
-	m.ctx.Logger.Debug("daily aggregation complete", "date", dateStr)
+	m.ctx.Logger.Info("daily aggregation complete", "date", dateStr)
 	return nil
 }
 
