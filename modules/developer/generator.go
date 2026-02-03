@@ -576,7 +576,7 @@ func (m *Module) generateMedia(ctx context.Context, uploaderID int64) ([]int64, 
 			return nil, fmt.Errorf("failed to save original image: %w", err)
 		}
 
-		// Create variants
+		// Create variants (must match model.ImageVariants)
 		variants := []struct {
 			name   string
 			width  int
@@ -584,6 +584,7 @@ func (m *Module) generateMedia(ctx context.Context, uploaderID int64) ([]int64, 
 			crop   bool
 		}{
 			{"thumbnail", 150, 150, true},
+			{"small", 400, 300, false},
 			{"medium", 800, 600, false},
 			{"large", 1920, 1080, false},
 		}
