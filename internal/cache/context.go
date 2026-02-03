@@ -10,35 +10,35 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
-// CacheContext holds context information for cache key generation.
+// Context holds context information for cache key generation.
 // It captures language and role to create context-aware cache keys.
-type CacheContext struct {
+type Context struct {
 	LanguageCode string // "en", "ru", etc.
 	Role         string // anonymous, public, editor, admin
 }
 
 // PageKey generates a cache key for a page by slug.
 // Format: {lang}:{role}:{slug}
-func (c CacheContext) PageKey(slug string) string {
+func (c Context) PageKey(slug string) string {
 	return fmt.Sprintf("%s:%s:%s", c.LanguageCode, c.Role, slug)
 }
 
 // PageIDKey generates a cache key for a page by ID.
 // Format: {lang}:{role}:{id}
-func (c CacheContext) PageIDKey(id int64) string {
+func (c Context) PageIDKey(id int64) string {
 	return fmt.Sprintf("%s:%s:%d", c.LanguageCode, c.Role, id)
 }
 
-// NewCacheContext creates a new CacheContext with the given language and role.
+// NewContext creates a new Context with the given language and role.
 // If role is empty, defaults to "anonymous".
-func NewCacheContext(langCode string, role string) CacheContext {
+func NewContext(langCode string, role string) Context {
 	if langCode == "" {
 		langCode = "en" // Default language
 	}
 	if role == "" {
 		role = model.RoleAnonymous
 	}
-	return CacheContext{
+	return Context{
 		LanguageCode: langCode,
 		Role:         role,
 	}
@@ -54,8 +54,8 @@ func RoleFromUser(user *store.User) string {
 }
 
 // DefaultContext returns a default cache context for anonymous English users.
-func DefaultContext() CacheContext {
-	return CacheContext{
+func DefaultContext() Context {
+	return Context{
 		LanguageCode: "en",
 		Role:         model.RoleAnonymous,
 	}

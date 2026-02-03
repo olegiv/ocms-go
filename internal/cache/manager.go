@@ -18,7 +18,6 @@ type Kind string
 const (
 	KindConfig      Kind = "config"
 	KindSitemap     Kind = "sitemap"
-	KindGeneral     Kind = "general"
 	KindMenu        Kind = "menu"
 	KindLanguage    Kind = "language"
 	KindTranslation Kind = "translation"
@@ -399,12 +398,12 @@ func (m *Manager) GetTranslationsBatch(ctx context.Context, entityType string, e
 
 // GetPublishedPageBySlug is a convenience method to get a published page by slug.
 // The cacheCtx provides language and role context for cache key generation.
-func (m *Manager) GetPublishedPageBySlug(ctx context.Context, cacheCtx CacheContext, slug string) (*store.Page, error) {
+func (m *Manager) GetPublishedPageBySlug(ctx context.Context, cacheCtx Context, slug string) (*store.Page, error) {
 	return m.Page.GetBySlug(ctx, cacheCtx, slug)
 }
 
 // GetPublishedPageByID is a convenience method to get a published page by ID.
 // The cacheCtx provides language and role context for cache key generation.
-func (m *Manager) GetPublishedPageByID(ctx context.Context, cacheCtx CacheContext, id int64) (*store.Page, error) {
+func (m *Manager) GetPublishedPageByID(ctx context.Context, cacheCtx Context, id int64) (*store.Page, error) {
 	return m.Page.GetByID(ctx, cacheCtx, id)
 }

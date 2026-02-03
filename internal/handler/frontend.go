@@ -1857,7 +1857,7 @@ func (h *FrontendHandler) getConfigValue(ctx context.Context, key string) string
 
 // getCacheContext builds a cache context from the HTTP request.
 // It extracts the language code and user role for context-aware caching.
-func (h *FrontendHandler) getCacheContext(r *http.Request) cache.CacheContext {
+func (h *FrontendHandler) getCacheContext(r *http.Request) cache.Context {
 	// Get language code from context
 	var langCode string
 	if langInfo := middleware.GetLanguage(r); langInfo != nil {
@@ -1868,7 +1868,7 @@ func (h *FrontendHandler) getCacheContext(r *http.Request) cache.CacheContext {
 	user := middleware.GetUser(r)
 	role := cache.RoleFromUser(user)
 
-	return cache.NewCacheContext(langCode, role)
+	return cache.NewContext(langCode, role)
 }
 
 // getPageTranslations returns translation links for a page for the language switcher.

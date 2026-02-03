@@ -10,28 +10,28 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
-func TestCacheContext_PageKey(t *testing.T) {
+func TestContext_PageKey(t *testing.T) {
 	tests := []struct {
 		name     string
-		ctx      CacheContext
+		ctx      Context
 		slug     string
 		expected string
 	}{
 		{
 			name:     "english anonymous",
-			ctx:      CacheContext{LanguageCode: "en", Role: "anonymous"},
+			ctx:      Context{LanguageCode: "en", Role: "anonymous"},
 			slug:     "about-us",
 			expected: "en:anonymous:about-us",
 		},
 		{
 			name:     "russian admin",
-			ctx:      CacheContext{LanguageCode: "ru", Role: "admin"},
+			ctx:      Context{LanguageCode: "ru", Role: "admin"},
 			slug:     "about-us",
 			expected: "ru:admin:about-us",
 		},
 		{
 			name:     "empty language uses as-is",
-			ctx:      CacheContext{LanguageCode: "", Role: "editor"},
+			ctx:      Context{LanguageCode: "", Role: "editor"},
 			slug:     "page",
 			expected: ":editor:page",
 		},
@@ -47,8 +47,8 @@ func TestCacheContext_PageKey(t *testing.T) {
 	}
 }
 
-func TestCacheContext_PageIDKey(t *testing.T) {
-	ctx := CacheContext{LanguageCode: "en", Role: "admin"}
+func TestContext_PageIDKey(t *testing.T) {
+	ctx := Context{LanguageCode: "en", Role: "admin"}
 
 	tests := []struct {
 		id       int64
@@ -69,9 +69,9 @@ func TestCacheContext_PageIDKey(t *testing.T) {
 	}
 }
 
-func TestNewCacheContext(t *testing.T) {
+func TestNewContext(t *testing.T) {
 	t.Run("with values", func(t *testing.T) {
-		ctx := NewCacheContext("ru", "editor")
+		ctx := NewContext("ru", "editor")
 		if ctx.LanguageCode != "ru" {
 			t.Errorf("LanguageCode = %q, want %q", ctx.LanguageCode, "ru")
 		}
@@ -81,21 +81,21 @@ func TestNewCacheContext(t *testing.T) {
 	})
 
 	t.Run("empty language defaults to en", func(t *testing.T) {
-		ctx := NewCacheContext("", "admin")
+		ctx := NewContext("", "admin")
 		if ctx.LanguageCode != "en" {
 			t.Errorf("LanguageCode = %q, want %q", ctx.LanguageCode, "en")
 		}
 	})
 
 	t.Run("empty role defaults to anonymous", func(t *testing.T) {
-		ctx := NewCacheContext("en", "")
+		ctx := NewContext("en", "")
 		if ctx.Role != model.RoleAnonymous {
 			t.Errorf("Role = %q, want %q", ctx.Role, model.RoleAnonymous)
 		}
 	})
 
 	t.Run("both empty use defaults", func(t *testing.T) {
-		ctx := NewCacheContext("", "")
+		ctx := NewContext("", "")
 		if ctx.LanguageCode != "en" {
 			t.Errorf("LanguageCode = %q, want %q", ctx.LanguageCode, "en")
 		}
@@ -140,10 +140,10 @@ func TestDefaultContext(t *testing.T) {
 	}
 }
 
-func TestCacheContext_DifferentContextsProduceDifferentKeys(t *testing.T) {
+func TestContext_DifferentContextsProduceDifferentKeys(t *testing.T) {
 	slug := "about-us"
 
-	contexts := []CacheContext{
+	contexts := []Context{
 		{LanguageCode: "en", Role: "anonymous"},
 		{LanguageCode: "en", Role: "admin"},
 		{LanguageCode: "ru", Role: "anonymous"},
