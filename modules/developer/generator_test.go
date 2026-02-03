@@ -521,7 +521,7 @@ func TestGeneratePages(t *testing.T) {
 		t.Errorf("len(pageIDs) = %d, want 5-20", len(pageIDs))
 	}
 
-	// Verify pages are published
+	// Verify pages are published and have correct page_type
 	for _, id := range pageIDs {
 		page, err := q.GetPageByID(ctx, id)
 		if err != nil {
@@ -530,6 +530,9 @@ func TestGeneratePages(t *testing.T) {
 		}
 		if page.Status != "published" {
 			t.Errorf("page %d status = %q, want published", id, page.Status)
+		}
+		if page.PageType != "post" {
+			t.Errorf("page %d page_type = %q, want post", id, page.PageType)
 		}
 	}
 
@@ -561,7 +564,8 @@ func TestGenerateMenuItems(t *testing.T) {
 			Title: "Test Page", Slug: "test-page-" + string(rune('0'+i)),
 			Body: "<p>Content</p>", Status: "published", AuthorID: fixtures.User.ID,
 			LanguageCode: fixtures.Language.Code,
-			CreatedAt:  now, UpdatedAt: now,
+			PageType:     "post",
+			CreatedAt:    now, UpdatedAt: now,
 		})
 		if err != nil {
 			t.Fatalf("CreatePage: %v", err)
@@ -639,7 +643,8 @@ func TestGenerateMenuItemsWithLanguageSpecificMenus(t *testing.T) {
 			Title: "EN Page", Slug: "en-page-" + string(rune('a'+i)),
 			Body: "<p>Content</p>", Status: "published", AuthorID: fixtures.User.ID,
 			LanguageCode: fixtures.Language.Code,
-			CreatedAt:  now, UpdatedAt: now,
+			PageType:     "post",
+			CreatedAt:    now, UpdatedAt: now,
 		})
 		if err != nil {
 			t.Fatalf("CreatePage EN: %v", err)
@@ -649,7 +654,8 @@ func TestGenerateMenuItemsWithLanguageSpecificMenus(t *testing.T) {
 			Title: "RU Page", Slug: "ru-page-" + string(rune('a'+i)),
 			Body: "<p>Content</p>", Status: "published", AuthorID: fixtures.User.ID,
 			LanguageCode: fixtures.Language2.Code,
-			CreatedAt:  now, UpdatedAt: now,
+			PageType:     "post",
+			CreatedAt:    now, UpdatedAt: now,
 		})
 		if err != nil {
 			t.Fatalf("CreatePage RU: %v", err)

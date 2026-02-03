@@ -8,7 +8,7 @@
             {{range .Categories}}
             <li>
                 <a href="{{$.LangPrefix}}/category/{{.Slug}}">{{.Name}}</a>
-                {{if .Count}}<span class="count">({{.Count}})</span>{{end}}
+                {{if .PageCount}}<span class="count">({{.PageCount}})</span>{{end}}
             </li>
             {{end}}
         </ul>
