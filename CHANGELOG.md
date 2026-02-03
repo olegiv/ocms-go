@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-02-03
+
+### Added
+
+#### DB Manager Module
+- SQL query execution interface for administrators
+- Read-only and write query support with confirmation dialogs
+- Query history and result display
+- Admin-only access enforcement
+
+#### Page Caching
+- Context-aware page caching with automatic admin bypass
+- Cache invalidation on content updates
+
+#### Page Types
+- New page type field for content organization
+- "Exclude from lists" option for utility pages
+
+#### Analytics Enhancements
+- On-demand full aggregation for analytics data
+- Improved timezone handling in aggregation
+
+#### Media Library
+- Regenerate variants button on media edit page
+- Unified media dropzone component across admin
+
+#### Security & CI
+- SECURITY.md vulnerability reporting guide
+- GitHub security workflows and CI badges
+
+### Changed
+- Editor preserves HTML formatting in source mode
+- Tag cloud ordered by usage count instead of alphabetically
+- Refactored module handlers to eliminate duplicate code
+- Switched to GitHub default CodeQL setup
+
+### Fixed
+- TestMakeUniqueSlug failing due to incomplete table schema
+- Template float comparison error in analytics
+- Timezone handling in RunFullAggregation
+- Code quality warnings from golangci-lint
+
 ## [0.2.0] - 2026-02-01
 
 ### Added
@@ -118,7 +160,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/olegiv/ocms-go/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/olegiv/ocms-go/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/olegiv/ocms-go/compare/v0.0.0...v0.1.0
 [0.0.0]: https://github.com/olegiv/ocms-go/releases/tag/v0.0.0
