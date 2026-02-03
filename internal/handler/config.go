@@ -257,10 +257,15 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 		// Handle translatable config items
 		if model.IsTranslatableConfigKey(cfg.Key) && len(languages) > 0 {
+			// Get the default language form value for the base config row
+			defaultLangFieldName := cfg.Key + "_" + defaultLangCode
+			defaultLangValue := r.FormValue(defaultLangFieldName)
+
 			// Ensure the config key exists in the config table first (for FK constraint)
+			// Use the default language form value so cache lookups get the correct value
 			_, err := h.queries.UpsertConfig(r.Context(), store.UpsertConfigParams{
 				Key:          cfg.Key,
-				Value:        cfg.Value,
+				Value:        defaultLangValue,
 				Type:         cfg.Type,
 				Description:  cfg.Description,
 				LanguageCode: defaultLangCode,
