@@ -954,22 +954,64 @@ select.form-control {
   }
 }
 
-// Source code editor for HTML
+// Source code editor for HTML (CodeMirror container)
 .source-editor {
   width: 100%;
   min-height: 300px;
-  padding: $spacing-4;
   border: none;
-  background-color: $white;
-  color: $gray-900;
-  font-family: $font-family-mono;
-  font-size: $font-size-sm;
-  line-height: 1.6;
-  resize: vertical;
+  background-color: $gray-900;
   box-sizing: border-box;
+  display: none;
 
-  &:focus {
-    outline: none;
+  // CodeMirror editor styles
+  .cm-editor {
+    height: 100%;
+    min-height: 300px;
+    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    font-size: $font-size-sm;
+    line-height: 1.6;
+
+    &.cm-focused {
+      outline: none;
+    }
+  }
+
+  .cm-scroller {
+    overflow: auto;
+    min-height: 300px;
+  }
+
+  .cm-content {
+    padding: $spacing-4;
+    min-height: 300px;
+  }
+
+  .cm-gutters {
+    background-color: $gray-800;
+    border-right: 1px solid $gray-700;
+    color: $gray-500;
+  }
+
+  .cm-activeLineGutter {
+    background-color: $gray-700;
+  }
+
+  .cm-activeLine {
+    background-color: rgba($white, 0.05);
+  }
+
+  // Selection
+  .cm-selectionBackground {
+    background-color: rgba($primary, 0.3) !important;
+  }
+
+  &.cm-focused .cm-selectionBackground {
+    background-color: rgba($primary, 0.4) !important;
+  }
+
+  // Cursor
+  .cm-cursor {
+    border-left-color: $white;
   }
 }
 

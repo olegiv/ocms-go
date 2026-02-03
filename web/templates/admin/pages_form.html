@@ -280,8 +280,8 @@
                     </div>
                     <!-- Editor Content Area -->
                     <div id="editor" class="editor-content"></div>
-                    <!-- Source HTML Editor -->
-                    <textarea id="source-editor" class="source-editor hidden"></textarea>
+                    <!-- Source HTML Editor (CodeMirror) -->
+                    <div id="source-editor" class="source-editor"></div>
                 </div>
 
                 <!-- Editor Image Picker Modal -->
@@ -650,13 +650,50 @@ import StarterKit from 'https://esm.sh/@tiptap/starter-kit@2.1.13';
 import Link from 'https://esm.sh/@tiptap/extension-link@2.1.13';
 import Image from 'https://esm.sh/@tiptap/extension-image@2.1.13';
 
+// CodeMirror imports for source editing
+import { EditorView, basicSetup } from 'https://esm.sh/codemirror@6.0.1';
+import { EditorState } from 'https://esm.sh/@codemirror/state@6.5.2';
+import { html } from 'https://esm.sh/@codemirror/lang-html@6.4.9';
+import { oneDark } from 'https://esm.sh/@codemirror/theme-one-dark@6.1.2';
+
 const initialContent = document.getElementById('body-input').value || '<p></p>';
 let isSourceMode = false;
 let rawSourceHTML = initialContent; // Store raw HTML separately to preserve formatting
 let skipNextUpdate = false; // Flag to skip onUpdate after setContent
-const sourceEditor = document.getElementById('source-editor');
+const sourceEditorContainer = document.getElementById('source-editor');
 const editorElement = document.getElementById('editor');
 const sourceToggleBtn = document.getElementById('source-toggle-btn');
+
+// Initialize CodeMirror for source editing
+let sourceView = null;
+
+function initCodeMirror() {
+    if (sourceView) return; // Already initialized
+
+    const updateListener = EditorView.updateListener.of((update) => {
+        if (update.docChanged) {
+            rawSourceHTML = update.state.doc.toString();
+            document.getElementById('body-input').value = rawSourceHTML;
+        }
+    });
+
+    sourceView = new EditorView({
+        state: EditorState.create({
+            doc: rawSourceHTML,
+            extensions: [
+                basicSetup,
+                html(),
+                oneDark,
+                updateListener,
+                EditorView.lineWrapping,
+            ]
+        }),
+        parent: sourceEditorContainer
+    });
+}
+
+// Initialize CodeMirror on page load
+initCodeMirror();
 
 const editor = new Editor({
     element: document.getElementById('editor'),
@@ -756,11 +793,18 @@ function toggleSourceMode() {
 
     if (isSourceMode) {
         // Switch to source mode: show raw HTML (preserved from last source edit or initial)
-        // Use rawSourceHTML if we have it, otherwise get from TipTap (first time only)
-        sourceEditor.value = rawSourceHTML;
+        // Update CodeMirror content with current raw HTML
+        if (sourceView) {
+            sourceView.dispatch({
+                changes: {
+                    from: 0,
+                    to: sourceView.state.doc.length,
+                    insert: rawSourceHTML
+                }
+            });
+        }
         editorElement.style.display = 'none';
-        sourceEditor.style.display = 'block';
-        sourceEditor.classList.remove('hidden');
+        sourceEditorContainer.style.display = 'block';
 
         sourceToggleBtn.classList.add('active');
         // Disable other toolbar buttons
@@ -768,13 +812,18 @@ function toggleSourceMode() {
             btn.disabled = true;
             btn.style.opacity = '0.5';
         });
+
+        // Focus CodeMirror
+        if (sourceView) {
+            sourceView.focus();
+        }
     } else {
         // Switch to visual mode: sync source to TipTap
-        rawSourceHTML = sourceEditor.value; // Store raw HTML before TipTap normalizes it
+        // rawSourceHTML is already updated by CodeMirror's updateListener
         skipNextUpdate = true; // Don't let onUpdate overwrite rawSourceHTML
-        editor.commands.setContent(sourceEditor.value);
-        document.getElementById('body-input').value = sourceEditor.value;
-        sourceEditor.style.display = 'none';
+        editor.commands.setContent(rawSourceHTML);
+        document.getElementById('body-input').value = rawSourceHTML;
+        sourceEditorContainer.style.display = 'none';
         editorElement.style.display = 'block';
         sourceToggleBtn.classList.remove('active');
         // Re-enable other toolbar buttons
@@ -784,12 +833,6 @@ function toggleSourceMode() {
         });
     }
 }
-
-// Sync source editor changes to hidden input and rawSourceHTML
-sourceEditor.addEventListener('input', () => {
-    rawSourceHTML = sourceEditor.value;
-    document.getElementById('body-input').value = sourceEditor.value;
-});
 
 // Update toolbar button active states
 editor.on('selectionUpdate', () => {
