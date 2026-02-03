@@ -62,9 +62,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 # =============================================================================
 FROM alpine:3.21
 
-# Install runtime dependencies
+# Install runtime dependencies (su-exec for privilege dropping)
 RUN apk add --no-cache \
     ca-certificates \
+    su-exec \
     tzdata
 
 # Create non-root user for security
@@ -80,11 +81,12 @@ RUN mkdir -p /app/data /app/uploads /app/custom/themes /app/custom/modules \
 # Copy binary from builder
 COPY --from=builder /build/bin/ocms /app/ocms
 
+# Copy entrypoint script
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
 # Set ownership
 RUN chown ocms:ocms /app/ocms
-
-# Switch to non-root user
-USER ocms
 
 # Environment variables with sensible defaults
 ENV OCMS_SERVER_HOST=0.0.0.0
@@ -104,5 +106,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Volume mount points for persistent data
 VOLUME ["/app/data", "/app/uploads", "/app/custom"]
 
-# Run the application
-ENTRYPOINT ["/app/ocms"]
+# Entrypoint handles permissions and drops to non-root user
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+CMD ["/app/ocms"]
