@@ -650,11 +650,10 @@ import StarterKit from 'https://esm.sh/@tiptap/starter-kit@2.1.13';
 import Link from 'https://esm.sh/@tiptap/extension-link@2.1.13';
 import Image from 'https://esm.sh/@tiptap/extension-image@2.1.13';
 
-// CodeMirror imports for source editing
-import { EditorView, basicSetup } from 'https://esm.sh/codemirror@6.0.1';
-import { EditorState } from 'https://esm.sh/@codemirror/state@6.5.2';
-import { html } from 'https://esm.sh/@codemirror/lang-html@6.4.9';
-import { oneDark } from 'https://esm.sh/@codemirror/theme-one-dark@6.1.2';
+// CodeMirror imports for source editing - use bundle to avoid multiple @codemirror/state instances
+import { EditorView, basicSetup } from 'https://esm.sh/codemirror@6.0.1?bundle';
+import { html } from 'https://esm.sh/@codemirror/lang-html@6.4.9?bundle';
+import { oneDark } from 'https://esm.sh/@codemirror/theme-one-dark@6.1.2?bundle';
 
 const initialContent = document.getElementById('body-input').value || '<p></p>';
 let isSourceMode = false;
@@ -678,16 +677,14 @@ function initCodeMirror() {
     });
 
     sourceView = new EditorView({
-        state: EditorState.create({
-            doc: rawSourceHTML,
-            extensions: [
-                basicSetup,
-                html(),
-                oneDark,
-                updateListener,
-                EditorView.lineWrapping,
-            ]
-        }),
+        doc: rawSourceHTML,
+        extensions: [
+            basicSetup,
+            html(),
+            oneDark,
+            updateListener,
+            EditorView.lineWrapping,
+        ],
         parent: sourceEditorContainer
     });
 }
