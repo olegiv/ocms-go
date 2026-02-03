@@ -13,9 +13,10 @@ import (
 )
 
 // MenuWithItems represents a menu with its items for caching.
+// Items includes page data (title, slug) from JOIN for URL building.
 type MenuWithItems struct {
 	Menu  store.Menu
-	Items []store.MenuItem
+	Items []store.ListMenuItemsWithPageRow
 }
 
 // MenuCache provides cached access to menus.
@@ -134,7 +135,8 @@ func (c *MenuCache) loadAll(ctx context.Context) error {
 	c.menus = make(map[string]*MenuWithItems, len(menus))
 
 	for _, menu := range menus {
-		items, err := c.queries.ListMenuItems(ctx, menu.ID)
+		// Use ListMenuItemsWithPage to include page slugs for URL building
+		items, err := c.queries.ListMenuItemsWithPage(ctx, menu.ID)
 		if err != nil {
 			return err
 		}
@@ -151,12 +153,13 @@ func (c *MenuCache) loadAll(ctx context.Context) error {
 	return nil
 }
 
-// Invalidate clears the cache, forcing a reload on next access.
+// Invalidate clears the cache and resets statistics, forcing a reload on next access.
 func (c *MenuCache) Invalidate() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.loaded = false
 	c.menus = make(map[string]*MenuWithItems)
+	c.cache.ResetStats()
 }
 
 // InvalidateBySlug invalidates a specific menu by slug.

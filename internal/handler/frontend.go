@@ -370,7 +370,12 @@ type FrontendHandler struct {
 // If menuService is nil, a new one will be created. Pass a shared menuService for cache consistency.
 func NewFrontendHandler(db *sql.DB, themeManager *theme.Manager, cacheManager *cache.Manager, logger *slog.Logger, menuService *service.MenuService) *FrontendHandler {
 	if menuService == nil {
-		menuService = service.NewMenuService(db)
+		// Create MenuService using cacheManager's MenuCache for stats tracking
+		var menuCache *cache.MenuCache
+		if cacheManager != nil {
+			menuCache = cacheManager.Menus
+		}
+		menuService = service.NewMenuService(db, menuCache)
 	}
 	return &FrontendHandler{
 		db:            db,
@@ -555,8 +560,25 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	slug := chi.URLParam(r, "slug")
 
-	// Get published page by slug
-	page, err := h.queries.GetPublishedPageBySlug(ctx, slug)
+	// Build cache context from request (language + user role)
+	cacheCtx := h.getCacheContext(r)
+
+	// Get published page by slug (try cache first, then database)
+	var page store.Page
+	var err error
+
+	if h.cacheManager != nil {
+		pagePtr, cacheErr := h.cacheManager.GetPublishedPageBySlug(ctx, cacheCtx, slug)
+		if cacheErr == nil && pagePtr != nil {
+			page = *pagePtr
+		} else {
+			err = cacheErr
+		}
+	} else {
+		// Fallback to direct DB query if cache not available
+		page, err = h.queries.GetPublishedPageBySlug(ctx, slug)
+	}
+
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// Slug not found - check if it's an alias
@@ -721,8 +743,22 @@ func (h *FrontendHandler) PageByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get published page by ID
-	page, err := h.queries.GetPublishedPageByID(ctx, id)
+	// Build cache context from request (language + user role)
+	cacheCtx := h.getCacheContext(r)
+
+	// Get published page by ID (try cache first, then database)
+	var page store.Page
+	if h.cacheManager != nil {
+		pagePtr, cacheErr := h.cacheManager.GetPublishedPageByID(ctx, cacheCtx, id)
+		if cacheErr == nil && pagePtr != nil {
+			page = *pagePtr
+		} else {
+			err = cacheErr
+		}
+	} else {
+		page, err = h.queries.GetPublishedPageByID(ctx, id)
+	}
+
 	if err != nil {
 		h.renderNotFound(w, r)
 		return
@@ -1817,6 +1853,22 @@ func (h *FrontendHandler) getConfigValue(ctx context.Context, key string) string
 		return cfg.Value
 	}
 	return ""
+}
+
+// getCacheContext builds a cache context from the HTTP request.
+// It extracts the language code and user role for context-aware caching.
+func (h *FrontendHandler) getCacheContext(r *http.Request) cache.CacheContext {
+	// Get language code from context
+	var langCode string
+	if langInfo := middleware.GetLanguage(r); langInfo != nil {
+		langCode = langInfo.Code
+	}
+
+	// Get user role from context
+	user := middleware.GetUser(r)
+	role := cache.RoleFromUser(user)
+
+	return cache.NewCacheContext(langCode, role)
 }
 
 // getPageTranslations returns translation links for a page for the language switcher.

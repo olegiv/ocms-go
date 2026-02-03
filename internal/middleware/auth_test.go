@@ -181,3 +181,51 @@ func TestGetRequestPath(t *testing.T) {
 		}
 	})
 }
+
+func TestLoadSiteConfig(t *testing.T) {
+	t.Run("without cache manager uses default", func(t *testing.T) {
+		// Create middleware without cache (nil cacheManager)
+		middleware := LoadSiteConfig(nil, nil)
+
+		var capturedSiteName string
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedSiteName = GetSiteName(r)
+			w.WriteHeader(http.StatusOK)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/", nil)
+		rr := httptest.NewRecorder()
+
+		middleware(handler).ServeHTTP(rr, req)
+
+		// Should use default "oCMS" when no cache and no DB
+		if capturedSiteName != "oCMS" {
+			t.Errorf("GetSiteName() = %q, want %q", capturedSiteName, "oCMS")
+		}
+	})
+
+	t.Run("stores site name in context", func(t *testing.T) {
+		// LoadSiteConfig with nil cache and nil db should set default
+		middleware := LoadSiteConfig(nil, nil)
+
+		var capturedCtx context.Context
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedCtx = r.Context()
+			w.WriteHeader(http.StatusOK)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		rr := httptest.NewRecorder()
+
+		middleware(handler).ServeHTTP(rr, req)
+
+		// Verify context has site name
+		siteName, ok := capturedCtx.Value(ContextKeySiteName).(string)
+		if !ok {
+			t.Fatal("site name not stored in context")
+		}
+		if siteName != "oCMS" {
+			t.Errorf("context site name = %q, want %q", siteName, "oCMS")
+		}
+	})
+}

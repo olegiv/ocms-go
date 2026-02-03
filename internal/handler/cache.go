@@ -119,3 +119,33 @@ func (h *CacheHandler) ClearSitemap(w http.ResponseWriter, r *http.Request) {
 	h.clearCacheHelper(w, r, h.cacheManager.InvalidateSitemap,
 		"sitemap cache cleared", "Sitemap cache cleared", "Sitemap cache cleared")
 }
+
+// ClearPages handles POST /admin/cache/clear/pages - clears page cache.
+func (h *CacheHandler) ClearPages(w http.ResponseWriter, r *http.Request) {
+	if h.cacheManager == nil {
+		flashError(w, r, h.renderer, redirectAdminCache, "Cache system not initialized")
+		return
+	}
+	h.clearCacheHelper(w, r, h.cacheManager.InvalidatePages,
+		"pages cache cleared", "Pages cache cleared", "Pages cache cleared")
+}
+
+// ClearMenus handles POST /admin/cache/clear/menus - clears menu cache.
+func (h *CacheHandler) ClearMenus(w http.ResponseWriter, r *http.Request) {
+	if h.cacheManager == nil {
+		flashError(w, r, h.renderer, redirectAdminCache, "Cache system not initialized")
+		return
+	}
+	h.clearCacheHelper(w, r, h.cacheManager.InvalidateMenus,
+		"menus cache cleared", "Menus cache cleared", "Menus cache cleared")
+}
+
+// ClearLanguages handles POST /admin/cache/clear/languages - clears language cache.
+func (h *CacheHandler) ClearLanguages(w http.ResponseWriter, r *http.Request) {
+	if h.cacheManager == nil {
+		flashError(w, r, h.renderer, redirectAdminCache, "Cache system not initialized")
+		return
+	}
+	h.clearCacheHelper(w, r, h.cacheManager.InvalidateLanguages,
+		"languages cache cleared", "Languages cache cleared", "Languages cache cleared")
+}

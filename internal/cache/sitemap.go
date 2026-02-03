@@ -117,12 +117,13 @@ func (c *SitemapCache) regenerate(ctx context.Context, siteURL string) ([]byte, 
 	return xml, nil
 }
 
-// Invalidate clears the cached sitemap, forcing regeneration on next request.
+// Invalidate clears the cached sitemap and resets statistics, forcing regeneration on next request.
 func (c *SitemapCache) Invalidate() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.xml = nil
 	c.cachedAt = time.Time{}
+	c.cache.ResetStats()
 }
 
 // Stats returns cache statistics.

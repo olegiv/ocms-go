@@ -558,6 +558,9 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Invalidate page cache (for sitemap regeneration on next request)
+	h.invalidatePageCache(page.ID)
+
 	resp := storePageToResponse(page)
 
 	// Include categories and tags in response
@@ -733,6 +736,9 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Invalidate page cache
+	h.invalidatePageCache(page.ID)
+
 	resp := storePageToResponse(page)
 
 	// Include categories and tags
@@ -762,6 +768,9 @@ func (h *Handler) DeletePage(w http.ResponseWriter, r *http.Request) {
 		WriteInternalError(w, "Failed to delete page")
 		return
 	}
+
+	// Invalidate page cache
+	h.invalidatePageCache(page.ID)
 
 	w.WriteHeader(http.StatusNoContent)
 }
