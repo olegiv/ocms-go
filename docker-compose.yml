@@ -1,0 +1,93 @@
+# Copyright (c) 2025-2026 Oleg Ivanchenko
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# oCMS Docker Compose Configuration
+# Usage:
+#   docker compose up -d                    # Start with default settings
+#   docker compose --profile redis up -d    # Start with Redis caching
+#   docker compose down                     # Stop services
+#   docker compose logs -f ocms             # View logs
+
+services:
+  ocms:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+    image: ocms:latest
+    container_name: ocms
+    restart: unless-stopped
+    ports:
+      - "${OCMS_SERVER_PORT:-8080}:8080"
+    environment:
+      # Required
+      - OCMS_SESSION_SECRET=${OCMS_SESSION_SECRET:?Session secret is required (min 32 bytes)}
+      # Server configuration
+      - OCMS_SERVER_HOST=0.0.0.0
+      - OCMS_SERVER_PORT=8080
+      - OCMS_ENV=${OCMS_ENV:-production}
+      - OCMS_LOG_LEVEL=${OCMS_LOG_LEVEL:-info}
+      # Database
+      - OCMS_DB_PATH=/app/data/ocms.db
+      # Theme/Custom content
+      - OCMS_CUSTOM_DIR=/app/custom
+      - OCMS_ACTIVE_THEME=${OCMS_ACTIVE_THEME:-default}
+      # Seeding (set to true for fresh installs)
+      - OCMS_DO_SEED=${OCMS_DO_SEED:-false}
+      # Cache configuration (optional - uses in-memory by default)
+      - OCMS_REDIS_URL=${OCMS_REDIS_URL:-}
+      - OCMS_CACHE_PREFIX=${OCMS_CACHE_PREFIX:-ocms:}
+      - OCMS_CACHE_TTL=${OCMS_CACHE_TTL:-3600}
+      - OCMS_CACHE_MAX_SIZE=${OCMS_CACHE_MAX_SIZE:-10000}
+      # GeoIP (optional)
+      - OCMS_GEOIP_DB_PATH=${OCMS_GEOIP_DB_PATH:-}
+      # hCaptcha (optional)
+      - OCMS_HCAPTCHA_SITE_KEY=${OCMS_HCAPTCHA_SITE_KEY:-}
+      - OCMS_HCAPTCHA_SECRET_KEY=${OCMS_HCAPTCHA_SECRET_KEY:-}
+    volumes:
+      - ocms_data:/app/data
+      - ocms_uploads:/app/uploads
+      - ./custom:/app/custom:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      redis:
+        condition: service_healthy
+        required: false
+
+  # Optional Redis service for distributed caching
+  # Enable with: docker compose --profile redis up -d
+  redis:
+    image: redis:7-alpine
+    container_name: ocms-redis
+    profiles:
+      - redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  ocms_data:
+    name: ocms_data
+  ocms_uploads:
+    name: ocms_uploads
+  redis_data:
+    name: ocms_redis_data
+
+networks:
+  default:
+    name: ocms_network
