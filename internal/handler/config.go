@@ -59,6 +59,45 @@ func sortConfigs(configs []store.Config) {
 	})
 }
 
+// mergeWithStandardFields ensures all standard config fields are present,
+// using DB values when available and defaults otherwise.
+func mergeWithStandardFields(dbConfigs []store.Config) []store.Config {
+	// Create a map of existing DB configs
+	existing := make(map[string]store.Config)
+	for _, cfg := range dbConfigs {
+		existing[cfg.Key] = cfg
+	}
+
+	// Build result with all standard fields
+	var result []store.Config
+	seen := make(map[string]bool)
+
+	for _, def := range model.StandardConfigFields {
+		if cfg, ok := existing[def.Key]; ok {
+			// Use existing DB value
+			result = append(result, cfg)
+		} else {
+			// Create placeholder from standard definition
+			result = append(result, store.Config{
+				Key:         def.Key,
+				Value:       def.DefaultValue,
+				Type:        def.Type,
+				Description: def.Description,
+			})
+		}
+		seen[def.Key] = true
+	}
+
+	// Add any additional DB configs not in standard fields (e.g., theme settings)
+	for _, cfg := range dbConfigs {
+		if !seen[cfg.Key] {
+			result = append(result, cfg)
+		}
+	}
+
+	return result
+}
+
 // ConfigHandler handles configuration management routes.
 type ConfigHandler struct {
 	queries        *store.Queries
@@ -128,12 +167,15 @@ func (h *ConfigHandler) List(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	// Get all config items
-	configs, err := h.queries.ListConfig(r.Context())
+	// Get all config items from DB
+	dbConfigs, err := h.queries.ListConfig(r.Context())
 	if err != nil {
 		logAndInternalError(w, "failed to list config", "error", err)
 		return
 	}
+
+	// Merge with standard fields to show all expected fields even on empty site
+	configs := mergeWithStandardFields(dbConfigs)
 	sortConfigs(configs)
 
 	// Get active languages
@@ -173,13 +215,16 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get all config items to know their types
-	configs, err := h.queries.ListConfig(r.Context())
+	// Get all config items from DB
+	dbConfigs, err := h.queries.ListConfig(r.Context())
 	if err != nil {
 		slog.Error("failed to list config", "error", err)
 		flashError(w, r, h.renderer, redirectAdminConfig, i18n.T(lang, "error.loading_config"))
 		return
 	}
+
+	// Merge with standard fields to handle fields that don't exist in DB yet
+	configs := mergeWithStandardFields(dbConfigs)
 	sortConfigs(configs)
 
 	// Get active languages for translation handling
@@ -187,6 +232,15 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("failed to list languages", "error", err)
 		languages = nil
+	}
+
+	// Get default language code for new config entries
+	defaultLangCode := "en"
+	for _, lang := range languages {
+		if lang.IsDefault {
+			defaultLangCode = lang.Code
+			break
+		}
 	}
 
 	validationErrors := make(map[string]string)
@@ -203,6 +257,20 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 		// Handle translatable config items
 		if model.IsTranslatableConfigKey(cfg.Key) && len(languages) > 0 {
+			// Ensure the config key exists in the config table first (for FK constraint)
+			_, err := h.queries.UpsertConfig(r.Context(), store.UpsertConfigParams{
+				Key:          cfg.Key,
+				Value:        cfg.Value,
+				Type:         cfg.Type,
+				Description:  cfg.Description,
+				LanguageCode: defaultLangCode,
+				UpdatedAt:    now,
+				UpdatedBy:    updatedBy,
+			})
+			if err != nil {
+				slog.Error("failed to upsert config for translation", "key", cfg.Key, "error", err)
+			}
+
 			// Save translations for each language
 			for _, language := range languages {
 				// Form field name: key_langcode (e.g., site_name_en, site_name_ru)
@@ -245,15 +313,18 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Update the config value
-		_, err := h.queries.UpdateConfigValue(r.Context(), store.UpdateConfigValueParams{
-			Key:       cfg.Key,
-			Value:     value,
-			UpdatedAt: now,
-			UpdatedBy: updatedBy,
+		// Upsert the config value (creates if not exists, updates if exists)
+		_, err := h.queries.UpsertConfig(r.Context(), store.UpsertConfigParams{
+			Key:          cfg.Key,
+			Value:        value,
+			Type:         cfg.Type,
+			Description:  cfg.Description,
+			LanguageCode: defaultLangCode,
+			UpdatedAt:    now,
+			UpdatedBy:    updatedBy,
 		})
 		if err != nil {
-			slog.Error("failed to update config", "key", cfg.Key, "error", err)
+			slog.Error("failed to upsert config", "key", cfg.Key, "error", err)
 			validationErrors[cfg.Key] = i18n.T(lang, "error.saving_value")
 		}
 	}
