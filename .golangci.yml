@@ -42,6 +42,12 @@ linters:
         - name: import-shadowing
           severity: warning
           disabled: false
+        - name: exported
+          severity: warning
+          disabled: false
+          arguments:
+            - "checkPrivateReceivers"
+            - "sayRepetitiveInsteadOfStutters"
     unconvert:
       fast-math: false
       safe: false

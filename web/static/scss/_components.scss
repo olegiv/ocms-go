@@ -810,233 +810,31 @@ select.form-control {
   border: 1px solid $gray-300;
   border-radius: $radius-md;
   overflow: hidden;
-}
 
-// Editor toolbar
-.editor-toolbar {
-  display: flex;
-  align-items: center;
-  gap: $spacing-1;
-  padding: $spacing-2 $spacing-3;
-  background-color: $gray-50;
-  border-bottom: 1px solid $gray-300;
-  flex-wrap: wrap;
-}
-
-.toolbar-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: none;
-  background-color: transparent;
-  color: $gray-600;
-  border-radius: $radius-sm;
-  cursor: pointer;
-  font-size: $font-size-sm;
-  font-weight: $font-weight-semibold;
-  transition: all $transition-fast;
-
-  &:hover {
-    background-color: $gray-200;
-    color: $gray-900;
+  // TinyMCE editor textarea (hidden when initialized)
+  .tinymce-editor {
+    width: 100%;
+    min-height: 300px;
+    padding: $spacing-4;
+    border: none;
+    font-family: inherit;
+    font-size: $font-size-base;
+    line-height: 1.6;
+    resize: vertical;
   }
 
-  &.active {
-    background-color: $primary;
-    color: $white;
-  }
-}
-
-.toolbar-divider {
-  width: 1px;
-  height: 24px;
-  background-color: $gray-300;
-  margin: 0 $spacing-2;
-}
-
-// Editor content area
-.editor-content {
-  min-height: 300px;
-  padding: $spacing-4;
-  background-color: $white;
-
-  &:focus {
-    outline: none;
+  // TinyMCE container styling
+  .tox-tinymce {
+    border: none !important;
+    border-radius: 0 !important;
   }
 
-  // TipTap ProseMirror styles
-  .ProseMirror {
-    min-height: 250px;
-    outline: none;
-
-    > * + * {
-      margin-top: 0.75em;
-    }
-
-    p {
-      margin: 0;
-    }
-
-    h1, h2, h3, h4, h5, h6 {
-      line-height: 1.3;
-      margin-top: 1em;
-      margin-bottom: 0.5em;
-    }
-
-    h1 {
-      font-size: $font-size-3xl;
-    }
-
-    h2 {
-      font-size: $font-size-2xl;
-    }
-
-    h3 {
-      font-size: $font-size-xl;
-    }
-
-    ul, ol {
-      padding-left: 1.5em;
-      margin: 0.5em 0;
-    }
-
-    li {
-      margin: 0.25em 0;
-    }
-
-    blockquote {
-      border-left: 3px solid $gray-300;
-      padding-left: $spacing-4;
-      margin: 1em 0;
-      color: $gray-600;
-      font-style: italic;
-    }
-
-    a {
-      color: $primary;
-      text-decoration: underline;
-    }
-
-    strong {
-      font-weight: $font-weight-bold;
-    }
-
-    em {
-      font-style: italic;
-    }
-
-    code {
-      font-family: $font-family-mono;
-      background-color: $gray-100;
-      padding: 0.1em 0.3em;
-      border-radius: $radius-sm;
-    }
-
-    pre {
-      background-color: $gray-900;
-      color: $gray-100;
-      padding: $spacing-4;
-      border-radius: $radius-md;
-      overflow-x: auto;
-
-      code {
-        background: none;
-        padding: 0;
-      }
-    }
+  .tox-editor-header {
+    border-bottom: 1px solid $gray-300 !important;
   }
 
-  .ProseMirror-focused {
-    outline: none;
-  }
-}
-
-// Source code editor for HTML
-.source-editor {
-  width: 100%;
-  min-height: 300px;
-  padding: $spacing-4;
-  border: none;
-  background-color: $white;
-  color: $gray-900;
-  font-family: $font-family-mono;
-  font-size: $font-size-sm;
-  line-height: 1.6;
-  resize: vertical;
-  box-sizing: border-box;
-
-  &:focus {
-    outline: none;
-  }
-}
-
-// Editor code block styles
-.editor-content {
-  .ProseMirror {
-    pre {
-      background-color: $gray-900;
-      color: $gray-100;
-      font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
-      font-size: $font-size-sm;
-      padding: $spacing-4;
-      border-radius: $radius-md;
-      margin: $spacing-4 0;
-      overflow-x: auto;
-      line-height: 1.6;
-
-      code {
-        background: none;
-        color: inherit;
-        font-size: inherit;
-        padding: 0;
-        border-radius: 0;
-      }
-    }
-
-    // Inline code
-    code {
-      background-color: $gray-100;
-      color: $gray-800;
-      font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
-      font-size: 0.875em;
-      padding: 0.125em 0.375em;
-      border-radius: $radius-sm;
-    }
-  }
-}
-
-// Editor image styles
-.editor-content {
-  .ProseMirror {
-    img {
-      max-width: 100%;
-      height: auto;
-      border-radius: $radius-md;
-      margin: $spacing-4 0;
-      display: block;
-
-      &.ProseMirror-selectednode {
-        outline: 2px solid $primary;
-        outline-offset: 2px;
-      }
-
-      // Size variants based on URL pattern
-      &[src*="/medium/"] {
-        max-width: 600px;
-        margin-left: auto;
-        margin-right: auto;
-      }
-
-      &[src*="/thumbnail/"] {
-        max-width: 200px;
-        float: left;
-        margin-right: $spacing-4;
-        margin-bottom: $spacing-2;
-      }
-    }
+  .tox-toolbar__primary {
+    background-color: $gray-50 !important;
   }
 }
 
