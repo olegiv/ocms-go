@@ -188,7 +188,7 @@ func (c *LanguageCache) loadAll(ctx context.Context) error {
 	return nil
 }
 
-// Invalidate clears the cache, forcing a reload on next access.
+// Invalidate clears the cache and resets statistics, forcing a reload on next access.
 func (c *LanguageCache) Invalidate() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -197,6 +197,7 @@ func (c *LanguageCache) Invalidate() {
 	c.active = nil
 	c.byCode = make(map[string]store.Language)
 	c.defaultLang = nil
+	c.cache.ResetStats()
 }
 
 // Stats returns cache statistics.

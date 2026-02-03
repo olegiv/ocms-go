@@ -74,7 +74,8 @@ func New(cfg Config) (*Renderer, error) {
 	if cfg.MenuService != nil {
 		menuSvc = cfg.MenuService
 	} else if cfg.DB != nil {
-		menuSvc = service.NewMenuService(cfg.DB)
+		// Create MenuService without cache (stats won't be tracked)
+		menuSvc = service.NewMenuService(cfg.DB, nil)
 	}
 
 	r := &Renderer{

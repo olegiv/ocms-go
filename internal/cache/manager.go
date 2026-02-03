@@ -22,6 +22,7 @@ const (
 	KindMenu        Kind = "menu"
 	KindLanguage    Kind = "language"
 	KindTranslation Kind = "translation"
+	KindPage        Kind = "page"
 )
 
 // ManagerCacheStats holds statistics for a specific cache in the manager.
@@ -47,6 +48,7 @@ type Manager struct {
 	Menus       *MenuCache
 	Language    *LanguageCache
 	Translation *TranslationCache
+	Page        *PageCache
 	General     *SimpleCache // for misc cached data
 
 	// Distributed cache (optional, nil if only using memory cache)
@@ -67,6 +69,7 @@ func NewManager(queries *store.Queries) *Manager {
 		Menus:               NewMenuCache(queries),
 		Language:            NewLanguageCache(queries),
 		Translation:         NewTranslationCache(queries),
+		Page:                NewPageCache(queries),
 		General:             New(5 * time.Minute),
 		ThemeSettingsPrefix: "theme_settings_",
 		info: ManagerInfo{
@@ -162,6 +165,7 @@ func (m *Manager) ClearAll() {
 	m.Menus.Invalidate()
 	m.Language.Invalidate()
 	m.Translation.Invalidate()
+	m.Page.Invalidate()
 	m.General.Clear()
 
 	// Clear distributed cache if present
@@ -182,6 +186,7 @@ func (m *Manager) ClearAll() {
 	m.Menus.ResetStats()
 	m.Language.ResetStats()
 	m.Translation.ResetStats()
+	m.Page.ResetStats()
 	m.General.ResetStats()
 
 	slog.Info("cache stats reset")
@@ -203,9 +208,25 @@ func (m *Manager) InvalidateThemeSettings() {
 	m.Config.Invalidate()
 }
 
-// InvalidateContent invalidates content-related caches (sitemap, etc.).
+// InvalidateContent invalidates content-related caches (sitemap, pages).
 // Call this when pages, categories, or tags are created/updated/deleted.
 func (m *Manager) InvalidateContent() {
+	m.Sitemap.Invalidate()
+	m.Page.Invalidate()
+}
+
+// InvalidatePage invalidates a specific page from the cache.
+// Call this when a specific page is updated or deleted.
+func (m *Manager) InvalidatePage(pageID int64) {
+	m.Page.InvalidatePage(pageID)
+	// Also invalidate sitemap since page content may have changed
+	m.Sitemap.Invalidate()
+}
+
+// InvalidatePages invalidates the entire page cache.
+// Call this after bulk operations on pages.
+func (m *Manager) InvalidatePages() {
+	m.Page.Invalidate()
 	m.Sitemap.Invalidate()
 }
 
@@ -261,9 +282,9 @@ func (m *Manager) AllStats() []ManagerCacheStats {
 			Stats: m.Translation.Stats(),
 		},
 		{
-			Name:  "General Cache",
-			Kind:  KindGeneral,
-			Stats: m.General.Stats(),
+			Name:  "Pages",
+			Kind:  KindPage,
+			Stats: m.Page.Stats(),
 		},
 	}
 
@@ -284,13 +305,14 @@ func (m *Manager) TotalStats() Stats {
 	menuStats := m.Menus.Stats()
 	languageStats := m.Language.Stats()
 	translationStats := m.Translation.Stats()
+	pageStats := m.Page.Stats()
 	generalStats := m.General.Stats()
 
 	total := Stats{
-		Hits:   configStats.Hits + sitemapStats.Hits + menuStats.Hits + languageStats.Hits + translationStats.Hits + generalStats.Hits,
-		Misses: configStats.Misses + sitemapStats.Misses + menuStats.Misses + languageStats.Misses + translationStats.Misses + generalStats.Misses,
-		Sets:   configStats.Sets + sitemapStats.Sets + menuStats.Sets + languageStats.Sets + translationStats.Sets + generalStats.Sets,
-		Items:  configStats.Items + sitemapStats.Items + menuStats.Items + languageStats.Items + translationStats.Items + generalStats.Items,
+		Hits:   configStats.Hits + sitemapStats.Hits + menuStats.Hits + languageStats.Hits + translationStats.Hits + pageStats.Hits + generalStats.Hits,
+		Misses: configStats.Misses + sitemapStats.Misses + menuStats.Misses + languageStats.Misses + translationStats.Misses + pageStats.Misses + generalStats.Misses,
+		Sets:   configStats.Sets + sitemapStats.Sets + menuStats.Sets + languageStats.Sets + translationStats.Sets + pageStats.Sets + generalStats.Sets,
+		Items:  configStats.Items + sitemapStats.Items + menuStats.Items + languageStats.Items + translationStats.Items + pageStats.Items + generalStats.Items,
 	}
 
 	totalRequests := total.Hits + total.Misses
@@ -373,4 +395,16 @@ func (m *Manager) GetTranslations(ctx context.Context, entityType string, entity
 // GetTranslationsBatch is a convenience method to get translations for multiple entities.
 func (m *Manager) GetTranslationsBatch(ctx context.Context, entityType string, entityIDs []int64) (map[int64]TranslationMap, error) {
 	return m.Translation.GetBatch(ctx, entityType, entityIDs)
+}
+
+// GetPublishedPageBySlug is a convenience method to get a published page by slug.
+// The cacheCtx provides language and role context for cache key generation.
+func (m *Manager) GetPublishedPageBySlug(ctx context.Context, cacheCtx CacheContext, slug string) (*store.Page, error) {
+	return m.Page.GetBySlug(ctx, cacheCtx, slug)
+}
+
+// GetPublishedPageByID is a convenience method to get a published page by ID.
+// The cacheCtx provides language and role context for cache key generation.
+func (m *Manager) GetPublishedPageByID(ctx context.Context, cacheCtx CacheContext, id int64) (*store.Page, error) {
+	return m.Page.GetByID(ctx, cacheCtx, id)
 }

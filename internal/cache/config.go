@@ -161,12 +161,13 @@ func (c *ConfigCache) loadAll(ctx context.Context) error {
 	return nil
 }
 
-// Invalidate clears the cache, forcing a reload on next access.
+// Invalidate clears the cache and resets statistics, forcing a reload on next access.
 func (c *ConfigCache) Invalidate() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.loaded = false
 	c.allConfig = make(map[string]store.Config)
+	c.cache.ResetStats()
 }
 
 // InvalidateKey marks a specific key as needing reload.
