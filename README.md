@@ -177,13 +177,14 @@ sudo dnf install vips-devel
 | `OCMS_LOG_LEVEL` | Log level (`debug`/`info`/`warn`/`error`) | `info` | No |
 | `OCMS_CUSTOM_DIR` | Directory for custom themes and modules | `./custom` | No |
 | `OCMS_ACTIVE_THEME` | Name of the active theme | `default` | No |
-| `OCMS_API_RATE_LIMIT` | API requests per minute per key | `100` | No |
+| `OCMS_DO_SEED` | Seed database with default admin and config | `false` | No |
 | `OCMS_CACHE_TTL` | Default cache TTL in seconds | `3600` | No |
 | `OCMS_REDIS_URL` | Redis URL for distributed caching | - | No |
 | `OCMS_CACHE_PREFIX` | Redis key prefix | `ocms:` | No |
 | `OCMS_CACHE_MAX_SIZE` | Max entries for in-memory cache | `10000` | No |
-| `OCMS_WEBHOOK_WORKERS` | Concurrent webhook delivery workers | `3` | No |
-| `OCMS_DEFAULT_LANGUAGE` | Default content language code | `en` | No |
+| `OCMS_HCAPTCHA_SITE_KEY` | hCaptcha site key for login protection | - | No |
+| `OCMS_HCAPTCHA_SECRET_KEY` | hCaptcha secret key for login protection | - | No |
+| `OCMS_GEOIP_DB_PATH` | Path to GeoLite2-Country.mmdb for country detection | - | No |
 
 ## Development
 
@@ -218,11 +219,83 @@ make run
 
 ### Default Admin Credentials
 
-On first run, the application seeds a default admin user:
+On first run with `OCMS_DO_SEED=true`, the application seeds a default admin user:
 - **Email**: admin@example.com
-- **Password**: changeme
+- **Password**: changeme1234
 
 Change these credentials immediately after first login.
+
+## Docker
+
+### Quick Start with Docker
+
+```bash
+# Clone the repository
+git clone https://github.com/olegiv/ocms-go.git
+cd ocms-go
+
+# Start with Docker Compose (generates session secret automatically)
+OCMS_SESSION_SECRET=$(openssl rand -base64 32) OCMS_DO_SEED=true docker compose up -d
+
+# View logs
+docker compose logs -f ocms
+```
+
+Access the admin panel at http://localhost:8080/admin with:
+- **Email**: admin@example.com
+- **Password**: changeme1234
+
+### Docker Commands
+
+| Command | Description |
+|---------|-------------|
+| `docker compose up -d` | Start oCMS |
+| `docker compose --profile redis up -d` | Start with Redis caching |
+| `docker compose down` | Stop services |
+| `docker compose logs -f ocms` | View logs |
+| `docker compose pull && docker compose up -d` | Update to latest |
+
+### Volume Mounts
+
+| Volume | Container Path | Purpose |
+|--------|----------------|---------|
+| `ocms_data` | `/app/data` | SQLite database |
+| `ocms_uploads` | `/app/uploads` | Media uploads |
+| `./custom` | `/app/custom` | Custom themes and modules |
+
+### Building the Docker Image
+
+```bash
+# Build with version info
+docker build \
+  --build-arg VERSION=$(git describe --tags --always) \
+  --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) \
+  --build-arg BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+  -t ocms:latest .
+```
+
+### Production Configuration
+
+Create a `.env` file for production:
+
+```bash
+OCMS_SESSION_SECRET=your-secure-secret-key-at-least-32-bytes
+OCMS_ENV=production
+OCMS_DO_SEED=false
+OCMS_ACTIVE_THEME=default
+
+# Optional: Redis caching
+OCMS_REDIS_URL=redis://redis:6379/0
+
+# Optional: hCaptcha protection
+OCMS_HCAPTCHA_SITE_KEY=your-site-key
+OCMS_HCAPTCHA_SECRET_KEY=your-secret-key
+```
+
+Then start with:
+```bash
+docker compose --profile redis up -d
+```
 
 ## Project Structure
 
@@ -521,8 +594,10 @@ git commit -m "Update Claude Code shared submodule"
 - **SQL**: Type-safe queries with [sqlc](https://sqlc.dev/)
 - **Templates**: [templ](https://templ.guide/) for type-safe HTML
 - **Frontend**: HTMX + Alpine.js
+- **Rich Text Editor**: [TinyMCE](https://www.tiny.cloud/) for content editing
 - **Styling**: Custom SCSS framework
 - **Authentication**: Secure sessions with argon2id password hashing
+- **Containerization**: Docker with multi-stage builds
 
 ## License
 

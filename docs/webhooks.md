@@ -252,21 +252,6 @@ To prevent webhook floods from rapid updates, oCMS includes event debouncing:
 
 This means if a page is updated 10 times in 2 seconds, only 1 webhook is sent with the final state.
 
-To disable debouncing (send every event):
-```bash
-export OCMS_WEBHOOK_DEBOUNCE=false
-```
-
-## Configuration
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OCMS_WEBHOOK_WORKERS` | Concurrent delivery workers | `3` |
-| `OCMS_WEBHOOK_TIMEOUT` | Request timeout | `30s` |
-| `OCMS_WEBHOOK_DEBOUNCE` | Enable event debouncing | `true` |
-
 ## Best Practices
 
 1. **Always verify signatures**: Protect against spoofed requests
