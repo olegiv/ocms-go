@@ -652,7 +652,8 @@ import Image from 'https://esm.sh/@tiptap/extension-image@2.1.13';
 
 const initialContent = document.getElementById('body-input').value || '<p></p>';
 let isSourceMode = false;
-let lastEditMode = 'visual'; // Track where last edit happened: 'visual' or 'source'
+let rawSourceHTML = initialContent; // Store raw HTML separately to preserve formatting
+let skipNextUpdate = false; // Flag to skip onUpdate after setContent
 const sourceEditor = document.getElementById('source-editor');
 const editorElement = document.getElementById('editor');
 const sourceToggleBtn = document.getElementById('source-toggle-btn');
@@ -683,8 +684,14 @@ const editor = new Editor({
         },
     },
     onUpdate: ({ editor }) => {
-        document.getElementById('body-input').value = editor.getHTML();
-        lastEditMode = 'visual';
+        const html = editor.getHTML();
+        document.getElementById('body-input').value = html;
+        // Only update rawSourceHTML if this is a real edit, not from setContent
+        if (skipNextUpdate) {
+            skipNextUpdate = false;
+        } else {
+            rawSourceHTML = html;
+        }
     },
 });
 
@@ -748,13 +755,13 @@ function toggleSourceMode() {
     isSourceMode = !isSourceMode;
 
     if (isSourceMode) {
-        // Switch to source mode: only update from TipTap if last edit was in visual mode
-        if (lastEditMode === 'visual') {
-            sourceEditor.value = editor.getHTML();
-        }
-        // If lastEditMode === 'source', keep current sourceEditor.value unchanged
+        // Switch to source mode: show raw HTML (preserved from last source edit or initial)
+        // Use rawSourceHTML if we have it, otherwise get from TipTap (first time only)
+        sourceEditor.value = rawSourceHTML;
         editorElement.style.display = 'none';
         sourceEditor.style.display = 'block';
+        sourceEditor.classList.remove('hidden');
+
         sourceToggleBtn.classList.add('active');
         // Disable other toolbar buttons
         document.querySelectorAll('.toolbar-btn:not([data-action="source"])').forEach(btn => {
@@ -762,7 +769,9 @@ function toggleSourceMode() {
             btn.style.opacity = '0.5';
         });
     } else {
-        // Switch to visual mode: update editor with textarea content
+        // Switch to visual mode: sync source to TipTap
+        rawSourceHTML = sourceEditor.value; // Store raw HTML before TipTap normalizes it
+        skipNextUpdate = true; // Don't let onUpdate overwrite rawSourceHTML
         editor.commands.setContent(sourceEditor.value);
         document.getElementById('body-input').value = sourceEditor.value;
         sourceEditor.style.display = 'none';
@@ -776,10 +785,10 @@ function toggleSourceMode() {
     }
 }
 
-// Sync source editor changes to hidden input
+// Sync source editor changes to hidden input and rawSourceHTML
 sourceEditor.addEventListener('input', () => {
+    rawSourceHTML = sourceEditor.value;
     document.getElementById('body-input').value = sourceEditor.value;
-    lastEditMode = 'source';
 });
 
 // Update toolbar button active states
