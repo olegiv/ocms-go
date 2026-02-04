@@ -551,7 +551,7 @@ func run() error {
 	}
 	apiKeysHandler := handler.NewAPIKeysHandler(db, renderer, sessionManager)
 	webhooksHandler := handler.NewWebhooksHandler(db, renderer, sessionManager)
-	redirectsHandler := handler.NewRedirectsHandler(db, renderer, sessionManager)
+	redirectsHandler := handler.NewRedirectsHandler(db, renderer, sessionManager, redirectsMiddleware)
 	importExportHandler := handler.NewImportExportHandler(db, renderer, sessionManager)
 	healthHandler := handler.NewHealthHandler(db, sessionManager, handler.UploadsDirPath)
 	docsHandler := handler.NewDocsHandler(renderer, cfg, moduleRegistry, healthHandler.StartTime(), versionInfo)

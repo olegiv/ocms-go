@@ -3914,8 +3914,8 @@
         },
         {
             "id": "pages.error.featured_image_too_small",
-            "message": "Featured image must be at least {{.min_width}}x{{.min_height}} pixels. Selected image is {{.width}}x{{.height}}.",
-            "translation": "Featured image must be at least {{.min_width}}x{{.min_height}} pixels. Selected image is {{.width}}x{{.height}}."
+            "message": "Featured image must be at least %dx%d pixels. Selected image is %dx%d.",
+            "translation": "Featured image must be at least %dx%d pixels. Selected image is %dx%d."
         },
         {
             "id": "msg.config_saved",
@@ -4451,6 +4451,16 @@
             "id": "label.inactive",
             "message": "Inactive",
             "translation": "Inactive"
+        },
+        {
+            "id": "label.enabled",
+            "message": "Enabled",
+            "translation": "Enabled"
+        },
+        {
+            "id": "label.disabled",
+            "message": "Disabled",
+            "translation": "Disabled"
         },
         {
             "id": "label.yes",
@@ -5774,8 +5784,8 @@
         },
         {
             "id": "redirects.total_count",
-            "message": "{{.}} redirect(s) total",
-            "translation": "{{.}} redirect(s) total"
+            "message": "%d redirect(s) total",
+            "translation": "%d redirect(s) total"
         },
         {
             "id": "redirects.help_title",

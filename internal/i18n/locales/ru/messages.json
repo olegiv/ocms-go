@@ -3399,8 +3399,8 @@
         },
         {
             "id": "pages.error.featured_image_too_small",
-            "message": "Featured image must be at least {{.min_width}}x{{.min_height}} pixels. Selected image is {{.width}}x{{.height}}.",
-            "translation": "Изображение должно быть не менее {{.min_width}}x{{.min_height}} пикселей. Выбранное изображение: {{.width}}x{{.height}}."
+            "message": "Featured image must be at least %dx%d pixels. Selected image is %dx%d.",
+            "translation": "Изображение должно быть не менее %dx%d пикселей. Выбранное изображение: %dx%d."
         },
         {
             "id": "msg.config_saved",
@@ -3936,6 +3936,16 @@
             "id": "label.inactive",
             "message": "Inactive",
             "translation": "Неактивный"
+        },
+        {
+            "id": "label.enabled",
+            "message": "Enabled",
+            "translation": "Включено"
+        },
+        {
+            "id": "label.disabled",
+            "message": "Disabled",
+            "translation": "Отключено"
         },
         {
             "id": "label.yes",
@@ -5774,8 +5784,8 @@
         },
         {
             "id": "redirects.total_count",
-            "message": "{{.}} redirect(s) total",
-            "translation": "Всего {{.}} редирект(ов)"
+            "message": "%d redirect(s) total",
+            "translation": "Всего %d редирект(ов)"
         },
         {
             "id": "redirects.help_title",

@@ -1485,10 +1485,10 @@ func (h *PagesHandler) validateFeaturedImageSize(ctx context.Context, featuredIm
 
 	if width < model.MinFeaturedImageWidth || height < model.MinFeaturedImageHeight {
 		return i18n.T(lang, "pages.error.featured_image_too_small",
-			"width", width,
-			"height", height,
-			"min_width", model.MinFeaturedImageWidth,
-			"min_height", model.MinFeaturedImageHeight)
+			model.MinFeaturedImageWidth,
+			model.MinFeaturedImageHeight,
+			width,
+			height)
 	}
 
 	return ""
