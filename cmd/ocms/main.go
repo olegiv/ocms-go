@@ -487,7 +487,7 @@ func run() error {
 	themesHandler := handler.NewThemesHandler(db, renderer, sessionManager, themeManager, cacheManager)
 	widgetsHandler := handler.NewWidgetsHandler(db, renderer, sessionManager, themeManager)
 	modulesHandler := handler.NewModulesHandler(db, renderer, sessionManager, moduleRegistry, hookRegistry)
-	frontendHandler := handler.NewFrontendHandler(db, themeManager, cacheManager, logger, renderer.GetMenuService())
+	frontendHandler := handler.NewFrontendHandler(db, themeManager, cacheManager, logger, renderer.GetMenuService(), eventService)
 	cacheHandler := handler.NewCacheHandler(renderer, sessionManager, cacheManager, eventService)
 	languagesHandler := handler.NewLanguagesHandler(db, renderer, sessionManager)
 	apiHandler := api.NewHandler(db)
@@ -588,7 +588,7 @@ func run() error {
 
 		// Editor routes (editor + admin) - public users have no admin access
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireEditor())
+			r.Use(middleware.RequireEditorWithEventLog(eventService))
 
 			// Dashboard and common routes
 			r.Get(handler.RouteRoot, adminHandler.Dashboard)
@@ -683,7 +683,7 @@ func run() error {
 
 		// Admin-only routes
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireAdmin())
+			r.Use(middleware.RequireAdminWithEventLog(eventService))
 
 			// User management routes
 			registerCRUD(r, handler.RouteUsers, handler.RouteUsersID, crudHandlers{
