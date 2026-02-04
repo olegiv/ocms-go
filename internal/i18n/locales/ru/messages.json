@@ -83,6 +83,11 @@
             "translation": "Вебхуки"
         },
         {
+            "id": "nav.redirects",
+            "message": "Redirects",
+            "translation": "Редиректы"
+        },
+        {
             "id": "nav.export",
             "message": "Export",
             "translation": "Экспорт"
@@ -5636,6 +5641,206 @@
             "id": "frontend.did_you_mean",
             "message": "Did you mean:",
             "translation": "Возможно, вы искали:"
+        },
+        {
+            "id": "redirects.title",
+            "message": "URL Redirects",
+            "translation": "URL Редиректы"
+        },
+        {
+            "id": "redirects.description",
+            "message": "Manage URL redirects to forward visitors from old URLs to new destinations",
+            "translation": "Управление URL редиректами для перенаправления посетителей со старых URL на новые"
+        },
+        {
+            "id": "redirects.new",
+            "message": "New Redirect",
+            "translation": "Новый редирект"
+        },
+        {
+            "id": "redirects.edit",
+            "message": "Edit Redirect",
+            "translation": "Редактировать редирект"
+        },
+        {
+            "id": "redirects.create",
+            "message": "Create Redirect",
+            "translation": "Создать редирект"
+        },
+        {
+            "id": "redirects.update",
+            "message": "Update Redirect",
+            "translation": "Обновить редирект"
+        },
+        {
+            "id": "redirects.new_description",
+            "message": "Create a new URL redirect",
+            "translation": "Создать новый URL редирект"
+        },
+        {
+            "id": "redirects.edit_description",
+            "message": "Update redirect settings",
+            "translation": "Обновить настройки редиректа"
+        },
+        {
+            "id": "redirects.back_to_list",
+            "message": "Back to Redirects",
+            "translation": "Назад к редиректам"
+        },
+        {
+            "id": "redirects.source_path",
+            "message": "Source Path",
+            "translation": "Исходный путь"
+        },
+        {
+            "id": "redirects.source_path_hint",
+            "message": "The URL path to redirect from (e.g., /old-page). Use * for wildcards.",
+            "translation": "URL путь для редиректа (например, /old-page). Используйте * для шаблонов."
+        },
+        {
+            "id": "redirects.target_url",
+            "message": "Target URL",
+            "translation": "Целевой URL"
+        },
+        {
+            "id": "redirects.target_url_hint",
+            "message": "The destination URL (internal path like /new-page or external URL like https://example.com)",
+            "translation": "URL назначения (внутренний путь как /new-page или внешний URL как https://example.com)"
+        },
+        {
+            "id": "redirects.status_code",
+            "message": "Status Code",
+            "translation": "Код статуса"
+        },
+        {
+            "id": "redirects.status_code_hint",
+            "message": "301 for permanent, 302 for temporary redirects",
+            "translation": "301 для постоянного, 302 для временного редиректа"
+        },
+        {
+            "id": "redirects.target_type",
+            "message": "Target Type",
+            "translation": "Тип цели"
+        },
+        {
+            "id": "redirects.target_type_hint",
+            "message": "_self opens in same window, _blank opens in new window",
+            "translation": "_self открывает в том же окне, _blank в новом окне"
+        },
+        {
+            "id": "redirects.is_wildcard",
+            "message": "Wildcard Pattern",
+            "translation": "Шаблон с wildcards"
+        },
+        {
+            "id": "redirects.is_wildcard_hint",
+            "message": "Enable to use * as a wildcard in the source path (e.g., /old-blog/* matches /old-blog/post1, /old-blog/post2)",
+            "translation": "Включите для использования * как шаблона в пути (например, /old-blog/* соответствует /old-blog/post1, /old-blog/post2)"
+        },
+        {
+            "id": "redirects.enabled",
+            "message": "Enabled",
+            "translation": "Включено"
+        },
+        {
+            "id": "redirects.enabled_hint",
+            "message": "When enabled, this redirect will be active and process matching requests",
+            "translation": "Когда включено, этот редирект будет активен и обрабатывать соответствующие запросы"
+        },
+        {
+            "id": "redirects.wildcard",
+            "message": "Wildcard",
+            "translation": "Шаблон"
+        },
+        {
+            "id": "redirects.no_redirects",
+            "message": "No redirects configured",
+            "translation": "Нет настроенных редиректов"
+        },
+        {
+            "id": "redirects.no_redirects_hint",
+            "message": "Create a redirect to forward visitors from old URLs to new destinations",
+            "translation": "Создайте редирект для перенаправления посетителей со старых URL на новые"
+        },
+        {
+            "id": "redirects.delete_redirect",
+            "message": "Delete Redirect",
+            "translation": "Удалить редирект"
+        },
+        {
+            "id": "redirects.confirm_delete",
+            "message": "Are you sure you want to delete the redirect",
+            "translation": "Вы уверены, что хотите удалить редирект"
+        },
+        {
+            "id": "redirects.total_count",
+            "message": "{{.}} redirect(s) total",
+            "translation": "Всего {{.}} редирект(ов)"
+        },
+        {
+            "id": "redirects.help_title",
+            "message": "Help",
+            "translation": "Справка"
+        },
+        {
+            "id": "redirects.help_wildcards_title",
+            "message": "Wildcards",
+            "translation": "Шаблоны"
+        },
+        {
+            "id": "redirects.help_wildcards_desc",
+            "message": "Use wildcards to match multiple URLs with a single redirect rule:",
+            "translation": "Используйте шаблоны для соответствия нескольким URL одним правилом редиректа:"
+        },
+        {
+            "id": "redirects.help_wildcard_example1",
+            "message": "matches any URL starting with /old-blog/",
+            "translation": "соответствует любому URL, начинающемуся с /old-blog/"
+        },
+        {
+            "id": "redirects.help_wildcard_example2",
+            "message": "matches URLs like /products/123/details",
+            "translation": "соответствует URL типа /products/123/details"
+        },
+        {
+            "id": "redirects.help_status_codes_title",
+            "message": "Status Codes",
+            "translation": "Коды статуса"
+        },
+        {
+            "id": "redirects.help_301",
+            "message": "Permanent redirect. Search engines will update their index.",
+            "translation": "Постоянный редирект. Поисковые системы обновят свой индекс."
+        },
+        {
+            "id": "redirects.help_302",
+            "message": "Temporary redirect. Search engines keep the original URL.",
+            "translation": "Временный редирект. Поисковые системы сохраняют исходный URL."
+        },
+        {
+            "id": "redirects.help_307",
+            "message": "Temporary redirect that preserves the request method (GET/POST).",
+            "translation": "Временный редирект, сохраняющий метод запроса (GET/POST)."
+        },
+        {
+            "id": "redirects.help_308",
+            "message": "Permanent redirect that preserves the request method (GET/POST).",
+            "translation": "Постоянный редирект, сохраняющий метод запроса (GET/POST)."
+        },
+        {
+            "id": "redirects.help_target_types_title",
+            "message": "Target Types",
+            "translation": "Типы целей"
+        },
+        {
+            "id": "redirects.help_target_self",
+            "message": "Opens the target URL in the same browser window/tab.",
+            "translation": "Открывает целевой URL в том же окне/вкладке браузера."
+        },
+        {
+            "id": "redirects.help_target_blank",
+            "message": "Opens the target URL in a new browser window/tab.",
+            "translation": "Открывает целевой URL в новом окне/вкладке браузера."
         },
         {
             "id": "editor.insert_image",
