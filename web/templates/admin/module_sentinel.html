@@ -9,6 +9,45 @@
     </div>
 </div>
 
+<!-- Settings Section -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h3>{{T .AdminLang "sentinel.settings_title"}}</h3>
+        <p class="text-muted mb-0">{{T .AdminLang "sentinel.settings_description"}}</p>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="/admin/sentinel/settings" class="sentinel-settings-form">
+            {{.CSRFField}}
+            <div class="settings-row">
+                <div class="setting-item">
+                    <label class="toggle-label">
+                        <input type="checkbox" name="ban_check_enabled" {{if .Data.BanCheckEnabled}}checked{{end}}>
+                        <span class="toggle-text">{{T .AdminLang "sentinel.setting_ban_check"}}</span>
+                    </label>
+                    <small class="form-text text-muted">{{T .AdminLang "sentinel.setting_ban_check_help"}}</small>
+                </div>
+                <div class="setting-item">
+                    <label class="toggle-label">
+                        <input type="checkbox" name="autoban_enabled" {{if .Data.AutoBanEnabled}}checked{{end}}>
+                        <span class="toggle-text">{{T .AdminLang "sentinel.setting_autoban"}}</span>
+                    </label>
+                    <small class="form-text text-muted">{{T .AdminLang "sentinel.setting_autoban_help"}}</small>
+                </div>
+                <div class="setting-item setting-button">
+                    <button type="submit" class="btn btn-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                            <polyline points="17 21 17 13 7 13 7 21"/>
+                            <polyline points="7 3 7 8 15 8"/>
+                        </svg>
+                        {{T .AdminLang "sentinel.save_settings"}}
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Whitelist Section -->
 <div class="card mb-4">
     <div class="card-header">
@@ -331,5 +370,35 @@ code.text-warning { background-color: rgba(255, 193, 7, 0.15); padding: 0.2rem 0
 .empty-state-small { text-align: center; padding: 1rem; }
 .mb-4 { margin-bottom: 1.5rem; }
 .mt-3 { margin-top: 1rem; }
+.sentinel-settings-form .settings-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    align-items: flex-start;
+}
+.sentinel-settings-form .setting-item {
+    flex: 1;
+    min-width: 200px;
+}
+.sentinel-settings-form .setting-button {
+    flex: 0 0 auto;
+    min-width: auto;
+    align-self: center;
+}
+.sentinel-settings-form .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-weight: 500;
+}
+.sentinel-settings-form .toggle-label input[type="checkbox"] {
+    width: 1.25rem;
+    height: 1.25rem;
+    cursor: pointer;
+}
+.sentinel-settings-form .toggle-text {
+    user-select: none;
+}
 </style>
 {{end}}

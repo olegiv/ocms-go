@@ -45,15 +45,19 @@ func (m *Module) handleAdminList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct {
-		Bans      []BannedIP
-		Paths     []AutoBanPath
-		Whitelist []WhitelistedIP
-		Version   string
+		Bans            []BannedIP
+		Paths           []AutoBanPath
+		Whitelist       []WhitelistedIP
+		Version         string
+		BanCheckEnabled bool
+		AutoBanEnabled  bool
 	}{
-		Bans:      bans,
-		Paths:     paths,
-		Whitelist: whitelist,
-		Version:   m.Version(),
+		Bans:            bans,
+		Paths:           paths,
+		Whitelist:       whitelist,
+		Version:         m.Version(),
+		BanCheckEnabled: m.IsBanCheckEnabled(),
+		AutoBanEnabled:  m.IsAutoBanEnabled(),
 	}
 
 	if err := m.ctx.Render.Render(w, r, "admin/module_sentinel", render.TemplateData{
@@ -505,6 +509,65 @@ func (m *Module) deleteWhitelistEntry(id int64) error {
 	}
 
 	return m.reloadWhitelist()
+}
+
+// ============================================================================
+// Settings handlers
+// ============================================================================
+
+// handleUpdateSettings handles POST /admin/sentinel/settings - updates module settings.
+func (m *Module) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+	lang := m.ctx.Render.GetAdminLang(r)
+
+	// Get form values - checkboxes return empty string if unchecked
+	banCheckEnabled := r.FormValue("ban_check_enabled") == "on"
+	autoBanEnabled := r.FormValue("autoban_enabled") == "on"
+
+	// Update settings in database
+	if err := m.updateSetting(settingBanCheckEnabled, banCheckEnabled); err != nil {
+		m.ctx.Logger.Error("failed to update ban_check_enabled setting", "error", err)
+		m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_settings_failed"))
+		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
+		return
+	}
+
+	if err := m.updateSetting(settingAutoBanEnabled, autoBanEnabled); err != nil {
+		m.ctx.Logger.Error("failed to update autoban_enabled setting", "error", err)
+		m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_settings_failed"))
+		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
+		return
+	}
+
+	// Reload settings into cache
+	if err := m.reloadSettings(); err != nil {
+		m.ctx.Logger.Error("failed to reload settings", "error", err)
+	}
+
+	m.ctx.Logger.Info("sentinel settings updated",
+		"ban_check_enabled", banCheckEnabled,
+		"autoban_enabled", autoBanEnabled,
+		"updated_by", user.ID,
+	)
+	m.ctx.Render.SetFlashSuccess(r, i18n.T(lang, "sentinel.success_settings_updated"))
+	http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
+}
+
+// ============================================================================
+// Database operations - Settings
+// ============================================================================
+
+func (m *Module) updateSetting(key string, value bool) error {
+	valueStr := "false"
+	if value {
+		valueStr = "true"
+	}
+
+	_, err := m.ctx.DB.Exec(`
+		INSERT INTO sentinel_settings (key, value) VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value
+	`, key, valueStr)
+	return err
 }
 
 // ============================================================================
