@@ -363,12 +363,13 @@ type FrontendHandler struct {
 	widgetService *service.WidgetService
 	searchService *service.SearchService
 	cacheManager  *cache.Manager
+	eventService  *service.EventService
 	logger        *slog.Logger
 }
 
 // NewFrontendHandler creates a new FrontendHandler.
 // If menuService is nil, a new one will be created. Pass a shared menuService for cache consistency.
-func NewFrontendHandler(db *sql.DB, themeManager *theme.Manager, cacheManager *cache.Manager, logger *slog.Logger, menuService *service.MenuService) *FrontendHandler {
+func NewFrontendHandler(db *sql.DB, themeManager *theme.Manager, cacheManager *cache.Manager, logger *slog.Logger, menuService *service.MenuService, eventService *service.EventService) *FrontendHandler {
 	if menuService == nil {
 		// Create MenuService using cacheManager's MenuCache for stats tracking
 		var menuCache *cache.MenuCache
@@ -385,6 +386,7 @@ func NewFrontendHandler(db *sql.DB, themeManager *theme.Manager, cacheManager *c
 		widgetService: service.NewWidgetService(db),
 		searchService: service.NewSearchService(db),
 		cacheManager:  cacheManager,
+		eventService:  eventService,
 		logger:        logger,
 	}
 }
@@ -2185,6 +2187,24 @@ func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request)
 			http.Redirect(w, r, "/"+aliasPage.Slug, http.StatusMovedPermanently)
 			return
 		}
+	}
+
+	// Log 404 for monitoring and debugging
+	h.logger.Info("page not found",
+		"status", http.StatusNotFound,
+		"method", r.Method,
+		"path", r.URL.Path,
+		"remote_addr", r.RemoteAddr,
+	)
+
+	// Log 404 to event log (visible in admin panel)
+	if h.eventService != nil {
+		userID := middleware.GetUserIDPtr(r)
+		metadata := map[string]any{
+			"method": r.Method,
+			"status": http.StatusNotFound,
+		}
+		_ = h.eventService.LogSystemEvent(r.Context(), "info", "Page not found", userID, r.RemoteAddr, r.URL.Path, metadata)
 	}
 
 	base := h.getBaseTemplateData(r, "Page Not Found", "")

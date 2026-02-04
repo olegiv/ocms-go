@@ -8,12 +8,14 @@ package middleware
 import (
 	"context"
 	"database/sql"
+	"log/slog"
 	"net/http"
 
 	"github.com/alexedwards/scs/v2"
 
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -229,6 +231,13 @@ func roleLevel(role string) int {
 // Roles are hierarchical: admin > editor. Public users have no admin access.
 // For example, RequireRole("editor") allows both admin and editor users.
 func RequireRole(minRole string) func(http.Handler) http.Handler {
+	return RequireRoleWithEventLog(minRole, nil)
+}
+
+// RequireRoleWithEventLog creates middleware that requires a minimum user role and logs to event log.
+// Roles are hierarchical: admin > editor. Public users have no admin access.
+// If eventService is provided, 403 errors will be logged to the event log (visible in admin panel).
+func RequireRoleWithEventLog(minRole string, eventService *service.EventService) func(http.Handler) http.Handler {
 	minLevel := roleLevel(minRole)
 
 	return func(next http.Handler) http.Handler {
@@ -242,6 +251,29 @@ func RequireRole(minRole string) func(http.Handler) http.Handler {
 			// Check role hierarchy
 			userLevel := roleLevel(user.Role)
 			if userLevel < minLevel {
+				// Log 403 for security monitoring (application logs)
+				slog.Warn("access denied",
+					"status", http.StatusForbidden,
+					"method", r.Method,
+					"path", r.URL.Path,
+					"user_id", user.ID,
+					"user_role", user.Role,
+					"required_role", minRole,
+					"remote_addr", r.RemoteAddr,
+				)
+
+				// Log 403 to event log (visible in admin panel)
+				if eventService != nil {
+					userID := user.ID
+					metadata := map[string]any{
+						"method":        r.Method,
+						"status":        http.StatusForbidden,
+						"user_role":     user.Role,
+						"required_role": minRole,
+					}
+					_ = eventService.LogAuthEvent(r.Context(), "warning", "Access denied: insufficient permissions", &userID, r.RemoteAddr, r.URL.Path, metadata)
+				}
+
 				// Return 403 Forbidden for insufficient role
 				http.Error(w, "Forbidden: insufficient permissions", http.StatusForbidden)
 				return
@@ -258,10 +290,20 @@ func RequireAdmin() func(http.Handler) http.Handler {
 	return RequireRole(RoleAdmin)
 }
 
+// RequireAdminWithEventLog creates middleware that requires admin role with event logging.
+func RequireAdminWithEventLog(eventService *service.EventService) func(http.Handler) http.Handler {
+	return RequireRoleWithEventLog(RoleAdmin, eventService)
+}
+
 // RequireEditor creates middleware that requires at least editor role.
 // Allows both admin and editor users.
 func RequireEditor() func(http.Handler) http.Handler {
 	return RequireRole(RoleEditor)
+}
+
+// RequireEditorWithEventLog creates middleware that requires at least editor role with event logging.
+func RequireEditorWithEventLog(eventService *service.EventService) func(http.Handler) http.Handler {
+	return RequireRoleWithEventLog(RoleEditor, eventService)
 }
 
 // globalSessionManager is set by SetSessionManager and used by GetAdminLang.

@@ -29,7 +29,7 @@ func runFaviconTest(t *testing.T, tc faviconTestCase) {
 		tc.setupDB(t, db)
 	}
 
-	h := NewFrontendHandler(db, nil, nil, nil, nil)
+	h := NewFrontendHandler(db, nil, nil, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/favicon.ico", nil)
 	w := httptest.NewRecorder()
 
