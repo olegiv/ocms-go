@@ -89,13 +89,13 @@ func (m *Module) handleCreate(w http.ResponseWriter, r *http.Request) {
 	urlField := strings.TrimSpace(r.FormValue("url"))
 
 	if ipPattern == "" {
-		m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_ip_required"))
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_ip_required"), "error")
 		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
 		return
 	}
 
 	if !isValidIPPattern(ipPattern) {
-		m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_invalid_pattern"))
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_invalid_pattern"), "error")
 		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
 		return
 	}
@@ -104,7 +104,7 @@ func (m *Module) handleCreate(w http.ResponseWriter, r *http.Request) {
 	adminIP := getClientIP(r)
 	if matchIPPattern(ipPattern, adminIP) {
 		m.ctx.Logger.Warn("admin attempted to ban own IP", "ip_pattern", ipPattern, "admin_ip", adminIP, "user_id", user.ID)
-		m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_self_ban"))
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_self_ban"), "error")
 		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
 		return
 	}
@@ -112,17 +112,17 @@ func (m *Module) handleCreate(w http.ResponseWriter, r *http.Request) {
 	err := m.createBan(ipPattern, notes, urlField, user.ID)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_duplicate"))
+			m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_duplicate"), "error")
 		} else {
 			m.ctx.Logger.Error("failed to create ban", "error", err, "ip_pattern", ipPattern)
-			m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_create_failed"))
+			m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_create_failed"), "error")
 		}
 		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
 		return
 	}
 
 	m.ctx.Logger.Info("IP banned", "ip_pattern", ipPattern, "banned_by", user.ID)
-	m.ctx.Render.SetFlashSuccess(r, i18n.T(lang, "sentinel.success_created"))
+	m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.success_created"), "success")
 	http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
 }
 
@@ -171,13 +171,13 @@ func (m *Module) handleCreatePath(w http.ResponseWriter, r *http.Request) {
 	notes := strings.TrimSpace(r.FormValue("notes"))
 
 	if pathPattern == "" {
-		m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_path_required"))
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_path_required"), "error")
 		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
 		return
 	}
 
 	if !isValidPathPattern(pathPattern) {
-		m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_invalid_path_pattern"))
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_invalid_path_pattern"), "error")
 		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
 		return
 	}
@@ -185,17 +185,17 @@ func (m *Module) handleCreatePath(w http.ResponseWriter, r *http.Request) {
 	err := m.createAutoBanPath(pathPattern, notes, user.ID)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_path_duplicate"))
+			m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_path_duplicate"), "error")
 		} else {
 			m.ctx.Logger.Error("failed to create auto-ban path", "error", err, "path_pattern", pathPattern)
-			m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_path_create_failed"))
+			m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_path_create_failed"), "error")
 		}
 		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
 		return
 	}
 
 	m.ctx.Logger.Info("auto-ban path created", "path_pattern", pathPattern, "created_by", user.ID)
-	m.ctx.Render.SetFlashSuccess(r, i18n.T(lang, "sentinel.success_path_created"))
+	m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.success_path_created"), "success")
 	http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
 }
 
@@ -244,13 +244,13 @@ func (m *Module) handleCreateWhitelist(w http.ResponseWriter, r *http.Request) {
 	notes := strings.TrimSpace(r.FormValue("notes"))
 
 	if ipPattern == "" {
-		m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_ip_required"))
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_ip_required"), "error")
 		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
 		return
 	}
 
 	if !isValidIPPattern(ipPattern) {
-		m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_invalid_pattern"))
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_invalid_pattern"), "error")
 		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
 		return
 	}
@@ -258,17 +258,17 @@ func (m *Module) handleCreateWhitelist(w http.ResponseWriter, r *http.Request) {
 	err := m.createWhitelistEntry(ipPattern, notes, user.ID)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_whitelist_duplicate"))
+			m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_whitelist_duplicate"), "error")
 		} else {
 			m.ctx.Logger.Error("failed to create whitelist entry", "error", err, "ip_pattern", ipPattern)
-			m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_whitelist_create_failed"))
+			m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_whitelist_create_failed"), "error")
 		}
 		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
 		return
 	}
 
 	m.ctx.Logger.Info("IP whitelisted", "ip_pattern", ipPattern, "created_by", user.ID)
-	m.ctx.Render.SetFlashSuccess(r, i18n.T(lang, "sentinel.success_whitelist_created"))
+	m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.success_whitelist_created"), "success")
 	http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
 }
 
@@ -529,14 +529,14 @@ func (m *Module) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	// Update settings in database
 	if err := m.updateSetting(settingBanCheckEnabled, banCheckEnabled); err != nil {
 		m.ctx.Logger.Error("failed to update ban_check_enabled setting", "error", err)
-		m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_settings_failed"))
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_settings_failed"), "error")
 		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
 		return
 	}
 
 	if err := m.updateSetting(settingAutoBanEnabled, autoBanEnabled); err != nil {
 		m.ctx.Logger.Error("failed to update autoban_enabled setting", "error", err)
-		m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_settings_failed"))
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_settings_failed"), "error")
 		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
 		return
 	}
@@ -551,7 +551,7 @@ func (m *Module) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		"autoban_enabled", autoBanEnabled,
 		"updated_by", user.ID,
 	)
-	m.ctx.Render.SetFlashSuccess(r, i18n.T(lang, "sentinel.success_settings_updated"))
+	m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.success_settings_updated"), "success")
 	http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
 }
 
