@@ -18,6 +18,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"github.com/olegiv/ocms-go/internal/geoip"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -28,12 +29,13 @@ var localesFS embed.FS
 
 // BannedIP represents a banned IP record.
 type BannedIP struct {
-	ID        int64     `json:"id"`
-	IPPattern string    `json:"ip_pattern"`
-	Notes     string    `json:"notes"`
-	URL       string    `json:"url"`
-	BannedAt  time.Time `json:"banned_at"`
-	CreatedBy int64     `json:"created_by"`
+	ID          int64     `json:"id"`
+	IPPattern   string    `json:"ip_pattern"`
+	CountryCode string    `json:"country_code"`
+	Notes       string    `json:"notes"`
+	URL         string    `json:"url"`
+	BannedAt    time.Time `json:"banned_at"`
+	CreatedBy   int64     `json:"created_by"`
 }
 
 // AutoBanPath represents a path pattern that triggers automatic IP banning.
@@ -75,6 +77,9 @@ type Module struct {
 	// Session manager for checking authenticated users
 	sessionManager *scs.SessionManager
 
+	// GeoIP lookup for country resolution
+	geoIP *geoip.Lookup
+
 	// Settings cache
 	banCheckEnabled bool
 	autoBanEnabled  bool
@@ -98,9 +103,10 @@ func New() *Module {
 	return &Module{
 		BaseModule: module.NewBaseModule(
 			"sentinel",
-			"1.2.0",
+			"1.3.0",
 			"IP banning module with auto-ban paths and whitelist support",
 		),
+		geoIP: geoip.NewLookup(),
 		// Default settings (enabled)
 		banCheckEnabled: true,
 		autoBanEnabled:  true,
@@ -110,6 +116,22 @@ func New() *Module {
 // Init initializes the module with the given context.
 func (m *Module) Init(ctx *module.Context) error {
 	m.ctx = ctx
+
+	// Initialize GeoIP lookup with path from config
+	geoIPPath := ""
+	if ctx.Config != nil {
+		geoIPPath = ctx.Config.GeoIPDBPath
+	}
+	if err := m.geoIP.Init(geoIPPath); err != nil {
+		ctx.Logger.Warn("GeoIP database not available, country detection disabled",
+			"error", err,
+			"path", geoIPPath,
+		)
+	} else if geoIPPath == "" {
+		ctx.Logger.Info("GeoIP not configured for Sentinel, country detection disabled. Set OCMS_GEOIP_DB_PATH to enable.")
+	} else {
+		ctx.Logger.Info("Sentinel GeoIP database loaded", "path", geoIPPath)
+	}
 
 	// Load settings first
 	if err := m.reloadSettings(); err != nil {
@@ -133,6 +155,7 @@ func (m *Module) Init(ctx *module.Context) error {
 		"whitelisted", len(m.whitelistPatterns),
 		"ban_check_enabled", m.banCheckEnabled,
 		"autoban_enabled", m.autoBanEnabled,
+		"geoip_enabled", m.geoIP.IsEnabled(),
 	)
 	return nil
 }
@@ -172,6 +195,9 @@ func (m *Module) Shutdown() error {
 	if m.ctx != nil {
 		m.ctx.Logger.Info("Sentinel module shutting down")
 	}
+	if m.geoIP != nil {
+		_ = m.geoIP.Close()
+	}
 	return nil
 }
 
@@ -205,6 +231,7 @@ func (m *Module) TemplateFuncs() template.FuncMap {
 		"sentinelVersion": func() string {
 			return m.Version()
 		},
+		"countryName": geoip.CountryName,
 	}
 }
 
@@ -326,6 +353,19 @@ func (m *Module) Migrations() []module.Migration {
 			Down: func(db *sql.DB) error {
 				_, err := db.Exec(`DROP TABLE IF EXISTS sentinel_settings`)
 				return err
+			},
+		},
+		{
+			Version:     5,
+			Description: "Add country_code column to sentinel_banned_ips",
+			Up: func(db *sql.DB) error {
+				_, err := db.Exec(`ALTER TABLE sentinel_banned_ips ADD COLUMN country_code TEXT NOT NULL DEFAULT ''`)
+				return err
+			},
+			Down: func(db *sql.DB) error {
+				// SQLite doesn't support DROP COLUMN, so we'd need to recreate the table
+				// For simplicity, we'll just leave the column
+				return nil
 			},
 		},
 	}
@@ -553,16 +593,22 @@ func matchPathPattern(pattern, path string) bool {
 // autoBanIP automatically bans an IP that triggered an auto-ban path.
 func (m *Module) autoBanIP(ip, triggeredPath, matchedPattern string) error {
 	notes := "Auto-banned for accessing: " + triggeredPath
+	countryCode := m.geoIP.LookupCountry(ip)
 	_, err := m.ctx.DB.Exec(`
-		INSERT OR IGNORE INTO sentinel_banned_ips (ip_pattern, notes, url, banned_at, created_by)
-		VALUES (?, ?, ?, ?, 0)
-	`, ip, notes, triggeredPath, time.Now())
+		INSERT OR IGNORE INTO sentinel_banned_ips (ip_pattern, country_code, notes, url, banned_at, created_by)
+		VALUES (?, ?, ?, ?, ?, 0)
+	`, ip, countryCode, notes, triggeredPath, time.Now())
 	if err != nil {
 		return err
 	}
 
 	// Reload cache
 	return m.reloadBannedIPs()
+}
+
+// LookupCountry returns the country code for an IP address.
+func (m *Module) LookupCountry(ip string) string {
+	return m.geoIP.LookupCountry(ip)
 }
 
 // GetMiddleware returns the IP ban checking middleware for use in router setup.

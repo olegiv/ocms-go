@@ -1,7 +1,8 @@
 // Copyright (c) 2025-2026 Oleg Ivanchenko
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package analytics_int
+// Package geoip provides IP-to-country lookup using MaxMind GeoLite2-Country database.
+package geoip
 
 import (
 	"fmt"
@@ -34,8 +35,8 @@ func init() {
 	}
 }
 
-// GeoIPLookup handles IP to country lookup using MaxMind GeoLite2-Country database.
-type GeoIPLookup struct {
+// Lookup handles IP to country lookup using MaxMind GeoLite2-Country database.
+type Lookup struct {
 	db          *maxminddb.Reader
 	dbPath      string
 	dbModTime   time.Time
@@ -51,15 +52,15 @@ type geoRecord struct {
 	} `maxminddb:"country"`
 }
 
-// NewGeoIPLookup creates a new GeoIP lookup instance.
-func NewGeoIPLookup() *GeoIPLookup {
-	return &GeoIPLookup{}
+// NewLookup creates a new GeoIP lookup instance.
+func NewLookup() *Lookup {
+	return &Lookup{}
 }
 
 // Init initializes the GeoIP database from the given path.
 // If path is empty, GeoIP lookups are disabled (graceful degradation).
 // Returns an error if the database cannot be loaded (logs warning instead).
-func (g *GeoIPLookup) Init(dbPath string) error {
+func (g *Lookup) Init(dbPath string) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -76,7 +77,7 @@ func (g *GeoIPLookup) Init(dbPath string) error {
 
 // loadDatabase loads or reloads the MaxMind database.
 // Caller must hold g.mu write lock.
-func (g *GeoIPLookup) loadDatabase() error {
+func (g *Lookup) loadDatabase() error {
 	// Check if file exists and get mod time
 	info, err := os.Stat(g.dbPath)
 	if err != nil {
@@ -114,7 +115,7 @@ func (g *GeoIPLookup) loadDatabase() error {
 
 // Reload reloads the GeoIP database if it has been updated.
 // Safe to call periodically (e.g., from a cron job).
-func (g *GeoIPLookup) Reload() error {
+func (g *Lookup) Reload() error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -131,7 +132,7 @@ func (g *GeoIPLookup) Reload() error {
 // - IP address is invalid
 // - Country cannot be determined
 // Returns "LOCAL" for private/local IPs.
-func (g *GeoIPLookup) LookupCountry(ip string) string {
+func (g *Lookup) LookupCountry(ip string) string {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
@@ -169,14 +170,14 @@ func (g *GeoIPLookup) LookupCountry(ip string) string {
 }
 
 // IsEnabled returns whether GeoIP lookups are available.
-func (g *GeoIPLookup) IsEnabled() bool {
+func (g *Lookup) IsEnabled() bool {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 	return g.enabled
 }
 
 // Close closes the GeoIP database.
-func (g *GeoIPLookup) Close() error {
+func (g *Lookup) Close() error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
