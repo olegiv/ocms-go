@@ -28,6 +28,16 @@ func TestMatchIPPattern(t *testing.T) {
 		{"wildcard partial octet 2", "192.168.1.10*", "192.168.1.101", true},
 		{"wildcard partial octet no match", "192.168.1.10*", "192.168.1.200", false},
 
+		// Multi-wildcard patterns (full 4-octet)
+		{"two wildcards", "192.168.*.*", "192.168.1.100", true},
+		{"two wildcards different subnet", "192.168.*.*", "10.0.0.1", false},
+		{"middle wildcard", "192.*.1.1", "192.168.1.1", true},
+		{"middle wildcard no match", "192.*.1.1", "192.168.2.1", false},
+		{"wildcard at specific position", "10.*.*.1", "10.0.0.1", true},
+		{"wildcard at specific position no match", "10.*.*.1", "10.0.0.2", false},
+		{"all wildcards except first", "192.*.*.*", "192.0.0.1", true},
+		{"all wildcards except first no match", "192.*.*.*", "10.0.0.1", false},
+
 		// Edge cases
 		{"empty pattern", "", "192.168.1.1", false},
 		{"empty ip", "192.168.1.1", "", false},
