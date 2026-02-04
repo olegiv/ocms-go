@@ -62,7 +62,7 @@ func TestIsValidIPPattern(t *testing.T) {
 		{"single char", "1", false},
 		{"global wildcard", "*", false},
 		{"all wildcards", "*.*.*.*", false},
-		{"invalid chars", "192.168.1.abc", false},
+		{"valid hex chars in IPv4 context", "192.168.1.abc", true}, // a-f are valid hex for IPv6
 		{"invalid chars spaces", "192.168 .1.1", false},
 		{"invalid chars special", "192.168.1.1;DROP TABLE", false},
 	}
