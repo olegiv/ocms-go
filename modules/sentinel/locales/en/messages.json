@@ -6,6 +6,16 @@
         {"id": "sentinel.title", "message": "Sentinel - IP Security", "translation": "Sentinel - IP Security"},
         {"id": "sentinel.description", "message": "Manage IP banning, auto-ban paths, and whitelist", "translation": "Manage IP banning, auto-ban paths, and whitelist"},
 
+        {"id": "sentinel.settings_title", "message": "Settings", "translation": "Settings"},
+        {"id": "sentinel.settings_description", "message": "Enable or disable security features", "translation": "Enable or disable security features"},
+        {"id": "sentinel.setting_ban_check", "message": "IP Ban Check", "translation": "IP Ban Check"},
+        {"id": "sentinel.setting_ban_check_help", "message": "Block requests from banned IP addresses", "translation": "Block requests from banned IP addresses"},
+        {"id": "sentinel.setting_autoban", "message": "Auto-Ban by Path", "translation": "Auto-Ban by Path"},
+        {"id": "sentinel.setting_autoban_help", "message": "Automatically ban IPs accessing forbidden paths", "translation": "Automatically ban IPs accessing forbidden paths"},
+        {"id": "sentinel.save_settings", "message": "Save Settings", "translation": "Save Settings"},
+        {"id": "sentinel.success_settings_updated", "message": "Settings updated successfully", "translation": "Settings updated successfully"},
+        {"id": "sentinel.error_settings_failed", "message": "Failed to update settings", "translation": "Failed to update settings"},
+
         {"id": "sentinel.whitelist_title", "message": "Whitelisted IPs", "translation": "Whitelisted IPs"},
         {"id": "sentinel.whitelist_description", "message": "IPs that bypass all security checks", "translation": "IPs that bypass all security checks"},
         {"id": "sentinel.whitelist_notes_placeholder", "message": "Description (optional)", "translation": "Description (optional)"},

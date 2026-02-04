@@ -61,6 +61,12 @@ const (
 	roleEditor       = "editor"
 )
 
+// Settings keys.
+const (
+	settingBanCheckEnabled = "ban_check_enabled"
+	settingAutoBanEnabled  = "autoban_enabled"
+)
+
 // Module implements the module.Module interface for IP banning.
 type Module struct {
 	module.BaseModule
@@ -68,6 +74,11 @@ type Module struct {
 
 	// Session manager for checking authenticated users
 	sessionManager *scs.SessionManager
+
+	// Settings cache
+	banCheckEnabled bool
+	autoBanEnabled  bool
+	settingsMu      sync.RWMutex
 
 	// Cache of banned IPs for fast lookup
 	bannedPatterns []string
@@ -87,15 +98,23 @@ func New() *Module {
 	return &Module{
 		BaseModule: module.NewBaseModule(
 			"sentinel",
-			"1.1.0",
+			"1.2.0",
 			"IP banning module with auto-ban paths and whitelist support",
 		),
+		// Default settings (enabled)
+		banCheckEnabled: true,
+		autoBanEnabled:  true,
 	}
 }
 
 // Init initializes the module with the given context.
 func (m *Module) Init(ctx *module.Context) error {
 	m.ctx = ctx
+
+	// Load settings first
+	if err := m.reloadSettings(); err != nil {
+		return err
+	}
 
 	// Load all caches
 	if err := m.reloadBannedIPs(); err != nil {
@@ -112,6 +131,8 @@ func (m *Module) Init(ctx *module.Context) error {
 		"banned_count", len(m.bannedPatterns),
 		"autoban_paths", len(m.autoBanPaths),
 		"whitelisted", len(m.whitelistPatterns),
+		"ban_check_enabled", m.banCheckEnabled,
+		"autoban_enabled", m.autoBanEnabled,
 	)
 	return nil
 }
@@ -173,6 +194,9 @@ func (m *Module) RegisterAdminRoutes(r chi.Router) {
 	// Whitelist
 	r.Post("/sentinel/whitelist", m.handleCreateWhitelist)
 	r.Delete("/sentinel/whitelist/{id}", m.handleDeleteWhitelist)
+
+	// Settings
+	r.Post("/sentinel/settings", m.handleUpdateSettings)
 }
 
 // TemplateFuncs returns template functions provided by the module.
@@ -278,6 +302,32 @@ func (m *Module) Migrations() []module.Migration {
 				return err
 			},
 		},
+		{
+			Version:     4,
+			Description: "Create sentinel_settings table",
+			Up: func(db *sql.DB) error {
+				_, err := db.Exec(`
+					CREATE TABLE IF NOT EXISTS sentinel_settings (
+						key TEXT PRIMARY KEY,
+						value TEXT NOT NULL DEFAULT ''
+					)
+				`)
+				if err != nil {
+					return err
+				}
+				// Insert default settings (both enabled)
+				_, err = db.Exec(`INSERT OR IGNORE INTO sentinel_settings (key, value) VALUES (?, ?)`, settingBanCheckEnabled, "true")
+				if err != nil {
+					return err
+				}
+				_, err = db.Exec(`INSERT OR IGNORE INTO sentinel_settings (key, value) VALUES (?, ?)`, settingAutoBanEnabled, "true")
+				return err
+			},
+			Down: func(db *sql.DB) error {
+				_, err := db.Exec(`DROP TABLE IF EXISTS sentinel_settings`)
+				return err
+			},
+		},
 	}
 }
 
@@ -351,6 +401,59 @@ func (m *Module) reloadWhitelist() error {
 	m.whitelistMu.Unlock()
 
 	return rows.Err()
+}
+
+// reloadSettings loads settings from the database into memory.
+func (m *Module) reloadSettings() error {
+	// Default values if settings table doesn't exist yet
+	banCheck := true
+	autoBan := true
+
+	// Try to read settings from database
+	rows, err := m.ctx.DB.Query(`SELECT key, value FROM sentinel_settings`)
+	if err != nil {
+		// Table might not exist yet (before migration), use defaults
+		m.settingsMu.Lock()
+		m.banCheckEnabled = banCheck
+		m.autoBanEnabled = autoBan
+		m.settingsMu.Unlock()
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var key, value string
+		if err := rows.Scan(&key, &value); err != nil {
+			return err
+		}
+		switch key {
+		case settingBanCheckEnabled:
+			banCheck = value == "true"
+		case settingAutoBanEnabled:
+			autoBan = value == "true"
+		}
+	}
+
+	m.settingsMu.Lock()
+	m.banCheckEnabled = banCheck
+	m.autoBanEnabled = autoBan
+	m.settingsMu.Unlock()
+
+	return rows.Err()
+}
+
+// IsBanCheckEnabled returns whether IP ban checking is enabled.
+func (m *Module) IsBanCheckEnabled() bool {
+	m.settingsMu.RLock()
+	defer m.settingsMu.RUnlock()
+	return m.banCheckEnabled
+}
+
+// IsAutoBanEnabled returns whether auto-ban by path is enabled.
+func (m *Module) IsAutoBanEnabled() bool {
+	m.settingsMu.RLock()
+	defer m.settingsMu.RUnlock()
+	return m.autoBanEnabled
 }
 
 // IsIPWhitelisted checks if the given IP matches any whitelisted pattern.
@@ -486,37 +589,39 @@ func (m *Module) Middleware() func(http.Handler) http.Handler {
 				return
 			}
 
-			// 2. Check if IP is already banned
-			if m.IsIPBanned(ip) {
+			// 2. Check if IP is already banned (if ban check is enabled)
+			if m.IsBanCheckEnabled() && m.IsIPBanned(ip) {
 				m.ctx.Logger.Warn("blocked banned IP", "ip", ip, "path", path)
 				http.Error(w, i18n.T("en", "sentinel.access_denied"), http.StatusForbidden)
 				return
 			}
 
-			// 3. Check auto-ban paths - ban IP if accessing forbidden path
+			// 3. Check auto-ban paths - ban IP if accessing forbidden path (if auto-ban is enabled)
 			// Skip auto-ban for authenticated admin/editor users
-			if matchedPattern := m.CheckAutoBanPath(path); matchedPattern != "" {
-				// Check if user is admin or editor before auto-banning
-				if m.isAdminOrEditor(r) {
-					m.ctx.Logger.Debug("skipping auto-ban for admin/editor user",
+			if m.IsAutoBanEnabled() {
+				if matchedPattern := m.CheckAutoBanPath(path); matchedPattern != "" {
+					// Check if user is admin or editor before auto-banning
+					if m.isAdminOrEditor(r) {
+						m.ctx.Logger.Debug("skipping auto-ban for admin/editor user",
+							"ip", ip,
+							"path", path,
+							"pattern", matchedPattern,
+						)
+						next.ServeHTTP(w, r)
+						return
+					}
+
+					m.ctx.Logger.Warn("auto-banning IP for forbidden path",
 						"ip", ip,
 						"path", path,
 						"pattern", matchedPattern,
 					)
-					next.ServeHTTP(w, r)
+					if err := m.autoBanIP(ip, path, matchedPattern); err != nil {
+						m.ctx.Logger.Error("failed to auto-ban IP", "error", err, "ip", ip)
+					}
+					http.Error(w, i18n.T("en", "sentinel.access_denied"), http.StatusForbidden)
 					return
 				}
-
-				m.ctx.Logger.Warn("auto-banning IP for forbidden path",
-					"ip", ip,
-					"path", path,
-					"pattern", matchedPattern,
-				)
-				if err := m.autoBanIP(ip, path, matchedPattern); err != nil {
-					m.ctx.Logger.Error("failed to auto-ban IP", "error", err, "ip", ip)
-				}
-				http.Error(w, i18n.T("en", "sentinel.access_denied"), http.StatusForbidden)
-				return
 			}
 
 			next.ServeHTTP(w, r)
