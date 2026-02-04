@@ -364,7 +364,8 @@ func (h *RedirectsHandler) Toggle(w http.ResponseWriter, r *http.Request) {
 	_ = h.eventService.LogConfigEvent(r.Context(), model.EventLevelInfo, "Redirect toggled", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"redirect_id": id, "enabled": newStatus})
 
 	if r.Header.Get("HX-Request") == "true" {
-		w.WriteHeader(http.StatusOK)
+		// Return 204 No Content so htmx doesn't swap (row stays visible)
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
