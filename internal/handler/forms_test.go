@@ -15,7 +15,7 @@ import (
 func TestNewFormsHandler(t *testing.T) {
 	db, sm := testHandlerSetup(t)
 
-	h := NewFormsHandler(db, nil, sm, nil, nil, nil, nil)
+	h := NewFormsHandler(db, nil, sm, nil, nil, nil, nil, nil)
 	if h == nil {
 		t.Fatal("NewFormsHandler returned nil")
 	}
