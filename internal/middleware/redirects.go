@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -118,7 +119,22 @@ func (rm *RedirectsMiddleware) Handler(next http.Handler) http.Handler {
 					"wildcard", rd.IsWildcard,
 				)
 
-				http.Redirect(w, r, targetURL, int(rd.StatusCode))
+				// Normalize and validate redirect target to prevent open redirects.
+				// Replace backslashes, as some browsers treat them like forward slashes.
+				safeTarget := strings.ReplaceAll(targetURL, "\\", "/")
+				parsedTarget, err := url.Parse(safeTarget)
+				if err != nil || parsedTarget.Hostname() != "" {
+					// Invalid or external redirect target: reject the redirect.
+					slog.Warn("blocked unsafe redirect target",
+						"source", path,
+						"target", targetURL,
+						"error", err,
+					)
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+
+				http.Redirect(w, r, parsedTarget.String(), int(rd.StatusCode))
 				return
 			}
 		}
