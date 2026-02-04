@@ -4,11 +4,13 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"log/slog"
 	"net/http"
 	"net/mail"
@@ -20,12 +22,15 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/theme"
 	"github.com/olegiv/ocms-go/internal/util"
 	"github.com/olegiv/ocms-go/internal/webhook"
 	"github.com/olegiv/ocms-go/modules/hcaptcha"
@@ -33,20 +38,28 @@ import (
 
 // FormsHandler handles form management routes.
 type FormsHandler struct {
+	db             *sql.DB
 	queries        *store.Queries
 	renderer       *render.Renderer
 	sessionManager *scs.SessionManager
 	dispatcher     *webhook.Dispatcher
 	hookRegistry   *module.HookRegistry
+	themeManager   *theme.Manager
+	cacheManager   *cache.Manager
+	menuService    *service.MenuService
 }
 
 // NewFormsHandler creates a new FormsHandler.
-func NewFormsHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, hr *module.HookRegistry) *FormsHandler {
+func NewFormsHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, hr *module.HookRegistry, tm *theme.Manager, cm *cache.Manager, ms *service.MenuService) *FormsHandler {
 	return &FormsHandler{
+		db:             db,
 		queries:        store.New(db),
 		renderer:       renderer,
 		sessionManager: sm,
 		hookRegistry:   hr,
+		themeManager:   tm,
+		cacheManager:   cm,
+		menuService:    ms,
 	}
 }
 
@@ -953,20 +966,19 @@ func (h *FormsHandler) Show(w http.ResponseWriter, r *http.Request) {
 		fields = []store.FormField{}
 	}
 
-	data := PublicFormData{
-		Form:      *form,
-		Fields:    fields,
-		Errors:    make(map[string]string),
-		Values:    make(map[string]string),
-		Success:   false,
-		CSRFToken: h.sessionManager.Token(r.Context()),
-		SiteName:  h.getSiteName(r.Context()),
+	// Build template data with theme support
+	base := h.getBaseTemplateData(r, form.Title)
+	data := FormTemplateData{
+		BaseTemplateData: base,
+		Form:             *form,
+		Fields:           fields,
+		Errors:           make(map[string]string),
+		Values:           make(map[string]string),
+		Success:          false,
+		CSRFToken:        template.HTML(h.sessionManager.Token(r.Context())),
 	}
 
-	h.renderer.RenderPage(w, r, "public/form", render.TemplateData{
-		Title: form.Title,
-		Data:  data,
-	})
+	h.render(w, r, data)
 }
 
 // Submit handles POST /forms/{slug} - processes form submission.
@@ -1128,35 +1140,35 @@ func (h *FormsHandler) renderFormWithErrors(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	data := PublicFormData{
-		Form:      form,
-		Fields:    fields,
-		Errors:    fieldErrors,
-		Values:    values,
-		Success:   false,
-		CSRFToken: h.sessionManager.Token(r.Context()),
-		SiteName:  h.getSiteName(r.Context()),
+	// Build template data with theme support
+	base := h.getBaseTemplateData(r, form.Title)
+	data := FormTemplateData{
+		BaseTemplateData: base,
+		Form:             form,
+		Fields:           fields,
+		Errors:           fieldErrors,
+		Values:           values,
+		Success:          false,
+		CSRFToken:        template.HTML(h.sessionManager.Token(r.Context())),
 	}
 
-	h.renderer.RenderPage(w, r, "public/form", render.TemplateData{
-		Title: form.Title,
-		Data:  data,
-	})
+	h.render(w, r, data)
 }
 
 // renderFormSuccess renders the form success page.
 func (h *FormsHandler) renderFormSuccess(w http.ResponseWriter, r *http.Request, form store.Form, fields []store.FormField) {
-	data := PublicFormData{
-		Form:     form,
-		Fields:   fields,
-		Success:  true,
-		SiteName: h.getSiteName(r.Context()),
+	// Build template data with theme support
+	base := h.getBaseTemplateData(r, form.Title)
+	data := FormTemplateData{
+		BaseTemplateData: base,
+		Form:             form,
+		Fields:           fields,
+		Success:          true,
+		Errors:           make(map[string]string),
+		Values:           make(map[string]string),
 	}
 
-	h.renderer.RenderPage(w, r, "public/form", render.TemplateData{
-		Title: form.Title,
-		Data:  data,
-	})
+	h.render(w, r, data)
 }
 
 // isValidEmail checks if the email is valid.
@@ -1745,4 +1757,155 @@ func (h *FormsHandler) TranslateForm(w http.ResponseWriter, r *http.Request) {
 
 	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminFormsID, translatedForm.ID),
 		fmt.Sprintf("Translation created for %s. Please translate the form content.", setup.TargetContext.TargetLang.Name))
+}
+
+// FormTemplateData holds data for form template rendering.
+type FormTemplateData struct {
+	BaseTemplateData
+	Form      store.Form
+	Fields    []store.FormField
+	Errors    map[string]string
+	Values    map[string]string
+	Success   bool
+	CSRFToken template.HTML
+}
+
+// render renders a form template using the active theme.
+func (h *FormsHandler) render(w http.ResponseWriter, r *http.Request, data FormTemplateData) {
+	activeTheme := h.themeManager.GetActiveTheme()
+	if activeTheme == nil {
+		slog.Error("no active theme available")
+		http.Error(w, "No active theme", http.StatusInternalServerError)
+		return
+	}
+
+	buf := new(bytes.Buffer)
+	if err := activeTheme.RenderPage(buf, "form", data); err != nil {
+		slog.Error("failed to render form template", "error", err)
+		http.Error(w, "Template rendering error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, err := buf.WriteTo(w); err != nil {
+		slog.Error("failed to write response", "error", err)
+	}
+}
+
+// getBaseTemplateData builds base template data for form rendering.
+func (h *FormsHandler) getBaseTemplateData(r *http.Request, title string) BaseTemplateData {
+	ctx := r.Context()
+	var langCode string
+	langPrefix := ""
+
+	// Get language from middleware
+	if langInfo := middleware.GetLanguage(r); langInfo != nil {
+		langCode = langInfo.Code
+		if !langInfo.IsDefault {
+			langPrefix = "/" + langInfo.Code
+		}
+	}
+
+	// Build base data
+	data := BaseTemplateData{
+		Title:       title,
+		SiteName:    "oCMS",
+		Year:        time.Now().Year(),
+		ShowSidebar: false,
+		CurrentPath: r.URL.Path,
+		RequestURI:  r.URL.RequestURI(),
+		LangCode:    langCode,
+		LangPrefix:  langPrefix,
+		Site: SiteData{
+			SiteName:    "oCMS",
+			Description: "A simple content management system",
+			CurrentYear: time.Now().Year(),
+			Settings:    make(map[string]string),
+		},
+	}
+
+	// Get site configuration
+	if h.cacheManager != nil {
+		if name, err := h.cacheManager.GetConfig(ctx, "site_name"); err == nil && name != "" {
+			data.SiteName = name
+			data.Site.SiteName = name
+		}
+		if desc, err := h.cacheManager.GetConfig(ctx, "site_description"); err == nil && desc != "" {
+			data.SiteTagline = desc
+			data.Site.Description = desc
+		}
+		if url, err := h.cacheManager.GetConfig(ctx, "site_url"); err == nil && url != "" {
+			data.SiteURL = strings.TrimSuffix(url, "/")
+			data.Site.URL = strings.TrimSuffix(url, "/")
+		}
+		if logo, err := h.cacheManager.GetConfig(ctx, "site_logo"); err == nil && logo != "" {
+			data.SiteLogo = logo
+		}
+		if ogImage, err := h.cacheManager.GetConfig(ctx, "default_og_image"); err == nil && ogImage != "" {
+			data.OGImage = ogImage
+			data.Site.DefaultOGImage = ogImage
+		}
+		if css, err := h.cacheManager.GetConfig(ctx, "custom_css"); err == nil && css != "" {
+			data.CustomCSS = css
+		}
+	}
+
+	// Get theme settings
+	if activeTheme := h.themeManager.GetActiveTheme(); activeTheme != nil {
+		data.Site.Theme = &activeTheme.Config
+		data.ThemeSettings = make(map[string]string)
+
+		configKey := "theme_settings_" + activeTheme.Name
+		var settingsJSON string
+		if h.cacheManager != nil {
+			settingsJSON, _ = h.cacheManager.GetConfig(ctx, configKey)
+		}
+		if settingsJSON != "" {
+			var settings map[string]string
+			if err := json.Unmarshal([]byte(settingsJSON), &settings); err == nil {
+				data.ThemeSettings = settings
+			}
+		}
+	}
+
+	// Load menus
+	if h.menuService != nil {
+		data.MainMenu = h.loadMenu("main", r.URL.Path, langCode)
+		data.FooterMenu = h.loadMenu("footer", r.URL.Path, langCode)
+		data.Navigation = data.MainMenu
+		data.FooterNav = data.FooterMenu
+	}
+
+	return data
+}
+
+// loadMenu loads a menu by slug and language.
+func (h *FormsHandler) loadMenu(slug, currentPath, langCode string) []MenuItem {
+	var items []service.MenuItem
+	if langCode != "" {
+		items = h.menuService.GetMenuForLanguage(slug, langCode)
+	} else {
+		items = h.menuService.GetMenu(slug)
+	}
+	if items == nil {
+		return nil
+	}
+
+	return h.menuItemsToView(items, currentPath)
+}
+
+// menuItemsToView converts service menu items to view items.
+func (h *FormsHandler) menuItemsToView(items []service.MenuItem, currentPath string) []MenuItem {
+	result := make([]MenuItem, 0, len(items))
+	for _, item := range items {
+		mi := MenuItem{
+			Title:    item.Title,
+			URL:      item.URL,
+			Target:   item.Target,
+			IsActive: item.URL == currentPath,
+			Children: h.menuItemsToView(item.Children, currentPath),
+		}
+		result = append(result, mi)
+	}
+	return result
 }
