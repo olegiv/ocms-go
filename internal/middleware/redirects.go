@@ -146,11 +146,34 @@ func (rm *RedirectsMiddleware) Handler(next http.Handler) http.Handler {
 // matchPathWithCaptures matches a request path against a source pattern and returns captured wildcard segments.
 // For non-wildcard patterns, it returns a simple equality check with no captures.
 // For wildcard patterns:
-//   - "*" captures exactly one path segment
+//   - "*" captures exactly one path segment (when standalone)
 //   - "**" captures zero or more path segments (joined with "/")
+//   - Trailing "*" (e.g., /user/login*) matches any path starting with that prefix
 func (rm *RedirectsMiddleware) matchPathWithCaptures(requestPath, sourcePath string, isWildcard bool) (bool, []string) {
 	if !isWildcard {
 		return requestPath == sourcePath, nil
+	}
+
+	// Handle trailing prefix wildcard (e.g., /user/login*)
+	// Must end with single * but not ** (which is handled by segment matching)
+	if strings.HasSuffix(sourcePath, "*") && !strings.HasSuffix(sourcePath, "**") {
+		// Check if it's a standalone segment wildcard like /blog/*
+		// by verifying the character before * is not /
+		prefix := strings.TrimSuffix(sourcePath, "*")
+		if !strings.HasSuffix(prefix, "/") {
+			// This is a prefix wildcard like /user/login* (not /user/login/*)
+			reqPath := strings.TrimSuffix(requestPath, "/")
+			prefixNorm := strings.TrimSuffix(prefix, "/")
+
+			// Match exact prefix or prefix followed by more path
+			if reqPath == prefixNorm || strings.HasPrefix(reqPath, prefix) {
+				// Capture everything after the prefix
+				captured := strings.TrimPrefix(reqPath, prefix)
+				captured = strings.TrimPrefix(captured, "/")
+				return true, []string{captured}
+			}
+			return false, nil
+		}
 	}
 
 	sourceParts := strings.Split(strings.Trim(sourcePath, "/"), "/")
