@@ -738,6 +738,10 @@ document.addEventListener('DOMContentLoaded', function() {
         promotion: false,
         branding: false,
         base_url: '/static/dist/js/tinymce',
+
+        // URL handling configuration - disable URL conversion to preserve paths as-is
+        convert_urls: false,  // Don't modify URLs at all - keep them exactly as entered
+
         plugins: [
             'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
             'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
