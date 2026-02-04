@@ -51,8 +51,8 @@
     </footer>
     {{end}}
 
-    {{/* Author Box */}}
-    {{if .ShowAuthorBox}}
+    {{/* Author Box - only shown for posts */}}
+    {{if and .ShowAuthorBox (eq .Page.Type "post")}}
     {{if .Page.Author}}
     <div class="author-box">
         {{if .Page.Author.Avatar}}

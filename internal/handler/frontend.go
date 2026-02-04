@@ -1296,7 +1296,7 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 		Body:       template.HTML(p.Body),
 		URL:        "/" + p.Slug,
 		Status:     p.Status,
-		Type:       "page",
+		Type:       p.PageType,
 		CreatedAt:  p.CreatedAt,
 		UpdatedAt:  p.UpdatedAt,
 		LangCode:   langCode,
