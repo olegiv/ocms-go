@@ -32,8 +32,8 @@ func TestModuleNew(t *testing.T) {
 		t.Errorf("Name() = %q, want %q", m.Name(), "analytics_int")
 	}
 
-	if m.Version() != "1.0.0" {
-		t.Errorf("Version() = %q, want %q", m.Version(), "1.0.0")
+	if m.Version() != "1.0.1" {
+		t.Errorf("Version() = %q, want %q", m.Version(), "1.0.1")
 	}
 
 	if m.AdminURL() != "/admin/internal-analytics" {
