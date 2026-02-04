@@ -241,6 +241,7 @@
             <thead>
                 <tr>
                     <th>{{T .AdminLang "sentinel.table_ip"}}</th>
+                    <th>{{T .AdminLang "sentinel.table_country"}}</th>
                     <th>{{T .AdminLang "sentinel.table_notes"}}</th>
                     <th>{{T .AdminLang "sentinel.table_url"}}</th>
                     <th>{{T .AdminLang "sentinel.table_banned_at"}}</th>
@@ -251,6 +252,7 @@
                 {{range .Data.Bans}}
                 <tr>
                     <td><code class="text-danger">{{.IPPattern}}</code></td>
+                    <td>{{if .CountryCode}}<span class="country-badge" title="{{countryName .CountryCode}}">{{.CountryCode}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>
                     <td class="text-muted">{{if .Notes}}{{.Notes}}{{else}}-{{end}}</td>
                     <td class="text-muted">
                         {{if .URL}}
@@ -367,6 +369,7 @@ document.addEventListener('DOMContentLoaded', function() {
 code.text-danger { background-color: rgba(220, 53, 69, 0.1); padding: 0.2rem 0.4rem; border-radius: 3px; }
 code.text-success { background-color: rgba(40, 167, 69, 0.1); padding: 0.2rem 0.4rem; border-radius: 3px; }
 code.text-warning { background-color: rgba(255, 193, 7, 0.15); padding: 0.2rem 0.4rem; border-radius: 3px; }
+.country-badge { background-color: rgba(108, 117, 125, 0.15); padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.85em; font-weight: 500; cursor: help; }
 .empty-state-small { text-align: center; padding: 1rem; }
 .mb-4 { margin-bottom: 1.5rem; }
 .mt-3 { margin-top: 1rem; }

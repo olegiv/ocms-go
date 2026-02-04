@@ -55,6 +55,7 @@
         {"id": "sentinel.ban_ip", "message": "Ban IP", "translation": "Заблокировать"},
         {"id": "sentinel.remove_ban", "message": "Remove ban", "translation": "Снять блокировку"},
         {"id": "sentinel.table_ip", "message": "IP Pattern", "translation": "IP-адрес"},
+        {"id": "sentinel.table_country", "message": "Country", "translation": "Страна"},
         {"id": "sentinel.table_notes", "message": "Notes", "translation": "Заметки"},
         {"id": "sentinel.table_url", "message": "URL", "translation": "URL"},
         {"id": "sentinel.table_banned_at", "message": "Banned At", "translation": "Заблокирован"},

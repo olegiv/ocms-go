@@ -310,7 +310,7 @@ func (m *Module) handleDeleteWhitelist(w http.ResponseWriter, r *http.Request) {
 
 func (m *Module) listBannedIPs() ([]BannedIP, error) {
 	rows, err := m.ctx.DB.Query(`
-		SELECT id, ip_pattern, notes, url, banned_at, created_by
+		SELECT id, ip_pattern, country_code, notes, url, banned_at, created_by
 		FROM sentinel_banned_ips
 		ORDER BY banned_at DESC
 	`)
@@ -322,7 +322,7 @@ func (m *Module) listBannedIPs() ([]BannedIP, error) {
 	var bans []BannedIP
 	for rows.Next() {
 		var ban BannedIP
-		if err := rows.Scan(&ban.ID, &ban.IPPattern, &ban.Notes, &ban.URL, &ban.BannedAt, &ban.CreatedBy); err != nil {
+		if err := rows.Scan(&ban.ID, &ban.IPPattern, &ban.CountryCode, &ban.Notes, &ban.URL, &ban.BannedAt, &ban.CreatedBy); err != nil {
 			return nil, err
 		}
 		bans = append(bans, ban)
@@ -334,10 +334,10 @@ func (m *Module) listBannedIPs() ([]BannedIP, error) {
 func (m *Module) getBanByID(id int64) (*BannedIP, error) {
 	var ban BannedIP
 	err := m.ctx.DB.QueryRow(`
-		SELECT id, ip_pattern, notes, url, banned_at, created_by
+		SELECT id, ip_pattern, country_code, notes, url, banned_at, created_by
 		FROM sentinel_banned_ips
 		WHERE id = ?
-	`, id).Scan(&ban.ID, &ban.IPPattern, &ban.Notes, &ban.URL, &ban.BannedAt, &ban.CreatedBy)
+	`, id).Scan(&ban.ID, &ban.IPPattern, &ban.CountryCode, &ban.Notes, &ban.URL, &ban.BannedAt, &ban.CreatedBy)
 	if err != nil {
 		return nil, err
 	}
@@ -345,10 +345,12 @@ func (m *Module) getBanByID(id int64) (*BannedIP, error) {
 }
 
 func (m *Module) createBan(ipPattern, notes, urlField string, createdBy int64) error {
+	// Lookup country for the IP pattern (only works for full IPs, not patterns with wildcards)
+	countryCode := m.LookupCountry(ipPattern)
 	_, err := m.ctx.DB.Exec(`
-		INSERT INTO sentinel_banned_ips (ip_pattern, notes, url, banned_at, created_by)
-		VALUES (?, ?, ?, ?, ?)
-	`, ipPattern, notes, urlField, time.Now(), createdBy)
+		INSERT INTO sentinel_banned_ips (ip_pattern, country_code, notes, url, banned_at, created_by)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, ipPattern, countryCode, notes, urlField, time.Now(), createdBy)
 	if err != nil {
 		return err
 	}

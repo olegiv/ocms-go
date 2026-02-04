@@ -55,6 +55,7 @@
         {"id": "sentinel.ban_ip", "message": "Ban IP", "translation": "Ban IP"},
         {"id": "sentinel.remove_ban", "message": "Remove ban", "translation": "Remove ban"},
         {"id": "sentinel.table_ip", "message": "IP Pattern", "translation": "IP Pattern"},
+        {"id": "sentinel.table_country", "message": "Country", "translation": "Country"},
         {"id": "sentinel.table_notes", "message": "Notes", "translation": "Notes"},
         {"id": "sentinel.table_url", "message": "URL", "translation": "URL"},
         {"id": "sentinel.table_banned_at", "message": "Banned At", "translation": "Banned At"},
