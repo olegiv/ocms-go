@@ -24,6 +24,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
+	"github.com/olegiv/ocms-go/internal/geoip"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/service"
@@ -289,6 +290,7 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			}
 			return result.String()
 		},
+		"countryName": geoip.CountryName,
 		"deref": func(p *int64) int64 {
 			if p == nil {
 				return 0
