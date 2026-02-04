@@ -17,12 +17,12 @@ import (
 	"github.com/olegiv/ocms-go/internal/render"
 )
 
-// handleAdminList handles GET /admin/sentinel - displays list of banned IPs.
+// handleAdminList handles GET /admin/sentinel - displays all sentinel data.
 func (m *Module) handleAdminList(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	lang := m.ctx.Render.GetAdminLang(r)
 
-	// Fetch all banned IPs
+	// Fetch all data
 	bans, err := m.listBannedIPs()
 	if err != nil {
 		m.ctx.Logger.Error("failed to list banned IPs", "error", err)
@@ -30,12 +30,30 @@ func (m *Module) handleAdminList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	paths, err := m.listAutoBanPaths()
+	if err != nil {
+		m.ctx.Logger.Error("failed to list auto-ban paths", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	whitelist, err := m.listWhitelist()
+	if err != nil {
+		m.ctx.Logger.Error("failed to list whitelist", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
 	data := struct {
-		Bans    []BannedIP
-		Version string
+		Bans      []BannedIP
+		Paths     []AutoBanPath
+		Whitelist []WhitelistedIP
+		Version   string
 	}{
-		Bans:    bans,
-		Version: m.Version(),
+		Bans:      bans,
+		Paths:     paths,
+		Whitelist: whitelist,
+		Version:   m.Version(),
 	}
 
 	if err := m.ctx.Render.Render(w, r, "admin/module_sentinel", render.TemplateData{
@@ -53,6 +71,10 @@ func (m *Module) handleAdminList(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ============================================================================
+// Banned IPs handlers
+// ============================================================================
+
 // handleCreate handles POST /admin/sentinel - creates a new IP ban.
 func (m *Module) handleCreate(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
@@ -62,14 +84,12 @@ func (m *Module) handleCreate(w http.ResponseWriter, r *http.Request) {
 	notes := strings.TrimSpace(r.FormValue("notes"))
 	urlField := strings.TrimSpace(r.FormValue("url"))
 
-	// Validate IP pattern
 	if ipPattern == "" {
 		m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_ip_required"))
 		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
 		return
 	}
 
-	// Validate pattern format (basic validation)
 	if !isValidIPPattern(ipPattern) {
 		m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_invalid_pattern"))
 		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
@@ -85,7 +105,6 @@ func (m *Module) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create the ban
 	err := m.createBan(ipPattern, notes, urlField, user.ID)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
@@ -112,7 +131,6 @@ func (m *Module) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get ban info before deleting for logging
 	ban, err := m.getBanByID(id)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -136,7 +154,155 @@ func (m *Module) handleDelete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// Database operations
+// ============================================================================
+// Auto-ban paths handlers
+// ============================================================================
+
+// handleCreatePath handles POST /admin/sentinel/paths - creates a new auto-ban path.
+func (m *Module) handleCreatePath(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+	lang := m.ctx.Render.GetAdminLang(r)
+
+	pathPattern := strings.TrimSpace(r.FormValue("path_pattern"))
+	notes := strings.TrimSpace(r.FormValue("notes"))
+
+	if pathPattern == "" {
+		m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_path_required"))
+		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
+		return
+	}
+
+	if !isValidPathPattern(pathPattern) {
+		m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_invalid_path_pattern"))
+		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
+		return
+	}
+
+	err := m.createAutoBanPath(pathPattern, notes, user.ID)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_path_duplicate"))
+		} else {
+			m.ctx.Logger.Error("failed to create auto-ban path", "error", err, "path_pattern", pathPattern)
+			m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_path_create_failed"))
+		}
+		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
+		return
+	}
+
+	m.ctx.Logger.Info("auto-ban path created", "path_pattern", pathPattern, "created_by", user.ID)
+	m.ctx.Render.SetFlashSuccess(r, i18n.T(lang, "sentinel.success_path_created"))
+	http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
+}
+
+// handleDeletePath handles DELETE /admin/sentinel/paths/{id} - removes an auto-ban path.
+func (m *Module) handleDeletePath(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	path, err := m.getPathByID(id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Not Found", http.StatusNotFound)
+			return
+		}
+		m.ctx.Logger.Error("failed to get path", "error", err, "id", id)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	if err := m.deleteAutoBanPath(id); err != nil {
+		m.ctx.Logger.Error("failed to delete path", "error", err, "id", id)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	user := middleware.GetUser(r)
+	m.ctx.Logger.Info("auto-ban path removed", "path_pattern", path.PathPattern, "removed_by", user.ID)
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ============================================================================
+// Whitelist handlers
+// ============================================================================
+
+// handleCreateWhitelist handles POST /admin/sentinel/whitelist - creates a whitelist entry.
+func (m *Module) handleCreateWhitelist(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+	lang := m.ctx.Render.GetAdminLang(r)
+
+	ipPattern := strings.TrimSpace(r.FormValue("ip_pattern"))
+	notes := strings.TrimSpace(r.FormValue("notes"))
+
+	if ipPattern == "" {
+		m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_ip_required"))
+		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
+		return
+	}
+
+	if !isValidIPPattern(ipPattern) {
+		m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_invalid_pattern"))
+		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
+		return
+	}
+
+	err := m.createWhitelistEntry(ipPattern, notes, user.ID)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_whitelist_duplicate"))
+		} else {
+			m.ctx.Logger.Error("failed to create whitelist entry", "error", err, "ip_pattern", ipPattern)
+			m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_whitelist_create_failed"))
+		}
+		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
+		return
+	}
+
+	m.ctx.Logger.Info("IP whitelisted", "ip_pattern", ipPattern, "created_by", user.ID)
+	m.ctx.Render.SetFlashSuccess(r, i18n.T(lang, "sentinel.success_whitelist_created"))
+	http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
+}
+
+// handleDeleteWhitelist handles DELETE /admin/sentinel/whitelist/{id} - removes whitelist entry.
+func (m *Module) handleDeleteWhitelist(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	entry, err := m.getWhitelistByID(id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Not Found", http.StatusNotFound)
+			return
+		}
+		m.ctx.Logger.Error("failed to get whitelist entry", "error", err, "id", id)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	if err := m.deleteWhitelistEntry(id); err != nil {
+		m.ctx.Logger.Error("failed to delete whitelist entry", "error", err, "id", id)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	user := middleware.GetUser(r)
+	m.ctx.Logger.Info("whitelist entry removed", "ip_pattern", entry.IPPattern, "removed_by", user.ID)
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ============================================================================
+// Database operations - Banned IPs
+// ============================================================================
 
 func (m *Module) listBannedIPs() ([]BannedIP, error) {
 	rows, err := m.ctx.DB.Query(`
@@ -182,8 +348,6 @@ func (m *Module) createBan(ipPattern, notes, urlField string, createdBy int64) e
 	if err != nil {
 		return err
 	}
-
-	// Reload cache
 	return m.reloadBannedIPs()
 }
 
@@ -202,31 +366,161 @@ func (m *Module) deleteBan(id int64) error {
 		return sql.ErrNoRows
 	}
 
-	// Reload cache
 	return m.reloadBannedIPs()
 }
 
+// ============================================================================
+// Database operations - Auto-ban paths
+// ============================================================================
+
+func (m *Module) listAutoBanPaths() ([]AutoBanPath, error) {
+	rows, err := m.ctx.DB.Query(`
+		SELECT id, path_pattern, notes, created_at, created_by
+		FROM sentinel_autoban_paths
+		ORDER BY created_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var paths []AutoBanPath
+	for rows.Next() {
+		var p AutoBanPath
+		if err := rows.Scan(&p.ID, &p.PathPattern, &p.Notes, &p.CreatedAt, &p.CreatedBy); err != nil {
+			return nil, err
+		}
+		paths = append(paths, p)
+	}
+
+	return paths, rows.Err()
+}
+
+func (m *Module) getPathByID(id int64) (*AutoBanPath, error) {
+	var p AutoBanPath
+	err := m.ctx.DB.QueryRow(`
+		SELECT id, path_pattern, notes, created_at, created_by
+		FROM sentinel_autoban_paths
+		WHERE id = ?
+	`, id).Scan(&p.ID, &p.PathPattern, &p.Notes, &p.CreatedAt, &p.CreatedBy)
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+func (m *Module) createAutoBanPath(pathPattern, notes string, createdBy int64) error {
+	_, err := m.ctx.DB.Exec(`
+		INSERT INTO sentinel_autoban_paths (path_pattern, notes, created_at, created_by)
+		VALUES (?, ?, ?, ?)
+	`, pathPattern, notes, time.Now(), createdBy)
+	if err != nil {
+		return err
+	}
+	return m.reloadAutoBanPaths()
+}
+
+func (m *Module) deleteAutoBanPath(id int64) error {
+	result, err := m.ctx.DB.Exec(`DELETE FROM sentinel_autoban_paths WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+
+	return m.reloadAutoBanPaths()
+}
+
+// ============================================================================
+// Database operations - Whitelist
+// ============================================================================
+
+func (m *Module) listWhitelist() ([]WhitelistedIP, error) {
+	rows, err := m.ctx.DB.Query(`
+		SELECT id, ip_pattern, notes, created_at, created_by
+		FROM sentinel_whitelist
+		ORDER BY created_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var entries []WhitelistedIP
+	for rows.Next() {
+		var e WhitelistedIP
+		if err := rows.Scan(&e.ID, &e.IPPattern, &e.Notes, &e.CreatedAt, &e.CreatedBy); err != nil {
+			return nil, err
+		}
+		entries = append(entries, e)
+	}
+
+	return entries, rows.Err()
+}
+
+func (m *Module) getWhitelistByID(id int64) (*WhitelistedIP, error) {
+	var e WhitelistedIP
+	err := m.ctx.DB.QueryRow(`
+		SELECT id, ip_pattern, notes, created_at, created_by
+		FROM sentinel_whitelist
+		WHERE id = ?
+	`, id).Scan(&e.ID, &e.IPPattern, &e.Notes, &e.CreatedAt, &e.CreatedBy)
+	if err != nil {
+		return nil, err
+	}
+	return &e, nil
+}
+
+func (m *Module) createWhitelistEntry(ipPattern, notes string, createdBy int64) error {
+	_, err := m.ctx.DB.Exec(`
+		INSERT INTO sentinel_whitelist (ip_pattern, notes, created_at, created_by)
+		VALUES (?, ?, ?, ?)
+	`, ipPattern, notes, time.Now(), createdBy)
+	if err != nil {
+		return err
+	}
+	return m.reloadWhitelist()
+}
+
+func (m *Module) deleteWhitelistEntry(id int64) error {
+	result, err := m.ctx.DB.Exec(`DELETE FROM sentinel_whitelist WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+
+	return m.reloadWhitelist()
+}
+
+// ============================================================================
+// Validation helpers
+// ============================================================================
+
 // isValidIPPattern validates the IP pattern format.
-// Accepts:
-// - Full IPv4: 192.168.1.1
-// - Wildcards: 192.168.1.*, 192.168.*, 192.*, 10.0.0.1*
-// - IPv6: 2001:db8::1 (basic validation)
 func isValidIPPattern(pattern string) bool {
-	if pattern == "" {
+	if pattern == "" || len(pattern) < 2 {
 		return false
 	}
 
-	// Don't allow patterns that are too short or dangerous
-	if len(pattern) < 2 {
-		return false
-	}
-
-	// Don't allow banning everything
 	if pattern == "*" || pattern == "*.*.*.*" {
 		return false
 	}
 
-	// Basic character validation
 	for _, c := range pattern {
 		if !isValidIPChar(c) {
 			return false
@@ -237,9 +531,45 @@ func isValidIPPattern(pattern string) bool {
 }
 
 func isValidIPChar(c rune) bool {
-	// Allow digits, dots, colons (for IPv6), and asterisks for wildcards
 	return (c >= '0' && c <= '9') ||
 		(c >= 'a' && c <= 'f') ||
 		(c >= 'A' && c <= 'F') ||
 		c == '.' || c == ':' || c == '*'
+}
+
+// isValidPathPattern validates the path pattern format.
+// Accepts: /path, /path*, */path, */path*
+func isValidPathPattern(pattern string) bool {
+	if pattern == "" {
+		return false
+	}
+
+	// Must contain at least one path character
+	core := strings.TrimPrefix(pattern, "*")
+	core = strings.TrimSuffix(core, "*")
+
+	if core == "" {
+		return false
+	}
+
+	// Path should start with /
+	if !strings.HasPrefix(core, "/") {
+		return false
+	}
+
+	// Basic character validation - allow alphanumeric, /, -, _, .
+	for _, c := range core {
+		if !isValidPathChar(c) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func isValidPathChar(c rune) bool {
+	return (c >= 'a' && c <= 'z') ||
+		(c >= 'A' && c <= 'Z') ||
+		(c >= '0' && c <= '9') ||
+		c == '/' || c == '-' || c == '_' || c == '.'
 }
