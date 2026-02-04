@@ -15,10 +15,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 //go:embed locales
@@ -52,10 +54,20 @@ type WhitelistedIP struct {
 	CreatedBy int64     `json:"created_by"`
 }
 
+// Session keys for authentication check.
+const (
+	sessionKeyUserID = "user_id"
+	roleAdmin        = "admin"
+	roleEditor       = "editor"
+)
+
 // Module implements the module.Module interface for IP banning.
 type Module struct {
 	module.BaseModule
 	ctx *module.Context
+
+	// Session manager for checking authenticated users
+	sessionManager *scs.SessionManager
 
 	// Cache of banned IPs for fast lookup
 	bannedPatterns []string
@@ -102,6 +114,36 @@ func (m *Module) Init(ctx *module.Context) error {
 		"whitelisted", len(m.whitelistPatterns),
 	)
 	return nil
+}
+
+// SetSessionManager sets the session manager for checking authenticated users.
+// This allows the middleware to skip auto-banning for admin/editor users.
+func (m *Module) SetSessionManager(sm *scs.SessionManager) {
+	m.sessionManager = sm
+}
+
+// isAdminOrEditor checks if the current request is from an authenticated admin or editor user.
+// Returns true if the user should be exempt from auto-banning.
+func (m *Module) isAdminOrEditor(r *http.Request) bool {
+	if m.sessionManager == nil || m.ctx == nil {
+		return false
+	}
+
+	// Get user ID from session
+	userID := m.sessionManager.GetInt64(r.Context(), sessionKeyUserID)
+	if userID == 0 {
+		return false
+	}
+
+	// Query database for user role
+	queries := store.New(m.ctx.DB)
+	user, err := queries.GetUserByID(r.Context(), userID)
+	if err != nil {
+		return false
+	}
+
+	// Check if user is admin or editor
+	return user.Role == roleAdmin || user.Role == roleEditor
 }
 
 // Shutdown performs cleanup when the module is shutting down.
@@ -452,7 +494,19 @@ func (m *Module) Middleware() func(http.Handler) http.Handler {
 			}
 
 			// 3. Check auto-ban paths - ban IP if accessing forbidden path
+			// Skip auto-ban for authenticated admin/editor users
 			if matchedPattern := m.CheckAutoBanPath(path); matchedPattern != "" {
+				// Check if user is admin or editor before auto-banning
+				if m.isAdminOrEditor(r) {
+					m.ctx.Logger.Debug("skipping auto-ban for admin/editor user",
+						"ip", ip,
+						"path", path,
+						"pattern", matchedPattern,
+					)
+					next.ServeHTTP(w, r)
+					return
+				}
+
 				m.ctx.Logger.Warn("auto-banning IP for forbidden path",
 					"ip", ip,
 					"path", path,
