@@ -38,28 +38,30 @@ import (
 
 // FormsHandler handles form management routes.
 type FormsHandler struct {
-	db             *sql.DB
-	queries        *store.Queries
-	renderer       *render.Renderer
-	sessionManager *scs.SessionManager
-	dispatcher     *webhook.Dispatcher
-	hookRegistry   *module.HookRegistry
-	themeManager   *theme.Manager
-	cacheManager   *cache.Manager
-	menuService    *service.MenuService
+	db              *sql.DB
+	queries         *store.Queries
+	renderer        *render.Renderer
+	sessionManager  *scs.SessionManager
+	dispatcher      *webhook.Dispatcher
+	hookRegistry    *module.HookRegistry
+	themeManager    *theme.Manager
+	cacheManager    *cache.Manager
+	menuService     *service.MenuService
+	frontendHandler *FrontendHandler
 }
 
 // NewFormsHandler creates a new FormsHandler.
-func NewFormsHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, hr *module.HookRegistry, tm *theme.Manager, cm *cache.Manager, ms *service.MenuService) *FormsHandler {
+func NewFormsHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, hr *module.HookRegistry, tm *theme.Manager, cm *cache.Manager, ms *service.MenuService, fh *FrontendHandler) *FormsHandler {
 	return &FormsHandler{
-		db:             db,
-		queries:        store.New(db),
-		renderer:       renderer,
-		sessionManager: sm,
-		hookRegistry:   hr,
-		themeManager:   tm,
-		cacheManager:   cm,
-		menuService:    ms,
+		db:              db,
+		queries:         store.New(db),
+		renderer:        renderer,
+		sessionManager:  sm,
+		hookRegistry:    hr,
+		themeManager:    tm,
+		cacheManager:    cm,
+		menuService:     ms,
+		frontendHandler: fh,
 	}
 }
 
@@ -319,7 +321,7 @@ func (h *FormsHandler) getActiveFormBySlug(w http.ResponseWriter, r *http.Reques
 	form, err := h.queries.GetFormBySlug(r.Context(), slug)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			h.renderer.RenderNotFound(w, r)
+			h.frontendHandler.NotFound(w, r)
 		} else {
 			slog.Error("failed to get form", "error", err, "slug", slug)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -328,7 +330,7 @@ func (h *FormsHandler) getActiveFormBySlug(w http.ResponseWriter, r *http.Reques
 	}
 
 	if !form.IsActive {
-		h.renderer.RenderNotFound(w, r)
+		h.frontendHandler.NotFound(w, r)
 		return nil
 	}
 	return &form
