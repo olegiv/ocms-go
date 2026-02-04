@@ -107,3 +107,80 @@ func TestIsValidIPChar(t *testing.T) {
 		})
 	}
 }
+
+func TestMatchPathPattern(t *testing.T) {
+	tests := []struct {
+		name    string
+		pattern string
+		path    string
+		want    bool
+	}{
+		// Exact match
+		{"exact match", "/wp-admin", "/wp-admin", true},
+		{"exact match no match", "/wp-admin", "/wp-login", false},
+		{"exact match with trailing", "/wp-admin", "/wp-admin/", false},
+
+		// Starts with (pattern ends with *)
+		{"starts with match", "/wp-admin*", "/wp-admin/index.php", true},
+		{"starts with match 2", "/api/*", "/api/v1/users", true},
+		{"starts with no match", "/wp-admin*", "/admin/wp-admin", false},
+
+		// Ends with (pattern starts with *)
+		{"ends with match", "*/.env", "/path/to/.env", true},
+		{"ends with match 2", "*/config.php", "/var/www/config.php", true},
+		{"ends with no match", "*/.env", "/.env.local", false},
+
+		// Contains (pattern starts and ends with *)
+		{"contains match", "*/phpMyAdmin*", "/tools/phpMyAdmin/index.php", true},
+		{"contains match 2", "*/admin*", "/path/admin/users", true},
+		{"contains match exact", "*/wp-login*", "/wp-login.php", true},
+		{"contains no match", "*/phpMyAdmin*", "/phpmyadmin/", false},
+
+		// Edge cases
+		{"empty pattern", "", "/some/path", false},
+		{"empty path", "/admin", "", false},
+		{"both empty", "", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := matchPathPattern(tt.pattern, tt.path)
+			if got != tt.want {
+				t.Errorf("matchPathPattern(%q, %q) = %v, want %v", tt.pattern, tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsValidPathPattern(t *testing.T) {
+	tests := []struct {
+		name    string
+		pattern string
+		want    bool
+	}{
+		// Valid patterns
+		{"exact path", "/wp-admin", true},
+		{"path with wildcard suffix", "/wp-admin*", true},
+		{"path with wildcard prefix", "*/wp-admin", true},
+		{"path with both wildcards", "*/wp-admin*", true},
+		{"path with subdirectory", "/api/v1/users", true},
+		{"path with extension", "/.env", true},
+		{"path with hyphen", "/wp-login.php", true},
+
+		// Invalid patterns
+		{"empty", "", false},
+		{"just wildcard", "*", false},
+		{"no leading slash", "wp-admin", false},
+		{"invalid chars", "/wp-admin<script>", false},
+		{"spaces", "/wp admin", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isValidPathPattern(tt.pattern)
+			if got != tt.want {
+				t.Errorf("isValidPathPattern(%q) = %v, want %v", tt.pattern, got, tt.want)
+			}
+		})
+	}
+}

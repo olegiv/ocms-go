@@ -9,18 +9,165 @@
     </div>
 </div>
 
-<div class="card">
+<!-- Whitelist Section -->
+<div class="card mb-4">
     <div class="card-header">
-        <h3>{{T .AdminLang "sentinel.add_ban"}}</h3>
+        <h3>{{T .AdminLang "sentinel.whitelist_title"}}</h3>
+        <p class="text-muted mb-0">{{T .AdminLang "sentinel.whitelist_description"}}</p>
     </div>
     <div class="card-body">
-        <form method="POST" action="/admin/sentinel" class="add-ban-form">
+        <form method="POST" action="/admin/sentinel/whitelist" class="sentinel-form">
             {{.CSRFField}}
             <div class="form-row">
                 <div class="form-group">
-                    <label for="ip_pattern">{{T .AdminLang "sentinel.ip_pattern"}}</label>
                     <input type="text"
-                           id="ip_pattern"
+                           name="ip_pattern"
+                           class="form-control"
+                           placeholder="{{T .AdminLang "sentinel.ip_pattern_placeholder"}}"
+                           required>
+                </div>
+                <div class="form-group flex-grow">
+                    <input type="text"
+                           name="notes"
+                           class="form-control"
+                           placeholder="{{T .AdminLang "sentinel.whitelist_notes_placeholder"}}">
+                </div>
+                <div class="form-group form-group-button">
+                    <button type="submit" class="btn btn-success">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>
+                            <path d="m9 12 2 2 4-4"/>
+                        </svg>
+                        {{T .AdminLang "sentinel.add_whitelist"}}
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        {{if .Data.Whitelist}}
+        <table class="table mt-3">
+            <thead>
+                <tr>
+                    <th>{{T .AdminLang "sentinel.table_ip"}}</th>
+                    <th>{{T .AdminLang "sentinel.table_notes"}}</th>
+                    <th>{{T .AdminLang "sentinel.table_created_at"}}</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Data.Whitelist}}
+                <tr>
+                    <td><code class="text-success">{{.IPPattern}}</code></td>
+                    <td class="text-muted">{{if .Notes}}{{.Notes}}{{else}}-{{end}}</td>
+                    <td class="text-muted">{{formatDateTimeLocale .CreatedAt $.AdminLang}}</td>
+                    <td class="text-right">
+                        <button type="button"
+                                class="btn btn-sm btn-outline-danger delete-whitelist"
+                                data-id="{{.ID}}"
+                                title="{{T $.AdminLang "sentinel.remove_whitelist"}}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                            </svg>
+                        </button>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="empty-state-small mt-3">
+            <p class="text-muted">{{T .AdminLang "sentinel.no_whitelist"}}</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+
+<!-- Auto-ban Paths Section -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h3>{{T .AdminLang "sentinel.paths_title"}}</h3>
+        <p class="text-muted mb-0">{{T .AdminLang "sentinel.paths_description"}}</p>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="/admin/sentinel/paths" class="sentinel-form">
+            {{.CSRFField}}
+            <div class="form-row">
+                <div class="form-group">
+                    <input type="text"
+                           name="path_pattern"
+                           class="form-control"
+                           placeholder="{{T .AdminLang "sentinel.path_pattern_placeholder"}}"
+                           required>
+                    <small class="form-text text-muted">{{T .AdminLang "sentinel.path_pattern_help"}}</small>
+                </div>
+                <div class="form-group flex-grow">
+                    <input type="text"
+                           name="notes"
+                           class="form-control"
+                           placeholder="{{T .AdminLang "sentinel.path_notes_placeholder"}}">
+                </div>
+                <div class="form-group form-group-button">
+                    <button type="submit" class="btn btn-warning">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 9v4"/><path d="M12 17h.01"/><path d="M3.6 3.6 21 21"/>
+                            <path d="M21 12a9 9 0 1 1-9-9"/>
+                        </svg>
+                        {{T .AdminLang "sentinel.add_path"}}
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        {{if .Data.Paths}}
+        <table class="table mt-3">
+            <thead>
+                <tr>
+                    <th>{{T .AdminLang "sentinel.table_path"}}</th>
+                    <th>{{T .AdminLang "sentinel.table_notes"}}</th>
+                    <th>{{T .AdminLang "sentinel.table_created_at"}}</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Data.Paths}}
+                <tr>
+                    <td><code class="text-warning">{{.PathPattern}}</code></td>
+                    <td class="text-muted">{{if .Notes}}{{.Notes}}{{else}}-{{end}}</td>
+                    <td class="text-muted">{{formatDateTimeLocale .CreatedAt $.AdminLang}}</td>
+                    <td class="text-right">
+                        <button type="button"
+                                class="btn btn-sm btn-outline-danger delete-path"
+                                data-id="{{.ID}}"
+                                title="{{T $.AdminLang "sentinel.remove_path"}}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                            </svg>
+                        </button>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="empty-state-small mt-3">
+            <p class="text-muted">{{T .AdminLang "sentinel.no_paths"}}</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+
+<!-- Banned IPs Section -->
+<div class="card">
+    <div class="card-header">
+        <h3>{{T .AdminLang "sentinel.banned_title"}}</h3>
+        <p class="text-muted mb-0">{{T .AdminLang "sentinel.banned_description"}}</p>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="/admin/sentinel" class="sentinel-form">
+            {{.CSRFField}}
+            <div class="form-row">
+                <div class="form-group">
+                    <input type="text"
                            name="ip_pattern"
                            class="form-control"
                            placeholder="{{T .AdminLang "sentinel.ip_pattern_placeholder"}}"
@@ -28,17 +175,13 @@
                     <small class="form-text text-muted">{{T .AdminLang "sentinel.ip_pattern_help"}}</small>
                 </div>
                 <div class="form-group">
-                    <label for="notes">{{T .AdminLang "sentinel.notes"}}</label>
                     <input type="text"
-                           id="notes"
                            name="notes"
                            class="form-control"
                            placeholder="{{T .AdminLang "sentinel.notes_placeholder"}}">
                 </div>
                 <div class="form-group">
-                    <label for="url">{{T .AdminLang "sentinel.url"}}</label>
                     <input type="text"
-                           id="url"
                            name="url"
                            class="form-control"
                            placeholder="{{T .AdminLang "sentinel.url_placeholder"}}">
@@ -46,24 +189,16 @@
                 <div class="form-group form-group-button">
                     <button type="submit" class="btn btn-danger">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"/>
-                            <path d="m4.9 4.9 14.2 14.2"/>
+                            <circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>
                         </svg>
                         {{T .AdminLang "sentinel.ban_ip"}}
                     </button>
                 </div>
             </div>
         </form>
-    </div>
-</div>
 
-{{if .Data.Bans}}
-<div class="card">
-    <div class="card-header">
-        <h3>{{T .AdminLang "sentinel.banned_count"}}: {{len .Data.Bans}}</h3>
-    </div>
-    <div class="card-body">
-        <table class="table">
+        {{if .Data.Bans}}
+        <table class="table mt-3">
             <thead>
                 <tr>
                     <th>{{T .AdminLang "sentinel.table_ip"}}</th>
@@ -92,9 +227,7 @@
                                 data-id="{{.ID}}"
                                 title="{{T $.AdminLang "sentinel.remove_ban"}}">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M3 6h18"/>
-                                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
-                                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                                <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
                             </svg>
                         </button>
                     </td>
@@ -102,12 +235,8 @@
                 {{end}}
             </tbody>
         </table>
-    </div>
-</div>
-{{else}}
-<div class="card">
-    <div class="card-body">
-        <div class="empty-state">
+        {{else}}
+        <div class="empty-state mt-3">
             <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>
                 <path d="m9 12 2 2 4-4"/>
@@ -115,37 +244,60 @@
             <p>{{T .AdminLang "sentinel.no_bans"}}</p>
             <span class="empty-hint">{{T .AdminLang "sentinel.no_bans_hint"}}</span>
         </div>
+        {{end}}
     </div>
 </div>
-{{end}}
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     let i18n = {
-        confirmDelete: '{{T .AdminLang "sentinel.confirm_delete"}}',
+        confirmDeleteBan: '{{T .AdminLang "sentinel.confirm_delete"}}',
+        confirmDeletePath: '{{T .AdminLang "sentinel.confirm_delete_path"}}',
+        confirmDeleteWhitelist: '{{T .AdminLang "sentinel.confirm_delete_whitelist"}}',
         deleteFailed: '{{T .AdminLang "sentinel.delete_failed"}}'
     };
 
-    // Handle delete button clicks
+    // Delete banned IP
     document.querySelectorAll('.delete-ban').forEach(function(btn) {
         btn.addEventListener('click', function() {
-            const id = this.dataset.id;
-            if (confirm(i18n.confirmDelete)) {
-                fetch('/admin/sentinel/' + id, {
+            if (confirm(i18n.confirmDeleteBan)) {
+                fetch('/admin/sentinel/' + this.dataset.id, {
                     method: 'DELETE',
-                    headers: {
-                        'X-CSRF-Token': '{{.CSRFToken}}'
-                    }
+                    headers: { 'X-CSRF-Token': '{{.CSRFToken}}' }
                 }).then(function(response) {
-                    if (response.ok) {
-                        window.location.reload();
-                    } else {
-                        alert(i18n.deleteFailed);
-                    }
-                }).catch(function(err) {
-                    console.error('Error:', err);
-                    alert(i18n.deleteFailed);
-                });
+                    if (response.ok) window.location.reload();
+                    else alert(i18n.deleteFailed);
+                }).catch(function() { alert(i18n.deleteFailed); });
+            }
+        });
+    });
+
+    // Delete auto-ban path
+    document.querySelectorAll('.delete-path').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            if (confirm(i18n.confirmDeletePath)) {
+                fetch('/admin/sentinel/paths/' + this.dataset.id, {
+                    method: 'DELETE',
+                    headers: { 'X-CSRF-Token': '{{.CSRFToken}}' }
+                }).then(function(response) {
+                    if (response.ok) window.location.reload();
+                    else alert(i18n.deleteFailed);
+                }).catch(function() { alert(i18n.deleteFailed); });
+            }
+        });
+    });
+
+    // Delete whitelist entry
+    document.querySelectorAll('.delete-whitelist').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            if (confirm(i18n.confirmDeleteWhitelist)) {
+                fetch('/admin/sentinel/whitelist/' + this.dataset.id, {
+                    method: 'DELETE',
+                    headers: { 'X-CSRF-Token': '{{.CSRFToken}}' }
+                }).then(function(response) {
+                    if (response.ok) window.location.reload();
+                    else alert(i18n.deleteFailed);
+                }).catch(function() { alert(i18n.deleteFailed); });
             }
         });
     });
@@ -153,39 +305,31 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
-.add-ban-form .form-row {
+.sentinel-form .form-row {
     display: flex;
     flex-wrap: wrap;
     gap: 1rem;
-    align-items: flex-end;
+    align-items: flex-start;
 }
-
-.add-ban-form .form-group {
+.sentinel-form .form-group {
     flex: 1;
-    min-width: 200px;
+    min-width: 180px;
 }
-
-.add-ban-form .form-group-button {
+.sentinel-form .form-group-button {
     flex: 0 0 auto;
     min-width: auto;
+    padding-top: 0;
 }
-
-.add-ban-form .form-group label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-weight: 500;
-}
-
-.add-ban-form .form-text {
+.sentinel-form .form-text {
     display: block;
     margin-top: 0.25rem;
-    font-size: 0.875rem;
+    font-size: 0.8rem;
 }
-
-code.text-danger {
-    background-color: rgba(220, 53, 69, 0.1);
-    padding: 0.2rem 0.4rem;
-    border-radius: 3px;
-}
+code.text-danger { background-color: rgba(220, 53, 69, 0.1); padding: 0.2rem 0.4rem; border-radius: 3px; }
+code.text-success { background-color: rgba(40, 167, 69, 0.1); padding: 0.2rem 0.4rem; border-radius: 3px; }
+code.text-warning { background-color: rgba(255, 193, 7, 0.15); padding: 0.2rem 0.4rem; border-radius: 3px; }
+.empty-state-small { text-align: center; padding: 1rem; }
+.mb-4 { margin-bottom: 1.5rem; }
+.mt-3 { margin-top: 1rem; }
 </style>
 {{end}}
