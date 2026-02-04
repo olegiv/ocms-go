@@ -93,8 +93,9 @@ func (rm *RedirectsMiddleware) Handler(next http.Handler) http.Handler {
 		// Check for matching redirect
 		redirects := rm.getRedirects()
 		for _, rd := range redirects {
-			if rm.matchPath(path, rd.SourcePath, rd.IsWildcard) {
-				targetURL := rm.buildTargetURL(path, rd)
+			matched, captures := rm.matchPathWithCaptures(path, rd.SourcePath, rd.IsWildcard)
+			if matched {
+				targetURL := rm.buildTargetURL(rd, captures)
 
 				// For _blank target, we can't do a server redirect to open a new window
 				// The browser will follow the redirect in the same window
@@ -126,24 +127,26 @@ func (rm *RedirectsMiddleware) Handler(next http.Handler) http.Handler {
 	})
 }
 
-// matchPath checks if a request path matches a redirect source path.
-func (rm *RedirectsMiddleware) matchPath(requestPath, sourcePath string, isWildcard bool) bool {
+// matchPathWithCaptures matches a request path against a source pattern and returns captured wildcard segments.
+// For non-wildcard patterns, it returns a simple equality check with no captures.
+// For wildcard patterns:
+//   - "*" captures exactly one path segment
+//   - "**" captures zero or more path segments (joined with "/")
+func (rm *RedirectsMiddleware) matchPathWithCaptures(requestPath, sourcePath string, isWildcard bool) (bool, []string) {
 	if !isWildcard {
-		return requestPath == sourcePath
+		return requestPath == sourcePath, nil
 	}
-
-	// Wildcard matching
-	// * matches any single path segment
-	// ** matches any number of path segments (including zero)
 
 	sourceParts := strings.Split(strings.Trim(sourcePath, "/"), "/")
 	requestParts := strings.Split(strings.Trim(requestPath, "/"), "/")
 
-	return matchPathParts(sourceParts, requestParts, 0, 0)
+	var captures []string
+	matched := matchPathPartsWithCaptures(sourceParts, requestParts, 0, 0, &captures)
+	return matched, captures
 }
 
-// matchPathParts recursively matches path parts with wildcard support.
-func matchPathParts(sourceParts, requestParts []string, si, ri int) bool {
+// matchPathPartsWithCaptures recursively matches path parts with wildcard support and captures matched segments.
+func matchPathPartsWithCaptures(sourceParts, requestParts []string, si, ri int, captures *[]string) bool {
 	// Both exhausted - match
 	if si >= len(sourceParts) && ri >= len(requestParts) {
 		return true
@@ -161,6 +164,8 @@ func matchPathParts(sourceParts, requestParts []string, si, ri int) bool {
 			if sourceParts[i] != "**" {
 				return false
 			}
+			// ** matching zero segments captures empty string
+			*captures = append(*captures, "")
 		}
 		return true
 	}
@@ -169,47 +174,65 @@ func matchPathParts(sourceParts, requestParts []string, si, ri int) bool {
 
 	switch part {
 	case "*":
-		// Single wildcard - matches exactly one segment
-		return matchPathParts(sourceParts, requestParts, si+1, ri+1)
+		// Single wildcard - matches exactly one segment, capture it
+		*captures = append(*captures, requestParts[ri])
+		return matchPathPartsWithCaptures(sourceParts, requestParts, si+1, ri+1, captures)
 
 	case "**":
 		// Double wildcard - matches zero or more segments
-		// Try matching zero segments (move source forward)
-		if matchPathParts(sourceParts, requestParts, si+1, ri) {
+		// Try matching zero segments first (move source forward)
+		capturesBefore := len(*captures)
+		*captures = append(*captures, "") // Capture empty for zero match
+		if matchPathPartsWithCaptures(sourceParts, requestParts, si+1, ri, captures) {
 			return true
 		}
-		// Try matching one segment (move request forward, keep source at **)
-		return matchPathParts(sourceParts, requestParts, si, ri+1)
+		// Backtrack: remove captures added during failed attempt
+		*captures = (*captures)[:capturesBefore]
+
+		// Try matching one or more segments
+		// Collect all segments that ** should match
+		for endIdx := ri; endIdx <= len(requestParts); endIdx++ {
+			capturesBefore := len(*captures)
+			captured := strings.Join(requestParts[ri:endIdx], "/")
+			*captures = append(*captures, captured)
+			if matchPathPartsWithCaptures(sourceParts, requestParts, si+1, endIdx, captures) {
+				return true
+			}
+			// Backtrack
+			*captures = (*captures)[:capturesBefore]
+		}
+		return false
 
 	default:
 		// Literal match
 		if part == requestParts[ri] {
-			return matchPathParts(sourceParts, requestParts, si+1, ri+1)
+			return matchPathPartsWithCaptures(sourceParts, requestParts, si+1, ri+1, captures)
 		}
 		return false
 	}
 }
 
-// buildTargetURL builds the final target URL, handling wildcard substitutions.
-func (rm *RedirectsMiddleware) buildTargetURL(requestPath string, rd store.Redirect) string {
-	// For non-wildcard redirects, just return the target
-	if !rd.IsWildcard {
+// buildTargetURL builds the final target URL by substituting captured wildcard segments.
+// Each "*" or "**" in the target URL is replaced with the corresponding captured segment.
+func (rm *RedirectsMiddleware) buildTargetURL(rd store.Redirect, captures []string) string {
+	if !rd.IsWildcard || len(captures) == 0 {
 		return rd.TargetUrl
 	}
 
-	// For wildcard redirects, check if target contains $1, $2, etc. for captured segments
-	// If target contains *, replace it with the matched wildcard portion
 	targetURL := rd.TargetUrl
 
-	// Simple case: if target ends with * and source ends with *, append the matched portion
-	if strings.Contains(rd.SourcePath, "*") && strings.Contains(targetURL, "*") {
-		// Extract the prefix before the wildcard in source
-		sourcePrefix := strings.Split(rd.SourcePath, "*")[0]
-		// Get the matched portion from the request
-		if strings.HasPrefix(requestPath, sourcePrefix) {
-			matchedPortion := strings.TrimPrefix(requestPath, sourcePrefix)
-			// Replace * in target with matched portion
-			targetURL = strings.Replace(targetURL, "*", matchedPortion, 1)
+	// Replace each * in the target with the corresponding captured segment
+	for _, capture := range captures {
+		// Find and replace the first * (which could be part of ** too)
+		if idx := strings.Index(targetURL, "*"); idx != -1 {
+			// Check if it's ** (double wildcard)
+			if idx+1 < len(targetURL) && targetURL[idx+1] == '*' {
+				// Replace ** with the captured segment
+				targetURL = targetURL[:idx] + capture + targetURL[idx+2:]
+			} else {
+				// Replace single * with the captured segment
+				targetURL = targetURL[:idx] + capture + targetURL[idx+1:]
+			}
 		}
 	}
 
