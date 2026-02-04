@@ -24,19 +24,21 @@ import (
 
 // RedirectsHandler handles redirect management routes.
 type RedirectsHandler struct {
-	queries        *store.Queries
-	renderer       *render.Renderer
-	sessionManager *scs.SessionManager
-	eventService   *service.EventService
+	queries             *store.Queries
+	renderer            *render.Renderer
+	sessionManager      *scs.SessionManager
+	eventService        *service.EventService
+	redirectsMiddleware *middleware.RedirectsMiddleware
 }
 
 // NewRedirectsHandler creates a new RedirectsHandler.
-func NewRedirectsHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager) *RedirectsHandler {
+func NewRedirectsHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, rm *middleware.RedirectsMiddleware) *RedirectsHandler {
 	return &RedirectsHandler{
-		queries:        store.New(db),
-		renderer:       renderer,
-		sessionManager: sm,
-		eventService:   service.NewEventService(db),
+		queries:             store.New(db),
+		renderer:            renderer,
+		sessionManager:      sm,
+		eventService:        service.NewEventService(db),
+		redirectsMiddleware: rm,
 	}
 }
 
@@ -190,6 +192,7 @@ func (h *RedirectsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("redirect created", "redirect_id", redirect.ID, "source_path", redirect.SourcePath)
 	_ = h.eventService.LogConfigEvent(r.Context(), model.EventLevelInfo, "Redirect created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"redirect_id": redirect.ID, "source_path": redirect.SourcePath, "target_url": redirect.TargetUrl})
+	h.redirectsMiddleware.InvalidateCache()
 	flashSuccess(w, r, h.renderer, redirectAdminRedirects, "Redirect created successfully")
 }
 
@@ -301,6 +304,7 @@ func (h *RedirectsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("redirect updated", "redirect_id", id, "updated_by", middleware.GetUserID(r))
 	_ = h.eventService.LogConfigEvent(r.Context(), model.EventLevelInfo, "Redirect updated", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"redirect_id": id, "source_path": input.SourcePath})
+	h.redirectsMiddleware.InvalidateCache()
 	flashSuccess(w, r, h.renderer, redirectAdminRedirects, "Redirect updated successfully")
 }
 
@@ -326,6 +330,7 @@ func (h *RedirectsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("redirect deleted", "redirect_id", id, "source_path", redirect.SourcePath, "deleted_by", middleware.GetUserID(r))
 	_ = h.eventService.LogConfigEvent(r.Context(), model.EventLevelInfo, "Redirect deleted", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"redirect_id": id, "source_path": redirect.SourcePath})
+	h.redirectsMiddleware.InvalidateCache()
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.WriteHeader(http.StatusOK)
@@ -362,6 +367,7 @@ func (h *RedirectsHandler) Toggle(w http.ResponseWriter, r *http.Request) {
 	newStatus := !redirect.Enabled
 	slog.Info("redirect toggled", "redirect_id", id, "enabled", newStatus, "toggled_by", middleware.GetUserID(r))
 	_ = h.eventService.LogConfigEvent(r.Context(), model.EventLevelInfo, "Redirect toggled", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"redirect_id": id, "enabled": newStatus})
+	h.redirectsMiddleware.InvalidateCache()
 
 	if r.Header.Get("HX-Request") == "true" {
 		// Return 204 No Content so htmx doesn't swap (row stays visible)
