@@ -374,6 +374,7 @@ func run() error {
 		return fmt.Errorf("registering hcaptcha module: %w", err)
 	}
 	sentinelModule := sentinel.New()
+	sentinelModule.SetSessionManager(sessionManager)
 	if err := moduleRegistry.Register(sentinelModule); err != nil {
 		return fmt.Errorf("registering sentinel module: %w", err)
 	}
