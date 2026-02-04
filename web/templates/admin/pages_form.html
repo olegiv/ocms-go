@@ -905,14 +905,25 @@ function aliasManager() {
         },
 
         validateAlias(index) {
-            // Client-side slugify
+            // Client-side validation for path-like aliases (e.g., "blog/post/55")
+            // Backend allows "/" for path segments; each segment must be a valid slug
             let value = this.aliases[index].value;
-            value = value.toLowerCase()
-                .trim()
-                .replace(/[^\w\s-]/g, '')
-                .replace(/[\s_-]+/g, '-')
-                .replace(/^-+|-+$/g, '');
-            this.aliases[index].value = value;
+            value = value.toLowerCase().trim();
+
+            // Split by "/" and slugify each segment individually
+            let segments = value.split('/');
+            segments = segments.map(segment => {
+                return segment
+                    .replace(/[^\w\s-]/g, '')      // Remove non-word chars
+                    .replace(/[\s_-]+/g, '-')       // Normalize separators to hyphens
+                    .replace(/^-+|-+$/g, '');       // Trim leading/trailing hyphens
+            });
+
+            // Filter empty segments (handles leading/trailing/consecutive slashes)
+            segments = segments.filter(segment => segment !== '');
+
+            // Rejoin with single slashes
+            this.aliases[index].value = segments.join('/');
         }
     };
 }
