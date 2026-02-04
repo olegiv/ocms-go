@@ -97,6 +97,18 @@ func registerFrontendRoutes(r chi.Router, h *handler.FrontendHandler) {
 	r.Get(handler.RouteTagSlug, h.Tag)
 	r.Get(handler.RoutePageByID, h.PageByID)
 	r.Get(handler.RouteParamSlug, h.Page)
+
+	// Legacy blog tag URL redirect: /blog/tag/{slug} -> /tag/{slug}
+	r.Get("/blog/tag/{slug}", func(w http.ResponseWriter, req *http.Request) {
+		slug := chi.URLParam(req, "slug")
+		// Preserve language prefix if present (when called inside /{lang} route group)
+		lang := chi.URLParam(req, "lang")
+		if lang != "" {
+			http.Redirect(w, req, "/"+lang+"/tag/"+slug, http.StatusMovedPermanently)
+		} else {
+			http.Redirect(w, req, "/tag/"+slug, http.StatusMovedPermanently)
+		}
+	})
 }
 
 func main() {
