@@ -39,6 +39,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/theme"
 	"github.com/olegiv/ocms-go/internal/themes"
+	"github.com/olegiv/ocms-go/internal/util"
 	"github.com/olegiv/ocms-go/internal/version"
 	"github.com/olegiv/ocms-go/internal/webhook"
 	"github.com/olegiv/ocms-go/modules/analytics_ext"
@@ -102,9 +103,19 @@ func registerFrontendRoutes(r chi.Router, h *handler.FrontendHandler) {
 	// Legacy blog tag URL redirect: /blog/tag/{slug} -> /tag/{slug}
 	r.Get("/blog/tag/{slug}", func(w http.ResponseWriter, req *http.Request) {
 		slug := chi.URLParam(req, "slug")
+		// Validate slug to prevent open URL redirect (CWE-601)
+		if !util.IsValidSlug(slug) {
+			http.NotFound(w, req)
+			return
+		}
 		// Preserve language prefix if present (when called inside /{lang} route group)
 		lang := chi.URLParam(req, "lang")
 		if lang != "" {
+			// Validate language code to prevent open URL redirect (CWE-601)
+			if !util.IsValidLangCode(lang) {
+				http.NotFound(w, req)
+				return
+			}
 			http.Redirect(w, req, "/"+lang+"/tag/"+slug, http.StatusMovedPermanently)
 		} else {
 			http.Redirect(w, req, "/tag/"+slug, http.StatusMovedPermanently)

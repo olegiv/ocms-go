@@ -438,3 +438,128 @@ func TestIsValidAlias(t *testing.T) {
 		})
 	}
 }
+
+func TestIsValidLangCode(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		// Valid language codes
+		{
+			name:     "valid 2-letter code",
+			input:    "en",
+			expected: true,
+		},
+		{
+			name:     "valid 2-letter code de",
+			input:    "de",
+			expected: true,
+		},
+		{
+			name:     "valid 3-letter code",
+			input:    "fra",
+			expected: true,
+		},
+		{
+			name:     "valid code with region",
+			input:    "zh-cn",
+			expected: true,
+		},
+		{
+			name:     "valid code with region pt-br",
+			input:    "pt-br",
+			expected: true,
+		},
+		{
+			name:     "valid code with region en-us",
+			input:    "en-us",
+			expected: true,
+		},
+		{
+			name:     "valid code with script zh-hans",
+			input:    "zh-hans",
+			expected: true,
+		},
+		// Invalid language codes
+		{
+			name:     "invalid - empty",
+			input:    "",
+			expected: false,
+		},
+		{
+			name:     "invalid - too long",
+			input:    "verylongcode",
+			expected: false,
+		},
+		{
+			name:     "invalid - uppercase",
+			input:    "EN",
+			expected: false,
+		},
+		{
+			name:     "invalid - mixed case",
+			input:    "En-US",
+			expected: false,
+		},
+		{
+			name:     "invalid - spaces",
+			input:    "en us",
+			expected: false,
+		},
+		{
+			name:     "invalid - special chars",
+			input:    "en!us",
+			expected: false,
+		},
+		{
+			name:     "invalid - slash (path traversal)",
+			input:    "en/us",
+			expected: false,
+		},
+		{
+			name:     "invalid - backslash",
+			input:    "en\\us",
+			expected: false,
+		},
+		{
+			name:     "invalid - starts with hyphen",
+			input:    "-en",
+			expected: false,
+		},
+		{
+			name:     "invalid - ends with hyphen",
+			input:    "en-",
+			expected: false,
+		},
+		{
+			name:     "invalid - consecutive hyphens",
+			input:    "en--us",
+			expected: false,
+		},
+		{
+			name:     "invalid - dot (path traversal)",
+			input:    "..",
+			expected: false,
+		},
+		{
+			name:     "invalid - protocol attempt",
+			input:    "http:",
+			expected: false,
+		},
+		{
+			name:     "invalid - URL characters",
+			input:    "evil.com",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsValidLangCode(tt.input)
+			if result != tt.expected {
+				t.Errorf("IsValidLangCode(%q) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
