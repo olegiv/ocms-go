@@ -76,6 +76,15 @@ func (m *Module) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Prevent admin from banning their own IP
+	adminIP := getClientIP(r)
+	if matchIPPattern(ipPattern, adminIP) {
+		m.ctx.Logger.Warn("admin attempted to ban own IP", "ip_pattern", ipPattern, "admin_ip", adminIP, "user_id", user.ID)
+		m.ctx.Render.SetFlashError(r, i18n.T(lang, "sentinel.error_self_ban"))
+		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
+		return
+	}
+
 	// Create the ban
 	err := m.createBan(ipPattern, notes, urlField, user.ID)
 	if err != nil {
