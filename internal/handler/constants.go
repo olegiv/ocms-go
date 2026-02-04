@@ -79,6 +79,8 @@ const (
 	RouteAPIKeys = "/api-keys"
 	// RouteWebhooks is the webhooks admin route.
 	RouteWebhooks = "/webhooks"
+	// RouteRedirects is the redirects admin route.
+	RouteRedirects = "/redirects"
 	// RouteExport is the export admin route.
 	RouteExport = "/export"
 	// RouteImport is the import admin route.
@@ -116,6 +118,8 @@ const (
 	RouteAPIKeysID = RouteAPIKeys + RouteParamID
 	// RouteWebhooksID is the webhooks ID route pattern.
 	RouteWebhooksID = RouteWebhooks + RouteParamID
+	// RouteRedirectsID is the redirects ID route pattern.
+	RouteRedirectsID = RouteRedirects + RouteParamID
 )
 
 const (
@@ -164,6 +168,9 @@ const (
 	redirectAdminMenusID              = redirectAdminMenus + "/%d"
 	redirectAdminFormsID              = redirectAdminForms + "/%d"
 	redirectAdminFormsIDSubmissions   = redirectAdminFormsID + "/submissions"
+	redirectAdminRedirects            = redirectAdmin + RouteRedirects
+	redirectAdminRedirectsNew         = redirectAdminRedirects + RouteSuffixNew
+	redirectAdminRedirectsID          = redirectAdminRedirects + "/%d"
 )
 
 // Utility constants used by main.go.

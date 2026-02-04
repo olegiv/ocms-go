@@ -477,6 +477,10 @@ func run() error {
 	r.Use(middleware.Timeout(30 * time.Second)) // 30 second request timeout
 	r.Use(middleware.StripTrailingSlash)        // Redirect /path/ to /path (301)
 
+	// Global redirects middleware (database-driven URL redirects)
+	redirectsMiddleware := middleware.NewRedirectsMiddleware(db)
+	r.Use(redirectsMiddleware.Handler)
+
 	// Security headers middleware (CSP, HSTS, X-Frame-Options, etc.)
 	securityConfig := middleware.DefaultSecurityHeadersConfig(cfg.IsDevelopment())
 	r.Use(middleware.SecurityHeaders(securityConfig))
@@ -536,6 +540,7 @@ func run() error {
 	}
 	apiKeysHandler := handler.NewAPIKeysHandler(db, renderer, sessionManager)
 	webhooksHandler := handler.NewWebhooksHandler(db, renderer, sessionManager)
+	redirectsHandler := handler.NewRedirectsHandler(db, renderer, sessionManager)
 	importExportHandler := handler.NewImportExportHandler(db, renderer, sessionManager)
 	healthHandler := handler.NewHealthHandler(db, sessionManager, handler.UploadsDirPath)
 	docsHandler := handler.NewDocsHandler(renderer, cfg, moduleRegistry, healthHandler.StartTime(), versionInfo)
@@ -759,6 +764,13 @@ func run() error {
 			r.Get(handler.RouteWebhooksID+"/deliveries", webhooksHandler.Deliveries)
 			r.Post(handler.RouteWebhooksID+"/test", webhooksHandler.Test)
 			r.Post(handler.RouteWebhooksID+"/deliveries/{did}/retry", webhooksHandler.RetryDelivery)
+
+			// Redirect management routes
+			registerCRUD(r, handler.RouteRedirects, handler.RouteRedirectsID, crudHandlers{
+				List: redirectsHandler.List, NewForm: redirectsHandler.NewForm, Create: redirectsHandler.Create,
+				EditForm: redirectsHandler.EditForm, Update: redirectsHandler.Update, Delete: redirectsHandler.Delete,
+			})
+			r.Post(handler.RouteRedirectsID+"/toggle", redirectsHandler.Toggle)
 
 			// Cache management routes
 			r.Get("/cache", cacheHandler.Stats)
