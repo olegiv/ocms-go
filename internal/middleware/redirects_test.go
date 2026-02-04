@@ -135,6 +135,63 @@ func TestMatchPathWithCaptures(t *testing.T) {
 			wantMatch:    false,
 			wantCaptures: nil,
 		},
+		// Prefix wildcard tests (trailing * not preceded by /)
+		{
+			name:         "prefix wildcard matches exact path",
+			source:       "/user/login*",
+			request:      "/user/login",
+			isWildcard:   true,
+			wantMatch:    true,
+			wantCaptures: []string{""},
+		},
+		{
+			name:         "prefix wildcard matches with trailing slash",
+			source:       "/user/login*",
+			request:      "/user/login/",
+			isWildcard:   true,
+			wantMatch:    true,
+			wantCaptures: []string{""},
+		},
+		{
+			name:         "prefix wildcard matches path with segment",
+			source:       "/user/login*",
+			request:      "/user/login/google",
+			isWildcard:   true,
+			wantMatch:    true,
+			wantCaptures: []string{"google"},
+		},
+		{
+			name:         "prefix wildcard matches path suffix",
+			source:       "/user/login*",
+			request:      "/user/loginX",
+			isWildcard:   true,
+			wantMatch:    true,
+			wantCaptures: []string{"X"},
+		},
+		{
+			name:         "prefix wildcard matches nested path",
+			source:       "/user/login*",
+			request:      "/user/login/a/b/c",
+			isWildcard:   true,
+			wantMatch:    true,
+			wantCaptures: []string{"a/b/c"},
+		},
+		{
+			name:         "prefix wildcard no match short path",
+			source:       "/user/login*",
+			request:      "/user/log",
+			isWildcard:   true,
+			wantMatch:    false,
+			wantCaptures: nil,
+		},
+		{
+			name:         "prefix wildcard no match different path",
+			source:       "/user/login*",
+			request:      "/admin/login",
+			isWildcard:   true,
+			wantMatch:    false,
+			wantCaptures: nil,
+		},
 	}
 
 	rm := &RedirectsMiddleware{}

@@ -409,7 +409,10 @@ func parseRedirectFormInput(r *http.Request) redirectFormInput {
 	sourcePath := strings.TrimSpace(r.FormValue("source_path"))
 	targetURL := strings.TrimSpace(r.FormValue("target_url"))
 	statusCodeStr := r.FormValue("status_code")
-	isWildcard := r.FormValue("is_wildcard") == "true" || r.FormValue("is_wildcard") == "on"
+	// Auto-detect wildcards: if source path contains * or **, set isWildcard automatically
+	isWildcard := r.FormValue("is_wildcard") == "true" ||
+		r.FormValue("is_wildcard") == "on" ||
+		strings.Contains(sourcePath, "*")
 	targetType := r.FormValue("target_type")
 	enabled := r.FormValue("enabled") == "true" || r.FormValue("enabled") == "on"
 
