@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path"
@@ -108,7 +109,9 @@ func registerFrontendRoutes(r chi.Router, h *handler.FrontendHandler) {
 			http.NotFound(w, req)
 			return
 		}
-		// Preserve language prefix if present (when called inside /{lang} route group)
+
+		// Build target URL
+		var targetPath string
 		lang := chi.URLParam(req, "lang")
 		if lang != "" {
 			// Validate language code to prevent open URL redirect (CWE-601)
@@ -116,10 +119,18 @@ func registerFrontendRoutes(r chi.Router, h *handler.FrontendHandler) {
 				http.NotFound(w, req)
 				return
 			}
-			http.Redirect(w, req, "/"+lang+"/tag/"+slug, http.StatusMovedPermanently)
+			targetPath = "/" + lang + "/tag/" + slug
 		} else {
-			http.Redirect(w, req, "/tag/"+slug, http.StatusMovedPermanently)
+			targetPath = "/tag/" + slug
 		}
+
+		// Parse and verify URL is local (no hostname) to prevent open redirect
+		target, err := url.Parse(strings.ReplaceAll(targetPath, "\\", "/"))
+		if err != nil || target.Hostname() != "" {
+			http.NotFound(w, req)
+			return
+		}
+		http.Redirect(w, req, target.String(), http.StatusMovedPermanently)
 	})
 }
 
