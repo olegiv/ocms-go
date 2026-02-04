@@ -79,6 +79,40 @@ func IsValidSlug(s string) bool {
 	return true
 }
 
+// IsValidLangCode checks if a string is a valid language code format.
+// Language codes are typically 2-3 letter codes optionally followed by a hyphen
+// and a 2-4 letter region code (e.g., "en", "de", "zh-cn", "pt-br").
+// Only lowercase letters, digits, and hyphens are allowed.
+func IsValidLangCode(s string) bool {
+	if s == "" || len(s) > 10 {
+		return false
+	}
+
+	// Must start and end with alphanumeric
+	if !isAlphanumeric(rune(s[0])) || !isAlphanumeric(rune(s[len(s)-1])) {
+		return false
+	}
+
+	// Check all characters are lowercase letters, digits, or hyphens
+	for _, r := range s {
+		if !isAlphanumeric(r) && r != '-' {
+			return false
+		}
+	}
+
+	// No consecutive hyphens
+	if strings.Contains(s, "--") {
+		return false
+	}
+
+	return true
+}
+
+// isAlphanumeric checks if a rune is a lowercase letter or digit.
+func isAlphanumeric(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+}
+
 // IsValidAlias checks if a string is a valid alias format.
 // Aliases can contain path segments separated by forward slashes (e.g., "blog/post/55").
 // Each segment must be a valid slug: lowercase letters, numbers, and hyphens.
