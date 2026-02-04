@@ -540,20 +540,74 @@ func (m *Module) CheckAutoBanPath(path string) string {
 }
 
 // matchIPPattern checks if an IP matches a pattern.
-// Supports wildcard (*) at the end of octets.
+// Supports wildcards (*) in any octet position:
+//   - "192.168.1.*" matches any IP in 192.168.1.0/24
+//   - "192.168.*.*" matches any IP in 192.168.0.0/16
+//   - "192.*.1.1" matches 192.x.1.1 for any x
+//   - "192.168.*" short form matches any IP starting with 192.168.
+//   - "10*" partial wildcard matches "100", "101", etc.
 func matchIPPattern(pattern, ip string) bool {
+	if pattern == "" || ip == "" {
+		return false
+	}
+	if pattern == "*" {
+		return true
+	}
 	if pattern == ip {
 		return true
 	}
 
-	if strings.Contains(pattern, "*") {
-		prefix := strings.TrimSuffix(pattern, "*")
-		if strings.HasPrefix(ip, prefix) {
+	patternParts := strings.Split(pattern, ".")
+	ipParts := strings.Split(ip, ".")
+
+	// If pattern has fewer parts than IP and ends with *, do prefix matching
+	// e.g., "192.168.*" matches "192.168.1.100"
+	if len(patternParts) < len(ipParts) {
+		lastPart := patternParts[len(patternParts)-1]
+		if lastPart == "*" {
+			// Check all parts before the wildcard match exactly
+			for i := 0; i < len(patternParts)-1; i++ {
+				if patternParts[i] != ipParts[i] {
+					return false
+				}
+			}
 			return true
 		}
+		// Pattern like "10*" - partial match on first octet, rest is prefix
+		if strings.HasSuffix(lastPart, "*") {
+			prefix := strings.TrimSuffix(lastPart, "*")
+			for i := 0; i < len(patternParts)-1; i++ {
+				if patternParts[i] != ipParts[i] {
+					return false
+				}
+			}
+			return strings.HasPrefix(ipParts[len(patternParts)-1], prefix)
+		}
+		return false
 	}
 
-	return false
+	// Must have same number of parts for full octet matching
+	if len(patternParts) != len(ipParts) {
+		return false
+	}
+
+	for i, pp := range patternParts {
+		if pp == "*" {
+			continue // wildcard matches any octet
+		}
+		// Handle partial wildcard like "10*" matching "100", "101", etc.
+		if strings.HasSuffix(pp, "*") {
+			prefix := strings.TrimSuffix(pp, "*")
+			if !strings.HasPrefix(ipParts[i], prefix) {
+				return false
+			}
+			continue
+		}
+		if pp != ipParts[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // matchPathPattern checks if a path matches a pattern.
