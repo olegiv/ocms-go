@@ -17,6 +17,7 @@
                 {{if .Page.Excerpt}}
                 <p class="dev-article-excerpt">{{.Page.Excerpt}}</p>
                 {{end}}
+                {{if eq .Page.Type "post"}}
                 <div class="dev-article-meta">
                     {{if .Page.PublishedAt}}
                     <span class="dev-meta-item">
@@ -30,6 +31,7 @@
                     <span class="dev-meta-item">~{{.Page.ReadingTime}} {{TTheme $.LangCode "frontend.min_read"}}</span>
                     {{end}}
                 </div>
+                {{end}}
             </div>
         </div>
         {{else}}
@@ -43,6 +45,7 @@
             {{if .Page.Excerpt}}
             <p class="dev-article-excerpt">{{.Page.Excerpt}}</p>
             {{end}}
+            {{if eq .Page.Type "post"}}
             <div class="dev-article-meta">
                 {{if .Page.PublishedAt}}
                 <span class="dev-meta-item">
@@ -56,6 +59,7 @@
                 <span class="dev-meta-item">~{{.Page.ReadingTime}} {{TTheme $.LangCode "frontend.min_read"}}</span>
                 {{end}}
             </div>
+            {{end}}
         </header>
         {{end}}
 
@@ -88,8 +92,8 @@
         </footer>
         {{end}}
 
-        {{/* Author Box */}}
-        {{if .ShowAuthorBox}}
+        {{/* Author Box - only shown for posts */}}
+        {{if and .ShowAuthorBox (eq .Page.Type "post")}}
         {{if .Page.Author}}
         <div class="dev-author-box">
             <div class="dev-author-header">
