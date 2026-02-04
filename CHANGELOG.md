@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-02-04
+
+### Added
+
+#### Docker Support
+- Complete Docker deployment support with multi-stage build
+- Entrypoint script for proper volume permissions
+- Dockerfile supporting Go 1.25+ toolchain
+
+#### Editor Upgrade
+- Switch from TipTap to TinyMCE 8 editor
+- GPL license key configuration for TinyMCE 8
+- Security: Add `rel="noopener noreferrer"` to all links
+- Disable automatic URL conversion in editor
+
+#### Forms
+- Integrate public forms with theme system for consistent styling
+- Improved form 404 handling using FrontendHandler
+
+#### Event Logging
+- Track 403 and 404 HTTP errors in event log
+
+#### Developer Module
+- Add missing 'small' image variant in test data generator
+
+### Changed
+- Update Alpine.js dependencies to version 3.15.8
+- Rename CacheContext to Context in cache package
+- Show all config fields on newly created empty sites
+- Add Google Analytics to development CSP
+
+### Fixed
+- Fix daily analytics aggregation logging and error handling
+- Fix empty site homepage crash by setting PageType for generated pages
+- Fix sidebar template using wrong field name for category count
+- Fix translatable config to persist form values in base config row
+- Fix theme tests by adding missing template functions
+- Fix Docker volume permissions with entrypoint script
+
 ## [0.3.0] - 2026-02-03
 
 ### Added
@@ -160,7 +199,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/olegiv/ocms-go/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/olegiv/ocms-go/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/olegiv/ocms-go/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/olegiv/ocms-go/compare/v0.0.0...v0.1.0
