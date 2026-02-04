@@ -453,6 +453,7 @@ func run() error {
 	r.Use(chimw.Compress(5))                    // Gzip compression with level 5
 	r.Use(chimw.GetHead)                        // Handle HEAD requests for uptime monitoring
 	r.Use(middleware.Timeout(30 * time.Second)) // 30 second request timeout
+	r.Use(middleware.StripTrailingSlash)        // Redirect /path/ to /path (301)
 
 	// Security headers middleware (CSP, HSTS, X-Frame-Options, etc.)
 	securityConfig := middleware.DefaultSecurityHeadersConfig(cfg.IsDevelopment())
