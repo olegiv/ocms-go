@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olegiv/ocms-go/internal/geoip"
 	"github.com/olegiv/ocms-go/internal/testutil"
 	"github.com/olegiv/ocms-go/internal/testutil/moduleutil"
 )
@@ -31,8 +32,8 @@ func TestModuleNew(t *testing.T) {
 		t.Errorf("Name() = %q, want %q", m.Name(), "analytics_int")
 	}
 
-	if m.Version() != "1.0.0" {
-		t.Errorf("Version() = %q, want %q", m.Version(), "1.0.0")
+	if m.Version() != "1.0.1" {
+		t.Errorf("Version() = %q, want %q", m.Version(), "1.0.1")
 	}
 
 	if m.AdminURL() != "/admin/internal-analytics" {
@@ -254,11 +255,11 @@ func TestGetRealTimeVisitorCount(t *testing.T) {
 }
 
 func TestGeoIPLookup(t *testing.T) {
-	g := NewGeoIPLookup()
+	g := geoip.NewLookup()
 
 	// Test without database (graceful degradation)
 	if err := g.Init(""); err != nil {
-		t.Fatalf("GeoIPLookup.Init failed: %v", err)
+		t.Fatalf("geoip.Lookup.Init failed: %v", err)
 	}
 
 	// Without database, only private IPs should return LOCAL
@@ -298,7 +299,7 @@ func TestGeoIPLookup(t *testing.T) {
 }
 
 func TestGeoIPLookup_InvalidPath(t *testing.T) {
-	g := NewGeoIPLookup()
+	g := geoip.NewLookup()
 
 	err := g.Init("/nonexistent/path/GeoLite2-Country.mmdb")
 	if err == nil {
@@ -331,7 +332,7 @@ func TestCountryName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.code, func(t *testing.T) {
-			result := CountryName(tt.code)
+			result := geoip.CountryName(tt.code)
 			if result != tt.expected {
 				t.Errorf("CountryName(%q) = %q, want %q", tt.code, result, tt.expected)
 			}

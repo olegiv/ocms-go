@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/robfig/cron/v3"
 
+	"github.com/olegiv/ocms-go/internal/geoip"
 	"github.com/olegiv/ocms-go/internal/module"
 )
 
@@ -24,7 +25,7 @@ type Module struct {
 	module.BaseModule
 	ctx      *module.Context
 	settings *Settings
-	geoIP    *GeoIPLookup
+	geoIP    *geoip.Lookup
 	cron     *cron.Cron
 	saltMu   sync.RWMutex
 }
@@ -34,10 +35,10 @@ func New() *Module {
 	return &Module{
 		BaseModule: module.NewBaseModule(
 			"analytics_int",
-			"1.0.0",
+			"1.0.1",
 			"Internal Analytics",
 		),
-		geoIP: NewGeoIPLookup(),
+		geoIP: geoip.NewLookup(),
 	}
 }
 

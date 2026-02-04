@@ -7,6 +7,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/olegiv/ocms-go/internal/geoip"
 )
 
 // dateFormat is the standard date format for analytics queries (YYYY-MM-DD).
@@ -260,7 +262,7 @@ func (m *Module) getCountryStats(ctx context.Context, startDate, endDate time.Ti
 		if err := rows.Scan(&c.CountryCode, &c.Views); err != nil {
 			continue
 		}
-		c.CountryName = CountryName(c.CountryCode)
+		c.CountryName = geoip.CountryName(c.CountryCode)
 		totalViews += c.Views
 		countries = append(countries, c)
 	}
