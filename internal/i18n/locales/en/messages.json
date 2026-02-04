@@ -83,6 +83,11 @@
             "translation": "Webhooks"
         },
         {
+            "id": "nav.redirects",
+            "message": "Redirects",
+            "translation": "Redirects"
+        },
+        {
             "id": "nav.export",
             "message": "Export",
             "translation": "Export"
@@ -5636,6 +5641,206 @@
             "id": "webhooks.failed_count",
             "message": "failed",
             "translation": "failed"
+        },
+        {
+            "id": "redirects.title",
+            "message": "URL Redirects",
+            "translation": "URL Redirects"
+        },
+        {
+            "id": "redirects.description",
+            "message": "Manage URL redirects to forward visitors from old URLs to new destinations",
+            "translation": "Manage URL redirects to forward visitors from old URLs to new destinations"
+        },
+        {
+            "id": "redirects.new",
+            "message": "New Redirect",
+            "translation": "New Redirect"
+        },
+        {
+            "id": "redirects.edit",
+            "message": "Edit Redirect",
+            "translation": "Edit Redirect"
+        },
+        {
+            "id": "redirects.create",
+            "message": "Create Redirect",
+            "translation": "Create Redirect"
+        },
+        {
+            "id": "redirects.update",
+            "message": "Update Redirect",
+            "translation": "Update Redirect"
+        },
+        {
+            "id": "redirects.new_description",
+            "message": "Create a new URL redirect",
+            "translation": "Create a new URL redirect"
+        },
+        {
+            "id": "redirects.edit_description",
+            "message": "Update redirect settings",
+            "translation": "Update redirect settings"
+        },
+        {
+            "id": "redirects.back_to_list",
+            "message": "Back to Redirects",
+            "translation": "Back to Redirects"
+        },
+        {
+            "id": "redirects.source_path",
+            "message": "Source Path",
+            "translation": "Source Path"
+        },
+        {
+            "id": "redirects.source_path_hint",
+            "message": "The URL path to redirect from (e.g., /old-page). Use * for wildcards.",
+            "translation": "The URL path to redirect from (e.g., /old-page). Use * for wildcards."
+        },
+        {
+            "id": "redirects.target_url",
+            "message": "Target URL",
+            "translation": "Target URL"
+        },
+        {
+            "id": "redirects.target_url_hint",
+            "message": "The destination URL (internal path like /new-page or external URL like https://example.com)",
+            "translation": "The destination URL (internal path like /new-page or external URL like https://example.com)"
+        },
+        {
+            "id": "redirects.status_code",
+            "message": "Status Code",
+            "translation": "Status Code"
+        },
+        {
+            "id": "redirects.status_code_hint",
+            "message": "301 for permanent, 302 for temporary redirects",
+            "translation": "301 for permanent, 302 for temporary redirects"
+        },
+        {
+            "id": "redirects.target_type",
+            "message": "Target Type",
+            "translation": "Target Type"
+        },
+        {
+            "id": "redirects.target_type_hint",
+            "message": "_self opens in same window, _blank opens in new window",
+            "translation": "_self opens in same window, _blank opens in new window"
+        },
+        {
+            "id": "redirects.is_wildcard",
+            "message": "Wildcard Pattern",
+            "translation": "Wildcard Pattern"
+        },
+        {
+            "id": "redirects.is_wildcard_hint",
+            "message": "Enable to use * as a wildcard in the source path (e.g., /old-blog/* matches /old-blog/post1, /old-blog/post2)",
+            "translation": "Enable to use * as a wildcard in the source path (e.g., /old-blog/* matches /old-blog/post1, /old-blog/post2)"
+        },
+        {
+            "id": "redirects.enabled",
+            "message": "Enabled",
+            "translation": "Enabled"
+        },
+        {
+            "id": "redirects.enabled_hint",
+            "message": "When enabled, this redirect will be active and process matching requests",
+            "translation": "When enabled, this redirect will be active and process matching requests"
+        },
+        {
+            "id": "redirects.wildcard",
+            "message": "Wildcard",
+            "translation": "Wildcard"
+        },
+        {
+            "id": "redirects.no_redirects",
+            "message": "No redirects configured",
+            "translation": "No redirects configured"
+        },
+        {
+            "id": "redirects.no_redirects_hint",
+            "message": "Create a redirect to forward visitors from old URLs to new destinations",
+            "translation": "Create a redirect to forward visitors from old URLs to new destinations"
+        },
+        {
+            "id": "redirects.delete_redirect",
+            "message": "Delete Redirect",
+            "translation": "Delete Redirect"
+        },
+        {
+            "id": "redirects.confirm_delete",
+            "message": "Are you sure you want to delete the redirect",
+            "translation": "Are you sure you want to delete the redirect"
+        },
+        {
+            "id": "redirects.total_count",
+            "message": "{{.}} redirect(s) total",
+            "translation": "{{.}} redirect(s) total"
+        },
+        {
+            "id": "redirects.help_title",
+            "message": "Help",
+            "translation": "Help"
+        },
+        {
+            "id": "redirects.help_wildcards_title",
+            "message": "Wildcards",
+            "translation": "Wildcards"
+        },
+        {
+            "id": "redirects.help_wildcards_desc",
+            "message": "Use wildcards to match multiple URLs with a single redirect rule:",
+            "translation": "Use wildcards to match multiple URLs with a single redirect rule:"
+        },
+        {
+            "id": "redirects.help_wildcard_example1",
+            "message": "matches any URL starting with /old-blog/",
+            "translation": "matches any URL starting with /old-blog/"
+        },
+        {
+            "id": "redirects.help_wildcard_example2",
+            "message": "matches URLs like /products/123/details",
+            "translation": "matches URLs like /products/123/details"
+        },
+        {
+            "id": "redirects.help_status_codes_title",
+            "message": "Status Codes",
+            "translation": "Status Codes"
+        },
+        {
+            "id": "redirects.help_301",
+            "message": "Permanent redirect. Search engines will update their index.",
+            "translation": "Permanent redirect. Search engines will update their index."
+        },
+        {
+            "id": "redirects.help_302",
+            "message": "Temporary redirect. Search engines keep the original URL.",
+            "translation": "Temporary redirect. Search engines keep the original URL."
+        },
+        {
+            "id": "redirects.help_307",
+            "message": "Temporary redirect that preserves the request method (GET/POST).",
+            "translation": "Temporary redirect that preserves the request method (GET/POST)."
+        },
+        {
+            "id": "redirects.help_308",
+            "message": "Permanent redirect that preserves the request method (GET/POST).",
+            "translation": "Permanent redirect that preserves the request method (GET/POST)."
+        },
+        {
+            "id": "redirects.help_target_types_title",
+            "message": "Target Types",
+            "translation": "Target Types"
+        },
+        {
+            "id": "redirects.help_target_self",
+            "message": "Opens the target URL in the same browser window/tab.",
+            "translation": "Opens the target URL in the same browser window/tab."
+        },
+        {
+            "id": "redirects.help_target_blank",
+            "message": "Opens the target URL in a new browser window/tab.",
+            "translation": "Opens the target URL in a new browser window/tab."
         },
         {
             "id": "editor.insert_image",
