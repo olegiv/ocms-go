@@ -1,0 +1,191 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{T .AdminLang "sentinel.title"}}</h1>
+        <p class="page-description">{{T .AdminLang "sentinel.description"}}</p>
+    </div>
+    <div class="page-actions">
+        <span class="badge badge-primary">v{{.Data.Version}}</span>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>{{T .AdminLang "sentinel.add_ban"}}</h3>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="/admin/sentinel" class="add-ban-form">
+            {{.CSRFField}}
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="ip_pattern">{{T .AdminLang "sentinel.ip_pattern"}}</label>
+                    <input type="text"
+                           id="ip_pattern"
+                           name="ip_pattern"
+                           class="form-control"
+                           placeholder="{{T .AdminLang "sentinel.ip_pattern_placeholder"}}"
+                           required>
+                    <small class="form-text text-muted">{{T .AdminLang "sentinel.ip_pattern_help"}}</small>
+                </div>
+                <div class="form-group">
+                    <label for="notes">{{T .AdminLang "sentinel.notes"}}</label>
+                    <input type="text"
+                           id="notes"
+                           name="notes"
+                           class="form-control"
+                           placeholder="{{T .AdminLang "sentinel.notes_placeholder"}}">
+                </div>
+                <div class="form-group">
+                    <label for="url">{{T .AdminLang "sentinel.url"}}</label>
+                    <input type="text"
+                           id="url"
+                           name="url"
+                           class="form-control"
+                           placeholder="{{T .AdminLang "sentinel.url_placeholder"}}">
+                </div>
+                <div class="form-group form-group-button">
+                    <button type="submit" class="btn btn-danger">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="m4.9 4.9 14.2 14.2"/>
+                        </svg>
+                        {{T .AdminLang "sentinel.ban_ip"}}
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{if .Data.Bans}}
+<div class="card">
+    <div class="card-header">
+        <h3>{{T .AdminLang "sentinel.banned_count"}}: {{len .Data.Bans}}</h3>
+    </div>
+    <div class="card-body">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>{{T .AdminLang "sentinel.table_ip"}}</th>
+                    <th>{{T .AdminLang "sentinel.table_notes"}}</th>
+                    <th>{{T .AdminLang "sentinel.table_url"}}</th>
+                    <th>{{T .AdminLang "sentinel.table_banned_at"}}</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Data.Bans}}
+                <tr>
+                    <td><code class="text-danger">{{.IPPattern}}</code></td>
+                    <td class="text-muted">{{if .Notes}}{{.Notes}}{{else}}-{{end}}</td>
+                    <td class="text-muted">
+                        {{if .URL}}
+                            <a href="{{.URL}}" target="_blank" rel="noopener">{{.URL}}</a>
+                        {{else}}
+                            -
+                        {{end}}
+                    </td>
+                    <td class="text-muted">{{formatDateTimeLocale .BannedAt $.AdminLang}}</td>
+                    <td class="text-right">
+                        <button type="button"
+                                class="btn btn-sm btn-outline-danger delete-ban"
+                                data-id="{{.ID}}"
+                                title="{{T $.AdminLang "sentinel.remove_ban"}}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 6h18"/>
+                                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                            </svg>
+                        </button>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{else}}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>
+                <path d="m9 12 2 2 4-4"/>
+            </svg>
+            <p>{{T .AdminLang "sentinel.no_bans"}}</p>
+            <span class="empty-hint">{{T .AdminLang "sentinel.no_bans_hint"}}</span>
+        </div>
+    </div>
+</div>
+{{end}}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let i18n = {
+        confirmDelete: '{{T .AdminLang "sentinel.confirm_delete"}}',
+        deleteFailed: '{{T .AdminLang "sentinel.delete_failed"}}'
+    };
+
+    // Handle delete button clicks
+    document.querySelectorAll('.delete-ban').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const id = this.dataset.id;
+            if (confirm(i18n.confirmDelete)) {
+                fetch('/admin/sentinel/' + id, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRF-Token': '{{.CSRFToken}}'
+                    }
+                }).then(function(response) {
+                    if (response.ok) {
+                        window.location.reload();
+                    } else {
+                        alert(i18n.deleteFailed);
+                    }
+                }).catch(function(err) {
+                    console.error('Error:', err);
+                    alert(i18n.deleteFailed);
+                });
+            }
+        });
+    });
+});
+</script>
+
+<style>
+.add-ban-form .form-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-end;
+}
+
+.add-ban-form .form-group {
+    flex: 1;
+    min-width: 200px;
+}
+
+.add-ban-form .form-group-button {
+    flex: 0 0 auto;
+    min-width: auto;
+}
+
+.add-ban-form .form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.add-ban-form .form-text {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.875rem;
+}
+
+code.text-danger {
+    background-color: rgba(220, 53, 69, 0.1);
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+}
+</style>
+{{end}}

@@ -49,6 +49,7 @@ import (
 	"github.com/olegiv/ocms-go/modules/example"
 	"github.com/olegiv/ocms-go/modules/hcaptcha"
 	"github.com/olegiv/ocms-go/modules/migrator"
+	"github.com/olegiv/ocms-go/modules/sentinel"
 	"github.com/olegiv/ocms-go/web"
 )
 
@@ -372,6 +373,10 @@ func run() error {
 	if err := moduleRegistry.Register(hcaptcha.New()); err != nil {
 		return fmt.Errorf("registering hcaptcha module: %w", err)
 	}
+	sentinelModule := sentinel.New()
+	if err := moduleRegistry.Register(sentinelModule); err != nil {
+		return fmt.Errorf("registering sentinel module: %w", err)
+	}
 	if err := moduleRegistry.Register(migrator.New()); err != nil {
 		return fmt.Errorf("registering migrator module: %w", err)
 	}
@@ -448,6 +453,11 @@ func run() error {
 	// Middleware stack
 	r.Use(chimw.RequestID)
 	r.Use(chimw.RealIP)
+	// Sentinel IP ban check (applied early, after RealIP)
+	if moduleRegistry.IsActive("sentinel") {
+		r.Use(sentinelModule.GetMiddleware())
+		slog.Info("sentinel IP ban middleware enabled")
+	}
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.Compress(5))                    // Gzip compression with level 5
