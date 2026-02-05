@@ -504,19 +504,16 @@ function privacySettings() {
     // Parse initial services from server
     let initialServices = [];
     try {
-        const servicesJson = '{{.Data.ServicesJSON}}';
-        if (servicesJson && servicesJson !== '[]' && servicesJson !== 'null') {
-            const parsed = JSON.parse(servicesJson);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-                // Convert purposes array to string for display
-                initialServices = parsed.map(s => ({
-                    ...s,
-                    purposes: Array.isArray(s.purposes) ? s.purposes.join(', ') : (s.purposes || '')
-                }));
-            }
+        const servicesData = {{safeHTML .Data.ServicesJSON}};
+        if (Array.isArray(servicesData) && servicesData.length > 0) {
+            // Convert purposes array to string for display
+            initialServices = servicesData.map(s => ({
+                ...s,
+                purposes: Array.isArray(s.purposes) ? s.purposes.join(', ') : (s.purposes || '')
+            }));
         }
     } catch (e) {
-        console.error('Failed to parse services:', e);
+        console.error('Failed to load services:', e);
         initialServices = [];
     }
 
