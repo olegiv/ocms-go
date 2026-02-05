@@ -4,8 +4,10 @@
 package imaging
 
 import (
+	"bytes"
 	"image"
 	"image/color"
+	"image/png"
 	"testing"
 
 	"github.com/olegiv/ocms-go/internal/model"
@@ -140,6 +142,104 @@ func TestFormatToMimeType(t *testing.T) {
 				t.Errorf("formatToMimeType(%q) = %v, want %v", tt.format, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestCreateAllVariants(t *testing.T) {
+	// Create a temp directory for uploads
+	uploadsDir := t.TempDir()
+	p := NewProcessor(uploadsDir)
+
+	// Create a source image large enough for all variants (2400x1600)
+	sourceImg := createTestImage(2400, 1600)
+	uuid := "test-uuid-all-variants"
+
+	// Save source image first via ProcessImage
+	result, err := p.ProcessImage(
+		func() *bytes.Reader {
+			var buf bytes.Buffer
+			_ = png.Encode(&buf, sourceImg)
+			return bytes.NewReader(buf.Bytes())
+		}(),
+		uuid,
+		"test-all.png",
+	)
+	if err != nil {
+		t.Fatalf("ProcessImage: %v", err)
+	}
+
+	// Create all variants
+	variants, err := p.CreateAllVariants(result.FilePath, uuid, "test-all.png")
+	if err != nil {
+		t.Fatalf("CreateAllVariants: %v", err)
+	}
+
+	if len(variants) == 0 {
+		t.Fatal("CreateAllVariants returned no variants")
+	}
+
+	// All 4 variants should be created for a 2400x1600 image
+	if len(variants) != 4 {
+		t.Errorf("variant count = %d, want 4", len(variants))
+	}
+
+	// Verify each variant has valid dimensions
+	for _, v := range variants {
+		if v.Width <= 0 || v.Height <= 0 {
+			t.Errorf("variant %q has invalid dimensions: %dx%d", v.Type, v.Width, v.Height)
+		}
+		if v.Size <= 0 {
+			t.Errorf("variant %q has invalid size: %d", v.Type, v.Size)
+		}
+	}
+}
+
+func TestCreateAllVariants_SmallSource(t *testing.T) {
+	// Create a temp directory for uploads
+	uploadsDir := t.TempDir()
+	p := NewProcessor(uploadsDir)
+
+	// Create a small source image (100x100) - smaller than all non-crop variants
+	sourceImg := createTestImage(100, 100)
+	uuid := "test-uuid-small-source"
+
+	// Save source image
+	result, err := p.ProcessImage(
+		func() *bytes.Reader {
+			var buf bytes.Buffer
+			_ = png.Encode(&buf, sourceImg)
+			return bytes.NewReader(buf.Bytes())
+		}(),
+		uuid,
+		"test-small.png",
+	)
+	if err != nil {
+		t.Fatalf("ProcessImage: %v", err)
+	}
+
+	// Create all variants - should only create thumbnail (crop=true)
+	variants, err := p.CreateAllVariants(result.FilePath, uuid, "test-small.png")
+	if err != nil {
+		t.Fatalf("CreateAllVariants: %v", err)
+	}
+
+	// Only thumbnail should be created (it crops, so source size doesn't matter)
+	if len(variants) != 1 {
+		t.Errorf("variant count = %d, want 1 (only thumbnail for small source)", len(variants))
+		for _, v := range variants {
+			t.Logf("  variant: %s (%dx%d)", v.Type, v.Width, v.Height)
+		}
+	}
+}
+
+func TestCreateAllVariants_InvalidSource(t *testing.T) {
+	uploadsDir := t.TempDir()
+	p := NewProcessor(uploadsDir)
+
+	// Pass a non-existent source file - all variants should fail
+	_, err := p.CreateAllVariants("/nonexistent/path.png", "bad-uuid", "bad.png")
+	if err == nil {
+		t.Error("CreateAllVariants should fail with non-existent source")
 	}
 }
 
