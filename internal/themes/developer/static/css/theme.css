@@ -595,6 +595,23 @@ img {
     color: var(--dev-comment);
 }
 
+.dev-footer-privacy {
+    margin-left: var(--dev-space-md);
+    padding-left: var(--dev-space-md);
+    border-left: 1px solid var(--dev-border);
+}
+
+.dev-footer-privacy a {
+    font-family: var(--dev-font-mono), monospace;
+    font-size: 0.875rem;
+    color: var(--dev-text-muted);
+    text-decoration: none;
+}
+
+.dev-footer-privacy a:hover {
+    color: var(--dev-accent);
+}
+
 /* Footer Navigation - Column Layout */
 .dev-footer-nav {
     display: flex;

@@ -113,7 +113,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <script async src="https://www.googletagmanager.com/gtag/js?id=%s"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
+  if (typeof window.gtag !== 'function') { window.gtag = function(){dataLayer.push(arguments);}; }
   gtag('js', new Date());
   gtag('config', '%s');
 </script>
