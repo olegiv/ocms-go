@@ -114,6 +114,8 @@ func minimalFuncMap() map[string]any {
 		"timeBefore":            func(t1, t2 any) bool { return false },
 		"formatDate":            func(t any) string { return "" },
 		"formatDateTime":        func(t any) string { return "" },
+		"privacyHead":           func() string { return "" },
+		"privacyFooterLink":     func() string { return "" },
 		"formatDateLocale":      func(t any, lang string) string { return "" },
 		"formatDateTimeLocale":  func(t any, lang string) string { return "" },
 		"truncate":              func(s string, length int) string { return s },
