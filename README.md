@@ -185,6 +185,8 @@ sudo dnf install vips-devel
 | `OCMS_HCAPTCHA_SITE_KEY` | hCaptcha site key for login protection | - | No |
 | `OCMS_HCAPTCHA_SECRET_KEY` | hCaptcha secret key for login protection | - | No |
 | `OCMS_GEOIP_DB_PATH` | Path to GeoLite2-Country.mmdb for country detection | - | No |
+| `OCMS_UPLOADS_DIR` | Directory for uploaded media files | `./uploads` | No |
+| `OCMS_DEMO_MODE` | Enable demo content seeding (users, pages, media) | `false` | No |
 
 ## Development
 
@@ -224,6 +226,15 @@ On first run with `OCMS_DO_SEED=true`, the application seeds a default admin use
 - **Password**: changeme1234
 
 Change these credentials immediately after first login.
+
+### Demo Mode
+
+With `OCMS_DEMO_MODE=true` (requires `OCMS_DO_SEED=true`), additional demo content is seeded including sample pages, categories, tags, media, and menu items. Two demo users are created:
+
+- **Admin**: demo@example.com / demo1234demo
+- **Editor**: editor@example.com / demo1234demo
+
+See [docs/demo-deployment.md](docs/demo-deployment.md) for Fly.io deployment and demo configuration details.
 
 ## Docker
 
