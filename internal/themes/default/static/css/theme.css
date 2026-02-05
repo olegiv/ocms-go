@@ -1256,6 +1256,21 @@ a.tag:hover {
     margin-bottom: 0;
 }
 
+.footer-privacy-link {
+    margin-top: var(--spacing-xs);
+    font-size: var(--font-size-small);
+}
+
+.footer-privacy-link a {
+    color: var(--text-muted);
+    text-decoration: none;
+}
+
+.footer-privacy-link a:hover {
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+
 /* Footer Navigation - Column Layout */
 .footer-nav-columns {
     display: flex;

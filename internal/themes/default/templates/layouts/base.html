@@ -61,6 +61,9 @@
     <style>{{.CustomCSS | safeHTML}}</style>
     {{end}}
 
+    {{/* Privacy/Consent scripts - MUST be before analytics for Google Consent Mode v2 */}}
+    {{if privacyHead}}{{privacyHead}}{{end}}
+
     {{/* External analytics tracking scripts (head) */}}
     {{if analyticsExtHead}}{{analyticsExtHead}}{{end}}
 

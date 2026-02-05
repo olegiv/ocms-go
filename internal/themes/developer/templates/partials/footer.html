@@ -33,6 +33,7 @@
         <div class="dev-footer-inner">
             <div class="dev-footer-left">
                 <span class="dev-footer-text">// {{.SiteName}} &copy; {{now.Year}}</span>
+                {{with privacyFooterLink}}<span class="dev-footer-privacy">{{.}}</span>{{end}}
             </div>
             <div class="dev-footer-right">
                 <span class="dev-footer-powered">
