@@ -57,8 +57,8 @@ if [[ "$DO_RESET" == true ]]; then
     curl -s -o /dev/null "https://${APP_NAME}.fly.dev/health" || true
     sleep 5
 
-    # Get machine ID
-    MACHINE_ID=$(fly machines list -a "$APP_NAME" -q 2>/dev/null | head -1)
+    # Get machine ID (trim whitespace)
+    MACHINE_ID=$(fly machines list -a "$APP_NAME" -q 2>/dev/null | head -1 | tr -d '[:space:]')
     if [[ -z "$MACHINE_ID" ]]; then
         echo "ERROR: Could not get machine ID"
         exit 1
