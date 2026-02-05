@@ -32,6 +32,7 @@
                         placeholder="{{T .AdminLang "users.name_placeholder"}}"
                         required
                         autofocus
+                        maxlength="255"
                     >
                     {{if index .Data.Errors "name"}}
                     <span class="form-error">{{index .Data.Errors "name"}}</span>
@@ -48,6 +49,7 @@
                         value="{{index .Data.FormValues "email"}}"
                         placeholder="{{T .AdminLang "users.email_placeholder"}}"
                         required
+                        maxlength="255"
                     >
                     {{if index .Data.Errors "email"}}
                     <span class="form-error">{{index .Data.Errors "email"}}</span>

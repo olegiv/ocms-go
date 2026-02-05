@@ -32,6 +32,7 @@
                         placeholder="/old-page"
                         required
                         autofocus
+                        maxlength="2048"
                     >
                     {{if index .Data.Errors "source_path"}}
                     <span class="form-error">{{index .Data.Errors "source_path"}}</span>
@@ -52,6 +53,7 @@
                         value="{{if .Data.IsEdit}}{{.Data.Redirect.TargetUrl}}{{else}}{{index .Data.FormValues "target_url"}}{{end}}"
                         placeholder="/new-page or https://example.com/page"
                         required
+                        maxlength="2048"
                     >
                     {{if index .Data.Errors "target_url"}}
                     <span class="form-error">{{index .Data.Errors "target_url"}}</span>

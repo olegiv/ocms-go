@@ -39,6 +39,7 @@
                     value="{{if .Data.FormValues.name}}{{.Data.FormValues.name}}{{else if .Data.Tag}}{{.Data.Tag.Name}}{{end}}"
                     placeholder="{{T .AdminLang "tags.name_placeholder"}}"
                     required
+                    maxlength="255"
                     @input="generateSlug($event.target.value)"
                 >
                 {{if .Data.Errors.name}}
@@ -62,6 +63,7 @@
                     placeholder="tag-slug"
                     x-model="slug"
                     @input="slugEdited = true"
+                    maxlength="255"
                 >
                 {{if .Data.Errors.slug}}
                 <span class="form-error">{{.Data.Errors.slug}}</span>

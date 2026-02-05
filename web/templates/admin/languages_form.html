@@ -74,6 +74,7 @@
                         x-model="name"
                         placeholder="{{T .AdminLang "languages.name_placeholder"}}"
                         required
+                        maxlength="255"
                     >
                     {{if index .Data.Errors "name"}}
                     <span class="form-error">{{index .Data.Errors "name"}}</span>
@@ -93,6 +94,7 @@
                         x-model="nativeName"
                         placeholder="{{T .AdminLang "languages.native_placeholder"}}"
                         required
+                        maxlength="255"
                     >
                     {{if index .Data.Errors "native_name"}}
                     <span class="form-error">{{index .Data.Errors "native_name"}}</span>

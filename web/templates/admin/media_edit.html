@@ -112,6 +112,7 @@
                         value="{{if .Data.FormValues.filename}}{{.Data.FormValues.filename}}{{else}}{{.Data.Media.Filename}}{{end}}"
                         class="form-input {{if .Data.Errors.filename}}is-invalid{{end}}"
                         required
+                        maxlength="255"
                     >
                     {{if .Data.Errors.filename}}
                     <span class="form-error">{{.Data.Errors.filename}}</span>
@@ -127,6 +128,7 @@
                         value="{{if .Data.FormValues.alt}}{{.Data.FormValues.alt}}{{else}}{{.Data.Media.Alt.String}}{{end}}"
                         class="form-input"
                         placeholder="{{T .AdminLang "media.alt_placeholder"}}"
+                        maxlength="255"
                     >
                     <span class="form-hint">{{T .AdminLang "media.alt_hint"}}</span>
                 </div>
@@ -159,6 +161,7 @@
                                 value="{{if $trans}}{{$trans.Alt}}{{end}}"
                                 class="form-input"
                                 placeholder="{{T $.AdminLang "media.alt_placeholder"}}"
+                                maxlength="255"
                             >
                         </div>
                         <div class="form-group">

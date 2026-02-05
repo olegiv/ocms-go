@@ -1198,6 +1198,48 @@ select.form-control {
   }
 }
 
+// Event URL column truncation
+.event-url {
+  max-width: 250px;
+  font-size: $font-size-sm;
+  color: $gray-600;
+
+  .url-text {
+    display: block;
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &.truncated {
+      cursor: pointer;
+
+      &::before {
+        content: "▶ ";
+        font-size: 0.65em;
+      }
+
+      &:hover {
+        color: $gray-800;
+      }
+    }
+
+    &.expanded {
+      white-space: normal;
+      word-break: break-all;
+      background-color: $gray-100;
+      padding: 0.5rem;
+      border-radius: $radius-md;
+      user-select: text;
+      overflow: visible;
+
+      &::before {
+        content: "▼ ";
+      }
+    }
+  }
+}
+
 // Event row level highlighting
 .event-row.event-level-error {
   background-color: rgba($error, 0.03);

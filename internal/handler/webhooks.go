@@ -628,8 +628,8 @@ func validateWebhookForm(input webhookFormInput, validateEvents bool) map[string
 
 	if input.Name == "" {
 		validationErrors["name"] = "Name is required"
-	} else if len(input.Name) > 100 {
-		validationErrors["name"] = "Name must be less than 100 characters"
+	} else if len(input.Name) > 255 {
+		validationErrors["name"] = "Name must be less than 255 characters"
 	}
 
 	if input.URL == "" {
