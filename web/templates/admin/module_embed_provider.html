@@ -87,6 +87,7 @@
                        value="{{.Default}}"
                        placeholder="{{.Placeholder}}"
                        class="form-control"
+                       maxlength="{{if eq .Type "url"}}2048{{else}}255{{end}}"
                        {{if .Required}}required{{end}}>
                 {{end}}
                 {{if and .Description (ne .Type "checkbox")}}

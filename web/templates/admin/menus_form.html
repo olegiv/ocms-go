@@ -40,6 +40,7 @@
                     value="{{if .Data.FormValues.name}}{{.Data.FormValues.name}}{{else if .Data.Menu}}{{.Data.Menu.Name}}{{end}}"
                     placeholder="{{T .AdminLang "menus.name_placeholder"}}"
                     required
+                    maxlength="255"
                 >
                 {{if .Data.Errors.name}}
                 <span class="form-error">{{.Data.Errors.name}}</span>
@@ -57,6 +58,7 @@
                     class="form-input {{if .Data.Errors.slug}}is-invalid{{end}}"
                     value="{{if .Data.FormValues.slug}}{{.Data.FormValues.slug}}{{else if .Data.Menu}}{{.Data.Menu.Slug}}{{end}}"
                     placeholder="{{T .AdminLang "menus.slug_placeholder"}}"
+                    maxlength="255"
                 >
                 {{if .Data.Errors.slug}}
                 <span class="form-error">{{.Data.Errors.slug}}</span>
@@ -118,11 +120,11 @@
                         <h4 class="menu-add-title">{{T .AdminLang "menus.custom_link"}}</h4>
                         <div class="form-group">
                             <label class="form-label">{{T .AdminLang "label.title"}}</label>
-                            <input type="text" class="form-input" x-model="customLink.title" placeholder="{{T .AdminLang "menus.link_text"}}">
+                            <input type="text" class="form-input" x-model="customLink.title" placeholder="{{T .AdminLang "menus.link_text"}}" maxlength="255">
                         </div>
                         <div class="form-group">
                             <label class="form-label">URL</label>
-                            <input type="text" class="form-input" x-model="customLink.url" placeholder="https://...">
+                            <input type="text" class="form-input" x-model="customLink.url" placeholder="https://..." maxlength="2048">
                         </div>
                         <div class="form-group">
                             <label class="form-label">{{T .AdminLang "menus.target"}}</label>
@@ -287,11 +289,11 @@
                 <div class="modal-body">
                     <div class="form-group">
                         <label class="form-label">{{T .AdminLang "label.title"}}</label>
-                        <input type="text" class="form-input" x-model="editingItem.title">
+                        <input type="text" class="form-input" x-model="editingItem.title" maxlength="255">
                     </div>
                     <div class="form-group" x-show="!editingItem.page_id">
                         <label class="form-label">URL</label>
-                        <input type="text" class="form-input" x-model="editingItem.url">
+                        <input type="text" class="form-input" x-model="editingItem.url" maxlength="2048">
                     </div>
                     <div class="form-group">
                         <label class="form-label">{{T .AdminLang "menus.target"}}</label>
@@ -312,7 +314,7 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label">{{T .AdminLang "menus.css_class"}}</label>
-                        <input type="text" class="form-input" x-model="editingItem.css_class" placeholder="{{T .AdminLang "menus.css_class_placeholder"}}">
+                        <input type="text" class="form-input" x-model="editingItem.css_class" placeholder="{{T .AdminLang "menus.css_class_placeholder"}}" maxlength="255">
                     </div>
                     <div class="form-group">
                         <label class="checkbox-label">

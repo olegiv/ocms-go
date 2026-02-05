@@ -36,7 +36,8 @@
                        name="privacy_policy_url"
                        value="{{.Data.PrivacyPolicyURL}}"
                        placeholder="/privacy"
-                       class="form-control">
+                       class="form-control"
+                       maxlength="2048">
                 <small class="form-text">{{T .AdminLang "privacy.privacy_policy_url_help"}}</small>
             </div>
         </div>
@@ -55,7 +56,8 @@
                            id="cookie_name"
                            name="cookie_name"
                            value="{{if .Data.CookieName}}{{.Data.CookieName}}{{else}}klaro{{end}}"
-                           class="form-control">
+                           class="form-control"
+                           maxlength="255">
                     <small class="form-text">{{T .AdminLang "privacy.cookie_name_help"}}</small>
                 </div>
 
@@ -221,21 +223,21 @@
                                 </div>
                                 <div class="form-group">
                                     <label>{{T .AdminLang "privacy.service_title"}}</label>
-                                    <input type="text" x-model="service.title" class="form-control">
+                                    <input type="text" x-model="service.title" class="form-control" maxlength="255">
                                 </div>
                             </div>
                             <div class="form-group">
                                 <label>{{T .AdminLang "privacy.service_description"}}</label>
-                                <input type="text" x-model="service.description" class="form-control">
+                                <input type="text" x-model="service.description" class="form-control" maxlength="255">
                             </div>
                             <div class="form-row">
                                 <div class="form-group">
                                     <label>{{T .AdminLang "privacy.service_purposes"}}</label>
-                                    <input type="text" x-model="service.purposes" class="form-control" placeholder="analytics, marketing">
+                                    <input type="text" x-model="service.purposes" class="form-control" placeholder="analytics, marketing" maxlength="255">
                                 </div>
                                 <div class="form-group">
                                     <label>{{T .AdminLang "privacy.service_gcm_type"}}</label>
-                                    <input type="text" x-model="service.gcm_consent_type" class="form-control" placeholder="analytics_storage">
+                                    <input type="text" x-model="service.gcm_consent_type" class="form-control" placeholder="analytics_storage" maxlength="255">
                                 </div>
                             </div>
                             <div class="checkbox-row">

@@ -63,13 +63,15 @@
                            name="ip_pattern"
                            class="form-control"
                            placeholder="{{T .AdminLang "sentinel.ip_pattern_placeholder"}}"
+                           maxlength="255"
                            required>
                 </div>
                 <div class="form-group flex-grow">
                     <input type="text"
                            name="notes"
                            class="form-control"
-                           placeholder="{{T .AdminLang "sentinel.whitelist_notes_placeholder"}}">
+                           placeholder="{{T .AdminLang "sentinel.whitelist_notes_placeholder"}}"
+                           maxlength="255">
                 </div>
                 <div class="form-group form-group-button">
                     <button type="submit" class="btn btn-success">
@@ -136,6 +138,7 @@
                            name="path_pattern"
                            class="form-control"
                            placeholder="{{T .AdminLang "sentinel.path_pattern_placeholder"}}"
+                           maxlength="255"
                            required>
                     <small class="form-text text-muted">{{T .AdminLang "sentinel.path_pattern_help"}}</small>
                 </div>
@@ -143,7 +146,8 @@
                     <input type="text"
                            name="notes"
                            class="form-control"
-                           placeholder="{{T .AdminLang "sentinel.path_notes_placeholder"}}">
+                           placeholder="{{T .AdminLang "sentinel.path_notes_placeholder"}}"
+                           maxlength="255">
                 </div>
                 <div class="form-group form-group-button">
                     <button type="submit" class="btn btn-warning">
@@ -210,6 +214,7 @@
                            name="ip_pattern"
                            class="form-control"
                            placeholder="{{T .AdminLang "sentinel.ip_pattern_placeholder"}}"
+                           maxlength="255"
                            required>
                     <small class="form-text text-muted">{{T .AdminLang "sentinel.ip_pattern_help"}}</small>
                 </div>
@@ -217,13 +222,15 @@
                     <input type="text"
                            name="notes"
                            class="form-control"
-                           placeholder="{{T .AdminLang "sentinel.notes_placeholder"}}">
+                           placeholder="{{T .AdminLang "sentinel.notes_placeholder"}}"
+                           maxlength="255">
                 </div>
                 <div class="form-group">
                     <input type="text"
                            name="url"
                            class="form-control"
-                           placeholder="{{T .AdminLang "sentinel.url_placeholder"}}">
+                           placeholder="{{T .AdminLang "sentinel.url_placeholder"}}"
+                           maxlength="2048">
                 </div>
                 <div class="form-group form-group-button">
                     <button type="submit" class="btn btn-danger">

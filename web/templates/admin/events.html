@@ -76,7 +76,7 @@
                     </td>
                     <td class="event-url">
                         {{if .RequestURL}}
-                            <code class="text-muted">{{.RequestURL}}</code>
+                            <span class="url-text"><code>{{.RequestURL}}</code></span>
                         {{else}}
                             <span class="text-muted">-</span>
                         {{end}}
@@ -129,7 +129,7 @@
 {{if .Data.Events}}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.details-text').forEach(function(el) {
+    document.querySelectorAll('.details-text, .url-text').forEach(function(el) {
         if (el.scrollWidth > el.clientWidth) {
             el.classList.add('truncated');
             el.addEventListener('click', function() {
