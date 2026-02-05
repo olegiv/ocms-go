@@ -3,13 +3,14 @@
   "private": true,
   "description": "Asset dependencies for oCMS",
   "scripts": {
-    "copy-deps": "mkdir -p web/static/dist/js && cp node_modules/htmx.org/dist/htmx.min.js web/static/dist/js/ && cp node_modules/alpinejs/dist/cdn.min.js web/static/dist/js/alpine.min.js && cp node_modules/@alpinejs/sort/dist/cdn.min.js web/static/dist/js/alpine-sort.min.js && cp node_modules/@alpinejs/collapse/dist/cdn.min.js web/static/dist/js/alpine-collapse.min.js && cp -r node_modules/tinymce web/static/dist/js/"
+    "copy-deps": "mkdir -p web/static/dist/js web/static/dist/css && cp node_modules/htmx.org/dist/htmx.min.js web/static/dist/js/ && cp node_modules/alpinejs/dist/cdn.min.js web/static/dist/js/alpine.min.js && cp node_modules/@alpinejs/sort/dist/cdn.min.js web/static/dist/js/alpine-sort.min.js && cp node_modules/@alpinejs/collapse/dist/cdn.min.js web/static/dist/js/alpine-collapse.min.js && cp -r node_modules/tinymce web/static/dist/js/ && cp node_modules/klaro/dist/klaro-no-css.js web/static/dist/js/klaro.min.js && cp node_modules/klaro/dist/klaro.css web/static/dist/css/klaro.css"
   },
   "dependencies": {
     "@alpinejs/collapse": "^3.15.8",
     "@alpinejs/sort": "^3.15.8",
     "alpinejs": "^3.15.8",
     "htmx.org": "^2.0.8",
+    "klaro": "^0.7.22",
     "tinymce": "^8.3.2"
   }
 }

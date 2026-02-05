@@ -60,11 +60,11 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 		// More permissive in development for easier debugging
 		cfg.ContentSecurityPolicy = buildCSP(map[string]string{
 			"default-src": "'self'",
-			"script-src":  "'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://esm.sh https://www.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
-			"style-src":   "'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com",
+			"script-src":  "'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://esm.sh https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
+			"style-src":   "'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com https://fonts.googleapis.com https://www.googletagmanager.com",
 			"img-src":     "'self' data: blob: https:",
-			"font-src":    "'self' data:",
-			"connect-src": "'self' https://esm.sh https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
+			"font-src":    "'self' data: https://fonts.gstatic.com",
+			"connect-src": "'self' https://esm.sh https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://*.googletagmanager.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
 			"frame-src":   "'self' https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
 			"object-src":  "'none'",
 			"base-uri":    "'self'",
@@ -74,11 +74,11 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 		// Strict CSP for production
 		cfg.ContentSecurityPolicy = buildCSP(map[string]string{
 			"default-src": "'self'",
-			"script-src":  "'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://esm.sh https://www.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
-			"style-src":   "'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com",
+			"script-src":  "'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://esm.sh https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
+			"style-src":   "'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com https://fonts.googleapis.com https://www.googletagmanager.com",
 			"img-src":     "'self' data: blob: https:",
-			"font-src":    "'self' data:",
-			"connect-src": "'self' https://esm.sh https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
+			"font-src":    "'self' data: https://fonts.gstatic.com",
+			"connect-src": "'self' https://esm.sh https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://*.googletagmanager.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
 			"frame-src":   "'self' https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
 			"object-src":  "'none'",
 			"base-uri":    "'self'",
