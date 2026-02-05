@@ -206,6 +206,37 @@ func TestLoad_GeoIPDBPath(t *testing.T) {
 	}
 }
 
+func TestLoad_UploadsDir(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		os.Clearenv()
+		setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load() error: %v", err)
+		}
+
+		if cfg.UploadsDir != "./uploads" {
+			t.Errorf("UploadsDir = %q, want %q", cfg.UploadsDir, "./uploads")
+		}
+	})
+
+	t.Run("custom_value", func(t *testing.T) {
+		os.Clearenv()
+		setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+		setEnv(t, "OCMS_UPLOADS_DIR", "/var/www/uploads")
+
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load() error: %v", err)
+		}
+
+		if cfg.UploadsDir != "/var/www/uploads" {
+			t.Errorf("UploadsDir = %q, want %q", cfg.UploadsDir, "/var/www/uploads")
+		}
+	})
+}
+
 func TestLoad_CustomDir(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
 		os.Clearenv()

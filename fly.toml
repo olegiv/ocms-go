@@ -1,0 +1,74 @@
+# fly.toml app configuration file generated for ocms-demo on 2026-02-05T16:03:35+01:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'ocms-demo'
+primary_region = 'fra'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+  [build.args]
+    VERSION = 'demo'
+
+[env]
+  GOGC = '50'  # Reduce Go memory usage for 256MB instances
+  OCMS_ACTIVE_THEME = 'default'
+  OCMS_CUSTOM_DIR = '/app/custom'
+  OCMS_DB_PATH = '/app/data/ocms.db'
+  OCMS_DEMO_MODE = 'true'
+  OCMS_DO_SEED = 'true'
+  OCMS_ENV = 'production'
+  OCMS_LOG_LEVEL = 'info'
+  OCMS_SERVER_HOST = '0.0.0.0'
+  OCMS_SERVER_PORT = '8080'
+  OCMS_UPLOADS_DIR = '/app/data/uploads'
+
+[processes]
+  app = '/app/ocms'
+
+[[mounts]]
+  source = 'ocms_data'
+  destination = '/app/data'
+  initial_size = '1gb'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+  [http_service.concurrency]
+    type = 'requests'
+    hard_limit = 250
+    soft_limit = 200
+
+[checks]
+  [checks.liveness]
+    port = 8080
+    type = 'http'
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '10s'
+    path = '/health/live'
+
+  [checks.readiness]
+    port = 8080
+    type = 'http'
+    interval = '15s'
+    timeout = '5s'
+    grace_period = '10s'
+    path = '/health/ready'
+
+[[restart]]
+  policy = 'always'
+
+[[vm]]
+  memory = '256mb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 256
+

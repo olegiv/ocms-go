@@ -1,0 +1,1 @@
+../shared/stacks/go/commands/fly-deploy.md

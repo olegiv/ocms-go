@@ -75,7 +75,7 @@ RUN addgroup -g 1000 ocms && \
 WORKDIR /app
 
 # Create data directories
-RUN mkdir -p /app/data /app/uploads /app/custom/themes /app/custom/modules \
+RUN mkdir -p /app/data /app/uploads /app/custom/themes /app/custom/modules /app/scripts \
     && chown -R ocms:ocms /app
 
 # Copy binary from builder
@@ -84,6 +84,10 @@ COPY --from=builder /build/bin/ocms /app/ocms
 # Copy entrypoint script
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
+
+# Copy demo reset script (for Fly.io demo deployments)
+COPY .fly/scripts/reset-demo.sh /app/scripts/reset-demo.sh
+RUN chmod +x /app/scripts/reset-demo.sh
 
 # Set ownership
 RUN chown ocms:ocms /app/ocms

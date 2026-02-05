@@ -164,10 +164,14 @@ cmd/ocms/main.go
 | `OCMS_HCAPTCHA_SECRET_KEY` | No | - | hCaptcha secret key (overrides database setting) |
 | `OCMS_GEOIP_DB_PATH` | No | - | Path to GeoLite2-Country.mmdb for country detection |
 | `OCMS_DO_SEED` | No | `false` | Enable database seeding (admin user, config, menus) |
+| `OCMS_UPLOADS_DIR` | No | `./uploads` | Directory for uploaded media files |
+| `OCMS_DEMO_MODE` | No | `false` | Enable demo content seeding (demo users, pages, media) |
 
 ## Default Credentials
 
 When `OCMS_DO_SEED=true`, seeds admin user: `admin@example.com` / `changeme1234`
+
+When `OCMS_DEMO_MODE=true`, also seeds demo users: `demo@example.com` / `demo1234demo` (admin) and `editor@example.com` / `demo1234demo` (editor)
 
 Seeding is opt-in to prevent automatic recreation of deleted data on restart.
 
@@ -508,6 +512,7 @@ Additional documentation is available in the `docs/` directory:
 - `docs/i18n.md` - Internationalization, translation file format, theme translations, and `TTheme` usage
 - `docs/csrf.md` - CSRF protection configuration, TrustedOrigins format, and troubleshooting
 - `docs/caching.md` - Cache types, context-aware page caching, admin bypass, and Redis configuration
+- `docs/demo-deployment.md` - Demo mode, Fly.io deployment, and demo content seeding
 
 Security audit documents are available in the `.audit/` directory (gitignored).
 
@@ -614,6 +619,9 @@ Review changes and prepare a commit message. Runs `/code-quality` first and asks
 
 ### /clean
 Clean build artifacts, compiled binaries, and development databases.
+
+### /fly-deploy
+Deploy the application to Fly.io. Supports `--reset` (reset database), `--logs` (show logs), and `status` (check status only).
 
 ## How to Use Claude Code Extensions
 
