@@ -1,87 +1,74 @@
-# Copyright (c) 2025-2026 Oleg Ivanchenko
-# SPDX-License-Identifier: GPL-3.0-or-later
+# fly.toml app configuration file generated for ocms-demo on 2026-02-05T16:03:35+01:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-# Fly.io deployment configuration for oCMS Demo
-# Documentation: https://fly.io/docs/reference/configuration/
+app = 'ocms-demo'
+primary_region = 'fra'
 
-app = "ocms-demo"
-primary_region = "iad"
-
-# Build configuration - uses existing Dockerfile
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
+
   [build.args]
-    VERSION = "demo"
+    VERSION = 'demo'
 
-# Environment variables (non-sensitive)
 [env]
-  OCMS_ENV = "production"
-  OCMS_SERVER_HOST = "0.0.0.0"
-  OCMS_SERVER_PORT = "8080"
-  OCMS_DB_PATH = "/app/data/ocms.db"
-  OCMS_CUSTOM_DIR = "/app/custom"
-  OCMS_ACTIVE_THEME = "default"
-  OCMS_LOG_LEVEL = "info"
-  OCMS_DO_SEED = "true"
-  OCMS_DEMO_MODE = "true"
-  # Uploads stored in data volume for simplicity
-  OCMS_UPLOADS_DIR = "/app/data/uploads"
+  GOGC = '50'  # Reduce Go memory usage for 256MB instances
+  OCMS_ACTIVE_THEME = 'default'
+  OCMS_CUSTOM_DIR = '/app/custom'
+  OCMS_DB_PATH = '/app/data/ocms.db'
+  OCMS_DEMO_MODE = 'true'
+  OCMS_DO_SEED = 'true'
+  OCMS_ENV = 'production'
+  OCMS_LOG_LEVEL = 'info'
+  OCMS_SERVER_HOST = '0.0.0.0'
+  OCMS_SERVER_PORT = '8080'
+  OCMS_UPLOADS_DIR = '/app/data/uploads'
 
-# HTTP service configuration
+[processes]
+  app = '/app/ocms'
+
+[[mounts]]
+  source = 'ocms_data'
+  destination = '/app/data'
+  initial_size = '1gb'
+
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
-  processes = ["app"]
+  processes = ['app']
 
-  # Health check for routing
   [http_service.concurrency]
-    type = "requests"
+    type = 'requests'
     hard_limit = 250
     soft_limit = 200
 
-# Machine configuration (free tier: shared-cpu-1x, 256MB)
-[[vm]]
-  memory = "256mb"
-  cpu_kind = "shared"
-  cpus = 1
-
-# Persistent volume for SQLite database and uploads
-[mounts]
-  source = "ocms_data"
-  destination = "/app/data"
-  initial_size = "1gb"
-
-# Health checks
 [checks]
   [checks.liveness]
-    type = "http"
     port = 8080
-    path = "/health/live"
-    interval = "30s"
-    timeout = "5s"
-    grace_period = "10s"
+    type = 'http'
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '10s'
+    path = '/health/live'
 
   [checks.readiness]
-    type = "http"
     port = 8080
-    path = "/health/ready"
-    interval = "15s"
-    timeout = "5s"
-    grace_period = "10s"
+    type = 'http'
+    interval = '15s'
+    timeout = '5s'
+    grace_period = '10s'
+    path = '/health/ready'
 
-# Graceful shutdown
-[processes]
-  app = "/app/ocms"
+[[restart]]
+  policy = 'always'
 
-# Restart policy
-[restart]
-  policy = "always"
-  max_retries = 3
+[[vm]]
+  memory = '256mb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 256
 
-# Metrics (optional - for monitoring)
-[metrics]
-  port = 8080
-  path = "/metrics"

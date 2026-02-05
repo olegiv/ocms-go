@@ -164,17 +164,26 @@ func (p *Processor) CreateVariant(sourcePath, uuid, filename string, config mode
 }
 
 // CreateAllVariants creates all standard variants for an image.
+// It continues processing even if individual variants fail, returning
+// all successfully created variants along with any errors encountered.
 func (p *Processor) CreateAllVariants(sourcePath, uuid, filename string) ([]*VariantResult, error) {
 	var results []*VariantResult
+	var errs []string
 
 	for variantType, config := range model.ImageVariants {
 		result, err := p.CreateVariant(sourcePath, uuid, filename, config, variantType)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create %s variant: %w", variantType, err)
+			errs = append(errs, fmt.Sprintf("%s: %v", variantType, err))
+			continue // Continue with other variants
 		}
 		if result != nil {
 			results = append(results, result)
 		}
+	}
+
+	// Return results even if some variants failed
+	if len(errs) > 0 && len(results) == 0 {
+		return nil, fmt.Errorf("all variants failed: %s", strings.Join(errs, "; "))
 	}
 
 	return results, nil
