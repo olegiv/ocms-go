@@ -8,11 +8,11 @@ Demo mode seeds sample content (users, pages, categories, tags, media, and menus
 
 ### Enabling Demo Mode
 
-Set two environment variables:
+Both environment variables are required (demo seeding is gated on `OCMS_DO_SEED`):
 
 ```bash
-OCMS_DO_SEED=true        # Enable base seeding (admin user, config, menus)
-OCMS_DEMO_MODE=true      # Enable demo content seeding
+OCMS_DO_SEED=true        # Required: enable base seeding (admin user, config, menus)
+OCMS_DEMO_MODE=true      # Enable demo content seeding (requires DO_SEED=true)
 ```
 
 ### Demo Content
