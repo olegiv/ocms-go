@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-02-05
+
+### Added
+
+#### Privacy Module
+- Klaro consent library integration for GDPR compliance
+- Google Consent Mode v2 (GCM v2) support
+- Admin interface for configuring consent services
+
+#### Sentinel Module
+- IP banning with admin CRUD interface
+- Country detection using GeoIP service
+- Auto-ban paths configuration for automated blocking
+- IP whitelist support for trusted addresses
+- Self-ban prevention for administrators
+- Settings to enable/disable IP ban check and auto-ban
+- Skip auto-ban for authenticated admin/editor users
+
+#### Global URL Redirects
+- Admin CRUD interface for managing redirects
+- Wildcard support with prefix matching
+- Redirect caching for performance
+
+#### Routing Enhancements
+- Trailing slash redirect middleware
+- Legacy blog tag redirect (`/blog/tag/{slug}` → `/tag/{slug}`)
+- `countryName` template function for GeoIP lookups
+
+### Changed
+- SQLC regenerated with v1.26.0 format
+- Page metadata (date/author) hidden for page type content
+
+### Fixed
+- Open URL redirect security vulnerability (CWE-601)
+- Redirect cache and translation format issues
+- Multi-wildcard IP pattern matching in Sentinel
+- Flash message calls in Sentinel module handlers
+- Alias validation to support path-like URLs
+- Theme tests for privacy module functions
+- Services JSON escaping in privacy admin template
+
+### Security
+- Fixed open URL redirect in legacy blog tag redirect (CWE-601)
+
 ## [0.4.0] - 2026-02-04
 
 ### Added
@@ -199,7 +243,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/olegiv/ocms-go/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/olegiv/ocms-go/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/olegiv/ocms-go/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/olegiv/ocms-go/compare/v0.1.0...v0.2.0
