@@ -83,6 +83,7 @@
                     {{if .FooterText}}
                     <p>{{safeHTML .FooterText}}</p>
                     {{end}}
+                    {{with privacyFooterLink}}<p class="footer-privacy-link">{{.}}</p>{{end}}
                 </div>
 
                 {{if .SocialLinks}}

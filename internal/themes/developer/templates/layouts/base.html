@@ -48,6 +48,9 @@
     <!-- Favicon (served from theme settings or default) -->
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
 
+    <!-- Privacy/Consent scripts - MUST be before analytics for Google Consent Mode v2 -->
+    {{if privacyHead}}{{privacyHead}}{{end}}
+
     <!-- External analytics tracking scripts (head) -->
     {{if analyticsExtHead}}{{analyticsExtHead}}{{end}}
 
