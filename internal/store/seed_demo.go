@@ -535,17 +535,18 @@ func seedDemoMedia(ctx context.Context, queries *Queries, userID int64, langCode
 	now := time.Now()
 
 	// Define demo images with different colors for variety
+	// All images are 2400x1600 to ensure all variants (including large 1920x1080) are created
 	images := []demoImage{
-		{"hero-banner.png", "Hero banner image", 1200, 600, color.RGBA{59, 130, 246, 255}},        // Blue
-		{"about-image.png", "About page image", 800, 600, color.RGBA{16, 185, 129, 255}},         // Green
-		{"blog-post-1.png", "Blog post featured image", 800, 450, color.RGBA{245, 158, 11, 255}}, // Amber
-		{"blog-post-2.png", "Blog tutorial image", 800, 450, color.RGBA{139, 92, 246, 255}},      // Purple
-		{"blog-post-3.png", "Blog news image", 800, 450, color.RGBA{236, 72, 153, 255}},          // Pink
-		{"portfolio-1.png", "E-commerce project screenshot", 1000, 600, color.RGBA{20, 184, 166, 255}}, // Teal
-		{"portfolio-2.png", "Corporate website screenshot", 1000, 600, color.RGBA{99, 102, 241, 255}},  // Indigo
-		{"services-web.png", "Web development services", 800, 500, color.RGBA{239, 68, 68, 255}},      // Red
-		{"team-photo.png", "Team photo placeholder", 600, 400, color.RGBA{107, 114, 128, 255}},       // Gray
-		{"logo-sample.png", "Sample logo image", 400, 200, color.RGBA{34, 197, 94, 255}},            // Green-500
+		{"hero-banner.png", "Hero banner image", 2400, 1600, color.RGBA{59, 130, 246, 255}},           // Blue
+		{"about-image.png", "About page image", 2400, 1600, color.RGBA{16, 185, 129, 255}},            // Green
+		{"blog-post-1.png", "Blog post featured image", 2400, 1600, color.RGBA{245, 158, 11, 255}},    // Amber
+		{"blog-post-2.png", "Blog tutorial image", 2400, 1600, color.RGBA{139, 92, 246, 255}},         // Purple
+		{"blog-post-3.png", "Blog news image", 2400, 1600, color.RGBA{236, 72, 153, 255}},             // Pink
+		{"portfolio-1.png", "E-commerce project screenshot", 2400, 1600, color.RGBA{20, 184, 166, 255}}, // Teal
+		{"portfolio-2.png", "Corporate website screenshot", 2400, 1600, color.RGBA{99, 102, 241, 255}},  // Indigo
+		{"services-web.png", "Web development services", 2400, 1600, color.RGBA{239, 68, 68, 255}},     // Red
+		{"team-photo.png", "Team photo placeholder", 2400, 1600, color.RGBA{107, 114, 128, 255}},       // Gray
+		{"logo-sample.png", "Sample logo image", 2400, 1600, color.RGBA{34, 197, 94, 255}},             // Green-500
 	}
 
 	for _, img := range images {

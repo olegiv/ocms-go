@@ -41,36 +41,40 @@ for arg in "$@"; do
 done
 
 echo "==> Building Docker image..."
-docker build -t "$IMAGE_NAME" .
+if [[ "$DO_RESET" == true ]]; then
+    # Force rebuild without cache when resetting to ensure latest code
+    docker build --no-cache -t "$IMAGE_NAME" .
+else
+    docker build -t "$IMAGE_NAME" .
+fi
 
 echo "==> Deploying to Fly.io..."
 fly deploy --local-only --image "$IMAGE_NAME"
 
 if [[ "$DO_RESET" == true ]]; then
-    echo "==> Starting machines..."
-    fly machines start -a "$APP_NAME" 2>/dev/null || true
-
-    echo "==> Waiting for machine to start..."
+    echo "==> Ensuring machine is running..."
+    # Trigger machine start via HTTP (auto-start on request)
+    curl -s -o /dev/null "https://${APP_NAME}.fly.dev/health" || true
     sleep 5
 
-    # Check if machine is running
-    if ! fly status -a "$APP_NAME" | grep -q "running"; then
-        echo "==> Machine not running, triggering via HTTP..."
-        curl -s -o /dev/null "https://${APP_NAME}.fly.dev/health" || true
-        sleep 5
+    # Get machine ID
+    MACHINE_ID=$(fly machines list -a "$APP_NAME" -q 2>/dev/null | head -1)
+    if [[ -z "$MACHINE_ID" ]]; then
+        echo "ERROR: Could not get machine ID"
+        exit 1
     fi
+    echo "==> Machine ID: $MACHINE_ID"
 
-    echo "==> Resetting database and uploads..."
-    fly ssh console -C "rm -f /app/data/ocms.db* && rm -rf /app/data/uploads/*" -a "$APP_NAME"
+    echo "==> Running reset script..."
+    fly ssh console -C "/app/scripts/reset-demo.sh" -a "$APP_NAME"
 
-    echo "==> Restarting machines..."
-    fly machines restart -a "$APP_NAME"
+    echo "==> Restarting machine..."
+    fly machines restart "$MACHINE_ID" -a "$APP_NAME"
 
-    echo "==> Reset complete. Fresh seeding will occur on startup."
-
-    # Wait for app to be ready
     echo "==> Waiting for app to be ready..."
-    sleep 10
+    sleep 15
+
+    echo "==> Reset complete. Fresh seeding occurred on startup."
 fi
 
 echo ""
