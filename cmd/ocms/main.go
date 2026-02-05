@@ -257,6 +257,11 @@ func run() error {
 		return fmt.Errorf("seeding database: %w", err)
 	}
 
+	// Seed demo content if demo mode is enabled
+	if err := store.SeedDemo(ctx, db); err != nil {
+		return fmt.Errorf("seeding demo content: %w", err)
+	}
+
 	// Update i18n from database settings
 	queries := store.New(db)
 
