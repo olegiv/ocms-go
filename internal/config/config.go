@@ -18,6 +18,7 @@ type Config struct {
 	Env           string `env:"OCMS_ENV" envDefault:"development"`
 	LogLevel    string `env:"OCMS_LOG_LEVEL" envDefault:"info"`
 	CustomDir   string `env:"OCMS_CUSTOM_DIR" envDefault:"./custom"`
+	UploadsDir  string `env:"OCMS_UPLOADS_DIR" envDefault:"./uploads"`
 	ActiveTheme string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`
 
 	// Cache configuration

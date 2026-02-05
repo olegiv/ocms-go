@@ -1065,8 +1065,8 @@ func deleteMediaFiles(uploadDir, mediaUUID string) {
 	originalsDir := filepath.Join(uploadDir, "originals", mediaUUID)
 	_ = os.RemoveAll(originalsDir)
 
-	// Delete variants
-	for _, variant := range []string{"thumbnail", "medium", "large"} {
+	// Delete variants (must match variants created in generateMedia)
+	for _, variant := range []string{"thumbnail", "small", "medium", "large"} {
 		variantDir := filepath.Join(uploadDir, variant, mediaUUID)
 		_ = os.RemoveAll(variantDir)
 	}

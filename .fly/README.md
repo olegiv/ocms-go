@@ -17,15 +17,18 @@ fly auth login
 fly launch --no-deploy --copy-config
 
 # 3. Create persistent volume for database
-fly volumes create ocms_data --size 1 --region iad
+fly volumes create ocms_data --size 1 --region fra
 
 # 4. Set required secrets
-fly secrets set OCMS_SESSION_SECRET="$(openssl rand -base64 32)"
+fly secrets set OCMS_SESSION_SECRET="$(openssl rand -base64 32)" --app ocms-demo
 
-# 5. Deploy
+# 5. (Optional) Reduce memory usage for 256MB instances
+fly secrets set GOGC=50 --app ocms-demo
+
+# 6. Deploy
 fly deploy
 
-# 6. Open the app
+# 7. Open the app
 fly open
 ```
 
@@ -38,6 +41,7 @@ Set via `fly secrets set`:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `OCMS_SESSION_SECRET` | Yes | Min 32 bytes for session encryption |
+| `GOGC` | No | Set to `50` to reduce memory usage on 256MB instances |
 
 Configured in `fly.toml`:
 
@@ -60,11 +64,22 @@ The app uses a single 1GB volume mounted at `/app/data`:
 ### Deployment
 
 ```bash
+# Deploy using script (recommended)
+./.fly/scripts/deploy.sh
+
+# Deploy and reset database (fresh seeding)
+./.fly/scripts/deploy.sh --reset
+
+# Or manually:
 # Deploy latest version
 fly deploy
 
-# Deploy with specific Dockerfile
-fly deploy --dockerfile Dockerfile
+# Deploy with local Docker (if remote builder fails)
+fly deploy --local-only
+
+# Deploy with pre-built image (if --local-only has network issues)
+docker build -t ocms-test .
+fly deploy --local-only --image ocms-test
 
 # Check deployment status
 fly status
@@ -104,17 +119,19 @@ fly ssh console -C "ls -lh /app/data/ocms.db"
 
 ### Demo Reset
 
-To reset the demo to initial state:
+To reset the demo to initial state (required after deploying new seeding features):
 
 ```bash
 # Option 1: Run reset script
 fly ssh console -C "/app/scripts/reset-demo.sh"
-fly machines restart
+fly machines restart -a ocms-demo
 
-# Option 2: Just restart (database recreated if missing)
-fly ssh console -C "rm /app/data/ocms.db*"
-fly machines restart
+# Option 2: Delete database and restart (database recreated on startup)
+fly ssh console -C "rm /app/data/ocms.db*" -a ocms-demo
+fly machines restart -a ocms-demo
 ```
+
+> **Note:** Seeding only runs when data doesn't exist. To see new demo content (media, pages, etc.), reset the database.
 
 ### Scaling
 
@@ -165,6 +182,8 @@ When the demo starts fresh:
 |------|-------|----------|
 | Admin | `admin@example.com` | `changeme1234` |
 
+> **Note:** This is a public demo. Data may be reset at any time.
+
 For demo with additional users, set `OCMS_SEED_DEMO_USERS=true`.
 
 ## Troubleshooting
@@ -181,6 +200,23 @@ fly machines list
 # Force restart
 fly machines restart
 ```
+
+### No started VMs (SSH fails)
+
+If you see `Error: app ocms-demo has no started VMs`:
+
+```bash
+# Start machines first
+fly machines start -a ocms-demo
+
+# Or trigger start via HTTP request
+curl https://ocms-demo.fly.dev/health
+
+# Then run your SSH command
+fly ssh console -C "your-command" -a ocms-demo
+```
+
+> **Note:** With `auto_stop_machines = 'stop'`, VMs stop when idle. They auto-start on HTTP requests but must be manually started for SSH access.
 
 ### Database issues
 
@@ -234,6 +270,7 @@ Using Fly.io free tier:
 .fly/
 ├── README.md           # This file
 └── scripts/
+    ├── deploy.sh       # Build and deploy script
     └── reset-demo.sh   # Demo reset script
 
 fly.toml                # Fly.io configuration (project root)

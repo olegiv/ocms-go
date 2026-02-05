@@ -540,7 +540,7 @@ func run() error {
 	configHandler := handler.NewConfigHandler(db, renderer, sessionManager, cacheManager)
 	eventsHandler := handler.NewEventsHandler(db, renderer, sessionManager)
 	taxonomyHandler := handler.NewTaxonomyHandler(db, renderer, sessionManager)
-	mediaHandler := handler.NewMediaHandler(db, renderer, sessionManager, handler.UploadsDirPath)
+	mediaHandler := handler.NewMediaHandler(db, renderer, sessionManager, cfg.UploadsDir)
 	menusHandler := handler.NewMenusHandler(db, renderer, sessionManager)
 	frontendHandler := handler.NewFrontendHandler(db, themeManager, cacheManager, logger, renderer.GetMenuService(), eventService)
 	formsHandler := handler.NewFormsHandler(db, renderer, sessionManager, hookRegistry, themeManager, cacheManager, renderer.GetMenuService(), frontendHandler)
@@ -562,7 +562,7 @@ func run() error {
 	webhooksHandler := handler.NewWebhooksHandler(db, renderer, sessionManager)
 	redirectsHandler := handler.NewRedirectsHandler(db, renderer, sessionManager, redirectsMiddleware)
 	importExportHandler := handler.NewImportExportHandler(db, renderer, sessionManager)
-	healthHandler := handler.NewHealthHandler(db, sessionManager, handler.UploadsDirPath)
+	healthHandler := handler.NewHealthHandler(db, sessionManager, cfg.UploadsDir)
 	docsHandler := handler.NewDocsHandler(renderer, cfg, moduleRegistry, healthHandler.StartTime(), versionInfo)
 
 	// Set webhook dispatcher on handlers that dispatch events
@@ -910,10 +910,10 @@ func run() error {
 	staticHandler := middleware.StaticCache(31536000)(http.StripPrefix("/static/dist/", http.FileServer(http.FS(staticFS))))
 	r.Handle("/static/dist/*", staticHandler)
 
-	// Serve uploaded media files from ./uploads directory
+	// Serve uploaded media files from uploads directory (configured via OCMS_UPLOADS_DIR)
 	// Uploads: cache for 1 week (604800 seconds)
-	uploadsDir := http.Dir(handler.UploadsDirPath)
-	uploadsHandler := middleware.StaticCache(604800)(http.StripPrefix("/uploads/", http.FileServer(uploadsDir)))
+	uploadsDirFS := http.Dir(cfg.UploadsDir)
+	uploadsHandler := middleware.StaticCache(604800)(http.StripPrefix("/uploads/", http.FileServer(uploadsDirFS)))
 	r.Handle("/uploads/*", uploadsHandler)
 
 	// Serve theme static files with caching (1 month = 2592000 seconds)

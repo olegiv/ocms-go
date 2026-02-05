@@ -4,13 +4,21 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/png"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/disintegration/imaging"
+	"github.com/google/uuid"
 	"github.com/olegiv/ocms-go/internal/auth"
 )
 
@@ -59,8 +67,18 @@ func SeedDemo(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("seeding demo tags: %w", err)
 	}
 
+	// Create demo media
+	uploadsDir := os.Getenv("OCMS_UPLOADS_DIR")
+	if uploadsDir == "" {
+		uploadsDir = "./uploads"
+	}
+	mediaIDs, err := seedDemoMedia(ctx, queries, adminID, defaultLang.Code, uploadsDir)
+	if err != nil {
+		return fmt.Errorf("seeding demo media: %w", err)
+	}
+
 	// Create demo pages
-	if err := seedDemoPages(ctx, queries, adminID, defaultLang.Code, categoryIDs, tagIDs); err != nil {
+	if err := seedDemoPages(ctx, queries, adminID, defaultLang.Code, categoryIDs, tagIDs, mediaIDs); err != nil {
 		return fmt.Errorf("seeding demo pages: %w", err)
 	}
 
@@ -157,7 +175,7 @@ func seedDemoCategories(ctx context.Context, queries *Queries, langCode string) 
 		created, err := queries.CreateCategory(ctx, CreateCategoryParams{
 			Name:         cat.Name,
 			Slug:         cat.Slug,
-			Description:  cat.Description,
+			Description:  sql.NullString{String: cat.Description, Valid: true},
 			ParentID:     sql.NullInt64{Valid: false},
 			Position:     cat.Position,
 			LanguageCode: langCode,
@@ -229,9 +247,10 @@ type demoPage struct {
 	MetaDescription string
 	CategorySlugs   []string
 	TagSlugs        []string
+	FeaturedImage   string // Filename from demo media to use as featured image
 }
 
-func seedDemoPages(ctx context.Context, queries *Queries, authorID int64, langCode string, categoryIDs, tagIDs map[string]int64) error {
+func seedDemoPages(ctx context.Context, queries *Queries, authorID int64, langCode string, categoryIDs, tagIDs, mediaIDs map[string]int64) error {
 	// Check if pages already exist
 	count, err := queries.CountPages(ctx)
 	if err != nil {
@@ -251,13 +270,21 @@ func seedDemoPages(ctx context.Context, queries *Queries, authorID int64, langCo
 			publishedAt = sql.NullTime{Time: now.Add(-time.Duration(len(pages)-i) * 24 * time.Hour), Valid: true}
 		}
 
+		// Set featured image if specified and exists in mediaIDs
+		featuredImageID := sql.NullInt64{Valid: false}
+		if page.FeaturedImage != "" {
+			if mediaID, ok := mediaIDs[page.FeaturedImage]; ok {
+				featuredImageID = sql.NullInt64{Int64: mediaID, Valid: true}
+			}
+		}
+
 		created, err := queries.CreatePage(ctx, CreatePageParams{
 			Title:             page.Title,
 			Slug:              page.Slug,
 			Body:              page.Body,
 			Status:            page.Status,
 			AuthorID:          authorID,
-			FeaturedImageID:   sql.NullInt64{Valid: false},
+			FeaturedImageID:   featuredImageID,
 			MetaTitle:         page.MetaTitle,
 			MetaDescription:   page.MetaDescription,
 			MetaKeywords:      "",
@@ -320,6 +347,7 @@ func getDemoPages() []demoPage {
 			MetaDescription: "oCMS is a lightweight, fast, and secure content management system built with Go.",
 			CategorySlugs:   []string{},
 			TagSlugs:        []string{},
+			FeaturedImage:   "hero-banner.png",
 		},
 		{
 			Title:           "About Us",
@@ -331,6 +359,7 @@ func getDemoPages() []demoPage {
 			MetaDescription: "Learn about oCMS, our mission, and the technology behind this modern CMS.",
 			CategorySlugs:   []string{},
 			TagSlugs:        []string{},
+			FeaturedImage:   "about-image.png",
 		},
 		{
 			Title:           "Contact",
@@ -342,6 +371,7 @@ func getDemoPages() []demoPage {
 			MetaDescription: "Get in touch with the oCMS team.",
 			CategorySlugs:   []string{},
 			TagSlugs:        []string{},
+			FeaturedImage:   "team-photo.png",
 		},
 		// Blog posts
 		{
@@ -354,6 +384,7 @@ func getDemoPages() []demoPage {
 			MetaDescription: "Learn how to set up and configure oCMS for your website in minutes.",
 			CategorySlugs:   []string{"blog", "resources"},
 			TagSlugs:        []string{"tutorial", "featured"},
+			FeaturedImage:   "blog-post-1.png",
 		},
 		{
 			Title:           "Building Modern Websites with Go",
@@ -365,6 +396,7 @@ func getDemoPages() []demoPage {
 			MetaDescription: "Discover why Go is an excellent choice for building fast, secure web applications.",
 			CategorySlugs:   []string{"blog"},
 			TagSlugs:        []string{"go", "web-development", "tutorial"},
+			FeaturedImage:   "blog-post-2.png",
 		},
 		{
 			Title:           "oCMS Theme Development",
@@ -376,6 +408,7 @@ func getDemoPages() []demoPage {
 			MetaDescription: "A comprehensive guide to creating beautiful custom themes for oCMS.",
 			CategorySlugs:   []string{"blog", "resources"},
 			TagSlugs:        []string{"tutorial", "design", "web-development"},
+			FeaturedImage:   "blog-post-3.png",
 		},
 		// Portfolio items
 		{
@@ -388,6 +421,7 @@ func getDemoPages() []demoPage {
 			MetaDescription: "A modern e-commerce platform built with oCMS and custom integrations.",
 			CategorySlugs:   []string{"portfolio"},
 			TagSlugs:        []string{"featured", "web-development"},
+			FeaturedImage:   "portfolio-1.png",
 		},
 		{
 			Title:           "Corporate Website Redesign",
@@ -399,6 +433,7 @@ func getDemoPages() []demoPage {
 			MetaDescription: "Complete redesign of a Fortune 500 company website using oCMS.",
 			CategorySlugs:   []string{"portfolio"},
 			TagSlugs:        []string{"design", "featured"},
+			FeaturedImage:   "portfolio-2.png",
 		},
 		// Services
 		{
@@ -411,6 +446,7 @@ func getDemoPages() []demoPage {
 			MetaDescription: "Custom web development services using modern technologies and best practices.",
 			CategorySlugs:   []string{"services"},
 			TagSlugs:        []string{"web-development"},
+			FeaturedImage:   "services-web.png",
 		},
 	}
 }
@@ -451,8 +487,8 @@ func seedDemoMenuItems(ctx context.Context, queries *Queries) error {
 		_, err := queries.CreateMenuItem(ctx, CreateMenuItemParams{
 			MenuID:    mainMenu.ID,
 			Title:     item.Title,
-			Url:       item.URL,
-			Target:    "_self",
+			Url:       sql.NullString{String: item.URL, Valid: true},
+			Target:    sql.NullString{String: "_self", Valid: true},
 			ParentID:  sql.NullInt64{Valid: false},
 			Position:  item.Position,
 			CreatedAt: now,
@@ -465,6 +501,212 @@ func seedDemoMenuItems(ctx context.Context, queries *Queries) error {
 
 	slog.Info("seeded demo menu items", "count", len(menuItems))
 	return nil
+}
+
+// demoImage defines a placeholder image to generate.
+type demoImage struct {
+	Filename string
+	Alt      string
+	Width    int
+	Height   int
+	Color    color.RGBA
+}
+
+func seedDemoMedia(ctx context.Context, queries *Queries, userID int64, langCode, uploadsDir string) (map[string]int64, error) {
+	mediaIDs := make(map[string]int64)
+
+	// Check if media already exists
+	count, err := queries.CountMedia(ctx)
+	if err != nil {
+		return mediaIDs, err
+	}
+	if count > 0 {
+		slog.Info("media already exists, skipping demo media")
+		// Return existing media IDs by filename
+		media, err := queries.ListMedia(ctx, ListMediaParams{Limit: 100, Offset: 0})
+		if err == nil {
+			for _, m := range media {
+				mediaIDs[m.Filename] = m.ID
+			}
+		}
+		return mediaIDs, nil
+	}
+
+	now := time.Now()
+
+	// Define demo images with different colors for variety
+	images := []demoImage{
+		{"hero-banner.png", "Hero banner image", 1200, 600, color.RGBA{59, 130, 246, 255}},        // Blue
+		{"about-image.png", "About page image", 800, 600, color.RGBA{16, 185, 129, 255}},         // Green
+		{"blog-post-1.png", "Blog post featured image", 800, 450, color.RGBA{245, 158, 11, 255}}, // Amber
+		{"blog-post-2.png", "Blog tutorial image", 800, 450, color.RGBA{139, 92, 246, 255}},      // Purple
+		{"blog-post-3.png", "Blog news image", 800, 450, color.RGBA{236, 72, 153, 255}},          // Pink
+		{"portfolio-1.png", "E-commerce project screenshot", 1000, 600, color.RGBA{20, 184, 166, 255}}, // Teal
+		{"portfolio-2.png", "Corporate website screenshot", 1000, 600, color.RGBA{99, 102, 241, 255}},  // Indigo
+		{"services-web.png", "Web development services", 800, 500, color.RGBA{239, 68, 68, 255}},      // Red
+		{"team-photo.png", "Team photo placeholder", 600, 400, color.RGBA{107, 114, 128, 255}},       // Gray
+		{"logo-sample.png", "Sample logo image", 400, 200, color.RGBA{34, 197, 94, 255}},            // Green-500
+	}
+
+	for _, img := range images {
+		mediaID, err := createDemoImage(ctx, queries, userID, langCode, uploadsDir, img, now)
+		if err != nil {
+			slog.Warn("failed to create demo image", "filename", img.Filename, "error", err)
+			// Continue with other images
+		} else if mediaID > 0 {
+			mediaIDs[img.Filename] = mediaID
+		}
+	}
+
+	slog.Info("seeded demo media", "count", len(images))
+	return mediaIDs, nil
+}
+
+// imageVariant defines settings for a single image variant.
+type imageVariant struct {
+	name   string
+	width  int
+	height int
+	crop   bool
+}
+
+// demoImageVariants matches the variants defined in internal/model/media.go
+var demoImageVariants = []imageVariant{
+	{"thumbnail", 150, 150, true},
+	{"small", 400, 300, false},
+	{"medium", 800, 600, false},
+	{"large", 1920, 1080, false},
+}
+
+func createDemoImage(ctx context.Context, queries *Queries, userID int64, langCode, uploadsDir string, img demoImage, now time.Time) (int64, error) {
+	// Generate UUID for the file
+	fileUUID := uuid.New().String()
+
+	// Create the placeholder image
+	rect := image.Rect(0, 0, img.Width, img.Height)
+	rgba := image.NewRGBA(rect)
+
+	// Fill with the specified color
+	draw.Draw(rgba, rgba.Bounds(), &image.Uniform{img.Color}, image.Point{}, draw.Src)
+
+	// Add a lighter center rectangle to make it look like a placeholder
+	centerRect := image.Rect(img.Width/4, img.Height/4, img.Width*3/4, img.Height*3/4)
+	lighterColor := color.RGBA{
+		R: min(img.Color.R+40, 255),
+		G: min(img.Color.G+40, 255),
+		B: min(img.Color.B+40, 255),
+		A: 255,
+	}
+	draw.Draw(rgba, centerRect, &image.Uniform{lighterColor}, image.Point{}, draw.Src)
+
+	// Create directory structure for original
+	originalsDir := filepath.Join(uploadsDir, "originals", fileUUID)
+	if err := os.MkdirAll(originalsDir, 0755); err != nil {
+		return 0, fmt.Errorf("failed to create originals directory: %w", err)
+	}
+
+	// Save the original image
+	originalPath := filepath.Join(originalsDir, img.Filename)
+	originalData, err := encodePNG(rgba)
+	if err != nil {
+		return 0, fmt.Errorf("failed to encode original PNG: %w", err)
+	}
+	if err := os.WriteFile(originalPath, originalData, 0644); err != nil {
+		return 0, fmt.Errorf("failed to write original file: %w", err)
+	}
+
+	// Create media record in database
+	media, err := queries.CreateMedia(ctx, CreateMediaParams{
+		Uuid:         fileUUID,
+		Filename:     img.Filename,
+		MimeType:     "image/png",
+		Size:         int64(len(originalData)),
+		Width:        sql.NullInt64{Int64: int64(img.Width), Valid: true},
+		Height:       sql.NullInt64{Int64: int64(img.Height), Valid: true},
+		Alt:          sql.NullString{String: img.Alt, Valid: true},
+		Caption:      sql.NullString{String: "", Valid: true},
+		FolderID:     sql.NullInt64{Valid: false},
+		UploadedBy:   userID,
+		LanguageCode: langCode,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+	if err != nil {
+		_ = os.Remove(originalPath)
+		return 0, fmt.Errorf("failed to create media record: %w", err)
+	}
+
+	// Create image variants directly (following developer module pattern)
+	for _, v := range demoImageVariants {
+		// Skip if source is smaller than target (for non-crop variants)
+		if !v.crop && img.Width <= v.width && img.Height <= v.height {
+			continue
+		}
+
+		// Create variant directory
+		variantDir := filepath.Join(uploadsDir, v.name, fileUUID)
+		if err := os.MkdirAll(variantDir, 0755); err != nil {
+			slog.Warn("failed to create variant directory", "variant", v.name, "error", err)
+			continue
+		}
+
+		// Resize the image
+		variantData, variantWidth, variantHeight, err := resizeImage(rgba, v.width, v.height, v.crop)
+		if err != nil {
+			slog.Warn("failed to resize image for variant", "variant", v.name, "error", err)
+			continue
+		}
+
+		// Save variant file
+		variantPath := filepath.Join(variantDir, img.Filename)
+		if err := os.WriteFile(variantPath, variantData, 0644); err != nil {
+			slog.Warn("failed to write variant file", "variant", v.name, "error", err)
+			continue
+		}
+
+		// Create variant record in database
+		_, err = queries.CreateMediaVariant(ctx, CreateMediaVariantParams{
+			MediaID:   media.ID,
+			Type:      v.name,
+			Width:     int64(variantWidth),
+			Height:    int64(variantHeight),
+			Size:      int64(len(variantData)),
+			CreatedAt: now,
+		})
+		if err != nil {
+			slog.Warn("failed to store variant record", "variant", v.name, "error", err)
+		}
+	}
+
+	return media.ID, nil
+}
+
+// encodePNG encodes an image as PNG and returns the bytes.
+func encodePNG(img image.Image) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// resizeImage resizes an image to the specified dimensions.
+// If crop is true, it crops to exact size; otherwise it fits within bounds.
+func resizeImage(src image.Image, width, height int, crop bool) ([]byte, int, int, error) {
+	var resized image.Image
+	if crop {
+		resized = imaging.Fill(src, width, height, imaging.Center, imaging.Lanczos)
+	} else {
+		resized = imaging.Fit(src, width, height, imaging.Lanczos)
+	}
+
+	bounds := resized.Bounds()
+	data, err := encodePNG(resized)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	return data, bounds.Dx(), bounds.Dy(), nil
 }
 
 // Page content helpers
