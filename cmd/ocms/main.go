@@ -890,9 +890,10 @@ func run() error {
 	})
 	slog.Info("REST API v1 mounted at /api/v1")
 
-	// Public form routes (no authentication required, with CSRF protection)
+	// Public form routes (no authentication required, with CSRF protection and language detection)
 	r.Group(func(r chi.Router) {
 		r.Use(csrfMiddleware)
+		r.Use(middleware.Language(db))
 		r.Get(handler.RouteFormsSlug, formsHandler.Show)
 		r.Post(handler.RouteFormsSlug, formsHandler.Submit)
 	})

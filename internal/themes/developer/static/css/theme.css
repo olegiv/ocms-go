@@ -2155,25 +2155,9 @@ img {
 
 /* Form page container */
 .form-page {
-    max-width: 600px;
-    margin: 2rem auto;
+    max-width: var(--dev-content);
+    margin: 0 auto;
     padding: 0 1rem;
-}
-
-/* Form header */
-.form-page .form-header {
-    margin-bottom: 2rem;
-    text-align: center;
-}
-
-.form-page .form-header h1 {
-    color: var(--dev-accent);
-    margin-bottom: 0.5rem;
-    font-family: var(--dev-mono);
-}
-
-.form-page .form-description {
-    color: var(--dev-text-muted);
 }
 
 /* Form styling */

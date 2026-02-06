@@ -11,14 +11,14 @@
         <a href="/forms/{{.Form.Slug}}" class="btn btn-primary">{{TTheme $.LangCode "forms.public.submit_another"}}</a>
     </div>
     {{else}}
-    <div class="form-header">
-        <h1>{{.Form.Title}}</h1>
+    <header class="page-header">
+        <h1 class="page-title">{{.Form.Title}}</h1>
         {{if .Form.Description.Valid}}
         {{if .Form.Description.String}}
-        <p class="form-description">{{.Form.Description.String}}</p>
+        <p class="page-excerpt">{{.Form.Description.String}}</p>
         {{end}}
         {{end}}
-    </div>
+    </header>
 
     {{if index .Errors "_form"}}
     <div class="alert alert-error">
