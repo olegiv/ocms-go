@@ -84,6 +84,13 @@
                     <td class="event-ip">
                         {{if .IPAddress}}
                             <code class="text-muted">{{.IPAddress}}</code>
+                            {{if sentinelIsActive}}
+                                {{if sentinelIsIPBanned .IPAddress}}
+                                    <span class="badge badge-danger ban-badge" data-ip="{{.IPAddress}}">{{T $.AdminLang "sentinel.banned"}}</span>
+                                {{else if not (or .IsOwnIP (sentinelIsIPWhitelisted .IPAddress))}}
+                                    <button type="button" class="btn btn-sm btn-danger ban-btn" data-ip="{{.IPAddress}}" onclick="banIP(this)">{{T $.AdminLang "sentinel.ban_action"}}</button>
+                                {{end}}
+                            {{end}}
                         {{else}}
                             <span class="text-muted">-</span>
                         {{end}}
@@ -138,6 +145,45 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+function banIP(btn) {
+    var ip = btn.getAttribute('data-ip');
+    btn.disabled = true;
+    btn.classList.add('btn-loading');
+
+    fetch('/admin/sentinel/ban', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip: ip })
+    })
+    .then(function(response) {
+        if (response.redirected) {
+            throw new Error('Sentinel module is not active');
+        }
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.success) {
+            showToast('IP ' + ip + ' banned', 'success');
+            document.querySelectorAll('.ban-btn[data-ip="' + ip + '"]').forEach(function(el) {
+                var badge = document.createElement('span');
+                badge.className = 'badge badge-danger ban-badge';
+                badge.setAttribute('data-ip', ip);
+                badge.textContent = 'Banned';
+                el.replaceWith(badge);
+            });
+        } else {
+            showToast(data.error || 'Failed to ban IP', 'error');
+            btn.disabled = false;
+            btn.classList.remove('btn-loading');
+        }
+    })
+    .catch(function(err) {
+        showToast(err.message || 'Failed to ban IP', 'error');
+        btn.disabled = false;
+        btn.classList.remove('btn-loading');
+    });
+}
 </script>
 {{end}}
 {{end}}
