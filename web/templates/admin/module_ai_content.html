@@ -1,0 +1,132 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{T .AdminLang "ai_content.title"}}</h1>
+        <p class="page-description">{{T .AdminLang "ai_content.description"}}</p>
+    </div>
+    <div class="page-actions">
+        <a href="/admin/ai-content/generate" class="btn btn-primary">{{T .AdminLang "ai_content.btn_generate"}}</a>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="stats-grid" style="margin-bottom: 1.5rem;">
+    <a href="/admin/ai-content/settings" class="stat-card" style="text-decoration: none; cursor: pointer;">
+        <div class="stat-label">{{T .AdminLang "ai_content.btn_settings"}}</div>
+        <div class="stat-value" style="font-size: 1.5rem;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        </div>
+    </a>
+    <a href="/admin/ai-content/generate" class="stat-card" style="text-decoration: none; cursor: pointer;">
+        <div class="stat-label">{{T .AdminLang "ai_content.btn_generate"}}</div>
+        <div class="stat-value" style="font-size: 1.5rem;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18m9-9H3"/></svg>
+        </div>
+    </a>
+    <a href="/admin/ai-content/usage" class="stat-card" style="text-decoration: none; cursor: pointer;">
+        <div class="stat-label">{{T .AdminLang "ai_content.btn_usage"}}</div>
+        <div class="stat-value" style="font-size: 1.5rem;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        </div>
+    </a>
+</div>
+
+<!-- Usage Statistics -->
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+        <h2 class="card-title">{{T .AdminLang "ai_content.dashboard_stats"}}</h2>
+    </div>
+    <div class="card-body">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">{{T .AdminLang "ai_content.total_requests"}}</div>
+                <div class="stat-value">{{.Data.Stats.TotalRequests}}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">{{T .AdminLang "ai_content.total_tokens"}}</div>
+                <div class="stat-value">{{formatNumber .Data.Stats.TotalTokens}}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">{{T .AdminLang "ai_content.total_cost"}}</div>
+                <div class="stat-value">${{printf "%.4f" .Data.Stats.TotalCostUSD}}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">{{T .AdminLang "ai_content.pages_generated"}}</div>
+                <div class="stat-value">{{.Data.Stats.TotalPages}}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Provider Status -->
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+        <h2 class="card-title">{{T .AdminLang "ai_content.provider_status"}}</h2>
+    </div>
+    <div class="card-body">
+        <div class="stats-grid">
+            {{range .Data.Providers}}
+            {{$settings := index $.Data.SettingsMap .ID}}
+            <div class="stat-card">
+                <div class="stat-label">{{.Name}}</div>
+                <div class="stat-value" style="font-size: 0.875rem;">
+                    {{if $settings}}
+                        {{if $settings.IsEnabled}}
+                            <span class="badge badge-success">{{T $.AdminLang "ai_content.status_enabled"}}</span>
+                            <br><small style="color: var(--text-muted);">{{$settings.Model}}</small>
+                        {{else}}
+                            <span class="badge badge-warning">{{T $.AdminLang "ai_content.status_disabled"}}</span>
+                        {{end}}
+                    {{else}}
+                        <span class="badge badge-secondary">{{T $.AdminLang "ai_content.status_not_configured"}}</span>
+                    {{end}}
+                </div>
+            </div>
+            {{end}}
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">{{T .AdminLang "ai_content.recent_activity"}}</h2>
+    </div>
+    <div class="card-body">
+        {{if .Data.Stats.RecentRecords}}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>{{T .AdminLang "ai_content.usage_provider"}}</th>
+                        <th>{{T .AdminLang "ai_content.usage_model"}}</th>
+                        <th>{{T .AdminLang "ai_content.usage_operation"}}</th>
+                        <th>{{T .AdminLang "ai_content.usage_page"}}</th>
+                        <th>{{T .AdminLang "ai_content.usage_tokens"}}</th>
+                        <th>{{T .AdminLang "ai_content.usage_cost"}}</th>
+                        <th>{{T .AdminLang "ai_content.usage_date"}}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Data.Stats.RecentRecords}}
+                    <tr>
+                        <td><span class="badge badge-info">{{.Provider}}</span></td>
+                        <td>{{.Model}}</td>
+                        <td>{{.Operation}}</td>
+                        <td>{{if .PageTitle}}{{.PageTitle}}{{else}}-{{end}}</td>
+                        <td>{{formatNumber .TotalTokens}}</td>
+                        <td>${{printf "%.4f" .CostUSD}}</td>
+                        <td>{{formatDateTimeLocale .CreatedAt $.AdminLang}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{else}}
+        <div class="empty-state">
+            <p>{{T .AdminLang "ai_content.no_activity"}}</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}

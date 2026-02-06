@@ -1,0 +1,121 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{T .AdminLang "ai_content.generate_title"}}</h1>
+        <p class="page-description">{{T .AdminLang "ai_content.description"}}</p>
+    </div>
+    <div class="page-actions">
+        <a href="/admin/ai-content" class="btn btn-secondary">{{T .AdminLang "ai_content.btn_back"}}</a>
+    </div>
+</div>
+
+<form method="POST" action="/admin/ai-content/generate" x-data="{ submitting: false }" @submit="submitting = true">
+    {{.CSRFField}}
+
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <h2 class="card-title">Content Brief</h2>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label class="form-label">{{T .AdminLang "ai_content.form_topic"}} *</label>
+                <input type="text" name="topic" class="form-input" required placeholder="{{T .AdminLang "ai_content.form_topic_placeholder"}}">
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label class="form-label">{{T .AdminLang "ai_content.form_audience"}}</label>
+                    <input type="text" name="target_audience" class="form-input" placeholder="{{T .AdminLang "ai_content.form_audience_placeholder"}}">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">{{T .AdminLang "ai_content.form_tone"}}</label>
+                    <select name="tone" class="form-input">
+                        <option value="">-- Select --</option>
+                        <option value="professional">{{T .AdminLang "ai_content.tone_professional"}}</option>
+                        <option value="casual">{{T .AdminLang "ai_content.tone_casual"}}</option>
+                        <option value="academic">{{T .AdminLang "ai_content.tone_academic"}}</option>
+                        <option value="friendly">{{T .AdminLang "ai_content.tone_friendly"}}</option>
+                        <option value="authoritative">{{T .AdminLang "ai_content.tone_authoritative"}}</option>
+                        <option value="humorous">{{T .AdminLang "ai_content.tone_humorous"}}</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">{{T .AdminLang "ai_content.form_key_points"}}</label>
+                <textarea name="key_points" class="form-input" rows="4" placeholder="{{T .AdminLang "ai_content.form_key_points_placeholder"}}"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">{{T .AdminLang "ai_content.form_additional_info"}}</label>
+                <textarea name="additional_info" class="form-input" rows="2" placeholder="Any special instructions for the AI..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <h2 class="card-title">Settings</h2>
+        </div>
+        <div class="card-body">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label class="form-label">{{T .AdminLang "ai_content.form_provider"}}</label>
+                    <select name="provider" class="form-input">
+                        {{range .Data.EnabledProviders}}
+                        <option value="{{.Provider}}">
+                            {{.Provider}} ({{.Model}})
+                        </option>
+                        {{end}}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">{{T .AdminLang "ai_content.form_language"}}</label>
+                    <select name="language_code" class="form-input">
+                        {{range .Data.Languages}}
+                        <option value="{{.Code}}" {{if .IsDefault}}selected{{end}}>{{.Name}} ({{.NativeName}})</option>
+                        {{end}}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">{{T .AdminLang "ai_content.form_content_type"}}</label>
+                    <select name="content_type" class="form-input">
+                        <option value="post">{{T .AdminLang "ai_content.type_post"}}</option>
+                        <option value="page">{{T .AdminLang "ai_content.type_page"}}</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label class="form-label">{{T .AdminLang "ai_content.form_category"}}</label>
+                    <select name="categories" class="form-input" multiple style="min-height: 100px;">
+                        {{range .Data.Categories}}
+                        <option value="{{.ID}}">{{.Name}}</option>
+                        {{end}}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">{{T .AdminLang "ai_content.form_tags"}}</label>
+                    <select name="tags" class="form-input" multiple style="min-height: 100px;">
+                        {{range .Data.Tags}}
+                        <option value="{{.ID}}">{{.Name}}</option>
+                        {{end}}
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-actions" style="display: flex; gap: 0.5rem;">
+        <button type="submit" class="btn btn-primary" :disabled="submitting">
+            <span x-show="!submitting">{{T .AdminLang "ai_content.btn_generate"}}</span>
+            <span x-show="submitting">Generating content, please wait...</span>
+        </button>
+    </div>
+</form>
+{{end}}

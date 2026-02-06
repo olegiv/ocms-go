@@ -43,6 +43,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/util"
 	"github.com/olegiv/ocms-go/internal/version"
 	"github.com/olegiv/ocms-go/internal/webhook"
+	"github.com/olegiv/ocms-go/modules/ai_content"
 	"github.com/olegiv/ocms-go/modules/analytics_ext"
 	"github.com/olegiv/ocms-go/modules/analytics_int"
 	"github.com/olegiv/ocms-go/modules/dbmanager"
@@ -418,6 +419,9 @@ func run() error {
 	}
 	if err := moduleRegistry.Register(dbmanager.New()); err != nil {
 		return fmt.Errorf("registering dbmanager module: %w", err)
+	}
+	if err := moduleRegistry.Register(ai_content.New(cfg.UploadsDir)); err != nil {
+		return fmt.Errorf("registering ai_content module: %w", err)
 	}
 
 	// Register internal analytics module (built-in analytics tracking)
