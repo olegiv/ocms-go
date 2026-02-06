@@ -1,0 +1,154 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{T .AdminLang "ai_content.preview_title"}}</h1>
+        <p class="page-description">Review the generated content before creating the page</p>
+    </div>
+    <div class="page-actions">
+        <a href="/admin/ai-content/generate" class="btn btn-secondary">{{T .AdminLang "ai_content.btn_regenerate"}}</a>
+    </div>
+</div>
+
+<!-- Generation Info -->
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+        <h2 class="card-title">{{T .AdminLang "ai_content.preview_cost_info"}}</h2>
+    </div>
+    <div class="card-body">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">{{T .AdminLang "ai_content.usage_provider"}}</div>
+                <div class="stat-value" style="font-size: 1rem;">{{.Data.Provider}}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">{{T .AdminLang "ai_content.usage_model"}}</div>
+                <div class="stat-value" style="font-size: 1rem;">{{.Data.Model}}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">{{T .AdminLang "ai_content.usage_tokens"}}</div>
+                <div class="stat-value" style="font-size: 1rem;">{{formatNumber .Data.TokensUsed}}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">{{T .AdminLang "ai_content.usage_cost"}}</div>
+                <div class="stat-value" style="font-size: 1rem;">${{printf "%.4f" .Data.CostUSD}}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form method="POST" action="/admin/ai-content/create-page" x-data="{ submitting: false, generateImage: {{if .Data.ImageAvailable}}true{{else}}false{{end}} }" @submit="submitting = true">
+    {{.CSRFField}}
+
+    <!-- Title & Slug -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <h2 class="card-title">Title & URL</h2>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label class="form-label">Title</label>
+                <input type="text" name="title" class="form-input" value="{{.Data.Generated.Title}}" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Slug</label>
+                <input type="text" name="slug" class="form-input" value="{{.Data.Generated.Slug}}">
+            </div>
+            <input type="hidden" name="language_code" value="{{.Data.Input.LanguageCode}}">
+            <input type="hidden" name="content_type" value="{{.Data.Input.ContentType}}">
+        </div>
+    </div>
+
+    <!-- SEO Metadata -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <h2 class="card-title">{{T .AdminLang "ai_content.preview_meta"}}</h2>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label class="form-label">Meta Title</label>
+                <input type="text" name="meta_title" class="form-input" value="{{.Data.Generated.MetaTitle}}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Meta Description</label>
+                <textarea name="meta_description" class="form-input" rows="2">{{.Data.Generated.MetaDescription}}</textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Meta Keywords</label>
+                <input type="text" name="meta_keywords" class="form-input" value="{{.Data.Generated.MetaKeywords}}">
+            </div>
+        </div>
+    </div>
+
+    <!-- Featured Image -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <h2 class="card-title">{{T .AdminLang "ai_content.form_generate_image"}}</h2>
+        </div>
+        <div class="card-body">
+            {{if .Data.ImageAvailable}}
+            <div class="form-group">
+                <label class="form-label">
+                    <input type="checkbox" name="generate_image" value="1" x-model="generateImage">
+                    {{T .AdminLang "ai_content.form_generate_image"}} (DALL-E)
+                </label>
+            </div>
+            <div class="form-group" x-show="generateImage">
+                <label class="form-label">{{T .AdminLang "ai_content.form_image_prompt"}}</label>
+                <textarea name="image_prompt" class="form-input" rows="3">{{.Data.Generated.ImagePrompt}}</textarea>
+                <small class="form-help">You can edit the image generation prompt before creating the page.</small>
+            </div>
+            {{else}}
+            <p style="color: var(--text-muted);">{{T .AdminLang "ai_content.image_note"}}</p>
+            {{end}}
+        </div>
+    </div>
+
+    <!-- Categories & Tags -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <h2 class="card-title">Categories & Tags</h2>
+        </div>
+        <div class="card-body">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label class="form-label">{{T .AdminLang "ai_content.form_category"}}</label>
+                    <select name="categories" class="form-input" multiple style="min-height: 100px;">
+                        {{range .Data.Categories}}
+                        <option value="{{.ID}}">{{.Name}}</option>
+                        {{end}}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">{{T .AdminLang "ai_content.form_tags"}}</label>
+                    <select name="tags" class="form-input" multiple style="min-height: 100px;">
+                        {{range .Data.Tags}}
+                        <option value="{{.ID}}">{{.Name}}</option>
+                        {{end}}
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Article Body Preview -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <h2 class="card-title">{{T .AdminLang "ai_content.preview_body"}}</h2>
+        </div>
+        <div class="card-body">
+            <div class="ai-content-preview" style="padding: 1rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background: var(--bg-primary); max-height: 500px; overflow-y: auto;">
+                {{.Data.Generated.Body | safeHTML}}
+            </div>
+            <textarea name="body" style="display: none;">{{.Data.Generated.Body}}</textarea>
+        </div>
+    </div>
+
+    <div class="form-actions" style="display: flex; gap: 0.5rem; margin-bottom: 2rem;">
+        <button type="submit" class="btn btn-primary" :disabled="submitting">
+            <span x-show="!submitting">{{T .AdminLang "ai_content.btn_create_page"}}</span>
+            <span x-show="submitting">Creating page, please wait...</span>
+        </button>
+        <a href="/admin/ai-content/generate" class="btn btn-secondary">{{T .AdminLang "ai_content.btn_regenerate"}}</a>
+    </div>
+</form>
+{{end}}

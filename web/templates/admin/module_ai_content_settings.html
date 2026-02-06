@@ -1,0 +1,116 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{T .AdminLang "ai_content.settings_title"}}</h1>
+        <p class="page-description">Configure AI providers for content generation</p>
+    </div>
+    <div class="page-actions">
+        <a href="/admin/ai-content" class="btn btn-secondary">{{T .AdminLang "ai_content.btn_back"}}</a>
+    </div>
+</div>
+
+<div class="ai-settings-info card" style="margin-bottom: 1.5rem;">
+    <div class="card-body">
+        <p style="margin: 0 0 0.5rem; color: var(--text-muted);"><strong>Note:</strong> {{T .AdminLang "ai_content.image_note"}}</p>
+        <p style="margin: 0; color: var(--text-muted);"><strong>Environment variables:</strong> API keys can also be set via <code>OCMS_OPENAI_API_KEY</code>, <code>OCMS_CLAUDE_API_KEY</code>, <code>OCMS_GROQ_API_KEY</code>, <code>OCMS_OLLAMA_URL</code> (override database settings).</p>
+    </div>
+</div>
+
+{{range .Data.Providers}}
+{{$settings := index $.Data.SettingsMap .ID}}
+<div class="card" style="margin-bottom: 1.5rem;" x-data="{ open: {{if $settings}}{{if $settings.IsEnabled}}true{{else}}false{{end}}{{else}}false{{end}} }">
+    <div class="card-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;" @click="open = !open">
+        <div>
+            <h2 class="card-title" style="margin: 0;">
+                {{.Name}}
+                {{if $settings}}
+                    {{if $settings.IsEnabled}}
+                        <span class="badge badge-success" style="margin-left: 0.5rem;">{{T $.AdminLang "ai_content.status_enabled"}}</span>
+                    {{end}}
+                {{end}}
+            </h2>
+            <small style="color: var(--text-muted);">{{.Description}}</small>
+        </div>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :style="open ? 'transform: rotate(180deg)' : ''"><path d="m6 9 6 6 6-6"/></svg>
+    </div>
+    <div class="card-body" x-show="open" x-transition>
+        <form method="POST" action="/admin/ai-content/settings">
+            {{$.CSRFField}}
+            <input type="hidden" name="provider" value="{{.ID}}">
+
+            <div class="form-group">
+                <label class="form-label">
+                    <input type="checkbox" name="is_enabled" value="1" {{if $settings}}{{if $settings.IsEnabled}}checked{{end}}{{end}}>
+                    {{T $.AdminLang "ai_content.form_enabled"}}
+                </label>
+            </div>
+
+            {{if .NeedsAPIKey}}
+            <div class="form-group">
+                <label class="form-label">{{T $.AdminLang "ai_content.form_api_key"}}</label>
+                <input type="password" name="api_key" class="form-input" value="{{if $settings}}{{$settings.APIKey}}{{end}}" placeholder="sk-..." autocomplete="off">
+                <small class="form-help">{{T $.AdminLang "ai_content.api_key_help"}}</small>
+            </div>
+            {{end}}
+
+            {{if .HasBaseURL}}
+            <div class="form-group">
+                <label class="form-label">{{T $.AdminLang "ai_content.form_base_url"}}</label>
+                <input type="url" name="base_url" class="form-input" value="{{if $settings}}{{$settings.BaseURL}}{{end}}" placeholder="http://localhost:11434">
+                <small class="form-help">{{T $.AdminLang "ai_content.ollama_url_help"}}</small>
+            </div>
+            {{end}}
+
+            <div class="form-group">
+                <label class="form-label">{{T $.AdminLang "ai_content.form_model"}}</label>
+                <select name="model" class="form-input">
+                    <option value="">-- Select Model --</option>
+                    {{$currentModel := ""}}
+                    {{if $settings}}{{$currentModel = $settings.Model}}{{end}}
+                    {{range .Models}}
+                    <option value="{{.ID}}" {{if eq .ID $currentModel}}selected{{end}}>
+                        {{.Name}}
+                        {{if gt .InputCost 0.0}} (in: ${{printf "%.2f" .InputCost}} / out: ${{printf "%.2f" .OutputCost}} {{T $.AdminLang "ai_content.cost_per_million"}}){{end}}
+                    </option>
+                    {{end}}
+                </select>
+            </div>
+
+            {{if .ImageModels}}
+            <div class="form-group" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                <label class="form-label">
+                    <input type="checkbox" name="image_enabled" value="1" {{if $settings}}{{if $settings.ImageEnabled}}checked{{end}}{{end}}>
+                    {{T $.AdminLang "ai_content.form_image_enabled"}}
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">{{T $.AdminLang "ai_content.form_image_model"}}</label>
+                <select name="image_model" class="form-input">
+                    <option value="">-- Select Image Model --</option>
+                    {{$currentImgModel := ""}}
+                    {{if $settings}}{{$currentImgModel = $settings.ImageModel}}{{end}}
+                    {{range .ImageModels}}
+                    <option value="{{.ID}}" {{if eq .ID $currentImgModel}}selected{{end}}>
+                        {{.Name}} (${{printf "%.3f" .ImageCost}} per image)
+                    </option>
+                    {{end}}
+                </select>
+            </div>
+            {{end}}
+
+            <div class="form-actions" style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                <button type="submit" class="btn btn-primary">{{T $.AdminLang "ai_content.btn_save"}}</button>
+            </div>
+        </form>
+        {{if $settings}}{{if $settings.IsEnabled}}
+        <form method="POST" action="/admin/ai-content/settings/test" style="margin-top: 0.5rem;">
+            {{$.CSRFField}}
+            <input type="hidden" name="provider" value="{{.ID}}">
+            <button type="submit" class="btn btn-secondary">{{T $.AdminLang "ai_content.btn_test"}}</button>
+        </form>
+        {{end}}{{end}}
+    </div>
+</div>
+{{end}}
+{{end}}

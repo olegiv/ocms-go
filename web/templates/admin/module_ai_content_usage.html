@@ -1,0 +1,147 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{T .AdminLang "ai_content.usage_title"}}</h1>
+        <p class="page-description">Track AI token usage, costs, and generation history</p>
+    </div>
+    <div class="page-actions">
+        <a href="/admin/ai-content" class="btn btn-secondary">{{T .AdminLang "ai_content.btn_back"}}</a>
+    </div>
+</div>
+
+<!-- Aggregate Stats -->
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+        <h2 class="card-title">{{T .AdminLang "ai_content.dashboard_stats"}}</h2>
+    </div>
+    <div class="card-body">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">{{T .AdminLang "ai_content.total_requests"}}</div>
+                <div class="stat-value">{{.Data.Stats.TotalRequests}}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">{{T .AdminLang "ai_content.total_tokens"}}</div>
+                <div class="stat-value">{{formatNumber .Data.Stats.TotalTokens}}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">{{T .AdminLang "ai_content.total_cost"}}</div>
+                <div class="stat-value">${{printf "%.4f" .Data.Stats.TotalCostUSD}}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">{{T .AdminLang "ai_content.text_requests"}}</div>
+                <div class="stat-value">{{.Data.Stats.TotalTextRequests}}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">{{T .AdminLang "ai_content.image_requests"}}</div>
+                <div class="stat-value">{{.Data.Stats.TotalImageRequests}}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">{{T .AdminLang "ai_content.pages_generated"}}</div>
+                <div class="stat-value">{{.Data.Stats.TotalPages}}</div>
+            </div>
+        </div>
+
+        <!-- Per-Provider Breakdown -->
+        {{if .Data.Stats.ByProvider}}
+        <h3 style="margin-top: 1.5rem; margin-bottom: 1rem;">By Provider</h3>
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>{{T .AdminLang "ai_content.usage_provider"}}</th>
+                        <th>Requests</th>
+                        <th>{{T .AdminLang "ai_content.usage_tokens"}}</th>
+                        <th>{{T .AdminLang "ai_content.usage_cost"}}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Data.Stats.ByProvider}}
+                    <tr>
+                        <td><span class="badge badge-info">{{.Provider}}</span></td>
+                        <td>{{.Requests}}</td>
+                        <td>{{formatNumber .TotalTokens}}</td>
+                        <td>${{printf "%.4f" .TotalCostUSD}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{end}}
+    </div>
+</div>
+
+<!-- Usage Log -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Generation Log ({{.Data.Total}} records)</h2>
+    </div>
+    <div class="card-body">
+        {{if .Data.Records}}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>{{T .AdminLang "ai_content.usage_date"}}</th>
+                        <th>{{T .AdminLang "ai_content.usage_provider"}}</th>
+                        <th>{{T .AdminLang "ai_content.usage_model"}}</th>
+                        <th>{{T .AdminLang "ai_content.usage_operation"}}</th>
+                        <th>{{T .AdminLang "ai_content.usage_page"}}</th>
+                        <th>Prompt</th>
+                        <th>Completion</th>
+                        <th>Total</th>
+                        <th>{{T .AdminLang "ai_content.usage_cost"}}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Data.Records}}
+                    <tr>
+                        <td style="white-space: nowrap;">{{formatDateTimeLocale .CreatedAt $.AdminLang}}</td>
+                        <td><span class="badge badge-info">{{.Provider}}</span></td>
+                        <td style="font-size: 0.8rem;">{{.Model}}</td>
+                        <td>
+                            {{if eq .Operation "image"}}
+                                <span class="badge badge-warning">image</span>
+                            {{else}}
+                                <span class="badge badge-success">text</span>
+                            {{end}}
+                        </td>
+                        <td>
+                            {{if .PageID.Valid}}
+                                <a href="/admin/pages/{{.PageID.Int64}}/edit">{{.PageTitle}}</a>
+                            {{else if .PageTitle}}
+                                {{.PageTitle}}
+                            {{else}}
+                                -
+                            {{end}}
+                        </td>
+                        <td>{{formatNumber .PromptTokens}}</td>
+                        <td>{{formatNumber .CompletionTokens}}</td>
+                        <td>{{formatNumber .TotalTokens}}</td>
+                        <td>${{printf "%.4f" .CostUSD}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {{if gt .Data.TotalPages 1}}
+        <div class="pagination" style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: center;">
+            {{if gt .Data.Page 1}}
+                <a href="/admin/ai-content/usage?page={{sub .Data.Page 1}}" class="btn btn-secondary btn-sm">&laquo; Previous</a>
+            {{end}}
+            <span style="padding: 0.5rem; color: var(--text-muted);">Page {{.Data.Page}} of {{.Data.TotalPages}}</span>
+            {{if lt .Data.Page .Data.TotalPages}}
+                <a href="/admin/ai-content/usage?page={{add .Data.Page 1}}" class="btn btn-secondary btn-sm">Next &raquo;</a>
+            {{end}}
+        </div>
+        {{end}}
+        {{else}}
+        <div class="empty-state">
+            <p>{{T .AdminLang "ai_content.no_activity"}}</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}
