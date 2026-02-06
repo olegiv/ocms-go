@@ -211,6 +211,7 @@ func (m *Module) RegisterAdminRoutes(r chi.Router) {
 	// Banned IPs
 	r.Get("/sentinel", m.handleAdminList)
 	r.Post("/sentinel", m.handleCreate)
+	r.Post("/sentinel/ban", m.handleBanAjax)
 	r.Delete("/sentinel/{id}", m.handleDelete)
 
 	// Auto-ban paths
@@ -231,7 +232,20 @@ func (m *Module) TemplateFuncs() template.FuncMap {
 		"sentinelVersion": func() string {
 			return m.Version()
 		},
-		"countryName": geoip.CountryName,
+		"countryName":     geoip.CountryName,
+		"sentinelIsActive": func() bool { return true },
+		"sentinelIsIPBanned": func(ip string) bool {
+			if ip == "" {
+				return false
+			}
+			return m.IsIPBanned(ip)
+		},
+		"sentinelIsIPWhitelisted": func(ip string) bool {
+			if ip == "" {
+				return false
+			}
+			return m.IsIPWhitelisted(ip)
+		},
 	}
 }
 

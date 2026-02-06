@@ -5,6 +5,7 @@ package sentinel
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -124,6 +125,61 @@ func (m *Module) handleCreate(w http.ResponseWriter, r *http.Request) {
 	m.ctx.Logger.Info("IP banned", "ip_pattern", ipPattern, "banned_by", user.ID)
 	m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.success_created"), "success")
 	http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
+}
+
+// handleBanAjax handles POST /admin/sentinel/ban - AJAX endpoint to ban an IP.
+// Returns JSON response for use from the events page.
+func (m *Module) handleBanAjax(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+
+	var req struct {
+		IP string `json:"ip"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	ip := strings.TrimSpace(req.IP)
+	if ip == "" {
+		writeJSONError(w, "IP address is required", http.StatusBadRequest)
+		return
+	}
+
+	if !isValidIPPattern(ip) {
+		writeJSONError(w, "Invalid IP address", http.StatusBadRequest)
+		return
+	}
+
+	// Prevent admin from banning their own IP
+	adminIP := getClientIP(r)
+	if matchIPPattern(ip, adminIP) {
+		m.ctx.Logger.Warn("admin attempted to ban own IP via events", "ip", ip, "admin_ip", adminIP, "user_id", user.ID)
+		writeJSONError(w, "Cannot ban your own IP address", http.StatusBadRequest)
+		return
+	}
+
+	err := m.createBan(ip, "Banned from event log", "", user.ID)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			writeJSONError(w, "IP already banned", http.StatusConflict)
+			return
+		}
+		m.ctx.Logger.Error("failed to create ban via events", "error", err, "ip", ip)
+		writeJSONError(w, "Failed to ban IP", http.StatusInternalServerError)
+		return
+	}
+
+	m.ctx.Logger.Info("IP banned via events", "ip", ip, "banned_by", user.ID)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+// writeJSONError writes a JSON error response.
+func writeJSONError(w http.ResponseWriter, message string, status int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]any{"success": false, "error": message})
 }
 
 // handleDelete handles DELETE /admin/sentinel/{id} - removes an IP ban.
