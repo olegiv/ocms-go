@@ -202,15 +202,11 @@ func (m *Module) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var testErr error
-	if ps.Provider == ProviderOllama {
-		_, testErr = ollamaChatWithURL(ctx, ps.BaseURL, testReq)
+	client := getProviderClient(ps)
+	if client == nil {
+		testErr = fmt.Errorf("unsupported provider")
 	} else {
-		client := getProviderClient(ps.Provider)
-		if client == nil {
-			testErr = fmt.Errorf("unsupported provider")
-		} else {
-			_, testErr = client.ChatCompletion(ctx, ps.APIKey, testReq)
-		}
+		_, testErr = client.ChatCompletion(ctx, ps.APIKey, testReq)
 	}
 
 	if testErr != nil {
