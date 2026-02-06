@@ -70,6 +70,9 @@
         {"id": "sentinel.error_duplicate", "message": "This IP pattern is already banned", "translation": "This IP pattern is already banned"},
         {"id": "sentinel.error_create_failed", "message": "Failed to create ban", "translation": "Failed to create ban"},
         {"id": "sentinel.error_self_ban", "message": "Cannot ban your own IP address", "translation": "Cannot ban your own IP address"},
-        {"id": "sentinel.access_denied", "message": "Access denied", "translation": "Access denied"}
+        {"id": "sentinel.access_denied", "message": "Access denied", "translation": "Access denied"},
+
+        {"id": "sentinel.ban_action", "message": "Ban", "translation": "Ban"},
+        {"id": "sentinel.banned", "message": "Banned", "translation": "Banned"}
     ]
 }
