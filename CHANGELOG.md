@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-02-06
+
+### Added
+
+#### Fly.io Deployment
+- Full deployment configuration for oCMS demo instances
+- Demo media seeding with image variants and featured images
+- Deploy script with tests and documentation
+- `/fly-deploy` Claude Code command for streamlined deployment
+
+#### Event Log Enhancements
+- Ban IP button directly from event log entries
+- Event URL included in ban context for audit trail
+
+#### Admin UX
+- `maxlength` attributes on all admin text inputs for input validation
+
+### Changed
+- Update go-chi to v5.2.5
+- Gate demo seeding on `OCMS_DO_SEED` environment variable
+
+### Fixed
+- Form page header to match other admin pages
+- Demo seeding: larger images and improved deploy script
+- Deploy script whitespace trimming for machine ID
+
 ## [0.5.0] - 2026-02-05
 
 ### Added
@@ -243,7 +269,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/olegiv/ocms-go/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/olegiv/ocms-go/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/olegiv/ocms-go/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/olegiv/ocms-go/compare/v0.2.0...v0.3.0
