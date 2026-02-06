@@ -1814,6 +1814,7 @@ func (h *FormsHandler) getBaseTemplateData(r *http.Request, title string) BaseTe
 		SiteName:    "oCMS",
 		Year:        time.Now().Year(),
 		ShowSidebar: false,
+		ShowSearch:  true,
 		CurrentPath: r.URL.Path,
 		RequestURI:  r.URL.RequestURI(),
 		LangCode:    langCode,
@@ -1867,6 +1868,24 @@ func (h *FormsHandler) getBaseTemplateData(r *http.Request, title string) BaseTe
 			if err := json.Unmarshal([]byte(settingsJSON), &settings); err == nil {
 				data.ThemeSettings = settings
 			}
+		}
+	}
+
+	// Apply translated config values for current language
+	if langInfo := middleware.GetLanguage(r); langInfo != nil {
+		if translatedName, err := h.queries.GetConfigTranslationByKeyAndLangCode(ctx, store.GetConfigTranslationByKeyAndLangCodeParams{
+			ConfigKey: "site_name",
+			Code:      langInfo.Code,
+		}); err == nil && translatedName.Value != "" {
+			data.SiteName = translatedName.Value
+			data.Site.SiteName = translatedName.Value
+		}
+		if translatedDesc, err := h.queries.GetConfigTranslationByKeyAndLangCode(ctx, store.GetConfigTranslationByKeyAndLangCodeParams{
+			ConfigKey: "site_description",
+			Code:      langInfo.Code,
+		}); err == nil && translatedDesc.Value != "" {
+			data.SiteTagline = translatedDesc.Value
+			data.Site.Description = translatedDesc.Value
 		}
 	}
 
