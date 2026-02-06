@@ -11,14 +11,18 @@
         <a href="/forms/{{.Form.Slug}}" class="btn btn-primary">{{TTheme $.LangCode "forms.public.submit_another"}}</a>
     </div>
     {{else}}
-    <div class="form-header">
-        <h1>{{.Form.Title}}</h1>
+    <header class="dev-article-header">
+        <div class="dev-file-path">
+            <span class="dev-comment">// </span>
+            <span class="dev-path">/forms/{{.Form.Slug}}</span>
+        </div>
+        <h1 class="dev-article-title">{{.Form.Title}}</h1>
         {{if .Form.Description.Valid}}
         {{if .Form.Description.String}}
-        <p class="form-description">{{.Form.Description.String}}</p>
+        <p class="dev-article-excerpt">{{.Form.Description.String}}</p>
         {{end}}
         {{end}}
-    </div>
+    </header>
 
     {{if index .Errors "_form"}}
     <div class="alert alert-error">
