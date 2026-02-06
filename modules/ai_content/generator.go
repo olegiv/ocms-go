@@ -101,18 +101,12 @@ func (m *Module) generateContent(ctx context.Context, settings *ProviderSettings
 		Temperature: 0.7,
 	}
 
-	var chatResp *ChatResponse
-	var err error
-
-	if settings.Provider == ProviderOllama {
-		chatResp, err = ollamaChatWithURL(ctx, settings.BaseURL, req)
-	} else {
-		client := getProviderClient(settings.Provider)
-		if client == nil {
-			return nil, nil, fmt.Errorf("unsupported provider: %s", settings.Provider)
-		}
-		chatResp, err = client.ChatCompletion(ctx, settings.APIKey, req)
+	client := getProviderClient(settings)
+	if client == nil {
+		return nil, nil, fmt.Errorf("unsupported provider: %s", settings.Provider)
 	}
+
+	chatResp, err := client.ChatCompletion(ctx, settings.APIKey, req)
 
 	if err != nil {
 		return nil, nil, fmt.Errorf("AI generation failed: %w", err)
@@ -184,7 +178,7 @@ func (m *Module) generateFeaturedImage(ctx context.Context, prompt string) (*Ima
 		imageModel = "dall-e-3"
 	}
 
-	client := newOpenAIClient()
+	client := newOpenAICompatibleClient(ProviderOpenAI, "https://api.openai.com/v1")
 	imgReq := ImageRequest{
 		Model:   imageModel,
 		Prompt:  prompt,

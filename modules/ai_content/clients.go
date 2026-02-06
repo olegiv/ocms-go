@@ -8,102 +8,119 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
+
+	openai "github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
 )
 
 const httpTimeout = 120 * time.Second
 
-// openAIClient implements Provider and ImageProvider for OpenAI.
-type openAIClient struct {
-	baseURL string
+// openAICompatibleClient implements Provider and ImageProvider using the
+// official openai-go SDK. It works for OpenAI, Groq, and Ollama via
+// option.WithBaseURL().
+type openAICompatibleClient struct {
+	providerID string
+	baseURL    string
 }
 
-func newOpenAIClient() *openAIClient {
-	return &openAIClient{baseURL: "https://api.openai.com/v1"}
+func newOpenAICompatibleClient(providerID, baseURL string) *openAICompatibleClient {
+	return &openAICompatibleClient{
+		providerID: providerID,
+		baseURL:    baseURL,
+	}
 }
 
-func (c *openAIClient) ID() string { return ProviderOpenAI }
+func (c *openAICompatibleClient) ID() string { return c.providerID }
 
-func (c *openAIClient) ChatCompletion(ctx context.Context, apiKey string, req ChatRequest) (*ChatResponse, error) {
-	body := map[string]any{
-		"model":    req.Model,
-		"messages": req.Messages,
+// buildSDKClient creates an openai.Client configured for this provider.
+func (c *openAICompatibleClient) buildSDKClient(apiKey string) openai.Client {
+	// Ollama doesn't need auth; SDK requires a non-empty key
+	if apiKey == "" {
+		apiKey = "not-needed"
+	}
+	return openai.NewClient(
+		option.WithAPIKey(apiKey),
+		option.WithBaseURL(c.baseURL),
+		option.WithHTTPClient(&http.Client{Timeout: httpTimeout}),
+	)
+}
+
+// ChatCompletion performs a chat completion using the openai-go SDK.
+func (c *openAICompatibleClient) ChatCompletion(ctx context.Context, apiKey string, req ChatRequest) (*ChatResponse, error) {
+	client := c.buildSDKClient(apiKey)
+
+	msgs := make([]openai.ChatCompletionMessageParamUnion, 0, len(req.Messages))
+	for _, m := range req.Messages {
+		switch m.Role {
+		case "system":
+			msgs = append(msgs, openai.SystemMessage(m.Content))
+		case "user":
+			msgs = append(msgs, openai.UserMessage(m.Content))
+		case "assistant":
+			msgs = append(msgs, openai.AssistantMessage(m.Content))
+		default:
+			msgs = append(msgs, openai.UserMessage(m.Content))
+		}
+	}
+
+	params := openai.ChatCompletionNewParams{
+		Model:    req.Model,
+		Messages: msgs,
 	}
 	if req.MaxTokens > 0 {
-		body["max_tokens"] = req.MaxTokens
+		params.MaxTokens = openai.Int(int64(req.MaxTokens))
 	}
 	if req.Temperature > 0 {
-		body["temperature"] = req.Temperature
+		params.Temperature = openai.Float(req.Temperature)
 	}
 
-	respBody, err := doJSONRequest(ctx, c.baseURL+"/chat/completions", apiKey, "Bearer", body)
+	completion, err := client.Chat.Completions.New(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("openai chat: %w", err)
+		return nil, fmt.Errorf("%s chat: %w", c.providerID, mapSDKError(err))
 	}
 
-	var result struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-		Usage struct {
-			PromptTokens     int `json:"prompt_tokens"`
-			CompletionTokens int `json:"completion_tokens"`
-			TotalTokens      int `json:"total_tokens"`
-		} `json:"usage"`
-		Model string `json:"model"`
-	}
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("openai decode: %w", err)
-	}
-	if len(result.Choices) == 0 {
-		return nil, fmt.Errorf("openai: no choices returned")
+	if len(completion.Choices) == 0 {
+		return nil, fmt.Errorf("%s: no choices returned", c.providerID)
 	}
 
 	return &ChatResponse{
-		Content:          result.Choices[0].Message.Content,
-		PromptTokens:     result.Usage.PromptTokens,
-		CompletionTokens: result.Usage.CompletionTokens,
-		TotalTokens:      result.Usage.TotalTokens,
-		Model:            result.Model,
+		Content:          completion.Choices[0].Message.Content,
+		PromptTokens:     int(completion.Usage.PromptTokens),
+		CompletionTokens: int(completion.Usage.CompletionTokens),
+		TotalTokens:      int(completion.Usage.TotalTokens),
+		Model:            completion.Model,
 	}, nil
 }
 
 // GenerateImage generates an image using OpenAI DALL-E or GPT Image.
-func (c *openAIClient) GenerateImage(ctx context.Context, apiKey string, req ImageRequest) (*ImageResponse, error) {
-	body := map[string]any{
-		"model":  req.Model,
-		"prompt": req.Prompt,
-		"n":      1,
-		"size":   req.Size,
+func (c *openAICompatibleClient) GenerateImage(ctx context.Context, apiKey string, req ImageRequest) (*ImageResponse, error) {
+	client := c.buildSDKClient(apiKey)
+
+	params := openai.ImageGenerateParams{
+		Prompt: req.Prompt,
+		Model:  openai.ImageModel(req.Model),
+		N:      openai.Int(1),
+		Size:   openai.ImageGenerateParamsSize(req.Size),
 	}
 
-	// gpt-image-1 doesn't support response_format
+	// gpt-image-1 doesn't support response_format; dall-e-3 uses b64_json
 	if req.Model == "dall-e-3" {
-		body["response_format"] = "b64_json"
+		params.ResponseFormat = openai.ImageGenerateParamsResponseFormatB64JSON
 		if req.Quality != "" {
-			body["quality"] = req.Quality
+			params.Quality = openai.ImageGenerateParamsQuality(req.Quality)
 		}
 	}
 
-	respBody, err := doJSONRequest(ctx, c.baseURL+"/images/generations", apiKey, "Bearer", body)
+	result, err := client.Images.Generate(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("openai image: %w", err)
+		return nil, fmt.Errorf("openai image: %w", mapSDKError(err))
 	}
 
-	var result struct {
-		Data []struct {
-			B64JSON string `json:"b64_json"`
-			URL     string `json:"url"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("openai image decode: %w", err)
-	}
 	if len(result.Data) == 0 {
 		return nil, fmt.Errorf("openai: no image data returned")
 	}
@@ -115,7 +132,6 @@ func (c *openAIClient) GenerateImage(ctx context.Context, apiKey string, req Ima
 			return nil, fmt.Errorf("openai image base64 decode: %w", err)
 		}
 	} else if result.Data[0].URL != "" {
-		// Download image from URL
 		imgData, err = downloadImage(ctx, result.Data[0].URL)
 		if err != nil {
 			return nil, fmt.Errorf("openai image download: %w", err)
@@ -135,6 +151,16 @@ func (c *openAIClient) GenerateImage(ctx context.Context, apiKey string, req Ima
 		Model:     req.Model,
 		CostUSD:   costUSD,
 	}, nil
+}
+
+// mapSDKError converts an openai.Error to a descriptive error while
+// preserving the original error chain for errors.As callers.
+func mapSDKError(err error) error {
+	var apiErr *openai.Error
+	if errors.As(err, &apiErr) {
+		return fmt.Errorf("api error (status %d): %w", apiErr.StatusCode, err)
+	}
+	return err
 }
 
 // claudeClient implements Provider for Anthropic Claude.
@@ -212,171 +238,6 @@ func (c *claudeClient) ChatCompletion(ctx context.Context, apiKey string, req Ch
 	}, nil
 }
 
-// groqClient implements Provider for Groq.
-type groqClient struct {
-	baseURL string
-}
-
-func newGroqClient() *groqClient {
-	return &groqClient{baseURL: "https://api.groq.com/openai/v1"}
-}
-
-func (c *groqClient) ID() string { return ProviderGroq }
-
-func (c *groqClient) ChatCompletion(ctx context.Context, apiKey string, req ChatRequest) (*ChatResponse, error) {
-	// Groq uses OpenAI-compatible API
-	body := map[string]any{
-		"model":    req.Model,
-		"messages": req.Messages,
-	}
-	if req.MaxTokens > 0 {
-		body["max_tokens"] = req.MaxTokens
-	}
-	if req.Temperature > 0 {
-		body["temperature"] = req.Temperature
-	}
-
-	respBody, err := doJSONRequest(ctx, c.baseURL+"/chat/completions", apiKey, "Bearer", body)
-	if err != nil {
-		return nil, fmt.Errorf("groq chat: %w", err)
-	}
-
-	var result struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-		Usage struct {
-			PromptTokens     int `json:"prompt_tokens"`
-			CompletionTokens int `json:"completion_tokens"`
-			TotalTokens      int `json:"total_tokens"`
-		} `json:"usage"`
-		Model string `json:"model"`
-	}
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("groq decode: %w", err)
-	}
-	if len(result.Choices) == 0 {
-		return nil, fmt.Errorf("groq: no choices returned")
-	}
-
-	return &ChatResponse{
-		Content:          result.Choices[0].Message.Content,
-		PromptTokens:     result.Usage.PromptTokens,
-		CompletionTokens: result.Usage.CompletionTokens,
-		TotalTokens:      result.Usage.TotalTokens,
-		Model:            result.Model,
-	}, nil
-}
-
-// ollamaClient implements Provider for Ollama.
-type ollamaClient struct{}
-
-func newOllamaClient() *ollamaClient {
-	return &ollamaClient{}
-}
-
-func (c *ollamaClient) ID() string { return ProviderOllama }
-
-func (c *ollamaClient) ChatCompletion(ctx context.Context, _ string, req ChatRequest) (*ChatResponse, error) {
-	// This should never be called directly; use ollamaChat instead
-	return nil, fmt.Errorf("ollama: use ollamaChatWithURL instead")
-}
-
-// ollamaChatWithURL performs a chat completion using a custom Ollama base URL.
-func ollamaChatWithURL(ctx context.Context, baseURL string, req ChatRequest) (*ChatResponse, error) {
-	if baseURL == "" {
-		baseURL = "http://localhost:11434"
-	}
-
-	body := map[string]any{
-		"model":    req.Model,
-		"messages": req.Messages,
-		"stream":   false,
-	}
-
-	jsonBody, err := json.Marshal(body)
-	if err != nil {
-		return nil, fmt.Errorf("ollama marshal: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/api/chat", bytes.NewReader(jsonBody))
-	if err != nil {
-		return nil, fmt.Errorf("ollama request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: httpTimeout}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("ollama call: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("ollama read: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ollama error (status %d): %s", resp.StatusCode, string(respBody))
-	}
-
-	var result struct {
-		Message struct {
-			Content string `json:"content"`
-		} `json:"message"`
-		PromptEvalCount int    `json:"prompt_eval_count"`
-		EvalCount       int    `json:"eval_count"`
-		Model           string `json:"model"`
-	}
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("ollama decode: %w", err)
-	}
-
-	return &ChatResponse{
-		Content:          result.Message.Content,
-		PromptTokens:     result.PromptEvalCount,
-		CompletionTokens: result.EvalCount,
-		TotalTokens:      result.PromptEvalCount + result.EvalCount,
-		Model:            result.Model,
-	}, nil
-}
-
-// doJSONRequest performs a JSON HTTP request with Bearer token auth (OpenAI/Groq compatible).
-func doJSONRequest(ctx context.Context, url, apiKey, authScheme string, body any) ([]byte, error) {
-	jsonBody, err := json.Marshal(body)
-	if err != nil {
-		return nil, fmt.Errorf("marshal: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
-	if err != nil {
-		return nil, fmt.Errorf("new request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", authScheme+" "+apiKey)
-
-	client := &http.Client{Timeout: httpTimeout}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("http call: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read body: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("api error (status %d): %s", resp.StatusCode, string(respBody))
-	}
-
-	return respBody, nil
-}
-
 // doClaudeRequest performs a JSON HTTP request with Anthropic-style auth.
 func doClaudeRequest(ctx context.Context, url, apiKey string, body any) ([]byte, error) {
 	jsonBody, err := json.Marshal(body)
@@ -431,17 +292,21 @@ func downloadImage(ctx context.Context, imgURL string) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
-// getProviderClient returns the appropriate Provider implementation for a provider ID.
-func getProviderClient(providerID string) Provider {
-	switch providerID {
+// getProviderClient returns the appropriate Provider for the given settings.
+func getProviderClient(settings *ProviderSettings) Provider {
+	switch settings.Provider {
 	case ProviderOpenAI:
-		return newOpenAIClient()
+		return newOpenAICompatibleClient(ProviderOpenAI, "https://api.openai.com/v1")
 	case ProviderClaude:
 		return newClaudeClient()
 	case ProviderGroq:
-		return newGroqClient()
+		return newOpenAICompatibleClient(ProviderGroq, "https://api.groq.com/openai/v1")
 	case ProviderOllama:
-		return newOllamaClient()
+		baseURL := settings.BaseURL
+		if baseURL == "" {
+			baseURL = "http://localhost:11434"
+		}
+		return newOpenAICompatibleClient(ProviderOllama, baseURL+"/v1")
 	default:
 		return nil
 	}
