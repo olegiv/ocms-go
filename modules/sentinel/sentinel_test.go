@@ -162,6 +162,59 @@ func TestMatchPathPattern(t *testing.T) {
 	}
 }
 
+func TestNormalizePath(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{"no trailing slash", "/wp-admin", "/wp-admin"},
+		{"with trailing slash", "/wp-admin/", "/wp-admin"},
+		{"root path preserved", "/", "/"},
+		{"multiple segments trailing", "/admin/sentinel/", "/admin/sentinel"},
+		{"deep path trailing", "/a/b/c/d/", "/a/b/c/d"},
+		{"no trailing no change", "/api/v1/users", "/api/v1/users"},
+		{"empty string", "", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizePath(tt.path)
+			if got != tt.want {
+				t.Errorf("normalizePath(%q) = %q, want %q", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestNormalizePathWithPatternMatching verifies that path normalization
+// fixes the trailing-slash issue: /wp-admin/ should match pattern /wp-admin.
+func TestNormalizePathWithPatternMatching(t *testing.T) {
+	tests := []struct {
+		name    string
+		pattern string
+		path    string
+		want    bool
+	}{
+		{"exact after normalize", "/wp-admin", "/wp-admin/", true},
+		{"prefix after normalize", "/wp-admin*", "/wp-admin/", true},
+		{"root matches itself", "/", "/", true},
+		{"no slash no change", "/wp-admin", "/wp-admin", true},
+		{"deep path normalize", "/admin/config", "/admin/config/", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			normalized := normalizePath(tt.path)
+			got := matchPathPattern(tt.pattern, normalized)
+			if got != tt.want {
+				t.Errorf("matchPathPattern(%q, normalizePath(%q)=%q) = %v, want %v",
+					tt.pattern, tt.path, normalized, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsValidPathPattern(t *testing.T) {
 	tests := []struct {
 		name    string

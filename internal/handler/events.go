@@ -262,6 +262,7 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 			model.EventCategoryUser,
 			model.EventCategoryConfig,
 			model.EventCategorySystem,
+			model.EventCategorySecurity,
 			model.EventCategoryCache,
 			model.EventCategoryMigrator,
 			model.EventCategoryMedia,
