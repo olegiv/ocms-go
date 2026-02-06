@@ -133,7 +133,8 @@ func (m *Module) handleBanAjax(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 
 	var req struct {
-		IP string `json:"ip"`
+		IP  string `json:"ip"`
+		URL string `json:"url"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, "Invalid request", http.StatusBadRequest)
@@ -159,7 +160,7 @@ func (m *Module) handleBanAjax(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := m.createBan(ip, "Banned from event log", "", user.ID)
+	err := m.createBan(ip, "Banned from event log", strings.TrimSpace(req.URL), user.ID)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			writeJSONError(w, "IP already banned", http.StatusConflict)
