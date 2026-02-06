@@ -291,6 +291,10 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			return result.String()
 		},
 		"countryName": geoip.CountryName,
+		// Sentinel no-op placeholders; the module overrides them via AddTemplateFuncs.
+		"sentinelIsActive":        func() bool { return false },
+		"sentinelIsIPBanned":      func(ip string) bool { return false },
+		"sentinelIsIPWhitelisted": func(ip string) bool { return false },
 		"deref": func(p *int64) int64 {
 			if p == nil {
 				return 0
