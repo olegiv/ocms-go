@@ -88,7 +88,7 @@
                                 {{if sentinelIsIPBanned .IPAddress}}
                                     <span class="badge badge-danger ban-badge" data-ip="{{.IPAddress}}">{{T $.AdminLang "sentinel.banned"}}</span>
                                 {{else if not (or .IsOwnIP (sentinelIsIPWhitelisted .IPAddress))}}
-                                    <button type="button" class="btn btn-sm btn-danger ban-btn" data-ip="{{.IPAddress}}" onclick="banIP(this)">{{T $.AdminLang "sentinel.ban_action"}}</button>
+                                    <button type="button" class="btn btn-sm btn-danger ban-btn" data-ip="{{.IPAddress}}" data-url="{{.RequestURL}}" onclick="banIP(this)">{{T $.AdminLang "sentinel.ban_action"}}</button>
                                 {{end}}
                             {{end}}
                         {{else}}
@@ -148,13 +148,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function banIP(btn) {
     var ip = btn.getAttribute('data-ip');
+    var url = btn.getAttribute('data-url') || '';
     btn.disabled = true;
     btn.classList.add('btn-loading');
 
     fetch('/admin/sentinel/ban', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ip: ip })
+        body: JSON.stringify({ ip: ip, url: url })
     })
     .then(function(response) {
         if (response.redirected) {
