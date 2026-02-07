@@ -52,6 +52,7 @@ import (
 	"github.com/olegiv/ocms-go/modules/hcaptcha"
 	"github.com/olegiv/ocms-go/modules/migrator"
 	"github.com/olegiv/ocms-go/modules/privacy"
+	"github.com/olegiv/ocms-go/modules/react_headless"
 	"github.com/olegiv/ocms-go/modules/sentinel"
 	"github.com/olegiv/ocms-go/web"
 )
@@ -419,6 +420,10 @@ func run() error {
 	if err := moduleRegistry.Register(dbmanager.New()); err != nil {
 		return fmt.Errorf("registering dbmanager module: %w", err)
 	}
+	reactHeadlessModule := react_headless.New()
+	if err := moduleRegistry.Register(reactHeadlessModule); err != nil {
+		return fmt.Errorf("registering react_headless module: %w", err)
+	}
 
 	// Register internal analytics module (built-in analytics tracking)
 	internalAnalyticsModule := analytics_int.New()
@@ -442,6 +447,13 @@ func run() error {
 	if !moduleRegistry.IsActive("sentinel") {
 		if err := sentinelModule.Init(moduleCtx); err != nil {
 			slog.Warn("failed to pre-initialize sentinel for middleware", "error", err)
+		}
+	}
+
+	// Pre-initialize react_headless for CORS middleware to have settings loaded.
+	if !moduleRegistry.IsActive("react_headless") {
+		if err := reactHeadlessModule.Init(moduleCtx); err != nil {
+			slog.Warn("failed to pre-initialize react_headless for CORS middleware", "error", err)
 		}
 	}
 
@@ -830,6 +842,9 @@ func run() error {
 
 	// REST API v1 routes
 	r.Route("/api/v1", func(r chi.Router) {
+		// CORS middleware for headless React frontends
+		r.Use(reactHeadlessModule.GetCORSMiddleware(moduleRegistry.IsActive))
+
 		// Global rate limiting for API (100 requests per second with burst of 200)
 		apiRateLimiter := middleware.NewGlobalRateLimiter(100, 200)
 		r.Use(apiRateLimiter.Middleware())
