@@ -1,0 +1,205 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{T .AdminLang "react_headless.title"}}</h1>
+        <p class="page-description">{{T .AdminLang "react_headless.description"}}</p>
+    </div>
+    <div class="page-actions">
+        <span class="badge badge-primary">v{{.Data.Version}}</span>
+    </div>
+</div>
+
+<div class="module-info-card">
+    <div class="card">
+        <div class="card-body">
+            <h3>{{T .AdminLang "react_headless.cors_settings"}}</h3>
+            <p class="text-muted">{{T .AdminLang "react_headless.cors_description"}}</p>
+
+            <form method="POST" action="/admin/react-headless">
+                {{.CSRFField}}
+
+                <div class="form-group">
+                    <label for="allowed_origins">{{T .AdminLang "react_headless.allowed_origins"}}</label>
+                    <textarea id="allowed_origins"
+                              name="allowed_origins"
+                              class="form-control"
+                              rows="3"
+                              placeholder="http://localhost:5173, https://example.com"
+                              required>{{.Data.Settings.AllowedOrigins}}</textarea>
+                    <small class="form-text text-muted">{{T .AdminLang "react_headless.origins_help"}}</small>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="max_age">{{T .AdminLang "react_headless.max_age"}}</label>
+                        <input type="number"
+                               id="max_age"
+                               name="max_age"
+                               class="form-control"
+                               value="{{.Data.Settings.MaxAge}}"
+                               min="0"
+                               max="86400">
+                        <small class="form-text text-muted">{{T .AdminLang "react_headless.max_age_help"}}</small>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox"
+                               name="allow_credentials"
+                               value="1"
+                               {{if .Data.Settings.AllowCredentials}}checked{{end}}>
+                        {{T .AdminLang "react_headless.allow_credentials"}}
+                    </label>
+                    <small class="form-text text-muted">{{T .AdminLang "react_headless.credentials_help"}}</small>
+                </div>
+
+                <button type="submit" class="btn btn-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                        <polyline points="17 21 17 13 7 13 7 21"/>
+                        <polyline points="7 3 7 8 15 8"/>
+                    </svg>
+                    {{T .AdminLang "react_headless.save"}}
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="module-info-card">
+    <div class="card">
+        <div class="card-body">
+            <h3>{{T .AdminLang "react_headless.getting_started"}}</h3>
+            <p class="text-muted">{{T .AdminLang "react_headless.getting_started_desc"}}</p>
+
+            <div class="features-grid">
+                <div class="feature-item">
+                    <div class="feature-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="2" y1="12" x2="22" y2="12"/>
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                        </svg>
+                    </div>
+                    <div class="feature-content">
+                        <h4>{{T .AdminLang "react_headless.step1_title"}}</h4>
+                        <p>{{T .AdminLang "react_headless.step1_desc"}}</p>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                        </svg>
+                    </div>
+                    <div class="feature-content">
+                        <h4>{{T .AdminLang "react_headless.step2_title"}}</h4>
+                        <p>{{T .AdminLang "react_headless.step2_desc"}}</p>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="16 18 22 12 16 6"/>
+                            <polyline points="8 6 2 12 8 18"/>
+                        </svg>
+                    </div>
+                    <div class="feature-content">
+                        <h4>{{T .AdminLang "react_headless.step3_title"}}</h4>
+                        <p>{{T .AdminLang "react_headless.step3_desc"}}</p>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
+                        </svg>
+                    </div>
+                    <div class="feature-content">
+                        <h4>{{T .AdminLang "react_headless.step4_title"}}</h4>
+                        <p>{{T .AdminLang "react_headless.step4_desc"}}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="module-info-card">
+    <div class="card">
+        <div class="card-body">
+            <h3>{{T .AdminLang "react_headless.api_endpoints"}}</h3>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>{{T .AdminLang "react_headless.endpoint"}}</th>
+                            <th>{{T .AdminLang "react_headless.method"}}</th>
+                            <th>{{T .AdminLang "react_headless.auth"}}</th>
+                            <th>{{T .AdminLang "react_headless.endpoint_description"}}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>/api/v1/pages</code></td>
+                            <td><span class="badge badge-success">GET</span></td>
+                            <td>{{T .AdminLang "react_headless.optional"}}</td>
+                            <td>{{T .AdminLang "react_headless.ep_list_pages"}}</td>
+                        </tr>
+                        <tr>
+                            <td><code>/api/v1/pages/{id}</code></td>
+                            <td><span class="badge badge-success">GET</span></td>
+                            <td>{{T .AdminLang "react_headless.optional"}}</td>
+                            <td>{{T .AdminLang "react_headless.ep_get_page"}}</td>
+                        </tr>
+                        <tr>
+                            <td><code>/api/v1/pages/slug/{slug}</code></td>
+                            <td><span class="badge badge-success">GET</span></td>
+                            <td>{{T .AdminLang "react_headless.optional"}}</td>
+                            <td>{{T .AdminLang "react_headless.ep_get_page_slug"}}</td>
+                        </tr>
+                        <tr>
+                            <td><code>/api/v1/media</code></td>
+                            <td><span class="badge badge-success">GET</span></td>
+                            <td>{{T .AdminLang "react_headless.optional"}}</td>
+                            <td>{{T .AdminLang "react_headless.ep_list_media"}}</td>
+                        </tr>
+                        <tr>
+                            <td><code>/api/v1/tags</code></td>
+                            <td><span class="badge badge-success">GET</span></td>
+                            <td>{{T .AdminLang "react_headless.none"}}</td>
+                            <td>{{T .AdminLang "react_headless.ep_list_tags"}}</td>
+                        </tr>
+                        <tr>
+                            <td><code>/api/v1/categories</code></td>
+                            <td><span class="badge badge-success">GET</span></td>
+                            <td>{{T .AdminLang "react_headless.none"}}</td>
+                            <td>{{T .AdminLang "react_headless.ep_list_categories"}}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="text-muted" style="margin-top: 1rem;">
+                <a href="/admin/api-keys">{{T .AdminLang "react_headless.manage_api_keys"}}</a> |
+                <a href="/api/v1/docs" target="_blank">{{T .AdminLang "react_headless.api_docs"}}</a>
+            </p>
+        </div>
+    </div>
+</div>
+
+{{if .Data.AllowedOrigins}}
+<div class="module-info-card">
+    <div class="card">
+        <div class="card-body">
+            <h3>{{T .AdminLang "react_headless.active_origins"}}</h3>
+            <div class="tags-list">
+                {{range .Data.AllowedOrigins}}
+                <span class="badge badge-info" style="margin: 0.25rem;">{{.}}</span>
+                {{end}}
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+{{end}}
