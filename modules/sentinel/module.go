@@ -660,8 +660,7 @@ func matchIPPattern(pattern, ip string) bool {
 			return true
 		}
 		// Pattern like "10*" - partial match on first octet, rest is prefix
-		if strings.HasSuffix(lastPart, "*") {
-			prefix := strings.TrimSuffix(lastPart, "*")
+		if prefix, ok := strings.CutSuffix(lastPart, "*"); ok {
 			for i := 0; i < len(patternParts)-1; i++ {
 				if patternParts[i] != ipParts[i] {
 					return false
@@ -682,8 +681,7 @@ func matchIPPattern(pattern, ip string) bool {
 			continue // wildcard matches any octet
 		}
 		// Handle partial wildcard like "10*" matching "100", "101", etc.
-		if strings.HasSuffix(pp, "*") {
-			prefix := strings.TrimSuffix(pp, "*")
+		if prefix, ok := strings.CutSuffix(pp, "*"); ok {
 			if !strings.HasPrefix(ipParts[i], prefix) {
 				return false
 			}
@@ -803,11 +801,7 @@ func (m *Module) Middleware() func(http.Handler) http.Handler {
 
 			// 2. Check if IP is already banned (if ban check is enabled)
 			if m.IsBanCheckEnabled() && m.IsIPBanned(ip) {
-				m.ctx.Logger.Warn("blocked banned IP", "ip", ip, "path", path)
-				if m.eventLogger != nil {
-					_ = m.eventLogger.LogEvent(context.Background(), model.EventLevelWarning, model.EventCategorySecurity,
-						"Blocked banned IP", nil, ip, path, nil)
-				}
+				m.ctx.Logger.Info("blocked banned IP", "ip", ip, "path", path)
 				http.Error(w, i18n.T("en", "sentinel.access_denied"), http.StatusForbidden)
 				return
 			}
@@ -827,7 +821,7 @@ func (m *Module) Middleware() func(http.Handler) http.Handler {
 						return
 					}
 
-					m.ctx.Logger.Warn("auto-banning IP for forbidden path",
+					m.ctx.Logger.Info("auto-banning IP for forbidden path",
 						"ip", ip,
 						"path", path,
 						"pattern", matchedPattern,
@@ -848,8 +842,8 @@ func (m *Module) Middleware() func(http.Handler) http.Handler {
 // getClientIP extracts the client IP from the request.
 func getClientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if idx := strings.Index(xff, ","); idx != -1 {
-			return strings.TrimSpace(xff[:idx])
+		if before, _, ok := strings.Cut(xff, ","); ok {
+			return strings.TrimSpace(before)
 		}
 		return strings.TrimSpace(xff)
 	}
