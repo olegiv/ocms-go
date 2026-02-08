@@ -77,12 +77,6 @@ func (h *ThemesHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Activate handles POST /admin/themes/activate - activates a theme.
 func (h *ThemesHandler) Activate(w http.ResponseWriter, r *http.Request) {
-	// Block in demo mode
-	if middleware.IsDemoMode() {
-		flashError(w, r, h.renderer, redirectAdminThemes, middleware.DemoModeMessageDetailed(middleware.RestrictionThemeSettings))
-		return
-	}
-
 	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminThemes) {
 		return
 	}
