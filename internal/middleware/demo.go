@@ -171,6 +171,7 @@ func BlockDeleteInDemoMode(restriction DemoRestriction) func(http.Handler) http.
 					Value:    string(restriction),
 					Path:     "/",
 					MaxAge:   5,
+					Secure:   true,
 					HttpOnly: true,
 					SameSite: http.SameSiteLaxMode,
 				})
