@@ -47,6 +47,7 @@
         {"id": "privacy.service_default", "message": "Default On", "translation": "Default On"},
         {"id": "privacy.service_gcm_type", "message": "GCM Consent Type", "translation": "GCM Consent Type"},
         {"id": "privacy.service_remove", "message": "Remove", "translation": "Remove"},
+        {"id": "privacy.purpose_essential", "message": "Essential", "translation": "Essential"},
         {"id": "privacy.purpose_analytics", "message": "Analytics", "translation": "Analytics"},
         {"id": "privacy.purpose_marketing", "message": "Marketing", "translation": "Marketing"},
         {"id": "privacy.purpose_functional", "message": "Functional", "translation": "Functional"},

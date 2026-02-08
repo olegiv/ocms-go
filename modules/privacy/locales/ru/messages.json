@@ -47,6 +47,7 @@
         {"id": "privacy.service_default", "message": "Default On", "translation": "Включён по умолчанию"},
         {"id": "privacy.service_gcm_type", "message": "GCM Consent Type", "translation": "Тип согласия GCM"},
         {"id": "privacy.service_remove", "message": "Remove", "translation": "Удалить"},
+        {"id": "privacy.purpose_essential", "message": "Essential", "translation": "Обязательные"},
         {"id": "privacy.purpose_analytics", "message": "Analytics", "translation": "Аналитика"},
         {"id": "privacy.purpose_marketing", "message": "Marketing", "translation": "Маркетинг"},
         {"id": "privacy.purpose_functional", "message": "Functional", "translation": "Функциональный"},

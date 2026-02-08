@@ -456,11 +456,11 @@ function privacySettings() {
             name: 'klaro',
             title: 'Essential Cookies',
             description: 'Stores consent choices and UI preferences (required)',
-            purposes: ['functional'],
+            purposes: ['essential'],
             gcm_consent_type: '',
             required: true,
             default: true,
-            cookies: [{pattern: '^klaro'}, {pattern: '^ocms_lang$'}, {pattern: '^session$'}, {pattern: '^ocms_informer_dismissed'}]
+            cookies: [{pattern: '^klaro'}, {pattern: '^ocms_lang$'}, {pattern: '^(__Host-)?session$'}, {pattern: '^ocms_informer_dismissed'}]
         },
         'google-analytics': {
             name: 'google-analytics',
