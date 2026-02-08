@@ -134,6 +134,7 @@ func BlockInDemoMode(restriction DemoRestriction) func(http.Handler) http.Handle
 				MaxAge:   5, // Short-lived cookie
 				HttpOnly: true,
 				SameSite: http.SameSiteLaxMode,
+				Secure:   true,
 			})
 
 			// Redirect back to referrer or admin dashboard
