@@ -514,6 +514,10 @@ func (h *PagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 
 // Create handles POST /admin/pages - creates a new page.
 func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminPagesNew) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
@@ -773,6 +777,10 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /admin/pages/{id} - updates an existing page.
 func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminPages) {
+		return
+	}
+
 	lang := h.renderer.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -935,6 +943,12 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/pages/{id} - deletes a page.
 func (h *PagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		http.Error(w, middleware.DemoModeMessageDetailed(middleware.RestrictionDeletePage), http.StatusForbidden)
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid page ID", http.StatusBadRequest)
@@ -983,6 +997,16 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 
 	page, ok := h.requirePageWithRedirect(w, r, id)
 	if !ok {
+		return
+	}
+
+	// In demo mode: block unpublishing with specific message, block publishing with generic read-only message
+	if middleware.IsDemoMode() {
+		if page.Status == PageStatusPublished {
+			demoGuard(w, r, h.renderer, middleware.RestrictionUnpublishContent, redirectAdminPages)
+		} else {
+			demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminPages)
+		}
 		return
 	}
 
@@ -1103,6 +1127,10 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 
 // RestoreVersion handles POST /admin/pages/{id}/versions/{versionId}/restore - restores a version.
 func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminPages) {
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		flashError(w, r, h.renderer, redirectAdminPages, "Invalid page ID")
@@ -1188,6 +1216,10 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 
 // Translate handles POST /admin/pages/{id}/translate/{langCode} - creates a translation.
 func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminPages) {
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		flashError(w, r, h.renderer, redirectAdminPages, "Invalid page ID")

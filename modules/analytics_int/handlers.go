@@ -109,6 +109,13 @@ func (m *Module) handleRealtime(w http.ResponseWriter, r *http.Request) {
 
 // handleSaveSettings saves module settings.
 func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		m.ctx.Render.SetFlash(r, middleware.DemoModeMessageDetailed(middleware.RestrictionModuleSettings), "error")
+		http.Redirect(w, r, "/admin/internal-analytics", http.StatusSeeOther)
+		return
+	}
+
 	user := m.requireAPIAuth(w, r)
 	if user == nil {
 		return

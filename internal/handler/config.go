@@ -208,6 +208,11 @@ func (h *ConfigHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /admin/config - updates configuration values.
 func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionEditConfig, redirectAdminConfig) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 

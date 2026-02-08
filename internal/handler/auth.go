@@ -183,6 +183,21 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		h.loginProtection.RecordSuccessfulLogin(email)
 	}
 
+	// Re-hash password if it uses old/expensive parameters (e.g., 64MB → 19MB)
+	if auth.NeedsRehash(user.PasswordHash) {
+		if newHash, err := auth.HashPassword(password); err == nil {
+			if err := h.queries.UpdateUserPassword(r.Context(), store.UpdateUserPasswordParams{
+				PasswordHash: newHash,
+				UpdatedAt:    time.Now(),
+				ID:           user.ID,
+			}); err != nil {
+				slog.Error("failed to re-hash password", "error", err, "user_id", user.ID)
+			} else {
+				slog.Info("password re-hashed with updated parameters", "user_id", user.ID)
+			}
+		}
+	}
+
 	// Update last login timestamp
 	if err := h.queries.UpdateUserLastLogin(r.Context(), store.UpdateUserLastLoginParams{
 		LastLoginAt: sql.NullTime{Time: time.Now(), Valid: true},

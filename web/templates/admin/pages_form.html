@@ -81,25 +81,30 @@
             <!-- Status -->
             <div class="form-group">
                 <label for="status" class="form-label">{{T .AdminLang "label.status"}}</label>
+                {{$currentStatus := ""}}
+                {{if .Data.FormValues.status}}
+                    {{$currentStatus = .Data.FormValues.status}}
+                {{else if .Data.Page}}
+                    {{$currentStatus = .Data.Page.Status}}
+                {{else}}
+                    {{$currentStatus = "draft"}}
+                {{end}}
+                {{if and (isDemoMode) .Data.IsEdit (eq $currentStatus "published")}}
+                <input type="hidden" name="status" value="published">
+                <span class="badge badge-success">{{T .AdminLang "status.published"}}</span>
+                {{else}}
                 <select
                     id="status"
                     name="status"
                     class="form-select {{if .Data.Errors.status}}is-invalid{{end}}"
                 >
-                    {{$currentStatus := ""}}
-                    {{if .Data.FormValues.status}}
-                        {{$currentStatus = .Data.FormValues.status}}
-                    {{else if .Data.Page}}
-                        {{$currentStatus = .Data.Page.Status}}
-                    {{else}}
-                        {{$currentStatus = "draft"}}
-                    {{end}}
                     {{range .Data.Statuses}}
                     <option value="{{.}}" {{if eq . $currentStatus}}selected{{end}}>
                         {{if eq . "draft"}}{{T $.AdminLang "status.draft"}}{{else if eq . "published"}}{{T $.AdminLang "status.published"}}{{else}}{{.}}{{end}}
                     </option>
                     {{end}}
                 </select>
+                {{end}}
                 {{if .Data.Errors.status}}
                 <span class="form-error">{{.Data.Errors.status}}</span>
                 {{end}}

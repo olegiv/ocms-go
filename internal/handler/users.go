@@ -152,6 +152,11 @@ type UserFormData struct {
 
 // NewForm handles GET /admin/users/new - displays the new user form.
 func (h *UsersHandler) NewForm(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionCreateUser, redirectAdminUsers) {
+		return
+	}
+
 	data := UserFormData{
 		Roles:      ValidRoles,
 		Errors:     make(map[string]string),
@@ -164,6 +169,11 @@ func (h *UsersHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 
 // Create handles POST /admin/users - creates a new user.
 func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionCreateUser, redirectAdminUsers) {
+		return
+	}
+
 	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminUsersNew) {
 		return
 	}
@@ -305,6 +315,11 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /admin/users/{id} - updates an existing user.
 func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionEditUser, redirectAdminUsers) {
+		return
+	}
+
 	currentUser := middleware.GetUser(r)
 	if currentUser == nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -454,6 +469,12 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/users/{id} - deletes a user.
 func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		h.sendDeleteError(w, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteUser))
+		return
+	}
+
 	currentUser := middleware.GetUser(r)
 	if currentUser == nil {
 		h.sendDeleteError(w, "Unauthorized")

@@ -92,6 +92,11 @@ func (h *CacheHandler) clearCacheHelper(w http.ResponseWriter, r *http.Request, 
 
 // Clear handles POST /admin/cache/clear - clears all caches.
 func (h *CacheHandler) Clear(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionClearCache, redirectAdminCache) {
+		return
+	}
+
 	if h.cacheManager == nil {
 		flashError(w, r, h.renderer, redirectAdminCache, "Cache system not initialized")
 		return
@@ -102,6 +107,11 @@ func (h *CacheHandler) Clear(w http.ResponseWriter, r *http.Request) {
 
 // ClearConfig handles POST /admin/cache/clear/config - clears config cache.
 func (h *CacheHandler) ClearConfig(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionClearCache, redirectAdminCache) {
+		return
+	}
+
 	if h.cacheManager == nil {
 		flashError(w, r, h.renderer, redirectAdminCache, "Cache system not initialized")
 		return
@@ -112,6 +122,11 @@ func (h *CacheHandler) ClearConfig(w http.ResponseWriter, r *http.Request) {
 
 // ClearSitemap handles POST /admin/cache/clear/sitemap - clears sitemap cache.
 func (h *CacheHandler) ClearSitemap(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionClearCache, redirectAdminCache) {
+		return
+	}
+
 	if h.cacheManager == nil {
 		flashError(w, r, h.renderer, redirectAdminCache, "Cache system not initialized")
 		return
@@ -122,6 +137,11 @@ func (h *CacheHandler) ClearSitemap(w http.ResponseWriter, r *http.Request) {
 
 // ClearPages handles POST /admin/cache/clear/pages - clears page cache.
 func (h *CacheHandler) ClearPages(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionClearCache, redirectAdminCache) {
+		return
+	}
+
 	if h.cacheManager == nil {
 		flashError(w, r, h.renderer, redirectAdminCache, "Cache system not initialized")
 		return
@@ -132,6 +152,11 @@ func (h *CacheHandler) ClearPages(w http.ResponseWriter, r *http.Request) {
 
 // ClearMenus handles POST /admin/cache/clear/menus - clears menu cache.
 func (h *CacheHandler) ClearMenus(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionClearCache, redirectAdminCache) {
+		return
+	}
+
 	if h.cacheManager == nil {
 		flashError(w, r, h.renderer, redirectAdminCache, "Cache system not initialized")
 		return
@@ -142,6 +167,11 @@ func (h *CacheHandler) ClearMenus(w http.ResponseWriter, r *http.Request) {
 
 // ClearLanguages handles POST /admin/cache/clear/languages - clears language cache.
 func (h *CacheHandler) ClearLanguages(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionClearCache, redirectAdminCache) {
+		return
+	}
+
 	if h.cacheManager == nil {
 		flashError(w, r, h.renderer, redirectAdminCache, "Cache system not initialized")
 		return

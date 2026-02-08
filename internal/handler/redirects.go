@@ -137,6 +137,10 @@ func (h *RedirectsHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 
 // Create handles POST /admin/redirects - creates a new redirect.
 func (h *RedirectsHandler) Create(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminRedirectsNew) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
@@ -235,6 +239,10 @@ func (h *RedirectsHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /admin/redirects/{id} - updates a redirect.
 func (h *RedirectsHandler) Update(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminRedirects) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
@@ -310,6 +318,10 @@ func (h *RedirectsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/redirects/{id} - deletes a redirect.
 func (h *RedirectsHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid redirect ID", http.StatusBadRequest)
@@ -342,6 +354,10 @@ func (h *RedirectsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // Toggle handles POST /admin/redirects/{id}/toggle - toggles a redirect's enabled status.
 func (h *RedirectsHandler) Toggle(w http.ResponseWriter, r *http.Request) {
+	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid redirect ID", http.StatusBadRequest)

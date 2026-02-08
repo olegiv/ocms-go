@@ -134,6 +134,14 @@ func (m *Module) handleProviderSettings(w http.ResponseWriter, r *http.Request) 
 
 // handleSaveProviderSettings handles POST /admin/embed/{provider} - saves provider settings.
 func (m *Module) handleSaveProviderSettings(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		providerID := chi.URLParam(r, "provider")
+		m.ctx.Render.SetFlash(r, middleware.DemoModeMessageDetailed(middleware.RestrictionModuleSettings), "error")
+		http.Redirect(w, r, "/admin/embed/"+providerID, http.StatusSeeOther)
+		return
+	}
+
 	ctx, ok := m.getProviderContext(w, r)
 	if !ok {
 		return
@@ -202,6 +210,13 @@ func (m *Module) handleSaveProviderSettings(w http.ResponseWriter, r *http.Reque
 
 // handleToggleProvider handles POST /admin/embed/{provider}/toggle - toggles provider.
 func (m *Module) handleToggleProvider(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		m.ctx.Render.SetFlash(r, middleware.DemoModeMessageDetailed(middleware.RestrictionModuleSettings), "error")
+		http.Redirect(w, r, "/admin/embed", http.StatusSeeOther)
+		return
+	}
+
 	ctx, ok := m.getProviderContext(w, r)
 	if !ok {
 		return

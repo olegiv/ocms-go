@@ -247,6 +247,10 @@ func (h *MenusHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 
 // Create handles POST /admin/menus - creates a new menu.
 func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminMenusNew) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
@@ -358,6 +362,10 @@ func (h *MenusHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /admin/menus/{id} - updates a menu.
 func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminMenus) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
@@ -430,6 +438,12 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/menus/{id} - deletes a menu.
 func (h *MenusHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		http.Error(w, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteMenu), http.StatusForbidden)
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid menu ID", http.StatusBadRequest)
@@ -480,6 +494,10 @@ type AddItemRequest struct {
 
 // AddItem handles POST /admin/menus/{id}/items - adds a menu item.
 func (h *MenusHandler) AddItem(w http.ResponseWriter, r *http.Request) {
+	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+		return
+	}
+
 	menuID, err := ParseIDParam(r)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid menu ID")
@@ -552,6 +570,10 @@ type UpdateItemRequest struct {
 
 // UpdateItem handles PUT /admin/menus/{id}/items/{itemId} - updates a menu item.
 func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
+	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+		return
+	}
+
 	menu, item, ok := h.requireMenuAndItemForJSON(w, r)
 	if !ok {
 		return
@@ -626,6 +648,12 @@ func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 
 // DeleteItem handles DELETE /admin/menus/{id}/items/{itemId} - deletes a menu item.
 func (h *MenusHandler) DeleteItem(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		writeJSONError(w, http.StatusForbidden, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteMenuItem))
+		return
+	}
+
 	menu, item, ok := h.requireMenuAndItemForJSON(w, r)
 	if !ok {
 		return
@@ -657,6 +685,10 @@ type ReorderRequest struct {
 
 // Reorder handles POST /admin/menus/{id}/reorder - reorders menu items.
 func (h *MenusHandler) Reorder(w http.ResponseWriter, r *http.Request) {
+	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+		return
+	}
+
 	menuID, err := ParseIDParam(r)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid menu ID")

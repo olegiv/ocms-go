@@ -83,7 +83,7 @@
                     </td>
                     <td class="event-ip">
                         {{if .IPAddress}}
-                            <code class="text-muted">{{.IPAddress}}</code>
+                            <code class="text-muted">{{maskIP .IPAddress}}</code>
                             {{if sentinelIsActive}}
                                 {{if sentinelIsIPBanned .IPAddress}}
                                     <span class="badge badge-danger ban-badge" data-ip="{{.IPAddress}}">{{T $.AdminLang "sentinel.banned"}}</span>
