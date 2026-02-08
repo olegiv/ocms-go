@@ -37,7 +37,8 @@
                        name="ga4_measurement_id"
                        value="{{.Data.GA4MeasurementID}}"
                        placeholder="G-XXXXXXXXXX"
-                       class="form-control">
+                       class="form-control"
+                       maxlength="255">
                 <small class="form-text">{{T .AdminLang "analytics_ext.ga4_measurement_id_help"}}</small>
             </div>
         </div>
@@ -72,7 +73,8 @@
                        name="gtm_container_id"
                        value="{{.Data.GTMContainerID}}"
                        placeholder="GTM-XXXXXXX"
-                       class="form-control">
+                       class="form-control"
+                       maxlength="255">
                 <small class="form-text">{{T .AdminLang "analytics_ext.gtm_container_id_help"}}</small>
             </div>
             <div class="info-box info-box-warning">
@@ -115,7 +117,8 @@
                            name="matomo_url"
                            value="{{.Data.MatomoURL}}"
                            placeholder="https://matomo.example.com"
-                           class="form-control">
+                           class="form-control"
+                           maxlength="2048">
                     <small class="form-text">{{T .AdminLang "analytics_ext.matomo_url_help"}}</small>
                 </div>
                 <div class="form-group form-group-sm">
@@ -125,7 +128,8 @@
                            name="matomo_site_id"
                            value="{{.Data.MatomoSiteID}}"
                            placeholder="1"
-                           class="form-control">
+                           class="form-control"
+                           maxlength="255">
                     <small class="form-text">{{T .AdminLang "analytics_ext.matomo_site_id_help"}}</small>
                 </div>
             </div>

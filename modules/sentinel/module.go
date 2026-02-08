@@ -7,6 +7,7 @@
 package sentinel
 
 import (
+	"context"
 	"database/sql"
 	"embed"
 	"html/template"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/geoip"
 	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/store"
 )
@@ -56,6 +58,18 @@ type WhitelistedIP struct {
 	CreatedBy int64     `json:"created_by"`
 }
 
+// ActiveChecker checks whether a named module is currently active.
+// Used by the middleware to check active status at runtime.
+type ActiveChecker interface {
+	IsActive(name string) bool
+}
+
+// EventLogger logs events to the admin event log.
+// Satisfied by *service.EventService.
+type EventLogger interface {
+	LogEvent(ctx context.Context, level, category, message string, userID *int64, ipAddress, requestURL string, metadata map[string]any) error
+}
+
 // Session keys for authentication check.
 const (
 	sessionKeyUserID = "user_id"
@@ -76,6 +90,12 @@ type Module struct {
 
 	// Session manager for checking authenticated users
 	sessionManager *scs.SessionManager
+
+	// activeChecker checks module active status at runtime (set from main.go)
+	activeChecker ActiveChecker
+
+	// eventLogger logs security events to the admin event log
+	eventLogger EventLogger
 
 	// GeoIP lookup for country resolution
 	geoIP *geoip.Lookup
@@ -103,7 +123,7 @@ func New() *Module {
 	return &Module{
 		BaseModule: module.NewBaseModule(
 			"sentinel",
-			"1.3.0",
+			"1.4.0",
 			"IP banning module with auto-ban paths and whitelist support",
 		),
 		geoIP: geoip.NewLookup(),
@@ -166,12 +186,33 @@ func (m *Module) SetSessionManager(sm *scs.SessionManager) {
 	m.sessionManager = sm
 }
 
+// SetActiveChecker sets the active status checker for runtime middleware checks.
+// The middleware uses this to skip processing when the module is deactivated at runtime.
+func (m *Module) SetActiveChecker(checker ActiveChecker) {
+	m.activeChecker = checker
+}
+
+// SetEventLogger sets the event logger for logging security events to the admin event log.
+func (m *Module) SetEventLogger(logger EventLogger) {
+	m.eventLogger = logger
+}
+
 // isAdminOrEditor checks if the current request is from an authenticated admin or editor user.
 // Returns true if the user should be exempt from auto-banning.
-func (m *Module) isAdminOrEditor(r *http.Request) bool {
+// Uses named return with recover because the sentinel middleware runs before the session
+// middleware (LoadAndSave), so SCS may panic with "no session data in context" for
+// public requests. In that case, we treat the user as unauthenticated.
+func (m *Module) isAdminOrEditor(r *http.Request) (isAdmin bool) {
 	if m.sessionManager == nil || m.ctx == nil {
 		return false
 	}
+
+	// Recover from SCS panic when session middleware hasn't loaded yet.
+	defer func() {
+		if rec := recover(); rec != nil {
+			isAdmin = false
+		}
+	}()
 
 	// Get user ID from session
 	userID := m.sessionManager.GetInt64(r.Context(), sessionKeyUserID)
@@ -211,6 +252,7 @@ func (m *Module) RegisterAdminRoutes(r chi.Router) {
 	// Banned IPs
 	r.Get("/sentinel", m.handleAdminList)
 	r.Post("/sentinel", m.handleCreate)
+	r.Post("/sentinel/ban", m.handleBanAjax)
 	r.Delete("/sentinel/{id}", m.handleDelete)
 
 	// Auto-ban paths
@@ -231,7 +273,20 @@ func (m *Module) TemplateFuncs() template.FuncMap {
 		"sentinelVersion": func() string {
 			return m.Version()
 		},
-		"countryName": geoip.CountryName,
+		"countryName":     geoip.CountryName,
+		"sentinelIsActive": func() bool { return true },
+		"sentinelIsIPBanned": func(ip string) bool {
+			if ip == "" {
+				return false
+			}
+			return m.IsIPBanned(ip)
+		},
+		"sentinelIsIPWhitelisted": func(ip string) bool {
+			if ip == "" {
+				return false
+			}
+			return m.IsIPWhitelisted(ip)
+		},
 	}
 }
 
@@ -366,6 +421,37 @@ func (m *Module) Migrations() []module.Migration {
 				// SQLite doesn't support DROP COLUMN, so we'd need to recreate the table
 				// For simplicity, we'll just leave the column
 				return nil
+			},
+		},
+		{
+			Version:     6,
+			Description: "Seed default auto-ban paths for common attack vectors",
+			Up: func(db *sql.DB) error {
+				defaults := []struct {
+					pattern, notes string
+				}{
+					{"/wp-admin*", "WordPress admin - common attack target"},
+					{"/wp-login*", "WordPress login - common attack target"},
+					{"*/.env", "Environment files - sensitive data exposure"},
+					{"*/xmlrpc.php", "WordPress XML-RPC - brute force target"},
+					{"/wp-includes*", "WordPress includes - common probe"},
+					{"*/phpmyadmin*", "phpMyAdmin - database management probe"},
+					{"*/wp-content/plugins*", "WordPress plugins - vulnerability scan"},
+				}
+				for _, d := range defaults {
+					_, err := db.Exec(
+						`INSERT OR IGNORE INTO sentinel_autoban_paths (path_pattern, notes, created_at, created_by) VALUES (?, ?, CURRENT_TIMESTAMP, 0)`,
+						d.pattern, d.notes,
+					)
+					if err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Down: func(db *sql.DB) error {
+				_, err := db.Exec(`DELETE FROM sentinel_autoban_paths WHERE created_by = 0`)
+				return err
 			},
 		},
 	}
@@ -574,8 +660,7 @@ func matchIPPattern(pattern, ip string) bool {
 			return true
 		}
 		// Pattern like "10*" - partial match on first octet, rest is prefix
-		if strings.HasSuffix(lastPart, "*") {
-			prefix := strings.TrimSuffix(lastPart, "*")
+		if prefix, ok := strings.CutSuffix(lastPart, "*"); ok {
 			for i := 0; i < len(patternParts)-1; i++ {
 				if patternParts[i] != ipParts[i] {
 					return false
@@ -596,8 +681,7 @@ func matchIPPattern(pattern, ip string) bool {
 			continue // wildcard matches any octet
 		}
 		// Handle partial wildcard like "10*" matching "100", "101", etc.
-		if strings.HasSuffix(pp, "*") {
-			prefix := strings.TrimSuffix(pp, "*")
+		if prefix, ok := strings.CutSuffix(pp, "*"); ok {
 			if !strings.HasPrefix(ipParts[i], prefix) {
 				return false
 			}
@@ -656,6 +740,15 @@ func (m *Module) autoBanIP(ip, triggeredPath, matchedPattern string) error {
 		return err
 	}
 
+	// Log to admin event log
+	if m.eventLogger != nil {
+		_ = m.eventLogger.LogEvent(context.Background(), model.EventLevelWarning, model.EventCategorySecurity,
+			"IP auto-banned by Sentinel", nil, ip, triggeredPath, map[string]any{
+				"pattern": matchedPattern,
+				"country": countryCode,
+			})
+	}
+
 	// Reload cache
 	return m.reloadBannedIPs()
 }
@@ -670,6 +763,15 @@ func (m *Module) GetMiddleware() func(http.Handler) http.Handler {
 	return m.Middleware()
 }
 
+// normalizePath strips trailing slashes for consistent pattern matching.
+// Root path "/" is preserved as-is.
+func normalizePath(path string) string {
+	if len(path) > 1 && path[len(path)-1] == '/' {
+		return path[:len(path)-1]
+	}
+	return path
+}
+
 // Middleware returns HTTP middleware that checks whitelist, bans, and auto-ban paths.
 func (m *Module) Middleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -680,8 +782,16 @@ func (m *Module) Middleware() func(http.Handler) http.Handler {
 				return
 			}
 
+			// Skip if module is deactivated at runtime
+			if m.activeChecker != nil && !m.activeChecker.IsActive("sentinel") {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			ip := getClientIP(r)
-			path := r.URL.Path
+
+			// Normalize path: strip trailing slash so /wp-admin/ matches /wp-admin patterns
+			path := normalizePath(r.URL.Path)
 
 			// 1. Check whitelist first - whitelisted IPs bypass all checks
 			if m.IsIPWhitelisted(ip) {
@@ -691,7 +801,7 @@ func (m *Module) Middleware() func(http.Handler) http.Handler {
 
 			// 2. Check if IP is already banned (if ban check is enabled)
 			if m.IsBanCheckEnabled() && m.IsIPBanned(ip) {
-				m.ctx.Logger.Warn("blocked banned IP", "ip", ip, "path", path)
+				m.ctx.Logger.Info("blocked banned IP", "ip", ip, "path", path)
 				http.Error(w, i18n.T("en", "sentinel.access_denied"), http.StatusForbidden)
 				return
 			}
@@ -711,7 +821,7 @@ func (m *Module) Middleware() func(http.Handler) http.Handler {
 						return
 					}
 
-					m.ctx.Logger.Warn("auto-banning IP for forbidden path",
+					m.ctx.Logger.Info("auto-banning IP for forbidden path",
 						"ip", ip,
 						"path", path,
 						"pattern", matchedPattern,
@@ -732,8 +842,8 @@ func (m *Module) Middleware() func(http.Handler) http.Handler {
 // getClientIP extracts the client IP from the request.
 func getClientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if idx := strings.Index(xff, ","); idx != -1 {
-			return strings.TrimSpace(xff[:idx])
+		if before, _, ok := strings.Cut(xff, ","); ok {
+			return strings.TrimSpace(before)
 		}
 		return strings.TrimSpace(xff)
 	}

@@ -70,6 +70,9 @@
         {"id": "sentinel.error_duplicate", "message": "This IP pattern is already banned", "translation": "Этот IP-адрес уже заблокирован"},
         {"id": "sentinel.error_create_failed", "message": "Failed to create ban", "translation": "Не удалось создать блокировку"},
         {"id": "sentinel.error_self_ban", "message": "Cannot ban your own IP address", "translation": "Нельзя заблокировать собственный IP-адрес"},
-        {"id": "sentinel.access_denied", "message": "Access denied", "translation": "Доступ запрещен"}
+        {"id": "sentinel.access_denied", "message": "Access denied", "translation": "Доступ запрещен"},
+
+        {"id": "sentinel.ban_action", "message": "Ban", "translation": "Забл."},
+        {"id": "sentinel.banned", "message": "Banned", "translation": "Забл."}
     ]
 }

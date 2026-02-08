@@ -114,6 +114,7 @@
                     placeholder="{{T .AdminLang "api_keys.name_placeholder"}}"
                     required
                     autofocus
+                    maxlength="255"
                 >
                 {{if index .Data.Errors "name"}}
                 <span class="form-error">{{index .Data.Errors "name"}}</span>

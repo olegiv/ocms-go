@@ -421,8 +421,8 @@ func validateAPIKeyName(name string) string {
 	if len(name) < 3 {
 		return "Name must be at least 3 characters"
 	}
-	if len(name) > 100 {
-		return "Name must be less than 100 characters"
+	if len(name) > 255 {
+		return "Name must be less than 255 characters"
 	}
 	return ""
 }

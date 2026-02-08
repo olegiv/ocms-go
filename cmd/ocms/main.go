@@ -408,6 +408,8 @@ func run() error {
 	}
 	sentinelModule := sentinel.New()
 	sentinelModule.SetSessionManager(sessionManager)
+	sentinelModule.SetActiveChecker(moduleRegistry)
+	sentinelModule.SetEventLogger(eventService)
 	if err := moduleRegistry.Register(sentinelModule); err != nil {
 		return fmt.Errorf("registering sentinel module: %w", err)
 	}
@@ -433,6 +435,15 @@ func run() error {
 			slog.Error("error shutting down modules", "error", err)
 		}
 	}()
+
+	// Always initialize sentinel for middleware to work even if module is inactive.
+	// InitAll skips Init() for inactive modules, but sentinel middleware is always
+	// registered and needs its caches loaded. The middleware checks active status at runtime.
+	if !moduleRegistry.IsActive("sentinel") {
+		if err := sentinelModule.Init(moduleCtx); err != nil {
+			slog.Warn("failed to pre-initialize sentinel for middleware", "error", err)
+		}
+	}
 
 	// Set module registry on renderer for sidebar modules
 	renderer.SetSidebarModuleProvider(moduleRegistry)
@@ -487,11 +498,9 @@ func run() error {
 	// Middleware stack
 	r.Use(chimw.RequestID)
 	r.Use(chimw.RealIP)
-	// Sentinel IP ban check (applied early, after RealIP)
-	if moduleRegistry.IsActive("sentinel") {
-		r.Use(sentinelModule.GetMiddleware())
-		slog.Info("sentinel IP ban middleware enabled")
-	}
+	// Sentinel IP ban check (always registered, checks active status at runtime)
+	r.Use(sentinelModule.GetMiddleware())
+	slog.Info("sentinel IP ban middleware registered")
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.Compress(5))                    // Gzip compression with level 5
@@ -890,9 +899,10 @@ func run() error {
 	})
 	slog.Info("REST API v1 mounted at /api/v1")
 
-	// Public form routes (no authentication required, with CSRF protection)
+	// Public form routes (no authentication required, with CSRF protection and language detection)
 	r.Group(func(r chi.Router) {
 		r.Use(csrfMiddleware)
+		r.Use(middleware.Language(db))
 		r.Get(handler.RouteFormsSlug, formsHandler.Show)
 		r.Post(handler.RouteFormsSlug, formsHandler.Submit)
 	})

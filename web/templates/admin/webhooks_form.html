@@ -31,6 +31,7 @@
                     placeholder="e.g., Production Notification, Analytics Sync"
                     required
                     autofocus
+                    maxlength="255"
                 >
                 {{if index .Data.Errors "name"}}
                 <span class="form-error">{{index .Data.Errors "name"}}</span>
@@ -49,6 +50,7 @@
                     value="{{index .Data.FormValues "url"}}"
                     placeholder="https://example.com/webhook"
                     required
+                    maxlength="2048"
                 >
                 {{if index .Data.Errors "url"}}
                 <span class="form-error">{{index .Data.Errors "url"}}</span>
@@ -163,8 +165,8 @@
                     </template>
 
                     <div class="header-row add-header" x-data="{ newKey: '', newValue: '' }">
-                        <input type="text" class="form-input header-key" x-model="newKey" placeholder="Header name">
-                        <input type="text" class="form-input header-value" x-model="newValue" placeholder="Header value">
+                        <input type="text" class="form-input header-key" x-model="newKey" placeholder="Header name" maxlength="255">
+                        <input type="text" class="form-input header-value" x-model="newValue" placeholder="Header value" maxlength="255">
                         <button type="button" class="btn btn-sm btn-outline" @click="if (newKey.trim()) { headers[newKey.trim()] = newValue; newKey = ''; newValue = ''; }">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
                         </button>

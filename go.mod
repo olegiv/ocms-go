@@ -1,10 +1,10 @@
 module github.com/olegiv/ocms-go
 
-go 1.25.6
+go 1.25.7
 
 require (
 	github.com/caarlos0/env/v11 v11.3.1
-	github.com/go-chi/chi/v5 v5.2.4
+	github.com/go-chi/chi/v5 v5.2.5
 )
 
 require (
