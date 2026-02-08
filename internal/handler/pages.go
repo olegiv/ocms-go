@@ -514,6 +514,10 @@ func (h *PagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 
 // Create handles POST /admin/pages - creates a new page.
 func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminPagesNew) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
@@ -773,6 +777,10 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /admin/pages/{id} - updates an existing page.
 func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminPages) {
+		return
+	}
+
 	lang := h.renderer.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -981,6 +989,10 @@ func (h *PagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // TogglePublish handles POST /admin/pages/{id}/publish - toggles publish status.
 func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminPages) {
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		flashError(w, r, h.renderer, redirectAdminPages, "Invalid page ID")
@@ -1109,6 +1121,10 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 
 // RestoreVersion handles POST /admin/pages/{id}/versions/{versionId}/restore - restores a version.
 func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminPages) {
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		flashError(w, r, h.renderer, redirectAdminPages, "Invalid page ID")
@@ -1194,6 +1210,10 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 
 // Translate handles POST /admin/pages/{id}/translate/{langCode} - creates a translation.
 func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminPages) {
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		flashError(w, r, h.renderer, redirectAdminPages, "Invalid page ID")

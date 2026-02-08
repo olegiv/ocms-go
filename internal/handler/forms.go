@@ -488,6 +488,10 @@ func (h *FormsHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 
 // Create handles POST /admin/forms - creates a new form.
 func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminFormsNew) {
+		return
+	}
+
 	lang := h.renderer.GetAdminLang(r)
 
 	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminFormsNew) {
@@ -601,6 +605,10 @@ func (h *FormsHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /admin/forms/{id} - updates a form.
 func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminForms) {
+		return
+	}
+
 	lang := h.renderer.GetAdminLang(r)
 
 	id := h.parseFormIDParam(w, r)
@@ -733,6 +741,10 @@ type AddFieldRequest struct {
 
 // AddField handles POST /admin/forms/{id}/fields - adds a form field.
 func (h *FormsHandler) AddField(w http.ResponseWriter, r *http.Request) {
+	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+		return
+	}
+
 	formID, ok := parseFieldIDParamJSON(w, r, "id")
 	if !ok {
 		return
@@ -808,6 +820,10 @@ type UpdateFieldRequest struct {
 
 // UpdateField handles PUT /admin/forms/{id}/fields/{fieldId} - updates a form field.
 func (h *FormsHandler) UpdateField(w http.ResponseWriter, r *http.Request) {
+	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+		return
+	}
+
 	formID, ok := parseFieldIDParamJSON(w, r, "id")
 	if !ok {
 		return
@@ -866,6 +882,10 @@ func (h *FormsHandler) UpdateField(w http.ResponseWriter, r *http.Request) {
 
 // DeleteField handles DELETE /admin/forms/{id}/fields/{fieldId} - deletes a form field.
 func (h *FormsHandler) DeleteField(w http.ResponseWriter, r *http.Request) {
+	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+		return
+	}
+
 	formID, ok := parseFieldIDParamJSON(w, r, "id")
 	if !ok {
 		return
@@ -896,6 +916,10 @@ type ReorderFieldsRequest struct {
 
 // ReorderFields handles POST /admin/forms/{id}/fields/reorder - reorders form fields.
 func (h *FormsHandler) ReorderFields(w http.ResponseWriter, r *http.Request) {
+	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+		return
+	}
+
 	formID, ok := parseFieldIDParamJSON(w, r, "id")
 	if !ok {
 		return
@@ -1406,6 +1430,10 @@ func (h *FormsHandler) ViewSubmission(w http.ResponseWriter, r *http.Request) {
 
 // DeleteSubmission handles DELETE /admin/forms/{id}/submissions/{subId} - deletes a submission.
 func (h *FormsHandler) DeleteSubmission(w http.ResponseWriter, r *http.Request) {
+	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+		return
+	}
+
 	formID := parseFieldIDParam(w, r, "id")
 	if formID == 0 {
 		return
@@ -1681,6 +1709,10 @@ func (h *FormsHandler) setupFormTranslation(
 
 // TranslateForm handles POST /admin/forms/{id}/translate/{langCode} - creates a translation.
 func (h *FormsHandler) TranslateForm(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminForms) {
+		return
+	}
+
 	id := h.parseFormIDParam(w, r)
 	if id == 0 {
 		return
