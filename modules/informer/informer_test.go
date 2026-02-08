@@ -49,6 +49,10 @@ func TestDefaultSettings(t *testing.T) {
 	if s.TextColor != "#ffffff" {
 		t.Errorf("expected TextColor '#ffffff', got %q", s.TextColor)
 	}
+
+	if s.Version != "0" {
+		t.Errorf("expected Version '0', got %q", s.Version)
+	}
 }
 
 func TestMigrations(t *testing.T) {
@@ -290,6 +294,10 @@ func TestLoadSettingsDefault(t *testing.T) {
 	if s.TextColor != "#ffffff" {
 		t.Errorf("expected TextColor '#ffffff', got %q", s.TextColor)
 	}
+
+	if s.Version != "1" {
+		t.Errorf("expected Version '1' from DB default, got %q", s.Version)
+	}
 }
 
 func TestSaveAndLoadSettings(t *testing.T) {
@@ -326,6 +334,44 @@ func TestSaveAndLoadSettings(t *testing.T) {
 
 	if loaded.TextColor != "#fef2f2" {
 		t.Errorf("expected TextColor '#fef2f2', got %q", loaded.TextColor)
+	}
+}
+
+func TestSaveIncrementsVersion(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	// Load initial version (should be "1" from DB default)
+	initial, err := loadSettings(db)
+	if err != nil {
+		t.Fatalf("failed to load initial settings: %v", err)
+	}
+	if initial.Version != "1" {
+		t.Fatalf("expected initial version '1', got %q", initial.Version)
+	}
+
+	// Save once — version should increment to 2
+	if err := saveSettings(db, &Settings{Enabled: true, Text: "test", BgColor: "#000", TextColor: "#fff"}); err != nil {
+		t.Fatalf("failed to save: %v", err)
+	}
+	after1, err := loadSettings(db)
+	if err != nil {
+		t.Fatalf("failed to load after first save: %v", err)
+	}
+	if after1.Version != "2" {
+		t.Errorf("expected version '2' after first save, got %q", after1.Version)
+	}
+
+	// Save again — version should increment to 3
+	if err := saveSettings(db, &Settings{Enabled: true, Text: "updated", BgColor: "#000", TextColor: "#fff"}); err != nil {
+		t.Fatalf("failed to save: %v", err)
+	}
+	after2, err := loadSettings(db)
+	if err != nil {
+		t.Fatalf("failed to load after second save: %v", err)
+	}
+	if after2.Version != "3" {
+		t.Errorf("expected version '3' after second save, got %q", after2.Version)
 	}
 }
 
@@ -387,6 +433,58 @@ func TestMigrationUpDown(t *testing.T) {
 	err = db.QueryRow("SELECT COUNT(*) FROM informer_settings").Scan(&count)
 	if err == nil {
 		t.Error("expected error querying dropped table")
+	}
+}
+
+func TestMigrationV2UpDown(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	m := New()
+	migrations := m.Migrations()
+
+	// Apply migration 1 (create table)
+	if err := migrations[0].Up(db); err != nil {
+		t.Fatalf("migration 1 up failed: %v", err)
+	}
+
+	// Apply migration 2 (add version column)
+	if err := migrations[1].Up(db); err != nil {
+		t.Fatalf("migration 2 up failed: %v", err)
+	}
+
+	// Verify version column exists and has default value
+	var version int
+	err = db.QueryRow("SELECT version FROM informer_settings WHERE id = 1").Scan(&version)
+	if err != nil {
+		t.Fatalf("failed to query version column: %v", err)
+	}
+	if version != 1 {
+		t.Errorf("expected default version 1, got %d", version)
+	}
+
+	// Rollback migration 2
+	if err := migrations[1].Down(db); err != nil {
+		t.Fatalf("migration 2 down failed: %v", err)
+	}
+
+	// Verify version column is gone
+	err = db.QueryRow("SELECT version FROM informer_settings WHERE id = 1").Scan(&version)
+	if err == nil {
+		t.Error("expected error querying removed version column")
+	}
+
+	// Verify table still exists and data is intact
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM informer_settings").Scan(&count)
+	if err != nil {
+		t.Fatalf("table should still exist after migration 2 down: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 row after migration 2 down, got %d", count)
 	}
 }
 
