@@ -89,6 +89,13 @@ func (m *Module) handleExecute(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
+
+	if middleware.IsDemoMode() {
+		m.setFlashAndRedirect(w, r, "error",
+			middleware.DemoModeMessageDetailed(middleware.RestrictionSQLExecution))
+		return
+	}
+
 	lang := m.ctx.Render.GetAdminLang(r)
 
 	query := strings.TrimSpace(r.FormValue("query"))

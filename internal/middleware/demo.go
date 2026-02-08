@@ -62,6 +62,9 @@ const (
 	RestrictionThemeSettings  DemoRestriction = "theme_settings"
 	RestrictionClearCache     DemoRestriction = "clear_cache"
 
+	// Module-specific restrictions
+	RestrictionSQLExecution DemoRestriction = "sql_execution"
+
 	// Upload restrictions (size limits applied separately)
 	RestrictionLargeUpload DemoRestriction = "large_upload"
 )
@@ -96,6 +99,7 @@ func DemoModeMessageDetailed(restriction DemoRestriction) string {
 		RestrictionModuleSettings: "Changing module settings is disabled in demo mode",
 		RestrictionThemeSettings:  "Changing theme settings is disabled in demo mode",
 		RestrictionClearCache:     "Clearing cache is disabled in demo mode",
+		RestrictionSQLExecution:   "SQL execution is disabled in demo mode",
 		RestrictionLargeUpload:    "Large file uploads are disabled in demo mode (max 2MB)",
 	}
 
