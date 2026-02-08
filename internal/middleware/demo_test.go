@@ -72,6 +72,7 @@ func TestDemoModeMessageDetailed(t *testing.T) {
 		{RestrictionDeleteMedia, "Deleting media"},
 		{RestrictionAPIKeys, "API key"},
 		{RestrictionWebhooks, "Webhook"},
+		{RestrictionThemeSettings, "theme settings"},
 		{DemoRestriction("unknown"), "disabled in demo mode"},
 	}
 
