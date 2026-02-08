@@ -60,6 +60,9 @@
     {{block "head" .}}{{end}}
 </head>
 <body class="{{if .BodyClass}}{{.BodyClass}}{{end}}">
+    <!-- Informer notification bar (top of page) -->
+    {{if informerBar}}{{informerBar}}{{end}}
+
     <!-- External analytics tracking scripts (body - noscript fallbacks) -->
     {{if analyticsExtBody}}{{analyticsExtBody}}{{end}}
 
