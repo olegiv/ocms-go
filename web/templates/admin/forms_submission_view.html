@@ -29,7 +29,7 @@
             <span class="meta-label">{{T .AdminLang "forms.ip_address"}}</span>
             <span class="meta-value">
                 {{if .Data.Submission.IpAddress.Valid}}
-                <code>{{.Data.Submission.IpAddress.String}}</code>
+                <code>{{maskIP .Data.Submission.IpAddress.String}}</code>
                 {{else}}
                 <span class="text-muted">{{T .AdminLang "forms.unknown"}}</span>
                 {{end}}

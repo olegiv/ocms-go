@@ -360,6 +360,23 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		},
 		"hasPrefix": strings.HasPrefix,
 		"isDemoMode": middleware.IsDemoMode,
+		"maskIP": func(ip string) string {
+			if !middleware.IsDemoMode() {
+				return ip
+			}
+			if strings.Contains(ip, ":") && strings.Count(ip, ":") > 1 {
+				return "****:****:****:****"
+			}
+			host := ip
+			if idx := strings.LastIndex(ip, ":"); idx != -1 && strings.Count(ip, ":") == 1 {
+				host = ip[:idx]
+			}
+			parts := strings.Split(host, ".")
+			if len(parts) == 4 {
+				return parts[0] + ".*.*.*"
+			}
+			return "***"
+		},
 		"prettyJSON": func(s string) string {
 			var data any
 			if err := json.Unmarshal([]byte(s), &data); err != nil {

@@ -83,7 +83,7 @@
                     </td>
                     <td class="event-ip">
                         {{if .IPAddress}}
-                            <code class="text-muted">{{.IPAddress}}</code>
+                            <code class="text-muted">{{maskIP .IPAddress}}</code>
                         {{else}}
                             <span class="text-muted">-</span>
                         {{end}}

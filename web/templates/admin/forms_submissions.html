@@ -52,7 +52,7 @@
                 <td>{{formatDateTime .Submission.CreatedAt}}</td>
                 <td>
                     {{if .Submission.IpAddress.Valid}}
-                    <code>{{.Submission.IpAddress.String}}</code>
+                    <code>{{maskIP .Submission.IpAddress.String}}</code>
                     {{else}}
                     <span class="text-muted">-</span>
                     {{end}}
