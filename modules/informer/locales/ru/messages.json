@@ -1,0 +1,25 @@
+{
+    "$schema": "../../../../.schema/i18n-schema.json",
+    "language": "ru",
+    "messages": [
+        {"id": "informer.title", "message": "Informer Bar", "translation": "Информационная панель"},
+        {"id": "informer.description", "message": "Display a dismissible notification bar with a spinner at the top of the page", "translation": "Отображение закрываемой панели уведомлений со спиннером вверху страницы"},
+        {"id": "informer.enabled", "message": "Enable Informer Bar", "translation": "Включить информационную панель"},
+        {"id": "informer.enabled_help", "message": "When enabled, visitors will see a notification bar at the top of the page", "translation": "При включении посетители увидят панель уведомлений вверху страницы"},
+        {"id": "informer.text_section", "message": "Message", "translation": "Сообщение"},
+        {"id": "informer.text", "message": "Notification Text", "translation": "Текст уведомления"},
+        {"id": "informer.text_placeholder", "message": "We are currently performing maintenance...", "translation": "В настоящее время проводятся технические работы..."},
+        {"id": "informer.text_help", "message": "The text displayed in the notification bar. For translations, add entries with key 'informer.bar_text' in your locale files", "translation": "Текст, отображаемый в панели уведомлений. Для перевода добавьте записи с ключом 'informer.bar_text' в файлы локализации"},
+        {"id": "informer.appearance", "message": "Appearance", "translation": "Внешний вид"},
+        {"id": "informer.bg_color", "message": "Background Color", "translation": "Цвет фона"},
+        {"id": "informer.bg_color_help", "message": "Background color of the notification bar", "translation": "Цвет фона панели уведомлений"},
+        {"id": "informer.text_color", "message": "Text Color", "translation": "Цвет текста"},
+        {"id": "informer.text_color_help", "message": "Text and icon color of the notification bar", "translation": "Цвет текста и иконок панели уведомлений"},
+        {"id": "informer.preview", "message": "Preview", "translation": "Предпросмотр"},
+        {"id": "informer.cookie_info", "message": "Visitors can dismiss the bar by clicking the close button. Their preference is saved in a cookie for 365 days. Changing the notification text will reset all dismissals.", "translation": "Посетители могут закрыть панель, нажав кнопку закрытия. Их выбор сохраняется в cookie на 365 дней. Изменение текста уведомления сбросит все закрытия."},
+        {"id": "informer.save_button", "message": "Save Settings", "translation": "Сохранить настройки"},
+        {"id": "informer.success_save", "message": "Informer settings saved successfully", "translation": "Настройки информационной панели успешно сохранены"},
+        {"id": "informer.error_save", "message": "Failed to save informer settings", "translation": "Не удалось сохранить настройки информационной панели"},
+        {"id": "informer.error_parse_form", "message": "Failed to parse form data", "translation": "Не удалось обработать данные формы"}
+    ]
+}
