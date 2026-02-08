@@ -152,6 +152,10 @@ func (h *TaxonomyHandler) NewTagForm(w http.ResponseWriter, r *http.Request) {
 
 // CreateTag handles POST /admin/tags - creates a new tag.
 func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminTagsNew) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
@@ -273,6 +277,10 @@ func (h *TaxonomyHandler) EditTagForm(w http.ResponseWriter, r *http.Request) {
 
 // UpdateTag handles PUT /admin/tags/{id} - updates an existing tag.
 func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminTags) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
@@ -406,6 +414,10 @@ func (h *TaxonomyHandler) SearchTags(w http.ResponseWriter, r *http.Request) {
 
 // TranslateTag handles POST /admin/tags/{id}/translate/{langCode} - creates a translation.
 func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminTags) {
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		flashError(w, r, h.renderer, redirectAdminTags, "Invalid tag ID")
@@ -693,6 +705,10 @@ func (h *TaxonomyHandler) NewCategoryForm(w http.ResponseWriter, r *http.Request
 
 // CreateCategory handles POST /admin/categories - creates a new category.
 func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminCategoriesNew) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
@@ -833,6 +849,10 @@ func (h *TaxonomyHandler) EditCategoryForm(w http.ResponseWriter, r *http.Reques
 
 // UpdateCategory handles PUT /admin/categories/{id} - updates an existing category.
 func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminCategories) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
@@ -967,6 +987,10 @@ func (h *TaxonomyHandler) DeleteCategory(w http.ResponseWriter, r *http.Request)
 
 // TranslateCategory handles POST /admin/categories/{id}/translate/{langCode} - creates a translation.
 func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminCategories) {
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		flashError(w, r, h.renderer, redirectAdminCategories, "Invalid category ID")
