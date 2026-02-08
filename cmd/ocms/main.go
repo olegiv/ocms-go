@@ -456,6 +456,19 @@ func run() error {
 		}
 	}()
 
+	// Seed demo informer settings (must run after module init creates the table)
+	if cfg.DoSeed {
+		if err := store.SeedDemoInformerSettings(db); err != nil {
+			slog.Warn("failed to seed demo informer settings", "error", err)
+		} else if mod, ok := moduleRegistry.Get("informer"); ok {
+			if inf, ok := mod.(*informer.Module); ok {
+				if err := inf.ReloadSettings(); err != nil {
+					slog.Warn("failed to reload informer settings after demo seed", "error", err)
+				}
+			}
+		}
+	}
+
 	// Always initialize sentinel for middleware to work even if module is inactive.
 	// InitAll skips Init() for inactive modules, but sentinel middleware is always
 	// registered and needs its caches loaded. The middleware checks active status at runtime.
