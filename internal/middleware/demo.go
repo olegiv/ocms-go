@@ -55,8 +55,10 @@ const (
 	RestrictionWebhooks      DemoRestriction = "webhooks"
 	RestrictionExportData    DemoRestriction = "export_data"
 	RestrictionImportData    DemoRestriction = "import_data"
-	RestrictionModules       DemoRestriction = "modules"
-	RestrictionClearCache    DemoRestriction = "clear_cache"
+	RestrictionModules        DemoRestriction = "modules"
+	RestrictionModuleSettings DemoRestriction = "module_settings"
+	RestrictionThemeSettings  DemoRestriction = "theme_settings"
+	RestrictionClearCache     DemoRestriction = "clear_cache"
 
 	// Upload restrictions (size limits applied separately)
 	RestrictionLargeUpload DemoRestriction = "large_upload"
@@ -87,6 +89,8 @@ func DemoModeMessageDetailed(restriction DemoRestriction) string {
 		RestrictionExportData:     "Data export is disabled in demo mode",
 		RestrictionImportData:     "Data import is disabled in demo mode",
 		RestrictionModules:        "Module management is disabled in demo mode",
+		RestrictionModuleSettings: "Changing module settings is disabled in demo mode",
+		RestrictionThemeSettings:  "Changing theme settings is disabled in demo mode",
 		RestrictionClearCache:     "Clearing cache is disabled in demo mode",
 		RestrictionLargeUpload:    "Large file uploads are disabled in demo mode (max 2MB)",
 	}
