@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { fetchPages } from '../api/client'
 import { useApi } from '../hooks/useApi'
 import Pagination from './Pagination'

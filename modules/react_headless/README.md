@@ -59,16 +59,16 @@ frontend/
 │   └── styles.css              # Base styles
 ├── .env.example                # Environment variable template
 ├── index.html                  # HTML entry point
-├── package.json                # Dependencies (React 19, Vite 6)
+├── package.json                # Dependencies (React 19.2, Vite 7)
 ├── tsconfig.json               # TypeScript configuration
 └── vite.config.ts              # Vite dev server with API proxy
 ```
 
 ### Tech Stack
 
-- **React 19** with React Router 7
-- **TypeScript** for type safety
-- **Vite 6** for fast development and builds
+- **React 19.2** with React Router 7
+- **TypeScript 5.9** for type safety
+- **Vite 7** for fast development and builds
 - Built-in proxy for local development (avoids CORS during dev)
 
 ### Quick Start

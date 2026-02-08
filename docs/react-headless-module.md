@@ -255,9 +255,9 @@ VITE_API_KEY=your-production-api-key
 │   React Frontend    │────▶│   oCMS REST API     │
 │   (localhost:5173)  │     │   (localhost:8080)   │
 │                     │◀────│                     │
-│   - React 19        │     │   /api/v1/pages     │
-│   - TypeScript      │     │   /api/v1/media     │
-│   - Vite 6          │     │   /api/v1/tags      │
+│   - React 19.2      │     │   /api/v1/pages     │
+│   - TypeScript 5.9  │     │   /api/v1/media     │
+│   - Vite 7          │     │   /api/v1/tags      │
 │   - React Router    │     │   /api/v1/categories│
 │                     │     │                     │
 └─────────────────────┘     └─────────────────────┘

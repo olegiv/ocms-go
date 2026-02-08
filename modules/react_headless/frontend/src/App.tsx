@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route } from 'react-router'
 import Layout from './components/Layout'
 import PageList from './components/PageList'
 import PageDetail from './components/PageDetail'
