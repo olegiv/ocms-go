@@ -128,6 +128,7 @@ func minimalFuncMap() map[string]any {
 		"mediaURL":              func(url string) string { return url },
 		"imageSrc":              func(url string, variant string) string { return url },
 		"imageSrcset":           func(url string) string { return "" },
+		"informerBar":           func() string { return "" },
 	}
 }
 
