@@ -359,6 +359,7 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			return false
 		},
 		"hasPrefix": strings.HasPrefix,
+		"isDemoMode": middleware.IsDemoMode,
 		"prettyJSON": func(s string) string {
 			var data any
 			if err := json.Unmarshal([]byte(s), &data); err != nil {
