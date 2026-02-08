@@ -40,6 +40,25 @@
             "type": "select",
             "default": "yes",
             "options": ["yes", "no"]
+        },
+        {
+            "key": "show_hero_text",
+            "label": "Show Hero Text",
+            "type": "select",
+            "default": "yes",
+            "options": ["yes", "no"]
+        },
+        {
+            "key": "hero_image",
+            "label": "Hero Image",
+            "type": "image",
+            "default": ""
+        },
+        {
+            "key": "hero_image_alt",
+            "label": "Hero Image Alt Text",
+            "type": "text",
+            "default": ""
         }
     ],
     "widget_areas": [

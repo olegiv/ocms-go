@@ -1958,6 +1958,21 @@
             "translation": "Footer Text"
         },
         {
+            "id": "theme_settings.show_hero_text",
+            "message": "Show Hero Text",
+            "translation": "Show Hero Text"
+        },
+        {
+            "id": "theme_settings.hero_image",
+            "message": "Hero Image",
+            "translation": "Hero Image"
+        },
+        {
+            "id": "theme_settings.hero_image_alt",
+            "message": "Hero Image Alt Text",
+            "translation": "Hero Image Alt Text"
+        },
+        {
             "id": "option.yes",
             "message": "Yes",
             "translation": "Yes"
