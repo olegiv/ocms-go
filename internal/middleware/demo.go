@@ -218,6 +218,7 @@ func BlockWriteInDemoMode(restriction DemoRestriction) func(http.Handler) http.H
 				MaxAge:   5,
 				HttpOnly: true,
 				SameSite: http.SameSiteLaxMode,
+				Secure:   true,
 			})
 
 			referer := r.Header.Get("Referer")
@@ -257,6 +258,7 @@ func GetDemoBlockedMessage(w http.ResponseWriter, r *http.Request) string {
 		MaxAge:   -1,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   true,
 	})
 
 	return DemoModeMessageDetailed(DemoRestriction(cookie.Value))
