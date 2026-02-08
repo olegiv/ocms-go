@@ -668,7 +668,7 @@ func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // CreateFolder handles POST /admin/media/folders - creates a new folder.
 func (h *MediaHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
-	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+	if demoGuardAPI(w) {
 		return
 	}
 
@@ -732,7 +732,7 @@ func (h *MediaHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 
 // UpdateFolder handles PUT /admin/media/folders/{id} - renames or moves a folder.
 func (h *MediaHandler) UpdateFolder(w http.ResponseWriter, r *http.Request) {
-	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+	if demoGuardAPI(w) {
 		return
 	}
 
@@ -868,7 +868,7 @@ func (h *MediaHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 
 // RegenerateVariants handles POST /admin/media/{id}/regenerate - regenerates image variants.
 func (h *MediaHandler) RegenerateVariants(w http.ResponseWriter, r *http.Request) {
-	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+	if demoGuardAPI(w) {
 		return
 	}
 
@@ -918,7 +918,7 @@ func (h *MediaHandler) RegenerateVariants(w http.ResponseWriter, r *http.Request
 
 // MoveMedia handles POST /admin/media/{id}/move - moves media to a different folder.
 func (h *MediaHandler) MoveMedia(w http.ResponseWriter, r *http.Request) {
-	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+	if demoGuardAPI(w) {
 		return
 	}
 

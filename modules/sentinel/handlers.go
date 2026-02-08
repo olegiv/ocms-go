@@ -16,11 +16,26 @@ import (
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/store"
 )
+
+// requireUser returns the authenticated user or writes a 401 response.
+// Returns nil if the user is not authenticated (caller should return immediately).
+func requireUser(w http.ResponseWriter, r *http.Request) *store.User {
+	user := middleware.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return nil
+	}
+	return user
+}
 
 // handleAdminList handles GET /admin/sentinel - displays all sentinel data.
 func (m *Module) handleAdminList(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
+	user := requireUser(w, r)
+	if user == nil {
+		return
+	}
 	lang := m.ctx.Render.GetAdminLang(r)
 
 	// Fetch all data
@@ -82,7 +97,10 @@ func (m *Module) handleAdminList(w http.ResponseWriter, r *http.Request) {
 
 // handleCreate handles POST /admin/sentinel - creates a new IP ban.
 func (m *Module) handleCreate(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
+	user := requireUser(w, r)
+	if user == nil {
+		return
+	}
 	lang := m.ctx.Render.GetAdminLang(r)
 
 	ipPattern := strings.TrimSpace(r.FormValue("ip_pattern"))
@@ -130,7 +148,10 @@ func (m *Module) handleCreate(w http.ResponseWriter, r *http.Request) {
 // handleBanAjax handles POST /admin/sentinel/ban - AJAX endpoint to ban an IP.
 // Returns JSON response for use from the events page.
 func (m *Module) handleBanAjax(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
+	user := requireUser(w, r)
+	if user == nil {
+		return
+	}
 
 	var req struct {
 		IP  string `json:"ip"`
@@ -209,7 +230,10 @@ func (m *Module) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
+	user := requireUser(w, r)
+	if user == nil {
+		return
+	}
 	m.ctx.Logger.Info("IP ban removed", "ip_pattern", ban.IPPattern, "removed_by", user.ID)
 
 	w.WriteHeader(http.StatusNoContent)
@@ -219,41 +243,75 @@ func (m *Module) handleDelete(w http.ResponseWriter, r *http.Request) {
 // Auto-ban paths handlers
 // ============================================================================
 
-// handleCreatePath handles POST /admin/sentinel/paths - creates a new auto-ban path.
-func (m *Module) handleCreatePath(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
+// sentinelCreateParams holds the parameters for creating a sentinel entry.
+type sentinelCreateParams struct {
+	formField    string
+	emptyMsg     string
+	invalidMsg   string
+	duplicateMsg string
+	failedMsg    string
+	successMsg   string
+	logAction    string
+	logField     string
+	validate     func(string) bool
+	create       func(value, notes string, userID int64) error
+}
+
+// handleCreateEntry is a generic handler for creating sentinel entries (paths and whitelist).
+func (m *Module) handleCreateEntry(w http.ResponseWriter, r *http.Request, p sentinelCreateParams) {
+	user := requireUser(w, r)
+	if user == nil {
+		return
+	}
+
 	lang := m.ctx.Render.GetAdminLang(r)
 
-	pathPattern := strings.TrimSpace(r.FormValue("path_pattern"))
+	value := strings.TrimSpace(r.FormValue(p.formField))
 	notes := strings.TrimSpace(r.FormValue("notes"))
 
-	if pathPattern == "" {
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_path_required"), "error")
+	if value == "" {
+		m.ctx.Render.SetFlash(r, i18n.T(lang, p.emptyMsg), "error")
 		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
 		return
 	}
 
-	if !isValidPathPattern(pathPattern) {
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_invalid_path_pattern"), "error")
+	if !p.validate(value) {
+		m.ctx.Render.SetFlash(r, i18n.T(lang, p.invalidMsg), "error")
 		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
 		return
 	}
 
-	err := m.createAutoBanPath(pathPattern, notes, user.ID)
+	err := p.create(value, notes, user.ID)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_path_duplicate"), "error")
+			m.ctx.Render.SetFlash(r, i18n.T(lang, p.duplicateMsg), "error")
 		} else {
-			m.ctx.Logger.Error("failed to create auto-ban path", "error", err, "path_pattern", pathPattern)
-			m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_path_create_failed"), "error")
+			m.ctx.Logger.Error("failed to create "+p.logAction, "error", err, p.logField, value)
+			m.ctx.Render.SetFlash(r, i18n.T(lang, p.failedMsg), "error")
 		}
 		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
 		return
 	}
 
-	m.ctx.Logger.Info("auto-ban path created", "path_pattern", pathPattern, "created_by", user.ID)
-	m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.success_path_created"), "success")
+	m.ctx.Logger.Info(p.logAction+" created", p.logField, value, "created_by", user.ID)
+	m.ctx.Render.SetFlash(r, i18n.T(lang, p.successMsg), "success")
 	http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
+}
+
+// handleCreatePath handles POST /admin/sentinel/paths - creates a new auto-ban path.
+func (m *Module) handleCreatePath(w http.ResponseWriter, r *http.Request) {
+	m.handleCreateEntry(w, r, sentinelCreateParams{
+		formField:    "path_pattern",
+		emptyMsg:     "sentinel.error_path_required",
+		invalidMsg:   "sentinel.error_invalid_path_pattern",
+		duplicateMsg: "sentinel.error_path_duplicate",
+		failedMsg:    "sentinel.error_path_create_failed",
+		successMsg:   "sentinel.success_path_created",
+		logAction:    "auto-ban path",
+		logField:     "path_pattern",
+		validate:     isValidPathPattern,
+		create:       m.createAutoBanPath,
+	})
 }
 
 // handleDeletePath handles DELETE /admin/sentinel/paths/{id} - removes an auto-ban path.
@@ -282,7 +340,10 @@ func (m *Module) handleDeletePath(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
+	user := requireUser(w, r)
+	if user == nil {
+		return
+	}
 	m.ctx.Logger.Info("auto-ban path removed", "path_pattern", path.PathPattern, "removed_by", user.ID)
 
 	w.WriteHeader(http.StatusNoContent)
@@ -294,39 +355,18 @@ func (m *Module) handleDeletePath(w http.ResponseWriter, r *http.Request) {
 
 // handleCreateWhitelist handles POST /admin/sentinel/whitelist - creates a whitelist entry.
 func (m *Module) handleCreateWhitelist(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	lang := m.ctx.Render.GetAdminLang(r)
-
-	ipPattern := strings.TrimSpace(r.FormValue("ip_pattern"))
-	notes := strings.TrimSpace(r.FormValue("notes"))
-
-	if ipPattern == "" {
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_ip_required"), "error")
-		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
-		return
-	}
-
-	if !isValidIPPattern(ipPattern) {
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_invalid_pattern"), "error")
-		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
-		return
-	}
-
-	err := m.createWhitelistEntry(ipPattern, notes, user.ID)
-	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_whitelist_duplicate"), "error")
-		} else {
-			m.ctx.Logger.Error("failed to create whitelist entry", "error", err, "ip_pattern", ipPattern)
-			m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_whitelist_create_failed"), "error")
-		}
-		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
-		return
-	}
-
-	m.ctx.Logger.Info("IP whitelisted", "ip_pattern", ipPattern, "created_by", user.ID)
-	m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.success_whitelist_created"), "success")
-	http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
+	m.handleCreateEntry(w, r, sentinelCreateParams{
+		formField:    "ip_pattern",
+		emptyMsg:     "sentinel.error_ip_required",
+		invalidMsg:   "sentinel.error_invalid_pattern",
+		duplicateMsg: "sentinel.error_whitelist_duplicate",
+		failedMsg:    "sentinel.error_whitelist_create_failed",
+		successMsg:   "sentinel.success_whitelist_created",
+		logAction:    "IP whitelisted",
+		logField:     "ip_pattern",
+		validate:     isValidIPPattern,
+		create:       m.createWhitelistEntry,
+	})
 }
 
 // handleDeleteWhitelist handles DELETE /admin/sentinel/whitelist/{id} - removes whitelist entry.
@@ -355,7 +395,10 @@ func (m *Module) handleDeleteWhitelist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
+	user := requireUser(w, r)
+	if user == nil {
+		return
+	}
 	m.ctx.Logger.Info("whitelist entry removed", "ip_pattern", entry.IPPattern, "removed_by", user.ID)
 
 	w.WriteHeader(http.StatusNoContent)
@@ -583,7 +626,10 @@ func (m *Module) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
+	user := requireUser(w, r)
+	if user == nil {
+		return
+	}
 	lang := m.ctx.Render.GetAdminLang(r)
 
 	// Get form values - checkboxes return empty string if unchecked

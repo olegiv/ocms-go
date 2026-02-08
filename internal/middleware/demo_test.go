@@ -90,7 +90,7 @@ func TestDemoModeMessageDetailed(t *testing.T) {
 }
 
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
+	return len(s) >= len(substr) && (s == substr || s != "" && containsHelper(s, substr))
 }
 
 func containsHelper(s, substr string) bool {
@@ -179,62 +179,23 @@ func isAPIPath(path string) bool {
 	return len(path) >= 5 && path[:5] == "/api/"
 }
 
-func TestBlockDeleteInDemoMode(t *testing.T) {
+// demoMiddlewareTestCase defines a test case for demo mode middleware.
+type demoMiddlewareTestCase struct {
+	name       string
+	demoMode   bool
+	method     string
+	path       string
+	wantStatus int
+}
+
+// runDemoMiddlewareTests runs a set of test cases against a demo mode middleware factory.
+func runDemoMiddlewareTests(t *testing.T, makeMiddleware func() func(http.Handler) http.Handler, referer string, tests []demoMiddlewareTestCase) {
+	t.Helper()
+
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("OK"))
 	})
-
-	tests := []struct {
-		name       string
-		demoMode   bool
-		method     string
-		path       string
-		wantStatus int
-	}{
-		{
-			name:       "demo mode off - DELETE allowed",
-			demoMode:   false,
-			method:     http.MethodDelete,
-			path:       "/admin/pages/1",
-			wantStatus: http.StatusOK,
-		},
-		{
-			name:       "demo mode on - GET allowed",
-			demoMode:   true,
-			method:     http.MethodGet,
-			path:       "/admin/pages/1",
-			wantStatus: http.StatusOK,
-		},
-		{
-			name:       "demo mode on - POST to edit allowed",
-			demoMode:   true,
-			method:     http.MethodPost,
-			path:       "/admin/pages/1/edit",
-			wantStatus: http.StatusOK,
-		},
-		{
-			name:       "demo mode on - DELETE blocked",
-			demoMode:   true,
-			method:     http.MethodDelete,
-			path:       "/admin/pages/1",
-			wantStatus: http.StatusSeeOther,
-		},
-		{
-			name:       "demo mode on - POST to delete blocked",
-			demoMode:   true,
-			method:     http.MethodPost,
-			path:       "/admin/pages/1/delete",
-			wantStatus: http.StatusSeeOther,
-		},
-		{
-			name:       "demo mode on - API DELETE blocked",
-			demoMode:   true,
-			method:     http.MethodDelete,
-			path:       "/api/v1/pages/1",
-			wantStatus: http.StatusForbidden,
-		},
-	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -246,11 +207,11 @@ func TestBlockDeleteInDemoMode(t *testing.T) {
 			}
 			defer os.Unsetenv("OCMS_DEMO_MODE")
 
-			middleware := BlockDeleteInDemoMode(RestrictionDeletePage)
-			wrapped := middleware(handler)
+			mw := makeMiddleware()
+			wrapped := mw(handler)
 
 			req := httptest.NewRequest(tt.method, tt.path, nil)
-			req.Header.Set("Referer", "/admin/pages")
+			req.Header.Set("Referer", referer)
 			rec := httptest.NewRecorder()
 
 			wrapped.ServeHTTP(rec, req)
@@ -262,87 +223,30 @@ func TestBlockDeleteInDemoMode(t *testing.T) {
 	}
 }
 
-func TestBlockWriteInDemoMode(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
+func TestBlockDeleteInDemoMode(t *testing.T) {
+	runDemoMiddlewareTests(t, func() func(http.Handler) http.Handler {
+		return BlockDeleteInDemoMode(RestrictionDeletePage)
+	}, "/admin/pages", []demoMiddlewareTestCase{
+		{"demo mode off - DELETE allowed", false, http.MethodDelete, "/admin/pages/1", http.StatusOK},
+		{"demo mode on - GET allowed", true, http.MethodGet, "/admin/pages/1", http.StatusOK},
+		{"demo mode on - POST to edit allowed", true, http.MethodPost, "/admin/pages/1/edit", http.StatusOK},
+		{"demo mode on - DELETE blocked", true, http.MethodDelete, "/admin/pages/1", http.StatusSeeOther},
+		{"demo mode on - POST to delete blocked", true, http.MethodPost, "/admin/pages/1/delete", http.StatusSeeOther},
+		{"demo mode on - API DELETE blocked", true, http.MethodDelete, "/api/v1/pages/1", http.StatusForbidden},
 	})
+}
 
-	tests := []struct {
-		name       string
-		demoMode   bool
-		method     string
-		path       string
-		wantStatus int
-	}{
-		{
-			name:       "demo mode off - POST allowed",
-			demoMode:   false,
-			method:     http.MethodPost,
-			path:       "/admin/config",
-			wantStatus: http.StatusOK,
-		},
-		{
-			name:       "demo mode on - GET allowed",
-			demoMode:   true,
-			method:     http.MethodGet,
-			path:       "/admin/config",
-			wantStatus: http.StatusOK,
-		},
-		{
-			name:       "demo mode on - HEAD allowed",
-			demoMode:   true,
-			method:     http.MethodHead,
-			path:       "/admin/config",
-			wantStatus: http.StatusOK,
-		},
-		{
-			name:       "demo mode on - POST blocked",
-			demoMode:   true,
-			method:     http.MethodPost,
-			path:       "/admin/config",
-			wantStatus: http.StatusSeeOther,
-		},
-		{
-			name:       "demo mode on - PUT blocked",
-			demoMode:   true,
-			method:     http.MethodPut,
-			path:       "/admin/config",
-			wantStatus: http.StatusSeeOther,
-		},
-		{
-			name:       "demo mode on - API POST blocked",
-			demoMode:   true,
-			method:     http.MethodPost,
-			path:       "/api/v1/config",
-			wantStatus: http.StatusForbidden,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			resetDemoMode()
-			if tt.demoMode {
-				os.Setenv("OCMS_DEMO_MODE", "true")
-			} else {
-				os.Unsetenv("OCMS_DEMO_MODE")
-			}
-			defer os.Unsetenv("OCMS_DEMO_MODE")
-
-			middleware := BlockWriteInDemoMode(RestrictionEditConfig)
-			wrapped := middleware(handler)
-
-			req := httptest.NewRequest(tt.method, tt.path, nil)
-			req.Header.Set("Referer", "/admin/config")
-			rec := httptest.NewRecorder()
-
-			wrapped.ServeHTTP(rec, req)
-
-			if rec.Code != tt.wantStatus {
-				t.Errorf("got status %d, want %d", rec.Code, tt.wantStatus)
-			}
-		})
-	}
+func TestBlockWriteInDemoMode(t *testing.T) {
+	runDemoMiddlewareTests(t, func() func(http.Handler) http.Handler {
+		return BlockWriteInDemoMode(RestrictionEditConfig)
+	}, "/admin/config", []demoMiddlewareTestCase{
+		{"demo mode off - POST allowed", false, http.MethodPost, "/admin/config", http.StatusOK},
+		{"demo mode on - GET allowed", true, http.MethodGet, "/admin/config", http.StatusOK},
+		{"demo mode on - HEAD allowed", true, http.MethodHead, "/admin/config", http.StatusOK},
+		{"demo mode on - POST blocked", true, http.MethodPost, "/admin/config", http.StatusSeeOther},
+		{"demo mode on - PUT blocked", true, http.MethodPut, "/admin/config", http.StatusSeeOther},
+		{"demo mode on - API POST blocked", true, http.MethodPost, "/api/v1/config", http.StatusForbidden},
+	})
 }
 
 func TestGetDemoBlockedMessage(t *testing.T) {

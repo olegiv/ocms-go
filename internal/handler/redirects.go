@@ -318,7 +318,7 @@ func (h *RedirectsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/redirects/{id} - deletes a redirect.
 func (h *RedirectsHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+	if demoGuardAPI(w) {
 		return
 	}
 
@@ -354,7 +354,7 @@ func (h *RedirectsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // Toggle handles POST /admin/redirects/{id}/toggle - toggles a redirect's enabled status.
 func (h *RedirectsHandler) Toggle(w http.ResponseWriter, r *http.Request) {
-	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+	if demoGuardAPI(w) {
 		return
 	}
 
