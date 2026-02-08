@@ -27,6 +27,18 @@
     </div>
 </div>
 
+{{if isDemoMode}}
+<div class="query-section">
+    <div class="card">
+        <div class="card-header">
+            <h2>{{T .AdminLang "dbmanager.query_section"}}</h2>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-warning">{{T .AdminLang "dbmanager.demo_disabled"}}</div>
+        </div>
+    </div>
+</div>
+{{else}}
 <div class="query-section">
     <div class="card">
         <div class="card-header">
@@ -61,6 +73,7 @@
         </div>
     </div>
 </div>
+{{end}}
 
 {{if .Data.Result}}
 <div class="results-section">
