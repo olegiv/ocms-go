@@ -88,6 +88,14 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reload to pick up the new updated_at version for cookie invalidation.
+	saved, err := loadSettings(m.ctx.DB)
+	if err != nil {
+		m.ctx.Logger.Error("failed to reload informer settings", "error", err)
+		newSettings.Version = m.settings.Version
+	} else {
+		newSettings = saved
+	}
 	m.settings = newSettings
 
 	m.ctx.Logger.Info("Informer settings updated",

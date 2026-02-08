@@ -55,12 +55,16 @@ func TestMigrations(t *testing.T) {
 	m := New()
 	migrations := m.Migrations()
 
-	if len(migrations) != 1 {
-		t.Fatalf("expected 1 migration, got %d", len(migrations))
+	if len(migrations) != 2 {
+		t.Fatalf("expected 2 migrations, got %d", len(migrations))
 	}
 
 	if migrations[0].Version != 1 {
 		t.Errorf("expected migration version 1, got %d", migrations[0].Version)
+	}
+
+	if migrations[1].Version != 2 {
+		t.Errorf("expected migration version 2, got %d", migrations[1].Version)
 	}
 }
 
@@ -148,11 +152,11 @@ func TestRenderBarEnabled(t *testing.T) {
 	}
 }
 
-func TestRenderBarHTMLEscaping(t *testing.T) {
+func TestRenderBarAllowsHTML(t *testing.T) {
 	m := &Module{
 		settings: &Settings{
 			Enabled:   true,
-			Text:      `<script>alert("xss")</script>`,
+			Text:      `Check our <a href="/sale">sale page</a>!`,
 			BgColor:   "#000000",
 			TextColor: "#ffffff",
 		},
@@ -160,12 +164,8 @@ func TestRenderBarHTMLEscaping(t *testing.T) {
 
 	output := string(m.renderBar())
 
-	if strings.Contains(output, `<script>alert("xss")</script>`) {
-		t.Error("output should escape HTML in text to prevent XSS")
-	}
-
-	if !strings.Contains(output, "&lt;script&gt;") {
-		t.Error("output should contain escaped HTML entities")
+	if !strings.Contains(output, `<a href="/sale">sale page</a>`) {
+		t.Error("output should render HTML in text as-is (admin-only input)")
 	}
 }
 
@@ -176,6 +176,7 @@ func TestRenderBarCookieScript(t *testing.T) {
 			Text:      "Test",
 			BgColor:   "#000000",
 			TextColor: "#ffffff",
+			Version:   "1738900000",
 		},
 	}
 
@@ -195,6 +196,10 @@ func TestRenderBarCookieScript(t *testing.T) {
 
 	if !strings.Contains(output, "display='flex'") {
 		t.Error("script should show bar when cookie is not set")
+	}
+
+	if !strings.Contains(output, `ver="1738900000"`) {
+		t.Error("script should embed settings version for cookie comparison")
 	}
 }
 

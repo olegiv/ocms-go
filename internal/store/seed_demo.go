@@ -87,7 +87,33 @@ func SeedDemo(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("seeding demo menu items: %w", err)
 	}
 
+	// Enable informer bar with demo access info
+	if err := seedDemoInformerSettings(db); err != nil {
+		return fmt.Errorf("seeding demo informer settings: %w", err)
+	}
+
 	slog.Info("demo content seeded successfully")
+	return nil
+}
+
+func seedDemoInformerSettings(db *sql.DB) error {
+	const demoText = `This is a demo instance. Admin panel: <a href="/admin/" style="color:#fff;text-decoration:underline">/admin/</a> &mdash; Login: <strong>demo@example.com</strong> / <strong>demo1234demo</strong>`
+
+	_, err := db.Exec(`
+		UPDATE informer_settings SET
+			enabled = 1,
+			text = ?,
+			bg_color = '#1e40af',
+			text_color = '#ffffff',
+			version = version + 1,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = 1
+	`, demoText)
+	if err != nil {
+		return fmt.Errorf("updating informer settings: %w", err)
+	}
+
+	slog.Info("demo informer bar enabled")
 	return nil
 }
 

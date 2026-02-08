@@ -127,6 +127,30 @@ func (m *Module) Migrations() []module.Migration {
 				return err
 			},
 		},
+		{
+			Version:     2,
+			Description: "Add version column for cookie invalidation",
+			Up: func(db *sql.DB) error {
+				_, err := db.Exec(`ALTER TABLE informer_settings ADD COLUMN version INTEGER NOT NULL DEFAULT 1`)
+				return err
+			},
+			Down: func(db *sql.DB) error {
+				_, err := db.Exec(`
+					CREATE TABLE informer_settings_new (
+						id INTEGER PRIMARY KEY CHECK (id = 1),
+						enabled INTEGER NOT NULL DEFAULT 0,
+						text TEXT NOT NULL DEFAULT '',
+						bg_color TEXT NOT NULL DEFAULT '#1e40af',
+						text_color TEXT NOT NULL DEFAULT '#ffffff',
+						updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+					);
+					INSERT INTO informer_settings_new SELECT id, enabled, text, bg_color, text_color, updated_at FROM informer_settings;
+					DROP TABLE informer_settings;
+					ALTER TABLE informer_settings_new RENAME TO informer_settings;
+				`)
+				return err
+			},
+		},
 	}
 }
 
@@ -136,7 +160,6 @@ func (m *Module) renderBar() template.HTML {
 		return ""
 	}
 
-	escapedText := html.EscapeString(m.settings.Text)
 	bgColor := html.EscapeString(m.settings.BgColor)
 	textColor := html.EscapeString(m.settings.TextColor)
 
@@ -144,7 +167,7 @@ func (m *Module) renderBar() template.HTML {
 	b.WriteString(fmt.Sprintf(`<div id="informer-bar" style="display:none;background:%s;color:%s;" class="informer-bar">`, bgColor, textColor))
 	b.WriteString(`<div class="informer-bar-content">`)
 	b.WriteString(`<span class="informer-bar-spinner"></span>`)
-	b.WriteString(fmt.Sprintf(`<span class="informer-bar-text">%s</span>`, escapedText))
+	b.WriteString(fmt.Sprintf(`<span class="informer-bar-text">%s</span>`, m.settings.Text))
 	b.WriteString(`</div>`)
 	b.WriteString(fmt.Sprintf(`<button type="button" class="informer-bar-close" aria-label="Close" style="color:%s;" onclick="dismissInformer()">`, textColor))
 	b.WriteString(`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`)
@@ -153,7 +176,7 @@ func (m *Module) renderBar() template.HTML {
 
 	// CSS for the bar and spinner animation
 	b.WriteString(`<style>
-.informer-bar{position:fixed;top:0;left:0;right:0;z-index:9999;display:flex;align-items:center;justify-content:space-between;padding:8px 16px;font-size:14px;line-height:1.4;box-shadow:0 2px 4px rgba(0,0,0,0.15)}
+.informer-bar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;font-size:14px;line-height:1.4;box-shadow:0 2px 4px rgba(0,0,0,0.15)}
 .informer-bar-content{display:flex;align-items:center;gap:10px;flex:1;justify-content:center}
 .informer-bar-spinner{display:inline-block;width:16px;height:16px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:informer-spin 0.8s linear infinite;flex-shrink:0}
 @keyframes informer-spin{to{transform:rotate(360deg)}}
@@ -162,16 +185,17 @@ func (m *Module) renderBar() template.HTML {
 .informer-bar-close:hover{opacity:1}
 </style>`)
 
-	// JavaScript for cookie-based dismissal
+	// JavaScript for cookie-based dismissal (version-aware: resets on settings change)
+	version := html.EscapeString(m.settings.Version)
 	b.WriteString(fmt.Sprintf(`<script>
 (function(){
-var cn="%s";
+var cn="%s",ver="%s";
 function getCookie(n){var m=document.cookie.match(new RegExp('(?:^|; )'+n+'=([^;]*)'));return m?decodeURIComponent(m[1]):null}
 function setCookie(n,v,d){var e=new Date();e.setTime(e.getTime()+d*864e5);document.cookie=n+'='+encodeURIComponent(v)+';expires='+e.toUTCString()+';path=/;SameSite=Lax'}
-if(getCookie(cn)!=='1'){var el=document.getElementById('informer-bar');if(el)el.style.display='flex'}
-window.dismissInformer=function(){var el=document.getElementById('informer-bar');if(el)el.style.display='none';setCookie(cn,'1',365)}
+if(getCookie(cn)!==ver){var el=document.getElementById('informer-bar');if(el)el.style.display='flex'}
+window.dismissInformer=function(){var el=document.getElementById('informer-bar');if(el)el.style.display='none';setCookie(cn,ver,365)}
 })();
-</script>`, cookieName))
+</script>`, cookieName, version))
 
 	return template.HTML(b.String())
 }
