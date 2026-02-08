@@ -345,66 +345,6 @@ func TestBlockWriteInDemoMode(t *testing.T) {
 	}
 }
 
-func TestCheckDemoUploadSize(t *testing.T) {
-	tests := []struct {
-		name          string
-		demoMode      bool
-		contentLength int64
-		wantBlocked   bool
-	}{
-		{
-			name:          "demo mode off - large upload allowed",
-			demoMode:      false,
-			contentLength: 10 * 1024 * 1024, // 10MB
-			wantBlocked:   false,
-		},
-		{
-			name:          "demo mode on - small upload allowed",
-			demoMode:      true,
-			contentLength: 1 * 1024 * 1024, // 1MB
-			wantBlocked:   false,
-		},
-		{
-			name:          "demo mode on - large upload blocked",
-			demoMode:      true,
-			contentLength: 5 * 1024 * 1024, // 5MB
-			wantBlocked:   true,
-		},
-		{
-			name:          "demo mode on - exactly at limit allowed",
-			demoMode:      true,
-			contentLength: DemoUploadMaxSize,
-			wantBlocked:   false,
-		},
-		{
-			name:          "demo mode on - just over limit blocked",
-			demoMode:      true,
-			contentLength: DemoUploadMaxSize + 1,
-			wantBlocked:   true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			resetDemoMode()
-			if tt.demoMode {
-				os.Setenv("OCMS_DEMO_MODE", "true")
-			} else {
-				os.Unsetenv("OCMS_DEMO_MODE")
-			}
-			defer os.Unsetenv("OCMS_DEMO_MODE")
-
-			req := httptest.NewRequest(http.MethodPost, "/admin/media/upload", nil)
-			req.ContentLength = tt.contentLength
-
-			got := CheckDemoUploadSize(req)
-			if got != tt.wantBlocked {
-				t.Errorf("CheckDemoUploadSize() = %v, want %v", got, tt.wantBlocked)
-			}
-		})
-	}
-}
-
 func TestGetDemoBlockedMessage(t *testing.T) {
 	t.Run("no cookie", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/admin/", nil)

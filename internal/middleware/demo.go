@@ -64,9 +64,6 @@ const (
 
 	// Module-specific restrictions
 	RestrictionSQLExecution DemoRestriction = "sql_execution"
-
-	// Upload restrictions (size limits applied separately)
-	RestrictionLargeUpload DemoRestriction = "large_upload"
 )
 
 // DemoModeMessage is the user-friendly message shown when an action is blocked.
@@ -100,7 +97,6 @@ func DemoModeMessageDetailed(restriction DemoRestriction) string {
 		RestrictionThemeSettings:  "Changing theme settings is disabled in demo mode",
 		RestrictionClearCache:     "Clearing cache is disabled in demo mode",
 		RestrictionSQLExecution:   "SQL execution is disabled in demo mode",
-		RestrictionLargeUpload:    "Large file uploads are disabled in demo mode (max 2MB)",
 	}
 
 	if msg, ok := messages[restriction]; ok {
@@ -228,18 +224,6 @@ func BlockWriteInDemoMode(restriction DemoRestriction) func(http.Handler) http.H
 			http.Redirect(w, r, referer, http.StatusSeeOther)
 		})
 	}
-}
-
-// DemoUploadMaxSize is the maximum upload size in demo mode (2MB).
-const DemoUploadMaxSize = 2 * 1024 * 1024
-
-// CheckDemoUploadSize checks if the upload size exceeds demo mode limits.
-// Returns true if the upload should be blocked.
-func CheckDemoUploadSize(r *http.Request) bool {
-	if !IsDemoMode() {
-		return false
-	}
-	return r.ContentLength > DemoUploadMaxSize
 }
 
 // GetDemoBlockedMessage reads and clears the demo_blocked cookie,
