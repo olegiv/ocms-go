@@ -77,6 +77,12 @@ func (h *ThemesHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Activate handles POST /admin/themes/activate - activates a theme.
 func (h *ThemesHandler) Activate(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		flashError(w, r, h.renderer, redirectAdminThemes, middleware.DemoModeMessageDetailed(middleware.RestrictionThemeSettings))
+		return
+	}
+
 	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminThemes) {
 		return
 	}
@@ -177,6 +183,12 @@ func (h *ThemesHandler) Settings(w http.ResponseWriter, r *http.Request) {
 
 // SaveSettings handles PUT /admin/themes/{name}/settings - saves theme settings.
 func (h *ThemesHandler) SaveSettings(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		flashError(w, r, h.renderer, redirectAdminThemes, middleware.DemoModeMessageDetailed(middleware.RestrictionThemeSettings))
+		return
+	}
+
 	themeName := chi.URLParam(r, "name")
 
 	thm, err := h.themeManager.GetTheme(themeName)

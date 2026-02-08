@@ -519,6 +519,13 @@ func (m *Module) deleteWhitelistEntry(id int64) error {
 
 // handleUpdateSettings handles POST /admin/sentinel/settings - updates module settings.
 func (m *Module) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		m.ctx.Render.SetFlash(r, middleware.DemoModeMessageDetailed(middleware.RestrictionModuleSettings), "error")
+		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
+		return
+	}
+
 	user := middleware.GetUser(r)
 	lang := m.ctx.Render.GetAdminLang(r)
 
