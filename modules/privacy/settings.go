@@ -64,13 +64,16 @@ type Cookie struct {
 var PredefinedServices = []Service{
 	{
 		Name:        "klaro",
-		Title:       "Consent Preferences",
-		Description: "Stores your cookie consent choices (required)",
+		Title:       "Essential Cookies",
+		Description: "Stores consent choices and UI preferences (required)",
 		Purposes:    []string{"functional"},
 		Required:    true,
 		Default:     true,
 		Cookies: []Cookie{
 			{Pattern: "^klaro"},
+			{Pattern: "^ocms_lang$"},
+			{Pattern: "^session$"},
+			{Pattern: "^ocms_informer_dismissed"},
 		},
 	},
 	{
