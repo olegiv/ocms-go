@@ -31,7 +31,8 @@ type DemoRestriction string
 // Demo mode restrictions - operations that are blocked in demo mode.
 const (
 	// Content restrictions (block all modifications)
-	RestrictionContentReadOnly DemoRestriction = "content_read_only"
+	RestrictionContentReadOnly    DemoRestriction = "content_read_only"
+	RestrictionUnpublishContent   DemoRestriction = "unpublish_content"
 	RestrictionDeletePage      DemoRestriction = "delete_page"
 	RestrictionDeleteMedia    DemoRestriction = "delete_media"
 	RestrictionDeleteCategory DemoRestriction = "delete_category"
@@ -71,7 +72,8 @@ const DemoModeMessage = "This action is disabled in demo mode"
 // DemoModeMessageDetailed returns a detailed message for a specific restriction.
 func DemoModeMessageDetailed(restriction DemoRestriction) string {
 	messages := map[DemoRestriction]string{
-		RestrictionContentReadOnly: "Content is read-only in demo mode",
+		RestrictionContentReadOnly:  "Content is read-only in demo mode",
+		RestrictionUnpublishContent: "Unpublishing content is disabled in demo mode",
 		RestrictionDeletePage:      "Deleting pages is disabled in demo mode",
 		RestrictionDeleteMedia:    "Deleting media is disabled in demo mode",
 		RestrictionDeleteCategory: "Deleting categories is disabled in demo mode",

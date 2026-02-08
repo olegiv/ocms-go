@@ -633,6 +633,11 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 			WriteValidationError(w, map[string]string{"status": "Status must be 'draft' or 'published'"})
 			return
 		}
+		// Block unpublishing in demo mode
+		if middleware.IsDemoMode() && existing.Status == model.PageStatusPublished && *req.Status != model.PageStatusPublished {
+			WriteForbidden(w, middleware.DemoModeMessageDetailed(middleware.RestrictionUnpublishContent))
+			return
+		}
 		params.Status = *req.Status
 	}
 	if req.FeaturedImageID != nil {

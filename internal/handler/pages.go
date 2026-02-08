@@ -989,10 +989,6 @@ func (h *PagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // TogglePublish handles POST /admin/pages/{id}/publish - toggles publish status.
 func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
-	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminPages) {
-		return
-	}
-
 	id, err := ParseIDParam(r)
 	if err != nil {
 		flashError(w, r, h.renderer, redirectAdminPages, "Invalid page ID")
@@ -1001,6 +997,16 @@ func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 
 	page, ok := h.requirePageWithRedirect(w, r, id)
 	if !ok {
+		return
+	}
+
+	// In demo mode: block unpublishing with specific message, block publishing with generic read-only message
+	if middleware.IsDemoMode() {
+		if page.Status == PageStatusPublished {
+			demoGuard(w, r, h.renderer, middleware.RestrictionUnpublishContent, redirectAdminPages)
+		} else {
+			demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminPages)
+		}
 		return
 	}
 
