@@ -59,6 +59,20 @@ func (m *Module) Init(ctx *module.Context) error {
 	return nil
 }
 
+// ReloadSettings reloads settings from the database.
+// Used after demo seeding updates the informer_settings table.
+func (m *Module) ReloadSettings() error {
+	if m.ctx == nil {
+		return nil
+	}
+	settings, err := loadSettings(m.ctx.DB)
+	if err != nil {
+		return fmt.Errorf("reloading informer settings: %w", err)
+	}
+	m.settings = settings
+	return nil
+}
+
 // Shutdown performs cleanup when the module is shutting down.
 func (m *Module) Shutdown() error {
 	if m.ctx != nil {

@@ -87,16 +87,17 @@ func SeedDemo(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("seeding demo menu items: %w", err)
 	}
 
-	// Enable informer bar with demo access info
-	if err := seedDemoInformerSettings(db); err != nil {
-		return fmt.Errorf("seeding demo informer settings: %w", err)
-	}
-
 	slog.Info("demo content seeded successfully")
 	return nil
 }
 
-func seedDemoInformerSettings(db *sql.DB) error {
+// SeedDemoInformerSettings enables the informer bar with demo credentials.
+// Must be called after module initialization (informer module creates the table).
+func SeedDemoInformerSettings(db *sql.DB) error {
+	if os.Getenv("OCMS_DEMO_MODE") != "true" {
+		return nil
+	}
+
 	// Check if the informer module table exists (created by module migration, not core migrations)
 	var tableExists int
 	err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='informer_settings'`).Scan(&tableExists)
