@@ -51,6 +51,11 @@ type ExportFormData struct {
 
 // ExportForm handles GET /admin/export - displays the export form.
 func (h *ImportExportHandler) ExportForm(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionExportData, redirectAdmin) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
@@ -71,6 +76,11 @@ func (h *ImportExportHandler) ExportForm(w http.ResponseWriter, r *http.Request)
 
 // Export handles POST /admin/export - generates and downloads the export.
 func (h *ImportExportHandler) Export(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionExportData, redirectAdmin) {
+		return
+	}
+
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Invalid form data", http.StatusBadRequest)
 		return
@@ -177,6 +187,11 @@ func (h *ImportExportHandler) renderImportPage(w http.ResponseWriter, r *http.Re
 
 // ImportForm handles GET /admin/import - displays the import form.
 func (h *ImportExportHandler) ImportForm(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionImportData, redirectAdmin) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 	h.renderImportPage(w, r, user, ImportFormData{
 		ConflictStrategies: defaultConflictStrategies(),
@@ -185,6 +200,11 @@ func (h *ImportExportHandler) ImportForm(w http.ResponseWriter, r *http.Request)
 
 // ImportValidate handles POST /admin/import/validate - validates the uploaded file.
 func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionImportData, redirectAdmin) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 
 	// Parse multipart form (max 100MB for zip files with media)
@@ -311,6 +331,11 @@ func (h *ImportExportHandler) extractExportDataFromZip(zipData []byte) (transfer
 
 // Import handles POST /admin/import - performs the actual import.
 func (h *ImportExportHandler) Import(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionImportData, redirectAdmin) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 
 	if err := r.ParseForm(); err != nil {

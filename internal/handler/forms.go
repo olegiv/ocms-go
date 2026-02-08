@@ -686,6 +686,12 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/forms/{id} - deletes a form.
 func (h *FormsHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		http.Error(w, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteForm), http.StatusForbidden)
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid form ID", http.StatusBadRequest)

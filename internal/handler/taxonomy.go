@@ -360,6 +360,12 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 
 // DeleteTag handles DELETE /admin/tags/{id} - deletes a tag.
 func (h *TaxonomyHandler) DeleteTag(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		http.Error(w, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteTag), http.StatusForbidden)
+		return
+	}
+
 	params := deleteEntityParams[store.Tag]{EntityName: "tag", IDField: "tag_id", RedirectURL: redirectAdminTags, SuccessMessage: "Tag deleted successfully"}
 	params.RequireFn = func(id int64) (store.Tag, bool) { return h.requireTagWithError(w, r, id) }
 	params.DeleteFn = h.queries.DeleteTag
@@ -942,6 +948,12 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 
 // DeleteCategory handles DELETE /admin/categories/{id} - deletes a category.
 func (h *TaxonomyHandler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		http.Error(w, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteCategory), http.StatusForbidden)
+		return
+	}
+
 	handleDeleteEntity(w, r, h.renderer, deleteEntityParams[store.Category]{
 		EntityName:     "category",
 		IDField:        "category_id",

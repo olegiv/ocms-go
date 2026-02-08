@@ -610,6 +610,12 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/media/{id} - deletes media and files.
 func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		http.Error(w, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteMedia), http.StatusForbidden)
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid media ID", http.StatusBadRequest)
@@ -779,6 +785,12 @@ func (h *MediaHandler) UpdateFolder(w http.ResponseWriter, r *http.Request) {
 
 // DeleteFolder handles DELETE /admin/media/folders/{id} - deletes a folder.
 func (h *MediaHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		http.Error(w, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteMedia), http.StatusForbidden)
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid folder ID", http.StatusBadRequest)

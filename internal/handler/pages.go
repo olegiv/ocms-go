@@ -935,6 +935,12 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/pages/{id} - deletes a page.
 func (h *PagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		http.Error(w, middleware.DemoModeMessageDetailed(middleware.RestrictionDeletePage), http.StatusForbidden)
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid page ID", http.StatusBadRequest)

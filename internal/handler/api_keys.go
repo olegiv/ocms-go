@@ -108,6 +108,11 @@ type APIKeyFormData struct {
 
 // NewForm handles GET /admin/api-keys/new - displays the new API key form.
 func (h *APIKeysHandler) NewForm(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionAPIKeys, redirectAdminAPIKeys) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
@@ -124,6 +129,11 @@ func (h *APIKeysHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 
 // Create handles POST /admin/api-keys - creates a new API key.
 func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionAPIKeys, redirectAdminAPIKeys) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
@@ -247,6 +257,11 @@ func (h *APIKeysHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /admin/api-keys/{id} - updates an existing API key.
 func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionAPIKeys, redirectAdminAPIKeys) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
@@ -316,6 +331,12 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/api-keys/{id} - deletes (deactivates) an API key.
 func (h *APIKeysHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		h.sendDeleteError(w, middleware.DemoModeMessageDetailed(middleware.RestrictionAPIKeys))
+		return
+	}
+
 	id, _, ok := parseAPIKeyID(r)
 	if !ok {
 		h.sendDeleteError(w, "Invalid API key ID")

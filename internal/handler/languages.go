@@ -191,6 +191,11 @@ func (h *LanguagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 
 // Create handles creating a new language.
 func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionEditLanguages, redirectAdminLanguages) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 
 	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminLanguagesNew) {
@@ -328,6 +333,11 @@ func (h *LanguagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 // Update handles updating an existing language.
 func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionEditLanguages, redirectAdminLanguages) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 
 	existingLang := h.getLanguageByIDParam(w, r)
@@ -433,6 +443,18 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles deleting a language.
 func (h *LanguagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		msg := middleware.DemoModeMessageDetailed(middleware.RestrictionEditLanguages)
+		if r.Header.Get("HX-Request") == "true" {
+			w.Header().Set("HX-Reswap", "none")
+			http.Error(w, msg, http.StatusForbidden)
+			return
+		}
+		http.Error(w, msg, http.StatusForbidden)
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		if r.Header.Get("HX-Request") == "true" {
