@@ -1,0 +1,287 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{T .AdminLang "informer.title"}}</h1>
+        <p class="page-description">{{T .AdminLang "informer.description"}}</p>
+    </div>
+</div>
+
+<form method="POST" action="/admin/informer" class="informer-form">
+    {{.CSRFField}}
+
+    <!-- Enable/Disable Card -->
+    <div class="card informer-card">
+        <div class="card-header">
+            <div class="provider-header">
+                <div class="provider-logo provider-logo-informer">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 16v-4"/>
+                        <path d="M12 8h.01"/>
+                    </svg>
+                </div>
+                <div class="provider-info">
+                    <h2>{{T .AdminLang "informer.enabled"}}</h2>
+                    <p>{{T .AdminLang "informer.enabled_help"}}</p>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" name="enabled" value="1" {{if .Data.Enabled}}checked{{end}}>
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Text Card -->
+    <div class="card informer-card">
+        <div class="card-header">
+            <h3>{{T .AdminLang "informer.text_section"}}</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label for="text">{{T .AdminLang "informer.text"}}</label>
+                <input type="text"
+                       id="text"
+                       name="text"
+                       value="{{.Data.Text}}"
+                       class="form-control"
+                       maxlength="500"
+                       placeholder="{{T .AdminLang "informer.text_placeholder"}}">
+                <small class="form-text">{{T .AdminLang "informer.text_help"}}</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Appearance Card -->
+    <div class="card informer-card">
+        <div class="card-header">
+            <h3>{{T .AdminLang "informer.appearance"}}</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="bg_color">{{T .AdminLang "informer.bg_color"}}</label>
+                    <div class="color-input-group">
+                        <input type="color"
+                               id="bg_color"
+                               name="bg_color"
+                               value="{{.Data.BgColor}}"
+                               class="form-control-color">
+                        <input type="text"
+                               value="{{.Data.BgColor}}"
+                               class="form-control color-text"
+                               maxlength="7"
+                               readonly>
+                    </div>
+                    <small class="form-text">{{T .AdminLang "informer.bg_color_help"}}</small>
+                </div>
+                <div class="form-group">
+                    <label for="text_color">{{T .AdminLang "informer.text_color"}}</label>
+                    <div class="color-input-group">
+                        <input type="color"
+                               id="text_color"
+                               name="text_color"
+                               value="{{.Data.TextColor}}"
+                               class="form-control-color">
+                        <input type="text"
+                               value="{{.Data.TextColor}}"
+                               class="form-control color-text"
+                               maxlength="7"
+                               readonly>
+                    </div>
+                    <small class="form-text">{{T .AdminLang "informer.text_color_help"}}</small>
+                </div>
+            </div>
+
+            <!-- Preview -->
+            <div class="form-group" style="margin-top: 1.5rem;">
+                <label>{{T .AdminLang "informer.preview"}}</label>
+                <div id="informer-preview" class="informer-preview" style="background:{{.Data.BgColor}};color:{{.Data.TextColor}};">
+                    <div class="informer-preview-content">
+                        <span class="informer-preview-spinner"></span>
+                        <span id="informer-preview-text">{{if .Data.Text}}{{.Data.Text}}{{else}}{{T .AdminLang "informer.text_placeholder"}}{{end}}</span>
+                    </div>
+                    <span class="informer-preview-close" style="color:{{.Data.TextColor}};">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Box -->
+    <div class="card informer-card">
+        <div class="card-body">
+            <div class="info-box info-box-info">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 16v-4"/>
+                    <path d="M12 8h.01"/>
+                </svg>
+                <span>{{T .AdminLang "informer.cookie_info"}}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <polyline points="17 21 17 13 7 13 7 21"/>
+                <polyline points="7 3 7 8 15 8"/>
+            </svg>
+            {{T .AdminLang "informer.save_button"}}
+        </button>
+    </div>
+</form>
+
+<style>
+.informer-form {
+    max-width: 800px;
+}
+
+.informer-card {
+    margin-bottom: 1.5rem;
+}
+
+.provider-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.provider-logo {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.provider-logo-informer {
+    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+    color: white;
+}
+
+.provider-info {
+    flex: 1;
+}
+
+.provider-info h2 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.provider-info p {
+    margin: 0.25rem 0 0;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.color-input-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.form-control-color {
+    width: 48px;
+    height: 38px;
+    padding: 2px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    background: none;
+}
+
+.color-text {
+    max-width: 100px;
+    font-family: monospace;
+}
+
+.informer-preview {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    line-height: 1.4;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.informer-preview-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    justify-content: center;
+}
+
+.informer-preview-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: informer-admin-spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes informer-admin-spin {
+    to { transform: rotate(360deg); }
+}
+
+.informer-preview-close {
+    opacity: 0.8;
+    display: flex;
+    align-items: center;
+}
+
+.form-actions {
+    margin-top: 1.5rem;
+}
+</style>
+
+<script>
+(function() {
+    // Sync color picker with text display
+    var bgColor = document.getElementById('bg_color');
+    var textColor = document.getElementById('text_color');
+    var preview = document.getElementById('informer-preview');
+    var previewText = document.getElementById('informer-preview-text');
+    var textInput = document.getElementById('text');
+
+    if (bgColor) {
+        bgColor.addEventListener('input', function() {
+            this.nextElementSibling.value = this.value;
+            if (preview) preview.style.background = this.value;
+        });
+    }
+    if (textColor) {
+        textColor.addEventListener('input', function() {
+            this.nextElementSibling.value = this.value;
+            if (preview) {
+                preview.style.color = this.value;
+                var closeBtn = preview.querySelector('.informer-preview-close');
+                if (closeBtn) closeBtn.style.color = this.value;
+            }
+        });
+    }
+    if (textInput && previewText) {
+        textInput.addEventListener('input', function() {
+            previewText.textContent = this.value || this.placeholder;
+        });
+    }
+})();
+</script>
+{{end}}

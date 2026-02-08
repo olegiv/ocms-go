@@ -50,6 +50,7 @@ import (
 	"github.com/olegiv/ocms-go/modules/embed"
 	"github.com/olegiv/ocms-go/modules/example"
 	"github.com/olegiv/ocms-go/modules/hcaptcha"
+	"github.com/olegiv/ocms-go/modules/informer"
 	"github.com/olegiv/ocms-go/modules/migrator"
 	"github.com/olegiv/ocms-go/modules/privacy"
 	"github.com/olegiv/ocms-go/modules/sentinel"
@@ -405,6 +406,9 @@ func run() error {
 	}
 	if err := moduleRegistry.Register(privacy.New()); err != nil {
 		return fmt.Errorf("registering privacy module: %w", err)
+	}
+	if err := moduleRegistry.Register(informer.New()); err != nil {
+		return fmt.Errorf("registering informer module: %w", err)
 	}
 	sentinelModule := sentinel.New()
 	sentinelModule.SetSessionManager(sessionManager)
