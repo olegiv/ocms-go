@@ -13,7 +13,7 @@ primary_region = 'fra'
     VERSION = 'demo'
 
 [env]
-  GOGC = '50'  # Reduce Go memory usage for 256MB instances
+  GOMEMLIMIT = '200MiB'  # Let Go runtime optimize GC within memory budget
   OCMS_ACTIVE_THEME = 'default'
   OCMS_CUSTOM_DIR = '/app/custom'
   OCMS_DB_PATH = '/app/data/ocms.db'

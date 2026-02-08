@@ -15,17 +15,34 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-// Argon2 parameters
+// Argon2 parameters (OWASP recommended second choice: m=19456, t=2, p=1)
 const (
-	Argon2Time    = 1
-	Argon2Memory  = 64 * 1024 // 64 MB
-	Argon2Threads = 4
+	Argon2Time    = 2
+	Argon2Memory  = 19 * 1024 // 19 MB — fits on 256MB VMs
+	Argon2Threads = 1
 	Argon2KeyLen  = 32
 	Argon2SaltLen = 16
 )
 
+// NeedsRehash checks whether an encoded hash uses different parameters than
+// the current defaults. Returns true if the hash should be re-created.
+func NeedsRehash(encodedHash string) bool {
+	parts := strings.Split(encodedHash, "$")
+	if len(parts) != 6 || parts[1] != "argon2id" {
+		return true
+	}
+
+	var memory, timeCost uint32
+	var threads uint8
+	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &timeCost, &threads); err != nil {
+		return true
+	}
+
+	return memory != Argon2Memory || timeCost != Argon2Time || threads != Argon2Threads
+}
+
 // HashArgon2 creates an Argon2id hash of the input string.
-// Returns encoded hash in format: $argon2id$v=19$m=65536,t=1,p=4$salt$hash
+// Returns encoded hash in format: $argon2id$v=19$m=19456,t=2,p=1$salt$hash
 func HashArgon2(input string) (string, error) {
 	salt := make([]byte, Argon2SaltLen)
 	if _, err := rand.Read(salt); err != nil {

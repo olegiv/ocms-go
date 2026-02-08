@@ -69,3 +69,65 @@ func TestCheckPassword_DBHash(t *testing.T) {
 		t.Fatal("DB hash accepted wrong password")
 	}
 }
+
+func TestNeedsRehash_OldParameters(t *testing.T) {
+	// Hash with old parameters (m=65536, t=1, p=4) — should need rehash
+	oldHash := "$argon2id$v=19$m=65536,t=1,p=4$mucMvOaS6lZ2LWNS1OEFKw$UYEWv8cvCOO6l2zGeqv3JPVe1nyy0x9GXBfYEuDM544"
+	if !NeedsRehash(oldHash) {
+		t.Fatal("hash with old parameters should need rehash")
+	}
+}
+
+func TestNeedsRehash_CurrentParameters(t *testing.T) {
+	// Hash with current parameters — should NOT need rehash
+	hash, err := HashPassword("testpassword")
+	if err != nil {
+		t.Fatalf("HashPassword error: %v", err)
+	}
+	if NeedsRehash(hash) {
+		t.Fatal("freshly hashed password should not need rehash")
+	}
+}
+
+func TestNeedsRehash_InvalidHash(t *testing.T) {
+	if !NeedsRehash("invalid") {
+		t.Fatal("invalid hash should need rehash")
+	}
+	if !NeedsRehash("") {
+		t.Fatal("empty hash should need rehash")
+	}
+}
+
+func TestRehashProducesVerifiableHash(t *testing.T) {
+	password := "changeme1234"
+
+	// Create hash with old-style parameters (verify it works)
+	oldHash := "$argon2id$v=19$m=65536,t=1,p=4$mucMvOaS6lZ2LWNS1OEFKw$UYEWv8cvCOO6l2zGeqv3JPVe1nyy0x9GXBfYEuDM544"
+	valid, err := CheckPassword("changeme", oldHash)
+	if err != nil {
+		t.Fatalf("CheckPassword old hash error: %v", err)
+	}
+	if !valid {
+		t.Fatal("old hash should verify correctly")
+	}
+
+	// Re-hash with current parameters
+	newHash, err := HashPassword(password)
+	if err != nil {
+		t.Fatalf("HashPassword error: %v", err)
+	}
+
+	// Verify the new hash works
+	valid, err = CheckPassword(password, newHash)
+	if err != nil {
+		t.Fatalf("CheckPassword new hash error: %v", err)
+	}
+	if !valid {
+		t.Fatal("re-hashed password should verify correctly")
+	}
+
+	// Verify the new hash uses current parameters (no rehash needed)
+	if NeedsRehash(newHash) {
+		t.Fatal("newly hashed password should not need rehash")
+	}
+}
