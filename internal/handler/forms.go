@@ -1485,6 +1485,11 @@ func (h *FormsHandler) ExportSubmissions(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionExportData, fmt.Sprintf(redirectAdminFormsIDSubmissions, formID)) {
+		return
+	}
+
 	form, ok := h.requireFormWithHTTPError(w, r, formID)
 	if !ok {
 		return
