@@ -27,13 +27,15 @@
                 </div>
                 {{end}}
                 {{end}}
+                {{if index .ThemeSettings "hero_image"}}
+                <div class="dev-hero-banner">
+                    <img src="{{index .ThemeSettings "hero_image"}}"
+                         alt="{{with index .ThemeSettings "hero_image_alt"}}{{.}}{{else}}{{$.SiteName}}{{end}}"
+                         title="{{with index .ThemeSettings "hero_image_alt"}}{{.}}{{else}}{{$.SiteName}}{{end}}" />
+                </div>
+                {{end}}
             </div>
         </div>
-        {{if index .ThemeSettings "hero_image"}}
-        <img src="{{index .ThemeSettings "hero_image"}}" width="100%"
-             alt="{{with index .ThemeSettings "hero_image_alt"}}{{.}}{{else}}{{$.SiteName}}{{end}}"
-             title="{{with index .ThemeSettings "hero_image_alt"}}{{.}}{{else}}{{$.SiteName}}{{end}}" />
-        {{end}}
     </section>
     {{end}}
 

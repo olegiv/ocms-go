@@ -1086,6 +1086,17 @@ img {
     margin: 0 0 var(--dev-space-lg) 0;
 }
 
+.dev-hero-banner {
+    margin-top: var(--dev-space-md);
+    line-height: 0;
+}
+
+.dev-hero-banner img {
+    width: 100%;
+    display: block;
+    border-radius: var(--dev-radius-md);
+}
+
 /* Section titles */
 .dev-section {
     margin-bottom: var(--dev-space-2xl);
