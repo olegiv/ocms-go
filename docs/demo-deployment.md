@@ -36,6 +36,25 @@ When enabled, `SeedDemo` creates:
 | Editor | `editor@example.com` | `demo1234demo` |
 | Default admin | `admin@example.com` | `changeme1234` |
 
+### Demo Mode Restrictions
+
+In demo mode, certain actions are restricted to prevent abuse while still allowing visitors to explore the admin interface:
+
+| Area | Allowed | Blocked |
+|------|---------|---------|
+| Content (pages, tags, categories, menus, media, forms, widgets) | View | Create, edit, delete, unpublish |
+| Themes | View, switch active theme | Edit theme settings (colors, options) |
+| Users | View | Create, edit, delete, change roles |
+| Site config | View | Edit |
+| Languages | View | Edit |
+| API keys, webhooks | View | Create, edit, delete |
+| Import/export | — | Export, import |
+| Modules | View | Toggle, change settings |
+| Cache | View stats | Clear cache |
+| Media uploads | Upload up to 2MB | Upload over 2MB |
+| DB Manager module | — | SQL execution |
+| Form submissions | View | CSV export |
+
 ### Idempotent Seeding
 
 Demo seeding is idempotent - running it multiple times won't create duplicates. Each seed function checks for existing data before creating new records.
