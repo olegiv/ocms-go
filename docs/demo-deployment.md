@@ -51,7 +51,7 @@ In demo mode, certain actions are restricted to prevent abuse while still allowi
 | Import/export | — | Export, import |
 | Modules | View | Toggle, change settings |
 | Cache | View stats | Clear cache |
-| Media uploads | Upload up to 2MB | Upload over 2MB |
+| Media uploads | — | All uploads blocked |
 | DB Manager module | — | SQL execution |
 | Form submissions | View | CSV export |
 
