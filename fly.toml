@@ -14,7 +14,7 @@ primary_region = 'fra'
 
 [env]
   GOMEMLIMIT = '200MiB'  # Let Go runtime optimize GC within memory budget
-  OCMS_ACTIVE_THEME = 'default'
+  OCMS_ACTIVE_THEME = 'developer'
   OCMS_CUSTOM_DIR = '/app/custom'
   OCMS_DB_PATH = '/app/data/ocms.db'
   OCMS_DEMO_MODE = 'true'
