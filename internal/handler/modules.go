@@ -140,7 +140,7 @@ func (h *ModulesHandler) handleModuleToggle(w http.ResponseWriter, r *http.Reque
 func (h *ModulesHandler) ToggleActive(w http.ResponseWriter, r *http.Request) {
 	// Block in demo mode
 	if middleware.IsDemoMode() {
-		writeJSONError(w, middleware.DemoModeMessageDetailed(middleware.RestrictionModules), http.StatusForbidden)
+		writeJSONError(w, http.StatusForbidden, middleware.DemoModeMessageDetailed(middleware.RestrictionModules))
 		return
 	}
 
@@ -155,7 +155,7 @@ func (h *ModulesHandler) ToggleActive(w http.ResponseWriter, r *http.Request) {
 func (h *ModulesHandler) ToggleSidebar(w http.ResponseWriter, r *http.Request) {
 	// Block in demo mode
 	if middleware.IsDemoMode() {
-		writeJSONError(w, middleware.DemoModeMessageDetailed(middleware.RestrictionModules), http.StatusForbidden)
+		writeJSONError(w, http.StatusForbidden, middleware.DemoModeMessageDetailed(middleware.RestrictionModules))
 		return
 	}
 
