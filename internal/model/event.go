@@ -30,6 +30,7 @@ const (
 	EventCategoryMenu     = "menu"
 	EventCategoryAPIKey   = "api_key"
 	EventCategoryWebhook  = "webhook"
+	EventCategorySecurity = "security"
 )
 
 // Event represents a system event log entry.

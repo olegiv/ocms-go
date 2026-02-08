@@ -58,6 +58,7 @@
                             @blur="editing = false"
                             x-ref="renameInput{{.ID}}"
                             x-cloak
+                            maxlength="255"
                         >
                     </a>
                     <div class="folder-actions">
@@ -99,6 +100,7 @@
                     x-ref="newFolderInput"
                     @keydown.escape="showNewFolder = false"
                     required
+                    maxlength="255"
                 >
                 <div class="new-folder-actions">
                     <button type="submit" class="btn btn-sm btn-primary">{{T .AdminLang "btn.create"}}</button>

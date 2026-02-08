@@ -43,6 +43,7 @@
                             class="form-input {{if index $.Data.Errors (printf "%s_%s" $key .LanguageCode)}}is-invalid{{end}}"
                             value="{{.Value}}"
                             placeholder="{{T $.AdminLang "config.enter_value_for"}} {{.LanguageName}}"
+                            maxlength="255"
                         >
                         {{if index $.Data.Errors (printf "%s_%s" $key .LanguageCode)}}
                         <span class="form-error">{{index $.Data.Errors (printf "%s_%s" $key .LanguageCode)}}</span>
@@ -75,6 +76,7 @@
                     name="{{.Key}}_{{(index .Translations 0).LanguageCode}}"
                     class="form-input {{if index $.Data.Errors (printf "%s_%s" .Key (index .Translations 0).LanguageCode)}}is-invalid{{end}}"
                     value="{{(index .Translations 0).Value}}"
+                    maxlength="255"
                 >
                 {{if .Description}}
                 <span class="form-hint">{{.Description}}</span>
@@ -129,6 +131,7 @@
                     name="{{.Key}}"
                     class="form-input {{if index $.Data.Errors .Key}}is-invalid{{end}}"
                     value="{{.Value}}"
+                    maxlength="255"
                 >
                 {{if .Description}}
                 <span class="form-hint">{{.Description}}</span>

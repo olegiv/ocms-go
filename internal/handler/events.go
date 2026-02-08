@@ -6,6 +6,7 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
+	"net"
 	"net/http"
 	"sort"
 	"strconv"
@@ -49,6 +50,7 @@ type EventWithUser struct {
 	Details     string // Formatted metadata as readable text
 	DetailsLong bool   // True if details exceed display threshold
 	IPAddress   string
+	IsOwnIP     bool // True if this event's IP matches the current admin's IP
 	RequestURL  string
 	CreatedAt   string
 	UserName    string
@@ -236,6 +238,18 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 		events = convertEventsWithUser(rows)
 	}
 
+	// Mark events that match the current admin's IP to hide the Ban button
+	adminIP := middleware.GetClientIP(r)
+	for i := range events {
+		if events[i].IPAddress != "" {
+			eventHost := events[i].IPAddress
+			if h, _, err := net.SplitHostPort(eventHost); err == nil {
+				eventHost = h
+			}
+			events[i].IsOwnIP = eventHost == adminIP
+		}
+	}
+
 	data := EventsListData{
 		Events:      events,
 		TotalEvents: totalEvents,
@@ -248,6 +262,7 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 			model.EventCategoryUser,
 			model.EventCategoryConfig,
 			model.EventCategorySystem,
+			model.EventCategorySecurity,
 			model.EventCategoryCache,
 			model.EventCategoryMigrator,
 			model.EventCategoryMedia,

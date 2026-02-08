@@ -48,7 +48,8 @@
                                value="{{index $.Data.Config .Name}}"
                                {{if .Required}}required{{end}}
                                {{if .Placeholder}}placeholder="{{.Placeholder}}"{{end}}
-                               class="form-control">
+                               class="form-control"
+                               maxlength="255">
                         {{end}}
                     </div>
                     {{end}}

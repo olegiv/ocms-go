@@ -1856,23 +1856,8 @@ a.tag:hover {
 /* Form page container */
 .form-page {
     max-width: 600px;
-    margin: var(--spacing-xl) auto;
+    margin: 0 auto;
     padding: 0 var(--spacing-md);
-}
-
-/* Form header */
-.form-page .form-header {
-    margin-bottom: var(--spacing-xl);
-    text-align: center;
-}
-
-.form-page .form-header h1 {
-    color: var(--primary-color);
-    margin-bottom: var(--spacing-sm);
-}
-
-.form-page .form-description {
-    color: var(--text-muted);
 }
 
 /* Form styling */
