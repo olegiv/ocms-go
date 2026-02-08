@@ -336,13 +336,6 @@ func (h *FormsHandler) getActiveFormBySlug(w http.ResponseWriter, r *http.Reques
 	return &form
 }
 
-// getSiteName retrieves the site name from config with a default fallback.
-func (h *FormsHandler) getSiteName(ctx context.Context) string {
-	if siteConfig, err := h.queries.GetConfig(ctx, "site_name"); err == nil && siteConfig.Value != "" {
-		return siteConfig.Value
-	}
-	return "oCMS"
-}
 
 // updateLanguageContext updates the request context with the form's language.
 // This ensures UI translations match the form's language, consistent with page handler behavior.
@@ -741,7 +734,7 @@ type AddFieldRequest struct {
 
 // AddField handles POST /admin/forms/{id}/fields - adds a form field.
 func (h *FormsHandler) AddField(w http.ResponseWriter, r *http.Request) {
-	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+	if demoGuardAPI(w) {
 		return
 	}
 
@@ -820,7 +813,7 @@ type UpdateFieldRequest struct {
 
 // UpdateField handles PUT /admin/forms/{id}/fields/{fieldId} - updates a form field.
 func (h *FormsHandler) UpdateField(w http.ResponseWriter, r *http.Request) {
-	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+	if demoGuardAPI(w) {
 		return
 	}
 
@@ -882,7 +875,7 @@ func (h *FormsHandler) UpdateField(w http.ResponseWriter, r *http.Request) {
 
 // DeleteField handles DELETE /admin/forms/{id}/fields/{fieldId} - deletes a form field.
 func (h *FormsHandler) DeleteField(w http.ResponseWriter, r *http.Request) {
-	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+	if demoGuardAPI(w) {
 		return
 	}
 
@@ -916,7 +909,7 @@ type ReorderFieldsRequest struct {
 
 // ReorderFields handles POST /admin/forms/{id}/fields/reorder - reorders form fields.
 func (h *FormsHandler) ReorderFields(w http.ResponseWriter, r *http.Request) {
-	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+	if demoGuardAPI(w) {
 		return
 	}
 
@@ -1010,7 +1003,7 @@ func (h *FormsHandler) Show(w http.ResponseWriter, r *http.Request) {
 		CSRFToken:        template.HTML(h.sessionManager.Token(r.Context())),
 	}
 
-	h.render(w, r, data)
+	h.render(w, data)
 }
 
 // Submit handles POST /forms/{slug} - processes form submission.
@@ -1184,7 +1177,7 @@ func (h *FormsHandler) renderFormWithErrors(w http.ResponseWriter, r *http.Reque
 		CSRFToken:        template.HTML(h.sessionManager.Token(r.Context())),
 	}
 
-	h.render(w, r, data)
+	h.render(w, data)
 }
 
 // renderFormSuccess renders the form success page.
@@ -1200,7 +1193,7 @@ func (h *FormsHandler) renderFormSuccess(w http.ResponseWriter, r *http.Request,
 		Values:           make(map[string]string),
 	}
 
-	h.render(w, r, data)
+	h.render(w, data)
 }
 
 // isValidEmail checks if the email is valid.
@@ -1430,7 +1423,7 @@ func (h *FormsHandler) ViewSubmission(w http.ResponseWriter, r *http.Request) {
 
 // DeleteSubmission handles DELETE /admin/forms/{id}/submissions/{subId} - deletes a submission.
 func (h *FormsHandler) DeleteSubmission(w http.ResponseWriter, r *http.Request) {
-	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+	if demoGuardAPI(w) {
 		return
 	}
 
@@ -1816,7 +1809,7 @@ type FormTemplateData struct {
 }
 
 // render renders a form template using the active theme.
-func (h *FormsHandler) render(w http.ResponseWriter, r *http.Request, data FormTemplateData) {
+func (h *FormsHandler) render(w http.ResponseWriter, data FormTemplateData) {
 	activeTheme := h.themeManager.GetActiveTheme()
 	if activeTheme == nil {
 		slog.Error("no active theme available")

@@ -21,6 +21,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
@@ -180,6 +181,139 @@ func main() {
 	}
 }
 
+// parseLogLevel converts a log level string to slog.Level.
+func parseLogLevel(level string) slog.Level {
+	switch level {
+	case "debug":
+		return slog.LevelDebug
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
+}
+
+// initI18nFromDB updates i18n settings from database (active languages, default language).
+func initI18nFromDB(ctx context.Context, queries *store.Queries) {
+	if activeLanguages, err := queries.ListActiveLanguages(ctx); err == nil {
+		var activeCodes []string
+		for _, lang := range activeLanguages {
+			activeCodes = append(activeCodes, lang.Code)
+		}
+		i18n.SetActiveLanguages(activeCodes)
+		slog.Info("i18n active languages set from database", "languages", activeCodes)
+	}
+
+	if defaultLang, err := queries.GetDefaultLanguage(ctx); err == nil {
+		if i18n.IsSupported(defaultLang.Code) {
+			i18n.SetDefaultLanguage(defaultLang.Code)
+			slog.Info("i18n default language set from database", "language", defaultLang.Code)
+		}
+	}
+}
+
+// initCacheManager creates and starts the cache manager, preloads caches.
+func initCacheManager(ctx context.Context, db *sql.DB, cfg *config.Config) *cache.Manager {
+	cacheConfig := cache.Config{
+		Type:             "memory",
+		RedisURL:         cfg.RedisURL,
+		Prefix:           cfg.CachePrefix,
+		DefaultTTL:       time.Duration(cfg.CacheTTL) * time.Second,
+		MaxSize:          cfg.CacheMaxSize,
+		CleanupInterval:  time.Minute,
+		FallbackToMemory: true,
+	}
+	if cfg.UseRedisCache() {
+		cacheConfig.Type = "redis"
+	}
+	cacheManager := cache.NewManagerWithConfig(store.New(db), cacheConfig)
+	cacheManager.Start()
+
+	if err := cacheManager.Preload(ctx, ""); err != nil {
+		slog.Warn("failed to preload caches", "error", err)
+	}
+	switch {
+	case cacheManager.IsRedis():
+		slog.Info(handler.LogCacheManagerInit, "backend", "redis", "url", cfg.RedisURL)
+	case cacheManager.Info().IsFallback:
+		slog.Warn(handler.LogCacheManagerInit, "backend", "memory", "note", "Redis unavailable, using fallback")
+	default:
+		slog.Info(handler.LogCacheManagerInit, "backend", "memory")
+	}
+
+	return cacheManager
+}
+
+// registerModules registers all application modules with the registry.
+func registerModules(registry *module.Registry, sentinelModule *sentinel.Module, sessionManager *scs.SessionManager, eventService *service.EventService) (*analytics_int.Module, error) {
+	modules := []module.Module{
+		example.New(),
+		developer.New(),
+		analytics_ext.New(),
+		embed.New(),
+		hcaptcha.New(),
+		privacy.New(),
+		informer.New(),
+	}
+
+	for _, mod := range modules {
+		if err := registry.Register(mod); err != nil {
+			return nil, fmt.Errorf("registering %s module: %w", mod.Name(), err)
+		}
+	}
+
+	sentinelModule.SetSessionManager(sessionManager)
+	sentinelModule.SetActiveChecker(registry)
+	sentinelModule.SetEventLogger(eventService)
+	if err := registry.Register(sentinelModule); err != nil {
+		return nil, fmt.Errorf("registering sentinel module: %w", err)
+	}
+
+	if err := registry.Register(migrator.New()); err != nil {
+		return nil, fmt.Errorf("registering migrator module: %w", err)
+	}
+	if err := registry.Register(dbmanager.New()); err != nil {
+		return nil, fmt.Errorf("registering dbmanager module: %w", err)
+	}
+
+	internalAnalyticsModule := analytics_int.New()
+	if err := registry.Register(internalAnalyticsModule); err != nil {
+		return nil, fmt.Errorf("registering analytics_int module: %w", err)
+	}
+
+	return internalAnalyticsModule, nil
+}
+
+// loadActiveTheme determines and activates the appropriate theme.
+func loadActiveTheme(ctx context.Context, queries *store.Queries, themeManager *theme.Manager, renderer *render.Renderer, cfg *config.Config) {
+	themeManager.SetFuncMap(renderer.TemplateFuncs())
+	if err := themeManager.LoadThemes(); err != nil {
+		slog.Warn("failed to load themes", "error", err)
+	}
+
+	activeTheme := cfg.ActiveTheme
+	if dbConfig, err := queries.GetConfigByKey(ctx, "active_theme"); err == nil && dbConfig.Value != "" {
+		activeTheme = dbConfig.Value
+		slog.Info("active theme loaded from database", "theme", activeTheme)
+	}
+
+	if themeManager.HasTheme(activeTheme) {
+		if err := themeManager.SetActiveTheme(activeTheme); err != nil {
+			slog.Warn("failed to set active theme", "theme", activeTheme, "error", err)
+		}
+	} else if themeManager.ThemeCount() > 0 {
+		availableThemes := themeManager.ListThemesWithActive()
+		if len(availableThemes) > 0 {
+			if err := themeManager.SetActiveTheme(availableThemes[0].Name); err != nil {
+				slog.Warn("failed to set fallback theme", "error", err)
+			}
+		}
+	}
+	slog.Info("theme manager initialized", "themes", themeManager.ThemeCount())
+}
+
 func run() error {
 	// Load .env files if present (development)
 	_ = godotenv.Load()
@@ -199,16 +333,7 @@ func run() error {
 	}
 
 	// Setup logger
-	logLevel := slog.LevelInfo
-	switch cfg.LogLevel {
-	case "debug":
-		logLevel = slog.LevelDebug
-	case "warn":
-		logLevel = slog.LevelWarn
-	case "error":
-		logLevel = slog.LevelError
-	}
-
+	logLevel := parseLogLevel(cfg.LogLevel)
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: logLevel,
 	}))
@@ -275,24 +400,7 @@ func run() error {
 
 	// Update i18n from database settings
 	queries := store.New(db)
-
-	// Set active languages (only match against languages that are active in DB)
-	if activeLanguages, err := queries.ListActiveLanguages(ctx); err == nil {
-		var activeCodes []string
-		for _, lang := range activeLanguages {
-			activeCodes = append(activeCodes, lang.Code)
-		}
-		i18n.SetActiveLanguages(activeCodes)
-		slog.Info("i18n active languages set from database", "languages", activeCodes)
-	}
-
-	// Set default language
-	if defaultLang, err := queries.GetDefaultLanguage(ctx); err == nil {
-		if i18n.IsSupported(defaultLang.Code) {
-			i18n.SetDefaultLanguage(defaultLang.Code)
-			slog.Info("i18n default language set from database", "language", defaultLang.Code)
-		}
-	}
+	initI18nFromDB(ctx, queries)
 
 	// Initialize session manager
 	sessionManager := session.New(db, cfg.IsDevelopment())
@@ -302,35 +410,9 @@ func run() error {
 	// Initialize language cookie security settings
 	middleware.InitLanguageCookies(cfg.IsDevelopment())
 
-	// Initialize cache manager with config (must be before renderer for shared MenuService)
-	cacheConfig := cache.Config{
-		Type:             "memory",
-		RedisURL:         cfg.RedisURL,
-		Prefix:           cfg.CachePrefix,
-		DefaultTTL:       time.Duration(cfg.CacheTTL) * time.Second,
-		MaxSize:          cfg.CacheMaxSize,
-		CleanupInterval:  time.Minute,
-		FallbackToMemory: true,
-	}
-	if cfg.UseRedisCache() {
-		cacheConfig.Type = "redis"
-	}
-	cacheManager := cache.NewManagerWithConfig(store.New(db), cacheConfig)
-	cacheManager.Start()
+	// Initialize cache manager
+	cacheManager := initCacheManager(ctx, db, cfg)
 	defer cacheManager.Stop()
-
-	// Preload caches (config, menus, languages)
-	if err := cacheManager.Preload(ctx, ""); err != nil {
-		slog.Warn("failed to preload caches", "error", err)
-	}
-	switch {
-	case cacheManager.IsRedis():
-		slog.Info(handler.LogCacheManagerInit, "backend", "redis", "url", cfg.RedisURL)
-	case cacheManager.Info().IsFallback:
-		slog.Warn(handler.LogCacheManagerInit, "backend", "memory", "note", "Redis unavailable, using fallback")
-	default:
-		slog.Info(handler.LogCacheManagerInit, "backend", "memory")
-	}
 
 	// Create shared MenuService using cache manager's MenuCache
 	menuService := service.NewMenuService(db, cacheManager.Menus)
@@ -403,47 +485,11 @@ func run() error {
 		Hooks:  hookRegistry,
 	}
 
-	// Register modules
-	// Modules should be registered before InitAll is called
-	if err := moduleRegistry.Register(example.New()); err != nil {
-		return fmt.Errorf("registering example module: %w", err)
-	}
-	if err := moduleRegistry.Register(developer.New()); err != nil {
-		return fmt.Errorf("registering developer module: %w", err)
-	}
-	if err := moduleRegistry.Register(analytics_ext.New()); err != nil {
-		return fmt.Errorf("registering analytics_ext module: %w", err)
-	}
-	if err := moduleRegistry.Register(embed.New()); err != nil {
-		return fmt.Errorf("registering embed module: %w", err)
-	}
-	if err := moduleRegistry.Register(hcaptcha.New()); err != nil {
-		return fmt.Errorf("registering hcaptcha module: %w", err)
-	}
-	if err := moduleRegistry.Register(privacy.New()); err != nil {
-		return fmt.Errorf("registering privacy module: %w", err)
-	}
-	if err := moduleRegistry.Register(informer.New()); err != nil {
-		return fmt.Errorf("registering informer module: %w", err)
-	}
+	// Register all modules
 	sentinelModule := sentinel.New()
-	sentinelModule.SetSessionManager(sessionManager)
-	sentinelModule.SetActiveChecker(moduleRegistry)
-	sentinelModule.SetEventLogger(eventService)
-	if err := moduleRegistry.Register(sentinelModule); err != nil {
-		return fmt.Errorf("registering sentinel module: %w", err)
-	}
-	if err := moduleRegistry.Register(migrator.New()); err != nil {
-		return fmt.Errorf("registering migrator module: %w", err)
-	}
-	if err := moduleRegistry.Register(dbmanager.New()); err != nil {
-		return fmt.Errorf("registering dbmanager module: %w", err)
-	}
-
-	// Register internal analytics module (built-in analytics tracking)
-	internalAnalyticsModule := analytics_int.New()
-	if err := moduleRegistry.Register(internalAnalyticsModule); err != nil {
-		return fmt.Errorf("registering analytics_int module: %w", err)
+	internalAnalyticsModule, err := registerModules(moduleRegistry, sentinelModule, sessionManager, eventService)
+	if err != nil {
+		return err
 	}
 
 	// Initialize all registered modules
@@ -497,33 +543,7 @@ func run() error {
 	slog.Info("module system initialized", "modules", moduleRegistry.Count())
 
 	// Load themes (after modules provide their template functions)
-	themeManager.SetFuncMap(renderer.TemplateFuncs())
-	if err := themeManager.LoadThemes(); err != nil {
-		slog.Warn("failed to load themes", "error", err)
-	}
-
-	// Determine active theme: database config takes priority over environment variable
-	activeTheme := cfg.ActiveTheme
-	if dbConfig, err := queries.GetConfigByKey(ctx, "active_theme"); err == nil && dbConfig.Value != "" {
-		activeTheme = dbConfig.Value
-		slog.Info("active theme loaded from database", "theme", activeTheme)
-	}
-
-	// Set active theme
-	if themeManager.HasTheme(activeTheme) {
-		if err := themeManager.SetActiveTheme(activeTheme); err != nil {
-			slog.Warn("failed to set active theme", "theme", activeTheme, "error", err)
-		}
-	} else if themeManager.ThemeCount() > 0 {
-		// Fall back to first available theme
-		availableThemes := themeManager.ListThemesWithActive()
-		if len(availableThemes) > 0 {
-			if err := themeManager.SetActiveTheme(availableThemes[0].Name); err != nil {
-				slog.Warn("failed to set fallback theme", "error", err)
-			}
-		}
-	}
-	slog.Info("theme manager initialized", "themes", themeManager.ThemeCount())
+	loadActiveTheme(ctx, queries, themeManager, renderer, cfg)
 
 	// Create router
 	r := chi.NewRouter()

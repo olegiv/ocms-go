@@ -135,7 +135,7 @@ type CreateWidgetRequest struct {
 
 // Create handles POST /admin/widgets - creates a new widget.
 func (h *WidgetsHandler) Create(w http.ResponseWriter, r *http.Request) {
-	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+	if demoGuardAPI(w) {
 		return
 	}
 
@@ -202,7 +202,7 @@ type UpdateWidgetRequest struct {
 
 // Update handles PUT /admin/widgets/{id} - updates a widget.
 func (h *WidgetsHandler) Update(w http.ResponseWriter, r *http.Request) {
-	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+	if demoGuardAPI(w) {
 		return
 	}
 
@@ -288,7 +288,7 @@ type ReorderWidgetsRequest struct {
 
 // Reorder handles POST /admin/widgets/reorder - reorders widgets.
 func (h *WidgetsHandler) Reorder(w http.ResponseWriter, r *http.Request) {
-	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+	if demoGuardAPI(w) {
 		return
 	}
 
@@ -335,7 +335,7 @@ type MoveWidgetRequest struct {
 
 // MoveWidget handles POST /admin/widgets/{id}/move - moves a widget to a different area.
 func (h *WidgetsHandler) MoveWidget(w http.ResponseWriter, r *http.Request) {
-	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+	if demoGuardAPI(w) {
 		return
 	}
 

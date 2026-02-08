@@ -494,7 +494,7 @@ type AddItemRequest struct {
 
 // AddItem handles POST /admin/menus/{id}/items - adds a menu item.
 func (h *MenusHandler) AddItem(w http.ResponseWriter, r *http.Request) {
-	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+	if demoGuardAPI(w) {
 		return
 	}
 
@@ -570,7 +570,7 @@ type UpdateItemRequest struct {
 
 // UpdateItem handles PUT /admin/menus/{id}/items/{itemId} - updates a menu item.
 func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
-	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+	if demoGuardAPI(w) {
 		return
 	}
 
@@ -685,7 +685,7 @@ type ReorderRequest struct {
 
 // Reorder handles POST /admin/menus/{id}/reorder - reorders menu items.
 func (h *MenusHandler) Reorder(w http.ResponseWriter, r *http.Request) {
-	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+	if demoGuardAPI(w) {
 		return
 	}
 

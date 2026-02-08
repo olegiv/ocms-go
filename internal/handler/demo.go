@@ -39,17 +39,17 @@ func demoGuard(w http.ResponseWriter, r *http.Request, renderer *render.Renderer
 // Usage:
 //
 //	func (h *APIHandler) CreatePage(w http.ResponseWriter, r *http.Request) {
-//	    if demoGuardAPI(w, middleware.RestrictionCreateUser) {
+//	    if demoGuardAPI(w) {
 //	        return
 //	    }
 //	    // ... normal handler code
 //	}
-func demoGuardAPI(w http.ResponseWriter, restriction middleware.DemoRestriction) bool {
+func demoGuardAPI(w http.ResponseWriter) bool {
 	if !middleware.IsDemoMode() {
 		return false
 	}
 
-	message := middleware.DemoModeMessageDetailed(restriction)
+	message := middleware.DemoModeMessageDetailed(middleware.RestrictionContentReadOnly)
 	http.Error(w, message, http.StatusForbidden)
 	return true
 }
