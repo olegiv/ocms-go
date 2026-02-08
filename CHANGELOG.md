@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-02-09
+
+### Added
+
+#### Informer Module
+- Dismissible notification bar with flow layout and HTML content support
+- Cookie-based dismissal tracking with reset capability
+- Daily auto-reset for demo deployments
+- Klaro cookie consent integration (essential purpose and cookie policy)
+- Full i18n support (English and Russian translations)
+
+#### Demo Mode Security
+- Read-only content protection (blocks create/edit/delete/unpublish)
+- Module and theme settings protection
+- Form submission CSV export blocking
+- SQL execution blocking in DB Manager module
+- IP address masking in event logs
+- Theme switching still permitted for demo testing
+- Comprehensive test coverage for all restrictions
+
+#### Theme Enhancements
+- Hero section settings for developer theme
+- Hero image placed inside terminal body
+- Terminal frame visible when hero text is off
+
+### Changed
+- Update Go to 1.25.7
+- Update `golang.org/x/sys` to v0.41.0
+- Replace `GOGC=50` with `GOMEMLIMIT=200MiB` in Fly.io config
+
+### Fixed
+- Fix OOM crash on login for 256MB Fly.io VMs (Argon2id memory params)
+- Fix sentinel middleware not intercepting requests
+- Fix duplicate sentinel event log entries
+- Restore sentinel ban UI in events template
+- Fix template crash on forms submissions page
+- Fix swapped `writeJSONError` arguments in modules handler
+- Remove dead demo upload size limit code
+
+### Security
+- Fix Cookie 'Secure' attribute not set to true (code scanning alerts #33, #34, #36)
+
 ## [0.6.0] - 2026-02-06
 
 ### Added
@@ -269,7 +311,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/olegiv/ocms-go/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/olegiv/ocms-go/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/olegiv/ocms-go/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/olegiv/ocms-go/compare/v0.3.0...v0.4.0
