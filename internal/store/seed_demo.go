@@ -97,9 +97,17 @@ func SeedDemo(ctx context.Context, db *sql.DB) error {
 }
 
 func seedDemoInformerSettings(db *sql.DB) error {
+	// Check if the informer module table exists (created by module migration, not core migrations)
+	var tableExists int
+	err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='informer_settings'`).Scan(&tableExists)
+	if err != nil || tableExists == 0 {
+		slog.Info("informer_settings table not found, skipping demo informer setup")
+		return nil
+	}
+
 	const demoText = `This is a demo instance. Admin panel: <a href="/admin/" style="color:#fff;text-decoration:underline">/admin/</a> &mdash; Login: <strong>demo@example.com</strong> / <strong>demo1234demo</strong>`
 
-	_, err := db.Exec(`
+	_, err = db.Exec(`
 		UPDATE informer_settings SET
 			enabled = 1,
 			text = ?,
