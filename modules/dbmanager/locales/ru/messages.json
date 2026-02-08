@@ -31,6 +31,7 @@
         {"id": "dbmanager.history_success", "message": "Success", "translation": "Успешно"},
         {"id": "dbmanager.history_failed", "message": "Failed", "translation": "Ошибка"},
         {"id": "dbmanager.execute_confirm", "message": "Are you sure you want to execute this query?", "translation": "Вы уверены, что хотите выполнить этот запрос?"},
+        {"id": "dbmanager.demo_disabled", "message": "SQL execution is disabled in demo mode. You can view query history below.", "translation": "Выполнение SQL-запросов отключено в демо-режиме. Вы можете просмотреть историю запросов ниже."},
         {"id": "dbmanager.ms", "message": "ms", "translation": "мс"}
     ]
 }

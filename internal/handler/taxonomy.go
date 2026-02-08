@@ -152,6 +152,10 @@ func (h *TaxonomyHandler) NewTagForm(w http.ResponseWriter, r *http.Request) {
 
 // CreateTag handles POST /admin/tags - creates a new tag.
 func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminTagsNew) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
@@ -273,6 +277,10 @@ func (h *TaxonomyHandler) EditTagForm(w http.ResponseWriter, r *http.Request) {
 
 // UpdateTag handles PUT /admin/tags/{id} - updates an existing tag.
 func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminTags) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
@@ -360,6 +368,12 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 
 // DeleteTag handles DELETE /admin/tags/{id} - deletes a tag.
 func (h *TaxonomyHandler) DeleteTag(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		http.Error(w, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteTag), http.StatusForbidden)
+		return
+	}
+
 	params := deleteEntityParams[store.Tag]{EntityName: "tag", IDField: "tag_id", RedirectURL: redirectAdminTags, SuccessMessage: "Tag deleted successfully"}
 	params.RequireFn = func(id int64) (store.Tag, bool) { return h.requireTagWithError(w, r, id) }
 	params.DeleteFn = h.queries.DeleteTag
@@ -400,6 +414,10 @@ func (h *TaxonomyHandler) SearchTags(w http.ResponseWriter, r *http.Request) {
 
 // TranslateTag handles POST /admin/tags/{id}/translate/{langCode} - creates a translation.
 func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminTags) {
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		flashError(w, r, h.renderer, redirectAdminTags, "Invalid tag ID")
@@ -687,6 +705,10 @@ func (h *TaxonomyHandler) NewCategoryForm(w http.ResponseWriter, r *http.Request
 
 // CreateCategory handles POST /admin/categories - creates a new category.
 func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminCategoriesNew) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
@@ -827,6 +849,10 @@ func (h *TaxonomyHandler) EditCategoryForm(w http.ResponseWriter, r *http.Reques
 
 // UpdateCategory handles PUT /admin/categories/{id} - updates an existing category.
 func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminCategories) {
+		return
+	}
+
 	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
@@ -942,6 +968,12 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 
 // DeleteCategory handles DELETE /admin/categories/{id} - deletes a category.
 func (h *TaxonomyHandler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		http.Error(w, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteCategory), http.StatusForbidden)
+		return
+	}
+
 	handleDeleteEntity(w, r, h.renderer, deleteEntityParams[store.Category]{
 		EntityName:     "category",
 		IDField:        "category_id",
@@ -955,6 +987,10 @@ func (h *TaxonomyHandler) DeleteCategory(w http.ResponseWriter, r *http.Request)
 
 // TranslateCategory handles POST /admin/categories/{id}/translate/{langCode} - creates a translation.
 func (h *TaxonomyHandler) TranslateCategory(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminCategories) {
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		flashError(w, r, h.renderer, redirectAdminCategories, "Invalid category ID")

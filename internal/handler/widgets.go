@@ -135,6 +135,10 @@ type CreateWidgetRequest struct {
 
 // Create handles POST /admin/widgets - creates a new widget.
 func (h *WidgetsHandler) Create(w http.ResponseWriter, r *http.Request) {
+	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+		return
+	}
+
 	var req CreateWidgetRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
@@ -198,6 +202,10 @@ type UpdateWidgetRequest struct {
 
 // Update handles PUT /admin/widgets/{id} - updates a widget.
 func (h *WidgetsHandler) Update(w http.ResponseWriter, r *http.Request) {
+	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid widget ID")
@@ -243,6 +251,12 @@ func (h *WidgetsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/widgets/{id} - deletes a widget.
 func (h *WidgetsHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		writeJSONError(w, http.StatusForbidden, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteWidget))
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid widget ID")
@@ -274,6 +288,10 @@ type ReorderWidgetsRequest struct {
 
 // Reorder handles POST /admin/widgets/reorder - reorders widgets.
 func (h *WidgetsHandler) Reorder(w http.ResponseWriter, r *http.Request) {
+	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+		return
+	}
+
 	var req ReorderWidgetsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
@@ -317,6 +335,10 @@ type MoveWidgetRequest struct {
 
 // MoveWidget handles POST /admin/widgets/{id}/move - moves a widget to a different area.
 func (h *WidgetsHandler) MoveWidget(w http.ResponseWriter, r *http.Request) {
+	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid widget ID")

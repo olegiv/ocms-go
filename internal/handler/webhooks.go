@@ -194,6 +194,11 @@ func (h *WebhooksHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // NewForm handles GET /admin/webhooks/new - displays the new webhook form.
 func (h *WebhooksHandler) NewForm(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionWebhooks, redirectAdminWebhooks) {
+		return
+	}
+
 	h.renderNewWebhookForm(w, r, WebhookFormData{
 		Events:      model.AllWebhookEvents(),
 		Errors:      make(map[string]string),
@@ -206,6 +211,11 @@ func (h *WebhooksHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 
 // Create handles POST /admin/webhooks - creates a new webhook.
 func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionWebhooks, redirectAdminWebhooks) {
+		return
+	}
+
 	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminWebhooksNew) {
 		return
 	}
@@ -301,6 +311,11 @@ func (h *WebhooksHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /admin/webhooks/{id} - updates an existing webhook.
 func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if demoGuard(w, r, h.renderer, middleware.RestrictionWebhooks, redirectAdminWebhooks) {
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		flashError(w, r, h.renderer, redirectAdminWebhooks, "Invalid webhook ID")
@@ -365,6 +380,12 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/webhooks/{id} - deletes a webhook.
 func (h *WebhooksHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		h.sendDeleteError(w, middleware.DemoModeMessageDetailed(middleware.RestrictionWebhooks))
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		h.sendDeleteError(w, "Invalid webhook ID")

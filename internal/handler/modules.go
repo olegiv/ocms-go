@@ -138,6 +138,12 @@ func (h *ModulesHandler) handleModuleToggle(w http.ResponseWriter, r *http.Reque
 
 // ToggleActive handles POST /admin/modules/{name}/toggle - toggles module active status.
 func (h *ModulesHandler) ToggleActive(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		writeJSONError(w, http.StatusForbidden, middleware.DemoModeMessageDetailed(middleware.RestrictionModules))
+		return
+	}
+
 	h.handleModuleToggle(w, r, moduleToggleParams{
 		fieldName: "active",
 		logMsg:    "module active status toggled",
@@ -147,6 +153,12 @@ func (h *ModulesHandler) ToggleActive(w http.ResponseWriter, r *http.Request) {
 
 // ToggleSidebar handles POST /admin/modules/{name}/toggle-sidebar - toggles module sidebar visibility.
 func (h *ModulesHandler) ToggleSidebar(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		writeJSONError(w, http.StatusForbidden, middleware.DemoModeMessageDetailed(middleware.RestrictionModules))
+		return
+	}
+
 	h.handleModuleToggle(w, r, moduleToggleParams{
 		fieldName: "show",
 		logMsg:    "module sidebar visibility toggled",

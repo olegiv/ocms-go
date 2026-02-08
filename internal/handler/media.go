@@ -265,6 +265,17 @@ func (h *MediaHandler) UploadForm(w http.ResponseWriter, r *http.Request) {
 
 // Upload handles POST /admin/media/upload - processes file upload.
 func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
+	if middleware.IsDemoMode() {
+		msg := middleware.DemoModeMessageDetailed(middleware.RestrictionContentReadOnly)
+		if r.Header.Get("HX-Request") == "true" {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(msg))
+			return
+		}
+		flashError(w, r, h.renderer, redirectAdminMediaUpload, msg)
+		return
+	}
+
 	userID := middleware.GetUserID(r)
 
 	// Parse multipart form with max memory
@@ -489,6 +500,10 @@ func (h *MediaHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /admin/media/{id} - updates media metadata.
 func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
+	if demoGuard(w, r, h.renderer, middleware.RestrictionContentReadOnly, redirectAdminMedia) {
+		return
+	}
+
 	lang := h.renderer.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -610,6 +625,12 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/media/{id} - deletes media and files.
 func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		http.Error(w, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteMedia), http.StatusForbidden)
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid media ID", http.StatusBadRequest)
@@ -647,6 +668,10 @@ func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // CreateFolder handles POST /admin/media/folders - creates a new folder.
 func (h *MediaHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
+	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+		return
+	}
+
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Invalid form data", http.StatusBadRequest)
 		return
@@ -707,6 +732,10 @@ func (h *MediaHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 
 // UpdateFolder handles PUT /admin/media/folders/{id} - renames or moves a folder.
 func (h *MediaHandler) UpdateFolder(w http.ResponseWriter, r *http.Request) {
+	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid folder ID", http.StatusBadRequest)
@@ -779,6 +808,12 @@ func (h *MediaHandler) UpdateFolder(w http.ResponseWriter, r *http.Request) {
 
 // DeleteFolder handles DELETE /admin/media/folders/{id} - deletes a folder.
 func (h *MediaHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		http.Error(w, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteMedia), http.StatusForbidden)
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid folder ID", http.StatusBadRequest)
@@ -833,6 +868,10 @@ func (h *MediaHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 
 // RegenerateVariants handles POST /admin/media/{id}/regenerate - regenerates image variants.
 func (h *MediaHandler) RegenerateVariants(w http.ResponseWriter, r *http.Request) {
+	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+		return
+	}
+
 	lang := h.renderer.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -879,6 +918,10 @@ func (h *MediaHandler) RegenerateVariants(w http.ResponseWriter, r *http.Request
 
 // MoveMedia handles POST /admin/media/{id}/move - moves media to a different folder.
 func (h *MediaHandler) MoveMedia(w http.ResponseWriter, r *http.Request) {
+	if demoGuardAPI(w, middleware.RestrictionContentReadOnly) {
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid media ID", http.StatusBadRequest)
