@@ -109,7 +109,7 @@ A lightweight content management system built with Go, featuring a modern admin 
 
 ## Prerequisites
 
-- Go 1.21 or later
+- Go 1.25 or later
 - [Node.js](https://nodejs.org/) (npm) for frontend dependencies
 - [sqlc](https://sqlc.dev/) for SQL code generation
 - [templ](https://templ.guide/) for type-safe HTML templates
@@ -600,7 +600,7 @@ git commit -m "Update Claude Code shared submodule"
 
 ## Technology Stack
 
-- **Backend**: Go 1.21+
+- **Backend**: Go 1.25+
 - **Database**: SQLite with [goose](https://github.com/pressly/goose) migrations
 - **SQL**: Type-safe queries with [sqlc](https://sqlc.dev/)
 - **Templates**: [templ](https://templ.guide/) for type-safe HTML
