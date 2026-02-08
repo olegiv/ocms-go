@@ -8,10 +8,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log/slog"
+	"os"
+	"syscall"
 	"time"
 
 	"github.com/robfig/cron/v3"
 
+	"github.com/olegiv/ocms-go/internal/demo"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -131,4 +134,20 @@ func (s *Scheduler) publishPage(ctx context.Context, queries *store.Queries, pag
 	}
 
 	return nil
+}
+
+// AddDemoReset registers a daily job at 01:00 UTC that resets the demo
+// database and uploads, then sends SIGTERM for a clean restart.
+func (s *Scheduler) AddDemoReset(dbPath, uploadsDir, dataDir string) error {
+	_, err := s.cron.AddFunc("0 1 * * *", func() {
+		s.logger.Info("starting scheduled demo reset")
+		if err := demo.Reset(dbPath, uploadsDir, dataDir); err != nil {
+			s.logger.Error("scheduled demo reset failed", "error", err)
+			return
+		}
+		s.logger.Info("demo reset complete, sending SIGTERM for restart")
+		p, _ := os.FindProcess(os.Getpid())
+		_ = p.Signal(syscall.SIGTERM)
+	})
+	return err
 }

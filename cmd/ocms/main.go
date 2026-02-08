@@ -27,6 +27,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/config"
+	"github.com/olegiv/ocms-go/internal/demo"
 	"github.com/olegiv/ocms-go/internal/handler"
 	"github.com/olegiv/ocms-go/internal/handler/api"
 	"github.com/olegiv/ocms-go/internal/i18n"
@@ -224,6 +225,13 @@ func run() error {
 		return fmt.Errorf("creating data directory: %w", err)
 	}
 
+	// Reset demo data if overdue (only in demo mode)
+	if middleware.IsDemoMode() {
+		if err := demo.ResetIfNeeded(cfg.DBPath, cfg.UploadsDir, dbDir); err != nil {
+			slog.Warn("demo reset check failed", "error", err)
+		}
+	}
+
 	// Initialize database
 	slog.Info("initializing database", "path", cfg.DBPath)
 	db, err := store.NewDB(cfg.DBPath)
@@ -359,6 +367,14 @@ func run() error {
 		return fmt.Errorf("starting scheduler: %w", err)
 	}
 	defer sched.Stop()
+
+	// Schedule daily demo reset at 01:00 UTC (if demo mode)
+	if middleware.IsDemoMode() {
+		if err := sched.AddDemoReset(cfg.DBPath, cfg.UploadsDir, dbDir); err != nil {
+			return fmt.Errorf("adding demo reset job: %w", err)
+		}
+		slog.Info("demo reset scheduled", "schedule", "daily at 01:00 UTC")
+	}
 
 	// Initialize and start webhook dispatcher
 	webhookDispatcher := webhook.NewDispatcher(db, logger, webhook.DefaultConfig())
