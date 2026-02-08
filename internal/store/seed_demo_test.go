@@ -370,8 +370,8 @@ func TestSeedDemoMenuItems(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListMenuItems: %v", err)
 	}
-	if len(items) != 6 {
-		t.Errorf("menu items = %d, want 6", len(items))
+	if len(items) != 7 {
+		t.Errorf("menu items = %d, want 7", len(items))
 	}
 
 	// Running again should skip

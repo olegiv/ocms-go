@@ -407,6 +407,17 @@ func getDemoPages() []demoPage {
 			TagSlugs:        []string{},
 			FeaturedImage:   "team-photo.png",
 		},
+		{
+			Title:           "Cookie Policy",
+			Slug:            "cookie-policy",
+			Body:            getCookiePolicyBody(),
+			Status:          "published",
+			PageType:        "page",
+			MetaTitle:       "Cookie Policy",
+			MetaDescription: "Learn about the cookies used on this website, their purpose, and how to manage your preferences.",
+			CategorySlugs:   []string{},
+			TagSlugs:        []string{},
+		},
 		// Blog posts
 		{
 			Title:           "Getting Started with oCMS",
@@ -515,6 +526,7 @@ func seedDemoMenuItems(ctx context.Context, queries *Queries) error {
 		{"Services", "/web-development-services", 4},
 		{"About", "/about", 5},
 		{"Contact", "/contact", 6},
+		{"Cookie Policy", "/cookie-policy", 7},
 	}
 
 	for _, item := range menuItems {
@@ -1085,4 +1097,64 @@ func getServicesWebDevBody() string {
 
 <h2>Get Started</h2>
 <p>Contact us to discuss your project requirements. We'll provide a free consultation and estimate.</p>`
+}
+
+func getCookiePolicyBody() string {
+	return `<p>This page explains what cookies we use, why we use them, and how you can manage your preferences.</p>
+
+<h2>What Are Cookies?</h2>
+<p>Cookies are small text files stored on your device by your web browser. They help websites remember information about your visit, making your next visit easier and the site more useful to you.</p>
+
+<h2>Essential Cookies</h2>
+<p>These cookies are required for the website to function and cannot be disabled.</p>
+
+<table>
+<thead>
+<tr><th>Cookie</th><th>Purpose</th><th>Duration</th></tr>
+</thead>
+<tbody>
+<tr>
+<td><code>session</code> / <code>__Host-session</code></td>
+<td>Maintains your login session and authentication state. The <code>__Host-</code> prefix is used in production for additional security.</td>
+<td>24 hours</td>
+</tr>
+<tr>
+<td><code>klaro</code></td>
+<td>Stores your cookie consent preferences so you are not asked again on every visit.</td>
+<td>1 year</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Functional Cookies</h2>
+<p>These cookies provide additional functionality and a better experience. They are classified as essential and enabled by default.</p>
+
+<table>
+<thead>
+<tr><th>Cookie</th><th>Purpose</th><th>Duration</th></tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ocms_lang</code></td>
+<td>Remembers your preferred language so the site displays content in the correct language on return visits.</td>
+<td>1 year</td>
+</tr>
+<tr>
+<td><code>ocms_informer_dismissed</code></td>
+<td>Remembers that you dismissed the notification bar so it does not reappear on every page.</td>
+<td>1 year</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Third-Party Cookies</h2>
+<p>Depending on the services enabled by the site administrator, third-party cookies may be set for analytics or marketing purposes. These are only activated after you give consent through the cookie banner. Examples include:</p>
+<ul>
+<li><strong>Google Analytics</strong> (<code>_ga</code>, <code>_gid</code>) &mdash; website traffic analysis</li>
+<li><strong>Google Ads</strong> (<code>_gcl</code>) &mdash; conversion tracking and advertising</li>
+<li><strong>Matomo</strong> (<code>_pk_</code>) &mdash; privacy-focused analytics</li>
+</ul>
+
+<h2>Managing Your Preferences</h2>
+<p>You can change your cookie preferences at any time by clicking the &ldquo;Cookie Settings&rdquo; link in the page footer. You can also configure your browser to block or delete cookies, though this may affect site functionality.</p>`
 }

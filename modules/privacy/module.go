@@ -7,6 +7,8 @@ package privacy
 import (
 	"database/sql"
 	"embed"
+	"encoding/json"
+	"fmt"
 	"html/template"
 
 	"github.com/go-chi/chi/v5"
@@ -158,6 +160,58 @@ func (m *Module) Migrations() []module.Migration {
 			},
 			Down: func(db *sql.DB) error {
 				// SQLite doesn't support DROP COLUMN easily, so we skip the down migration
+				return nil
+			},
+		},
+		{
+			Version:     3,
+			Description: "Update essential cookies service",
+			Up: func(db *sql.DB) error {
+				var servicesJSON string
+				err := db.QueryRow(`SELECT services FROM privacy_settings WHERE id = 1`).Scan(&servicesJSON)
+				if err != nil {
+					return fmt.Errorf("reading services: %w", err)
+				}
+
+				if servicesJSON == "" || servicesJSON == "[]" {
+					return nil
+				}
+
+				var services []Service
+				if err := json.Unmarshal([]byte(servicesJSON), &services); err != nil {
+					return fmt.Errorf("parsing services JSON: %w", err)
+				}
+
+				found := false
+				for i := range services {
+					if services[i].Name == "klaro" {
+						services[i].Title = "Essential Cookies"
+						services[i].Description = "Stores consent choices and UI preferences (required)"
+						services[i].Purposes = []string{"essential"}
+						services[i].Cookies = []Cookie{
+							{Pattern: "^klaro"},
+							{Pattern: "^ocms_lang$"},
+							{Pattern: "^(__Host-)?session$"},
+							{Pattern: "^ocms_informer_dismissed"},
+						}
+						found = true
+						break
+					}
+				}
+
+				if !found {
+					return nil
+				}
+
+				data, err := json.Marshal(services)
+				if err != nil {
+					return fmt.Errorf("marshaling services: %w", err)
+				}
+
+				_, err = db.Exec(`UPDATE privacy_settings SET services = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1`, string(data))
+				return err
+			},
+			Down: func(db *sql.DB) error {
 				return nil
 			},
 		},
