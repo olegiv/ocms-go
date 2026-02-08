@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 )
 
 // Settings holds the informer bar configuration.
@@ -15,18 +16,19 @@ type Settings struct {
 	Text      string
 	BgColor   string
 	TextColor string
+	Version   string
 }
 
 // loadSettings loads informer settings from the database.
 func loadSettings(db *sql.DB) (*Settings, error) {
 	row := db.QueryRow(`
-		SELECT enabled, text, bg_color, text_color
+		SELECT enabled, text, bg_color, text_color, version
 		FROM informer_settings WHERE id = 1
 	`)
 
 	s := &Settings{}
-	var enabled int
-	err := row.Scan(&enabled, &s.Text, &s.BgColor, &s.TextColor)
+	var enabled, version int
+	err := row.Scan(&enabled, &s.Text, &s.BgColor, &s.TextColor, &version)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return defaultSettings(), nil
@@ -35,6 +37,7 @@ func loadSettings(db *sql.DB) (*Settings, error) {
 	}
 
 	s.Enabled = enabled == 1
+	s.Version = strconv.Itoa(version)
 	return s, nil
 }
 
@@ -51,6 +54,7 @@ func saveSettings(db *sql.DB, s *Settings) error {
 			text = ?,
 			bg_color = ?,
 			text_color = ?,
+			version = version + 1,
 			updated_at = CURRENT_TIMESTAMP
 		WHERE id = 1
 	`, enabled, s.Text, s.BgColor, s.TextColor)
@@ -62,5 +66,6 @@ func defaultSettings() *Settings {
 	return &Settings{
 		BgColor:   "#1e40af",
 		TextColor: "#ffffff",
+		Version:   "0",
 	}
 }
