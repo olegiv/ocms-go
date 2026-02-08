@@ -43,9 +43,9 @@ done
 echo "==> Building Docker image..."
 if [[ "$DO_RESET" == true ]]; then
     # Force rebuild without cache when resetting to ensure latest code
-    docker build --no-cache -t "$IMAGE_NAME" .
+    docker build --no-cache --platform linux/amd64 -t "$IMAGE_NAME" .
 else
-    docker build -t "$IMAGE_NAME" .
+    docker build --platform linux/amd64 -t "$IMAGE_NAME" .
 fi
 
 echo "==> Deploying to Fly.io..."
