@@ -2,7 +2,7 @@
 <div class="page-header">
     <h1 class="page-title">{{T .AdminLang "forms.submissions"}} - {{.Data.Form.Name}}</h1>
     <div class="page-actions">
-        {{if and .Data.Submissions (not .DemoMode)}}
+        {{if and .Data.Submissions (not (isDemoMode))}}
         <form action="/admin/forms/{{.Data.Form.ID}}/submissions/export" method="POST" class="d-inline">
             {{.CSRFField}}
             <button type="submit" class="btn btn-secondary">{{T .AdminLang "forms.export_csv"}}</button>
