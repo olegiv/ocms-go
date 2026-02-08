@@ -1958,6 +1958,21 @@
             "translation": "Текст подвала"
         },
         {
+            "id": "theme_settings.show_hero_text",
+            "message": "Show Hero Text",
+            "translation": "Показывать текст героя"
+        },
+        {
+            "id": "theme_settings.hero_image",
+            "message": "Hero Image",
+            "translation": "Изображение героя"
+        },
+        {
+            "id": "theme_settings.hero_image_alt",
+            "message": "Hero Image Alt Text",
+            "translation": "Альтернативный текст изображения героя"
+        },
+        {
             "id": "option.yes",
             "message": "Yes",
             "translation": "Да"

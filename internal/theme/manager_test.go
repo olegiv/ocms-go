@@ -582,6 +582,64 @@ func TestThemeWithSettings(t *testing.T) {
 	}
 }
 
+func TestEmbeddedDeveloperThemeSettings(t *testing.T) {
+	m := testManagerWithEmbedded(t)
+
+	if err := m.LoadThemes(); err != nil {
+		t.Fatalf("LoadThemes: %v", err)
+	}
+
+	theme, err := m.GetTheme("developer")
+	if err != nil || theme == nil {
+		t.Fatalf("GetTheme(developer): %v", err)
+	}
+
+	// Build a map of settings by key for easy lookup
+	settings := make(map[string]Setting)
+	for _, s := range theme.Config.Settings {
+		settings[s.Key] = s
+	}
+
+	// Verify show_hero_text setting
+	s, ok := settings["show_hero_text"]
+	if !ok {
+		t.Fatal("expected developer theme to have show_hero_text setting")
+	}
+	if s.Type != "select" {
+		t.Errorf("show_hero_text type = %s, want select", s.Type)
+	}
+	if s.Default != "yes" {
+		t.Errorf("show_hero_text default = %s, want yes", s.Default)
+	}
+	if len(s.Options) != 2 || s.Options[0] != "yes" || s.Options[1] != "no" {
+		t.Errorf("show_hero_text options = %v, want [yes no]", s.Options)
+	}
+
+	// Verify hero_image setting
+	s, ok = settings["hero_image"]
+	if !ok {
+		t.Fatal("expected developer theme to have hero_image setting")
+	}
+	if s.Type != "image" {
+		t.Errorf("hero_image type = %s, want image", s.Type)
+	}
+	if s.Default != "" {
+		t.Errorf("hero_image default = %q, want empty", s.Default)
+	}
+
+	// Verify hero_image_alt setting
+	s, ok = settings["hero_image_alt"]
+	if !ok {
+		t.Fatal("expected developer theme to have hero_image_alt setting")
+	}
+	if s.Type != "text" {
+		t.Errorf("hero_image_alt type = %s, want text", s.Type)
+	}
+	if s.Default != "" {
+		t.Errorf("hero_image_alt default = %q, want empty", s.Default)
+	}
+}
+
 func TestThemeCount(t *testing.T) {
 	m, customDir := testManager(t)
 
