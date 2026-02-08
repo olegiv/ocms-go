@@ -243,6 +243,12 @@ func (h *WidgetsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/widgets/{id} - deletes a widget.
 func (h *WidgetsHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		writeJSONError(w, http.StatusForbidden, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteWidget))
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid widget ID")

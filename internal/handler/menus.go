@@ -430,6 +430,12 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /admin/menus/{id} - deletes a menu.
 func (h *MenusHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		http.Error(w, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteMenu), http.StatusForbidden)
+		return
+	}
+
 	id, err := ParseIDParam(r)
 	if err != nil {
 		http.Error(w, "Invalid menu ID", http.StatusBadRequest)
@@ -626,6 +632,12 @@ func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 
 // DeleteItem handles DELETE /admin/menus/{id}/items/{itemId} - deletes a menu item.
 func (h *MenusHandler) DeleteItem(w http.ResponseWriter, r *http.Request) {
+	// Block in demo mode
+	if middleware.IsDemoMode() {
+		writeJSONError(w, http.StatusForbidden, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteMenuItem))
+		return
+	}
+
 	menu, item, ok := h.requireMenuAndItemForJSON(w, r)
 	if !ok {
 		return
