@@ -45,6 +45,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/util"
 	"github.com/olegiv/ocms-go/internal/version"
 	"github.com/olegiv/ocms-go/internal/webhook"
+	"github.com/olegiv/ocms-go/custom/modules/bookmarks"
 	"github.com/olegiv/ocms-go/modules/analytics_ext"
 	"github.com/olegiv/ocms-go/modules/analytics_int"
 	"github.com/olegiv/ocms-go/modules/dbmanager"
@@ -256,6 +257,7 @@ func registerModules(registry *module.Registry, sentinelModule *sentinel.Module,
 		hcaptcha.New(),
 		privacy.New(),
 		informer.New(),
+		bookmarks.New(),
 	}
 
 	for _, mod := range modules {

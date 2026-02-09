@@ -1,0 +1,25 @@
+{
+    "$schema": "../../../../../.schema/i18n-schema.json",
+    "language": "ru",
+    "messages": [
+        {"id": "nav.bookmarks", "message": "Bookmarks", "translation": "Закладки"},
+        {"id": "bookmarks.title", "message": "Bookmarks", "translation": "Закладки"},
+        {"id": "bookmarks.description", "message": "Save and organize your favorite links", "translation": "Сохраняйте и организуйте любимые ссылки"},
+        {"id": "bookmarks.add_bookmark", "message": "Add Bookmark", "translation": "Добавить закладку"},
+        {"id": "bookmarks.field_title", "message": "Title", "translation": "Название"},
+        {"id": "bookmarks.field_url", "message": "https://example.com", "translation": "https://example.com"},
+        {"id": "bookmarks.field_description", "message": "Description (optional)", "translation": "Описание (необязательно)"},
+        {"id": "bookmarks.field_favorite", "message": "Favorite", "translation": "Избранное"},
+        {"id": "bookmarks.table_title", "message": "Title", "translation": "Название"},
+        {"id": "bookmarks.table_url", "message": "URL", "translation": "Ссылка"},
+        {"id": "bookmarks.table_description", "message": "Description", "translation": "Описание"},
+        {"id": "bookmarks.table_favorite", "message": "Favorite", "translation": "Избранное"},
+        {"id": "bookmarks.table_created", "message": "Created", "translation": "Создано"},
+        {"id": "bookmarks.toggle_favorite", "message": "Toggle favorite", "translation": "Переключить избранное"},
+        {"id": "bookmarks.delete_bookmark", "message": "Delete bookmark", "translation": "Удалить закладку"},
+        {"id": "bookmarks.no_bookmarks", "message": "No bookmarks yet", "translation": "Закладок пока нет"},
+        {"id": "bookmarks.no_bookmarks_hint", "message": "Add your first bookmark using the form above.", "translation": "Добавьте первую закладку с помощью формы выше."},
+        {"id": "bookmarks.confirm_delete", "message": "Are you sure you want to delete this bookmark?", "translation": "Вы уверены, что хотите удалить эту закладку?"},
+        {"id": "bookmarks.delete_failed", "message": "Failed to delete bookmark", "translation": "Не удалось удалить закладку"}
+    ]
+}
