@@ -444,12 +444,16 @@ func run() error {
 	// Note: Theme loading is deferred until after modules are initialized
 	// so that module template functions (like analyticsHead) are available
 
-	// Initialize and start scheduler
-	sched := scheduler.New(db, logger)
+	// Initialize scheduler registry and scheduler
+	schedulerRegistry := scheduler.NewRegistry(db, logger)
+	sched := scheduler.New(db, logger, schedulerRegistry)
 	if err := sched.Start(); err != nil {
 		return fmt.Errorf("starting scheduler: %w", err)
 	}
 	defer sched.Stop()
+
+	// Initialize task executor for user-created scheduled URL tasks
+	taskExecutor := scheduler.NewTaskExecutor(db, logger, schedulerRegistry, sched.Cron())
 
 	// Schedule daily demo reset at 01:00 UTC (if demo mode)
 	if middleware.IsDemoMode() {
@@ -476,13 +480,14 @@ func run() error {
 
 	// Create module context
 	moduleCtx := &module.Context{
-		DB:     db,
-		Store:  store.New(db),
-		Logger: logger,
-		Config: cfg,
-		Render: renderer,
-		Events: eventService,
-		Hooks:  hookRegistry,
+		DB:                db,
+		Store:             store.New(db),
+		Logger:            logger,
+		Config:            cfg,
+		Render:            renderer,
+		Events:            eventService,
+		Hooks:             hookRegistry,
+		SchedulerRegistry: schedulerRegistry,
 	}
 
 	// Register all modules
@@ -541,6 +546,14 @@ func run() error {
 	}
 
 	slog.Info("module system initialized", "modules", moduleRegistry.Count())
+
+	// Load user-created scheduled tasks from DB
+	if err := taskExecutor.LoadAndScheduleAll(); err != nil {
+		slog.Error("failed to load scheduled tasks", "error", err)
+	}
+
+	// Register daily cleanup job for old task runs (>30 days)
+	taskExecutor.RegisterCleanupJob()
 
 	// Load themes (after modules provide their template functions)
 	loadActiveTheme(ctx, queries, themeManager, renderer, cfg)
@@ -612,6 +625,7 @@ func run() error {
 	widgetsHandler := handler.NewWidgetsHandler(db, renderer, sessionManager, themeManager)
 	modulesHandler := handler.NewModulesHandler(db, renderer, sessionManager, moduleRegistry, hookRegistry)
 	cacheHandler := handler.NewCacheHandler(renderer, sessionManager, cacheManager, eventService)
+	schedulerHandler := handler.NewSchedulerHandler(db, renderer, schedulerRegistry, taskExecutor, eventService)
 	languagesHandler := handler.NewLanguagesHandler(db, renderer, sessionManager)
 	apiHandler := api.NewHandler(db)
 	apiDocsHandler, err := api.NewDocsHandler(api.DocsConfig{
@@ -864,6 +878,21 @@ func run() error {
 			r.Post("/cache/clear/pages", cacheHandler.ClearPages)
 			r.Post("/cache/clear/menus", cacheHandler.ClearMenus)
 			r.Post("/cache/clear/languages", cacheHandler.ClearLanguages)
+
+			// Scheduler management routes
+			r.Get("/scheduler", schedulerHandler.List)
+			r.Post("/scheduler/update", schedulerHandler.UpdateSchedule)
+			r.Post("/scheduler/reset", schedulerHandler.ResetSchedule)
+			r.Post("/scheduler/trigger/{source}/{name}", schedulerHandler.TriggerNow)
+			// Scheduled task routes
+			r.Get("/scheduler/tasks/new", schedulerHandler.TaskForm)
+			r.Post("/scheduler/tasks", schedulerHandler.TaskCreate)
+			r.Get("/scheduler/tasks/{id}/edit", schedulerHandler.TaskForm)
+			r.Post("/scheduler/tasks/{id}", schedulerHandler.TaskUpdate)
+			r.Post("/scheduler/tasks/{id}/toggle", schedulerHandler.TaskToggle)
+			r.Post("/scheduler/tasks/{id}/delete", schedulerHandler.TaskDelete)
+			r.Get("/scheduler/tasks/{id}/runs", schedulerHandler.TaskRuns)
+			r.Post("/scheduler/tasks/{id}/trigger", schedulerHandler.TaskTrigger)
 
 			// Import/Export routes
 			r.Get(handler.RouteExport, importExportHandler.ExportForm)

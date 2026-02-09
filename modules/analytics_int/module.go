@@ -118,14 +118,35 @@ func (m *Module) scheduleGeoIPReload() {
 		return
 	}
 
-	// Check for GeoIP database updates every hour
-	_, err := m.cron.AddFunc("0 * * * *", func() {
+	const (
+		defaultSchedule = "0 * * * *"
+		jobName         = "geoip_reload"
+	)
+
+	schedule := defaultSchedule
+	if m.ctx.SchedulerRegistry != nil {
+		schedule = m.ctx.SchedulerRegistry.GetEffectiveSchedule("analytics_int", jobName, defaultSchedule)
+	}
+
+	cronFunc := func() {
 		if err := m.geoIP.Reload(); err != nil {
 			m.ctx.Logger.Debug("GeoIP reload check", "error", err)
 		}
-	})
+	}
+
+	entryID, err := m.cron.AddFunc(schedule, cronFunc)
 	if err != nil {
 		m.ctx.Logger.Warn("failed to schedule GeoIP reload", "error", err)
+		return
+	}
+
+	if m.ctx.SchedulerRegistry != nil {
+		m.ctx.SchedulerRegistry.Register(
+			"analytics_int", jobName,
+			"Reload GeoIP database for country detection",
+			defaultSchedule,
+			m.cron, entryID, cronFunc, nil,
+		)
 	}
 }
 
