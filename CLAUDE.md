@@ -135,7 +135,7 @@ cmd/ocms/main.go
     │   └── internal/service (business logic)
     ├── internal/middleware  (auth, API auth, rate limiting)
     ├── internal/module      (module system, hooks)
-    ├── internal/scheduler   (cron scheduler)
+    ├── internal/scheduler   (cron scheduler + admin registry)
     ├── internal/seo         (sitemap, robots.txt, meta)
     ├── internal/session     (SCS session manager)
     ├── internal/theme       (theme loading/rendering)
@@ -200,6 +200,7 @@ Seeding is opt-in to prevent automatic recreation of deleted data on restart.
 - `/admin/api-keys` - API key management (list, new, edit)
 - `/admin/webhooks` - Webhook management (list, new, edit, deliveries)
 - `/admin/cache` - Cache statistics and clear
+- `/admin/scheduler` - Scheduled jobs management (view, edit, trigger, reset)
 - `/admin/export` - Content export
 - `/admin/import` - Content import
 - `/admin/docs` - Site documentation
@@ -512,6 +513,7 @@ Additional documentation is available in the `docs/` directory:
 - `docs/i18n.md` - Internationalization, translation file format, theme translations, and `TTheme` usage
 - `docs/csrf.md` - CSRF protection configuration, TrustedOrigins format, and troubleshooting
 - `docs/caching.md` - Cache types, context-aware page caching, admin bypass, and Redis configuration
+- `docs/scheduler.md` - Scheduler admin UI, cron job management, schedule overrides, and manual triggers
 - `docs/demo-deployment.md` - Demo mode, Fly.io deployment, and demo content seeding
 
 Security audit documents are available in the `.audit/` directory (gitignored).

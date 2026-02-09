@@ -1,0 +1,100 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{if .Data.IsEdit}}{{T .AdminLang "scheduler.edit_task"}}{{else}}{{T .AdminLang "scheduler.new_task"}}{{end}}</h1>
+        <p class="page-description">{{T .AdminLang "scheduler.task_form_description"}}</p>
+    </div>
+    <div class="page-actions">
+        <a href="/admin/scheduler" class="btn btn-outline">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            {{T .AdminLang "scheduler.back_to_scheduler"}}
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="{{if .Data.IsEdit}}/admin/scheduler/tasks/{{.Data.Task.ID}}{{else}}/admin/scheduler/tasks{{end}}" class="form">
+            {{.CSRFField}}
+
+            <div class="form-group">
+                <label for="name" class="form-label">{{T .AdminLang "scheduler.task_name"}} <span class="required">*</span></label>
+                <input
+                    type="text"
+                    id="name"
+                    name="name"
+                    class="form-input"
+                    value="{{.Data.Task.Name}}"
+                    placeholder="e.g., Health Check, Cache Warmup"
+                    required
+                    autofocus
+                    maxlength="255"
+                >
+                <span class="form-hint">{{T .AdminLang "scheduler.task_name_hint"}}</span>
+            </div>
+
+            <div class="form-group">
+                <label for="url" class="form-label">{{T .AdminLang "scheduler.task_url"}} <span class="required">*</span></label>
+                <input
+                    type="url"
+                    id="url"
+                    name="url"
+                    class="form-input"
+                    value="{{.Data.Task.Url}}"
+                    placeholder="https://example.com/api/health"
+                    required
+                    maxlength="2048"
+                >
+                <span class="form-hint">{{T .AdminLang "scheduler.task_url_hint"}}</span>
+            </div>
+
+            <div class="form-group">
+                <label for="schedule" class="form-label">{{T .AdminLang "scheduler.task_schedule"}} <span class="required">*</span></label>
+                <input
+                    type="text"
+                    id="schedule"
+                    name="schedule"
+                    class="form-input"
+                    value="{{.Data.Task.Schedule}}"
+                    placeholder="@every 5m"
+                    required
+                >
+                <span class="form-hint">{{T .AdminLang "scheduler.task_schedule_hint"}}</span>
+                <div style="margin-top:0.75rem; padding:0.75rem; background:#f8f9fa; border-radius:6px; font-size:0.8rem;">
+                    <div style="margin-bottom:0.4rem;"><strong>{{T .AdminLang "scheduler.quick_examples"}}</strong></div>
+                    <div style="display:grid; grid-template-columns:auto 1fr; gap:0.2rem 0.75rem;">
+                        <code>@every 5m</code> <span class="text-muted">{{T .AdminLang "scheduler.ex_every_5m"}}</span>
+                        <code>@every 30m</code> <span class="text-muted">{{T .AdminLang "scheduler.ex_every_30m"}}</span>
+                        <code>@every 1h</code> <span class="text-muted">{{T .AdminLang "scheduler.ex_every_1h"}}</span>
+                        <code>@every 6h</code> <span class="text-muted">{{T .AdminLang "scheduler.ex_every_6h"}}</span>
+                        <code>0 * * * *</code> <span class="text-muted">{{T .AdminLang "scheduler.ex_hourly"}}</span>
+                        <code>0 2 * * *</code> <span class="text-muted">{{T .AdminLang "scheduler.ex_daily_2am"}}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="timeout" class="form-label">{{T .AdminLang "scheduler.task_timeout"}}</label>
+                <input
+                    type="number"
+                    id="timeout"
+                    name="timeout"
+                    class="form-input"
+                    value="{{if .Data.IsEdit}}{{.Data.Task.TimeoutSeconds}}{{else}}30{{end}}"
+                    min="1"
+                    max="300"
+                    style="max-width: 200px;"
+                >
+                <span class="form-hint">{{T .AdminLang "scheduler.task_timeout_hint"}}</span>
+            </div>
+
+            <div class="form-actions">
+                <a href="/admin/scheduler" class="btn btn-outline">{{T .AdminLang "btn.cancel"}}</a>
+                {{if not (isDemoMode)}}
+                <button type="submit" class="btn btn-primary">{{if .Data.IsEdit}}{{T .AdminLang "btn.save"}}{{else}}{{T .AdminLang "scheduler.create_task"}}{{end}}</button>
+                {{end}}
+            </div>
+        </form>
+    </div>
+</div>
+{{end}}

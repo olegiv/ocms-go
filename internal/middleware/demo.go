@@ -64,6 +64,9 @@ const (
 
 	// Module-specific restrictions
 	RestrictionSQLExecution DemoRestriction = "sql_execution"
+
+	// Scheduler restrictions
+	RestrictionScheduler DemoRestriction = "scheduler"
 )
 
 // DemoModeMessage is the user-friendly message shown when an action is blocked.
@@ -97,6 +100,7 @@ func DemoModeMessageDetailed(restriction DemoRestriction) string {
 		RestrictionThemeSettings:  "Changing theme settings is disabled in demo mode",
 		RestrictionClearCache:     "Clearing cache is disabled in demo mode",
 		RestrictionSQLExecution:   "SQL execution is disabled in demo mode",
+		RestrictionScheduler:      "Scheduler management is disabled in demo mode",
 	}
 
 	if msg, ok := messages[restriction]; ok {

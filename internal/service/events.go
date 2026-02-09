@@ -106,6 +106,11 @@ func (s *EventService) LogCacheEvent(ctx context.Context, level, message string,
 	return s.LogEvent(ctx, level, model.EventCategoryCache, message, userID, ipAddress, requestURL, metadata)
 }
 
+// LogSchedulerEvent logs a scheduler-related event.
+func (s *EventService) LogSchedulerEvent(ctx context.Context, level, message string, userID *int64, ipAddress, requestURL string, metadata map[string]any) error {
+	return s.LogEvent(ctx, level, model.EventCategoryScheduler, message, userID, ipAddress, requestURL, metadata)
+}
+
 // LogMigratorEvent logs a migrator-related event.
 func (s *EventService) LogMigratorEvent(ctx context.Context, level, message string, userID *int64, ipAddress, requestURL string, metadata map[string]any) error {
 	return s.LogEvent(ctx, level, model.EventCategoryMigrator, message, userID, ipAddress, requestURL, metadata)
