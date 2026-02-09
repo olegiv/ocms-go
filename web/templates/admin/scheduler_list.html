@@ -1,0 +1,283 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{T .AdminLang "scheduler.title"}}</h1>
+        <p class="page-description">{{T .AdminLang "scheduler.description"}}</p>
+    </div>
+    {{if not (isDemoMode)}}
+    <div class="page-actions">
+        <a href="/admin/scheduler/tasks/new" class="btn btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            {{T .AdminLang "scheduler.new_task"}}
+        </a>
+    </div>
+    {{end}}
+</div>
+
+<!-- Custom Tasks -->
+{{if .Data.Tasks}}
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+        <h2 class="card-title">{{T .AdminLang "scheduler.custom_tasks"}}</h2>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>{{T .AdminLang "scheduler.task_name"}}</th>
+                        <th>{{T .AdminLang "scheduler.task_url"}}</th>
+                        <th>{{T .AdminLang "scheduler.col_schedule"}}</th>
+                        <th>{{T .AdminLang "label.status"}}</th>
+                        <th>{{T .AdminLang "scheduler.col_last_run"}}</th>
+                        <th>{{if isDemoMode}}{{T .AdminLang "scheduler.task_runs"}}{{else}}{{T .AdminLang "label.actions"}}{{end}}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Data.Tasks}}
+                    <tr>
+                        <td><strong>{{.Name}}</strong></td>
+                        <td><small><code>{{truncate .URL 50}}</code></small></td>
+                        <td><code>{{.Schedule}}</code></td>
+                        <td>
+                            {{if .IsActive}}
+                            <span class="badge badge-success">{{T $.AdminLang "scheduler.task_active"}}</span>
+                            {{else}}
+                            <span class="badge badge-secondary">{{T $.AdminLang "scheduler.task_inactive"}}</span>
+                            {{end}}
+                        </td>
+                        <td><small>{{.LastRun}}</small></td>
+                        <td class="table-actions">
+                            {{if not (isDemoMode)}}
+                            <a href="/admin/scheduler/tasks/{{.ID}}/edit" class="btn btn-sm btn-outline">
+                                {{T $.AdminLang "btn.edit"}}
+                            </a>
+                            {{end}}
+                            <a href="/admin/scheduler/tasks/{{.ID}}/runs" class="btn btn-sm btn-outline">
+                                {{T $.AdminLang "scheduler.task_runs"}}
+                            </a>
+                            {{if not (isDemoMode)}}
+                            <form method="POST" action="/admin/scheduler/tasks/{{.ID}}/toggle" class="d-inline">
+                                {{$.CSRFField}}
+                                <button type="submit" class="btn btn-sm btn-outline" title="{{if .IsActive}}{{T $.AdminLang "scheduler.task_disable"}}{{else}}{{T $.AdminLang "scheduler.task_enable"}}{{end}}">
+                                    {{if .IsActive}}{{T $.AdminLang "scheduler.task_disable"}}{{else}}{{T $.AdminLang "scheduler.task_enable"}}{{end}}
+                                </button>
+                            </form>
+                            {{if .IsActive}}
+                            <form method="POST" action="/admin/scheduler/tasks/{{.ID}}/trigger" class="d-inline">
+                                {{$.CSRFField}}
+                                <button type="submit" class="btn btn-sm btn-primary" onclick="return confirm('{{T $.AdminLang "scheduler.task_trigger_confirm"}}')">
+                                    {{T $.AdminLang "scheduler.trigger_now"}}
+                                </button>
+                            </form>
+                            {{end}}
+                            <form method="POST" action="/admin/scheduler/tasks/{{.ID}}/delete" class="d-inline">
+                                {{$.CSRFField}}
+                                <button type="submit" class="btn btn-sm btn-outline" style="color:#dc2626; border-color:#dc2626;" onclick="return confirm('{{T $.AdminLang "scheduler.task_delete_confirm"}}')">
+                                    {{T $.AdminLang "btn.delete"}}
+                                </button>
+                            </form>
+                            {{end}}
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{{end}}
+
+<!-- All System Jobs -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">{{T .AdminLang "scheduler.all_jobs"}}</h2>
+    </div>
+    <div class="card-body">
+        {{if .Data.Jobs}}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>{{T .AdminLang "scheduler.col_job"}}</th>
+                        <th>{{T .AdminLang "scheduler.col_source"}}</th>
+                        <th>{{T .AdminLang "scheduler.col_schedule"}}</th>
+                        <th>{{T .AdminLang "scheduler.col_last_run"}}</th>
+                        <th>{{T .AdminLang "scheduler.col_next_run"}}</th>
+                        {{if not (isDemoMode)}}<th>{{T .AdminLang "label.actions"}}</th>{{end}}
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Data.Jobs}}
+                    <tr>
+                        <td>
+                            <strong>{{.Description}}</strong>
+                            <br><small class="text-muted">{{.Name}}</small>
+                        </td>
+                        <td>
+                            {{if eq .Source "core"}}
+                            <span class="badge" style="background-color: var(--primary-color, #4f46e5); color: #fff;">{{.Source}}</span>
+                            {{else if eq .Source "task"}}
+                            <span class="badge" style="background-color: #059669; color: #fff;">{{.Source}}</span>
+                            {{else}}
+                            <span class="badge" style="background-color: #0891b2; color: #fff;">{{.Source}}</span>
+                            {{end}}
+                        </td>
+                        <td>
+                            <code>{{.Schedule}}</code>
+                            {{if .IsOverridden}}
+                            <br><small class="text-muted">{{T $.AdminLang "scheduler.default_label"}}: <code>{{.DefaultSchedule}}</code></small>
+                            {{end}}
+                        </td>
+                        <td><small>{{.LastRun}}</small></td>
+                        <td><small>{{.NextRun}}</small></td>
+                        {{if not (isDemoMode)}}
+                        <td class="table-actions">
+                            <button type="button" class="btn btn-sm btn-outline" onclick="editSchedule('{{.Source}}', '{{.Name}}', '{{.Schedule}}', '{{.Description}}')">
+                                {{T $.AdminLang "btn.edit"}}
+                            </button>
+                            {{if .IsOverridden}}
+                            <form method="POST" action="/admin/scheduler/reset" class="d-inline">
+                                {{$.CSRFField}}
+                                <input type="hidden" name="source" value="{{.Source}}">
+                                <input type="hidden" name="name" value="{{.Name}}">
+                                <button type="submit" class="btn btn-sm btn-outline" title="{{T $.AdminLang "scheduler.reset_schedule"}}">
+                                    {{T $.AdminLang "scheduler.reset"}}
+                                </button>
+                            </form>
+                            {{end}}
+                            {{if .CanTrigger}}
+                            <form method="POST" action="/admin/scheduler/trigger/{{.Source}}/{{.Name}}" class="d-inline">
+                                {{$.CSRFField}}
+                                <button type="submit" class="btn btn-sm btn-primary" onclick="return confirm('{{T $.AdminLang "scheduler.trigger_confirm"}}')">
+                                    {{T $.AdminLang "scheduler.trigger_now"}}
+                                </button>
+                            </form>
+                            {{end}}
+                        </td>
+                        {{end}}
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{else}}
+        <p class="text-muted">{{T .AdminLang "scheduler.no_jobs"}}</p>
+        {{end}}
+    </div>
+</div>
+
+<div class="card" style="margin-top: 1.5rem;">
+    <div class="card-header">
+        <h2 class="card-title">{{T .AdminLang "scheduler.cron_help_title"}}</h2>
+    </div>
+    <div class="card-body">
+        <p class="text-muted" style="margin-bottom:1rem;">{{T .AdminLang "scheduler.cron_intro"}}</p>
+
+        <h4 style="margin-bottom:0.75rem;">{{T .AdminLang "scheduler.interval_heading"}}</h4>
+        <p class="text-muted" style="margin-bottom:0.5rem;">{{T .AdminLang "scheduler.interval_desc"}}</p>
+        <div class="table-responsive">
+            <table class="table" style="max-width: 600px;">
+                <thead>
+                    <tr>
+                        <th>{{T .AdminLang "scheduler.expression"}}</th>
+                        <th>{{T .AdminLang "scheduler.meaning"}}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>@every 5m</code></td><td>{{T .AdminLang "scheduler.ex_every_5m"}}</td></tr>
+                    <tr><td><code>@every 30m</code></td><td>{{T .AdminLang "scheduler.ex_every_30m"}}</td></tr>
+                    <tr><td><code>@every 1h</code></td><td>{{T .AdminLang "scheduler.ex_every_1h"}}</td></tr>
+                    <tr><td><code>@every 6h</code></td><td>{{T .AdminLang "scheduler.ex_every_6h"}}</td></tr>
+                    <tr><td><code>@every 24h</code></td><td>{{T .AdminLang "scheduler.ex_every_24h"}}</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h4 style="margin-top:1.5rem; margin-bottom:0.75rem;">{{T .AdminLang "scheduler.cron_heading"}}</h4>
+        <p class="text-muted" style="margin-bottom:0.5rem;">{{T .AdminLang "scheduler.cron_desc"}}</p>
+        <div style="padding:0.75rem; background:#f8f9fa; border-radius:6px; margin-bottom:1rem; font-family:monospace; font-size:0.85rem;">
+            <span style="color:#6366f1;">{{T .AdminLang "scheduler.field_minute"}}</span>&nbsp;&nbsp;<span style="color:#0891b2;">{{T .AdminLang "scheduler.field_hour"}}</span>&nbsp;&nbsp;<span style="color:#059669;">{{T .AdminLang "scheduler.field_day"}}</span>&nbsp;&nbsp;<span style="color:#d97706;">{{T .AdminLang "scheduler.field_month"}}</span>&nbsp;&nbsp;<span style="color:#dc2626;">{{T .AdminLang "scheduler.field_weekday"}}</span><br>
+            <span style="color:#6366f1;">&nbsp;&nbsp;*</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#0891b2;">*</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#059669;">*</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#d97706;">*</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#dc2626;">*</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table" style="max-width: 700px;">
+                <thead>
+                    <tr>
+                        <th>{{T .AdminLang "scheduler.expression"}}</th>
+                        <th>{{T .AdminLang "scheduler.meaning"}}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>* * * * *</code></td><td>{{T .AdminLang "scheduler.ex_every_min"}}</td></tr>
+                    <tr><td><code>*/5 * * * *</code></td><td>{{T .AdminLang "scheduler.ex_every_5min"}}</td></tr>
+                    <tr><td><code>0 * * * *</code></td><td>{{T .AdminLang "scheduler.ex_hourly"}}</td></tr>
+                    <tr><td><code>0 2 * * *</code></td><td>{{T .AdminLang "scheduler.ex_daily_2am"}}</td></tr>
+                    <tr><td><code>0 0 * * 0</code></td><td>{{T .AdminLang "scheduler.ex_weekly_sun"}}</td></tr>
+                    <tr><td><code>0 0 1 * *</code></td><td>{{T .AdminLang "scheduler.ex_monthly"}}</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="text-muted" style="margin-top:0.5rem; font-size:0.85rem;">{{T .AdminLang "scheduler.cron_tip"}}</p>
+    </div>
+</div>
+
+{{if not (isDemoMode)}}
+<!-- Edit Schedule Modal -->
+<div id="editScheduleModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+    <div style="background:#fff; border-radius:8px; padding:2rem; max-width:500px; width:90%; margin:auto; position:relative; top:50%; transform:translateY(-50%);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+            <h3 id="editModalTitle" style="margin:0;">{{T .AdminLang "scheduler.edit_schedule"}}</h3>
+            <button type="button" onclick="closeEditModal()" style="background:none; border:none; font-size:1.5rem; cursor:pointer; padding:0; line-height:1;">&times;</button>
+        </div>
+        <form method="POST" action="/admin/scheduler/update">
+            {{.CSRFField}}
+            <input type="hidden" name="source" id="editSource">
+            <input type="hidden" name="name" id="editName">
+            <div class="form-group" style="margin-bottom:1rem;">
+                <label for="editScheduleInput" class="form-label">{{T .AdminLang "scheduler.cron_expression"}}</label>
+                <input type="text" name="schedule" id="editScheduleInput" class="form-control" required>
+                <small class="form-text text-muted">{{T .AdminLang "scheduler.cron_help"}}</small>
+                <div style="margin-top:0.75rem; padding:0.75rem; background:#f8f9fa; border-radius:6px; font-size:0.8rem;">
+                    <div style="margin-bottom:0.4rem;"><strong>{{T .AdminLang "scheduler.quick_examples"}}</strong></div>
+                    <div style="display:grid; grid-template-columns:auto 1fr; gap:0.2rem 0.75rem;">
+                        <code>@every 30m</code> <span class="text-muted">{{T .AdminLang "scheduler.ex_every_30m"}}</span>
+                        <code>@every 1h</code> <span class="text-muted">{{T .AdminLang "scheduler.ex_every_1h"}}</span>
+                        <code>@every 6h</code> <span class="text-muted">{{T .AdminLang "scheduler.ex_every_6h"}}</span>
+                        <code>@every 24h</code> <span class="text-muted">{{T .AdminLang "scheduler.ex_every_24h"}}</span>
+                        <code>0 * * * *</code> <span class="text-muted">{{T .AdminLang "scheduler.ex_hourly"}}</span>
+                        <code>0 2 * * *</code> <span class="text-muted">{{T .AdminLang "scheduler.ex_daily_2am"}}</span>
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
+                <button type="button" class="btn btn-outline" onclick="closeEditModal()">{{T .AdminLang "btn.cancel"}}</button>
+                <button type="submit" class="btn btn-primary">{{T .AdminLang "btn.save"}}</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function editSchedule(source, name, schedule, description) {
+    document.getElementById('editSource').value = source;
+    document.getElementById('editName').value = name;
+    document.getElementById('editScheduleInput').value = schedule;
+    document.getElementById('editModalTitle').textContent = description;
+    document.getElementById('editScheduleModal').style.display = 'block';
+}
+
+function closeEditModal() {
+    document.getElementById('editScheduleModal').style.display = 'none';
+}
+
+document.getElementById('editScheduleModal').addEventListener('click', function(e) {
+    if (e.target === this) closeEditModal();
+});
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeEditModal();
+});
+</script>
+{{end}}
+{{end}}

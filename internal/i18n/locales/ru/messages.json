@@ -6216,6 +6216,506 @@
             "id": "uploader.uploading",
             "message": "Uploading...",
             "translation": "Загрузка..."
+        },
+        {
+            "id": "nav.scheduler",
+            "message": "Scheduler",
+            "translation": "Планировщик"
+        },
+        {
+            "id": "scheduler.title",
+            "message": "Scheduled Jobs",
+            "translation": "Запланированные задачи"
+        },
+        {
+            "id": "scheduler.description",
+            "message": "View and manage scheduled tasks and cron jobs",
+            "translation": "Просмотр и управление запланированными задачами"
+        },
+        {
+            "id": "scheduler.all_jobs",
+            "message": "All Scheduled Jobs",
+            "translation": "Все задачи"
+        },
+        {
+            "id": "scheduler.col_job",
+            "message": "Job",
+            "translation": "Задача"
+        },
+        {
+            "id": "scheduler.col_source",
+            "message": "Source",
+            "translation": "Источник"
+        },
+        {
+            "id": "scheduler.col_schedule",
+            "message": "Schedule",
+            "translation": "Расписание"
+        },
+        {
+            "id": "scheduler.col_last_run",
+            "message": "Last Run",
+            "translation": "Последний запуск"
+        },
+        {
+            "id": "scheduler.col_next_run",
+            "message": "Next Run",
+            "translation": "Следующий запуск"
+        },
+        {
+            "id": "scheduler.default_label",
+            "message": "Default",
+            "translation": "По умолчанию"
+        },
+        {
+            "id": "scheduler.trigger_now",
+            "message": "Run Now",
+            "translation": "Запустить"
+        },
+        {
+            "id": "scheduler.trigger_confirm",
+            "message": "Are you sure you want to run this job now?",
+            "translation": "Вы уверены, что хотите запустить эту задачу сейчас?"
+        },
+        {
+            "id": "scheduler.edit_schedule",
+            "message": "Edit Schedule",
+            "translation": "Изменить расписание"
+        },
+        {
+            "id": "scheduler.reset_schedule",
+            "message": "Reset to default schedule",
+            "translation": "Сбросить на расписание по умолчанию"
+        },
+        {
+            "id": "scheduler.reset",
+            "message": "Reset",
+            "translation": "Сбросить"
+        },
+        {
+            "id": "scheduler.cron_expression",
+            "message": "Cron Expression",
+            "translation": "Cron-выражение"
+        },
+        {
+            "id": "scheduler.cron_help",
+            "message": "Enter a schedule expression. Use @every format for simple intervals or cron format for specific times.",
+            "translation": "Введите выражение расписания. Используйте формат @every для простых интервалов или cron для точного времени."
+        },
+        {
+            "id": "scheduler.quick_examples",
+            "message": "Common schedules:",
+            "translation": "Популярные расписания:"
+        },
+        {
+            "id": "scheduler.cron_help_title",
+            "message": "Schedule Expression Reference",
+            "translation": "Справочник по расписаниям"
+        },
+        {
+            "id": "scheduler.cron_intro",
+            "message": "There are two ways to define when a job runs: simple intervals (@every) or cron expressions for precise control.",
+            "translation": "Есть два способа задать расписание: простые интервалы (@every) или cron-выражения для точного контроля."
+        },
+        {
+            "id": "scheduler.interval_heading",
+            "message": "Simple Intervals (@every)",
+            "translation": "Простые интервалы (@every)"
+        },
+        {
+            "id": "scheduler.interval_desc",
+            "message": "The easiest way to schedule a job. Use @every followed by a duration: m for minutes, h for hours.",
+            "translation": "Самый простой способ задать расписание. Используйте @every и длительность: m — минуты, h — часы."
+        },
+        {
+            "id": "scheduler.cron_heading",
+            "message": "Cron Expressions (5 fields)",
+            "translation": "Cron-выражения (5 полей)"
+        },
+        {
+            "id": "scheduler.cron_desc",
+            "message": "For running jobs at specific times. A cron expression has 5 fields separated by spaces. Use * to mean \"every\" value.",
+            "translation": "Для запуска задач в определённое время. Cron-выражение состоит из 5 полей через пробел. * означает «каждое» значение."
+        },
+        {
+            "id": "scheduler.field_minute",
+            "message": "Minute",
+            "translation": "Минута"
+        },
+        {
+            "id": "scheduler.field_hour",
+            "message": "Hour",
+            "translation": "Час"
+        },
+        {
+            "id": "scheduler.field_day",
+            "message": "Day",
+            "translation": "День"
+        },
+        {
+            "id": "scheduler.field_month",
+            "message": "Month",
+            "translation": "Месяц"
+        },
+        {
+            "id": "scheduler.field_weekday",
+            "message": "Weekday",
+            "translation": "День недели"
+        },
+        {
+            "id": "scheduler.cron_tip",
+            "message": "Tip: * means \"every\", */5 means \"every 5th\", and 0 means \"at exactly 0\". Weekdays: 0=Sun, 1=Mon, ..., 6=Sat.",
+            "translation": "Подсказка: * — «каждый», */5 — «каждый 5-й», 0 — «ровно в 0». Дни недели: 0=Вс, 1=Пн, ..., 6=Сб."
+        },
+        {
+            "id": "scheduler.ex_every_5m",
+            "message": "Every 5 minutes",
+            "translation": "Каждые 5 минут"
+        },
+        {
+            "id": "scheduler.ex_every_30m",
+            "message": "Every 30 minutes",
+            "translation": "Каждые 30 минут"
+        },
+        {
+            "id": "scheduler.ex_every_1h",
+            "message": "Every 1 hour",
+            "translation": "Каждый 1 час"
+        },
+        {
+            "id": "scheduler.ex_every_6h",
+            "message": "Every 6 hours",
+            "translation": "Каждые 6 часов"
+        },
+        {
+            "id": "scheduler.ex_every_24h",
+            "message": "Every 24 hours",
+            "translation": "Каждые 24 часа"
+        },
+        {
+            "id": "scheduler.ex_every_min",
+            "message": "Every minute (use with caution)",
+            "translation": "Каждую минуту (используйте осторожно)"
+        },
+        {
+            "id": "scheduler.ex_every_5min",
+            "message": "Every 5 minutes (at :00, :05, :10, ...)",
+            "translation": "Каждые 5 минут (в :00, :05, :10, ...)"
+        },
+        {
+            "id": "scheduler.ex_hourly",
+            "message": "Once per hour (at :00)",
+            "translation": "Раз в час (в :00)"
+        },
+        {
+            "id": "scheduler.ex_daily_2am",
+            "message": "Once per day at 2:00 AM",
+            "translation": "Раз в день в 2:00"
+        },
+        {
+            "id": "scheduler.ex_weekly_sun",
+            "message": "Once per week (Sunday at midnight)",
+            "translation": "Раз в неделю (воскресенье в полночь)"
+        },
+        {
+            "id": "scheduler.ex_monthly",
+            "message": "Once per month (1st day at midnight)",
+            "translation": "Раз в месяц (1-го числа в полночь)"
+        },
+        {
+            "id": "scheduler.expression",
+            "message": "Expression",
+            "translation": "Выражение"
+        },
+        {
+            "id": "scheduler.meaning",
+            "message": "Meaning",
+            "translation": "Значение"
+        },
+        {
+            "id": "scheduler.no_jobs",
+            "message": "No scheduled jobs registered.",
+            "translation": "Нет зарегистрированных задач."
+        },
+        {
+            "id": "scheduler.success_update",
+            "message": "Schedule updated successfully",
+            "translation": "Расписание успешно обновлено"
+        },
+        {
+            "id": "scheduler.success_trigger",
+            "message": "Job triggered successfully",
+            "translation": "Задача успешно запущена"
+        },
+        {
+            "id": "scheduler.success_reset",
+            "message": "Schedule reset to default",
+            "translation": "Расписание сброшено на значение по умолчанию"
+        },
+        {
+            "id": "scheduler.error_update",
+            "message": "Failed to update schedule",
+            "translation": "Не удалось обновить расписание"
+        },
+        {
+            "id": "scheduler.error_trigger",
+            "message": "Failed to trigger job",
+            "translation": "Не удалось запустить задачу"
+        },
+        {
+            "id": "scheduler.error_reset",
+            "message": "Failed to reset schedule",
+            "translation": "Не удалось сбросить расписание"
+        },
+        {
+            "id": "scheduler.custom_tasks",
+            "message": "Custom Tasks",
+            "translation": "Пользовательские задачи"
+        },
+        {
+            "id": "scheduler.new_task",
+            "message": "New Task",
+            "translation": "Новая задача"
+        },
+        {
+            "id": "scheduler.edit_task",
+            "message": "Edit Task",
+            "translation": "Редактировать задачу"
+        },
+        {
+            "id": "scheduler.task_form_description",
+            "message": "Create a scheduled HTTP GET request to an internal or external URL",
+            "translation": "Создайте запланированный HTTP GET запрос к внутреннему или внешнему URL"
+        },
+        {
+            "id": "scheduler.back_to_scheduler",
+            "message": "Back to Scheduler",
+            "translation": "Назад к планировщику"
+        },
+        {
+            "id": "scheduler.task_name",
+            "message": "Name",
+            "translation": "Название"
+        },
+        {
+            "id": "scheduler.task_name_hint",
+            "message": "A descriptive name for this scheduled task",
+            "translation": "Описательное название для этой запланированной задачи"
+        },
+        {
+            "id": "scheduler.task_url",
+            "message": "URL",
+            "translation": "URL"
+        },
+        {
+            "id": "scheduler.task_url_hint",
+            "message": "The URL to send an HTTP GET request to (internal or external)",
+            "translation": "URL для отправки HTTP GET запроса (внутренний или внешний)"
+        },
+        {
+            "id": "scheduler.task_schedule",
+            "message": "Schedule",
+            "translation": "Расписание"
+        },
+        {
+            "id": "scheduler.task_schedule_hint",
+            "message": "How often to run this task (cron expression or @every interval)",
+            "translation": "Как часто запускать задачу (cron-выражение или интервал @every)"
+        },
+        {
+            "id": "scheduler.task_timeout",
+            "message": "Timeout (seconds)",
+            "translation": "Таймаут (секунды)"
+        },
+        {
+            "id": "scheduler.task_timeout_hint",
+            "message": "Maximum time to wait for a response (1-300 seconds, default: 30)",
+            "translation": "Максимальное время ожидания ответа (1-300 секунд, по умолчанию: 30)"
+        },
+        {
+            "id": "scheduler.create_task",
+            "message": "Create Task",
+            "translation": "Создать задачу"
+        },
+        {
+            "id": "scheduler.task_active",
+            "message": "Active",
+            "translation": "Активна"
+        },
+        {
+            "id": "scheduler.task_inactive",
+            "message": "Inactive",
+            "translation": "Неактивна"
+        },
+        {
+            "id": "scheduler.task_enable",
+            "message": "Enable",
+            "translation": "Включить"
+        },
+        {
+            "id": "scheduler.task_disable",
+            "message": "Disable",
+            "translation": "Отключить"
+        },
+        {
+            "id": "scheduler.task_runs",
+            "message": "Runs",
+            "translation": "Запуски"
+        },
+        {
+            "id": "scheduler.total_runs",
+            "message": "Total Runs",
+            "translation": "Всего запусков"
+        },
+        {
+            "id": "scheduler.task_trigger_confirm",
+            "message": "Run this task now?",
+            "translation": "Запустить задачу сейчас?"
+        },
+        {
+            "id": "scheduler.task_delete_confirm",
+            "message": "Delete this task and all its run history?",
+            "translation": "Удалить задачу и всю историю запусков?"
+        },
+        {
+            "id": "scheduler.task_not_found",
+            "message": "Task not found",
+            "translation": "Задача не найдена"
+        },
+        {
+            "id": "scheduler.task_created",
+            "message": "Task created successfully",
+            "translation": "Задача успешно создана"
+        },
+        {
+            "id": "scheduler.task_updated",
+            "message": "Task updated successfully",
+            "translation": "Задача успешно обновлена"
+        },
+        {
+            "id": "scheduler.task_deleted",
+            "message": "Task deleted successfully",
+            "translation": "Задача успешно удалена"
+        },
+        {
+            "id": "scheduler.task_toggled",
+            "message": "Task status updated",
+            "translation": "Статус задачи обновлён"
+        },
+        {
+            "id": "scheduler.task_triggered",
+            "message": "Task triggered successfully",
+            "translation": "Задача успешно запущена"
+        },
+        {
+            "id": "scheduler.error_task_required",
+            "message": "Name, URL, and schedule are required",
+            "translation": "Название, URL и расписание обязательны"
+        },
+        {
+            "id": "scheduler.error_task_create",
+            "message": "Failed to create task",
+            "translation": "Не удалось создать задачу"
+        },
+        {
+            "id": "scheduler.error_task_update",
+            "message": "Failed to update task",
+            "translation": "Не удалось обновить задачу"
+        },
+        {
+            "id": "scheduler.error_task_delete",
+            "message": "Failed to delete task",
+            "translation": "Не удалось удалить задачу"
+        },
+        {
+            "id": "scheduler.error_task_toggle",
+            "message": "Failed to toggle task",
+            "translation": "Не удалось переключить задачу"
+        },
+        {
+            "id": "scheduler.error_task_trigger",
+            "message": "Failed to trigger task",
+            "translation": "Не удалось запустить задачу"
+        },
+        {
+            "id": "scheduler.error_task_schedule",
+            "message": "Task created but failed to schedule",
+            "translation": "Задача создана, но не удалось запланировать"
+        },
+        {
+            "id": "scheduler.error_invalid_url",
+            "message": "Invalid task URL",
+            "translation": "Недопустимый URL задачи"
+        },
+        {
+            "id": "scheduler.error_rate_limit",
+            "message": "Please wait before triggering again",
+            "translation": "Подождите перед повторным запуском"
+        },
+        {
+            "id": "scheduler.error_name_length",
+            "message": "Task name must be 3-100 characters",
+            "translation": "Название задачи должно быть от 3 до 100 символов"
+        },
+        {
+            "id": "scheduler.error_url_length",
+            "message": "URL must not exceed 2048 characters",
+            "translation": "URL не должен превышать 2048 символов"
+        },
+        {
+            "id": "scheduler.error_timeout_range",
+            "message": "Timeout must be between 1 and 300 seconds",
+            "translation": "Тайм-аут должен быть от 1 до 300 секунд"
+        },
+        {
+            "id": "scheduler.error_invalid_schedule",
+            "message": "Invalid cron schedule expression",
+            "translation": "Недопустимое выражение расписания cron"
+        },
+        {
+            "id": "scheduler.run_status",
+            "message": "Status",
+            "translation": "Статус"
+        },
+        {
+            "id": "scheduler.run_code",
+            "message": "HTTP Code",
+            "translation": "HTTP код"
+        },
+        {
+            "id": "scheduler.run_duration",
+            "message": "Duration",
+            "translation": "Длительность"
+        },
+        {
+            "id": "scheduler.run_started",
+            "message": "Started",
+            "translation": "Запущено"
+        },
+        {
+            "id": "scheduler.run_error",
+            "message": "Error",
+            "translation": "Ошибка"
+        },
+        {
+            "id": "scheduler.status_success",
+            "message": "Success",
+            "translation": "Успешно"
+        },
+        {
+            "id": "scheduler.status_failed",
+            "message": "Failed",
+            "translation": "Ошибка"
+        },
+        {
+            "id": "scheduler.status_pending",
+            "message": "Pending",
+            "translation": "Ожидание"
+        },
+        {
+            "id": "scheduler.no_runs",
+            "message": "No runs yet. Trigger the task manually or wait for the next scheduled run.",
+            "translation": "Запусков пока нет. Запустите задачу вручную или дождитесь следующего запланированного запуска."
         }
     ]
 }
