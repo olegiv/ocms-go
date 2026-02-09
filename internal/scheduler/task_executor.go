@@ -170,8 +170,7 @@ func (te *TaskExecutor) scheduleTask(task store.ScheduledTask) error {
 
 	if te.registry != nil {
 		triggerFunc := func() error {
-			go te.executeTask(taskCopy)
-			return nil
+			return te.TriggerTask(taskCopy.ID)
 		}
 		te.registry.Register(
 			taskSource, name,
@@ -197,6 +196,12 @@ func (te *TaskExecutor) executeTask(task store.ScheduledTask) {
 	})
 	if err != nil {
 		te.logger.Error("failed to create task run record", "error", err, "task_id", task.ID)
+		return
+	}
+
+	// Revalidate URL before each execution to prevent DNS rebinding attacks
+	if err := ValidateTaskURL(task.Url); err != nil {
+		te.recordFailure(queries, run.ID, startedAt, fmt.Sprintf("SSRF protection: %v", err))
 		return
 	}
 
@@ -293,7 +298,13 @@ func (te *TaskExecutor) RegisterCleanupJob() {
 		te.logger.Info("cleaned up old task runs", "older_than", cutoff.Format("2006-01-02"))
 	}
 
-	entryID, err := te.cronInst.AddFunc(cleanupSchedule, jobFunc)
+	// Apply persisted schedule override if one exists
+	effectiveSchedule := cleanupSchedule
+	if te.registry != nil {
+		effectiveSchedule = te.registry.GetEffectiveSchedule(taskSource, "cleanup", cleanupSchedule)
+	}
+
+	entryID, err := te.cronInst.AddFunc(effectiveSchedule, jobFunc)
 	if err != nil {
 		te.logger.Error("failed to register task run cleanup job", "error", err)
 		return
@@ -311,7 +322,7 @@ func (te *TaskExecutor) RegisterCleanupJob() {
 		)
 	}
 
-	te.logger.Info("task run cleanup job registered", "schedule", cleanupSchedule, "retention_days", retentionDays)
+	te.logger.Info("task run cleanup job registered", "schedule", effectiveSchedule, "retention_days", retentionDays)
 }
 
 // taskName generates the registry name for a task.
