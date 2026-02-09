@@ -13,23 +13,26 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-
-	"github.com/olegiv/ocms-go/internal/i18n"
-	"github.com/olegiv/ocms-go/internal/middleware"
-	"github.com/olegiv/ocms-go/internal/render"
 )
 
 // Bookmark represents a saved bookmark.
 type Bookmark struct {
-	ID          int64     `json:"id"`
-	Title       string    `json:"title"`
-	URL         string    `json:"url"`
-	Description string    `json:"description"`
-	IsFavorite  bool      `json:"is_favorite"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID                int64     `json:"id"`
+	Title             string    `json:"title"`
+	URL               string    `json:"url"`
+	Description       string    `json:"description"`
+	IsFavorite        bool      `json:"is_favorite"`
+	CreatedAt         time.Time `json:"created_at"`
+	CreatedAtFormatted string   `json:"-"`
 }
 
-// handlePublicList handles GET /bookmarks - public route showing all bookmarks.
+// adminPageData holds data passed to the admin template.
+type adminPageData struct {
+	Bookmarks []Bookmark
+	Version   string
+}
+
+// handlePublicList handles GET /bookmarks - public route returning JSON.
 func (m *Module) handlePublicList(w http.ResponseWriter, _ *http.Request) {
 	items, err := m.listBookmarks()
 	if err != nil {
@@ -45,11 +48,9 @@ func (m *Module) handlePublicList(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-// handleAdminList handles GET /admin/bookmarks - admin dashboard.
-func (m *Module) handleAdminList(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	lang := m.ctx.Render.GetAdminLang(r)
-
+// handleAdminList handles GET /admin/bookmarks - renders the admin dashboard
+// using the module's own embedded template.
+func (m *Module) handleAdminList(w http.ResponseWriter, _ *http.Request) {
 	items, err := m.listBookmarks()
 	if err != nil {
 		m.ctx.Logger.Error("failed to list bookmarks", "error", err)
@@ -57,26 +58,17 @@ func (m *Module) handleAdminList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := struct {
-		Bookmarks []Bookmark
-		Version   string
-	}{
-		Bookmarks: items,
-		Version:   m.Version(),
+	// Format dates for display
+	for i := range items {
+		items[i].CreatedAtFormatted = items[i].CreatedAt.Format("2006-01-02 15:04")
 	}
 
-	if err := m.ctx.Render.Render(w, r, "admin/module_bookmarks", render.TemplateData{
-		Title: i18n.T(lang, "bookmarks.title"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
-			{Label: i18n.T(lang, "bookmarks.title"), URL: "/admin/bookmarks", Active: true},
-		},
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := m.adminTmpl.Execute(w, adminPageData{
+		Bookmarks: items,
+		Version:   m.Version(),
 	}); err != nil {
-		m.ctx.Logger.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		m.ctx.Logger.Error("failed to render admin template", "error", err)
 	}
 }
 
@@ -112,7 +104,7 @@ func (m *Module) handleCreate(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/bookmarks", http.StatusSeeOther)
 }
 
-// handleToggleFavorite handles POST /admin/bookmarks/{id}/toggle - toggles favorite status.
+// handleToggleFavorite handles POST /admin/bookmarks/{id}/toggle.
 func (m *Module) handleToggleFavorite(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -129,7 +121,7 @@ func (m *Module) handleToggleFavorite(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/bookmarks", http.StatusSeeOther)
 }
 
-// handleDelete handles DELETE /admin/bookmarks/{id} - deletes a bookmark.
+// handleDelete handles DELETE /admin/bookmarks/{id}.
 func (m *Module) handleDelete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -163,10 +155,11 @@ func (m *Module) listBookmarks() ([]Bookmark, error) {
 }
 
 func (m *Module) createBookmark(title, bookmarkURL, description string, isFavorite bool) (*Bookmark, error) {
+	now := time.Now()
 	result, err := m.ctx.DB.Exec(`
 		INSERT INTO bookmarks (title, url, description, is_favorite, created_at)
 		VALUES (?, ?, ?, ?, ?)
-	`, title, bookmarkURL, description, isFavorite, time.Now())
+	`, title, bookmarkURL, description, isFavorite, now)
 	if err != nil {
 		return nil, fmt.Errorf("creating bookmark: %w", err)
 	}
@@ -182,7 +175,7 @@ func (m *Module) createBookmark(title, bookmarkURL, description string, isFavori
 		URL:         bookmarkURL,
 		Description: description,
 		IsFavorite:  isFavorite,
-		CreatedAt:   time.Now(),
+		CreatedAt:   now,
 	}, nil
 }
 

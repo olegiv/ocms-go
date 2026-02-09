@@ -479,6 +479,17 @@ func TestMultipleBookmarksCRUD(t *testing.T) {
 	}
 }
 
+func TestAdminTemplateParsed(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	if m.adminTmpl == nil {
+		t.Error("admin template should be parsed after Init")
+	}
+}
+
 func TestDependencies(t *testing.T) {
 	m := New()
 
