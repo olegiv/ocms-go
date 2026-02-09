@@ -2,9 +2,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // Package bookmarks provides a custom bookmarks module for oCMS.
-// It demonstrates how to create a custom module in the custom/modules/ directory
-// with database migrations, admin UI, public routes, template functions, hooks,
-// and i18n translations.
+// It demonstrates how to create a fully self-contained custom module
+// in the custom/modules/ directory with database migrations, embedded admin
+// template, public routes, template functions, hooks, and i18n translations.
+//
+// # Registration
+//
+// To use this module, register it in cmd/ocms/main.go:
+//
+//	import "github.com/olegiv/ocms-go/custom/modules/bookmarks"
+//
+//	// In registerModules():
+//	bookmarks.New(),
 package bookmarks
 
 import (
@@ -22,10 +31,14 @@ import (
 //go:embed locales
 var localesFS embed.FS
 
+//go:embed templates/admin.html
+var adminTemplateHTML string
+
 // Module implements the module.Module interface for bookmarks.
 type Module struct {
 	module.BaseModule
-	ctx *module.Context
+	ctx       *module.Context
+	adminTmpl *template.Template
 }
 
 // New creates a new instance of the bookmarks module.
@@ -42,10 +55,17 @@ func New() *Module {
 // Init initializes the module with the given context.
 func (m *Module) Init(ctx *module.Context) error {
 	m.ctx = ctx
-	m.ctx.Logger.Info("Bookmarks module initialized")
+
+	// Parse the embedded admin template
+	tmpl, err := template.New("admin").Parse(adminTemplateHTML)
+	if err != nil {
+		return fmt.Errorf("parsing admin template: %w", err)
+	}
+	m.adminTmpl = tmpl
 
 	m.registerHooks()
 
+	m.ctx.Logger.Info("Bookmarks module initialized")
 	return nil
 }
 
@@ -142,9 +162,6 @@ func (m *Module) registerHooks() {
 		Priority: 20,
 		Fn: func(ctx context.Context, data any) (any, error) {
 			m.ctx.Logger.Debug("Bookmarks module: page saved hook triggered")
-			// In a real module, you could auto-bookmark the saved page:
-			//   pageData := data.(*PageSaveData)
-			//   m.createBookmark(pageData.Title, pageData.URL, "Auto-bookmarked")
 			return data, nil
 		},
 	})
