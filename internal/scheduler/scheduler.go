@@ -20,30 +20,59 @@ import (
 
 // Scheduler handles scheduled tasks like publishing pages.
 type Scheduler struct {
-	db     *sql.DB
-	cron   *cron.Cron
-	logger *slog.Logger
+	db       *sql.DB
+	cron     *cron.Cron
+	logger   *slog.Logger
+	registry *Registry
 }
 
 // New creates a new scheduler instance.
-func New(db *sql.DB, logger *slog.Logger) *Scheduler {
+func New(db *sql.DB, logger *slog.Logger, registry *Registry) *Scheduler {
 	return &Scheduler{
-		db:     db,
-		cron:   cron.New(),
-		logger: logger,
+		db:       db,
+		cron:     cron.New(),
+		logger:   logger,
+		registry: registry,
 	}
+}
+
+// Cron returns the cron instance.
+func (s *Scheduler) Cron() *cron.Cron {
+	return s.cron
 }
 
 // Start begins the scheduler with a job to check for scheduled pages every minute.
 func (s *Scheduler) Start() error {
-	// Run every minute
-	_, err := s.cron.AddFunc("* * * * *", func() {
+	const (
+		defaultSchedule = "* * * * *"
+		jobSource       = "core"
+		jobName         = "scheduled_pages"
+	)
+
+	schedule := defaultSchedule
+	if s.registry != nil {
+		schedule = s.registry.GetEffectiveSchedule(jobSource, jobName, defaultSchedule)
+	}
+
+	jobFunc := func() {
 		if err := s.processScheduledPages(); err != nil {
 			s.logger.Error("failed to process scheduled pages", "error", err)
 		}
-	})
+	}
+
+	entryID, err := s.cron.AddFunc(schedule, jobFunc)
 	if err != nil {
 		return err
+	}
+
+	if s.registry != nil {
+		s.registry.Register(
+			jobSource, jobName,
+			"Publish pages scheduled for publishing",
+			defaultSchedule,
+			s.cron, entryID, jobFunc,
+			func() error { return s.processScheduledPages() },
+		)
 	}
 
 	s.cron.Start()
@@ -112,7 +141,7 @@ func (s *Scheduler) publishPage(ctx context.Context, queries *store.Queries, pag
 	}
 
 	// Log the event
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"page_id":      page.ID,
 		"page_title":   page.Title,
 		"page_slug":    page.Slug,
@@ -139,7 +168,18 @@ func (s *Scheduler) publishPage(ctx context.Context, queries *store.Queries, pag
 // AddDemoReset registers a daily job at 01:00 UTC that resets the demo
 // database and uploads, then sends SIGTERM for a clean restart.
 func (s *Scheduler) AddDemoReset(dbPath, uploadsDir, dataDir string) error {
-	_, err := s.cron.AddFunc("0 1 * * *", func() {
+	const (
+		defaultSchedule = "0 1 * * *"
+		jobSource       = "core"
+		jobName         = "demo_reset"
+	)
+
+	schedule := defaultSchedule
+	if s.registry != nil {
+		schedule = s.registry.GetEffectiveSchedule(jobSource, jobName, defaultSchedule)
+	}
+
+	jobFunc := func() {
 		s.logger.Info("starting scheduled demo reset")
 		if err := demo.Reset(dbPath, uploadsDir, dataDir); err != nil {
 			s.logger.Error("scheduled demo reset failed", "error", err)
@@ -148,6 +188,22 @@ func (s *Scheduler) AddDemoReset(dbPath, uploadsDir, dataDir string) error {
 		s.logger.Info("demo reset complete, sending SIGTERM for restart")
 		p, _ := os.FindProcess(os.Getpid())
 		_ = p.Signal(syscall.SIGTERM)
-	})
-	return err
+	}
+
+	entryID, err := s.cron.AddFunc(schedule, jobFunc)
+	if err != nil {
+		return err
+	}
+
+	if s.registry != nil {
+		// No manual trigger for demo reset — it sends SIGTERM
+		s.registry.Register(
+			jobSource, jobName,
+			"Reset demo data daily at 01:00 UTC",
+			defaultSchedule,
+			s.cron, entryID, jobFunc, nil,
+		)
+	}
+
+	return nil
 }

@@ -6216,6 +6216,506 @@
             "id": "uploader.uploading",
             "message": "Uploading...",
             "translation": "Uploading..."
+        },
+        {
+            "id": "nav.scheduler",
+            "message": "Scheduler",
+            "translation": "Scheduler"
+        },
+        {
+            "id": "scheduler.title",
+            "message": "Scheduled Jobs",
+            "translation": "Scheduled Jobs"
+        },
+        {
+            "id": "scheduler.description",
+            "message": "View and manage scheduled tasks and cron jobs",
+            "translation": "View and manage scheduled tasks and cron jobs"
+        },
+        {
+            "id": "scheduler.all_jobs",
+            "message": "All Scheduled Jobs",
+            "translation": "All Scheduled Jobs"
+        },
+        {
+            "id": "scheduler.col_job",
+            "message": "Job",
+            "translation": "Job"
+        },
+        {
+            "id": "scheduler.col_source",
+            "message": "Source",
+            "translation": "Source"
+        },
+        {
+            "id": "scheduler.col_schedule",
+            "message": "Schedule",
+            "translation": "Schedule"
+        },
+        {
+            "id": "scheduler.col_last_run",
+            "message": "Last Run",
+            "translation": "Last Run"
+        },
+        {
+            "id": "scheduler.col_next_run",
+            "message": "Next Run",
+            "translation": "Next Run"
+        },
+        {
+            "id": "scheduler.default_label",
+            "message": "Default",
+            "translation": "Default"
+        },
+        {
+            "id": "scheduler.trigger_now",
+            "message": "Run Now",
+            "translation": "Run Now"
+        },
+        {
+            "id": "scheduler.trigger_confirm",
+            "message": "Are you sure you want to run this job now?",
+            "translation": "Are you sure you want to run this job now?"
+        },
+        {
+            "id": "scheduler.edit_schedule",
+            "message": "Edit Schedule",
+            "translation": "Edit Schedule"
+        },
+        {
+            "id": "scheduler.reset_schedule",
+            "message": "Reset to default schedule",
+            "translation": "Reset to default schedule"
+        },
+        {
+            "id": "scheduler.reset",
+            "message": "Reset",
+            "translation": "Reset"
+        },
+        {
+            "id": "scheduler.cron_expression",
+            "message": "Cron Expression",
+            "translation": "Cron Expression"
+        },
+        {
+            "id": "scheduler.cron_help",
+            "message": "Enter a schedule expression. Use @every format for simple intervals or cron format for specific times.",
+            "translation": "Enter a schedule expression. Use @every format for simple intervals or cron format for specific times."
+        },
+        {
+            "id": "scheduler.quick_examples",
+            "message": "Common schedules:",
+            "translation": "Common schedules:"
+        },
+        {
+            "id": "scheduler.cron_help_title",
+            "message": "Schedule Expression Reference",
+            "translation": "Schedule Expression Reference"
+        },
+        {
+            "id": "scheduler.cron_intro",
+            "message": "There are two ways to define when a job runs: simple intervals (@every) or cron expressions for precise control.",
+            "translation": "There are two ways to define when a job runs: simple intervals (@every) or cron expressions for precise control."
+        },
+        {
+            "id": "scheduler.interval_heading",
+            "message": "Simple Intervals (@every)",
+            "translation": "Simple Intervals (@every)"
+        },
+        {
+            "id": "scheduler.interval_desc",
+            "message": "The easiest way to schedule a job. Use @every followed by a duration: m for minutes, h for hours.",
+            "translation": "The easiest way to schedule a job. Use @every followed by a duration: m for minutes, h for hours."
+        },
+        {
+            "id": "scheduler.cron_heading",
+            "message": "Cron Expressions (5 fields)",
+            "translation": "Cron Expressions (5 fields)"
+        },
+        {
+            "id": "scheduler.cron_desc",
+            "message": "For running jobs at specific times. A cron expression has 5 fields separated by spaces. Use * to mean \"every\" value.",
+            "translation": "For running jobs at specific times. A cron expression has 5 fields separated by spaces. Use * to mean \"every\" value."
+        },
+        {
+            "id": "scheduler.field_minute",
+            "message": "Minute",
+            "translation": "Minute"
+        },
+        {
+            "id": "scheduler.field_hour",
+            "message": "Hour",
+            "translation": "Hour"
+        },
+        {
+            "id": "scheduler.field_day",
+            "message": "Day",
+            "translation": "Day"
+        },
+        {
+            "id": "scheduler.field_month",
+            "message": "Month",
+            "translation": "Month"
+        },
+        {
+            "id": "scheduler.field_weekday",
+            "message": "Weekday",
+            "translation": "Weekday"
+        },
+        {
+            "id": "scheduler.cron_tip",
+            "message": "Tip: * means \"every\", */5 means \"every 5th\", and 0 means \"at exactly 0\". Weekdays: 0=Sun, 1=Mon, ..., 6=Sat.",
+            "translation": "Tip: * means \"every\", */5 means \"every 5th\", and 0 means \"at exactly 0\". Weekdays: 0=Sun, 1=Mon, ..., 6=Sat."
+        },
+        {
+            "id": "scheduler.ex_every_5m",
+            "message": "Every 5 minutes",
+            "translation": "Every 5 minutes"
+        },
+        {
+            "id": "scheduler.ex_every_30m",
+            "message": "Every 30 minutes",
+            "translation": "Every 30 minutes"
+        },
+        {
+            "id": "scheduler.ex_every_1h",
+            "message": "Every 1 hour",
+            "translation": "Every 1 hour"
+        },
+        {
+            "id": "scheduler.ex_every_6h",
+            "message": "Every 6 hours",
+            "translation": "Every 6 hours"
+        },
+        {
+            "id": "scheduler.ex_every_24h",
+            "message": "Every 24 hours",
+            "translation": "Every 24 hours"
+        },
+        {
+            "id": "scheduler.ex_every_min",
+            "message": "Every minute (use with caution)",
+            "translation": "Every minute (use with caution)"
+        },
+        {
+            "id": "scheduler.ex_every_5min",
+            "message": "Every 5 minutes (at :00, :05, :10, ...)",
+            "translation": "Every 5 minutes (at :00, :05, :10, ...)"
+        },
+        {
+            "id": "scheduler.ex_hourly",
+            "message": "Once per hour (at :00)",
+            "translation": "Once per hour (at :00)"
+        },
+        {
+            "id": "scheduler.ex_daily_2am",
+            "message": "Once per day at 2:00 AM",
+            "translation": "Once per day at 2:00 AM"
+        },
+        {
+            "id": "scheduler.ex_weekly_sun",
+            "message": "Once per week (Sunday at midnight)",
+            "translation": "Once per week (Sunday at midnight)"
+        },
+        {
+            "id": "scheduler.ex_monthly",
+            "message": "Once per month (1st day at midnight)",
+            "translation": "Once per month (1st day at midnight)"
+        },
+        {
+            "id": "scheduler.expression",
+            "message": "Expression",
+            "translation": "Expression"
+        },
+        {
+            "id": "scheduler.meaning",
+            "message": "Meaning",
+            "translation": "Meaning"
+        },
+        {
+            "id": "scheduler.no_jobs",
+            "message": "No scheduled jobs registered.",
+            "translation": "No scheduled jobs registered."
+        },
+        {
+            "id": "scheduler.success_update",
+            "message": "Schedule updated successfully",
+            "translation": "Schedule updated successfully"
+        },
+        {
+            "id": "scheduler.success_trigger",
+            "message": "Job triggered successfully",
+            "translation": "Job triggered successfully"
+        },
+        {
+            "id": "scheduler.success_reset",
+            "message": "Schedule reset to default",
+            "translation": "Schedule reset to default"
+        },
+        {
+            "id": "scheduler.error_update",
+            "message": "Failed to update schedule",
+            "translation": "Failed to update schedule"
+        },
+        {
+            "id": "scheduler.error_trigger",
+            "message": "Failed to trigger job",
+            "translation": "Failed to trigger job"
+        },
+        {
+            "id": "scheduler.error_reset",
+            "message": "Failed to reset schedule",
+            "translation": "Failed to reset schedule"
+        },
+        {
+            "id": "scheduler.custom_tasks",
+            "message": "Custom Tasks",
+            "translation": "Custom Tasks"
+        },
+        {
+            "id": "scheduler.new_task",
+            "message": "New Task",
+            "translation": "New Task"
+        },
+        {
+            "id": "scheduler.edit_task",
+            "message": "Edit Task",
+            "translation": "Edit Task"
+        },
+        {
+            "id": "scheduler.task_form_description",
+            "message": "Create a scheduled HTTP GET request to an internal or external URL",
+            "translation": "Create a scheduled HTTP GET request to an internal or external URL"
+        },
+        {
+            "id": "scheduler.back_to_scheduler",
+            "message": "Back to Scheduler",
+            "translation": "Back to Scheduler"
+        },
+        {
+            "id": "scheduler.task_name",
+            "message": "Name",
+            "translation": "Name"
+        },
+        {
+            "id": "scheduler.task_name_hint",
+            "message": "A descriptive name for this scheduled task",
+            "translation": "A descriptive name for this scheduled task"
+        },
+        {
+            "id": "scheduler.task_url",
+            "message": "URL",
+            "translation": "URL"
+        },
+        {
+            "id": "scheduler.task_url_hint",
+            "message": "The URL to send an HTTP GET request to (internal or external)",
+            "translation": "The URL to send an HTTP GET request to (internal or external)"
+        },
+        {
+            "id": "scheduler.task_schedule",
+            "message": "Schedule",
+            "translation": "Schedule"
+        },
+        {
+            "id": "scheduler.task_schedule_hint",
+            "message": "How often to run this task (cron expression or @every interval)",
+            "translation": "How often to run this task (cron expression or @every interval)"
+        },
+        {
+            "id": "scheduler.task_timeout",
+            "message": "Timeout (seconds)",
+            "translation": "Timeout (seconds)"
+        },
+        {
+            "id": "scheduler.task_timeout_hint",
+            "message": "Maximum time to wait for a response (1-300 seconds, default: 30)",
+            "translation": "Maximum time to wait for a response (1-300 seconds, default: 30)"
+        },
+        {
+            "id": "scheduler.create_task",
+            "message": "Create Task",
+            "translation": "Create Task"
+        },
+        {
+            "id": "scheduler.task_active",
+            "message": "Active",
+            "translation": "Active"
+        },
+        {
+            "id": "scheduler.task_inactive",
+            "message": "Inactive",
+            "translation": "Inactive"
+        },
+        {
+            "id": "scheduler.task_enable",
+            "message": "Enable",
+            "translation": "Enable"
+        },
+        {
+            "id": "scheduler.task_disable",
+            "message": "Disable",
+            "translation": "Disable"
+        },
+        {
+            "id": "scheduler.task_runs",
+            "message": "Runs",
+            "translation": "Runs"
+        },
+        {
+            "id": "scheduler.total_runs",
+            "message": "Total Runs",
+            "translation": "Total Runs"
+        },
+        {
+            "id": "scheduler.task_trigger_confirm",
+            "message": "Run this task now?",
+            "translation": "Run this task now?"
+        },
+        {
+            "id": "scheduler.task_delete_confirm",
+            "message": "Delete this task and all its run history?",
+            "translation": "Delete this task and all its run history?"
+        },
+        {
+            "id": "scheduler.task_not_found",
+            "message": "Task not found",
+            "translation": "Task not found"
+        },
+        {
+            "id": "scheduler.task_created",
+            "message": "Task created successfully",
+            "translation": "Task created successfully"
+        },
+        {
+            "id": "scheduler.task_updated",
+            "message": "Task updated successfully",
+            "translation": "Task updated successfully"
+        },
+        {
+            "id": "scheduler.task_deleted",
+            "message": "Task deleted successfully",
+            "translation": "Task deleted successfully"
+        },
+        {
+            "id": "scheduler.task_toggled",
+            "message": "Task status updated",
+            "translation": "Task status updated"
+        },
+        {
+            "id": "scheduler.task_triggered",
+            "message": "Task triggered successfully",
+            "translation": "Task triggered successfully"
+        },
+        {
+            "id": "scheduler.error_task_required",
+            "message": "Name, URL, and schedule are required",
+            "translation": "Name, URL, and schedule are required"
+        },
+        {
+            "id": "scheduler.error_task_create",
+            "message": "Failed to create task",
+            "translation": "Failed to create task"
+        },
+        {
+            "id": "scheduler.error_task_update",
+            "message": "Failed to update task",
+            "translation": "Failed to update task"
+        },
+        {
+            "id": "scheduler.error_task_delete",
+            "message": "Failed to delete task",
+            "translation": "Failed to delete task"
+        },
+        {
+            "id": "scheduler.error_task_toggle",
+            "message": "Failed to toggle task",
+            "translation": "Failed to toggle task"
+        },
+        {
+            "id": "scheduler.error_task_trigger",
+            "message": "Failed to trigger task",
+            "translation": "Failed to trigger task"
+        },
+        {
+            "id": "scheduler.error_task_schedule",
+            "message": "Task created but failed to schedule",
+            "translation": "Task created but failed to schedule"
+        },
+        {
+            "id": "scheduler.error_invalid_url",
+            "message": "Invalid task URL",
+            "translation": "Invalid task URL"
+        },
+        {
+            "id": "scheduler.error_rate_limit",
+            "message": "Please wait before triggering again",
+            "translation": "Please wait before triggering again"
+        },
+        {
+            "id": "scheduler.error_name_length",
+            "message": "Task name must be 3-100 characters",
+            "translation": "Task name must be 3-100 characters"
+        },
+        {
+            "id": "scheduler.error_url_length",
+            "message": "URL must not exceed 2048 characters",
+            "translation": "URL must not exceed 2048 characters"
+        },
+        {
+            "id": "scheduler.error_timeout_range",
+            "message": "Timeout must be between 1 and 300 seconds",
+            "translation": "Timeout must be between 1 and 300 seconds"
+        },
+        {
+            "id": "scheduler.error_invalid_schedule",
+            "message": "Invalid cron schedule expression",
+            "translation": "Invalid cron schedule expression"
+        },
+        {
+            "id": "scheduler.run_status",
+            "message": "Status",
+            "translation": "Status"
+        },
+        {
+            "id": "scheduler.run_code",
+            "message": "HTTP Code",
+            "translation": "HTTP Code"
+        },
+        {
+            "id": "scheduler.run_duration",
+            "message": "Duration",
+            "translation": "Duration"
+        },
+        {
+            "id": "scheduler.run_started",
+            "message": "Started",
+            "translation": "Started"
+        },
+        {
+            "id": "scheduler.run_error",
+            "message": "Error",
+            "translation": "Error"
+        },
+        {
+            "id": "scheduler.status_success",
+            "message": "Success",
+            "translation": "Success"
+        },
+        {
+            "id": "scheduler.status_failed",
+            "message": "Failed",
+            "translation": "Failed"
+        },
+        {
+            "id": "scheduler.status_pending",
+            "message": "Pending",
+            "translation": "Pending"
+        },
+        {
+            "id": "scheduler.no_runs",
+            "message": "No runs yet. Trigger the task manually or wait for the next scheduled run.",
+            "translation": "No runs yet. Trigger the task manually or wait for the next scheduled run."
         }
     ]
 }

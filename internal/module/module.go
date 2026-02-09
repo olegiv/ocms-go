@@ -16,19 +16,21 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/config"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/scheduler"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // Context provides access to application services for modules.
 type Context struct {
-	DB     *sql.DB
-	Store  *store.Queries
-	Logger *slog.Logger
-	Config *config.Config
-	Render *render.Renderer
-	Events *service.EventService
-	Hooks  *HookRegistry
+	DB                *sql.DB
+	Store             *store.Queries
+	Logger            *slog.Logger
+	Config            *config.Config
+	Render            *render.Renderer
+	Events            *service.EventService
+	Hooks             *HookRegistry
+	SchedulerRegistry *scheduler.Registry
 }
 
 // Module defines the interface that all modules must implement.

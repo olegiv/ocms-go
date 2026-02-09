@@ -12,7 +12,7 @@ func TestNew(t *testing.T) {
 	logger := slog.Default()
 
 	// Test creation without database (nil db allowed for creation)
-	s := New(nil, logger)
+	s := New(nil, logger, nil)
 	if s == nil {
 		t.Fatal("New() returned nil")
 	}
@@ -26,7 +26,7 @@ func TestNew(t *testing.T) {
 
 func TestScheduler_StartStop(t *testing.T) {
 	logger := slog.Default()
-	s := New(nil, logger)
+	s := New(nil, logger, nil)
 
 	// Start the scheduler
 	err := s.Start()
