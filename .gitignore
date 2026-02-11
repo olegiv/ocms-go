@@ -28,6 +28,7 @@ Thumbs.db
 custom/themes/*
 custom/modules/*
 !custom/themes/.gitkeep
+!custom/themes/starter/
 !custom/modules/.gitkeep
 !custom/modules/imports.go
 !custom/modules/bookmarks/

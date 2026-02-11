@@ -1,0 +1,46 @@
+<article class="st-card">
+    {{if .FeaturedImage}}
+    <div class="st-card__image">
+        <a href="{{.URL}}">
+            <img src="{{.FeaturedImage}}"
+                 srcset="{{.FeaturedImage}} 150w, {{.FeaturedImageSmall}} 400w, {{.FeaturedImageMedium}} 800w"
+                 sizes="(max-width: 768px) 100vw, 380px"
+                 alt="{{mediaAlt .FeaturedImageID $.LangCode .FeaturedImageAlt}}"
+                 loading="lazy">
+        </a>
+    </div>
+    {{end}}
+    <div class="st-card__body">
+        {{if .Category}}
+        <span class="st-card__category">
+            <a href="{{$.LangPrefix}}/category/{{.Category.Slug}}">{{.Category.Name}}</a>
+        </span>
+        {{end}}
+        <h3 class="st-card__title">
+            <a href="{{.URL}}">{{.Title}}</a>
+        </h3>
+        {{if .Highlight}}
+        <p class="st-card__excerpt">{{safeHTML .Highlight}}</p>
+        {{else if .Excerpt}}
+        <p class="st-card__excerpt">{{.Excerpt}}</p>
+        {{end}}
+        <div class="st-card__meta">
+            {{if .PublishedAt}}
+            <time datetime="{{.PublishedAt}}">{{formatDateLocale .PublishedAt $.LangCode}}</time>
+            {{end}}
+            {{if .Author}}
+            <span class="st-card__author">{{.Author.Name}}</span>
+            {{end}}
+            {{if .ReadingTime}}
+            <span class="st-card__reading">{{.ReadingTime}} {{TTheme $.LangCode "frontend.min_read"}}</span>
+            {{end}}
+        </div>
+        {{if .Tags}}
+        <div class="st-card__tags">
+            {{range .Tags}}
+            <a href="{{$.LangPrefix}}/tag/{{.Slug}}" class="st-tag">{{.Name}}</a>
+            {{end}}
+        </div>
+        {{end}}
+    </div>
+</article>

@@ -1,0 +1,56 @@
+{{define "content"}}
+<div class="st-search">
+    <header class="st-search__header">
+        <h1 class="st-search__title">{{TTheme .LangCode "search.title"}}</h1>
+        <form action="{{.LangPrefix}}/search" method="get" class="st-search__form" role="search">
+            <input type="search" name="q" value="{{.SearchQuery}}" placeholder="{{TTheme .LangCode "search.placeholder"}}" aria-label="{{TTheme .LangCode "search.placeholder"}}" autofocus>
+            <button type="submit" class="st-btn st-btn--primary">{{TTheme .LangCode "search.button"}}</button>
+        </form>
+    </header>
+
+    {{if .SearchQuery}}
+    <div class="st-search__results">
+        {{if .Pages}}
+        <p class="st-search__count">
+            {{if eq .ResultCount 1}}{{TTheme .LangCode "search.result_count" .ResultCount}}{{else}}{{TTheme .LangCode "search.results_count" .ResultCount}}{{end}} "{{.SearchQuery}}"
+        </p>
+
+        <div class="st-posts">
+            {{range .Pages}}
+            {{template "post-card.html" .}}
+            {{end}}
+        </div>
+
+        {{template "pagination.html" .}}
+
+        {{else}}
+        <div class="st-empty">
+            <p>{{TTheme $.LangCode "search.no_results"}} "{{.SearchQuery}}"</p>
+            <div class="st-search__suggestions">
+                <h3>{{TTheme $.LangCode "search.suggestions_title"}}</h3>
+                <ul>
+                    <li>{{TTheme $.LangCode "search.suggestion_spelling"}}</li>
+                    <li>{{TTheme $.LangCode "search.suggestion_keywords"}}</li>
+                    <li>{{TTheme $.LangCode "search.suggestion_general"}}</li>
+                </ul>
+            </div>
+        </div>
+        {{end}}
+    </div>
+    {{else}}
+    <div class="st-search__intro">
+        <p>{{TTheme .LangCode "search.intro"}}</p>
+        {{if .PopularSearches}}
+        <div class="st-search__popular">
+            <h3>{{TTheme .LangCode "search.popular_title"}}</h3>
+            <ul>
+                {{range .PopularSearches}}
+                <li><a href="{{$.LangPrefix}}/search?q={{.}}">{{.}}</a></li>
+                {{end}}
+            </ul>
+        </div>
+        {{end}}
+    </div>
+    {{end}}
+</div>
+{{end}}

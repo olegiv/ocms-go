@@ -1,0 +1,150 @@
+{{define "content"}}
+<div class="st-form-page">
+    {{if .Success}}
+    <div class="st-form-page__success">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+        </svg>
+        <h2>{{TTheme $.LangCode "forms.public.thank_you"}}</h2>
+        <p>{{if .Form.SuccessMessage.Valid}}{{.Form.SuccessMessage.String}}{{else}}{{TTheme $.LangCode "forms.public.default_success"}}{{end}}</p>
+        <a href="/forms/{{.Form.Slug}}" class="st-btn st-btn--primary">{{TTheme $.LangCode "forms.public.submit_another"}}</a>
+    </div>
+    {{else}}
+    <header class="st-article__header">
+        <h1 class="st-article__title">{{.Form.Title}}</h1>
+        {{if .Form.Description.Valid}}
+        {{if .Form.Description.String}}
+        <p class="st-article__excerpt">{{.Form.Description.String}}</p>
+        {{end}}
+        {{end}}
+    </header>
+
+    {{if index .Errors "_form"}}
+    <div class="st-alert st-alert--error">{{index .Errors "_form"}}</div>
+    {{end}}
+
+    {{if index .Errors "_captcha"}}
+    <div class="st-alert st-alert--error">{{index .Errors "_captcha"}}</div>
+    {{end}}
+
+    <form method="POST" action="/forms/{{.Form.Slug}}" class="st-form">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+
+        <!-- Honeypot -->
+        <div class="sr-only">
+            <label for="_website">{{TTheme $.LangCode "forms.public.honeypot_label"}}</label>
+            <input type="text" name="_website" id="_website" tabindex="-1" autocomplete="off">
+        </div>
+
+        {{range .Fields}}
+        {{if eq .Type "captcha"}}
+        {{if hcaptchaEnabled}}
+        <div class="st-form__group st-form__captcha">
+            {{hcaptchaWidget}}
+        </div>
+        {{end}}
+        {{else}}
+        <div class="st-form__group{{if index $.Errors .Name}} st-form__group--error{{end}}">
+            <label for="field_{{.ID}}">
+                {{.Label}}
+                {{if .IsRequired}}<span class="st-form__required">*</span>{{end}}
+            </label>
+
+            {{if eq .Type "text"}}
+            <input type="text" id="field_{{.ID}}" name="{{.Name}}" value="{{index $.Values .Name}}" {{if .Placeholder.Valid}}placeholder="{{.Placeholder.String}}"{{end}} {{if .IsRequired}}required{{end}} class="st-form__input">
+
+            {{else if eq .Type "email"}}
+            <input type="email" id="field_{{.ID}}" name="{{.Name}}" value="{{index $.Values .Name}}" {{if .Placeholder.Valid}}placeholder="{{.Placeholder.String}}"{{end}} {{if .IsRequired}}required{{end}} class="st-form__input">
+
+            {{else if eq .Type "textarea"}}
+            <textarea id="field_{{.ID}}" name="{{.Name}}" {{if .Placeholder.Valid}}placeholder="{{.Placeholder.String}}"{{end}} {{if .IsRequired}}required{{end}} rows="5" class="st-form__input">{{index $.Values .Name}}</textarea>
+
+            {{else if eq .Type "number"}}
+            <input type="number" id="field_{{.ID}}" name="{{.Name}}" value="{{index $.Values .Name}}" {{if .Placeholder.Valid}}placeholder="{{.Placeholder.String}}"{{end}} {{if .IsRequired}}required{{end}} class="st-form__input">
+
+            {{else if eq .Type "date"}}
+            <input type="date" id="field_{{.ID}}" name="{{.Name}}" value="{{index $.Values .Name}}" {{if .IsRequired}}required{{end}} class="st-form__input">
+
+            {{else if eq .Type "select"}}
+            <select id="field_{{.ID}}" name="{{.Name}}" {{if .IsRequired}}required{{end}} class="st-form__input">
+                <option value="">{{TTheme $.LangCode "forms.public.select_default"}}</option>
+                {{$selectedValue := index $.Values .Name}}
+                {{$options := parseJSON .Options.String}}
+                {{range $options}}
+                <option value="{{.}}" {{if eq . $selectedValue}}selected{{end}}>{{.}}</option>
+                {{end}}
+            </select>
+
+            {{else if eq .Type "radio"}}
+            <div class="st-form__options">
+                {{$fieldName := .Name}}
+                {{$selectedValue := index $.Values .Name}}
+                {{$options := parseJSON .Options.String}}
+                {{$fieldID := .ID}}
+                {{range $i, $opt := $options}}
+                <label class="st-form__radio">
+                    <input type="radio" name="{{$fieldName}}" value="{{$opt}}" {{if eq $opt $selectedValue}}checked{{end}}>
+                    <span>{{$opt}}</span>
+                </label>
+                {{end}}
+            </div>
+
+            {{else if eq .Type "checkbox"}}
+            <div class="st-form__options">
+                {{$fieldName := .Name}}
+                {{$selectedValue := index $.Values .Name}}
+                {{$options := parseJSON .Options.String}}
+                {{$fieldID := .ID}}
+                {{range $i, $opt := $options}}
+                <label class="st-form__checkbox">
+                    <input type="checkbox" name="{{$fieldName}}" value="{{$opt}}" {{if contains $selectedValue $opt}}checked{{end}}>
+                    <span>{{$opt}}</span>
+                </label>
+                {{end}}
+            </div>
+
+            {{else if eq .Type "file"}}
+            <input type="file" id="field_{{.ID}}" name="{{.Name}}" {{if .IsRequired}}required{{end}} class="st-form__input">
+
+            {{else}}
+            <input type="text" id="field_{{.ID}}" name="{{.Name}}" value="{{index $.Values .Name}}" {{if .Placeholder.Valid}}placeholder="{{.Placeholder.String}}"{{end}} {{if .IsRequired}}required{{end}} class="st-form__input">
+            {{end}}
+
+            {{if .HelpText.Valid}}
+            {{if .HelpText.String}}
+            <small class="st-form__help">{{.HelpText.String}}</small>
+            {{end}}
+            {{end}}
+
+            {{if index $.Errors .Name}}
+            <div class="st-form__error">{{index $.Errors .Name}}</div>
+            {{end}}
+        </div>
+        {{end}}
+        {{end}}
+
+        <div class="st-form__actions">
+            <button type="submit" class="st-btn st-btn--primary st-btn--lg">{{TTheme $.LangCode "forms.public.submit"}}</button>
+        </div>
+    </form>
+    {{end}}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    function fixHCaptchaHeight() {
+        var iframe = document.querySelector('.h-captcha iframe');
+        if (iframe && iframe.offsetHeight < 115) {
+            iframe.style.setProperty('height', '115px', 'important');
+            iframe.style.setProperty('min-height', '115px', 'important');
+        }
+    }
+    var attempts = 0;
+    var interval = setInterval(function() {
+        fixHCaptchaHeight();
+        if (++attempts > 50) clearInterval(interval);
+    }, 100);
+});
+</script>
+{{end}}

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="{{if .LangCode}}{{.LangCode}}{{else}}en{{end}}" {{if .LangDirection}}dir="{{.LangDirection}}"{{end}}>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta name="generator" content="oCMS - https://ocms.tech">
+
+    {{/* SEO Meta Tags */}}
+    {{if .MetaDescription}}<meta name="description" content="{{.MetaDescription}}">{{end}}
+    {{if .MetaKeywords}}<meta name="keywords" content="{{.MetaKeywords}}">{{end}}
+    {{if .Canonical}}<link rel="canonical" href="{{.Canonical}}">{{end}}
+    {{if .Robots}}<meta name="robots" content="{{.Robots}}">{{end}}
+
+    {{/* hreflang links for multi-language SEO */}}
+    {{range .HrefLangs}}
+    <link rel="alternate" hreflang="{{.Lang}}" href="{{.Href}}">
+    {{end}}
+
+    {{/* Open Graph */}}
+    <meta property="og:type" content="{{if .OGType}}{{.OGType}}{{else if .Page}}article{{else}}website{{end}}">
+    <meta property="og:title" content="{{if .Title}}{{.Title}}{{else}}{{.SiteName}}{{end}}">
+    {{if .MetaDescription}}<meta property="og:description" content="{{.MetaDescription}}">{{end}}
+    {{if .SiteURL}}<meta property="og:url" content="{{.SiteURL}}{{.RequestURI}}">{{end}}
+    {{if .OGImage}}<meta property="og:image" content="{{.OGImage}}">{{else if .FeaturedImage}}<meta property="og:image" content="{{.FeaturedImage}}">{{end}}
+    <meta property="og:site_name" content="{{.SiteName}}">
+
+    {{/* Twitter Card */}}
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{if .Title}}{{.Title}}{{else}}{{.SiteName}}{{end}}">
+    {{if .MetaDescription}}<meta name="twitter:description" content="{{.MetaDescription}}">{{end}}
+    {{if .OGImage}}<meta name="twitter:image" content="{{.OGImage}}">{{else if .FeaturedImage}}<meta name="twitter:image" content="{{.FeaturedImage}}">{{end}}
+
+    {{/* JSON-LD Structured Data */}}
+    {{if .JSONLD}}
+    <script type="application/ld+json">
+{{.JSONLD}}
+    </script>
+    {{end}}
+
+    <title>{{if .Title}}{{.Title}} | {{end}}{{.SiteName}}</title>
+
+    {{/* Favicon */}}
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+
+    {{/* Theme Styles */}}
+    <link rel="stylesheet" href="/themes/starter/static/css/theme.css">
+
+    {{/* Theme Settings CSS Variables */}}
+    {{if index .ThemeSettings "accent_color"}}
+    <style>
+        :root {
+            --st-accent: {{index .ThemeSettings "accent_color"}};
+            --st-accent-hover: {{index .ThemeSettings "accent_color"}}dd;
+            --st-link: {{index .ThemeSettings "accent_color"}};
+        }
+    </style>
+    {{end}}
+
+    {{/* Custom CSS */}}
+    {{if .CustomCSS}}
+    <style>{{.CustomCSS | safeHTML}}</style>
+    {{end}}
+
+    {{/* Privacy/Consent scripts - MUST be before analytics for Google Consent Mode v2 */}}
+    {{if privacyHead}}{{privacyHead}}{{end}}
+
+    {{/* External analytics tracking scripts (head) */}}
+    {{if analyticsExtHead}}{{analyticsExtHead}}{{end}}
+
+    {{/* External embed scripts (head) */}}
+    {{if embedHead}}{{embedHead}}{{end}}
+
+    {{block "head" .}}{{end}}
+</head>
+<body class="st-body{{if .BodyClass}} {{.BodyClass}}{{end}}">
+    {{/* Informer notification bar (top of page) */}}
+    {{if informerBar}}{{informerBar}}{{end}}
+
+    {{/* External analytics tracking scripts (body - noscript fallbacks) */}}
+    {{if analyticsExtBody}}{{analyticsExtBody}}{{end}}
+
+    {{template "header.html" .}}
+
+    <main class="st-main">
+        <div class="st-container">
+            {{if .ShowSidebar}}
+            <div class="st-layout st-layout--with-sidebar">
+                <div class="st-content">
+                    {{template "content" .}}
+                </div>
+                <aside class="st-sidebar">
+                    {{template "sidebar.html" .}}
+                </aside>
+            </div>
+            {{else}}
+            <div class="st-layout">
+                <div class="st-content st-content--full">
+                    {{template "content" .}}
+                </div>
+            </div>
+            {{end}}
+        </div>
+    </main>
+
+    {{template "footer.html" .}}
+
+    {{/* Alpine.js Collapse Plugin (must load before Alpine) */}}
+    <script defer src="/static/dist/js/alpine-collapse.min.js"></script>
+    {{/* Alpine.js */}}
+    <script defer src="/static/dist/js/alpine.min.js"></script>
+    {{/* Theme JavaScript */}}
+    <script src="/themes/starter/static/js/theme.js"></script>
+
+    {{block "scripts" .}}{{end}}
+
+    {{/* External embed scripts (body - chat widgets, etc.) */}}
+    {{if embedBody}}{{embedBody}}{{end}}
+</body>
+</html>
