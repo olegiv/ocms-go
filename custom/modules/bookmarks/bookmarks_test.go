@@ -340,6 +340,9 @@ func TestToggleFavorite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listBookmarks: %v", err)
 	}
+	if len(items) == 0 {
+		t.Fatal("expected at least one bookmark")
+	}
 	if !items[0].IsFavorite {
 		t.Error("bookmark should be favorite after toggle")
 	}
@@ -352,6 +355,9 @@ func TestToggleFavorite(t *testing.T) {
 	items, err = m.listBookmarks()
 	if err != nil {
 		t.Fatalf("listBookmarks: %v", err)
+	}
+	if len(items) == 0 {
+		t.Fatal("expected at least one bookmark")
 	}
 	if items[0].IsFavorite {
 		t.Error("bookmark should not be favorite after second toggle")
@@ -964,6 +970,9 @@ func TestHandleToggleFavoriteHTTP(t *testing.T) {
 	items, err := m.listBookmarks()
 	if err != nil {
 		t.Fatalf("listBookmarks: %v", err)
+	}
+	if len(items) == 0 {
+		t.Fatal("expected at least one bookmark")
 	}
 	if !items[0].IsFavorite {
 		t.Error("bookmark should be favorite after toggle")
