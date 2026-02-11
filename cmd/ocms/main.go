@@ -57,6 +57,9 @@ import (
 	"github.com/olegiv/ocms-go/modules/privacy"
 	"github.com/olegiv/ocms-go/modules/sentinel"
 	"github.com/olegiv/ocms-go/web"
+
+	// Custom modules — loaded via init() self-registration
+	_ "github.com/olegiv/ocms-go/custom/modules"
 )
 
 // Version information - injected at build time via ldflags
@@ -281,6 +284,13 @@ func registerModules(registry *module.Registry, sentinelModule *sentinel.Module,
 	internalAnalyticsModule := analytics_int.New()
 	if err := registry.Register(internalAnalyticsModule); err != nil {
 		return nil, fmt.Errorf("registering analytics_int module: %w", err)
+	}
+
+	// Register custom modules (self-registered via init() in custom/modules/)
+	for _, mod := range module.CustomModules() {
+		if err := registry.Register(mod); err != nil {
+			return nil, fmt.Errorf("registering custom module %s: %w", mod.Name(), err)
+		}
 	}
 
 	return internalAnalyticsModule, nil
