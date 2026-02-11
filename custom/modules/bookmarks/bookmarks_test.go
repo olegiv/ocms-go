@@ -6,8 +6,17 @@ package bookmarks
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io/fs"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/testutil"
@@ -496,5 +505,535 @@ func TestDependencies(t *testing.T) {
 	deps := m.Dependencies()
 	if len(deps) != 0 {
 		t.Errorf("Dependencies() = %v, want nil or empty", deps)
+	}
+}
+
+func TestTranslationsFS(t *testing.T) {
+	m := New()
+	tfs := m.TranslationsFS()
+
+	// Verify English translations exist
+	data, err := fs.ReadFile(tfs, "locales/en/messages.json")
+	if err != nil {
+		t.Fatalf("reading en translations: %v", err)
+	}
+	if len(data) == 0 {
+		t.Error("en translations file is empty")
+	}
+
+	// Verify Russian translations exist
+	data, err = fs.ReadFile(tfs, "locales/ru/messages.json")
+	if err != nil {
+		t.Fatalf("reading ru translations: %v", err)
+	}
+	if len(data) == 0 {
+		t.Error("ru translations file is empty")
+	}
+
+	// Verify JSON is valid and has messages
+	var parsed struct {
+		Language string `json:"language"`
+		Messages []struct {
+			ID          string `json:"id"`
+			Translation string `json:"translation"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("parsing ru translations: %v", err)
+	}
+	if parsed.Language != "ru" {
+		t.Errorf("language = %q, want ru", parsed.Language)
+	}
+	if len(parsed.Messages) == 0 {
+		t.Error("ru translations has no messages")
+	}
+}
+
+func TestTranslationsKeys(t *testing.T) {
+	m := New()
+	tfs := m.TranslationsFS()
+
+	data, err := fs.ReadFile(tfs, "locales/en/messages.json")
+	if err != nil {
+		t.Fatalf("reading en translations: %v", err)
+	}
+
+	var parsed struct {
+		Messages []struct {
+			ID string `json:"id"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("parsing en translations: %v", err)
+	}
+
+	// Verify essential translation keys exist
+	requiredKeys := []string{
+		"nav.bookmarks",
+		"bookmarks.title",
+		"bookmarks.description",
+		"bookmarks.add_bookmark",
+		"bookmarks.field_title",
+		"bookmarks.field_url",
+		"bookmarks.no_bookmarks",
+		"bookmarks.confirm_delete",
+		"bookmarks.table_actions",
+		"bookmarks.title_required",
+		"bookmarks.url_required",
+	}
+
+	keySet := make(map[string]bool)
+	for _, msg := range parsed.Messages {
+		keySet[msg.ID] = true
+	}
+
+	for _, key := range requiredKeys {
+		if !keySet[key] {
+			t.Errorf("missing required translation key: %s", key)
+		}
+	}
+}
+
+func TestRegisterRoutes(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	r := chi.NewRouter()
+	m.RegisterRoutes(r)
+
+	// Walk routes and check /bookmarks is registered
+	var found bool
+	walkErr := chi.Walk(r, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		if method == "GET" && route == "/bookmarks" {
+			found = true
+		}
+		return nil
+	})
+	if walkErr != nil {
+		t.Fatalf("walking routes: %v", walkErr)
+	}
+	if !found {
+		t.Error("GET /bookmarks route not registered")
+	}
+}
+
+func TestRegisterAdminRoutes(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	r := chi.NewRouter()
+	m.RegisterAdminRoutes(r)
+
+	expectedRoutes := map[string]string{
+		"GET /bookmarks":            "admin list",
+		"POST /bookmarks":           "create",
+		"POST /bookmarks/{id}/toggle": "toggle favorite",
+		"DELETE /bookmarks/{id}":     "delete",
+	}
+
+	foundRoutes := make(map[string]bool)
+	walkErr := chi.Walk(r, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		key := method + " " + route
+		foundRoutes[key] = true
+		return nil
+	})
+	if walkErr != nil {
+		t.Fatalf("walking routes: %v", walkErr)
+	}
+
+	for route, desc := range expectedRoutes {
+		if !foundRoutes[route] {
+			t.Errorf("route %q (%s) not registered", route, desc)
+		}
+	}
+}
+
+func TestHandlePublicListEmpty(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	r := chi.NewRouter()
+	m.RegisterRoutes(r)
+
+	req := httptest.NewRequest(http.MethodGet, "/bookmarks", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	ct := rec.Header().Get("Content-Type")
+	if ct != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", ct)
+	}
+
+	var body struct {
+		Bookmarks []Bookmark `json:"bookmarks"`
+		Total     int        `json:"total"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if body.Total != 0 {
+		t.Errorf("total = %d, want 0", body.Total)
+	}
+	if len(body.Bookmarks) != 0 {
+		t.Errorf("bookmarks count = %d, want 0", len(body.Bookmarks))
+	}
+}
+
+func TestHandlePublicListWithData(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	_, err := m.createBookmark("Test Link", "https://test.com", "A test", false)
+	if err != nil {
+		t.Fatalf("createBookmark: %v", err)
+	}
+	_, err = m.createBookmark("Fav Link", "https://fav.com", "", true)
+	if err != nil {
+		t.Fatalf("createBookmark: %v", err)
+	}
+
+	r := chi.NewRouter()
+	m.RegisterRoutes(r)
+
+	req := httptest.NewRequest(http.MethodGet, "/bookmarks", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var body struct {
+		Bookmarks []Bookmark `json:"bookmarks"`
+		Total     int        `json:"total"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if body.Total != 2 {
+		t.Errorf("total = %d, want 2", body.Total)
+	}
+	// Favorites sorted first
+	if len(body.Bookmarks) > 0 && body.Bookmarks[0].Title != "Fav Link" {
+		t.Errorf("first bookmark = %q, want Fav Link", body.Bookmarks[0].Title)
+	}
+}
+
+func TestHandleAdminList(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	_, err := m.createBookmark("Admin Link", "https://admin.com", "Admin test", false)
+	if err != nil {
+		t.Fatalf("createBookmark: %v", err)
+	}
+
+	r := chi.NewRouter()
+	m.RegisterAdminRoutes(r)
+
+	req := httptest.NewRequest(http.MethodGet, "/bookmarks", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	ct := rec.Header().Get("Content-Type")
+	if !strings.HasPrefix(ct, "text/html") {
+		t.Errorf("Content-Type = %q, want text/html*", ct)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "Admin Link") {
+		t.Error("response should contain bookmark title 'Admin Link'")
+	}
+	if !strings.Contains(body, "https://admin.com") {
+		t.Error("response should contain bookmark URL")
+	}
+	if !strings.Contains(body, m.Version()) {
+		t.Error("response should contain module version")
+	}
+}
+
+func TestHandleAdminListEmpty(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	r := chi.NewRouter()
+	m.RegisterAdminRoutes(r)
+
+	req := httptest.NewRequest(http.MethodGet, "/bookmarks", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "No bookmarks yet") {
+		t.Error("empty state should show 'No bookmarks yet'")
+	}
+}
+
+func TestHandleCreateFormPost(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	r := chi.NewRouter()
+	m.RegisterAdminRoutes(r)
+
+	form := url.Values{}
+	form.Set("title", "New Bookmark")
+	form.Set("url", "https://new.example.com")
+	form.Set("description", "Created via form")
+
+	req := httptest.NewRequest(http.MethodPost, "/bookmarks", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	// Should redirect
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+
+	// Verify bookmark was created
+	items, err := m.listBookmarks()
+	if err != nil {
+		t.Fatalf("listBookmarks: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("len(items) = %d, want 1", len(items))
+	}
+	if items[0].Title != "New Bookmark" {
+		t.Errorf("title = %q, want New Bookmark", items[0].Title)
+	}
+	if items[0].URL != "https://new.example.com" {
+		t.Errorf("url = %q, want https://new.example.com", items[0].URL)
+	}
+}
+
+func TestHandleCreateJSON(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	r := chi.NewRouter()
+	m.RegisterAdminRoutes(r)
+
+	form := url.Values{}
+	form.Set("title", "JSON Bookmark")
+	form.Set("url", "https://json.example.com")
+
+	req := httptest.NewRequest(http.MethodPost, "/bookmarks", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var bookmark Bookmark
+	if err := json.NewDecoder(rec.Body).Decode(&bookmark); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if bookmark.Title != "JSON Bookmark" {
+		t.Errorf("title = %q, want JSON Bookmark", bookmark.Title)
+	}
+}
+
+func TestHandleCreateWithFavorite(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	r := chi.NewRouter()
+	m.RegisterAdminRoutes(r)
+
+	form := url.Values{}
+	form.Set("title", "Fav Bookmark")
+	form.Set("url", "https://fav.example.com")
+	form.Set("is_favorite", "on")
+
+	req := httptest.NewRequest(http.MethodPost, "/bookmarks", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	var bookmark Bookmark
+	if err := json.NewDecoder(rec.Body).Decode(&bookmark); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if !bookmark.IsFavorite {
+		t.Error("bookmark should be marked as favorite")
+	}
+}
+
+func TestHandleCreateMissingTitle(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	r := chi.NewRouter()
+	m.RegisterAdminRoutes(r)
+
+	form := url.Values{}
+	form.Set("url", "https://notitle.com")
+
+	req := httptest.NewRequest(http.MethodPost, "/bookmarks", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestHandleCreateMissingURL(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	r := chi.NewRouter()
+	m.RegisterAdminRoutes(r)
+
+	form := url.Values{}
+	form.Set("title", "No URL")
+
+	req := httptest.NewRequest(http.MethodPost, "/bookmarks", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestHandleToggleFavoriteHTTP(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	bookmark, err := m.createBookmark("Toggle HTTP", "https://toggle.com", "", false)
+	if err != nil {
+		t.Fatalf("createBookmark: %v", err)
+	}
+
+	r := chi.NewRouter()
+	m.RegisterAdminRoutes(r)
+
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/bookmarks/%d/toggle", bookmark.ID), nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+
+	// Verify it was toggled
+	items, err := m.listBookmarks()
+	if err != nil {
+		t.Fatalf("listBookmarks: %v", err)
+	}
+	if !items[0].IsFavorite {
+		t.Error("bookmark should be favorite after toggle")
+	}
+}
+
+func TestHandleToggleFavoriteInvalidID(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	r := chi.NewRouter()
+	m.RegisterAdminRoutes(r)
+
+	req := httptest.NewRequest(http.MethodPost, "/bookmarks/abc/toggle", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestHandleDeleteHTTP(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	bookmark, err := m.createBookmark("Delete HTTP", "https://delete.com", "", false)
+	if err != nil {
+		t.Fatalf("createBookmark: %v", err)
+	}
+
+	r := chi.NewRouter()
+	m.RegisterAdminRoutes(r)
+
+	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/bookmarks/%d", bookmark.ID), nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+
+	// Verify it was deleted
+	items, err := m.listBookmarks()
+	if err != nil {
+		t.Fatalf("listBookmarks: %v", err)
+	}
+	if len(items) != 0 {
+		t.Errorf("len(items) = %d, want 0", len(items))
+	}
+}
+
+func TestHandleDeleteInvalidID(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	r := chi.NewRouter()
+	m.RegisterAdminRoutes(r)
+
+	req := httptest.NewRequest(http.MethodDelete, "/bookmarks/notanumber", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 }
