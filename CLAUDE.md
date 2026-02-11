@@ -513,6 +513,7 @@ Additional documentation is available in the `docs/` directory:
 - `docs/csrf.md` - CSRF protection configuration, TrustedOrigins format, and troubleshooting
 - `docs/caching.md` - Cache types, context-aware page caching, admin bypass, and Redis configuration
 - `docs/demo-deployment.md` - Demo mode, Fly.io deployment, and demo content seeding
+- `docs/custom-modules.md` - Custom module creation, self-registration pattern, and module interface
 
 Security audit documents are available in the `.audit/` directory (gitignored).
 
