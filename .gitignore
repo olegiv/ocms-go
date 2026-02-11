@@ -29,3 +29,5 @@ custom/themes/*
 custom/modules/*
 !custom/themes/.gitkeep
 !custom/modules/.gitkeep
+!custom/modules/imports.go
+!custom/modules/bookmarks/

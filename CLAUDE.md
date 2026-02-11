@@ -515,6 +515,7 @@ Additional documentation is available in the `docs/` directory:
 - `docs/caching.md` - Cache types, context-aware page caching, admin bypass, and Redis configuration
 - `docs/scheduler.md` - Scheduler admin UI, cron job management, schedule overrides, and manual triggers
 - `docs/demo-deployment.md` - Demo mode, Fly.io deployment, and demo content seeding
+- `docs/custom-modules.md` - Custom module creation, self-registration pattern, and module interface
 
 Security audit documents are available in the `.audit/` directory (gitignored).
 
