@@ -1,0 +1,83 @@
+{{define "pagination.html"}}
+{{if .Pagination}}
+<nav class="st-pagination" aria-label="Page navigation">
+    <ul class="st-pagination__list">
+        {{/* First */}}
+        {{if .Pagination.HasFirst}}
+        <li class="st-pagination__item">
+            <a href="{{.Pagination.FirstURL}}" aria-label="{{TTheme $.LangCode "pagination.first"}}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="11 17 6 12 11 7"></polyline><polyline points="18 17 13 12 18 7"></polyline></svg>
+            </a>
+        </li>
+        {{else}}
+        <li class="st-pagination__item st-pagination__item--disabled">
+            <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="11 17 6 12 11 7"></polyline><polyline points="18 17 13 12 18 7"></polyline></svg></span>
+        </li>
+        {{end}}
+
+        {{/* Previous */}}
+        {{if .Pagination.HasPrev}}
+        <li class="st-pagination__item">
+            <a href="{{.Pagination.PrevURL}}" aria-label="{{TTheme $.LangCode "pagination.previous"}}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </a>
+        </li>
+        {{else}}
+        <li class="st-pagination__item st-pagination__item--disabled">
+            <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></span>
+        </li>
+        {{end}}
+
+        {{/* Page Numbers */}}
+        {{range .Pagination.Pages}}
+        {{if .IsCurrent}}
+        <li class="st-pagination__item st-pagination__item--active">
+            <span aria-current="page">{{.Number}}</span>
+        </li>
+        {{else if .IsEllipsis}}
+        <li class="st-pagination__item st-pagination__item--ellipsis">
+            <span>&hellip;</span>
+        </li>
+        {{else}}
+        <li class="st-pagination__item">
+            <a href="{{.URL}}">{{.Number}}</a>
+        </li>
+        {{end}}
+        {{end}}
+
+        {{/* Next */}}
+        {{if .Pagination.HasNext}}
+        <li class="st-pagination__item">
+            <a href="{{.Pagination.NextURL}}" aria-label="{{TTheme $.LangCode "pagination.next"}}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </a>
+        </li>
+        {{else}}
+        <li class="st-pagination__item st-pagination__item--disabled">
+            <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></span>
+        </li>
+        {{end}}
+
+        {{/* Last */}}
+        {{if .Pagination.HasLast}}
+        <li class="st-pagination__item">
+            <a href="{{.Pagination.LastURL}}" aria-label="{{TTheme $.LangCode "pagination.last"}}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline></svg>
+            </a>
+        </li>
+        {{else}}
+        <li class="st-pagination__item st-pagination__item--disabled">
+            <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline></svg></span>
+        </li>
+        {{end}}
+    </ul>
+
+    {{if .Pagination.TotalPages}}
+    <p class="st-pagination__info">
+        {{TTheme $.LangCode "pagination.page"}} {{.Pagination.CurrentPage}} {{TTheme $.LangCode "pagination.of"}} {{.Pagination.TotalPages}}
+        {{if .Pagination.TotalItems}}({{.Pagination.TotalItems}} {{TTheme $.LangCode "pagination.items"}}){{end}}
+    </p>
+    {{end}}
+</nav>
+{{end}}
+{{end}}

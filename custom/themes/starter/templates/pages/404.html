@@ -1,0 +1,30 @@
+{{define "content"}}
+<div class="st-error">
+    <div class="st-error__content">
+        <span class="st-error__code">404</span>
+        <h1 class="st-error__title">{{TTheme .LangCode "frontend.page_not_found"}}</h1>
+        <p class="st-error__message">{{TTheme .LangCode "frontend.page_not_found_message"}}</p>
+        <div class="st-error__actions">
+            <a href="/" class="st-btn st-btn--primary">{{TTheme .LangCode "frontend.go_home"}}</a>
+            {{if .ShowSearch}}
+            <span class="st-error__or">{{TTheme .LangCode "frontend.or"}}</span>
+            <form action="{{.LangPrefix}}/search" method="get" class="st-error__search">
+                <input type="search" name="q" placeholder="{{TTheme .LangCode "search.placeholder"}}" aria-label="{{TTheme .LangCode "search.placeholder"}}">
+                <button type="submit" class="st-btn st-btn--outline">{{TTheme .LangCode "search.button"}}</button>
+            </form>
+            {{end}}
+        </div>
+    </div>
+
+    {{if .SuggestedPages}}
+    <div class="st-error__suggestions">
+        <h3>{{TTheme .LangCode "frontend.you_might_be_looking_for"}}</h3>
+        <ul>
+            {{range .SuggestedPages}}
+            <li><a href="{{.URL}}">{{.Title}}</a></li>
+            {{end}}
+        </ul>
+    </div>
+    {{end}}
+</div>
+{{end}}

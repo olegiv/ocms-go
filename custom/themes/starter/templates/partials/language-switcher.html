@@ -1,0 +1,37 @@
+{{/* Language Switcher */}}
+{{if .ShowLanguagePicker}}
+<div class="st-lang">
+    <div class="st-lang__current">
+        {{if .CurrentLanguage}}
+        <span class="st-lang__code" title="{{.CurrentLanguage.Name}}">
+            {{.CurrentLanguage.Code | upper}}
+        </span>
+        {{end}}
+        <svg class="st-lang__arrow" width="10" height="10" viewBox="0 0 12 12" fill="none">
+            <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+    </div>
+    <ul class="st-lang__dropdown">
+        {{if .Translations}}
+        {{range .Translations}}
+        <li class="{{if .Language.IsCurrent}}st-lang__item--active{{end}} {{if not .HasPage}}st-lang__item--missing{{end}}">
+            <a href="{{.URL}}" {{if .Language.Direction}}dir="{{.Language.Direction}}"{{end}} title="{{if .HasPage}}{{.PageTitle}}{{else}}{{.Language.Name}}{{end}}">
+                <span class="st-lang__code">{{.Language.Code | upper}}</span>
+                <span class="st-lang__name">{{.Language.NativeName}}</span>
+                {{if not .HasPage}}<span class="st-lang__missing">(no translation)</span>{{end}}
+            </a>
+        </li>
+        {{end}}
+        {{else}}
+        {{range .Languages}}
+        <li class="{{if .IsCurrent}}st-lang__item--active{{end}}">
+            <a href="/?lang={{.Code}}" {{if .Direction}}dir="{{.Direction}}"{{end}} title="{{.Name}}">
+                <span class="st-lang__code">{{.Code | upper}}</span>
+                <span class="st-lang__name">{{.NativeName}}</span>
+            </a>
+        </li>
+        {{end}}
+        {{end}}
+    </ul>
+</div>
+{{end}}

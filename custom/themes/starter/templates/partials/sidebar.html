@@ -1,0 +1,57 @@
+{{define "sidebar.html"}}
+<div class="st-sidebar__inner">
+    {{/* Categories */}}
+    {{if .Categories}}
+    <div class="st-widget">
+        <h3 class="st-widget__title">{{TTheme .LangCode "sidebar.categories"}}</h3>
+        <ul class="st-widget__list">
+            {{range .Categories}}
+            <li>
+                <a href="{{$.LangPrefix}}/category/{{.Slug}}">{{.Name}}</a>
+                {{if .PageCount}}<span class="st-widget__count">{{.PageCount}}</span>{{end}}
+            </li>
+            {{end}}
+        </ul>
+    </div>
+    {{end}}
+
+    {{/* Tags */}}
+    {{if .Tags}}
+    <div class="st-widget">
+        <h3 class="st-widget__title">{{TTheme .LangCode "sidebar.tags"}}</h3>
+        <div class="st-widget__tags">
+            {{range .Tags}}
+            <a href="{{$.LangPrefix}}/tag/{{.Slug}}" class="st-tag">{{.Name}}</a>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+
+    {{/* Recent Posts */}}
+    {{if .RecentPosts}}
+    <div class="st-widget">
+        <h3 class="st-widget__title">{{TTheme .LangCode "sidebar.recent_posts"}}</h3>
+        <ul class="st-widget__posts">
+            {{range .RecentPosts}}
+            <li>
+                <a href="{{.URL}}">{{.Title}}</a>
+                {{if .Date}}<span class="st-widget__date">{{.Date}}</span>{{end}}
+            </li>
+            {{end}}
+        </ul>
+    </div>
+    {{end}}
+
+    {{/* Dynamic Widgets from Admin */}}
+    {{if .Widgets}}
+    {{with index .Widgets "sidebar"}}
+    {{range .}}
+    <div class="st-widget st-widget--{{.Type}}">
+        {{if .Title}}<h3 class="st-widget__title">{{.Title}}</h3>{{end}}
+        <div class="st-widget__content">{{.Content}}</div>
+    </div>
+    {{end}}
+    {{end}}
+    {{end}}
+</div>
+{{end}}
