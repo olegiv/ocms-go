@@ -6,14 +6,10 @@
 // in the custom/modules/ directory with database migrations, embedded admin
 // template, public routes, template functions, hooks, and i18n translations.
 //
-// # Registration
+// The module self-registers via init() in register.go. To enable it,
+// add a blank import to custom/modules/imports.go:
 //
-// To use this module, register it in cmd/ocms/main.go:
-//
-//	import "github.com/olegiv/ocms-go/custom/modules/bookmarks"
-//
-//	// In registerModules():
-//	bookmarks.New(),
+//	_ "github.com/olegiv/ocms-go/custom/modules/bookmarks"
 package bookmarks
 
 import (
