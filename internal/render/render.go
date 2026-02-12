@@ -101,6 +101,14 @@ func (r *Renderer) SetSidebarModuleProvider(provider SidebarModuleProvider) {
 	r.sidebarModuleProvider = provider
 }
 
+// ListSidebarModules returns the sidebar modules from the provider.
+func (r *Renderer) ListSidebarModules() []SidebarModule {
+	if r.sidebarModuleProvider != nil {
+		return r.sidebarModuleProvider.ListSidebarModules()
+	}
+	return nil
+}
+
 // templateParseConfig defines how to parse a group of templates.
 type templateParseConfig struct {
 	dir     string   // Directory containing templates

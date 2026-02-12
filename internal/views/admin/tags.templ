@@ -1,0 +1,452 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import (
+	"fmt"
+	"time"
+)
+
+// TagListItem holds data for a tag in the list view.
+type TagListItem struct {
+	ID           int64
+	Name         string
+	Slug         string
+	LanguageCode string
+	UsageCount   int64
+	CreatedAt    time.Time
+}
+
+// TagsListData holds all data for the tags list page.
+type TagsListData struct {
+	Tags       []TagListItem
+	TotalCount int64
+	Pagination PaginationData
+}
+
+// TagFormData holds all data for the tag create/edit form.
+type TagFormData struct {
+	IsEdit            bool
+	Tag               *TagItem
+	AllLanguages      []LanguageOption
+	Language          *LanguageOption
+	Translations      []TagTranslation
+	MissingLanguages  []LanguageOption
+	FormValues        map[string]string
+	Errors            map[string]string
+}
+
+// TagItem holds individual tag data.
+type TagItem struct {
+	ID           int64
+	Name         string
+	Slug         string
+	LanguageCode string
+}
+
+// LanguageOption holds language selector option data.
+type LanguageOption struct {
+	Code       string
+	Name       string
+	NativeName string
+}
+
+// TagTranslation holds data for a tag translation.
+type TagTranslation struct {
+	Tag      TagItem
+	Language LanguageOption
+}
+
+// TagsListPage renders the tags list page.
+templ TagsListPage(pc *PageContext, data TagsListData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("tags.title") }</h1>
+				<p class="page-description">{ pc.T("tags.description", data.TotalCount) }</p>
+			</div>
+			<div class="page-actions">
+				<a href="/admin/tags/new" class="btn btn-primary">
+					@iconTags()
+					{ pc.T("tags.new") }
+				</a>
+			</div>
+		</div>
+		if len(data.Tags) > 0 {
+			<div class="card" id="tags-table">
+				<div class="table-responsive">
+					<table class="table">
+						<thead>
+							<tr>
+								<th>{ pc.T("label.name") }</th>
+								<th>{ pc.T("label.slug") }</th>
+								<th>{ pc.T("label.language") }</th>
+								<th>{ pc.T("nav.pages") }</th>
+								<th>{ pc.T("label.created_at") }</th>
+								<th class="text-right">{ pc.T("label.actions") }</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, tag := range data.Tags {
+								<tr id={ fmt.Sprintf("tag-row-%d", tag.ID) }>
+									<td>
+										<a href={ templ.SafeURL(fmt.Sprintf("/admin/tags/%d", tag.ID)) } class="tag-name-link">{ tag.Name }</a>
+									</td>
+									<td>
+										<code class="slug-code">{ tag.Slug }</code>
+									</td>
+									<td>
+										if tag.LanguageCode != "" {
+											<span class="badge badge-outline">{ tag.LanguageCode }</span>
+										} else {
+											<span class="text-muted">-</span>
+										}
+									</td>
+									<td>
+										<span class="badge badge-info">{ pc.T("tags.page_count", tag.UsageCount) }</span>
+									</td>
+									<td>{ tag.CreatedAt.Format("Jan 02, 2006") }</td>
+									<td class="text-right">
+										<div class="action-buttons">
+											<a href={ templ.SafeURL(fmt.Sprintf("/admin/tags/%d", tag.ID)) } class="btn btn-sm btn-outline" title={ pc.T("btn.edit") }>
+												@iconEdit()
+											</a>
+											@deleteTagModal(pc, tag)
+										</div>
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+				if data.Pagination.ShouldShow() {
+					<div class="card-footer">
+						@Pagination(pc, data.Pagination)
+					</div>
+				}
+			</div>
+		} else {
+			<div class="card">
+				<div class="card-body">
+					<div class="empty-state">
+						<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"></path><path d="M7 7h.01"></path></svg>
+						<p>{ pc.T("tags.no_tags") }</p>
+						<span class="empty-hint">{ pc.T("tags.create_first_hint") }</span>
+						<div class="empty-state-action">
+							<a href="/admin/tags/new" class="btn btn-primary">{ pc.T("tags.new") }</a>
+						</div>
+					</div>
+				</div>
+			</div>
+		}
+	}
+}
+
+templ deleteTagModal(pc *PageContext, tag TagListItem) {
+	<div x-data="{ showConfirm: false }" class="delete-action">
+		<button
+			type="button"
+			class="btn btn-sm btn-danger"
+			title={ pc.T("btn.delete") }
+			@click="showConfirm = true"
+		>
+			@iconDelete()
+		</button>
+		<div
+			class="modal-overlay"
+			x-show="showConfirm"
+			x-cloak
+			@click.self="showConfirm = false"
+			x-transition:enter="modal-enter"
+			x-transition:leave="modal-leave"
+		>
+			<div class="modal" @click.stop>
+				<div class="modal-header">
+					<h3 class="modal-title">{ pc.T("tags.delete_tag") }</h3>
+					<button type="button" class="modal-close" @click="showConfirm = false" aria-label={ pc.T("btn.close") }>&times;</button>
+				</div>
+				<div class="modal-body">
+					<p>{ pc.T("tags.confirm_delete") }</p>
+					if tag.UsageCount > 0 {
+						<p class="text-warning">{ pc.T("tags.usage_warning", tag.UsageCount) }</p>
+					}
+					<p class="text-muted">{ pc.T("tags.delete_warning") }</p>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
+					<button
+						type="button"
+						class="btn btn-danger"
+						hx-delete={ fmt.Sprintf("/admin/tags/%d", tag.ID) }
+						hx-target={ fmt.Sprintf("#tag-row-%d", tag.ID) }
+						hx-swap="outerHTML"
+						@click="showConfirm = false"
+					>
+						{ pc.T("tags.delete_tag") }
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+// TagFormPage renders the tag create/edit form.
+templ TagFormPage(pc *PageContext, data TagFormData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">
+					if data.IsEdit {
+						{ pc.T("tags.edit") }
+					} else {
+						{ pc.T("tags.new") }
+					}
+				</h1>
+				<p class="page-description">
+					if data.IsEdit {
+						{ pc.T("tags.edit_description") }
+					} else {
+						{ pc.T("tags.new_description") }
+					}
+				</p>
+			</div>
+			<div class="page-actions">
+				<a href="/admin/tags" class="btn btn-outline">
+					@iconBack()
+					{ pc.T("tags.back_to_tags") }
+				</a>
+			</div>
+		</div>
+		<div class="card">
+			<form
+				id="tag-form"
+				method="POST"
+				action={ tagFormAction(data) }
+				class="card-body"
+				x-data={ tagFormXData(data) }
+			>
+				if data.IsEdit {
+					<input type="hidden" name="_method" value="PUT"/>
+				}
+				<div class="form-grid">
+					<!-- Name -->
+					<div class="form-group">
+						<label for="name" class="form-label">
+							{ pc.T("label.name") } <span class="required">*</span>
+						</label>
+						<input
+							type="text"
+							id="name"
+							name="name"
+							class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["name"] != "") }
+							value={ tagFormValue(data, "name") }
+							placeholder={ pc.T("tags.name_placeholder") }
+							required
+							maxlength="255"
+							@input="generateSlug($event.target.value)"
+						/>
+						if data.Errors["name"] != "" {
+							<span class="form-error">{ data.Errors["name"] }</span>
+						} else {
+							<span class="form-hint">{ pc.T("tags.name_hint") }</span>
+						}
+					</div>
+					<!-- Slug -->
+					<div class="form-group">
+						<label for="slug" class="form-label">
+							{ pc.T("label.slug") } <span class="required">*</span>
+						</label>
+						<input
+							type="text"
+							id="slug"
+							name="slug"
+							class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["slug"] != "") }
+							value={ tagFormValue(data, "slug") }
+							placeholder="tag-slug"
+							x-model="slug"
+							@input="slugEdited = true"
+							maxlength="255"
+						/>
+						if data.Errors["slug"] != "" {
+							<span class="form-error">{ data.Errors["slug"] }</span>
+						} else {
+							<span class="form-hint">{ pc.T("tags.slug_hint") }</span>
+						}
+					</div>
+					<!-- Language -->
+					if len(data.AllLanguages) > 1 {
+						<div class="form-group">
+							<label for="language_code" class="form-label">{ pc.T("label.language") }</label>
+							<select
+								id="language_code"
+								name={ languageFieldName(data.IsEdit) }
+								class="form-select"
+								disabled?={ data.IsEdit }
+							>
+								for _, lang := range data.AllLanguages {
+									<option
+										value={ lang.Code }
+										selected?={ lang.Code == currentLanguageCode(data) }
+									>
+										{ lang.Name } ({ lang.Code })
+									</option>
+								}
+							</select>
+							if data.IsEdit {
+								<input type="hidden" name="language_code" value={ languageHiddenValue(data) }/>
+								<span class="form-hint">{ pc.T("tags.language_readonly") }</span>
+							} else {
+								<span class="form-hint">{ pc.T("tags.select_language") }</span>
+							}
+						</div>
+					} else if data.Language != nil {
+						<input type="hidden" name="language_code" value={ data.Language.Code }/>
+					}
+				</div>
+				<div class="form-actions">
+					<button type="submit" class="btn btn-primary">
+						if data.IsEdit {
+							@iconSave()
+							{ pc.T("tags.update") }
+						} else {
+							@iconTags()
+							{ pc.T("tags.create") }
+						}
+					</button>
+					<a href="/admin/tags" class="btn btn-outline">{ pc.T("btn.cancel") }</a>
+				</div>
+			</form>
+			<!-- Translations Panel (Edit mode only) -->
+			if data.IsEdit && len(data.AllLanguages) > 1 {
+				@tagTranslationsPanel(pc, data)
+			}
+		</div>
+		<script>
+		function tagForm() {
+			return {
+				slug: document.getElementById('slug')?.value || '',
+				slugEdited: document.getElementById('slug')?.value ? true : false,
+				generateSlug(value) {
+					if (!this.slugEdited) {
+						this.slug = value
+							.toLowerCase()
+							.trim()
+							.replace(/[^\w\s-]/g, '')
+							.replace(/[\s_-]+/g, '-')
+							.replace(/^-+|-+$/g, '');
+					}
+				}
+			}
+		}
+		</script>
+	}
+}
+
+templ tagTranslationsPanel(pc *PageContext, data TagFormData) {
+	<div class="translations-panel" style="margin-top: 1.5rem; padding: 1rem;">
+		<div class="translations-header">
+			<h3 class="translations-title">
+				@iconTranslate()
+				{ pc.T("tags.translations") }
+			</h3>
+			if data.Language != nil {
+				<span class="current-language-badge">
+					{ pc.T("tags.current_language") }: { data.Language.Name }
+				</span>
+			}
+		</div>
+		if len(data.Translations) > 0 {
+			<div class="translations-list">
+				<h4 class="translations-subtitle">{ pc.T("tags.existing_translations") }</h4>
+				for _, tr := range data.Translations {
+					<div class="translation-item">
+						<div class="translation-info">
+							<span class="translation-lang-badge" title={ tr.Language.NativeName }>{ tr.Language.Code }</span>
+							<a href={ templ.SafeURL(fmt.Sprintf("/admin/tags/%d", tr.Tag.ID)) } class="translation-link">
+								{ tr.Tag.Name }
+							</a>
+						</div>
+					</div>
+				}
+			</div>
+		}
+		if len(data.MissingLanguages) > 0 {
+			<div class="translations-add">
+				<h4 class="translations-subtitle">{ pc.T("tags.add_translation") }</h4>
+				<div class="translation-buttons">
+					for _, lang := range data.MissingLanguages {
+						<form action={ templ.SafeURL(fmt.Sprintf("/admin/tags/%d/translate/%s", data.Tag.ID, lang.Code)) } method="POST" class="inline-form">
+							<button type="submit" class="btn btn-sm btn-outline translation-add-btn" title={ "Create " + lang.Name + " translation" }>
+								@iconPlusSmall()
+								{ lang.Code } - { lang.Name }
+							</button>
+						</form>
+					}
+				</div>
+			</div>
+		}
+		if len(data.Translations) == 0 && len(data.MissingLanguages) == 0 {
+			<p class="translations-empty">{ pc.T("tags.all_translations_exist") }</p>
+		}
+	</div>
+}
+
+// Helper functions for tag form
+
+func tagFormAction(data TagFormData) templ.SafeURL {
+	if data.IsEdit && data.Tag != nil {
+		return templ.SafeURL(fmt.Sprintf("/admin/tags/%d", data.Tag.ID))
+	}
+	return "/admin/tags"
+}
+
+func tagFormXData(data TagFormData) string {
+	slug := tagFormValue(data, "slug")
+	if data.IsEdit {
+		return fmt.Sprintf(`{ slug: '%s', slugEdited: true, generateSlug(value) { if (!this.slugEdited) { this.slug = value.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, ''); } } }`, slug)
+	}
+	return fmt.Sprintf(`{ slug: '%s', slugEdited: false, generateSlug(value) { if (!this.slugEdited) { this.slug = value.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, ''); } } }`, slug)
+}
+
+func tagFormValue(data TagFormData, field string) string {
+	if v, ok := data.FormValues[field]; ok && v != "" {
+		return v
+	}
+	if data.Tag != nil {
+		switch field {
+		case "name":
+			return data.Tag.Name
+		case "slug":
+			return data.Tag.Slug
+		}
+	}
+	return ""
+}
+
+func currentLanguageCode(data TagFormData) string {
+	if v, ok := data.FormValues["language_code"]; ok && v != "" {
+		return v
+	}
+	if data.Language != nil {
+		return data.Language.Code
+	}
+	if data.Tag != nil {
+		return data.Tag.LanguageCode
+	}
+	return ""
+}
+
+func languageFieldName(isEdit bool) string {
+	if isEdit {
+		return "_language_code_disabled"
+	}
+	return "language_code"
+}
+
+func languageHiddenValue(data TagFormData) string {
+	if data.Language != nil {
+		return data.Language.Code
+	}
+	return ""
+}
