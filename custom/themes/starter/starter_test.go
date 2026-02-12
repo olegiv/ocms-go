@@ -447,8 +447,8 @@ func TestStaticAssetsExist(t *testing.T) {
 	for _, asset := range requiredAssets {
 		path := filepath.Join(themePath, asset)
 		info, err := os.Stat(path)
-		if os.IsNotExist(err) {
-			t.Errorf("static asset missing: %s", asset)
+		if err != nil {
+			t.Errorf("static asset missing or inaccessible: %s: %v", asset, err)
 			continue
 		}
 		if info.Size() == 0 {
@@ -956,8 +956,8 @@ func TestStarterThemeStaticPath(t *testing.T) {
 func TestREADMEExists(t *testing.T) {
 	path := filepath.Join(starterThemePath(t), "README.md")
 	info, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		t.Fatal("README.md does not exist")
+	if err != nil {
+		t.Fatal("README.md does not exist or is inaccessible:", err)
 	}
 	if info.Size() == 0 {
 		t.Error("README.md is empty")
