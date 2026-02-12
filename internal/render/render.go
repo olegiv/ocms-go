@@ -826,6 +826,45 @@ func formatDateTimeForLocale(t time.Time, lang string) string {
 	return t.Format("Jan 2, 2006 3:04 PM")
 }
 
+// SentinelIsActive returns whether the sentinel module is active.
+// It calls the sentinelIsActive template function if registered, otherwise returns false.
+func (r *Renderer) SentinelIsActive() bool {
+	fn, ok := r.TemplateFuncs()["sentinelIsActive"]
+	if !ok {
+		return false
+	}
+	if f, ok := fn.(func() bool); ok {
+		return f()
+	}
+	return false
+}
+
+// SentinelIsIPBanned returns whether an IP is banned by the sentinel module.
+// It calls the sentinelIsIPBanned template function if registered, otherwise returns false.
+func (r *Renderer) SentinelIsIPBanned(ip string) bool {
+	fn, ok := r.TemplateFuncs()["sentinelIsIPBanned"]
+	if !ok {
+		return false
+	}
+	if f, ok := fn.(func(string) bool); ok {
+		return f(ip)
+	}
+	return false
+}
+
+// SentinelIsIPWhitelisted returns whether an IP is whitelisted by the sentinel module.
+// It calls the sentinelIsIPWhitelisted template function if registered, otherwise returns false.
+func (r *Renderer) SentinelIsIPWhitelisted(ip string) bool {
+	fn, ok := r.TemplateFuncs()["sentinelIsIPWhitelisted"]
+	if !ok {
+		return false
+	}
+	if f, ok := fn.(func(string) bool); ok {
+		return f(ip)
+	}
+	return false
+}
+
 // getUserRole extracts the role from a user object.
 // Accepts store.User, *store.User, or any struct with a Role field.
 func getUserRole(user any) string {
