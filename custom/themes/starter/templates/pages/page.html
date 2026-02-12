@@ -1,0 +1,104 @@
+{{define "content"}}
+<article class="st-article">
+    {{if and .Page.FeaturedImage (not .Page.HideFeaturedImage)}}
+    {{/* Hero with featured image */}}
+    <div class="st-article__hero">
+        <img src="{{.Page.FeaturedImage}}"
+             srcset="{{.Page.FeaturedImageMedium}} 800w, {{.Page.FeaturedImageLarge}} 1600w"
+             sizes="100vw"
+             alt="{{mediaAlt .Page.FeaturedImageID $.LangCode .Page.FeaturedImageAlt}}">
+        <div class="st-article__hero-overlay">
+            <header class="st-article__header">
+                <h1 class="st-article__title">{{.Page.Title}}</h1>
+                {{if .Page.Excerpt}}
+                <p class="st-article__excerpt">{{.Page.Excerpt}}</p>
+                {{end}}
+            </header>
+        </div>
+    </div>
+    {{else}}
+    {{/* Standard header */}}
+    <header class="st-article__header">
+        <h1 class="st-article__title">{{.Page.Title}}</h1>
+        {{if .Page.Excerpt}}
+        <p class="st-article__excerpt">{{.Page.Excerpt}}</p>
+        {{end}}
+    </header>
+    {{end}}
+
+    {{/* Post meta (for blog posts) */}}
+    {{if eq .Page.Type "post"}}
+    <div class="st-article__meta">
+        {{if .Page.PublishedAt}}
+        <time datetime="{{.Page.PublishedAt}}">{{formatDateLocale .Page.PublishedAt $.LangCode}}</time>
+        {{end}}
+        {{if .Page.Author}}
+        <span class="st-article__author">{{TTheme $.LangCode "frontend.by_author"}} {{.Page.Author.Name}}</span>
+        {{end}}
+        {{if .Page.ReadingTime}}
+        <span class="st-article__reading">{{.Page.ReadingTime}} {{TTheme $.LangCode "frontend.min_read"}}</span>
+        {{end}}
+    </div>
+    {{end}}
+
+    <div class="st-article__body st-prose">
+        {{.Page.Body}}
+    </div>
+
+    {{/* Category and Tags */}}
+    {{if or .Page.Category .Page.Tags}}
+    <footer class="st-article__footer">
+        {{if .Page.Category}}
+        <div class="st-article__category">
+            <span class="st-label">{{TTheme $.LangCode "frontend.category_label"}}</span>
+            <a href="/category/{{.Page.Category.Slug}}">{{.Page.Category.Name}}</a>
+        </div>
+        {{end}}
+        {{if .Page.Tags}}
+        <div class="st-article__tags">
+            <span class="st-label">{{TTheme $.LangCode "frontend.tags_label"}}</span>
+            {{range .Page.Tags}}
+            <a href="/tag/{{.Slug}}" class="st-tag">{{.Name}}</a>
+            {{end}}
+        </div>
+        {{end}}
+    </footer>
+    {{end}}
+
+    {{/* Author Box */}}
+    {{if and .ShowAuthorBox (eq .Page.Type "post")}}
+    {{if .Page.Author}}
+    <div class="st-author">
+        {{if .Page.Author.Avatar}}
+        <img src="{{.Page.Author.Avatar}}" alt="{{.Page.Author.Name}}" class="st-author__avatar">
+        {{end}}
+        <div class="st-author__info">
+            <h4 class="st-author__name">{{.Page.Author.Name}}</h4>
+            {{if .Page.Author.Bio}}<p class="st-author__bio">{{.Page.Author.Bio}}</p>{{end}}
+        </div>
+    </div>
+    {{end}}
+    {{end}}
+
+    {{/* Related Posts */}}
+    {{if .RelatedPages}}
+    <section class="st-related">
+        <h3 class="st-section__title">{{TTheme $.LangCode "frontend.related_posts"}}</h3>
+        <div class="st-grid st-grid--3">
+            {{range .RelatedPages}}
+            <article class="st-card st-card--small">
+                {{if .FeaturedImage}}
+                <div class="st-card__image">
+                    <a href="{{.URL}}"><img src="{{.FeaturedImage}}" alt="{{mediaAlt .FeaturedImageID $.LangCode .FeaturedImageAlt}}" loading="lazy"></a>
+                </div>
+                {{end}}
+                <div class="st-card__body">
+                    <h4 class="st-card__title"><a href="{{.URL}}">{{.Title}}</a></h4>
+                </div>
+            </article>
+            {{end}}
+        </div>
+    </section>
+    {{end}}
+</article>
+{{end}}

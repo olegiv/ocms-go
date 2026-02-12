@@ -1,0 +1,82 @@
+{{define "footer.html"}}
+<footer class="st-footer">
+    <div class="st-container">
+        {{/* Footer Widgets */}}
+        {{if .Widgets}}
+        <div class="st-footer__widgets">
+            {{with index .Widgets "footer-1"}}
+            <div class="st-footer__col">
+                {{range .}}
+                <div class="st-widget st-widget--{{.Type}}">
+                    {{if .Title}}<h4 class="st-widget__title">{{.Title}}</h4>{{end}}
+                    <div class="st-widget__content">{{.Content}}</div>
+                </div>
+                {{end}}
+            </div>
+            {{end}}
+
+            {{with index .Widgets "footer-2"}}
+            <div class="st-footer__col">
+                {{range .}}
+                <div class="st-widget st-widget--{{.Type}}">
+                    {{if .Title}}<h4 class="st-widget__title">{{.Title}}</h4>{{end}}
+                    <div class="st-widget__content">{{.Content}}</div>
+                </div>
+                {{end}}
+            </div>
+            {{end}}
+        </div>
+        {{end}}
+
+        {{/* Footer Navigation */}}
+        {{if .FooterNav}}
+        <nav class="st-footer__nav" aria-label="Footer navigation">
+            {{range .FooterNav}}
+            <div class="st-footer__nav-group">
+                <a href="{{.URL}}" class="st-footer__nav-header">{{.Title}}</a>
+                {{if .Children}}
+                <ul class="st-footer__nav-list">
+                    {{range .Children}}
+                    <li><a href="{{.URL}}">{{.Title}}</a>
+                        {{if .Children}}
+                        <ul>
+                            {{range .Children}}
+                            <li><a href="{{.URL}}">{{.Title}}</a></li>
+                            {{end}}
+                        </ul>
+                        {{end}}
+                    </li>
+                    {{end}}
+                </ul>
+                {{end}}
+            </div>
+            {{end}}
+        </nav>
+        {{end}}
+
+        <div class="st-footer__bottom">
+            <div class="st-footer__copy">
+                {{if .CopyrightText}}
+                <p>{{safeHTML .CopyrightText}}</p>
+                {{else}}
+                <p>&copy; {{.Year}} {{.SiteName}}. {{TTheme .LangCode "frontend.all_rights_reserved"}}</p>
+                {{end}}
+                {{if .FooterText}}
+                <p>{{safeHTML .FooterText}}</p>
+                {{end}}
+                {{with privacyFooterLink}}<p class="st-footer__privacy">{{.}}</p>{{end}}
+            </div>
+
+            {{if .SocialLinks}}
+            <div class="st-footer__social">
+                {{range .SocialLinks}}
+                <a href="{{.URL}}" target="_blank" rel="noopener noreferrer" aria-label="{{.Name}}">
+                    {{.Icon}}
+                </a>
+                {{end}}
+            </div>
+            {{end}}
+        </div>
+    </div>
+</footer>
+{{end}}

@@ -13,7 +13,23 @@ custom/
 
 ## Themes
 
-Place custom themes in `custom/themes/`. Each theme should have its own directory:
+Place custom themes in `custom/themes/`. Each theme should have its own directory.
+
+### Sample Theme: Starter
+
+A complete sample custom theme is included at `custom/themes/starter/`. It demonstrates:
+- Full template coverage (home, page, list, 404, category, tag, search, form)
+- Card-based grid layout with magazine-style typography
+- Theme settings (accent color, sidebar toggle, hero style)
+- Widget areas (sidebar, footer columns)
+- Multi-language support (English, Russian)
+- Responsive design with mobile navigation
+
+Activate it with: `OCMS_ACTIVE_THEME=starter`
+
+See `custom/themes/starter/README.md` for full documentation.
+
+### Theme Structure
 
 ```
 custom/themes/
