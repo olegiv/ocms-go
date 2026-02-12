@@ -6,6 +6,7 @@ package bookmarks
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -113,6 +114,10 @@ func (m *Module) handleToggleFavorite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := m.toggleFavorite(id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Bookmark not found", http.StatusNotFound)
+			return
+		}
 		m.ctx.Logger.Error("failed to toggle favorite", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
@@ -130,6 +135,10 @@ func (m *Module) handleDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := m.deleteBookmark(id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		m.ctx.Logger.Error("failed to delete bookmark", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return

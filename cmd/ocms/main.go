@@ -827,6 +827,9 @@ func run() error {
 			r.Delete(handler.RouteWidgetsID, widgetsHandler.Delete)
 			r.Post(handler.RouteWidgetsID+handler.RouteSuffixMove, widgetsHandler.MoveWidget)
 			r.Post(handler.RouteWidgets+handler.RouteSuffixReorder, widgetsHandler.Reorder)
+
+			// Register module admin routes (require editor role)
+			moduleRegistry.AdminRouteAll(r)
 		})
 
 		// Admin-only routes
@@ -916,8 +919,6 @@ func run() error {
 			r.Get(handler.RouteDocsSlug, docsHandler.Guide)
 		})
 
-		// Register module admin routes (module-specific permissions)
-		moduleRegistry.AdminRouteAll(r)
 	})
 
 	// REST API v1 routes
