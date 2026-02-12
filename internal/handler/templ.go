@@ -188,6 +188,36 @@ func eventsBreadcrumbs(lang string) []render.Breadcrumb {
 	}
 }
 
+// usersBreadcrumbs returns breadcrumbs for the users list page.
+func usersBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.users"), URL: redirectAdminUsers, Active: true},
+	}
+}
+
+// userFormBreadcrumbs returns breadcrumbs for the user form page.
+func userFormBreadcrumbs(lang string, isEdit bool) []render.Breadcrumb {
+	label := i18n.T(lang, "users.new")
+	if isEdit {
+		label = i18n.T(lang, "users.edit")
+	}
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.users"), URL: redirectAdminUsers},
+		{Label: label, Active: true},
+	}
+}
+
+// userEditBreadcrumbs returns breadcrumbs for the user edit form with entity name.
+func userEditBreadcrumbs(lang string, userName string, userID int64) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.users"), URL: redirectAdminUsers},
+		{Label: userName, URL: fmt.Sprintf(redirectAdminUsersID, userID), Active: true},
+	}
+}
+
 // convertEventItems converts handler EventWithUser slice to view EventItem slice.
 // It masks IPs for display and pre-computes sentinel ban/whitelist state.
 func convertEventItems(events []EventWithUser, renderer *render.Renderer, sentinelActive bool) []adminviews.EventItem {
