@@ -347,6 +347,87 @@ func convertCategoryTranslations(translations []CategoryTranslationInfo) []admin
 }
 
 // =============================================================================
+// REDIRECTS HELPERS
+// =============================================================================
+
+// redirectsBreadcrumbs returns breadcrumbs for the redirects list page.
+func redirectsBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.redirects"), URL: redirectAdminRedirects, Active: true},
+	}
+}
+
+// redirectFormBreadcrumbs returns breadcrumbs for the redirect form page.
+func redirectFormBreadcrumbs(lang string, isEdit bool) []render.Breadcrumb {
+	label := i18n.T(lang, "redirects.new")
+	if isEdit {
+		label = i18n.T(lang, "redirects.edit")
+	}
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.redirects"), URL: redirectAdminRedirects},
+		{Label: label, Active: true},
+	}
+}
+
+// redirectEditBreadcrumbs returns breadcrumbs for the redirect edit form with entity name.
+func redirectEditBreadcrumbs(lang string, sourcePath string, redirectID int64) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.redirects"), URL: redirectAdminRedirects},
+		{Label: sourcePath, URL: fmt.Sprintf(redirectAdminRedirectsID, redirectID), Active: true},
+	}
+}
+
+// convertRedirectListItems converts store redirects to view RedirectListItem slice.
+func convertRedirectListItems(redirects []store.Redirect) []adminviews.RedirectListItem {
+	items := make([]adminviews.RedirectListItem, len(redirects))
+	for i, r := range redirects {
+		items[i] = adminviews.RedirectListItem{
+			ID:         r.ID,
+			SourcePath: r.SourcePath,
+			TargetURL:  r.TargetUrl,
+			StatusCode: r.StatusCode,
+			IsWildcard: r.IsWildcard,
+			TargetType: r.TargetType,
+			Enabled:    r.Enabled,
+		}
+	}
+	return items
+}
+
+// convertRedirectInfo converts a store.Redirect pointer to a view RedirectInfo pointer.
+func convertRedirectInfo(rd *store.Redirect) *adminviews.RedirectInfo {
+	if rd == nil {
+		return nil
+	}
+	return &adminviews.RedirectInfo{
+		ID:         rd.ID,
+		SourcePath: rd.SourcePath,
+		TargetURL:  rd.TargetUrl,
+		StatusCode: rd.StatusCode,
+		IsWildcard: rd.IsWildcard,
+		TargetType: rd.TargetType,
+		Enabled:    rd.Enabled,
+		CreatedAt:  rd.CreatedAt,
+		UpdatedAt:  rd.UpdatedAt,
+	}
+}
+
+// convertStatusCodes converts handler StatusCodeOption slice to view RedirectStatusCodeOption slice.
+func convertStatusCodes(codes []StatusCodeOption) []adminviews.RedirectStatusCodeOption {
+	items := make([]adminviews.RedirectStatusCodeOption, len(codes))
+	for i, c := range codes {
+		items[i] = adminviews.RedirectStatusCodeOption{
+			Code:  c.Code,
+			Label: c.Label,
+		}
+	}
+	return items
+}
+
+// =============================================================================
 // MENUS HELPERS
 // =============================================================================
 
