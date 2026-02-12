@@ -4,8 +4,11 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/a-h/templ"
 	"github.com/alexedwards/scs/v2"
@@ -583,4 +586,136 @@ func convertCommonLanguages() []adminviews.CommonLanguageOption {
 		}
 	}
 	return opts
+}
+
+// =============================================================================
+// API KEYS HELPERS
+// =============================================================================
+
+// apiKeysBreadcrumbs returns breadcrumbs for the API keys list page.
+func apiKeysBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.api_keys"), URL: redirectAdminAPIKeys, Active: true},
+	}
+}
+
+// apiKeyFormBreadcrumbs returns breadcrumbs for the API key form page.
+func apiKeyFormBreadcrumbs(lang string, isEdit bool) []render.Breadcrumb {
+	label := i18n.T(lang, "api_keys.new_key")
+	if isEdit {
+		label = i18n.T(lang, "api_keys.edit_key")
+	}
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.api_keys"), URL: redirectAdminAPIKeys},
+		{Label: label, Active: true},
+	}
+}
+
+// apiKeyEditBreadcrumbs returns breadcrumbs for the API key edit form with entity name.
+func apiKeyEditBreadcrumbs(lang string, keyName string, keyID int64) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.api_keys"), URL: redirectAdminAPIKeys},
+		{Label: keyName, URL: fmt.Sprintf("%s/%d", redirectAdminAPIKeys, keyID), Active: true},
+	}
+}
+
+// convertAPIKeyListItems converts store API keys to view APIKeyListItem slice.
+func convertAPIKeyListItems(apiKeys []store.ApiKey) []adminviews.APIKeyListItem {
+	items := make([]adminviews.APIKeyListItem, len(apiKeys))
+	for i, k := range apiKeys {
+		items[i] = adminviews.APIKeyListItem{
+			ID:        k.ID,
+			Name:      k.Name,
+			KeyPrefix: k.KeyPrefix,
+			IsActive:  k.IsActive,
+		}
+
+		// Parse permissions JSON
+		items[i].Permissions = parsePermissionsJSON(k.Permissions)
+
+		// Check if expired (active but past expiration)
+		if k.IsActive && k.ExpiresAt.Valid && k.ExpiresAt.Time.Before(time.Now()) {
+			items[i].IsExpired = true
+		}
+
+		// Format dates
+		if k.LastUsedAt.Valid {
+			items[i].LastUsedAt = k.LastUsedAt.Time.Format("Jan 2, 2006 3:04 PM")
+		}
+		if k.ExpiresAt.Valid {
+			items[i].ExpiresAt = k.ExpiresAt.Time.Format("Jan 2, 2006")
+		}
+	}
+	return items
+}
+
+// convertAPIKeyInfo converts a store.ApiKey pointer to a view APIKeyInfo pointer.
+func convertAPIKeyInfo(apiKey *store.ApiKey) *adminviews.APIKeyInfo {
+	if apiKey == nil {
+		return nil
+	}
+	info := &adminviews.APIKeyInfo{
+		ID:        apiKey.ID,
+		Name:      apiKey.Name,
+		KeyPrefix: apiKey.KeyPrefix,
+		IsActive:  apiKey.IsActive,
+		CreatedAt: apiKey.CreatedAt.Format("Jan 2, 2006 3:04 PM"),
+	}
+
+	// Permissions - raw JSON for form checking
+	info.Permissions = apiKey.Permissions
+
+	if apiKey.LastUsedAt.Valid {
+		info.HasLastUsed = true
+		info.LastUsedAt = apiKey.LastUsedAt.Time.Format("Jan 2, 2006 3:04 PM")
+	}
+	if apiKey.ExpiresAt.Valid {
+		info.HasExpires = true
+		info.ExpiresAt = apiKey.ExpiresAt.Time.Format("2006-01-02")
+	}
+
+	return info
+}
+
+// buildPermissionGroups creates the permission groups for the API key form.
+// existingPerms is the raw JSON permissions string (for edit mode checking).
+func buildPermissionGroups(existingPerms string) []adminviews.PermissionGroup {
+	return []adminviews.PermissionGroup{
+		{
+			TitleKey: "api_keys.perm_pages",
+			Permissions: []adminviews.PermissionOption{
+				{Value: "pages:read", DescKey: "api_keys.perm_pages_read", Checked: strings.Contains(existingPerms, "pages:read")},
+				{Value: "pages:write", DescKey: "api_keys.perm_pages_write", Checked: strings.Contains(existingPerms, "pages:write")},
+			},
+		},
+		{
+			TitleKey: "api_keys.perm_media",
+			Permissions: []adminviews.PermissionOption{
+				{Value: "media:read", DescKey: "api_keys.perm_media_read", Checked: strings.Contains(existingPerms, "media:read")},
+				{Value: "media:write", DescKey: "api_keys.perm_media_write", Checked: strings.Contains(existingPerms, "media:write")},
+			},
+		},
+		{
+			TitleKey: "api_keys.perm_taxonomy",
+			Permissions: []adminviews.PermissionOption{
+				{Value: "taxonomy:read", DescKey: "api_keys.perm_taxonomy_read", Checked: strings.Contains(existingPerms, "taxonomy:read")},
+				{Value: "taxonomy:write", DescKey: "api_keys.perm_taxonomy_write", Checked: strings.Contains(existingPerms, "taxonomy:write")},
+			},
+		},
+	}
+}
+
+// parsePermissionsJSON parses a JSON array string into a string slice.
+func parsePermissionsJSON(jsonStr string) []string {
+	var perms []string
+	if jsonStr == "" || jsonStr == "[]" {
+		return perms
+	}
+	if err := json.Unmarshal([]byte(jsonStr), &perms); err != nil {
+		return nil
+	}
+	return perms
 }
