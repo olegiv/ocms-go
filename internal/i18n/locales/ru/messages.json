@@ -1908,6 +1908,11 @@
             "translation": "Сохранить настройки"
         },
         {
+            "id": "themes.demo_readonly",
+            "message": "Theme settings are read-only in demo mode. Changes cannot be saved.",
+            "translation": "Настройки темы доступны только для чтения в демо-режиме. Изменения не могут быть сохранены."
+        },
+        {
             "id": "themes.no_settings",
             "message": "No configurable settings",
             "translation": "Нет настраиваемых параметров"
