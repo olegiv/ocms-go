@@ -8,7 +8,6 @@ package render
 import (
 	"bytes"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -18,7 +17,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -28,6 +26,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/service"
+	"github.com/olegiv/ocms-go/internal/uikit"
 )
 
 // SessionKeyAdminLang is the session key for storing admin UI language preference.
@@ -202,364 +201,187 @@ func (r *Renderer) ReloadTemplates() error {
 }
 
 // templateFuncs returns custom template functions.
+// Starts with reusable helpers from uikit, then layers oCMS-specific functions on top.
 func (r *Renderer) templateFuncs() template.FuncMap {
-	return template.FuncMap{
-		"lower": strings.ToLower,
-		"upper": strings.ToUpper,
-		"now": time.Now,
-		"timeBefore": func(t1, t2 time.Time) bool {
-			return t1.Before(t2)
-		},
-		"formatDate": func(t time.Time) string {
-			return t.Format("Jan 2, 2006")
-		},
-		"formatDateTime": func(t time.Time) string {
-			return t.Format("Jan 2, 2006 3:04 PM")
-		},
-		// formatDateLocale formats a date according to the specified language.
-		// Usage: {{formatDateLocale .PublishedAt .LangCode}}
-		// Handles both time.Time and *time.Time (returns empty string for nil)
-		"formatDateLocale": func(t any, lang string) string {
-			return applyTimeFormatter(t, lang, formatDateForLocale)
-		},
-		// formatDateTimeLocale formats a datetime according to the specified language.
-		// Usage: {{formatDateTimeLocale .UpdatedAt .AdminLang}}
-		// Handles both time.Time and *time.Time (returns empty string for nil)
-		"formatDateTimeLocale": func(t any, lang string) string {
-			return applyTimeFormatter(t, lang, formatDateTimeForLocale)
-		},
-		"truncate": func(s string, length int) string {
-			if len(s) <= length {
-				return s
-			}
-			return s[:length] + "..."
-		},
-		"safe": func(s string) template.HTML {
-			return template.HTML(s)
-		},
-		"safeHTML": func(s string) template.HTML {
-			return template.HTML(s)
-		},
-		"add": func(a, b int) int {
-			return a + b
-		},
-		"sub": func(a, b int) int {
-			return a - b
-		},
-		"multiply": func(a, b int) int {
-			return a * b
-		},
-		"repeat": strings.Repeat,
-		"seq": func(start, end int) []int {
-			var result []int
-			for i := start; i <= end; i++ {
-				result = append(result, i)
-			}
-			return result
-		},
-		"toJSON": func(v any) template.JS {
-			b, err := json.Marshal(v)
-			if err != nil {
-				return "[]"
-			}
-			return template.JS(b)
-		},
-		"formatBytes": func(bytes int64) string {
-			const unit = 1024
-			if bytes < unit {
-				return fmt.Sprintf("%d B", bytes)
-			}
-			div, exp := int64(unit), 0
-			for n := bytes / unit; n >= unit; n /= unit {
-				div *= unit
-				exp++
-			}
-			return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
-		},
-		"formatNumber": func(n int64) string {
-			if n < 1000 {
-				return strconv.FormatInt(n, 10)
-			}
-			s := strconv.FormatInt(n, 10)
-			var result strings.Builder
-			for i, c := range s {
-				if i > 0 && (len(s)-i)%3 == 0 {
-					result.WriteRune(',')
-				}
-				result.WriteRune(c)
-			}
-			return result.String()
-		},
-		"countryName": geoip.CountryName,
-		// Sentinel no-op placeholders; the module overrides them via AddTemplateFuncs.
-		"sentinelIsActive":        func() bool { return false },
-		"sentinelIsIPBanned":      func(ip string) bool { return false },
-		"sentinelIsIPWhitelisted": func(ip string) bool { return false },
-		"deref": func(p *int64) int64 {
-			if p == nil {
-				return 0
-			}
-			return *p
-		},
-		"safeURL": func(s string) template.URL {
-			return template.URL(s)
-		},
-		"getMenu": func(slug string) []service.MenuItem {
-			if r.menuService == nil {
-				return nil
-			}
-			return r.menuService.GetMenu(slug)
-		},
-		// getMenuForLanguage returns menu items for a specific language with fallback.
-		// Usage in templates: {{range getMenuForLanguage "main" "ru"}}...{{end}}
-		"getMenuForLanguage": func(slug string, langCode string) []service.MenuItem {
-			if r.menuService == nil {
-				return nil
-			}
-			return r.menuService.GetMenuForLanguage(slug, langCode)
-		},
-		"dict": func(values ...any) map[string]any {
-			if len(values)%2 != 0 {
-				return nil
-			}
-			dict := make(map[string]any, len(values)/2)
-			for i := 0; i < len(values); i += 2 {
-				key, ok := values[i].(string)
-				if !ok {
-					continue
-				}
-				dict[key] = values[i+1]
-			}
-			return dict
-		},
-		"parseJSON": func(s string) []string {
-			if s == "" || s == "[]" {
-				return []string{}
-			}
-			var result []string
-			if err := json.Unmarshal([]byte(s), &result); err != nil {
-				return []string{}
-			}
-			return result
-		},
-		"contains": func(collection, element any) bool {
-			// Handle string slice
-			if slice, ok := collection.([]string); ok {
-				if elem, ok := element.(string); ok {
-					for _, s := range slice {
-						if s == elem {
-							return true
-						}
-					}
-				}
-				return false
-			}
-			// Handle string contains substring
-			if s, ok := collection.(string); ok {
-				if substr, ok := element.(string); ok {
-					return strings.Contains(s, substr)
-				}
-			}
-			return false
-		},
-		"hasPrefix": strings.HasPrefix,
-		"isDemoMode": middleware.IsDemoMode,
-		"maskIP": func(ip string) string {
-			if !middleware.IsDemoMode() {
-				return ip
-			}
-			if strings.Contains(ip, ":") && strings.Count(ip, ":") > 1 {
-				return "****:****:****:****"
-			}
-			host := ip
-			if idx := strings.LastIndex(ip, ":"); idx != -1 && strings.Count(ip, ":") == 1 {
-				host = ip[:idx]
-			}
-			parts := strings.Split(host, ".")
-			if len(parts) == 4 {
-				return parts[0] + ".*.*.*"
-			}
-			return "***"
-		},
-		"prettyJSON": func(s string) string {
-			var data any
-			if err := json.Unmarshal([]byte(s), &data); err != nil {
-				return s
-			}
-			pretty, err := json.MarshalIndent(data, "", "  ")
-			if err != nil {
-				return s
-			}
-			return string(pretty)
-		},
-		"int64": func(v any) int64 {
-			switch val := v.(type) {
-			case int:
-				return int64(val)
-			case int32:
-				return int64(val)
-			case int64:
-				return val
-			case float64:
-				return int64(val)
-			case string:
-				i, _ := strconv.ParseInt(val, 10, 64)
-				return i
-			default:
-				return 0
-			}
-		},
-		"atoi": func(s string) int64 {
-			if s == "" {
-				return 0
-			}
-			i, _ := strconv.ParseInt(s, 10, 64)
-			return i
-		},
-		// pagesListURL builds a URL for admin pages list with proper encoding.
-		// Parameters: status (string), category (int64), search (string), page (int)
-		"pagesListURL": func(status string, category int64, search string, page int) string {
-			params := url.Values{}
-			if status != "" {
-				params.Set("status", status)
-			}
-			if category > 0 {
-				params.Set("category", fmt.Sprintf("%d", category))
-			}
-			if search != "" {
-				params.Set("search", search)
-			}
-			if page > 1 {
-				params.Set("page", fmt.Sprintf("%d", page))
-			}
-			if len(params) == 0 {
-				return "/admin/pages"
-			}
-			return "/admin/pages?" + params.Encode()
-		},
-		// T translates a message key to the specified language.
-		// Usage in templates: {{T .AdminLang "btn.save"}}
-		// With arguments: {{T .AdminLang "msg.deleted" "Page"}}
-		"T": i18n.T,
-		// TDefault translates a message key, falling back to a default value if not found.
-		// Usage in templates: {{TDefault .AdminLang "key" "Default Value"}}
-		"TDefault": func(lang string, key string, defaultVal string) string {
-			result := i18n.T(lang, key)
-			// If the key wasn't found, T returns the key itself
-			if result == key {
-				return defaultVal
-			}
-			return result
-		},
-		// adminLangOptions returns the list of admin UI languages.
-		// Only returns languages that are:
-		// 1. Active in the database
-		// 2. Supported by the i18n system (have locale files)
-		"adminLangOptions": func() []struct {
-			Code string
-			Name string
-		} {
-			// Fallback to all i18n supported languages if DB unavailable
-			if r.db == nil {
-				return []struct {
-					Code string
-					Name string
-				}{
-					{"en", "English"},
-				}
-			}
+	// Start with pure, reusable helpers from uikit
+	funcs := uikit.TemplateFuncs()
 
-			// Query active languages from database
-			rows, err := r.db.Query("SELECT code, native_name FROM languages WHERE is_active = 1 ORDER BY position")
-			if err != nil {
-				return []struct {
-					Code string
-					Name string
-				}{
-					{"en", "English"},
-				}
-			}
-			defer func() { _ = rows.Close() }()
-
-			var options []struct {
+	// oCMS-specific functions below (depend on geoip, i18n, middleware, DB, etc.)
+	funcs["countryName"] = geoip.CountryName
+	// Sentinel no-op placeholders; the module overrides them via AddTemplateFuncs.
+	funcs["sentinelIsActive"] = func() bool { return false }
+	funcs["sentinelIsIPBanned"] = func(ip string) bool { return false }
+	funcs["sentinelIsIPWhitelisted"] = func(ip string) bool { return false }
+	funcs["getMenu"] = func(slug string) []service.MenuItem {
+		if r.menuService == nil {
+			return nil
+		}
+		return r.menuService.GetMenu(slug)
+	}
+	// getMenuForLanguage returns menu items for a specific language with fallback.
+	// Usage in templates: {{range getMenuForLanguage "main" "ru"}}...{{end}}
+	funcs["getMenuForLanguage"] = func(slug string, langCode string) []service.MenuItem {
+		if r.menuService == nil {
+			return nil
+		}
+		return r.menuService.GetMenuForLanguage(slug, langCode)
+	}
+	funcs["isDemoMode"] = middleware.IsDemoMode
+	funcs["maskIP"] = func(ip string) string {
+		if !middleware.IsDemoMode() {
+			return ip
+		}
+		if strings.Contains(ip, ":") && strings.Count(ip, ":") > 1 {
+			return "****:****:****:****"
+		}
+		host := ip
+		if idx := strings.LastIndex(ip, ":"); idx != -1 && strings.Count(ip, ":") == 1 {
+			host = ip[:idx]
+		}
+		parts := strings.Split(host, ".")
+		if len(parts) == 4 {
+			return parts[0] + ".*.*.*"
+		}
+		return "***"
+	}
+	// pagesListURL builds a URL for admin pages list with proper encoding.
+	// Parameters: status (string), category (int64), search (string), page (int)
+	funcs["pagesListURL"] = func(status string, category int64, search string, page int) string {
+		params := url.Values{}
+		if status != "" {
+			params.Set("status", status)
+		}
+		if category > 0 {
+			params.Set("category", fmt.Sprintf("%d", category))
+		}
+		if search != "" {
+			params.Set("search", search)
+		}
+		if page > 1 {
+			params.Set("page", fmt.Sprintf("%d", page))
+		}
+		if len(params) == 0 {
+			return "/admin/pages"
+		}
+		return "/admin/pages?" + params.Encode()
+	}
+	// T translates a message key to the specified language.
+	// Usage in templates: {{T .AdminLang "btn.save"}}
+	// With arguments: {{T .AdminLang "msg.deleted" "Page"}}
+	funcs["T"] = i18n.T
+	// TDefault translates a message key, falling back to a default value if not found.
+	// Usage in templates: {{TDefault .AdminLang "key" "Default Value"}}
+	funcs["TDefault"] = func(lang string, key string, defaultVal string) string {
+		result := i18n.T(lang, key)
+		if result == key {
+			return defaultVal
+		}
+		return result
+	}
+	// adminLangOptions returns the list of admin UI languages.
+	// Only returns languages that are:
+	// 1. Active in the database
+	// 2. Supported by the i18n system (have locale files)
+	funcs["adminLangOptions"] = func() []struct {
+		Code string
+		Name string
+	} {
+		if r.db == nil {
+			return []struct {
 				Code string
 				Name string
+			}{
+				{"en", "English"},
 			}
+		}
 
-			for rows.Next() {
-				var code, name string
-				if err := rows.Scan(&code, &name); err != nil {
-					continue
-				}
-				// Only include if i18n supports this language
-				if i18n.IsSupported(code) {
-					options = append(options, struct {
-						Code string
-						Name string
-					}{code, name})
-				}
+		rows, err := r.db.Query("SELECT code, native_name FROM languages WHERE is_active = 1 ORDER BY position")
+		if err != nil {
+			return []struct {
+				Code string
+				Name string
+			}{
+				{"en", "English"},
 			}
+		}
+		defer func() { _ = rows.Close() }()
 
-			// Fallback to English if no matching languages found
-			if len(options) == 0 {
-				return []struct {
+		var options []struct {
+			Code string
+			Name string
+		}
+
+		for rows.Next() {
+			var code, name string
+			if err := rows.Scan(&code, &name); err != nil {
+				continue
+			}
+			if i18n.IsSupported(code) {
+				options = append(options, struct {
 					Code string
 					Name string
-				}{
-					{"en", "English"},
-				}
+				}{code, name})
 			}
+		}
 
-			return options
-		},
-		// TLang translates a language code to its localized name.
-		// Usage in templates: {{TLang .AdminLang .LanguageCode}}
-		// Falls back to the original code if no translation exists.
-		"TLang": func(adminLang string, langCode string) string {
-			translationKey := "language." + langCode
-			translated := i18n.T(adminLang, translationKey)
-			// If translation exists (different from key), return it
-			if translated != translationKey {
-				return translated
+		if len(options) == 0 {
+			return []struct {
+				Code string
+				Name string
+			}{
+				{"en", "English"},
 			}
-			// Fallback to language code
-			return langCode
-		},
-		// mediaAlt returns the translated alt text for a media item.
-		// Falls back to the default alt text if no translation exists for the language.
-		// Usage in theme templates: {{mediaAlt .FeaturedImage.ID .LangCode .FeaturedImage.Alt.String}}
-		"mediaAlt": func(mediaID int64, langCode string, defaultAlt string) string {
-			return r.getMediaTranslation(mediaID, langCode, "alt", defaultAlt)
-		},
-		// mediaCaption returns the translated caption for a media item.
-		// Falls back to the default caption if no translation exists for the language.
-		// Usage in theme templates: {{mediaCaption .FeaturedImage.ID .LangCode .FeaturedImage.Caption.String}}
-		"mediaCaption": func(mediaID int64, langCode string, defaultCaption string) string {
-			return r.getMediaTranslation(mediaID, langCode, "caption", defaultCaption)
-		},
-		// Placeholder functions for hCaptcha module (will be overwritten if module is loaded)
-		"hcaptchaEnabled": func() bool {
-			return false
-		},
-		"hcaptchaWidget": func() template.HTML {
-			return ""
-		},
-		// isAdmin checks if the user has admin role.
-		// Usage: {{if isAdmin .User}}...{{end}}
-		"isAdmin": func(user any) bool {
-			return getUserRole(user) == "admin"
-		},
-		// isEditor checks if the user has at least editor role (editor or admin).
-		// Public users have no admin access.
-		// Usage: {{if isEditor .User}}...{{end}}
-		"isEditor": func(user any) bool {
-			role := getUserRole(user)
-			return role == "admin" || role == "editor"
-		},
-		// userRole returns the user's role string.
-		// Usage: {{userRole .User}}
-		"userRole": getUserRole,
+		}
+
+		return options
 	}
+	// TLang translates a language code to its localized name.
+	// Usage in templates: {{TLang .AdminLang .LanguageCode}}
+	// Falls back to the original code if no translation exists.
+	funcs["TLang"] = func(adminLang string, langCode string) string {
+		translationKey := "language." + langCode
+		translated := i18n.T(adminLang, translationKey)
+		if translated != translationKey {
+			return translated
+		}
+		return langCode
+	}
+	// mediaAlt returns the translated alt text for a media item.
+	// Falls back to the default alt text if no translation exists for the language.
+	// Usage in theme templates: {{mediaAlt .FeaturedImage.ID .LangCode .FeaturedImage.Alt.String}}
+	funcs["mediaAlt"] = func(mediaID int64, langCode string, defaultAlt string) string {
+		return r.getMediaTranslation(mediaID, langCode, "alt", defaultAlt)
+	}
+	// mediaCaption returns the translated caption for a media item.
+	// Falls back to the default caption if no translation exists for the language.
+	// Usage in theme templates: {{mediaCaption .FeaturedImage.ID .LangCode .FeaturedImage.Caption.String}}
+	funcs["mediaCaption"] = func(mediaID int64, langCode string, defaultCaption string) string {
+		return r.getMediaTranslation(mediaID, langCode, "caption", defaultCaption)
+	}
+	// Placeholder functions for hCaptcha module (will be overwritten if module is loaded)
+	funcs["hcaptchaEnabled"] = func() bool {
+		return false
+	}
+	funcs["hcaptchaWidget"] = func() template.HTML {
+		return ""
+	}
+	// isAdmin checks if the user has admin role.
+	// Usage: {{if isAdmin .User}}...{{end}}
+	funcs["isAdmin"] = func(user any) bool {
+		return getUserRole(user) == "admin"
+	}
+	// isEditor checks if the user has at least editor role (editor or admin).
+	// Public users have no admin access.
+	// Usage: {{if isEditor .User}}...{{end}}
+	funcs["isEditor"] = func(user any) bool {
+		role := getUserRole(user)
+		return role == "admin" || role == "editor"
+	}
+	// userRole returns the user's role string.
+	// Usage: {{userRole .User}}
+	funcs["userRole"] = getUserRole
+
+	return funcs
 }
 
 // getMediaTranslation fetches a translated field for a media item.
@@ -582,12 +404,10 @@ func (r *Renderer) getMediaTranslation(mediaID int64, langCode, field, defaultVa
 	return value
 }
 
-// Breadcrumb represents a single breadcrumb item.
-type Breadcrumb struct {
-	Label  string
-	URL    string
-	Active bool
-}
+// Breadcrumb is a type alias for uikit.Breadcrumb.
+// This allows all existing code (handlers, modules) to continue using render.Breadcrumb
+// while the canonical definition lives in the reusable uikit package.
+type Breadcrumb = uikit.Breadcrumb
 
 // TemplateData holds data passed to templates.
 type TemplateData struct {
@@ -781,42 +601,6 @@ func (r *Renderer) PopSessionData(req *http.Request, key string) map[string]stri
 	return nil
 }
 
-// monthsRu contains Russian month names in genitive case.
-var monthsRu = []string{
-	"января", "февраля", "марта", "апреля", "мая", "июня",
-	"июля", "августа", "сентября", "октября", "ноября", "декабря",
-}
-
-// applyTimeFormatter applies a time formatting function to a value that may be time.Time or *time.Time.
-func applyTimeFormatter(t any, lang string, formatter func(time.Time, string) string) string {
-	switch v := t.(type) {
-	case time.Time:
-		return formatter(v, lang)
-	case *time.Time:
-		if v == nil {
-			return ""
-		}
-		return formatter(*v, lang)
-	default:
-		return ""
-	}
-}
-
-// formatDateForLocale formats a date according to the specified language.
-func formatDateForLocale(t time.Time, lang string) string {
-	if lang == "ru" {
-		return fmt.Sprintf("%d %s %d", t.Day(), monthsRu[t.Month()-1], t.Year())
-	}
-	return t.Format("Jan 2, 2006")
-}
-
-// formatDateTimeForLocale formats a time.Time as a localized datetime string.
-func formatDateTimeForLocale(t time.Time, lang string) string {
-	if lang == "ru" {
-		return fmt.Sprintf("%d %s %d, %02d:%02d", t.Day(), monthsRu[t.Month()-1], t.Year(), t.Hour(), t.Minute())
-	}
-	return t.Format("Jan 2, 2006 3:04 PM")
-}
 
 // getUserRole extracts the role from a user object.
 // Accepts store.User, *store.User, or any struct with a Role field.

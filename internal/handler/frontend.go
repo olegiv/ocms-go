@@ -98,31 +98,6 @@ type TagView struct {
 	PageCount   int64
 }
 
-// Pagination holds pagination data for templates.
-type Pagination struct {
-	CurrentPage int
-	TotalPages  int
-	TotalItems  int64
-	PerPage     int
-	HasPrev     bool
-	HasNext     bool
-	HasFirst    bool
-	HasLast     bool
-	PrevURL     string
-	NextURL     string
-	FirstURL    string
-	LastURL     string
-	Pages       []PaginationPage
-}
-
-// PaginationPage represents a single page link in pagination.
-type PaginationPage struct {
-	Number     int
-	URL        string
-	IsCurrent  bool
-	IsEllipsis bool
-}
-
 // SiteData holds site-wide data for templates.
 type SiteData struct {
 	SiteName       string
@@ -2061,49 +2036,6 @@ func (h *FrontendHandler) getSiteURL(ctx context.Context, r *http.Request) strin
 		siteURL = scheme + "://" + r.Host
 	}
 	return siteURL
-}
-
-// buildPaginationPages builds the page links with ellipsis for pagination.
-// This is extracted to avoid duplication between frontend and admin pagination.
-func buildPaginationPages[T any](currentPage, totalPages int, buildURL func(int) string, makePage func(number int, url string, isCurrent, isEllipsis bool) T) []T {
-	var pages []T
-
-	start := currentPage - 2
-	end := currentPage + 2
-	if start < 1 {
-		start = 1
-		end = 5
-	}
-	if end > totalPages {
-		end = totalPages
-		start = end - 4
-		if start < 1 {
-			start = 1
-		}
-	}
-
-	// Add first page and ellipsis if needed
-	if start > 1 {
-		pages = append(pages, makePage(1, buildURL(1), false, false))
-		if start > 2 {
-			pages = append(pages, makePage(0, "", false, true))
-		}
-	}
-
-	// Add page numbers
-	for i := start; i <= end; i++ {
-		pages = append(pages, makePage(i, buildURL(i), i == currentPage, false))
-	}
-
-	// Add ellipsis and last page if needed
-	if end < totalPages {
-		if end < totalPages-1 {
-			pages = append(pages, makePage(0, "", false, true))
-		}
-		pages = append(pages, makePage(totalPages, buildURL(totalPages), false, false))
-	}
-
-	return pages
 }
 
 // buildPagination creates pagination data for templates.
