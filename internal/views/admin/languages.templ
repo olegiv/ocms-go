@@ -1,0 +1,512 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import (
+	"fmt"
+	"strings"
+	"time"
+)
+
+// LanguageListItem holds data for a language in the list view.
+type LanguageListItem struct {
+	ID         int64
+	Code       string
+	Name       string
+	NativeName string
+	Direction  string
+	IsDefault  bool
+	IsActive   bool
+	Position   int64
+}
+
+// LanguagesListData holds all data for the languages list page.
+type LanguagesListData struct {
+	Languages      []LanguageListItem
+	TotalLanguages int64
+}
+
+// CommonLanguageOption represents a language option for the quick-select dropdown.
+type CommonLanguageOption struct {
+	Code       string
+	Name       string
+	NativeName string
+	Direction  string
+}
+
+// LanguageInfo holds individual language data for the form.
+type LanguageInfo struct {
+	ID         int64
+	Code       string
+	Name       string
+	NativeName string
+	Direction  string
+	IsDefault  bool
+	IsActive   bool
+	Position   int64
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+// LanguageFormData holds all data for the language create/edit form.
+type LanguageFormData struct {
+	IsEdit          bool
+	Language        *LanguageInfo
+	CommonLanguages []CommonLanguageOption
+	Errors          map[string]string
+	FormValues      map[string]string
+}
+
+// LanguagesListPage renders the languages list page.
+templ LanguagesListPage(pc *PageContext, data LanguagesListData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("languages.title") }</h1>
+				<p class="page-description">{ pc.T("languages.description") } ({ fmt.Sprintf("%d", data.TotalLanguages) } { pc.T("label.total") })</p>
+			</div>
+			<div class="page-actions">
+				<a href="/admin/languages/new" class="btn btn-primary">
+					@iconPlus()
+					{ pc.T("languages.add") }
+				</a>
+			</div>
+		</div>
+		if len(data.Languages) > 0 {
+			<div class="card" id="languages-table">
+				<div class="table-responsive">
+					<table class="table">
+						<thead>
+							<tr>
+								<th>{ pc.T("languages.code") }</th>
+								<th>{ pc.T("label.name") }</th>
+								<th>{ pc.T("languages.native_name") }</th>
+								<th>{ pc.T("languages.direction") }</th>
+								<th>{ pc.T("label.status") }</th>
+								<th>{ pc.T("languages.position") }</th>
+								<th class="text-right">{ pc.T("label.actions") }</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, lang := range data.Languages {
+								@LanguageRow(pc, lang)
+							}
+						</tbody>
+					</table>
+				</div>
+			</div>
+			<div class="card-footer-info">
+				<span class="text-muted">{ pc.T("languages.total_count", data.TotalLanguages) }</span>
+			</div>
+		} else {
+			<div class="card">
+				<div class="card-body">
+					<div class="empty-state">
+						<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" x2="22" y1="12" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+						<p>{ pc.T("languages.no_languages") }</p>
+						<span class="empty-hint">{ pc.T("languages.no_languages_hint") }</span>
+						<div class="empty-state-action">
+							<a href="/admin/languages/new" class="btn btn-primary">{ pc.T("languages.add") }</a>
+						</div>
+					</div>
+				</div>
+			</div>
+		}
+	}
+}
+
+// LanguageRow renders a single language table row.
+templ LanguageRow(pc *PageContext, lang LanguageListItem) {
+	<tr id={ fmt.Sprintf("language-row-%d", lang.ID) }>
+		<td>
+			<code class="language-code">{ lang.Code }</code>
+		</td>
+		<td>
+			<span>{ lang.Name }</span>
+			if lang.IsDefault {
+				<span class="badge badge-primary">{ pc.T("languages.default") }</span>
+			}
+		</td>
+		<td>{ lang.NativeName }</td>
+		<td>
+			<span class={ languageDirectionBadgeClass(lang.Direction) }>
+				{ strings.ToUpper(lang.Direction) }
+			</span>
+		</td>
+		<td>
+			if lang.IsActive {
+				<span class="badge badge-success">{ pc.T("label.active") }</span>
+			} else {
+				<span class="badge badge-secondary">{ pc.T("label.inactive") }</span>
+			}
+		</td>
+		<td>{ fmt.Sprintf("%d", lang.Position) }</td>
+		<td class="text-right">
+			<div class="action-buttons">
+				if !lang.IsDefault {
+					<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/languages/%d/default", lang.ID)) } class="d-inline">
+						<button type="submit" class="btn btn-sm btn-outline" title={ pc.T("languages.set_default") }>
+							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+						</button>
+					</form>
+				}
+				<a href={ templ.SafeURL(fmt.Sprintf("/admin/languages/%d", lang.ID)) } class="btn btn-sm btn-outline" title={ pc.T("btn.edit") }>
+					@iconEdit()
+				</a>
+				if !lang.IsDefault {
+					@deleteLanguageModal(pc, lang)
+				}
+			</div>
+		</td>
+	</tr>
+}
+
+templ deleteLanguageModal(pc *PageContext, lang LanguageListItem) {
+	<div x-data="{ showConfirm: false }" class="delete-action">
+		<button
+			type="button"
+			class="btn btn-sm btn-danger"
+			title={ pc.T("btn.delete") }
+			@click="showConfirm = true"
+		>
+			@iconDelete()
+		</button>
+		<div
+			class="modal-overlay"
+			x-show="showConfirm"
+			x-cloak
+			@click.self="showConfirm = false"
+			x-transition:enter="modal-enter"
+			x-transition:leave="modal-leave"
+		>
+			<div class="modal" @click.stop>
+				<div class="modal-header">
+					<h3 class="modal-title">{ pc.T("languages.delete") }</h3>
+					<button type="button" class="modal-close" @click="showConfirm = false" aria-label={ pc.T("btn.close") }>&times;</button>
+				</div>
+				<div class="modal-body">
+					<p>
+						{ pc.T("languages.confirm_delete") }
+						<strong>{ lang.Name } ({ lang.Code })</strong>?
+					</p>
+					<p class="text-muted">{ pc.T("label.action_cannot_undone") } { pc.T("languages.delete_warning") }</p>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
+					<button
+						type="button"
+						class="btn btn-danger"
+						hx-delete={ fmt.Sprintf("/admin/languages/%d", lang.ID) }
+						hx-target={ fmt.Sprintf("#language-row-%d", lang.ID) }
+						hx-swap="outerHTML"
+						@click="showConfirm = false"
+					>
+						{ pc.T("languages.delete") }
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+// LanguageFormPage renders the language create/edit form.
+templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">
+					if data.IsEdit {
+						{ pc.T("languages.edit_language") }
+					} else {
+						{ pc.T("languages.new_language") }
+					}
+				</h1>
+				<p class="page-description">
+					if data.IsEdit {
+						{ pc.T("languages.update_settings") }
+					} else {
+						{ pc.T("languages.add_new") }
+					}
+				</p>
+			</div>
+			<div class="page-actions">
+				<a href="/admin/languages" class="btn btn-outline">
+					@iconBack()
+					{ pc.T("languages.back_to_languages") }
+				</a>
+			</div>
+		</div>
+		<div class="card">
+			<div class="card-body">
+				<form method="POST" action={ languageFormAction(data) } class="form" x-data={ languageFormAlpineData(data) }>
+					if data.IsEdit {
+						<input type="hidden" name="_method" value="PUT"/>
+					}
+					<div class="form-grid">
+						if !data.IsEdit {
+							<div class="form-group form-group-full">
+								<label class="form-label">{ pc.T("languages.quick_select") }</label>
+								<p class="form-help">{ pc.T("languages.quick_select_hint") }</p>
+								<select
+									id="quick_select"
+									class="form-input form-select"
+									@change="selectLanguage($event.target.value)"
+								>
+									<option value="">{ pc.T("languages.select_language") }</option>
+									for _, cl := range data.CommonLanguages {
+										<option value={ fmt.Sprintf("%s|%s|%s|%s", cl.Code, cl.Name, cl.NativeName, cl.Direction) }>
+											{ cl.Name } ({ cl.Code })
+										</option>
+									}
+								</select>
+							</div>
+							<div class="form-group form-group-full">
+								<hr class="form-divider"/>
+							</div>
+						}
+						<div class="form-group">
+							<label for="code" class="form-label">
+								{ pc.T("languages.language_code") } <span class="required">*</span>
+							</label>
+							<input
+								type="text"
+								id="code"
+								name="code"
+								class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["code"] != "") }
+								value={ languageFormValue(data, "code") }
+								x-model="code"
+								placeholder={ pc.T("languages.code_placeholder") }
+								maxlength="5"
+								required
+								if data.IsEdit {
+									readonly
+								}
+								if !data.IsEdit {
+									autofocus
+								}
+							/>
+							if data.Errors["code"] != "" {
+								<span class="form-error">{ data.Errors["code"] }</span>
+							} else {
+								<span class="form-hint">{ pc.T("languages.code_hint") }</span>
+							}
+						</div>
+						<div class="form-group">
+							<label for="name" class="form-label">
+								{ pc.T("label.name") } <span class="required">*</span>
+							</label>
+							<input
+								type="text"
+								id="name"
+								name="name"
+								class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["name"] != "") }
+								value={ languageFormValue(data, "name") }
+								x-model="name"
+								placeholder={ pc.T("languages.name_placeholder") }
+								required
+								maxlength="255"
+							/>
+							if data.Errors["name"] != "" {
+								<span class="form-error">{ data.Errors["name"] }</span>
+							} else {
+								<span class="form-hint">{ pc.T("languages.name_hint") }</span>
+							}
+						</div>
+						<div class="form-group">
+							<label for="native_name" class="form-label">
+								{ pc.T("languages.native_name") } <span class="required">*</span>
+							</label>
+							<input
+								type="text"
+								id="native_name"
+								name="native_name"
+								class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["native_name"] != "") }
+								value={ languageFormValue(data, "native_name") }
+								x-model="nativeName"
+								placeholder={ pc.T("languages.native_placeholder") }
+								required
+								maxlength="255"
+							/>
+							if data.Errors["native_name"] != "" {
+								<span class="form-error">{ data.Errors["native_name"] }</span>
+							} else {
+								<span class="form-hint">{ pc.T("languages.native_hint") }</span>
+							}
+						</div>
+						<div class="form-group">
+							<label for="direction" class="form-label">
+								{ pc.T("languages.text_direction") } <span class="required">*</span>
+							</label>
+							<select
+								id="direction"
+								name="direction"
+								class={ templ.KV("form-input form-select", true), templ.KV("is-invalid", data.Errors["direction"] != "") }
+								x-model="direction"
+								required
+							>
+								<option value="ltr" selected?={ languageCurrentDirection(data) == "ltr" }>{ pc.T("languages.ltr") }</option>
+								<option value="rtl" selected?={ languageCurrentDirection(data) == "rtl" }>{ pc.T("languages.rtl") }</option>
+							</select>
+							if data.Errors["direction"] != "" {
+								<span class="form-error">{ data.Errors["direction"] }</span>
+							} else {
+								<span class="form-hint">{ pc.T("languages.direction_hint") }</span>
+							}
+						</div>
+						<div class="form-group">
+							<label for="position" class="form-label">{ pc.T("languages.position") }</label>
+							<input
+								type="number"
+								id="position"
+								name="position"
+								class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["position"] != "") }
+								value={ languageFormValue(data, "position") }
+								placeholder="0"
+								min="0"
+							/>
+							if data.Errors["position"] != "" {
+								<span class="form-error">{ data.Errors["position"] }</span>
+							} else {
+								<span class="form-hint">{ pc.T("languages.position_hint") }</span>
+							}
+						</div>
+						<div class="form-group">
+							<label class="form-label">{ pc.T("label.status") }</label>
+							<div class="form-check">
+								<input
+									type="checkbox"
+									id="is_active"
+									name="is_active"
+									value="1"
+									class="form-check-input"
+									checked?={ languageFormChecked(data, "is_active") }
+								/>
+								<label for="is_active" class="form-check-label">{ pc.T("label.active") }</label>
+							</div>
+							if data.Errors["is_active"] != "" {
+								<span class="form-error">{ data.Errors["is_active"] }</span>
+							} else {
+								<span class="form-hint">{ pc.T("languages.status_hint") }</span>
+							}
+						</div>
+					</div>
+					if data.IsEdit && data.Language != nil && data.Language.IsDefault {
+						<div class="form-group form-group-full">
+							<div class="alert alert-info">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
+								<span>{ pc.T("languages.is_default_info") }</span>
+							</div>
+						</div>
+					}
+					<div class="form-actions">
+						<button type="submit" class="btn btn-primary">
+							@iconSave()
+							if data.IsEdit {
+								{ pc.T("languages.update") }
+							} else {
+								{ pc.T("languages.create") }
+							}
+						</button>
+						<a href="/admin/languages" class="btn btn-outline">{ pc.T("btn.cancel") }</a>
+					</div>
+				</form>
+			</div>
+		</div>
+		if !data.IsEdit {
+			@languageFormScript()
+		}
+	}
+}
+
+// languageFormScript renders the Alpine.js script for the quick-select feature.
+templ languageFormScript() {
+	<script>
+	function languageForm() {
+		return {
+			code: '',
+			name: '',
+			nativeName: '',
+			direction: 'ltr',
+			selectLanguage(value) {
+				if (!value) return;
+				const parts = value.split('|');
+				if (parts.length >= 4) {
+					this.code = parts[0];
+					this.name = parts[1];
+					this.nativeName = parts[2];
+					this.direction = parts[3];
+				}
+			}
+		}
+	}
+	</script>
+}
+
+// Helper functions
+
+func languageDirectionBadgeClass(direction string) string {
+	if direction == "rtl" {
+		return "badge badge-warning"
+	}
+	return "badge badge-secondary"
+}
+
+func languageFormAction(data LanguageFormData) templ.SafeURL {
+	if data.IsEdit && data.Language != nil {
+		return templ.SafeURL(fmt.Sprintf("/admin/languages/%d", data.Language.ID))
+	}
+	return "/admin/languages"
+}
+
+func languageFormValue(data LanguageFormData, field string) string {
+	if v, ok := data.FormValues[field]; ok && v != "" {
+		return v
+	}
+	if data.Language != nil {
+		switch field {
+		case "code":
+			return data.Language.Code
+		case "name":
+			return data.Language.Name
+		case "native_name":
+			return data.Language.NativeName
+		case "direction":
+			return data.Language.Direction
+		case "position":
+			return fmt.Sprintf("%d", data.Language.Position)
+		}
+	}
+	return ""
+}
+
+func languageFormChecked(data LanguageFormData, field string) bool {
+	if field == "is_active" {
+		if v, ok := data.FormValues[field]; ok {
+			return v == "1"
+		}
+		if data.Language != nil {
+			return data.Language.IsActive
+		}
+		// Default to checked for new languages
+		return !data.IsEdit
+	}
+	return false
+}
+
+func languageCurrentDirection(data LanguageFormData) string {
+	if v, ok := data.FormValues["direction"]; ok && v != "" {
+		return v
+	}
+	if data.Language != nil {
+		return data.Language.Direction
+	}
+	return "ltr"
+}
+
+func languageFormAlpineData(data LanguageFormData) string {
+	if data.IsEdit {
+		return ""
+	}
+	return "languageForm()"
+}
