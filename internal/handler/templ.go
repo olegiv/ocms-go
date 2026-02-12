@@ -345,3 +345,75 @@ func convertCategoryTranslations(translations []CategoryTranslationInfo) []admin
 	}
 	return result
 }
+
+// =============================================================================
+// MENUS HELPERS
+// =============================================================================
+
+// menusBreadcrumbs returns breadcrumbs for the menus list page.
+func menusBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.menus"), URL: redirectAdminMenus, Active: true},
+	}
+}
+
+// menuFormBreadcrumbs returns breadcrumbs for the menu new form page.
+func menuFormBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.menus"), URL: redirectAdminMenus},
+		{Label: i18n.T(lang, "menus.new"), Active: true},
+	}
+}
+
+// menuEditBreadcrumbs returns breadcrumbs for the menu edit form with entity name.
+func menuEditBreadcrumbs(lang string, menuName string, menuID int64) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.menus"), URL: redirectAdminMenus},
+		{Label: menuName, URL: fmt.Sprintf(redirectAdminMenusID, menuID), Active: true},
+	}
+}
+
+// convertMenuListItems converts store menus to view MenuListItem slice.
+func convertMenuListItems(menus []store.Menu) []adminviews.MenuListItem {
+	items := make([]adminviews.MenuListItem, len(menus))
+	for i, m := range menus {
+		items[i] = adminviews.MenuListItem{
+			ID:           m.ID,
+			Name:         m.Name,
+			Slug:         m.Slug,
+			LanguageCode: m.LanguageCode,
+			UpdatedAt:    m.UpdatedAt,
+			IsProtected:  m.Slug == "main" || m.Slug == "footer",
+		}
+	}
+	return items
+}
+
+// convertMenuPages converts store pages to view MenuPageItem slice.
+func convertMenuPages(pages []store.Page) []adminviews.MenuPageItem {
+	items := make([]adminviews.MenuPageItem, len(pages))
+	for i, p := range pages {
+		items[i] = adminviews.MenuPageItem{
+			ID:    p.ID,
+			Title: p.Title,
+			Slug:  p.Slug,
+		}
+	}
+	return items
+}
+
+// convertMenuInfo converts a store.Menu pointer to a view MenuInfo pointer.
+func convertMenuInfo(menu *store.Menu) *adminviews.MenuInfo {
+	if menu == nil {
+		return nil
+	}
+	return &adminviews.MenuInfo{
+		ID:           menu.ID,
+		Name:         menu.Name,
+		Slug:         menu.Slug,
+		LanguageCode: menu.LanguageCode,
+	}
+}
