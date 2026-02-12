@@ -180,6 +180,41 @@ func categoryEditBreadcrumbs(lang string, categoryName string, categoryID int64)
 	}
 }
 
+// eventsBreadcrumbs returns breadcrumbs for the events list page.
+func eventsBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.event_log"), URL: redirectAdminEvents, Active: true},
+	}
+}
+
+// convertEventItems converts handler EventWithUser slice to view EventItem slice.
+// It masks IPs for display and pre-computes sentinel ban/whitelist state.
+func convertEventItems(events []EventWithUser, renderer *render.Renderer, sentinelActive bool) []adminviews.EventItem {
+	items := make([]adminviews.EventItem, len(events))
+	for i, e := range events {
+		items[i] = adminviews.EventItem{
+			ID:           e.ID,
+			Level:        e.Level,
+			Category:     e.Category,
+			Message:      e.Message,
+			Details:      e.Details,
+			DetailsLong:  e.DetailsLong,
+			IPAddress:    maskIP(e.IPAddress),
+			RawIPAddress: e.IPAddress,
+			IsOwnIP:      e.IsOwnIP,
+			RequestURL:   e.RequestURL,
+			CreatedAt:    e.CreatedAt,
+			UserName:     e.UserName,
+		}
+		if sentinelActive && e.IPAddress != "" {
+			items[i].IsBanned = renderer.SentinelIsIPBanned(e.IPAddress)
+			items[i].IsWhitelisted = renderer.SentinelIsIPWhitelisted(e.IPAddress)
+		}
+	}
+	return items
+}
+
 // =============================================================================
 // TYPE CONVERSION HELPERS (store → view types)
 // =============================================================================
