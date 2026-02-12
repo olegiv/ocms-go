@@ -1,0 +1,531 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import (
+	"fmt"
+	"time"
+)
+
+// APIKeyListItem holds data for a single API key in the list view.
+type APIKeyListItem struct {
+	ID          int64
+	Name        string
+	KeyPrefix   string
+	Permissions []string // Pre-parsed from JSON
+	IsActive    bool
+	IsExpired   bool   // Pre-computed: active but past expiration
+	LastUsedAt  string // Pre-formatted date string, empty if never used
+	ExpiresAt   string // Pre-formatted date string, empty if no expiration
+}
+
+// APIKeysListData holds all data for the API keys list page.
+type APIKeysListData struct {
+	APIKeys   []APIKeyListItem
+	TotalKeys int64
+	Pagination PaginationData
+}
+
+// APIKeyInfo holds individual API key data for the form.
+type APIKeyInfo struct {
+	ID          int64
+	Name        string
+	KeyPrefix   string
+	Permissions string // Raw JSON string for checking contains
+	IsActive    bool
+	CreatedAt   string
+	LastUsedAt  string // Empty if never used
+	ExpiresAt   string // Date-only format for input field, empty if no expiration
+	HasLastUsed bool
+	HasExpires  bool
+}
+
+// PermissionGroup represents a group of related permissions.
+type PermissionGroup struct {
+	TitleKey    string // i18n key for the group title
+	Permissions []PermissionOption
+}
+
+// PermissionOption represents a single permission checkbox.
+type PermissionOption struct {
+	Value       string
+	DescKey     string // i18n key for the description
+	Checked     bool
+}
+
+// APIKeyFormData holds all data for the API key create/edit form.
+type APIKeyFormData struct {
+	IsEdit           bool
+	APIKey           *APIKeyInfo
+	PermissionGroups []PermissionGroup
+	Errors           map[string]string
+	FormValues       map[string]string
+	GeneratedKey     string // Only set after creation to show key once
+	GeneratedPerms   []string // Permissions of the generated key
+}
+
+// APIKeysListPage renders the API keys list page.
+templ APIKeysListPage(pc *PageContext, data APIKeysListData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("api_keys.title") }</h1>
+				<p class="page-description">{ pc.T("api_keys.description") } ({ fmt.Sprintf("%d", data.TotalKeys) } { pc.T("label.total") })</p>
+			</div>
+			<div class="page-actions">
+				<a href="/admin/api-keys/new" class="btn btn-primary">
+					@iconAPIKeys()
+					{ pc.T("api_keys.create") }
+				</a>
+			</div>
+		</div>
+		if len(data.APIKeys) > 0 {
+			<div class="card" id="api-keys-table">
+				<div class="table-responsive">
+					<table class="table">
+						<thead>
+							<tr>
+								<th>{ pc.T("label.name") }</th>
+								<th>{ pc.T("api_keys.key_prefix") }</th>
+								<th>{ pc.T("api_keys.permissions") }</th>
+								<th>{ pc.T("label.status") }</th>
+								<th>{ pc.T("api_keys.last_used") }</th>
+								<th>{ pc.T("api_keys.expires") }</th>
+								<th class="text-right">{ pc.T("label.actions") }</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, key := range data.APIKeys {
+								@APIKeyRow(pc, key)
+							}
+						</tbody>
+					</table>
+				</div>
+				if data.Pagination.ShouldShow() {
+					<div class="card-footer">
+						@Pagination(pc, data.Pagination)
+					</div>
+				}
+			</div>
+		} else {
+			<div class="card">
+				<div class="card-body">
+					<div class="empty-state">
+						<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
+						<p>{ pc.T("api_keys.no_keys") }</p>
+						<span class="empty-hint">{ pc.T("api_keys.no_keys_hint") }</span>
+						<div class="empty-state-action">
+							<a href="/admin/api-keys/new" class="btn btn-primary">{ pc.T("api_keys.create") }</a>
+						</div>
+					</div>
+				</div>
+			</div>
+		}
+		<div class="card mt-6">
+			<div class="card-header">
+				<h3 class="card-title">{ pc.T("api_keys.usage") }</h3>
+			</div>
+			<div class="card-body">
+				<p>{ pc.T("api_keys.usage_hint") }</p>
+				<pre class="code-block"><code>Authorization: Bearer YOUR_API_KEY</code></pre>
+				<p class="mt-4">{ pc.T("api_keys.base_url") }: <code>/api/v1/</code></p>
+				<p class="tags-wrapper">
+					<a href="/api/v1/status" target="_blank" class="btn btn-sm btn-outline">{ pc.T("api_keys.check_status") }</a>
+					<a href="/api/v1/docs" target="_blank" class="btn btn-sm btn-primary">
+						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></svg>
+						{ pc.T("api_keys.view_docs") }
+					</a>
+				</p>
+			</div>
+		</div>
+	}
+}
+
+// APIKeyRow renders a single API key table row.
+templ APIKeyRow(pc *PageContext, key APIKeyListItem) {
+	<tr id={ fmt.Sprintf("api-key-row-%d", key.ID) }>
+		<td>
+			<strong>{ key.Name }</strong>
+		</td>
+		<td>
+			<code class="key-prefix">{ key.KeyPrefix }...</code>
+		</td>
+		<td>
+			<div class="permission-badges">
+				if len(key.Permissions) > 0 {
+					for _, perm := range key.Permissions {
+						<span class="badge badge-outline badge-sm">{ perm }</span>
+					}
+				} else {
+					<span class="text-muted">{ pc.T("api_keys.none") }</span>
+				}
+			</div>
+		</td>
+		<td>
+			if key.IsActive {
+				if key.IsExpired {
+					<span class="badge badge-warning">{ pc.T("api_keys.expired") }</span>
+				} else {
+					<span class="badge badge-success">{ pc.T("label.active") }</span>
+				}
+			} else {
+				<span class="badge badge-secondary">{ pc.T("api_keys.revoked") }</span>
+			}
+		</td>
+		<td>
+			if key.LastUsedAt != "" {
+				{ key.LastUsedAt }
+			} else {
+				<span class="text-muted">{ pc.T("label.never") }</span>
+			}
+		</td>
+		<td>
+			if key.ExpiresAt != "" {
+				{ key.ExpiresAt }
+			} else {
+				<span class="text-muted">{ pc.T("label.never") }</span>
+			}
+		</td>
+		<td class="text-right">
+			<div class="action-buttons">
+				<a href={ templ.SafeURL(fmt.Sprintf("/admin/api-keys/%d", key.ID)) } class="btn btn-sm btn-outline" title={ pc.T("btn.edit") }>
+					@iconEdit()
+				</a>
+				if key.IsActive {
+					@revokeAPIKeyModal(pc, key)
+				}
+			</div>
+		</td>
+	</tr>
+}
+
+// revokeAPIKeyModal renders the revoke confirmation modal for an API key.
+templ revokeAPIKeyModal(pc *PageContext, key APIKeyListItem) {
+	<div x-data="{ showConfirm: false }" class="delete-action">
+		<button
+			type="button"
+			class="btn btn-sm btn-danger"
+			title={ pc.T("api_keys.revoke") }
+			@click="showConfirm = true"
+		>
+			<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" x2="19.07" y1="4.93" y2="19.07"></line></svg>
+		</button>
+		<div
+			class="modal-overlay"
+			x-show="showConfirm"
+			x-cloak
+			@click.self="showConfirm = false"
+			x-transition:enter="modal-enter"
+			x-transition:leave="modal-leave"
+		>
+			<div class="modal" @click.stop>
+				<div class="modal-header">
+					<h3 class="modal-title">{ pc.T("api_keys.revoke_key") }</h3>
+					<button type="button" class="modal-close" @click="showConfirm = false" aria-label={ pc.T("btn.close") }>&times;</button>
+				</div>
+				<div class="modal-body">
+					<p>
+						{ pc.T("api_keys.confirm_revoke") }
+						<strong>{ key.Name }</strong>?
+					</p>
+					<p class="text-muted">{ pc.T("api_keys.revoke_warning") }</p>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
+					<button
+						type="button"
+						class="btn btn-danger"
+						hx-delete={ fmt.Sprintf("/admin/api-keys/%d", key.ID) }
+						hx-target={ fmt.Sprintf("#api-key-row-%d", key.ID) }
+						hx-swap="outerHTML"
+						@click="showConfirm = false"
+					>
+						{ pc.T("api_keys.revoke_key") }
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+// APIKeyFormPage renders the API key create/edit form or the generated key page.
+templ APIKeyFormPage(pc *PageContext, data APIKeyFormData) {
+	@AdminLayout(pc) {
+		if data.GeneratedKey != "" {
+			@apiKeyGeneratedPage(pc, data)
+		} else {
+			@apiKeyEditForm(pc, data)
+		}
+	}
+}
+
+// apiKeyGeneratedPage renders the success page showing the generated API key.
+templ apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) {
+	<div class="page-header">
+		<div>
+			<h1 class="page-title">{ pc.T("api_keys.key_created") }</h1>
+			<p class="page-description">{ pc.T("api_keys.key_generated") }</p>
+		</div>
+		<div class="page-actions">
+			<a href="/admin/api-keys" class="btn btn-outline">
+				@iconBack()
+				{ pc.T("api_keys.back_to_keys") }
+			</a>
+		</div>
+	</div>
+	<div class="card">
+		<div class="card-body">
+			<div class="alert alert-warning mb-6">
+				<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+				<div>
+					<strong>{ pc.T("api_keys.important") }:</strong> { pc.T("api_keys.copy_warning") }
+				</div>
+			</div>
+			<div class="api-key-display">
+				<label class="form-label">{ pc.T("api_keys.your_key") }</label>
+				<div class="key-container" x-data="{ copied: false }">
+					<input
+						type="text"
+						class="form-input key-input"
+						value={ data.GeneratedKey }
+						readonly
+						id="generated-key"
+					/>
+					<button
+						type="button"
+						class="btn btn-primary copy-btn"
+						@click="navigator.clipboard.writeText(document.getElementById('generated-key').value); copied = true; setTimeout(() => copied = false, 2000)"
+					>
+						<span x-show="!copied">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
+							{ pc.T("btn.copy") }
+						</span>
+						<span x-show="copied" x-cloak>
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+							{ pc.T("btn.copied") }
+						</span>
+					</button>
+				</div>
+			</div>
+			if data.APIKey != nil {
+				<div class="key-details">
+					<div class="detail-row">
+						<span class="detail-label">{ pc.T("label.name") }:</span>
+						<span class="detail-value">{ data.APIKey.Name }</span>
+					</div>
+					<div class="detail-row">
+						<span class="detail-label">{ pc.T("api_keys.key_prefix") }:</span>
+						<span class="detail-value"><code>{ data.APIKey.KeyPrefix }...</code></span>
+					</div>
+					<div class="detail-row">
+						<span class="detail-label">{ pc.T("api_keys.permissions") }:</span>
+						<span class="detail-value">
+							for _, perm := range data.GeneratedPerms {
+								<span class="badge badge-outline">{ perm }</span>
+							}
+						</span>
+					</div>
+					if data.APIKey.HasExpires {
+						<div class="detail-row">
+							<span class="detail-label">{ pc.T("api_keys.expires") }:</span>
+							<span class="detail-value">{ data.APIKey.ExpiresAt }</span>
+						</div>
+					}
+				</div>
+			}
+			<div class="form-actions mt-8">
+				<a href="/admin/api-keys" class="btn btn-primary">{ pc.T("btn.done") }</a>
+				<a href="/admin/api-keys/new" class="btn btn-outline">{ pc.T("api_keys.create_another") }</a>
+			</div>
+		</div>
+	</div>
+}
+
+// apiKeyEditForm renders the create/edit form for API keys.
+templ apiKeyEditForm(pc *PageContext, data APIKeyFormData) {
+	<div class="page-header">
+		<div>
+			<h1 class="page-title">
+				if data.IsEdit {
+					{ pc.T("api_keys.edit_key") }
+				} else {
+					{ pc.T("api_keys.new_key") }
+				}
+			</h1>
+			<p class="page-description">
+				if data.IsEdit {
+					{ pc.T("api_keys.update_settings") }
+				} else {
+					{ pc.T("api_keys.create_new") }
+				}
+			</p>
+		</div>
+		<div class="page-actions">
+			<a href="/admin/api-keys" class="btn btn-outline">
+				@iconBack()
+				{ pc.T("api_keys.back_to_keys") }
+			</a>
+		</div>
+	</div>
+	<div class="card">
+		<div class="card-body">
+			<form method="POST" action={ apiKeyFormAction(data) } class="form">
+				if data.IsEdit {
+					<input type="hidden" name="_method" value="PUT"/>
+				}
+				<div class="form-group">
+					<label for="name" class="form-label">
+						{ pc.T("label.name") } <span class="required">*</span>
+					</label>
+					<input
+						type="text"
+						id="name"
+						name="name"
+						class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["name"] != "") }
+						value={ apiKeyFormValue(data, "name") }
+						placeholder={ pc.T("api_keys.name_placeholder") }
+						required
+						autofocus
+						maxlength="255"
+					/>
+					if data.Errors["name"] != "" {
+						<span class="form-error">{ data.Errors["name"] }</span>
+					} else {
+						<span class="form-hint">{ pc.T("api_keys.name_hint") }</span>
+					}
+				</div>
+				<div class="form-group">
+					<label class="form-label">
+						{ pc.T("api_keys.permissions") } <span class="required">*</span>
+					</label>
+					if data.Errors["permissions"] != "" {
+						<span class="form-error form-label-block">{ data.Errors["permissions"] }</span>
+					}
+					<div class="permissions-grid">
+						for _, group := range data.PermissionGroups {
+							<div class="permission-group">
+								<h4 class="permission-group-title">{ pc.T(group.TitleKey) }</h4>
+								for _, perm := range group.Permissions {
+									<label class="checkbox-label">
+										<input
+											type="checkbox"
+											name="permissions"
+											value={ perm.Value }
+											checked?={ perm.Checked }
+										/>
+										<span class="checkbox-text">
+											<strong>{ perm.Value }</strong>
+											<small>{ pc.T(perm.DescKey) }</small>
+										</span>
+									</label>
+								}
+							</div>
+						}
+					</div>
+				</div>
+				<div class="form-group">
+					<label for="expires_at" class="form-label">{ pc.T("api_keys.expiration_date") }</label>
+					<input
+						type="date"
+						id="expires_at"
+						name="expires_at"
+						class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["expires_at"] != "") }
+						value={ apiKeyFormValue(data, "expires_at") }
+						min={ todayDate() }
+					/>
+					if data.Errors["expires_at"] != "" {
+						<span class="form-error">{ data.Errors["expires_at"] }</span>
+					} else {
+						<span class="form-hint">{ pc.T("api_keys.expiration_hint") }</span>
+					}
+				</div>
+				if data.IsEdit {
+					<div class="form-group">
+						<label class="form-label">{ pc.T("label.status") }</label>
+						<label class="checkbox-label">
+							<input
+								type="checkbox"
+								name="is_active"
+								value="on"
+								checked?={ apiKeyFormCheckedActive(data) }
+							/>
+							<span class="checkbox-text">
+								<strong>{ pc.T("label.active") }</strong>
+								<small>{ pc.T("api_keys.revoke_hint") }</small>
+							</span>
+						</label>
+					</div>
+					if data.APIKey != nil {
+						<div class="form-group">
+							<label class="form-label">{ pc.T("api_keys.key_info") }</label>
+							<div class="key-info-box">
+								<div class="info-row">
+									<span class="info-label">{ pc.T("api_keys.key_prefix") }:</span>
+									<code>{ data.APIKey.KeyPrefix }...</code>
+								</div>
+								<div class="info-row">
+									<span class="info-label">{ pc.T("api_keys.created") }:</span>
+									<span>{ data.APIKey.CreatedAt }</span>
+								</div>
+								if data.APIKey.HasLastUsed {
+									<div class="info-row">
+										<span class="info-label">{ pc.T("api_keys.last_used") }:</span>
+										<span>{ data.APIKey.LastUsedAt }</span>
+									</div>
+								}
+							</div>
+						</div>
+					}
+				}
+				<div class="form-actions">
+					<button type="submit" class="btn btn-primary">
+						@iconSave()
+						if data.IsEdit {
+							{ pc.T("api_keys.update") }
+						} else {
+							{ pc.T("api_keys.create") }
+						}
+					</button>
+					<a href="/admin/api-keys" class="btn btn-outline">{ pc.T("btn.cancel") }</a>
+				</div>
+			</form>
+		</div>
+	</div>
+}
+
+// Helper functions
+
+func apiKeyFormAction(data APIKeyFormData) templ.SafeURL {
+	if data.IsEdit && data.APIKey != nil {
+		return templ.SafeURL(fmt.Sprintf("/admin/api-keys/%d", data.APIKey.ID))
+	}
+	return "/admin/api-keys"
+}
+
+func apiKeyFormValue(data APIKeyFormData, field string) string {
+	if v, ok := data.FormValues[field]; ok && v != "" {
+		return v
+	}
+	if data.APIKey != nil {
+		switch field {
+		case "name":
+			return data.APIKey.Name
+		case "expires_at":
+			return data.APIKey.ExpiresAt
+		}
+	}
+	return ""
+}
+
+func apiKeyFormCheckedActive(data APIKeyFormData) bool {
+	if data.APIKey != nil {
+		return data.APIKey.IsActive
+	}
+	return true
+}
+
+func todayDate() string {
+	return time.Now().Format("2006-01-02")
+}
+
