@@ -20,6 +20,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 // RedirectsHandler handles redirect management routes.
@@ -42,15 +43,22 @@ func NewRedirectsHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionM
 	}
 }
 
-// RedirectsListData holds data for the redirects list template.
-type RedirectsListData struct {
-	Redirects  []store.Redirect
-	TotalCount int64
+// StatusCodeOption represents a status code option for the form select.
+type StatusCodeOption struct {
+	Code  int
+	Label string
+}
+
+// ValidStatusCodes contains valid HTTP redirect status codes.
+var ValidStatusCodes = []StatusCodeOption{
+	{Code: 301, Label: "301 - Permanent Redirect"},
+	{Code: 302, Label: "302 - Temporary Redirect"},
+	{Code: 307, Label: "307 - Temporary Redirect (preserve method)"},
+	{Code: 308, Label: "308 - Permanent Redirect (preserve method)"},
 }
 
 // List handles GET /admin/redirects - displays a list of redirects.
 func (h *RedirectsHandler) List(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	redirects, err := h.queries.ListRedirects(r.Context())
@@ -66,53 +74,21 @@ func (h *RedirectsHandler) List(w http.ResponseWriter, r *http.Request) {
 		count = 0
 	}
 
-	data := RedirectsListData{
-		Redirects:  redirects,
+	viewData := adminviews.RedirectsListData{
+		Redirects:  convertRedirectListItems(redirects),
 		TotalCount: count,
 	}
 
-	h.renderer.RenderPage(w, r, "admin/redirects_list", render.TemplateData{
-		Title: i18n.T(lang, "nav.redirects"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.redirects"), URL: redirectAdminRedirects, Active: true},
-		},
-	})
-}
-
-// RedirectFormData holds data for the redirect form template.
-type RedirectFormData struct {
-	Redirect    *store.Redirect
-	StatusCodes []StatusCodeOption
-	TargetTypes []string
-	Errors      map[string]string
-	FormValues  map[string]string
-	IsEdit      bool
-}
-
-// StatusCodeOption represents a status code option for the form select.
-type StatusCodeOption struct {
-	Code  int
-	Label string
-}
-
-// ValidStatusCodes contains valid HTTP redirect status codes.
-var ValidStatusCodes = []StatusCodeOption{
-	{Code: 301, Label: "301 - Permanent Redirect"},
-	{Code: 302, Label: "302 - Temporary Redirect"},
-	{Code: 307, Label: "307 - Temporary Redirect (preserve method)"},
-	{Code: 308, Label: "308 - Permanent Redirect (preserve method)"},
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "nav.redirects"), redirectsBreadcrumbs(lang))
+	renderTempl(w, r, adminviews.RedirectsListPage(pc, viewData))
 }
 
 // NewForm handles GET /admin/redirects/new - displays the new redirect form.
 func (h *RedirectsHandler) NewForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	data := RedirectFormData{
-		StatusCodes: ValidStatusCodes,
+	viewData := adminviews.RedirectFormData{
+		StatusCodes: convertStatusCodes(ValidStatusCodes),
 		TargetTypes: model.ValidTargets,
 		Errors:      make(map[string]string),
 		FormValues: map[string]string{
@@ -123,16 +99,8 @@ func (h *RedirectsHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 		IsEdit: false,
 	}
 
-	h.renderer.RenderPage(w, r, "admin/redirects_form", render.TemplateData{
-		Title: i18n.T(lang, "redirects.new"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.redirects"), URL: redirectAdminRedirects},
-			{Label: i18n.T(lang, "redirects.new"), URL: redirectAdminRedirectsNew, Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "redirects.new"), redirectFormBreadcrumbs(lang, false))
+	renderTempl(w, r, adminviews.RedirectFormPage(pc, viewData))
 }
 
 // Create handles POST /admin/redirects - creates a new redirect.
@@ -141,7 +109,6 @@ func (h *RedirectsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminRedirectsNew) {
@@ -156,24 +123,16 @@ func (h *RedirectsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(input.Errors) > 0 {
-		data := RedirectFormData{
-			StatusCodes: ValidStatusCodes,
+		viewData := adminviews.RedirectFormData{
+			StatusCodes: convertStatusCodes(ValidStatusCodes),
 			TargetTypes: model.ValidTargets,
 			Errors:      input.Errors,
 			FormValues:  input.FormValues,
 			IsEdit:      false,
 		}
 
-		h.renderer.RenderPage(w, r, "admin/redirects_form", render.TemplateData{
-			Title: i18n.T(lang, "redirects.new"),
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-				{Label: i18n.T(lang, "nav.redirects"), URL: redirectAdminRedirects},
-				{Label: i18n.T(lang, "redirects.new"), URL: redirectAdminRedirectsNew, Active: true},
-			},
-		})
+		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "redirects.new"), redirectFormBreadcrumbs(lang, false))
+		renderTempl(w, r, adminviews.RedirectFormPage(pc, viewData))
 		return
 	}
 
@@ -202,7 +161,6 @@ func (h *RedirectsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // EditForm handles GET /admin/redirects/{id} - displays the redirect edit form.
 func (h *RedirectsHandler) EditForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -216,25 +174,17 @@ func (h *RedirectsHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := RedirectFormData{
-		Redirect:    &redirect,
-		StatusCodes: ValidStatusCodes,
+	viewData := adminviews.RedirectFormData{
+		Redirect:    convertRedirectInfo(&redirect),
+		StatusCodes: convertStatusCodes(ValidStatusCodes),
 		TargetTypes: model.ValidTargets,
 		Errors:      make(map[string]string),
 		FormValues:  make(map[string]string),
 		IsEdit:      true,
 	}
 
-	h.renderer.RenderPage(w, r, "admin/redirects_form", render.TemplateData{
-		Title: i18n.T(lang, "redirects.edit"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.redirects"), URL: redirectAdminRedirects},
-			{Label: redirect.SourcePath, URL: "", Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "redirects.edit"), redirectEditBreadcrumbs(lang, redirect.SourcePath, redirect.ID))
+	renderTempl(w, r, adminviews.RedirectFormPage(pc, viewData))
 }
 
 // Update handles PUT /admin/redirects/{id} - updates a redirect.
@@ -243,7 +193,6 @@ func (h *RedirectsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -271,25 +220,17 @@ func (h *RedirectsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(input.Errors) > 0 {
-		data := RedirectFormData{
-			Redirect:    &redirect,
-			StatusCodes: ValidStatusCodes,
+		viewData := adminviews.RedirectFormData{
+			Redirect:    convertRedirectInfo(&redirect),
+			StatusCodes: convertStatusCodes(ValidStatusCodes),
 			TargetTypes: model.ValidTargets,
 			Errors:      input.Errors,
 			FormValues:  input.FormValues,
 			IsEdit:      true,
 		}
 
-		h.renderer.RenderPage(w, r, "admin/redirects_form", render.TemplateData{
-			Title: i18n.T(lang, "redirects.edit"),
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-				{Label: i18n.T(lang, "nav.redirects"), URL: redirectAdminRedirects},
-				{Label: redirect.SourcePath, URL: "", Active: true},
-			},
-		})
+		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "redirects.edit"), redirectEditBreadcrumbs(lang, redirect.SourcePath, redirect.ID))
+		renderTempl(w, r, adminviews.RedirectFormPage(pc, viewData))
 		return
 	}
 
@@ -386,8 +327,18 @@ func (h *RedirectsHandler) Toggle(w http.ResponseWriter, r *http.Request) {
 	h.redirectsMiddleware.InvalidateCache()
 
 	if r.Header.Get("HX-Request") == "true" {
-		// Return 204 No Content so htmx doesn't swap (row stays visible)
-		w.WriteHeader(http.StatusNoContent)
+		// Render updated row for htmx swap
+		pc := buildPageContext(r, h.sessionManager, h.renderer, "", nil)
+		item := adminviews.RedirectListItem{
+			ID:         redirect.ID,
+			SourcePath: redirect.SourcePath,
+			TargetURL:  redirect.TargetUrl,
+			StatusCode: redirect.StatusCode,
+			IsWildcard: redirect.IsWildcard,
+			TargetType: redirect.TargetType,
+			Enabled:    newStatus,
+		}
+		renderTempl(w, r, adminviews.RedirectRow(pc, item))
 		return
 	}
 
