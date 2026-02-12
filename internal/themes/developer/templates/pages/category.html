@@ -53,7 +53,7 @@
                     {{if .Tags}}
                     <div class="dev-post-tags">
                         {{range .Tags}}
-                        <a href="/tag/{{.Slug}}" class="dev-tag">#{{.Name}}</a>
+                        <a href="{{$.LangPrefix}}/tag/{{.Slug}}" class="dev-tag">#{{.Name}}</a>
                         {{end}}
                     </div>
                     {{end}}
@@ -92,7 +92,7 @@
                 {{range .Subcategories}}
                 <li class="dev-subcategory-item">
                     <span class="dev-folder-icon">📁</span>
-                    <a href="/category/{{.Slug}}">{{.Name}}/</a>
+                    <a href="{{$.LangPrefix}}/category/{{.Slug}}">{{.Name}}/</a>
                     {{if .Count}}<span class="dev-count">({{.Count}})</span>{{end}}
                 </li>
                 {{end}}

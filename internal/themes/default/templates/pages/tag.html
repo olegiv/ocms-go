@@ -29,7 +29,7 @@
             <div class="post-content">
                 {{if .Category}}
                 <span class="post-category">
-                    <a href="/category/{{.Category.Slug}}">{{.Category.Name}}</a>
+                    <a href="{{$.LangPrefix}}/category/{{.Category.Slug}}">{{.Category.Name}}</a>
                 </span>
                 {{end}}
                 <h2 class="post-title">
@@ -66,7 +66,7 @@
         <h3>{{TTheme $.LangCode "frontend.related_tags"}}</h3>
         <div class="tag-cloud">
             {{range .RelatedTags}}
-            <a href="/tag/{{.Slug}}" class="tag">{{.Name}}</a>
+            <a href="{{$.LangPrefix}}/tag/{{.Slug}}" class="tag">{{.Name}}</a>
             {{end}}
         </div>
     </section>

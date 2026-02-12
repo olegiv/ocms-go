@@ -36,7 +36,7 @@
                 <div class="dev-post-content">
                     {{if .Category}}
                     <span class="dev-post-category">
-                        <a href="/category/{{.Category.Slug}}">{{.Category.Name}}</a>
+                        <a href="{{$.LangPrefix}}/category/{{.Category.Slug}}">{{.Category.Name}}</a>
                     </span>
                     {{end}}
                     <h2 class="dev-post-title">
@@ -88,7 +88,7 @@
             </h3>
             <div class="dev-tag-cloud">
                 {{range .RelatedTags}}
-                <a href="/tag/{{.Slug}}" class="dev-tag">#{{.Name}}</a>
+                <a href="{{$.LangPrefix}}/tag/{{.Slug}}" class="dev-tag">#{{.Name}}</a>
                 {{end}}
             </div>
         </section>

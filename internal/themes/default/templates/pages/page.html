@@ -36,7 +36,7 @@
         {{if .Page.Category}}
         <div class="page-category">
             <span class="label">{{TTheme $.LangCode "frontend.category_label"}}</span>
-            <a href="/category/{{.Page.Category.Slug}}">{{.Page.Category.Name}}</a>
+            <a href="{{$.LangPrefix}}/category/{{.Page.Category.Slug}}">{{.Page.Category.Name}}</a>
         </div>
         {{end}}
 
@@ -44,7 +44,7 @@
         <div class="page-tags">
             <span class="label">{{TTheme $.LangCode "frontend.tags_label"}}</span>
             {{range .Page.Tags}}
-            <a href="/tag/{{.Slug}}" class="tag">{{.Name}}</a>
+            <a href="{{$.LangPrefix}}/tag/{{.Slug}}" class="tag">{{.Name}}</a>
             {{end}}
         </div>
         {{end}}
