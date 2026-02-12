@@ -23,6 +23,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 	"github.com/olegiv/ocms-go/internal/webhook"
 )
 
@@ -87,20 +88,11 @@ func (h *UsersHandler) dispatchUserEvent(ctx context.Context, eventType string, 
 	}
 }
 
-// UsersListData holds data for the users list template.
-type UsersListData struct {
-	Users         []store.User
-	CurrentUserID int64
-	TotalUsers    int64
-	Pagination    AdminPagination
-}
-
 // List handles GET /admin/users - displays a paginated list of users.
 func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
-
 	page := ParsePageParam(r)
+	currentUserID := middleware.GetUserID(r)
 
 	// Get total user count
 	totalUsers, err := h.queries.CountUsers(r.Context())
@@ -123,31 +115,32 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := UsersListData{
-		Users:         users,
-		CurrentUserID: middleware.GetUserID(r),
-		TotalUsers:    totalUsers,
-		Pagination:    BuildAdminPagination(page, int(totalUsers), UsersPerPage, redirectAdminUsers, r.URL.Query()),
+	// Convert to view types
+	var viewUsers []adminviews.UserListItem
+	for _, u := range users {
+		item := adminviews.UserListItem{
+			ID:            u.ID,
+			Name:          u.Name,
+			Email:         u.Email,
+			Role:          u.Role,
+			CreatedAt:     u.CreatedAt,
+			IsCurrentUser: u.ID == currentUserID,
+		}
+		if u.LastLoginAt.Valid {
+			t := u.LastLoginAt.Time
+			item.LastLoginAt = &t
+		}
+		viewUsers = append(viewUsers, item)
 	}
 
-	h.renderer.RenderPage(w, r, "admin/users_list", render.TemplateData{
-		Title: i18n.T(lang, "nav.users"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.users"), URL: redirectAdminUsers, Active: true},
-		},
-	})
-}
+	viewData := adminviews.UsersListData{
+		Users:      viewUsers,
+		TotalCount: totalUsers,
+		Pagination: convertPagination(BuildAdminPagination(page, int(totalUsers), UsersPerPage, redirectAdminUsers, r.URL.Query())),
+	}
 
-// UserFormData holds data for the user form template.
-type UserFormData struct {
-	User       *store.User
-	Roles      []string
-	Errors     map[string]string
-	FormValues map[string]string
-	IsEdit     bool
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "nav.users"), usersBreadcrumbs(lang))
+	renderTempl(w, r, adminviews.UsersListPage(pc, viewData))
 }
 
 // NewForm handles GET /admin/users/new - displays the new user form.
@@ -157,14 +150,16 @@ func (h *UsersHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := UserFormData{
+	lang := h.renderer.GetAdminLang(r)
+	data := adminviews.UserFormData{
 		Roles:      ValidRoles,
 		Errors:     make(map[string]string),
 		FormValues: make(map[string]string),
 		IsEdit:     false,
 	}
 
-	h.renderNewUserForm(w, r, data)
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "users.new"), userFormBreadcrumbs(lang, false))
+	renderTempl(w, r, adminviews.UserFormPage(pc, data))
 }
 
 // Create handles POST /admin/users - creates a new user.
@@ -237,13 +232,15 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
-		data := UserFormData{
+		lang := h.renderer.GetAdminLang(r)
+		data := adminviews.UserFormData{
 			Roles:      ValidRoles,
 			Errors:     validationErrors,
 			FormValues: formValues,
 			IsEdit:     false,
 		}
-		h.renderNewUserForm(w, r, data)
+		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "users.new"), userFormBreadcrumbs(lang, false))
+		renderTempl(w, r, adminviews.UserFormPage(pc, data))
 		return
 	}
 
@@ -295,8 +292,13 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := UserFormData{
-		User:   &editUser,
+	data := adminviews.UserFormData{
+		User: &adminviews.UserItem{
+			ID:    editUser.ID,
+			Name:  editUser.Name,
+			Email: editUser.Email,
+			Role:  editUser.Role,
+		},
 		Roles:  ValidRoles,
 		Errors: make(map[string]string),
 		FormValues: map[string]string{
@@ -307,10 +309,8 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		IsEdit: true,
 	}
 
-	renderEntityEditPage(w, r, h.renderer, "admin/users_form",
-		i18n.T(lang, "users.edit"), data, lang,
-		"nav.users", redirectAdminUsers,
-		editUser.Name, fmt.Sprintf(redirectAdminUsersID, editUser.ID))
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "users.edit"), userEditBreadcrumbs(lang, editUser.Name, editUser.ID))
+	renderTempl(w, r, adminviews.UserFormPage(pc, data))
 }
 
 // Update handles PUT /admin/users/{id} - updates an existing user.
@@ -411,18 +411,21 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
-		data := UserFormData{
-			User:       &editUser,
+		data := adminviews.UserFormData{
+			User: &adminviews.UserItem{
+				ID:    editUser.ID,
+				Name:  editUser.Name,
+				Email: editUser.Email,
+				Role:  editUser.Role,
+			},
 			Roles:      ValidRoles,
 			Errors:     validationErrors,
 			FormValues: formValues,
 			IsEdit:     true,
 		}
 
-		renderEntityEditPage(w, r, h.renderer, "admin/users_form",
-			i18n.T(lang, "users.edit"), data, lang,
-			"nav.users", redirectAdminUsers,
-			editUser.Name, fmt.Sprintf(redirectAdminUsersID, id))
+		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "users.edit"), userEditBreadcrumbs(lang, editUser.Name, id))
+		renderTempl(w, r, adminviews.UserFormPage(pc, data))
 		return
 	}
 
@@ -567,21 +570,4 @@ func isValidRole(role string) bool {
 func (h *UsersHandler) requireUserWithRedirect(w http.ResponseWriter, r *http.Request, id int64) (store.User, bool) {
 	return requireEntityWithRedirect(w, r, h.renderer, redirectAdminUsers, "User", id,
 		func(id int64) (store.User, error) { return h.queries.GetUserByID(r.Context(), id) })
-}
-
-// renderNewUserForm renders the new user form with the given data.
-func (h *UsersHandler) renderNewUserForm(w http.ResponseWriter, r *http.Request, data UserFormData) {
-	user := middleware.GetUser(r)
-	lang := h.renderer.GetAdminLang(r)
-
-	h.renderer.RenderPage(w, r, "admin/users_form", render.TemplateData{
-		Title: i18n.T(lang, "users.new"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.users"), URL: redirectAdminUsers},
-			{Label: i18n.T(lang, "users.new"), URL: redirectAdminUsersNew, Active: true},
-		},
-	})
 }
