@@ -61,6 +61,13 @@
         <span class="badge">v{{.Version}}</span>
     </div>
 
+    {{if .DemoMode}}
+    <div class="card" style="background: #fff3cd; border-left: 4px solid #ffc107;">
+        <p style="margin: 0; color: #856404; font-size: 14px;">
+            <strong>Demo Mode:</strong> Bookmarks are read-only. Adding, editing, and deleting bookmarks is disabled.
+        </p>
+    </div>
+    {{else}}
     <div class="card">
         <h3 class="section-title">Add Bookmark</h3>
         <form method="POST" action="/admin/bookmarks">
@@ -89,6 +96,7 @@
             </div>
         </form>
     </div>
+    {{end}}
 
     {{if .Bookmarks}}
     <div class="card">
@@ -100,7 +108,7 @@
                     <th>Description</th>
                     <th>Fav</th>
                     <th>Created</th>
-                    <th></th>
+                    {{if not $.DemoMode}}<th></th>{{end}}
                 </tr>
             </thead>
             <tbody>
@@ -110,16 +118,24 @@
                     <td class="url-cell"><a href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{.URL}}</a></td>
                     <td class="muted">{{if .Description}}{{.Description}}{{else}}-{{end}}</td>
                     <td>
+                        {{if $.DemoMode}}
+                        <span class="btn-star {{if .IsFavorite}}active{{end}}" title="Read-only in demo mode">
+                            {{if .IsFavorite}}&#9733;{{else}}&#9734;{{end}}
+                        </span>
+                        {{else}}
                         <form method="POST" action="/admin/bookmarks/{{.ID}}/toggle" style="display:inline">
                             <button type="submit" class="btn-star {{if .IsFavorite}}active{{end}}" title="Toggle favorite">
                                 {{if .IsFavorite}}&#9733;{{else}}&#9734;{{end}}
                             </button>
                         </form>
+                        {{end}}
                     </td>
                     <td class="muted">{{.CreatedAtFormatted}}</td>
+                    {{if not $.DemoMode}}
                     <td class="actions">
                         <button type="button" class="btn btn-danger" onclick="deleteBookmark({{.ID}})">Delete</button>
                     </td>
+                    {{end}}
                 </tr>
                 {{end}}
             </tbody>
