@@ -40,7 +40,7 @@ Create a generic CMS called **Opossum CMS (oCMS)** in Go. This is a hobby projec
 
 | Component | Technology |
 |-----------|------------|
-| Language | Go 1.25+ (latest stable) |
+| Language | Go 1.26+ (latest stable) |
 | Router | chi |
 | Templates | html/template (stdlib) |
 | Database | SQLite (development), PostgreSQL (future production) |
