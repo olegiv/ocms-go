@@ -1,0 +1,62 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "name": "Starter",
+    "version": "1.0.0",
+    "author": "oCMS",
+    "description": "A clean, magazine-style starter theme with card-based layouts and warm typography",
+    "screenshot": "screenshot.svg",
+    "templates": {
+        "home": "pages/home.html",
+        "page": "pages/page.html",
+        "list": "pages/list.html",
+        "404": "pages/404.html",
+        "category": "pages/category.html",
+        "tag": "pages/tag.html",
+        "search": "pages/search.html"
+    },
+    "settings": [
+        {
+            "key": "favicon",
+            "label": "Favicon",
+            "type": "image",
+            "default": ""
+        },
+        {
+            "key": "accent_color",
+            "label": "Accent Color",
+            "type": "color",
+            "default": "#2d6a4f"
+        },
+        {
+            "key": "show_sidebar",
+            "label": "Show Sidebar",
+            "type": "select",
+            "default": "yes",
+            "options": ["yes", "no"]
+        },
+        {
+            "key": "hero_style",
+            "label": "Hero Style",
+            "type": "select",
+            "default": "gradient",
+            "options": ["gradient", "minimal", "none"]
+        }
+    ],
+    "widget_areas": [
+        {
+            "id": "sidebar",
+            "name": "Sidebar",
+            "description": "Widgets displayed in the sidebar"
+        },
+        {
+            "id": "footer-1",
+            "name": "Footer Column 1",
+            "description": "First footer widget area"
+        },
+        {
+            "id": "footer-2",
+            "name": "Footer Column 2",
+            "description": "Second footer widget area"
+        }
+    ]
+}

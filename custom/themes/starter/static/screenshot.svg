@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+  <defs>
+    <linearGradient id="hero-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2d6a4f"/>
+      <stop offset="100%" style="stop-color:#1b4332"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="400" height="300" fill="#fafaf8"/>
+
+  <!-- Header -->
+  <rect width="400" height="40" fill="#ffffff"/>
+  <line x1="0" y1="40" x2="400" y2="40" stroke="#e0ddd5" stroke-width="1"/>
+  <!-- Logo -->
+  <text x="20" y="26" font-family="Georgia, serif" font-size="14" font-weight="bold" fill="#2c2c2c">Starter</text>
+  <!-- Nav items -->
+  <rect x="160" y="14" width="30" height="8" rx="2" fill="#e0ddd5"/>
+  <rect x="200" y="14" width="30" height="8" rx="2" fill="#e0ddd5"/>
+  <rect x="240" y="14" width="30" height="8" rx="2" fill="#e0ddd5"/>
+
+  <!-- Hero Section -->
+  <rect x="15" y="50" width="370" height="80" rx="8" fill="url(#hero-bg)"/>
+  <text x="35" y="82" font-family="Georgia, serif" font-size="16" font-weight="bold" fill="white">Welcome to Starter</text>
+  <rect x="35" y="92" width="180" height="6" rx="2" fill="rgba(255,255,255,0.5)"/>
+  <rect x="35" y="106" width="70" height="14" rx="4" fill="rgba(255,255,255,0.3)"/>
+
+  <!-- Cards Grid -->
+  <!-- Card 1 -->
+  <rect x="15" y="145" width="178" height="140" rx="6" fill="#ffffff" stroke="#e0ddd5" stroke-width="1"/>
+  <rect x="15" y="145" width="178" height="60" rx="6" fill="#e0ddd5"/>
+  <rect x="15" y="199" width="178" height="1" fill="#e0ddd5"/>
+  <rect x="25" y="215" width="100" height="8" rx="2" fill="#2c2c2c"/>
+  <rect x="25" y="230" width="150" height="5" rx="1" fill="#e0ddd5"/>
+  <rect x="25" y="240" width="130" height="5" rx="1" fill="#e0ddd5"/>
+  <rect x="25" y="255" width="40" height="5" rx="1" fill="#999999"/>
+  <rect x="25" y="268" width="35" height="12" rx="2" fill="rgba(45,106,79,0.1)"/>
+  <text x="32" y="277" font-family="sans-serif" font-size="6" fill="#2d6a4f">Tag</text>
+
+  <!-- Card 2 -->
+  <rect x="207" y="145" width="178" height="140" rx="6" fill="#ffffff" stroke="#e0ddd5" stroke-width="1"/>
+  <rect x="207" y="145" width="178" height="60" rx="6" fill="#e0ddd5"/>
+  <rect x="207" y="199" width="178" height="1" fill="#e0ddd5"/>
+  <rect x="217" y="215" width="110" height="8" rx="2" fill="#2c2c2c"/>
+  <rect x="217" y="230" width="140" height="5" rx="1" fill="#e0ddd5"/>
+  <rect x="217" y="240" width="120" height="5" rx="1" fill="#e0ddd5"/>
+  <rect x="217" y="255" width="45" height="5" rx="1" fill="#999999"/>
+  <rect x="217" y="268" width="35" height="12" rx="2" fill="rgba(45,106,79,0.1)"/>
+  <text x="224" y="277" font-family="sans-serif" font-size="6" fill="#2d6a4f">Tag</text>
+</svg>

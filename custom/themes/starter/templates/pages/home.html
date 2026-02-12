@@ -1,0 +1,47 @@
+{{define "content"}}
+<div class="st-home">
+    {{/* Hero Section */}}
+    {{if .HeroEnabled}}
+    <section class="st-hero">
+        {{if .HeroImage}}
+        <div class="st-hero__bg">
+            <img src="{{.HeroImage}}" alt="{{if .HeroTitle}}{{.HeroTitle}}{{else}}{{.SiteName}}{{end}}">
+        </div>
+        {{end}}
+        <div class="st-hero__content">
+            <h1 class="st-hero__title">{{if .HeroTitle}}{{.HeroTitle}}{{else}}{{.SiteName}}{{end}}</h1>
+            {{if .HeroSubtitle}}<p class="st-hero__subtitle">{{.HeroSubtitle}}</p>{{end}}
+            {{if .HeroCTA}}
+            <a href="{{.HeroCTAURL}}" class="st-btn st-btn--primary">{{.HeroCTA}}</a>
+            {{end}}
+        </div>
+    </section>
+    {{end}}
+
+    {{/* Static Content */}}
+    {{if .Page}}
+    <section class="st-section">
+        <div class="st-prose">
+            {{.Page.Body}}
+        </div>
+    </section>
+    {{end}}
+
+    {{/* Recent Posts Grid */}}
+    {{if .RecentPages}}
+    <section class="st-section">
+        <h2 class="st-section__title">{{TTheme $.LangCode "frontend.recent_posts"}}</h2>
+        <div class="st-grid">
+            {{range .RecentPages}}
+            {{template "post-card.html" .}}
+            {{end}}
+        </div>
+        {{if .ShowAllPostsLink}}
+        <div class="st-section__footer">
+            <a href="{{.LangPrefix}}/blog" class="st-btn st-btn--outline">{{TTheme $.LangCode "frontend.view_all_posts"}}</a>
+        </div>
+        {{end}}
+    </section>
+    {{end}}
+</div>
+{{end}}

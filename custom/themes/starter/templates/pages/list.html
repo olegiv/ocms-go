@@ -1,0 +1,25 @@
+{{define "content"}}
+<div class="st-archive">
+    <header class="st-archive__header">
+        <h1 class="st-archive__title">{{if .Title}}{{.Title}}{{else}}{{TTheme $.LangCode "frontend.all_posts"}}{{end}}</h1>
+        {{if .Description}}
+        <p class="st-archive__desc">{{.Description}}</p>
+        {{end}}
+    </header>
+
+    {{if .Pages}}
+    <div class="st-posts">
+        {{range .Pages}}
+        {{template "post-card.html" .}}
+        {{end}}
+    </div>
+
+    {{template "pagination.html" .}}
+
+    {{else}}
+    <div class="st-empty">
+        <p>{{TTheme $.LangCode "frontend.no_posts"}}</p>
+    </div>
+    {{end}}
+</div>
+{{end}}
