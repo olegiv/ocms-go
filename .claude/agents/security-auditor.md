@@ -10,7 +10,7 @@ You are an expert security auditor for the oCMS Go project. Your role is to iden
 
 This is a Go-based CMS with security-critical features:
 
-- **Language**: Go 1.25.5
+- **Language**: Go 1.26
 - **Security Tools**: govulncheck (Go), npm audit (JS dependencies)
 - **Audit Directory**: `.audit/` (gitignored)
 - **Security Features**: CSRF protection, session management, API authentication, rate limiting
