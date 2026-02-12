@@ -12,6 +12,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
@@ -497,4 +498,89 @@ func convertMenuInfo(menu *store.Menu) *adminviews.MenuInfo {
 		Slug:         menu.Slug,
 		LanguageCode: menu.LanguageCode,
 	}
+}
+
+// =============================================================================
+// LANGUAGES HELPERS
+// =============================================================================
+
+// languagesBreadcrumbs returns breadcrumbs for the languages list page.
+func languagesBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.languages"), URL: redirectAdminLanguages, Active: true},
+	}
+}
+
+// languageFormBreadcrumbs returns breadcrumbs for the language form page.
+func languageFormBreadcrumbs(lang string, isEdit bool) []render.Breadcrumb {
+	label := i18n.T(lang, "languages.new")
+	if isEdit {
+		label = i18n.T(lang, "languages.edit")
+	}
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.languages"), URL: redirectAdminLanguages},
+		{Label: label, Active: true},
+	}
+}
+
+// languageEditBreadcrumbs returns breadcrumbs for the language edit form with entity name.
+func languageEditBreadcrumbs(lang string, langName string, langID int64) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.languages"), URL: redirectAdminLanguages},
+		{Label: langName, URL: fmt.Sprintf(redirectAdminLanguagesID, langID), Active: true},
+	}
+}
+
+// convertLanguageListItems converts store languages to view LanguageListItem slice.
+func convertLanguageListItems(languages []store.Language) []adminviews.LanguageListItem {
+	items := make([]adminviews.LanguageListItem, len(languages))
+	for i, l := range languages {
+		items[i] = adminviews.LanguageListItem{
+			ID:         l.ID,
+			Code:       l.Code,
+			Name:       l.Name,
+			NativeName: l.NativeName,
+			Direction:  l.Direction,
+			IsDefault:  l.IsDefault,
+			IsActive:   l.IsActive,
+			Position:   l.Position,
+		}
+	}
+	return items
+}
+
+// convertLanguageInfo converts a store.Language pointer to a view LanguageInfo pointer.
+func convertLanguageInfo(lang *store.Language) *adminviews.LanguageInfo {
+	if lang == nil {
+		return nil
+	}
+	return &adminviews.LanguageInfo{
+		ID:         lang.ID,
+		Code:       lang.Code,
+		Name:       lang.Name,
+		NativeName: lang.NativeName,
+		Direction:  lang.Direction,
+		IsDefault:  lang.IsDefault,
+		IsActive:   lang.IsActive,
+		Position:   lang.Position,
+		CreatedAt:  lang.CreatedAt,
+		UpdatedAt:  lang.UpdatedAt,
+	}
+}
+
+// convertCommonLanguages converts model CommonLanguages to view CommonLanguageOption slice.
+func convertCommonLanguages() []adminviews.CommonLanguageOption {
+	opts := make([]adminviews.CommonLanguageOption, len(model.CommonLanguages))
+	for i, cl := range model.CommonLanguages {
+		opts[i] = adminviews.CommonLanguageOption{
+			Code:       cl.Code,
+			Name:       cl.Name,
+			NativeName: cl.NativeName,
+			Direction:  cl.Direction,
+		}
+	}
+	return opts
 }
