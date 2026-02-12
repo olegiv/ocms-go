@@ -11,6 +11,116 @@
             "id": "frontend.all_posts",
             "message": "All Posts",
             "translation": "Все публикации"
+        },
+        {
+            "id": "frontend.recent_posts",
+            "message": "Recent Posts",
+            "translation": "Последние публикации"
+        },
+        {
+            "id": "frontend.view_all_posts",
+            "message": "View All Posts",
+            "translation": "Смотреть все публикации"
+        },
+        {
+            "id": "frontend.page_not_found",
+            "message": "Page Not Found",
+            "translation": "Страница не найдена"
+        },
+        {
+            "id": "frontend.page_not_found_message",
+            "message": "The page you are looking for might have been moved or doesn't exist.",
+            "translation": "Страница, которую вы ищете, могла быть перемещена или удалена."
+        },
+        {
+            "id": "frontend.go_home",
+            "message": "Go Home",
+            "translation": "На главную"
+        },
+        {
+            "id": "frontend.related_posts",
+            "message": "Related Posts",
+            "translation": "Вам также может понравиться"
+        },
+        {
+            "id": "frontend.by_author",
+            "message": "By",
+            "translation": "Автор:"
+        },
+        {
+            "id": "frontend.min_read",
+            "message": "min read",
+            "translation": "мин. чтения"
+        },
+        {
+            "id": "frontend.category_label",
+            "message": "Category",
+            "translation": "Рубрика"
+        },
+        {
+            "id": "frontend.tags_label",
+            "message": "Tags",
+            "translation": "Метки"
+        },
+        {
+            "id": "frontend.no_posts",
+            "message": "No posts found.",
+            "translation": "Публикации пока отсутствуют."
+        },
+        {
+            "id": "frontend.no_posts_category",
+            "message": "No posts in this category.",
+            "translation": "В этой рубрике пока нет публикаций."
+        },
+        {
+            "id": "frontend.no_posts_tag",
+            "message": "No posts with this tag.",
+            "translation": "По этой метке публикаций пока нет."
+        },
+        {
+            "id": "frontend.all_rights_reserved",
+            "message": "All rights reserved.",
+            "translation": "Все права защищены."
+        },
+        {
+            "id": "search.title",
+            "message": "Search",
+            "translation": "Поиск по сайту"
+        },
+        {
+            "id": "search.placeholder",
+            "message": "Search...",
+            "translation": "Поиск статей, тем и другого..."
+        },
+        {
+            "id": "search.button",
+            "message": "Search",
+            "translation": "Найти"
+        },
+        {
+            "id": "search.no_results",
+            "message": "No results found for",
+            "translation": "По запросу ничего не найдено:"
+        },
+        {
+            "id": "search.intro",
+            "message": "Enter a search term to find content.",
+            "translation": "Воспользуйтесь полем выше для поиска статей и страниц."
+        },
+        {
+            "id": "sidebar.categories",
+            "message": "Categories",
+            "translation": "Рубрики"
+        },
+        {
+            "id": "sidebar.tags",
+            "message": "Tags",
+            "translation": "Популярные метки"
+        },
+        {
+            "id": "sidebar.recent_posts",
+            "message": "Recent Posts",
+            "translation": "Последние публикации"
         }
     ]
 }
