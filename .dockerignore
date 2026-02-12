@@ -61,11 +61,12 @@ Dockerfile*
 docker-compose*.yml
 .dockerignore
 
-# Custom content (mounted as volume)
+# Custom themes (loaded from filesystem at runtime)
 custom/themes/*
-custom/modules/*
 !custom/themes/.gitkeep
-!custom/modules/.gitkeep
+
+# Custom modules are compiled into the binary, so they
+# must remain in the build context (not excluded here).
 
 # Development scripts
 scripts/
