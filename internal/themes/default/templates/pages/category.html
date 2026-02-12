@@ -44,7 +44,7 @@
                 {{if .Tags}}
                 <div class="post-tags">
                     {{range .Tags}}
-                    <a href="/tag/{{.Slug}}" class="tag">{{.Name}}</a>
+                    <a href="{{$.LangPrefix}}/tag/{{.Slug}}" class="tag">{{.Name}}</a>
                     {{end}}
                 </div>
                 {{end}}
@@ -69,7 +69,7 @@
         <ul class="subcategory-list">
             {{range .Subcategories}}
             <li>
-                <a href="/category/{{.Slug}}">{{.Name}}</a>
+                <a href="{{$.LangPrefix}}/category/{{.Slug}}">{{.Name}}</a>
                 {{if .Count}}<span class="count">({{.Count}})</span>{{end}}
             </li>
             {{end}}

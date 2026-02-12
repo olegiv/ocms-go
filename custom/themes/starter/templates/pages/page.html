@@ -51,14 +51,14 @@
         {{if .Page.Category}}
         <div class="st-article__category">
             <span class="st-label">{{TTheme $.LangCode "frontend.category_label"}}</span>
-            <a href="/category/{{.Page.Category.Slug}}">{{.Page.Category.Name}}</a>
+            <a href="{{$.LangPrefix}}/category/{{.Page.Category.Slug}}">{{.Page.Category.Name}}</a>
         </div>
         {{end}}
         {{if .Page.Tags}}
         <div class="st-article__tags">
             <span class="st-label">{{TTheme $.LangCode "frontend.tags_label"}}</span>
             {{range .Page.Tags}}
-            <a href="/tag/{{.Slug}}" class="st-tag">{{.Name}}</a>
+            <a href="{{$.LangPrefix}}/tag/{{.Slug}}" class="st-tag">{{.Name}}</a>
             {{end}}
         </div>
         {{end}}

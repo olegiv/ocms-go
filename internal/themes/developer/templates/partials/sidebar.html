@@ -8,7 +8,7 @@
         <ul class="dev-category-list">
             {{range .Categories}}
             <li class="dev-category-item">
-                <a href="/category/{{.Slug}}" class="dev-category-link">
+                <a href="{{$.LangPrefix}}/category/{{.Slug}}" class="dev-category-link">
                     <span class="dev-arrow">&gt;</span> {{.Name}}
                     {{if .PageCount}}<span class="dev-count">({{.PageCount}})</span>{{end}}
                 </a>
@@ -25,7 +25,7 @@
         </h3>
         <div class="dev-tag-cloud">
             {{range .Tags}}
-            <a href="/tag/{{.Slug}}" class="dev-tag">
+            <a href="{{$.LangPrefix}}/tag/{{.Slug}}" class="dev-tag">
                 #{{.Name}}
             </a>
             {{end}}

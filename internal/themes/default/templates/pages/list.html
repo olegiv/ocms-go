@@ -25,7 +25,7 @@
             <div class="post-content">
                 {{if .Category}}
                 <span class="post-category">
-                    <a href="/category/{{.Category.Slug}}">{{.Category.Name}}</a>
+                    <a href="{{$.LangPrefix}}/category/{{.Category.Slug}}">{{.Category.Name}}</a>
                 </span>
                 {{end}}
                 <h2 class="post-title">
@@ -48,7 +48,7 @@
                 {{if .Tags}}
                 <div class="post-tags">
                     {{range .Tags}}
-                    <a href="/tag/{{.Slug}}" class="tag">{{.Name}}</a>
+                    <a href="{{$.LangPrefix}}/tag/{{.Slug}}" class="tag">{{.Name}}</a>
                     {{end}}
                 </div>
                 {{end}}
