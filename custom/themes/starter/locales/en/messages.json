@@ -11,6 +11,116 @@
             "id": "frontend.all_posts",
             "message": "All Posts",
             "translation": "All Articles"
+        },
+        {
+            "id": "frontend.recent_posts",
+            "message": "Recent Posts",
+            "translation": "Latest Articles"
+        },
+        {
+            "id": "frontend.view_all_posts",
+            "message": "View All Posts",
+            "translation": "Browse All Articles"
+        },
+        {
+            "id": "frontend.page_not_found",
+            "message": "Page Not Found",
+            "translation": "Oops! Page Not Found"
+        },
+        {
+            "id": "frontend.page_not_found_message",
+            "message": "The page you are looking for might have been moved or doesn't exist.",
+            "translation": "The page you were looking for doesn't seem to exist. It may have been moved or deleted."
+        },
+        {
+            "id": "frontend.go_home",
+            "message": "Go Home",
+            "translation": "Back to Home"
+        },
+        {
+            "id": "frontend.related_posts",
+            "message": "Related Posts",
+            "translation": "You May Also Like"
+        },
+        {
+            "id": "frontend.by_author",
+            "message": "By",
+            "translation": "Written by"
+        },
+        {
+            "id": "frontend.min_read",
+            "message": "min read",
+            "translation": "min read"
+        },
+        {
+            "id": "frontend.category_label",
+            "message": "Category",
+            "translation": "Filed under"
+        },
+        {
+            "id": "frontend.tags_label",
+            "message": "Tags",
+            "translation": "Tagged with"
+        },
+        {
+            "id": "frontend.no_posts",
+            "message": "No posts found.",
+            "translation": "No articles have been published yet."
+        },
+        {
+            "id": "frontend.no_posts_category",
+            "message": "No posts in this category.",
+            "translation": "No articles in this category yet."
+        },
+        {
+            "id": "frontend.no_posts_tag",
+            "message": "No posts with this tag.",
+            "translation": "No articles with this tag yet."
+        },
+        {
+            "id": "frontend.all_rights_reserved",
+            "message": "All rights reserved.",
+            "translation": "All rights reserved."
+        },
+        {
+            "id": "search.title",
+            "message": "Search",
+            "translation": "Search Articles"
+        },
+        {
+            "id": "search.placeholder",
+            "message": "Search...",
+            "translation": "Search articles, topics, and more..."
+        },
+        {
+            "id": "search.button",
+            "message": "Search",
+            "translation": "Search"
+        },
+        {
+            "id": "search.no_results",
+            "message": "No results found for",
+            "translation": "We couldn't find any results for"
+        },
+        {
+            "id": "search.intro",
+            "message": "Enter a search term to find content.",
+            "translation": "Use the search box above to find articles and pages."
+        },
+        {
+            "id": "sidebar.categories",
+            "message": "Categories",
+            "translation": "Browse by Category"
+        },
+        {
+            "id": "sidebar.tags",
+            "message": "Tags",
+            "translation": "Popular Tags"
+        },
+        {
+            "id": "sidebar.recent_posts",
+            "message": "Recent Posts",
+            "translation": "Latest Articles"
         }
     ]
 }
