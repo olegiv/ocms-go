@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/olegiv/ocms-go/internal/middleware"
 )
 
 // Bookmark represents a saved bookmark.
@@ -31,6 +33,7 @@ type Bookmark struct {
 type adminPageData struct {
 	Bookmarks []Bookmark
 	Version   string
+	DemoMode  bool
 }
 
 // handlePublicList handles GET /bookmarks - public route returning JSON.
@@ -68,6 +71,7 @@ func (m *Module) handleAdminList(w http.ResponseWriter, _ *http.Request) {
 	if err := m.adminTmpl.Execute(w, adminPageData{
 		Bookmarks: items,
 		Version:   m.Version(),
+		DemoMode:  middleware.IsDemoMode(),
 	}); err != nil {
 		m.ctx.Logger.Error("failed to render admin template", "error", err)
 	}
@@ -75,6 +79,11 @@ func (m *Module) handleAdminList(w http.ResponseWriter, _ *http.Request) {
 
 // handleCreate handles POST /admin/bookmarks - creates a new bookmark.
 func (m *Module) handleCreate(w http.ResponseWriter, r *http.Request) {
+	if middleware.IsDemoMode() {
+		http.Error(w, middleware.DemoModeMessageDetailed(middleware.RestrictionContentReadOnly), http.StatusForbidden)
+		return
+	}
+
 	title := strings.TrimSpace(r.FormValue("title"))
 	bookmarkURL := strings.TrimSpace(r.FormValue("url"))
 	description := strings.TrimSpace(r.FormValue("description"))
@@ -107,6 +116,11 @@ func (m *Module) handleCreate(w http.ResponseWriter, r *http.Request) {
 
 // handleToggleFavorite handles POST /admin/bookmarks/{id}/toggle.
 func (m *Module) handleToggleFavorite(w http.ResponseWriter, r *http.Request) {
+	if middleware.IsDemoMode() {
+		http.Error(w, middleware.DemoModeMessageDetailed(middleware.RestrictionContentReadOnly), http.StatusForbidden)
+		return
+	}
+
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
@@ -128,6 +142,11 @@ func (m *Module) handleToggleFavorite(w http.ResponseWriter, r *http.Request) {
 
 // handleDelete handles DELETE /admin/bookmarks/{id}.
 func (m *Module) handleDelete(w http.ResponseWriter, r *http.Request) {
+	if middleware.IsDemoMode() {
+		http.Error(w, middleware.DemoModeMessageDetailed(middleware.RestrictionContentReadOnly), http.StatusForbidden)
+		return
+	}
+
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
