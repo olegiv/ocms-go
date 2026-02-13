@@ -1705,6 +1705,213 @@ func convertMediaUploadViewData(data UploadFormData, lang string) adminviews.Med
 	}
 }
 
+// =============================================================================
+// Forms helpers
+// =============================================================================
+
+// formsListBreadcrumbs returns breadcrumbs for the forms list page.
+func formsListBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.forms"), URL: redirectAdminForms, Active: true},
+	}
+}
+
+// formsNewBreadcrumbs returns breadcrumbs for the new form page.
+func formsNewBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.forms"), URL: redirectAdminForms},
+		{Label: i18n.T(lang, "forms.new"), URL: redirectAdminFormsNew, Active: true},
+	}
+}
+
+// formsEditBreadcrumbs returns breadcrumbs for the form edit page.
+func formsEditBreadcrumbs(lang string, formName string, formID int64) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.forms"), URL: redirectAdminForms},
+		{Label: formName, URL: fmt.Sprintf(redirectAdminFormsID, formID), Active: true},
+	}
+}
+
+// formsSubmissionsBreadcrumbs returns breadcrumbs for the submissions list page.
+func formsSubmissionsBreadcrumbs(lang string, formName string, formID int64) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.forms"), URL: redirectAdminForms},
+		{Label: formName, URL: fmt.Sprintf(redirectAdminFormsID, formID)},
+		{Label: i18n.T(lang, "forms.submissions"), URL: fmt.Sprintf(redirectAdminFormsIDSubmissions, formID), Active: true},
+	}
+}
+
+// formsSubmissionViewBreadcrumbs returns breadcrumbs for viewing a single submission.
+func formsSubmissionViewBreadcrumbs(lang string, formName string, formID int64, subID int64) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.forms"), URL: redirectAdminForms},
+		{Label: formName, URL: fmt.Sprintf(redirectAdminFormsID, formID)},
+		{Label: i18n.T(lang, "forms.submissions"), URL: fmt.Sprintf(redirectAdminFormsIDSubmissions, formID)},
+		{Label: fmt.Sprintf("#%d", subID), URL: fmt.Sprintf("/admin/forms/%d/submissions/%d", formID, subID), Active: true},
+	}
+}
+
+// convertFormsListViewData converts handler FormsListData to view FormsListViewData.
+func convertFormsListViewData(data FormsListData) adminviews.FormsListViewData {
+	items := make([]adminviews.FormListItemView, len(data.Forms))
+	for i, f := range data.Forms {
+		items[i] = adminviews.FormListItemView{
+			ID:              f.Form.ID,
+			Name:            f.Form.Name,
+			Title:           f.Form.Title,
+			Slug:            f.Form.Slug,
+			LanguageCode:    f.Form.LanguageCode,
+			IsActive:        f.Form.IsActive,
+			SubmissionCount: f.SubmissionCount,
+			UnreadCount:     f.UnreadCount,
+		}
+	}
+	return adminviews.FormsListViewData{Forms: items}
+}
+
+// convertFormFields converts store FormField slice to view FormFieldView slice.
+func convertFormFields(fields []store.FormField) []adminviews.FormFieldView {
+	result := make([]adminviews.FormFieldView, len(fields))
+	for i, f := range fields {
+		result[i] = adminviews.FormFieldView{
+			ID:          f.ID,
+			Type:        f.Type,
+			Name:        f.Name,
+			Label:       f.Label,
+			Placeholder: f.Placeholder.String,
+			HelpText:    f.HelpText.String,
+			Options:     f.Options.String,
+			Validation:  f.Validation.String,
+			IsRequired:  f.IsRequired,
+		}
+	}
+	return result
+}
+
+// convertFormFormViewData converts handler FormFormData to view FormFormViewData.
+func convertFormFormViewData(data FormFormData, renderer *render.Renderer) adminviews.FormFormViewData {
+	viewData := adminviews.FormFormViewData{
+		IsEdit:               data.IsEdit,
+		FieldTypes:           data.FieldTypes,
+		Errors:               data.Errors,
+		FormValues:           data.FormValues,
+		HasMultipleLanguages: len(data.AllLanguages) > 1,
+		AllLanguages:         convertLanguageOptions(data.AllLanguages),
+		Language:             convertLanguageOptionPtr(data.Language),
+		HcaptchaEnabled:      renderer.HcaptchaEnabled(),
+		IsDemoMode:           middleware.IsDemoMode(),
+	}
+
+	if data.Form != nil {
+		viewData.FormID = data.Form.ID
+		viewData.FormName = data.Form.Name
+		viewData.FormSlug = data.Form.Slug
+		viewData.FormTitle = data.Form.Title
+		viewData.FormDescription = data.Form.Description.String
+		viewData.SuccessMessage = data.Form.SuccessMessage.String
+		viewData.EmailTo = data.Form.EmailTo.String
+		viewData.IsActive = data.Form.IsActive
+		viewData.LanguageCode = data.Form.LanguageCode
+	}
+
+	// Fields
+	viewData.Fields = convertFormFields(data.Fields)
+	fieldsJSON, err := json.Marshal(viewData.Fields)
+	if err != nil {
+		viewData.FieldsJSON = "[]"
+	} else {
+		viewData.FieldsJSON = string(fieldsJSON)
+	}
+
+	// Field types JSON
+	typesJSON, err := json.Marshal(data.FieldTypes)
+	if err != nil {
+		viewData.FieldTypesJSON = "[]"
+	} else {
+		viewData.FieldTypesJSON = string(typesJSON)
+	}
+
+	// Translations
+	for _, tr := range data.Translations {
+		viewData.Translations = append(viewData.Translations, adminviews.FormTranslationInfoView{
+			LanguageCode: tr.Language.Code,
+			LanguageName: tr.Language.Name,
+			FormID:       tr.Form.ID,
+			FormName:     tr.Form.Name,
+		})
+	}
+
+	// Missing languages
+	for _, l := range data.MissingLanguages {
+		viewData.MissingLanguages = append(viewData.MissingLanguages, convertLanguageOption(l))
+	}
+
+	return viewData
+}
+
+// convertSubmissionsListViewData converts handler SubmissionsListData to view SubmissionsListViewData.
+func convertSubmissionsListViewData(data SubmissionsListData, renderer *render.Renderer, lang string) adminviews.SubmissionsListViewData {
+	subs := make([]adminviews.SubmissionItemView, len(data.Submissions))
+	for i, s := range data.Submissions {
+		subs[i] = adminviews.SubmissionItemView{
+			ID:        s.Submission.ID,
+			Preview:   s.Preview,
+			CreatedAt: renderer.FormatDateTimeLocale(s.Submission.CreatedAt, lang),
+			IPAddress: s.Submission.IpAddress.String,
+			IsRead:    s.Submission.IsRead,
+		}
+	}
+
+	return adminviews.SubmissionsListViewData{
+		FormID:      data.Form.ID,
+		FormName:    data.Form.Name,
+		FormSlug:    data.Form.Slug,
+		TotalCount:  data.TotalCount,
+		UnreadCount: data.UnreadCount,
+		Submissions: subs,
+		Pagination:  convertPagination(data.Pagination),
+		IsDemoMode:  middleware.IsDemoMode(),
+	}
+}
+
+// convertSubmissionViewViewData converts handler SubmissionViewData to view SubmissionViewViewData.
+func convertSubmissionViewViewData(data SubmissionViewData, renderer *render.Renderer, lang string) adminviews.SubmissionViewViewData {
+	var fields []adminviews.SubmissionFieldView
+	for _, f := range data.Fields {
+		val := ""
+		if v, ok := data.Data[f.Name]; ok {
+			val = fmt.Sprintf("%v", v)
+		}
+		fields = append(fields, adminviews.SubmissionFieldView{
+			Label: f.Label,
+			Name:  f.Name,
+			Type:  f.Type,
+			Value: val,
+		})
+	}
+
+	rawJSON, err := json.MarshalIndent(data.Data, "", "  ")
+	if err != nil {
+		rawJSON = []byte("{}")
+	}
+
+	return adminviews.SubmissionViewViewData{
+		FormID:       data.Form.ID,
+		FormName:     data.Form.Name,
+		SubmissionID: data.Submission.ID,
+		CreatedAt:    renderer.FormatDateTimeLocale(data.Submission.CreatedAt, lang),
+		IPAddress:    data.Submission.IpAddress.String,
+		UserAgent:    data.Submission.UserAgent.String,
+		Fields:       fields,
+		RawJSON:      string(rawJSON),
+	}
+}
+
 // convertMediaEditViewData converts handler data to view data for the media edit page.
 func convertMediaEditViewData(data MediaEditData, renderer *render.Renderer, lang string) adminviews.MediaEditViewData {
 	media := adminviews.MediaItemView{
