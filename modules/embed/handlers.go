@@ -27,7 +27,6 @@ type ProviderListItem struct {
 
 // handleList handles GET /admin/embed - shows the list of embed providers.
 func (m *Module) handleList(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := m.ctx.Render.GetAdminLang(r)
 
 	// Load settings for all providers
@@ -62,27 +61,21 @@ func (m *Module) handleList(w http.ResponseWriter, r *http.Request) {
 		providerList = append(providerList, item)
 	}
 
-	if err := m.ctx.Render.Render(w, r, "admin/module_embed_list", render.TemplateData{
-		Title: i18n.T(lang, "embed.title"),
-		User:  user,
-		Data: map[string]any{
-			"Providers": providerList,
-		},
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
-			{Label: i18n.T(lang, "embed.title"), URL: "/admin/embed", Active: true},
-		},
-	}); err != nil {
-		m.ctx.Logger.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	viewData := EmbedListViewData{
+		Providers: providerList,
 	}
+
+	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "embed.title"), []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
+		{Label: i18n.T(lang, "embed.title"), URL: "/admin/embed", Active: true},
+	})
+	render.RenderTempl(w, r, EmbedListPage(pc, viewData))
 }
 
 // handleProviderSettings handles GET /admin/embed/{provider} - shows provider settings.
 func (m *Module) handleProviderSettings(w http.ResponseWriter, r *http.Request) {
 	providerID := chi.URLParam(r, "provider")
-	user := middleware.GetUser(r)
 	lang := m.ctx.Render.GetAdminLang(r)
 
 	// Find provider
@@ -111,25 +104,21 @@ func (m *Module) handleProviderSettings(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	if err := m.ctx.Render.Render(w, r, "admin/module_embed_provider", render.TemplateData{
-		Title: provider.Name(),
-		User:  user,
-		Data: map[string]any{
-			"Provider":  provider,
-			"Schema":    schema,
-			"Settings":  ps,
-			"IsEnabled": ps.IsEnabled,
-		},
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
-			{Label: i18n.T(lang, "embed.title"), URL: "/admin/embed"},
-			{Label: provider.Name(), URL: "/admin/embed/" + providerID, Active: true},
-		},
-	}); err != nil {
-		m.ctx.Logger.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	viewData := EmbedProviderViewData{
+		ProviderID:   provider.ID(),
+		ProviderName: provider.Name(),
+		ProviderDesc: provider.Description(),
+		IsEnabled:    ps.IsEnabled,
+		Schema:       schema,
 	}
+
+	pc := m.ctx.Render.BuildPageContext(r, provider.Name(), []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
+		{Label: i18n.T(lang, "embed.title"), URL: "/admin/embed"},
+		{Label: provider.Name(), URL: "/admin/embed/" + providerID, Active: true},
+	})
+	render.RenderTempl(w, r, EmbedProviderPage(pc, viewData))
 }
 
 // handleSaveProviderSettings handles POST /admin/embed/{provider} - saves provider settings.

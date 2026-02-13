@@ -18,41 +18,30 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
-// ListSourcesData contains data for the source list template.
-type ListSourcesData struct {
-	Sources []Source
-}
-
-// SourceFormData contains data for the source form template.
-type SourceFormData struct {
-	Source         Source
-	ConfigFields   []ConfigField
-	Config         map[string]string
-	ImportedCounts map[string]int // Counts of imported items by entity type
-}
-
 // handleListSources handles GET /admin/migrator - displays available sources.
 func (m *Module) handleListSources(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := m.ctx.Render.GetAdminLang(r)
 
-	data := ListSourcesData{
-		Sources: ListSources(),
+	sources := ListSources()
+	var viewSources []MigratorSourceView
+	for _, src := range sources {
+		viewSources = append(viewSources, MigratorSourceView{
+			Name:        src.Name(),
+			DisplayName: src.DisplayName(),
+			Description: src.Description(),
+		})
 	}
 
-	if err := m.ctx.Render.Render(w, r, "admin/module_migrator_list", render.TemplateData{
-		Title: i18n.T(lang, "migrator.title"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
-			{Label: i18n.T(lang, "migrator.title"), URL: "/admin/migrator", Active: true},
-		},
-	}); err != nil {
-		m.ctx.Logger.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	viewData := MigratorListViewData{
+		Sources: viewSources,
 	}
+
+	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "migrator.title"), []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
+		{Label: i18n.T(lang, "migrator.title"), URL: "/admin/migrator", Active: true},
+	})
+	render.RenderTempl(w, r, MigratorListPage(pc, viewData))
 }
 
 // sessionKeyMigratorConfig is the session key for storing migrator config between requests.
@@ -60,7 +49,6 @@ const sessionKeyMigratorConfig = "migrator_config"
 
 // handleSourceForm handles GET /admin/migrator/{source} - displays source import form.
 func (m *Module) handleSourceForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := m.ctx.Render.GetAdminLang(r)
 	sourceName := chi.URLParam(r, "source")
 
@@ -74,39 +62,33 @@ func (m *Module) handleSourceForm(w http.ResponseWriter, r *http.Request) {
 	// Get imported item counts for this source
 	importedCounts, _ := m.getImportedCounts(r.Context(), sourceName)
 
-	data := SourceFormData{
-		Source:         source,
-		ConfigFields:   source.ConfigFields(),
-		Config:         make(map[string]string),
-		ImportedCounts: importedCounts,
-	}
-
-	// Try to restore config from session (after failed test/import)
+	config := make(map[string]string)
 	if savedConfig := m.ctx.Render.PopSessionData(r, sessionKeyMigratorConfig); savedConfig != nil {
-		data.Config = savedConfig
+		config = savedConfig
 	} else {
-		// Set default values only if no saved config
-		for _, field := range data.ConfigFields {
+		for _, field := range source.ConfigFields() {
 			if field.Default != "" {
-				data.Config[field.Name] = field.Default
+				config[field.Name] = field.Default
 			}
 		}
 	}
 
-	if err := m.ctx.Render.Render(w, r, "admin/module_migrator_source", render.TemplateData{
-		Title: i18n.T(lang, "migrator.import_from", source.DisplayName()),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
-			{Label: i18n.T(lang, "migrator.title"), URL: "/admin/migrator"},
-			{Label: source.DisplayName(), URL: "/admin/migrator/" + sourceName, Active: true},
-		},
-	}); err != nil {
-		m.ctx.Logger.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	viewData := MigratorSourceFormViewData{
+		SourceName:     sourceName,
+		DisplayName:    source.DisplayName(),
+		Description:    source.Description(),
+		ConfigFields:   source.ConfigFields(),
+		Config:         config,
+		ImportedCounts: importedCounts,
 	}
+
+	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "migrator.import_from", source.DisplayName()), []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
+		{Label: i18n.T(lang, "migrator.title"), URL: "/admin/migrator"},
+		{Label: source.DisplayName(), URL: "/admin/migrator/" + sourceName, Active: true},
+	})
+	render.RenderTempl(w, r, MigratorSourceFormPage(pc, viewData))
 }
 
 // sourceRequestContext holds common data extracted from migrator handler requests.
