@@ -1260,6 +1260,246 @@ func convertWebhookDeliveriesViewData(data WebhookDeliveriesData) adminviews.Web
 }
 
 // =============================================================================
+// PAGES HELPERS
+// =============================================================================
+
+// pagesBreadcrumbs returns breadcrumbs for the pages list page.
+func pagesBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "pages.title"), URL: redirectAdminPages, Active: true},
+	}
+}
+
+// pagesNewBreadcrumbs returns breadcrumbs for the new page form.
+func pagesNewBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "pages.title"), URL: redirectAdminPages},
+		{Label: i18n.T(lang, "pages.new"), URL: redirectAdminPagesNew, Active: true},
+	}
+}
+
+// pagesEditBreadcrumbs returns breadcrumbs for the edit page form.
+func pagesEditBreadcrumbs(lang string, pageTitle string, pageID int64) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "pages.title"), URL: redirectAdminPages},
+		{Label: pageTitle, URL: fmt.Sprintf(redirectAdminPagesID, pageID), Active: true},
+	}
+}
+
+// pagesVersionsBreadcrumbs returns breadcrumbs for the page versions page.
+func pagesVersionsBreadcrumbs(lang string, pageTitle string, pageID int64) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "pages.title"), URL: redirectAdminPages},
+		{Label: pageTitle, URL: fmt.Sprintf(redirectAdminPagesID, pageID)},
+		{Label: i18n.T(lang, "versions.title"), URL: fmt.Sprintf(redirectAdminPagesIDVersions, pageID), Active: true},
+	}
+}
+
+// convertPagesListViewData converts handler PagesListData to view PagesListViewData.
+func convertPagesListViewData(data PagesListData, renderer *render.Renderer, lang string) adminviews.PagesListViewData {
+	var pages []adminviews.PageListItemView
+	for _, p := range data.Pages {
+		item := adminviews.PageListItemView{
+			ID:        p.ID,
+			Title:     p.Title,
+			Slug:      p.Slug,
+			Status:    p.Status,
+			UpdatedAt: renderer.FormatDateTimeLocale(p.UpdatedAt, lang),
+		}
+
+		// Scheduled check
+		if p.Status == "draft" && p.ScheduledAt.Valid {
+			item.IsScheduled = true
+			item.ScheduledAtTitle = i18n.T(lang, "status.scheduled") + " " + renderer.FormatDateTimeLocale(p.ScheduledAt.Time, lang)
+		}
+
+		// Featured image
+		if img, ok := data.PageFeaturedImages[p.ID]; ok && img != nil {
+			item.FeaturedImage = &adminviews.PageFeaturedImageView{
+				Thumbnail: img.Thumbnail,
+			}
+		}
+
+		// Tags
+		if tags, ok := data.PageTags[p.ID]; ok {
+			for _, t := range tags {
+				item.Tags = append(item.Tags, adminviews.PageTagView{Name: t.Name})
+			}
+		}
+
+		// Categories
+		if cats, ok := data.PageCategories[p.ID]; ok {
+			for _, c := range cats {
+				item.Categories = append(item.Categories, adminviews.PageCategoryView{Name: c.Name})
+			}
+		}
+
+		// Language
+		if l, ok := data.PageLanguages[p.ID]; ok && l != nil {
+			item.Language = &adminviews.PageLanguageView{Code: l.Code, Name: l.Name}
+		}
+
+		// Demo mode check
+		item.IsDemoPublished = middleware.IsDemoMode() && p.Status == "published"
+
+		pages = append(pages, item)
+	}
+
+	return adminviews.PagesListViewData{
+		Pages:          pages,
+		TotalCount:     data.TotalCount,
+		StatusFilter:   data.StatusFilter,
+		CategoryFilter: data.CategoryFilter,
+		LanguageFilter: data.LanguageFilter,
+		SearchFilter:   data.SearchFilter,
+		AllCategories:  convertPageCategoryNodes(data.AllCategories),
+		AllLanguages:   convertLanguageOptions(data.AllLanguages),
+		Statuses:       data.Statuses,
+		Pagination:     convertPagination(data.Pagination),
+		IsDemoMode:     middleware.IsDemoMode(),
+	}
+}
+
+// convertPageCategoryNodes converts handler PageCategoryNode slice to view.
+func convertPageCategoryNodes(nodes []PageCategoryNode) []adminviews.PageCategoryNodeView {
+	var result []adminviews.PageCategoryNodeView
+	for _, n := range nodes {
+		desc := ""
+		if n.Category.Description.Valid {
+			desc = n.Category.Description.String
+		}
+		result = append(result, adminviews.PageCategoryNodeView{
+			ID:          n.Category.ID,
+			Name:        n.Category.Name,
+			Description: desc,
+			Depth:       n.Depth,
+		})
+	}
+	return result
+}
+
+// convertPageFormViewData converts handler PageFormData to view PageFormViewData.
+func convertPageFormViewData(data PageFormData, renderer *render.Renderer, lang string) adminviews.PageFormViewData {
+	viewData := adminviews.PageFormViewData{
+		IsEdit:               data.IsEdit,
+		Statuses:             data.Statuses,
+		PageTypes:            data.PageTypes,
+		AllCategories:        convertPageCategoryNodes(data.AllCategories),
+		Errors:               data.Errors,
+		FormValues:           data.FormValues,
+		HasMultipleLanguages: len(data.AllLanguages) > 1,
+		AllLanguages:         convertLanguageOptions(data.AllLanguages),
+		Language:             convertLanguageOptionPtr(data.Language),
+		IsDemoMode:           middleware.IsDemoMode(),
+	}
+
+	if data.Page != nil {
+		viewData.PageID = data.Page.ID
+		viewData.PageTitle = data.Page.Title
+		viewData.PageSlug = data.Page.Slug
+		viewData.PageBody = data.Page.Body
+		viewData.PageStatus = data.Page.Status
+		viewData.PageType = data.Page.PageType
+		viewData.MetaTitle = data.Page.MetaTitle
+		viewData.MetaDescription = data.Page.MetaDescription
+		viewData.MetaKeywords = data.Page.MetaKeywords
+		viewData.CanonicalURL = data.Page.CanonicalUrl
+		viewData.NoIndex = data.Page.NoIndex == 1
+		viewData.NoFollow = data.Page.NoFollow == 1
+		viewData.HideFeaturedImage = data.Page.HideFeaturedImage == 1
+		viewData.ExcludeFromLists = data.Page.ExcludeFromLists == 1
+
+		if data.Page.OgImageID.Valid {
+			viewData.OgImageID = fmt.Sprintf("%d", data.Page.OgImageID.Int64)
+		}
+
+		if data.Page.ScheduledAt.Valid {
+			viewData.HasScheduledAt = true
+			viewData.ScheduledAt = data.Page.ScheduledAt.Time.Format("2006-01-02T15:04")
+			viewData.ScheduledAtFmt = renderer.FormatDateTimeLocale(data.Page.ScheduledAt.Time, lang)
+		}
+	}
+
+	// Featured image
+	if data.FeaturedImage != nil {
+		viewData.FeaturedImage = &adminviews.PageFormFeaturedImageView{
+			ID:        data.FeaturedImage.ID,
+			Filename:  data.FeaturedImage.Filename,
+			Filepath:  data.FeaturedImage.Filepath,
+			Thumbnail: data.FeaturedImage.Thumbnail,
+			Mimetype:  data.FeaturedImage.Mimetype,
+		}
+	}
+
+	// Tags
+	for _, t := range data.Tags {
+		viewData.Tags = append(viewData.Tags, adminviews.PageFormTagView{
+			ID:   t.ID,
+			Name: t.Name,
+			Slug: t.Slug,
+		})
+	}
+
+	// Categories (selected)
+	for _, c := range data.Categories {
+		viewData.Categories = append(viewData.Categories, adminviews.PageFormCategoryView{
+			ID: c.ID,
+		})
+	}
+
+	// Aliases
+	for _, a := range data.Aliases {
+		viewData.Aliases = append(viewData.Aliases, adminviews.PageFormAliasView{
+			ID:    a.ID,
+			Alias: a.Alias,
+		})
+	}
+
+	// Translations
+	for _, tr := range data.Translations {
+		viewData.Translations = append(viewData.Translations, adminviews.PageTranslationView{
+			Language: convertLanguageOption(tr.Language),
+			PageID:   tr.Page.ID,
+			Title:    tr.Page.Title,
+			Status:   tr.Page.Status,
+		})
+	}
+
+	// Missing languages
+	for _, l := range data.MissingLanguages {
+		viewData.MissingLanguages = append(viewData.MissingLanguages, convertLanguageOption(l))
+	}
+
+	return viewData
+}
+
+// convertPageVersionsViewData converts handler PageVersionsData to view.
+func convertPageVersionsViewData(data PageVersionsData, renderer *render.Renderer, lang string) adminviews.PageVersionsViewData {
+	var versions []adminviews.PageVersionView
+	for _, v := range data.Versions {
+		versions = append(versions, adminviews.PageVersionView{
+			ID:            v.ID,
+			Title:         v.Title,
+			Body:          v.Body,
+			ChangedByName: v.ChangedByName,
+			CreatedAt:     renderer.FormatDateTimeLocale(v.CreatedAt, lang),
+		})
+	}
+
+	return adminviews.PageVersionsViewData{
+		PageID:     data.Page.ID,
+		PageTitle:  data.Page.Title,
+		TotalCount: data.TotalCount,
+		Versions:   versions,
+		Pagination: convertPagination(data.Pagination),
+	}
+}
+
+// =============================================================================
 // SCHEDULER HELPERS
 // =============================================================================
 

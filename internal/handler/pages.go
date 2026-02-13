@@ -25,6 +25,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 	"github.com/olegiv/ocms-go/internal/webhook"
 )
 
@@ -143,7 +144,6 @@ type PagesListData struct {
 
 // List handles GET /admin/pages - displays a paginated list of pages.
 func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	page := ParsePageParam(r)
@@ -379,15 +379,9 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		Pagination:         BuildAdminPagination(page, int(totalCount), PagesPerPage, redirectAdminPages, r.URL.Query()),
 	}
 
-	h.renderer.RenderPage(w, r, "admin/pages_list", render.TemplateData{
-		Title: i18n.T(lang, "pages.title"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "pages.title"), URL: redirectAdminPages, Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.title"), pagesBreadcrumbs(lang))
+	viewData := convertPagesListViewData(data, h.renderer, lang)
+	renderTempl(w, r, adminviews.PagesListPage(pc, viewData))
 }
 
 // PageCategoryNode represents a category with depth for tree display.
@@ -472,7 +466,6 @@ func buildPageCategoryTree(categories []store.Category, parentID *int64, depth i
 
 // NewForm handles GET /admin/pages/new - displays the new page form.
 func (h *PagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	// Load all categories for the selector
@@ -500,16 +493,9 @@ func (h *PagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 		IsEdit:        false,
 	}
 
-	h.renderer.RenderPage(w, r, "admin/pages_form", render.TemplateData{
-		Title: i18n.T(lang, "pages.new"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "pages.title"), URL: redirectAdminPages},
-			{Label: i18n.T(lang, "pages.new"), URL: redirectAdminPagesNew, Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.new"), pagesNewBreadcrumbs(lang))
+	viewData := convertPageFormViewData(data, h.renderer, lang)
+	renderTempl(w, r, adminviews.PageFormPage(pc, viewData))
 }
 
 // Create handles POST /admin/pages - creates a new page.
@@ -518,7 +504,6 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminPagesNew) {
@@ -586,16 +571,9 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 			IsEdit:       false,
 		}
 
-		h.renderer.RenderPage(w, r, "admin/pages_form", render.TemplateData{
-			Title: i18n.T(lang, "pages.new"),
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-				{Label: i18n.T(lang, "pages.title"), URL: redirectAdminPages},
-				{Label: i18n.T(lang, "pages.new"), URL: redirectAdminPagesNew, Active: true},
-			},
-		})
+		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.new"), pagesNewBreadcrumbs(lang))
+		viewData := convertPageFormViewData(data, h.renderer, lang)
+		renderTempl(w, r, adminviews.PageFormPage(pc, viewData))
 		return
 	}
 
@@ -772,7 +750,9 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		IsEdit:           true,
 	}
 
-	renderEntityEditPage(w, r, h.renderer, "admin/pages_form", i18n.T(adminLang, "pages.edit"), data, adminLang, "pages.title", redirectAdminPages, page.Title, fmt.Sprintf(redirectAdminPagesID, page.ID))
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(adminLang, "pages.edit"), pagesEditBreadcrumbs(adminLang, page.Title, page.ID))
+	viewData := convertPageFormViewData(data, h.renderer, adminLang)
+	renderTempl(w, r, adminviews.PageFormPage(pc, viewData))
 }
 
 // Update handles PUT /admin/pages/{id} - updates an existing page.
@@ -848,10 +828,9 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 			IsEdit:     true,
 		}
 
-		renderEntityEditPage(w, r, h.renderer, "admin/pages_form",
-			i18n.T(lang, "pages.edit"), data, lang,
-			"pages.title", redirectAdminPages,
-			existingPage.Title, fmt.Sprintf(redirectAdminPagesID, id))
+		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.edit"), pagesEditBreadcrumbs(lang, existingPage.Title, id))
+		viewData := convertPageFormViewData(data, h.renderer, lang)
+		renderTempl(w, r, adminviews.PageFormPage(pc, viewData))
 		return
 	}
 
@@ -1065,7 +1044,6 @@ type PageVersionsData struct {
 
 // Versions handles GET /admin/pages/{id}/versions - displays version history.
 func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -1112,17 +1090,9 @@ func (h *PagesHandler) Versions(w http.ResponseWriter, r *http.Request) {
 		Pagination: BuildAdminPagination(pageNum, int(totalCount), VersionsPerPage, fmt.Sprintf(redirectAdminPagesIDVersions, id), r.URL.Query()),
 	}
 
-	h.renderer.RenderPage(w, r, "admin/pages_versions", render.TemplateData{
-		Title: fmt.Sprintf("%s - %s", i18n.T(lang, "versions.title"), page.Title),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "pages.title"), URL: redirectAdminPages},
-			{Label: page.Title, URL: fmt.Sprintf(redirectAdminPagesID, page.ID)},
-			{Label: i18n.T(lang, "versions.title"), URL: fmt.Sprintf(redirectAdminPagesIDVersions, page.ID), Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, fmt.Sprintf("%s - %s", i18n.T(lang, "versions.title"), page.Title), pagesVersionsBreadcrumbs(lang, page.Title, page.ID))
+	viewData := convertPageVersionsViewData(data, h.renderer, lang)
+	renderTempl(w, r, adminviews.PageVersionsPage(pc, viewData))
 }
 
 // RestoreVersion handles POST /admin/pages/{id}/versions/{versionId}/restore - restores a version.

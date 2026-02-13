@@ -826,6 +826,11 @@ func formatDateTimeForLocale(t time.Time, lang string) string {
 	return t.Format("Jan 2, 2006 3:04 PM")
 }
 
+// FormatDateTimeLocale formats a time value as a localized datetime string.
+func (r *Renderer) FormatDateTimeLocale(t any, lang string) string {
+	return applyTimeFormatter(t, lang, formatDateTimeForLocale)
+}
+
 // SentinelIsActive returns whether the sentinel module is active.
 // It calls the sentinelIsActive template function if registered, otherwise returns false.
 func (r *Renderer) SentinelIsActive() bool {
