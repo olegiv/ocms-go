@@ -25,6 +25,23 @@ templ Header(pc *PageContext) {
 			<a href="/" class="header-link" target="_blank" title={ pc.T("dashboard.view_site") }>
 				<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
 			</a>
+			<!-- Language Selector (only shown when multiple languages available) -->
+			if len(pc.LangOptions) > 1 {
+				<form action="/admin/language" method="POST" class="lang-selector-form">
+					<label class="lang-selector" title={ pc.T("admin.change_language") }>
+						<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" x2="22" y1="12" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+						<select name="lang" onchange="this.form.submit()" class="lang-select" aria-label={ pc.T("admin.change_language") }>
+							for _, lang := range pc.LangOptions {
+								if lang.Code == pc.AdminLang {
+									<option value={ lang.Code } selected>{ lang.Name }</option>
+								} else {
+									<option value={ lang.Code }>{ lang.Name }</option>
+								}
+							}
+						</select>
+					</label>
+				</form>
+			}
 			<!-- User Dropdown -->
 			<div class="user-dropdown">
 				<div class="header-user">

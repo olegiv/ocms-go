@@ -62,6 +62,14 @@ func buildPageContext(
 		})
 	}
 
+	// Populate language options for the header switcher
+	for _, lo := range renderer.AdminLangOptions() {
+		pc.LangOptions = append(pc.LangOptions, adminviews.LangOption{
+			Code: lo.Code,
+			Name: lo.Name,
+		})
+	}
+
 	// Get sidebar modules
 	for _, m := range renderer.ListSidebarModules() {
 		pc.SidebarModules = append(pc.SidebarModules, adminviews.SidebarModule{

@@ -886,11 +886,11 @@ func (r *Renderer) AdminLangOptions() []AdminLangOption {
 	if !ok {
 		return []AdminLangOption{{"en", "English"}}
 	}
-	type langOpt struct {
+	type anonLangOpt = struct {
 		Code string
 		Name string
 	}
-	if f, ok := fn.(func() []langOpt); ok {
+	if f, ok := fn.(func() []anonLangOpt); ok {
 		opts := f()
 		result := make([]AdminLangOption, len(opts))
 		for i, o := range opts {
