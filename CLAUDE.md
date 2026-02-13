@@ -51,12 +51,21 @@ $(go env GOTOOLDIR)/compile -V  # Shows actual compiler version
 **Fix**: The local Go installation must match the version in `go.mod`. Upgrade Go:
 ```bash
 # Download from https://go.dev/dl/
-curl -LO https://go.dev/dl/go<VERSION>.darwin-arm64.tar.gz
+# Use linux-amd64 or darwin-arm64 depending on platform
+curl -LO https://go.dev/dl/go<VERSION>.linux-amd64.tar.gz
 sudo rm -rf /usr/local/go
-sudo tar -C /usr/local -xzf go<VERSION>.darwin-arm64.tar.gz
+sudo tar -C /usr/local -xzf go<VERSION>.linux-amd64.tar.gz
+rm go<VERSION>.linux-amd64.tar.gz
+go version  # Verify the new version
 ```
 
-**NEVER** downgrade the Go version in `go.mod` to work around this issue.
+**If `go mod tidy` fails with toolchain download timeout** (e.g., `dial tcp ... i/o timeout`):
+The automatic toolchain download via `proxy.golang.org` may be blocked in restricted environments.
+Fix by manually installing Go from `go.dev/dl/` as shown above — direct downloads use a different CDN that is typically not blocked. After installing, run `GOTOOLCHAIN=local go mod tidy`.
+
+**CRITICAL RULES**:
+- **NEVER** downgrade the Go version in `go.mod` to work around toolchain issues
+- **NEVER** set `GOTOOLCHAIN=local` as a workaround when the local version is older than `go.mod` requires — install the correct version instead
 
 ## Code Generation
 
