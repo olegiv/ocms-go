@@ -1,0 +1,481 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package migrator
+
+import (
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+	"fmt"
+)
+
+// MigratorSourceView is a view-friendly representation of a Source.
+type MigratorSourceView struct {
+	Name        string
+	DisplayName string
+	Description string
+}
+
+// MigratorListViewData holds data for the migrator source list page.
+type MigratorListViewData struct {
+	Sources []MigratorSourceView
+}
+
+// MigratorSourceFormViewData holds data for the migrator source form page.
+type MigratorSourceFormViewData struct {
+	SourceName     string
+	DisplayName    string
+	Description    string
+	ConfigFields   []ConfigField
+	Config         map[string]string
+	ImportedCounts map[string]int
+}
+
+templ MigratorListPage(pc *adminviews.PageContext, data MigratorListViewData) {
+	@adminviews.AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("migrator.title") }</h1>
+				<p class="page-description">{ pc.T("migrator.description") }</p>
+			</div>
+		</div>
+		<div class="migrator-sources">
+			<div class="section-header">
+				<h2>{ pc.T("migrator.select_source") }</h2>
+				<p>{ pc.T("migrator.select_source_description") }</p>
+			</div>
+			<div class="source-cards">
+				if len(data.Sources) > 0 {
+					for _, src := range data.Sources {
+						<div class="card source-card">
+							<div class="card-body">
+								<div class="source-header">
+									<div class="source-icon">
+										<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+											<ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+											<path d="M3 5V19A9 3 0 0 0 21 19V5"></path>
+											<path d="M3 12A9 3 0 0 0 21 12"></path>
+										</svg>
+									</div>
+									<div class="source-title">
+										<h3>{ src.DisplayName }</h3>
+										<p>{ src.Description }</p>
+									</div>
+								</div>
+								<div class="source-actions">
+									<a href={ templ.URL("/admin/migrator/" + src.Name) } class="btn btn-primary">
+										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+											<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+											<polyline points="7 10 12 15 17 10"></polyline>
+											<line x1="12" x2="12" y1="15" y2="3"></line>
+										</svg>
+										{ pc.T("migrator.import_button") }
+									</a>
+								</div>
+							</div>
+						</div>
+					}
+				} else {
+					<div class="empty-state">
+						<p>{ pc.T("migrator.no_sources") }</p>
+					</div>
+				}
+			</div>
+		</div>
+		<style>
+			.migrator-sources {
+				margin-top: 2rem;
+			}
+
+			.source-cards {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+				gap: 1.5rem;
+				margin-top: 1rem;
+			}
+
+			.source-card {
+				transition: transform 0.2s, box-shadow 0.2s;
+			}
+
+			.source-card:hover {
+				transform: translateY(-2px);
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+			}
+
+			.source-header {
+				display: flex;
+				align-items: flex-start;
+				gap: 1rem;
+				margin-bottom: 1.5rem;
+			}
+
+			.source-icon {
+				flex-shrink: 0;
+				width: 48px;
+				height: 48px;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				background: var(--primary-color, #3b82f6);
+				color: white;
+				border-radius: 8px;
+			}
+
+			.source-title h3 {
+				margin: 0 0 0.25rem 0;
+				font-size: 1.125rem;
+			}
+
+			.source-title p {
+				margin: 0;
+				color: var(--text-muted, #6b7280);
+				font-size: 0.875rem;
+			}
+
+			.source-actions {
+				display: flex;
+				justify-content: flex-end;
+			}
+
+			.empty-state {
+				text-align: center;
+				padding: 3rem;
+				color: var(--text-muted, #6b7280);
+			}
+		</style>
+	}
+}
+
+templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormViewData) {
+	@adminviews.AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.Title }</h1>
+				<p class="page-description">{ data.Description }</p>
+			</div>
+			<div class="page-actions">
+				<a href="/admin/migrator" class="btn btn-secondary">
+					<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="m12 19-7-7 7-7"></path>
+						<path d="M19 12H5"></path>
+					</svg>
+					{ pc.T("migrator.back_to_sources") }
+				</a>
+			</div>
+		</div>
+		<div id="migrator-data" data-confirm-import={ pc.T("migrator.confirm_import") } data-confirm-delete={ pc.T("migrator.confirm_delete") } data-source-name={ data.SourceName } style="display:none"></div>
+		<div class="migrator-form-container">
+			<form method="POST" action={ templ.URL("/admin/migrator/" + data.SourceName + "/import") } id="import-form" onsubmit="confirmImport(event)">
+				<div class="card">
+					<div class="card-header">
+						<h2>{ pc.T("migrator.connection_settings") }</h2>
+					</div>
+					<div class="card-body">
+						<div class="form-grid">
+							for _, field := range data.ConfigFields {
+								<div class={ "form-group", templ.KV("form-group-password", field.Type == "password") }>
+									<label for={ field.Name }>
+										{ field.Label }
+										if field.Required {
+											<span class="required">*</span>
+										}
+									</label>
+									if field.Type == "password" {
+										<input type="password" id={ field.Name } name={ field.Name } value={ data.Config[field.Name] } required?={ field.Required } placeholder={ field.Placeholder } class="form-control"/>
+									} else if field.Type == "number" {
+										<input type="number" id={ field.Name } name={ field.Name } value={ data.Config[field.Name] } required?={ field.Required } placeholder={ field.Placeholder } class="form-control"/>
+									} else {
+										<input type="text" id={ field.Name } name={ field.Name } value={ data.Config[field.Name] } required?={ field.Required } placeholder={ field.Placeholder } class="form-control" maxlength="255"/>
+									}
+								</div>
+							}
+						</div>
+						<div class="form-actions">
+							<button type="button" class="btn btn-secondary" id="test-connection-btn" onclick="testConnection()">
+								<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+									<polyline points="22 4 12 14.01 9 11.01"></polyline>
+								</svg>
+								{ pc.T("migrator.test_connection") }
+							</button>
+						</div>
+					</div>
+				</div>
+				<div class="card">
+					<div class="card-header">
+						<h2>{ pc.T("migrator.import_options") }</h2>
+					</div>
+					<div class="card-body">
+						<div class="form-checkboxes">
+							<label class="checkbox-label">
+								<input type="checkbox" name="import_tags" checked/>
+								<span>{ pc.T("migrator.option_import_tags") }</span>
+							</label>
+							<label class="checkbox-label">
+								<input type="checkbox" name="import_media" checked/>
+								<span>{ pc.T("migrator.option_import_media") }</span>
+							</label>
+							<label class="checkbox-label">
+								<input type="checkbox" name="import_posts" checked/>
+								<span>{ pc.T("migrator.option_import_posts") }</span>
+							</label>
+							<label class="checkbox-label">
+								<input type="checkbox" name="import_users"/>
+								<span>{ pc.T("migrator.option_import_users") }</span>
+							</label>
+							<label class="checkbox-label">
+								<input type="checkbox" name="skip_existing"/>
+								<span>{ pc.T("migrator.option_skip_existing") }</span>
+							</label>
+						</div>
+					</div>
+				</div>
+				<div class="form-submit">
+					<button type="submit" class="btn btn-primary btn-lg">
+						<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+							<polyline points="7 10 12 15 17 10"></polyline>
+							<line x1="12" x2="12" y1="15" y2="3"></line>
+						</svg>
+						{ pc.T("migrator.start_import") }
+					</button>
+				</div>
+			</form>
+			<div class="card card-danger">
+				<div class="card-header">
+					<h2>{ pc.T("migrator.imported_content") }</h2>
+				</div>
+				<div class="card-body">
+					if data.ImportedCounts != nil {
+						if data.ImportedCounts["page"] > 0 || data.ImportedCounts["tag"] > 0 || data.ImportedCounts["media"] > 0 || data.ImportedCounts["user"] > 0 {
+							<div class="imported-stats">
+								<div class="stat-item">
+									<span class="stat-label">{ pc.T("migrator.imported_pages") }:</span>
+									<span class="stat-value">{ fmt.Sprintf("%d", data.ImportedCounts["page"]) }</span>
+								</div>
+								<div class="stat-item">
+									<span class="stat-label">{ pc.T("migrator.imported_tags") }:</span>
+									<span class="stat-value">{ fmt.Sprintf("%d", data.ImportedCounts["tag"]) }</span>
+								</div>
+								<div class="stat-item">
+									<span class="stat-label">{ pc.T("migrator.imported_media") }:</span>
+									<span class="stat-value">{ fmt.Sprintf("%d", data.ImportedCounts["media"]) }</span>
+								</div>
+								<div class="stat-item">
+									<span class="stat-label">{ pc.T("migrator.imported_users") }:</span>
+									<span class="stat-value">{ fmt.Sprintf("%d", data.ImportedCounts["user"]) }</span>
+								</div>
+							</div>
+							<form method="POST" action={ templ.URL("/admin/migrator/" + data.SourceName + "/delete") } onsubmit="return confirmDelete()">
+								<button type="submit" class="btn btn-danger">
+									<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<path d="M3 6h18"></path>
+										<path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+										<path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+										<line x1="10" x2="10" y1="11" y2="17"></line>
+										<line x1="14" x2="14" y1="11" y2="17"></line>
+									</svg>
+									{ pc.T("migrator.delete_imported") }
+								</button>
+							</form>
+						} else {
+							<p class="text-muted">{ pc.T("migrator.no_imported_content") }</p>
+						}
+					} else {
+						<p class="text-muted">{ pc.T("migrator.no_imported_content") }</p>
+					}
+				</div>
+			</div>
+		</div>
+		<style>
+			.migrator-form-container {
+				max-width: 800px;
+				margin-top: 2rem;
+			}
+
+			.card {
+				margin-bottom: 1.5rem;
+			}
+
+			.card-header {
+				padding: 1rem 1.5rem;
+				border-bottom: 1px solid var(--border-color, #e5e7eb);
+			}
+
+			.card-header h2 {
+				margin: 0;
+				font-size: 1rem;
+				font-weight: 600;
+			}
+
+			.form-grid {
+				display: grid;
+				grid-template-columns: repeat(2, 1fr);
+				gap: 1rem;
+			}
+
+			@media (max-width: 640px) {
+				.form-grid {
+					grid-template-columns: 1fr;
+				}
+			}
+
+			.form-group {
+				display: flex;
+				flex-direction: column;
+				gap: 0.375rem;
+			}
+
+			.form-group label {
+				font-weight: 500;
+				font-size: 0.875rem;
+			}
+
+			.form-group .required {
+				color: var(--danger-color, #ef4444);
+			}
+
+			.form-control {
+				padding: 0.5rem 0.75rem;
+				border: 1px solid var(--border-color, #e5e7eb);
+				border-radius: 6px;
+				font-size: 0.875rem;
+			}
+
+			.form-control:focus {
+				outline: none;
+				border-color: var(--primary-color, #3b82f6);
+				box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+			}
+
+			.form-actions {
+				margin-top: 1rem;
+				padding-top: 1rem;
+				border-top: 1px solid var(--border-color, #e5e7eb);
+			}
+
+			.form-checkboxes {
+				display: flex;
+				flex-direction: column;
+				gap: 0.75rem;
+			}
+
+			.checkbox-label {
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+				cursor: pointer;
+			}
+
+			.checkbox-label input[type="checkbox"] {
+				width: 18px;
+				height: 18px;
+			}
+
+			.form-submit {
+				margin-top: 1.5rem;
+			}
+
+			.card-danger {
+				margin-top: 2rem;
+				border-color: var(--danger-color, #ef4444);
+			}
+
+			.card-danger .card-header {
+				background-color: rgba(239, 68, 68, 0.1);
+				border-bottom-color: var(--danger-color, #ef4444);
+			}
+
+			.card-danger .card-header h2 {
+				color: var(--danger-color, #ef4444);
+			}
+
+			.imported-stats {
+				display: flex;
+				gap: 2rem;
+				margin-bottom: 1rem;
+			}
+
+			.stat-item {
+				display: flex;
+				gap: 0.5rem;
+			}
+
+			.stat-label {
+				font-weight: 500;
+			}
+
+			.stat-value {
+				font-weight: 600;
+				color: var(--primary-color, #3b82f6);
+			}
+
+			.text-muted {
+				color: var(--text-muted, #6b7280);
+				margin: 0;
+			}
+
+			.btn-danger {
+				background-color: var(--danger-color, #ef4444);
+				color: white;
+				border: none;
+			}
+
+			.btn-danger:hover {
+				background-color: #dc2626;
+			}
+		</style>
+		<script>
+			function testConnection() {
+				const importForm = document.getElementById('import-form');
+				if (!importForm) return;
+
+				// Validate required fields first
+				const inputs = importForm.querySelectorAll('input[required]');
+				for (let i = 0; i < inputs.length; i++) {
+					if (!inputs[i].value.trim()) {
+						inputs[i].focus();
+						inputs[i].reportValidity();
+						return;
+					}
+				}
+
+				// Get source name from data attribute
+				const migratorData = document.getElementById('migrator-data');
+				const sourceName = migratorData ? migratorData.dataset.sourceName : '';
+
+				// Create a form for testing connection
+				const testForm = document.createElement('form');
+				testForm.method = 'POST';
+				testForm.action = '/admin/migrator/' + sourceName + '/test';
+
+				// Copy all input fields from the import form (config fields only)
+				const configInputs = importForm.querySelectorAll('input[type="text"], input[type="password"], input[type="number"]');
+				configInputs.forEach(function(input) {
+					const hidden = document.createElement('input');
+					hidden.type = 'hidden';
+					hidden.name = input.name;
+					hidden.value = input.value;
+					testForm.appendChild(hidden);
+				});
+
+				document.body.appendChild(testForm);
+				testForm.submit();
+			}
+
+			function confirmImport(event) {
+				const migratorData = document.getElementById('migrator-data');
+				const message = migratorData ? migratorData.dataset.confirmImport : 'Are you sure you want to start the import?';
+				if (!confirm(message)) {
+					event.preventDefault();
+				}
+			}
+
+			function confirmDelete() {
+				const migratorData = document.getElementById('migrator-data');
+				const message = migratorData ? migratorData.dataset.confirmDelete : 'Are you sure you want to delete all imported content?';
+				return confirm(message);
+			}
+		</script>
+	}
+}
