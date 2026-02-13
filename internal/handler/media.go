@@ -482,7 +482,7 @@ func (h *MediaHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "media.edit_title"), mediaEditBreadcrumbs(lang, media.Filename, media.ID))
-	viewData := convertMediaEditViewData(data, h.renderer, lang)
+	viewData := convertMediaEditViewData(data, lang)
 	renderTempl(w, r, adminviews.MediaEditPage(pc, viewData))
 }
 
@@ -551,7 +551,7 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 
 		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "media.edit_title"), mediaEditBreadcrumbs(lang, media.Filename, id))
-		viewData := convertMediaEditViewData(data, h.renderer, lang)
+		viewData := convertMediaEditViewData(data, lang)
 		renderTempl(w, r, adminviews.MediaEditPage(pc, viewData))
 		return
 	}

@@ -150,7 +150,7 @@ func buildMenuFormViewData(
 	items []MenuItemNode,
 	pages []store.Page,
 	languages []store.Language,
-	errors map[string]string,
+	errs map[string]string,
 	formValues map[string]string,
 ) adminviews.MenuFormData {
 	return adminviews.MenuFormData{
@@ -160,7 +160,7 @@ func buildMenuFormViewData(
 		Pages:      convertMenuPages(pages),
 		Targets:    model.ValidTargets,
 		Languages:  convertLanguageOptions(languages),
-		Errors:     errors,
+		Errors:     errs,
 		FormValues: formValues,
 	}
 }

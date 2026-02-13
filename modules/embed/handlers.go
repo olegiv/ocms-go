@@ -70,7 +70,7 @@ func (m *Module) handleList(w http.ResponseWriter, r *http.Request) {
 		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
 		{Label: i18n.T(lang, "embed.title"), URL: "/admin/embed", Active: true},
 	})
-	render.RenderTempl(w, r, EmbedListPage(pc, viewData))
+	render.Templ(w, r, EmbedListPage(pc, viewData))
 }
 
 // handleProviderSettings handles GET /admin/embed/{provider} - shows provider settings.
@@ -118,7 +118,7 @@ func (m *Module) handleProviderSettings(w http.ResponseWriter, r *http.Request) 
 		{Label: i18n.T(lang, "embed.title"), URL: "/admin/embed"},
 		{Label: provider.Name(), URL: "/admin/embed/" + providerID, Active: true},
 	})
-	render.RenderTempl(w, r, EmbedProviderPage(pc, viewData))
+	render.Templ(w, r, EmbedProviderPage(pc, viewData))
 }
 
 // handleSaveProviderSettings handles POST /admin/embed/{provider} - saves provider settings.

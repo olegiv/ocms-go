@@ -839,17 +839,17 @@ func FormatDateTime(t time.Time) string {
 }
 
 // FormatBytes formats bytes into a human-readable string.
-func FormatBytes(bytes int64) string {
+func FormatBytes(size int64) string {
 	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
+	if size < unit {
+		return fmt.Sprintf("%d B", size)
 	}
 	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
+	for n := size / unit; n >= unit; n /= unit {
 		div *= unit
 		exp++
 	}
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+	return fmt.Sprintf("%.1f %cB", float64(size)/float64(div), "KMGTPE"[exp])
 }
 
 // HcaptchaEnabled returns whether hCaptcha is enabled.
@@ -898,7 +898,7 @@ func (r *Renderer) AdminLangOptions() []AdminLangOption {
 		opts := f()
 		result := make([]AdminLangOption, len(opts))
 		for i, o := range opts {
-			result[i] = AdminLangOption{Code: o.Code, Name: o.Name}
+			result[i] = AdminLangOption(o)
 		}
 		return result
 	}
@@ -1038,9 +1038,9 @@ func (r *Renderer) BuildPageContext(req *http.Request, title string, breadcrumbs
 	return pc
 }
 
-// RenderTempl renders a templ component as an HTTP response.
+// Templ renders a templ component as an HTTP response.
 // This is used by modules to render templ-based admin pages.
-func RenderTempl(w http.ResponseWriter, r *http.Request, component templ.Component) {
+func Templ(w http.ResponseWriter, r *http.Request, component templ.Component) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := component.Render(r.Context(), w); err != nil {
 		slog.Error("templ render error", "error", err)

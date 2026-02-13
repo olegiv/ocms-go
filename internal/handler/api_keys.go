@@ -89,7 +89,7 @@ func (h *APIKeysHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.renderAPIKeyForm(w, r, nil, make(map[string]string), make(map[string]string), false, "")
+	h.renderAPIKeyForm(w, r, nil, make(map[string]string), make(map[string]string), false)
 }
 
 // Create handles POST /admin/api-keys - creates a new API key.
@@ -117,7 +117,7 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 			"name":       name,
 			"expires_at": expiresAtStr,
 		}
-		h.renderAPIKeyForm(w, r, nil, validationErrors, formValues, false, "")
+		h.renderAPIKeyForm(w, r, nil, validationErrors, formValues, false)
 		return
 	}
 
@@ -191,7 +191,7 @@ func (h *APIKeysHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.renderAPIKeyForm(w, r, &apiKey, make(map[string]string), make(map[string]string), true, "")
+	h.renderAPIKeyForm(w, r, &apiKey, make(map[string]string), make(map[string]string), true)
 }
 
 // Update handles PUT /admin/api-keys/{id} - updates an existing API key.
@@ -231,7 +231,7 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 			"name":       name,
 			"expires_at": expiresAtStr,
 		}
-		h.renderAPIKeyForm(w, r, &apiKey, validationErrors, formValues, true, "")
+		h.renderAPIKeyForm(w, r, &apiKey, validationErrors, formValues, true)
 		return
 	}
 
@@ -418,7 +418,7 @@ func (h *APIKeysHandler) fetchAPIKeyForDelete(w http.ResponseWriter, r *http.Req
 }
 
 // renderAPIKeyForm renders the API key form using templ.
-func (h *APIKeysHandler) renderAPIKeyForm(w http.ResponseWriter, r *http.Request, apiKey *store.ApiKey, errs map[string]string, formValues map[string]string, isEdit bool, generatedKey string) {
+func (h *APIKeysHandler) renderAPIKeyForm(w http.ResponseWriter, r *http.Request, apiKey *store.ApiKey, errs map[string]string, formValues map[string]string, isEdit bool) {
 	adminLang := h.renderer.GetAdminLang(r)
 
 	// Build permission groups with checked state
@@ -433,7 +433,7 @@ func (h *APIKeysHandler) renderAPIKeyForm(w http.ResponseWriter, r *http.Request
 		PermissionGroups: buildPermissionGroups(existingPerms),
 		Errors:           errs,
 		FormValues:       formValues,
-		GeneratedKey:     generatedKey,
+		GeneratedKey:     "",
 	}
 
 	var title string

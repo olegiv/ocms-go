@@ -29,7 +29,7 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		MatomoURL:        m.settings.MatomoURL,
 		MatomoSiteID:     m.settings.MatomoSiteID,
 	}
-	render.RenderTempl(w, r, AnalyticsExtPage(pc, viewData))
+	render.Templ(w, r, AnalyticsExtPage(pc, viewData))
 }
 
 // handleSaveSettings handles POST /admin/external-analytics - saves analytics settings.
