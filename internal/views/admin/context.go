@@ -50,6 +50,15 @@ func (pc *PageContext) T(key string, args ...any) string {
 	return i18n.T(pc.AdminLang, key, args...)
 }
 
+// TDefault translates a key, falling back to defaultVal if the key is not found.
+func (pc *PageContext) TDefault(key string, defaultVal string) string {
+	result := i18n.T(pc.AdminLang, key)
+	if result == key {
+		return defaultVal
+	}
+	return result
+}
+
 // IsAdmin returns true if the user has admin role.
 func (pc *PageContext) IsAdmin() bool {
 	return pc.User.Role == "admin"

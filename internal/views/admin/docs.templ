@@ -1,0 +1,216 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import "fmt"
+
+// DocsSystemInfoView holds system-level information for display.
+type DocsSystemInfoView struct {
+	Version        string
+	GitCommit      string
+	BuildTime      string
+	GoVersion      string
+	Environment    string
+	ServerPort     int
+	DBPath         string
+	ActiveTheme    string
+	CacheType      string
+	EnabledModules int
+	TotalModules   int
+	Uptime         string
+}
+
+// DocsEndpointGroupView groups related endpoints.
+type DocsEndpointGroupView struct {
+	Name      string
+	Endpoints []DocsEndpointView
+}
+
+// DocsEndpointView describes a single API/route endpoint.
+type DocsEndpointView struct {
+	Method      string
+	Path        string
+	Description string
+	Auth        string
+}
+
+// DocsGuideView represents a documentation guide link.
+type DocsGuideView struct {
+	Slug  string
+	Title string
+}
+
+// DocsViewData holds all data for the docs overview page.
+type DocsViewData struct {
+	System    DocsSystemInfoView
+	Endpoints []DocsEndpointGroupView
+	Guides    []DocsGuideView
+}
+
+// DocsGuideViewData holds data for a single guide page.
+type DocsGuideViewData struct {
+	Title   string
+	Content string // Trusted HTML content from local markdown files
+}
+
+// DocsPage renders the documentation overview page.
+templ DocsPage(pc *PageContext, data DocsViewData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("docs.title") }</h1>
+				<p class="page-description">{ pc.T("docs.description") }</p>
+			</div>
+		</div>
+		<!-- System Info -->
+		<div class="card mb-6">
+			<div class="card-header">
+				<h2 class="card-title">{ pc.T("docs.system_info") }</h2>
+			</div>
+			<div class="card-body">
+				<div class="info-grid">
+					<div class="info-item">
+						<h4>{ pc.T("docs.ocms_version") }</h4>
+						<p><span class="badge badge-primary">{ data.System.Version }</span></p>
+					</div>
+					<div class="info-item">
+						<h4>{ pc.T("docs.git_commit") }</h4>
+						<p><code>{ data.System.GitCommit }</code></p>
+					</div>
+					<div class="info-item">
+						<h4>{ pc.T("docs.build_time") }</h4>
+						<p>{ data.System.BuildTime }</p>
+					</div>
+					<div class="info-item">
+						<h4>{ pc.T("docs.go_version") }</h4>
+						<p>{ data.System.GoVersion }</p>
+					</div>
+					<div class="info-item">
+						<h4>{ pc.T("docs.environment") }</h4>
+						<p>
+							if data.System.Environment == "production" {
+								<span class="badge badge-success">{ data.System.Environment }</span>
+							} else {
+								<span class="badge badge-warning">{ data.System.Environment }</span>
+							}
+						</p>
+					</div>
+					<div class="info-item">
+						<h4>{ pc.T("docs.server_port") }</h4>
+						<p>{ fmt.Sprintf("%d", data.System.ServerPort) }</p>
+					</div>
+					<div class="info-item">
+						<h4>{ pc.T("docs.db_path") }</h4>
+						<p><code>{ data.System.DBPath }</code></p>
+					</div>
+					<div class="info-item">
+						<h4>{ pc.T("docs.active_theme") }</h4>
+						<p>{ data.System.ActiveTheme }</p>
+					</div>
+					<div class="info-item">
+						<h4>{ pc.T("docs.cache_type") }</h4>
+						<p>{ data.System.CacheType }</p>
+					</div>
+					<div class="info-item">
+						<h4>{ pc.T("docs.enabled_modules") }</h4>
+						<p>{ fmt.Sprintf("%d", data.System.EnabledModules) } / { fmt.Sprintf("%d", data.System.TotalModules) }</p>
+					</div>
+					<div class="info-item">
+						<h4>{ pc.T("docs.uptime") }</h4>
+						<p>{ data.System.Uptime }</p>
+					</div>
+				</div>
+			</div>
+		</div>
+		<!-- Endpoint Reference -->
+		for _, group := range data.Endpoints {
+			<div class="card mb-6">
+				<div class="card-header">
+					<h2 class="card-title">{ group.Name }</h2>
+				</div>
+				<div class="card-body">
+					<div class="table-responsive">
+						<table class="table">
+							<thead>
+								<tr>
+									<th>{ pc.T("docs.method") }</th>
+									<th>{ pc.T("docs.path") }</th>
+									<th>{ pc.T("docs.ep_description") }</th>
+									<th>{ pc.T("docs.auth") }</th>
+								</tr>
+							</thead>
+							<tbody>
+								for _, ep := range group.Endpoints {
+									<tr>
+										<td>
+											@endpointMethodBadge(ep.Method)
+										</td>
+										<td><code>{ ep.Path }</code></td>
+										<td>{ ep.Description }</td>
+										<td><span class="badge badge-info badge-sm">{ ep.Auth }</span></td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					</div>
+				</div>
+			</div>
+		}
+		<!-- Guides -->
+		if len(data.Guides) > 0 {
+			<div class="card mb-6">
+				<div class="card-header">
+					<h2 class="card-title">{ pc.T("docs.guides") }</h2>
+				</div>
+				<div class="card-body">
+					<div class="info-grid">
+						for _, guide := range data.Guides {
+							<div class="info-item">
+								<h4><a href={ templ.SafeURL(fmt.Sprintf("/admin/docs/%s", guide.Slug)) }>{ guide.Title }</a></h4>
+							</div>
+						}
+					</div>
+				</div>
+			</div>
+		}
+	}
+}
+
+// DocsGuidePage renders a single documentation guide page.
+templ DocsGuidePage(pc *PageContext, data DocsGuideViewData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ data.Title }</h1>
+			</div>
+			<div class="page-actions">
+				<a href="/admin/docs" class="btn btn-outline">
+					@iconBack()
+					{ pc.T("docs.back_to_docs") }
+				</a>
+			</div>
+		</div>
+		<div class="card">
+			<div class="card-body docs-content">
+				@templ.Raw(data.Content)
+			</div>
+		</div>
+	}
+}
+
+// endpointMethodBadge renders a colored badge for an HTTP method.
+templ endpointMethodBadge(method string) {
+	switch method {
+		case "GET":
+			<span class="badge badge-success">GET</span>
+		case "POST":
+			<span class="badge badge-primary">POST</span>
+		case "PUT":
+			<span class="badge badge-warning">PUT</span>
+		case "DELETE":
+			<span class="badge badge-danger">DELETE</span>
+		default:
+			<span class="badge">{ method }</span>
+	}
+}

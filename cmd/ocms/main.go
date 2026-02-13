@@ -651,7 +651,7 @@ func run() error {
 	redirectsHandler := handler.NewRedirectsHandler(db, renderer, sessionManager, redirectsMiddleware)
 	importExportHandler := handler.NewImportExportHandler(db, renderer, sessionManager)
 	healthHandler := handler.NewHealthHandler(db, sessionManager, cfg.UploadsDir)
-	docsHandler := handler.NewDocsHandler(renderer, cfg, moduleRegistry, healthHandler.StartTime(), versionInfo)
+	docsHandler := handler.NewDocsHandler(renderer, sessionManager, cfg, moduleRegistry, healthHandler.StartTime(), versionInfo)
 
 	// Set webhook dispatcher on handlers that dispatch events
 	pagesHandler.SetDispatcher(webhookDispatcher)
