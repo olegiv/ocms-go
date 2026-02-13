@@ -14,18 +14,9 @@ import (
 
 // handleDashboard handles GET /admin/hcaptcha - shows the hCaptcha settings page.
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := m.ctx.Render.GetAdminLang(r)
 
-	// Mask secret key for display
-	displaySettings := struct {
-		Enabled       bool
-		SiteKey       string
-		SecretKey     string
-		SecretKeyMask string
-		Theme         string
-		Size          string
-	}{
+	displaySettings := HCaptchaViewData{
 		Enabled:       m.settings.Enabled,
 		SiteKey:       m.settings.SiteKey,
 		SecretKey:     m.settings.SecretKey,
@@ -34,19 +25,12 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		Size:          m.settings.Size,
 	}
 
-	if err := m.ctx.Render.Render(w, r, "admin/module_hcaptcha", render.TemplateData{
-		Title: i18n.T(lang, "hcaptcha.title"),
-		User:  user,
-		Data:  displaySettings,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
-			{Label: i18n.T(lang, "hcaptcha.title"), URL: "/admin/hcaptcha", Active: true},
-		},
-	}); err != nil {
-		m.ctx.Logger.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "hcaptcha.title"), []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
+		{Label: i18n.T(lang, "hcaptcha.title"), URL: "/admin/hcaptcha", Active: true},
+	})
+	render.RenderTempl(w, r, HCaptchaPage(pc, displaySettings))
 }
 
 // handleSaveSettings handles POST /admin/hcaptcha - saves hCaptcha settings.

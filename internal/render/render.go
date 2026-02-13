@@ -22,12 +22,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/a-h/templ"
 	"github.com/alexedwards/scs/v2"
 
 	"github.com/olegiv/ocms-go/internal/geoip"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/service"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 // SessionKeyAdminLang is the session key for storing admin UI language preference.
@@ -938,4 +940,70 @@ func getUserRole(user any) string {
 	}
 
 	return roleField.String()
+}
+
+// BuildPageContext creates a PageContext for templ views from the request state.
+// This is used by modules to render templ-based admin pages.
+func (r *Renderer) BuildPageContext(req *http.Request, title string, breadcrumbs []Breadcrumb) *adminviews.PageContext {
+	user := middleware.GetUser(req)
+	adminLang := r.GetAdminLang(req)
+
+	var userInfo adminviews.UserInfo
+	if user != nil {
+		userInfo = adminviews.UserInfo{
+			ID:    user.ID,
+			Name:  user.Name,
+			Email: user.Email,
+			Role:  user.Role,
+		}
+	}
+
+	pc := &adminviews.PageContext{
+		Title:       title,
+		User:        userInfo,
+		SiteName:    middleware.GetSiteName(req),
+		CurrentPath: req.URL.Path,
+		AdminLang:   adminLang,
+	}
+
+	// Convert breadcrumbs
+	for _, b := range breadcrumbs {
+		pc.Breadcrumbs = append(pc.Breadcrumbs, adminviews.Breadcrumb{
+			Label:  b.Label,
+			URL:    b.URL,
+			Active: b.Active,
+		})
+	}
+
+	// Get sidebar modules
+	for _, m := range r.ListSidebarModules() {
+		pc.SidebarModules = append(pc.SidebarModules, adminviews.SidebarModule{
+			Name:     m.Name,
+			Label:    m.Label,
+			AdminURL: m.AdminURL,
+		})
+	}
+
+	// Get flash message from session
+	if r.sessionManager != nil {
+		if flash := r.sessionManager.PopString(req.Context(), "flash"); flash != "" {
+			pc.Flash = flash
+			pc.FlashType = r.sessionManager.PopString(req.Context(), "flash_type")
+			if pc.FlashType == "" {
+				pc.FlashType = "info"
+			}
+		}
+	}
+
+	return pc
+}
+
+// RenderTempl renders a templ component as an HTTP response.
+// This is used by modules to render templ-based admin pages.
+func RenderTempl(w http.ResponseWriter, r *http.Request, component templ.Component) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := component.Render(r.Context(), w); err != nil {
+		slog.Error("templ render error", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
 }
