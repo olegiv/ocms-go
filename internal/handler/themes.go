@@ -19,6 +19,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/theme"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 // ThemesHandler handles theme management routes.
@@ -55,24 +56,16 @@ type ThemeSettingsData struct {
 
 // List handles GET /admin/themes - displays available themes.
 func (h *ThemesHandler) List(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	themes := h.themeManager.ListThemesWithActive()
-
-	data := ThemeListData{
-		Themes: themes,
+	viewData := adminviews.ThemesListData{
+		Themes: convertThemeViewItems(h.themeManager.ListThemesWithActive()),
 	}
 
-	h.renderer.RenderPage(w, r, "admin/themes_list", render.TemplateData{
-		Title: i18n.T(lang, "nav.themes"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.themes"), URL: redirectAdminThemes, Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer,
+		i18n.T(lang, "nav.themes"),
+		themesBreadcrumbs(lang))
+	renderTempl(w, r, adminviews.ThemesListPage(pc, viewData))
 }
 
 // Activate handles POST /admin/themes/activate - activates a theme.
@@ -129,7 +122,6 @@ func (h *ThemesHandler) Activate(w http.ResponseWriter, r *http.Request) {
 
 // Settings handles GET /admin/themes/{name}/settings - displays theme settings form.
 func (h *ThemesHandler) Settings(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 	themeName := chi.URLParam(r, "name")
 
@@ -139,13 +131,9 @@ func (h *ThemesHandler) Settings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get theme info with active status
+	// Get active status
 	activeTheme := h.themeManager.GetActiveTheme()
-	themeInfo := theme.Info{
-		Name:     thm.Name,
-		Config:   thm.Config,
-		IsActive: activeTheme != nil && activeTheme.Name == thm.Name,
-	}
+	isActive := activeTheme != nil && activeTheme.Name == thm.Name
 
 	// Load saved settings from config
 	settings := h.loadThemeSettings(r, themeName)
@@ -157,22 +145,13 @@ func (h *ThemesHandler) Settings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	data := ThemeSettingsData{
-		Theme:    themeInfo,
-		Settings: settings,
-		Errors:   make(map[string]string),
-	}
+	viewData := convertThemeSettingsViewData(thm, themeName, isActive, settings, make(map[string]string))
 
-	h.renderer.RenderPage(w, r, "admin/themes_settings", render.TemplateData{
-		Title: thm.Config.Name + " Settings",
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.themes"), URL: redirectAdminThemes},
-			{Label: thm.Config.Name + " Settings", URL: redirectAdminThemesSlash + themeName + pathSettings, Active: true},
-		},
-	})
+	title := thm.Config.Name + " Settings"
+	pc := buildPageContext(r, h.sessionManager, h.renderer,
+		title,
+		themeSettingsBreadcrumbs(lang, thm.Config.Name, themeName))
+	renderTempl(w, r, adminviews.ThemeSettingsPage(pc, viewData))
 }
 
 // SaveSettings handles PUT /admin/themes/{name}/settings - saves theme settings.

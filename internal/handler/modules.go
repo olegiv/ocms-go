@@ -17,6 +17,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 // ModulesHandler handles module management routes.
@@ -47,26 +48,17 @@ type ModulesListData struct {
 
 // List handles GET /admin/modules - displays registered modules.
 func (h *ModulesHandler) List(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
-	modules := h.registry.ListInfo()
-	hooks := h.hooks.ListHookInfo()
-
-	data := ModulesListData{
-		Modules: modules,
-		Hooks:   hooks,
+	viewData := adminviews.ModulesViewData{
+		Modules: convertModuleViewItems(h.registry.ListInfo()),
+		Hooks:   convertHookViewItems(h.hooks.ListHookInfo()),
 	}
 
-	h.renderer.RenderPage(w, r, "admin/modules_list", render.TemplateData{
-		Title: i18n.T(lang, "nav.modules"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules", Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer,
+		i18n.T(lang, "nav.modules"),
+		modulesBreadcrumbs(lang))
+	renderTempl(w, r, adminviews.ModulesPage(pc, viewData))
 }
 
 // ToggleActiveRequest represents the request body for toggling module active status.

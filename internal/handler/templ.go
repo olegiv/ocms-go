@@ -17,8 +17,10 @@ import (
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/theme"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
@@ -751,4 +753,269 @@ func parsePermissionsJSON(jsonStr string) []string {
 		return nil
 	}
 	return perms
+}
+
+// =============================================================================
+// DOCS HELPERS
+// =============================================================================
+
+// docsBreadcrumbs returns breadcrumbs for the docs overview page.
+func docsBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "docs.title"), URL: redirectAdminDocs, Active: true},
+	}
+}
+
+// docsGuideBreadcrumbs returns breadcrumbs for a single guide page.
+func docsGuideBreadcrumbs(lang string, title string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "docs.title"), URL: redirectAdminDocs},
+		{Label: title, Active: true},
+	}
+}
+
+// convertDocsViewData converts handler types to the view data struct.
+func convertDocsViewData(sys DocsSystemInfo, groups []DocsEndpointGroup, guides []DocsGuide) adminviews.DocsViewData {
+	viewSys := adminviews.DocsSystemInfoView{
+		Version:        sys.Version,
+		GitCommit:      sys.GitCommit,
+		BuildTime:      sys.BuildTime,
+		GoVersion:      sys.GoVersion,
+		Environment:    sys.Environment,
+		ServerPort:     sys.ServerPort,
+		DBPath:         sys.DBPath,
+		ActiveTheme:    sys.ActiveTheme,
+		CacheType:      sys.CacheType,
+		EnabledModules: sys.EnabledModules,
+		TotalModules:   sys.TotalModules,
+		Uptime:         sys.Uptime,
+	}
+
+	var viewGroups []adminviews.DocsEndpointGroupView
+	for _, g := range groups {
+		vg := adminviews.DocsEndpointGroupView{Name: g.Name}
+		for _, ep := range g.Endpoints {
+			vg.Endpoints = append(vg.Endpoints, adminviews.DocsEndpointView{
+				Method:      ep.Method,
+				Path:        ep.Path,
+				Description: ep.Description,
+				Auth:        ep.Auth,
+			})
+		}
+		viewGroups = append(viewGroups, vg)
+	}
+
+	var viewGuides []adminviews.DocsGuideView
+	for _, g := range guides {
+		viewGuides = append(viewGuides, adminviews.DocsGuideView{
+			Slug:  g.Slug,
+			Title: g.Title,
+		})
+	}
+
+	return adminviews.DocsViewData{
+		System:    viewSys,
+		Endpoints: viewGroups,
+		Guides:    viewGuides,
+	}
+}
+
+// =============================================================================
+// MODULES HELPERS
+// =============================================================================
+
+// modulesBreadcrumbs returns breadcrumbs for the modules list page.
+func modulesBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules", Active: true},
+	}
+}
+
+// convertModuleViewItems converts module.Info slice to view ModuleViewItem slice.
+func convertModuleViewItems(modules []module.Info) []adminviews.ModuleViewItem {
+	items := make([]adminviews.ModuleViewItem, len(modules))
+	for i, m := range modules {
+		items[i] = adminviews.ModuleViewItem{
+			Name:              m.Name,
+			Version:           m.Version,
+			Description:       m.Description,
+			AdminURL:          m.AdminURL,
+			Active:            m.Active,
+			ShowInSidebar:     m.ShowInSidebar,
+			HasMigrations:     m.HasMigrations,
+			MigrationsApplied: m.MigrationsApplied,
+			MigrationCount:    m.MigrationCount,
+			MigrationsPending: m.MigrationsPending,
+		}
+	}
+	return items
+}
+
+// convertHookViewItems converts module.HookInfo slice to view HookViewItem slice.
+func convertHookViewItems(hooks []module.HookInfo) []adminviews.HookViewItem {
+	items := make([]adminviews.HookViewItem, len(hooks))
+	for i, h := range hooks {
+		items[i] = adminviews.HookViewItem{Name: h.Name}
+		for _, hh := range h.Handlers {
+			items[i].Handlers = append(items[i].Handlers, adminviews.HookHandlerViewItem{
+				Name:     hh.Name,
+				Module:   hh.Module,
+				Priority: hh.Priority,
+			})
+		}
+	}
+	return items
+}
+
+// =============================================================================
+// THEMES HELPERS
+// =============================================================================
+
+// themesBreadcrumbs returns breadcrumbs for the themes list page.
+func themesBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.themes"), URL: redirectAdminThemes, Active: true},
+	}
+}
+
+// themeSettingsBreadcrumbs returns breadcrumbs for the theme settings page.
+func themeSettingsBreadcrumbs(lang string, configName string, themeName string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.themes"), URL: redirectAdminThemes},
+		{Label: configName + " Settings", URL: redirectAdminThemesSlash + themeName + pathSettings, Active: true},
+	}
+}
+
+// convertThemeViewItems converts theme.Info slice to view ThemeViewItem slice.
+func convertThemeViewItems(themes []theme.Info) []adminviews.ThemeViewItem {
+	items := make([]adminviews.ThemeViewItem, len(themes))
+	for i, t := range themes {
+		items[i] = adminviews.ThemeViewItem{
+			Name:              t.Name,
+			ConfigName:        t.Config.Name,
+			ConfigVersion:     t.Config.Version,
+			ConfigAuthor:      t.Config.Author,
+			ConfigDescription: t.Config.Description,
+			ConfigScreenshot:  t.Config.Screenshot,
+			IsActive:          t.IsActive,
+			IsEmbedded:        t.IsEmbedded,
+			HasSettings:       len(t.Config.Settings) > 0,
+			SettingsURL:       fmt.Sprintf("/admin/themes/%s/settings", t.Name),
+		}
+	}
+	return items
+}
+
+// convertThemeSettingsViewData converts theme data to the settings view data.
+func convertThemeSettingsViewData(thm *theme.Theme, themeName string, isActive bool, settings map[string]string, errors map[string]string) adminviews.ThemeSettingsViewData {
+	var viewSettings []adminviews.ThemeSettingView
+	for _, s := range thm.Config.Settings {
+		vs := adminviews.ThemeSettingView{
+			Key:     s.Key,
+			Label:   s.Label,
+			Type:    s.Type,
+			Default: s.Default,
+			Options: s.Options,
+			Value:   settings[s.Key],
+			Error:   errors[s.Key],
+		}
+		viewSettings = append(viewSettings, vs)
+	}
+
+	return adminviews.ThemeSettingsViewData{
+		ThemeName:       themeName,
+		ThemeConfigName: thm.Config.Name,
+		IsActive:        isActive,
+		Settings:        viewSettings,
+		IsDemoMode:      middleware.IsDemoMode(),
+	}
+}
+
+// =============================================================================
+// EXPORT/IMPORT HELPERS
+// =============================================================================
+
+// exportBreadcrumbs returns breadcrumbs for the export page.
+func exportBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.export"), URL: "/admin/export", Active: true},
+	}
+}
+
+// convertImportViewData converts handler ImportFormData to view ImportViewData.
+func convertImportViewData(data ImportFormData) adminviews.ImportViewData {
+	viewData := adminviews.ImportViewData{
+		IsZipFile:     data.IsZipFile,
+		HasMediaFiles: data.HasMediaFiles,
+	}
+
+	// Convert conflict strategies
+	for _, cs := range data.ConflictStrategies {
+		viewData.ConflictStrategies = append(viewData.ConflictStrategies, adminviews.ConflictStrategyView{
+			Value:       cs.Value,
+			Label:       cs.Label,
+			Description: cs.Description,
+		})
+	}
+
+	// Convert validation result
+	if data.ValidationResult != nil {
+		vr := &adminviews.ValidationResultView{
+			Valid:     data.ValidationResult.Valid,
+			Entities:  data.ValidationResult.Entities,
+			Conflicts: data.ValidationResult.Conflicts,
+		}
+		for _, e := range data.ValidationResult.Errors {
+			vr.Errors = append(vr.Errors, adminviews.ValidationErrorView{
+				Entity:  e.Entity,
+				Message: e.Message,
+			})
+		}
+		viewData.ValidationResult = vr
+	}
+
+	// Convert import result
+	if data.ImportResult != nil {
+		ir := &adminviews.ImportResultView{
+			Success:      data.ImportResult.Success,
+			DryRun:       data.ImportResult.DryRun,
+			TotalCreated: data.ImportResult.TotalCreated(),
+			TotalUpdated: data.ImportResult.TotalUpdated(),
+			TotalSkipped: data.ImportResult.TotalSkipped(),
+			Created:      data.ImportResult.Created,
+			Updated:      data.ImportResult.Updated,
+			Skipped:      data.ImportResult.Skipped,
+		}
+		for _, e := range data.ImportResult.Errors {
+			ir.Errors = append(ir.Errors, adminviews.ImportErrorView{
+				Entity:  e.Entity,
+				ID:      e.ID,
+				Message: e.Message,
+			})
+		}
+		viewData.ImportResult = ir
+	}
+
+	// Convert uploaded data flags
+	if data.UploadedData != nil {
+		viewData.UploadedData = &adminviews.ImportUploadedDataView{
+			HasPages:      len(data.UploadedData.Pages) > 0,
+			HasCategories: len(data.UploadedData.Categories) > 0,
+			HasTags:       len(data.UploadedData.Tags) > 0,
+			HasMedia:      len(data.UploadedData.Media) > 0,
+			HasMenus:      len(data.UploadedData.Menus) > 0,
+			HasForms:      len(data.UploadedData.Forms) > 0,
+			HasUsers:      len(data.UploadedData.Users) > 0,
+			HasLanguages:  len(data.UploadedData.Languages) > 0,
+			HasConfig:     len(data.UploadedData.Config) > 0,
+		}
+	}
+
+	return viewData
 }

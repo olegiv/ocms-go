@@ -22,6 +22,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/transfer"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 // ImportExportHandler handles import/export routes.
@@ -56,22 +57,12 @@ func (h *ImportExportHandler) ExportForm(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	data := ExportFormData{
-		PageStatuses: []string{"all", "published", "draft"},
-	}
-
-	h.renderer.RenderPage(w, r, "admin/export", render.TemplateData{
-		Title: i18n.T(lang, "nav.export"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.export"), URL: "/admin/export", Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer,
+		i18n.T(lang, "nav.export"),
+		exportBreadcrumbs(lang))
+	renderTempl(w, r, adminviews.ExportPage(pc, adminviews.ExportViewData{}))
 }
 
 // Export handles POST /admin/export - generates and downloads the export.
@@ -175,14 +166,15 @@ func importBreadcrumbs(lang string) []render.Breadcrumb {
 }
 
 // renderImportPage renders the import template with the given data.
-func (h *ImportExportHandler) renderImportPage(w http.ResponseWriter, r *http.Request, user interface{}, data ImportFormData) {
+func (h *ImportExportHandler) renderImportPage(w http.ResponseWriter, r *http.Request, _ interface{}, data ImportFormData) {
 	lang := middleware.GetAdminLang(r)
-	h.renderer.RenderPage(w, r, "admin/import", render.TemplateData{
-		Title:       i18n.T(lang, "nav.import"),
-		User:        user,
-		Data:        data,
-		Breadcrumbs: importBreadcrumbs(lang),
-	})
+
+	viewData := convertImportViewData(data)
+
+	pc := buildPageContext(r, h.sessionManager, h.renderer,
+		i18n.T(lang, "nav.import"),
+		importBreadcrumbs(lang))
+	renderTempl(w, r, adminviews.ImportPage(pc, viewData))
 }
 
 // ImportForm handles GET /admin/import - displays the import form.

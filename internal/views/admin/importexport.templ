@@ -1,0 +1,674 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import "fmt"
+
+// ExportViewData holds data for the export page.
+type ExportViewData struct{}
+
+// ImportViewData holds data for the import page.
+type ImportViewData struct {
+	ConflictStrategies []ConflictStrategyView
+	ValidationResult   *ValidationResultView
+	ImportResult       *ImportResultView
+	UploadedData       *ImportUploadedDataView
+	IsZipFile          bool
+	HasMediaFiles      bool
+}
+
+// ConflictStrategyView holds a conflict strategy option.
+type ConflictStrategyView struct {
+	Value       string
+	Label       string
+	Description string
+}
+
+// ValidationResultView holds the result of import file validation.
+type ValidationResultView struct {
+	Valid     bool
+	Entities  map[string]int
+	Conflicts map[string][]string
+	Errors    []ValidationErrorView
+}
+
+// ValidationErrorView holds a single validation error.
+type ValidationErrorView struct {
+	Entity  string
+	Message string
+}
+
+// ImportResultView holds the result of an import operation.
+type ImportResultView struct {
+	Success      bool
+	DryRun       bool
+	TotalCreated int
+	TotalUpdated int
+	TotalSkipped int
+	Created      map[string]int
+	Updated      map[string]int
+	Skipped      map[string]int
+	Errors       []ImportErrorView
+}
+
+// ImportErrorView holds a single import error.
+type ImportErrorView struct {
+	Entity  string
+	ID      string
+	Message string
+}
+
+// ImportUploadedDataView holds flags for what data is in the uploaded file.
+type ImportUploadedDataView struct {
+	HasPages      bool
+	HasCategories bool
+	HasTags       bool
+	HasMedia      bool
+	HasMenus      bool
+	HasForms      bool
+	HasUsers      bool
+	HasLanguages  bool
+	HasConfig     bool
+}
+
+// ExportPage renders the content export page.
+templ ExportPage(pc *PageContext, data ExportViewData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("export.title") }</h1>
+				<p class="page-description">{ pc.T("export.description") }</p>
+			</div>
+		</div>
+		<div class="card">
+			<form
+				method="POST"
+				action="/admin/export"
+				class="card-body"
+				x-data={ `{
+					includeMedia: true,
+					includeMediaFiles: false,
+					get willBeZip() { return this.includeMedia && this.includeMediaFiles; }
+				}` }
+			>
+				<div class="export-sections">
+					<!-- Content Section -->
+					<div class="export-section">
+						<h3 class="export-section-title">{ pc.T("export.content_section") }</h3>
+						<div class="export-options">
+							<div class="form-checkbox">
+								<input type="checkbox" id="include_pages" name="include_pages" value="on" checked class="checkbox-input"/>
+								<label for="include_pages" class="checkbox-label">
+									<strong>{ pc.T("export.pages") }</strong>
+									<span class="checkbox-hint">{ pc.T("export.pages_hint") }</span>
+								</label>
+							</div>
+							<div class="form-group export-sub-option nested-options">
+								<label for="page_status" class="form-label">{ pc.T("export.page_status") }</label>
+								<select id="page_status" name="page_status" class="form-select">
+									<option value="all">{ pc.T("export.status_all") }</option>
+									<option value="published">{ pc.T("export.status_published") }</option>
+									<option value="draft">{ pc.T("export.status_draft") }</option>
+								</select>
+							</div>
+							<div class="form-checkbox">
+								<input type="checkbox" id="include_categories" name="include_categories" value="on" checked class="checkbox-input"/>
+								<label for="include_categories" class="checkbox-label">
+									<strong>{ pc.T("export.categories") }</strong>
+									<span class="checkbox-hint">{ pc.T("export.categories_hint") }</span>
+								</label>
+							</div>
+							<div class="form-checkbox">
+								<input type="checkbox" id="include_tags" name="include_tags" value="on" checked class="checkbox-input"/>
+								<label for="include_tags" class="checkbox-label">
+									<strong>{ pc.T("export.tags") }</strong>
+									<span class="checkbox-hint">{ pc.T("export.tags_hint") }</span>
+								</label>
+							</div>
+							<div class="form-checkbox">
+								<input
+									type="checkbox"
+									id="include_media"
+									name="include_media"
+									value="on"
+									checked
+									class="checkbox-input"
+									x-model="includeMedia"
+								/>
+								<label for="include_media" class="checkbox-label">
+									<strong>{ pc.T("export.media") }</strong>
+									<span class="checkbox-hint">{ pc.T("export.media_hint") }</span>
+								</label>
+							</div>
+							<div class="form-checkbox ml-8" x-show="includeMedia" x-cloak>
+								<input
+									type="checkbox"
+									id="include_media_files"
+									name="include_media_files"
+									value="on"
+									class="checkbox-input"
+									x-model="includeMediaFiles"
+								/>
+								<label for="include_media_files" class="checkbox-label">
+									<strong>{ pc.T("export.media_files") }</strong>
+									<span class="checkbox-hint">{ pc.T("export.media_files_hint") }</span>
+								</label>
+							</div>
+							<div class="form-checkbox">
+								<input type="checkbox" id="include_menus" name="include_menus" value="on" checked class="checkbox-input"/>
+								<label for="include_menus" class="checkbox-label">
+									<strong>{ pc.T("export.menus") }</strong>
+									<span class="checkbox-hint">{ pc.T("export.menus_hint") }</span>
+								</label>
+							</div>
+						</div>
+					</div>
+					<!-- Forms Section -->
+					<div class="export-section">
+						<h3 class="export-section-title">{ pc.T("export.forms_section") }</h3>
+						<div class="export-options">
+							<div class="form-checkbox">
+								<input type="checkbox" id="include_forms" name="include_forms" value="on" checked class="checkbox-input"/>
+								<label for="include_forms" class="checkbox-label">
+									<strong>{ pc.T("export.forms") }</strong>
+									<span class="checkbox-hint">{ pc.T("export.forms_hint") }</span>
+								</label>
+							</div>
+							<div class="form-checkbox ml-8">
+								<input type="checkbox" id="include_submissions" name="include_submissions" value="on" class="checkbox-input"/>
+								<label for="include_submissions" class="checkbox-label">
+									<strong>{ pc.T("export.submissions") }</strong>
+									<span class="checkbox-hint">{ pc.T("export.submissions_hint") }</span>
+								</label>
+							</div>
+						</div>
+					</div>
+					<!-- System Section -->
+					<div class="export-section">
+						<h3 class="export-section-title">{ pc.T("export.system_section") }</h3>
+						<div class="export-options">
+							<div class="form-checkbox">
+								<input type="checkbox" id="include_users" name="include_users" value="on" checked class="checkbox-input"/>
+								<label for="include_users" class="checkbox-label">
+									<strong>{ pc.T("export.users") }</strong>
+									<span class="checkbox-hint">{ pc.T("export.users_hint") }</span>
+								</label>
+							</div>
+							<div class="form-checkbox">
+								<input type="checkbox" id="include_languages" name="include_languages" value="on" checked class="checkbox-input"/>
+								<label for="include_languages" class="checkbox-label">
+									<strong>{ pc.T("export.languages") }</strong>
+									<span class="checkbox-hint">{ pc.T("export.languages_hint") }</span>
+								</label>
+							</div>
+							<div class="form-checkbox">
+								<input type="checkbox" id="include_config" name="include_config" value="on" checked class="checkbox-input"/>
+								<label for="include_config" class="checkbox-label">
+									<strong>{ pc.T("export.config") }</strong>
+									<span class="checkbox-hint">{ pc.T("export.config_hint") }</span>
+								</label>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="export-info">
+					@iconInfo()
+					<p>{ pc.T("export.info") }</p>
+				</div>
+				<div class="export-info zip-info warning-notice" x-show="willBeZip" x-cloak>
+					@iconArchive()
+					<p>{ pc.T("export.zip_info") }</p>
+				</div>
+				<div class="form-actions">
+					<button type="submit" class="btn btn-primary">
+						@iconDownload()
+						<span x-text={ fmt.Sprintf("willBeZip ? '%s' : '%s'", pc.T("export.download_zip"), pc.T("export.download")) }>
+							{ pc.T("export.download") }
+						</span>
+					</button>
+				</div>
+			</form>
+		</div>
+	}
+}
+
+// ImportPage renders the content import page.
+templ ImportPage(pc *PageContext, data ImportViewData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("import.title") }</h1>
+				<p class="page-description">{ pc.T("import.description") }</p>
+			</div>
+		</div>
+		// Step 1: File Upload
+		if data.ValidationResult == nil && data.ImportResult == nil {
+			@importFileUpload(pc)
+		}
+		// Step 2: Validation Results & Import Options
+		if data.ValidationResult != nil && data.ImportResult == nil {
+			@importValidationResults(pc, data)
+			if data.ValidationResult.Valid {
+				@importOptionsForm(pc, data)
+			}
+		}
+		// Step 3: Import Results
+		if data.ImportResult != nil {
+			@importResults(pc, data)
+		}
+	}
+}
+
+// importFileUpload renders the file upload form (step 1).
+templ importFileUpload(pc *PageContext) {
+	<div class="card">
+		<form
+			method="POST"
+			action="/admin/import/validate"
+			enctype="multipart/form-data"
+			class="card-body"
+			x-data="importUploader()"
+			@submit="handleSubmit($event)"
+		>
+			<div class="media-dropzone">
+				<div
+					class="media-dropzone-area"
+					:class="{ 'is-dragover': dragover, 'has-content': selectedFile }"
+					@dragover.prevent="dragover = true"
+					@dragleave.prevent="dragover = false"
+					@drop.prevent="handleDrop($event)"
+					@click="$refs.fileInput.click()"
+				>
+					<input
+						type="file"
+						x-ref="fileInput"
+						name="import_file"
+						accept=".json,.zip"
+						class="media-dropzone-input"
+						@change="handleFileSelect($event)"
+					/>
+					<!-- Empty state -->
+					<div class="media-dropzone-empty" x-show="!selectedFile">
+						<div class="media-dropzone-icon">
+							@iconUploadLarge()
+						</div>
+						<p class="media-dropzone-title">{ pc.T("import.drop_file") }</p>
+						<p class="media-dropzone-subtitle">{ pc.T("uploader.or_click") }</p>
+						<p class="media-dropzone-hint">{ pc.T("import.file_hint_extended") }</p>
+					</div>
+					<!-- Selected file state -->
+					<div class="media-dropzone-files" x-show="selectedFile" @click.stop>
+						<div class="media-dropzone-file is-success">
+							<div class="media-dropzone-file-preview">
+								<div class="media-dropzone-file-icon-small">
+									@iconFile()
+								</div>
+							</div>
+							<div class="media-dropzone-file-info">
+								<span class="media-dropzone-file-name" x-text="selectedFile?.name"></span>
+								<span class="media-dropzone-file-size" x-text="formatSize(selectedFile?.size || 0)"></span>
+							</div>
+							<button
+								type="button"
+								class="media-dropzone-file-remove"
+								@click.stop="clearFile()"
+								title={ pc.T("btn.remove") }
+							>
+								@iconXSmall()
+							</button>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="import-info">
+				@iconInfo()
+				<p>{ pc.T("import.info") }</p>
+			</div>
+			<div class="media-dropzone-buttons">
+				<button type="submit" class="btn btn-primary" :disabled="!selectedFile">
+					@iconUpload()
+					{ pc.T("import.validate") }
+				</button>
+			</div>
+		</form>
+	</div>
+	@importUploaderScript()
+}
+
+// importValidationResults renders the validation results card (step 2a).
+templ importValidationResults(pc *PageContext, data ImportViewData) {
+	<div class="card">
+		<div class="card-body">
+			if data.ValidationResult.Valid {
+				<div class="validation-success">
+					@iconSuccess()
+					<span>{ pc.T("import.validation_success") }</span>
+				</div>
+			} else {
+				<div class="validation-error">
+					@iconError()
+					<span>{ pc.T("import.validation_error") }</span>
+				</div>
+			}
+			if data.IsZipFile {
+				<div class="zip-file-notice">
+					@iconArchive()
+					<span>{ pc.T("import.zip_file_detected") }</span>
+					if data.HasMediaFiles {
+						<span class="media-files-badge">{ pc.T("import.contains_media_files") }</span>
+					}
+				</div>
+			}
+			<h3 class="section-title">{ pc.T("import.found_entities") }</h3>
+			<div class="entity-summary">
+				for entity, count := range data.ValidationResult.Entities {
+					if count > 0 {
+						<div class="entity-item">
+							<span class="entity-name">{ entity }</span>
+							<span class="entity-count">{ fmt.Sprintf("%d", count) }</span>
+						</div>
+					}
+				}
+			</div>
+			if len(data.ValidationResult.Conflicts) > 0 {
+				<h3 class="section-title">{ pc.T("import.conflicts") }</h3>
+				<div class="conflicts-section">
+					for entity, slugs := range data.ValidationResult.Conflicts {
+						<div class="conflict-group">
+							<h4 class="conflict-entity">{ entity }</h4>
+							<ul class="conflict-list">
+								for _, slug := range slugs {
+									<li>{ slug }</li>
+								}
+							</ul>
+						</div>
+					}
+				</div>
+			}
+			if len(data.ValidationResult.Errors) > 0 {
+				<h3 class="section-title">{ pc.T("import.validation_errors") }</h3>
+				<div class="errors-section">
+					for _, validationErr := range data.ValidationResult.Errors {
+						<div class="error-item">
+							<strong>{ validationErr.Entity }:</strong> { validationErr.Message }
+						</div>
+					}
+				</div>
+			}
+		</div>
+	</div>
+}
+
+// importOptionsForm renders the import options form (step 2b).
+templ importOptionsForm(pc *PageContext, data ImportViewData) {
+	<div class="card">
+		<form method="POST" action="/admin/import" class="card-body">
+			<h3 class="section-title">{ pc.T("import.options") }</h3>
+			<div class="import-sections">
+				<!-- Conflict Strategy -->
+				<div class="import-section">
+					<h4 class="import-section-title">{ pc.T("import.conflict_strategy") }</h4>
+					<div class="form-group">
+						<select name="conflict_strategy" class="form-select">
+							for _, strategy := range data.ConflictStrategies {
+								<option value={ strategy.Value }>{ strategy.Label } - { strategy.Description }</option>
+							}
+						</select>
+					</div>
+				</div>
+				<!-- Content Section -->
+				<div class="import-section">
+					<h4 class="import-section-title">{ pc.T("import.content_section") }</h4>
+					<div class="import-options">
+						if data.UploadedData != nil && data.UploadedData.HasPages {
+							@importCheckbox("import_pages", pc.T("import.pages"), pc.T("import.pages_hint"), true)
+						}
+						if data.UploadedData != nil && data.UploadedData.HasCategories {
+							@importCheckbox("import_categories", pc.T("import.categories"), pc.T("import.categories_hint"), true)
+						}
+						if data.UploadedData != nil && data.UploadedData.HasTags {
+							@importCheckbox("import_tags", pc.T("import.tags"), pc.T("import.tags_hint"), true)
+						}
+						if data.UploadedData != nil && data.UploadedData.HasMedia {
+							@importCheckbox("import_media", pc.T("import.media"), pc.T("import.media_hint"), true)
+						}
+						if data.HasMediaFiles {
+							<div class="form-checkbox ml-8">
+								<input type="checkbox" id="import_media_files" name="import_media_files" value="on" checked class="checkbox-input"/>
+								<label for="import_media_files" class="checkbox-label">
+									<strong>{ pc.T("import.media_files") }</strong>
+									<span class="checkbox-hint">{ pc.T("import.media_files_hint") }</span>
+								</label>
+							</div>
+						}
+						if data.UploadedData != nil && data.UploadedData.HasMenus {
+							@importCheckbox("import_menus", pc.T("import.menus"), pc.T("import.menus_hint"), true)
+						}
+					</div>
+				</div>
+				<!-- Forms Section -->
+				if data.UploadedData != nil && data.UploadedData.HasForms {
+					<div class="import-section">
+						<h4 class="import-section-title">{ pc.T("import.forms_section") }</h4>
+						<div class="import-options">
+							@importCheckbox("import_forms", pc.T("import.forms"), pc.T("import.forms_hint"), true)
+						</div>
+					</div>
+				}
+				<!-- System Section -->
+				<div class="import-section">
+					<h4 class="import-section-title">{ pc.T("import.system_section") }</h4>
+					<div class="import-options">
+						if data.UploadedData != nil && data.UploadedData.HasUsers {
+							@importCheckbox("import_users", pc.T("import.users"), pc.T("import.users_hint"), true)
+						}
+						if data.UploadedData != nil && data.UploadedData.HasLanguages {
+							@importCheckbox("import_languages", pc.T("import.languages"), pc.T("import.languages_hint"), true)
+						}
+						if data.UploadedData != nil && data.UploadedData.HasConfig {
+							@importCheckbox("import_config", pc.T("import.config"), pc.T("import.config_hint"), true)
+						}
+					</div>
+				</div>
+				<!-- Dry Run Option -->
+				<div class="import-section">
+					<h4 class="import-section-title">{ pc.T("import.advanced") }</h4>
+					<div class="import-options">
+						@importCheckbox("dry_run", pc.T("import.dry_run"), pc.T("import.dry_run_hint"), false)
+					</div>
+				</div>
+			</div>
+			<div class="form-actions">
+				<a href="/admin/import" class="btn btn-secondary">
+					{ pc.T("btn.cancel") }
+				</a>
+				<button type="submit" class="btn btn-primary">
+					@iconUpload()
+					{ pc.T("import.start_import") }
+				</button>
+			</div>
+		</form>
+	</div>
+}
+
+// importCheckbox renders a checkbox with label and hint.
+templ importCheckbox(name string, label string, hint string, checked bool) {
+	<div class="form-checkbox">
+		if checked {
+			<input type="checkbox" id={ name } name={ name } value="on" checked class="checkbox-input"/>
+		} else {
+			<input type="checkbox" id={ name } name={ name } value="on" class="checkbox-input"/>
+		}
+		<label for={ name } class="checkbox-label">
+			<strong>{ label }</strong>
+			<span class="checkbox-hint">{ hint }</span>
+		</label>
+	</div>
+}
+
+// importResults renders the import results card (step 3).
+templ importResults(pc *PageContext, data ImportViewData) {
+	<div class="card">
+		<div class="card-body">
+			if data.ImportResult.Success {
+				<div class="import-success">
+					@iconSuccessLarge()
+					<div>
+						if data.ImportResult.DryRun {
+							<h3>{ pc.T("import.dry_run_complete") }</h3>
+							<p>{ pc.T("import.dry_run_note") }</p>
+						} else {
+							<h3>{ pc.T("import.success") }</h3>
+						}
+					</div>
+				</div>
+			} else {
+				<div class="import-failure">
+					@iconErrorLarge()
+					<div>
+						<h3>{ pc.T("import.failed") }</h3>
+						<p>{ pc.T("import.errors_occurred") }</p>
+					</div>
+				</div>
+			}
+			<h3 class="section-title">{ pc.T("import.summary") }</h3>
+			<div class="results-grid">
+				<div class="result-card result-created">
+					<span class="result-count">{ fmt.Sprintf("%d", data.ImportResult.TotalCreated) }</span>
+					<span class="result-label">{ pc.T("import.created") }</span>
+				</div>
+				<div class="result-card result-updated">
+					<span class="result-count">{ fmt.Sprintf("%d", data.ImportResult.TotalUpdated) }</span>
+					<span class="result-label">{ pc.T("import.updated") }</span>
+				</div>
+				<div class="result-card result-skipped">
+					<span class="result-count">{ fmt.Sprintf("%d", data.ImportResult.TotalSkipped) }</span>
+					<span class="result-label">{ pc.T("import.skipped") }</span>
+				</div>
+			</div>
+			if len(data.ImportResult.Created) > 0 {
+				<h4 class="subsection-title">{ pc.T("import.details_created") }</h4>
+				<div class="details-grid">
+					for entity, count := range data.ImportResult.Created {
+						if count > 0 {
+							<div class="detail-item">
+								<span class="detail-entity">{ entity }</span>
+								<span class="detail-count">{ fmt.Sprintf("%d", count) }</span>
+							</div>
+						}
+					}
+				</div>
+			}
+			if len(data.ImportResult.Updated) > 0 {
+				<h4 class="subsection-title">{ pc.T("import.details_updated") }</h4>
+				<div class="details-grid">
+					for entity, count := range data.ImportResult.Updated {
+						if count > 0 {
+							<div class="detail-item">
+								<span class="detail-entity">{ entity }</span>
+								<span class="detail-count">{ fmt.Sprintf("%d", count) }</span>
+							</div>
+						}
+					}
+				</div>
+			}
+			if len(data.ImportResult.Skipped) > 0 {
+				<h4 class="subsection-title">{ pc.T("import.details_skipped") }</h4>
+				<div class="details-grid">
+					for entity, count := range data.ImportResult.Skipped {
+						if count > 0 {
+							<div class="detail-item">
+								<span class="detail-entity">{ entity }</span>
+								<span class="detail-count">{ fmt.Sprintf("%d", count) }</span>
+							</div>
+						}
+					}
+				</div>
+			}
+			if len(data.ImportResult.Errors) > 0 {
+				<h4 class="subsection-title errors-title">{ pc.T("import.errors") }</h4>
+				<div class="errors-list">
+					for _, importErr := range data.ImportResult.Errors {
+						<div class="error-item">
+							<strong>{ importErr.Entity } ({ importErr.ID }):</strong> { importErr.Message }
+						</div>
+					}
+				</div>
+			}
+			<div class="form-actions">
+				<a href="/admin/import" class="btn btn-primary">
+					{ pc.T("import.import_another") }
+				</a>
+			</div>
+		</div>
+	</div>
+}
+
+// importUploaderScript renders the Alpine.js import uploader component.
+templ importUploaderScript() {
+	<script>
+	function importUploader() {
+		return {
+			selectedFile: null,
+			dragover: false,
+
+			handleFileSelect(event) {
+				const files = event.target.files;
+				if (files && files.length > 0) {
+					this.selectedFile = files[0];
+				}
+			},
+
+			handleDrop(event) {
+				this.dragover = false;
+				const files = event.dataTransfer.files;
+				if (files && files.length > 0) {
+					this.selectedFile = files[0];
+					this.$refs.fileInput.files = files;
+				}
+			},
+
+			clearFile() {
+				this.selectedFile = null;
+				this.$refs.fileInput.value = '';
+			},
+
+			handleSubmit(event) {
+				if (!this.selectedFile) {
+					event.preventDefault();
+					this.$refs.fileInput.click();
+				}
+			},
+
+			formatSize(bytes) {
+				if (bytes === 0) return '0 Bytes';
+				const k = 1024;
+				const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+				const i = Math.floor(Math.log(bytes) / Math.log(k));
+				return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+			}
+		};
+	}
+	</script>
+}
+
+// Large upload icon (48x48) for the dropzone empty state.
+templ iconUploadLarge() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" x2="12" y1="3" y2="15"></line></svg>
+}
+
+// Small X icon (16x16) for the file remove button.
+templ iconXSmall() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+}
+
+// Large success icon (32x32) for import results.
+templ iconSuccessLarge() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+}
+
+// Large error icon (32x32) for import results.
+templ iconErrorLarge() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" x2="9" y1="9" y2="15"></line><line x1="9" x2="15" y1="9" y2="15"></line></svg>
+}
