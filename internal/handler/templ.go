@@ -1019,3 +1019,363 @@ func convertImportViewData(data ImportFormData) adminviews.ImportViewData {
 
 	return viewData
 }
+
+// =============================================================================
+// WIDGETS HELPERS
+// =============================================================================
+
+// widgetsBreadcrumbs returns breadcrumbs for the widgets list page.
+func widgetsBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.widgets"), URL: "/admin/widgets", Active: true},
+	}
+}
+
+// convertWidgetsViewData converts handler WidgetsListData to view WidgetsViewData.
+func convertWidgetsViewData(data WidgetsListData) adminviews.WidgetsViewData {
+	var areas []adminviews.WidgetAreaView
+	for _, wa := range data.WidgetAreas {
+		area := adminviews.WidgetAreaView{
+			AreaID:          wa.Area.ID,
+			AreaName:        wa.Area.Name,
+			AreaDescription: wa.Area.Description,
+		}
+		for _, w := range wa.Widgets {
+			area.Widgets = append(area.Widgets, adminviews.WidgetItemView{
+				ID:         w.ID,
+				WidgetType: w.WidgetType,
+				Title:      w.Title.String,
+				HasTitle:   w.Title.Valid && w.Title.String != "",
+			})
+		}
+		areas = append(areas, area)
+	}
+
+	var types []adminviews.WidgetTypeView
+	for _, wt := range data.WidgetTypes {
+		types = append(types, adminviews.WidgetTypeView{
+			ID:          wt.ID,
+			Name:        wt.Name,
+			Description: wt.Description,
+		})
+	}
+
+	themeName := ""
+	if data.Theme != nil {
+		themeName = data.Theme.Name
+	}
+
+	return adminviews.WidgetsViewData{
+		ThemeName:   themeName,
+		WidgetAreas: areas,
+		WidgetTypes: types,
+	}
+}
+
+// =============================================================================
+// CONFIG HELPERS
+// =============================================================================
+
+// convertConfigViewData converts handler ConfigFormData to view ConfigViewData.
+func convertConfigViewData(data ConfigFormData) adminviews.ConfigViewData {
+	var items []adminviews.ConfigItemView
+	for _, item := range data.Items {
+		items = append(items, adminviews.ConfigItemView{
+			Key:         item.Key,
+			Value:       item.Value,
+			Type:        item.Type,
+			Description: item.Description,
+			Label:       item.Label,
+		})
+	}
+
+	var transItems []adminviews.TranslatableConfigItemView
+	for _, item := range data.TranslatableItems {
+		ti := adminviews.TranslatableConfigItemView{
+			Key:         item.Key,
+			Label:       item.Label,
+			Description: item.Description,
+			Type:        item.Type,
+		}
+		for _, tr := range item.Translations {
+			ti.Translations = append(ti.Translations, adminviews.ConfigTranslationValueView{
+				LanguageCode: tr.LanguageCode,
+				LanguageName: tr.LanguageName,
+				Value:        tr.Value,
+			})
+		}
+		transItems = append(transItems, ti)
+	}
+
+	return adminviews.ConfigViewData{
+		Items:                items,
+		TranslatableItems:    transItems,
+		Errors:               data.Errors,
+		HasMultipleLanguages: data.HasMultipleLanguages,
+	}
+}
+
+// =============================================================================
+// WEBHOOKS HELPERS
+// =============================================================================
+
+// webhooksBreadcrumbs returns breadcrumbs for the webhooks list page.
+func webhooksBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.webhooks"), URL: redirectAdminWebhooks, Active: true},
+	}
+}
+
+// webhookNewBreadcrumbs returns breadcrumbs for the new webhook form.
+func webhookNewBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.webhooks"), URL: redirectAdminWebhooks},
+		{Label: i18n.T(lang, "webhooks.new"), URL: redirectAdminWebhooksNew, Active: true},
+	}
+}
+
+// webhookEditBreadcrumbs returns breadcrumbs for the edit webhook form.
+func webhookEditBreadcrumbs(lang string, webhookName string, webhookID int64) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.webhooks"), URL: redirectAdminWebhooks},
+		{Label: webhookName, URL: fmt.Sprintf(redirectAdminWebhooksID, webhookID), Active: true},
+	}
+}
+
+// webhookDeliveriesBreadcrumbs returns breadcrumbs for the deliveries page.
+func webhookDeliveriesBreadcrumbs(lang string, webhook store.Webhook) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.webhooks"), URL: redirectAdminWebhooks},
+		{Label: webhook.Name, URL: fmt.Sprintf(redirectAdminWebhooksID, webhook.ID)},
+		{Label: i18n.T(lang, "webhooks.deliveries_title"), URL: fmt.Sprintf(redirectAdminWebhooksIDDeliveries, webhook.ID), Active: true},
+	}
+}
+
+// convertWebhooksListViewData converts handler WebhooksListData to view WebhooksListViewData.
+func convertWebhooksListViewData(data WebhooksListData) adminviews.WebhooksListViewData {
+	var items []adminviews.WebhookListItemView
+	for _, wh := range data.Webhooks {
+		item := adminviews.WebhookListItemView{
+			ID:             wh.ID,
+			Name:           wh.Name,
+			URL:            wh.Url,
+			Events:         wh.Events,
+			IsActive:       wh.IsActive,
+			TotalDelivered: wh.TotalDelivered,
+			TotalPending:   wh.TotalPending,
+			TotalDead:      wh.TotalDead,
+			SuccessRate:    wh.SuccessRate,
+			HealthStatus:   wh.HealthStatus,
+		}
+		if wh.LastSuccessfulAt != nil {
+			item.HasLastSuccessfulAt = true
+			item.LastSuccessfulAt = wh.LastSuccessfulAt.Format("Jan 2, 15:04")
+		}
+		items = append(items, item)
+	}
+
+	return adminviews.WebhooksListViewData{
+		Webhooks:      items,
+		TotalWebhooks: data.TotalWebhooks,
+	}
+}
+
+// convertWebhookFormViewData converts handler WebhookFormData to view WebhookFormViewData.
+func convertWebhookFormViewData(data WebhookFormData) adminviews.WebhookFormViewData {
+	var events []adminviews.WebhookEventInfoView
+	for _, ev := range data.Events {
+		events = append(events, adminviews.WebhookEventInfoView{
+			Type:        ev.Type,
+			Description: ev.Description,
+		})
+	}
+
+	viewData := adminviews.WebhookFormViewData{
+		IsEdit:      data.IsEdit,
+		Events:      events,
+		Errors:      data.Errors,
+		FormValues:  data.FormValues,
+		FormEvents:  data.FormEvents,
+		FormHeaders: data.FormHeaders,
+	}
+
+	if data.Webhook != nil {
+		viewData.WebhookID = data.Webhook.ID
+		viewData.CreatedAt = data.Webhook.CreatedAt.Format("Jan 2, 2006 3:04 PM")
+		viewData.UpdatedAt = data.Webhook.UpdatedAt.Format("Jan 2, 2006 3:04 PM")
+	}
+
+	return viewData
+}
+
+// convertWebhookDeliveriesViewData converts handler WebhookDeliveriesData to view.
+func convertWebhookDeliveriesViewData(data WebhookDeliveriesData) adminviews.WebhookDeliveriesViewData {
+	var deliveries []adminviews.WebhookDeliveryView
+	for _, d := range data.Deliveries {
+		dv := adminviews.WebhookDeliveryView{
+			ID:        d.ID,
+			Event:     d.Event,
+			Status:    d.Status,
+			Attempts:  d.Attempts,
+			Payload:   d.Payload,
+			CreatedAt: d.CreatedAt.Format("Jan 2, 15:04:05"),
+			UpdatedAt: d.UpdatedAt.Format("Jan 2, 15:04:05"),
+			CanRetry:  d.Status == "dead" || d.Status == "failed",
+		}
+		if d.ResponseCode.Valid {
+			dv.HasResponseCode = true
+			dv.ResponseCode = d.ResponseCode.Int64
+		}
+		if d.ErrorMessage.Valid && d.ErrorMessage.String != "" {
+			dv.HasErrorMessage = true
+			dv.ErrorMessage = d.ErrorMessage.String
+		}
+		if d.ResponseBody.Valid && d.ResponseBody.String != "" {
+			dv.HasResponseBody = true
+			dv.ResponseBody = d.ResponseBody.String
+		}
+		if d.DeliveredAt.Valid {
+			dv.HasDeliveredAt = true
+			dv.DeliveredAt = d.DeliveredAt.Time.Format("Jan 2, 15:04:05")
+		}
+		if d.NextRetryAt.Valid {
+			dv.HasNextRetryAt = true
+			dv.NextRetryAt = d.NextRetryAt.Time.Format("Jan 2, 15:04:05")
+		}
+		deliveries = append(deliveries, dv)
+	}
+
+	return adminviews.WebhookDeliveriesViewData{
+		WebhookID:   data.Webhook.ID,
+		WebhookName: data.Webhook.Name,
+		Deliveries:  deliveries,
+		TotalCount:  data.TotalCount,
+		Pagination:  convertPagination(data.Pagination),
+	}
+}
+
+// =============================================================================
+// SCHEDULER HELPERS
+// =============================================================================
+
+// schedulerBreadcrumbs returns breadcrumbs for the scheduler list page.
+func schedulerBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "scheduler.title"), URL: redirectAdminScheduler, Active: true},
+	}
+}
+
+// schedulerTaskFormBreadcrumbs returns breadcrumbs for the task form page.
+func schedulerTaskFormBreadcrumbs(lang string, title string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "scheduler.title"), URL: redirectAdminScheduler},
+		{Label: title, Active: true},
+	}
+}
+
+// schedulerTaskRunsBreadcrumbs returns breadcrumbs for the task runs page.
+func schedulerTaskRunsBreadcrumbs(lang string, taskName string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "scheduler.title"), URL: redirectAdminScheduler},
+		{Label: taskName},
+		{Label: i18n.T(lang, "scheduler.task_runs"), Active: true},
+	}
+}
+
+// convertSchedulerListViewData converts handler data to view SchedulerListViewData.
+func convertSchedulerListViewData(data SchedulerListData) adminviews.SchedulerListViewData {
+	var jobs []adminviews.SchedulerJobViewItem
+	for _, j := range data.Jobs {
+		jobs = append(jobs, adminviews.SchedulerJobViewItem{
+			Source:          j.Source,
+			Name:            j.Name,
+			Description:     j.Description,
+			DefaultSchedule: j.DefaultSchedule,
+			Schedule:        j.Schedule,
+			IsOverridden:    j.IsOverridden,
+			LastRun:         j.LastRun,
+			NextRun:         j.NextRun,
+			CanTrigger:      j.CanTrigger,
+		})
+	}
+
+	var tasks []adminviews.SchedulerTaskViewItem
+	for _, t := range data.Tasks {
+		tasks = append(tasks, adminviews.SchedulerTaskViewItem{
+			ID:       t.ID,
+			Name:     t.Name,
+			URL:      t.URL,
+			Schedule: t.Schedule,
+			IsActive: t.IsActive,
+			LastRun:  t.LastRun,
+		})
+	}
+
+	return adminviews.SchedulerListViewData{
+		Jobs:       jobs,
+		Tasks:      tasks,
+		IsDemoMode: middleware.IsDemoMode(),
+	}
+}
+
+// convertSchedulerTaskFormViewData converts store.ScheduledTask to view SchedulerTaskFormViewData.
+func convertSchedulerTaskFormViewData(task store.ScheduledTask, isEdit bool) adminviews.SchedulerTaskFormViewData {
+	timeout := task.TimeoutSeconds
+	if timeout == 0 {
+		timeout = 30
+	}
+	return adminviews.SchedulerTaskFormViewData{
+		TaskID:         task.ID,
+		Name:           task.Name,
+		URL:            task.Url,
+		Schedule:       task.Schedule,
+		TimeoutSeconds: timeout,
+		IsEdit:         isEdit,
+		IsDemoMode:     middleware.IsDemoMode(),
+	}
+}
+
+// convertSchedulerTaskRunsViewData converts handler data to view SchedulerTaskRunsViewData.
+func convertSchedulerTaskRunsViewData(task store.ScheduledTask, runs []store.ScheduledTaskRun, totalCount int64, pagination AdminPagination) adminviews.SchedulerTaskRunsViewData {
+	var viewRuns []adminviews.SchedulerTaskRunView
+	for _, r := range runs {
+		vr := adminviews.SchedulerTaskRunView{
+			Status:    r.Status,
+			StartedAt: r.StartedAt.Format("2006-01-02 15:04:05"),
+		}
+		if r.StatusCode.Valid {
+			vr.HasStatusCode = true
+			vr.StatusCode = r.StatusCode.Int64
+		}
+		if r.DurationMs.Valid {
+			vr.HasDuration = true
+			vr.DurationMs = r.DurationMs.Int64
+		}
+		if r.ErrorMessage.Valid && r.ErrorMessage.String != "" {
+			vr.HasErrorMessage = true
+			vr.ErrorMessage = r.ErrorMessage.String
+		}
+		viewRuns = append(viewRuns, vr)
+	}
+
+	return adminviews.SchedulerTaskRunsViewData{
+		TaskID:       task.ID,
+		TaskName:     task.Name,
+		TaskURL:      task.Url,
+		TaskSchedule: task.Schedule,
+		TaskTimeout:  task.TimeoutSeconds,
+		TaskIsActive: task.IsActive == 1,
+		TotalCount:   totalCount,
+		Runs:         viewRuns,
+		Pagination:   convertPagination(pagination),
+		IsDemoMode:   middleware.IsDemoMode(),
+	}
+}
