@@ -1,0 +1,224 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package example
+
+import (
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+	"fmt"
+)
+
+// ExampleItem is a view-only struct with pre-formatted date.
+type ExampleItem struct {
+	ID          int64
+	Name        string
+	Description string
+	CreatedAt   string
+}
+
+// ExampleViewData holds data for the example admin page.
+type ExampleViewData struct {
+	Version string
+	Items   []ExampleItem
+}
+
+templ ExamplePage(pc *adminviews.PageContext, data ExampleViewData) {
+	@adminviews.AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("example.title") }</h1>
+				<p class="page-description">{ pc.T("example.description") }</p>
+			</div>
+			<div class="page-actions">
+				<span class="badge badge-primary">v{ data.Version }</span>
+			</div>
+		</div>
+		<div class="module-info-card">
+			<div class="card">
+				<div class="card-body">
+					<h3>{ pc.T("example.features") }</h3>
+					<div class="features-grid">
+						<div class="feature-item">
+							<div class="feature-icon">
+								<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z"></path>
+									<path d="m3 9 2.45-4.9A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.8 1.1L21 9"></path>
+									<path d="M12 3v6"></path>
+								</svg>
+							</div>
+							<div class="feature-content">
+								<h4>{ pc.T("example.public_route") }</h4>
+								<p><a href="/example" target="_blank">/example</a></p>
+							</div>
+						</div>
+						<div class="feature-item">
+							<div class="feature-icon">
+								<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<rect width="18" height="18" x="3" y="3" rx="2"></rect>
+									<path d="M3 9h18"></path>
+									<path d="M9 21V9"></path>
+								</svg>
+							</div>
+							<div class="feature-content">
+								<h4>{ pc.T("example.admin_route") }</h4>
+								<p>/admin/example</p>
+							</div>
+						</div>
+						<div class="feature-item">
+							<div class="feature-icon">
+								<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+									<polyline points="14 2 14 8 20 8"></polyline>
+								</svg>
+							</div>
+							<div class="feature-content">
+								<h4>{ pc.T("example.template_functions") }</h4>
+								<p><code>exampleFunc</code>, <code>exampleVersion</code></p>
+							</div>
+						</div>
+						<div class="feature-item">
+							<div class="feature-icon">
+								<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+									<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+								</svg>
+							</div>
+							<div class="feature-content">
+								<h4>{ pc.T("example.hooks") }</h4>
+								<p><code>page.after_save</code>, <code>page.before_render</code></p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="items-section" data-confirm-delete={ pc.T("example.confirm_delete") } data-delete-failed={ pc.T("example.delete_failed") }>
+			<div class="section-header">
+				<h2>{ pc.T("example.items_title") }</h2>
+				<p>{ pc.T("example.items_description") }</p>
+			</div>
+			<div class="card">
+				<div class="card-body">
+					<form method="POST" action="/admin/example/items" class="add-item-form">
+						<div class="form-row">
+							<div class="form-group">
+								<input
+									type="text"
+									name="name"
+									class="form-control"
+									placeholder={ pc.T("example.item_name") }
+									maxlength="255"
+									required
+								/>
+							</div>
+							<div class="form-group flex-grow">
+								<input
+									type="text"
+									name="description"
+									class="form-control"
+									placeholder={ pc.T("example.item_description") }
+									maxlength="255"
+								/>
+							</div>
+							<button type="submit" class="btn btn-primary">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M12 5v14M5 12h14"></path>
+								</svg>
+								{ pc.T("example.add_item") }
+							</button>
+						</div>
+					</form>
+				</div>
+			</div>
+			if len(data.Items) > 0 {
+				<div class="card">
+					<div class="card-body">
+						<table class="table">
+							<thead>
+								<tr>
+									<th>{ pc.T("example.table_id") }</th>
+									<th>{ pc.T("example.table_name") }</th>
+									<th>{ pc.T("example.table_description") }</th>
+									<th>{ pc.T("example.table_created") }</th>
+									<th></th>
+								</tr>
+							</thead>
+							<tbody>
+								for _, item := range data.Items {
+									<tr>
+										<td><code>{ fmt.Sprintf("%d", item.ID) }</code></td>
+										<td>{ item.Name }</td>
+										<td class="text-muted">
+											if item.Description != "" {
+												{ item.Description }
+											} else {
+												-
+											}
+										</td>
+										<td class="text-muted">{ item.CreatedAt }</td>
+										<td class="text-right">
+											<button
+												type="button"
+												class="btn btn-sm btn-danger delete-item"
+												data-id={ fmt.Sprintf("%d", item.ID) }
+												title={ pc.T("example.delete_item") }
+											>
+												<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+													<path d="M3 6h18"></path>
+													<path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+													<path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+												</svg>
+											</button>
+										</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					</div>
+				</div>
+			} else {
+				<div class="card">
+					<div class="card-body">
+						<div class="empty-state">
+							<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z"></path>
+								<path d="m3 9 2.45-4.9A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.8 1.1L21 9"></path>
+								<path d="M12 3v6"></path>
+							</svg>
+							<p>{ pc.T("example.no_items") }</p>
+							<span class="empty-hint">{ pc.T("example.no_items_hint") }</span>
+						</div>
+					</div>
+				</div>
+			}
+		</div>
+		<script>
+		document.addEventListener('DOMContentLoaded', function() {
+			const itemsSection = document.querySelector('.items-section');
+			const confirmDelete = itemsSection.dataset.confirmDelete;
+			const deleteFailed = itemsSection.dataset.deleteFailed;
+
+			// Handle delete button clicks
+			document.querySelectorAll('.delete-item').forEach(function(btn) {
+				btn.addEventListener('click', function() {
+					const id = this.dataset.id;
+					if (confirm(confirmDelete)) {
+						fetch('/admin/example/items/' + id, {
+							method: 'DELETE'
+						}).then(function(response) {
+							if (response.ok) {
+								window.location.reload();
+							} else {
+								alert(deleteFailed);
+							}
+						}).catch(function(err) {
+							console.error('Error:', err);
+							alert(deleteFailed);
+						});
+					}
+				});
+			});
+		});
+		</script>
+	}
+}

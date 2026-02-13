@@ -1,0 +1,348 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package dbmanager
+
+import (
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+	"fmt"
+)
+
+// DBManagerViewData contains all data for rendering the DB Manager page.
+type DBManagerViewData struct {
+	IsDemoMode bool
+	Query      string
+	Result     *QueryResult
+	History    []QueryHistoryItem
+}
+
+// truncateQuery truncates a query string to maxLen characters and adds ellipsis.
+func truncateQuery(q string, maxLen int) string {
+	if len(q) <= maxLen {
+		return q
+	}
+	return q[:maxLen] + "..."
+}
+
+templ DBManagerPage(pc *adminviews.PageContext, data DBManagerViewData) {
+	@adminviews.AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("dbmanager.title") }</h1>
+				<p class="page-description">{ pc.T("dbmanager.description") }</p>
+			</div>
+			<div class="page-actions">
+				<span class="badge badge-info">{ pc.T("dbmanager.warning_badge") }</span>
+			</div>
+		</div>
+		<div class="dbmanager-warning">
+			<div class="card card-info">
+				<div class="card-body">
+					<div class="warning-content">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+							<path d="M12 9v4"></path>
+							<path d="M12 17h.01"></path>
+						</svg>
+						<div>
+							<strong>{ pc.T("dbmanager.warning_title") }</strong>
+							<p>{ pc.T("dbmanager.warning_text") }</p>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		if data.IsDemoMode {
+			<div class="query-section">
+				<div class="card">
+					<div class="card-header">
+						<h2>{ pc.T("dbmanager.query_section") }</h2>
+					</div>
+					<div class="card-body">
+						<div class="alert alert-warning">{ pc.T("dbmanager.demo_disabled") }</div>
+					</div>
+				</div>
+			</div>
+		} else {
+			<div class="query-section">
+				<div class="card">
+					<div class="card-header">
+						<h2>{ pc.T("dbmanager.query_section") }</h2>
+					</div>
+					<div class="card-body">
+						<form method="POST" action="/admin/dbmanager/execute" id="query-form">
+							<div class="form-group">
+								<textarea
+									name="query"
+									id="sql-query"
+									class="form-control form-control-code"
+									rows="8"
+									placeholder={ pc.T("dbmanager.query_placeholder") }
+									spellcheck="false"
+								>{ data.Query }</textarea>
+								<small class="form-text text-muted">{ pc.T("dbmanager.query_hint") }</small>
+							</div>
+							<div class="form-actions">
+								<button type="submit" class="btn btn-primary">
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<polygon points="5 3 19 12 5 21 5 3"></polygon>
+									</svg>
+									{ pc.T("dbmanager.execute_button") }
+								</button>
+								<button type="button" class="btn btn-secondary" onclick="document.getElementById('sql-query').value = ''">
+									{ pc.T("dbmanager.clear_button") }
+								</button>
+							</div>
+						</form>
+					</div>
+				</div>
+			</div>
+		}
+		if data.Result != nil {
+			<div class="results-section">
+				if data.Result.Error != "" {
+					<div class="card card-danger">
+						<div class="card-header">
+							<h2>{ pc.T("dbmanager.results_section") }</h2>
+						</div>
+						<div class="card-body">
+							<div class="alert alert-danger">
+								<strong>{ pc.T("dbmanager.error_title") }:</strong> { data.Result.Error }
+							</div>
+						</div>
+					</div>
+				} else {
+					<div class="card card-success">
+						<div class="card-header">
+							<h2>{ pc.T("dbmanager.results_section") }</h2>
+							<div class="result-stats">
+								if data.Result.IsSelect {
+									<span class="badge badge-info">{ fmt.Sprintf("%d", data.Result.RowsAffected) } { pc.T("dbmanager.results_rows") }</span>
+								} else {
+									<span class="badge badge-info">{ fmt.Sprintf("%d", data.Result.RowsAffected) } { pc.T("dbmanager.results_affected") }</span>
+								}
+								<span class="badge badge-secondary">{ fmt.Sprintf("%d", data.Result.ExecutionMs) } { pc.T("dbmanager.ms") }</span>
+							</div>
+						</div>
+						<div class="card-body">
+							if data.Result.IsSelect {
+								if len(data.Result.Columns) > 0 {
+									<div class="table-responsive">
+										<table class="table table-striped table-hover">
+											<thead>
+												<tr>
+													for _, col := range data.Result.Columns {
+														<th>{ col }</th>
+													}
+												</tr>
+											</thead>
+											<tbody>
+												if len(data.Result.Rows) > 0 {
+													for _, row := range data.Result.Rows {
+														<tr>
+															for _, cell := range row {
+																<td>{ cell }</td>
+															}
+														</tr>
+													}
+												} else {
+													<tr>
+														<td colspan={ fmt.Sprintf("%d", len(data.Result.Columns)) } class="text-center text-muted">
+															{ pc.T("dbmanager.results_empty") }
+														</td>
+													</tr>
+												}
+											</tbody>
+										</table>
+									</div>
+								} else {
+									<p class="text-muted">{ pc.T("dbmanager.results_empty") }</p>
+								}
+							} else {
+								<div class="alert alert-success">
+									{ pc.T("dbmanager.results_success") } - { fmt.Sprintf("%d", data.Result.RowsAffected) } { pc.T("dbmanager.results_affected") }
+								</div>
+							}
+						</div>
+					</div>
+				}
+			</div>
+		}
+		if len(data.History) > 0 {
+			<div class="history-section">
+				<div class="card">
+					<div class="card-header">
+						<h2>{ pc.T("dbmanager.history_section") }</h2>
+					</div>
+					<div class="card-body">
+						<div class="table-responsive">
+							<table class="table table-striped table-hover">
+								<thead>
+									<tr>
+										<th>{ pc.T("dbmanager.history_query") }</th>
+										<th>{ pc.T("dbmanager.history_time") }</th>
+										<th>{ pc.T("dbmanager.history_duration") }</th>
+										<th>{ pc.T("dbmanager.history_rows") }</th>
+										<th>{ pc.T("dbmanager.history_status") }</th>
+									</tr>
+								</thead>
+								<tbody>
+									for _, item := range data.History {
+										<tr class="history-row" data-query={ item.Query }>
+											<td class="query-cell">
+												<code class="query-preview">{ truncateQuery(item.Query, 80) }</code>
+											</td>
+											<td>{ item.ExecutedAt.Format("2006-01-02 15:04:05") }</td>
+											<td>{ fmt.Sprintf("%d", item.ExecutionTime) } { pc.T("dbmanager.ms") }</td>
+											<td>{ fmt.Sprintf("%d", item.RowsAffected) }</td>
+											<td>
+												if item.Error.Valid {
+													<span class="badge badge-danger" title={ item.Error.String }>{ pc.T("dbmanager.history_failed") }</span>
+												} else {
+													<span class="badge badge-success">{ pc.T("dbmanager.history_success") }</span>
+												}
+											</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			</div>
+		} else if data.Result == nil {
+			<div class="history-section">
+				<div class="card">
+					<div class="card-header">
+						<h2>{ pc.T("dbmanager.history_section") }</h2>
+					</div>
+					<div class="card-body">
+						<p class="text-muted text-center">{ pc.T("dbmanager.history_empty") }</p>
+					</div>
+				</div>
+			</div>
+		}
+		<style>
+		.dbmanager-warning {
+		    margin-bottom: 1.5rem;
+		}
+
+		.warning-content {
+		    display: flex;
+		    align-items: flex-start;
+		    gap: 1rem;
+		}
+
+		.warning-content svg {
+		    flex-shrink: 0;
+		    color: var(--warning-color, #f0ad4e);
+		}
+
+		.warning-content p {
+		    margin: 0.25rem 0 0 0;
+		}
+
+		.query-section {
+		    margin-bottom: 1.5rem;
+		}
+
+		.form-control-code {
+		    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', 'Droid Sans Mono', 'Source Code Pro', monospace;
+		    font-size: 0.875rem;
+		    line-height: 1.5;
+		    resize: vertical;
+		}
+
+		.form-actions {
+		    display: flex;
+		    gap: 0.5rem;
+		    margin-top: 1rem;
+		}
+
+		.results-section {
+		    margin-bottom: 1.5rem;
+		}
+
+		.result-stats {
+		    display: flex;
+		    gap: 0.5rem;
+		}
+
+		.history-section {
+		    margin-bottom: 1.5rem;
+		}
+
+		.history-row {
+		    cursor: pointer;
+		}
+
+		.history-row:hover {
+		    background-color: var(--hover-bg, rgba(0,0,0,0.02));
+		}
+
+		.query-cell {
+		    max-width: 400px;
+		}
+
+		.query-preview {
+		    display: block;
+		    overflow: hidden;
+		    text-overflow: ellipsis;
+		    white-space: nowrap;
+		    font-size: 0.8125rem;
+		}
+
+		.card-success .card-header {
+		    background-color: rgba(40, 167, 69, 0.1);
+		    border-bottom-color: rgba(40, 167, 69, 0.2);
+		}
+
+		.card-danger .card-header {
+		    background-color: rgba(220, 53, 69, 0.1);
+		    border-bottom-color: rgba(220, 53, 69, 0.2);
+		}
+
+		.table-responsive {
+		    overflow-x: auto;
+		}
+
+		.table th {
+		    white-space: nowrap;
+		}
+
+		.table td {
+		    max-width: 300px;
+		    overflow: hidden;
+		    text-overflow: ellipsis;
+		    white-space: nowrap;
+		}
+		</style>
+		<script>
+		document.addEventListener('DOMContentLoaded', function() {
+		    // Click on history row to load query
+		    document.querySelectorAll('.history-row').forEach(function(row) {
+		        row.addEventListener('click', function() {
+		            var query = this.getAttribute('data-query');
+		            var textarea = document.getElementById('sql-query');
+		            if (textarea && query) {
+		                textarea.value = query;
+		                textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		                textarea.focus();
+		            }
+		        });
+		    });
+
+		    // Keyboard shortcut: Ctrl+Enter to execute
+		    var textarea = document.getElementById('sql-query');
+		    if (textarea) {
+		        textarea.addEventListener('keydown', function(e) {
+		            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+		                e.preventDefault();
+		                document.getElementById('query-form').submit();
+		            }
+		        });
+		    }
+		});
+		</script>
+	}
+}

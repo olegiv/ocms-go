@@ -13,7 +13,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olegiv/ocms-go/internal/i18n"
-	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/render"
 )
 
@@ -80,10 +79,8 @@ func (m *Module) handleExample(w http.ResponseWriter, _ *http.Request) {
 
 // handleAdminExample handles GET /admin/example - admin route.
 func (m *Module) handleAdminExample(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := m.ctx.Render.GetAdminLang(r)
 
-	// Fetch items from the database
 	items, err := m.listItems()
 	if err != nil {
 		m.ctx.Logger.Error("failed to list example items", "error", err)
@@ -91,27 +88,28 @@ func (m *Module) handleAdminExample(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := struct {
-		Items   []Item
-		Version string
-	}{
-		Items:   items,
-		Version: m.Version(),
+	// Convert items to view items with pre-formatted dates
+	viewItems := make([]ExampleItem, len(items))
+	for i, item := range items {
+		viewItems[i] = ExampleItem{
+			ID:          item.ID,
+			Name:        item.Name,
+			Description: item.Description,
+			CreatedAt:   item.CreatedAt.Format("Jan 02, 2006 15:04"),
+		}
 	}
 
-	if err := m.ctx.Render.Render(w, r, "admin/module_example", render.TemplateData{
-		Title: i18n.T(lang, "example.title"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
-			{Label: i18n.T(lang, "example.title"), URL: "/admin/example", Active: true},
-		},
-	}); err != nil {
-		m.ctx.Logger.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	viewData := ExampleViewData{
+		Version: m.Version(),
+		Items:   viewItems,
 	}
+
+	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "example.title"), []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
+		{Label: i18n.T(lang, "example.title"), URL: "/admin/example", Active: true},
+	})
+	render.RenderTempl(w, r, ExamplePage(pc, viewData))
 }
 
 // handleListItems handles GET /admin/example/items - returns JSON list of items.
