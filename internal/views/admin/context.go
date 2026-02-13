@@ -10,6 +10,12 @@ import (
 	"github.com/olegiv/ocms-go/internal/i18n"
 )
 
+// LangOption represents a language option for the admin UI language switcher.
+type LangOption struct {
+	Code string
+	Name string
+}
+
 // PageContext carries shared data for all admin templ views.
 type PageContext struct {
 	Title          string
@@ -19,6 +25,7 @@ type PageContext struct {
 	SiteName       string
 	CurrentPath    string
 	AdminLang      string
+	LangOptions    []LangOption
 	Breadcrumbs    []Breadcrumb
 	SidebarModules []SidebarModule
 }
