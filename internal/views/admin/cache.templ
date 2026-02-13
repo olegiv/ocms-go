@@ -1,0 +1,304 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import "fmt"
+
+// CacheStatsViewData holds data for the cache stats page.
+type CacheStatsViewData struct {
+	Caches      []CacheItemView
+	TotalStats  CacheStatsView
+	IsRedis     bool
+	IsFallback  bool
+	RedisURL    string
+	HealthError string
+	ResetAt     string // Pre-formatted reset time
+}
+
+// CacheItemView holds data for an individual cache entry.
+type CacheItemView struct {
+	Name     string
+	Kind     string // "config", "sitemap", "menu", "language", "translation", "page", "general"
+	Items    int
+	Hits     int64
+	Misses   int64
+	HitRate  float64
+	CachedAt string // Pre-formatted, empty if not cached (sitemap)
+	Size     int    // Size in bytes (sitemap)
+}
+
+// CacheStatsView holds total cache statistics.
+type CacheStatsView struct {
+	Hits    int64
+	Misses  int64
+	Items   int
+	HitRate float64
+}
+
+// CacheStatsPage renders the cache statistics page.
+templ CacheStatsPage(pc *PageContext, data CacheStatsViewData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("cache.title") }</h1>
+				<p class="page-description">{ pc.T("cache.description") }</p>
+				if data.ResetAt != "" {
+					<p class="page-description page-subtitle">
+						@iconClock()
+						{ pc.T("cache.stats_reset") } { data.ResetAt }
+					</p>
+				}
+			</div>
+			<div class="page-actions">
+				<form method="POST" action="/admin/cache/clear" class="d-inline">
+					<button type="submit" class="btn btn-danger" onclick="return confirm(this.dataset.msg)" data-msg={ pc.T("cache.clear_confirm") }>
+						@iconDelete()
+						{ pc.T("cache.clear_all") }
+					</button>
+				</form>
+			</div>
+		</div>
+		<!-- Cache Backend Info -->
+		<div class="cache-backend-info mb-6">
+			<div class={ "backend-card", templ.KV("backend-redis", data.IsRedis), templ.KV("backend-memory", !data.IsRedis) }>
+				<div class="backend-icon">
+					if data.IsRedis {
+						@iconRedis()
+					} else {
+						@iconMemory()
+					}
+				</div>
+				<div class="backend-content">
+					<span class="backend-type">
+						if data.IsRedis {
+							{ pc.T("cache.redis_cache") }
+						} else {
+							{ pc.T("cache.memory_cache") }
+						}
+						if data.IsFallback {
+							<span class="badge badge-warning ml-2">{ pc.T("cache.fallback") }</span>
+						}
+					</span>
+					<span class="backend-status">
+						if data.HealthError != "" {
+							<span class="status-indicator status-error"></span>
+							{ pc.T("cache.unhealthy") }: { data.HealthError }
+						} else {
+							<span class="status-indicator status-healthy"></span>
+							{ pc.T("cache.healthy") }
+						}
+					</span>
+					if data.IsRedis && data.RedisURL != "" {
+						<span class="backend-url">{ data.RedisURL }</span>
+					}
+				</div>
+			</div>
+			if data.IsFallback {
+				<div class="alert alert-warning mt-3">
+					@iconWarning()
+					<span>{ pc.T("cache.redis_failed") }</span>
+				</div>
+			}
+		</div>
+		<!-- Total Stats Summary -->
+		<div class="stats-grid mb-6">
+			<div class="stat-card">
+				<div class="stat-icon stat-badge-success">
+					@iconCheck()
+				</div>
+				<div class="stat-content">
+					<span class="stat-value">{ fmt.Sprintf("%d", data.TotalStats.Hits) }</span>
+					<span class="stat-label">{ pc.T("cache.hits") }</span>
+				</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-icon stat-badge-warning">
+					@iconX()
+				</div>
+				<div class="stat-content">
+					<span class="stat-value">{ fmt.Sprintf("%d", data.TotalStats.Misses) }</span>
+					<span class="stat-label">{ pc.T("cache.misses") }</span>
+				</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-icon stat-badge-primary">
+					@iconClock()
+				</div>
+				<div class="stat-content">
+					<span class="stat-value">{ fmt.Sprintf("%.1f%%", data.TotalStats.HitRate) }</span>
+					<span class="stat-label">{ pc.T("cache.hit_rate") }</span>
+				</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-icon stat-badge-info">
+					@iconPackage()
+				</div>
+				<div class="stat-content">
+					<span class="stat-value">{ fmt.Sprintf("%d", data.TotalStats.Items) }</span>
+					<span class="stat-label">{ pc.T("cache.cached_items") }</span>
+				</div>
+			</div>
+		</div>
+		<!-- Individual Cache Details -->
+		<div class="card">
+			<div class="card-header">
+				<h2 class="card-title">{ pc.T("cache.details") }</h2>
+			</div>
+			<div class="card-body">
+				<div class="table-responsive">
+					<table class="table">
+						<thead>
+							<tr>
+								<th>{ pc.T("cache.cache_name") }</th>
+								<th>{ pc.T("cache.items") }</th>
+								<th>{ pc.T("cache.hits") }</th>
+								<th>{ pc.T("cache.misses") }</th>
+								<th>{ pc.T("cache.hit_rate") }</th>
+								<th>{ pc.T("label.actions") }</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, c := range data.Caches {
+								@cacheRow(pc, c)
+							}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+		<!-- Cache Info -->
+		<div class="card mt-6">
+			<div class="card-header">
+				<h2 class="card-title">{ pc.T("cache.info_title") }</h2>
+			</div>
+			<div class="card-body">
+				<div class="info-grid">
+					if data.IsRedis {
+						<div class="info-item">
+							<h4>{ pc.T("cache.redis_distributed") }</h4>
+							<p>{ pc.T("cache.redis_description") }</p>
+						</div>
+					} else {
+						<div class="info-item">
+							<h4>{ pc.T("cache.memory_local") }</h4>
+							<p>{ pc.T("cache.memory_description") }</p>
+						</div>
+					}
+					<div class="info-item">
+						<h4>{ pc.T("cache.config_cache") }</h4>
+						<p>{ pc.T("cache.config_description") }</p>
+					</div>
+					<div class="info-item">
+						<h4>{ pc.T("cache.sitemap_cache") }</h4>
+						<p>{ pc.T("cache.sitemap_description") }</p>
+					</div>
+					<div class="info-item">
+						<h4>{ pc.T("cache.menus_languages") }</h4>
+						<p>{ pc.T("cache.menus_description") }</p>
+					</div>
+					<div class="info-item">
+						<h4>{ pc.T("cache.pages_cache") }</h4>
+						<p>{ pc.T("cache.pages_description") }</p>
+					</div>
+					<div class="info-item">
+						<h4>{ pc.T("cache.translations_cache") }</h4>
+						<p>{ pc.T("cache.translations_description") }</p>
+					</div>
+				</div>
+			</div>
+		</div>
+	}
+}
+
+// cacheRow renders a single cache row in the details table.
+templ cacheRow(pc *PageContext, c CacheItemView) {
+	<tr>
+		<td>
+			<strong>{ cacheKindName(pc, c) }</strong>
+			if c.Kind == "sitemap" {
+				if c.CachedAt != "" {
+					<br/>
+					<small class="text-muted">{ pc.T("cache.cached") }: { c.CachedAt } ({ fmt.Sprintf("%d", c.Size) } { pc.T("cache.bytes") })</small>
+				} else {
+					<br/>
+					<small class="text-muted">{ pc.T("cache.not_cached") }</small>
+				}
+			}
+		</td>
+		<td>{ fmt.Sprintf("%d", c.Items) }</td>
+		<td>{ fmt.Sprintf("%d", c.Hits) }</td>
+		<td>{ fmt.Sprintf("%d", c.Misses) }</td>
+		<td>
+			if c.HitRate > 80.0 {
+				<span class="badge badge-success">{ fmt.Sprintf("%.1f%%", c.HitRate) }</span>
+			} else if c.HitRate > 50.0 {
+				<span class="badge badge-warning">{ fmt.Sprintf("%.1f%%", c.HitRate) }</span>
+			} else {
+				<span class="badge badge-muted">{ fmt.Sprintf("%.1f%%", c.HitRate) }</span>
+			}
+		</td>
+		<td>
+			@cacheClearButton(pc, c)
+		</td>
+	</tr>
+}
+
+// cacheClearButton renders the clear button for a cache row if applicable.
+templ cacheClearButton(pc *PageContext, c CacheItemView) {
+	switch c.Kind {
+		case "config":
+			if c.Items > 0 {
+				<form method="POST" action="/admin/cache/clear/config" class="d-inline">
+					<button type="submit" class="btn btn-sm btn-outline" title={ pc.T("cache.clear_config") }>{ pc.T("cache.clear") }</button>
+				</form>
+			}
+		case "sitemap":
+			if c.CachedAt != "" {
+				<form method="POST" action="/admin/cache/clear/sitemap" class="d-inline">
+					<button type="submit" class="btn btn-sm btn-outline" title={ pc.T("cache.clear_sitemap") }>{ pc.T("cache.clear") }</button>
+				</form>
+			}
+		case "page":
+			if c.Items > 0 {
+				<form method="POST" action="/admin/cache/clear/pages" class="d-inline">
+					<button type="submit" class="btn btn-sm btn-outline" title={ pc.T("cache.clear_pages") }>{ pc.T("cache.clear") }</button>
+				</form>
+			}
+		case "menu":
+			if c.Items > 0 {
+				<form method="POST" action="/admin/cache/clear/menus" class="d-inline">
+					<button type="submit" class="btn btn-sm btn-outline" title={ pc.T("cache.clear_menus") }>{ pc.T("cache.clear") }</button>
+				</form>
+			}
+		case "language":
+			if c.Items > 0 {
+				<form method="POST" action="/admin/cache/clear/languages" class="d-inline">
+					<button type="submit" class="btn btn-sm btn-outline" title={ pc.T("cache.clear_languages") }>{ pc.T("cache.clear") }</button>
+				</form>
+			}
+	}
+}
+
+// cacheKindName returns the translated name for a cache kind.
+func cacheKindName(pc *PageContext, c CacheItemView) string {
+	switch c.Kind {
+	case "config":
+		return pc.T("cache.name_config")
+	case "sitemap":
+		return pc.T("cache.name_sitemap")
+	case "menu":
+		return pc.T("cache.name_menus")
+	case "language":
+		return pc.T("cache.name_languages")
+	case "translation":
+		return pc.T("cache.name_translations")
+	case "page":
+		return pc.T("cache.name_pages")
+	case "general":
+		return pc.T("cache.name_general")
+	default:
+		return c.Name
+	}
+}
+

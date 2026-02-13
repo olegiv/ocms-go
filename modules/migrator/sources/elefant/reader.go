@@ -27,11 +27,18 @@ type Reader struct {
 	schemaDetected bool
 }
 
+// maxTablePrefixLength is the maximum allowed length for a table prefix.
+const maxTablePrefixLength = 20
+
 // sanitizeTablePrefix validates that a table prefix contains only safe SQL identifier characters
-// and returns the sanitized value. This prevents SQL injection when the prefix is used in query building.
+// (alphanumeric and underscore, max 20 characters) and returns the sanitized value.
+// This prevents SQL injection when the prefix is used in query building.
 func sanitizeTablePrefix(prefix string) (string, error) {
 	if prefix == "" {
 		return "", nil
+	}
+	if len(prefix) > maxTablePrefixLength {
+		return "", fmt.Errorf("invalid table prefix: exceeds maximum length of %d characters", maxTablePrefixLength)
 	}
 	// Create a new string by only copying valid characters.
 	// This helps break the taint trace in some static analysis tools.
@@ -438,17 +445,8 @@ func getMimeTypeFromExt(path string) string {
 		return ""
 	}
 
-	// Use standard library first
-	mimeType := mime.TypeByExtension(ext)
-	if mimeType != "" {
-		// Strip charset suffix if present (e.g., "text/plain; charset=utf-8")
-		if idx := strings.Index(mimeType, ";"); idx != -1 {
-			mimeType = strings.TrimSpace(mimeType[:idx])
-		}
-		return mimeType
-	}
-
-	// Fallback for common types
+	// Known types first for consistent cross-platform results
+	// (e.g., mime.TypeByExtension(".webm") returns "audio/webm" on some OS)
 	switch ext {
 	case ".jpg", ".jpeg":
 		return "image/jpeg"
@@ -464,6 +462,16 @@ func getMimeTypeFromExt(path string) string {
 		return "video/mp4"
 	case ".webm":
 		return "video/webm"
+	}
+
+	// Fall back to standard library for other types
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType != "" {
+		// Strip charset suffix if present (e.g., "text/plain; charset=utf-8")
+		if idx := strings.Index(mimeType, ";"); idx != -1 {
+			mimeType = strings.TrimSpace(mimeType[:idx])
+		}
+		return mimeType
 	}
 
 	return ""

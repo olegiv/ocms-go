@@ -1,0 +1,267 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import "fmt"
+
+// ModuleViewItem holds data for a module in the list view.
+type ModuleViewItem struct {
+	Name              string
+	Version           string
+	Description       string
+	AdminURL          string
+	Active            bool
+	ShowInSidebar     bool
+	HasMigrations     bool
+	MigrationsApplied int
+	MigrationCount    int
+	MigrationsPending int
+	IsEmbedded        bool
+}
+
+// HookViewItem holds data for a hook in the list view.
+type HookViewItem struct {
+	Name     string
+	Handlers []HookHandlerViewItem
+}
+
+// HookHandlerViewItem holds data for a hook handler.
+type HookHandlerViewItem struct {
+	Name     string
+	Module   string
+	Priority int
+}
+
+// ModulesViewData holds all data for the modules list page.
+type ModulesViewData struct {
+	Modules []ModuleViewItem
+	Hooks   []HookViewItem
+}
+
+// ModulesPage renders the modules list page.
+templ ModulesPage(pc *PageContext, data ModulesViewData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("modules.title") }</h1>
+				<p class="page-description">{ pc.T("modules.description") }</p>
+			</div>
+		</div>
+		<!-- Modules Section -->
+		<div class="modules-section">
+			<h2>{ pc.T("modules.registered") }</h2>
+			if len(data.Modules) > 0 {
+				<div class="modules-grid">
+					for _, mod := range data.Modules {
+						@moduleCard(pc, mod)
+					}
+				</div>
+			} else {
+				<div class="card">
+					<div class="card-body">
+						<div class="empty-state">
+							<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+							<p>{ pc.T("modules.no_modules") }</p>
+							<span class="empty-hint">{ pc.T("modules.no_modules_hint") }</span>
+						</div>
+					</div>
+				</div>
+			}
+		</div>
+		<!-- Hooks Section -->
+		<div class="hooks-section">
+			<h2>{ pc.T("modules.hooks") }</h2>
+			if len(data.Hooks) > 0 {
+				<div class="card">
+					<div class="card-body">
+						<div class="table-responsive">
+							<table class="table">
+								<thead>
+									<tr>
+										<th>{ pc.T("modules.hook_name") }</th>
+										<th>{ pc.T("modules.handlers") }</th>
+									</tr>
+								</thead>
+								<tbody>
+									for _, hook := range data.Hooks {
+										@hookRow(pc, hook)
+									}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			} else {
+				<div class="card">
+					<div class="card-body">
+						<div class="empty-state">
+							<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+							<p>{ pc.T("modules.no_hooks") }</p>
+							<span class="empty-hint">{ pc.T("modules.no_hooks_hint") }</span>
+						</div>
+					</div>
+				</div>
+			}
+		</div>
+	}
+}
+
+// moduleCard renders a single module card with toggle switches.
+templ moduleCard(pc *PageContext, mod ModuleViewItem) {
+	<div
+		class={ "module-card", templ.KV("module-inactive", !mod.Active) }
+		data-module={ mod.Name }
+		data-activate-title={ pc.T("modules.activate_to_access") }
+		data-deactivate-title={ pc.T("modules.click_to_deactivate") }
+		x-data={ moduleToggleData(mod) }
+	>
+		<div class="module-icon">
+			@iconModules()
+		</div>
+		<div class="module-info">
+			<h3 class="module-name">{ mod.Name }</h3>
+			<p class="module-version">v{ mod.Version }</p>
+			<p class="module-description">{ mod.Description }</p>
+			if mod.HasMigrations {
+				<div class="module-migrations">
+					@iconDatabase()
+					<span class="migrations-count">
+						{ fmt.Sprintf("%d", mod.MigrationsApplied) }/{ fmt.Sprintf("%d", mod.MigrationCount) } { pc.T("modules.migrations") }
+					</span>
+					if mod.MigrationsPending > 0 {
+						<span class="badge badge-warning badge-sm">
+							{ fmt.Sprintf("%d", mod.MigrationsPending) } { pc.T("modules.migrations_pending") }
+						</span>
+					} else {
+						<span class="badge badge-info badge-sm">{ pc.T("modules.up_to_date") }</span>
+					}
+				</div>
+			}
+			if mod.AdminURL != "" {
+				<div class="module-actions">
+					<a
+						href={ templ.SafeURL(mod.AdminURL) }
+						class="btn btn-sm btn-secondary module-dashboard-link"
+						:class="{ 'disabled': !isActive }"
+						x-bind:title="!isActive ? activateTitle : ''"
+					>
+						@iconDashboard()
+						{ pc.T("modules.dashboard") }
+					</a>
+				</div>
+			}
+		</div>
+		<div class="module-status">
+			<div class="module-toggle-row">
+				<span class="toggle-label">{ pc.T("modules.enabled") }</span>
+				<label
+					class="toggle-switch"
+					x-bind:title="isActive ? deactivateTitle : activateTitle"
+				>
+					<input
+						type="checkbox"
+						x-model="isActive"
+						@change="toggleActive()"
+					/>
+					<span class="toggle-slider"></span>
+				</label>
+			</div>
+			if mod.AdminURL != "" {
+				<div class="module-toggle-row">
+					<span class="toggle-label">{ pc.T("modules.show_in_sidebar") }</span>
+					<label class="toggle-switch toggle-switch-sm" title={ pc.T("modules.toggle_sidebar") }>
+						<input
+							type="checkbox"
+							x-model="showInSidebar"
+							@change="toggleSidebar()"
+							x-bind:disabled="!isActive"
+						/>
+						<span class="toggle-slider"></span>
+					</label>
+				</div>
+			}
+		</div>
+	</div>
+}
+
+// hookRow renders a single hook row in the hooks table.
+templ hookRow(pc *PageContext, hook HookViewItem) {
+	<tr>
+		<td><code>{ hook.Name }</code></td>
+		<td>
+			if len(hook.Handlers) > 0 {
+				<ul class="hook-handlers">
+					for _, handler := range hook.Handlers {
+						<li>
+							<span class="handler-name">{ handler.Name }</span>
+							<span class="handler-module">({ handler.Module })</span>
+							<span class="handler-priority">{ pc.T("modules.priority") }: { fmt.Sprintf("%d", handler.Priority) }</span>
+						</li>
+					}
+				</ul>
+			} else {
+				<span class="text-muted">{ pc.T("modules.no_handlers") }</span>
+			}
+		</td>
+	</tr>
+}
+
+// moduleToggleData returns the Alpine.js x-data JSON for a module card.
+func moduleToggleData(mod ModuleViewItem) string {
+	return fmt.Sprintf(`{
+		isActive: %t,
+		showInSidebar: %t,
+		moduleName: '%s',
+		activateTitle: '',
+		deactivateTitle: '',
+		init() {
+			this.activateTitle = this.$el.dataset.activateTitle || '';
+			this.deactivateTitle = this.$el.dataset.deactivateTitle || '';
+		},
+		toggleActive() {
+			const card = this.$el;
+			fetch('/admin/modules/' + encodeURIComponent(this.moduleName) + '/toggle', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ active: this.isActive })
+			})
+			.then(r => r.json())
+			.then(data => {
+				if (data.success) {
+					if (data.active) {
+						card.classList.remove('module-inactive');
+					} else {
+						card.classList.add('module-inactive');
+						this.showInSidebar = false;
+					}
+				} else {
+					this.isActive = !this.isActive;
+					alert('Error: ' + (data.message || 'Failed to toggle module'));
+				}
+			})
+			.catch(() => {
+				this.isActive = !this.isActive;
+				alert('Error toggling module');
+			});
+		},
+		toggleSidebar() {
+			fetch('/admin/modules/' + encodeURIComponent(this.moduleName) + '/toggle-sidebar', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ show: this.showInSidebar })
+			})
+			.then(r => r.json())
+			.then(data => {
+				if (!data.success) {
+					this.showInSidebar = !this.showInSidebar;
+					alert('Error: ' + (data.message || 'Failed to toggle sidebar visibility'));
+				}
+			})
+			.catch(() => {
+				this.showInSidebar = !this.showInSidebar;
+				alert('Error toggling sidebar visibility');
+			});
+		}
+	}`, mod.Active, mod.ShowInSidebar, mod.Name)
+}

@@ -1,0 +1,536 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import (
+	"fmt"
+	"strings"
+	"time"
+)
+
+// RedirectListItem holds data for a redirect in the list view.
+type RedirectListItem struct {
+	ID         int64
+	SourcePath string
+	TargetURL  string
+	StatusCode int64
+	IsWildcard bool
+	TargetType string
+	Enabled    bool
+}
+
+// RedirectsListData holds all data for the redirects list page.
+type RedirectsListData struct {
+	Redirects  []RedirectListItem
+	TotalCount int64
+}
+
+// RedirectInfo holds individual redirect data for the form.
+type RedirectInfo struct {
+	ID         int64
+	SourcePath string
+	TargetURL  string
+	StatusCode int64
+	IsWildcard bool
+	TargetType string
+	Enabled    bool
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+// RedirectStatusCodeOption represents a status code option for the form select.
+type RedirectStatusCodeOption struct {
+	Code  int
+	Label string
+}
+
+// RedirectFormData holds all data for the redirect create/edit form.
+type RedirectFormData struct {
+	IsEdit      bool
+	Redirect    *RedirectInfo
+	StatusCodes []RedirectStatusCodeOption
+	TargetTypes []string
+	Errors      map[string]string
+	FormValues  map[string]string
+}
+
+// RedirectsListPage renders the redirects list page.
+templ RedirectsListPage(pc *PageContext, data RedirectsListData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("redirects.title") }</h1>
+				<p class="page-description">{ pc.T("redirects.description") }</p>
+			</div>
+			<div class="page-actions">
+				<a href="/admin/redirects/new" class="btn btn-primary">
+					@iconPlus()
+					{ pc.T("redirects.new") }
+				</a>
+			</div>
+		</div>
+		if len(data.Redirects) > 0 {
+			<div class="card" id="redirects-table">
+				<div class="table-responsive">
+					<table class="table">
+						<thead>
+							<tr>
+								<th>{ pc.T("redirects.source_path") }</th>
+								<th>{ pc.T("redirects.target_url") }</th>
+								<th>{ pc.T("redirects.status_code") }</th>
+								<th>{ pc.T("redirects.target_type") }</th>
+								<th>{ pc.T("label.status") }</th>
+								<th class="text-right">{ pc.T("label.actions") }</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, redirect := range data.Redirects {
+								@RedirectRow(pc, redirect)
+							}
+						</tbody>
+					</table>
+				</div>
+			</div>
+			<div class="card-footer-info">
+				<span class="text-muted">{ pc.T("redirects.total_count", data.TotalCount) }</span>
+			</div>
+		} else {
+			<div class="card">
+				<div class="card-body">
+					<div class="empty-state">
+						<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"></path><path d="M15 7h2a5 5 0 0 1 0 10h-2"></path><line x1="8" x2="16" y1="12" y2="12"></line></svg>
+						<p>{ pc.T("redirects.no_redirects") }</p>
+						<span class="empty-hint">{ pc.T("redirects.no_redirects_hint") }</span>
+						<div class="empty-state-action">
+							<a href="/admin/redirects/new" class="btn btn-primary">{ pc.T("redirects.create") }</a>
+						</div>
+					</div>
+				</div>
+			</div>
+		}
+	}
+}
+
+// RedirectRow renders a single redirect table row.
+templ RedirectRow(pc *PageContext, redirect RedirectListItem) {
+	<tr id={ fmt.Sprintf("redirect-row-%d", redirect.ID) }>
+		<td>
+			<a href={ templ.SafeURL(fmt.Sprintf("/admin/redirects/%d", redirect.ID)) } class="redirect-source-link">
+				if redirect.IsWildcard {
+					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline" title={ pc.T("redirects.wildcard") }><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path></svg>
+				} else {
+					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><path d="M9 17H7A5 5 0 0 1 7 7h2"></path><path d="M15 7h2a5 5 0 0 1 0 10h-2"></path><line x1="8" x2="16" y1="12" y2="12"></line></svg>
+				}
+				<code>{ redirect.SourcePath }</code>
+			</a>
+		</td>
+		<td>
+			<div class="target-url-cell">
+				if strings.HasPrefix(redirect.TargetURL, "http") {
+					<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline" title="External URL"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>
+				}
+				<span class="target-url-text" title={ redirect.TargetURL }>{ truncateStr(redirect.TargetURL, 50) }</span>
+			</div>
+		</td>
+		<td>
+			<span class={ statusCodeBadgeClass(redirect.StatusCode) }>
+				{ fmt.Sprintf("%d", redirect.StatusCode) }
+			</span>
+		</td>
+		<td>
+			if redirect.TargetType == "_blank" {
+				<span class="badge badge-outline" title="Opens in new window">_blank</span>
+			} else {
+				<span class="badge badge-muted">{ redirect.TargetType }</span>
+			}
+		</td>
+		<td>
+			<button
+				type="button"
+				class={ toggleButtonClass(redirect.Enabled) }
+				hx-post={ fmt.Sprintf("/admin/redirects/%d/toggle", redirect.ID) }
+				hx-target={ fmt.Sprintf("#redirect-row-%d", redirect.ID) }
+				hx-swap="outerHTML"
+				title={ toggleTitle(pc, redirect.Enabled) }
+			>
+				if redirect.Enabled {
+					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+					{ pc.T("label.enabled") }
+				} else {
+					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+					{ pc.T("label.disabled") }
+				}
+			</button>
+		</td>
+		<td class="text-right">
+			<div class="action-buttons">
+				<a href={ templ.SafeURL(fmt.Sprintf("/admin/redirects/%d", redirect.ID)) } class="btn btn-sm btn-outline" title={ pc.T("btn.edit") }>
+					@iconEdit()
+				</a>
+				@deleteRedirectModal(pc, redirect)
+			</div>
+		</td>
+	</tr>
+}
+
+templ deleteRedirectModal(pc *PageContext, redirect RedirectListItem) {
+	<div x-data="{ showConfirm: false }" class="delete-action">
+		<button
+			type="button"
+			class="btn btn-sm btn-danger"
+			title={ pc.T("btn.delete") }
+			@click="showConfirm = true"
+		>
+			@iconDelete()
+		</button>
+		<div
+			class="modal-overlay"
+			x-show="showConfirm"
+			x-cloak
+			@click.self="showConfirm = false"
+			x-transition:enter="modal-enter"
+			x-transition:leave="modal-leave"
+		>
+			<div class="modal" @click.stop>
+				<div class="modal-header">
+					<h3 class="modal-title">{ pc.T("redirects.delete_redirect") }</h3>
+					<button type="button" class="modal-close" @click="showConfirm = false" aria-label={ pc.T("btn.close") }>&times;</button>
+				</div>
+				<div class="modal-body">
+					<p>
+						{ pc.T("redirects.confirm_delete") }
+						<strong><code>{ redirect.SourcePath }</code></strong>?
+					</p>
+					<p class="text-muted">{ pc.T("label.action_cannot_undone") }</p>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
+					<button
+						type="button"
+						class="btn btn-danger"
+						hx-delete={ fmt.Sprintf("/admin/redirects/%d", redirect.ID) }
+						hx-target={ fmt.Sprintf("#redirect-row-%d", redirect.ID) }
+						hx-swap="outerHTML"
+						@click="showConfirm = false"
+					>
+						{ pc.T("redirects.delete_redirect") }
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+// RedirectFormPage renders the redirect create/edit form.
+templ RedirectFormPage(pc *PageContext, data RedirectFormData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">
+					if data.IsEdit {
+						{ pc.T("redirects.edit") }
+					} else {
+						{ pc.T("redirects.new") }
+					}
+				</h1>
+				<p class="page-description">
+					if data.IsEdit {
+						{ pc.T("redirects.edit_description") }
+					} else {
+						{ pc.T("redirects.new_description") }
+					}
+				</p>
+			</div>
+			<div class="page-actions">
+				<a href="/admin/redirects" class="btn btn-outline">
+					@iconBack()
+					{ pc.T("redirects.back_to_list") }
+				</a>
+			</div>
+		</div>
+		<div class="card">
+			<div class="card-body">
+				<form method="POST" action={ redirectFormAction(data) } class="form">
+					if data.IsEdit {
+						<input type="hidden" name="_method" value="PUT"/>
+					}
+					<div class="form-row">
+						<div class="form-group form-group-lg">
+							<label for="source_path" class="form-label">
+								{ pc.T("redirects.source_path") } <span class="required">*</span>
+							</label>
+							<input
+								type="text"
+								id="source_path"
+								name="source_path"
+								class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["source_path"] != "") }
+								value={ redirectFormValue(data, "source_path") }
+								placeholder="/old-page"
+								required
+								autofocus
+								maxlength="2048"
+							/>
+							if data.Errors["source_path"] != "" {
+								<span class="form-error">{ data.Errors["source_path"] }</span>
+							} else {
+								<span class="form-hint">{ pc.T("redirects.source_path_hint") }</span>
+							}
+						</div>
+					</div>
+					<div class="form-row">
+						<div class="form-group form-group-lg">
+							<label for="target_url" class="form-label">
+								{ pc.T("redirects.target_url") } <span class="required">*</span>
+							</label>
+							<input
+								type="text"
+								id="target_url"
+								name="target_url"
+								class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["target_url"] != "") }
+								value={ redirectFormValue(data, "target_url") }
+								placeholder="/new-page or https://example.com/page"
+								required
+								maxlength="2048"
+							/>
+							if data.Errors["target_url"] != "" {
+								<span class="form-error">{ data.Errors["target_url"] }</span>
+							} else {
+								<span class="form-hint">{ pc.T("redirects.target_url_hint") }</span>
+							}
+						</div>
+					</div>
+					<div class="form-row form-row-2">
+						<div class="form-group">
+							<label for="status_code" class="form-label">
+								{ pc.T("redirects.status_code") } <span class="required">*</span>
+							</label>
+							<select
+								id="status_code"
+								name="status_code"
+								class={ templ.KV("form-select", true), templ.KV("is-invalid", data.Errors["status_code"] != "") }
+								required
+							>
+								for _, sc := range data.StatusCodes {
+									<option
+										value={ fmt.Sprintf("%d", sc.Code) }
+										selected?={ fmt.Sprintf("%d", sc.Code) == redirectCurrentStatusCode(data) }
+									>
+										{ sc.Label }
+									</option>
+								}
+							</select>
+							if data.Errors["status_code"] != "" {
+								<span class="form-error">{ data.Errors["status_code"] }</span>
+							} else {
+								<span class="form-hint">{ pc.T("redirects.status_code_hint") }</span>
+							}
+						</div>
+						<div class="form-group">
+							<label for="target_type" class="form-label">
+								{ pc.T("redirects.target_type") }
+							</label>
+							<select
+								id="target_type"
+								name="target_type"
+								class={ templ.KV("form-select", true), templ.KV("is-invalid", data.Errors["target_type"] != "") }
+							>
+								for _, tt := range data.TargetTypes {
+									<option
+										value={ tt }
+										selected?={ tt == redirectCurrentTargetType(data) }
+									>
+										{ tt }
+									</option>
+								}
+							</select>
+							if data.Errors["target_type"] != "" {
+								<span class="form-error">{ data.Errors["target_type"] }</span>
+							} else {
+								<span class="form-hint">{ pc.T("redirects.target_type_hint") }</span>
+							}
+						</div>
+					</div>
+					<div class="form-group">
+						<label class="checkbox-label">
+							<input
+								type="checkbox"
+								name="is_wildcard"
+								value="true"
+								checked?={ redirectFormChecked(data, "is_wildcard") }
+							/>
+							<span class="checkbox-text">
+								<strong>{ pc.T("redirects.is_wildcard") }</strong>
+								<small>{ pc.T("redirects.is_wildcard_hint") }</small>
+							</span>
+						</label>
+					</div>
+					<div class="form-group">
+						<label class="checkbox-label">
+							<input
+								type="checkbox"
+								name="enabled"
+								value="true"
+								checked?={ redirectFormChecked(data, "enabled") }
+							/>
+							<span class="checkbox-text">
+								<strong>{ pc.T("redirects.enabled") }</strong>
+								<small>{ pc.T("redirects.enabled_hint") }</small>
+							</span>
+						</label>
+					</div>
+					if data.IsEdit && data.Redirect != nil {
+						<div class="form-group">
+							<label class="form-label">{ pc.T("label.info") }</label>
+							<div class="info-box">
+								<div class="info-row">
+									<span class="info-label">{ pc.T("label.created") }:</span>
+									<span>{ data.Redirect.CreatedAt.Format("Jan 02, 2006 15:04") }</span>
+								</div>
+								<div class="info-row">
+									<span class="info-label">{ pc.T("label.updated") }:</span>
+									<span>{ data.Redirect.UpdatedAt.Format("Jan 02, 2006 15:04") }</span>
+								</div>
+							</div>
+						</div>
+					}
+					<div class="form-actions">
+						<button type="submit" class="btn btn-primary">
+							@iconSave()
+							if data.IsEdit {
+								{ pc.T("redirects.update") }
+							} else {
+								{ pc.T("redirects.create") }
+							}
+						</button>
+						<a href="/admin/redirects" class="btn btn-outline">{ pc.T("btn.cancel") }</a>
+					</div>
+				</form>
+			</div>
+		</div>
+		<!-- Help Section -->
+		<div class="card mt-4">
+			<div class="card-header">
+				<h3 class="card-title">{ pc.T("redirects.help_title") }</h3>
+			</div>
+			<div class="card-body">
+				<div class="help-section">
+					<h4>{ pc.T("redirects.help_wildcards_title") }</h4>
+					<p>{ pc.T("redirects.help_wildcards_desc") }</p>
+					<ul class="help-list">
+						<li><code>/old-blog/*</code> { pc.T("redirects.help_wildcard_example1") }</li>
+						<li><code>/products/*/details</code> { pc.T("redirects.help_wildcard_example2") }</li>
+					</ul>
+				</div>
+				<div class="help-section">
+					<h4>{ pc.T("redirects.help_status_codes_title") }</h4>
+					<ul class="help-list">
+						<li><strong>301</strong> - { pc.T("redirects.help_301") }</li>
+						<li><strong>302</strong> - { pc.T("redirects.help_302") }</li>
+						<li><strong>307</strong> - { pc.T("redirects.help_307") }</li>
+						<li><strong>308</strong> - { pc.T("redirects.help_308") }</li>
+					</ul>
+				</div>
+				<div class="help-section">
+					<h4>{ pc.T("redirects.help_target_types_title") }</h4>
+					<ul class="help-list">
+						<li><strong>_self</strong> - { pc.T("redirects.help_target_self") }</li>
+						<li><strong>_blank</strong> - { pc.T("redirects.help_target_blank") }</li>
+					</ul>
+				</div>
+			</div>
+		</div>
+	}
+}
+
+// Helper functions
+
+func redirectFormAction(data RedirectFormData) templ.SafeURL {
+	if data.IsEdit && data.Redirect != nil {
+		return templ.SafeURL(fmt.Sprintf("/admin/redirects/%d", data.Redirect.ID))
+	}
+	return "/admin/redirects"
+}
+
+func redirectFormValue(data RedirectFormData, field string) string {
+	if v, ok := data.FormValues[field]; ok && v != "" {
+		return v
+	}
+	if data.Redirect != nil {
+		switch field {
+		case "source_path":
+			return data.Redirect.SourcePath
+		case "target_url":
+			return data.Redirect.TargetURL
+		}
+	}
+	return ""
+}
+
+func redirectFormChecked(data RedirectFormData, field string) bool {
+	switch field {
+	case "is_wildcard":
+		if v, ok := data.FormValues[field]; ok {
+			return v == "true"
+		}
+		if data.Redirect != nil {
+			return data.Redirect.IsWildcard
+		}
+		return false
+	case "enabled":
+		if v, ok := data.FormValues[field]; ok {
+			return v == "true"
+		}
+		if data.Redirect != nil {
+			return data.Redirect.Enabled
+		}
+		// Default to checked for new redirects
+		return true
+	}
+	return false
+}
+
+func redirectCurrentStatusCode(data RedirectFormData) string {
+	if v, ok := data.FormValues["status_code"]; ok && v != "" {
+		return v
+	}
+	if data.Redirect != nil {
+		return fmt.Sprintf("%d", data.Redirect.StatusCode)
+	}
+	return "301"
+}
+
+func redirectCurrentTargetType(data RedirectFormData) string {
+	if v, ok := data.FormValues["target_type"]; ok && v != "" {
+		return v
+	}
+	if data.Redirect != nil {
+		return data.Redirect.TargetType
+	}
+	return "_self"
+}
+
+func statusCodeBadgeClass(code int64) string {
+	switch code {
+	case 301:
+		return "badge badge-success"
+	case 302:
+		return "badge badge-warning"
+	default:
+		return "badge badge-outline"
+	}
+}
+
+func toggleButtonClass(enabled bool) string {
+	if enabled {
+		return "status-toggle status-enabled"
+	}
+	return "status-toggle status-disabled"
+}
+
+func toggleTitle(pc *PageContext, enabled bool) string {
+	if enabled {
+		return pc.T("btn.disable")
+	}
+	return pc.T("btn.enable")
+}

@@ -1,0 +1,582 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import (
+	"fmt"
+	"time"
+)
+
+// MenuListItem holds data for a menu in the list view.
+type MenuListItem struct {
+	ID           int64
+	Name         string
+	Slug         string
+	LanguageCode string
+	UpdatedAt    time.Time
+	IsProtected  bool // true when slug == "main" || slug == "footer"
+}
+
+// MenusListData holds all data for the menus list page.
+type MenusListData struct {
+	Menus []MenuListItem
+}
+
+// MenuFormData holds all data for the menu create/edit form.
+type MenuFormData struct {
+	IsEdit     bool
+	Menu       *MenuInfo
+	ItemsJSON  string // Pre-serialized JSON for Alpine.js data-items attribute
+	Pages      []MenuPageItem
+	Targets    []string
+	Languages  []LanguageOption
+	Errors     map[string]string
+	FormValues map[string]string
+}
+
+// MenuInfo holds individual menu data for the form.
+type MenuInfo struct {
+	ID           int64
+	Name         string
+	Slug         string
+	LanguageCode string
+}
+
+// MenuPageItem holds page data for the add-pages section.
+type MenuPageItem struct {
+	ID    int64
+	Title string
+	Slug  string
+}
+
+// MenusListPage renders the menus list page.
+templ MenusListPage(pc *PageContext, data MenusListData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("menus.title") }</h1>
+				<p class="page-description">{ pc.T("menus.description") }</p>
+			</div>
+			<div class="page-actions">
+				<a href="/admin/menus/new" class="btn btn-primary">
+					@iconPlus()
+					{ pc.T("menus.new") }
+				</a>
+			</div>
+		</div>
+		if len(data.Menus) > 0 {
+			<div class="card" id="menus-table">
+				<div class="table-responsive">
+					<table class="table">
+						<thead>
+							<tr>
+								<th>{ pc.T("label.name") }</th>
+								<th>{ pc.T("label.slug") }</th>
+								<th>{ pc.T("label.language") }</th>
+								<th>{ pc.T("label.updated") }</th>
+								<th class="text-right">{ pc.T("label.actions") }</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, menu := range data.Menus {
+								<tr id={ fmt.Sprintf("menu-row-%d", menu.ID) }>
+									<td>
+										<a href={ templ.SafeURL(fmt.Sprintf("/admin/menus/%d", menu.ID)) } class="menu-name-link">
+											@iconMenusSmall()
+											{ menu.Name }
+										</a>
+									</td>
+									<td>
+										<code class="slug-code">{ menu.Slug }</code>
+									</td>
+									<td>
+										if menu.LanguageCode != "" {
+											<span class="badge badge-outline">{ menu.LanguageCode }</span>
+										} else {
+											<span class="badge badge-muted">&mdash;</span>
+										}
+									</td>
+									<td>{ menu.UpdatedAt.Format("Jan 02, 2006") }</td>
+									<td class="text-right">
+										<div class="action-buttons">
+											<a href={ templ.SafeURL(fmt.Sprintf("/admin/menus/%d", menu.ID)) } class="btn btn-sm btn-outline" title={ pc.T("menus.edit") }>
+												@iconEdit()
+											</a>
+											if !menu.IsProtected {
+												@deleteMenuModal(pc, menu)
+											} else {
+												<span class="badge badge-muted" title={ pc.T("menus.protected") }>{ pc.T("menus.protected") }</span>
+											}
+										</div>
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		} else {
+			<div class="card">
+				<div class="card-body">
+					<div class="empty-state">
+						<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="6" y2="6"></line><line x1="3" x2="21" y1="12" y2="12"></line><line x1="3" x2="21" y1="18" y2="18"></line></svg>
+						<p>{ pc.T("menus.no_menus") }</p>
+						<span class="empty-hint">{ pc.T("menus.no_menus_hint") }</span>
+						<div class="empty-state-action">
+							<a href="/admin/menus/new" class="btn btn-primary">{ pc.T("menus.create") }</a>
+						</div>
+					</div>
+				</div>
+			</div>
+		}
+	}
+}
+
+templ deleteMenuModal(pc *PageContext, menu MenuListItem) {
+	<div x-data="{ showConfirm: false }" class="delete-action">
+		<button
+			type="button"
+			class="btn btn-sm btn-danger"
+			title={ pc.T("btn.delete") }
+			@click="showConfirm = true"
+		>
+			@iconDelete()
+		</button>
+		<div
+			class="modal-overlay"
+			x-show="showConfirm"
+			x-cloak
+			@click.self="showConfirm = false"
+			x-transition:enter="modal-enter"
+			x-transition:leave="modal-leave"
+		>
+			<div class="modal" @click.stop>
+				<div class="modal-header">
+					<h3 class="modal-title">{ pc.T("menus.delete_menu") }</h3>
+					<button type="button" class="modal-close" @click="showConfirm = false" aria-label={ pc.T("btn.close") }>&times;</button>
+				</div>
+				<div class="modal-body">
+					<p>
+						{ pc.T("menus.confirm_delete") }
+						<strong>{ menu.Name }</strong>?
+					</p>
+					<p class="text-warning">{ pc.T("menus.items_deleted_warning") }</p>
+					<p class="text-muted">{ pc.T("label.action_cannot_undone") }</p>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
+					<button
+						type="button"
+						class="btn btn-danger"
+						hx-delete={ fmt.Sprintf("/admin/menus/%d", menu.ID) }
+						hx-target={ fmt.Sprintf("#menu-row-%d", menu.ID) }
+						hx-swap="outerHTML"
+						@click="showConfirm = false"
+					>
+						{ pc.T("menus.delete_menu") }
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+// MenuFormPage renders the menu create/edit form.
+templ MenuFormPage(pc *PageContext, data MenuFormData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">
+					if data.IsEdit {
+						{ pc.T("menus.edit") }
+					} else {
+						{ pc.T("menus.new") }
+					}
+				</h1>
+				<p class="page-description">
+					if data.IsEdit {
+						{ pc.T("menus.edit_description") }
+					} else {
+						{ pc.T("menus.new_description") }
+					}
+				</p>
+			</div>
+			<div class="page-actions">
+				<a href="/admin/menus" class="btn btn-outline">
+					@iconBack()
+					{ pc.T("menus.back_to_menus") }
+				</a>
+			</div>
+		</div>
+		<!-- Menu Settings Card -->
+		<div class="card mb-4">
+			<div class="card-header">
+				<h3 class="card-title">{ pc.T("menus.settings") }</h3>
+			</div>
+			<form
+				method="POST"
+				action={ menuFormAction(data) }
+				class="card-body"
+			>
+				if data.IsEdit {
+					<input type="hidden" name="_method" value="PUT"/>
+				}
+				<div class="form-grid">
+					<div class="form-group">
+						<label for="name" class="form-label">
+							{ pc.T("label.name") } <span class="required">*</span>
+						</label>
+						<input
+							type="text"
+							id="name"
+							name="name"
+							class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["name"] != "") }
+							value={ menuFormValue(data, "name") }
+							placeholder={ pc.T("menus.name_placeholder") }
+							required
+							maxlength="255"
+						/>
+						if data.Errors["name"] != "" {
+							<span class="form-error">{ data.Errors["name"] }</span>
+						}
+					</div>
+					<div class="form-group">
+						<label for="slug" class="form-label">
+							{ pc.T("label.slug") } <span class="required">*</span>
+						</label>
+						<input
+							type="text"
+							id="slug"
+							name="slug"
+							class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["slug"] != "") }
+							value={ menuFormValue(data, "slug") }
+							placeholder={ pc.T("menus.slug_placeholder") }
+							maxlength="255"
+						/>
+						if data.Errors["slug"] != "" {
+							<span class="form-error">{ data.Errors["slug"] }</span>
+						} else {
+							<span class="form-hint">{ pc.T("menus.slug_hint") }</span>
+						}
+					</div>
+					<div class="form-group">
+						<label for="language_code" class="form-label">
+							{ pc.T("label.language") }
+						</label>
+						<select
+							id="language_code"
+							name="language_code"
+							class={ templ.KV("form-select", true), templ.KV("is-invalid", data.Errors["language_code"] != "") }
+						>
+							for _, lang := range data.Languages {
+								<option
+									value={ lang.Code }
+									selected?={ lang.Code == menuCurrentLanguageCode(data) }
+								>
+									{ lang.NativeName } ({ lang.Code })
+								</option>
+							}
+						</select>
+						if data.Errors["language_code"] != "" {
+							<span class="form-error">{ data.Errors["language_code"] }</span>
+						} else {
+							<span class="form-hint">{ pc.T("menus.language_hint") }</span>
+						}
+					</div>
+				</div>
+				<div class="form-actions">
+					<button type="submit" class="btn btn-primary">
+						if data.IsEdit {
+							{ pc.T("menus.save_settings") }
+						} else {
+							{ pc.T("menus.create") }
+						}
+					</button>
+				</div>
+			</form>
+		</div>
+		if data.IsEdit && data.Menu != nil {
+			@menuBuilderSection(pc, data)
+		}
+	}
+}
+
+// menuBuilderSection renders the interactive menu builder with Alpine.js.
+templ menuBuilderSection(pc *PageContext, data MenuFormData) {
+	<div
+		class="menu-builder"
+		x-data="menuBuilder()"
+		data-menu-id={ fmt.Sprintf("%d", data.Menu.ID) }
+		data-items={ data.ItemsJSON }
+		data-i18n-confirm-delete={ pc.T("label.confirm_delete") }
+		data-i18n-item-page={ pc.T("menus.item_page") }
+		data-i18n-item-custom={ pc.T("menus.item_custom") }
+	>
+		<div class="menu-builder-grid">
+			<!-- Left Panel: Add Items -->
+			<div class="menu-builder-panel">
+				<div class="card">
+					<div class="card-header">
+						<h3 class="card-title">{ pc.T("menus.add_items") }</h3>
+					</div>
+					<div class="card-body">
+						<!-- Add Custom Link -->
+						<div class="menu-add-section">
+							<h4 class="menu-add-title">{ pc.T("menus.custom_link") }</h4>
+							<div class="form-group">
+								<label class="form-label">{ pc.T("label.title") }</label>
+								<input type="text" class="form-input" x-model="customLink.title" placeholder={ pc.T("menus.link_text") } maxlength="255"/>
+							</div>
+							<div class="form-group">
+								<label class="form-label">URL</label>
+								<input type="text" class="form-input" x-model="customLink.url" placeholder="https://..." maxlength="2048"/>
+							</div>
+							<div class="form-group">
+								<label class="form-label">{ pc.T("menus.target") }</label>
+								<select class="form-select" x-model="customLink.target">
+									for _, target := range data.Targets {
+										<option value={ target }>{ target }</option>
+									}
+								</select>
+							</div>
+							<div class="form-group">
+								<label class="form-label">{ pc.T("menus.parent_item") }</label>
+								<select class="form-select" x-model="customLink.parent_id">
+									<option value="0">&mdash; { pc.T("menus.top_level") } &mdash;</option>
+									<template x-for="opt in flattenItems()" :key="opt.id">
+										<option :value="opt.id" x-text="'\u2014'.repeat(opt.depth) + (opt.depth ? ' ' : '') + opt.title"></option>
+									</template>
+								</select>
+							</div>
+							<button type="button" class="btn btn-primary btn-sm" @click="addCustomLink()" :disabled="!customLink.title || !customLink.url">
+								{ pc.T("menus.add_to_menu") }
+							</button>
+						</div>
+						<!-- Add Pages -->
+						if len(data.Pages) > 0 {
+							<div class="menu-add-section">
+								<h4 class="menu-add-title">{ pc.T("pages.title") }</h4>
+								<div class="menu-pages-list">
+									for _, page := range data.Pages {
+										<div class="menu-page-item">
+											<label class="checkbox-label">
+												<input
+													type="checkbox"
+													data-page-id={ fmt.Sprintf("%d", page.ID) }
+													data-page-title={ page.Title }
+													data-page-slug={ page.Slug }
+													x-bind:checked={ fmt.Sprintf("isPageSelected(%d)", page.ID) }
+													@change="togglePage(parseInt($el.dataset.pageId), $el.dataset.pageTitle, $el.dataset.pageSlug)"
+												/>
+												<span>{ page.Title }</span>
+											</label>
+										</div>
+									}
+								</div>
+								<div class="form-group">
+									<label class="form-label">{ pc.T("menus.parent_item") }</label>
+									<select class="form-select" x-model="pagesParentId">
+										<option value="0">&mdash; { pc.T("menus.top_level") } &mdash;</option>
+										<template x-for="opt in flattenItems()" :key="opt.id">
+											<option :value="opt.id" x-text="'\u2014'.repeat(opt.depth) + (opt.depth ? ' ' : '') + opt.title"></option>
+										</template>
+									</select>
+								</div>
+								<button type="button" class="btn btn-primary btn-sm" @click="addSelectedPages()" :disabled="selectedPages.length === 0">
+									{ pc.T("menus.add_selected") }
+								</button>
+							</div>
+						}
+					</div>
+				</div>
+			</div>
+			<!-- Right Panel: Menu Structure -->
+			<div class="menu-builder-panel menu-builder-main">
+				<div class="card">
+					<div class="card-header">
+						<h3 class="card-title">{ pc.T("menus.structure") }</h3>
+						<span class="text-muted" x-show="hasChanges">{ pc.T("menus.unsaved_changes") }</span>
+					</div>
+					<div class="card-body">
+						<template x-if="items.length === 0">
+							<div class="menu-empty-state">
+								<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="6" y2="6"></line><line x1="3" x2="21" y1="12" y2="12"></line><line x1="3" x2="21" y1="18" y2="18"></line></svg>
+								<p>{ pc.T("menus.no_items") }</p>
+							</div>
+						</template>
+						<div id="menu-items" class="menu-items-container" x-sort="handleSort" x-sort:config="{ handle: '.menu-item-handle' }">
+							<template x-for="(item, index) in items" :key="`${item.id || item.tempId}-${sortIteration}`">
+								<div class="menu-item" x-sort:item="item.id || item.tempId">
+									<div class="menu-item-header">
+										<div class="menu-item-handle" x-sort:handle>
+											<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1"></circle><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="5" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="19" r="1"></circle></svg>
+										</div>
+										<div class="menu-item-info">
+											<span class="menu-item-title" x-text="item.title"></span>
+											<span class="menu-item-type" x-text="item.page_id ? labels.itemPage : labels.itemCustom"></span>
+										</div>
+										<div class="menu-item-actions">
+											<button type="button" class="btn btn-sm btn-icon" @click="editItem(item)" :title={ pc.T("btn.edit") }>
+												<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
+											</button>
+											<button type="button" class="btn btn-sm btn-icon btn-danger" @click="deleteItem(item, index)" :title={ pc.T("btn.delete") }>
+												<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+											</button>
+										</div>
+									</div>
+									<!-- Nested children (Level 2) -->
+									<div class="menu-item-children" x-show="item.children && item.children.length > 0" x-sort="(key, pos) => handleChildSort(item, key, pos)">
+										<template x-for="(child, childIndex) in item.children" :key="`${child.id || child.tempId}-${sortIteration}`">
+											<div class="menu-item menu-item-nested" :data-id="child.id || child.tempId" x-sort:item="child.id || child.tempId">
+												<div class="menu-item-header">
+													<div class="menu-item-handle" x-sort:handle>
+														<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1"></circle><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="5" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="19" r="1"></circle></svg>
+													</div>
+													<div class="menu-item-info">
+														<span class="menu-item-title" x-text="child.title"></span>
+														<span class="menu-item-type" x-text="child.page_id ? labels.itemPage : labels.itemCustom"></span>
+													</div>
+													<div class="menu-item-actions">
+														<button type="button" class="btn btn-sm btn-icon" @click="editItem(child)" :title={ pc.T("btn.edit") }>
+															<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
+														</button>
+														<button type="button" class="btn btn-sm btn-icon btn-danger" @click="deleteChildItem(item, childIndex)" :title={ pc.T("btn.delete") }>
+															<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+														</button>
+													</div>
+												</div>
+												<!-- Level 3: Grandchildren -->
+												<div class="menu-item-children" x-show="child.children && child.children.length > 0" x-sort="(key, pos) => handleGrandchildSort(child, key, pos)">
+													<template x-for="(grandchild, grandchildIndex) in child.children" :key="`${grandchild.id || grandchild.tempId}-${sortIteration}`">
+														<div class="menu-item menu-item-nested menu-item-level-3" :data-id="grandchild.id || grandchild.tempId" x-sort:item="grandchild.id || grandchild.tempId">
+															<div class="menu-item-header">
+																<div class="menu-item-handle" x-sort:handle>
+																	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1"></circle><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="5" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="19" r="1"></circle></svg>
+																</div>
+																<div class="menu-item-info">
+																	<span class="menu-item-title" x-text="grandchild.title"></span>
+																	<span class="menu-item-type" x-text="grandchild.page_id ? labels.itemPage : labels.itemCustom"></span>
+																</div>
+																<div class="menu-item-actions">
+																	<button type="button" class="btn btn-sm btn-icon" @click="editItem(grandchild)" :title={ pc.T("btn.edit") }>
+																		<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
+																	</button>
+																	<button type="button" class="btn btn-sm btn-icon btn-danger" @click="deleteGrandchildItem(child, grandchildIndex)" :title={ pc.T("btn.delete") }>
+																		<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+																	</button>
+																</div>
+															</div>
+														</div>
+													</template>
+												</div>
+											</div>
+										</template>
+									</div>
+								</div>
+							</template>
+						</div>
+						<div class="menu-builder-actions" x-show="hasChanges">
+							<button type="button" class="btn btn-primary" @click="saveOrder()" :disabled="saving">
+								<span x-show="!saving">{ pc.T("menus.save_order") }</span>
+								<span x-show="saving">{ pc.T("menus.saving") }</span>
+							</button>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<!-- Edit Item Modal -->
+		<template x-if="editingItem">
+			<div class="modal-overlay" x-show="editingItem" x-cloak @click.self="editingItem = null">
+				<div class="modal" @click.stop>
+					<div class="modal-header">
+						<h3 class="modal-title">{ pc.T("menus.edit_item") }</h3>
+						<button type="button" class="modal-close" @click="editingItem = null" aria-label={ pc.T("btn.close") }>&times;</button>
+					</div>
+					<div class="modal-body">
+						<div class="form-group">
+							<label class="form-label">{ pc.T("label.title") }</label>
+							<input type="text" class="form-input" x-model="editingItem.title" maxlength="255"/>
+						</div>
+						<div class="form-group" x-show="!editingItem.page_id">
+							<label class="form-label">URL</label>
+							<input type="text" class="form-input" x-model="editingItem.url" maxlength="2048"/>
+						</div>
+						<div class="form-group">
+							<label class="form-label">{ pc.T("menus.target") }</label>
+							<select class="form-select" x-model="editingItem.target">
+								for _, target := range data.Targets {
+									<option value={ target }>{ target }</option>
+								}
+							</select>
+						</div>
+						<div class="form-group">
+							<label class="form-label">{ pc.T("menus.parent_item") }</label>
+							<select class="form-select" x-model="editingItem.parent_id">
+								<option value="0">&mdash; { pc.T("menus.top_level") } &mdash;</option>
+								<template x-for="opt in flattenItems()" :key="opt.id">
+									<option :value="String(opt.id)" x-text="'\u2014'.repeat(opt.depth) + (opt.depth ? ' ' : '') + opt.title" :disabled="opt.id === editingItem.id"></option>
+								</template>
+							</select>
+						</div>
+						<div class="form-group">
+							<label class="form-label">{ pc.T("menus.css_class") }</label>
+							<input type="text" class="form-input" x-model="editingItem.css_class" placeholder={ pc.T("menus.css_class_placeholder") } maxlength="255"/>
+						</div>
+						<div class="form-group">
+							<label class="checkbox-label">
+								<input type="checkbox" x-model="editingItem.is_active"/>
+								<span>{ pc.T("label.active") }</span>
+							</label>
+						</div>
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn btn-outline" @click="editingItem = null">{ pc.T("btn.cancel") }</button>
+						<button type="button" class="btn btn-primary" @click="saveItem()">{ pc.T("btn.save_changes") }</button>
+					</div>
+				</div>
+			</div>
+		</template>
+	</div>
+	<script src="/static/dist/js/menu-builder.js"></script>
+}
+
+// iconMenusSmall renders a small menu icon for the list table.
+templ iconMenusSmall() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><line x1="3" x2="21" y1="6" y2="6"></line><line x1="3" x2="21" y1="12" y2="12"></line><line x1="3" x2="21" y1="18" y2="18"></line></svg>
+}
+
+// Helper functions for menu form
+
+func menuFormAction(data MenuFormData) templ.SafeURL {
+	if data.IsEdit && data.Menu != nil {
+		return templ.SafeURL(fmt.Sprintf("/admin/menus/%d", data.Menu.ID))
+	}
+	return "/admin/menus"
+}
+
+func menuFormValue(data MenuFormData, field string) string {
+	if v, ok := data.FormValues[field]; ok && v != "" {
+		return v
+	}
+	if data.Menu != nil {
+		switch field {
+		case "name":
+			return data.Menu.Name
+		case "slug":
+			return data.Menu.Slug
+		}
+	}
+	return ""
+}
+
+func menuCurrentLanguageCode(data MenuFormData) string {
+	if v, ok := data.FormValues["language_code"]; ok && v != "" {
+		return v
+	}
+	if data.Menu != nil {
+		return data.Menu.LanguageCode
+	}
+	return ""
+}

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 	"github.com/robfig/cron/v3"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/scheduler"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 const (
@@ -36,21 +38,23 @@ const (
 
 // SchedulerHandler handles scheduler admin routes.
 type SchedulerHandler struct {
-	db           *sql.DB
-	renderer     *render.Renderer
-	registry     *scheduler.Registry
-	taskExecutor *scheduler.TaskExecutor
-	eventService *service.EventService
+	db             *sql.DB
+	renderer       *render.Renderer
+	sessionManager *scs.SessionManager
+	registry       *scheduler.Registry
+	taskExecutor   *scheduler.TaskExecutor
+	eventService   *service.EventService
 }
 
 // NewSchedulerHandler creates a new SchedulerHandler.
-func NewSchedulerHandler(db *sql.DB, renderer *render.Renderer, registry *scheduler.Registry, taskExec *scheduler.TaskExecutor, es *service.EventService) *SchedulerHandler {
+func NewSchedulerHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, registry *scheduler.Registry, taskExec *scheduler.TaskExecutor, es *service.EventService) *SchedulerHandler {
 	return &SchedulerHandler{
-		db:           db,
-		renderer:     renderer,
-		registry:     registry,
-		taskExecutor: taskExec,
-		eventService: es,
+		db:             db,
+		renderer:       renderer,
+		sessionManager: sm,
+		registry:       registry,
+		taskExecutor:   taskExec,
+		eventService:   es,
 	}
 }
 
@@ -86,7 +90,6 @@ type SchedulerListData struct {
 
 // List handles GET /admin/scheduler - displays all scheduled jobs and custom tasks.
 func (h *SchedulerHandler) List(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
 	jobs := h.registry.List()
@@ -153,15 +156,9 @@ func (h *SchedulerHandler) List(w http.ResponseWriter, r *http.Request) {
 		Tasks: taskViews,
 	}
 
-	h.renderer.RenderPage(w, r, "admin/scheduler_list", render.TemplateData{
-		Title: i18n.T(lang, "scheduler.title"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "scheduler.title"), URL: redirectAdminScheduler, Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "scheduler.title"), schedulerBreadcrumbs(lang))
+	viewData := convertSchedulerListViewData(data)
+	renderTempl(w, r, adminviews.SchedulerListPage(pc, viewData))
 }
 
 // UpdateSchedule handles POST /admin/scheduler/update - updates job schedule.
@@ -279,7 +276,6 @@ func (h *SchedulerHandler) TriggerNow(w http.ResponseWriter, r *http.Request) {
 
 // TaskForm handles GET /admin/scheduler/tasks/new and /admin/scheduler/tasks/{id}/edit.
 func (h *SchedulerHandler) TaskForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
 	var task store.ScheduledTask
@@ -302,26 +298,14 @@ func (h *SchedulerHandler) TaskForm(w http.ResponseWriter, r *http.Request) {
 		isEdit = true
 	}
 
-	type formData struct {
-		Task   store.ScheduledTask
-		IsEdit bool
-	}
-
 	title := i18n.T(lang, "scheduler.new_task")
 	if isEdit {
 		title = i18n.T(lang, "scheduler.edit_task")
 	}
 
-	h.renderer.RenderPage(w, r, "admin/scheduler_task_form", render.TemplateData{
-		Title: title,
-		User:  user,
-		Data:  formData{Task: task, IsEdit: isEdit},
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "scheduler.title"), URL: redirectAdminScheduler},
-			{Label: title, Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, title, schedulerTaskFormBreadcrumbs(lang, title))
+	viewData := convertSchedulerTaskFormViewData(task, isEdit)
+	renderTempl(w, r, adminviews.SchedulerTaskFormPage(pc, viewData))
 }
 
 // TaskCreate handles POST /admin/scheduler/tasks - creates a new scheduled task.
@@ -652,7 +636,6 @@ func (h *SchedulerHandler) TaskDelete(w http.ResponseWriter, r *http.Request) {
 
 // TaskRuns handles GET /admin/scheduler/tasks/{id}/runs - shows run history.
 func (h *SchedulerHandler) TaskRuns(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -688,31 +671,11 @@ func (h *SchedulerHandler) TaskRuns(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type runsData struct {
-		Task       store.ScheduledTask
-		Runs       []store.ScheduledTaskRun
-		TotalCount int64
-		Pagination AdminPagination
-	}
+	pagination := BuildAdminPagination(page, int(totalCount), taskRunsPerPage, fmt.Sprintf("/admin/scheduler/tasks/%d/runs", id), r.URL.Query())
 
-	data := runsData{
-		Task:       task,
-		Runs:       runs,
-		TotalCount: totalCount,
-		Pagination: BuildAdminPagination(page, int(totalCount), taskRunsPerPage, fmt.Sprintf("/admin/scheduler/tasks/%d/runs", id), r.URL.Query()),
-	}
-
-	h.renderer.RenderPage(w, r, "admin/scheduler_task_runs", render.TemplateData{
-		Title: i18n.T(lang, "scheduler.task_runs"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "scheduler.title"), URL: redirectAdminScheduler},
-			{Label: task.Name},
-			{Label: i18n.T(lang, "scheduler.task_runs"), Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "scheduler.task_runs"), schedulerTaskRunsBreadcrumbs(lang, task.Name))
+	viewData := convertSchedulerTaskRunsViewData(task, runs, totalCount, pagination)
+	renderTempl(w, r, adminviews.SchedulerTaskRunsPage(pc, viewData))
 }
 
 // TaskTrigger handles POST /admin/scheduler/tasks/{id}/trigger - manually triggers a task.

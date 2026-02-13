@@ -24,6 +24,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 // TagsPerPage is the number of tags to display per page.
@@ -56,9 +57,7 @@ type TagsListData struct {
 
 // ListTags handles GET /admin/tags - displays a paginated list of tags.
 func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
-
 	page := ParsePageParam(r)
 
 	// Get total count
@@ -84,21 +83,27 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := TagsListData{
-		Tags:       tags,
-		TotalCount: totalCount,
-		Pagination: BuildAdminPagination(page, int(totalCount), TagsPerPage, redirectAdminTags, r.URL.Query()),
+	// Convert to view types
+	var viewTags []adminviews.TagListItem
+	for _, t := range tags {
+		viewTags = append(viewTags, adminviews.TagListItem{
+			ID:           t.ID,
+			Name:         t.Name,
+			Slug:         t.Slug,
+			LanguageCode: t.LanguageCode,
+			UsageCount:   t.UsageCount,
+			CreatedAt:    t.CreatedAt,
+		})
 	}
 
-	h.renderer.RenderPage(w, r, "admin/tags_list", render.TemplateData{
-		Title: i18n.T(lang, "nav.tags"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.tags"), URL: redirectAdminTags, Active: true},
-		},
-	})
+	viewData := adminviews.TagsListData{
+		Tags:       viewTags,
+		TotalCount: totalCount,
+		Pagination: convertPagination(BuildAdminPagination(page, int(totalCount), TagsPerPage, redirectAdminTags, r.URL.Query())),
+	}
+
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "nav.tags"), tagsBreadcrumbs(lang))
+	renderTempl(w, r, adminviews.TagsListPage(pc, viewData))
 }
 
 // TagTranslationInfo holds information about a tag translation.
@@ -121,33 +126,22 @@ type TagFormData struct {
 
 // NewTagForm handles GET /admin/tags/new - displays the new tag form.
 func (h *TaxonomyHandler) NewTagForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
 	// Load all active languages
 	allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
-
-	// Get default language for preselection
 	defaultLanguage := FindDefaultLanguage(allLanguages)
 
-	data := TagFormData{
+	viewData := adminviews.TagFormData{
 		Errors:       make(map[string]string),
 		FormValues:   make(map[string]string),
 		IsEdit:       false,
-		AllLanguages: allLanguages,
-		Language:     defaultLanguage,
+		AllLanguages: convertLanguageOptions(allLanguages),
+		Language:     convertLanguageOptionPtr(defaultLanguage),
 	}
 
-	h.renderer.RenderPage(w, r, "admin/tags_form", render.TemplateData{
-		Title: i18n.T(lang, "tags.new"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.tags"), URL: redirectAdminTags},
-			{Label: i18n.T(lang, "tags.new"), URL: redirectAdminTagsNew, Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "tags.new"), tagFormBreadcrumbs(lang, false))
+	renderTempl(w, r, adminviews.TagFormPage(pc, viewData))
 }
 
 // CreateTag handles POST /admin/tags - creates a new tag.
@@ -156,7 +150,6 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
 	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminTagsNew) {
@@ -190,7 +183,6 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
-		// Load all active languages for the form
 		allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 		var currentLanguage *store.Language
 		if languageCode != "" {
@@ -200,24 +192,16 @@ func (h *TaxonomyHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		data := TagFormData{
+		viewData := adminviews.TagFormData{
 			Errors:       validationErrors,
 			FormValues:   formValues,
 			IsEdit:       false,
-			AllLanguages: allLanguages,
-			Language:     currentLanguage,
+			AllLanguages: convertLanguageOptions(allLanguages),
+			Language:     convertLanguageOptionPtr(currentLanguage),
 		}
 
-		h.renderer.RenderPage(w, r, "admin/tags_form", render.TemplateData{
-			Title: i18n.T(lang, "tags.new"),
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-				{Label: i18n.T(lang, "nav.tags"), URL: redirectAdminTags},
-				{Label: i18n.T(lang, "tags.new"), URL: redirectAdminTagsNew, Active: true},
-			},
-		})
+		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "tags.new"), tagFormBreadcrumbs(lang, false))
+		renderTempl(w, r, adminviews.TagFormPage(pc, viewData))
 		return
 	}
 
@@ -257,22 +241,21 @@ func (h *TaxonomyHandler) EditTagForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	langInfo := h.loadTagLanguageInfo(r.Context(), tag)
+	tagItem := convertTagItem(tag)
 
-	data := TagFormData{
-		Tag:              &tag,
+	viewData := adminviews.TagFormData{
+		Tag:              &tagItem,
 		Errors:           make(map[string]string),
 		FormValues:       make(map[string]string),
 		IsEdit:           true,
-		AllLanguages:     langInfo.AllLanguages,
-		Language:         langInfo.EntityLanguage,
-		Translations:     langInfo.Translations,
-		MissingLanguages: langInfo.MissingLanguages,
+		AllLanguages:     convertLanguageOptions(langInfo.AllLanguages),
+		Language:         convertLanguageOptionPtr(langInfo.EntityLanguage),
+		Translations:     convertTagTranslations(langInfo.Translations),
+		MissingLanguages: convertLanguageOptions(langInfo.MissingLanguages),
 	}
 
-	renderEntityEditPage(w, r, h.renderer, "admin/tags_form",
-		tag.Name, data, lang,
-		"nav.tags", redirectAdminTags,
-		tag.Name, fmt.Sprintf(redirectAdminTagsID, tag.ID))
+	pc := buildPageContext(r, h.sessionManager, h.renderer, tag.Name, tagEditBreadcrumbs(lang, tag.Name, tag.ID))
+	renderTempl(w, r, adminviews.TagFormPage(pc, viewData))
 }
 
 // UpdateTag handles PUT /admin/tags/{id} - updates an existing tag.
@@ -281,7 +264,6 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -323,26 +305,19 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
 		langInfo := h.loadTagLanguageInfo(r.Context(), existingTag)
+		tagItem := convertTagItem(existingTag)
 
-		data := TagFormData{
-			Tag:          &existingTag,
+		viewData := adminviews.TagFormData{
+			Tag:          &tagItem,
 			Errors:       validationErrors,
 			FormValues:   formValues,
 			IsEdit:       true,
-			AllLanguages: langInfo.AllLanguages,
-			Language:     langInfo.EntityLanguage,
+			AllLanguages: convertLanguageOptions(langInfo.AllLanguages),
+			Language:     convertLanguageOptionPtr(langInfo.EntityLanguage),
 		}
 
-		h.renderer.RenderPage(w, r, "admin/tags_form", render.TemplateData{
-			Title: existingTag.Name,
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-				{Label: i18n.T(lang, "nav.tags"), URL: redirectAdminTags},
-				{Label: existingTag.Name, URL: fmt.Sprintf(redirectAdminTagsID, id), Active: true},
-			},
-		})
+		pc := buildPageContext(r, h.sessionManager, h.renderer, existingTag.Name, tagEditBreadcrumbs(lang, existingTag.Name, id))
+		renderTempl(w, r, adminviews.TagFormPage(pc, viewData))
 		return
 	}
 
@@ -604,7 +579,6 @@ func buildCategoryTreeWithUsage(categories []store.GetCategoryUsageCountsRow, pa
 
 // ListCategories handles GET /admin/categories - displays category tree.
 func (h *TaxonomyHandler) ListCategories(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
 	// Get all categories with usage counts
@@ -626,20 +600,13 @@ func (h *TaxonomyHandler) ListCategories(w http.ResponseWriter, r *http.Request)
 	tree := buildCategoryTreeWithUsage(categories, nil, 0)
 	flatTree := flattenCategoryTree(tree)
 
-	data := CategoriesListData{
-		Categories: flatTree,
+	viewData := adminviews.CategoriesListData{
+		Categories: convertCategoryListItems(flatTree),
 		TotalCount: totalCount,
 	}
 
-	h.renderer.RenderPage(w, r, "admin/categories_list", render.TemplateData{
-		Title: i18n.T(lang, "nav.categories"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.categories"), URL: redirectAdminCategories, Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "nav.categories"), categoriesBreadcrumbs(lang))
+	renderTempl(w, r, adminviews.CategoriesListPage(pc, viewData))
 }
 
 // CategoryTranslationInfo holds information about a category translation.
@@ -663,7 +630,6 @@ type CategoryFormData struct {
 
 // NewCategoryForm handles GET /admin/categories/new - displays the new category form.
 func (h *TaxonomyHandler) NewCategoryForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
 	// Get all categories for parent selector
@@ -678,29 +644,19 @@ func (h *TaxonomyHandler) NewCategoryForm(w http.ResponseWriter, r *http.Request
 
 	// Load all active languages
 	allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
-
-	// Get default language for preselection
 	defaultLanguage := FindDefaultLanguage(allLanguages)
 
-	data := CategoryFormData{
-		AllCategories: flatTree,
+	viewData := adminviews.CategoryFormData{
+		AllCategories: convertCategoryListItems(flatTree),
 		Errors:        make(map[string]string),
 		FormValues:    make(map[string]string),
 		IsEdit:        false,
-		AllLanguages:  allLanguages,
-		Language:      defaultLanguage,
+		AllLanguages:  convertLanguageOptions(allLanguages),
+		Language:      convertLanguageOptionPtr(defaultLanguage),
 	}
 
-	h.renderer.RenderPage(w, r, "admin/categories_form", render.TemplateData{
-		Title: i18n.T(lang, "categories.new"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.categories"), URL: redirectAdminCategories},
-			{Label: i18n.T(lang, "categories.new"), URL: redirectAdminCategoriesNew, Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "categories.new"), categoryFormBreadcrumbs(lang, false))
+	renderTempl(w, r, adminviews.CategoryFormPage(pc, viewData))
 }
 
 // CreateCategory handles POST /admin/categories - creates a new category.
@@ -709,7 +665,6 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
 	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminCategoriesNew) {
@@ -750,12 +705,10 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
-		// Get categories for parent selector
 		categories, _ := h.queries.ListCategories(r.Context())
 		tree := buildCategoryTree(categories, nil, 0)
 		flatTree := flattenCategoryTree(tree)
 
-		// Load all active languages for the form
 		allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 		var currentLanguage *store.Language
 		if languageCode != "" {
@@ -765,25 +718,17 @@ func (h *TaxonomyHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 			}
 		}
 
-		data := CategoryFormData{
-			AllCategories: flatTree,
+		viewData := adminviews.CategoryFormData{
+			AllCategories: convertCategoryListItems(flatTree),
 			Errors:        validationErrors,
 			FormValues:    formValues,
 			IsEdit:        false,
-			AllLanguages:  allLanguages,
-			Language:      currentLanguage,
+			AllLanguages:  convertLanguageOptions(allLanguages),
+			Language:      convertLanguageOptionPtr(currentLanguage),
 		}
 
-		h.renderer.RenderPage(w, r, "admin/categories_form", render.TemplateData{
-			Title: i18n.T(lang, "categories.new"),
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-				{Label: i18n.T(lang, "nav.categories"), URL: redirectAdminCategories},
-				{Label: i18n.T(lang, "categories.new"), URL: redirectAdminCategoriesNew, Active: true},
-			},
-		})
+		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "categories.new"), categoryFormBreadcrumbs(lang, false))
+		renderTempl(w, r, adminviews.CategoryFormPage(pc, viewData))
 		return
 	}
 
@@ -828,23 +773,22 @@ func (h *TaxonomyHandler) EditCategoryForm(w http.ResponseWriter, r *http.Reques
 	// Get all categories for parent selector (excluding self and descendants)
 	flatTree := h.buildFilteredCategoryTree(r.Context(), id)
 	langInfo := h.loadCategoryLanguageInfo(r.Context(), category)
+	catItem := convertCategoryItem(category)
 
-	data := CategoryFormData{
-		Category:         &category,
-		AllCategories:    flatTree,
+	viewData := adminviews.CategoryFormData{
+		Category:         &catItem,
+		AllCategories:    convertCategoryListItems(flatTree),
 		Errors:           make(map[string]string),
 		FormValues:       make(map[string]string),
 		IsEdit:           true,
-		AllLanguages:     langInfo.AllLanguages,
-		Language:         langInfo.EntityLanguage,
-		Translations:     langInfo.Translations,
-		MissingLanguages: langInfo.MissingLanguages,
+		AllLanguages:     convertLanguageOptions(langInfo.AllLanguages),
+		Language:         convertLanguageOptionPtr(langInfo.EntityLanguage),
+		Translations:     convertCategoryTranslations(langInfo.Translations),
+		MissingLanguages: convertLanguageOptions(langInfo.MissingLanguages),
 	}
 
-	renderEntityEditPage(w, r, h.renderer, "admin/categories_form",
-		category.Name, data, lang,
-		"nav.categories", redirectAdminCategories,
-		category.Name, fmt.Sprintf(redirectAdminCategoriesID, category.ID))
+	pc := buildPageContext(r, h.sessionManager, h.renderer, category.Name, categoryEditBreadcrumbs(lang, category.Name, category.ID))
+	renderTempl(w, r, adminviews.CategoryFormPage(pc, viewData))
 }
 
 // UpdateCategory handles PUT /admin/categories/{id} - updates an existing category.
@@ -853,7 +797,6 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -919,27 +862,20 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 	if len(validationErrors) > 0 {
 		flatTree := h.buildFilteredCategoryTree(r.Context(), id)
 		langInfo := h.loadCategoryLanguageInfo(r.Context(), existingCategory)
+		catItem := convertCategoryItem(existingCategory)
 
-		data := CategoryFormData{
-			Category:      &existingCategory,
-			AllCategories: flatTree,
+		viewData := adminviews.CategoryFormData{
+			Category:      &catItem,
+			AllCategories: convertCategoryListItems(flatTree),
 			Errors:        validationErrors,
 			FormValues:    formValues,
 			IsEdit:        true,
-			AllLanguages:  langInfo.AllLanguages,
-			Language:      langInfo.EntityLanguage,
+			AllLanguages:  convertLanguageOptions(langInfo.AllLanguages),
+			Language:      convertLanguageOptionPtr(langInfo.EntityLanguage),
 		}
 
-		h.renderer.RenderPage(w, r, "admin/categories_form", render.TemplateData{
-			Title: existingCategory.Name,
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-				{Label: i18n.T(lang, "nav.categories"), URL: redirectAdminCategories},
-				{Label: existingCategory.Name, URL: fmt.Sprintf(redirectAdminCategoriesID, id), Active: true},
-			},
-		})
+		pc := buildPageContext(r, h.sessionManager, h.renderer, existingCategory.Name, categoryEditBreadcrumbs(lang, existingCategory.Name, id))
+		renderTempl(w, r, adminviews.CategoryFormPage(pc, viewData))
 		return
 	}
 

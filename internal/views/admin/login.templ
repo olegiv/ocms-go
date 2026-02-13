@@ -1,0 +1,158 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import "github.com/olegiv/ocms-go/internal/i18n"
+
+// LoginData holds data for the login page.
+type LoginData struct {
+	Title           string
+	AdminLang       string
+	Flash           string
+	FlashType       string
+	LangOptions     []LangOption
+	HcaptchaEnabled bool
+	HcaptchaWidget  string
+}
+
+// T translates a key using the admin language.
+func (d LoginData) T(key string, args ...any) string {
+	return i18n.T(d.AdminLang, key, args...)
+}
+
+// LoginPage renders the login page.
+templ LoginPage(d LoginData) {
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<meta name="generator" content="oCMS - https://ocms.tech"/>
+		<title>{ d.Title } - oCMS</title>
+		<link rel="icon" type="image/x-icon" href="/favicon.ico"/>
+		<link rel="stylesheet" href="/static/dist/main.css"/>
+		<link rel="stylesheet" href="/static/dist/admin-tw.css"/>
+	</head>
+	<body>
+		<div class="auth-container">
+			if len(d.LangOptions) > 1 {
+				<form action="/language" method="POST" class="auth-lang-form">
+					@csrfField()
+					<label class="auth-lang-selector" title={ d.T("admin.change_language") }>
+						@iconGlobe()
+						<select
+							name="lang"
+							onchange="this.form.submit()"
+							class="auth-lang-select"
+							aria-label={ d.T("admin.change_language") }
+						>
+							for _, lang := range d.LangOptions {
+								<option
+									value={ lang.Code }
+									if lang.Code == d.AdminLang {
+										selected
+									}
+								>
+									{ lang.Name }
+								</option>
+							}
+						</select>
+					</label>
+				</form>
+			}
+			<div class="auth-card">
+				<div class="auth-header">
+					<h1 class="auth-title">oCMS</h1>
+					<p class="auth-subtitle">{ d.T("auth.login_title") }</p>
+				</div>
+				if d.Flash != "" {
+					@loginAlert(d.Flash, d.FlashType)
+				}
+				<form method="POST" action="/login" class="auth-form">
+					@csrfField()
+					<div class="form-group">
+						<label for="email" class="form-label">{ d.T("label.email") }</label>
+						<input
+							type="email"
+							id="email"
+							name="email"
+							class="form-input"
+							placeholder="admin@example.com"
+							required
+							autofocus
+							data-msg-required={ d.T("validation.required") }
+							data-msg-email={ d.T("validation.email_invalid") }
+						/>
+					</div>
+					<div class="form-group">
+						<label for="password" class="form-label">{ d.T("label.password") }</label>
+						<input
+							type="password"
+							id="password"
+							name="password"
+							class="form-input"
+							placeholder={ d.T("auth.password_placeholder") }
+							required
+							data-msg-required={ d.T("validation.required") }
+						/>
+					</div>
+					if d.HcaptchaEnabled {
+						<div class="form-group captcha-group">
+							@templ.Raw(d.HcaptchaWidget)
+						</div>
+					}
+					<button type="submit" class="btn btn-primary btn-block">
+						{ d.T("auth.login") }
+					</button>
+				</form>
+			</div>
+		</div>
+		@loginValidationScript()
+	</body>
+	</html>
+}
+
+// loginAlert renders a flash message on the login page.
+templ loginAlert(message string, alertType string) {
+	<div class={ "alert alert-" + alertType }>
+		{ message }
+	</div>
+}
+
+// loginValidationScript adds client-side form validation and hCaptcha height fix.
+templ loginValidationScript() {
+	<script>
+	document.addEventListener('DOMContentLoaded', function() {
+		const inputs = document.querySelectorAll('input[required]');
+		inputs.forEach(function(input) {
+			input.addEventListener('invalid', function(e) {
+				e.preventDefault();
+				if (input.validity.valueMissing) {
+					input.setCustomValidity(input.dataset.msgRequired || '');
+				} else if (input.validity.typeMismatch && input.type === 'email') {
+					input.setCustomValidity(input.dataset.msgEmail || '');
+				}
+				input.reportValidity();
+			});
+			input.addEventListener('input', function() {
+				input.setCustomValidity('');
+			});
+		});
+
+		// Fix hCaptcha iframe height to show test mode warning text properly
+		function fixHCaptchaHeight() {
+			const iframe = document.querySelector('.h-captcha iframe');
+			if (iframe && iframe.offsetHeight < 115) {
+				iframe.style.setProperty('height', '115px', 'important');
+				iframe.style.setProperty('min-height', '115px', 'important');
+			}
+		}
+		let hcaptchaAttempts = 0;
+		const hcaptchaInterval = setInterval(function() {
+			fixHCaptchaHeight();
+			if (++hcaptchaAttempts > 50) clearInterval(hcaptchaInterval);
+		}, 100);
+	});
+	</script>
+}

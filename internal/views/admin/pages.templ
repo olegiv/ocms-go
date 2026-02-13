@@ -1,0 +1,2006 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import "fmt"
+import "strings"
+import "encoding/json"
+
+// =============================================================================
+// VIEW TYPES
+// =============================================================================
+
+// PageListItemView represents a page in the list.
+type PageListItemView struct {
+	ID               int64
+	Title            string
+	Slug             string
+	Status           string
+	IsScheduled      bool
+	ScheduledAtTitle string
+	UpdatedAt        string
+	FeaturedImage    *PageFeaturedImageView
+	Tags             []PageTagView
+	Categories       []PageCategoryView
+	Language         *PageLanguageView
+	IsDemoPublished  bool // true if demo mode AND status=published
+}
+
+// PageFeaturedImageView holds featured image data for display.
+type PageFeaturedImageView struct {
+	Thumbnail string
+}
+
+// PageTagView represents a tag in the pages list.
+type PageTagView struct {
+	Name string
+}
+
+// PageCategoryView represents a category in the pages list.
+type PageCategoryView struct {
+	Name string
+}
+
+// PageLanguageView represents a language badge.
+type PageLanguageView struct {
+	Code string
+	Name string
+}
+
+// PageCategoryNodeView represents a category with depth for tree display.
+type PageCategoryNodeView struct {
+	ID          int64
+	Name        string
+	Description string
+	Depth       int
+}
+
+// PageFormViewData holds data for the page form page.
+type PageFormViewData struct {
+	IsEdit        bool
+	PageID        int64
+	PageTitle     string
+	PageSlug      string
+	PageBody      string
+	PageStatus    string
+	PageType      string
+	Statuses      []string
+	PageTypes     []string
+	AllCategories []PageCategoryNodeView
+	Tags          []PageFormTagView
+	Categories    []PageFormCategoryView
+	FeaturedImage *PageFormFeaturedImageView
+	Aliases       []PageFormAliasView
+	Errors        map[string]string
+	FormValues    map[string]string
+	// Language/Translation
+	HasMultipleLanguages bool
+	AllLanguages         []LanguageOption
+	Language             *LanguageOption
+	Translations         []PageTranslationView
+	MissingLanguages     []LanguageOption
+	// SEO
+	MetaTitle       string
+	MetaDescription string
+	MetaKeywords    string
+	OgImageID       string
+	CanonicalURL    string
+	NoIndex         bool
+	NoFollow        bool
+	// Scheduling
+	ScheduledAt    string
+	HasScheduledAt bool
+	ScheduledAtFmt string
+	// Checkboxes
+	HideFeaturedImage bool
+	ExcludeFromLists  bool
+	IsDemoMode        bool
+}
+
+// PageFormTagView holds tag data for the form tag selector.
+type PageFormTagView struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
+
+// PageFormCategoryView holds category data for the form category selector.
+type PageFormCategoryView struct {
+	ID int64 `json:"id"`
+}
+
+// PageFormFeaturedImageView holds featured image data for the form.
+type PageFormFeaturedImageView struct {
+	ID        int64  `json:"id"`
+	Filename  string `json:"filename"`
+	Filepath  string `json:"filepath"`
+	Thumbnail string `json:"thumbnail"`
+	Mimetype  string `json:"mimetype"`
+}
+
+// PageFormAliasView holds alias data for the form.
+type PageFormAliasView struct {
+	ID    int64
+	Alias string
+}
+
+// PageTranslationView holds translation info for the form.
+type PageTranslationView struct {
+	Language LanguageOption
+	PageID   int64
+	Title    string
+	Status   string
+}
+
+// PagesListViewData holds data for the pages list page.
+type PagesListViewData struct {
+	Pages          []PageListItemView
+	TotalCount     int64
+	StatusFilter   string
+	CategoryFilter int64
+	LanguageFilter string
+	SearchFilter   string
+	AllCategories  []PageCategoryNodeView
+	AllLanguages   []LanguageOption
+	Statuses       []string
+	Pagination     PaginationData
+	IsDemoMode     bool
+}
+
+// PageVersionView represents a version in the list.
+type PageVersionView struct {
+	ID            int64
+	Title         string
+	Body          string
+	ChangedByName string
+	CreatedAt     string
+}
+
+// PageVersionsViewData holds data for the versions page.
+type PageVersionsViewData struct {
+	PageID     int64
+	PageTitle  string
+	TotalCount int64
+	Versions   []PageVersionView
+	Pagination PaginationData
+}
+
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+// tagsJSON returns the tags as a JSON string for the tag selector.
+func tagsJSON(tags []PageFormTagView) string {
+	if len(tags) == 0 {
+		return "[]"
+	}
+	b, err := json.Marshal(tags)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
+}
+
+// categoriesJSON returns the categories as a JSON string for the category selector.
+func categoriesJSON(cats []PageFormCategoryView) string {
+	if len(cats) == 0 {
+		return "[]"
+	}
+	b, err := json.Marshal(cats)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
+}
+
+// featuredImageJSON returns the featured image as a JSON string.
+func featuredImageJSON(img *PageFormFeaturedImageView) string {
+	if img == nil {
+		return "null"
+	}
+	b, err := json.Marshal(img)
+	if err != nil {
+		return "null"
+	}
+	return string(b)
+}
+
+// pagesListURL builds a filter URL for the pages list.
+func pagesListURL(status string, categoryFilter int64, searchFilter string, page int) string {
+	var params []string
+	if status != "" {
+		params = append(params, fmt.Sprintf("status=%s", status))
+	}
+	if categoryFilter > 0 {
+		params = append(params, fmt.Sprintf("category=%d", categoryFilter))
+	}
+	if searchFilter != "" {
+		params = append(params, fmt.Sprintf("search=%s", searchFilter))
+	}
+	if page > 0 {
+		params = append(params, fmt.Sprintf("page=%d", page))
+	}
+	if len(params) == 0 {
+		return "/admin/pages"
+	}
+	return "/admin/pages?" + strings.Join(params, "&")
+}
+
+// depthPadding returns CSS padding-left for tree depth.
+func depthPadding(depth int) string {
+	return fmt.Sprintf("padding-left: %dpx;", depth*20)
+}
+
+// repeatDash returns repeated "— " for tree depth.
+func repeatDash(n int) string {
+	return strings.Repeat("\u2014 ", n)
+}
+
+// currentStatus returns the effective status value.
+func currentStatus(formValues map[string]string, pageStatus string) string {
+	if v, ok := formValues["status"]; ok && v != "" {
+		return v
+	}
+	if pageStatus != "" {
+		return pageStatus
+	}
+	return "draft"
+}
+
+// currentPageType returns the effective page type value.
+func currentPageType(formValues map[string]string, pageType string) string {
+	if v, ok := formValues["page_type"]; ok && v != "" {
+		return v
+	}
+	if pageType != "" {
+		return pageType
+	}
+	return "post"
+}
+
+// formVal returns a form value or fallback.
+func formVal(formValues map[string]string, key string, fallback string) string {
+	if v, ok := formValues[key]; ok && v != "" {
+		return v
+	}
+	return fallback
+}
+
+// formChecked returns true if checkbox value is "1" or fallback bool is true.
+func formChecked(formValues map[string]string, key string, fallback bool) bool {
+	if v, ok := formValues[key]; ok {
+		return v == "1"
+	}
+	return fallback
+}
+
+// currentLanguageCode returns the effective language code.
+func pageCurrentLanguageCode(formValues map[string]string, lang *LanguageOption, pageLanguageCode string) string {
+	if v, ok := formValues["language_code"]; ok && v != "" {
+		return v
+	}
+	if lang != nil {
+		return lang.Code
+	}
+	return pageLanguageCode
+}
+
+// seoOpen returns whether the SEO section should be open.
+func seoOpen(data PageFormViewData) bool {
+	return formVal(data.FormValues, "meta_title", data.MetaTitle) != "" ||
+		formVal(data.FormValues, "meta_description", data.MetaDescription) != ""
+}
+
+// scheduleOpen returns whether the schedule section should be open.
+func scheduleOpen(data PageFormViewData) bool {
+	return formVal(data.FormValues, "scheduled_at", "") != "" || data.HasScheduledAt
+}
+
+// =============================================================================
+// PAGES LIST PAGE
+// =============================================================================
+
+templ PagesListPage(pc *PageContext, data PagesListViewData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("pages.title") }</h1>
+				<p class="page-description">{ pc.T("pages.total_count", data.TotalCount) }</p>
+			</div>
+			<div class="page-actions">
+				<a href="/admin/pages/new" class="btn btn-primary">
+					@iconFilePlus()
+					{ pc.T("pages.new") }
+				</a>
+			</div>
+		</div>
+		<!-- Filters -->
+		<div class="filter-bar">
+			<div class="filter-group">
+				<label class="filter-label">{ pc.T("label.status") }:</label>
+				<div class="filter-buttons">
+					<a
+						href={ templ.SafeURL(pagesListURL("", data.CategoryFilter, data.SearchFilter, 0)) }
+						class={ "btn btn-sm", templ.KV("btn-primary", data.StatusFilter == ""), templ.KV("btn-outline", data.StatusFilter != "") }
+					>
+						{ pc.T("label.all") }
+					</a>
+					for _, s := range data.Statuses {
+						<a
+							href={ templ.SafeURL(pagesListURL(s, data.CategoryFilter, data.SearchFilter, 0)) }
+							class={ "btn btn-sm", templ.KV("btn-primary", data.StatusFilter == s), templ.KV("btn-outline", data.StatusFilter != s) }
+						>
+							if s == "draft" {
+								{ pc.T("status.draft") }
+							} else if s == "published" {
+								{ pc.T("status.published") }
+							} else {
+								{ s }
+							}
+						</a>
+					}
+					<a
+						href={ templ.SafeURL(pagesListURL("scheduled", data.CategoryFilter, data.SearchFilter, 0)) }
+						class={ "btn btn-sm", templ.KV("btn-primary", data.StatusFilter == "scheduled"), templ.KV("btn-outline", data.StatusFilter != "scheduled") }
+					>
+						@iconClock12()
+						{ pc.T("status.scheduled") }
+					</a>
+				</div>
+			</div>
+			if len(data.AllCategories) > 0 {
+				<div class="filter-group">
+					<label class="filter-label">{ pc.T("label.category") }:</label>
+					<form action="/admin/pages" method="get" class="filter-form">
+						if data.StatusFilter != "" {
+							<input type="hidden" name="status" value={ data.StatusFilter }/>
+						}
+						if data.SearchFilter != "" {
+							<input type="hidden" name="search" value={ data.SearchFilter }/>
+						}
+						if data.LanguageFilter != "" {
+							<input type="hidden" name="language" value={ data.LanguageFilter }/>
+						}
+						<select name="category" class="form-select form-select-sm" onchange="this.form.submit()">
+							<option value="">{ pc.T("pages.all_categories") }</option>
+							for _, cat := range data.AllCategories {
+								<option
+									value={ fmt.Sprintf("%d", cat.ID) }
+									selected?={ data.CategoryFilter == cat.ID }
+								>
+									if cat.Depth > 0 {
+										{ repeatDash(cat.Depth) }
+									}
+									{ cat.Name }
+								</option>
+							}
+						</select>
+					</form>
+				</div>
+			}
+			if len(data.AllLanguages) > 1 {
+				<div class="filter-group">
+					<label class="filter-label">{ pc.T("label.language") }:</label>
+					<form action="/admin/pages" method="get" class="filter-form">
+						if data.StatusFilter != "" {
+							<input type="hidden" name="status" value={ data.StatusFilter }/>
+						}
+						if data.CategoryFilter > 0 {
+							<input type="hidden" name="category" value={ fmt.Sprintf("%d", data.CategoryFilter) }/>
+						}
+						if data.SearchFilter != "" {
+							<input type="hidden" name="search" value={ data.SearchFilter }/>
+						}
+						<select name="language" class="form-select form-select-sm" onchange="this.form.submit()">
+							<option value="">{ pc.T("pages.all_languages") }</option>
+							for _, lang := range data.AllLanguages {
+								<option
+									value={ lang.Code }
+									selected?={ data.LanguageFilter == lang.Code }
+								>
+									{ lang.Name } ({ lang.Code })
+								</option>
+							}
+						</select>
+					</form>
+				</div>
+			}
+			<div class="filter-group filter-group-search">
+				<form action="/admin/pages" method="get" class="search-form">
+					if data.StatusFilter != "" {
+						<input type="hidden" name="status" value={ data.StatusFilter }/>
+					}
+					if data.CategoryFilter > 0 {
+						<input type="hidden" name="category" value={ fmt.Sprintf("%d", data.CategoryFilter) }/>
+					}
+					<div class="search-input-wrapper">
+						<input type="text" name="search" value={ data.SearchFilter } placeholder={ pc.T("pages.search_placeholder") } class="form-control form-control-sm" aria-label={ pc.T("btn.search") }/>
+						<button type="submit" class="btn btn-sm btn-outline search-btn" title={ pc.T("btn.search") }>
+							@iconSearch14()
+						</button>
+						if data.SearchFilter != "" {
+							<a href={ templ.SafeURL(pagesListURL(data.StatusFilter, data.CategoryFilter, "", 0)) } class="btn btn-sm btn-outline clear-search-btn" title={ pc.T("btn.clear") }>
+								@iconX14()
+							</a>
+						}
+					</div>
+				</form>
+			</div>
+		</div>
+		if data.SearchFilter != "" {
+			<div class="search-results-info">
+				<p>{ pc.T("pages.search_results", data.TotalCount, data.SearchFilter) }</p>
+			</div>
+		}
+		if len(data.Pages) > 0 {
+			<div class="card" id="pages-table">
+				<div class="table-responsive">
+					<table class="table">
+						<thead>
+							<tr>
+								<th class="col-w-60">{ pc.T("label.image") }</th>
+								<th>{ pc.T("label.title") }</th>
+								<th>{ pc.T("label.tags") }</th>
+								<th>{ pc.T("label.categories") }</th>
+								<th>{ pc.T("label.language") }</th>
+								<th>{ pc.T("label.status") }</th>
+								<th>{ pc.T("label.updated_at") }</th>
+								<th class="text-right">{ pc.T("label.actions") }</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, page := range data.Pages {
+								@pageListRow(pc, page, data.IsDemoMode)
+							}
+						</tbody>
+					</table>
+				</div>
+				if data.Pagination.ShouldShow() {
+					<div class="card-footer">
+						@Pagination(pc, data.Pagination)
+					</div>
+				}
+			</div>
+		} else {
+			<div class="card">
+				<div class="card-body">
+					<div class="empty-state">
+						@iconFileLarge()
+						<p>{ pc.T("pages.no_pages") }</p>
+						if data.StatusFilter != "" {
+							<span class="empty-hint">{ pc.T("pages.no_filter_results", data.StatusFilter) }</span>
+						} else {
+							<span class="empty-hint">{ pc.T("pages.create_first_hint") }</span>
+						}
+						<div class="empty-state-action">
+							<a href="/admin/pages/new" class="btn btn-primary">{ pc.T("pages.new") }</a>
+						</div>
+					</div>
+				</div>
+			</div>
+		}
+	}
+}
+
+templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool) {
+	<tr id={ fmt.Sprintf("page-row-%d", page.ID) }>
+		<td class="page-image-cell">
+			if page.FeaturedImage != nil {
+				<img src={ page.FeaturedImage.Thumbnail } alt={ page.Title } class="page-thumbnail"/>
+			} else {
+				<div class="page-thumbnail-placeholder">
+					@iconImagePlaceholder()
+				</div>
+			}
+		</td>
+		<td>
+			<a href={ templ.SafeURL(fmt.Sprintf("/%s", page.Slug)) } class="page-title-link" target="_blank">{ page.Title }</a>
+		</td>
+		<td>
+			if len(page.Tags) > 0 {
+				<div class="tag-list">
+					for _, tag := range page.Tags {
+						<span class="tag-badge-sm">{ tag.Name }</span>
+					}
+				</div>
+			} else {
+				<span class="text-muted">&mdash;</span>
+			}
+		</td>
+		<td>
+			if len(page.Categories) > 0 {
+				<div class="category-list">
+					for _, cat := range page.Categories {
+						<span class="category-badge-sm">{ cat.Name }</span>
+					}
+				</div>
+			} else {
+				<span class="text-muted">&mdash;</span>
+			}
+		</td>
+		<td>
+			if page.Language != nil {
+				<span class="language-badge" title={ page.Language.Name }>{ page.Language.Code }</span>
+			} else {
+				<span class="text-muted">&mdash;</span>
+			}
+		</td>
+		<td>
+			if page.IsScheduled {
+				<span class="badge badge-info" title={ page.ScheduledAtTitle }>
+					@iconClock12()
+					{ pc.T("status.scheduled") }
+				</span>
+			} else {
+				<span class={ "badge", templ.KV("badge-success", page.Status == "published"), templ.KV("badge-warning", page.Status != "published") }>
+					if page.Status == "published" {
+						{ pc.T("status.published") }
+					} else if page.Status == "draft" {
+						{ pc.T("status.draft") }
+					} else {
+						{ page.Status }
+					}
+				</span>
+			}
+		</td>
+		<td>{ page.UpdatedAt }</td>
+		<td class="text-right">
+			<div class="action-buttons">
+				if !page.IsDemoPublished {
+					<form action={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/publish", page.ID)) } method="POST" class="inline-form">
+						@csrfField()
+						<button
+							type="submit"
+							class={ "btn btn-sm", templ.KV("btn-warning", page.Status == "published"), templ.KV("btn-success", page.Status != "published") }
+							title={ publishTitle(pc, page.Status) }
+						>
+							if page.Status == "published" {
+								@iconEyeOff()
+							} else {
+								@iconEye()
+							}
+						</button>
+					</form>
+				}
+				<a href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d", page.ID)) } class="btn btn-sm btn-outline" title={ pc.T("btn.edit") }>
+					@iconEdit()
+				</a>
+				<div x-data="{ showConfirm: false }" class="delete-action">
+					<button
+						type="button"
+						class="btn btn-sm btn-danger"
+						title={ pc.T("btn.delete") }
+						@click="showConfirm = true"
+					>
+						@iconTrash()
+					</button>
+					<!-- Delete Confirmation Modal -->
+					<div
+						class="modal-overlay"
+						x-show="showConfirm"
+						x-cloak
+						@click.self="showConfirm = false"
+						x-transition:enter="modal-enter"
+						x-transition:leave="modal-leave"
+					>
+						<div class="modal" @click.stop>
+							<div class="modal-header">
+								<h3 class="modal-title">{ pc.T("pages.delete_page") }</h3>
+								<button type="button" class="modal-close" @click="showConfirm = false" aria-label={ pc.T("btn.close") }>&times;</button>
+							</div>
+							<div class="modal-body">
+								<p>{ pc.T("pages.confirm_delete") }</p>
+								<p class="text-muted">{ pc.T("pages.delete_warning") }</p>
+							</div>
+							<div class="modal-footer">
+								<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
+								<button
+									type="button"
+									class="btn btn-danger"
+									hx-delete={ fmt.Sprintf("/admin/pages/%d", page.ID) }
+									hx-target={ fmt.Sprintf("#page-row-%d", page.ID) }
+									hx-swap="outerHTML"
+									@click="showConfirm = false"
+								>
+									{ pc.T("pages.delete_page") }
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</td>
+	</tr>
+}
+
+func publishTitle(pc *PageContext, status string) string {
+	if status == "published" {
+		return pc.T("btn.unpublish")
+	}
+	return pc.T("btn.publish")
+}
+
+// =============================================================================
+// PAGE FORM PAGE
+// =============================================================================
+
+templ PageFormPage(pc *PageContext, data PageFormViewData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">
+					if data.IsEdit {
+						{ pc.T("pages.edit") }
+					} else {
+						{ pc.T("pages.new") }
+					}
+				</h1>
+				<p class="page-description">
+					if data.IsEdit {
+						{ pc.T("pages.edit_description") }
+					} else {
+						{ pc.T("pages.new_description") }
+					}
+				</p>
+			</div>
+			<div class="page-actions">
+				if data.IsEdit {
+					<a href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/versions", data.PageID)) } class="btn btn-outline">
+						@iconClockHistory()
+						{ pc.T("pages.version_history") }
+					</a>
+				}
+				<a href="/admin/pages" class="btn btn-outline">
+					@iconChevronLeft()
+					{ pc.T("pages.back_to_pages") }
+				</a>
+			</div>
+		</div>
+		<div class="card">
+			<form
+				method="POST"
+				action={ templ.SafeURL(pageFormAction(data)) }
+				class="card-body"
+				x-data={ pageFormXData(data) }
+			>
+				@csrfField()
+				if data.IsEdit {
+					<input type="hidden" name="_method" value="PUT"/>
+				}
+				<div class="form-grid">
+					<!-- Title -->
+					<div class="form-group form-group-full">
+						<label for="title" class="form-label">
+							{ pc.T("label.title") } <span class="required">*</span>
+						</label>
+						<input
+							type="text"
+							id="title"
+							name="title"
+							class={ "form-input", templ.KV("is-invalid", data.Errors["title"] != "") }
+							value={ formVal(data.FormValues, "title", data.PageTitle) }
+							placeholder={ pc.T("hint.enter_page_title") }
+							required
+							maxlength="255"
+							@input="generateSlug($event.target.value)"
+						/>
+						if data.Errors["title"] != "" {
+							<span class="form-error">{ data.Errors["title"] }</span>
+						}
+					</div>
+					<!-- Slug -->
+					<div class="form-group">
+						<label for="slug" class="form-label">
+							{ pc.T("label.slug") } <span class="required">*</span>
+						</label>
+						<div class="input-with-prefix">
+							<span class="input-prefix">/</span>
+							<input
+								type="text"
+								id="slug"
+								name="slug"
+								class={ "form-input", templ.KV("is-invalid", data.Errors["slug"] != "") }
+								value={ formVal(data.FormValues, "slug", data.PageSlug) }
+								placeholder={ pc.T("hint.page_slug") }
+								x-model="slug"
+								@input="slugEdited = true"
+								maxlength="255"
+							/>
+						</div>
+						if data.Errors["slug"] != "" {
+							<span class="form-error">{ data.Errors["slug"] }</span>
+						} else {
+							<span class="form-hint">{ pc.T("hint.slug") }</span>
+						}
+					</div>
+					<!-- Status -->
+					<div class="form-group">
+						<label for="status" class="form-label">{ pc.T("label.status") }</label>
+						if data.IsDemoMode && data.IsEdit && currentStatus(data.FormValues, data.PageStatus) == "published" {
+							<input type="hidden" name="status" value="published"/>
+							<span class="badge badge-success">{ pc.T("status.published") }</span>
+						} else {
+							<select
+								id="status"
+								name="status"
+								class={ "form-select", templ.KV("is-invalid", data.Errors["status"] != "") }
+							>
+								for _, s := range data.Statuses {
+									<option
+										value={ s }
+										selected?={ s == currentStatus(data.FormValues, data.PageStatus) }
+									>
+										if s == "draft" {
+											{ pc.T("status.draft") }
+										} else if s == "published" {
+											{ pc.T("status.published") }
+										} else {
+											{ s }
+										}
+									</option>
+								}
+							</select>
+						}
+						if data.Errors["status"] != "" {
+							<span class="form-error">{ data.Errors["status"] }</span>
+						}
+					</div>
+					<!-- Page Type -->
+					<div class="form-group">
+						<label for="page_type" class="form-label">{ pc.T("pages.page_type") }</label>
+						<select
+							id="page_type"
+							name="page_type"
+							class={ "form-select", templ.KV("is-invalid", data.Errors["page_type"] != "") }
+						>
+							for _, pt := range data.PageTypes {
+								<option
+									value={ pt }
+									selected?={ pt == currentPageType(data.FormValues, data.PageType) }
+								>
+									if pt == "post" {
+										{ pc.T("pages.type_post") }
+									} else if pt == "page" {
+										{ pc.T("pages.type_page") }
+									} else {
+										{ pt }
+									}
+								</option>
+							}
+						</select>
+						if data.Errors["page_type"] != "" {
+							<span class="form-error">{ data.Errors["page_type"] }</span>
+						} else {
+							<span class="form-hint">{ pc.T("pages.page_type_hint") }</span>
+						}
+					</div>
+					<!-- Language -->
+					if data.HasMultipleLanguages {
+						<div class="form-group">
+							<label for="language_code" class="form-label">{ pc.T("label.language") }</label>
+							<select
+								id="language_code"
+								name={ langSelectName(data.IsEdit) }
+								class="form-select"
+								disabled?={ data.IsEdit }
+							>
+								for _, lang := range data.AllLanguages {
+									<option
+										value={ lang.Code }
+										selected?={ lang.Code == pageCurrentLanguageCode(data.FormValues, data.Language, "") }
+									>
+										{ lang.Name } ({ lang.Code })
+									</option>
+								}
+							</select>
+							if data.IsEdit {
+								if data.Language != nil {
+									<input type="hidden" name="language_code" value={ data.Language.Code }/>
+								}
+								<span class="form-hint">{ pc.T("pages.language_readonly") }</span>
+							} else {
+								<span class="form-hint">{ pc.T("pages.select_language") }</span>
+							}
+						</div>
+					} else if data.Language != nil {
+						<input type="hidden" name="language_code" value={ data.Language.Code }/>
+					}
+					<!-- Translations Panel (Edit mode only) -->
+					if data.IsEdit && data.HasMultipleLanguages {
+						<div class="form-group form-group-full">
+							@translationsPanel(pc, data)
+						</div>
+					}
+					<!-- Body (TinyMCE Editor) -->
+					<div class="form-group form-group-full">
+						<label class="form-label">{ pc.T("label.content") }</label>
+						<div class="editor-container">
+							<textarea id="editor" name="body" class="tinymce-editor">
+								{ formVal(data.FormValues, "body", data.PageBody) }
+							</textarea>
+						</div>
+						@editorImageModal(pc)
+						if data.Errors["body"] != "" {
+							<span class="form-error">{ data.Errors["body"] }</span>
+						}
+					</div>
+					<!-- Featured Image -->
+					<div class="form-group form-group-full">
+						<div
+							class="media-dropzone"
+							x-data="mediaDropzone()"
+							x-init="init()"
+							data-mode="select"
+							data-initial-image={ featuredImageJSON(data.FeaturedImage) }
+						>
+							<label class="form-label">{ pc.T("media.featured_image") }</label>
+							@mediaDropzoneSelectArea(pc)
+							<span class="form-hint">{ pc.T("media.featured_image_requirements") }</span>
+							@mediaDropzoneSelectModal(pc)
+						</div>
+					</div>
+					<!-- Hide Featured Image -->
+					<div class="form-group">
+						<label class="checkbox-label">
+							<input
+								type="checkbox"
+								name="hide_featured_image"
+								value="1"
+								checked?={ formChecked(data.FormValues, "hide_featured_image", data.HideFeaturedImage) }
+							/>
+							<span>{ pc.T("pages.hide_featured_image") }</span>
+						</label>
+						<span class="form-hint">{ pc.T("pages.hide_featured_image_hint") }</span>
+					</div>
+					<!-- Exclude from Lists -->
+					<div class="form-group">
+						<label class="checkbox-label">
+							<input
+								type="checkbox"
+								name="exclude_from_lists"
+								value="1"
+								checked?={ formChecked(data.FormValues, "exclude_from_lists", data.ExcludeFromLists) }
+							/>
+							<span>{ pc.T("pages.exclude_from_lists") }</span>
+						</label>
+						<span class="form-hint">{ pc.T("pages.exclude_from_lists_hint") }</span>
+					</div>
+					<!-- Tags -->
+					<div class="form-group form-group-full">
+						@tagSelector(pc, data.Tags)
+					</div>
+					<!-- Categories -->
+					<div class="form-group form-group-full">
+						@categorySelector(pc, data.AllCategories, data.Categories)
+					</div>
+					<!-- URL Aliases -->
+					<div class="form-group form-group-full">
+						@aliasesSection(pc, data)
+					</div>
+					<!-- SEO Settings -->
+					<div class="form-group form-group-full">
+						@seoSection(pc, data)
+					</div>
+					<!-- Scheduling -->
+					<div class="form-group form-group-full">
+						@schedulingSection(pc, data)
+					</div>
+				</div>
+				<div class="form-actions">
+					<a href="/admin/pages" class="btn btn-outline">{ pc.T("btn.cancel") }</a>
+					<button type="submit" class="btn btn-primary">
+						if data.IsEdit {
+							{ pc.T("pages.update") }
+						} else {
+							{ pc.T("pages.create") }
+						}
+					</button>
+				</div>
+			</form>
+		</div>
+		@pageFormScripts(pc, data)
+	}
+}
+
+func pageFormAction(data PageFormViewData) string {
+	if data.IsEdit {
+		return fmt.Sprintf("/admin/pages/%d", data.PageID)
+	}
+	return "/admin/pages"
+}
+
+func pageFormXData(data PageFormViewData) string {
+	slug := formVal(data.FormValues, "slug", data.PageSlug)
+	slugEdited := "true"
+	if !data.IsEdit {
+		slugEdited = "false"
+	}
+	return fmt.Sprintf(`pageForm('%s', %s)`, slug, slugEdited)
+}
+
+func langSelectName(isEdit bool) string {
+	if isEdit {
+		return ""
+	}
+	return "language_code"
+}
+
+// =============================================================================
+// FORM SUB-COMPONENTS
+// =============================================================================
+
+templ translationsPanel(pc *PageContext, data PageFormViewData) {
+	<div class="translations-panel">
+		<div class="translations-header">
+			<h3 class="translations-title">
+				@iconTranslate()
+				{ pc.T("pages.translations") }
+			</h3>
+			if data.Language != nil {
+				<span class="current-language-badge">
+					{ pc.T("pages.current_language") }: { data.Language.Name }
+				</span>
+			}
+		</div>
+		if len(data.Translations) > 0 {
+			<div class="translations-list">
+				<h4 class="translations-subtitle">{ pc.T("pages.existing_translations") }</h4>
+				for _, tr := range data.Translations {
+					<div class="translation-item">
+						<div class="translation-info">
+							<span class="translation-lang-badge" title={ tr.Language.NativeName }>{ tr.Language.Code }</span>
+							<a href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d", tr.PageID)) } class="translation-link">
+								{ tr.Title }
+							</a>
+							<span class={ "translation-status badge", templ.KV("badge-success", tr.Status == "published"), templ.KV("badge-warning", tr.Status != "published") }>
+								if tr.Status == "published" {
+									{ pc.T("status.published") }
+								} else if tr.Status == "draft" {
+									{ pc.T("status.draft") }
+								} else {
+									{ tr.Status }
+								}
+							</span>
+						</div>
+						<a href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d", tr.PageID)) } class="btn btn-sm btn-outline">
+							{ pc.T("btn.edit") }
+						</a>
+					</div>
+				}
+			</div>
+		}
+		if len(data.MissingLanguages) > 0 {
+			<div class="translations-add">
+				<h4 class="translations-subtitle">{ pc.T("pages.add_translation") }</h4>
+				<div class="translation-buttons">
+					for _, lang := range data.MissingLanguages {
+						<button
+							type="button"
+							class="btn btn-sm btn-outline translation-add-btn"
+							title={ lang.Name }
+							data-page-id={ fmt.Sprintf("%d", data.PageID) }
+							data-lang-code={ lang.Code }
+							onclick="createTranslation(this.dataset.pageId, this.dataset.langCode)"
+						>
+							@iconPlus14()
+							{ lang.Code } - { lang.Name }
+						</button>
+					}
+				</div>
+			</div>
+		}
+		if len(data.Translations) == 0 && len(data.MissingLanguages) == 0 {
+			<p class="translations-empty">{ pc.T("pages.all_translations_exist") }</p>
+		}
+	</div>
+}
+
+templ tagSelector(pc *PageContext, tags []PageFormTagView) {
+	<div class="tag-selector" x-data="tagSelector()" x-init="init()" data-initial-tags={ tagsJSON(tags) }>
+		<label class="form-label">{ pc.T("tags.title") }</label>
+		<!-- Selected Tags Display -->
+		<div class="selected-tags">
+			<template x-for="tag in selectedTags" :key="tag.id">
+				<span class="tag-badge">
+					<span x-text="tag.name"></span>
+					<button type="button" class="tag-remove" @click="removeTag(tag.id)" title="Remove tag" aria-label="Remove tag">
+						<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+					</button>
+					<input type="hidden" name="tags[]" :value="tag.id"/>
+				</span>
+			</template>
+		</div>
+		<!-- Tag Search Input -->
+		<div class="tag-search-container">
+			<input
+				type="text"
+				class="form-input tag-search-input"
+				placeholder={ pc.T("tags.search_placeholder") }
+				x-model="searchQuery"
+				@input.debounce.300ms="searchTags()"
+				@focus="showDropdown = true"
+				@keydown.escape="showDropdown = false"
+				@keydown.enter.prevent="selectFirstOrCreate()"
+			/>
+			<!-- Dropdown Results -->
+			<div class="tag-dropdown" x-show="showDropdown && (searchResults.length > 0 || searchQuery.length > 0)" x-cloak @click.outside="showDropdown = false">
+				<template x-if="searchResults.length > 0">
+					<div>
+						<template x-for="tag in searchResults" :key="tag.id">
+							<button
+								type="button"
+								class="tag-option"
+								@click="addTag(tag)"
+								:class="{ 'is-selected': isSelected(tag.id) }"
+							>
+								<span x-text="tag.name"></span>
+								<span class="tag-slug" x-text="tag.slug"></span>
+								<template x-if="isSelected(tag.id)">
+									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+								</template>
+							</button>
+						</template>
+					</div>
+				</template>
+				<template x-if="searchQuery.length > 1 && !exactMatchExists()">
+					<button type="button" class="tag-option tag-create" @click="createAndAddTag()">
+						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+						{ pc.T("tags.create_new") } "<span x-text="searchQuery"></span>"
+					</button>
+				</template>
+				<template x-if="searchResults.length === 0 && searchQuery.length <= 1">
+					<div class="tag-no-results">{ pc.T("tags.type_to_search") }</div>
+				</template>
+			</div>
+		</div>
+		<span class="form-hint">{ pc.T("tags.select_hint") }</span>
+	</div>
+}
+
+templ categorySelector(pc *PageContext, allCategories []PageCategoryNodeView, selectedCategories []PageFormCategoryView) {
+	<div class="category-selector" x-data="categorySelector()" data-initial-categories={ categoriesJSON(selectedCategories) }>
+		<label class="form-label">{ pc.T("categories.title") }</label>
+		if len(allCategories) > 0 {
+			<div class="category-tree">
+				for _, cat := range allCategories {
+					<div class="category-item" style={ depthPadding(cat.Depth) }>
+						<label class="category-checkbox">
+							<input
+								type="checkbox"
+								name="categories[]"
+								value={ fmt.Sprintf("%d", cat.ID) }
+								:checked={ fmt.Sprintf("isSelected(%d)", cat.ID) }
+								@change={ fmt.Sprintf("toggleCategory(%d)", cat.ID) }
+							/>
+							<span class="checkbox-indicator"></span>
+							<span class="category-name">{ cat.Name }</span>
+							if cat.Description != "" {
+								<span class="category-desc">{ truncateStr(cat.Description, 30) }</span>
+							}
+						</label>
+					</div>
+				}
+			</div>
+		} else {
+			<div class="category-empty">
+				<p>{ pc.T("categories.no_available") }</p>
+				<a href="/admin/categories/new" class="btn btn-sm btn-outline">{ pc.T("categories.new") }</a>
+			</div>
+		}
+		<span class="form-hint">{ pc.T("categories.select_hint") }</span>
+	</div>
+}
+
+templ aliasesSection(pc *PageContext, data PageFormViewData) {
+	<details class="collapsible-section" x-data={ aliasManagerXData(data.Aliases) } :open="aliases.length > 0">
+		<summary class="collapsible-header" @click.prevent="$el.parentElement.open = !$el.parentElement.open">
+			@iconChevronRight()
+			<span>{ pc.T("pages.aliases") }</span>
+			<template x-if="aliases.length > 0">
+				<span class="badge badge-info ml-2" x-text="aliases.length"></span>
+			</template>
+		</summary>
+		<div class="collapsible-content">
+			<!-- Existing Aliases List -->
+			<div class="aliases-list" x-show="aliases.length > 0">
+				<template x-for="(alias, index) in aliases" :key="index">
+					<div class="alias-item">
+						<div class="input-with-prefix" style="flex: 1;">
+							<span class="input-prefix">/</span>
+							<input
+								type="text"
+								class="form-input"
+								x-model="alias.value"
+								name="aliases[]"
+								placeholder={ pc.T("pages.alias_placeholder") }
+								@input="validateAlias(index)"
+								maxlength="255"
+							/>
+						</div>
+						<button type="button" class="btn btn-sm btn-outline btn-danger" @click="removeAlias(index)" title={ pc.T("btn.remove") }>
+							@iconX14()
+						</button>
+					</div>
+				</template>
+			</div>
+			<!-- Add New Alias Button -->
+			<button type="button" class="btn btn-sm btn-outline mt-2" @click="addAlias()">
+				@iconPlus14()
+				{ pc.T("pages.add_alias") }
+			</button>
+			if data.Errors["aliases"] != "" {
+				<span class="form-error mt-2">{ data.Errors["aliases"] }</span>
+			}
+			<span class="form-hint mt-2">{ pc.T("pages.aliases_hint") }</span>
+		</div>
+	</details>
+}
+
+func aliasManagerXData(aliases []PageFormAliasView) string {
+	if len(aliases) == 0 {
+		return "aliasManager([])"
+	}
+	var parts []string
+	for _, a := range aliases {
+		parts = append(parts, fmt.Sprintf(`{value:'%s',id:%d}`, a.Alias, a.ID))
+	}
+	return fmt.Sprintf("aliasManager([%s])", strings.Join(parts, ","))
+}
+
+templ seoSection(pc *PageContext, data PageFormViewData) {
+	<details class="collapsible-section" x-data={ fmt.Sprintf("{ open: %t }", seoOpen(data)) } :open="open">
+		<summary class="collapsible-header" @click.prevent="open = !open">
+			@iconChevronRight()
+			<span>{ pc.T("seo.title") }</span>
+		</summary>
+		<div class="collapsible-content">
+			<!-- Meta Title -->
+			<div class="form-group" x-data="{ charCount: 0 }" x-init="charCount = $refs.metaTitleInput.value.length">
+				<label for="meta_title" class="form-label">{ pc.T("seo.meta_title") }</label>
+				<input
+					type="text"
+					id="meta_title"
+					name="meta_title"
+					class="form-input"
+					x-ref="metaTitleInput"
+					value={ formVal(data.FormValues, "meta_title", data.MetaTitle) }
+					placeholder={ pc.T("seo.meta_title_hint") }
+					maxlength="70"
+					@input="charCount = $event.target.value.length"
+				/>
+				<span class="form-hint">
+					<span x-text="charCount"></span>/60 { pc.T("seo.chars_recommended") }
+					<span x-show="charCount > 60" class="text-warning"> - { pc.T("seo.may_be_truncated") }</span>
+				</span>
+			</div>
+			<!-- Meta Description -->
+			<div class="form-group" x-data="{ charCount: 0 }" x-init="charCount = $refs.metaDescInput.value.length">
+				<label for="meta_description" class="form-label">{ pc.T("seo.meta_description") }</label>
+				<textarea
+					id="meta_description"
+					name="meta_description"
+					class="form-input form-textarea"
+					rows="3"
+					x-ref="metaDescInput"
+					placeholder={ pc.T("seo.meta_description_hint") }
+					maxlength="320"
+					@input="charCount = $event.target.value.length"
+				>
+					{ formVal(data.FormValues, "meta_description", data.MetaDescription) }
+				</textarea>
+				<span class="form-hint">
+					<span x-text="charCount"></span>/160 { pc.T("seo.chars_recommended") }
+					<span x-show="charCount > 160" class="text-warning"> - { pc.T("seo.may_be_truncated") }</span>
+				</span>
+			</div>
+			<!-- Meta Keywords -->
+			<div class="form-group">
+				<label for="meta_keywords" class="form-label">{ pc.T("seo.meta_keywords") }</label>
+				<input
+					type="text"
+					id="meta_keywords"
+					name="meta_keywords"
+					class="form-input"
+					value={ formVal(data.FormValues, "meta_keywords", data.MetaKeywords) }
+					placeholder="keyword1, keyword2, keyword3"
+					maxlength="255"
+				/>
+				<span class="form-hint">{ pc.T("seo.meta_keywords_hint") }</span>
+			</div>
+			<!-- OG Image -->
+			<div class="form-group">
+				<label class="form-label">{ pc.T("seo.og_image") }</label>
+				<div class="media-picker" x-data={ ogImagePickerXData(data) }>
+					<input type="hidden" name="og_image_id" :value="selectedId"/>
+					<div class="media-picker-preview" x-show="selectedId">
+						<img :src="selectedPath" alt="OG Image Preview" class="media-preview-img"/>
+						<button type="button" class="btn btn-sm btn-outline media-remove-btn" @click="clearSelection()">{ pc.T("btn.remove") }</button>
+					</div>
+					<button type="button" class="btn btn-outline" @click="openMediaModal()" x-show="!selectedId">
+						@iconImage16()
+						{ pc.T("seo.select_og_image") }
+					</button>
+					<span class="form-hint">{ pc.T("seo.og_image_hint") }</span>
+				</div>
+			</div>
+			<!-- Canonical URL -->
+			<div class="form-group">
+				<label for="canonical_url" class="form-label">{ pc.T("seo.canonical_url") }</label>
+				<input
+					type="url"
+					id="canonical_url"
+					name="canonical_url"
+					class="form-input"
+					value={ formVal(data.FormValues, "canonical_url", data.CanonicalURL) }
+					placeholder="https://example.com/original-page"
+					maxlength="2048"
+				/>
+				<span class="form-hint">{ pc.T("seo.canonical_url_hint") }</span>
+			</div>
+			<!-- Robots Settings -->
+			<div class="form-group">
+				<label class="form-label">{ pc.T("seo.directives") }</label>
+				<div class="checkbox-group">
+					<label class="checkbox-label">
+						<input
+							type="checkbox"
+							name="no_index"
+							value="1"
+							checked?={ formChecked(data.FormValues, "no_index", data.NoIndex) }
+						/>
+						<div class="checkbox-text">
+							<span class="checkbox-title">{ pc.T("seo.no_index") }</span>
+							<span class="checkbox-hint">{ pc.T("seo.no_index_hint") }</span>
+						</div>
+					</label>
+					<label class="checkbox-label">
+						<input
+							type="checkbox"
+							name="no_follow"
+							value="1"
+							checked?={ formChecked(data.FormValues, "no_follow", data.NoFollow) }
+						/>
+						<div class="checkbox-text">
+							<span class="checkbox-title">{ pc.T("seo.no_follow") }</span>
+							<span class="checkbox-hint">{ pc.T("seo.no_follow_hint") }</span>
+						</div>
+					</label>
+				</div>
+			</div>
+		</div>
+	</details>
+}
+
+func ogImagePickerXData(data PageFormViewData) string {
+	ogID := formVal(data.FormValues, "og_image_id", data.OgImageID)
+	return fmt.Sprintf("ogImagePicker('%s')", ogID)
+}
+
+templ schedulingSection(pc *PageContext, data PageFormViewData) {
+	<details class="collapsible-section" x-data={ fmt.Sprintf("{ open: %t }", scheduleOpen(data)) } :open="open">
+		<summary class="collapsible-header" @click.prevent="open = !open">
+			@iconChevronRight()
+			<span>{ pc.T("schedule.title") }</span>
+			if data.HasScheduledAt {
+				<span class="badge badge-info ml-2">{ pc.T("schedule.scheduled") }</span>
+			}
+		</summary>
+		<div class="collapsible-content">
+			<div class="form-group">
+				<label for="scheduled_at" class="form-label">{ pc.T("schedule.datetime") }</label>
+				<input
+					type="datetime-local"
+					id="scheduled_at"
+					name="scheduled_at"
+					class="form-input"
+					value={ formVal(data.FormValues, "scheduled_at", data.ScheduledAt) }
+				/>
+				<span class="form-hint">
+					{ pc.T("schedule.hint") }
+					if data.HasScheduledAt && data.ScheduledAtFmt != "" {
+						<br/>
+						<strong>{ pc.T("schedule.currently_scheduled") }:</strong> { data.ScheduledAtFmt }
+					}
+				</span>
+			</div>
+			<div class="alert alert-info mt-3">
+				@iconInfo16()
+				<div>
+					<strong>{ pc.T("schedule.how_it_works") }:</strong>
+					<ul class="ml-4 mt-1">
+						<li>{ pc.T("schedule.step1") }</li>
+						<li>{ pc.T("schedule.step2") }</li>
+						<li>{ pc.T("schedule.step3") }</li>
+					</ul>
+				</div>
+			</div>
+		</div>
+	</details>
+}
+
+// =============================================================================
+// MEDIA DROPZONE (select mode) - inline for the page form
+// =============================================================================
+
+templ mediaDropzoneSelectArea(pc *PageContext) {
+	<div
+		class="media-dropzone-area"
+		:class="{ 'is-dragover': dragover, 'has-content': selectedImage }"
+		@dragover.prevent="dragover = true"
+		@dragleave.prevent="dragover = false"
+		@drop.prevent="handleDrop($event)"
+		@click="handleClick()"
+	>
+		<!-- Empty State -->
+		<div class="media-dropzone-empty" x-show="!selectedImage">
+			<div class="media-dropzone-icon">
+				@iconImagePlaceholderLarge()
+			</div>
+			<p class="media-dropzone-title">{ pc.T("media.click_to_select") }</p>
+		</div>
+		<!-- Selected Image Preview -->
+		<div class="media-dropzone-selected" x-show="selectedImage" @click.stop>
+			<div class="media-dropzone-preview">
+				<template x-if="selectedImage && isImageType(selectedImage.mimetype)">
+					<img :src="selectedImage.thumbnail || selectedImage.filepath" :alt="selectedImage.filename"/>
+				</template>
+				<template x-if="selectedImage && !isImageType(selectedImage.mimetype)">
+					<div class="media-dropzone-file-icon">
+						<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg>
+						<span x-text="selectedImage?.filename" class="media-dropzone-filename"></span>
+					</div>
+				</template>
+			</div>
+			<div class="media-dropzone-actions">
+				<button type="button" class="btn btn-sm btn-outline" @click="openPicker()">
+					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" x2="12" y1="3" y2="15"></line></svg>
+					{ pc.T("btn.change") }
+				</button>
+				<button type="button" class="btn btn-sm btn-outline btn-danger" @click="clearSelection()">
+					@iconX14()
+					{ pc.T("btn.remove") }
+				</button>
+			</div>
+			<input type="hidden" name="featured_image_id" :value="selectedImage?.id"/>
+		</div>
+	</div>
+}
+
+templ mediaDropzoneSelectModal(pc *PageContext) {
+	<div class="media-dropzone-modal" x-show="showModal" x-cloak @keydown.escape.window="closeModal()">
+		<div class="media-dropzone-modal-overlay" @click="closeModal()"></div>
+		<div class="media-dropzone-modal-dialog">
+			<div class="media-dropzone-modal-header">
+				<h3>{ pc.T("media.select_media") }</h3>
+				<button type="button" class="media-dropzone-modal-close" @click="closeModal()" aria-label={ pc.T("btn.close") }>
+					<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+				</button>
+			</div>
+			<div class="media-dropzone-modal-toolbar">
+				<div class="media-dropzone-modal-search">
+					<input type="text" placeholder={ pc.T("media.search_media") } x-model="searchQuery" @input.debounce.300ms="loadMedia()" class="form-input"/>
+				</div>
+				<div class="media-dropzone-modal-filter">
+					<select x-model="filterType" @change="loadMedia()" class="form-select">
+						<option value="">{ pc.T("media.all_types") }</option>
+						<option value="image">{ pc.T("media.images") }</option>
+						<option value="document">{ pc.T("media.documents") }</option>
+					</select>
+				</div>
+			</div>
+			<div class="media-dropzone-modal-content">
+				<template x-if="loading">
+					<div class="media-dropzone-modal-loading">
+						<div class="spinner"></div>
+						<span>{ pc.T("media.loading") }</span>
+					</div>
+				</template>
+				<template x-if="!loading && mediaItems.length === 0">
+					<div class="media-dropzone-modal-empty">
+						@iconImagePlaceholderLarge()
+						<p>{ pc.T("media.no_media") }</p>
+						<a href="/admin/media/upload" class="btn btn-primary btn-sm">{ pc.T("media.upload") }</a>
+					</div>
+				</template>
+				<template x-if="!loading && mediaItems.length > 0">
+					<div class="media-dropzone-modal-grid">
+						<template x-for="item in mediaItems" :key="item.id">
+							<div
+								class="media-dropzone-modal-item"
+								:class="{ 'is-selected': tempSelected && tempSelected.id === item.id }"
+								@click="selectItem(item)"
+							>
+								<div class="media-dropzone-modal-item-preview">
+									<template x-if="isImageType(item.mimetype)">
+										<img :src="item.thumbnail || item.filepath" :alt="item.filename"/>
+									</template>
+									<template x-if="!isImageType(item.mimetype)">
+										<div class="media-dropzone-modal-item-file">
+											<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg>
+										</div>
+									</template>
+								</div>
+								<div class="media-dropzone-modal-item-info">
+									<span x-text="item.filename"></span>
+								</div>
+								<div class="media-dropzone-modal-item-check" x-show="tempSelected && tempSelected.id === item.id">
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+								</div>
+							</div>
+						</template>
+					</div>
+				</template>
+			</div>
+			<template x-if="totalPages > 1">
+				<div class="media-dropzone-modal-pagination">
+					<button type="button" class="btn btn-sm btn-outline" :disabled="currentPage <= 1" @click="prevPage()">
+						{ pc.T("pagination.previous") }
+					</button>
+					<span>{ pc.T("pagination.page") } <span x-text="currentPage"></span> { pc.T("pagination.of") } <span x-text="totalPages"></span></span>
+					<button type="button" class="btn btn-sm btn-outline" :disabled="currentPage >= totalPages" @click="nextPage()">
+						{ pc.T("pagination.next") }
+					</button>
+				</div>
+			</template>
+			<div class="media-dropzone-modal-footer">
+				<button type="button" class="btn btn-outline" @click="closeModal()">{ pc.T("btn.cancel") }</button>
+				<button type="button" class="btn btn-primary" :disabled="!tempSelected" @click="confirmSelection()">
+					{ pc.T("media.select_image") }
+				</button>
+			</div>
+		</div>
+	</div>
+}
+
+// =============================================================================
+// EDITOR IMAGE MODAL
+// =============================================================================
+
+templ editorImageModal(pc *PageContext) {
+	<div id="editor-image-modal" class="editor-image-modal" style="display: none;">
+		<div class="editor-image-modal-overlay"></div>
+		<div class="editor-image-modal-dialog">
+			<div class="editor-image-modal-header">
+				<h3>{ pc.T("editor.insert_image") }</h3>
+				<button type="button" class="editor-image-modal-close" id="editor-image-close-btn">
+					<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+				</button>
+			</div>
+			<div class="editor-image-modal-toolbar">
+				<input type="text" id="editor-image-search" placeholder={ pc.T("media.search_media") } class="form-input"/>
+			</div>
+			<div class="editor-image-modal-content" id="editor-image-grid"></div>
+			<div id="editor-image-options" class="editor-image-options" style="display: none;">
+				<div class="form-group">
+					<label class="form-label">{ pc.T("editor.alt_text") } <span class="required">*</span></label>
+					<input type="text" id="editor-image-alt" class="form-input" maxlength="255" placeholder={ pc.T("media.alt_placeholder") }/>
+				</div>
+				<div class="form-group">
+					<label class="form-label">{ pc.T("editor.image_size") }</label>
+					<select id="editor-image-size" class="form-select">
+						<option value="full">{ pc.T("editor.size_full") }</option>
+						<option value="medium" selected>{ pc.T("editor.size_medium") }</option>
+						<option value="small">{ pc.T("editor.size_small") }</option>
+					</select>
+				</div>
+			</div>
+			<div class="editor-image-modal-footer">
+				<button type="button" class="btn btn-outline" id="editor-image-cancel-btn">{ pc.T("btn.cancel") }</button>
+				<button type="button" class="btn btn-primary" id="editor-image-insert-btn" disabled>{ pc.T("editor.insert_image") }</button>
+			</div>
+		</div>
+	</div>
+}
+
+// =============================================================================
+// PAGE FORM SCRIPTS
+// =============================================================================
+
+templ pageFormScripts(pc *PageContext, data PageFormViewData) {
+	<!-- TinyMCE Editor Scripts -->
+	<script src="/static/dist/js/tinymce/tinymce.min.js"></script>
+	<script>
+	// Store TinyMCE editor instance
+	let tinymceEditor = null;
+
+	// Editor Image Picker for TinyMCE
+	const editorImagePicker = {
+		modal: null, grid: null, searchInput: null, optionsPanel: null,
+		insertBtn: null, altInput: null, sizeSelect: null, selectedImage: null,
+		currentPage: 1, debounceTimer: null, insertCallback: null, currentItems: [],
+
+		init() {
+			this.modal = document.getElementById('editor-image-modal');
+			this.grid = document.getElementById('editor-image-grid');
+			this.searchInput = document.getElementById('editor-image-search');
+			this.optionsPanel = document.getElementById('editor-image-options');
+			this.insertBtn = document.getElementById('editor-image-insert-btn');
+			this.altInput = document.getElementById('editor-image-alt');
+			this.sizeSelect = document.getElementById('editor-image-size');
+			this.searchInput.addEventListener('input', () => {
+				clearTimeout(this.debounceTimer);
+				this.debounceTimer = setTimeout(() => { this.currentPage = 1; this.loadMedia(); }, 300);
+			});
+			document.getElementById('editor-image-close-btn').addEventListener('click', () => this.close());
+			document.getElementById('editor-image-cancel-btn').addEventListener('click', () => this.close());
+			this.modal.querySelector('.editor-image-modal-overlay').addEventListener('click', () => this.close());
+			this.insertBtn.addEventListener('click', () => this.insert());
+			document.addEventListener('keydown', (e) => {
+				if (e.key === 'Escape' && this.modal.style.display !== 'none') this.close();
+			});
+		},
+		open(callback) {
+			this.insertCallback = callback || null;
+			this.selectedImage = null;
+			this.optionsPanel.style.display = 'none';
+			this.insertBtn.disabled = true;
+			this.altInput.value = '';
+			this.searchInput.value = '';
+			this.currentPage = 1;
+			this.modal.style.display = 'flex';
+			this.loadMedia();
+			this.searchInput.focus();
+		},
+		close() { this.modal.style.display = 'none'; this.selectedImage = null; this.insertCallback = null; },
+		async loadMedia() {
+			const search = this.searchInput.value.trim();
+			let url = `/admin/media/api?page=${this.currentPage}&limit=12&type=image`;
+			if (search) url += `&q=${encodeURIComponent(search)}`;
+			try {
+				this.grid.innerHTML = '<div class="editor-image-loading"><div class="spinner"></div><span>Loading...</span></div>';
+				const response = await fetch(url);
+				if (!response.ok) throw new Error('Failed to load media');
+				const data = await response.json();
+				this.renderGrid(data.items || []);
+			} catch (error) {
+				console.error('Failed to load media:', error);
+				this.grid.innerHTML = '<div class="editor-image-empty"><p>Error loading media</p></div>';
+			}
+		},
+		renderGrid(items) {
+			if (!items || items.length === 0) {
+				this.grid.innerHTML = '<div class="editor-image-empty"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg><p>No images found</p><a href="/admin/media/upload" class="btn btn-primary btn-sm" target="_blank">Upload Images</a></div>';
+				return;
+			}
+			this.currentItems = items;
+			const gridHTML = items.map(item => {
+				const isSelected = this.selectedImage?.id === item.id;
+				const thumbnailUrl = item.thumbnail || item.filepath;
+				return `<div class="editor-image-item ${isSelected ? 'is-selected' : ''}" data-id="${item.id}"><div class="editor-image-item-preview"><img src="${thumbnailUrl}" alt="${item.filename || ''}"></div><div class="editor-image-item-info"><span class="editor-image-item-name">${item.filename || 'Untitled'}</span></div>${isSelected ? '<div class="editor-image-item-check"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>' : ''}</div>`;
+			}).join('');
+			this.grid.innerHTML = `<div class="editor-image-grid">${gridHTML}</div>`;
+			this.grid.querySelectorAll('.editor-image-item').forEach(item => {
+				item.addEventListener('click', () => {
+					const id = parseInt(item.dataset.id, 10);
+					const selectedItem = this.currentItems.find(i => i.id === id);
+					if (selectedItem) this.selectImage(selectedItem);
+				});
+			});
+		},
+		selectImage(item) {
+			this.selectedImage = item;
+			this.optionsPanel.style.display = 'block';
+			this.insertBtn.disabled = false;
+			const filenameWithoutExt = (item.filename || 'image').replace(/\.[^/.]+$/, '');
+			this.altInput.value = item.alt || filenameWithoutExt;
+			this.loadMedia();
+		},
+		insert() {
+			if (!this.selectedImage) return;
+			const alt = this.altInput.value.trim() || this.selectedImage.filename || 'Image';
+			const size = this.sizeSelect.value;
+			let imageUrl = this.selectedImage.filepath;
+			if (size === 'medium' && this.selectedImage.filepath) imageUrl = this.selectedImage.filepath.replace('/originals/', '/medium/');
+			else if (size === 'small' && this.selectedImage.thumbnail) imageUrl = this.selectedImage.thumbnail;
+			if (this.insertCallback) this.insertCallback(imageUrl, { alt: alt, title: alt });
+			else if (tinymceEditor) tinymceEditor.insertContent(`<img src="${imageUrl}" alt="${alt}" title="${alt}" />`);
+			this.close();
+		}
+	};
+
+	// Initialize TinyMCE
+	document.addEventListener('DOMContentLoaded', function() {
+		editorImagePicker.init();
+		tinymce.init({
+			selector: '#editor',
+			license_key: 'gpl',
+			height: 400,
+			menubar: true,
+			promotion: false,
+			branding: false,
+			base_url: '/static/dist/js/tinymce',
+			convert_urls: false,
+			plugins: ['advlist','autolink','lists','link','image','charmap','preview','anchor','searchreplace','visualblocks','code','fullscreen','insertdatetime','media','table','help','wordcount','codesample'],
+			toolbar: 'undo redo | blocks | bold italic forecolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | link customimage media codesample | code | removeformat | help',
+			content_style: 'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Open Sans","Helvetica Neue",sans-serif;font-size:16px;line-height:1.6;padding:1rem;}img{max-width:100%;height:auto;border-radius:8px;}pre{background-color:#1e1e1e;color:#d4d4d4;padding:1rem;border-radius:8px;overflow-x:auto;}blockquote{border-left:3px solid #ccc;padding-left:1rem;margin:1rem 0;color:#666;font-style:italic;}',
+			link_default_target: '_blank',
+			link_assume_external_targets: true,
+			link_attributes_postprocess: (attrs) => {
+				if (attrs.target === '_blank') {
+					if (attrs.rel) {
+						const relValues = attrs.rel.split(' ');
+						if (!relValues.includes('noopener')) relValues.push('noopener');
+						if (!relValues.includes('noreferrer')) relValues.push('noreferrer');
+						attrs.rel = relValues.join(' ');
+					} else { attrs.rel = 'noopener noreferrer'; }
+				}
+				return attrs;
+			},
+			image_advtab: true,
+			image_title: true,
+			automatic_uploads: false,
+			setup: function(editor) {
+				tinymceEditor = editor;
+				editor.ui.registry.addButton('customimage', {
+					icon: 'image',
+					tooltip: 'Insert Image',
+					onAction: function() { editorImagePicker.open(); }
+				});
+			},
+			file_picker_types: 'image',
+			file_picker_callback: function(callback, value, meta) {
+				if (meta.filetype === 'image') editorImagePicker.open(callback);
+			},
+			init_instance_callback: function(editor) {
+				const form = editor.getElement().closest('form');
+				if (form) form.addEventListener('submit', function() { editor.save(); });
+			}
+		});
+	});
+	</script>
+	<script>
+	function createTranslation(pageId, langCode) {
+		fetch(`/admin/pages/${pageId}/translate/${langCode}`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+		}).then(response => {
+			if (response.redirected) window.location.href = response.url;
+			else if (response.ok) window.location.reload();
+			else console.error('Failed to create translation');
+		}).catch(error => { console.error('Error creating translation:', error); });
+	}
+
+	function pageForm(initialSlug, initialSlugEdited) {
+		return {
+			slug: initialSlug,
+			slugEdited: initialSlugEdited,
+			generateSlug(title) {
+				if (this.slugEdited) return;
+				this.slug = title.toLowerCase().trim().replace(/[^\w\s-]/g,'').replace(/[\s_-]+/g,'-').replace(/^-+|-+$/g,'');
+			}
+		};
+	}
+
+	function aliasManager(initialAliases) {
+		return {
+			aliases: initialAliases || [],
+			addAlias() { this.aliases.push({ value: '', id: null }); },
+			removeAlias(index) { this.aliases.splice(index, 1); },
+			validateAlias(index) {
+				let value = this.aliases[index].value.toLowerCase().trim();
+				let segments = value.split('/');
+				segments = segments.map(segment => segment.replace(/[^\w\s-]/g,'').replace(/[\s_-]+/g,'-').replace(/^-+|-+$/g,''));
+				segments = segments.filter(segment => segment !== '');
+				this.aliases[index].value = segments.join('/');
+			}
+		};
+	}
+
+	function ogImagePicker(initialId) {
+		return {
+			selectedId: initialId || '',
+			selectedPath: '',
+			init() {
+				if (this.selectedId) this.fetchImagePath(this.selectedId);
+			},
+			async fetchImagePath(id) {
+				try {
+					const response = await fetch(`/admin/media/api?limit=1`);
+					const data = await response.json();
+					this.selectedPath = '/uploads/originals/' + id + '/image.jpg';
+				} catch (error) { console.error('Failed to fetch OG image:', error); }
+			},
+			openMediaModal() {
+				if (typeof window.openMediaPickerForOG === 'function') window.openMediaPickerForOG(this);
+				else {
+					const mediaId = prompt('Enter media ID for OG image:');
+					if (mediaId) { this.selectedId = mediaId; this.selectedPath = '/uploads/originals/' + mediaId + '/image.jpg'; }
+				}
+			},
+			selectMedia(id, path, filename) { this.selectedId = id; this.selectedPath = path; },
+			clearSelection() { this.selectedId = ''; this.selectedPath = ''; }
+		};
+	}
+
+	// Tag selector and category selector are defined in tag_selector.html and category_selector.html partials
+	// These JS functions are included via the global admin scripts for legacy templates.
+	// For templ pages, we inline them here.
+	function tagSelector() {
+		return {
+			selectedTags: [], searchQuery: '', searchResults: [], showDropdown: false, allTags: [],
+			init() {
+				const container = this.$el;
+				const initialTags = container.dataset.initialTags;
+				if (initialTags) { try { this.selectedTags = JSON.parse(initialTags); } catch(e) { console.error('Failed to parse initial tags:', e); } }
+				this.loadAllTags();
+			},
+			async loadAllTags() { try { const r = await fetch('/admin/tags/search'); if (r.ok) this.allTags = await r.json(); } catch(e) { console.error('Failed to load tags:', e); } },
+			async searchTags() {
+				if (this.searchQuery.length === 0) { this.searchResults = this.allTags.slice(0, 10); return; }
+				try { const r = await fetch(`/admin/tags/search?q=${encodeURIComponent(this.searchQuery)}`); if (r.ok) this.searchResults = await r.json(); } catch(e) { console.error('Failed to search tags:', e); this.searchResults = []; }
+			},
+			addTag(tag) { if (!this.isSelected(tag.id)) this.selectedTags.push(tag); this.searchQuery = ''; this.searchResults = this.allTags.slice(0, 10); },
+			removeTag(tagId) { this.selectedTags = this.selectedTags.filter(t => t.id !== tagId); },
+			isSelected(tagId) { return this.selectedTags.some(t => t.id === tagId); },
+			exactMatchExists() { const q = this.searchQuery.toLowerCase().trim(); return this.searchResults.some(t => t.name.toLowerCase() === q); },
+			async createAndAddTag() {
+				const name = this.searchQuery.trim(); if (name.length < 2) return;
+				try {
+					const formData = new FormData(); formData.append('name', name); formData.append('slug', this.slugify(name));
+					await fetch('/admin/tags', { method: 'POST', body: formData, headers: { 'Accept': 'application/json' } });
+					const searchR = await fetch(`/admin/tags/search?q=${encodeURIComponent(name)}`);
+					if (searchR.ok) { const tags = await searchR.json(); const newTag = tags.find(t => t.name.toLowerCase() === name.toLowerCase()); if (newTag) { this.addTag(newTag); this.allTags.push(newTag); } }
+				} catch(e) { console.error('Failed to create tag:', e); }
+			},
+			selectFirstOrCreate() {
+				if (this.searchResults.length > 0 && !this.isSelected(this.searchResults[0].id)) this.addTag(this.searchResults[0]);
+				else if (this.searchQuery.length > 1 && !this.exactMatchExists()) this.createAndAddTag();
+			},
+			slugify(text) { return text.toLowerCase().trim().replace(/[^\w\s-]/g,'').replace(/[\s_-]+/g,'-').replace(/^-+|-+$/g,''); }
+		};
+	}
+
+	function categorySelector() {
+		return {
+			selectedCategories: [],
+			init() {
+				const container = this.$el;
+				const initialCategories = container.dataset.initialCategories;
+				if (initialCategories) { try { const cats = JSON.parse(initialCategories); this.selectedCategories = cats.map(c => c.id); } catch(e) { console.error('Failed to parse initial categories:', e); } }
+			},
+			isSelected(categoryId) { return this.selectedCategories.includes(categoryId); },
+			toggleCategory(categoryId) {
+				if (this.isSelected(categoryId)) this.selectedCategories = this.selectedCategories.filter(id => id !== categoryId);
+				else this.selectedCategories.push(categoryId);
+			}
+		};
+	}
+	</script>
+}
+
+// =============================================================================
+// PAGE VERSIONS PAGE
+// =============================================================================
+
+templ PageVersionsPage(pc *PageContext, data PageVersionsViewData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("versions.title") }</h1>
+				<p class="page-description">
+					<a href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d", data.PageID)) } class="text-link">{ data.PageTitle }</a>
+					{ " " }&mdash; { fmt.Sprintf("%d", data.TotalCount) } { pc.T("versions.version") }
+					if data.TotalCount != 1 {
+						{ "s" }
+					}
+				</p>
+			</div>
+			<div class="page-actions">
+				<a href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d", data.PageID)) } class="btn btn-outline">
+					@iconArrowLeft()
+					{ pc.T("versions.back_to_page") }
+				</a>
+			</div>
+		</div>
+		if len(data.Versions) > 0 {
+			<div class="card">
+				<div class="table-responsive">
+					<table class="table">
+						<thead>
+							<tr>
+								<th>{ pc.T("versions.version") }</th>
+								<th>{ pc.T("label.title") }</th>
+								<th>{ pc.T("versions.changed_by") }</th>
+								<th>{ pc.T("versions.date") }</th>
+								<th class="text-right">{ pc.T("label.actions") }</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, version := range data.Versions {
+								@versionRow(pc, data, version)
+							}
+						</tbody>
+					</table>
+				</div>
+				if data.Pagination.ShouldShow() {
+					<div class="card-footer">
+						@Pagination(pc, data.Pagination)
+					</div>
+				}
+			</div>
+		} else {
+			<div class="card">
+				<div class="card-body">
+					<div class="empty-state">
+						@iconClockLarge()
+						<p>{ pc.T("versions.no_versions") }</p>
+						<span class="empty-hint">{ pc.T("versions.no_versions_hint") }</span>
+					</div>
+				</div>
+			</div>
+		}
+	}
+}
+
+templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionView) {
+	<tr>
+		<td>
+			<span class="badge badge-info">#{ fmt.Sprintf("%d", version.ID) }</span>
+		</td>
+		<td>
+			<span class="version-title">{ version.Title }</span>
+		</td>
+		<td>
+			<span class="user-name">{ version.ChangedByName }</span>
+		</td>
+		<td>{ version.CreatedAt }</td>
+		<td class="text-right">
+			<div class="action-buttons">
+				<div x-data="{ showPreview: false, showConfirm: false }" class="version-actions">
+					<!-- Preview Button -->
+					<button
+						type="button"
+						class="btn btn-sm btn-outline"
+						title={ pc.T("versions.preview") }
+						@click="showPreview = true"
+					>
+						@iconEye()
+					</button>
+					<!-- Restore Button -->
+					<button
+						type="button"
+						class="btn btn-sm btn-primary"
+						title={ pc.T("versions.restore") }
+						@click="showConfirm = true"
+					>
+						@iconRestore()
+					</button>
+					<!-- Preview Modal -->
+					<div
+						class="modal-overlay"
+						x-show="showPreview"
+						x-cloak
+						@click.self="showPreview = false"
+						x-transition:enter="modal-enter"
+						x-transition:leave="modal-leave"
+					>
+						<div class="modal modal-lg" @click.stop>
+							<div class="modal-header">
+								<h3 class="modal-title">{ pc.T("versions.preview_title") } #{ fmt.Sprintf("%d", version.ID) }</h3>
+								<button type="button" class="modal-close" @click="showPreview = false" aria-label={ pc.T("btn.close") }>&times;</button>
+							</div>
+							<div class="modal-body">
+								<div class="version-preview">
+									<div class="version-meta">
+										<strong>{ pc.T("label.title") }:</strong> { version.Title }<br/>
+										<strong>{ pc.T("versions.changed_by") }:</strong> { version.ChangedByName }<br/>
+										<strong>{ pc.T("versions.date") }:</strong> { version.CreatedAt }
+									</div>
+									<div class="version-content">
+										<strong>{ pc.T("pages.content") }:</strong>
+										<div class="content-preview">
+											if version.Body != "" {
+												@templ.Raw(version.Body)
+											} else {
+												<em class="text-muted">{ pc.T("forms.no_content") }</em>
+											}
+										</div>
+									</div>
+								</div>
+							</div>
+							<div class="modal-footer">
+								<button type="button" class="btn btn-outline" @click="showPreview = false">{ pc.T("btn.close") }</button>
+								<form action={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/versions/%d/restore", data.PageID, version.ID)) } method="POST" class="inline-form">
+									@csrfField()
+									<button type="submit" class="btn btn-primary">{ pc.T("versions.restore_this") }</button>
+								</form>
+							</div>
+						</div>
+					</div>
+					<!-- Restore Confirmation Modal -->
+					<div
+						class="modal-overlay"
+						x-show="showConfirm"
+						x-cloak
+						@click.self="showConfirm = false"
+						x-transition:enter="modal-enter"
+						x-transition:leave="modal-leave"
+					>
+						<div class="modal" @click.stop>
+							<div class="modal-header">
+								<h3 class="modal-title">{ pc.T("versions.restore_title") }</h3>
+								<button type="button" class="modal-close" @click="showConfirm = false" aria-label={ pc.T("btn.close") }>&times;</button>
+							</div>
+							<div class="modal-body">
+								<p>{ pc.T("versions.restore_confirm") } <strong>#{ fmt.Sprintf("%d", version.ID) }</strong>?</p>
+								<p class="text-muted">{ pc.T("versions.restore_note") }</p>
+							</div>
+							<div class="modal-footer">
+								<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
+								<form action={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/versions/%d/restore", data.PageID, version.ID)) } method="POST" class="inline-form">
+									@csrfField()
+									<button type="submit" class="btn btn-primary">{ pc.T("versions.restore_version") }</button>
+								</form>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</td>
+	</tr>
+}
+
+// =============================================================================
+// ICON COMPONENTS (pages-specific)
+// =============================================================================
+
+templ iconFilePlus() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><line x1="12" x2="12" y1="11" y2="17"></line><line x1="9" x2="15" y1="14" y2="14"></line></svg>
+}
+
+templ iconClock12() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-text"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+}
+
+templ iconClockHistory() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"></path><circle cx="12" cy="12" r="10"></circle></svg>
+}
+
+templ iconSearch14() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+}
+
+templ iconX14() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+}
+
+templ iconImagePlaceholder() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg>
+}
+
+templ iconImagePlaceholderLarge() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg>
+}
+
+templ iconEyeOff() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" x2="23" y1="1" y2="23"></line></svg>
+}
+
+templ iconFileLarge() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg>
+}
+
+templ iconClockLarge() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"></path><circle cx="12" cy="12" r="10"></circle></svg>
+}
+
+templ iconArrowLeft() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
+}
+
+templ iconRestore() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+}
+
+templ iconPlus14() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+}
+
+templ iconImage16() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg>
+}
+
+templ iconInfo16() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
+}

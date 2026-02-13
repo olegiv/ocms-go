@@ -21,6 +21,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 // APIKeysPerPage is the number of API keys to display per page.
@@ -44,17 +45,9 @@ func NewAPIKeysHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionMan
 	}
 }
 
-// APIKeysListData holds data for the API keys list template.
-type APIKeysListData struct {
-	APIKeys    []store.ApiKey
-	TotalKeys  int64
-	Pagination AdminPagination
-}
-
 // List handles GET /admin/api-keys - displays a paginated list of API keys.
 func (h *APIKeysHandler) List(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	lang := middleware.GetAdminLang(r)
+	adminLang := h.renderer.GetAdminLang(r)
 
 	page := ParsePageParam(r)
 
@@ -79,31 +72,14 @@ func (h *APIKeysHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := APIKeysListData{
-		APIKeys:    apiKeys,
+	viewData := adminviews.APIKeysListData{
+		APIKeys:    convertAPIKeyListItems(apiKeys),
 		TotalKeys:  totalKeys,
-		Pagination: BuildAdminPagination(page, int(totalKeys), APIKeysPerPage, redirectAdminAPIKeys, r.URL.Query()),
+		Pagination: convertPagination(BuildAdminPagination(page, int(totalKeys), APIKeysPerPage, redirectAdminAPIKeys, r.URL.Query())),
 	}
 
-	h.renderer.RenderPage(w, r, "admin/api_keys_list", render.TemplateData{
-		Title: i18n.T(lang, "api_keys.title"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.api_keys"), URL: redirectAdminAPIKeys, Active: true},
-		},
-	})
-}
-
-// APIKeyFormData holds data for the API key form template.
-type APIKeyFormData struct {
-	APIKey       *store.ApiKey
-	Permissions  []string
-	Errors       map[string]string
-	FormValues   map[string]string
-	IsEdit       bool
-	GeneratedKey string // Only set after creation to show the key once
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(adminLang, "api_keys.title"), apiKeysBreadcrumbs(adminLang))
+	renderTempl(w, r, adminviews.APIKeysListPage(pc, viewData))
 }
 
 // NewForm handles GET /admin/api-keys/new - displays the new API key form.
@@ -113,18 +89,7 @@ func (h *APIKeysHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
-	lang := middleware.GetAdminLang(r)
-
-	data := APIKeyFormData{
-		Permissions: model.AllPermissions(),
-		Errors:      make(map[string]string),
-		FormValues:  make(map[string]string),
-		IsEdit:      false,
-	}
-
-	h.renderAPIKeyForm(w, r, user, lang, i18n.T(lang, "api_keys.new_key"), data,
-		i18n.T(lang, "api_keys.new_key"), redirectAdminAPIKeysNew)
+	h.renderAPIKeyForm(w, r, nil, make(map[string]string), make(map[string]string), false)
 }
 
 // Create handles POST /admin/api-keys - creates a new API key.
@@ -133,9 +98,6 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if demoGuard(w, r, h.renderer, middleware.RestrictionAPIKeys, redirectAdminAPIKeys) {
 		return
 	}
-
-	user := middleware.GetUser(r)
-	lang := middleware.GetAdminLang(r)
 
 	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminAPIKeysNew) {
 		return
@@ -151,17 +113,11 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
-		data := APIKeyFormData{
-			Permissions: model.AllPermissions(),
-			Errors:      validationErrors,
-			FormValues: map[string]string{
-				"name":       name,
-				"expires_at": expiresAtStr,
-			},
-			IsEdit: false,
+		formValues := map[string]string{
+			"name":       name,
+			"expires_at": expiresAtStr,
 		}
-		h.renderAPIKeyForm(w, r, user, lang, i18n.T(lang, "api_keys.new_key"), data,
-			i18n.T(lang, "api_keys.new_key"), redirectAdminAPIKeysNew)
+		h.renderAPIKeyForm(w, r, nil, validationErrors, formValues, false)
 		return
 	}
 
@@ -207,24 +163,24 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	_ = h.eventService.LogAPIKeyEvent(r.Context(), model.EventLevelInfo, "API key created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"key_id": apiKey.ID, "name": apiKey.Name})
 
 	// Render success page showing the generated key once
-	data := APIKeyFormData{
-		APIKey:       &apiKey,
-		Permissions:  model.AllPermissions(),
-		Errors:       make(map[string]string),
-		FormValues:   make(map[string]string),
-		IsEdit:       false,
-		GeneratedKey: rawKey,
+	adminLang := h.renderer.GetAdminLang(r)
+	viewData := adminviews.APIKeyFormData{
+		APIKey:           convertAPIKeyInfo(&apiKey),
+		PermissionGroups: buildPermissionGroups(apiKey.Permissions),
+		Errors:           make(map[string]string),
+		FormValues:       make(map[string]string),
+		IsEdit:           false,
+		GeneratedKey:     rawKey,
+		GeneratedPerms:   parsePermissionsJSON(apiKey.Permissions),
 	}
-	h.renderAPIKeyForm(w, r, user, lang, i18n.T(lang, "api_keys.key_created"), data,
-		i18n.T(lang, "api_keys.new_key"), redirectAdminAPIKeysNew)
+
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(adminLang, "api_keys.key_created"), apiKeyFormBreadcrumbs(adminLang, false))
+	renderTempl(w, r, adminviews.APIKeyFormPage(pc, viewData))
 }
 
 // EditForm handles GET /admin/api-keys/{id} - displays the edit API key form.
 func (h *APIKeysHandler) EditForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	lang := middleware.GetAdminLang(r)
-
-	id, idStr, ok := parseAPIKeyID(r)
+	id, _, ok := parseAPIKeyID(r)
 	if !ok {
 		flashError(w, r, h.renderer, redirectAdminAPIKeys, "Invalid API key ID")
 		return
@@ -235,24 +191,7 @@ func (h *APIKeysHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Format expiration date for form
-	expiresAtStr := ""
-	if apiKey.ExpiresAt.Valid {
-		expiresAtStr = apiKey.ExpiresAt.Time.Format("2006-01-02")
-	}
-
-	data := APIKeyFormData{
-		APIKey:      &apiKey,
-		Permissions: model.AllPermissions(),
-		Errors:      make(map[string]string),
-		FormValues: map[string]string{
-			"name":       apiKey.Name,
-			"expires_at": expiresAtStr,
-		},
-		IsEdit: true,
-	}
-	h.renderAPIKeyForm(w, r, user, lang, i18n.T(lang, "api_keys.edit_key"), data,
-		apiKey.Name, redirectAdminAPIKeysSlash+idStr)
+	h.renderAPIKeyForm(w, r, &apiKey, make(map[string]string), make(map[string]string), true)
 }
 
 // Update handles PUT /admin/api-keys/{id} - updates an existing API key.
@@ -261,9 +200,6 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if demoGuard(w, r, h.renderer, middleware.RestrictionAPIKeys, redirectAdminAPIKeys) {
 		return
 	}
-
-	user := middleware.GetUser(r)
-	lang := middleware.GetAdminLang(r)
 
 	id, idStr, ok := parseAPIKeyID(r)
 	if !ok {
@@ -291,18 +227,11 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
-		data := APIKeyFormData{
-			APIKey:      &apiKey,
-			Permissions: model.AllPermissions(),
-			Errors:      validationErrors,
-			FormValues: map[string]string{
-				"name":       name,
-				"expires_at": expiresAtStr,
-			},
-			IsEdit: true,
+		formValues := map[string]string{
+			"name":       name,
+			"expires_at": expiresAtStr,
 		}
-		h.renderAPIKeyForm(w, r, user, lang, i18n.T(lang, "api_keys.edit_key"), data,
-			apiKey.Name, redirectAdminAPIKeysSlash+idStr)
+		h.renderAPIKeyForm(w, r, &apiKey, validationErrors, formValues, true)
 		return
 	}
 
@@ -488,16 +417,35 @@ func (h *APIKeysHandler) fetchAPIKeyForDelete(w http.ResponseWriter, r *http.Req
 		h.sendDeleteError)
 }
 
-// renderAPIKeyForm renders the API key form with appropriate breadcrumbs.
-func (h *APIKeysHandler) renderAPIKeyForm(w http.ResponseWriter, r *http.Request, user any, lang string, title string, data APIKeyFormData, breadcrumbLabel string, breadcrumbURL string) {
-	h.renderer.RenderPage(w, r, "admin/api_keys_form", render.TemplateData{
-		Title: title,
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.api_keys"), URL: redirectAdminAPIKeys},
-			{Label: breadcrumbLabel, URL: breadcrumbURL, Active: true},
-		},
-	})
+// renderAPIKeyForm renders the API key form using templ.
+func (h *APIKeysHandler) renderAPIKeyForm(w http.ResponseWriter, r *http.Request, apiKey *store.ApiKey, errs map[string]string, formValues map[string]string, isEdit bool) {
+	adminLang := h.renderer.GetAdminLang(r)
+
+	// Build permission groups with checked state
+	existingPerms := ""
+	if isEdit && apiKey != nil {
+		existingPerms = apiKey.Permissions
+	}
+
+	viewData := adminviews.APIKeyFormData{
+		IsEdit:           isEdit,
+		APIKey:           convertAPIKeyInfo(apiKey),
+		PermissionGroups: buildPermissionGroups(existingPerms),
+		Errors:           errs,
+		FormValues:       formValues,
+		GeneratedKey:     "",
+	}
+
+	var title string
+	var breadcrumbs []render.Breadcrumb
+	if isEdit && apiKey != nil {
+		title = i18n.T(adminLang, "api_keys.edit_key")
+		breadcrumbs = apiKeyEditBreadcrumbs(adminLang, apiKey.Name, apiKey.ID)
+	} else {
+		title = i18n.T(adminLang, "api_keys.new_key")
+		breadcrumbs = apiKeyFormBreadcrumbs(adminLang, false)
+	}
+
+	pc := buildPageContext(r, h.sessionManager, h.renderer, title, breadcrumbs)
+	renderTempl(w, r, adminviews.APIKeyFormPage(pc, viewData))
 }

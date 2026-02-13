@@ -22,6 +22,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 // DeliveriesPerPage is the number of deliveries to display per page.
@@ -87,7 +88,6 @@ type WebhookDeliveriesData struct {
 
 // List handles GET /admin/webhooks - displays all webhooks.
 func (h *WebhooksHandler) List(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
 	webhooks, err := h.queries.ListWebhooks(r.Context())
@@ -181,15 +181,9 @@ func (h *WebhooksHandler) List(w http.ResponseWriter, r *http.Request) {
 		TotalWebhooks: totalWebhooks,
 	}
 
-	h.renderer.RenderPage(w, r, "admin/webhooks_list", render.TemplateData{
-		Title: i18n.T(lang, "nav.webhooks"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.webhooks"), URL: redirectAdminWebhooks, Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "nav.webhooks"), webhooksBreadcrumbs(lang))
+	viewData := convertWebhooksListViewData(data)
+	renderTempl(w, r, adminviews.WebhooksListPage(pc, viewData))
 }
 
 // NewForm handles GET /admin/webhooks/new - displays the new webhook form.
@@ -418,7 +412,6 @@ func (h *WebhooksHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // Deliveries handles GET /admin/webhooks/{id}/deliveries - displays delivery history.
 func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -463,17 +456,9 @@ func (h *WebhooksHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 		Pagination: BuildAdminPagination(page, int(totalCount), DeliveriesPerPage, fmt.Sprintf(redirectAdminWebhooksIDDeliveries, id), r.URL.Query()),
 	}
 
-	h.renderer.RenderPage(w, r, "admin/webhooks_deliveries", render.TemplateData{
-		Title: i18n.T(lang, "webhooks.deliveries_title"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.webhooks"), URL: redirectAdminWebhooks},
-			{Label: webhook.Name, URL: fmt.Sprintf(redirectAdminWebhooksID, id)},
-			{Label: i18n.T(lang, "webhooks.deliveries_title"), URL: fmt.Sprintf(redirectAdminWebhooksIDDeliveries, id), Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "webhooks.deliveries_title"), webhookDeliveriesBreadcrumbs(lang, webhook))
+	viewData := convertWebhookDeliveriesViewData(data)
+	renderTempl(w, r, adminviews.WebhookDeliveriesPage(pc, viewData))
 }
 
 // Test handles POST /admin/webhooks/{id}/test - sends a test event.
@@ -684,28 +669,18 @@ func validateWebhookForm(input webhookFormInput, validateEvents bool) map[string
 
 // renderNewWebhookForm renders the new webhook form with the given data.
 func (h *WebhooksHandler) renderNewWebhookForm(w http.ResponseWriter, r *http.Request, data WebhookFormData) {
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
-
-	h.renderer.RenderPage(w, r, "admin/webhooks_form", render.TemplateData{
-		Title: i18n.T(lang, "webhooks.new"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.webhooks"), URL: redirectAdminWebhooks},
-			{Label: i18n.T(lang, "webhooks.new"), URL: redirectAdminWebhooksNew, Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "webhooks.new"), webhookNewBreadcrumbs(lang))
+	viewData := convertWebhookFormViewData(data)
+	renderTempl(w, r, adminviews.WebhookFormPage(pc, viewData))
 }
 
 // renderEditWebhookForm renders the edit webhook form with the given data.
 func (h *WebhooksHandler) renderEditWebhookForm(w http.ResponseWriter, r *http.Request, webhook store.Webhook, data WebhookFormData) {
 	lang := middleware.GetAdminLang(r)
-	renderEntityEditPage(w, r, h.renderer, "admin/webhooks_form",
-		webhook.Name, data, lang,
-		"nav.webhooks", redirectAdminWebhooks,
-		webhook.Name, fmt.Sprintf(redirectAdminWebhooksID, webhook.ID))
+	pc := buildPageContext(r, h.sessionManager, h.renderer, webhook.Name, webhookEditBreadcrumbs(lang, webhook.Name, webhook.ID))
+	viewData := convertWebhookFormViewData(data)
+	renderTempl(w, r, adminviews.WebhookFormPage(pc, viewData))
 }
 
 // calculateHealthStatus determines the health status based on success rate.

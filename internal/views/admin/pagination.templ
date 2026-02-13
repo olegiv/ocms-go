@@ -1,0 +1,120 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import "fmt"
+
+// PaginationData holds pagination state for admin list views.
+// This is a view-layer type to avoid circular imports with the handler package.
+type PaginationData struct {
+	CurrentPage int
+	TotalPages  int
+	TotalItems  int64
+	HasFirst    bool
+	HasPrev     bool
+	HasNext     bool
+	HasLast     bool
+	FirstURL    string
+	PrevURL     string
+	NextURL     string
+	LastURL     string
+	Pages       []PaginationPage
+}
+
+// PaginationPage represents a single page link.
+type PaginationPage struct {
+	Number     int
+	URL        string
+	IsCurrent  bool
+	IsEllipsis bool
+}
+
+// ShouldShow returns true if pagination should be displayed.
+func (p PaginationData) ShouldShow() bool {
+	return p.TotalPages > 1
+}
+
+// Pagination renders pagination controls for admin lists.
+templ Pagination(pc *PageContext, p PaginationData) {
+	if p.ShouldShow() {
+		<div class="pagination">
+			<div class="pagination-info">
+				{ pc.T("pagination.page") } { fmt.Sprintf("%d", p.CurrentPage) } { pc.T("pagination.of") } { fmt.Sprintf("%d", p.TotalPages) }
+				if p.TotalItems > 0 {
+					<span class="pagination-total">({ fmt.Sprintf("%d", p.TotalItems) } { pc.T("pagination.items") })</span>
+				}
+			</div>
+			<div class="pagination-controls">
+				<!-- First Page -->
+				if p.HasFirst {
+					<a href={ templ.SafeURL(p.FirstURL) } class="btn btn-sm btn-outline" title={ pc.T("pagination.first") } aria-label={ pc.T("pagination.first") }>
+						@iconPageFirst()
+					</a>
+				} else {
+					<span class="btn btn-sm btn-outline disabled" title={ pc.T("pagination.first") } aria-label={ pc.T("pagination.first") }>
+						@iconPageFirst()
+					</span>
+				}
+				<!-- Previous Page -->
+				if p.HasPrev {
+					<a href={ templ.SafeURL(p.PrevURL) } class="btn btn-sm btn-outline" title={ pc.T("pagination.previous") } aria-label={ pc.T("pagination.previous") }>
+						@iconPagePrev()
+					</a>
+				} else {
+					<span class="btn btn-sm btn-outline disabled" title={ pc.T("pagination.previous") } aria-label={ pc.T("pagination.previous") }>
+						@iconPagePrev()
+					</span>
+				}
+				<!-- Page Numbers -->
+				<div class="pagination-pages">
+					for _, page := range p.Pages {
+						if page.IsEllipsis {
+							<span class="pagination-ellipsis">&hellip;</span>
+						} else if page.IsCurrent {
+							<span class="btn btn-sm btn-primary">{ fmt.Sprintf("%d", page.Number) }</span>
+						} else {
+							<a href={ templ.SafeURL(page.URL) } class="btn btn-sm btn-outline">{ fmt.Sprintf("%d", page.Number) }</a>
+						}
+					}
+				</div>
+				<!-- Next Page -->
+				if p.HasNext {
+					<a href={ templ.SafeURL(p.NextURL) } class="btn btn-sm btn-outline" title={ pc.T("pagination.next") } aria-label={ pc.T("pagination.next") }>
+						@iconPageNext()
+					</a>
+				} else {
+					<span class="btn btn-sm btn-outline disabled" title={ pc.T("pagination.next") } aria-label={ pc.T("pagination.next") }>
+						@iconPageNext()
+					</span>
+				}
+				<!-- Last Page -->
+				if p.HasLast {
+					<a href={ templ.SafeURL(p.LastURL) } class="btn btn-sm btn-outline" title={ pc.T("pagination.last") } aria-label={ pc.T("pagination.last") }>
+						@iconPageLast()
+					</a>
+				} else {
+					<span class="btn btn-sm btn-outline disabled" title={ pc.T("pagination.last") } aria-label={ pc.T("pagination.last") }>
+						@iconPageLast()
+					</span>
+				}
+			</div>
+		</div>
+	}
+}
+
+templ iconPageFirst() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="11 17 6 12 11 7"></polyline><polyline points="18 17 13 12 18 7"></polyline></svg>
+}
+
+templ iconPagePrev() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
+}
+
+templ iconPageNext() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+}
+
+templ iconPageLast() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline></svg>
+}

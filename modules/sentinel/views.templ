@@ -1,0 +1,510 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package sentinel
+
+import (
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+	"fmt"
+	"github.com/olegiv/ocms-go/internal/geoip"
+)
+
+// SentinelBan represents a banned IP for the view layer.
+type SentinelBan struct {
+	ID          int64
+	IPPattern   string
+	CountryCode string
+	Notes       string
+	URL         string
+	BannedAt    string
+}
+
+// SentinelPath represents an auto-ban path for the view layer.
+type SentinelPath struct {
+	ID          int64
+	PathPattern string
+	Notes       string
+	CreatedAt   string
+}
+
+// SentinelWhitelistEntry represents a whitelist entry for the view layer.
+type SentinelWhitelistEntry struct {
+	ID        int64
+	IPPattern string
+	Notes     string
+	CreatedAt string
+}
+
+// SentinelViewData holds all data for the sentinel admin page.
+type SentinelViewData struct {
+	Version         string
+	BanCheckEnabled bool
+	AutoBanEnabled  bool
+	Bans            []SentinelBan
+	Paths           []SentinelPath
+	Whitelist       []SentinelWhitelistEntry
+}
+
+templ SentinelPage(pc *adminviews.PageContext, data SentinelViewData) {
+	@adminviews.AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("sentinel.title") }</h1>
+				<p class="page-description">{ pc.T("sentinel.description") }</p>
+			</div>
+			<div class="page-actions">
+				<span class="badge badge-primary">v{ data.Version }</span>
+			</div>
+		</div>
+		<!-- Settings Section -->
+		<div class="card mb-4">
+			<div class="card-header">
+				<h3>{ pc.T("sentinel.settings_title") }</h3>
+				<p class="text-muted mb-0">{ pc.T("sentinel.settings_description") }</p>
+			</div>
+			<div class="card-body">
+				<form method="POST" action="/admin/sentinel/settings" class="sentinel-settings-form">
+					<div class="settings-row">
+						<div class="setting-item">
+							<label class="toggle-label">
+								<input type="checkbox" name="ban_check_enabled" checked?={ data.BanCheckEnabled }/>
+								<span class="toggle-text">{ pc.T("sentinel.setting_ban_check") }</span>
+							</label>
+							<small class="form-text text-muted">{ pc.T("sentinel.setting_ban_check_help") }</small>
+						</div>
+						<div class="setting-item">
+							<label class="toggle-label">
+								<input type="checkbox" name="autoban_enabled" checked?={ data.AutoBanEnabled }/>
+								<span class="toggle-text">{ pc.T("sentinel.setting_autoban") }</span>
+							</label>
+							<small class="form-text text-muted">{ pc.T("sentinel.setting_autoban_help") }</small>
+						</div>
+						<div class="setting-item setting-button">
+							<button type="submit" class="btn btn-primary">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+									<polyline points="17 21 17 13 7 13 7 21"></polyline>
+									<polyline points="7 3 7 8 15 8"></polyline>
+								</svg>
+								{ pc.T("sentinel.save_settings") }
+							</button>
+						</div>
+					</div>
+				</form>
+			</div>
+		</div>
+		<!-- Whitelist Section -->
+		<div class="card mb-4">
+			<div class="card-header">
+				<h3>{ pc.T("sentinel.whitelist_title") }</h3>
+				<p class="text-muted mb-0">{ pc.T("sentinel.whitelist_description") }</p>
+			</div>
+			<div class="card-body">
+				<form method="POST" action="/admin/sentinel/whitelist" class="sentinel-form">
+					<div class="form-row">
+						<div class="form-group">
+							<input
+								type="text"
+								name="ip_pattern"
+								class="form-control"
+								placeholder={ pc.T("sentinel.ip_pattern_placeholder") }
+								maxlength="255"
+								required
+							/>
+						</div>
+						<div class="form-group flex-grow">
+							<input
+								type="text"
+								name="notes"
+								class="form-control"
+								placeholder={ pc.T("sentinel.whitelist_notes_placeholder") }
+								maxlength="255"
+							/>
+						</div>
+						<div class="form-group form-group-button">
+							<button type="submit" class="btn btn-success">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"></path>
+									<path d="m9 12 2 2 4-4"></path>
+								</svg>
+								{ pc.T("sentinel.add_whitelist") }
+							</button>
+						</div>
+					</div>
+				</form>
+				if len(data.Whitelist) > 0 {
+					<table class="table mt-3">
+						<thead>
+							<tr>
+								<th>{ pc.T("sentinel.table_ip") }</th>
+								<th>{ pc.T("sentinel.table_notes") }</th>
+								<th>{ pc.T("sentinel.table_created_at") }</th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, wl := range data.Whitelist {
+								<tr>
+									<td><code class="text-success">{ wl.IPPattern }</code></td>
+									<td class="text-muted">
+										if wl.Notes != "" {
+											{ wl.Notes }
+										} else {
+											-
+										}
+									</td>
+									<td class="text-muted">{ wl.CreatedAt }</td>
+									<td class="text-right">
+										<button
+											type="button"
+											class="btn btn-sm btn-outline-danger delete-whitelist"
+											data-id={ fmt.Sprintf("%d", wl.ID) }
+											title={ pc.T("sentinel.remove_whitelist") }
+										>
+											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+												<path d="M3 6h18"></path>
+												<path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+												<path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+											</svg>
+										</button>
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				} else {
+					<div class="empty-state-small mt-3">
+						<p class="text-muted">{ pc.T("sentinel.no_whitelist") }</p>
+					</div>
+				}
+			</div>
+		</div>
+		<!-- Auto-ban Paths Section -->
+		<div class="card mb-4">
+			<div class="card-header">
+				<h3>{ pc.T("sentinel.paths_title") }</h3>
+				<p class="text-muted mb-0">{ pc.T("sentinel.paths_description") }</p>
+			</div>
+			<div class="card-body">
+				<form method="POST" action="/admin/sentinel/paths" class="sentinel-form">
+					<div class="form-row">
+						<div class="form-group">
+							<input
+								type="text"
+								name="path_pattern"
+								class="form-control"
+								placeholder={ pc.T("sentinel.path_pattern_placeholder") }
+								maxlength="255"
+								required
+							/>
+							<small class="form-text text-muted">{ pc.T("sentinel.path_pattern_help") }</small>
+						</div>
+						<div class="form-group flex-grow">
+							<input
+								type="text"
+								name="notes"
+								class="form-control"
+								placeholder={ pc.T("sentinel.path_notes_placeholder") }
+								maxlength="255"
+							/>
+						</div>
+						<div class="form-group form-group-button">
+							<button type="submit" class="btn btn-warning">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M12 9v4"></path>
+									<path d="M12 17h.01"></path>
+									<path d="M3.6 3.6 21 21"></path>
+									<path d="M21 12a9 9 0 1 1-9-9"></path>
+								</svg>
+								{ pc.T("sentinel.add_path") }
+							</button>
+						</div>
+					</div>
+				</form>
+				if len(data.Paths) > 0 {
+					<table class="table mt-3">
+						<thead>
+							<tr>
+								<th>{ pc.T("sentinel.table_path") }</th>
+								<th>{ pc.T("sentinel.table_notes") }</th>
+								<th>{ pc.T("sentinel.table_created_at") }</th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, path := range data.Paths {
+								<tr>
+									<td><code class="text-warning">{ path.PathPattern }</code></td>
+									<td class="text-muted">
+										if path.Notes != "" {
+											{ path.Notes }
+										} else {
+											-
+										}
+									</td>
+									<td class="text-muted">{ path.CreatedAt }</td>
+									<td class="text-right">
+										<button
+											type="button"
+											class="btn btn-sm btn-outline-danger delete-path"
+											data-id={ fmt.Sprintf("%d", path.ID) }
+											title={ pc.T("sentinel.remove_path") }
+										>
+											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+												<path d="M3 6h18"></path>
+												<path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+												<path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+											</svg>
+										</button>
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				} else {
+					<div class="empty-state-small mt-3">
+						<p class="text-muted">{ pc.T("sentinel.no_paths") }</p>
+					</div>
+				}
+			</div>
+		</div>
+		<!-- Banned IPs Section -->
+		<div class="card">
+			<div class="card-header">
+				<h3>{ pc.T("sentinel.banned_title") }</h3>
+				<p class="text-muted mb-0">{ pc.T("sentinel.banned_description") }</p>
+			</div>
+			<div class="card-body">
+				<form method="POST" action="/admin/sentinel" class="sentinel-form">
+					<div class="form-row">
+						<div class="form-group">
+							<input
+								type="text"
+								name="ip_pattern"
+								class="form-control"
+								placeholder={ pc.T("sentinel.ip_pattern_placeholder") }
+								maxlength="255"
+								required
+							/>
+							<small class="form-text text-muted">{ pc.T("sentinel.ip_pattern_help") }</small>
+						</div>
+						<div class="form-group">
+							<input
+								type="text"
+								name="notes"
+								class="form-control"
+								placeholder={ pc.T("sentinel.notes_placeholder") }
+								maxlength="255"
+							/>
+						</div>
+						<div class="form-group">
+							<input
+								type="text"
+								name="url"
+								class="form-control"
+								placeholder={ pc.T("sentinel.url_placeholder") }
+								maxlength="2048"
+							/>
+						</div>
+						<div class="form-group form-group-button">
+							<button type="submit" class="btn btn-danger">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<circle cx="12" cy="12" r="10"></circle>
+									<path d="m4.9 4.9 14.2 14.2"></path>
+								</svg>
+								{ pc.T("sentinel.ban_ip") }
+							</button>
+						</div>
+					</div>
+				</form>
+				if len(data.Bans) > 0 {
+					<table class="table mt-3">
+						<thead>
+							<tr>
+								<th>{ pc.T("sentinel.table_ip") }</th>
+								<th>{ pc.T("sentinel.table_country") }</th>
+								<th>{ pc.T("sentinel.table_notes") }</th>
+								<th>{ pc.T("sentinel.table_url") }</th>
+								<th>{ pc.T("sentinel.table_banned_at") }</th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, ban := range data.Bans {
+								<tr>
+									<td><code class="text-danger">{ ban.IPPattern }</code></td>
+									<td>
+										if ban.CountryCode != "" {
+											<span class="country-badge" title={ geoip.CountryName(ban.CountryCode) }>{ ban.CountryCode }</span>
+										} else {
+											<span class="text-muted">-</span>
+										}
+									</td>
+									<td class="text-muted">
+										if ban.Notes != "" {
+											{ ban.Notes }
+										} else {
+											-
+										}
+									</td>
+									<td class="text-muted">
+										if ban.URL != "" {
+											<a href={ templ.URL(ban.URL) } target="_blank" rel="noopener">{ ban.URL }</a>
+										} else {
+											-
+										}
+									</td>
+									<td class="text-muted">{ ban.BannedAt }</td>
+									<td class="text-right">
+										<button
+											type="button"
+											class="btn btn-sm btn-outline-danger delete-ban"
+											data-id={ fmt.Sprintf("%d", ban.ID) }
+											title={ pc.T("sentinel.remove_ban") }
+										>
+											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+												<path d="M3 6h18"></path>
+												<path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+												<path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+											</svg>
+										</button>
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				} else {
+					<div class="empty-state mt-3">
+						<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"></path>
+							<path d="m9 12 2 2 4-4"></path>
+						</svg>
+						<p>{ pc.T("sentinel.no_bans") }</p>
+						<span class="empty-hint">{ pc.T("sentinel.no_bans_hint") }</span>
+					</div>
+				}
+			</div>
+		</div>
+		<!-- Hidden container for JS i18n strings -->
+		<div
+			id="sentinel-data"
+			data-confirm-ban={ pc.T("sentinel.confirm_delete") }
+			data-confirm-path={ pc.T("sentinel.confirm_delete_path") }
+			data-confirm-whitelist={ pc.T("sentinel.confirm_delete_whitelist") }
+			data-delete-failed={ pc.T("sentinel.delete_failed") }
+			style="display:none"
+		></div>
+		<script>
+		document.addEventListener('DOMContentLoaded', function() {
+		    var sentinelData = document.getElementById('sentinel-data');
+		    var i18n = {
+		        confirmDeleteBan: sentinelData.dataset.confirmBan,
+		        confirmDeletePath: sentinelData.dataset.confirmPath,
+		        confirmDeleteWhitelist: sentinelData.dataset.confirmWhitelist,
+		        deleteFailed: sentinelData.dataset.deleteFailed
+		    };
+
+		    // Delete banned IP
+		    document.querySelectorAll('.delete-ban').forEach(function(btn) {
+		        btn.addEventListener('click', function() {
+		            if (confirm(i18n.confirmDeleteBan)) {
+		                fetch('/admin/sentinel/' + this.dataset.id, {
+		                    method: 'DELETE'
+		                }).then(function(response) {
+		                    if (response.ok) window.location.reload();
+		                    else alert(i18n.deleteFailed);
+		                }).catch(function() { alert(i18n.deleteFailed); });
+		            }
+		        });
+		    });
+
+		    // Delete auto-ban path
+		    document.querySelectorAll('.delete-path').forEach(function(btn) {
+		        btn.addEventListener('click', function() {
+		            if (confirm(i18n.confirmDeletePath)) {
+		                fetch('/admin/sentinel/paths/' + this.dataset.id, {
+		                    method: 'DELETE'
+		                }).then(function(response) {
+		                    if (response.ok) window.location.reload();
+		                    else alert(i18n.deleteFailed);
+		                }).catch(function() { alert(i18n.deleteFailed); });
+		            }
+		        });
+		    });
+
+		    // Delete whitelist entry
+		    document.querySelectorAll('.delete-whitelist').forEach(function(btn) {
+		        btn.addEventListener('click', function() {
+		            if (confirm(i18n.confirmDeleteWhitelist)) {
+		                fetch('/admin/sentinel/whitelist/' + this.dataset.id, {
+		                    method: 'DELETE'
+		                }).then(function(response) {
+		                    if (response.ok) window.location.reload();
+		                    else alert(i18n.deleteFailed);
+		                }).catch(function() { alert(i18n.deleteFailed); });
+		            }
+		        });
+		    });
+		});
+		</script>
+		<style>
+		.sentinel-form .form-row {
+		    display: flex;
+		    flex-wrap: wrap;
+		    gap: 1rem;
+		    align-items: flex-start;
+		}
+		.sentinel-form .form-group {
+		    flex: 1;
+		    min-width: 180px;
+		}
+		.sentinel-form .form-group-button {
+		    flex: 0 0 auto;
+		    min-width: auto;
+		    padding-top: 0;
+		}
+		.sentinel-form .form-text {
+		    display: block;
+		    margin-top: 0.25rem;
+		    font-size: 0.8rem;
+		}
+		code.text-danger { background-color: rgba(220, 53, 69, 0.1); padding: 0.2rem 0.4rem; border-radius: 3px; }
+		code.text-success { background-color: rgba(40, 167, 69, 0.1); padding: 0.2rem 0.4rem; border-radius: 3px; }
+		code.text-warning { background-color: rgba(255, 193, 7, 0.15); padding: 0.2rem 0.4rem; border-radius: 3px; }
+		.country-badge { background-color: rgba(108, 117, 125, 0.15); padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.85em; font-weight: 500; cursor: help; }
+		.empty-state-small { text-align: center; padding: 1rem; }
+		.mb-4 { margin-bottom: 1.5rem; }
+		.mt-3 { margin-top: 1rem; }
+		.sentinel-settings-form .settings-row {
+		    display: flex;
+		    flex-wrap: wrap;
+		    gap: 2rem;
+		    align-items: flex-start;
+		}
+		.sentinel-settings-form .setting-item {
+		    flex: 1;
+		    min-width: 200px;
+		}
+		.sentinel-settings-form .setting-button {
+		    flex: 0 0 auto;
+		    min-width: auto;
+		    align-self: center;
+		}
+		.sentinel-settings-form .toggle-label {
+		    display: flex;
+		    align-items: center;
+		    gap: 0.5rem;
+		    cursor: pointer;
+		    font-weight: 500;
+		}
+		.sentinel-settings-form .toggle-label input[type="checkbox"] {
+		    width: 1.25rem;
+		    height: 1.25rem;
+		    cursor: pointer;
+		}
+		.sentinel-settings-form .toggle-text {
+		    user-select: none;
+		}
+		</style>
+	}
+}

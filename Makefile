@@ -1,4 +1,4 @@
-make.PHONY: run stop restart build build-prod build-linux-amd64 build-darwin-arm64 build-all-platforms test clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc
+make.PHONY: run stop restart build build-prod build-linux-amd64 build-darwin-arm64 build-all-platforms test clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ
 
 # Build variables
 BINARY_NAME=ocms
@@ -98,3 +98,8 @@ sqlc:
 	sqlc generate
 	@sed -i '' 's/defer rows\.Close()/defer func() { _ = rows.Close() }()/g' internal/store/*.sql.go
 	@echo "SQLC generated and warnings fixed"
+
+# Generate templ Go code from .templ files
+templ:
+	templ generate
+	@echo "Templ files generated"

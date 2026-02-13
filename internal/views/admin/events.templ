@@ -1,0 +1,264 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import "fmt"
+
+// EventItem holds data for a single event row.
+type EventItem struct {
+	ID            int64
+	Level         string // "info", "warning", "error"
+	Category      string
+	Message       string
+	Details       string // Formatted metadata
+	DetailsLong   bool   // True if details > 80 chars
+	IPAddress     string // Masked in demo mode (for display)
+	RawIPAddress  string // Unmasked (for ban button data-ip)
+	IsOwnIP       bool
+	IsBanned      bool // Pre-computed sentinel state
+	IsWhitelisted bool // Pre-computed sentinel state
+	RequestURL    string
+	CreatedAt     string
+	UserName      string
+}
+
+// EventsListData holds all data for the events list page.
+type EventsListData struct {
+	Events         []EventItem
+	TotalEvents    int64
+	Level          string // Current level filter
+	Category       string // Current category filter
+	Levels         []string
+	Categories     []string
+	SentinelActive bool
+	Pagination     PaginationData
+}
+
+// EventsListPage renders the events list page.
+templ EventsListPage(pc *PageContext, data EventsListData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("events.title") }</h1>
+				<p class="page-description">{ pc.T("events.description") } ({ fmt.Sprintf("%d", data.TotalEvents) } { pc.T("label.total") })</p>
+			</div>
+		</div>
+		<!-- Filters -->
+		@eventsFilterBar(pc, data)
+		if len(data.Events) > 0 {
+			<div class="card" id="events-table">
+				<div class="table-responsive">
+					@eventsTable(pc, data)
+				</div>
+				if data.Pagination.ShouldShow() {
+					<div class="card-footer">
+						@Pagination(pc, data.Pagination)
+					</div>
+				}
+			</div>
+			@eventsScript()
+		} else {
+			<div class="card">
+				<div class="card-body">
+					<div class="empty-state">
+						@iconEvents()
+						<p>{ pc.T("events.no_events") }</p>
+						if data.Level != "" || data.Category != "" {
+							<span class="empty-hint">{ pc.T("events.no_events_filter") }</span>
+							<div class="empty-state-action">
+								<a href="/admin/events" class="btn btn-primary">{ pc.T("events.clear_filters") }</a>
+							</div>
+						} else {
+							<span class="empty-hint">{ pc.T("events.no_events_hint") }</span>
+						}
+					</div>
+				</div>
+			</div>
+		}
+	}
+}
+
+// eventsFilterBar renders the level/category filter form.
+templ eventsFilterBar(pc *PageContext, data EventsListData) {
+	<div class="card card-filters">
+		<div class="filter-bar">
+			<form method="get" action="/admin/events" class="filter-form">
+				<div class="filter-group">
+					<label for="level" class="filter-label">{ pc.T("events.level") }</label>
+					<select name="level" id="level" class="form-select form-select-sm">
+						<option value="">{ pc.T("events.all_levels") }</option>
+						for _, lvl := range data.Levels {
+							<option value={ lvl } selected?={ lvl == data.Level }>{ lvl }</option>
+						}
+					</select>
+				</div>
+				<div class="filter-group">
+					<label for="category" class="filter-label">{ pc.T("events.category") }</label>
+					<select name="category" id="category" class="form-select form-select-sm">
+						<option value="">{ pc.T("events.all_categories") }</option>
+						for _, cat := range data.Categories {
+							<option value={ cat } selected?={ cat == data.Category }>{ cat }</option>
+						}
+					</select>
+				</div>
+				<div class="filter-actions">
+					<button type="submit" class="btn btn-sm btn-primary">{ pc.T("events.filter") }</button>
+					if data.Level != "" || data.Category != "" {
+						<a href="/admin/events" class="btn btn-sm btn-outline">{ pc.T("events.clear") }</a>
+					}
+				</div>
+			</form>
+		</div>
+	</div>
+}
+
+// eventsTable renders the events table with all columns.
+templ eventsTable(pc *PageContext, data EventsListData) {
+	<table class="table">
+		<thead>
+			<tr>
+				<th>{ pc.T("events.time") }</th>
+				<th>{ pc.T("events.level") }</th>
+				<th>{ pc.T("events.category") }</th>
+				<th>{ pc.T("events.message") }</th>
+				<th>{ pc.T("events.details") }</th>
+				<th>{ pc.T("events.url") }</th>
+				<th>{ pc.T("events.ip_address") }</th>
+				<th>{ pc.T("events.user") }</th>
+			</tr>
+		</thead>
+		<tbody>
+			for _, event := range data.Events {
+				<tr class={ "event-row", "event-level-" + event.Level }>
+					<td class="event-time">{ event.CreatedAt }</td>
+					<td>
+						<span class={ "badge", eventLevelBadgeClass(event.Level) }>
+							{ event.Level }
+						</span>
+					</td>
+					<td>
+						<span class="badge badge-secondary">{ event.Category }</span>
+					</td>
+					<td class="event-message">{ event.Message }</td>
+					<td class="event-details">
+						if event.Details != "" {
+							<span class="details-text">{ event.Details }</span>
+						} else {
+							<span class="text-muted">-</span>
+						}
+					</td>
+					<td class="event-url">
+						if event.RequestURL != "" {
+							<span class="url-text"><code>{ event.RequestURL }</code></span>
+						} else {
+							<span class="text-muted">-</span>
+						}
+					</td>
+					<td class="event-ip">
+						@eventIPCell(pc, event, data.SentinelActive)
+					</td>
+					<td>
+						if event.UserName != "" {
+							<span class="text-muted">{ event.UserName }</span>
+						} else {
+							<span class="text-muted">{ pc.T("events.system") }</span>
+						}
+					</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+}
+
+// eventIPCell renders the IP address cell with optional sentinel ban controls.
+templ eventIPCell(pc *PageContext, event EventItem, sentinelActive bool) {
+	if event.IPAddress != "" {
+		<code class="text-muted">{ event.IPAddress }</code>
+		if sentinelActive {
+			if event.IsBanned {
+				<span class="badge badge-danger ban-badge" data-ip={ event.RawIPAddress }>{ pc.T("sentinel.banned") }</span>
+			} else if !event.IsOwnIP && !event.IsWhitelisted {
+				<button
+					type="button"
+					class="btn btn-sm btn-danger ban-btn"
+					data-ip={ event.RawIPAddress }
+					data-url={ event.RequestURL }
+					onclick="banIP(this)"
+				>
+					{ pc.T("sentinel.ban_action") }
+				</button>
+			}
+		}
+	} else {
+		<span class="text-muted">-</span>
+	}
+}
+
+// eventsScript renders the inline JavaScript for events page interactivity.
+templ eventsScript() {
+	<script>
+	document.addEventListener('DOMContentLoaded', function() {
+		document.querySelectorAll('.details-text, .url-text').forEach(function(el) {
+			if (el.scrollWidth > el.clientWidth) {
+				el.classList.add('truncated');
+				el.addEventListener('click', function() {
+					this.classList.toggle('expanded');
+				});
+			}
+		});
+	});
+
+	function banIP(btn) {
+		var ip = btn.getAttribute('data-ip');
+		var url = btn.getAttribute('data-url') || '';
+		btn.disabled = true;
+		btn.classList.add('btn-loading');
+
+		fetch('/admin/sentinel/ban', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ ip: ip, url: url })
+		})
+		.then(function(response) {
+			if (response.redirected) {
+				throw new Error('Sentinel module is not active');
+			}
+			return response.json();
+		})
+		.then(function(data) {
+			if (data.success) {
+				showToast('IP ' + ip + ' banned', 'success');
+				document.querySelectorAll('.ban-btn[data-ip="' + ip + '"]').forEach(function(el) {
+					var badge = document.createElement('span');
+					badge.className = 'badge badge-danger ban-badge';
+					badge.setAttribute('data-ip', ip);
+					badge.textContent = 'Banned';
+					el.replaceWith(badge);
+				});
+			} else {
+				showToast(data.error || 'Failed to ban IP', 'error');
+				btn.disabled = false;
+				btn.classList.remove('btn-loading');
+			}
+		})
+		.catch(function(err) {
+			showToast(err.message || 'Failed to ban IP', 'error');
+			btn.disabled = false;
+			btn.classList.remove('btn-loading');
+		});
+	}
+	</script>
+}
+
+// eventLevelBadgeClass returns the badge CSS class for an event level.
+func eventLevelBadgeClass(level string) string {
+	switch level {
+	case "error":
+		return "badge-danger"
+	case "warning":
+		return "badge-warning"
+	default:
+		return "badge-info"
+	}
+}

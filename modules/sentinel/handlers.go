@@ -38,7 +38,6 @@ func (m *Module) handleAdminList(w http.ResponseWriter, r *http.Request) {
 	}
 	lang := m.ctx.Render.GetAdminLang(r)
 
-	// Fetch all data
 	bans, err := m.listBannedIPs()
 	if err != nil {
 		m.ctx.Logger.Error("failed to list banned IPs", "error", err)
@@ -60,35 +59,55 @@ func (m *Module) handleAdminList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := struct {
-		Bans            []BannedIP
-		Paths           []AutoBanPath
-		Whitelist       []WhitelistedIP
-		Version         string
-		BanCheckEnabled bool
-		AutoBanEnabled  bool
-	}{
-		Bans:            bans,
-		Paths:           paths,
-		Whitelist:       whitelist,
+	// Convert to view types
+	viewBans := make([]SentinelBan, len(bans))
+	for i, b := range bans {
+		viewBans[i] = SentinelBan{
+			ID:          b.ID,
+			IPPattern:   b.IPPattern,
+			CountryCode: b.CountryCode,
+			Notes:       b.Notes,
+			URL:         b.URL,
+			BannedAt:    b.BannedAt.Format("Jan 02, 2006 15:04"),
+		}
+	}
+
+	viewPaths := make([]SentinelPath, len(paths))
+	for i, p := range paths {
+		viewPaths[i] = SentinelPath{
+			ID:          p.ID,
+			PathPattern: p.PathPattern,
+			Notes:       p.Notes,
+			CreatedAt:   p.CreatedAt.Format("Jan 02, 2006 15:04"),
+		}
+	}
+
+	viewWhitelist := make([]SentinelWhitelistEntry, len(whitelist))
+	for i, wl := range whitelist {
+		viewWhitelist[i] = SentinelWhitelistEntry{
+			ID:        wl.ID,
+			IPPattern: wl.IPPattern,
+			Notes:     wl.Notes,
+			CreatedAt: wl.CreatedAt.Format("Jan 02, 2006 15:04"),
+		}
+	}
+
+	viewData := SentinelViewData{
 		Version:         m.Version(),
 		BanCheckEnabled: m.IsBanCheckEnabled(),
 		AutoBanEnabled:  m.IsAutoBanEnabled(),
+		Bans:            viewBans,
+		Paths:           viewPaths,
+		Whitelist:       viewWhitelist,
 	}
 
-	if err := m.ctx.Render.Render(w, r, "admin/module_sentinel", render.TemplateData{
-		Title: i18n.T(lang, "sentinel.title"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
-			{Label: i18n.T(lang, "sentinel.title"), URL: "/admin/sentinel", Active: true},
-		},
-	}); err != nil {
-		m.ctx.Logger.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "sentinel.title"), []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
+		{Label: i18n.T(lang, "sentinel.title"), URL: "/admin/sentinel", Active: true},
+	})
+
+	render.Templ(w, r, SentinelPage(pc, viewData))
 }
 
 // ============================================================================

@@ -7,6 +7,7 @@ package render
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -22,12 +23,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/a-h/templ"
 	"github.com/alexedwards/scs/v2"
 
 	"github.com/olegiv/ocms-go/internal/geoip"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/service"
+	"github.com/olegiv/ocms-go/internal/store"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 // SessionKeyAdminLang is the session key for storing admin UI language preference.
@@ -99,6 +103,14 @@ func New(cfg Config) (*Renderer, error) {
 // This is called after modules are initialized since they're registered after the renderer is created.
 func (r *Renderer) SetSidebarModuleProvider(provider SidebarModuleProvider) {
 	r.sidebarModuleProvider = provider
+}
+
+// ListSidebarModules returns the sidebar modules from the provider.
+func (r *Renderer) ListSidebarModules() []SidebarModule {
+	if r.sidebarModuleProvider != nil {
+		return r.sidebarModuleProvider.ListSidebarModules()
+	}
+	return nil
 }
 
 // templateParseConfig defines how to parse a group of templates.
@@ -234,11 +246,12 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			}
 			return s[:length] + "..."
 		},
-		"safe": func(s string) template.HTML {
-			return template.HTML(s)
-		},
+		// safeHTML bypasses Go's automatic HTML escaping.
+		// SECURITY: Only use for trusted, admin-controlled content (theme settings,
+		// CMS page body, search highlights). NEVER pass user-submitted form input
+		// directly through this function without prior sanitization.
 		"safeHTML": func(s string) template.HTML {
-			return template.HTML(s)
+			return template.HTML(s) //nolint:gosec // Intentional bypass for admin-controlled CMS content
 		},
 		"add": func(a, b int) int {
 			return a + b
@@ -459,55 +472,36 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			Code string
 			Name string
 		} {
-			// Fallback to all i18n supported languages if DB unavailable
+			englishFallback := []struct {
+				Code string
+				Name string
+			}{{"en", "English"}}
+
 			if r.db == nil {
-				return []struct {
-					Code string
-					Name string
-				}{
-					{"en", "English"},
-				}
+				return englishFallback
 			}
 
-			// Query active languages from database
-			rows, err := r.db.Query("SELECT code, native_name FROM languages WHERE is_active = 1 ORDER BY position")
+			// Query active languages from database using SQLC
+			langs, err := store.New(r.db).ListActiveLanguages(context.Background())
 			if err != nil {
-				return []struct {
-					Code string
-					Name string
-				}{
-					{"en", "English"},
-				}
+				return englishFallback
 			}
-			defer func() { _ = rows.Close() }()
 
 			var options []struct {
 				Code string
 				Name string
 			}
-
-			for rows.Next() {
-				var code, name string
-				if err := rows.Scan(&code, &name); err != nil {
-					continue
-				}
-				// Only include if i18n supports this language
-				if i18n.IsSupported(code) {
+			for _, lang := range langs {
+				if i18n.IsSupported(lang.Code) {
 					options = append(options, struct {
 						Code string
 						Name string
-					}{code, name})
+					}{lang.Code, lang.NativeName})
 				}
 			}
 
-			// Fallback to English if no matching languages found
 			if len(options) == 0 {
-				return []struct {
-					Code string
-					Name string
-				}{
-					{"en", "English"},
-				}
+				return englishFallback
 			}
 
 			return options
@@ -564,18 +558,30 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 
 // getMediaTranslation fetches a translated field for a media item.
 // Returns the default value if the database is unavailable, parameters are invalid,
-// or no translation exists.
+// or no translation exists. Only "alt" and "caption" fields are supported.
 func (r *Renderer) getMediaTranslation(mediaID int64, langCode, field, defaultValue string) string {
 	if r.db == nil || mediaID == 0 || langCode == "" {
 		return defaultValue
 	}
+	queries := store.New(r.db)
+	ctx := context.Background()
+
 	var value string
-	query := fmt.Sprintf(`
-		SELECT mt.%s FROM media_translations mt
-		JOIN languages l ON l.id = mt.language_id
-		WHERE mt.media_id = ? AND l.code = ? AND mt.%s != ''
-	`, field, field)
-	err := r.db.QueryRow(query, mediaID, langCode).Scan(&value)
+	var err error
+	switch field {
+	case "alt":
+		value, err = queries.GetMediaTranslationAlt(ctx, store.GetMediaTranslationAltParams{
+			MediaID: mediaID,
+			Code:    langCode,
+		})
+	case "caption":
+		value, err = queries.GetMediaTranslationCaption(ctx, store.GetMediaTranslationCaptionParams{
+			MediaID: mediaID,
+			Code:    langCode,
+		})
+	default:
+		return defaultValue
+	}
 	if err != nil || value == "" {
 		return defaultValue
 	}
@@ -818,6 +824,122 @@ func formatDateTimeForLocale(t time.Time, lang string) string {
 	return t.Format("Jan 2, 2006 3:04 PM")
 }
 
+// FormatDateTimeLocale formats a time value as a localized datetime string.
+func (r *Renderer) FormatDateTimeLocale(t any, lang string) string {
+	return applyTimeFormatter(t, lang, formatDateTimeForLocale)
+}
+
+// FormatDateTime formats a time value as "Jan 2, 2006 3:04 PM".
+func FormatDateTime(t time.Time) string {
+	return t.Format("Jan 2, 2006 3:04 PM")
+}
+
+// FormatBytes formats bytes into a human-readable string.
+func FormatBytes(size int64) string {
+	const unit = 1024
+	if size < unit {
+		return fmt.Sprintf("%d B", size)
+	}
+	div, exp := int64(unit), 0
+	for n := size / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(size)/float64(div), "KMGTPE"[exp])
+}
+
+// HcaptchaEnabled returns whether hCaptcha is enabled.
+// It calls the hcaptchaEnabled template function if registered, otherwise returns false.
+func (r *Renderer) HcaptchaEnabled() bool {
+	fn, ok := r.TemplateFuncs()["hcaptchaEnabled"]
+	if !ok {
+		return false
+	}
+	if f, ok := fn.(func() bool); ok {
+		return f()
+	}
+	return false
+}
+
+// HcaptchaWidgetHTML returns the hCaptcha widget HTML string.
+// It calls the hcaptchaWidget template function if registered, otherwise returns empty string.
+func (r *Renderer) HcaptchaWidgetHTML() string {
+	fn, ok := r.TemplateFuncs()["hcaptchaWidget"]
+	if !ok {
+		return ""
+	}
+	if f, ok := fn.(func() template.HTML); ok {
+		return string(f())
+	}
+	return ""
+}
+
+// AdminLangOption represents a language option for the admin UI language switcher.
+type AdminLangOption struct {
+	Code string
+	Name string
+}
+
+// AdminLangOptions returns the list of admin UI languages.
+func (r *Renderer) AdminLangOptions() []AdminLangOption {
+	fn, ok := r.TemplateFuncs()["adminLangOptions"]
+	if !ok {
+		return []AdminLangOption{{"en", "English"}}
+	}
+	type anonLangOpt = struct {
+		Code string
+		Name string
+	}
+	if f, ok := fn.(func() []anonLangOpt); ok {
+		opts := f()
+		result := make([]AdminLangOption, len(opts))
+		for i, o := range opts {
+			result[i] = AdminLangOption(o)
+		}
+		return result
+	}
+	return []AdminLangOption{{"en", "English"}}
+}
+
+// SentinelIsActive returns whether the sentinel module is active.
+// It calls the sentinelIsActive template function if registered, otherwise returns false.
+func (r *Renderer) SentinelIsActive() bool {
+	fn, ok := r.TemplateFuncs()["sentinelIsActive"]
+	if !ok {
+		return false
+	}
+	if f, ok := fn.(func() bool); ok {
+		return f()
+	}
+	return false
+}
+
+// SentinelIsIPBanned returns whether an IP is banned by the sentinel module.
+// It calls the sentinelIsIPBanned template function if registered, otherwise returns false.
+func (r *Renderer) SentinelIsIPBanned(ip string) bool {
+	fn, ok := r.TemplateFuncs()["sentinelIsIPBanned"]
+	if !ok {
+		return false
+	}
+	if f, ok := fn.(func(string) bool); ok {
+		return f(ip)
+	}
+	return false
+}
+
+// SentinelIsIPWhitelisted returns whether an IP is whitelisted by the sentinel module.
+// It calls the sentinelIsIPWhitelisted template function if registered, otherwise returns false.
+func (r *Renderer) SentinelIsIPWhitelisted(ip string) bool {
+	fn, ok := r.TemplateFuncs()["sentinelIsIPWhitelisted"]
+	if !ok {
+		return false
+	}
+	if f, ok := fn.(func(string) bool); ok {
+		return f(ip)
+	}
+	return false
+}
+
 // getUserRole extracts the role from a user object.
 // Accepts store.User, *store.User, or any struct with a Role field.
 func getUserRole(user any) string {
@@ -854,4 +976,70 @@ func getUserRole(user any) string {
 	}
 
 	return roleField.String()
+}
+
+// BuildPageContext creates a PageContext for templ views from the request state.
+// This is used by modules to render templ-based admin pages.
+func (r *Renderer) BuildPageContext(req *http.Request, title string, breadcrumbs []Breadcrumb) *adminviews.PageContext {
+	user := middleware.GetUser(req)
+	adminLang := r.GetAdminLang(req)
+
+	var userInfo adminviews.UserInfo
+	if user != nil {
+		userInfo = adminviews.UserInfo{
+			ID:    user.ID,
+			Name:  user.Name,
+			Email: user.Email,
+			Role:  user.Role,
+		}
+	}
+
+	pc := &adminviews.PageContext{
+		Title:       title,
+		User:        userInfo,
+		SiteName:    middleware.GetSiteName(req),
+		CurrentPath: req.URL.Path,
+		AdminLang:   adminLang,
+	}
+
+	// Convert breadcrumbs
+	for _, b := range breadcrumbs {
+		pc.Breadcrumbs = append(pc.Breadcrumbs, adminviews.Breadcrumb{
+			Label:  b.Label,
+			URL:    b.URL,
+			Active: b.Active,
+		})
+	}
+
+	// Get sidebar modules
+	for _, m := range r.ListSidebarModules() {
+		pc.SidebarModules = append(pc.SidebarModules, adminviews.SidebarModule{
+			Name:     m.Name,
+			Label:    m.Label,
+			AdminURL: m.AdminURL,
+		})
+	}
+
+	// Get flash message from session
+	if r.sessionManager != nil {
+		if flash := r.sessionManager.PopString(req.Context(), "flash"); flash != "" {
+			pc.Flash = flash
+			pc.FlashType = r.sessionManager.PopString(req.Context(), "flash_type")
+			if pc.FlashType == "" {
+				pc.FlashType = "info"
+			}
+		}
+	}
+
+	return pc
+}
+
+// Templ renders a templ component as an HTTP response.
+// This is used by modules to render templ-based admin pages.
+func Templ(w http.ResponseWriter, r *http.Request, component templ.Component) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := component.Render(r.Context(), w); err != nil {
+		slog.Error("templ render error", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
 }

@@ -16,28 +16,17 @@ import (
 
 // handleDashboard handles GET /admin/privacy - shows the privacy settings page.
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := m.ctx.Render.GetAdminLang(r)
 
-	// Prepare display data
-	displaySettings := struct {
-		Enabled                     bool
-		Debug                       bool
-		PrivacyPolicyURL            string
-		CookieName                  string
-		CookieExpiresDays           int
-		Theme                       string
-		Position                    string
-		GCMEnabled                  bool
-		GCMDefaultAnalytics         bool
-		GCMDefaultAdStorage         bool
-		GCMDefaultAdUserData        bool
-		GCMDefaultAdPersonalization bool
-		GCMWaitForUpdate            int
-		Services                    []Service
-		ServicesJSON                string
-		PredefinedServices          []Service
-	}{
+	// Serialize services to JSON
+	servicesJSON := "[]"
+	if len(m.settings.Services) > 0 {
+		if data, err := json.Marshal(m.settings.Services); err == nil {
+			servicesJSON = string(data)
+		}
+	}
+
+	viewData := PrivacyViewData{
 		Enabled:                     m.settings.Enabled,
 		Debug:                       m.settings.Debug,
 		PrivacyPolicyURL:            m.settings.PrivacyPolicyURL,
@@ -51,35 +40,16 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		GCMDefaultAdUserData:        m.settings.GCMDefaultAdUserData,
 		GCMDefaultAdPersonalization: m.settings.GCMDefaultAdPersonalization,
 		GCMWaitForUpdate:            m.settings.GCMWaitForUpdate,
-		Services:                    m.settings.Services,
+		ServicesJSON:                servicesJSON,
 		PredefinedServices:          PredefinedServices,
 	}
 
-	// Serialize services to JSON for the UI
-	// Note: json.Marshal(nil) returns "null", so we check for nil/empty first
-	if len(m.settings.Services) > 0 {
-		if servicesData, err := json.Marshal(m.settings.Services); err == nil {
-			displaySettings.ServicesJSON = string(servicesData)
-		} else {
-			displaySettings.ServicesJSON = "[]"
-		}
-	} else {
-		displaySettings.ServicesJSON = "[]"
-	}
-
-	if err := m.ctx.Render.Render(w, r, "admin/module_privacy", render.TemplateData{
-		Title: i18n.T(lang, "privacy.title"),
-		User:  user,
-		Data:  displaySettings,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
-			{Label: i18n.T(lang, "privacy.title"), URL: "/admin/privacy", Active: true},
-		},
-	}); err != nil {
-		m.ctx.Logger.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "privacy.title"), []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
+		{Label: i18n.T(lang, "privacy.title"), URL: "/admin/privacy", Active: true},
+	})
+	render.Templ(w, r, PrivacyPage(pc, viewData))
 }
 
 // handleSaveSettings handles POST /admin/privacy - saves privacy settings.

@@ -117,3 +117,13 @@ DELETE FROM media_translations WHERE media_id = ? AND language_id = ?;
 
 -- name: DeleteAllMediaTranslations :exec
 DELETE FROM media_translations WHERE media_id = ?;
+
+-- name: GetMediaTranslationAlt :one
+SELECT mt.alt FROM media_translations mt
+JOIN languages l ON l.id = mt.language_id
+WHERE mt.media_id = ? AND l.code = ? AND mt.alt != '';
+
+-- name: GetMediaTranslationCaption :one
+SELECT mt.caption FROM media_translations mt
+JOIN languages l ON l.id = mt.language_id
+WHERE mt.media_id = ? AND l.code = ? AND mt.caption != '';
