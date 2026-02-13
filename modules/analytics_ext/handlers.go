@@ -14,22 +14,22 @@ import (
 
 // handleDashboard handles GET /admin/external-analytics - shows the analytics settings page.
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := m.ctx.Render.GetAdminLang(r)
-
-	if err := m.ctx.Render.Render(w, r, "admin/module_analytics_ext", render.TemplateData{
-		Title: i18n.T(lang, "analytics_ext.title"),
-		User:  user,
-		Data:  m.settings,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
-			{Label: i18n.T(lang, "analytics_ext.title"), URL: "/admin/external-analytics", Active: true},
-		},
-	}); err != nil {
-		m.ctx.Logger.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "analytics_ext.title"), []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
+		{Label: i18n.T(lang, "analytics_ext.title"), URL: "/admin/external-analytics", Active: true},
+	})
+	viewData := AnalyticsExtViewData{
+		GA4Enabled:       m.settings.GA4Enabled,
+		GA4MeasurementID: m.settings.GA4MeasurementID,
+		GTMEnabled:       m.settings.GTMEnabled,
+		GTMContainerID:   m.settings.GTMContainerID,
+		MatomoEnabled:    m.settings.MatomoEnabled,
+		MatomoURL:        m.settings.MatomoURL,
+		MatomoSiteID:     m.settings.MatomoSiteID,
 	}
+	render.RenderTempl(w, r, AnalyticsExtPage(pc, viewData))
 }
 
 // handleSaveSettings handles POST /admin/external-analytics - saves analytics settings.

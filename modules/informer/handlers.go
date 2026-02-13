@@ -14,34 +14,21 @@ import (
 
 // handleDashboard handles GET /admin/informer - shows the informer settings page.
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := m.ctx.Render.GetAdminLang(r)
 
-	displaySettings := struct {
-		Enabled   bool
-		Text      string
-		BgColor   string
-		TextColor string
-	}{
+	viewData := InformerViewData{
 		Enabled:   m.settings.Enabled,
 		Text:      m.settings.Text,
 		BgColor:   m.settings.BgColor,
 		TextColor: m.settings.TextColor,
 	}
 
-	if err := m.ctx.Render.Render(w, r, "admin/module_informer", render.TemplateData{
-		Title: i18n.T(lang, "informer.title"),
-		User:  user,
-		Data:  displaySettings,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
-			{Label: i18n.T(lang, "informer.title"), URL: "/admin/informer", Active: true},
-		},
-	}); err != nil {
-		m.ctx.Logger.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "informer.title"), []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
+		{Label: i18n.T(lang, "informer.title"), URL: "/admin/informer", Active: true},
+	})
+	render.RenderTempl(w, r, InformerPage(pc, viewData))
 }
 
 // handleSaveSettings handles POST /admin/informer - saves informer settings.
