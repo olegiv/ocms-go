@@ -865,6 +865,46 @@ func (r *Renderer) HcaptchaEnabled() bool {
 	return false
 }
 
+// HcaptchaWidgetHTML returns the hCaptcha widget HTML string.
+// It calls the hcaptchaWidget template function if registered, otherwise returns empty string.
+func (r *Renderer) HcaptchaWidgetHTML() string {
+	fn, ok := r.TemplateFuncs()["hcaptchaWidget"]
+	if !ok {
+		return ""
+	}
+	if f, ok := fn.(func() template.HTML); ok {
+		return string(f())
+	}
+	return ""
+}
+
+// AdminLangOption represents a language option for the admin UI language switcher.
+type AdminLangOption struct {
+	Code string
+	Name string
+}
+
+// AdminLangOptions returns the list of admin UI languages.
+func (r *Renderer) AdminLangOptions() []AdminLangOption {
+	fn, ok := r.TemplateFuncs()["adminLangOptions"]
+	if !ok {
+		return []AdminLangOption{{"en", "English"}}
+	}
+	type langOpt struct {
+		Code string
+		Name string
+	}
+	if f, ok := fn.(func() []langOpt); ok {
+		opts := f()
+		result := make([]AdminLangOption, len(opts))
+		for i, o := range opts {
+			result[i] = AdminLangOption{Code: o.Code, Name: o.Name}
+		}
+		return result
+	}
+	return []AdminLangOption{{"en", "English"}}
+}
+
 // SentinelIsActive returns whether the sentinel module is active.
 // It calls the sentinelIsActive template function if registered, otherwise returns false.
 func (r *Renderer) SentinelIsActive() bool {

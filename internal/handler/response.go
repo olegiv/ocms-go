@@ -221,36 +221,6 @@ func handleDeleteEntity[T any](w http.ResponseWriter, r *http.Request, renderer 
 }
 
 // =============================================================================
-// ENTITY EDIT PAGE HELPERS
-// =============================================================================
-
-// renderEntityEditPage renders an edit page for an entity with standard breadcrumbs.
-// The breadcrumbs follow the pattern: Dashboard > Entity List > Entity Name (active).
-func renderEntityEditPage(
-	w http.ResponseWriter, r *http.Request,
-	renderer *render.Renderer,
-	template string,
-	title string,
-	data any,
-	lang string,
-	navKey string,
-	listURL string,
-	entityName string,
-	entityURL string,
-) {
-	renderer.RenderPage(w, r, template, render.TemplateData{
-		Title: title,
-		User:  middleware.GetUser(r),
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, navKey), URL: listURL},
-			{Label: entityName, URL: entityURL, Active: true},
-		},
-	})
-}
-
-// =============================================================================
 // LANGUAGE PREFERENCE HELPERS
 // =============================================================================
 
