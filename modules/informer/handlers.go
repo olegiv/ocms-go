@@ -28,7 +28,7 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
 		{Label: i18n.T(lang, "informer.title"), URL: "/admin/informer", Active: true},
 	})
-	render.RenderTempl(w, r, InformerPage(pc, viewData))
+	render.Templ(w, r, InformerPage(pc, viewData))
 }
 
 // handleSaveSettings handles POST /admin/informer - saves informer settings.

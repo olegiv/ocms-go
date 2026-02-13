@@ -30,7 +30,7 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
 		{Label: i18n.T(lang, "hcaptcha.title"), URL: "/admin/hcaptcha", Active: true},
 	})
-	render.RenderTempl(w, r, HCaptchaPage(pc, displaySettings))
+	render.Templ(w, r, HCaptchaPage(pc, displaySettings))
 }
 
 // handleSaveSettings handles POST /admin/hcaptcha - saves hCaptcha settings.

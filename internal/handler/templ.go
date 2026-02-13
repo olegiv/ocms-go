@@ -1662,7 +1662,7 @@ func convertMediaLibraryViewData(data MediaLibraryData) adminviews.MediaLibraryV
 			OriginalURL:  m.OriginalURL,
 			IsImage:      m.IsImage,
 			TypeIcon:     m.TypeIcon,
-			Size:         render.FormatBytes(m.Medium.Size),
+			Size:         render.FormatBytes(m.Size),
 		}
 	}
 
@@ -1913,7 +1913,7 @@ func convertSubmissionViewViewData(data SubmissionViewData, renderer *render.Ren
 }
 
 // convertMediaEditViewData converts handler data to view data for the media edit page.
-func convertMediaEditViewData(data MediaEditData, renderer *render.Renderer, lang string) adminviews.MediaEditViewData {
+func convertMediaEditViewData(data MediaEditData, lang string) adminviews.MediaEditViewData {
 	media := adminviews.MediaItemView{
 		ID:            data.Media.ID,
 		Filename:      data.Media.Filename,
@@ -1922,7 +1922,7 @@ func convertMediaEditViewData(data MediaEditData, renderer *render.Renderer, lan
 		OriginalURL:   data.Media.OriginalURL,
 		IsImage:       data.Media.IsImage,
 		TypeIcon:      data.Media.TypeIcon,
-		Size:          render.FormatBytes(data.Media.Medium.Size),
+		Size:          render.FormatBytes(data.Media.Size),
 		MimeType:      data.Media.MimeType,
 		HasDimensions: data.Media.Width.Valid,
 		Width:         data.Media.Width.Int64,

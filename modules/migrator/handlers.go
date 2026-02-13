@@ -41,7 +41,7 @@ func (m *Module) handleListSources(w http.ResponseWriter, r *http.Request) {
 		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
 		{Label: i18n.T(lang, "migrator.title"), URL: "/admin/migrator", Active: true},
 	})
-	render.RenderTempl(w, r, MigratorListPage(pc, viewData))
+	render.Templ(w, r, MigratorListPage(pc, viewData))
 }
 
 // sessionKeyMigratorConfig is the session key for storing migrator config between requests.
@@ -88,7 +88,7 @@ func (m *Module) handleSourceForm(w http.ResponseWriter, r *http.Request) {
 		{Label: i18n.T(lang, "migrator.title"), URL: "/admin/migrator"},
 		{Label: source.DisplayName(), URL: "/admin/migrator/" + sourceName, Active: true},
 	})
-	render.RenderTempl(w, r, MigratorSourceFormPage(pc, viewData))
+	render.Templ(w, r, MigratorSourceFormPage(pc, viewData))
 }
 
 // sourceRequestContext holds common data extracted from migrator handler requests.

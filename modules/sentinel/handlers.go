@@ -107,7 +107,7 @@ func (m *Module) handleAdminList(w http.ResponseWriter, r *http.Request) {
 		{Label: i18n.T(lang, "sentinel.title"), URL: "/admin/sentinel", Active: true},
 	})
 
-	render.RenderTempl(w, r, SentinelPage(pc, viewData))
+	render.Templ(w, r, SentinelPage(pc, viewData))
 }
 
 // ============================================================================

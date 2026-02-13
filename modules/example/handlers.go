@@ -109,7 +109,7 @@ func (m *Module) handleAdminExample(w http.ResponseWriter, r *http.Request) {
 		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
 		{Label: i18n.T(lang, "example.title"), URL: "/admin/example", Active: true},
 	})
-	render.RenderTempl(w, r, ExamplePage(pc, viewData))
+	render.Templ(w, r, ExamplePage(pc, viewData))
 }
 
 // handleListItems handles GET /admin/example/items - returns JSON list of items.

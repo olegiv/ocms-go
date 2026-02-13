@@ -57,7 +57,7 @@ func (m *Module) renderDashboard(w http.ResponseWriter, r *http.Request, lang st
 		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
 		{Label: i18n.T(lang, "dbmanager.title"), URL: "/admin/dbmanager", Active: true},
 	})
-	render.RenderTempl(w, r, DBManagerPage(pc, viewData))
+	render.Templ(w, r, DBManagerPage(pc, viewData))
 }
 
 // handleDashboard handles GET /admin/dbmanager - shows the database manager dashboard.

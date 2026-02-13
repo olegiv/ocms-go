@@ -67,7 +67,7 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
 		{Label: i18n.T(lang, "analytics_int.title"), URL: "/admin/internal-analytics", Active: true},
 	})
-	render.RenderTempl(w, r, AnalyticsIntPage(pc, viewData))
+	render.Templ(w, r, AnalyticsIntPage(pc, viewData))
 }
 
 // handleAPIStats returns JSON stats for HTMX updates.
