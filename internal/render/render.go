@@ -7,6 +7,7 @@ package render
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -29,6 +30,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/service"
+	"github.com/olegiv/ocms-go/internal/store"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
@@ -244,11 +246,12 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			}
 			return s[:length] + "..."
 		},
-		"safe": func(s string) template.HTML {
-			return template.HTML(s)
-		},
+		// safeHTML bypasses Go's automatic HTML escaping.
+		// SECURITY: Only use for trusted, admin-controlled content (theme settings,
+		// CMS page body, search highlights). NEVER pass user-submitted form input
+		// directly through this function without prior sanitization.
 		"safeHTML": func(s string) template.HTML {
-			return template.HTML(s)
+			return template.HTML(s) //nolint:gosec // Intentional bypass for admin-controlled CMS content
 		},
 		"add": func(a, b int) int {
 			return a + b
@@ -469,55 +472,36 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			Code string
 			Name string
 		} {
-			// Fallback to all i18n supported languages if DB unavailable
+			englishFallback := []struct {
+				Code string
+				Name string
+			}{{"en", "English"}}
+
 			if r.db == nil {
-				return []struct {
-					Code string
-					Name string
-				}{
-					{"en", "English"},
-				}
+				return englishFallback
 			}
 
-			// Query active languages from database
-			rows, err := r.db.Query("SELECT code, native_name FROM languages WHERE is_active = 1 ORDER BY position")
+			// Query active languages from database using SQLC
+			langs, err := store.New(r.db).ListActiveLanguages(context.Background())
 			if err != nil {
-				return []struct {
-					Code string
-					Name string
-				}{
-					{"en", "English"},
-				}
+				return englishFallback
 			}
-			defer func() { _ = rows.Close() }()
 
 			var options []struct {
 				Code string
 				Name string
 			}
-
-			for rows.Next() {
-				var code, name string
-				if err := rows.Scan(&code, &name); err != nil {
-					continue
-				}
-				// Only include if i18n supports this language
-				if i18n.IsSupported(code) {
+			for _, lang := range langs {
+				if i18n.IsSupported(lang.Code) {
 					options = append(options, struct {
 						Code string
 						Name string
-					}{code, name})
+					}{lang.Code, lang.NativeName})
 				}
 			}
 
-			// Fallback to English if no matching languages found
 			if len(options) == 0 {
-				return []struct {
-					Code string
-					Name string
-				}{
-					{"en", "English"},
-				}
+				return englishFallback
 			}
 
 			return options
@@ -574,18 +558,30 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 
 // getMediaTranslation fetches a translated field for a media item.
 // Returns the default value if the database is unavailable, parameters are invalid,
-// or no translation exists.
+// or no translation exists. Only "alt" and "caption" fields are supported.
 func (r *Renderer) getMediaTranslation(mediaID int64, langCode, field, defaultValue string) string {
 	if r.db == nil || mediaID == 0 || langCode == "" {
 		return defaultValue
 	}
+	queries := store.New(r.db)
+	ctx := context.Background()
+
 	var value string
-	query := fmt.Sprintf(`
-		SELECT mt.%s FROM media_translations mt
-		JOIN languages l ON l.id = mt.language_id
-		WHERE mt.media_id = ? AND l.code = ? AND mt.%s != ''
-	`, field, field)
-	err := r.db.QueryRow(query, mediaID, langCode).Scan(&value)
+	var err error
+	switch field {
+	case "alt":
+		value, err = queries.GetMediaTranslationAlt(ctx, store.GetMediaTranslationAltParams{
+			MediaID: mediaID,
+			Code:    langCode,
+		})
+	case "caption":
+		value, err = queries.GetMediaTranslationCaption(ctx, store.GetMediaTranslationCaptionParams{
+			MediaID: mediaID,
+			Code:    langCode,
+		})
+	default:
+		return defaultValue
+	}
 	if err != nil || value == "" {
 		return defaultValue
 	}

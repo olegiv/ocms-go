@@ -4,6 +4,7 @@
 package module
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // errModuleNotFound is the format string for module not found errors.
@@ -201,6 +203,8 @@ func (r *Registry) runAllMigrations(db *sql.DB) error {
 }
 
 // ensureMigrationsTable creates the module_migrations table if it doesn't exist.
+// SEC-005: DDL statements must remain as direct SQL — SQLC cannot generate DDL.
+// These are safety nets for startup before goose migrations run.
 func (r *Registry) ensureMigrationsTable(db *sql.DB) error {
 	_, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS module_migrations (
@@ -228,11 +232,10 @@ func (r *Registry) ensureMigrationsTable(db *sql.DB) error {
 
 // isMigrationApplied checks if a migration has already been applied.
 func (r *Registry) isMigrationApplied(db *sql.DB, module string, version int64) (bool, error) {
-	var count int
-	err := db.QueryRow(
-		"SELECT COUNT(*) FROM module_migrations WHERE module = ? AND version = ?",
-		module, version,
-	).Scan(&count)
+	count, err := store.New(db).IsModuleMigrationApplied(context.Background(), store.IsModuleMigrationAppliedParams{
+		Module:  module,
+		Version: version,
+	})
 	if err != nil {
 		return false, err
 	}
@@ -241,19 +244,21 @@ func (r *Registry) isMigrationApplied(db *sql.DB, module string, version int64) 
 
 // recordMigration records that a migration has been applied.
 func (r *Registry) recordMigration(db *sql.DB, module string, version int64) error {
-	_, err := db.Exec(
-		"INSERT INTO module_migrations (module, version, applied_at) VALUES (?, ?, ?)",
-		module, version, time.Now(),
-	)
-	return err
+	return store.New(db).RecordModuleMigration(context.Background(), store.RecordModuleMigrationParams{
+		Module:    module,
+		Version:   version,
+		AppliedAt: time.Now(),
+	})
 }
 
 // loadActiveStatus loads the active and sidebar status for all registered modules from the database.
 // Modules not in the database are considered active by default (sidebar=false) and will be inserted.
 func (r *Registry) loadActiveStatus(db *sql.DB) error {
+	queries := store.New(db)
+	ctx := context.Background()
+
 	for _, name := range r.order {
-		var isActive, showInSidebar bool
-		err := db.QueryRow("SELECT is_active, show_in_sidebar FROM modules WHERE name = ?", name).Scan(&isActive, &showInSidebar)
+		mod, err := queries.GetModule(ctx, name)
 		if errors.Is(err, sql.ErrNoRows) {
 			// Module not in database — check if it restricts environments
 			defaultActive := true
@@ -272,14 +277,11 @@ func (r *Registry) loadActiveStatus(db *sql.DB) error {
 				}
 			}
 
-			activeInt := 0
-			if defaultActive {
-				activeInt = 1
-			}
-			_, err = db.Exec(
-				"INSERT INTO modules (name, is_active, show_in_sidebar, updated_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP)",
-				name, activeInt,
-			)
+			_, err = queries.UpsertModule(ctx, store.UpsertModuleParams{
+				Name:          name,
+				IsActive:      defaultActive,
+				ShowInSidebar: false,
+			})
 			if err != nil {
 				return fmt.Errorf("inserting module %s: %w", name, err)
 			}
@@ -291,9 +293,9 @@ func (r *Registry) loadActiveStatus(db *sql.DB) error {
 		if err != nil {
 			return fmt.Errorf("loading active status for module %s: %w", name, err)
 		}
-		r.activeStatus[name] = isActive
-		r.sidebarStatus[name] = showInSidebar
-		r.logger.Debug("loaded module status", "module", name, "active", isActive, "sidebar", showInSidebar)
+		r.activeStatus[name] = mod.IsActive
+		r.sidebarStatus[name] = mod.ShowInSidebar
+		r.logger.Debug("loaded module status", "module", name, "active", mod.IsActive, "sidebar", mod.ShowInSidebar)
 	}
 	return nil
 }
@@ -310,8 +312,13 @@ func (r *Registry) getStatus(statusMap map[string]bool, name string, defaultValu
 	return value
 }
 
-// setStatus updates a module status in the database and local map.
-func (r *Registry) setStatus(statusMap map[string]bool, name, column, logField string, value bool) error {
+// IsActive returns whether a module is active.
+func (r *Registry) IsActive(name string) bool {
+	return r.getStatus(r.activeStatus, name, true)
+}
+
+// SetActive sets a module's active status and persists it to the database.
+func (r *Registry) SetActive(name string, active bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -323,25 +330,17 @@ func (r *Registry) setStatus(statusMap map[string]bool, name, column, logField s
 		return fmt.Errorf("registry not initialized")
 	}
 
-	query := fmt.Sprintf("UPDATE modules SET %s = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?", column)
-	_, err := r.ctx.DB.Exec(query, value, name)
+	_, err := r.ctx.DB.Exec(
+		"UPDATE modules SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?",
+		active, name,
+	)
 	if err != nil {
-		return fmt.Errorf("updating module %s: %w", column, err)
+		return fmt.Errorf("updating module active status: %w", err)
 	}
 
-	statusMap[name] = value
-	r.logger.Info("module status changed", "module", name, logField, value)
+	r.activeStatus[name] = active
+	r.logger.Info("module status changed", "module", name, "active", active)
 	return nil
-}
-
-// IsActive returns whether a module is active.
-func (r *Registry) IsActive(name string) bool {
-	return r.getStatus(r.activeStatus, name, true)
-}
-
-// SetActive sets a module's active status and persists it to the database.
-func (r *Registry) SetActive(name string, active bool) error {
-	return r.setStatus(r.activeStatus, name, "is_active", "active", active)
 }
 
 // ShowInSidebar returns whether a module should be shown in the admin sidebar.
@@ -351,7 +350,28 @@ func (r *Registry) ShowInSidebar(name string) bool {
 
 // SetShowInSidebar sets whether a module should appear in the admin sidebar.
 func (r *Registry) SetShowInSidebar(name string, show bool) error {
-	return r.setStatus(r.sidebarStatus, name, "show_in_sidebar", "show", show)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.modules[name]; !exists {
+		return fmt.Errorf("module %q not registered", name)
+	}
+
+	if r.ctx == nil || r.ctx.DB == nil {
+		return fmt.Errorf("registry not initialized")
+	}
+
+	_, err := r.ctx.DB.Exec(
+		"UPDATE modules SET show_in_sidebar = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?",
+		show, name,
+	)
+	if err != nil {
+		return fmt.Errorf("updating module sidebar status: %w", err)
+	}
+
+	r.sidebarStatus[name] = show
+	r.logger.Info("module status changed", "module", name, "show", show)
+	return nil
 }
 
 // ListSidebarModules returns modules that should appear in the admin sidebar.

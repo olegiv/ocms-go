@@ -197,6 +197,12 @@ type Module struct {
 	ShowInSidebar bool      `json:"show_in_sidebar"`
 }
 
+type ModuleMigration struct {
+	Module    string    `json:"module"`
+	Version   int64     `json:"version"`
+	AppliedAt time.Time `json:"applied_at"`
+}
+
 type Page struct {
 	ID                int64         `json:"id"`
 	Title             string        `json:"title"`
@@ -290,6 +296,13 @@ type ScheduledTaskRun struct {
 	DurationMs   sql.NullInt64  `json:"duration_ms"`
 	StartedAt    time.Time      `json:"started_at"`
 	CompletedAt  sql.NullTime   `json:"completed_at"`
+}
+
+type SchedulerOverride struct {
+	Source           string       `json:"source"`
+	Name             string       `json:"name"`
+	OverrideSchedule string       `json:"override_schedule"`
+	UpdatedAt        sql.NullTime `json:"updated_at"`
 }
 
 type Session struct {

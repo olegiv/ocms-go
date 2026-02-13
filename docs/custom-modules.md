@@ -180,7 +180,7 @@ func (m *Module) Migrations() []module.Migration {
 }
 ```
 
-Migrations are tracked in the `module_migrations` table and only run once. Version numbers must start at 1.
+Migrations are tracked in the `module_migrations` table (goose migration `20260213100001`) and only run once. Version numbers must start at 1. Migration tracking uses SQLC-generated type-safe queries. Custom modules should always use parameterized queries (`?` placeholders) for database operations — never use `fmt.Sprintf` to build SQL statements.
 
 ## Hooks
 

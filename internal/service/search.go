@@ -11,11 +11,14 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // SearchService provides full-text search functionality using SQLite FTS5.
 type SearchService struct {
-	db *sql.DB
+	db      *sql.DB
+	queries *store.Queries
 }
 
 // SearchResult represents a single search result with match highlight.
@@ -44,7 +47,7 @@ type SearchParams struct {
 
 // NewSearchService creates a new search service.
 func NewSearchService(db *sql.DB) *SearchService {
-	return &SearchService{db: db}
+	return &SearchService{db: db, queries: store.New(db)}
 }
 
 // escapeQuery escapes special FTS5 characters in the query.
@@ -81,6 +84,9 @@ func (s *SearchService) escapeQuery(query string) string {
 }
 
 // SearchPublishedPages searches published pages using FTS5.
+// SEC-005: FTS5 queries must remain as direct SQL because bm25(), snippet(),
+// and MATCH are SQLite FTS5-specific functions that SQLC cannot generate
+// type-safe code for. The dynamic language filter clause is also built conditionally.
 func (s *SearchService) SearchPublishedPages(ctx context.Context, params SearchParams) ([]SearchResult, int64, error) {
 	if params.Query == "" {
 		return []SearchResult{}, 0, nil
@@ -281,6 +287,7 @@ func sanitizeHighlight(highlight string) string {
 
 // RebuildIndex rebuilds the FTS index from scratch.
 // This is useful after bulk operations or to ensure consistency.
+// SEC-005: FTS5 virtual table operations must remain as direct SQL.
 func (s *SearchService) RebuildIndex(ctx context.Context) error {
 	// Delete all entries
 	//goland:noinspection SqlResolve
@@ -300,30 +307,20 @@ func (s *SearchService) RebuildIndex(ctx context.Context) error {
 	return err
 }
 
-// SearchAllPages searches all pages (for admin search) using FTS5.
+// SearchAllPages searches all pages (for admin search) using LIKE.
+// FTS5 only indexes published pages, so admin search uses LIKE to include all statuses.
 func (s *SearchService) SearchAllPages(ctx context.Context, params SearchParams) ([]SearchResult, int64, error) {
 	if params.Query == "" {
 		return []SearchResult{}, 0, nil
 	}
 
-	escapedQuery := s.escapeQuery(params.Query)
-	if escapedQuery == "" {
-		return []SearchResult{}, 0, nil
-	}
-
-	// For admin search, we search all pages regardless of status
-	// Since FTS only indexes published pages, we need a different approach
-	// Use LIKE for admin search to include all pages
 	likePattern := "%" + params.Query + "%"
 
-	// Count total results
-	countQuery := `
-		SELECT COUNT(*) FROM pages
-		WHERE title LIKE ? OR body LIKE ?
-	`
-
-	var total int64
-	err := s.db.QueryRowContext(ctx, countQuery, likePattern, likePattern).Scan(&total)
+	// Count total results using SQLC
+	total, err := s.queries.CountAdminSearchPages(ctx, store.CountAdminSearchPagesParams{
+		Title: likePattern,
+		Body:  likePattern,
+	})
 	if err != nil {
 		return nil, 0, err
 	}
@@ -332,49 +329,32 @@ func (s *SearchService) SearchAllPages(ctx context.Context, params SearchParams)
 		return []SearchResult{}, 0, nil
 	}
 
-	// Search all pages
-	searchQuery := `
-		SELECT
-			id, title, slug, body, status,
-			published_at, created_at, updated_at, featured_image_id
-		FROM pages
-		WHERE title LIKE ? OR body LIKE ?
-		ORDER BY updated_at DESC
-		LIMIT ? OFFSET ?
-	`
-
-	rows, err := s.db.QueryContext(ctx, searchQuery, likePattern, likePattern, params.Limit, params.Offset)
+	// Search all pages using SQLC
+	rows, err := s.queries.SearchAdminPages(ctx, store.SearchAdminPagesParams{
+		Title:  likePattern,
+		Body:   likePattern,
+		Limit:  int64(params.Limit),
+		Offset: int64(params.Offset),
+	})
 	if err != nil {
 		return nil, 0, err
 	}
-	defer func(rows *sql.Rows) {
-		_ = rows.Close()
-	}(rows)
 
-	var results []SearchResult
-	for rows.Next() {
-		var r SearchResult
-		err := rows.Scan(
-			&r.ID,
-			&r.Title,
-			&r.Slug,
-			&r.Body,
-			&r.Status,
-			&r.PublishedAt,
-			&r.CreatedAt,
-			&r.UpdatedAt,
-			&r.FeaturedImageID,
-		)
-		if err != nil {
-			return nil, 0, err
+	results := make([]SearchResult, 0, len(rows))
+	for _, row := range rows {
+		r := SearchResult{
+			ID:              row.ID,
+			Title:           row.Title,
+			Slug:            row.Slug,
+			Body:            row.Body,
+			Status:          row.Status,
+			PublishedAt:     row.PublishedAt,
+			CreatedAt:       row.CreatedAt,
+			UpdatedAt:       row.UpdatedAt,
+			FeaturedImageID: row.FeaturedImageID,
 		}
-
 		r.Excerpt = s.generateExcerpt(r.Body, params.Query, 200)
 		results = append(results, r)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, 0, err
 	}
 
 	return results, total, nil

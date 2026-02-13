@@ -6,12 +6,13 @@ package developer
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
-	"math/rand"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
@@ -97,14 +98,33 @@ type GenerateResult struct {
 	PageIDs  []int64
 }
 
+// cryptoRandIntn returns a cryptographically secure random number in [0, max).
+func cryptoRandIntn(max int) int {
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
+	if err != nil {
+		// Fallback should never happen; rand.Reader is always available
+		return 0
+	}
+	return int(n.Int64())
+}
+
+// cryptoRandFloat32 returns a cryptographically secure random float32 in [0.0, 1.0).
+func cryptoRandFloat32() float32 {
+	n, err := rand.Int(rand.Reader, big.NewInt(1<<24))
+	if err != nil {
+		return 0
+	}
+	return float32(n.Int64()) / float32(1<<24)
+}
+
 // generateRandomCount returns a random number between 5 and 20
 func generateRandomCount() int {
-	return rand.Intn(16) + 5 // 5-20
+	return cryptoRandIntn(16) + 5 // 5-20
 }
 
 // randomElement returns a random element from a string slice
 func randomElement(slice []string) string {
-	return slice[rand.Intn(len(slice))]
+	return slice[cryptoRandIntn(len(slice))]
 }
 
 // assignRandomTaxonomy assigns random items from sourceIDs to a page and returns the assigned IDs.
@@ -118,10 +138,10 @@ func assignRandomTaxonomy(
 		return nil
 	}
 	var assigned []int64
-	numItems := rand.Intn(maxItems) + 1
+	numItems := cryptoRandIntn(maxItems) + 1
 	usedIDs := make(map[int64]bool)
 	for j := 0; j < numItems && j < len(sourceIDs); j++ {
-		id := sourceIDs[rand.Intn(len(sourceIDs))]
+		id := sourceIDs[cryptoRandIntn(len(sourceIDs))]
 		if usedIDs[id] {
 			continue
 		}
@@ -161,10 +181,10 @@ func assignTranslatedTaxonomy(
 
 // generateLoremIpsum generates 3-5 paragraphs of Lorem Ipsum
 func generateLoremIpsum() string {
-	numParagraphs := rand.Intn(3) + 3 // 3-5 paragraphs
+	numParagraphs := cryptoRandIntn(3) + 3 // 3-5 paragraphs
 	var paragraphs []string
 	for i := 0; i < numParagraphs; i++ {
-		paragraphs = append(paragraphs, loremParagraphs[rand.Intn(len(loremParagraphs))])
+		paragraphs = append(paragraphs, loremParagraphs[cryptoRandIntn(len(loremParagraphs))])
 	}
 	return strings.Join(paragraphs, "\n\n")
 }
@@ -377,7 +397,7 @@ func (m *Module) generateCategories(ctx context.Context, languages []store.Langu
 	// Create child categories
 	for i := 0; i < numChildren && len(rootCats) > 0; i++ {
 		position++
-		parentID := rootCats[rand.Intn(len(rootCats))]
+		parentID := rootCats[cryptoRandIntn(len(rootCats))]
 		catID, err := m.createSingleCategory(ctx, createCategoryParams{
 			queries:         queries,
 			usedNames:       usedNames,
@@ -397,7 +417,7 @@ func (m *Module) generateCategories(ctx context.Context, languages []store.Langu
 	// Create grandchild categories
 	for i := 0; i < numGrandchildren && len(childCats) > 0; i++ {
 		position++
-		parentID := childCats[rand.Intn(len(childCats))]
+		parentID := childCats[cryptoRandIntn(len(childCats))]
 		catID, err := m.createSingleCategory(ctx, createCategoryParams{
 			queries:         queries,
 			usedNames:       usedNames,
@@ -558,7 +578,7 @@ func (m *Module) generateMedia(ctx context.Context, uploaderID int64) ([]int64, 
 		filename := fmt.Sprintf("placeholder-%d.jpg", i+1)
 
 		// Pick a random color
-		placeholderColor := placeholderColors[rand.Intn(len(placeholderColors))]
+		placeholderColor := placeholderColors[cryptoRandIntn(len(placeholderColors))]
 
 		// Create a placeholder image (800x600 colored rectangle)
 		imgData, err := createPlaceholderImage(800, 600, placeholderColor.R, placeholderColor.G, placeholderColor.B)
@@ -734,7 +754,7 @@ func (m *Module) generatePages(ctx context.Context, languages []store.Language, 
 		// Select random featured image
 		var featuredImageID sql.NullInt64
 		if len(mediaIDs) > 0 {
-			featuredImageID = sql.NullInt64{Int64: mediaIDs[rand.Intn(len(mediaIDs))], Valid: true}
+			featuredImageID = sql.NullInt64{Int64: mediaIDs[cryptoRandIntn(len(mediaIDs))], Valid: true}
 		}
 
 		// Create page
@@ -942,19 +962,19 @@ func (m *Module) generateMenuItems(ctx context.Context, languages []store.Langua
 		}
 
 		// Generate 3-7 menu items per menu
-		count := rand.Intn(5) + 3
+		count := cryptoRandIntn(5) + 3
 		var rootItemIDs []int64
 
 		for i := 0; i < count; i++ {
 			// Determine if this item should have a parent (40% chance if we have root items)
 			var parentID sql.NullInt64
-			if len(rootItemIDs) > 0 && rand.Float32() < 0.4 {
-				parentID = sql.NullInt64{Int64: rootItemIDs[rand.Intn(len(rootItemIDs))], Valid: true}
+			if len(rootItemIDs) > 0 && cryptoRandFloat32() < 0.4 {
+				parentID = sql.NullInt64{Int64: rootItemIDs[cryptoRandIntn(len(rootItemIDs))], Valid: true}
 			}
 
 			// All items link to pages
 			title := randomElement(adjectives) + " " + randomElement(nouns)
-			pageID := sql.NullInt64{Int64: pagesForMenu[rand.Intn(len(pagesForMenu))], Valid: true}
+			pageID := sql.NullInt64{Int64: pagesForMenu[cryptoRandIntn(len(pagesForMenu))], Valid: true}
 
 			menuItem, err := queries.CreateMenuItem(ctx, store.CreateMenuItemParams{
 				MenuID:    menu.ID,

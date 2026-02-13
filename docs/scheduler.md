@@ -151,6 +151,10 @@ CREATE TABLE scheduler_overrides (
 
 On startup, the scheduler loads all overrides and applies them to jobs automatically, so your custom schedules persist across deployments.
 
+### Database Management
+
+The `scheduler_overrides` table is created by goose migration `20260213100000_create_scheduler_overrides.sql`. All override queries use SQLC-generated type-safe code. A runtime `CREATE TABLE IF NOT EXISTS` remains as a safety net for backwards compatibility with databases that predate the migration.
+
 ## Demo Mode Restrictions
 
 When `OCMS_DEMO_MODE=true`, scheduler modifications are disabled to prevent demo users from breaking the demo experience:
