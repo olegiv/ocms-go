@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/olegiv/ocms-go/internal/store"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 func TestNewUsersHandler(t *testing.T) {
@@ -275,17 +275,14 @@ func TestUsersHandler_Update_Unauthorized(t *testing.T) {
 }
 
 func TestUsersListData(t *testing.T) {
-	data := UsersListData{
-		Users:         []store.User{},
-		CurrentUserID: 1,
-		TotalUsers:    50,
-		Pagination: AdminPagination{
+	data := adminviews.UsersListData{
+		Users:      []adminviews.UserListItem{},
+		TotalCount: 50,
+		Pagination: adminviews.PaginationData{
 			CurrentPage: 2,
 			TotalPages:  5,
 			HasPrev:     true,
 			HasNext:     true,
-			PrevPage:    1,
-			NextPage:    3,
 		},
 	}
 
@@ -304,7 +301,7 @@ func TestUsersListData(t *testing.T) {
 }
 
 func TestUserFormData(t *testing.T) {
-	data := UserFormData{
+	data := adminviews.UserFormData{
 		User:       nil,
 		Roles:      ValidRoles,
 		Errors:     map[string]string{"email": "Invalid"},

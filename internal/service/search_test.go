@@ -4,7 +4,11 @@
 package service
 
 import (
+	"context"
+	"database/sql"
 	"testing"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func TestSearchServiceEscapeQuery(t *testing.T) {
@@ -255,6 +259,9 @@ func TestNewSearchService(t *testing.T) {
 	if service.db != nil {
 		t.Error("db should be nil when passed nil")
 	}
+	if service.queries == nil {
+		t.Error("queries should be initialized even with nil db")
+	}
 }
 
 func TestSanitizeHighlight(t *testing.T) {
@@ -313,6 +320,167 @@ func TestSanitizeHighlight(t *testing.T) {
 			}
 		})
 	}
+}
+
+// searchTestDB creates an in-memory SQLite database with the pages table for search tests.
+func searchTestDB(t *testing.T) *sql.DB {
+	t.Helper()
+
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open test db: %v", err)
+	}
+
+	// Create minimal pages table matching the columns SearchAdminPages returns
+	_, err = db.Exec(`
+		CREATE TABLE pages (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			title TEXT NOT NULL,
+			slug TEXT NOT NULL UNIQUE,
+			body TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'draft',
+			author_id INTEGER NOT NULL DEFAULT 1,
+			published_at DATETIME,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			featured_image_id INTEGER,
+			language_code TEXT NOT NULL DEFAULT 'en',
+			meta_title TEXT NOT NULL DEFAULT '',
+			meta_description TEXT NOT NULL DEFAULT '',
+			meta_keywords TEXT NOT NULL DEFAULT ''
+		)
+	`)
+	if err != nil {
+		_ = db.Close()
+		t.Fatalf("failed to create pages table: %v", err)
+	}
+
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
+func TestSearchAllPages(t *testing.T) {
+	db := searchTestDB(t)
+	service := NewSearchService(db)
+
+	ctx := context.Background()
+
+	// Insert test pages with different statuses
+	_, err := db.Exec(`INSERT INTO pages (title, slug, body, status) VALUES
+		('Hello World', 'hello-world', 'This is the first post about Go programming', 'published'),
+		('Draft Post', 'draft-post', 'This draft discusses Go testing patterns', 'draft'),
+		('Archived Article', 'archived', 'Archived content about Go modules', 'archived'),
+		('Unrelated Page', 'unrelated', 'Nothing to see here about Python', 'published')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test pages: %v", err)
+	}
+
+	t.Run("matching query returns results", func(t *testing.T) {
+		results, total, err := service.SearchAllPages(ctx, SearchParams{
+			Query: "Go", Limit: 10, Offset: 0,
+		})
+		if err != nil {
+			t.Fatalf("SearchAllPages failed: %v", err)
+		}
+		if total != 3 {
+			t.Errorf("total = %d, want 3 (all Go pages regardless of status)", total)
+		}
+		if len(results) != 3 {
+			t.Errorf("len(results) = %d, want 3", len(results))
+		}
+	})
+
+	t.Run("includes all statuses", func(t *testing.T) {
+		results, _, err := service.SearchAllPages(ctx, SearchParams{
+			Query: "Go", Limit: 10, Offset: 0,
+		})
+		if err != nil {
+			t.Fatalf("SearchAllPages failed: %v", err)
+		}
+
+		statuses := make(map[string]bool)
+		for _, r := range results {
+			statuses[r.Status] = true
+		}
+		for _, expected := range []string{"published", "draft", "archived"} {
+			if !statuses[expected] {
+				t.Errorf("expected status %q in results", expected)
+			}
+		}
+	})
+
+	t.Run("no match returns empty", func(t *testing.T) {
+		results, total, err := service.SearchAllPages(ctx, SearchParams{
+			Query: "nonexistent_xyz", Limit: 10, Offset: 0,
+		})
+		if err != nil {
+			t.Fatalf("SearchAllPages failed: %v", err)
+		}
+		if total != 0 {
+			t.Errorf("total = %d, want 0", total)
+		}
+		if len(results) != 0 {
+			t.Errorf("len(results) = %d, want 0", len(results))
+		}
+	})
+
+	t.Run("empty query returns early", func(t *testing.T) {
+		results, total, err := service.SearchAllPages(ctx, SearchParams{
+			Query: "", Limit: 10, Offset: 0,
+		})
+		if err != nil {
+			t.Fatalf("SearchAllPages failed: %v", err)
+		}
+		if total != 0 {
+			t.Errorf("total = %d, want 0", total)
+		}
+		if len(results) != 0 {
+			t.Errorf("len(results) = %d, want 0", len(results))
+		}
+	})
+
+	t.Run("pagination works", func(t *testing.T) {
+		// Get first page
+		results1, total, err := service.SearchAllPages(ctx, SearchParams{
+			Query: "Go", Limit: 2, Offset: 0,
+		})
+		if err != nil {
+			t.Fatalf("SearchAllPages failed: %v", err)
+		}
+		if total != 3 {
+			t.Errorf("total = %d, want 3", total)
+		}
+		if len(results1) != 2 {
+			t.Errorf("len(results1) = %d, want 2", len(results1))
+		}
+
+		// Get second page
+		results2, _, err := service.SearchAllPages(ctx, SearchParams{
+			Query: "Go", Limit: 2, Offset: 2,
+		})
+		if err != nil {
+			t.Fatalf("SearchAllPages failed: %v", err)
+		}
+		if len(results2) != 1 {
+			t.Errorf("len(results2) = %d, want 1", len(results2))
+		}
+	})
+
+	t.Run("excerpt is generated", func(t *testing.T) {
+		results, _, err := service.SearchAllPages(ctx, SearchParams{
+			Query: "Go", Limit: 1, Offset: 0,
+		})
+		if err != nil {
+			t.Fatalf("SearchAllPages failed: %v", err)
+		}
+		if len(results) == 0 {
+			t.Fatal("expected at least 1 result")
+		}
+		if results[0].Excerpt == "" {
+			t.Error("expected non-empty excerpt")
+		}
+	})
 }
 
 // Helper function

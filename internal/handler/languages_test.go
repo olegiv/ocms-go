@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/store"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 func TestNewLanguagesHandler(t *testing.T) {
@@ -24,8 +25,8 @@ func TestNewLanguagesHandler(t *testing.T) {
 }
 
 func TestLanguagesListData(t *testing.T) {
-	data := LanguagesListData{
-		Languages:      []store.Language{},
+	data := adminviews.LanguagesListData{
+		Languages:      []adminviews.LanguageListItem{},
 		TotalLanguages: 0,
 	}
 

@@ -492,6 +492,117 @@ func TestUpdateScheduleNotFound(t *testing.T) {
 	}
 }
 
+func TestUnregister(t *testing.T) {
+	db := testDB(t)
+	logger := testLogger()
+	registry := NewRegistry(db, logger)
+
+	cronInst := cron.New()
+	cronInst.Start()
+	defer cronInst.Stop()
+
+	jobFunc := func() {}
+
+	entryID, err := cronInst.AddFunc("@every 1h", jobFunc)
+	if err != nil {
+		t.Fatalf("failed to add cron job: %v", err)
+	}
+
+	registry.Register("core", "test-job", "Test job", "@every 1h", cronInst, entryID, jobFunc, nil)
+
+	// Verify job exists
+	jobs := registry.List()
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(jobs))
+	}
+
+	// Unregister the job
+	registry.Unregister("core", "test-job")
+
+	// Verify job is removed
+	jobs = registry.List()
+	if len(jobs) != 0 {
+		t.Errorf("expected 0 jobs after unregister, got %d", len(jobs))
+	}
+}
+
+func TestUnregisterRemovesOverride(t *testing.T) {
+	db := testDB(t)
+	logger := testLogger()
+	registry := NewRegistry(db, logger)
+
+	cronInst := cron.New()
+	cronInst.Start()
+	defer cronInst.Stop()
+
+	jobFunc := func() {}
+
+	entryID, err := cronInst.AddFunc("@every 1h", jobFunc)
+	if err != nil {
+		t.Fatalf("failed to add cron job: %v", err)
+	}
+
+	registry.Register("core", "test-job", "Test job", "@every 1h", cronInst, entryID, jobFunc, nil)
+
+	// Add a schedule override
+	err = registry.UpdateSchedule("core", "test-job", "@every 30m")
+	if err != nil {
+		t.Fatalf("UpdateSchedule failed: %v", err)
+	}
+
+	// Verify override exists in DB
+	var overrideSchedule string
+	err = db.QueryRow("SELECT override_schedule FROM scheduler_overrides WHERE source = ? AND name = ?",
+		"core", "test-job").Scan(&overrideSchedule)
+	if err != nil {
+		t.Fatalf("expected override in DB: %v", err)
+	}
+
+	// Unregister the job
+	registry.Unregister("core", "test-job")
+
+	// Verify override is removed from DB
+	err = db.QueryRow("SELECT override_schedule FROM scheduler_overrides WHERE source = ? AND name = ?",
+		"core", "test-job").Scan(&overrideSchedule)
+	if err != sql.ErrNoRows {
+		t.Errorf("expected sql.ErrNoRows after unregister, got %v", err)
+	}
+
+	// Re-register same job — should use default schedule (no override)
+	entryID2, err := cronInst.AddFunc("@every 1h", jobFunc)
+	if err != nil {
+		t.Fatalf("failed to add cron job: %v", err)
+	}
+
+	registry.Register("core", "test-job", "Test job", "@every 1h", cronInst, entryID2, jobFunc, nil)
+
+	jobs := registry.List()
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(jobs))
+	}
+	if jobs[0].IsOverridden {
+		t.Error("re-registered job should not have override after unregister")
+	}
+	if jobs[0].Schedule != "@every 1h" {
+		t.Errorf("re-registered job schedule = %q, want %q", jobs[0].Schedule, "@every 1h")
+	}
+}
+
+func TestUnregisterNonexistent(t *testing.T) {
+	db := testDB(t)
+	logger := testLogger()
+	registry := NewRegistry(db, logger)
+
+	// Should not panic or error
+	registry.Unregister("core", "nonexistent-job")
+
+	// Verify no jobs
+	jobs := registry.List()
+	if len(jobs) != 0 {
+		t.Errorf("expected 0 jobs, got %d", len(jobs))
+	}
+}
+
 func TestResetScheduleNotFound(t *testing.T) {
 	db := testDB(t)
 	logger := testLogger()

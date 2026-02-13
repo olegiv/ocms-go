@@ -16,9 +16,9 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/i18n"
-	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 // DashboardStats holds the statistics displayed on the dashboard.
@@ -124,7 +124,6 @@ func NewAdminHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 
 // Dashboard renders the admin dashboard with stats and recent activity.
 func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	ctx := r.Context()
 	lang := h.renderer.GetAdminLang(r)
 
@@ -346,24 +345,74 @@ func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Build dashboard data
-	dashboardData := DashboardData{
-		Stats:                  stats,
-		RecentSubmissions:      recentSubmissions,
-		WebhookHealth:          webhookHealth,
-		RecentFailedDeliveries: recentFailedDeliveries,
-		TranslationCoverage:    translationCoverage,
-		RecentActivity:         recentActivity,
+	// Build dashboard data for templ view
+	viewData := adminviews.DashboardData{
+		Stats: adminviews.DashboardStats{
+			TotalPages:          stats.TotalPages,
+			PublishedPages:      stats.PublishedPages,
+			DraftPages:          stats.DraftPages,
+			TotalUsers:          stats.TotalUsers,
+			TotalMedia:          stats.TotalMedia,
+			TotalForms:          stats.TotalForms,
+			UnreadSubmissions:   stats.UnreadSubmissions,
+			ActiveLanguages:     stats.ActiveLanguages,
+			TotalWebhooks:       stats.TotalWebhooks,
+			FailedDeliveries24h: stats.FailedDeliveries24h,
+			CacheHitRate:        stats.CacheHitRate,
+			CacheItems:          int64(stats.CacheItems),
+		},
 	}
 
-	h.renderer.RenderPage(w, r, "admin/dashboard", render.TemplateData{
-		Title: i18n.T(lang, "nav.dashboard"),
-		User:  user,
-		Data:  dashboardData,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin, Active: true},
-		},
-	})
+	for _, s := range recentSubmissions {
+		viewData.RecentSubmissions = append(viewData.RecentSubmissions, adminviews.RecentSubmission{
+			ID:        s.ID,
+			FormID:    s.FormID,
+			FormName:  s.FormName,
+			IsRead:    s.IsRead,
+			CreatedAt: s.CreatedAt,
+		})
+	}
+
+	for _, wh := range webhookHealth {
+		viewData.WebhookHealth = append(viewData.WebhookHealth, adminviews.WebhookHealthItem{
+			Name:         wh.Name,
+			IsActive:     wh.IsActive,
+			HealthStatus: wh.HealthStatus,
+			SuccessRate:  wh.SuccessRate,
+		})
+	}
+
+	for _, fd := range recentFailedDeliveries {
+		viewData.RecentFailedDeliveries = append(viewData.RecentFailedDeliveries, adminviews.RecentFailedDelivery{
+			WebhookID:   fd.WebhookID,
+			WebhookName: fd.WebhookName,
+			Event:       fd.Event,
+			Status:      fd.Status,
+			CreatedAt:   fd.CreatedAt,
+		})
+	}
+
+	for _, tc := range translationCoverage {
+		viewData.TranslationCoverage = append(viewData.TranslationCoverage, adminviews.TranslationCoverage{
+			LanguageCode: tc.LanguageCode,
+			TotalPages:   tc.TotalPages,
+			IsDefault:    tc.IsDefault,
+		})
+	}
+
+	for _, a := range recentActivity {
+		viewData.RecentActivity = append(viewData.RecentActivity, adminviews.ActivityItem{
+			Category:  a.Category,
+			Level:     a.Level,
+			Message:   a.Message,
+			UserName:  a.UserName,
+			TimeAgo:   a.TimeAgo,
+			CreatedAt: a.CreatedAt,
+		})
+	}
+
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "nav.dashboard"), dashboardBreadcrumbs(lang))
+	renderTempl(w, r, adminviews.DashboardPage(pc, viewData))
 }
 
 // SetLanguage changes the admin UI language preference.

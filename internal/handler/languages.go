@@ -19,6 +19,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 
 	"github.com/alexedwards/scs/v2"
 )
@@ -37,26 +38,6 @@ func NewLanguagesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionM
 		renderer:       renderer,
 		sessionManager: sm,
 	}
-}
-
-// LanguagesListData holds data for the languages list template.
-type LanguagesListData struct {
-	Languages      []store.Language
-	TotalLanguages int64
-}
-
-// LanguageFormData holds data for the language form template.
-type LanguageFormData struct {
-	Language        *store.Language
-	CommonLanguages []struct {
-		Code       string
-		Name       string
-		NativeName string
-		Direction  string
-	}
-	Errors     map[string]string
-	FormValues map[string]string
-	IsEdit     bool
 }
 
 // languageFormInput holds parsed form values for language create/update.
@@ -118,37 +99,35 @@ func (h *LanguagesHandler) getLanguageByIDParam(w http.ResponseWriter, r *http.R
 	return &lang
 }
 
-// renderLanguageForm renders the language form template.
-func (h *LanguagesHandler) renderLanguageForm(w http.ResponseWriter, r *http.Request, user interface{}, data LanguageFormData) {
-	lang := middleware.GetAdminLang(r)
+// renderLanguageForm renders the language form using templ.
+func (h *LanguagesHandler) renderLanguageForm(w http.ResponseWriter, r *http.Request, lang *store.Language, errs map[string]string, formValues map[string]string, isEdit bool) {
+	adminLang := h.renderer.GetAdminLang(r)
 
-	var title, lastLabel, lastURL string
-	if data.IsEdit && data.Language != nil {
-		title = i18n.T(lang, "languages.edit")
-		lastLabel = i18n.T(lang, "languages.edit")
-		lastURL = fmt.Sprintf(redirectAdminLanguagesID, data.Language.ID)
-	} else {
-		title = i18n.T(lang, "languages.new")
-		lastLabel = i18n.T(lang, "languages.new")
-		lastURL = redirectAdminLanguagesNew
+	viewData := adminviews.LanguageFormData{
+		IsEdit:          isEdit,
+		Language:        convertLanguageInfo(lang),
+		CommonLanguages: convertCommonLanguages(),
+		Errors:          errs,
+		FormValues:      formValues,
 	}
 
-	h.renderer.RenderPage(w, r, "admin/languages_form", render.TemplateData{
-		Title: title,
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.languages"), URL: redirectAdminLanguages},
-			{Label: lastLabel, URL: lastURL, Active: true},
-		},
-	})
+	var title string
+	var breadcrumbs []render.Breadcrumb
+	if isEdit && lang != nil {
+		title = i18n.T(adminLang, "languages.edit")
+		breadcrumbs = languageEditBreadcrumbs(adminLang, lang.Name, lang.ID)
+	} else {
+		title = i18n.T(adminLang, "languages.new")
+		breadcrumbs = languageFormBreadcrumbs(adminLang, false)
+	}
+
+	pc := buildPageContext(r, h.sessionManager, h.renderer, title, breadcrumbs)
+	renderTempl(w, r, adminviews.LanguageFormPage(pc, viewData))
 }
 
 // List displays all languages.
 func (h *LanguagesHandler) List(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	lang := middleware.GetAdminLang(r)
+	adminLang := h.renderer.GetAdminLang(r)
 
 	languages, err := h.queries.ListLanguages(r.Context())
 	if err != nil {
@@ -162,31 +141,18 @@ func (h *LanguagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := LanguagesListData{
-		Languages:      languages,
+	viewData := adminviews.LanguagesListData{
+		Languages:      convertLanguageListItems(languages),
 		TotalLanguages: totalLanguages,
 	}
 
-	h.renderer.RenderPage(w, r, "admin/languages_list", render.TemplateData{
-		Title: i18n.T(lang, "nav.languages"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.languages"), URL: redirectAdminLanguages, Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(adminLang, "nav.languages"), languagesBreadcrumbs(adminLang))
+	renderTempl(w, r, adminviews.LanguagesListPage(pc, viewData))
 }
 
 // NewForm displays the form to create a new language.
 func (h *LanguagesHandler) NewForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	h.renderLanguageForm(w, r, user, LanguageFormData{
-		CommonLanguages: model.CommonLanguages,
-		Errors:          make(map[string]string),
-		FormValues:      make(map[string]string),
-		IsEdit:          false,
-	})
+	h.renderLanguageForm(w, r, nil, make(map[string]string), make(map[string]string), false)
 }
 
 // Create handles creating a new language.
@@ -195,8 +161,6 @@ func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if demoGuard(w, r, h.renderer, middleware.RestrictionEditLanguages, redirectAdminLanguages) {
 		return
 	}
-
-	user := middleware.GetUser(r)
 
 	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminLanguagesNew) {
 		return
@@ -267,12 +231,7 @@ func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(validationErrors) > 0 {
-		h.renderLanguageForm(w, r, user, LanguageFormData{
-			CommonLanguages: model.CommonLanguages,
-			Errors:          validationErrors,
-			FormValues:      input.toFormValues(),
-			IsEdit:          false,
-		})
+		h.renderLanguageForm(w, r, nil, validationErrors, input.toFormValues(), false)
 		return
 	}
 
@@ -298,6 +257,16 @@ func (h *LanguagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	flashSuccess(w, r, h.renderer, redirectAdminLanguages, "Language created successfully")
 }
 
+// EditForm displays the form to edit an existing language.
+func (h *LanguagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
+	lang := h.getLanguageByIDParam(w, r)
+	if lang == nil {
+		return
+	}
+
+	h.renderLanguageForm(w, r, lang, make(map[string]string), languageToFormValues(lang), true)
+}
+
 // languageToFormValues converts a store.Language to form values map.
 func languageToFormValues(lang *store.Language) map[string]string {
 	fv := map[string]string{
@@ -313,32 +282,12 @@ func languageToFormValues(lang *store.Language) map[string]string {
 	return fv
 }
 
-// EditForm displays the form to edit an existing language.
-func (h *LanguagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-
-	lang := h.getLanguageByIDParam(w, r)
-	if lang == nil {
-		return
-	}
-
-	h.renderLanguageForm(w, r, user, LanguageFormData{
-		Language:        lang,
-		CommonLanguages: model.CommonLanguages,
-		Errors:          make(map[string]string),
-		FormValues:      languageToFormValues(lang),
-		IsEdit:          true,
-	})
-}
-
 // Update handles updating an existing language.
 func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Block in demo mode
 	if demoGuard(w, r, h.renderer, middleware.RestrictionEditLanguages, redirectAdminLanguages) {
 		return
 	}
-
-	user := middleware.GetUser(r)
 
 	existingLang := h.getLanguageByIDParam(w, r)
 	if existingLang == nil {
@@ -409,13 +358,7 @@ func (h *LanguagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(validationErrors) > 0 {
-		h.renderLanguageForm(w, r, user, LanguageFormData{
-			Language:        existingLang,
-			CommonLanguages: model.CommonLanguages,
-			Errors:          validationErrors,
-			FormValues:      input.toFormValues(),
-			IsEdit:          true,
-		})
+		h.renderLanguageForm(w, r, existingLang, validationErrors, input.toFormValues(), true)
 		return
 	}
 

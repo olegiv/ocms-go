@@ -23,6 +23,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 // MenusHandler handles menu management routes.
@@ -43,15 +44,8 @@ func NewMenusHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 	}
 }
 
-// MenusListData holds data for the menus list template.
-type MenusListData struct {
-	Menus     []store.Menu
-	Languages []store.Language
-}
-
 // List handles GET /admin/menus - displays a list of menus.
 func (h *MenusHandler) List(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	menus, err := h.queries.ListMenus(r.Context())
@@ -61,23 +55,12 @@ func (h *MenusHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get languages for filter/display
-	languages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
-
-	data := MenusListData{
-		Menus:     menus,
-		Languages: languages,
+	viewData := adminviews.MenusListData{
+		Menus: convertMenuListItems(menus),
 	}
 
-	h.renderer.RenderPage(w, r, "admin/menus_list", render.TemplateData{
-		Title: i18n.T(lang, "nav.menus"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.menus"), URL: redirectAdminMenus, Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "nav.menus"), menusBreadcrumbs(lang))
+	renderTempl(w, r, adminviews.MenusListPage(pc, viewData))
 }
 
 // MenuItemNode represents a menu item with children for tree display.
@@ -147,30 +130,39 @@ func (n MenuItemNode) toJSON() menuItemNodeJSON {
 	}
 }
 
-// MenuFormData holds data for the menu builder template.
-type MenuFormData struct {
-	Menu       *store.Menu
-	Items      []MenuItemNode
-	Pages      []store.Page // Available pages to add
-	Targets    []string
-	Languages  []store.Language
-	Errors     map[string]string
-	FormValues map[string]string
-	IsEdit     bool
+// serializeMenuItems JSON-encodes the menu item tree for the Alpine.js data attribute.
+func serializeMenuItems(items []MenuItemNode) string {
+	if len(items) == 0 {
+		return "[]"
+	}
+	data, err := json.Marshal(items)
+	if err != nil {
+		slog.Error("failed to serialize menu items", "error", err)
+		return "[]"
+	}
+	return string(data)
 }
 
-// renderMenuEditForm renders the menu edit form with common template data.
-func (h *MenusHandler) renderMenuEditForm(w http.ResponseWriter, r *http.Request, menu *store.Menu, user *store.User, lang string, data MenuFormData) {
-	h.renderer.RenderPage(w, r, "admin/menus_form", render.TemplateData{
-		Title: fmt.Sprintf("Edit Menu - %s", menu.Name),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.menus"), URL: redirectAdminMenus},
-			{Label: menu.Name, URL: fmt.Sprintf(redirectAdminMenusID, menu.ID), Active: true},
-		},
-	})
+// buildMenuFormViewData constructs the view-layer form data for templ rendering.
+func buildMenuFormViewData(
+	isEdit bool,
+	menu *store.Menu,
+	items []MenuItemNode,
+	pages []store.Page,
+	languages []store.Language,
+	errs map[string]string,
+	formValues map[string]string,
+) adminviews.MenuFormData {
+	return adminviews.MenuFormData{
+		IsEdit:     isEdit,
+		Menu:       convertMenuInfo(menu),
+		ItemsJSON:  serializeMenuItems(items),
+		Pages:      convertMenuPages(pages),
+		Targets:    model.ValidTargets,
+		Languages:  convertLanguageOptions(languages),
+		Errors:     errs,
+		FormValues: formValues,
+	}
 }
 
 // buildMenuTree builds a nested tree from flat menu items.
@@ -208,7 +200,6 @@ func buildMenuTree(items []store.ListMenuItemsWithPageRow, parentID sql.NullInt6
 
 // NewForm handles GET /admin/menus/new - displays the new menu form.
 func (h *MenusHandler) NewForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	// Get languages for selector
@@ -225,24 +216,9 @@ func (h *MenusHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 		formValues["language_code"] = defaultLang.Code
 	}
 
-	data := MenuFormData{
-		Targets:    model.ValidTargets,
-		Languages:  languages,
-		Errors:     make(map[string]string),
-		FormValues: formValues,
-		IsEdit:     false,
-	}
-
-	h.renderer.RenderPage(w, r, "admin/menus_form", render.TemplateData{
-		Title: i18n.T(lang, "menus.new"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.menus"), URL: redirectAdminMenus},
-			{Label: i18n.T(lang, "menus.new"), URL: redirectAdminMenusNew, Active: true},
-		},
-	})
+	viewData := buildMenuFormViewData(false, nil, nil, nil, languages, make(map[string]string), formValues)
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "menus.new"), menuFormBreadcrumbs(lang))
+	renderTempl(w, r, adminviews.MenuFormPage(pc, viewData))
 }
 
 // Create handles POST /admin/menus - creates a new menu.
@@ -251,7 +227,6 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	if !parseFormOrRedirect(w, r, h.renderer, redirectAdminMenusNew) {
@@ -266,27 +241,10 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(input.Errors) > 0 {
-		// Get languages for re-render
 		languages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
-
-		data := MenuFormData{
-			Targets:    model.ValidTargets,
-			Languages:  languages,
-			Errors:     input.Errors,
-			FormValues: input.FormValues,
-			IsEdit:     false,
-		}
-
-		h.renderer.RenderPage(w, r, "admin/menus_form", render.TemplateData{
-			Title: i18n.T(lang, "menus.new"),
-			User:  user,
-			Data:  data,
-			Breadcrumbs: []render.Breadcrumb{
-				{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-				{Label: i18n.T(lang, "nav.menus"), URL: redirectAdminMenus},
-				{Label: i18n.T(lang, "menus.new"), URL: redirectAdminMenusNew, Active: true},
-			},
-		})
+		viewData := buildMenuFormViewData(false, nil, nil, nil, languages, input.Errors, input.FormValues)
+		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "menus.new"), menuFormBreadcrumbs(lang))
+		renderTempl(w, r, adminviews.MenuFormPage(pc, viewData))
 		return
 	}
 
@@ -311,7 +269,6 @@ func (h *MenusHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // EditForm handles GET /admin/menus/{id} - displays the menu builder.
 func (h *MenusHandler) EditForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -348,16 +305,9 @@ func (h *MenusHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	// Get languages for selector
 	languages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 
-	h.renderMenuEditForm(w, r, &menu, user, lang, MenuFormData{
-		Menu:       &menu,
-		Items:      tree,
-		Pages:      pages,
-		Targets:    model.ValidTargets,
-		Languages:  languages,
-		Errors:     make(map[string]string),
-		FormValues: make(map[string]string),
-		IsEdit:     true,
-	})
+	viewData := buildMenuFormViewData(true, &menu, tree, pages, languages, make(map[string]string), make(map[string]string))
+	pc := buildPageContext(r, h.sessionManager, h.renderer, fmt.Sprintf("Edit Menu - %s", menu.Name), menuEditBreadcrumbs(lang, menu.Name, menu.ID))
+	renderTempl(w, r, adminviews.MenuFormPage(pc, viewData))
 }
 
 // Update handles PUT /admin/menus/{id} - updates a menu.
@@ -366,7 +316,6 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	id, err := ParseIDParam(r)
@@ -398,16 +347,9 @@ func (h *MenusHandler) Update(w http.ResponseWriter, r *http.Request) {
 		pages, _ := h.queries.ListPages(r.Context(), store.ListPagesParams{Limit: 1000, Offset: 0})
 		languages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 
-		h.renderMenuEditForm(w, r, &menu, user, lang, MenuFormData{
-			Menu:       &menu,
-			Items:      tree,
-			Pages:      pages,
-			Targets:    model.ValidTargets,
-			Languages:  languages,
-			Errors:     input.Errors,
-			FormValues: input.FormValues,
-			IsEdit:     true,
-		})
+		viewData := buildMenuFormViewData(true, &menu, tree, pages, languages, input.Errors, input.FormValues)
+		pc := buildPageContext(r, h.sessionManager, h.renderer, fmt.Sprintf("Edit Menu - %s", menu.Name), menuEditBreadcrumbs(lang, menu.Name, menu.ID))
+		renderTempl(w, r, adminviews.MenuFormPage(pc, viewData))
 		return
 	}
 

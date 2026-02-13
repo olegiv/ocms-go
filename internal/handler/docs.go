@@ -5,7 +5,6 @@ package handler
 
 import (
 	"bytes"
-	"html/template"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 	"github.com/yuin/goldmark"
 
@@ -23,6 +23,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/version"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 // DocsDir is the default directory containing documentation files.
@@ -30,23 +31,25 @@ const DocsDir = "./docs"
 
 // DocsHandler handles the site documentation admin page.
 type DocsHandler struct {
-	renderer    *render.Renderer
-	cfg         *config.Config
-	registry    *module.Registry
-	versionInfo *version.Info
-	docsDir     string
-	startTime   time.Time
+	renderer       *render.Renderer
+	sessionManager *scs.SessionManager
+	cfg            *config.Config
+	registry       *module.Registry
+	versionInfo    *version.Info
+	docsDir        string
+	startTime      time.Time
 }
 
 // NewDocsHandler creates a new DocsHandler.
-func NewDocsHandler(renderer *render.Renderer, cfg *config.Config, registry *module.Registry, startTime time.Time, versionInfo *version.Info) *DocsHandler {
+func NewDocsHandler(renderer *render.Renderer, sm *scs.SessionManager, cfg *config.Config, registry *module.Registry, startTime time.Time, versionInfo *version.Info) *DocsHandler {
 	return &DocsHandler{
-		renderer:    renderer,
-		cfg:         cfg,
-		registry:    registry,
-		versionInfo: versionInfo,
-		docsDir:     DocsDir,
-		startTime:   startTime,
+		renderer:       renderer,
+		sessionManager: sm,
+		cfg:            cfg,
+		registry:       registry,
+		versionInfo:    versionInfo,
+		docsDir:        DocsDir,
+		startTime:      startTime,
 	}
 }
 
@@ -93,37 +96,20 @@ type DocsGuide struct {
 	Title string
 }
 
-// DocsGuideData holds data for the guide viewer page.
-type DocsGuideData struct {
-	Title   string
-	Content template.HTML
-}
-
 // Overview handles GET /admin/docs - displays the site documentation overview.
 func (h *DocsHandler) Overview(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
-	data := DocsPageData{
-		System:    h.getSystemInfo(),
-		Endpoints: h.getEndpoints(lang),
-		Guides:    h.listGuides(),
-	}
+	viewData := convertDocsViewData(h.getSystemInfo(), h.getEndpoints(lang), h.listGuides())
 
-	h.renderer.RenderPage(w, r, "admin/docs", render.TemplateData{
-		Title: i18n.T(lang, "docs.title"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "docs.title"), URL: redirectAdminDocs, Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer,
+		i18n.T(lang, "docs.title"),
+		docsBreadcrumbs(lang))
+	renderTempl(w, r, adminviews.DocsPage(pc, viewData))
 }
 
 // Guide handles GET /admin/docs/{slug} - displays a specific documentation guide.
 func (h *DocsHandler) Guide(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
 	slug := chi.URLParam(r, "slug")
@@ -160,21 +146,15 @@ func (h *DocsHandler) Guide(w http.ResponseWriter, r *http.Request) {
 
 	title := slugToTitle(slug)
 
-	data := DocsGuideData{
+	viewData := adminviews.DocsGuideViewData{
 		Title:   title,
-		Content: template.HTML(buf.String()), //nolint:gosec // trusted local markdown files
+		Content: buf.String(),
 	}
 
-	h.renderer.RenderPage(w, r, "admin/docs_guide", render.TemplateData{
-		Title: title,
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "docs.title"), URL: redirectAdminDocs},
-			{Label: title, Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer,
+		title,
+		docsGuideBreadcrumbs(lang, title))
+	renderTempl(w, r, adminviews.DocsGuidePage(pc, viewData))
 }
 
 // isValidDocsSlug validates that a slug contains only safe characters.

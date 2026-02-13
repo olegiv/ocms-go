@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/robfig/cron/v3"
+
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // registeredJob holds metadata about a registered cron job.
@@ -43,24 +45,28 @@ type JobInfo struct {
 
 // Registry manages all scheduled jobs across core and modules.
 type Registry struct {
-	db     *sql.DB
-	logger *slog.Logger
-	mu     sync.RWMutex
-	jobs   map[string]*registeredJob // key: "source:name"
+	db      *sql.DB
+	queries *store.Queries
+	logger  *slog.Logger
+	mu      sync.RWMutex
+	jobs    map[string]*registeredJob // key: "source:name"
 }
 
 // NewRegistry creates a new scheduler registry and ensures the overrides table exists.
 func NewRegistry(db *sql.DB, logger *slog.Logger) *Registry {
 	r := &Registry{
-		db:     db,
-		logger: logger,
-		jobs:   make(map[string]*registeredJob),
+		db:      db,
+		queries: store.New(db),
+		logger:  logger,
+		jobs:    make(map[string]*registeredJob),
 	}
 	r.ensureTable()
 	return r
 }
 
 // ensureTable creates the scheduler_overrides table if it doesn't exist.
+// SEC-005: DDL statement must remain as direct SQL — SQLC cannot generate DDL.
+// This is a safety net for startup before goose migrations run.
 func (r *Registry) ensureTable() {
 	_, err := r.db.Exec(`
 		CREATE TABLE IF NOT EXISTS scheduler_overrides (
@@ -79,11 +85,13 @@ func (r *Registry) ensureTable() {
 // GetEffectiveSchedule returns the override schedule if one exists, otherwise the default.
 // Call this BEFORE cron.AddFunc to use the correct schedule.
 func (r *Registry) GetEffectiveSchedule(source, name, defaultSchedule string) string {
-	var override string
-	err := r.db.QueryRow(
-		"SELECT override_schedule FROM scheduler_overrides WHERE source = ? AND name = ?",
-		source, name,
-	).Scan(&override)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	override, err := r.queries.GetSchedulerOverride(ctx, store.GetSchedulerOverrideParams{
+		Source: source,
+		Name:   name,
+	})
 	if err == nil && override != "" {
 		return override
 	}
@@ -212,13 +220,11 @@ func (r *Registry) UpdateSchedule(source, name, newSchedule string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, dbErr := r.db.ExecContext(ctx, `
-		INSERT INTO scheduler_overrides (source, name, override_schedule, updated_at)
-		VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-		ON CONFLICT(source, name) DO UPDATE SET
-			override_schedule = excluded.override_schedule,
-			updated_at = CURRENT_TIMESTAMP
-	`, source, name, newSchedule)
+	dbErr := r.queries.UpsertSchedulerOverride(ctx, store.UpsertSchedulerOverrideParams{
+		Source:           source,
+		Name:             name,
+		OverrideSchedule: newSchedule,
+	})
 	if dbErr != nil {
 		r.logger.Error("failed to persist schedule override", "error", dbErr, "source", source, "name", name)
 	}
@@ -249,7 +255,10 @@ func (r *Registry) Unregister(source, name string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err := r.db.ExecContext(ctx, "DELETE FROM scheduler_overrides WHERE source = ? AND name = ?", source, name)
+	err := r.queries.DeleteSchedulerOverride(ctx, store.DeleteSchedulerOverrideParams{
+		Source: source,
+		Name:   name,
+	})
 	if err != nil {
 		r.logger.Error("failed to delete schedule override on unregister", "error", err, "source", source, "name", name)
 	}
@@ -290,7 +299,10 @@ func (r *Registry) ResetSchedule(source, name string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, dbErr := r.db.ExecContext(ctx, "DELETE FROM scheduler_overrides WHERE source = ? AND name = ?", source, name)
+	dbErr := r.queries.DeleteSchedulerOverride(ctx, store.DeleteSchedulerOverrideParams{
+		Source: source,
+		Name:   name,
+	})
 	if dbErr != nil {
 		r.logger.Error("failed to remove schedule override", "error", dbErr, "source", source, "name", name)
 	}

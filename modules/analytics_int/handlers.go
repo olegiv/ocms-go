@@ -50,7 +50,7 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	dateRange, startDate, endDate := parseDateRangeParam(r)
 
 	// Fetch all dashboard data
-	data := DashboardData{
+	viewData := AnalyticsIntViewData{
 		Overview:     m.getOverviewStats(r.Context(), startDate, endDate),
 		TopPages:     m.getTopPages(r.Context(), startDate, endDate, 10),
 		TopReferrers: m.getTopReferrers(r.Context(), startDate, endDate, 10),
@@ -62,19 +62,12 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		Settings:     *m.settings,
 	}
 
-	if err := m.ctx.Render.Render(w, r, "admin/module_analytics_int", render.TemplateData{
-		Title: i18n.T(lang, "analytics_int.title"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
-			{Label: i18n.T(lang, "analytics_int.title"), URL: "/admin/internal-analytics", Active: true},
-		},
-	}); err != nil {
-		m.ctx.Logger.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "analytics_int.title"), []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
+		{Label: i18n.T(lang, "analytics_int.title"), URL: "/admin/internal-analytics", Active: true},
+	})
+	render.Templ(w, r, AnalyticsIntPage(pc, viewData))
 }
 
 // handleAPIStats returns JSON stats for HTMX updates.

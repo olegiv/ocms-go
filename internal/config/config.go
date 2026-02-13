@@ -5,9 +5,17 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
+	"strings"
 
 	"github.com/caarlos0/env/v11"
 )
+
+// knownWeakSecrets contains default/example secrets that must be rejected in production.
+var knownWeakSecrets = []string{
+	"change-me-to-32-byte-secret-key!",
+	"REPLACE_WITH_YOUR_OWN_SECRET_KEY!",
+}
 
 // Config holds the application configuration loaded from environment variables.
 type Config struct {
@@ -81,5 +89,38 @@ func Load() (*Config, error) {
 			MinSessionSecretLength, len(cfg.SessionSecret))
 	}
 
+	// Reject known weak/default secrets
+	for _, weak := range knownWeakSecrets {
+		if cfg.SessionSecret == weak {
+			return nil, fmt.Errorf("OCMS_SESSION_SECRET is a known default value and must not be used; "+
+				"generate a secure secret with: openssl rand -base64 32")
+		}
+	}
+
+	// Warn about low-entropy secrets
+	if !hasMinimumEntropy(cfg.SessionSecret) {
+		slog.Warn("OCMS_SESSION_SECRET has low character diversity; " +
+			"consider generating a random secret with: openssl rand -base64 32")
+	}
+
 	return cfg, nil
+}
+
+// hasMinimumEntropy checks that a secret contains at least 3 character classes
+// (lowercase, uppercase, digits, special characters).
+func hasMinimumEntropy(s string) bool {
+	charTypes := 0
+	if strings.ContainsAny(s, "abcdefghijklmnopqrstuvwxyz") {
+		charTypes++
+	}
+	if strings.ContainsAny(s, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+		charTypes++
+	}
+	if strings.ContainsAny(s, "0123456789") {
+		charTypes++
+	}
+	if strings.ContainsAny(s, "!@#$%^&*()-_=+[]{}|;:,.<>?/~`'\"\\") {
+		charTypes++
+	}
+	return charTypes >= 3
 }

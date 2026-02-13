@@ -51,12 +51,21 @@ $(go env GOTOOLDIR)/compile -V  # Shows actual compiler version
 **Fix**: The local Go installation must match the version in `go.mod`. Upgrade Go:
 ```bash
 # Download from https://go.dev/dl/
-curl -LO https://go.dev/dl/go<VERSION>.darwin-arm64.tar.gz
+# Use linux-amd64 or darwin-arm64 depending on platform
+curl -LO https://go.dev/dl/go<VERSION>.linux-amd64.tar.gz
 sudo rm -rf /usr/local/go
-sudo tar -C /usr/local -xzf go<VERSION>.darwin-arm64.tar.gz
+sudo tar -C /usr/local -xzf go<VERSION>.linux-amd64.tar.gz
+rm go<VERSION>.linux-amd64.tar.gz
+go version  # Verify the new version
 ```
 
-**NEVER** downgrade the Go version in `go.mod` to work around this issue.
+**If `go mod tidy` fails with toolchain download timeout** (e.g., `dial tcp ... i/o timeout`):
+The automatic toolchain download via `proxy.golang.org` may be blocked in restricted environments.
+Fix by manually installing Go from `go.dev/dl/` as shown above — direct downloads use a different CDN that is typically not blocked. After installing, run `GOTOOLCHAIN=local go mod tidy`.
+
+**CRITICAL RULES**:
+- **NEVER** downgrade the Go version in `go.mod` to work around toolchain issues
+- **NEVER** set `GOTOOLCHAIN=local` as a workaround when the local version is older than `go.mod` requires — install the correct version instead
 
 ## Code Generation
 
@@ -98,7 +107,7 @@ The hook source is in `.claude/shared/global/hooks/`.
 
    **Frontend JS Policy**: Always prefer official Alpine.js plugins (`@alpinejs/*`) over third-party libraries. For example, use `@alpinejs/sort` instead of Sortable.js, `@alpinejs/mask` instead of input mask libraries. This reduces external dependencies and ensures consistent integration with Alpine's reactivity system.
 
-3. **Handler Pattern**: Each handler struct (in `internal/handler/`) receives `*sql.DB`, `*render.Renderer`, and `*scs.SessionManager`. Handlers call `store.New(db)` to get sqlc queries.
+3. **Handler Pattern**: Each handler struct (in `internal/handler/`) receives `*sql.DB`, `*render.Renderer`, and `*scs.SessionManager`. Handlers call `store.New(db)` to get sqlc queries. Admin UI views use [templ](https://templ.guide/) components (`internal/views/admin/`) with type-safe Go code. Handler conversion functions in `internal/handler/templ.go` bridge store types to view types.
 
 4. **Middleware Chain**: Protected routes use middleware in order:
    - `middleware.SecurityHeaders` - adds CSP, HSTS, X-Frame-Options, etc.
@@ -130,9 +139,10 @@ cmd/ocms/main.go
     ├── internal/config      (env var loading)
     ├── internal/handler     (HTTP handlers)
     │   ├── api/             (REST API handlers)
-    │   ├── internal/render  (template rendering)
+    │   ├── internal/render  (template rendering + helper methods)
     │   ├── internal/store   (sqlc database access)
     │   └── internal/service (business logic)
+    ├── internal/views/admin (templ admin UI components)
     ├── internal/middleware  (auth, API auth, rate limiting)
     ├── internal/module      (module system, hooks)
     ├── internal/scheduler   (cron scheduler + admin registry)

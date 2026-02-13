@@ -1,0 +1,429 @@
+package analytics_int
+
+import (
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+	"context"
+	"fmt"
+	"io"
+	"strconv"
+)
+
+type AnalyticsIntViewData struct {
+	Overview     OverviewStats
+	TopPages     []TopPage
+	TopReferrers []TopReferrer
+	Browsers     []BrowserStat
+	Devices      []DeviceStat
+	Countries    []CountryStat
+	TimeSeries   []TimeSeriesPoint
+	DateRange    string
+	Settings     Settings
+}
+
+// Helper functions
+func formatNumber(n int64) string {
+	s := fmt.Sprintf("%d", n)
+	if len(s) <= 3 {
+		return s
+	}
+	var result []rune
+	for i, c := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			result = append(result, ',')
+		}
+		result = append(result, c)
+	}
+	return string(result)
+}
+
+func dateRangeClass(current, value string) string {
+	if current == value {
+		return "btn-primary"
+	}
+	return "btn-outline"
+}
+
+func trendClass(percent float64) string {
+	if percent > 0.0 {
+		return "trend-up"
+	} else if percent < 0.0 {
+		return "trend-down"
+	}
+	return "trend-neutral"
+}
+
+func deviceIcon(deviceType string) templ.Component {
+	return templ.ComponentFunc(func(ctx context.Context, w io.Writer) error {
+		switch deviceType {
+		case "desktop":
+			_, err := io.WriteString(w, `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<rect width="20" height="14" x="2" y="3" rx="2"/>
+				<line x1="8" x2="16" y1="21" y2="21"/>
+				<line x1="12" x2="12" y1="17" y2="21"/>
+			</svg>`)
+			return err
+		case "mobile":
+			_, err := io.WriteString(w, `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/>
+				<path d="M12 18h.01"/>
+			</svg>`)
+			return err
+		case "tablet":
+			_, err := io.WriteString(w, `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<rect width="16" height="20" x="4" y="2" rx="2" ry="2"/>
+				<line x1="12" x2="12.01" y1="18" y2="18"/>
+			</svg>`)
+			return err
+		default:
+			_, err := io.WriteString(w, `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<circle cx="12" cy="12" r="10"/>
+				<path d="M12 16v-4"/>
+				<path d="M12 8h.01"/>
+			</svg>`)
+			return err
+		}
+	})
+}
+
+templ AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) {
+	@adminviews.AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("analytics_int.title") }</h1>
+				<p class="page-description">{ pc.T("analytics_int.description") }</p>
+			</div>
+			<div class="page-actions">
+				<div class="date-range-selector">
+					<a href="?range=7d" class={ "btn btn-sm " + dateRangeClass(data.DateRange, "7d") }>7d</a>
+					<a href="?range=30d" class={ "btn btn-sm " + dateRangeClass(data.DateRange, "30d") }>30d</a>
+					<a href="?range=90d" class={ "btn btn-sm " + dateRangeClass(data.DateRange, "90d") }>90d</a>
+					<a href="?range=1y" class={ "btn btn-sm " + dateRangeClass(data.DateRange, "1y") }>1y</a>
+				</div>
+			</div>
+		</div>
+		<!-- Overview Stats -->
+		<div class="stats-section">
+			<div class="stats-grid stats-grid-4">
+				<div class="stat-card">
+					<div class="stat-icon stat-icon-blue">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+							<circle cx="12" cy="12" r="3"></circle>
+						</svg>
+					</div>
+					<div class="stat-content">
+						<span class="stat-value">{ fmt.Sprintf("%d", data.Overview.TotalViews) }</span>
+						<span class="stat-label">{ pc.T("analytics_int.total_views") }</span>
+					</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-icon stat-icon-green">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+							<circle cx="9" cy="7" r="4"></circle>
+							<path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+							<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+						</svg>
+					</div>
+					<div class="stat-content">
+						<span class="stat-value">{ fmt.Sprintf("%d", data.Overview.UniqueVisitors) }</span>
+						<span class="stat-label">{ pc.T("analytics_int.unique_visitors") }</span>
+					</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-icon stat-icon-orange">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+							<path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+						</svg>
+					</div>
+					<div class="stat-content">
+						<span class="stat-value">{ fmt.Sprintf("%.1f", data.Overview.BounceRate) }%</span>
+						<span class="stat-label">{ pc.T("analytics_int.bounce_rate") }</span>
+					</div>
+				</div>
+				<div class="stat-card stat-card-realtime">
+					<div class="stat-icon stat-icon-purple">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<circle cx="12" cy="12" r="10"></circle>
+							<polyline points="12 6 12 12 16 14"></polyline>
+						</svg>
+					</div>
+					<div class="stat-content">
+						<span class="stat-value" id="realtime-count">{ fmt.Sprintf("%d", data.Overview.RealTimeVisitors) }</span>
+						<span class="stat-label">{ pc.T("analytics_int.realtime") }</span>
+					</div>
+					<span class="realtime-dot"></span>
+				</div>
+			</div>
+		</div>
+		<!-- Today's Stats -->
+		<div class="today-stats">
+			<div class="today-card">
+				<span class="today-label">{ pc.T("analytics_int.today") }</span>
+				<span class="today-value">{ fmt.Sprintf("%d", data.Overview.ViewsToday) }</span>
+				if data.Overview.ViewsYesterday != 0 {
+					<span class={ "today-trend " + trendClass(data.Overview.TrendPercent) }>
+						if data.Overview.TrendPercent > 0.0 {
+							+{ fmt.Sprintf("%.1f", data.Overview.TrendPercent) }%
+						} else {
+							{ fmt.Sprintf("%.1f", data.Overview.TrendPercent) }%
+						}
+					</span>
+				}
+			</div>
+		</div>
+		<!-- Main Dashboard Grid -->
+		<div class="analytics-grid">
+			<!-- Time Series Chart -->
+			<div class="card chart-card">
+				<div class="card-header">
+					<h3>{ pc.T("analytics_int.views_over_time") }</h3>
+				</div>
+				<div class="card-body">
+					if len(data.TimeSeries) > 0 {
+						<div class="chart-container">
+							<div class="bar-chart" id="views-chart">
+								for _, ts := range data.TimeSeries {
+									<div class="bar-group" data-views={ fmt.Sprintf("%d", ts.Views) } title={ fmt.Sprintf("%s: %d views", ts.Date, ts.Views) }>
+										<div class="bar"></div>
+										<span class="bar-label">{ ts.Date[5:10] }</span>
+									</div>
+								}
+							</div>
+						</div>
+						<script>
+						(function() {
+							const chart = document.getElementById('views-chart');
+							if (!chart) return;
+							const bars = chart.querySelectorAll('.bar-group');
+							const maxHeight = 160;
+							let maxViews = 1;
+							bars.forEach(b => {
+								const v = parseInt(b.dataset.views) || 0;
+								if (v > maxViews) maxViews = v;
+							});
+							bars.forEach(b => {
+								const v = parseInt(b.dataset.views) || 0;
+								const height = Math.max(4, Math.round((v / maxViews) * maxHeight));
+								b.querySelector('.bar').style.height = height + 'px';
+							});
+						})();
+						</script>
+					} else {
+						<div class="empty-state">
+							<p>{ pc.T("analytics_int.no_data") }</p>
+						</div>
+					}
+				</div>
+			</div>
+			<!-- Top Pages -->
+			<div class="card">
+				<div class="card-header">
+					<h3>{ pc.T("analytics_int.top_pages") }</h3>
+				</div>
+				<div class="card-body">
+					if len(data.TopPages) > 0 {
+						<table class="table table-sm">
+							<thead>
+								<tr>
+									<th>{ pc.T("analytics_int.page") }</th>
+									<th class="text-right">{ pc.T("analytics_int.views") }</th>
+									<th class="text-right">{ pc.T("analytics_int.visitors") }</th>
+								</tr>
+							</thead>
+							<tbody>
+								for _, page := range data.TopPages {
+									<tr>
+										<td class="page-path" title={ page.Path }>{ page.PageTitle }</td>
+										<td class="text-right">{ fmt.Sprintf("%d", page.Views) }</td>
+										<td class="text-right">{ fmt.Sprintf("%d", page.UniqueVisitors) }</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					} else {
+						<div class="empty-state">
+							<p>{ pc.T("analytics_int.no_data") }</p>
+						</div>
+					}
+				</div>
+			</div>
+			<!-- Top Referrers -->
+			<div class="card">
+				<div class="card-header">
+					<h3>{ pc.T("analytics_int.top_referrers") }</h3>
+				</div>
+				<div class="card-body">
+					if len(data.TopReferrers) > 0 {
+						<table class="table table-sm">
+							<thead>
+								<tr>
+									<th>{ pc.T("analytics_int.source") }</th>
+									<th class="text-right">{ pc.T("analytics_int.views") }</th>
+								</tr>
+							</thead>
+							<tbody>
+								for _, ref := range data.TopReferrers {
+									<tr>
+										<td class="referrer-domain">
+											if ref.Domain != "" {
+												{ ref.Domain }
+											} else {
+												(direct)
+											}
+										</td>
+										<td class="text-right">{ fmt.Sprintf("%d", ref.Views) }</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					} else {
+						<div class="empty-state">
+							<p>{ pc.T("analytics_int.no_referrer_data") }</p>
+						</div>
+					}
+				</div>
+			</div>
+			<!-- Browsers -->
+			<div class="card">
+				<div class="card-header">
+					<h3>{ pc.T("analytics_int.browsers") }</h3>
+				</div>
+				<div class="card-body">
+					if len(data.Browsers) > 0 {
+						<div class="breakdown-list">
+							for _, browser := range data.Browsers {
+								<div class="breakdown-item">
+									<div class="breakdown-info">
+										<span class="breakdown-name">{ browser.Browser }</span>
+										<span class="breakdown-value">{ formatNumber(browser.Views) } ({ fmt.Sprintf("%.1f", browser.Percent) }%)</span>
+									</div>
+									<div class="breakdown-bar">
+										<div class="breakdown-fill" style={ fmt.Sprintf("width: %.0f%%", browser.Percent) }></div>
+									</div>
+								</div>
+							}
+						</div>
+					} else {
+						<div class="empty-state">
+							<p>{ pc.T("analytics_int.no_data") }</p>
+						</div>
+					}
+				</div>
+			</div>
+			<!-- Devices -->
+			<div class="card">
+				<div class="card-header">
+					<h3>{ pc.T("analytics_int.devices") }</h3>
+				</div>
+				<div class="card-body">
+					if len(data.Devices) > 0 {
+						<div class="device-breakdown">
+							for _, d := range data.Devices {
+								<div class="device-item">
+									<div class={ "device-icon device-icon-" + d.DeviceType }>
+										@deviceIcon(d.DeviceType)
+									</div>
+									<div class="device-info">
+										<span class="device-type">{ d.DeviceType }</span>
+										<span class="device-percent">{ fmt.Sprintf("%.1f", d.Percent) }%</span>
+									</div>
+								</div>
+							}
+						</div>
+					} else {
+						<div class="empty-state">
+							<p>{ pc.T("analytics_int.no_data") }</p>
+						</div>
+					}
+				</div>
+			</div>
+			<!-- Countries -->
+			<div class="card">
+				<div class="card-header">
+					<h3>{ pc.T("analytics_int.countries") }</h3>
+				</div>
+				<div class="card-body">
+					if len(data.Countries) > 0 {
+						<div class="breakdown-list">
+							for _, country := range data.Countries {
+								<div class="breakdown-item">
+									<div class="breakdown-info">
+										<span class="breakdown-name">{ country.CountryName }</span>
+										<span class="breakdown-value">{ formatNumber(country.Views) } ({ fmt.Sprintf("%.1f", country.Percent) }%)</span>
+									</div>
+									<div class="breakdown-bar">
+										<div class="breakdown-fill breakdown-fill-geo" style={ fmt.Sprintf("width: %.0f%%", country.Percent) }></div>
+									</div>
+								</div>
+							}
+						</div>
+					} else {
+						<div class="empty-state">
+							<p>{ pc.T("analytics_int.no_geo_data") }</p>
+						</div>
+					}
+				</div>
+			</div>
+		</div>
+		<!-- Settings -->
+		<div class="settings-section">
+			<div class="card">
+				<div class="card-header">
+					<h3>{ pc.T("analytics_int.settings") }</h3>
+				</div>
+				<div class="card-body">
+					<form method="POST" action="/admin/internal-analytics/settings">
+						<div class="form-group">
+							<label class="form-check">
+								<input type="checkbox" name="enabled" value="1" checked?={ data.Settings.Enabled }/>
+								<span>{ pc.T("analytics_int.enabled") }</span>
+							</label>
+							<p class="form-hint">{ pc.T("analytics_int.enabled_hint") }</p>
+						</div>
+						<div class="form-group">
+							<label>{ pc.T("analytics_int.retention_days") }</label>
+							<input type="number" name="retention_days" value={ strconv.Itoa(data.Settings.RetentionDays) } min="30" max="730" class="form-control form-control-sm"/>
+							<p class="form-hint">{ pc.T("analytics_int.retention_hint") }</p>
+						</div>
+						<div class="form-group">
+							<label>{ pc.T("analytics_int.exclude_paths") }</label>
+							<textarea name="exclude_paths" rows="3" class="form-control" placeholder="/private&#10;/internal">
+								for i, path := range data.Settings.ExcludePaths {
+									{ path }
+									if i < len(data.Settings.ExcludePaths)-1 {
+										{ "\n" }
+									}
+								}
+							</textarea>
+							<p class="form-hint">{ pc.T("analytics_int.exclude_hint") }</p>
+						</div>
+						<button type="submit" class="btn btn-primary">{ pc.T("analytics_int.save_settings") }</button>
+					</form>
+					<hr class="mt-4 mb-4"/>
+					<form method="POST" action="/admin/internal-analytics/aggregate">
+						<div class="form-group">
+							<p class="form-hint mb-2">{ pc.T("analytics_int.run_aggregation_hint") }</p>
+							<button type="submit" class="btn btn-outline">{ pc.T("analytics_int.run_aggregation") }</button>
+						</div>
+					</form>
+				</div>
+			</div>
+		</div>
+		<script>
+		// Update real-time count every 30 seconds
+		setInterval(function() {
+			fetch('/admin/internal-analytics/api/realtime')
+				.then(response => response.json())
+				.then(data => {
+					const el = document.getElementById('realtime-count');
+					if (el) {
+						el.textContent = data.visitors;
+					}
+				})
+				.catch(err => console.error('Failed to fetch realtime stats:', err));
+		}, 30000);
+		</script>
+	}
+}

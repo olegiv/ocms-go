@@ -63,4 +63,25 @@ echo "Compiling SCSS..."
 sass "$SCSS_DIR/main.scss" "$DIST_DIR/main.css" --style=compressed --no-source-map
 echo "  -> $DIST_DIR/main.css"
 
+# Generate templ Go code
+if command -v templ &> /dev/null; then
+    echo "Generating templ code..."
+    cd "$PROJECT_DIR"
+    templ generate
+    echo "  -> templ files generated"
+else
+    echo "Warning: templ is not installed. Skipping templ generation."
+    echo "Install it with: go install github.com/a-h/templ/cmd/templ@latest"
+fi
+
+# Compile Tailwind CSS
+CSS_INPUT="$PROJECT_DIR/web/static/css/admin-tw.css"
+CSS_OUTPUT="$DIST_DIR/admin-tw.css"
+if [ -f "$CSS_INPUT" ]; then
+    echo "Compiling Tailwind CSS..."
+    cd "$PROJECT_DIR"
+    npx @tailwindcss/cli -i "$CSS_INPUT" -o "$CSS_OUTPUT" --minify
+    echo "  -> $CSS_OUTPUT"
+fi
+
 echo "Assets built successfully!"

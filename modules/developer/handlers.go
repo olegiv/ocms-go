@@ -12,15 +12,8 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
-// DashboardData contains data for the developer dashboard template
-type DashboardData struct {
-	Counts map[string]int
-	Total  int
-}
-
 // handleDashboard handles GET /admin/developer - shows the developer dashboard
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := m.ctx.Render.GetAdminLang(r)
 
 	counts, err := m.getTrackedCounts(r.Context())
@@ -34,24 +27,21 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		total += c
 	}
 
-	data := DashboardData{
-		Counts: counts,
-		Total:  total,
+	viewData := DeveloperViewData{
+		TagCount:      counts["tag"],
+		CategoryCount: counts["category"],
+		MediaCount:    counts["media"],
+		PageCount:     counts["page"],
+		MenuItemCount: counts["menu_item"],
+		Total:         total,
 	}
 
-	if err := m.ctx.Render.Render(w, r, "admin/module_developer", render.TemplateData{
-		Title: i18n.T(lang, "developer.title"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
-			{Label: i18n.T(lang, "developer.title"), URL: "/admin/developer", Active: true},
-		},
-	}); err != nil {
-		m.ctx.Logger.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
+	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "developer.title"), []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
+		{Label: i18n.T(lang, "developer.title"), URL: "/admin/developer", Active: true},
+	})
+	render.Templ(w, r, DeveloperPage(pc, viewData))
 }
 
 // handleGenerate handles POST /admin/developer/generate - generates test data

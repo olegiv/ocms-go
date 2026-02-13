@@ -26,7 +26,7 @@ func TestNewDocsHandler(t *testing.T) {
 		BuildTime: "2025-01-01T00:00:00Z",
 	}
 
-	h := NewDocsHandler(nil, cfg, nil, startTime, verInfo)
+	h := NewDocsHandler(nil, nil, cfg, nil, startTime, verInfo)
 	if h == nil {
 		t.Fatal("NewDocsHandler returned nil")
 	}
@@ -217,7 +217,7 @@ func TestDocsHandler_GetSystemInfo(t *testing.T) {
 		BuildTime: "2025-06-15T12:30:00Z",
 	}
 
-	h := NewDocsHandler(nil, cfg, nil, time.Now().Add(-time.Hour), verInfo)
+	h := NewDocsHandler(nil, nil, cfg, nil, time.Now().Add(-time.Hour), verInfo)
 	info := h.getSystemInfo()
 
 	if info.Version != "v2.0.0" {
@@ -258,7 +258,7 @@ func TestDocsHandler_GetSystemInfo_Redis(t *testing.T) {
 		RedisURL: "redis://localhost:6379",
 	}
 
-	h := NewDocsHandler(nil, cfg, nil, time.Now(), nil)
+	h := NewDocsHandler(nil, nil, cfg, nil, time.Now(), nil)
 	info := h.getSystemInfo()
 
 	if info.CacheType != "Redis" {
@@ -272,7 +272,7 @@ func TestDocsHandler_GetSystemInfo_Redis(t *testing.T) {
 
 func TestDocsHandler_GetEndpoints(t *testing.T) {
 	cfg := &config.Config{Env: "development"}
-	h := NewDocsHandler(nil, cfg, nil, time.Now(), nil)
+	h := NewDocsHandler(nil, nil, cfg, nil, time.Now(), nil)
 
 	groups := h.getEndpoints("en")
 
@@ -299,16 +299,17 @@ func TestDocsHandler_GetEndpoints(t *testing.T) {
 	}
 }
 
-func TestDocsGuideData(t *testing.T) {
-	data := DocsGuideData{
-		Title:   "Test Guide",
-		Content: "<h1>Test</h1>",
+func TestDocsGuideViewData(t *testing.T) {
+	data := DocsPageData{
+		Guides: []DocsGuide{
+			{Slug: "test-guide", Title: "Test Guide"},
+		},
 	}
 
-	if data.Title != "Test Guide" {
-		t.Errorf("Title = %q; want Test Guide", data.Title)
+	if len(data.Guides) != 1 {
+		t.Fatalf("Guides count = %d; want 1", len(data.Guides))
 	}
-	if data.Content != "<h1>Test</h1>" {
-		t.Errorf("Content = %q; want <h1>Test</h1>", data.Content)
+	if data.Guides[0].Title != "Test Guide" {
+		t.Errorf("Title = %q; want Test Guide", data.Guides[0].Title)
 	}
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 // EventsPerPage is the number of events to display per page.
@@ -139,21 +140,32 @@ func formatMetadata(metadata string) string {
 	return strings.Join(parts, ", ")
 }
 
-// EventsListData holds data for the events list template.
-type EventsListData struct {
-	Events      []EventWithUser
-	TotalEvents int64
-	Level       string
-	Category    string
-	Levels      []string
-	Categories  []string
-	Pagination  AdminPagination
+// maskIP masks an IP address for display in demo mode.
+// In non-demo mode, the IP is returned unchanged.
+func maskIP(ip string) string {
+	if !middleware.IsDemoMode() {
+		return ip
+	}
+	// IPv6 (multiple colons)
+	if strings.Contains(ip, ":") && strings.Count(ip, ":") > 1 {
+		return "****:****:****:****"
+	}
+	// Strip port if present (single colon = host:port)
+	host := ip
+	if idx := strings.LastIndex(ip, ":"); idx != -1 && strings.Count(ip, ":") == 1 {
+		host = ip[:idx]
+	}
+	// IPv4
+	parts := strings.Split(host, ".")
+	if len(parts) == 4 {
+		return parts[0] + ".*.*.*"
+	}
+	return "***"
 }
 
 // List handles GET /admin/events - displays a paginated list of events.
 func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
-	lang := middleware.GetAdminLang(r)
+	lang := h.renderer.GetAdminLang(r)
 
 	// Get filter parameters
 	level := r.URL.Query().Get("level")
@@ -250,8 +262,12 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	data := EventsListData{
-		Events:      events,
+	// Pre-compute sentinel state and convert to view types
+	sentinelActive := h.renderer.SentinelIsActive()
+	eventItems := convertEventItems(events, h.renderer, sentinelActive)
+
+	data := adminviews.EventsListData{
+		Events:      eventItems,
 		TotalEvents: totalEvents,
 		Level:       level,
 		Category:    category,
@@ -272,18 +288,12 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 			model.EventCategoryAPIKey,
 			model.EventCategoryWebhook,
 		},
-		Pagination:  BuildAdminPagination(page, int(totalEvents), EventsPerPage, redirectAdminEvents, r.URL.Query()),
+		SentinelActive: sentinelActive,
+		Pagination:     convertPagination(BuildAdminPagination(page, int(totalEvents), EventsPerPage, redirectAdminEvents, r.URL.Query())),
 	}
 
-	h.renderer.RenderPage(w, r, "admin/events", render.TemplateData{
-		Title: i18n.T(lang, "events.title"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.event_log"), URL: redirectAdminEvents, Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "events.title"), eventsBreadcrumbs(lang))
+	renderTempl(w, r, adminviews.EventsListPage(pc, data))
 }
 
 // convertEventRows is a generic helper to convert sqlc rows to EventWithUser.

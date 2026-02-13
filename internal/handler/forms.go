@@ -32,6 +32,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/theme"
 	"github.com/olegiv/ocms-go/internal/util"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 	"github.com/olegiv/ocms-go/internal/webhook"
 	"github.com/olegiv/ocms-go/modules/hcaptcha"
 )
@@ -367,23 +368,11 @@ func (h *FormsHandler) updateLanguageContext(w http.ResponseWriter, r *http.Requ
 	return r.WithContext(ctx)
 }
 
-// formsBreadcrumbs returns the base breadcrumbs for forms pages.
-func formsBreadcrumbs(lang string) []render.Breadcrumb {
-	return []render.Breadcrumb{
-		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-		{Label: i18n.T(lang, "nav.forms"), URL: redirectAdminForms},
-	}
-}
-
 // renderFormFormPage renders the form create/edit page with data and breadcrumbs.
 func (h *FormsHandler) renderFormFormPage(w http.ResponseWriter, r *http.Request, data FormFormData, title string, breadcrumbs []render.Breadcrumb) {
-	user := middleware.GetUser(r)
-	h.renderer.RenderPage(w, r, "admin/forms_form", render.TemplateData{
-		Title:       title,
-		User:        user,
-		Data:        data,
-		Breadcrumbs: breadcrumbs,
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, title, breadcrumbs)
+	viewData := convertFormFormViewData(data, h.renderer)
+	renderTempl(w, r, adminviews.FormsFormPage(pc, viewData))
 }
 
 // FormsListData holds data for the forms list template.
@@ -393,7 +382,6 @@ type FormsListData struct {
 
 // List handles GET /admin/forms - displays a list of forms.
 func (h *FormsHandler) List(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	forms, err := h.queries.ListForms(r.Context(), store.ListFormsParams{
@@ -422,15 +410,9 @@ func (h *FormsHandler) List(w http.ResponseWriter, r *http.Request) {
 		Forms: formItems,
 	}
 
-	h.renderer.RenderPage(w, r, "admin/forms_list", render.TemplateData{
-		Title: i18n.T(lang, "nav.forms"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.forms"), URL: redirectAdminForms, Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "nav.forms"), formsListBreadcrumbs(lang))
+	viewData := convertFormsListViewData(data)
+	renderTempl(w, r, adminviews.FormsListPage(pc, viewData))
 }
 
 // FormTranslationInfo holds information about a form translation.
@@ -473,10 +455,7 @@ func (h *FormsHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 		Language:     defaultLanguage,
 	}
 
-	breadcrumbs := append(formsBreadcrumbs(lang),
-		render.Breadcrumb{Label: i18n.T(lang, "forms.new"), URL: redirectAdminFormsNew, Active: true})
-
-	h.renderFormFormPage(w, r, data, i18n.T(lang, "forms.new"), breadcrumbs)
+	h.renderFormFormPage(w, r, data, i18n.T(lang, "forms.new"), formsNewBreadcrumbs(lang))
 }
 
 // Create handles POST /admin/forms - creates a new form.
@@ -524,10 +503,7 @@ func (h *FormsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			IsEdit:     false,
 		}
 
-		breadcrumbs := append(formsBreadcrumbs(lang),
-			render.Breadcrumb{Label: i18n.T(lang, "forms.new"), URL: redirectAdminFormsNew, Active: true})
-
-		h.renderFormFormPage(w, r, data, i18n.T(lang, "forms.new"), breadcrumbs)
+		h.renderFormFormPage(w, r, data, i18n.T(lang, "forms.new"), formsNewBreadcrumbs(lang))
 		return
 	}
 
@@ -590,10 +566,7 @@ func (h *FormsHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		MissingLanguages: langInfo.MissingLanguages,
 	}
 
-	breadcrumbs := append(formsBreadcrumbs(lang),
-		render.Breadcrumb{Label: form.Name, URL: fmt.Sprintf(redirectAdminFormsID, form.ID), Active: true})
-
-	h.renderFormFormPage(w, r, data, fmt.Sprintf("Edit Form - %s", form.Name), breadcrumbs)
+	h.renderFormFormPage(w, r, data, fmt.Sprintf("Edit Form - %s", form.Name), formsEditBreadcrumbs(lang, form.Name, form.ID))
 }
 
 // Update handles PUT /admin/forms/{id} - updates a form.
@@ -655,10 +628,7 @@ func (h *FormsHandler) Update(w http.ResponseWriter, r *http.Request) {
 			MissingLanguages: langInfo.MissingLanguages,
 		}
 
-		breadcrumbs := append(formsBreadcrumbs(lang),
-			render.Breadcrumb{Label: form.Name, URL: fmt.Sprintf(redirectAdminFormsID, form.ID), Active: true})
-
-		h.renderFormFormPage(w, r, data, fmt.Sprintf("Edit Form - %s", form.Name), breadcrumbs)
+		h.renderFormFormPage(w, r, data, fmt.Sprintf("Edit Form - %s", form.Name), formsEditBreadcrumbs(lang, form.Name, form.ID))
 		return
 	}
 
@@ -1233,7 +1203,6 @@ type SubmissionsListData struct {
 
 // Submissions handles GET /admin/forms/{id}/submissions - lists form submissions.
 func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	formID := h.parseFormIDParam(w, r)
@@ -1320,16 +1289,11 @@ func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 		Pagination:  BuildAdminPagination(page, int(totalCount), perPage, fmt.Sprintf(redirectAdminFormsIDSubmissions, formID), r.URL.Query()),
 	}
 
-	breadcrumbs := append(formsBreadcrumbs(lang),
-		render.Breadcrumb{Label: form.Name, URL: fmt.Sprintf(redirectAdminFormsID, form.ID)},
-		render.Breadcrumb{Label: i18n.T(lang, "forms.submissions"), URL: fmt.Sprintf(redirectAdminFormsIDSubmissions, form.ID), Active: true})
-
-	h.renderer.RenderPage(w, r, "admin/forms_submissions", render.TemplateData{
-		Title:       fmt.Sprintf("Submissions - %s", form.Name),
-		User:        user,
-		Data:        data,
-		Breadcrumbs: breadcrumbs,
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer,
+		fmt.Sprintf("Submissions - %s", form.Name),
+		formsSubmissionsBreadcrumbs(lang, form.Name, form.ID))
+	viewData := convertSubmissionsListViewData(data, h.renderer, lang)
+	renderTempl(w, r, adminviews.FormsSubmissionsPage(pc, viewData))
 }
 
 // SubmissionViewData holds data for viewing a single submission.
@@ -1342,7 +1306,6 @@ type SubmissionViewData struct {
 
 // ViewSubmission handles GET /admin/forms/{id}/submissions/{subId} - views a submission.
 func (h *FormsHandler) ViewSubmission(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	formID := h.parseFormIDParam(w, r)
@@ -1401,24 +1364,18 @@ func (h *FormsHandler) ViewSubmission(w http.ResponseWriter, r *http.Request) {
 		data = make(map[string]interface{})
 	}
 
-	viewData := SubmissionViewData{
+	handlerData := SubmissionViewData{
 		Form:       *form,
 		Fields:     fields,
 		Submission: submission,
 		Data:       data,
 	}
 
-	breadcrumbs := append(formsBreadcrumbs(lang),
-		render.Breadcrumb{Label: form.Name, URL: fmt.Sprintf(redirectAdminFormsID, form.ID)},
-		render.Breadcrumb{Label: i18n.T(lang, "forms.submissions"), URL: fmt.Sprintf(redirectAdminFormsIDSubmissions, form.ID)},
-		render.Breadcrumb{Label: fmt.Sprintf("#%d", submission.ID), URL: fmt.Sprintf("/admin/forms/%d/submissions/%d", form.ID, submission.ID), Active: true})
-
-	h.renderer.RenderPage(w, r, "admin/forms_submission_view", render.TemplateData{
-		Title:       fmt.Sprintf("Submission #%d - %s", submission.ID, form.Name),
-		User:        user,
-		Data:        viewData,
-		Breadcrumbs: breadcrumbs,
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer,
+		fmt.Sprintf("Submission #%d - %s", submission.ID, form.Name),
+		formsSubmissionViewBreadcrumbs(lang, form.Name, form.ID, submission.ID))
+	viewData := convertSubmissionViewViewData(handlerData, h.renderer, lang)
+	renderTempl(w, r, adminviews.FormsSubmissionViewPage(pc, viewData))
 }
 
 // DeleteSubmission handles DELETE /admin/forms/{id}/submissions/{subId} - deletes a submission.

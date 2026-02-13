@@ -12,5 +12,9 @@
     "htmx.org": "^2.0.8",
     "klaro": "^0.7.22",
     "tinymce": "^8.3.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.18",
+    "tailwindcss": "^4.1.18"
   }
 }

@@ -1,0 +1,201 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import "fmt"
+import "strings"
+
+// ConfigItemView represents a non-translatable config item.
+type ConfigItemView struct {
+	Key         string
+	Value       string
+	Type        string
+	Description string
+	Label       string
+}
+
+// ConfigTranslationValueView holds a translation value for a specific language.
+type ConfigTranslationValueView struct {
+	LanguageCode string
+	LanguageName string
+	Value        string
+}
+
+// TranslatableConfigItemView holds a translatable config item with translations.
+type TranslatableConfigItemView struct {
+	Key          string
+	Label        string
+	Description  string
+	Type         string
+	Translations []ConfigTranslationValueView
+}
+
+// ConfigViewData holds all data for the config page.
+type ConfigViewData struct {
+	Items                []ConfigItemView
+	TranslatableItems    []TranslatableConfigItemView
+	Errors               map[string]string
+	HasMultipleLanguages bool
+}
+
+templ ConfigPage(pc *PageContext, data ConfigViewData) {
+	@AdminLayout(pc) {
+		<div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+			<div>
+				<h1 class="text-2xl font-bold text-gray-900 dark:text-white">{ pc.T("config.title") }</h1>
+				<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{ pc.T("config.description") }</p>
+			</div>
+		</div>
+		<div class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+			<form method="POST" action="/admin/config" class="p-6">
+				@csrfField()
+				<input type="hidden" name="_method" value="PUT"/>
+				<!-- Translatable items with language tabs -->
+				if len(data.TranslatableItems) > 0 && data.HasMultipleLanguages {
+					<div class="space-y-6">
+						for _, item := range data.TranslatableItems {
+							<div class="space-y-2" x-data={ fmt.Sprintf("{ activeTab: '%s' }", item.Translations[0].LanguageCode) }>
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">{ item.Label }</label>
+								<!-- Language tabs -->
+								<div class="flex gap-1 border-b border-gray-200 dark:border-gray-700">
+									for _, tr := range item.Translations {
+										<button type="button"
+											class="px-3 py-1.5 text-xs font-medium uppercase transition-colors"
+											:class={ fmt.Sprintf("activeTab === '%s' ? 'border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'", tr.LanguageCode) }
+											@click={ fmt.Sprintf("activeTab = '%s'", tr.LanguageCode) }>
+											{ strings.ToUpper(tr.LanguageCode) }
+										</button>
+									}
+								</div>
+								<!-- Tab content -->
+								for _, tr := range item.Translations {
+									<div x-show={ fmt.Sprintf("activeTab === '%s'", tr.LanguageCode) } x-cloak>
+										<input
+											type="text"
+											id={ fmt.Sprintf("%s_%s", item.Key, tr.LanguageCode) }
+											name={ fmt.Sprintf("%s_%s", item.Key, tr.LanguageCode) }
+											class={ inputClass(data.Errors[fmt.Sprintf("%s_%s", item.Key, tr.LanguageCode)]) }
+											value={ tr.Value }
+											placeholder={ fmt.Sprintf("%s %s", pc.T("config.enter_value_for"), tr.LanguageName) }
+											maxlength="255"
+										/>
+										if errMsg, ok := data.Errors[fmt.Sprintf("%s_%s", item.Key, tr.LanguageCode)]; ok && errMsg != "" {
+											<p class="mt-1 text-sm text-red-600 dark:text-red-400">{ errMsg }</p>
+										}
+									</div>
+								}
+								if item.Description != "" {
+									<p class="text-xs text-gray-500 dark:text-gray-400">{ item.Description }</p>
+								}
+							</div>
+						}
+					</div>
+					<hr class="my-6 border-gray-200 dark:border-gray-700"/>
+				}
+				<!-- Single-language translatable items -->
+				if len(data.TranslatableItems) > 0 && !data.HasMultipleLanguages {
+					<div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+						for _, item := range data.TranslatableItems {
+							<div>
+								<label for={ fmt.Sprintf("%s_%s", item.Key, item.Translations[0].LanguageCode) } class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+									{ item.Label }
+								</label>
+								<input
+									type="text"
+									id={ fmt.Sprintf("%s_%s", item.Key, item.Translations[0].LanguageCode) }
+									name={ fmt.Sprintf("%s_%s", item.Key, item.Translations[0].LanguageCode) }
+									class={ inputClass(data.Errors[fmt.Sprintf("%s_%s", item.Key, item.Translations[0].LanguageCode)]) }
+									value={ item.Translations[0].Value }
+									maxlength="255"
+								/>
+								if item.Description != "" {
+									<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{ item.Description }</p>
+								}
+								if errMsg, ok := data.Errors[fmt.Sprintf("%s_%s", item.Key, item.Translations[0].LanguageCode)]; ok && errMsg != "" {
+									<p class="mt-1 text-sm text-red-600 dark:text-red-400">{ errMsg }</p>
+								}
+							</div>
+						}
+					</div>
+					if len(data.Items) > 0 {
+						<hr class="my-6 border-gray-200 dark:border-gray-700"/>
+					}
+				}
+				<!-- Non-translatable config items -->
+				<div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+					for _, item := range data.Items {
+						<div>
+							<label for={ item.Key } class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+								{ item.Label }
+							</label>
+							if item.Type == "bool" {
+								<div class="flex items-center gap-2">
+									<input
+										type="checkbox"
+										id={ item.Key }
+										name={ item.Key }
+										value="true"
+										if item.Value == "true" {
+											checked
+										}
+										class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+									/>
+									<span class="text-sm text-gray-600 dark:text-gray-400">{ item.Description }</span>
+								</div>
+							} else if item.Type == "int" {
+								<input
+									type="number"
+									id={ item.Key }
+									name={ item.Key }
+									class={ inputClass(data.Errors[item.Key]) }
+									value={ item.Value }
+								/>
+								if item.Description != "" {
+									<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{ item.Description }</p>
+								}
+							} else {
+								<input
+									type="text"
+									id={ item.Key }
+									name={ item.Key }
+									class={ inputClass(data.Errors[item.Key]) }
+									value={ item.Value }
+									maxlength="255"
+								/>
+								if item.Description != "" {
+									<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{ item.Description }</p>
+								}
+							}
+							if errMsg, ok := data.Errors[item.Key]; ok && errMsg != "" {
+								<p class="mt-1 text-sm text-red-600 dark:text-red-400">{ errMsg }</p>
+							}
+						</div>
+					}
+				</div>
+				if len(data.Items) == 0 && len(data.TranslatableItems) == 0 {
+					<div class="py-12 text-center">
+						@iconSettings()
+						<p class="mt-2 text-gray-500 dark:text-gray-400">{ pc.T("config.no_settings") }</p>
+						<p class="text-sm text-gray-400 dark:text-gray-500">{ pc.T("config.init_hint") }</p>
+					</div>
+				} else {
+					<div class="mt-6 flex justify-end">
+						<button type="submit" class="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+							@iconSave()
+							{ pc.T("config.save") }
+						</button>
+					</div>
+				}
+			</form>
+		</div>
+	}
+}
+
+func inputClass(errMsg string) string {
+	base := "w-full rounded-md border px-3 py-2 text-sm dark:bg-gray-700 dark:text-white"
+	if errMsg != "" {
+		return base + " border-red-300 focus:border-red-500 focus:ring-red-500 dark:border-red-600"
+	}
+	return base + " border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600"
+}

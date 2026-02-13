@@ -239,7 +239,7 @@ func initCacheManager(ctx context.Context, db *sql.DB, cfg *config.Config) *cach
 	}
 	switch {
 	case cacheManager.IsRedis():
-		slog.Info(handler.LogCacheManagerInit, "backend", "redis", "url", cfg.RedisURL)
+		slog.Info(handler.LogCacheManagerInit, "backend", "redis", "url", cache.SanitizeRedisURL(cfg.RedisURL))
 	case cacheManager.Info().IsFallback:
 		slog.Warn(handler.LogCacheManagerInit, "backend", "memory", "note", "Redis unavailable, using fallback")
 	default:
@@ -635,7 +635,7 @@ func run() error {
 	widgetsHandler := handler.NewWidgetsHandler(db, renderer, sessionManager, themeManager)
 	modulesHandler := handler.NewModulesHandler(db, renderer, sessionManager, moduleRegistry, hookRegistry)
 	cacheHandler := handler.NewCacheHandler(renderer, sessionManager, cacheManager, eventService)
-	schedulerHandler := handler.NewSchedulerHandler(db, renderer, schedulerRegistry, taskExecutor, eventService)
+	schedulerHandler := handler.NewSchedulerHandler(db, renderer, sessionManager, schedulerRegistry, taskExecutor, eventService)
 	languagesHandler := handler.NewLanguagesHandler(db, renderer, sessionManager)
 	apiHandler := api.NewHandler(db)
 	apiDocsHandler, err := api.NewDocsHandler(api.DocsConfig{
@@ -651,7 +651,7 @@ func run() error {
 	redirectsHandler := handler.NewRedirectsHandler(db, renderer, sessionManager, redirectsMiddleware)
 	importExportHandler := handler.NewImportExportHandler(db, renderer, sessionManager)
 	healthHandler := handler.NewHealthHandler(db, sessionManager, cfg.UploadsDir)
-	docsHandler := handler.NewDocsHandler(renderer, cfg, moduleRegistry, healthHandler.StartTime(), versionInfo)
+	docsHandler := handler.NewDocsHandler(renderer, sessionManager, cfg, moduleRegistry, healthHandler.StartTime(), versionInfo)
 
 	// Set webhook dispatcher on handlers that dispatch events
 	pagesHandler.SetDispatcher(webhookDispatcher)

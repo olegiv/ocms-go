@@ -1,0 +1,114 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import "fmt"
+
+// AdminLayout renders the full admin page with sidebar, header, and content.
+templ AdminLayout(pc *PageContext) {
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<meta name="generator" content="oCMS - https://ocms.tech"/>
+		<title>
+			if pc.Title != "" {
+				{ pc.Title } - oCMS
+			} else {
+				oCMS
+			}
+		</title>
+		<link rel="icon" type="image/x-icon" href="/favicon.ico"/>
+		<link rel="stylesheet" href="/static/dist/main.css"/>
+		<link rel="stylesheet" href="/static/dist/admin-tw.css"/>
+	</head>
+	<body>
+		<div class="admin-layout" x-data="{ sidebarOpen: false }">
+			<!-- Sidebar overlay for mobile -->
+			<div class="sidebar-overlay" :class="{ 'show': sidebarOpen }" @click="sidebarOpen = false"></div>
+			@Sidebar(pc)
+			<div class="admin-wrapper">
+				@Header(pc)
+				<main class="admin-main">
+					@Alert(pc)
+					@Breadcrumbs(pc)
+					{ children... }
+				</main>
+			</div>
+		</div>
+		<!-- HTMX -->
+		<script src="/static/dist/js/htmx.min.js" integrity="sha384-/TgkGk7p307TH7EXJDuUlgG3Ce1UVolAOFopFekQkkXihi5u/6OCvVKyz1W+idaz" crossorigin="anonymous"></script>
+		<!-- Alpine.js Sort Plugin -->
+		<script defer src="/static/dist/js/alpine-sort.min.js"></script>
+		<!-- Alpine.js -->
+		<script defer src="/static/dist/js/alpine.min.js" integrity="sha384-LXWjKwDZz29o7TduNe+r/UxaolHh5FsSvy2W7bDHSZ8jJeGgDeuNnsDNHoxpSgDi" crossorigin="anonymous"></script>
+		<!-- Admin core utilities -->
+		<script src="/static/dist/js/admin-core.js"></script>
+		<script src="/static/dist/js/media-dropzone.js"></script>
+	</body>
+	</html>
+}
+
+// csrfField is a no-op component. The CSRF middleware (filippo.io/csrf) uses
+// Fetch Metadata headers instead of per-request tokens, so no hidden field is needed.
+templ csrfField() {
+}
+
+// Alert renders flash messages with auto-dismiss.
+templ Alert(pc *PageContext) {
+	if pc.Flash != "" {
+		<div class="alert-container">
+			<div
+				class={ "alert alert-" + pc.FlashType + " alert-animated" }
+				x-data={ `{
+					show: true,
+					dismissing: false,
+					autoDismissTime: 5000,
+					dismiss() {
+						this.dismissing = true;
+						setTimeout(() => { this.show = false; }, 300);
+					}
+				}` }
+				x-show="show"
+				x-init="setTimeout(() => dismiss(), autoDismissTime)"
+				:class="{ 'alert-dismissing': dismissing }"
+				@mouseenter="$el.querySelector('.alert-progress').style.animationPlayState = 'paused'"
+				@mouseleave="$el.querySelector('.alert-progress').style.animationPlayState = 'running'"
+			>
+				<span class="alert-message">{ pc.Flash }</span>
+				<button type="button" class="alert-close" @click="dismiss()" aria-label={ pc.T("btn.close") }>&times;</button>
+				<div class="alert-progress" :style="'animation-duration: ' + autoDismissTime + 'ms'"></div>
+			</div>
+		</div>
+	}
+}
+
+// Breadcrumbs renders navigation breadcrumbs with Schema.org markup.
+templ Breadcrumbs(pc *PageContext) {
+	if len(pc.Breadcrumbs) > 0 {
+		<nav class="breadcrumbs" aria-label={ pc.T("breadcrumb.aria_label") }>
+			<ol class="breadcrumb-list" itemscope itemtype="https://schema.org/BreadcrumbList">
+				for i, crumb := range pc.Breadcrumbs {
+					<li
+						class={ templ.KV("breadcrumb-item", true), templ.KV("active", crumb.Active) }
+						itemprop="itemListElement"
+						itemscope
+						itemtype="https://schema.org/ListItem"
+					>
+						if crumb.Active {
+							<span itemprop="name">{ crumb.Label }</span>
+						} else {
+							<a href={ templ.SafeURL(crumb.URL) } itemprop="item">
+								<span itemprop="name">{ crumb.Label }</span>
+							</a>
+							<span class="breadcrumb-separator" aria-hidden="true">/</span>
+						}
+						<meta itemprop="position" content={ fmt.Sprintf("%d", i+1) }/>
+					</li>
+				}
+			</ol>
+		</nav>
+	}
+}

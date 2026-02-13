@@ -740,6 +740,102 @@ func TestAllTemplateFuncsSkipsInactive(t *testing.T) {
 	}
 }
 
+func TestSetShowInSidebar(t *testing.T) {
+	logger := testutil.TestLoggerSilent()
+	r := NewRegistry(logger)
+
+	m := newMockModule("sidebar", "1.0.0")
+	_ = r.Register(m)
+
+	db := createTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	ctx := &Context{DB: db, Logger: logger}
+	_ = r.InitAll(ctx)
+
+	// Should not be in sidebar by default
+	if r.ShowInSidebar("sidebar") {
+		t.Error("expected module not to show in sidebar by default")
+	}
+
+	// Enable sidebar
+	err := r.SetShowInSidebar("sidebar", true)
+	if err != nil {
+		t.Errorf("unexpected error setting show_in_sidebar to true: %v", err)
+	}
+
+	if !r.ShowInSidebar("sidebar") {
+		t.Error("expected module to show in sidebar after SetShowInSidebar(true)")
+	}
+
+	// Disable sidebar
+	err = r.SetShowInSidebar("sidebar", false)
+	if err != nil {
+		t.Errorf("unexpected error setting show_in_sidebar to false: %v", err)
+	}
+
+	if r.ShowInSidebar("sidebar") {
+		t.Error("expected module not to show in sidebar after SetShowInSidebar(false)")
+	}
+}
+
+func TestSetShowInSidebarNotRegistered(t *testing.T) {
+	logger := testutil.TestLoggerSilent()
+	r := NewRegistry(logger)
+
+	db := createTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	ctx := &Context{DB: db, Logger: logger}
+	r.mu.Lock()
+	r.ctx = ctx
+	r.mu.Unlock()
+
+	err := r.SetShowInSidebar("nonexistent", true)
+	if err == nil {
+		t.Error("expected error for unregistered module")
+	}
+}
+
+func TestSetShowInSidebarNotInitialized(t *testing.T) {
+	logger := testutil.TestLoggerSilent()
+	r := NewRegistry(logger)
+
+	m := newMockModule("uninit-sidebar", "1.0.0")
+	_ = r.Register(m)
+
+	err := r.SetShowInSidebar("uninit-sidebar", true)
+	if err == nil {
+		t.Error("expected error when registry not initialized")
+	}
+}
+
+func TestShowInSidebarPersistence(t *testing.T) {
+	logger := testutil.TestLoggerSilent()
+
+	db := createTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	// First registry: register, init, and enable sidebar
+	r1 := NewRegistry(logger)
+	m1 := newMockModule("sidebar-persist", "1.0.0")
+	_ = r1.Register(m1)
+
+	ctx := &Context{DB: db, Logger: logger}
+	_ = r1.InitAll(ctx)
+	_ = r1.SetShowInSidebar("sidebar-persist", true)
+
+	// Second registry: should load sidebar status from DB
+	r2 := NewRegistry(logger)
+	m2 := newMockModule("sidebar-persist", "1.0.0")
+	_ = r2.Register(m2)
+	_ = r2.InitAll(ctx)
+
+	if !r2.ShowInSidebar("sidebar-persist") {
+		t.Error("expected sidebar status to persist after reload")
+	}
+}
+
 func TestListInfoShowsActiveStatus(t *testing.T) {
 	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
