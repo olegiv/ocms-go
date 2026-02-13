@@ -98,7 +98,7 @@ The hook source is in `.claude/shared/global/hooks/`.
 
    **Frontend JS Policy**: Always prefer official Alpine.js plugins (`@alpinejs/*`) over third-party libraries. For example, use `@alpinejs/sort` instead of Sortable.js, `@alpinejs/mask` instead of input mask libraries. This reduces external dependencies and ensures consistent integration with Alpine's reactivity system.
 
-3. **Handler Pattern**: Each handler struct (in `internal/handler/`) receives `*sql.DB`, `*render.Renderer`, and `*scs.SessionManager`. Handlers call `store.New(db)` to get sqlc queries.
+3. **Handler Pattern**: Each handler struct (in `internal/handler/`) receives `*sql.DB`, `*render.Renderer`, and `*scs.SessionManager`. Handlers call `store.New(db)` to get sqlc queries. Admin UI views use [templ](https://templ.guide/) components (`internal/views/admin/`) with type-safe Go code. Handler conversion functions in `internal/handler/templ.go` bridge store types to view types.
 
 4. **Middleware Chain**: Protected routes use middleware in order:
    - `middleware.SecurityHeaders` - adds CSP, HSTS, X-Frame-Options, etc.
@@ -130,9 +130,10 @@ cmd/ocms/main.go
     ├── internal/config      (env var loading)
     ├── internal/handler     (HTTP handlers)
     │   ├── api/             (REST API handlers)
-    │   ├── internal/render  (template rendering)
+    │   ├── internal/render  (template rendering + helper methods)
     │   ├── internal/store   (sqlc database access)
     │   └── internal/service (business logic)
+    ├── internal/views/admin (templ admin UI components)
     ├── internal/middleware  (auth, API auth, rate limiting)
     ├── internal/module      (module system, hooks)
     ├── internal/scheduler   (cron scheduler + admin registry)
