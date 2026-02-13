@@ -19,6 +19,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/theme"
 	"github.com/olegiv/ocms-go/internal/util"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 // WidgetsHandler handles widget management routes.
@@ -73,7 +74,6 @@ type WidgetsListData struct {
 
 // List handles GET /admin/widgets - displays widget management page.
 func (h *WidgetsHandler) List(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	// Get active theme
@@ -112,15 +112,9 @@ func (h *WidgetsHandler) List(w http.ResponseWriter, r *http.Request) {
 		AllThemes:   h.themeManager.ListThemesWithActive(),
 	}
 
-	h.renderer.RenderPage(w, r, "admin/widgets_list", render.TemplateData{
-		Title: i18n.T(lang, "nav.widgets"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.widgets"), URL: "/admin/widgets", Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "nav.widgets"), widgetsBreadcrumbs(lang))
+	viewData := convertWidgetsViewData(data)
+	renderTempl(w, r, adminviews.WidgetsPage(pc, viewData))
 }
 
 // CreateWidgetRequest represents the JSON request for creating a widget.

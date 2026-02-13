@@ -61,7 +61,7 @@ func testSchedulerHandler(t *testing.T) (*SchedulerHandler, *scheduler.Registry,
 		cronInst.Stop()
 	})
 
-	handler := NewSchedulerHandler(db, renderer, registry, nil, nil)
+	handler := NewSchedulerHandler(db, renderer, sm, registry, nil, nil)
 
 	return handler, registry, cronInst, sm
 }
@@ -69,7 +69,7 @@ func testSchedulerHandler(t *testing.T) (*SchedulerHandler, *scheduler.Registry,
 func TestNewSchedulerHandler(t *testing.T) {
 	registry, _ := testSchedulerRegistry(t)
 
-	handler := NewSchedulerHandler(nil, nil, registry, nil, nil)
+	handler := NewSchedulerHandler(nil, nil, nil, registry, nil, nil)
 
 	if handler == nil {
 		t.Fatal("NewSchedulerHandler returned nil")

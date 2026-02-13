@@ -51,6 +51,11 @@ templ AdminLayout(pc *PageContext) {
 	</html>
 }
 
+// csrfField is a no-op component. The CSRF middleware (filippo.io/csrf) uses
+// Fetch Metadata headers instead of per-request tokens, so no hidden field is needed.
+templ csrfField() {
+}
+
 // Alert renders flash messages with auto-dismiss.
 templ Alert(pc *PageContext) {
 	if pc.Flash != "" {

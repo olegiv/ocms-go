@@ -21,6 +21,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 // configKeyOrder defines the display order for config keys.
@@ -427,13 +428,10 @@ func configBreadcrumbs(lang string) []render.Breadcrumb {
 }
 
 // renderConfigPage renders the config page with standard template data.
-func (h *ConfigHandler) renderConfigPage(w http.ResponseWriter, r *http.Request, user any, lang string, data ConfigFormData) {
-	h.renderer.RenderPage(w, r, "admin/config", render.TemplateData{
-		Title:       i18n.T(lang, "config.title"),
-		User:        user,
-		Data:        data,
-		Breadcrumbs: configBreadcrumbs(lang),
-	})
+func (h *ConfigHandler) renderConfigPage(w http.ResponseWriter, r *http.Request, _ any, lang string, data ConfigFormData) {
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "config.title"), configBreadcrumbs(lang))
+	viewData := convertConfigViewData(data)
+	renderTempl(w, r, adminviews.ConfigPage(pc, viewData))
 }
 
 // buildConfigFormData builds the form data for the config page, separating translatable

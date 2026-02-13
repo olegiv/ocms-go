@@ -635,7 +635,7 @@ func run() error {
 	widgetsHandler := handler.NewWidgetsHandler(db, renderer, sessionManager, themeManager)
 	modulesHandler := handler.NewModulesHandler(db, renderer, sessionManager, moduleRegistry, hookRegistry)
 	cacheHandler := handler.NewCacheHandler(renderer, sessionManager, cacheManager, eventService)
-	schedulerHandler := handler.NewSchedulerHandler(db, renderer, schedulerRegistry, taskExecutor, eventService)
+	schedulerHandler := handler.NewSchedulerHandler(db, renderer, sessionManager, schedulerRegistry, taskExecutor, eventService)
 	languagesHandler := handler.NewLanguagesHandler(db, renderer, sessionManager)
 	apiHandler := api.NewHandler(db)
 	apiDocsHandler, err := api.NewDocsHandler(api.DocsConfig{
