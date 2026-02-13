@@ -239,7 +239,7 @@ func initCacheManager(ctx context.Context, db *sql.DB, cfg *config.Config) *cach
 	}
 	switch {
 	case cacheManager.IsRedis():
-		slog.Info(handler.LogCacheManagerInit, "backend", "redis", "url", cfg.RedisURL)
+		slog.Info(handler.LogCacheManagerInit, "backend", "redis", "url", cache.SanitizeRedisURL(cfg.RedisURL))
 	case cacheManager.Info().IsFallback:
 		slog.Warn(handler.LogCacheManagerInit, "backend", "memory", "note", "Redis unavailable, using fallback")
 	default:

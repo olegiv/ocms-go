@@ -4,8 +4,11 @@
 package render
 
 import (
+	"database/sql"
 	"testing"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func TestBlankLinesRegex(t *testing.T) {
@@ -568,5 +571,151 @@ func TestTemplateFuncs_Repeat(t *testing.T) {
 		if got := repeat(tt.s, tt.count); got != tt.expected {
 			t.Errorf("repeat(%q, %d) = %q, want %q", tt.s, tt.count, got, tt.expected)
 		}
+	}
+}
+
+// mediaTestDB creates an in-memory SQLite database with tables for media translation tests.
+func mediaTestDB(t *testing.T) *sql.DB {
+	t.Helper()
+
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open test db: %v", err)
+	}
+
+	// Create minimal tables needed for getMediaTranslation
+	for _, stmt := range []string{
+		`CREATE TABLE media (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			filename TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE TABLE languages (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			code TEXT NOT NULL UNIQUE,
+			name TEXT NOT NULL DEFAULT '',
+			is_active INTEGER NOT NULL DEFAULT 1
+		)`,
+		`CREATE TABLE media_translations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			media_id INTEGER NOT NULL REFERENCES media(id),
+			language_id INTEGER NOT NULL REFERENCES languages(id),
+			alt TEXT NOT NULL DEFAULT '',
+			caption TEXT NOT NULL DEFAULT '',
+			UNIQUE(media_id, language_id)
+		)`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			_ = db.Close()
+			t.Fatalf("failed to create table: %v", err)
+		}
+	}
+
+	// Seed test data
+	_, err = db.Exec(`INSERT INTO media (id, filename) VALUES (1, 'test.jpg')`)
+	if err != nil {
+		_ = db.Close()
+		t.Fatalf("failed to insert media: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO languages (id, code, name) VALUES (1, 'en', 'English'), (2, 'ru', 'Russian')`)
+	if err != nil {
+		_ = db.Close()
+		t.Fatalf("failed to insert languages: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO media_translations (media_id, language_id, alt, caption) VALUES (1, 2, 'Альтернативный текст', 'Подпись к изображению')`)
+	if err != nil {
+		_ = db.Close()
+		t.Fatalf("failed to insert media translation: %v", err)
+	}
+
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
+func TestGetMediaTranslation(t *testing.T) {
+	db := mediaTestDB(t)
+	r := &Renderer{db: db}
+
+	tests := []struct {
+		name         string
+		mediaID      int64
+		langCode     string
+		field        string
+		defaultValue string
+		want         string
+	}{
+		{
+			name:         "alt translation found",
+			mediaID:      1,
+			langCode:     "ru",
+			field:        "alt",
+			defaultValue: "default alt",
+			want:         "Альтернативный текст",
+		},
+		{
+			name:         "caption translation found",
+			mediaID:      1,
+			langCode:     "ru",
+			field:        "caption",
+			defaultValue: "default caption",
+			want:         "Подпись к изображению",
+		},
+		{
+			name:         "unknown field returns default",
+			mediaID:      1,
+			langCode:     "ru",
+			field:        "title",
+			defaultValue: "default title",
+			want:         "default title",
+		},
+		{
+			name:         "no translation for language returns default",
+			mediaID:      1,
+			langCode:     "en",
+			field:        "alt",
+			defaultValue: "english default",
+			want:         "english default",
+		},
+		{
+			name:         "nonexistent media returns default",
+			mediaID:      999,
+			langCode:     "ru",
+			field:        "alt",
+			defaultValue: "missing media",
+			want:         "missing media",
+		},
+		{
+			name:         "empty langCode returns default",
+			mediaID:      1,
+			langCode:     "",
+			field:        "alt",
+			defaultValue: "no lang",
+			want:         "no lang",
+		},
+		{
+			name:         "zero mediaID returns default",
+			mediaID:      0,
+			langCode:     "ru",
+			field:        "alt",
+			defaultValue: "zero id",
+			want:         "zero id",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := r.getMediaTranslation(tt.mediaID, tt.langCode, tt.field, tt.defaultValue)
+			if got != tt.want {
+				t.Errorf("getMediaTranslation(%d, %q, %q, %q) = %q, want %q",
+					tt.mediaID, tt.langCode, tt.field, tt.defaultValue, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetMediaTranslationNilDB(t *testing.T) {
+	r := &Renderer{db: nil}
+	got := r.getMediaTranslation(1, "ru", "alt", "fallback")
+	if got != "fallback" {
+		t.Errorf("expected fallback with nil db, got %q", got)
 	}
 }

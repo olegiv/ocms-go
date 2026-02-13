@@ -5,8 +5,21 @@ package cache
 
 import (
 	"log/slog"
+	"net/url"
 	"time"
 )
+
+// SanitizeRedisURL masks the password in a Redis URL for safe logging.
+func SanitizeRedisURL(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "[invalid URL]"
+	}
+	if parsed.User != nil {
+		parsed.User = url.UserPassword(parsed.User.Username(), "***")
+	}
+	return parsed.String()
+}
 
 // BackendType identifies the type of cache backend.
 type BackendType string
@@ -58,7 +71,7 @@ func NewCacheWithInfo(cfg Config) (*Result, error) {
 		if err != nil {
 			slog.Warn("failed to connect to Redis cache",
 				"error", err,
-				"url", cfg.RedisURL,
+				"url", SanitizeRedisURL(cfg.RedisURL),
 				"fallback", cfg.FallbackToMemory,
 			)
 
@@ -82,7 +95,7 @@ func NewCacheWithInfo(cfg Config) (*Result, error) {
 		}
 
 		slog.Info("connected to Redis cache",
-			"url", cfg.RedisURL,
+			"url", SanitizeRedisURL(cfg.RedisURL),
 			"prefix", cfg.Prefix,
 		)
 

@@ -126,6 +126,42 @@ func TestLoad_SessionSecretMinimumLength(t *testing.T) {
 	}
 }
 
+func TestLoad_RejectsKnownWeakSecrets(t *testing.T) {
+	for _, weak := range knownWeakSecrets {
+		t.Run(weak[:16], func(t *testing.T) {
+			os.Clearenv()
+			setEnv(t, "OCMS_SESSION_SECRET", weak)
+
+			_, err := Load()
+			if err == nil {
+				t.Fatal("Load() should reject known weak secret")
+			}
+		})
+	}
+}
+
+func TestHasMinimumEntropy(t *testing.T) {
+	tests := []struct {
+		name string
+		s    string
+		want bool
+	}{
+		{"all lowercase", "abcdefghijklmnopqrstuvwxyz123456", false},
+		{"lower+upper only", "abcdefGHIJKLmnopQRSTuvwx12345678", true},
+		{"base64 output", "K7gNU3sdo+OL0wNhqoVWhr3g6s1xYv72ol/pe/Unols=", true},
+		{"all same char", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", false},
+		{"mixed good secret", "MyS3cr3t!K3y-F0r_Pr0duct10n!!!", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasMinimumEntropy(tt.s); got != tt.want {
+				t.Errorf("hasMinimumEntropy(%q) = %v, want %v", tt.s, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestConfig_IsDevelopment(t *testing.T) {
 	tests := []struct {
 		env  string

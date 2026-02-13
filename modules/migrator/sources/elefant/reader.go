@@ -27,11 +27,18 @@ type Reader struct {
 	schemaDetected bool
 }
 
+// maxTablePrefixLength is the maximum allowed length for a table prefix.
+const maxTablePrefixLength = 20
+
 // sanitizeTablePrefix validates that a table prefix contains only safe SQL identifier characters
-// and returns the sanitized value. This prevents SQL injection when the prefix is used in query building.
+// (alphanumeric and underscore, max 20 characters) and returns the sanitized value.
+// This prevents SQL injection when the prefix is used in query building.
 func sanitizeTablePrefix(prefix string) (string, error) {
 	if prefix == "" {
 		return "", nil
+	}
+	if len(prefix) > maxTablePrefixLength {
+		return "", fmt.Errorf("invalid table prefix: exceeds maximum length of %d characters", maxTablePrefixLength)
 	}
 	// Create a new string by only copying valid characters.
 	// This helps break the taint trace in some static analysis tools.

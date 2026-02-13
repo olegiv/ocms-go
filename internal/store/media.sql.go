@@ -338,6 +338,42 @@ func (q *Queries) GetMediaTranslation(ctx context.Context, arg GetMediaTranslati
 	return i, err
 }
 
+const getMediaTranslationAlt = `-- name: GetMediaTranslationAlt :one
+SELECT mt.alt FROM media_translations mt
+JOIN languages l ON l.id = mt.language_id
+WHERE mt.media_id = ? AND l.code = ? AND mt.alt != ''
+`
+
+type GetMediaTranslationAltParams struct {
+	MediaID int64  `json:"media_id"`
+	Code    string `json:"code"`
+}
+
+func (q *Queries) GetMediaTranslationAlt(ctx context.Context, arg GetMediaTranslationAltParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, getMediaTranslationAlt, arg.MediaID, arg.Code)
+	var alt string
+	err := row.Scan(&alt)
+	return alt, err
+}
+
+const getMediaTranslationCaption = `-- name: GetMediaTranslationCaption :one
+SELECT mt.caption FROM media_translations mt
+JOIN languages l ON l.id = mt.language_id
+WHERE mt.media_id = ? AND l.code = ? AND mt.caption != ''
+`
+
+type GetMediaTranslationCaptionParams struct {
+	MediaID int64  `json:"media_id"`
+	Code    string `json:"code"`
+}
+
+func (q *Queries) GetMediaTranslationCaption(ctx context.Context, arg GetMediaTranslationCaptionParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, getMediaTranslationCaption, arg.MediaID, arg.Code)
+	var caption string
+	err := row.Scan(&caption)
+	return caption, err
+}
+
 const getMediaTranslations = `-- name: GetMediaTranslations :many
 SELECT mt.id, mt.media_id, mt.language_id, mt.alt, mt.caption, mt.created_at, mt.updated_at, l.code as language_code, l.name as language_name
 FROM media_translations mt
