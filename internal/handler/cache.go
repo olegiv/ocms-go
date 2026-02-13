@@ -15,6 +15,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/service"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 // CacheHandler handles cache management routes.
@@ -46,7 +47,6 @@ type CacheStatsData struct {
 
 // Stats handles GET /admin/cache - displays cache statistics.
 func (h *CacheHandler) Stats(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := middleware.GetAdminLang(r)
 
 	if h.cacheManager == nil {
@@ -54,27 +54,30 @@ func (h *CacheHandler) Stats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := CacheStatsData{
-		Caches:     h.cacheManager.AllStats(),
-		TotalStats: h.cacheManager.TotalStats(),
-		Info:       h.cacheManager.Info(),
+	info := h.cacheManager.Info()
+	totalStats := h.cacheManager.TotalStats()
+
+	viewData := adminviews.CacheStatsViewData{
+		Caches:     convertCacheItems(h.cacheManager.AllStats()),
+		TotalStats: adminviews.CacheStatsView{Hits: totalStats.Hits, Misses: totalStats.Misses, Items: totalStats.Items, HitRate: totalStats.HitRate},
 		IsRedis:    h.cacheManager.IsRedis(),
+		IsFallback: info.IsFallback,
+		RedisURL:   info.RedisURL,
+	}
+
+	if totalStats.ResetAt != nil {
+		viewData.ResetAt = totalStats.ResetAt.Format("Jan 2, 2006 15:04:05")
 	}
 
 	// Perform health check
 	if err := h.cacheManager.HealthCheck(r.Context()); err != nil {
-		data.HealthError = err.Error()
+		viewData.HealthError = err.Error()
 	}
 
-	h.renderer.RenderPage(w, r, "admin/cache_stats", render.TemplateData{
-		Title: i18n.T(lang, "nav.cache"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.cache"), URL: redirectAdminCache, Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer,
+		i18n.T(lang, "nav.cache"),
+		cacheBreadcrumbs(lang))
+	renderTempl(w, r, adminviews.CacheStatsPage(pc, viewData))
 }
 
 // clearCacheHelper performs the clear operation, logging, and flash message.

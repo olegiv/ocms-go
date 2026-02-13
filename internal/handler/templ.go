@@ -13,6 +13,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/alexedwards/scs/v2"
 
+	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
@@ -706,6 +707,38 @@ func buildPermissionGroups(existingPerms string) []adminviews.PermissionGroup {
 			},
 		},
 	}
+}
+
+// =============================================================================
+// CACHE HELPERS
+// =============================================================================
+
+// cacheBreadcrumbs returns breadcrumbs for the cache stats page.
+func cacheBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.cache"), URL: redirectAdminCache, Active: true},
+	}
+}
+
+// convertCacheItems converts cache.ManagerCacheStats slice to view CacheItemView slice.
+func convertCacheItems(caches []cache.ManagerCacheStats) []adminviews.CacheItemView {
+	items := make([]adminviews.CacheItemView, len(caches))
+	for idx, c := range caches {
+		items[idx] = adminviews.CacheItemView{
+			Name:    c.Name,
+			Kind:    string(c.Kind),
+			Items:   c.Stats.Items,
+			Hits:    c.Stats.Hits,
+			Misses:  c.Stats.Misses,
+			HitRate: c.Stats.HitRate,
+			Size:    c.Size,
+		}
+		if c.CachedAt != nil {
+			items[idx].CachedAt = c.CachedAt.Format("Jan 2, 15:04")
+		}
+	}
+	return items
 }
 
 // parsePermissionsJSON parses a JSON array string into a string slice.
