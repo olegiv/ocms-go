@@ -445,17 +445,8 @@ func getMimeTypeFromExt(path string) string {
 		return ""
 	}
 
-	// Use standard library first
-	mimeType := mime.TypeByExtension(ext)
-	if mimeType != "" {
-		// Strip charset suffix if present (e.g., "text/plain; charset=utf-8")
-		if idx := strings.Index(mimeType, ";"); idx != -1 {
-			mimeType = strings.TrimSpace(mimeType[:idx])
-		}
-		return mimeType
-	}
-
-	// Fallback for common types
+	// Known types first for consistent cross-platform results
+	// (e.g., mime.TypeByExtension(".webm") returns "audio/webm" on some OS)
 	switch ext {
 	case ".jpg", ".jpeg":
 		return "image/jpeg"
@@ -471,6 +462,16 @@ func getMimeTypeFromExt(path string) string {
 		return "video/mp4"
 	case ".webm":
 		return "video/webm"
+	}
+
+	// Fall back to standard library for other types
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType != "" {
+		// Strip charset suffix if present (e.g., "text/plain; charset=utf-8")
+		if idx := strings.Index(mimeType, ";"); idx != -1 {
+			mimeType = strings.TrimSpace(mimeType[:idx])
+		}
+		return mimeType
 	}
 
 	return ""
