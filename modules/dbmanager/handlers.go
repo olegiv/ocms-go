@@ -45,20 +45,19 @@ type DashboardData struct {
 }
 
 // renderDashboard renders the database manager dashboard with the given data.
-func (m *Module) renderDashboard(w http.ResponseWriter, r *http.Request, lang string, user *store.User, data DashboardData) {
-	if err := m.ctx.Render.Render(w, r, "admin/module_dbmanager", render.TemplateData{
-		Title: i18n.T(lang, "dbmanager.title"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
-			{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
-			{Label: i18n.T(lang, "dbmanager.title"), URL: "/admin/dbmanager", Active: true},
-		},
-	}); err != nil {
-		m.ctx.Logger.Error("render error", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+func (m *Module) renderDashboard(w http.ResponseWriter, r *http.Request, lang string, _ *store.User, data DashboardData) {
+	viewData := DBManagerViewData{
+		IsDemoMode: middleware.IsDemoMode(),
+		Query:      data.Query,
+		Result:     data.Result,
+		History:    data.History,
 	}
+	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "dbmanager.title"), []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: "/admin"},
+		{Label: i18n.T(lang, "nav.modules"), URL: "/admin/modules"},
+		{Label: i18n.T(lang, "dbmanager.title"), URL: "/admin/dbmanager", Active: true},
+	})
+	render.RenderTempl(w, r, DBManagerPage(pc, viewData))
 }
 
 // handleDashboard handles GET /admin/dbmanager - shows the database manager dashboard.
