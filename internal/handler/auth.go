@@ -21,6 +21,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 	"github.com/olegiv/ocms-go/modules/hcaptcha"
 )
 
@@ -66,9 +67,37 @@ func (h *AuthHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lang := middleware.GetAdminLang(r)
-	h.renderer.RenderPage(w, r, "auth/login", render.TemplateData{
-		Title: i18n.T(lang, "auth.login"),
-	})
+
+	// Build login data for templ view
+	data := adminviews.LoginData{
+		Title:     i18n.T(lang, "auth.login"),
+		AdminLang: lang,
+	}
+
+	// Get language options
+	for _, opt := range h.renderer.AdminLangOptions() {
+		data.LangOptions = append(data.LangOptions, adminviews.LangOption{
+			Code: opt.Code,
+			Name: opt.Name,
+		})
+	}
+
+	// Get hCaptcha state
+	data.HcaptchaEnabled = h.renderer.HcaptchaEnabled()
+	if data.HcaptchaEnabled {
+		data.HcaptchaWidget = h.renderer.HcaptchaWidgetHTML()
+	}
+
+	// Get flash message from session
+	if flash := h.sessionManager.PopString(r.Context(), "flash"); flash != "" {
+		data.Flash = flash
+		data.FlashType = h.sessionManager.PopString(r.Context(), "flash_type")
+		if data.FlashType == "" {
+			data.FlashType = "info"
+		}
+	}
+
+	renderTempl(w, r, adminviews.LoginPage(data))
 }
 
 // Login handles the login form submission.
