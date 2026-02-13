@@ -1619,3 +1619,166 @@ func convertSchedulerTaskRunsViewData(task store.ScheduledTask, runs []store.Sch
 		IsDemoMode:   middleware.IsDemoMode(),
 	}
 }
+
+// =============================================================================
+// Media helpers
+// =============================================================================
+
+// mediaBreadcrumbs returns breadcrumbs for the media library page.
+func mediaBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.media"), URL: redirectAdminMedia, Active: true},
+	}
+}
+
+// mediaUploadBreadcrumbs returns breadcrumbs for the media upload page.
+func mediaUploadBreadcrumbs(lang string) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.media"), URL: redirectAdminMedia},
+		{Label: i18n.T(lang, "media.upload"), URL: redirectAdminMediaUpload, Active: true},
+	}
+}
+
+// mediaEditBreadcrumbs returns breadcrumbs for the media edit page.
+func mediaEditBreadcrumbs(lang string, filename string, mediaID int64) []render.Breadcrumb {
+	return []render.Breadcrumb{
+		{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
+		{Label: i18n.T(lang, "nav.media"), URL: redirectAdminMedia},
+		{Label: filename, URL: fmt.Sprintf(redirectAdminMediaID, mediaID), Active: true},
+	}
+}
+
+// convertMediaLibraryViewData converts handler data to view data for the media library.
+func convertMediaLibraryViewData(data MediaLibraryData) adminviews.MediaLibraryViewData {
+	viewMedia := make([]adminviews.MediaItemView, len(data.Media))
+	for i, m := range data.Media {
+		viewMedia[i] = adminviews.MediaItemView{
+			ID:           m.ID,
+			Filename:     m.Filename,
+			Alt:          m.Alt.String,
+			ThumbnailURL: m.ThumbnailURL,
+			OriginalURL:  m.OriginalURL,
+			IsImage:      m.IsImage,
+			TypeIcon:     m.TypeIcon,
+			Size:         render.FormatBytes(m.Medium.Size),
+		}
+	}
+
+	viewFolders := make([]adminviews.MediaFolderView, len(data.Folders))
+	for i, f := range data.Folders {
+		viewFolders[i] = adminviews.MediaFolderView{
+			ID:        f.ID,
+			Name:      f.Name,
+			HasParent: f.ParentID.Valid,
+		}
+	}
+
+	return adminviews.MediaLibraryViewData{
+		Media:      viewMedia,
+		Folders:    viewFolders,
+		TotalCount: data.TotalCount,
+		Filter:     data.Filter,
+		FolderID:   data.FolderID,
+		Search:     data.Search,
+		Pagination: convertPagination(data.Pagination),
+	}
+}
+
+// convertMediaUploadViewData converts handler data to view data for the media upload page.
+func convertMediaUploadViewData(data UploadFormData, lang string) adminviews.MediaUploadViewData {
+	viewFolders := make([]adminviews.MediaFolderView, len(data.Folders))
+	for i, f := range data.Folders {
+		viewFolders[i] = adminviews.MediaFolderView{
+			ID:   f.ID,
+			Name: f.Name,
+		}
+	}
+
+	return adminviews.MediaUploadViewData{
+		Folders:          viewFolders,
+		MaxSize:          data.MaxSize,
+		MaxSizeFormatted: render.FormatBytes(data.MaxSize),
+		AllowedExt:       data.AllowedExt,
+		FormatsHint:      i18n.T(lang, "media.supported_formats"),
+	}
+}
+
+// convertMediaEditViewData converts handler data to view data for the media edit page.
+func convertMediaEditViewData(data MediaEditData, renderer *render.Renderer, lang string) adminviews.MediaEditViewData {
+	media := adminviews.MediaItemView{
+		ID:            data.Media.ID,
+		Filename:      data.Media.Filename,
+		Alt:           data.Media.Alt.String,
+		ThumbnailURL:  data.Media.ThumbnailURL,
+		OriginalURL:   data.Media.OriginalURL,
+		IsImage:       data.Media.IsImage,
+		TypeIcon:      data.Media.TypeIcon,
+		Size:          render.FormatBytes(data.Media.Medium.Size),
+		MimeType:      data.Media.MimeType,
+		HasDimensions: data.Media.Width.Valid,
+		Width:         data.Media.Width.Int64,
+		Height:        data.Media.Height.Int64,
+		CreatedAt:     render.FormatDateTime(data.Media.CreatedAt),
+		UUID:          data.Media.Uuid,
+		FolderID:      data.Media.FolderID.Int64,
+		HasFolderID:   data.Media.FolderID.Valid,
+	}
+
+	viewVariants := make([]adminviews.MediaVariantView, len(data.Variants))
+	for i, v := range data.Variants {
+		typeLabel := v.Type
+		switch v.Type {
+		case "thumbnail":
+			typeLabel = i18n.T(lang, "media.variant_thumbnail")
+		case "medium":
+			typeLabel = i18n.T(lang, "media.variant_medium")
+		case "large":
+			typeLabel = i18n.T(lang, "media.variant_large")
+		}
+		viewVariants[i] = adminviews.MediaVariantView{
+			Type:      v.Type,
+			TypeLabel: typeLabel,
+			Width:     v.Width,
+			Height:    v.Height,
+			Size:      render.FormatBytes(v.Size),
+		}
+	}
+
+	viewFolders := make([]adminviews.MediaFolderView, len(data.Folders))
+	for i, f := range data.Folders {
+		viewFolders[i] = adminviews.MediaFolderView{
+			ID:   f.ID,
+			Name: f.Name,
+		}
+	}
+
+	viewLanguages := make([]adminviews.MediaLanguageView, len(data.Languages))
+	for i, l := range data.Languages {
+		viewLanguages[i] = adminviews.MediaLanguageView{
+			Code:       l.Code,
+			NativeName: l.NativeName,
+		}
+	}
+
+	viewTranslations := make(map[string]adminviews.MediaTranslationView)
+	for code, t := range data.Translations {
+		viewTranslations[code] = adminviews.MediaTranslationView{
+			Alt:     t.Alt,
+			Caption: t.Caption,
+		}
+	}
+
+	return adminviews.MediaEditViewData{
+		Media:            media,
+		Variants:         viewVariants,
+		Folders:          viewFolders,
+		CurrentFolderID:  data.Media.FolderID.Int64,
+		HasCurrentFolder: data.Media.FolderID.Valid,
+		Languages:        viewLanguages,
+		Translations:     viewTranslations,
+		Errors:           data.Errors,
+		FormValues:       data.FormValues,
+	}
+}
