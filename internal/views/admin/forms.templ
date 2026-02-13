@@ -1,0 +1,979 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import "fmt"
+import "encoding/json"
+
+// =============================================================================
+// VIEW TYPES
+// =============================================================================
+
+// FormListItemView represents a form in the list.
+type FormListItemView struct {
+	ID              int64
+	Name            string
+	Title           string
+	Slug            string
+	LanguageCode    string
+	IsActive        bool
+	SubmissionCount int64
+	UnreadCount     int64
+}
+
+// FormTranslationInfoView holds info about a form translation.
+type FormTranslationInfoView struct {
+	LanguageCode string
+	LanguageName string
+	FormID       int64
+	FormName     string
+}
+
+// FormFieldView represents a form field for JSON serialization.
+type FormFieldView struct {
+	ID          int64  `json:"id"`
+	Type        string `json:"type"`
+	Name        string `json:"name"`
+	Label       string `json:"label"`
+	Placeholder string `json:"placeholder"`
+	HelpText    string `json:"help_text"`
+	Options     string `json:"options"`
+	Validation  string `json:"validation"`
+	IsRequired  bool   `json:"is_required"`
+}
+
+// FormsListViewData holds data for the forms list page.
+type FormsListViewData struct {
+	Forms []FormListItemView
+}
+
+// FormFormViewData holds data for the form create/edit page.
+type FormFormViewData struct {
+	IsEdit           bool
+	FormID           int64
+	FormName         string
+	FormSlug         string
+	FormTitle        string
+	FormDescription  string
+	SuccessMessage   string
+	EmailTo          string
+	IsActive         bool
+	LanguageCode     string
+	Fields           []FormFieldView
+	FieldTypes       []string
+	Errors           map[string]string
+	FormValues       map[string]string
+	// Language/Translation
+	HasMultipleLanguages bool
+	AllLanguages         []LanguageOption
+	Language             *LanguageOption
+	Translations         []FormTranslationInfoView
+	MissingLanguages     []LanguageOption
+	HcaptchaEnabled      bool
+	FieldsJSON           string
+	FieldTypesJSON       string
+	IsDemoMode           bool
+}
+
+// SubmissionItemView represents a submission in the list.
+type SubmissionItemView struct {
+	ID        int64
+	Preview   string
+	CreatedAt string
+	IPAddress string
+	IsRead    bool
+}
+
+// SubmissionsListViewData holds data for the submissions list page.
+type SubmissionsListViewData struct {
+	FormID      int64
+	FormName    string
+	FormSlug    string
+	TotalCount  int64
+	UnreadCount int64
+	Submissions []SubmissionItemView
+	Pagination  PaginationData
+	IsDemoMode  bool
+}
+
+// SubmissionFieldView represents a field in the submission view.
+type SubmissionFieldView struct {
+	Label string
+	Name  string
+	Type  string
+	Value string
+}
+
+// SubmissionViewViewData holds data for viewing a single submission.
+type SubmissionViewViewData struct {
+	FormID       int64
+	FormName     string
+	SubmissionID int64
+	CreatedAt    string
+	IPAddress    string
+	UserAgent    string
+	Fields       []SubmissionFieldView
+	RawJSON      string
+}
+
+// =============================================================================
+// HELPERS
+// =============================================================================
+
+// formFormVal returns form value with fallback for edit mode.
+func formFormVal(formValues map[string]string, key string, editFallback string, isEdit bool) string {
+	if isEdit {
+		if v, ok := formValues[key]; ok && v != "" {
+			return v
+		}
+		return editFallback
+	}
+	if v, ok := formValues[key]; ok {
+		return v
+	}
+	return ""
+}
+
+// formFormChecked returns true if checkbox should be checked.
+func formFormChecked(formValues map[string]string, key string, editValue bool, isEdit bool) bool {
+	if isEdit {
+		if _, ok := formValues[key]; ok {
+			return formValues[key] == "true" || formValues[key] == "on"
+		}
+		return editValue
+	}
+	return formValues[key] == "true" || formValues[key] == "on"
+}
+
+// formsFieldsToJSON serializes form fields to JSON for Alpine.js.
+func formsFieldsToJSON(fields []FormFieldView) string {
+	b, err := json.Marshal(fields)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
+}
+
+// formCurrentLanguageCode returns the effective language code for the form.
+func formCurrentLanguageCode(formValues map[string]string, lang *LanguageOption, formLangCode string) string {
+	if v, ok := formValues["language_code"]; ok && v != "" {
+		return v
+	}
+	if lang != nil {
+		return lang.Code
+	}
+	return formLangCode
+}
+
+// =============================================================================
+// LIST PAGE
+// =============================================================================
+
+templ FormsListPage(pc *PageContext, data FormsListViewData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<h1 class="page-title">{ pc.T("forms.title") }</h1>
+			<div class="page-actions">
+				<a href="/admin/forms/new" class="btn btn-primary">{ pc.T("forms.new") }</a>
+			</div>
+		</div>
+		if len(data.Forms) > 0 {
+			<div class="table-container">
+				<table class="table">
+					<thead>
+						<tr>
+							<th>{ pc.T("label.name") }</th>
+							<th>{ pc.T("label.title") }</th>
+							<th>{ pc.T("label.slug") }</th>
+							<th>{ pc.T("label.language") }</th>
+							<th>{ pc.T("forms.submissions") }</th>
+							<th>{ pc.T("label.status") }</th>
+							<th>{ pc.T("label.actions") }</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, item := range data.Forms {
+							<tr>
+								<td>
+									<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d", item.ID)) } class="link-primary">{ item.Name }</a>
+								</td>
+								<td>{ item.Title }</td>
+								<td><code>{ item.Slug }</code></td>
+								<td>
+									if item.LanguageCode != "" {
+										<span class="badge badge-outline">{ item.LanguageCode }</span>
+									} else {
+										<span class="text-muted">-</span>
+									}
+								</td>
+								<td>
+									<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions", item.ID)) } class="link-secondary">
+										{ fmt.Sprintf("%d", item.SubmissionCount) }
+										if item.SubmissionCount != 1 {
+											{ " " + pc.T("forms.submissions_plural") }
+										} else {
+											{ " " + pc.T("forms.submission") }
+										}
+										if item.UnreadCount > 0 {
+											<span class="badge badge-primary">{ fmt.Sprintf("%d", item.UnreadCount) } { pc.T("forms.new_badge") }</span>
+										}
+									</a>
+								</td>
+								<td>
+									if item.IsActive {
+										<span class="badge badge-success">{ pc.T("forms.active") }</span>
+									} else {
+										<span class="badge badge-secondary">{ pc.T("forms.inactive") }</span>
+									}
+								</td>
+								<td>
+									<div class="btn-group">
+										<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d", item.ID)) } class="btn btn-sm btn-secondary">{ pc.T("btn.edit") }</a>
+										<a href={ templ.SafeURL(fmt.Sprintf("/forms/%s", item.Slug)) } class="btn btn-sm btn-outline" target="_blank">{ pc.T("forms.preview") }</a>
+										<button type="button"
+											class="btn btn-sm btn-danger"
+											hx-delete={ fmt.Sprintf("/admin/forms/%d", item.ID) }
+											hx-confirm={ pc.T("forms.confirm_delete") }
+											hx-target="closest tr"
+											hx-swap="outerHTML"
+										>
+											{ pc.T("btn.delete") }
+										</button>
+									</div>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		} else {
+			<div class="card">
+				<div class="card-body">
+					<div class="empty-state">
+						@iconFormDocLarge()
+						<p>{ pc.T("forms.no_forms") }</p>
+						<span class="empty-hint">{ pc.T("forms.no_forms_hint") }</span>
+						<div class="empty-state-action">
+							<a href="/admin/forms/new" class="btn btn-primary">{ pc.T("forms.create") }</a>
+						</div>
+					</div>
+				</div>
+			</div>
+		}
+	}
+}
+
+// =============================================================================
+// FORM PAGE (create/edit)
+// =============================================================================
+
+templ FormsFormPage(pc *PageContext, data FormFormViewData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<h1 class="page-title">
+				if data.IsEdit {
+					{ pc.T("forms.edit") }
+				} else {
+					{ pc.T("forms.new") }
+				}
+			</h1>
+			<div class="page-actions">
+				<a href="/admin/forms" class="btn btn-secondary">{ pc.T("forms.back_to_forms") }</a>
+				if data.IsEdit {
+					<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions", data.FormID)) } class="btn btn-secondary">{ pc.T("forms.view_submissions") }</a>
+					<a href={ templ.SafeURL(fmt.Sprintf("/forms/%s", data.FormSlug)) } class="btn btn-outline" target="_blank">{ pc.T("forms.preview") }</a>
+				}
+			</div>
+		</div>
+		<div class="form-builder-container">
+			<div class="form-builder-main">
+				<!-- Form Settings -->
+				<div class="card">
+					<div class="card-header">
+						<h3>{ pc.T("forms.form_settings") }</h3>
+					</div>
+					<div class="card-body">
+						<form method="POST" action={ templ.SafeURL(formFormAction(data)) }>
+							@csrfField()
+							if data.IsEdit {
+								<input type="hidden" name="_method" value="PUT"/>
+							}
+							<div class="form-row">
+								<div class="form-group col-md-6">
+									<label for="name" class="form-label">{ pc.T("forms.internal_name") } *</label>
+									<input type="text"
+										id="name"
+										name="name"
+										class={ "form-input", templ.KV("is-invalid", data.Errors["name"] != "") }
+										value={ formFormVal(data.FormValues, "name", data.FormName, data.IsEdit) }
+										required
+										maxlength="255"
+									/>
+									if data.Errors["name"] != "" {
+										<div class="form-error">{ data.Errors["name"] }</div>
+									}
+									<small class="form-text">{ pc.T("forms.internal_name_hint") }</small>
+								</div>
+								<div class="form-group col-md-6">
+									<label for="slug" class="form-label">{ pc.T("label.slug") } *</label>
+									<input type="text"
+										id="slug"
+										name="slug"
+										class={ "form-input", templ.KV("is-invalid", data.Errors["slug"] != "") }
+										value={ formFormVal(data.FormValues, "slug", data.FormSlug, data.IsEdit) }
+										pattern="[a-z0-9-]+"
+										placeholder="auto-generated-from-name"
+										maxlength="255"
+									/>
+									if data.Errors["slug"] != "" {
+										<div class="form-error">{ data.Errors["slug"] }</div>
+									}
+									<small class="form-text">{ pc.T("forms.slug_hint") }</small>
+								</div>
+							</div>
+							<div class="form-group">
+								<label for="title" class="form-label">{ pc.T("forms.display_title") } *</label>
+								<input type="text"
+									id="title"
+									name="title"
+									class={ "form-input", templ.KV("is-invalid", data.Errors["title"] != "") }
+									value={ formFormVal(data.FormValues, "title", data.FormTitle, data.IsEdit) }
+									required
+									maxlength="255"
+								/>
+								if data.Errors["title"] != "" {
+									<div class="form-error">{ data.Errors["title"] }</div>
+								}
+								<small class="form-text">{ pc.T("forms.display_title_hint") }</small>
+							</div>
+							<div class="form-group">
+								<label for="description" class="form-label">{ pc.T("label.description") }</label>
+								<textarea id="description" name="description" class="form-input" rows="2">{ formFormVal(data.FormValues, "description", data.FormDescription, data.IsEdit) }</textarea>
+								<small class="form-text">{ pc.T("forms.description_hint") }</small>
+							</div>
+							<div class="form-group">
+								<label for="success_message" class="form-label">{ pc.T("forms.success_message") }</label>
+								<textarea id="success_message" name="success_message" class="form-input" rows="2">{ formFormVal(data.FormValues, "success_message", data.SuccessMessage, data.IsEdit) }</textarea>
+								<small class="form-text">{ pc.T("forms.success_message_hint") }</small>
+							</div>
+							<div class="form-group">
+								<label for="email_to" class="form-label">{ pc.T("forms.notification_email") }</label>
+								<input type="email"
+									id="email_to"
+									name="email_to"
+									class="form-input"
+									value={ formFormVal(data.FormValues, "email_to", data.EmailTo, data.IsEdit) }
+									placeholder="admin@example.com"
+									maxlength="255"
+								/>
+								<small class="form-text">{ pc.T("forms.notification_email_hint") }</small>
+							</div>
+							<div class="form-group">
+								<label class="form-checkbox">
+									<input type="checkbox"
+										name="is_active"
+										value="true"
+										checked?={ formFormChecked(data.FormValues, "is_active", data.IsActive, data.IsEdit) }
+									/>
+									<span>{ pc.T("forms.is_active") }</span>
+								</label>
+							</div>
+							if data.HasMultipleLanguages {
+								<div class="form-group">
+									<label for="language_code" class="form-label">{ pc.T("label.language") }</label>
+									<select
+										id="language_code"
+										name={ languageSelectName(data.IsEdit) }
+										class="form-select"
+										disabled?={ data.IsEdit }
+									>
+										for _, lang := range data.AllLanguages {
+											<option
+												value={ lang.Code }
+												selected?={ lang.Code == formCurrentLanguageCode(data.FormValues, data.Language, data.LanguageCode) }
+											>
+												{ lang.Name } ({ lang.Code })
+											</option>
+										}
+									</select>
+									if data.IsEdit {
+										if data.Language != nil {
+											<input type="hidden" name="language_code" value={ data.Language.Code }/>
+										}
+										<small class="form-text">{ pc.T("forms.language_readonly") }</small>
+									} else {
+										<small class="form-text">{ pc.T("forms.select_language") }</small>
+									}
+								</div>
+							} else if data.Language != nil {
+								<input type="hidden" name="language_code" value={ data.Language.Code }/>
+							}
+							<div class="form-actions">
+								<button type="submit" class="btn btn-primary">
+									if data.IsEdit {
+										{ pc.T("forms.update_form") }
+									} else {
+										{ pc.T("forms.create_form") }
+									}
+								</button>
+								<a href="/admin/forms" class="btn btn-secondary">{ pc.T("btn.cancel") }</a>
+							</div>
+						</form>
+					</div>
+				</div>
+				if data.IsEdit {
+					<!-- Field Builder -->
+					@formsFieldBuilder(pc, data)
+					<!-- Translations Panel -->
+					if data.HasMultipleLanguages {
+						@formsTranslationsPanel(pc, data)
+					}
+				}
+			</div>
+		</div>
+		if data.IsEdit {
+			@formsFieldBuilderScript(pc, data)
+		}
+	}
+}
+
+func formFormAction(data FormFormViewData) string {
+	if data.IsEdit {
+		return fmt.Sprintf("/admin/forms/%d", data.FormID)
+	}
+	return "/admin/forms"
+}
+
+func languageSelectName(isEdit bool) string {
+	if isEdit {
+		return ""
+	}
+	return "language_code"
+}
+
+templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
+	<div class="card mt-4" x-data="formFieldBuilder()">
+		<div class="card-header">
+			<h3>{ pc.T("forms.form_fields") }</h3>
+			<button type="button" class="btn btn-primary btn-sm" @click="openAddModal()">
+				{ pc.T("forms.add_field") }
+			</button>
+		</div>
+		<div class="card-body">
+			<template x-if="fields.length === 0">
+				<div class="empty-state">
+					<p>{ pc.T("forms.no_fields") }</p>
+				</div>
+			</template>
+			<div id="fields-list" class="fields-list" x-sort="handleSort" x-sort:config="{ handle: '.field-item-handle' }">
+				<template x-for="field in fields" :key="`${field.id}-${sortIteration}`">
+					<div class="field-item" x-sort:item="field.id">
+						<div class="field-item-handle" x-sort:handle>
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<line x1="8" y1="6" x2="16" y2="6"></line>
+								<line x1="8" y1="12" x2="16" y2="12"></line>
+								<line x1="8" y1="18" x2="16" y2="18"></line>
+							</svg>
+						</div>
+						<div class="field-item-content">
+							<div class="field-item-label" x-text="field.label"></div>
+							<div class="field-item-meta">
+								<span class="badge badge-secondary" x-text="field.type"></span>
+								<code x-text="field.name"></code>
+								<span class="badge badge-primary" x-show="field.is_required">{ pc.T("forms.required") }</span>
+							</div>
+						</div>
+						<div class="field-item-actions">
+							<button type="button" class="btn btn-sm btn-secondary" @click="openEditModal(field)">
+								{ pc.T("btn.edit") }
+							</button>
+							<button type="button" class="btn btn-sm btn-danger" @click="deleteField(field.id)">
+								{ pc.T("btn.delete") }
+							</button>
+						</div>
+					</div>
+				</template>
+			</div>
+		</div>
+		<!-- Add/Edit Field Modal -->
+		<template x-if="showModal">
+			<div class="modal-overlay" x-show="showModal" @click.self="closeModal()" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;">
+				<div class="modal" @click.stop style="background:white;border-radius:8px;max-width:500px;width:100%;max-height:90vh;overflow-y:auto;">
+					<div class="modal-header" style="padding:1rem;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;">
+						<h3 class="modal-title" x-text={ fmt.Sprintf("editingField?.id ? '%s' : '%s'", pc.T("forms.edit_field"), pc.T("forms.add_field")) }></h3>
+						<button type="button" class="modal-close" @click="closeModal()" aria-label={ pc.T("btn.close") }>&times;</button>
+					</div>
+					<div class="modal-body" style="padding:1rem;">
+						<div class="form-group">
+							<label class="form-label">{ pc.T("forms.field_type") } *</label>
+							<select class="form-input" x-model="editingField.type">
+								<template x-for="t in (editingField && editingField.id ? fieldTypes : getAvailableFieldTypes())" :key="t">
+									<option :value="t" x-text="t"></option>
+								</template>
+							</select>
+						</div>
+						<div class="form-group">
+							<label class="form-label">{ pc.T("forms.field_label") } *</label>
+							<input type="text" class="form-input" x-model="editingField.label" maxlength="255"/>
+						</div>
+						<div class="form-group" x-show="editingField && editingField.type !== 'captcha'">
+							<label class="form-label">{ pc.T("forms.field_name") }</label>
+							<input type="text" class="form-input" x-model="editingField.name" placeholder="auto-generated" maxlength="255"/>
+							<small class="form-text">{ pc.T("forms.field_name_hint") }</small>
+						</div>
+						<div class="form-group" x-show="editingField && editingField.type !== 'captcha'">
+							<label class="form-label">{ pc.T("forms.field_placeholder") }</label>
+							<input type="text" class="form-input" x-model="editingField.placeholder" maxlength="255"/>
+						</div>
+						<div class="form-group" x-show="editingField && editingField.type !== 'captcha'">
+							<label class="form-label">{ pc.T("forms.field_help_text") }</label>
+							<input type="text" class="form-input" x-model="editingField.help_text" maxlength="255"/>
+							<small class="form-text">{ pc.T("forms.field_help_hint") }</small>
+						</div>
+						<div class="form-group" x-show="showOptionsField()">
+							<label class="form-label">{ pc.T("forms.field_options") }</label>
+							<textarea class="form-input" rows="4" x-model="editingField.options" placeholder={ "Option 1\nOption 2\nOption 3" }></textarea>
+							<small class="form-text">{ pc.T("forms.field_options_hint") }</small>
+						</div>
+						<!-- Captcha field info -->
+						<template x-if="editingField && editingField.type === 'captcha'">
+							<div class="alert alert-info" style="margin-bottom: 1rem;">
+								<strong>{ pc.T("forms.captcha_info_title") }</strong>
+								<p style="margin: 0.5rem 0 0 0;">{ pc.T("forms.captcha_info_text") }</p>
+								if !data.HcaptchaEnabled {
+									<div class="alert alert-warning" style="margin-top: 0.5rem; margin-bottom: 0;">
+										<strong>{ pc.T("forms.captcha_warning_title") }</strong>
+										{ " " + pc.T("forms.captcha_warning_text") + " " }
+										<a href="/admin/hcaptcha">{ pc.T("forms.captcha_configure_link") }</a>
+									</div>
+								}
+							</div>
+						</template>
+						<div class="form-group" x-show="editingField && editingField.type !== 'captcha'">
+							<label class="checkbox-label">
+								<input type="checkbox" x-model="editingField.is_required"/>
+								<span>{ pc.T("forms.field_required") }</span>
+							</label>
+						</div>
+					</div>
+					<div class="modal-footer" style="padding:1rem;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:0.5rem;">
+						<button type="button" class="btn btn-outline" @click="closeModal()">{ pc.T("btn.cancel") }</button>
+						<button type="button" class="btn btn-primary" @click="saveField()">{ pc.T("forms.save_field") }</button>
+					</div>
+				</div>
+			</div>
+		</template>
+	</div>
+}
+
+templ formsTranslationsPanel(pc *PageContext, data FormFormViewData) {
+	<div class="card mt-4">
+		<div class="card-header">
+			<h3>
+				@iconTranslate()
+				{ pc.T("forms.translations") }
+			</h3>
+			if data.Language != nil {
+				<span class="current-language-badge">
+					{ pc.T("forms.current_language") }: { data.Language.Name }
+				</span>
+			}
+		</div>
+		<div class="card-body">
+			if len(data.Translations) > 0 {
+				<div class="translations-list">
+					<h4 class="translations-subtitle">{ pc.T("forms.existing_translations") }</h4>
+					for _, t := range data.Translations {
+						<div class="translation-item">
+							<div class="translation-info">
+								<span class="translation-lang-badge" title={ t.LanguageName }>{ t.LanguageCode }</span>
+								<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d", t.FormID)) } class="translation-link">
+									{ t.FormName }
+								</a>
+							</div>
+						</div>
+					}
+				</div>
+			}
+			if len(data.MissingLanguages) > 0 {
+				<div class="translations-add">
+					<h4 class="translations-subtitle">{ pc.T("forms.add_translation") }</h4>
+					<div class="translation-buttons">
+						for _, lang := range data.MissingLanguages {
+							<form action={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/translate/%s", data.FormID, lang.Code)) } method="POST" class="inline-form">
+								@csrfField()
+								<button type="submit" class="btn btn-sm btn-outline translation-add-btn" title={ "Create " + lang.Name + " translation" }>
+									@iconPlus14()
+									{ lang.Code } - { lang.Name }
+								</button>
+							</form>
+						}
+					</div>
+				</div>
+			}
+			if len(data.Translations) == 0 && len(data.MissingLanguages) == 0 {
+				<p class="translations-empty">{ pc.T("forms.all_translations_exist") }</p>
+			}
+		</div>
+	</div>
+}
+
+templ formsFieldBuilderScript(pc *PageContext, data FormFormViewData) {
+	<script>
+	function formFieldBuilder() {
+		return {
+			formId: { fmt.Sprintf("%d", data.FormID) },
+			fields: JSON.parse({ fmt.Sprintf("'%s'", data.FieldsJSON) }),
+			sortIteration: 0,
+			showModal: false,
+			editingField: null,
+			fieldTypes: JSON.parse({ fmt.Sprintf("'%s'", data.FieldTypesJSON) }),
+			init() {
+				this.fields = (this.fields || []).map(f => ({
+					id: f.id,
+					type: f.type,
+					name: f.name,
+					label: f.label,
+					placeholder: f.placeholder?.String || f.placeholder || '',
+					help_text: f.help_text?.String || f.help_text || '',
+					options: f.options?.String || f.options || '[]',
+					validation: f.validation?.String || f.validation || '{}',
+					is_required: f.is_required ?? false
+				}));
+			},
+			handleSort(fieldId, newPosition) {
+				const oldIndex = this.fields.findIndex(f => f.id == fieldId);
+				if (oldIndex !== -1 && oldIndex !== newPosition) {
+					const [field] = this.fields.splice(oldIndex, 1);
+					this.fields.splice(newPosition, 0, field);
+					this.sortIteration++;
+					this.saveOrder();
+				}
+			},
+			async saveOrder() {
+				const fieldIds = this.fields.map(f => f.id);
+				try {
+					await fetch(`/admin/forms/${this.formId}/fields/reorder`, {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ field_ids: fieldIds })
+					});
+				} catch (e) {
+					console.error('Failed to save field order:', e);
+				}
+			},
+			openAddModal() {
+				this.editingField = {
+					id: null,
+					type: this.fieldTypes[0],
+					name: '',
+					label: '',
+					placeholder: '',
+					help_text: '',
+					options: '',
+					is_required: false
+				};
+				this.showModal = true;
+			},
+			hasCaptchaField() {
+				return this.fields.some(f => f.type === 'captcha');
+			},
+			getAvailableFieldTypes() {
+				if (this.hasCaptchaField()) {
+					return this.fieldTypes.filter(t => t !== 'captcha');
+				}
+				return this.fieldTypes;
+			},
+			openEditModal(field) {
+				let optionsText = '';
+				if (field.options && field.options !== '[]') {
+					try {
+						const arr = JSON.parse(field.options);
+						optionsText = arr.join('\n');
+					} catch (e) {}
+				}
+				this.editingField = {
+					id: field.id,
+					type: field.type,
+					name: field.name,
+					label: field.label,
+					placeholder: field.placeholder,
+					help_text: field.help_text,
+					options: optionsText,
+					is_required: field.is_required
+				};
+				this.showModal = true;
+			},
+			closeModal() {
+				this.showModal = false;
+				this.editingField = null;
+			},
+			showOptionsField() {
+				return this.editingField && ['select', 'radio', 'checkbox'].includes(this.editingField.type);
+			},
+			async saveField() {
+				if (!this.editingField || !this.editingField.label.trim()) {
+					return;
+				}
+				let options = '[]';
+				if (this.editingField.options.trim()) {
+					const arr = this.editingField.options.split('\n').map(o => o.trim()).filter(o => o);
+					options = JSON.stringify(arr);
+				}
+				const data = {
+					type: this.editingField.type,
+					label: this.editingField.label,
+					name: this.editingField.name,
+					placeholder: this.editingField.placeholder,
+					help_text: this.editingField.help_text,
+					options: options,
+					validation: '{}',
+					is_required: this.editingField.is_required
+				};
+				const url = this.editingField.id
+					? `/admin/forms/${this.formId}/fields/${this.editingField.id}`
+					: `/admin/forms/${this.formId}/fields`;
+				const method = this.editingField.id ? 'PUT' : 'POST';
+				try {
+					const response = await fetch(url, {
+						method: method,
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify(data)
+					});
+					const result = await response.json();
+					if (result.success) {
+						window.location.reload();
+					}
+				} catch (e) {
+					console.error('Failed to save field:', e);
+				}
+			},
+			async deleteField(fieldId) {
+				if (!confirm({ fmt.Sprintf("'%s'", pc.T("label.confirm_delete")) })) return;
+				try {
+					const response = await fetch(`/admin/forms/${this.formId}/fields/${fieldId}`, {
+						method: 'DELETE'
+					});
+					const result = await response.json();
+					if (result.success) {
+						this.fields = this.fields.filter(f => f.id !== fieldId);
+					}
+				} catch (e) {
+					console.error('Failed to delete field:', e);
+				}
+			}
+		};
+	}
+	</script>
+}
+
+// =============================================================================
+// SUBMISSIONS LIST PAGE
+// =============================================================================
+
+templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<h1 class="page-title">{ pc.T("forms.submissions") } - { data.FormName }</h1>
+			<div class="page-actions">
+				if len(data.Submissions) > 0 && !data.IsDemoMode {
+					<form action={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/export", data.FormID)) } method="POST" class="d-inline">
+						@csrfField()
+						<button type="submit" class="btn btn-secondary">{ pc.T("forms.export_csv") }</button>
+					</form>
+				}
+				<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d", data.FormID)) } class="btn btn-outline">{ pc.T("forms.back_to_form") }</a>
+			</div>
+		</div>
+		<div class="stats-bar">
+			<div class="stat">
+				<span class="stat-value">{ fmt.Sprintf("%d", data.TotalCount) }</span>
+				<span class="stat-label">{ pc.T("forms.total_submissions") }</span>
+			</div>
+			<div class="stat">
+				<span class="stat-value">{ fmt.Sprintf("%d", data.UnreadCount) }</span>
+				<span class="stat-label">{ pc.T("forms.unread") }</span>
+			</div>
+		</div>
+		if len(data.Submissions) > 0 {
+			<div class="table-container">
+				<table class="table">
+					<thead>
+						<tr>
+							<th class="col-w-60">ID</th>
+							<th>{ pc.T("forms.preview") }</th>
+							<th class="col-w-160">{ pc.T("forms.submitted") }</th>
+							<th class="col-w-120">{ pc.T("forms.ip_address") }</th>
+							<th class="col-w-80">{ pc.T("label.status") }</th>
+							<th class="col-w-150">{ pc.T("label.actions") }</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, sub := range data.Submissions {
+							<tr class={ templ.KV("unread", !sub.IsRead) }>
+								<td>
+									<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID)) } class="link-primary">
+										{ fmt.Sprintf("#%d", sub.ID) }
+									</a>
+								</td>
+								<td>
+									<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID)) } class="submission-preview">
+										if sub.Preview != "" {
+											{ sub.Preview }
+										} else {
+											<em>{ pc.T("forms.no_preview") }</em>
+										}
+									</a>
+								</td>
+								<td>{ sub.CreatedAt }</td>
+								<td>
+									if sub.IPAddress != "" {
+										<code>{ sub.IPAddress }</code>
+									} else {
+										<span class="text-muted">-</span>
+									}
+								</td>
+								<td>
+									if sub.IsRead {
+										<span class="badge badge-secondary">{ pc.T("forms.status_read") }</span>
+									} else {
+										<span class="badge badge-primary">{ pc.T("forms.status_new") }</span>
+									}
+								</td>
+								<td>
+									<div class="btn-group">
+										<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID)) } class="btn btn-sm btn-secondary">{ pc.T("forms.view") }</a>
+										<button type="button"
+											class="btn btn-sm btn-danger"
+											hx-delete={ fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID) }
+											hx-confirm={ pc.T("forms.confirm_delete_submission") }
+											hx-target="closest tr"
+											hx-swap="outerHTML"
+										>
+											{ pc.T("btn.delete") }
+										</button>
+									</div>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+			if data.Pagination.ShouldShow() {
+				<div class="card-footer">
+					@Pagination(pc, data.Pagination)
+				</div>
+			}
+		} else {
+			<div class="card">
+				<div class="card-body">
+					<div class="empty-state">
+						@iconMailLarge()
+						<p>{ pc.T("forms.no_submissions") }</p>
+						<span class="empty-hint">{ pc.T("forms.no_submissions_hint") }</span>
+						<div class="empty-state-action">
+							<a href={ templ.SafeURL(fmt.Sprintf("/forms/%s", data.FormSlug)) } class="btn btn-primary" target="_blank">{ pc.T("forms.view_form") }</a>
+						</div>
+					</div>
+				</div>
+			</div>
+		}
+	}
+}
+
+// =============================================================================
+// SUBMISSION VIEW PAGE
+// =============================================================================
+
+templ FormsSubmissionViewPage(pc *PageContext, data SubmissionViewViewData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<h1 class="page-title">{ pc.T("forms.submission_title") } { fmt.Sprintf("#%d", data.SubmissionID) }</h1>
+			<div class="page-actions">
+				<button type="button"
+					class="btn btn-danger"
+					hx-delete={ fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, data.SubmissionID) }
+					hx-confirm={ pc.T("forms.confirm_delete_submission") }
+					hx-redirect={ fmt.Sprintf("/admin/forms/%d/submissions", data.FormID) }
+				>
+					{ pc.T("btn.delete") }
+				</button>
+				<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions", data.FormID)) } class="btn btn-outline">{ pc.T("forms.back_to_submissions") }</a>
+			</div>
+		</div>
+		<div class="submission-detail">
+			<div class="submission-meta">
+				<div class="meta-item">
+					<span class="meta-label">{ pc.T("forms.form") }</span>
+					<span class="meta-value">
+						<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d", data.FormID)) }>{ data.FormName }</a>
+					</span>
+				</div>
+				<div class="meta-item">
+					<span class="meta-label">{ pc.T("forms.submitted") }</span>
+					<span class="meta-value">{ data.CreatedAt }</span>
+				</div>
+				<div class="meta-item">
+					<span class="meta-label">{ pc.T("forms.ip_address") }</span>
+					<span class="meta-value">
+						if data.IPAddress != "" {
+							<code>{ data.IPAddress }</code>
+						} else {
+							<span class="text-muted">{ pc.T("forms.unknown") }</span>
+						}
+					</span>
+				</div>
+				<div class="meta-item">
+					<span class="meta-label">{ pc.T("forms.user_agent") }</span>
+					<span class="meta-value user-agent">
+						if data.UserAgent != "" {
+							{ data.UserAgent }
+						} else {
+							<span class="text-muted">{ pc.T("forms.unknown") }</span>
+						}
+					</span>
+				</div>
+			</div>
+			<div class="submission-data">
+				<h2>{ pc.T("forms.submitted_data") }</h2>
+				<div class="data-table">
+					for _, field := range data.Fields {
+						<div class="data-row">
+							<div class="data-label">{ field.Label }</div>
+							<div class="data-value">
+								if field.Value != "" {
+									if field.Type == "textarea" {
+										<pre class="data-pre">{ field.Value }</pre>
+									} else if field.Type == "email" {
+										<a href={ templ.SafeURL("mailto:" + field.Value) }>{ field.Value }</a>
+									} else {
+										{ field.Value }
+									}
+								} else {
+									<span class="text-muted">-</span>
+								}
+							</div>
+						</div>
+					}
+				</div>
+			</div>
+			<div class="submission-raw">
+				<h3>{ pc.T("forms.raw_json") }</h3>
+				<pre class="json-data">{ data.RawJSON }</pre>
+			</div>
+		</div>
+	}
+}
+
+// =============================================================================
+// ICONS (page-specific)
+// =============================================================================
+
+templ iconFormDocLarge() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" x2="8" y1="13" y2="13"></line><line x1="16" x2="8" y1="17" y2="17"></line><line x1="10" x2="8" y1="9" y2="9"></line></svg>
+}
+
+templ iconMailLarge() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+}

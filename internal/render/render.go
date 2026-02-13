@@ -850,6 +850,19 @@ func FormatBytes(bytes int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
+// HcaptchaEnabled returns whether hCaptcha is enabled.
+// It calls the hcaptchaEnabled template function if registered, otherwise returns false.
+func (r *Renderer) HcaptchaEnabled() bool {
+	fn, ok := r.TemplateFuncs()["hcaptchaEnabled"]
+	if !ok {
+		return false
+	}
+	if f, ok := fn.(func() bool); ok {
+		return f()
+	}
+	return false
+}
+
 // SentinelIsActive returns whether the sentinel module is active.
 // It calls the sentinelIsActive template function if registered, otherwise returns false.
 func (r *Renderer) SentinelIsActive() bool {
