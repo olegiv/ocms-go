@@ -1,0 +1,907 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import "fmt"
+
+// =============================================================================
+// VIEW TYPES
+// =============================================================================
+
+// MediaItemView represents a media item with computed fields.
+type MediaItemView struct {
+	ID           int64
+	Filename     string
+	Alt          string
+	ThumbnailURL string
+	OriginalURL  string
+	IsImage      bool
+	TypeIcon     string // "video", "file-text", "file"
+	Size         string // formatted bytes
+	MimeType     string
+	Width        int64
+	Height       int64
+	HasDimensions bool
+	CreatedAt    string
+	UUID         string
+	FolderID     int64
+	HasFolderID  bool
+}
+
+// MediaFolderView represents a media folder.
+type MediaFolderView struct {
+	ID       int64
+	Name     string
+	HasParent bool
+}
+
+// MediaVariantView represents an image variant.
+type MediaVariantView struct {
+	Type      string
+	TypeLabel string
+	Width     int64
+	Height    int64
+	Size      string // formatted bytes
+}
+
+// MediaLanguageView represents a language for media translations.
+type MediaLanguageView struct {
+	Code       string
+	NativeName string
+}
+
+// MediaTranslationView holds translation data for display.
+type MediaTranslationView struct {
+	Alt     string
+	Caption string
+}
+
+// MediaLibraryViewData holds data for the media library page.
+type MediaLibraryViewData struct {
+	Media      []MediaItemView
+	Folders    []MediaFolderView
+	TotalCount int64
+	Filter     string
+	FolderID   *int64
+	Search     string
+	Pagination PaginationData
+}
+
+// MediaUploadViewData holds data for the media upload page.
+type MediaUploadViewData struct {
+	Folders          []MediaFolderView
+	MaxSize          int64
+	MaxSizeFormatted string
+	AllowedExt       string
+	FormatsHint      string
+}
+
+// MediaEditViewData holds data for the media edit page.
+type MediaEditViewData struct {
+	Media          MediaItemView
+	Variants       []MediaVariantView
+	Folders        []MediaFolderView
+	CurrentFolderID int64
+	HasCurrentFolder bool
+	Languages      []MediaLanguageView
+	Translations   map[string]MediaTranslationView
+	Errors         map[string]string
+	FormValues     map[string]string
+}
+
+// =============================================================================
+// HELPERS
+// =============================================================================
+
+// mediaFilterURL builds a URL for the media library with filter/folder params.
+func mediaFilterURL(filter string, folderID *int64) string {
+	base := "/admin/media"
+	if filter != "" && filter != "all" {
+		base += "?filter=" + filter
+		if folderID != nil {
+			base += fmt.Sprintf("&folder=%d", *folderID)
+		}
+		return base
+	}
+	if folderID != nil {
+		return fmt.Sprintf("%s?folder=%d", base, *folderID)
+	}
+	return base
+}
+
+// mediaClearSearchURL builds a clear search URL preserving the filter.
+func mediaClearSearchURL(filter string) string {
+	if filter != "" && filter != "all" {
+		return "/admin/media?filter=" + filter
+	}
+	return "/admin/media"
+}
+
+// mediaFormVal returns form value or fallback.
+func mediaFormVal(formValues map[string]string, key string, fallback string) string {
+	if v, ok := formValues[key]; ok {
+		return v
+	}
+	return fallback
+}
+
+// =============================================================================
+// LIBRARY PAGE
+// =============================================================================
+
+templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("media.title") }</h1>
+				<p class="page-description">{ pc.TDefault("media.description", fmt.Sprintf("%d", data.TotalCount)) }</p>
+			</div>
+			<div class="page-actions">
+				<a href="/admin/media/upload" class="btn btn-primary">
+					@iconUpload()
+					{ pc.T("btn.upload") }
+				</a>
+			</div>
+		</div>
+		<div class="media-layout" x-data="folderManager()">
+			<!-- Folder Sidebar -->
+			<aside class="folder-sidebar">
+				<div class="folder-sidebar-header">
+					<h3>{ pc.T("media.folders") }</h3>
+					<button type="button" class="btn btn-sm btn-outline" @click="showNewFolder = true" title={ pc.T("media.new_folder") }>
+						@iconPlus14()
+					</button>
+				</div>
+				<!-- Virtual Folders -->
+				<ul class="folder-list">
+					<li class="folder-item">
+						<a href="/admin/media" class={ "folder-link", templ.KV("active", data.FolderID == nil) }>
+							@iconImagePlaceholder()
+							<span class="folder-name">{ pc.T("media.all_media") }</span>
+							<span class="folder-count">{ fmt.Sprintf("%d", data.TotalCount) }</span>
+						</a>
+					</li>
+					<li class="folder-item">
+						<a href="/admin/media?folder=0" class={ "folder-link", templ.KV("active", data.FolderID != nil && *data.FolderID == 0) }>
+							@iconFile16()
+							<span class="folder-name">{ pc.T("media.uncategorized") }</span>
+						</a>
+					</li>
+				</ul>
+				<div class="folder-divider"></div>
+				<ul class="folder-list" id="folder-list">
+					for _, folder := range data.Folders {
+						if !folder.HasParent {
+							@mediaFolderItem(pc, data, folder)
+						}
+					}
+				</ul>
+				<!-- New Folder Form -->
+				<div class="new-folder-form" x-show="showNewFolder" x-cloak>
+					<form hx-post="/admin/media/folders" hx-target="#folder-list" hx-swap="beforeend" @htmx:after-request="showNewFolder = false; newFolderName = ''">
+						<input
+							type="text"
+							name="name"
+							class="form-input form-input-sm"
+							placeholder={ pc.T("media.folder_name") }
+							x-model="newFolderName"
+							x-ref="newFolderInput"
+							@keydown.escape="showNewFolder = false"
+							required
+							maxlength="255"
+						/>
+						<div class="new-folder-actions">
+							<button type="submit" class="btn btn-sm btn-primary">{ pc.T("btn.create") }</button>
+							<button type="button" class="btn btn-sm btn-outline" @click="showNewFolder = false">{ pc.T("btn.cancel") }</button>
+						</div>
+					</form>
+				</div>
+			</aside>
+			<!-- Main Content -->
+			<main class="media-main">
+				<!-- Filters & Search -->
+				<div class="filter-bar">
+					<div class="filter-group">
+						<label class="filter-label">{ pc.T("media.type") }:</label>
+						<div class="filter-buttons">
+							<a href={ templ.SafeURL(mediaFilterURL("all", data.FolderID)) } class={ "btn btn-sm", templ.KV("btn-primary", data.Filter == "all"), templ.KV("btn-outline", data.Filter != "all") }>
+								{ pc.T("label.all") }
+							</a>
+							<a href={ templ.SafeURL(mediaFilterURL("images", data.FolderID)) } class={ "btn btn-sm", templ.KV("btn-primary", data.Filter == "images"), templ.KV("btn-outline", data.Filter != "images") }>
+								@iconImage14()
+								{ pc.T("media.images") }
+							</a>
+							<a href={ templ.SafeURL(mediaFilterURL("documents", data.FolderID)) } class={ "btn btn-sm", templ.KV("btn-primary", data.Filter == "documents"), templ.KV("btn-outline", data.Filter != "documents") }>
+								@iconFileText14()
+								{ pc.T("media.documents") }
+							</a>
+							<a href={ templ.SafeURL(mediaFilterURL("videos", data.FolderID)) } class={ "btn btn-sm", templ.KV("btn-primary", data.Filter == "videos"), templ.KV("btn-outline", data.Filter != "videos") }>
+								@iconVideo14()
+								{ pc.T("media.videos") }
+							</a>
+						</div>
+					</div>
+					<div class="filter-group search-group">
+						<form action="/admin/media" method="GET" class="search-form">
+							if data.Filter != "all" {
+								<input type="hidden" name="filter" value={ data.Filter }/>
+							}
+							if data.FolderID != nil {
+								<input type="hidden" name="folder" value={ fmt.Sprintf("%d", *data.FolderID) }/>
+							}
+							<div class="search-input-wrapper">
+								@iconSearch16()
+								<input type="text" name="q" value={ data.Search } placeholder={ pc.T("media.search_files") } class="form-input search-input" aria-label={ pc.T("media.search_files") }/>
+								if data.Search != "" {
+									<a href={ templ.SafeURL(mediaClearSearchURL(data.Filter)) } class="search-clear" title={ pc.T("btn.clear") }>&times;</a>
+								}
+							</div>
+							<button type="submit" class="btn btn-sm btn-outline">{ pc.T("btn.search") }</button>
+						</form>
+					</div>
+				</div>
+				if len(data.Media) > 0 {
+					<div class="card">
+						<div class="media-grid">
+							for _, item := range data.Media {
+								@mediaGridItem(pc, item)
+							}
+						</div>
+						if data.Pagination.ShouldShow() {
+							<div class="card-footer">
+								@Pagination(pc, data.Pagination)
+							</div>
+						}
+					</div>
+				} else {
+					<div class="card">
+						<div class="card-body">
+							<div class="empty-state media-empty">
+								@iconImagePlaceholderLarge()
+								<p>{ pc.T("media.no_media") }</p>
+								if data.Search != "" {
+									<span class="empty-hint">{ pc.T("media.no_match_search") }</span>
+								} else if data.Filter != "all" {
+									<span class="empty-hint">{ pc.TDefault("media.no_filter_results", data.Filter) }</span>
+								} else if data.FolderID != nil {
+									<span class="empty-hint">{ pc.T("media.folder_empty") }</span>
+								} else {
+									<span class="empty-hint">{ pc.T("media.upload_first") }</span>
+								}
+								<div class="empty-state-action">
+									<a href="/admin/media/upload" class="btn btn-primary">{ pc.T("media.upload_files") }</a>
+								</div>
+							</div>
+						</div>
+					</div>
+				}
+			</main>
+		</div>
+		<script>
+		function folderManager() {
+			return {
+				showNewFolder: false,
+				newFolderName: '',
+				newName: '',
+				saveRename(folderId) {
+					if (!this.newName.trim()) return;
+					fetch(`/admin/media/folders/${folderId}`, {
+						method: 'PUT',
+						headers: {
+							'Content-Type': 'application/x-www-form-urlencoded',
+							'HX-Request': 'true'
+						},
+						body: `name=${encodeURIComponent(this.newName)}`
+					}).then(response => {
+						if (response.ok) {
+							window.location.reload();
+						}
+					});
+				}
+			};
+		}
+		</script>
+	}
+}
+
+templ mediaFolderItem(pc *PageContext, data MediaLibraryViewData, folder MediaFolderView) {
+	<li class="folder-item" data-folder-id={ fmt.Sprintf("%d", folder.ID) } x-data="{ editing: false, showDelete: false }">
+		<div class="folder-link-wrapper">
+			<a href={ templ.SafeURL(fmt.Sprintf("/admin/media?folder=%d", folder.ID)) } class={ "folder-link", templ.KV("active", data.FolderID != nil && *data.FolderID == folder.ID) }>
+				@iconFolder16()
+				<span class="folder-name" x-show="!editing">{ folder.Name }</span>
+				<input
+					type="text"
+					class="folder-name-input"
+					x-show="editing"
+					x-model="newName"
+					@keydown.enter={ fmt.Sprintf("saveRename(%d)", folder.ID) }
+					@keydown.escape="editing = false"
+					@blur="editing = false"
+					x-ref={ fmt.Sprintf("renameInput%d", folder.ID) }
+					x-cloak
+					maxlength="255"
+				/>
+			</a>
+			<div class="folder-actions">
+				<button type="button" class="folder-action-btn" @click={ fmt.Sprintf("editing = true; newName = $el.closest('.folder-link-wrapper').querySelector('.folder-name').textContent; $nextTick(() => $refs.renameInput%d.focus())", folder.ID) } title={ pc.T("media.rename") }>
+					@iconPencil12()
+				</button>
+				<button type="button" class="folder-action-btn folder-action-danger" @click="showDelete = true" title={ pc.T("btn.delete") }>
+					@iconTrash12()
+				</button>
+			</div>
+		</div>
+		<!-- Delete Confirmation -->
+		<div class="folder-delete-confirm" x-show="showDelete" x-cloak>
+			<span>{ pc.T("media.delete_folder") }</span>
+			<button
+				type="button"
+				class="btn btn-sm btn-danger"
+				hx-delete={ fmt.Sprintf("/admin/media/folders/%d", folder.ID) }
+				hx-target="closest .folder-item"
+				hx-swap="outerHTML"
+			>{ pc.T("label.yes") }</button>
+			<button type="button" class="btn btn-sm btn-outline" @click="showDelete = false">{ pc.T("label.no") }</button>
+		</div>
+	</li>
+}
+
+templ mediaGridItem(pc *PageContext, item MediaItemView) {
+	<div class="media-item" id={ fmt.Sprintf("media-item-%d", item.ID) } x-data="{ showConfirm: false }">
+		<a href={ templ.SafeURL(fmt.Sprintf("/admin/media/%d", item.ID)) } class="media-preview">
+			if item.IsImage {
+				if item.ThumbnailURL != "" {
+					<img src={ item.ThumbnailURL } alt={ item.Alt } loading="lazy"/>
+				} else {
+					<img src={ item.OriginalURL } alt={ item.Alt } loading="lazy"/>
+				}
+			} else {
+				<div class="media-icon">
+					if item.TypeIcon == "video" {
+						@iconVideoLarge()
+					} else if item.TypeIcon == "file-text" {
+						@iconFileTextLarge()
+					} else {
+						@iconFileLarge()
+					}
+				</div>
+			}
+		</a>
+		<div class="media-info">
+			<span class="media-filename" title={ item.Filename }>{ item.Filename }</span>
+			<span class="media-meta">{ item.Size }</span>
+		</div>
+		<div class="media-actions">
+			<a href={ templ.SafeURL(fmt.Sprintf("/admin/media/%d", item.ID)) } class="btn btn-sm btn-outline" title={ pc.T("btn.edit") }>
+				@iconPencil14()
+			</a>
+			<a href={ templ.SafeURL(item.OriginalURL) } class="btn btn-sm btn-outline" title={ pc.T("btn.download") } download>
+				@iconDownload14()
+			</a>
+			<button
+				type="button"
+				class="btn btn-sm btn-danger"
+				title={ pc.T("btn.delete") }
+				@click="showConfirm = true"
+			>
+				@iconTrash14()
+			</button>
+		</div>
+		<!-- Delete Confirmation Modal -->
+		<div
+			class="modal-overlay"
+			x-show="showConfirm"
+			x-cloak
+			@click.self="showConfirm = false"
+			x-transition:enter="modal-enter"
+			x-transition:leave="modal-leave"
+		>
+			<div class="modal" @click.stop>
+				<div class="modal-header">
+					<h3 class="modal-title">{ pc.T("media.delete_media") }</h3>
+					<button type="button" class="modal-close" @click="showConfirm = false" aria-label={ pc.T("btn.close") }>&times;</button>
+				</div>
+				<div class="modal-body">
+					<p>{ pc.T("media.confirm_delete") }</p>
+					<p class="text-muted">{ pc.T("media.delete_warning") }</p>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
+					<button
+						type="button"
+						class="btn btn-danger"
+						hx-delete={ fmt.Sprintf("/admin/media/%d", item.ID) }
+						hx-target={ fmt.Sprintf("#media-item-%d", item.ID) }
+						hx-swap="outerHTML"
+						@click="showConfirm = false"
+					>
+						{ pc.T("btn.delete") }
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+// =============================================================================
+// UPLOAD PAGE
+// =============================================================================
+
+templ MediaUploadPage(pc *PageContext, data MediaUploadViewData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("media.upload_title") }</h1>
+				<p class="page-description">{ pc.T("media.upload_description") }</p>
+			</div>
+			<div class="page-actions">
+				<a href="/admin/media" class="btn btn-outline">
+					@iconChevronLeft16()
+					{ pc.T("media.back_to_library") }
+				</a>
+			</div>
+		</div>
+		<div class="card">
+			<div class="card-body">
+				@csrfField()
+				<!-- Folder Selection -->
+				if len(data.Folders) > 0 {
+					<div class="form-group">
+						<label for="folder_id" class="form-label">{ pc.T("media.folder_optional") }</label>
+						<select id="folder_id" name="folder_id" class="form-select">
+							<option value="">{ pc.T("media.no_folder") }</option>
+							for _, folder := range data.Folders {
+								<option value={ fmt.Sprintf("%d", folder.ID) }>{ folder.Name }</option>
+							}
+						</select>
+					</div>
+				}
+				<!-- Media Dropzone Component (Upload Mode) -->
+				@mediaDropzoneUpload(pc, data)
+			</div>
+		</div>
+	}
+}
+
+templ mediaDropzoneUpload(pc *PageContext, data MediaUploadViewData) {
+	<div class="media-dropzone"
+		x-data="mediaDropzone()"
+		x-init="init()"
+		data-mode="upload"
+		data-accept={ data.AllowedExt }
+		data-max-size={ fmt.Sprintf("%d", data.MaxSize) }
+		data-multiple="true"
+		data-upload-url="/admin/media/upload"
+		data-redirect-url="/admin/media"
+		data-allowed-types="image/jpeg,image/png,image/gif,image/webp,image/x-icon,image/vnd.microsoft.icon,application/pdf,video/mp4,video/webm"
+	>
+		<!-- Dropzone Area -->
+		<div class="media-dropzone-area"
+			:class="{ 'is-dragover': dragover, 'has-content': files.length > 0 }"
+			@dragover.prevent="dragover = true"
+			@dragleave.prevent="dragover = false"
+			@drop.prevent="handleDrop($event)"
+			@click="handleClick()"
+		>
+			<input type="file"
+				x-ref="fileInput"
+				class="media-dropzone-input"
+				name="files"
+				multiple
+				accept={ data.AllowedExt }
+				@change="handleFiles($event)"
+			/>
+			<!-- Empty State -->
+			<div class="media-dropzone-empty" x-show="files.length === 0">
+				<div class="media-dropzone-icon">
+					@iconUploadLarge()
+				</div>
+				<p class="media-dropzone-title">{ pc.T("uploader.drag_drop") }</p>
+				<p class="media-dropzone-subtitle">{ pc.T("uploader.or_click") }</p>
+				if data.FormatsHint != "" {
+					<p class="media-dropzone-hint">{ data.FormatsHint }<br/>{ "Max: " + data.MaxSizeFormatted }</p>
+				}
+			</div>
+			<!-- Files Preview -->
+			<div class="media-dropzone-files" x-show="files.length > 0" @click.stop>
+				<template x-for="(file, index) in files" :key="index">
+					<div class="media-dropzone-file" :class="{ 'is-error': file.error, 'is-success': file.success }">
+						<div class="media-dropzone-file-preview">
+							<template x-if="file.preview">
+								<img :src="file.preview" :alt="file.name"/>
+							</template>
+							<template x-if="!file.preview">
+								<div class="media-dropzone-file-icon-small">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg>
+								</div>
+							</template>
+						</div>
+						<div class="media-dropzone-file-info">
+							<span class="media-dropzone-file-name" x-text="file.name"></span>
+							<span class="media-dropzone-file-size" x-text="formatSize(file.size)"></span>
+							<template x-if="file.error">
+								<span class="media-dropzone-file-error" x-text="file.error"></span>
+							</template>
+						</div>
+						<button type="button" class="media-dropzone-file-remove" @click.stop="removeFile(index)" title={ pc.T("btn.remove") }>
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+						</button>
+					</div>
+				</template>
+			</div>
+		</div>
+		<!-- Progress Bar -->
+		<div class="media-dropzone-progress" x-show="uploading" x-cloak>
+			<div class="media-dropzone-progress-bar">
+				<div class="media-dropzone-progress-fill" :style="'width: ' + progress + '%'"></div>
+			</div>
+			<span class="media-dropzone-progress-text" x-text="progress + '%'"></span>
+		</div>
+		<div class="media-dropzone-buttons">
+			<button type="button" class="btn btn-outline" @click="clearFiles()" x-show="files.length > 0 && !uploading">
+				{ pc.T("uploader.clear_all") }
+			</button>
+			<button type="button" class="btn btn-primary" :disabled="files.length === 0 || uploading || hasErrors" @click="upload()">
+				<template x-if="!uploading">
+					<span>
+						@iconUpload()
+						{ pc.T("btn.upload") } <span x-show="files.length > 0">(<span x-text="files.length"></span>)</span>
+					</span>
+				</template>
+				<template x-if="uploading">
+					<span>{ pc.T("uploader.uploading") }</span>
+				</template>
+			</button>
+		</div>
+	</div>
+}
+
+// =============================================================================
+// EDIT PAGE
+// =============================================================================
+
+templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
+	@AdminLayout(pc) {
+		<div class="page-header">
+			<div>
+				<h1 class="page-title">{ pc.T("media.edit_title") }</h1>
+				<p class="page-description">{ pc.T("media.edit_description") }</p>
+			</div>
+			<div class="page-actions">
+				<a href="/admin/media" class="btn btn-outline">
+					@iconChevronLeft16()
+					{ pc.T("media.back_to_library") }
+				</a>
+			</div>
+		</div>
+		<div class="media-edit-layout">
+			<!-- Preview Panel -->
+			<div class="card media-preview-panel">
+				<div class="media-preview-container">
+					if data.Media.IsImage {
+						<img src={ data.Media.OriginalURL } alt={ data.Media.Alt } class="media-preview-image"/>
+					} else {
+						<div class="media-preview-icon">
+							if data.Media.TypeIcon == "video" {
+								@iconVideoXLarge()
+							} else if data.Media.TypeIcon == "file-text" {
+								@iconFileTextXLarge()
+							} else {
+								@iconFileXLarge()
+							}
+						</div>
+					}
+				</div>
+				<div class="media-details">
+					<div class="media-detail-row">
+						<span class="media-detail-label">{ pc.T("media.type") }</span>
+						<span class="media-detail-value">{ data.Media.MimeType }</span>
+					</div>
+					<div class="media-detail-row">
+						<span class="media-detail-label">{ pc.T("label.size") }</span>
+						<span class="media-detail-value">{ data.Media.Size }</span>
+					</div>
+					if data.Media.HasDimensions {
+						<div class="media-detail-row">
+							<span class="media-detail-label">{ pc.T("media.dimensions") }</span>
+							<span class="media-detail-value">{ fmt.Sprintf("%d x %d px", data.Media.Width, data.Media.Height) }</span>
+						</div>
+					}
+					<div class="media-detail-row">
+						<span class="media-detail-label">{ pc.T("media.uploaded") }</span>
+						<span class="media-detail-value">{ data.Media.CreatedAt }</span>
+					</div>
+					<div class="media-detail-row">
+						<span class="media-detail-label">UUID</span>
+						<span class="media-detail-value"><code class="slug-code">{ data.Media.UUID }</code></span>
+					</div>
+				</div>
+				if len(data.Variants) > 0 {
+					<div class="media-variants">
+						<h4>{ pc.T("media.available_sizes") }</h4>
+						<ul class="variant-list">
+							for _, v := range data.Variants {
+								<li>
+									<span class="variant-type">{ v.TypeLabel }</span>
+									<span class="variant-size">{ fmt.Sprintf("%dx%d", v.Width, v.Height) }</span>
+									<span class="variant-filesize">{ v.Size }</span>
+								</li>
+							}
+						</ul>
+					</div>
+				}
+				<div class="media-actions-panel">
+					<a href={ templ.SafeURL(data.Media.OriginalURL) } class="btn btn-outline btn-block" download>
+						@iconDownload16()
+						{ pc.T("media.download_original") }
+					</a>
+					<button
+						type="button"
+						class="btn btn-outline btn-block"
+						data-copy-url={ data.Media.OriginalURL }
+						onclick="copyMediaURL(this)"
+					>
+						@iconCopy16()
+						{ pc.T("media.copy_url") }
+					</button>
+					if data.Media.IsImage {
+						<form action={ templ.SafeURL(fmt.Sprintf("/admin/media/%d/regenerate", data.Media.ID)) } method="POST" class="btn-form">
+							@csrfField()
+							<button type="submit" class="btn btn-outline btn-block">
+								@iconRefresh16()
+								{ pc.T("media.regenerate_variants") }
+							</button>
+						</form>
+					}
+				</div>
+			</div>
+			<!-- Edit Form Panel -->
+			<div class="card media-form-panel">
+				<div class="card-body">
+					<form action={ templ.SafeURL(fmt.Sprintf("/admin/media/%d", data.Media.ID)) } method="POST">
+						@csrfField()
+						<input type="hidden" name="_method" value="PUT"/>
+						<div class="form-group">
+							<label for="filename" class="form-label">{ pc.T("media.filename") } <span class="required">*</span></label>
+							<input
+								type="text"
+								id="filename"
+								name="filename"
+								value={ mediaFormVal(data.FormValues, "filename", data.Media.Filename) }
+								class={ "form-input", templ.KV("is-invalid", data.Errors["filename"] != "") }
+								required
+								maxlength="255"
+							/>
+							if data.Errors["filename"] != "" {
+								<span class="form-error">{ data.Errors["filename"] }</span>
+							}
+						</div>
+						<div class="form-group">
+							<label for="alt" class="form-label">{ pc.T("media.alt_text") }</label>
+							<input
+								type="text"
+								id="alt"
+								name="alt"
+								value={ mediaFormVal(data.FormValues, "alt", data.Media.Alt) }
+								class="form-input"
+								placeholder={ pc.T("media.alt_placeholder") }
+								maxlength="255"
+							/>
+							<span class="form-hint">{ pc.T("media.alt_hint") }</span>
+						</div>
+						<div class="form-group">
+							<label for="caption" class="form-label">{ pc.T("media.caption") }</label>
+							<textarea
+								id="caption"
+								name="caption"
+								class="form-input"
+								rows="3"
+								placeholder={ pc.T("media.caption_placeholder") }
+							>{ mediaFormVal(data.FormValues, "caption", "") }</textarea>
+						</div>
+						if len(data.Languages) > 0 {
+							<div class="translations-section">
+								<h4 class="section-title">{ pc.T("media.translations") }</h4>
+								for _, lang := range data.Languages {
+									@mediaTranslationFields(pc, lang, data.Translations)
+								}
+							</div>
+						}
+						if len(data.Folders) > 0 {
+							<div class="form-group">
+								<label for="folder_id" class="form-label">{ pc.T("media.folder") }</label>
+								<select id="folder_id" name="folder_id" class="form-select">
+									<option value="">{ pc.T("media.no_folder") }</option>
+									for _, folder := range data.Folders {
+										<option
+											value={ fmt.Sprintf("%d", folder.ID) }
+											selected?={ data.HasCurrentFolder && data.CurrentFolderID == folder.ID }
+										>
+											{ folder.Name }
+										</option>
+									}
+								</select>
+							</div>
+						}
+						<div class="form-actions">
+							<a href="/admin/media" class="btn btn-outline">{ pc.T("btn.cancel") }</a>
+							<button type="submit" class="btn btn-primary">{ pc.T("media.save_changes") }</button>
+						</div>
+					</form>
+				</div>
+			</div>
+		</div>
+		<!-- Delete Section -->
+		<div class="card danger-zone" x-data="{ showConfirm: false }">
+			<div class="card-body">
+				<h3 class="danger-title">{ pc.T("media.danger_zone") }</h3>
+				<p class="danger-description">{ pc.T("media.danger_description") }</p>
+				<button
+					type="button"
+					class="btn btn-danger"
+					@click="showConfirm = true"
+				>
+					@iconTrash16()
+					{ pc.T("media.delete_media") }
+				</button>
+				<!-- Delete Confirmation Modal -->
+				<div
+					class="modal-overlay"
+					x-show="showConfirm"
+					x-cloak
+					@click.self="showConfirm = false"
+					x-transition:enter="modal-enter"
+					x-transition:leave="modal-leave"
+				>
+					<div class="modal" @click.stop>
+						<div class="modal-header">
+							<h3 class="modal-title">{ pc.T("media.delete_media") }</h3>
+							<button type="button" class="modal-close" @click="showConfirm = false" aria-label={ pc.T("btn.close") }>&times;</button>
+						</div>
+						<div class="modal-body">
+							<p>{ pc.T("media.confirm_delete_name") } <strong>{ data.Media.Filename }</strong>?</p>
+							<p class="text-muted">{ pc.T("media.delete_warning") }</p>
+						</div>
+						<div class="modal-footer">
+							<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
+							<form action={ templ.SafeURL(fmt.Sprintf("/admin/media/%d", data.Media.ID)) } method="POST" class="inline-form">
+								@csrfField()
+								<input type="hidden" name="_method" value="DELETE"/>
+								<button type="submit" class="btn btn-danger">
+									{ pc.T("media.delete_media") }
+								</button>
+							</form>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<script>
+		function copyMediaURL(btn) {
+			var url = btn.getAttribute('data-copy-url');
+			navigator.clipboard.writeText(window.location.origin + url).then(function() {
+				btn.textContent = '✓ Copied';
+				setTimeout(function() { window.location.reload(); }, 1000);
+			});
+		}
+		</script>
+	}
+}
+
+templ mediaTranslationFields(pc *PageContext, lang MediaLanguageView, translations map[string]MediaTranslationView) {
+	<fieldset class="translation-fieldset">
+		<legend class="translation-legend">{ lang.NativeName } ({ lang.Code })</legend>
+		<div class="form-group">
+			<label for={ "alt_" + lang.Code } class="form-label">{ pc.T("media.alt_text") }</label>
+			<input
+				type="text"
+				id={ "alt_" + lang.Code }
+				name={ "alt_" + lang.Code }
+				value={ translations[lang.Code].Alt }
+				class="form-input"
+				placeholder={ pc.T("media.alt_placeholder") }
+				maxlength="255"
+			/>
+		</div>
+		<div class="form-group">
+			<label for={ "caption_" + lang.Code } class="form-label">{ pc.T("media.caption") }</label>
+			<textarea
+				id={ "caption_" + lang.Code }
+				name={ "caption_" + lang.Code }
+				class="form-input"
+				rows="2"
+				placeholder={ pc.T("media.caption_placeholder") }
+			>{ translations[lang.Code].Caption }</textarea>
+		</div>
+	</fieldset>
+}
+
+// =============================================================================
+// ICONS (page-specific, not in icons.templ)
+// =============================================================================
+
+templ iconImage14() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg>
+}
+
+templ iconFileText14() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>
+}
+
+templ iconVideo14() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"></path><rect x="2" y="6" width="14" height="12" rx="2"></rect></svg>
+}
+
+templ iconVideoLarge() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"></path><rect x="2" y="6" width="14" height="12" rx="2"></rect></svg>
+}
+
+templ iconVideoXLarge() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"></path><rect x="2" y="6" width="14" height="12" rx="2"></rect></svg>
+}
+
+templ iconFileTextLarge() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>
+}
+
+templ iconFileTextXLarge() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>
+}
+
+templ iconFileXLarge() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg>
+}
+
+templ iconFile16() {
+	<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg>
+}
+
+templ iconFolder16() {
+	<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+}
+
+templ iconSearch16() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+}
+
+templ iconPencil12() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
+}
+
+templ iconTrash12() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+}
+
+templ iconPencil14() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg>
+}
+
+templ iconDownload14() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>
+}
+
+templ iconTrash14() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" x2="10" y1="11" y2="17"></line><line x1="14" x2="14" y1="11" y2="17"></line></svg>
+}
+
+templ iconTrash16() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" x2="10" y1="11" y2="17"></line><line x1="14" x2="14" y1="11" y2="17"></line></svg>
+}
+
+templ iconDownload16() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>
+}
+
+templ iconCopy16() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
+}
+
+templ iconRefresh16() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path><path d="M16 16h5v5"></path></svg>
+}
+
+templ iconChevronLeft16() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+}

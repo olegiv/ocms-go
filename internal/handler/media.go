@@ -24,6 +24,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 	"github.com/olegiv/ocms-go/internal/webhook"
 )
 
@@ -108,7 +109,6 @@ type MediaLibraryData struct {
 
 // Library handles GET /admin/media - displays the media library.
 func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	page := ParsePageParam(r)
@@ -215,15 +215,9 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 		Pagination: BuildAdminPagination(page, int(totalCount), MediaPerPage, redirectAdminMedia, r.URL.Query()),
 	}
 
-	h.renderer.RenderPage(w, r, "admin/media_library", render.TemplateData{
-		Title: i18n.T(lang, "media.title"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.media"), URL: redirectAdminMedia, Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "media.title"), mediaBreadcrumbs(lang))
+	viewData := convertMediaLibraryViewData(data)
+	renderTempl(w, r, adminviews.MediaLibraryPage(pc, viewData))
 }
 
 // UploadFormData holds data for the upload form template.
@@ -235,7 +229,6 @@ type UploadFormData struct {
 
 // UploadForm handles GET /admin/media/upload - displays the upload form.
 func (h *MediaHandler) UploadForm(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUser(r)
 	lang := h.renderer.GetAdminLang(r)
 
 	// Get folders
@@ -251,16 +244,9 @@ func (h *MediaHandler) UploadForm(w http.ResponseWriter, r *http.Request) {
 		AllowedExt: ".jpg,.jpeg,.png,.gif,.webp,.ico,.pdf,.mp4,.webm",
 	}
 
-	h.renderer.RenderPage(w, r, "admin/media_upload", render.TemplateData{
-		Title: i18n.T(lang, "media.upload_title"),
-		User:  user,
-		Data:  data,
-		Breadcrumbs: []render.Breadcrumb{
-			{Label: i18n.T(lang, "nav.dashboard"), URL: redirectAdmin},
-			{Label: i18n.T(lang, "nav.media"), URL: redirectAdminMedia},
-			{Label: i18n.T(lang, "media.upload"), URL: redirectAdminMediaUpload, Active: true},
-		},
-	})
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "media.upload_title"), mediaUploadBreadcrumbs(lang))
+	viewData := convertMediaUploadViewData(data, lang)
+	renderTempl(w, r, adminviews.MediaUploadPage(pc, viewData))
 }
 
 // Upload handles POST /admin/media/upload - processes file upload.
@@ -495,7 +481,9 @@ func (h *MediaHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		FormValues:   make(map[string]string),
 	}
 
-	renderEntityEditPage(w, r, h.renderer, "admin/media_edit", i18n.T(lang, "media.edit_title"), data, lang, "nav.media", redirectAdminMedia, media.Filename, fmt.Sprintf(redirectAdminMediaID, media.ID))
+	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "media.edit_title"), mediaEditBreadcrumbs(lang, media.Filename, media.ID))
+	viewData := convertMediaEditViewData(data, h.renderer, lang)
+	renderTempl(w, r, adminviews.MediaEditPage(pc, viewData))
 }
 
 // Update handles PUT /admin/media/{id} - updates media metadata.
@@ -562,10 +550,9 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 
-		renderEntityEditPage(w, r, h.renderer, "admin/media_edit",
-			i18n.T(lang, "media.edit_title"), data, lang,
-			"nav.media", redirectAdminMedia,
-			media.Filename, fmt.Sprintf(redirectAdminMediaID, id))
+		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "media.edit_title"), mediaEditBreadcrumbs(lang, media.Filename, id))
+		viewData := convertMediaEditViewData(data, h.renderer, lang)
+		renderTempl(w, r, adminviews.MediaEditPage(pc, viewData))
 		return
 	}
 

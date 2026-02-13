@@ -831,6 +831,25 @@ func (r *Renderer) FormatDateTimeLocale(t any, lang string) string {
 	return applyTimeFormatter(t, lang, formatDateTimeForLocale)
 }
 
+// FormatDateTime formats a time value as "Jan 2, 2006 3:04 PM".
+func FormatDateTime(t time.Time) string {
+	return t.Format("Jan 2, 2006 3:04 PM")
+}
+
+// FormatBytes formats bytes into a human-readable string.
+func FormatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
 // SentinelIsActive returns whether the sentinel module is active.
 // It calls the sentinelIsActive template function if registered, otherwise returns false.
 func (r *Renderer) SentinelIsActive() bool {
