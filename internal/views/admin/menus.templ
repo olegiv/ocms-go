@@ -96,9 +96,9 @@ templ MenusListPage(pc *PageContext, data MenusListData) {
 									<td>{ menu.UpdatedAt.Format("Jan 02, 2006") }</td>
 									<td class="text-right">
 										<div class="action-buttons">
-											<a href={ templ.SafeURL(fmt.Sprintf("/admin/menus/%d", menu.ID)) } class="btn btn-sm btn-outline" title={ pc.T("menus.edit") }>
+											@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/menus/%d", menu.ID), Attributes: templ.Attributes{"title": pc.T("menus.edit")}}) {
 												@iconEdit()
-											</a>
+											}
 											if !menu.IsProtected {
 												@deleteMenuModal(pc, menu)
 											} else {
@@ -120,7 +120,9 @@ templ MenusListPage(pc *PageContext, data MenusListData) {
 						<p>{ pc.T("menus.no_menus") }</p>
 						<span class="empty-hint">{ pc.T("menus.no_menus_hint") }</span>
 						<div class="empty-state-action">
-							<a href="/admin/menus/new" class="btn btn-primary">{ pc.T("menus.create") }</a>
+							@button.Button(button.Props{Href: "/admin/menus/new"}) {
+								{ pc.T("menus.create") }
+							}
 						</div>
 					</div>
 				</div>
@@ -131,14 +133,9 @@ templ MenusListPage(pc *PageContext, data MenusListData) {
 
 templ deleteMenuModal(pc *PageContext, menu MenuListItem) {
 	<div x-data="{ showConfirm: false }" class="delete-action">
-		<button
-			type="button"
-			class="btn btn-sm btn-danger"
-			title={ pc.T("btn.delete") }
-			@click="showConfirm = true"
-		>
+		@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "showConfirm = true", "title": pc.T("btn.delete")}}) {
 			@iconDelete()
-		</button>
+		}
 		<div
 			class="modal-overlay"
 			x-show="showConfirm"
@@ -161,17 +158,12 @@ templ deleteMenuModal(pc *PageContext, menu MenuListItem) {
 					<p class="text-muted">{ pc.T("label.action_cannot_undone") }</p>
 				</div>
 				<div class="modal-footer">
-					<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
-					<button
-						type="button"
-						class="btn btn-danger"
-						hx-delete={ fmt.Sprintf("/admin/menus/%d", menu.ID) }
-						hx-target={ fmt.Sprintf("#menu-row-%d", menu.ID) }
-						hx-swap="outerHTML"
-						@click="showConfirm = false"
-					>
+					@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "showConfirm = false"}}) {
+						{ pc.T("btn.cancel") }
+					}
+					@button.Button(button.Props{Variant: button.VariantDestructive, Attributes: templ.Attributes{"hx-delete": fmt.Sprintf("/admin/menus/%d", menu.ID), "hx-target": fmt.Sprintf("#menu-row-%d", menu.ID), "hx-swap": "outerHTML", "@click": "showConfirm = false"}}) {
 						{ pc.T("menus.delete_menu") }
-					</button>
+					}
 				</div>
 			</div>
 		</div>
@@ -264,13 +256,13 @@ templ MenuFormPage(pc *PageContext, data MenuFormData) {
 					</div>
 				</div>
 				<div class="form-actions">
-					<button type="submit" class="btn btn-primary">
+					@button.Button(button.Props{Type: button.TypeSubmit}) {
 						if data.IsEdit {
 							{ pc.T("menus.save_settings") }
 						} else {
 							{ pc.T("menus.create") }
 						}
-					</button>
+					}
 				</div>
 			</form>
 		</div>
@@ -327,9 +319,9 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 									</template>
 								</select>
 							</div>
-							<button type="button" class="btn btn-primary btn-sm" @click="addCustomLink()" :disabled="!customLink.title || !customLink.url">
+							@button.Button(button.Props{Size: button.SizeSm, Attributes: templ.Attributes{"@click": "addCustomLink()", ":disabled": "!customLink.title || !customLink.url"}}) {
 								{ pc.T("menus.add_to_menu") }
-							</button>
+							}
 						</div>
 						<!-- Add Pages -->
 						if len(data.Pages) > 0 {
@@ -361,9 +353,9 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 										</template>
 									</select>
 								</div>
-								<button type="button" class="btn btn-primary btn-sm" @click="addSelectedPages()" :disabled="selectedPages.length === 0">
+								@button.Button(button.Props{Size: button.SizeSm, Attributes: templ.Attributes{"@click": "addSelectedPages()", ":disabled": "selectedPages.length === 0"}}) {
 									{ pc.T("menus.add_selected") }
-								</button>
+								}
 							</div>
 						}
 					</div>
@@ -395,12 +387,12 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 											<span class="menu-item-type" x-text="item.page_id ? labels.itemPage : labels.itemCustom"></span>
 										</div>
 										<div class="menu-item-actions">
-											<button type="button" class="btn btn-sm btn-icon" @click="editItem(item)" :title={ pc.T("btn.edit") }>
-												<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
-											</button>
-											<button type="button" class="btn btn-sm btn-icon btn-danger" @click="deleteItem(item, index)" :title={ pc.T("btn.delete") }>
-												<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
-											</button>
+											@button.Button(button.Props{Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "editItem(item)", ":title": pc.T("btn.edit")}}) {
+												@icon.Pencil(icon.Props{Size: 14})
+											}
+											@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "deleteItem(item, index)", ":title": pc.T("btn.delete")}}) {
+												@icon.Trash2(icon.Props{Size: 14})
+											}
 										</div>
 									</div>
 									<!-- Nested children (Level 2) -->
@@ -416,12 +408,12 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 														<span class="menu-item-type" x-text="child.page_id ? labels.itemPage : labels.itemCustom"></span>
 													</div>
 													<div class="menu-item-actions">
-														<button type="button" class="btn btn-sm btn-icon" @click="editItem(child)" :title={ pc.T("btn.edit") }>
-															<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
-														</button>
-														<button type="button" class="btn btn-sm btn-icon btn-danger" @click="deleteChildItem(item, childIndex)" :title={ pc.T("btn.delete") }>
-															<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
-														</button>
+														@button.Button(button.Props{Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "editItem(child)", ":title": pc.T("btn.edit")}}) {
+															@icon.Pencil(icon.Props{Size: 14})
+														}
+														@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "deleteChildItem(item, childIndex)", ":title": pc.T("btn.delete")}}) {
+															@icon.Trash2(icon.Props{Size: 14})
+														}
 													</div>
 												</div>
 												<!-- Level 3: Grandchildren -->
@@ -437,12 +429,12 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 																	<span class="menu-item-type" x-text="grandchild.page_id ? labels.itemPage : labels.itemCustom"></span>
 																</div>
 																<div class="menu-item-actions">
-																	<button type="button" class="btn btn-sm btn-icon" @click="editItem(grandchild)" :title={ pc.T("btn.edit") }>
-																		<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
-																	</button>
-																	<button type="button" class="btn btn-sm btn-icon btn-danger" @click="deleteGrandchildItem(child, grandchildIndex)" :title={ pc.T("btn.delete") }>
-																		<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
-																	</button>
+																	@button.Button(button.Props{Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "editItem(grandchild)", ":title": pc.T("btn.edit")}}) {
+																		@icon.Pencil(icon.Props{Size: 14})
+																	}
+																	@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "deleteGrandchildItem(child, grandchildIndex)", ":title": pc.T("btn.delete")}}) {
+																		@icon.Trash2(icon.Props{Size: 14})
+																	}
 																</div>
 															</div>
 														</div>
@@ -455,10 +447,10 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 							</template>
 						</div>
 						<div class="menu-builder-actions" x-show="hasChanges">
-							<button type="button" class="btn btn-primary" @click="saveOrder()" :disabled="saving">
+							@button.Button(button.Props{Attributes: templ.Attributes{"@click": "saveOrder()", ":disabled": "saving"}}) {
 								<span x-show="!saving">{ pc.T("menus.save_order") }</span>
 								<span x-show="saving">{ pc.T("menus.saving") }</span>
-							</button>
+							}
 						</div>
 					</div>
 				</div>
@@ -510,8 +502,12 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 						</div>
 					</div>
 					<div class="modal-footer">
-						<button type="button" class="btn btn-outline" @click="editingItem = null">{ pc.T("btn.cancel") }</button>
-						<button type="button" class="btn btn-primary" @click="saveItem()">{ pc.T("btn.save_changes") }</button>
+						@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "editingItem = null"}}) {
+							{ pc.T("btn.cancel") }
+						}
+						@button.Button(button.Props{Attributes: templ.Attributes{"@click": "saveItem()"}}) {
+							{ pc.T("btn.save_changes") }
+						}
 					</div>
 				</div>
 			</div>

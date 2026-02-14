@@ -3,7 +3,11 @@
 
 package admin
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/icon"
+)
 
 // CacheStatsViewData holds data for the cache stats page.
 type CacheStatsViewData struct {
@@ -41,10 +45,10 @@ templ CacheStatsPage(pc *PageContext, data CacheStatsViewData) {
 	@AdminLayout(pc) {
 		@PageHeader(pc.T("cache.title"), pc.T("cache.description")) {
 			<form method="POST" action="/admin/cache/clear" class="d-inline">
-				<button type="submit" class="btn btn-danger" onclick="return confirm(this.dataset.msg)" data-msg={ pc.T("cache.clear_confirm") }>
-					@iconDelete()
+				@button.Button(button.Props{Variant: button.VariantDestructive, Type: button.TypeSubmit, Attributes: templ.Attributes{"onclick": "return confirm(this.dataset.msg)", "data-msg": pc.T("cache.clear_confirm")}}) {
+					@icon.Trash2(icon.Props{Size: 16})
 					{ pc.T("cache.clear_all") }
-				</button>
+				}
 			</form>
 		}
 		<!-- Cache Backend Info -->
@@ -238,31 +242,41 @@ templ cacheClearButton(pc *PageContext, c CacheItemView) {
 		case "config":
 			if c.Items > 0 {
 				<form method="POST" action="/admin/cache/clear/config" class="d-inline">
-					<button type="submit" class="btn btn-sm btn-outline" title={ pc.T("cache.clear_config") }>{ pc.T("cache.clear") }</button>
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Attributes: templ.Attributes{"title": pc.T("cache.clear_config")}}) {
+						{ pc.T("cache.clear") }
+					}
 				</form>
 			}
 		case "sitemap":
 			if c.CachedAt != "" {
 				<form method="POST" action="/admin/cache/clear/sitemap" class="d-inline">
-					<button type="submit" class="btn btn-sm btn-outline" title={ pc.T("cache.clear_sitemap") }>{ pc.T("cache.clear") }</button>
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Attributes: templ.Attributes{"title": pc.T("cache.clear_sitemap")}}) {
+						{ pc.T("cache.clear") }
+					}
 				</form>
 			}
 		case "page":
 			if c.Items > 0 {
 				<form method="POST" action="/admin/cache/clear/pages" class="d-inline">
-					<button type="submit" class="btn btn-sm btn-outline" title={ pc.T("cache.clear_pages") }>{ pc.T("cache.clear") }</button>
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Attributes: templ.Attributes{"title": pc.T("cache.clear_pages")}}) {
+						{ pc.T("cache.clear") }
+					}
 				</form>
 			}
 		case "menu":
 			if c.Items > 0 {
 				<form method="POST" action="/admin/cache/clear/menus" class="d-inline">
-					<button type="submit" class="btn btn-sm btn-outline" title={ pc.T("cache.clear_menus") }>{ pc.T("cache.clear") }</button>
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Attributes: templ.Attributes{"title": pc.T("cache.clear_menus")}}) {
+						{ pc.T("cache.clear") }
+					}
 				</form>
 			}
 		case "language":
 			if c.Items > 0 {
 				<form method="POST" action="/admin/cache/clear/languages" class="d-inline">
-					<button type="submit" class="btn btn-sm btn-outline" title={ pc.T("cache.clear_languages") }>{ pc.T("cache.clear") }</button>
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Attributes: templ.Attributes{"title": pc.T("cache.clear_languages")}}) {
+						{ pc.T("cache.clear") }
+					}
 				</form>
 			}
 	}

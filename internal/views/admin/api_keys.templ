@@ -115,7 +115,9 @@ templ APIKeysListPage(pc *PageContext, data APIKeysListData) {
 						<p>{ pc.T("api_keys.no_keys") }</p>
 						<span class="empty-hint">{ pc.T("api_keys.no_keys_hint") }</span>
 						<div class="empty-state-action">
-							<a href="/admin/api-keys/new" class="btn btn-primary">{ pc.T("api_keys.create") }</a>
+							@button.Button(button.Props{Href: "/admin/api-keys/new"}) {
+								{ pc.T("api_keys.create") }
+							}
 						</div>
 					</div>
 				</div>
@@ -130,11 +132,13 @@ templ APIKeysListPage(pc *PageContext, data APIKeysListData) {
 				<pre class="code-block"><code>Authorization: Bearer YOUR_API_KEY</code></pre>
 				<p class="mt-4">{ pc.T("api_keys.base_url") }: <code>/api/v1/</code></p>
 				<p class="tags-wrapper">
-					<a href="/api/v1/status" target="_blank" class="btn btn-sm btn-outline">{ pc.T("api_keys.check_status") }</a>
-					<a href="/api/v1/docs" target="_blank" class="btn btn-sm btn-primary">
-						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></svg>
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: "/api/v1/status", Target: "_blank"}) {
+						{ pc.T("api_keys.check_status") }
+					}
+					@button.Button(button.Props{Size: button.SizeSm, Href: "/api/v1/docs", Target: "_blank"}) {
+						@icon.FileText(icon.Props{Size: 14})
 						{ pc.T("api_keys.view_docs") }
-					</a>
+					}
 				</p>
 			</div>
 		</div>
@@ -188,9 +192,9 @@ templ APIKeyRow(pc *PageContext, key APIKeyListItem) {
 		</td>
 		<td class="text-right">
 			<div class="action-buttons">
-				<a href={ templ.SafeURL(fmt.Sprintf("/admin/api-keys/%d", key.ID)) } class="btn btn-sm btn-outline" title={ pc.T("btn.edit") }>
-					@iconEdit()
-				</a>
+				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/api-keys/%d", key.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
+					@icon.Pencil(icon.Props{Size: 14})
+				}
 				if key.IsActive {
 					@revokeAPIKeyModal(pc, key)
 				}
@@ -202,14 +206,9 @@ templ APIKeyRow(pc *PageContext, key APIKeyListItem) {
 // revokeAPIKeyModal renders the revoke confirmation modal for an API key.
 templ revokeAPIKeyModal(pc *PageContext, key APIKeyListItem) {
 	<div x-data="{ showConfirm: false }" class="delete-action">
-		<button
-			type="button"
-			class="btn btn-sm btn-danger"
-			title={ pc.T("api_keys.revoke") }
-			@click="showConfirm = true"
-		>
-			<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" x2="19.07" y1="4.93" y2="19.07"></line></svg>
-		</button>
+		@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"title": pc.T("api_keys.revoke"), "@click": "showConfirm = true"}}) {
+			@icon.Ban(icon.Props{Size: 14})
+		}
 		<div
 			class="modal-overlay"
 			x-show="showConfirm"
@@ -231,17 +230,12 @@ templ revokeAPIKeyModal(pc *PageContext, key APIKeyListItem) {
 					<p class="text-muted">{ pc.T("api_keys.revoke_warning") }</p>
 				</div>
 				<div class="modal-footer">
-					<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
-					<button
-						type="button"
-						class="btn btn-danger"
-						hx-delete={ fmt.Sprintf("/admin/api-keys/%d", key.ID) }
-						hx-target={ fmt.Sprintf("#api-key-row-%d", key.ID) }
-						hx-swap="outerHTML"
-						@click="showConfirm = false"
-					>
+					@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "showConfirm = false"}}) {
+						{ pc.T("btn.cancel") }
+					}
+					@button.Button(button.Props{Variant: button.VariantDestructive, Attributes: templ.Attributes{"hx-delete": fmt.Sprintf("/admin/api-keys/%d", key.ID), "hx-target": fmt.Sprintf("#api-key-row-%d", key.ID), "hx-swap": "outerHTML", "@click": "showConfirm = false"}}) {
 						{ pc.T("api_keys.revoke_key") }
-					</button>
+					}
 				</div>
 			</div>
 		</div>
@@ -285,20 +279,16 @@ templ apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) {
 						readonly
 						id="generated-key"
 					/>
-					<button
-						type="button"
-						class="btn btn-primary copy-btn"
-						@click="navigator.clipboard.writeText(document.getElementById('generated-key').value); copied = true; setTimeout(() => copied = false, 2000)"
-					>
+					@button.Button(button.Props{Class: "copy-btn", Attributes: templ.Attributes{"@click": "navigator.clipboard.writeText(document.getElementById('generated-key').value); copied = true; setTimeout(() => copied = false, 2000)"}}) {
 						<span x-show="!copied">
-							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
+							@icon.Copy(icon.Props{Size: 16})
 							{ pc.T("btn.copy") }
 						</span>
 						<span x-show="copied" x-cloak>
-							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+							@icon.Check(icon.Props{Size: 16})
 							{ pc.T("btn.copied") }
 						</span>
-					</button>
+					}
 				</div>
 			</div>
 			if data.APIKey != nil {
@@ -328,8 +318,12 @@ templ apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) {
 				</div>
 			}
 			<div class="form-actions mt-8">
-				<a href="/admin/api-keys" class="btn btn-primary">{ pc.T("btn.done") }</a>
-				<a href="/admin/api-keys/new" class="btn btn-outline">{ pc.T("api_keys.create_another") }</a>
+				@button.Button(button.Props{Href: "/admin/api-keys"}) {
+					{ pc.T("btn.done") }
+				}
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/api-keys/new"}) {
+					{ pc.T("api_keys.create_another") }
+				}
 			</div>
 		</div>
 	</div>
@@ -454,15 +448,17 @@ templ apiKeyEditForm(pc *PageContext, data APIKeyFormData) {
 					}
 				}
 				<div class="form-actions">
-					<button type="submit" class="btn btn-primary">
-						@iconSave()
+					@button.Button(button.Props{Type: button.TypeSubmit}) {
+						@icon.Save(icon.Props{Size: 16})
 						if data.IsEdit {
 							{ pc.T("api_keys.update") }
 						} else {
 							{ pc.T("api_keys.create") }
 						}
-					</button>
-					<a href="/admin/api-keys" class="btn btn-outline">{ pc.T("btn.cancel") }</a>
+					}
+					@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/api-keys"}) {
+						{ pc.T("btn.cancel") }
+					}
 				</div>
 			</form>
 		</div>

@@ -128,6 +128,14 @@ func mediaFormVal(formValues map[string]string, key string, fallback string) str
 	return fallback
 }
 
+// mediaFilterVariant returns the button variant based on active state.
+func mediaFilterVariant(isActive bool) button.Variant {
+	if isActive {
+		return button.VariantDefault
+	}
+	return button.VariantOutline
+}
+
 // =============================================================================
 // LIBRARY PAGE
 // =============================================================================
@@ -145,9 +153,9 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 			<aside class="folder-sidebar">
 				<div class="folder-sidebar-header">
 					<h3>{ pc.T("media.folders") }</h3>
-					<button type="button" class="btn btn-sm btn-outline" @click="showNewFolder = true" title={ pc.T("media.new_folder") }>
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeButton, Attributes: templ.Attributes{"@click": "showNewFolder = true", "title": pc.T("media.new_folder")}}) {
 						@iconPlus14()
-					</button>
+					}
 				</div>
 				<!-- Virtual Folders -->
 				<ul class="folder-list">
@@ -188,8 +196,12 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 							maxlength="255"
 						/>
 						<div class="new-folder-actions">
-							<button type="submit" class="btn btn-sm btn-primary">{ pc.T("btn.create") }</button>
-							<button type="button" class="btn btn-sm btn-outline" @click="showNewFolder = false">{ pc.T("btn.cancel") }</button>
+							@button.Button(button.Props{Size: button.SizeSm, Type: button.TypeSubmit}) {
+								{ pc.T("btn.create") }
+							}
+							@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeButton, Attributes: templ.Attributes{"@click": "showNewFolder = false"}}) {
+								{ pc.T("btn.cancel") }
+							}
 						</div>
 					</form>
 				</div>
@@ -201,21 +213,21 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 					<div class="filter-group">
 						<label class="filter-label">{ pc.T("media.type") }:</label>
 						<div class="filter-buttons">
-							<a href={ templ.SafeURL(mediaFilterURL("all", data.FolderID)) } class={ "btn btn-sm", templ.KV("btn-primary", data.Filter == "all"), templ.KV("btn-outline", data.Filter != "all") }>
+							@button.Button(button.Props{Variant: mediaFilterVariant(data.Filter == "all"), Size: button.SizeSm, Href: mediaFilterURL("all", data.FolderID)}) {
 								{ pc.T("label.all") }
-							</a>
-							<a href={ templ.SafeURL(mediaFilterURL("images", data.FolderID)) } class={ "btn btn-sm", templ.KV("btn-primary", data.Filter == "images"), templ.KV("btn-outline", data.Filter != "images") }>
+							}
+							@button.Button(button.Props{Variant: mediaFilterVariant(data.Filter == "images"), Size: button.SizeSm, Href: mediaFilterURL("images", data.FolderID)}) {
 								@iconImage14()
 								{ pc.T("media.images") }
-							</a>
-							<a href={ templ.SafeURL(mediaFilterURL("documents", data.FolderID)) } class={ "btn btn-sm", templ.KV("btn-primary", data.Filter == "documents"), templ.KV("btn-outline", data.Filter != "documents") }>
+							}
+							@button.Button(button.Props{Variant: mediaFilterVariant(data.Filter == "documents"), Size: button.SizeSm, Href: mediaFilterURL("documents", data.FolderID)}) {
 								@iconFileText14()
 								{ pc.T("media.documents") }
-							</a>
-							<a href={ templ.SafeURL(mediaFilterURL("videos", data.FolderID)) } class={ "btn btn-sm", templ.KV("btn-primary", data.Filter == "videos"), templ.KV("btn-outline", data.Filter != "videos") }>
+							}
+							@button.Button(button.Props{Variant: mediaFilterVariant(data.Filter == "videos"), Size: button.SizeSm, Href: mediaFilterURL("videos", data.FolderID)}) {
 								@iconVideo14()
 								{ pc.T("media.videos") }
-							</a>
+							}
 						</div>
 					</div>
 					<div class="filter-group search-group">
@@ -233,7 +245,9 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 									<a href={ templ.SafeURL(mediaClearSearchURL(data.Filter)) } class="search-clear" title={ pc.T("btn.clear") }>&times;</a>
 								}
 							</div>
-							<button type="submit" class="btn btn-sm btn-outline">{ pc.T("btn.search") }</button>
+							@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit}) {
+								{ pc.T("btn.search") }
+							}
 						</form>
 					</div>
 				</div>
@@ -266,7 +280,9 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 									<span class="empty-hint">{ pc.T("media.upload_first") }</span>
 								}
 								<div class="empty-state-action">
-									<a href="/admin/media/upload" class="btn btn-primary">{ pc.T("media.upload_files") }</a>
+									@button.Button(button.Props{Href: "/admin/media/upload"}) {
+										{ pc.T("media.upload_files") }
+									}
 								</div>
 							</div>
 						</div>
@@ -332,14 +348,12 @@ templ mediaFolderItem(pc *PageContext, data MediaLibraryViewData, folder MediaFo
 		<!-- Delete Confirmation -->
 		<div class="folder-delete-confirm" x-show="showDelete" x-cloak>
 			<span>{ pc.T("media.delete_folder") }</span>
-			<button
-				type="button"
-				class="btn btn-sm btn-danger"
-				hx-delete={ fmt.Sprintf("/admin/media/folders/%d", folder.ID) }
-				hx-target="closest .folder-item"
-				hx-swap="outerHTML"
-			>{ pc.T("label.yes") }</button>
-			<button type="button" class="btn btn-sm btn-outline" @click="showDelete = false">{ pc.T("label.no") }</button>
+			@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Type: button.TypeButton, Attributes: templ.Attributes{"hx-delete": fmt.Sprintf("/admin/media/folders/%d", folder.ID), "hx-target": "closest .folder-item", "hx-swap": "outerHTML"}}) {
+				{ pc.T("label.yes") }
+			}
+			@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeButton, Attributes: templ.Attributes{"@click": "showDelete = false"}}) {
+				{ pc.T("label.no") }
+			}
 		</div>
 	</li>
 }
@@ -370,20 +384,15 @@ templ mediaGridItem(pc *PageContext, item MediaItemView) {
 			<span class="media-meta">{ item.Size }</span>
 		</div>
 		<div class="media-actions">
-			<a href={ templ.SafeURL(fmt.Sprintf("/admin/media/%d", item.ID)) } class="btn btn-sm btn-outline" title={ pc.T("btn.edit") }>
+			@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/media/%d", item.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
 				@iconPencil14()
-			</a>
-			<a href={ templ.SafeURL(item.OriginalURL) } class="btn btn-sm btn-outline" title={ pc.T("btn.download") } download>
+			}
+			@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: item.OriginalURL, Attributes: templ.Attributes{"title": pc.T("btn.download"), "download": ""}}) {
 				@iconDownload14()
-			</a>
-			<button
-				type="button"
-				class="btn btn-sm btn-danger"
-				title={ pc.T("btn.delete") }
-				@click="showConfirm = true"
-			>
+			}
+			@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Type: button.TypeButton, Attributes: templ.Attributes{"title": pc.T("btn.delete"), "@click": "showConfirm = true"}}) {
 				@iconTrash14()
-			</button>
+			}
 		</div>
 		<!-- Delete Confirmation Modal -->
 		<div
@@ -404,17 +413,12 @@ templ mediaGridItem(pc *PageContext, item MediaItemView) {
 					<p class="text-muted">{ pc.T("media.delete_warning") }</p>
 				</div>
 				<div class="modal-footer">
-					<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
-					<button
-						type="button"
-						class="btn btn-danger"
-						hx-delete={ fmt.Sprintf("/admin/media/%d", item.ID) }
-						hx-target={ fmt.Sprintf("#media-item-%d", item.ID) }
-						hx-swap="outerHTML"
-						@click="showConfirm = false"
-					>
+					@button.Button(button.Props{Variant: button.VariantOutline, Type: button.TypeButton, Attributes: templ.Attributes{"@click": "showConfirm = false"}}) {
+						{ pc.T("btn.cancel") }
+					}
+					@button.Button(button.Props{Variant: button.VariantDestructive, Type: button.TypeButton, Attributes: templ.Attributes{"hx-delete": fmt.Sprintf("/admin/media/%d", item.ID), "hx-target": fmt.Sprintf("#media-item-%d", item.ID), "hx-swap": "outerHTML", "@click": "showConfirm = false"}}) {
 						{ pc.T("btn.delete") }
-					</button>
+					}
 				</div>
 			</div>
 		</div>
@@ -530,10 +534,10 @@ templ mediaDropzoneUpload(pc *PageContext, data MediaUploadViewData) {
 			<span class="media-dropzone-progress-text" x-text="progress + '%'"></span>
 		</div>
 		<div class="media-dropzone-buttons">
-			<button type="button" class="btn btn-outline" @click="clearFiles()" x-show="files.length > 0 && !uploading">
+			@button.Button(button.Props{Variant: button.VariantOutline, Type: button.TypeButton, Attributes: templ.Attributes{"@click": "clearFiles()", "x-show": "files.length > 0 && !uploading"}}) {
 				{ pc.T("uploader.clear_all") }
-			</button>
-			<button type="button" class="btn btn-primary" :disabled="files.length === 0 || uploading || hasErrors" @click="upload()">
+			}
+			@button.Button(button.Props{Type: button.TypeButton, Attributes: templ.Attributes{":disabled": "files.length === 0 || uploading || hasErrors", "@click": "upload()"}}) {
 				<template x-if="!uploading">
 					<span>
 						@iconUpload()
@@ -543,7 +547,7 @@ templ mediaDropzoneUpload(pc *PageContext, data MediaUploadViewData) {
 				<template x-if="uploading">
 					<span>{ pc.T("uploader.uploading") }</span>
 				</template>
-			</button>
+			}
 		</div>
 	</div>
 }
@@ -617,26 +621,21 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 					</div>
 				}
 				<div class="media-actions-panel">
-					<a href={ templ.SafeURL(data.Media.OriginalURL) } class="btn btn-outline btn-block" download>
+					@button.Button(button.Props{Variant: button.VariantOutline, FullWidth: true, Href: data.Media.OriginalURL, Attributes: templ.Attributes{"download": ""}}) {
 						@iconDownload16()
 						{ pc.T("media.download_original") }
-					</a>
-					<button
-						type="button"
-						class="btn btn-outline btn-block"
-						data-copy-url={ data.Media.OriginalURL }
-						onclick="copyMediaURL(this)"
-					>
+					}
+					@button.Button(button.Props{Variant: button.VariantOutline, FullWidth: true, Type: button.TypeButton, Attributes: templ.Attributes{"data-copy-url": data.Media.OriginalURL, "onclick": "copyMediaURL(this)"}}) {
 						@iconCopy16()
 						{ pc.T("media.copy_url") }
-					</button>
+					}
 					if data.Media.IsImage {
 						<form action={ templ.SafeURL(fmt.Sprintf("/admin/media/%d/regenerate", data.Media.ID)) } method="POST" class="btn-form">
 							@csrfField()
-							<button type="submit" class="btn btn-outline btn-block">
+							@button.Button(button.Props{Variant: button.VariantOutline, FullWidth: true, Type: button.TypeSubmit}) {
 								@iconRefresh16()
 								{ pc.T("media.regenerate_variants") }
-							</button>
+							}
 						</form>
 					}
 				</div>
@@ -710,8 +709,12 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 							</div>
 						}
 						<div class="form-actions">
-							<a href="/admin/media" class="btn btn-outline">{ pc.T("btn.cancel") }</a>
-							<button type="submit" class="btn btn-primary">{ pc.T("media.save_changes") }</button>
+							@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/media"}) {
+								{ pc.T("btn.cancel") }
+							}
+							@button.Button(button.Props{Type: button.TypeSubmit}) {
+								{ pc.T("media.save_changes") }
+							}
 						</div>
 					</form>
 				</div>
@@ -722,14 +725,10 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 			<div class="card-body">
 				<h3 class="danger-title">{ pc.T("media.danger_zone") }</h3>
 				<p class="danger-description">{ pc.T("media.danger_description") }</p>
-				<button
-					type="button"
-					class="btn btn-danger"
-					@click="showConfirm = true"
-				>
+				@button.Button(button.Props{Variant: button.VariantDestructive, Type: button.TypeButton, Attributes: templ.Attributes{"@click": "showConfirm = true"}}) {
 					@iconTrash16()
 					{ pc.T("media.delete_media") }
-				</button>
+				}
 				<!-- Delete Confirmation Modal -->
 				<div
 					class="modal-overlay"
@@ -749,13 +748,15 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 							<p class="text-muted">{ pc.T("media.delete_warning") }</p>
 						</div>
 						<div class="modal-footer">
-							<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
+							@button.Button(button.Props{Variant: button.VariantOutline, Type: button.TypeButton, Attributes: templ.Attributes{"@click": "showConfirm = false"}}) {
+								{ pc.T("btn.cancel") }
+							}
 							<form action={ templ.SafeURL(fmt.Sprintf("/admin/media/%d", data.Media.ID)) } method="POST" class="inline-form">
 								@csrfField()
 								<input type="hidden" name="_method" value="DELETE"/>
-								<button type="submit" class="btn btn-danger">
+								@button.Button(button.Props{Variant: button.VariantDestructive, Type: button.TypeSubmit}) {
 									{ pc.T("media.delete_media") }
-								</button>
+								}
 							</form>
 						</div>
 					</div>

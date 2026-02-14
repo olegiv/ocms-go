@@ -105,9 +105,9 @@ templ TagsListPage(pc *PageContext, data TagsListData) {
 									<td>{ tag.CreatedAt.Format("Jan 02, 2006") }</td>
 									<td class="text-right">
 										<div class="action-buttons">
-											<a href={ templ.SafeURL(fmt.Sprintf("/admin/tags/%d", tag.ID)) } class="btn btn-sm btn-outline" title={ pc.T("btn.edit") }>
-												@iconEdit()
-											</a>
+											@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/tags/%d", tag.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
+												@icon.Pencil(icon.Props{Size: 14})
+											}
 											@deleteTagModal(pc, tag)
 										</div>
 									</td>
@@ -130,7 +130,9 @@ templ TagsListPage(pc *PageContext, data TagsListData) {
 						<p>{ pc.T("tags.no_tags") }</p>
 						<span class="empty-hint">{ pc.T("tags.create_first_hint") }</span>
 						<div class="empty-state-action">
-							<a href="/admin/tags/new" class="btn btn-primary">{ pc.T("tags.new") }</a>
+							@button.Button(button.Props{Href: "/admin/tags/new"}) {
+								{ pc.T("tags.new") }
+							}
 						</div>
 					</div>
 				</div>
@@ -141,14 +143,9 @@ templ TagsListPage(pc *PageContext, data TagsListData) {
 
 templ deleteTagModal(pc *PageContext, tag TagListItem) {
 	<div x-data="{ showConfirm: false }" class="delete-action">
-		<button
-			type="button"
-			class="btn btn-sm btn-danger"
-			title={ pc.T("btn.delete") }
-			@click="showConfirm = true"
-		>
-			@iconDelete()
-		</button>
+		@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"title": pc.T("btn.delete"), "@click": "showConfirm = true"}}) {
+			@icon.Trash2(icon.Props{Size: 14})
+		}
 		<div
 			class="modal-overlay"
 			x-show="showConfirm"
@@ -170,17 +167,12 @@ templ deleteTagModal(pc *PageContext, tag TagListItem) {
 					<p class="text-muted">{ pc.T("tags.delete_warning") }</p>
 				</div>
 				<div class="modal-footer">
-					<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
-					<button
-						type="button"
-						class="btn btn-danger"
-						hx-delete={ fmt.Sprintf("/admin/tags/%d", tag.ID) }
-						hx-target={ fmt.Sprintf("#tag-row-%d", tag.ID) }
-						hx-swap="outerHTML"
-						@click="showConfirm = false"
-					>
+					@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "showConfirm = false"}}) {
+						{ pc.T("btn.cancel") }
+					}
+					@button.Button(button.Props{Variant: button.VariantDestructive, Attributes: templ.Attributes{"hx-delete": fmt.Sprintf("/admin/tags/%d", tag.ID), "hx-target": fmt.Sprintf("#tag-row-%d", tag.ID), "hx-swap": "outerHTML", "@click": "showConfirm = false"}}) {
 						{ pc.T("tags.delete_tag") }
-					</button>
+					}
 				</div>
 			</div>
 		</div>
@@ -283,16 +275,18 @@ templ TagFormPage(pc *PageContext, data TagFormData) {
 					}
 				</div>
 				<div class="form-actions">
-					<button type="submit" class="btn btn-primary">
+					@button.Button(button.Props{Type: button.TypeSubmit}) {
 						if data.IsEdit {
-							@iconSave()
+							@icon.Save(icon.Props{Size: 16})
 							{ pc.T("tags.update") }
 						} else {
-							@iconTags()
+							@icon.Tag(icon.Props{Size: 16})
 							{ pc.T("tags.create") }
 						}
-					</button>
-					<a href="/admin/tags" class="btn btn-outline">{ pc.T("btn.cancel") }</a>
+					}
+					@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/tags"}) {
+						{ pc.T("btn.cancel") }
+					}
 				</div>
 			</form>
 			<!-- Translations Panel (Edit mode only) -->
@@ -355,10 +349,10 @@ templ tagTranslationsPanel(pc *PageContext, data TagFormData) {
 				<div class="translation-buttons">
 					for _, lang := range data.MissingLanguages {
 						<form action={ templ.SafeURL(fmt.Sprintf("/admin/tags/%d/translate/%s", data.Tag.ID, lang.Code)) } method="POST" class="inline-form">
-							<button type="submit" class="btn btn-sm btn-outline translation-add-btn" title={ "Create " + lang.Name + " translation" }>
-								@iconPlusSmall()
+							@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Class: "translation-add-btn", Attributes: templ.Attributes{"title": "Create " + lang.Name + " translation"}}) {
+								@icon.Plus(icon.Props{Size: 14})
 								{ lang.Code } - { lang.Name }
-							</button>
+							}
 						</form>
 					}
 				</div>

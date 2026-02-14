@@ -299,6 +299,22 @@ func scheduleOpen(data PageFormViewData) bool {
 	return formVal(data.FormValues, "scheduled_at", "") != "" || data.HasScheduledAt
 }
 
+// pagesFilterVariant returns the button variant for filter buttons.
+func pagesFilterVariant(isActive bool) button.Variant {
+	if isActive {
+		return button.VariantDefault
+	}
+	return button.VariantOutline
+}
+
+// publishButtonClass returns the class name for publish/unpublish button.
+func publishButtonClass(status string) string {
+	if status == "published" {
+		return "btn-warning"
+	}
+	return "btn-success"
+}
+
 // =============================================================================
 // PAGES LIST PAGE
 // =============================================================================
@@ -316,17 +332,11 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 			<div class="filter-group">
 				<label class="filter-label">{ pc.T("label.status") }:</label>
 				<div class="filter-buttons">
-					<a
-						href={ templ.SafeURL(pagesListURL("", data.CategoryFilter, data.SearchFilter, 0)) }
-						class={ "btn btn-sm", templ.KV("btn-primary", data.StatusFilter == ""), templ.KV("btn-outline", data.StatusFilter != "") }
-					>
+					@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == ""), Size: button.SizeSm, Href: pagesListURL("", data.CategoryFilter, data.SearchFilter, 0)}) {
 						{ pc.T("label.all") }
-					</a>
+					}
 					for _, s := range data.Statuses {
-						<a
-							href={ templ.SafeURL(pagesListURL(s, data.CategoryFilter, data.SearchFilter, 0)) }
-							class={ "btn btn-sm", templ.KV("btn-primary", data.StatusFilter == s), templ.KV("btn-outline", data.StatusFilter != s) }
-						>
+						@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == s), Size: button.SizeSm, Href: pagesListURL(s, data.CategoryFilter, data.SearchFilter, 0)}) {
 							if s == "draft" {
 								{ pc.T("status.draft") }
 							} else if s == "published" {
@@ -334,15 +344,12 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 							} else {
 								{ s }
 							}
-						</a>
+						}
 					}
-					<a
-						href={ templ.SafeURL(pagesListURL("scheduled", data.CategoryFilter, data.SearchFilter, 0)) }
-						class={ "btn btn-sm", templ.KV("btn-primary", data.StatusFilter == "scheduled"), templ.KV("btn-outline", data.StatusFilter != "scheduled") }
-					>
+					@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == "scheduled"), Size: button.SizeSm, Href: pagesListURL("scheduled", data.CategoryFilter, data.SearchFilter, 0)}) {
 						@iconClock12()
 						{ pc.T("status.scheduled") }
-					</a>
+					}
 				</div>
 			</div>
 			if len(data.AllCategories) > 0 {
@@ -412,13 +419,13 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 					}
 					<div class="search-input-wrapper">
 						<input type="text" name="search" value={ data.SearchFilter } placeholder={ pc.T("pages.search_placeholder") } class="form-control form-control-sm" aria-label={ pc.T("btn.search") }/>
-						<button type="submit" class="btn btn-sm btn-outline search-btn" title={ pc.T("btn.search") }>
+						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Class: "search-btn", Attributes: templ.Attributes{"title": pc.T("btn.search")}}) {
 							@iconSearch14()
-						</button>
+						}
 						if data.SearchFilter != "" {
-							<a href={ templ.SafeURL(pagesListURL(data.StatusFilter, data.CategoryFilter, "", 0)) } class="btn btn-sm btn-outline clear-search-btn" title={ pc.T("btn.clear") }>
+							@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: pagesListURL(data.StatusFilter, data.CategoryFilter, "", 0), Class: "clear-search-btn", Attributes: templ.Attributes{"title": pc.T("btn.clear")}}) {
 								@iconX14()
-							</a>
+							}
 						}
 					</div>
 				</form>
@@ -470,7 +477,9 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 							<span class="empty-hint">{ pc.T("pages.create_first_hint") }</span>
 						}
 						<div class="empty-state-action">
-							<a href="/admin/pages/new" class="btn btn-primary">{ pc.T("pages.new") }</a>
+							@button.Button(button.Props{Href: "/admin/pages/new"}) {
+								{ pc.T("pages.new") }
+							}
 						</div>
 					</div>
 				</div>
@@ -546,31 +555,22 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool) {
 				if !page.IsDemoPublished {
 					<form action={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/publish", page.ID)) } method="POST" class="inline-form">
 						@csrfField()
-						<button
-							type="submit"
-							class={ "btn btn-sm", templ.KV("btn-warning", page.Status == "published"), templ.KV("btn-success", page.Status != "published") }
-							title={ publishTitle(pc, page.Status) }
-						>
+						@button.Button(button.Props{Size: button.SizeSm, Type: button.TypeSubmit, Class: publishButtonClass(page.Status), Attributes: templ.Attributes{"title": publishTitle(pc, page.Status)}}) {
 							if page.Status == "published" {
 								@iconEyeOff()
 							} else {
 								@iconEye()
 							}
-						</button>
+						}
 					</form>
 				}
-				<a href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d", page.ID)) } class="btn btn-sm btn-outline" title={ pc.T("btn.edit") }>
+				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/pages/%d", page.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
 					@iconEdit()
-				</a>
+				}
 				<div x-data="{ showConfirm: false }" class="delete-action">
-					<button
-						type="button"
-						class="btn btn-sm btn-danger"
-						title={ pc.T("btn.delete") }
-						@click="showConfirm = true"
-					>
+					@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "showConfirm = true", "title": pc.T("btn.delete")}}) {
 						@iconTrash()
-					</button>
+					}
 					<!-- Delete Confirmation Modal -->
 					<div
 						class="modal-overlay"
@@ -590,17 +590,12 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool) {
 								<p class="text-muted">{ pc.T("pages.delete_warning") }</p>
 							</div>
 							<div class="modal-footer">
-								<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
-								<button
-									type="button"
-									class="btn btn-danger"
-									hx-delete={ fmt.Sprintf("/admin/pages/%d", page.ID) }
-									hx-target={ fmt.Sprintf("#page-row-%d", page.ID) }
-									hx-swap="outerHTML"
-									@click="showConfirm = false"
-								>
+								@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "showConfirm = false"}}) {
+									{ pc.T("btn.cancel") }
+								}
+								@button.Button(button.Props{Variant: button.VariantDestructive, Attributes: templ.Attributes{"hx-delete": fmt.Sprintf("/admin/pages/%d", page.ID), "hx-target": fmt.Sprintf("#page-row-%d", page.ID), "hx-swap": "outerHTML", "@click": "showConfirm = false"}}) {
 									{ pc.T("pages.delete_page") }
-								</button>
+								}
 							</div>
 						</div>
 					</div>
@@ -625,10 +620,10 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 	@AdminLayout(pc) {
 		if data.IsEdit {
 			@PageHeader(pc.T("pages.edit"), pc.T("pages.edit_description")) {
-				<a href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/versions", data.PageID)) } class="btn btn-outline">
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/admin/pages/%d/versions", data.PageID)}) {
 					@iconClockHistory()
 					{ pc.T("pages.version_history") }
-				</a>
+				}
 				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/pages"}) {
 					@icon.ArrowLeft(icon.Props{Size: 16})
 					{ pc.T("pages.back_to_pages") }
@@ -873,14 +868,16 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 					</div>
 				</div>
 				<div class="form-actions">
-					<a href="/admin/pages" class="btn btn-outline">{ pc.T("btn.cancel") }</a>
-					<button type="submit" class="btn btn-primary">
+					@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/pages"}) {
+						{ pc.T("btn.cancel") }
+					}
+					@button.Button(button.Props{Type: button.TypeSubmit}) {
 						if data.IsEdit {
 							{ pc.T("pages.update") }
 						} else {
 							{ pc.T("pages.create") }
 						}
-					</button>
+					}
 				</div>
 			</form>
 		</div>
@@ -948,9 +945,9 @@ templ translationsPanel(pc *PageContext, data PageFormViewData) {
 								}
 							</span>
 						</div>
-						<a href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d", tr.PageID)) } class="btn btn-sm btn-outline">
+						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/pages/%d", tr.PageID)}) {
 							{ pc.T("btn.edit") }
-						</a>
+						}
 					</div>
 				}
 			</div>
@@ -960,17 +957,10 @@ templ translationsPanel(pc *PageContext, data PageFormViewData) {
 				<h4 class="translations-subtitle">{ pc.T("pages.add_translation") }</h4>
 				<div class="translation-buttons">
 					for _, lang := range data.MissingLanguages {
-						<button
-							type="button"
-							class="btn btn-sm btn-outline translation-add-btn"
-							title={ lang.Name }
-							data-page-id={ fmt.Sprintf("%d", data.PageID) }
-							data-lang-code={ lang.Code }
-							onclick="createTranslation(this.dataset.pageId, this.dataset.langCode)"
-						>
+						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Class: "translation-add-btn", Attributes: templ.Attributes{"title": lang.Name, "data-page-id": fmt.Sprintf("%d", data.PageID), "data-lang-code": lang.Code, "onclick": "createTranslation(this.dataset.pageId, this.dataset.langCode)"}}) {
 							@iconPlus14()
 							{ lang.Code } - { lang.Name }
-						</button>
+						}
 					}
 				</div>
 			</div>
@@ -1070,7 +1060,9 @@ templ categorySelector(pc *PageContext, allCategories []PageCategoryNodeView, se
 		} else {
 			<div class="category-empty">
 				<p>{ pc.T("categories.no_available") }</p>
-				<a href="/admin/categories/new" class="btn btn-sm btn-outline">{ pc.T("categories.new") }</a>
+				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: "/admin/categories/new"}) {
+					{ pc.T("categories.new") }
+				}
 			</div>
 		}
 		<span class="form-hint">{ pc.T("categories.select_hint") }</span>
@@ -1103,17 +1095,17 @@ templ aliasesSection(pc *PageContext, data PageFormViewData) {
 								maxlength="255"
 							/>
 						</div>
-						<button type="button" class="btn btn-sm btn-outline btn-danger" @click="removeAlias(index)" title={ pc.T("btn.remove") }>
+						@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "removeAlias(index)", "title": pc.T("btn.remove")}}) {
 							@iconX14()
-						</button>
+						}
 					</div>
 				</template>
 			</div>
 			<!-- Add New Alias Button -->
-			<button type="button" class="btn btn-sm btn-outline mt-2" @click="addAlias()">
+			@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Class: "mt-2", Attributes: templ.Attributes{"@click": "addAlias()"}}) {
 				@iconPlus14()
 				{ pc.T("pages.add_alias") }
-			</button>
+			}
 			if data.Errors["aliases"] != "" {
 				<span class="form-error mt-2">{ data.Errors["aliases"] }</span>
 			}
@@ -1200,12 +1192,14 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 					<input type="hidden" name="og_image_id" :value="selectedId"/>
 					<div class="media-picker-preview" x-show="selectedId">
 						<img :src="selectedPath" alt="OG Image Preview" class="media-preview-img"/>
-						<button type="button" class="btn btn-sm btn-outline media-remove-btn" @click="clearSelection()">{ pc.T("btn.remove") }</button>
+						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Class: "media-remove-btn", Attributes: templ.Attributes{"@click": "clearSelection()"}}) {
+							{ pc.T("btn.remove") }
+						}
 					</div>
-					<button type="button" class="btn btn-outline" @click="openMediaModal()" x-show="!selectedId">
+					@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "openMediaModal()", "x-show": "!selectedId"}}) {
 						@iconImage16()
 						{ pc.T("seo.select_og_image") }
-					</button>
+					}
 					<span class="form-hint">{ pc.T("seo.og_image_hint") }</span>
 				</div>
 			</div>
@@ -1338,14 +1332,14 @@ templ mediaDropzoneSelectArea(pc *PageContext) {
 				</template>
 			</div>
 			<div class="media-dropzone-actions">
-				<button type="button" class="btn btn-sm btn-outline" @click="openPicker()">
+				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "openPicker()"}}) {
 					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" x2="12" y1="3" y2="15"></line></svg>
 					{ pc.T("btn.change") }
-				</button>
-				<button type="button" class="btn btn-sm btn-outline btn-danger" @click="clearSelection()">
+				}
+				@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "clearSelection()"}}) {
 					@iconX14()
 					{ pc.T("btn.remove") }
-				</button>
+				}
 			</div>
 			<input type="hidden" name="featured_image_id" :value="selectedImage?.id"/>
 		</div>
@@ -1385,7 +1379,9 @@ templ mediaDropzoneSelectModal(pc *PageContext) {
 					<div class="media-dropzone-modal-empty">
 						@iconImagePlaceholderLarge()
 						<p>{ pc.T("media.no_media") }</p>
-						<a href="/admin/media/upload" class="btn btn-primary btn-sm">{ pc.T("media.upload") }</a>
+						@button.Button(button.Props{Size: button.SizeSm, Href: "/admin/media/upload"}) {
+							{ pc.T("media.upload") }
+						}
 					</div>
 				</template>
 				<template x-if="!loading && mediaItems.length > 0">
@@ -1419,20 +1415,22 @@ templ mediaDropzoneSelectModal(pc *PageContext) {
 			</div>
 			<template x-if="totalPages > 1">
 				<div class="media-dropzone-modal-pagination">
-					<button type="button" class="btn btn-sm btn-outline" :disabled="currentPage <= 1" @click="prevPage()">
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Attributes: templ.Attributes{":disabled": "currentPage <= 1", "@click": "prevPage()"}}) {
 						{ pc.T("pagination.previous") }
-					</button>
+					}
 					<span>{ pc.T("pagination.page") } <span x-text="currentPage"></span> { pc.T("pagination.of") } <span x-text="totalPages"></span></span>
-					<button type="button" class="btn btn-sm btn-outline" :disabled="currentPage >= totalPages" @click="nextPage()">
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Attributes: templ.Attributes{":disabled": "currentPage >= totalPages", "@click": "nextPage()"}}) {
 						{ pc.T("pagination.next") }
-					</button>
+					}
 				</div>
 			</template>
 			<div class="media-dropzone-modal-footer">
-				<button type="button" class="btn btn-outline" @click="closeModal()">{ pc.T("btn.cancel") }</button>
-				<button type="button" class="btn btn-primary" :disabled="!tempSelected" @click="confirmSelection()">
+				@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "closeModal()"}}) {
+					{ pc.T("btn.cancel") }
+				}
+				@button.Button(button.Props{Attributes: templ.Attributes{":disabled": "!tempSelected", "@click": "confirmSelection()"}}) {
 					{ pc.T("media.select_image") }
-				</button>
+				}
 			</div>
 		</div>
 	</div>
@@ -1471,8 +1469,12 @@ templ editorImageModal(pc *PageContext) {
 				</div>
 			</div>
 			<div class="editor-image-modal-footer">
-				<button type="button" class="btn btn-outline" id="editor-image-cancel-btn">{ pc.T("btn.cancel") }</button>
-				<button type="button" class="btn btn-primary" id="editor-image-insert-btn" disabled>{ pc.T("editor.insert_image") }</button>
+				@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"id": "editor-image-cancel-btn"}}) {
+					{ pc.T("btn.cancel") }
+				}
+				@button.Button(button.Props{Disabled: true, Attributes: templ.Attributes{"id": "editor-image-insert-btn"}}) {
+					{ pc.T("editor.insert_image") }
+				}
 			</div>
 		</div>
 	</div>
@@ -1822,23 +1824,13 @@ templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersion
 			<div class="action-buttons">
 				<div x-data="{ showPreview: false, showConfirm: false }" class="version-actions">
 					<!-- Preview Button -->
-					<button
-						type="button"
-						class="btn btn-sm btn-outline"
-						title={ pc.T("versions.preview") }
-						@click="showPreview = true"
-					>
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "showPreview = true", "title": pc.T("versions.preview")}}) {
 						@iconEye()
-					</button>
+					}
 					<!-- Restore Button -->
-					<button
-						type="button"
-						class="btn btn-sm btn-primary"
-						title={ pc.T("versions.restore") }
-						@click="showConfirm = true"
-					>
+					@button.Button(button.Props{Size: button.SizeSm, Attributes: templ.Attributes{"@click": "showConfirm = true", "title": pc.T("versions.restore")}}) {
 						@iconRestore()
-					</button>
+					}
 					<!-- Preview Modal -->
 					<div
 						class="modal-overlay"
@@ -1873,10 +1865,14 @@ templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersion
 								</div>
 							</div>
 							<div class="modal-footer">
-								<button type="button" class="btn btn-outline" @click="showPreview = false">{ pc.T("btn.close") }</button>
+								@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "showPreview = false"}}) {
+									{ pc.T("btn.close") }
+								}
 								<form action={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/versions/%d/restore", data.PageID, version.ID)) } method="POST" class="inline-form">
 									@csrfField()
-									<button type="submit" class="btn btn-primary">{ pc.T("versions.restore_this") }</button>
+									@button.Button(button.Props{Type: button.TypeSubmit}) {
+										{ pc.T("versions.restore_this") }
+									}
 								</form>
 							</div>
 						</div>
@@ -1900,10 +1896,14 @@ templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersion
 								<p class="text-muted">{ pc.T("versions.restore_note") }</p>
 							</div>
 							<div class="modal-footer">
-								<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
+								@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "showConfirm = false"}}) {
+									{ pc.T("btn.cancel") }
+								}
 								<form action={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/versions/%d/restore", data.PageID, version.ID)) } method="POST" class="inline-form">
 									@csrfField()
-									<button type="submit" class="btn btn-primary">{ pc.T("versions.restore_version") }</button>
+									@button.Button(button.Props{Type: button.TypeSubmit}) {
+										{ pc.T("versions.restore_version") }
+									}
 								</form>
 							</div>
 						</div>

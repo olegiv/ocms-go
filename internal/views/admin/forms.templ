@@ -5,6 +5,8 @@ package admin
 
 import "fmt"
 import "encoding/json"
+import "github.com/olegiv/ocms-go/internal/views/components/button"
+import "github.com/olegiv/ocms-go/internal/views/components/icon"
 
 // =============================================================================
 // VIEW TYPES
@@ -172,12 +174,12 @@ func formCurrentLanguageCode(formValues map[string]string, lang *LanguageOption,
 
 templ FormsListPage(pc *PageContext, data FormsListViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<h1 class="page-title">{ pc.T("forms.title") }</h1>
-			<div class="page-actions">
-				<a href="/admin/forms/new" class="btn btn-primary">{ pc.T("forms.new") }</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("forms.title"), "") {
+			@button.Button(button.Props{Href: "/admin/forms/new"}) {
+				@icon.Plus(icon.Props{Size: 16})
+				{ pc.T("forms.new") }
+			}
+		}
 		if len(data.Forms) > 0 {
 			<div class="table-container">
 				<table class="table">
@@ -229,17 +231,24 @@ templ FormsListPage(pc *PageContext, data FormsListViewData) {
 								</td>
 								<td>
 									<div class="btn-group">
-										<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d", item.ID)) } class="btn btn-sm btn-secondary">{ pc.T("btn.edit") }</a>
-										<a href={ templ.SafeURL(fmt.Sprintf("/forms/%s", item.Slug)) } class="btn btn-sm btn-outline" target="_blank">{ pc.T("forms.preview") }</a>
-										<button type="button"
-											class="btn btn-sm btn-danger"
-											hx-delete={ fmt.Sprintf("/admin/forms/%d", item.ID) }
-											hx-confirm={ pc.T("forms.confirm_delete") }
-											hx-target="closest tr"
-											hx-swap="outerHTML"
-										>
+										@button.Button(button.Props{Variant: button.VariantSecondary, Size: button.SizeSm, Href: fmt.Sprintf("/admin/forms/%d", item.ID)}) {
+											{ pc.T("btn.edit") }
+										}
+										@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/forms/%s", item.Slug), Target: "_blank"}) {
+											{ pc.T("forms.preview") }
+										}
+										@button.Button(button.Props{
+											Variant: button.VariantDestructive,
+											Size: button.SizeSm,
+											Attributes: templ.Attributes{
+												"hx-delete": fmt.Sprintf("/admin/forms/%d", item.ID),
+												"hx-confirm": pc.T("forms.confirm_delete"),
+												"hx-target": "closest tr",
+												"hx-swap": "outerHTML",
+											},
+										}) {
 											{ pc.T("btn.delete") }
-										</button>
+										}
 									</div>
 								</td>
 							</tr>
@@ -255,7 +264,9 @@ templ FormsListPage(pc *PageContext, data FormsListViewData) {
 						<p>{ pc.T("forms.no_forms") }</p>
 						<span class="empty-hint">{ pc.T("forms.no_forms_hint") }</span>
 						<div class="empty-state-action">
-							<a href="/admin/forms/new" class="btn btn-primary">{ pc.T("forms.create") }</a>
+							@button.Button(button.Props{Href: "/admin/forms/new"}) {
+								{ pc.T("forms.create") }
+							}
 						</div>
 					</div>
 				</div>
@@ -270,22 +281,19 @@ templ FormsListPage(pc *PageContext, data FormsListViewData) {
 
 templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<h1 class="page-title">
-				if data.IsEdit {
-					{ pc.T("forms.edit") }
-				} else {
-					{ pc.T("forms.new") }
+		@PageHeader(formPageTitle(pc, data.IsEdit), "") {
+			@button.Button(button.Props{Variant: button.VariantSecondary, Href: "/admin/forms"}) {
+				{ pc.T("forms.back_to_forms") }
+			}
+			if data.IsEdit {
+				@button.Button(button.Props{Variant: button.VariantSecondary, Href: fmt.Sprintf("/admin/forms/%d/submissions", data.FormID)}) {
+					{ pc.T("forms.view_submissions") }
 				}
-			</h1>
-			<div class="page-actions">
-				<a href="/admin/forms" class="btn btn-secondary">{ pc.T("forms.back_to_forms") }</a>
-				if data.IsEdit {
-					<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions", data.FormID)) } class="btn btn-secondary">{ pc.T("forms.view_submissions") }</a>
-					<a href={ templ.SafeURL(fmt.Sprintf("/forms/%s", data.FormSlug)) } class="btn btn-outline" target="_blank">{ pc.T("forms.preview") }</a>
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/forms/%s", data.FormSlug), Target: "_blank"}) {
+					{ pc.T("forms.preview") }
 				}
-			</div>
-		</div>
+			}
+		}
 		<div class="form-builder-container">
 			<div class="form-builder-main">
 				<!-- Form Settings -->
@@ -410,14 +418,16 @@ templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 								<input type="hidden" name="language_code" value={ data.Language.Code }/>
 							}
 							<div class="form-actions">
-								<button type="submit" class="btn btn-primary">
+								@button.Button(button.Props{Type: button.TypeSubmit}) {
 									if data.IsEdit {
 										{ pc.T("forms.update_form") }
 									} else {
 										{ pc.T("forms.create_form") }
 									}
-								</button>
-								<a href="/admin/forms" class="btn btn-secondary">{ pc.T("btn.cancel") }</a>
+								}
+								@button.Button(button.Props{Variant: button.VariantSecondary, Href: "/admin/forms"}) {
+									{ pc.T("btn.cancel") }
+								}
 							</div>
 						</form>
 					</div>
@@ -452,13 +462,20 @@ func languageSelectName(isEdit bool) string {
 	return "language_code"
 }
 
+func formPageTitle(pc *PageContext, isEdit bool) string {
+	if isEdit {
+		return pc.T("forms.edit")
+	}
+	return pc.T("forms.new")
+}
+
 templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
 	<div class="card mt-4" x-data="formFieldBuilder()">
 		<div class="card-header">
 			<h3>{ pc.T("forms.form_fields") }</h3>
-			<button type="button" class="btn btn-primary btn-sm" @click="openAddModal()">
+			@button.Button(button.Props{Size: button.SizeSm, Attributes: templ.Attributes{"@click": "openAddModal()"}}) {
 				{ pc.T("forms.add_field") }
-			</button>
+			}
 		</div>
 		<div class="card-body">
 			<template x-if="fields.length === 0">
@@ -485,12 +502,12 @@ templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
 							</div>
 						</div>
 						<div class="field-item-actions">
-							<button type="button" class="btn btn-sm btn-secondary" @click="openEditModal(field)">
+							@button.Button(button.Props{Variant: button.VariantSecondary, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "openEditModal(field)"}}) {
 								{ pc.T("btn.edit") }
-							</button>
-							<button type="button" class="btn btn-sm btn-danger" @click="deleteField(field.id)">
+							}
+							@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "deleteField(field.id)"}}) {
 								{ pc.T("btn.delete") }
-							</button>
+							}
 						</div>
 					</div>
 				</template>
@@ -558,8 +575,12 @@ templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
 						</div>
 					</div>
 					<div class="modal-footer" style="padding:1rem;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:0.5rem;">
-						<button type="button" class="btn btn-outline" @click="closeModal()">{ pc.T("btn.cancel") }</button>
-						<button type="button" class="btn btn-primary" @click="saveField()">{ pc.T("forms.save_field") }</button>
+						@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "closeModal()"}}) {
+							{ pc.T("btn.cancel") }
+						}
+						@button.Button(button.Props{Attributes: templ.Attributes{"@click": "saveField()"}}) {
+							{ pc.T("forms.save_field") }
+						}
 					</div>
 				</div>
 			</div>
@@ -603,10 +624,16 @@ templ formsTranslationsPanel(pc *PageContext, data FormFormViewData) {
 						for _, lang := range data.MissingLanguages {
 							<form action={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/translate/%s", data.FormID, lang.Code)) } method="POST" class="inline-form">
 								@csrfField()
-								<button type="submit" class="btn btn-sm btn-outline translation-add-btn" title={ "Create " + lang.Name + " translation" }>
+								@button.Button(button.Props{
+									Variant: button.VariantOutline,
+									Size: button.SizeSm,
+									Type: button.TypeSubmit,
+									Class: "translation-add-btn",
+									Attributes: templ.Attributes{"title": "Create " + lang.Name + " translation"},
+								}) {
 									@iconPlus14()
 									{ lang.Code } - { lang.Name }
-								</button>
+								}
 							</form>
 						}
 					</div>
@@ -774,18 +801,19 @@ templ formsFieldBuilderScript(pc *PageContext, data FormFormViewData) {
 
 templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<h1 class="page-title">{ pc.T("forms.submissions") } - { data.FormName }</h1>
-			<div class="page-actions">
-				if len(data.Submissions) > 0 && !data.IsDemoMode {
-					<form action={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/export", data.FormID)) } method="POST" class="d-inline">
-						@csrfField()
-						<button type="submit" class="btn btn-secondary">{ pc.T("forms.export_csv") }</button>
-					</form>
-				}
-				<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d", data.FormID)) } class="btn btn-outline">{ pc.T("forms.back_to_form") }</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("forms.submissions") + " - " + data.FormName, "") {
+			if len(data.Submissions) > 0 && !data.IsDemoMode {
+				<form action={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/export", data.FormID)) } method="POST" class="d-inline">
+					@csrfField()
+					@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit}) {
+						{ pc.T("forms.export_csv") }
+					}
+				</form>
+			}
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/admin/forms/%d", data.FormID)}) {
+				{ pc.T("forms.back_to_form") }
+			}
+		}
 		<div class="stats-bar">
 			<div class="stat">
 				<span class="stat-value">{ fmt.Sprintf("%d", data.TotalCount) }</span>
@@ -843,16 +871,21 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 								</td>
 								<td>
 									<div class="btn-group">
-										<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID)) } class="btn btn-sm btn-secondary">{ pc.T("forms.view") }</a>
-										<button type="button"
-											class="btn btn-sm btn-danger"
-											hx-delete={ fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID) }
-											hx-confirm={ pc.T("forms.confirm_delete_submission") }
-											hx-target="closest tr"
-											hx-swap="outerHTML"
-										>
+										@button.Button(button.Props{Variant: button.VariantSecondary, Size: button.SizeSm, Href: fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID)}) {
+											{ pc.T("forms.view") }
+										}
+										@button.Button(button.Props{
+											Variant: button.VariantDestructive,
+											Size: button.SizeSm,
+											Attributes: templ.Attributes{
+												"hx-delete": fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID),
+												"hx-confirm": pc.T("forms.confirm_delete_submission"),
+												"hx-target": "closest tr",
+												"hx-swap": "outerHTML",
+											},
+										}) {
 											{ pc.T("btn.delete") }
-										</button>
+										}
 									</div>
 								</td>
 							</tr>
@@ -873,7 +906,9 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 						<p>{ pc.T("forms.no_submissions") }</p>
 						<span class="empty-hint">{ pc.T("forms.no_submissions_hint") }</span>
 						<div class="empty-state-action">
-							<a href={ templ.SafeURL(fmt.Sprintf("/forms/%s", data.FormSlug)) } class="btn btn-primary" target="_blank">{ pc.T("forms.view_form") }</a>
+							@button.Button(button.Props{Href: fmt.Sprintf("/forms/%s", data.FormSlug), Target: "_blank"}) {
+								{ pc.T("forms.view_form") }
+							}
 						</div>
 					</div>
 				</div>
@@ -888,20 +923,21 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 
 templ FormsSubmissionViewPage(pc *PageContext, data SubmissionViewViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<h1 class="page-title">{ pc.T("forms.submission_title") } { fmt.Sprintf("#%d", data.SubmissionID) }</h1>
-			<div class="page-actions">
-				<button type="button"
-					class="btn btn-danger"
-					hx-delete={ fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, data.SubmissionID) }
-					hx-confirm={ pc.T("forms.confirm_delete_submission") }
-					hx-redirect={ fmt.Sprintf("/admin/forms/%d/submissions", data.FormID) }
-				>
-					{ pc.T("btn.delete") }
-				</button>
-				<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions", data.FormID)) } class="btn btn-outline">{ pc.T("forms.back_to_submissions") }</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("forms.submission_title") + " " + fmt.Sprintf("#%d", data.SubmissionID), "") {
+			@button.Button(button.Props{
+				Variant: button.VariantDestructive,
+				Attributes: templ.Attributes{
+					"hx-delete": fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, data.SubmissionID),
+					"hx-confirm": pc.T("forms.confirm_delete_submission"),
+					"hx-redirect": fmt.Sprintf("/admin/forms/%d/submissions", data.FormID),
+				},
+			}) {
+				{ pc.T("btn.delete") }
+			}
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/admin/forms/%d/submissions", data.FormID)}) {
+				{ pc.T("forms.back_to_submissions") }
+			}
+		}
 		<div class="submission-detail">
 			<div class="submission-meta">
 				<div class="meta-item">
