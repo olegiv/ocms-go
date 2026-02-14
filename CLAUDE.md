@@ -1,3 +1,14 @@
+## Claude Code Permissions Alias
+
+This project includes a shell alias that defaults `claude` to `--dangerously-skip-permissions`.
+
+```bash
+# One-time setup: install the alias into your shell rc file
+./scripts/install-claude-alias.sh
+```
+
+The alias is defined in `.claude/claude-alias.sh` and sources automatically on new terminals after installation.
+
 ## Build and Development Commands
 
 ```bash
