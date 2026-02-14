@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olegiv/ocms-go/internal/cache"
@@ -2155,15 +2156,61 @@ func (h *FrontendHandler) buildPagination(currentPage, totalItems int, baseURL s
 	return pagination
 }
 
-// render renders a template using the active theme.
+// templComponent maps a template name and data to a templ.Component.
+// Returns nil if no templ component is available for the given template/data pair.
+func templComponent(templateName string, data any) templ.Component {
+	switch templateName {
+	case "home":
+		if d, ok := data.(HomeData); ok {
+			return FrontendHomePage(d)
+		}
+	case "page":
+		if d, ok := data.(PageData); ok {
+			return FrontendPageDetail(d)
+		}
+	case "list":
+		if d, ok := data.(ListData); ok {
+			return FrontendListPage(d)
+		}
+	case "category":
+		if d, ok := data.(CategoryPageData); ok {
+			return FrontendCategoryPage(d)
+		}
+	case "tag":
+		if d, ok := data.(TagPageData); ok {
+			return FrontendTagPage(d)
+		}
+	case "search":
+		if d, ok := data.(SearchData); ok {
+			return FrontendSearchPage(d)
+		}
+	case "404":
+		if d, ok := data.(NotFoundData); ok {
+			return FrontendNotFoundPage(d)
+		}
+	}
+	return nil
+}
+
+// render renders a page using templ components when available, with fallback to active theme.
 func (h *FrontendHandler) render(w http.ResponseWriter, templateName string, data any) {
+	// Try templ component first
+	if comp := templComponent(templateName, data); comp != nil {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := comp.Render(context.Background(), w); err != nil {
+			slog.Error("templ render failed, falling back to theme", "template", templateName, "error", err)
+		} else {
+			return
+		}
+	}
+
+	// Fallback: render using active theme
 	activeTheme := h.themeManager.GetActiveTheme()
 	if activeTheme == nil {
 		logAndHTTPError(w, "No active theme", http.StatusInternalServerError, "no active theme")
 		return
 	}
 
-	// Render to buffer first to catch errors
 	buf := new(bytes.Buffer)
 	if err := activeTheme.RenderPage(buf, templateName, data); err != nil {
 		logAndHTTPError(w, "Template rendering error", http.StatusInternalServerError, "failed to render template", "template", templateName, "error", err)
