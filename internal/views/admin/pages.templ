@@ -11,6 +11,7 @@ import "github.com/olegiv/ocms-go/internal/views/components/badge"
 import "github.com/olegiv/ocms-go/internal/views/components/button"
 import "github.com/olegiv/ocms-go/internal/views/components/card"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
+import "github.com/olegiv/ocms-go/internal/views/components/table"
 
 // =============================================================================
 // VIEW TYPES
@@ -449,26 +450,26 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 		}
 		if len(data.Pages) > 0 {
 			@card.Card(card.Props{ID: "pages-table"}) {
-				<div class="table-responsive">
-					<table class="table">
-						<thead>
-							<tr>
-								<th class="col-w-60">{ pc.T("label.image") }</th>
-								<th>{ pc.T("label.title") }</th>
-								<th>{ pc.T("label.tags") }</th>
-								<th>{ pc.T("label.categories") }</th>
-								<th>{ pc.T("label.language") }</th>
-								<th>{ pc.T("label.status") }</th>
-								<th>{ pc.T("label.updated_at") }</th>
-								<th class="text-right">{ pc.T("label.actions") }</th>
-							</tr>
-						</thead>
-						<tbody>
+				<div class="overflow-x-auto">
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head(table.HeadProps{Class: "w-[60px]"}) { { pc.T("label.image") } }
+								@table.Head() { { pc.T("label.title") } }
+								@table.Head() { { pc.T("label.tags") } }
+								@table.Head() { { pc.T("label.categories") } }
+								@table.Head() { { pc.T("label.language") } }
+								@table.Head() { { pc.T("label.status") } }
+								@table.Head() { { pc.T("label.updated_at") } }
+								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+							}
+						}
+						@table.Body() {
 							for _, page := range data.Pages {
 								@pageListRow(pc, page, data.IsDemoMode)
 							}
-						</tbody>
-					</table>
+						}
+					}
 				</div>
 				if data.Pagination.ShouldShow() {
 					@card.Footer() {
@@ -500,8 +501,8 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 }
 
 templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool) {
-	<tr id={ fmt.Sprintf("page-row-%d", page.ID) }>
-		<td class="page-image-cell">
+	@table.Row(table.RowProps{ID: fmt.Sprintf("page-row-%d", page.ID)}) {
+		@table.Cell(table.CellProps{Class: "page-image-cell"}) {
 			if page.FeaturedImage != nil {
 				<img src={ page.FeaturedImage.Thumbnail } alt={ page.Title } class="page-thumbnail"/>
 			} else {
@@ -509,11 +510,11 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool) {
 					@iconImagePlaceholder()
 				</div>
 			}
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			<a href={ templ.SafeURL(fmt.Sprintf("/%s", page.Slug)) } class="page-title-link" target="_blank">{ page.Title }</a>
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			if len(page.Tags) > 0 {
 				<div class="tag-list">
 					for _, tag := range page.Tags {
@@ -523,8 +524,8 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool) {
 			} else {
 				<span class="text-muted">&mdash;</span>
 			}
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			if len(page.Categories) > 0 {
 				<div class="category-list">
 					for _, cat := range page.Categories {
@@ -534,15 +535,15 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool) {
 			} else {
 				<span class="text-muted">&mdash;</span>
 			}
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			if page.Language != nil {
 				<span class="language-badge" title={ page.Language.Name }>{ page.Language.Code }</span>
 			} else {
 				<span class="text-muted">&mdash;</span>
 			}
-		</td>
-		<td>
+		}
+		@table.Cell() {
 		if page.IsScheduled {
 			@badge.Badge(badge.Props{Class: "badge-info", Attributes: templ.Attributes{"title": page.ScheduledAtTitle}}) {
 				@iconClock12()
@@ -559,9 +560,9 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool) {
 				}
 			}
 		}
-		</td>
-		<td>{ page.UpdatedAt }</td>
-		<td class="text-right">
+		}
+		@table.Cell() { { page.UpdatedAt } }
+		@table.Cell(table.CellProps{Class: "text-right"}) {
 			<div class="action-buttons">
 				if !page.IsDemoPublished {
 					<form action={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/publish", page.ID)) } method="POST" class="inline-form">
@@ -612,8 +613,8 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool) {
 					</div>
 				</div>
 			</div>
-		</td>
-	</tr>
+		}
+	}
 }
 
 func publishTitle(pc *PageContext, status string) string {
@@ -1781,23 +1782,23 @@ templ PageVersionsPage(pc *PageContext, data PageVersionsViewData) {
 		}
 		if len(data.Versions) > 0 {
 			@card.Card() {
-				<div class="table-responsive">
-					<table class="table">
-						<thead>
-							<tr>
-								<th>{ pc.T("versions.version") }</th>
-								<th>{ pc.T("label.title") }</th>
-								<th>{ pc.T("versions.changed_by") }</th>
-								<th>{ pc.T("versions.date") }</th>
-								<th class="text-right">{ pc.T("label.actions") }</th>
-							</tr>
-						</thead>
-						<tbody>
+				<div class="overflow-x-auto">
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { { pc.T("versions.version") } }
+								@table.Head() { { pc.T("label.title") } }
+								@table.Head() { { pc.T("versions.changed_by") } }
+								@table.Head() { { pc.T("versions.date") } }
+								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+							}
+						}
+						@table.Body() {
 							for _, version := range data.Versions {
 								@versionRow(pc, data, version)
 							}
-						</tbody>
-					</table>
+						}
+					}
 				</div>
 				if data.Pagination.ShouldShow() {
 					@card.Footer() {
@@ -1820,18 +1821,18 @@ templ PageVersionsPage(pc *PageContext, data PageVersionsViewData) {
 }
 
 templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionView) {
-	<tr>
-		<td>
+	@table.Row() {
+		@table.Cell() {
 			@badge.Badge(badge.Props{Class: "badge-info"}) { #{ fmt.Sprintf("%d", version.ID) } }
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			<span class="version-title">{ version.Title }</span>
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			<span class="user-name">{ version.ChangedByName }</span>
-		</td>
-		<td>{ version.CreatedAt }</td>
-		<td class="text-right">
+		}
+		@table.Cell() { { version.CreatedAt } }
+		@table.Cell(table.CellProps{Class: "text-right"}) {
 			<div class="action-buttons">
 				<div x-data="{ showPreview: false, showConfirm: false }" class="version-actions">
 					<!-- Preview Button -->
@@ -1921,8 +1922,8 @@ templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersion
 					</div>
 				</div>
 			</div>
-		</td>
-	</tr>
+		}
+	}
 }
 
 // =============================================================================

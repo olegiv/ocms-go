@@ -10,6 +10,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
 	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
 // UserListItem holds data for a user in the list view.
@@ -59,22 +60,22 @@ templ UsersListPage(pc *PageContext, data UsersListData) {
 		if len(data.Users) > 0 {
 			@card.Card(card.Props{ID: "users-table"}) {
 				@card.Content(card.ContentProps{Class: "p-0"}) {
-					<div class="table-responsive">
-						<table class="table">
-							<thead>
-								<tr>
-									<th>{ pc.T("label.name") }</th>
-									<th>{ pc.T("label.email") }</th>
-									<th>{ pc.T("label.role") }</th>
-									<th>{ pc.T("label.created_at") }</th>
-									<th>{ pc.T("users.last_login") }</th>
-									<th class="text-right">{ pc.T("label.actions") }</th>
-								</tr>
-							</thead>
-							<tbody>
+					<div class="overflow-x-auto">
+						@table.Table() {
+							@table.Header() {
+								@table.Row() {
+									@table.Head() { { pc.T("label.name") } }
+									@table.Head() { { pc.T("label.email") } }
+									@table.Head() { { pc.T("label.role") } }
+									@table.Head() { { pc.T("label.created_at") } }
+									@table.Head() { { pc.T("users.last_login") } }
+									@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+								}
+							}
+							@table.Body() {
 								for _, user := range data.Users {
-									<tr id={ fmt.Sprintf("user-row-%d", user.ID) }>
-										<td>
+									@table.Row(table.RowProps{ID: fmt.Sprintf("user-row-%d", user.ID)}) {
+										@table.Cell() {
 											<div class="user-cell">
 												<div class="user-avatar-sm">{ string(user.Name[0]) }</div>
 												<span>{ user.Name }</span>
@@ -84,22 +85,22 @@ templ UsersListPage(pc *PageContext, data UsersListData) {
 													}
 												}
 											</div>
-										</td>
-										<td>{ user.Email }</td>
-										<td>
+										}
+										@table.Cell() { { user.Email } }
+										@table.Cell() {
 											@badge.Badge(badge.Props{Class: roleBadgeClass(user.Role)}) {
 												{ roleLabel(pc, user.Role) }
 											}
-										</td>
-										<td>{ user.CreatedAt.Format("Jan 02, 2006") }</td>
-										<td>
+										}
+										@table.Cell() { { user.CreatedAt.Format("Jan 02, 2006") } }
+										@table.Cell() {
 											if user.LastLoginAt != nil {
 												{ user.LastLoginAt.Format("Jan 02, 2006 15:04") }
 											} else {
 												<span class="text-muted">{ pc.T("users.never") }</span>
 											}
-										</td>
-										<td class="text-right">
+										}
+										@table.Cell(table.CellProps{Class: "text-right"}) {
 											<div class="action-buttons">
 												@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/users/%d", user.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
 													@icon.Pencil(icon.Props{Size: 14})
@@ -108,11 +109,11 @@ templ UsersListPage(pc *PageContext, data UsersListData) {
 													@deleteUserModal(pc, user)
 												}
 											</div>
-										</td>
-									</tr>
+										}
+									}
 								}
-							</tbody>
-						</table>
+							}
+						}
 					</div>
 				}
 				if data.Pagination.ShouldShow() {

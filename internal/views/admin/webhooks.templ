@@ -8,7 +8,9 @@ import "strings"
 import "time"
 import "encoding/json"
 import "github.com/olegiv/ocms-go/internal/views/components/button"
+import "github.com/olegiv/ocms-go/internal/views/components/card"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
+import "github.com/olegiv/ocms-go/internal/views/components/table"
 
 // WebhookListItemView represents a webhook in the list.
 type WebhookListItemView struct {
@@ -128,46 +130,46 @@ templ WebhooksListPage(pc *PageContext, data WebhooksListViewData) {
 			}
 		}
 		if len(data.Webhooks) > 0 {
-			<div class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800" id="webhooks-table">
+			@card.Card(card.Props{ID: "webhooks-table"}) {
 				<div class="overflow-x-auto">
-					<table class="w-full text-left text-sm">
-						<thead class="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
-							<tr>
-								<th class="px-4 py-3">{ pc.T("webhooks.name") }</th>
-								<th class="px-4 py-3">{ pc.T("webhooks.url") }</th>
-								<th class="px-4 py-3">{ pc.T("webhooks.events") }</th>
-								<th class="px-4 py-3">{ pc.T("webhooks.status") }</th>
-								<th class="px-4 py-3">{ pc.T("webhooks.stats") }</th>
-								<th class="px-4 py-3 text-right">{ pc.T("webhooks.actions") }</th>
-							</tr>
-						</thead>
-						<tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { { pc.T("webhooks.name") } }
+								@table.Head() { { pc.T("webhooks.url") } }
+								@table.Head() { { pc.T("webhooks.events") } }
+								@table.Head() { { pc.T("webhooks.status") } }
+								@table.Head() { { pc.T("webhooks.stats") } }
+								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("webhooks.actions") } }
+							}
+						}
+						@table.Body() {
 							for _, wh := range data.Webhooks {
-								<tr id={ fmt.Sprintf("webhook-row-%d", wh.ID) }>
-									<td class="px-4 py-3 font-medium text-gray-900 dark:text-white">{ wh.Name }</td>
-									<td class="px-4 py-3">
-										<code class="rounded bg-gray-100 px-1 py-0.5 text-xs dark:bg-gray-700">{ wh.URL }</code>
-									</td>
-									<td class="px-4 py-3">
+								@table.Row(table.RowProps{ID: fmt.Sprintf("webhook-row-%d", wh.ID)}) {
+									@table.Cell(table.CellProps{Class: "font-medium"}) { { wh.Name } }
+									@table.Cell() {
+										<code class="rounded bg-muted px-1 py-0.5 text-xs">{ wh.URL }</code>
+									}
+									@table.Cell() {
 										<div class="flex flex-wrap gap-1">
 											for idx, event := range wh.Events {
 												if idx < 3 {
-													<span class="rounded border border-gray-200 px-1.5 py-0.5 text-xs dark:border-gray-600">{ event }</span>
+													<span class="rounded border px-1.5 py-0.5 text-xs">{ event }</span>
 												}
 											}
 											if len(wh.Events) > 3 {
-												<span class="rounded border border-gray-200 px-1.5 py-0.5 text-xs dark:border-gray-600">+{ fmt.Sprint(len(wh.Events) - 3) } { pc.T("webhooks.more_events") }</span>
+												<span class="rounded border px-1.5 py-0.5 text-xs">+{ fmt.Sprint(len(wh.Events) - 3) } { pc.T("webhooks.more_events") }</span>
 											}
 										</div>
-									</td>
-									<td class="px-4 py-3">
+									}
+									@table.Cell() {
 										if wh.IsActive {
 											<span class="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900 dark:text-green-200">{ pc.T("webhooks.active") }</span>
 										} else {
-											<span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300">{ pc.T("webhooks.inactive") }</span>
+											<span class="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{ pc.T("webhooks.inactive") }</span>
 										}
-									</td>
-									<td class="px-4 py-3">
+									}
+									@table.Cell() {
 										<div class="flex items-center gap-2">
 											<span class={ "h-2 w-2 rounded-full", webhookHealthClass(wh.HealthStatus) } title={ pc.T("webhooks.health") + ": " + fmtSuccessRate(wh.SuccessRate) + "%" }></span>
 											if wh.TotalDelivered > 0 {
@@ -186,36 +188,36 @@ templ WebhooksListPage(pc *PageContext, data WebhooksListViewData) {
 												</span>
 											}
 											if wh.TotalDelivered == 0 && wh.TotalPending == 0 && wh.TotalDead == 0 {
-												<span class="text-xs text-gray-400">{ pc.T("webhooks.no_deliveries") }</span>
+												<span class="text-xs text-muted-foreground">{ pc.T("webhooks.no_deliveries") }</span>
 											}
 										</div>
 										if wh.HasLastSuccessfulAt {
-											<div class="text-xs text-gray-400">{ wh.LastSuccessfulAt }</div>
+											<div class="text-xs text-muted-foreground">{ wh.LastSuccessfulAt }</div>
 										}
-									</td>
-									<td class="px-4 py-3 text-right">
+									}
+									@table.Cell(table.CellProps{Class: "text-right"}) {
 										<div class="flex items-center justify-end gap-1">
-											<a href={ templ.SafeURL(fmt.Sprintf("/admin/webhooks/%d/deliveries", wh.ID)) } class="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700" title={ pc.T("webhooks.view_deliveries") }>
+											<a href={ templ.SafeURL(fmt.Sprintf("/admin/webhooks/%d/deliveries", wh.ID)) } class="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" title={ pc.T("webhooks.view_deliveries") }>
 												@iconFile()
 											</a>
 											<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/webhooks/%d/test", wh.ID)) } class="inline">
 												@csrfField()
-												<button type="submit" class="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700" title={ pc.T("webhooks.test") }>
+												<button type="submit" class="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" title={ pc.T("webhooks.test") }>
 													@iconPlay()
 												</button>
 											</form>
-											<a href={ templ.SafeURL(fmt.Sprintf("/admin/webhooks/%d", wh.ID)) } class="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700" title={ pc.T("btn.edit") }>
+											<a href={ templ.SafeURL(fmt.Sprintf("/admin/webhooks/%d", wh.ID)) } class="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" title={ pc.T("btn.edit") }>
 												@iconEdit()
 											</a>
 											@webhookDeleteButton(pc, wh)
 										</div>
-									</td>
-								</tr>
+									}
+								}
 							}
-						</tbody>
-					</table>
+						}
+					}
 				</div>
-			</div>
+			}
 		} else {
 			<div class="rounded-lg border border-gray-200 bg-white p-12 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800">
 				@iconWebhook()
@@ -566,71 +568,71 @@ templ WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) {
 			</div>
 		}
 		if len(data.Deliveries) > 0 {
-			<div class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+			@card.Card() {
 				<div class="overflow-x-auto">
-					<table class="w-full text-left text-sm">
-						<thead class="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
-							<tr>
-								<th class="px-4 py-3">{ pc.T("webhooks.delivery_id") }</th>
-								<th class="px-4 py-3">{ pc.T("webhooks.event") }</th>
-								<th class="px-4 py-3">{ pc.T("webhooks.status") }</th>
-								<th class="px-4 py-3">{ pc.T("webhooks.attempts") }</th>
-								<th class="px-4 py-3">{ pc.T("webhooks.response") }</th>
-								<th class="px-4 py-3">{ pc.T("webhooks.created") }</th>
-								<th class="px-4 py-3 text-right">{ pc.T("webhooks.actions") }</th>
-							</tr>
-						</thead>
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { { pc.T("webhooks.delivery_id") } }
+								@table.Head() { { pc.T("webhooks.event") } }
+								@table.Head() { { pc.T("webhooks.status") } }
+								@table.Head() { { pc.T("webhooks.attempts") } }
+								@table.Head() { { pc.T("webhooks.response") } }
+								@table.Head() { { pc.T("webhooks.created") } }
+								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("webhooks.actions") } }
+							}
+						}
 						for _, d := range data.Deliveries {
-							<tbody x-data="{ showPayload: false }">
-								<tr class="border-b border-gray-200 dark:border-gray-700">
-									<td class="px-4 py-3"><code class="text-xs">#{ fmt.Sprint(d.ID) }</code></td>
-									<td class="px-4 py-3">
-										<span class="rounded border border-gray-200 px-1.5 py-0.5 text-xs dark:border-gray-600">{ d.Event }</span>
-									</td>
-									<td class="px-4 py-3">
+							@table.Body(table.BodyProps{Attributes: templ.Attributes{"x-data": "{ showPayload: false }"}}) {
+								@table.Row() {
+									@table.Cell() { <code class="text-xs">#{ fmt.Sprint(d.ID) }</code> }
+									@table.Cell() {
+										<span class="rounded border px-1.5 py-0.5 text-xs">{ d.Event }</span>
+									}
+									@table.Cell() {
 										@deliveryStatusBadge(pc, d.Status)
-									</td>
-									<td class="px-4 py-3">{ fmt.Sprint(d.Attempts) }</td>
-									<td class="px-4 py-3">
+									}
+									@table.Cell() { { fmt.Sprint(d.Attempts) } }
+									@table.Cell() {
 										if d.HasResponseCode {
 											<span class={ deliveryResponseClass(d.ResponseCode) }>{ fmt.Sprint(d.ResponseCode) }</span>
 										} else {
-											<span class="text-gray-400">-</span>
+											<span class="text-muted-foreground">-</span>
 										}
 										if d.HasErrorMessage {
 											<span class="ml-1 text-yellow-500" title={ d.ErrorMessage }>
 												@iconAlertCircle()
 											</span>
 										}
-									</td>
-									<td class="px-4 py-3 text-xs text-gray-500">{ d.CreatedAt }</td>
-									<td class="px-4 py-3 text-right">
+									}
+									@table.Cell(table.CellProps{Class: "text-xs text-muted-foreground"}) { { d.CreatedAt } }
+									@table.Cell(table.CellProps{Class: "text-right"}) {
 										<div class="flex items-center justify-end gap-1">
-											<button type="button" class="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700" @click="showPayload = !showPayload" title={ pc.T("webhooks.view_payload") }>
+											<button type="button" class="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" @click="showPayload = !showPayload" title={ pc.T("webhooks.view_payload") }>
 												@iconEye()
 											</button>
 											if d.CanRetry {
 												<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/webhooks/%d/deliveries/%d/retry", data.WebhookID, d.ID)) } class="inline">
 													@csrfField()
-													<button type="submit" class="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700" title={ pc.T("webhooks.retry") }>
+													<button type="submit" class="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" title={ pc.T("webhooks.retry") }>
 														@iconRefresh()
 													</button>
 												</form>
 											}
 										</div>
-									</td>
-								</tr>
-								<tr x-show="showPayload" x-cloak class="bg-gray-50 dark:bg-gray-900">
-									<td colspan="7" class="px-4 py-4">
+									}
+								}
+								@table.Row(table.RowProps{Class: "bg-muted/50", Attributes: templ.Attributes{"x-show": "showPayload", "x-cloak": true}}) {
+									@table.Cell(table.CellProps{Class: "px-4 py-4", Attributes: templ.Attributes{"colspan": "7"}}) {
 										<div class="space-y-4">
 											<div>
-												<h5 class="mb-1 text-xs font-semibold uppercase text-gray-500">{ pc.T("webhooks.payload") }</h5>
-												<pre class="max-h-64 overflow-auto rounded bg-gray-100 p-3 text-xs dark:bg-gray-800">{ d.Payload }</pre>
+												<h5 class="mb-1 text-xs font-semibold uppercase text-muted-foreground">{ pc.T("webhooks.payload") }</h5>
+												<pre class="max-h-64 overflow-auto rounded bg-muted p-3 text-xs">{ d.Payload }</pre>
 											</div>
 											if d.HasResponseBody {
 												<div>
-													<h5 class="mb-1 text-xs font-semibold uppercase text-gray-500">{ pc.T("webhooks.response_body") }</h5>
-													<pre class="max-h-64 overflow-auto rounded bg-gray-100 p-3 text-xs dark:bg-gray-800">{ d.ResponseBody }</pre>
+													<h5 class="mb-1 text-xs font-semibold uppercase text-muted-foreground">{ pc.T("webhooks.response_body") }</h5>
+													<pre class="max-h-64 overflow-auto rounded bg-muted p-3 text-xs">{ d.ResponseBody }</pre>
 												</div>
 											}
 											if d.HasErrorMessage {
@@ -640,8 +642,8 @@ templ WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) {
 												</div>
 											}
 											<div>
-												<h5 class="mb-1 text-xs font-semibold uppercase text-gray-500">{ pc.T("webhooks.headers_sent") }</h5>
-												<div class="space-y-0.5 text-xs text-gray-600 dark:text-gray-400">
+												<h5 class="mb-1 text-xs font-semibold uppercase text-muted-foreground">{ pc.T("webhooks.headers_sent") }</h5>
+												<div class="space-y-0.5 text-xs text-muted-foreground">
 													<div><code>Content-Type</code>: application/json</div>
 													<div><code>User-Agent</code>: oCMS/1.0</div>
 													<div><code>X-Webhook-Signature</code>: (HMAC-SHA256)</div>
@@ -650,8 +652,8 @@ templ WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) {
 												</div>
 											</div>
 											<div>
-												<h5 class="mb-1 text-xs font-semibold uppercase text-gray-500">{ pc.T("webhooks.timing_info") }</h5>
-												<div class="grid grid-cols-2 gap-1 text-xs text-gray-600 dark:text-gray-400">
+												<h5 class="mb-1 text-xs font-semibold uppercase text-muted-foreground">{ pc.T("webhooks.timing_info") }</h5>
+												<div class="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
 													<span>{ pc.T("webhooks.created") }</span><span>{ d.CreatedAt }</span>
 													if d.HasDeliveredAt {
 														<span>{ pc.T("webhooks.delivered_at") }</span><span>{ d.DeliveredAt }</span>
@@ -663,18 +665,18 @@ templ WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) {
 												</div>
 											</div>
 										</div>
-									</td>
-								</tr>
-							</tbody>
+									}
+								}
+							}
 						}
-					</table>
+					}
 				</div>
 				if data.Pagination.TotalPages > 1 {
-					<div class="border-t border-gray-200 px-4 py-3 dark:border-gray-700">
+					@card.Footer() {
 						@Pagination(pc, data.Pagination)
-					</div>
+					}
 				}
-			</div>
+			}
 		} else {
 			<div class="rounded-lg border border-gray-200 bg-white p-12 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800">
 				@iconFile()

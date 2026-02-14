@@ -9,6 +9,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
 // DocsSystemInfoView holds system-level information for display.
@@ -144,33 +145,45 @@ templ DocsPage(pc *PageContext, data DocsViewData) {
 					}
 				}
 				@card.Content() {
-					<div class="table-responsive">
-						<table class="table">
-							<thead>
-								<tr>
-									<th>{ pc.T("docs.method") }</th>
-									<th>{ pc.T("docs.path") }</th>
-									<th>{ pc.T("docs.ep_description") }</th>
-									<th>{ pc.T("docs.auth") }</th>
-								</tr>
-							</thead>
-							<tbody>
+					<div class="overflow-x-auto">
+						@table.Table() {
+							@table.Header() {
+								@table.Row() {
+									@table.Head() {
+										{ pc.T("docs.method") }
+									}
+									@table.Head() {
+										{ pc.T("docs.path") }
+									}
+									@table.Head() {
+										{ pc.T("docs.ep_description") }
+									}
+									@table.Head() {
+										{ pc.T("docs.auth") }
+									}
+								}
+							}
+							@table.Body() {
 								for _, ep := range group.Endpoints {
-									<tr>
-										<td>
+									@table.Row() {
+										@table.Cell() {
 											@endpointMethodBadge(ep.Method)
-										</td>
-										<td><code>{ ep.Path }</code></td>
-										<td>{ ep.Description }</td>
-										<td>
+										}
+										@table.Cell() {
+											<code>{ ep.Path }</code>
+										}
+										@table.Cell() {
+											{ ep.Description }
+										}
+										@table.Cell() {
 											@badge.Badge(badge.Props{Class: "badge-info badge-sm"}) {
 												{ ep.Auth }
 											}
-										</td>
-									</tr>
+										}
+									}
 								}
-							</tbody>
-						</table>
+							}
+						}
 					</div>
 				}
 			}

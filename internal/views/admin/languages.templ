@@ -12,6 +12,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
 // LanguageListItem holds data for a language in the list view.
@@ -77,25 +78,25 @@ templ LanguagesListPage(pc *PageContext, data LanguagesListData) {
 		}
 		if len(data.Languages) > 0 {
 			@card.Card(card.Props{ID: "languages-table"}) {
-				<div class="table-responsive">
-					<table class="table">
-						<thead>
-							<tr>
-								<th>{ pc.T("languages.code") }</th>
-								<th>{ pc.T("label.name") }</th>
-								<th>{ pc.T("languages.native_name") }</th>
-								<th>{ pc.T("languages.direction") }</th>
-								<th>{ pc.T("label.status") }</th>
-								<th>{ pc.T("languages.position") }</th>
-								<th class="text-right">{ pc.T("label.actions") }</th>
-							</tr>
-						</thead>
-						<tbody>
+				<div class="overflow-x-auto">
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { { pc.T("languages.code") } }
+								@table.Head() { { pc.T("label.name") } }
+								@table.Head() { { pc.T("languages.native_name") } }
+								@table.Head() { { pc.T("languages.direction") } }
+								@table.Head() { { pc.T("label.status") } }
+								@table.Head() { { pc.T("languages.position") } }
+								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+							}
+						}
+						@table.Body() {
 							for _, lang := range data.Languages {
 								@LanguageRow(pc, lang)
 							}
-						</tbody>
-					</table>
+						}
+					}
 				</div>
 			}
 			<div class="card-footer-info">
@@ -122,25 +123,25 @@ templ LanguagesListPage(pc *PageContext, data LanguagesListData) {
 
 // LanguageRow renders a single language table row.
 templ LanguageRow(pc *PageContext, lang LanguageListItem) {
-	<tr id={ fmt.Sprintf("language-row-%d", lang.ID) }>
-		<td>
+	@table.Row(table.RowProps{ID: fmt.Sprintf("language-row-%d", lang.ID)}) {
+		@table.Cell() {
 			<code class="language-code">{ lang.Code }</code>
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			<span>{ lang.Name }</span>
 			if lang.IsDefault {
 				@badge.Badge(badge.Props{}) {
 					{ pc.T("languages.default") }
 				}
 			}
-		</td>
-		<td>{ lang.NativeName }</td>
-		<td>
+		}
+		@table.Cell() { { lang.NativeName } }
+		@table.Cell() {
 			@badge.Badge(badge.Props{Class: languageDirectionBadgeClass(lang.Direction)}) {
 				{ strings.ToUpper(lang.Direction) }
 			}
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			if lang.IsActive {
 				@badge.Badge(badge.Props{Class: "badge-success"}) {
 					{ pc.T("label.active") }
@@ -150,9 +151,9 @@ templ LanguageRow(pc *PageContext, lang LanguageListItem) {
 					{ pc.T("label.inactive") }
 				}
 			}
-		</td>
-		<td>{ fmt.Sprintf("%d", lang.Position) }</td>
-		<td class="text-right">
+		}
+		@table.Cell() { { fmt.Sprintf("%d", lang.Position) } }
+		@table.Cell(table.CellProps{Class: "text-right"}) {
 			<div class="action-buttons">
 				if !lang.IsDefault {
 					<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/languages/%d/default", lang.ID)) } class="d-inline">
@@ -168,8 +169,8 @@ templ LanguageRow(pc *PageContext, lang LanguageListItem) {
 					@deleteLanguageModal(pc, lang)
 				}
 			</div>
-		</td>
-	</tr>
+		}
+	}
 }
 
 templ deleteLanguageModal(pc *PageContext, lang LanguageListItem) {

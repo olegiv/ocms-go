@@ -11,6 +11,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
 // APIKeyListItem holds data for a single API key in the list view.
@@ -84,25 +85,25 @@ templ APIKeysListPage(pc *PageContext, data APIKeysListData) {
 		}
 		if len(data.APIKeys) > 0 {
 			@card.Card(card.Props{ID: "api-keys-table"}) {
-				<div class="table-responsive">
-					<table class="table">
-						<thead>
-							<tr>
-								<th>{ pc.T("label.name") }</th>
-								<th>{ pc.T("api_keys.key_prefix") }</th>
-								<th>{ pc.T("api_keys.permissions") }</th>
-								<th>{ pc.T("label.status") }</th>
-								<th>{ pc.T("api_keys.last_used") }</th>
-								<th>{ pc.T("api_keys.expires") }</th>
-								<th class="text-right">{ pc.T("label.actions") }</th>
-							</tr>
-						</thead>
-						<tbody>
+				<div class="overflow-x-auto">
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { { pc.T("label.name") } }
+								@table.Head() { { pc.T("api_keys.key_prefix") } }
+								@table.Head() { { pc.T("api_keys.permissions") } }
+								@table.Head() { { pc.T("label.status") } }
+								@table.Head() { { pc.T("api_keys.last_used") } }
+								@table.Head() { { pc.T("api_keys.expires") } }
+								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+							}
+						}
+						@table.Body() {
 							for _, key := range data.APIKeys {
 								@APIKeyRow(pc, key)
 							}
-						</tbody>
-					</table>
+						}
+					}
 				</div>
 				if data.Pagination.ShouldShow() {
 					@card.Footer() {
@@ -152,14 +153,14 @@ templ APIKeysListPage(pc *PageContext, data APIKeysListData) {
 
 // APIKeyRow renders a single API key table row.
 templ APIKeyRow(pc *PageContext, key APIKeyListItem) {
-	<tr id={ fmt.Sprintf("api-key-row-%d", key.ID) }>
-		<td>
+	@table.Row(table.RowProps{ID: fmt.Sprintf("api-key-row-%d", key.ID)}) {
+		@table.Cell() {
 			<strong>{ key.Name }</strong>
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			<code class="key-prefix">{ key.KeyPrefix }...</code>
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			<div class="permission-badges">
 				if len(key.Permissions) > 0 {
 					for _, perm := range key.Permissions {
@@ -171,8 +172,8 @@ templ APIKeyRow(pc *PageContext, key APIKeyListItem) {
 					<span class="text-muted">{ pc.T("api_keys.none") }</span>
 				}
 			</div>
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			if key.IsActive {
 				if key.IsExpired {
 					@badge.Badge(badge.Props{Class: "badge-warning"}) {
@@ -188,22 +189,22 @@ templ APIKeyRow(pc *PageContext, key APIKeyListItem) {
 					{ pc.T("api_keys.revoked") }
 				}
 			}
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			if key.LastUsedAt != "" {
 				{ key.LastUsedAt }
 			} else {
 				<span class="text-muted">{ pc.T("label.never") }</span>
 			}
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			if key.ExpiresAt != "" {
 				{ key.ExpiresAt }
 			} else {
 				<span class="text-muted">{ pc.T("label.never") }</span>
 			}
-		</td>
-		<td class="text-right">
+		}
+		@table.Cell(table.CellProps{Class: "text-right"}) {
 			<div class="action-buttons">
 				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/api-keys/%d", key.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
 					@icon.Pencil(icon.Props{Size: 14})
@@ -212,8 +213,8 @@ templ APIKeyRow(pc *PageContext, key APIKeyListItem) {
 					@revokeAPIKeyModal(pc, key)
 				}
 			</div>
-		</td>
-	</tr>
+		}
+	}
 }
 
 // revokeAPIKeyModal renders the revoke confirmation modal for an API key.

@@ -10,6 +10,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
 // MenuListItem holds data for a menu in the list view.
@@ -65,30 +66,30 @@ templ MenusListPage(pc *PageContext, data MenusListData) {
 		}
 		if len(data.Menus) > 0 {
 			@card.Card(card.Props{ID: "menus-table"}) {
-				<div class="table-responsive">
-					<table class="table">
-						<thead>
-							<tr>
-								<th>{ pc.T("label.name") }</th>
-								<th>{ pc.T("label.slug") }</th>
-								<th>{ pc.T("label.language") }</th>
-								<th>{ pc.T("label.updated") }</th>
-								<th class="text-right">{ pc.T("label.actions") }</th>
-							</tr>
-						</thead>
-						<tbody>
+				<div class="overflow-x-auto">
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { { pc.T("label.name") } }
+								@table.Head() { { pc.T("label.slug") } }
+								@table.Head() { { pc.T("label.language") } }
+								@table.Head() { { pc.T("label.updated") } }
+								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+							}
+						}
+						@table.Body() {
 							for _, menu := range data.Menus {
-								<tr id={ fmt.Sprintf("menu-row-%d", menu.ID) }>
-									<td>
+								@table.Row(table.RowProps{ID: fmt.Sprintf("menu-row-%d", menu.ID)}) {
+									@table.Cell() {
 										<a href={ templ.SafeURL(fmt.Sprintf("/admin/menus/%d", menu.ID)) } class="menu-name-link">
 											@iconMenusSmall()
 											{ menu.Name }
 										</a>
-									</td>
-									<td>
+									}
+									@table.Cell() {
 										<code class="slug-code">{ menu.Slug }</code>
-									</td>
-									<td>
+									}
+									@table.Cell() {
 										if menu.LanguageCode != "" {
 											@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
 												{ menu.LanguageCode }
@@ -98,9 +99,9 @@ templ MenusListPage(pc *PageContext, data MenusListData) {
 												&mdash;
 											}
 										}
-									</td>
-									<td>{ menu.UpdatedAt.Format("Jan 02, 2006") }</td>
-									<td class="text-right">
+									}
+									@table.Cell() { { menu.UpdatedAt.Format("Jan 02, 2006") } }
+									@table.Cell(table.CellProps{Class: "text-right"}) {
 										<div class="action-buttons">
 											@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/menus/%d", menu.ID), Attributes: templ.Attributes{"title": pc.T("menus.edit")}}) {
 												@iconEdit()
@@ -113,11 +114,11 @@ templ MenusListPage(pc *PageContext, data MenusListData) {
 												}
 											}
 										</div>
-									</td>
-								</tr>
+									}
+								}
 							}
-						</tbody>
-					</table>
+						}
+					}
 				</div>
 			}
 		} else {
