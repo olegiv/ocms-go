@@ -29,3 +29,196 @@
   --color-warning: oklch(0.769 0.188 70.08);
   --color-info: oklch(0.623 0.214 259.815);
 }
+
+/* ============================================================
+   Legacy Module UI Bridge
+   Scoped under .admin-main to style legacy module markup with
+   the current theme variables.
+   ============================================================ */
+
+/* Page header */
+.admin-main .page-header {
+  margin-bottom: 1.5rem;
+}
+.admin-main .page-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--color-foreground);
+}
+.admin-main .page-description {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--color-muted-foreground);
+}
+
+/* Section header */
+.admin-main .section-header {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-foreground);
+  margin-bottom: 1rem;
+}
+
+/* Card */
+.admin-main .card {
+  background: var(--color-card);
+  color: var(--color-card-foreground);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.admin-main .card-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+  font-weight: 600;
+}
+.admin-main .card-body {
+  padding: 1.25rem;
+}
+.admin-main .card-footer {
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-muted);
+}
+
+/* Buttons */
+.admin-main .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color 0.15s, opacity 0.15s;
+  text-decoration: none;
+}
+.admin-main .btn:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.admin-main .btn-primary {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+.admin-main .btn-primary:hover { opacity: 0.9; }
+.admin-main .btn-secondary {
+  background: var(--color-secondary);
+  color: var(--color-secondary-foreground);
+}
+.admin-main .btn-secondary:hover { opacity: 0.85; }
+.admin-main .btn-danger {
+  background: var(--color-destructive);
+  color: var(--color-primary-foreground);
+}
+.admin-main .btn-danger:hover { opacity: 0.9; }
+.admin-main .btn-outline {
+  background: transparent;
+  color: var(--color-foreground);
+  border-color: var(--color-border);
+}
+.admin-main .btn-outline:hover {
+  background: var(--color-accent);
+}
+.admin-main .btn-sm {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.625rem;
+}
+.admin-main .btn-lg {
+  font-size: 1rem;
+  padding: 0.625rem 1.5rem;
+}
+
+/* Badges */
+.admin-main .badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1;
+  padding: 0.2rem 0.5rem;
+  border-radius: calc(var(--radius) * 2);
+  border: 1px solid transparent;
+}
+.admin-main .badge-primary {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+.admin-main .badge-secondary {
+  background: var(--color-secondary);
+  color: var(--color-secondary-foreground);
+}
+.admin-main .badge-success {
+  background: var(--color-success);
+  color: white;
+}
+.admin-main .badge-warning {
+  background: var(--color-warning);
+  color: white;
+}
+.admin-main .badge-danger,
+.admin-main .badge-error {
+  background: var(--color-destructive);
+  color: white;
+}
+.admin-main .badge-info {
+  background: var(--color-info);
+  color: white;
+}
+.admin-main .badge-outline {
+  background: transparent;
+  color: var(--color-foreground);
+  border-color: var(--color-border);
+}
+
+/* Form controls */
+.admin-main .form-control {
+  display: block;
+  width: 100%;
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius);
+  background: var(--color-background);
+  color: var(--color-foreground);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.admin-main .form-control:focus {
+  border-color: var(--color-ring);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--color-ring) 25%, transparent);
+}
+.admin-main textarea.form-control {
+  min-height: 5rem;
+  resize: vertical;
+}
+.admin-main select.form-control {
+  appearance: auto;
+}
+.admin-main .form-control-sm {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+}
+
+/* Form actions row */
+.admin-main .form-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 1rem;
+}
+
+/* Checkbox label */
+.admin-main .checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--color-foreground);
+  cursor: pointer;
+}
