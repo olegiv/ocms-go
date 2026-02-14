@@ -10,6 +10,7 @@ require (
 
 require (
 	filippo.io/csrf v0.2.1
+	github.com/Oudwins/tailwind-merge-go v0.2.1
 	github.com/alexedwards/scs/sqlite3store v0.0.0-20251002162104-209de6e426de
 	github.com/alexedwards/scs/v2 v2.9.0
 	github.com/disintegration/imaging v1.6.2
