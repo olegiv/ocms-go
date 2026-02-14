@@ -1,0 +1,33 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package handler
+
+import "github.com/olegiv/ocms-go/internal/views/components/button"
+
+// errorBaseData returns a minimal BaseTemplateData for the 500 error page.
+func errorBaseData() BaseTemplateData {
+	return BaseTemplateData{
+		Title:     "Internal Server Error",
+		SiteName:  "oCMS",
+		BodyClass: "error-500",
+	}
+}
+
+// FrontendInternalErrorPage renders a 500 Internal Server Error page.
+templ FrontendInternalErrorPage() {
+	@frontendBaseLayout(errorBaseData()) {
+		<main class="fe-main flex min-h-[80vh] items-center justify-center">
+			<div class="fe-container fe-500 mx-auto max-w-6xl px-4 py-20 text-center sm:px-6 lg:px-8">
+				<h1 class="fe-500-title text-7xl font-bold tracking-tight text-muted-foreground/50 sm:text-9xl">500</h1>
+				<p class="fe-500-text mt-4 text-2xl font-semibold text-foreground">Internal Server Error</p>
+				<p class="fe-500-sub mt-2 text-muted-foreground">An error occurred while processing your request.</p>
+				<div class="mt-8">
+					@button.Button(button.Props{Href: "/"}) {
+						Return to Homepage
+					}
+				</div>
+			</div>
+		</main>
+	}
+}

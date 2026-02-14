@@ -1,0 +1,267 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package handler
+
+import (
+	"fmt"
+
+	"github.com/olegiv/ocms-go/internal/views/components/alert"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/components/input"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/components/textarea"
+)
+
+// PublicFormField holds pre-resolved field data for the templ template.
+type PublicFormField struct {
+	ID          int64
+	Type        string
+	Name        string
+	Label       string
+	Placeholder string
+	HelpText    string
+	Options     []string // parsed from JSON
+	IsRequired  bool
+}
+
+// PublicFormViewData holds all data needed to render the public form page.
+type PublicFormViewData struct {
+	Base           BaseTemplateData
+	FormTitle      string
+	FormSlug       string
+	Description    string
+	SuccessMessage string
+	Fields         []PublicFormField
+	Errors         map[string]string
+	Values         map[string]string
+	Success        bool
+	CaptchaWidget  string // raw HTML from hCaptcha hook
+	Lang           string // language code for i18n
+}
+
+// FrontendFormPage renders the public form page.
+templ FrontendFormPage(data PublicFormViewData) {
+	@frontendBaseLayout(data.Base) {
+		@frontendNav(data.Base)
+		<main class="fe-main min-h-[60vh]">
+			<div class="fe-container mx-auto max-w-2xl px-4 py-10 sm:px-6 lg:px-8">
+				if data.Success {
+					@formSuccessView(data)
+				} else {
+					@formEntryView(data)
+				}
+			</div>
+		</main>
+		@frontendFooter(data.Base)
+	}
+}
+
+templ formSuccessView(data PublicFormViewData) {
+	@card.Card(card.Props{Class: "text-center"}) {
+		@card.Content(card.ContentProps{Class: "space-y-4 py-8"}) {
+			<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto text-green-600">
+				<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+				<polyline points="22 4 12 14.01 9 11.01"></polyline>
+			</svg>
+			<h2 class="text-2xl font-bold tracking-tight text-foreground">
+				{ formT(data.Lang, "forms.public.thank_you") }
+			</h2>
+			<p class="text-muted-foreground">
+				if data.SuccessMessage != "" {
+					{ data.SuccessMessage }
+				} else {
+					{ formT(data.Lang, "forms.public.default_success") }
+				}
+			</p>
+			@button.Button(button.Props{Href: "/forms/" + data.FormSlug, Variant: button.VariantOutline}) {
+				{ formT(data.Lang, "forms.public.submit_another") }
+			}
+		}
+	}
+}
+
+templ formEntryView(data PublicFormViewData) {
+	<header class="mb-8 space-y-2">
+		<h1 class="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">{ data.FormTitle }</h1>
+		if data.Description != "" {
+			<p class="text-lg text-muted-foreground">{ data.Description }</p>
+		}
+	</header>
+	if formErr, ok := data.Errors["_form"]; ok && formErr != "" {
+		@alert.Alert(alert.Props{Variant: alert.VariantDestructive, Class: "mb-6"}) {
+			@alert.Description() {
+				{ formErr }
+			}
+		}
+	}
+	if captchaErr, ok := data.Errors["_captcha"]; ok && captchaErr != "" {
+		@alert.Alert(alert.Props{Variant: alert.VariantDestructive, Class: "mb-6"}) {
+			@alert.Description() {
+				{ captchaErr }
+			}
+		}
+	}
+	<form method="POST" action={ templ.SafeURL("/forms/" + data.FormSlug) } class="space-y-6">
+		<!-- Honeypot -->
+		<div class="sr-only" aria-hidden="true">
+			<label for="_website">{ formT(data.Lang, "forms.public.honeypot_label") }</label>
+			<input type="text" name="_website" id="_website" tabindex="-1" autocomplete="off"/>
+		</div>
+		for _, field := range data.Fields {
+			if field.Type == "captcha" {
+				if data.CaptchaWidget != "" {
+					<div class="space-y-2">
+						@templ.Raw(data.CaptchaWidget)
+					</div>
+				}
+			} else {
+				@formFieldGroup(data, field)
+			}
+		}
+		<div class="pt-2">
+			@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeLg, FullWidth: true}) {
+				{ formT(data.Lang, "forms.public.submit") }
+			}
+		</div>
+	</form>
+}
+
+templ formFieldGroup(data PublicFormViewData, field PublicFormField) {
+	<div class="space-y-2">
+		@label.Label(label.Props{
+			For:   fmt.Sprintf("field_%d", field.ID),
+			Error: data.Errors[field.Name],
+		}) {
+			{ field.Label }
+			if field.IsRequired {
+				<span class="text-destructive ml-0.5">*</span>
+			}
+		}
+		switch field.Type {
+			case "text":
+				@input.Input(input.Props{
+					ID:          fmt.Sprintf("field_%d", field.ID),
+					Name:        field.Name,
+					Type:        input.TypeText,
+					Value:       data.Values[field.Name],
+					Placeholder: field.Placeholder,
+					HasError:    data.Errors[field.Name] != "",
+					Attributes:  requiredAttr(field.IsRequired),
+				})
+			case "email":
+				@input.Input(input.Props{
+					ID:          fmt.Sprintf("field_%d", field.ID),
+					Name:        field.Name,
+					Type:        input.TypeEmail,
+					Value:       data.Values[field.Name],
+					Placeholder: field.Placeholder,
+					HasError:    data.Errors[field.Name] != "",
+					Attributes:  requiredAttr(field.IsRequired),
+				})
+			case "textarea":
+				@textarea.Textarea(textarea.Props{
+					ID:          fmt.Sprintf("field_%d", field.ID),
+					Name:        field.Name,
+					Value:       data.Values[field.Name],
+					Placeholder: field.Placeholder,
+					Rows:        5,
+					HasError:    data.Errors[field.Name] != "",
+					Attributes:  requiredAttr(field.IsRequired),
+				})
+			case "number":
+				@input.Input(input.Props{
+					ID:          fmt.Sprintf("field_%d", field.ID),
+					Name:        field.Name,
+					Type:        input.TypeNumber,
+					Value:       data.Values[field.Name],
+					Placeholder: field.Placeholder,
+					HasError:    data.Errors[field.Name] != "",
+					Attributes:  requiredAttr(field.IsRequired),
+				})
+			case "date":
+				@input.Input(input.Props{
+					ID:       fmt.Sprintf("field_%d", field.ID),
+					Name:     field.Name,
+					Type:     input.TypeDate,
+					Value:    data.Values[field.Name],
+					HasError: data.Errors[field.Name] != "",
+					Attributes: requiredAttr(field.IsRequired),
+				})
+			case "select":
+				<select
+					id={ fmt.Sprintf("field_%d", field.ID) }
+					name={ field.Name }
+					if field.IsRequired {
+						required
+					}
+					class={
+						"flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+						templ.KV("border-destructive", data.Errors[field.Name] != ""),
+					}
+				>
+					<option value="">{ formT(data.Lang, "forms.public.select_default") }</option>
+					for _, opt := range field.Options {
+						<option value={ opt } selected?={ opt == data.Values[field.Name] }>{ opt }</option>
+					}
+				</select>
+			case "radio":
+				<div class="flex flex-col gap-2">
+					for i, opt := range field.Options {
+						<label class="flex items-center gap-2 text-sm cursor-pointer" for={ fmt.Sprintf("field_%d_%d", field.ID, i) }>
+							<input
+								type="radio"
+								id={ fmt.Sprintf("field_%d_%d", field.ID, i) }
+								name={ field.Name }
+								value={ opt }
+								checked?={ opt == data.Values[field.Name] }
+								class="h-4 w-4 border-input text-primary focus:ring-ring"
+							/>
+							<span>{ opt }</span>
+						</label>
+					}
+				</div>
+			case "checkbox":
+				<div class="flex flex-col gap-2">
+					for i, opt := range field.Options {
+						<label class="flex items-center gap-2 text-sm cursor-pointer" for={ fmt.Sprintf("field_%d_%d", field.ID, i) }>
+							<input
+								type="checkbox"
+								id={ fmt.Sprintf("field_%d_%d", field.ID, i) }
+								name={ field.Name }
+								value={ opt }
+								checked?={ fieldValueContains(data.Values[field.Name], opt) }
+								class="h-4 w-4 rounded border-input text-primary focus:ring-ring"
+							/>
+							<span>{ opt }</span>
+						</label>
+					}
+				</div>
+			case "file":
+				@input.Input(input.Props{
+					ID:       fmt.Sprintf("field_%d", field.ID),
+					Name:     field.Name,
+					Type:     input.TypeFile,
+					HasError: data.Errors[field.Name] != "",
+					Attributes: requiredAttr(field.IsRequired),
+				})
+			default:
+				@input.Input(input.Props{
+					ID:          fmt.Sprintf("field_%d", field.ID),
+					Name:        field.Name,
+					Type:        input.TypeText,
+					Value:       data.Values[field.Name],
+					Placeholder: field.Placeholder,
+					HasError:    data.Errors[field.Name] != "",
+					Attributes:  requiredAttr(field.IsRequired),
+				})
+		}
+		if field.HelpText != "" {
+			<p class="text-sm text-muted-foreground">{ field.HelpText }</p>
+		}
+		if fieldErr := data.Errors[field.Name]; fieldErr != "" {
+			<p class="text-sm text-destructive">{ fieldErr }</p>
+		}
+	</div>
+}
