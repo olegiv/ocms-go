@@ -1,0 +1,430 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package handler
+
+import (
+	"fmt"
+
+	"github.com/olegiv/ocms-go/internal/views/components/badge"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/components/input"
+)
+
+// frontendBaseLayout renders the full HTML shell with <head>, meta, CSS/JS includes.
+templ frontendBaseLayout(base BaseTemplateData) {
+	<!DOCTYPE html>
+	<html lang={ langOrDefault(base.LangCode) } dir={ dirOrDefault(base.LangDirection) }>
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<meta name="generator" content="oCMS"/>
+			if base.Title != "" {
+				<title>{ base.Title } - { base.SiteName }</title>
+			} else {
+				<title>{ base.SiteName }</title>
+			}
+			if base.MetaDescription != "" {
+				<meta name="description" content={ base.MetaDescription }/>
+			}
+			if base.MetaKeywords != "" {
+				<meta name="keywords" content={ base.MetaKeywords }/>
+			}
+			if base.Robots != "" {
+				<meta name="robots" content={ base.Robots }/>
+			}
+			if base.Canonical != "" {
+				<link rel="canonical" href={ base.Canonical }/>
+			}
+			<!-- Open Graph -->
+			<meta property="og:site_name" content={ base.SiteName }/>
+			if base.Title != "" {
+				<meta property="og:title" content={ base.Title }/>
+			}
+			if base.MetaDescription != "" {
+				<meta property="og:description" content={ base.MetaDescription }/>
+			}
+			if base.OGType != "" {
+				<meta property="og:type" content={ base.OGType }/>
+			}
+			if base.OGImage != "" {
+				<meta property="og:image" content={ absoluteURL(base.SiteURL, base.OGImage) }/>
+			}
+			<!-- hreflang -->
+			for _, hl := range base.HrefLangs {
+				<link rel="alternate" hreflang={ hl.Lang } href={ hl.Href }/>
+			}
+			<!-- JSON-LD structured data -->
+			if base.JSONLD != "" {
+				<script type="application/ld+json">
+					{ string(base.JSONLD) }
+				</script>
+			}
+			<link rel="icon" type="image/x-icon" href="/favicon.ico"/>
+			<link rel="stylesheet" href="/static/dist/main.css"/>
+			<link rel="stylesheet" href="/static/dist/admin-tw.css"/>
+			if base.CustomCSS != "" {
+				<style>
+					{ base.CustomCSS }
+				</style>
+			}
+		</head>
+		<body class={ bodyClasses(base.BodyClass) }>
+			{ children... }
+			<!-- HTMX -->
+			<script src="/static/dist/js/htmx.min.js"></script>
+			<!-- Alpine.js -->
+			<script defer src="/static/dist/js/alpine.min.js"></script>
+		</body>
+	</html>
+}
+
+// frontendNav renders the site header with navigation.
+templ frontendNav(base BaseTemplateData) {
+	<header class="fe-header sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+		<div class="fe-container fe-header-inner mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
+			<a href={ templ.SafeURL(base.LangPrefix + "/") } class="fe-logo flex items-center gap-2 text-lg font-bold tracking-tight text-foreground no-underline hover:opacity-80 transition-opacity">
+				if base.SiteLogo != "" {
+					<img src={ base.SiteLogo } alt={ base.SiteName } class="fe-logo-img h-8 w-auto"/>
+				} else {
+					{ base.SiteName }
+				}
+			</a>
+			<nav class="fe-nav flex items-center gap-2" x-data="{ open: false }">
+				<button class="fe-nav-toggle inline-flex items-center justify-center rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground md:hidden" @click="open = !open" aria-label="Toggle navigation">
+					<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+				</button>
+				<ul
+					class="fe-nav-list absolute left-0 right-0 top-14 z-40 flex-col gap-1 border-b bg-background p-4 shadow-md md:static md:flex md:flex-row md:items-center md:gap-1 md:border-none md:p-0 md:shadow-none"
+					:class="open ? 'flex' : 'hidden md:flex'"
+				>
+					for _, item := range base.MainMenu {
+						@frontendNavItem(item)
+					}
+					if base.ShowSearch {
+						<li class="fe-nav-item list-none">
+							<a href={ templ.SafeURL(base.LangPrefix + "/search") } class="fe-nav-link inline-flex items-center rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors" aria-label="Search">
+								<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+							</a>
+						</li>
+					}
+				</ul>
+			</nav>
+			if base.ShowLanguagePicker && len(base.Languages) > 1 {
+				<div class="fe-lang-picker relative" x-data="{ open: false }">
+					<button @click="open = !open" class="fe-lang-btn inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-accent transition-colors">
+						if base.CurrentLanguage != nil {
+							{ base.CurrentLanguage.Code }
+						}
+						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+					</button>
+					<ul class="fe-lang-list absolute right-0 top-full mt-1 min-w-[120px] rounded-md border bg-background p-1 shadow-md" x-show="open" @click.outside="open = false" x-cloak>
+						for _, tl := range base.Translations {
+							<li class="list-none">
+								<a
+									href={ templ.SafeURL(tl.URL) }
+									class={
+										"fe-lang-link block rounded-sm px-3 py-1.5 text-sm transition-colors hover:bg-accent",
+										templ.KV("fe-lang-active font-semibold text-foreground", tl.Language.IsCurrent),
+										templ.KV("text-muted-foreground", !tl.Language.IsCurrent),
+									}
+								>
+									{ tl.Language.NativeName }
+								</a>
+							</li>
+						}
+					</ul>
+				</div>
+			}
+		</div>
+	</header>
+}
+
+// frontendNavItem renders a single nav item with optional children.
+templ frontendNavItem(item MenuItem) {
+	<li class={ "fe-nav-item list-none", templ.KV("fe-nav-active", item.IsActive) }>
+		if len(item.Children) > 0 {
+			<div class="relative" x-data="{ sub: false }">
+				<a
+					href={ templ.SafeURL(item.URL) }
+					class={
+						"fe-nav-link inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
+						templ.KV("text-foreground", item.IsActive),
+						templ.KV("text-muted-foreground", !item.IsActive),
+					}
+					if item.Target != "" {
+						target={ item.Target }
+					}
+					@mouseenter="sub = true"
+				>
+					{ item.Title }
+					<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+				</a>
+				<ul class="fe-subnav absolute left-0 top-full z-50 mt-1 min-w-[160px] rounded-md border bg-background p-1 shadow-md" x-show="sub" @mouseleave="sub = false" x-cloak>
+					for _, child := range item.Children {
+						<li class="list-none">
+							<a
+								href={ templ.SafeURL(child.URL) }
+								class={
+									"fe-subnav-link block rounded-sm px-3 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
+									templ.KV("fe-nav-active font-semibold text-foreground", child.IsActive),
+									templ.KV("text-muted-foreground", !child.IsActive),
+								}
+								if child.Target != "" {
+									target={ child.Target }
+								}
+							>
+								{ child.Title }
+							</a>
+						</li>
+					}
+				</ul>
+			</div>
+		} else {
+			<a
+				href={ templ.SafeURL(item.URL) }
+				class={
+					"fe-nav-link inline-flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
+					templ.KV("text-foreground", item.IsActive),
+					templ.KV("text-muted-foreground", !item.IsActive),
+				}
+				if item.Target != "" {
+					target={ item.Target }
+				}
+			>
+				{ item.Title }
+			</a>
+		}
+	</li>
+}
+
+// frontendFooter renders the site footer.
+templ frontendFooter(base BaseTemplateData) {
+	<footer class="fe-footer border-t bg-muted/40">
+		<div class="fe-container mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+			if len(base.FooterMenu) > 0 {
+				<nav class="fe-footer-nav mb-6 flex flex-wrap justify-center gap-x-6 gap-y-2">
+					for _, item := range base.FooterMenu {
+						<a
+							href={ templ.SafeURL(item.URL) }
+							class="fe-footer-link text-sm text-muted-foreground hover:text-foreground transition-colors"
+							if item.Target != "" {
+								target={ item.Target }
+							}
+						>
+							{ item.Title }
+						</a>
+					}
+				</nav>
+			}
+			<div class="fe-footer-copy flex flex-col items-center gap-1 text-center text-sm text-muted-foreground">
+				if base.CopyrightText != "" {
+					<span>{ base.CopyrightText }</span>
+				} else {
+					<span>&copy; { fmt.Sprint(base.Year) } { base.SiteName }</span>
+				}
+				if base.FooterText != "" {
+					<span class="fe-footer-powered">{ base.FooterText }</span>
+				}
+			</div>
+		</div>
+	</footer>
+}
+
+// frontendSidebar renders a sidebar with categories, tags, and recent posts.
+templ frontendSidebar(categories []CategoryView, tags []TagView, recentPages []PageView) {
+	<aside class="fe-sidebar space-y-6">
+		if len(categories) > 0 {
+			@card.Card() {
+				@card.Header() {
+					@card.Title() {
+						Categories
+					}
+				}
+				@card.Content() {
+					<ul class="fe-sidebar-list space-y-1.5">
+						for _, cat := range categories {
+							<li class="list-none">
+								<a href={ templ.SafeURL(cat.URL) } class="fe-sidebar-link flex items-center justify-between rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
+									<span>{ cat.Name }</span>
+									if cat.PageCount > 0 {
+										<span class="fe-sidebar-count text-xs text-muted-foreground/70">{ fmt.Sprint(cat.PageCount) }</span>
+									}
+								</a>
+							</li>
+						}
+					</ul>
+				}
+			}
+		}
+		if len(tags) > 0 {
+			@card.Card() {
+				@card.Header() {
+					@card.Title() {
+						Tags
+					}
+				}
+				@card.Content() {
+					<div class="fe-tag-cloud flex flex-wrap gap-1.5">
+						for _, tag := range tags {
+							<a href={ templ.SafeURL(tag.URL) } class="fe-tag no-underline">
+								@badge.Badge(badge.Props{Variant: badge.VariantSecondary, Class: "cursor-pointer hover:bg-secondary/80"}) {
+									{ tag.Name }
+								}
+							</a>
+						}
+					</div>
+				}
+			}
+		}
+		if len(recentPages) > 0 {
+			@card.Card() {
+				@card.Header() {
+					@card.Title() {
+						Recent Posts
+					}
+				}
+				@card.Content() {
+					<ul class="fe-sidebar-list space-y-3">
+						for _, p := range recentPages {
+							<li class="list-none">
+								<a href={ templ.SafeURL(p.URL) } class="fe-sidebar-link text-sm font-medium text-foreground hover:text-primary transition-colors">{ p.Title }</a>
+								if p.PublishedAtFormatted != "" {
+									<span class="fe-sidebar-date block text-xs text-muted-foreground">{ p.PublishedAtFormatted }</span>
+								}
+							</li>
+						}
+					</ul>
+				}
+			}
+		}
+	</aside>
+}
+
+// frontendPagination renders pagination controls.
+templ frontendPagination(p Pagination) {
+	if p.TotalPages > 1 {
+		<nav class="fe-pagination mt-8 flex items-center justify-center gap-1" aria-label="Pagination">
+			if p.HasPrev {
+				@button.Button(button.Props{Href: p.PrevURL, Variant: button.VariantOutline, Size: button.SizeSm}) {
+					&laquo; Prev
+				}
+			}
+			for _, pg := range p.Pages {
+				if pg.IsEllipsis {
+					<span class="fe-page-ellipsis px-2 text-sm text-muted-foreground">&hellip;</span>
+				} else if pg.IsCurrent {
+					@button.Button(button.Props{Variant: button.VariantDefault, Size: button.SizeSm, Disabled: true}) {
+						{ fmt.Sprint(pg.Number) }
+					}
+				} else {
+					@button.Button(button.Props{Href: pg.URL, Variant: button.VariantOutline, Size: button.SizeSm}) {
+						{ fmt.Sprint(pg.Number) }
+					}
+				}
+			}
+			if p.HasNext {
+				@button.Button(button.Props{Href: p.NextURL, Variant: button.VariantOutline, Size: button.SizeSm}) {
+					Next &raquo;
+				}
+			}
+		</nav>
+	}
+}
+
+// postCard renders a post card for list pages.
+templ postCard(p PageView) {
+	<article class="fe-post-card">
+		@card.Card(card.Props{Class: "overflow-hidden transition-shadow hover:shadow-md"}) {
+			if p.FeaturedImageSmall != "" {
+				<a href={ templ.SafeURL(p.URL) } class="fe-post-card-img-link block">
+					<img
+						src={ p.FeaturedImageSmall }
+						alt={ imageAlt(p.FeaturedImageAlt, p.Title) }
+						class="fe-post-card-img aspect-[16/9] w-full object-cover"
+						loading="lazy"
+					/>
+				</a>
+			}
+			@card.Content(card.ContentProps{Class: "space-y-2"}) {
+				if p.Category != nil {
+					<a href={ templ.SafeURL(p.Category.URL) } class="fe-post-card-cat no-underline">
+						@badge.Badge(badge.Props{Variant: badge.VariantSecondary, Class: "cursor-pointer"}) {
+							{ p.Category.Name }
+						}
+					</a>
+				}
+				<h2 class="fe-post-card-title text-xl font-semibold leading-tight tracking-tight">
+					<a href={ templ.SafeURL(p.URL) } class="text-foreground no-underline hover:text-primary transition-colors">{ p.Title }</a>
+				</h2>
+				<div class="fe-post-card-meta flex items-center gap-2 text-sm text-muted-foreground">
+					if p.PublishedAtFormatted != "" {
+						<time>{ p.PublishedAtFormatted }</time>
+					}
+					if p.ReadingTime > 0 {
+						<span>&middot;</span>
+						<span>{ fmt.Sprintf("%d min read", p.ReadingTime) }</span>
+					}
+				</div>
+				if p.Excerpt != "" {
+					<p class="fe-post-card-excerpt text-sm text-muted-foreground line-clamp-3">{ p.Excerpt }</p>
+				}
+			}
+		}
+	</article>
+}
+
+// searchForm renders the search form used on the search page.
+templ searchForm(langPrefix, query string) {
+	<form action={ templ.SafeURL(langPrefix + "/search") } method="get" class="fe-search-form flex gap-2">
+		@input.Input(input.Props{
+			Type:        input.TypeSearch,
+			Name:        "q",
+			Value:       query,
+			Placeholder: "Search...",
+			Class:       "fe-search-input",
+			Attributes:  templ.Attributes{"autofocus": true},
+		})
+		@button.Button(button.Props{Type: button.TypeSubmit}) {
+			Search
+		}
+	</form>
+}
+
+// Helper functions used in templates.
+
+func langOrDefault(code string) string {
+	if code != "" {
+		return code
+	}
+	return "en"
+}
+
+func dirOrDefault(dir string) string {
+	if dir != "" {
+		return dir
+	}
+	return "ltr"
+}
+
+func absoluteURL(siteURL, path string) string {
+	if path == "" {
+		return ""
+	}
+	if len(path) > 4 && path[:4] == "http" {
+		return path
+	}
+	return siteURL + path
+}
+
+func bodyClasses(classes string) string {
+	return "fe bg-background text-foreground antialiased " + classes
+}
+
+func imageAlt(alt, fallback string) string {
+	if alt != "" {
+		return alt
+	}
+	return fallback
+}

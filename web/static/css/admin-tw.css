@@ -3,6 +3,7 @@
 @source "../../templates/**/*.html";
 @source "../../../internal/views/**/*.templ";
 @source "../../../internal/views/components/**/*.templ";
+@source "../../../internal/handler/**/*.templ";
 
 @custom-variant dark (&:is(.dark *));
 
