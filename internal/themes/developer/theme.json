@@ -5,7 +5,7 @@
     "author": "oCMS",
     "description": "Dark theme for developers and technical blogs",
     "screenshot": "screenshot.svg",
-    "engine": "templ",
+    "engine": "html",
     "templates": {
         "home": "pages/home.html",
         "page": "pages/page.html",
