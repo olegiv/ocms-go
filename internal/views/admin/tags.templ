@@ -10,6 +10,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
 // TagListItem holds data for a tag in the list view.
@@ -73,28 +74,28 @@ templ TagsListPage(pc *PageContext, data TagsListData) {
 		}
 		if len(data.Tags) > 0 {
 			@card.Card(card.Props{ID: "tags-table"}) {
-				<div class="table-responsive">
-					<table class="table">
-						<thead>
-							<tr>
-								<th>{ pc.T("label.name") }</th>
-								<th>{ pc.T("label.slug") }</th>
-								<th>{ pc.T("label.language") }</th>
-								<th>{ pc.T("nav.pages") }</th>
-								<th>{ pc.T("label.created_at") }</th>
-								<th class="text-right">{ pc.T("label.actions") }</th>
-							</tr>
-						</thead>
-						<tbody>
+				<div class="overflow-x-auto">
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { { pc.T("label.name") } }
+								@table.Head() { { pc.T("label.slug") } }
+								@table.Head() { { pc.T("label.language") } }
+								@table.Head() { { pc.T("nav.pages") } }
+								@table.Head() { { pc.T("label.created_at") } }
+								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+							}
+						}
+						@table.Body() {
 							for _, tag := range data.Tags {
-								<tr id={ fmt.Sprintf("tag-row-%d", tag.ID) }>
-									<td>
+								@table.Row(table.RowProps{ID: fmt.Sprintf("tag-row-%d", tag.ID)}) {
+									@table.Cell() {
 										<a href={ templ.SafeURL(fmt.Sprintf("/admin/tags/%d", tag.ID)) } class="tag-name-link">{ tag.Name }</a>
-									</td>
-									<td>
+									}
+									@table.Cell() {
 										<code class="slug-code">{ tag.Slug }</code>
-									</td>
-									<td>
+									}
+									@table.Cell() {
 										if tag.LanguageCode != "" {
 											@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
 												{ tag.LanguageCode }
@@ -102,25 +103,25 @@ templ TagsListPage(pc *PageContext, data TagsListData) {
 										} else {
 											<span class="text-muted">-</span>
 										}
-									</td>
-									<td>
+									}
+									@table.Cell() {
 										@badge.Badge(badge.Props{Class: "badge-info"}) {
 											{ pc.T("tags.page_count", tag.UsageCount) }
 										}
-									</td>
-									<td>{ tag.CreatedAt.Format("Jan 02, 2006") }</td>
-									<td class="text-right">
+									}
+									@table.Cell() { { tag.CreatedAt.Format("Jan 02, 2006") } }
+									@table.Cell(table.CellProps{Class: "text-right"}) {
 										<div class="action-buttons">
 											@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/tags/%d", tag.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
 												@icon.Pencil(icon.Props{Size: 14})
 											}
 											@deleteTagModal(pc, tag)
 										</div>
-									</td>
-								</tr>
+									}
+								}
 							}
-						</tbody>
-					</table>
+						}
+					}
 				</div>
 				if data.Pagination.ShouldShow() {
 					@card.Footer() {

@@ -8,6 +8,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
 // EventItem holds data for a single event row.
@@ -124,62 +125,62 @@ templ eventsFilterBar(pc *PageContext, data EventsListData) {
 
 // eventsTable renders the events table with all columns.
 templ eventsTable(pc *PageContext, data EventsListData) {
-	<table class="table">
-		<thead>
-			<tr>
-				<th>{ pc.T("events.time") }</th>
-				<th>{ pc.T("events.level") }</th>
-				<th>{ pc.T("events.category") }</th>
-				<th>{ pc.T("events.message") }</th>
-				<th>{ pc.T("events.details") }</th>
-				<th>{ pc.T("events.url") }</th>
-				<th>{ pc.T("events.ip_address") }</th>
-				<th>{ pc.T("events.user") }</th>
-			</tr>
-		</thead>
-		<tbody>
+	@table.Table() {
+		@table.Header() {
+			@table.Row() {
+				@table.Head() { { pc.T("events.time") } }
+				@table.Head() { { pc.T("events.level") } }
+				@table.Head() { { pc.T("events.category") } }
+				@table.Head() { { pc.T("events.message") } }
+				@table.Head() { { pc.T("events.details") } }
+				@table.Head() { { pc.T("events.url") } }
+				@table.Head() { { pc.T("events.ip_address") } }
+				@table.Head() { { pc.T("events.user") } }
+			}
+		}
+		@table.Body() {
 			for _, event := range data.Events {
-				<tr class={ "event-row", "event-level-" + event.Level }>
-					<td class="event-time">{ event.CreatedAt }</td>
-					<td>
+				@table.Row(table.RowProps{Class: "event-row event-level-" + event.Level}) {
+					@table.Cell(table.CellProps{Class: "event-time"}) { { event.CreatedAt } }
+					@table.Cell() {
 						@badge.Badge(badge.Props{Class: eventLevelBadgeClass(event.Level)}) {
 							{ event.Level }
 						}
-					</td>
-					<td>
+					}
+					@table.Cell() {
 						@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
 							{ event.Category }
 						}
-					</td>
-					<td class="event-message">{ event.Message }</td>
-					<td class="event-details">
+					}
+					@table.Cell(table.CellProps{Class: "event-message"}) { { event.Message } }
+					@table.Cell(table.CellProps{Class: "event-details"}) {
 						if event.Details != "" {
 							<span class="details-text">{ event.Details }</span>
 						} else {
 							<span class="text-muted">-</span>
 						}
-					</td>
-					<td class="event-url">
+					}
+					@table.Cell(table.CellProps{Class: "event-url"}) {
 						if event.RequestURL != "" {
 							<span class="url-text"><code>{ event.RequestURL }</code></span>
 						} else {
 							<span class="text-muted">-</span>
 						}
-					</td>
-					<td class="event-ip">
+					}
+					@table.Cell(table.CellProps{Class: "event-ip"}) {
 						@eventIPCell(pc, event, data.SentinelActive)
-					</td>
-					<td>
+					}
+					@table.Cell() {
 						if event.UserName != "" {
 							<span class="text-muted">{ event.UserName }</span>
 						} else {
 							<span class="text-muted">{ pc.T("events.system") }</span>
 						}
-					</td>
-				</tr>
+					}
+				}
 			}
-		</tbody>
-	</table>
+		}
+	}
 }
 
 // eventIPCell renders the IP address cell with optional sentinel ban controls.

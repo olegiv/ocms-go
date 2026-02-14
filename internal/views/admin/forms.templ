@@ -10,6 +10,7 @@ import "github.com/olegiv/ocms-go/internal/views/components/button"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
 import "github.com/olegiv/ocms-go/internal/views/components/badge"
 import "github.com/olegiv/ocms-go/internal/views/components/card"
+import "github.com/olegiv/ocms-go/internal/views/components/table"
 
 // =============================================================================
 // VIEW TYPES
@@ -184,28 +185,28 @@ templ FormsListPage(pc *PageContext, data FormsListViewData) {
 			}
 		}
 		if len(data.Forms) > 0 {
-			<div class="table-container">
-				<table class="table">
-					<thead>
-						<tr>
-							<th>{ pc.T("label.name") }</th>
-							<th>{ pc.T("label.title") }</th>
-							<th>{ pc.T("label.slug") }</th>
-							<th>{ pc.T("label.language") }</th>
-							<th>{ pc.T("forms.submissions") }</th>
-							<th>{ pc.T("label.status") }</th>
-							<th>{ pc.T("label.actions") }</th>
-						</tr>
-					</thead>
-					<tbody>
+			<div class="overflow-x-auto">
+				@table.Table() {
+					@table.Header() {
+						@table.Row() {
+							@table.Head() { { pc.T("label.name") } }
+							@table.Head() { { pc.T("label.title") } }
+							@table.Head() { { pc.T("label.slug") } }
+							@table.Head() { { pc.T("label.language") } }
+							@table.Head() { { pc.T("forms.submissions") } }
+							@table.Head() { { pc.T("label.status") } }
+							@table.Head() { { pc.T("label.actions") } }
+						}
+					}
+					@table.Body() {
 						for _, item := range data.Forms {
-							<tr>
-								<td>
+							@table.Row() {
+								@table.Cell() {
 									<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d", item.ID)) } class="link-primary">{ item.Name }</a>
-								</td>
-								<td>{ item.Title }</td>
-								<td><code>{ item.Slug }</code></td>
-								<td>
+								}
+								@table.Cell() { { item.Title } }
+								@table.Cell() { <code>{ item.Slug }</code> }
+								@table.Cell() {
 									if item.LanguageCode != "" {
 										@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
 											{ item.LanguageCode }
@@ -213,8 +214,8 @@ templ FormsListPage(pc *PageContext, data FormsListViewData) {
 									} else {
 										<span class="text-muted">-</span>
 									}
-								</td>
-								<td>
+								}
+								@table.Cell() {
 									<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions", item.ID)) } class="link-secondary">
 										{ fmt.Sprintf("%d", item.SubmissionCount) }
 										if item.SubmissionCount != 1 {
@@ -228,8 +229,8 @@ templ FormsListPage(pc *PageContext, data FormsListViewData) {
 											}
 										}
 									</a>
-								</td>
-								<td>
+								}
+								@table.Cell() {
 									if item.IsActive {
 										@badge.Badge(badge.Props{Class: "badge-success"}) {
 											{ pc.T("forms.active") }
@@ -239,8 +240,8 @@ templ FormsListPage(pc *PageContext, data FormsListViewData) {
 											{ pc.T("forms.inactive") }
 										}
 									}
-								</td>
-								<td>
+								}
+								@table.Cell() {
 									<div class="btn-group">
 										@button.Button(button.Props{Variant: button.VariantSecondary, Size: button.SizeSm, Href: fmt.Sprintf("/admin/forms/%d", item.ID)}) {
 											{ pc.T("btn.edit") }
@@ -261,11 +262,11 @@ templ FormsListPage(pc *PageContext, data FormsListViewData) {
 											{ pc.T("btn.delete") }
 										}
 									</div>
-								</td>
-							</tr>
+								}
+							}
 						}
-					</tbody>
-				</table>
+					}
+				}
 			</div>
 		} else {
 			@card.Card(card.Props{}) {
@@ -838,77 +839,32 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 			</div>
 		</div>
 		if len(data.Submissions) > 0 {
-			<div class="table-container">
-				<table class="table">
-					<thead>
-						<tr>
-							<th class="col-w-60">ID</th>
-							<th>{ pc.T("forms.preview") }</th>
-							<th class="col-w-160">{ pc.T("forms.submitted") }</th>
-							<th class="col-w-120">{ pc.T("forms.ip_address") }</th>
-							<th class="col-w-80">{ pc.T("label.status") }</th>
-							<th class="col-w-150">{ pc.T("label.actions") }</th>
-						</tr>
-					</thead>
-					<tbody>
-						for _, sub := range data.Submissions {
-							<tr class={ templ.KV("unread", !sub.IsRead) }>
-								<td>
-									<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID)) } class="link-primary">
-										{ fmt.Sprintf("#%d", sub.ID) }
-									</a>
-								</td>
-								<td>
-									<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID)) } class="submission-preview">
-										if sub.Preview != "" {
-											{ sub.Preview }
-										} else {
-											<em>{ pc.T("forms.no_preview") }</em>
-										}
-									</a>
-								</td>
-								<td>{ sub.CreatedAt }</td>
-								<td>
-									if sub.IPAddress != "" {
-										<code>{ sub.IPAddress }</code>
-									} else {
-										<span class="text-muted">-</span>
-									}
-								</td>
-								<td>
-									if sub.IsRead {
-										@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
-											{ pc.T("forms.status_read") }
-										}
-									} else {
-										@badge.Badge(badge.Props{}) {
-											{ pc.T("forms.status_new") }
-										}
-									}
-								</td>
-								<td>
-									<div class="btn-group">
-										@button.Button(button.Props{Variant: button.VariantSecondary, Size: button.SizeSm, Href: fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID)}) {
-											{ pc.T("forms.view") }
-										}
-										@button.Button(button.Props{
-											Variant: button.VariantDestructive,
-											Size: button.SizeSm,
-											Attributes: templ.Attributes{
-												"hx-delete": fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID),
-												"hx-confirm": pc.T("forms.confirm_delete_submission"),
-												"hx-target": "closest tr",
-												"hx-swap": "outerHTML",
-											},
-										}) {
-											{ pc.T("btn.delete") }
-										}
-									</div>
-								</td>
-							</tr>
+			<div class="overflow-x-auto">
+				@table.Table() {
+					@table.Header() {
+						@table.Row() {
+							@table.Head(table.HeadProps{Class: "w-[60px]"}) { ID }
+							@table.Head() { { pc.T("forms.preview") } }
+							@table.Head(table.HeadProps{Class: "w-[160px]"}) { { pc.T("forms.submitted") } }
+							@table.Head(table.HeadProps{Class: "w-[120px]"}) { { pc.T("forms.ip_address") } }
+							@table.Head(table.HeadProps{Class: "w-[80px]"}) { { pc.T("label.status") } }
+							@table.Head(table.HeadProps{Class: "w-[150px]"}) { { pc.T("label.actions") } }
 						}
-					</tbody>
-				</table>
+					}
+					@table.Body() {
+						for _, sub := range data.Submissions {
+							if !sub.IsRead {
+								@table.Row(table.RowProps{Class: "unread"}) {
+									@submissionRowCells(pc, data, sub)
+								}
+							} else {
+								@table.Row() {
+									@submissionRowCells(pc, data, sub)
+								}
+							}
+						}
+					}
+				}
 			</div>
 			if data.Pagination.ShouldShow() {
 				@card.Card(card.Props{}) {
@@ -933,6 +889,62 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 				}
 			}
 		}
+	}
+}
+
+// submissionRowCells renders the cells for a submission row (extracted to avoid duplication)
+templ submissionRowCells(pc *PageContext, data SubmissionsListViewData, sub SubmissionItemView) {
+	@table.Cell() {
+		<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID)) } class="link-primary">
+			{ fmt.Sprintf("#%d", sub.ID) }
+		</a>
+	}
+	@table.Cell() {
+		<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID)) } class="submission-preview">
+			if sub.Preview != "" {
+				{ sub.Preview }
+			} else {
+				<em>{ pc.T("forms.no_preview") }</em>
+			}
+		</a>
+	}
+	@table.Cell() { { sub.CreatedAt } }
+	@table.Cell() {
+		if sub.IPAddress != "" {
+			<code>{ sub.IPAddress }</code>
+		} else {
+			<span class="text-muted">-</span>
+		}
+	}
+	@table.Cell() {
+		if sub.IsRead {
+			@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+				{ pc.T("forms.status_read") }
+			}
+		} else {
+			@badge.Badge(badge.Props{}) {
+				{ pc.T("forms.status_new") }
+			}
+		}
+	}
+	@table.Cell() {
+		<div class="btn-group">
+			@button.Button(button.Props{Variant: button.VariantSecondary, Size: button.SizeSm, Href: fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID)}) {
+				{ pc.T("forms.view") }
+			}
+			@button.Button(button.Props{
+				Variant: button.VariantDestructive,
+				Size: button.SizeSm,
+				Attributes: templ.Attributes{
+					"hx-delete": fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID),
+					"hx-confirm": pc.T("forms.confirm_delete_submission"),
+					"hx-target": "closest tr",
+					"hx-swap": "outerHTML",
+				},
+			}) {
+				{ pc.T("btn.delete") }
+			}
+		</div>
 	}
 }
 

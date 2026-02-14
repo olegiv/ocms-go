@@ -5,7 +5,9 @@ package admin
 
 import "fmt"
 import "github.com/olegiv/ocms-go/internal/views/components/button"
+import "github.com/olegiv/ocms-go/internal/views/components/card"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
+import "github.com/olegiv/ocms-go/internal/views/components/table"
 
 // SchedulerJobViewItem represents a system job in the scheduler list.
 type SchedulerJobViewItem struct {
@@ -86,58 +88,58 @@ templ SchedulerListPage(pc *PageContext, data SchedulerListViewData) {
 		}
 		<!-- Custom Tasks -->
 		if len(data.Tasks) > 0 {
-			<div class="mb-6 rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-				<div class="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-					<h2 class="text-lg font-semibold text-gray-900 dark:text-white">{ pc.T("scheduler.custom_tasks") }</h2>
+			@card.Card(card.Props{Class: "mb-6"}) {
+				<div class="border-b px-6 py-4">
+					<h2 class="text-lg font-semibold">{ pc.T("scheduler.custom_tasks") }</h2>
 				</div>
 				<div class="overflow-x-auto">
-					<table class="w-full text-left text-sm">
-						<thead class="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
-							<tr>
-								<th class="px-4 py-3">{ pc.T("scheduler.task_name") }</th>
-								<th class="px-4 py-3">{ pc.T("scheduler.task_url") }</th>
-								<th class="px-4 py-3">{ pc.T("scheduler.col_schedule") }</th>
-								<th class="px-4 py-3">{ pc.T("label.status") }</th>
-								<th class="px-4 py-3">{ pc.T("scheduler.col_last_run") }</th>
-								<th class="px-4 py-3">
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { { pc.T("scheduler.task_name") } }
+								@table.Head() { { pc.T("scheduler.task_url") } }
+								@table.Head() { { pc.T("scheduler.col_schedule") } }
+								@table.Head() { { pc.T("label.status") } }
+								@table.Head() { { pc.T("scheduler.col_last_run") } }
+								@table.Head() {
 									if data.IsDemoMode {
 										{ pc.T("scheduler.task_runs") }
 									} else {
 										{ pc.T("label.actions") }
 									}
-								</th>
-							</tr>
-						</thead>
-						<tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+								}
+							}
+						}
+						@table.Body() {
 							for _, task := range data.Tasks {
-								<tr>
-									<td class="px-4 py-3 font-medium text-gray-900 dark:text-white">{ task.Name }</td>
-									<td class="px-4 py-3">
-										<code class="rounded bg-gray-100 px-1 py-0.5 text-xs dark:bg-gray-700">{ truncateStr(task.URL, 50) }</code>
-									</td>
-									<td class="px-4 py-3"><code class="text-xs">{ task.Schedule }</code></td>
-									<td class="px-4 py-3">
+								@table.Row() {
+									@table.Cell(table.CellProps{Class: "font-medium"}) { { task.Name } }
+									@table.Cell() {
+										<code class="rounded bg-muted px-1 py-0.5 text-xs">{ truncateStr(task.URL, 50) }</code>
+									}
+									@table.Cell() { <code class="text-xs">{ task.Schedule }</code> }
+									@table.Cell() {
 										if task.IsActive {
 											<span class="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900 dark:text-green-200">{ pc.T("scheduler.task_active") }</span>
 										} else {
-											<span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300">{ pc.T("scheduler.task_inactive") }</span>
+											<span class="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{ pc.T("scheduler.task_inactive") }</span>
 										}
-									</td>
-									<td class="px-4 py-3 text-xs text-gray-500">{ task.LastRun }</td>
-									<td class="px-4 py-3">
+									}
+									@table.Cell(table.CellProps{Class: "text-xs text-muted-foreground"}) { { task.LastRun } }
+									@table.Cell() {
 										<div class="flex flex-wrap items-center gap-1">
 											if !data.IsDemoMode {
-												<a href={ templ.SafeURL(fmt.Sprintf("/admin/scheduler/tasks/%d/edit", task.ID)) } class="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
+												<a href={ templ.SafeURL(fmt.Sprintf("/admin/scheduler/tasks/%d/edit", task.ID)) } class="rounded border px-2 py-1 text-xs text-muted-foreground hover:bg-muted">
 													{ pc.T("btn.edit") }
 												</a>
 											}
-											<a href={ templ.SafeURL(fmt.Sprintf("/admin/scheduler/tasks/%d/runs", task.ID)) } class="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
+											<a href={ templ.SafeURL(fmt.Sprintf("/admin/scheduler/tasks/%d/runs", task.ID)) } class="rounded border px-2 py-1 text-xs text-muted-foreground hover:bg-muted">
 												{ pc.T("scheduler.task_runs") }
 											</a>
 											if !data.IsDemoMode {
 												<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/scheduler/tasks/%d/toggle", task.ID)) } class="inline">
 													@csrfField()
-													<button type="submit" class="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
+													<button type="submit" class="rounded border px-2 py-1 text-xs text-muted-foreground hover:bg-muted">
 														if task.IsActive {
 															{ pc.T("scheduler.task_disable") }
 														} else {
@@ -148,71 +150,71 @@ templ SchedulerListPage(pc *PageContext, data SchedulerListViewData) {
 												if task.IsActive {
 													<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/scheduler/tasks/%d/trigger", task.ID)) } class="inline">
 														@csrfField()
-														<button type="submit" class="rounded bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-700" data-confirm={ pc.T("scheduler.task_trigger_confirm") } onclick="return confirm(this.dataset.confirm)">
+														<button type="submit" class="rounded bg-primary px-2 py-1 text-xs text-primary-foreground hover:bg-primary/90" data-confirm={ pc.T("scheduler.task_trigger_confirm") } onclick="return confirm(this.dataset.confirm)">
 															{ pc.T("scheduler.trigger_now") }
 														</button>
 													</form>
 												}
 												<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/scheduler/tasks/%d/delete", task.ID)) } class="inline">
 													@csrfField()
-													<button type="submit" class="rounded border border-red-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-red-700 dark:hover:bg-red-900" data-confirm={ pc.T("scheduler.task_delete_confirm") } onclick="return confirm(this.dataset.confirm)">
+													<button type="submit" class="rounded border border-destructive px-2 py-1 text-xs text-destructive hover:bg-destructive/10" data-confirm={ pc.T("scheduler.task_delete_confirm") } onclick="return confirm(this.dataset.confirm)">
 														{ pc.T("btn.delete") }
 													</button>
 												</form>
 											}
 										</div>
-									</td>
-								</tr>
+									}
+								}
 							}
-						</tbody>
-					</table>
+						}
+					}
 				</div>
-			</div>
+			}
 		}
 		<!-- All System Jobs -->
-		<div class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-			<div class="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-				<h2 class="text-lg font-semibold text-gray-900 dark:text-white">{ pc.T("scheduler.all_jobs") }</h2>
+		@card.Card() {
+			<div class="border-b px-6 py-4">
+				<h2 class="text-lg font-semibold">{ pc.T("scheduler.all_jobs") }</h2>
 			</div>
 			if len(data.Jobs) > 0 {
 				<div class="overflow-x-auto">
-					<table class="w-full text-left text-sm">
-						<thead class="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
-							<tr>
-								<th class="px-4 py-3">{ pc.T("scheduler.col_job") }</th>
-								<th class="px-4 py-3">{ pc.T("scheduler.col_source") }</th>
-								<th class="px-4 py-3">{ pc.T("scheduler.col_schedule") }</th>
-								<th class="px-4 py-3">{ pc.T("scheduler.col_last_run") }</th>
-								<th class="px-4 py-3">{ pc.T("scheduler.col_next_run") }</th>
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { { pc.T("scheduler.col_job") } }
+								@table.Head() { { pc.T("scheduler.col_source") } }
+								@table.Head() { { pc.T("scheduler.col_schedule") } }
+								@table.Head() { { pc.T("scheduler.col_last_run") } }
+								@table.Head() { { pc.T("scheduler.col_next_run") } }
 								if !data.IsDemoMode {
-									<th class="px-4 py-3">{ pc.T("label.actions") }</th>
+									@table.Head() { { pc.T("label.actions") } }
 								}
-							</tr>
-						</thead>
-						<tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+							}
+						}
+						@table.Body() {
 							for _, job := range data.Jobs {
-								<tr>
-									<td class="px-4 py-3">
-										<strong class="text-gray-900 dark:text-white">{ job.Description }</strong>
+								@table.Row() {
+									@table.Cell() {
+										<strong>{ job.Description }</strong>
 										<br/>
-										<small class="text-gray-400">{ job.Name }</small>
-									</td>
-									<td class="px-4 py-3">
+										<small class="text-muted-foreground">{ job.Name }</small>
+									}
+									@table.Cell() {
 										<span class={ "rounded px-2 py-0.5 text-xs font-medium text-white", jobSourceClass(job.Source) }>{ job.Source }</span>
-									</td>
-									<td class="px-4 py-3">
+									}
+									@table.Cell() {
 										<code class="text-xs">{ job.Schedule }</code>
 										if job.IsOverridden {
 											<br/>
-											<small class="text-gray-400">{ pc.T("scheduler.default_label") }: <code class="text-xs">{ job.DefaultSchedule }</code></small>
+											<small class="text-muted-foreground">{ pc.T("scheduler.default_label") }: <code class="text-xs">{ job.DefaultSchedule }</code></small>
 										}
-									</td>
-									<td class="px-4 py-3 text-xs text-gray-500">{ job.LastRun }</td>
-									<td class="px-4 py-3 text-xs text-gray-500">{ job.NextRun }</td>
+									}
+									@table.Cell(table.CellProps{Class: "text-xs text-muted-foreground"}) { { job.LastRun } }
+									@table.Cell(table.CellProps{Class: "text-xs text-muted-foreground"}) { { job.NextRun } }
 									if !data.IsDemoMode {
-										<td class="px-4 py-3">
+										@table.Cell() {
 											<div class="flex flex-wrap items-center gap-1">
-												<button type="button" class="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700" data-source={ job.Source } data-name={ job.Name } data-schedule={ job.Schedule } data-description={ job.Description } onclick="editSchedule(this.dataset.source, this.dataset.name, this.dataset.schedule, this.dataset.description)">
+												<button type="button" class="rounded border px-2 py-1 text-xs text-muted-foreground hover:bg-muted" data-source={ job.Source } data-name={ job.Name } data-schedule={ job.Schedule } data-description={ job.Description } onclick="editSchedule(this.dataset.source, this.dataset.name, this.dataset.schedule, this.dataset.description)">
 													{ pc.T("btn.edit") }
 												</button>
 												if job.IsOverridden {
@@ -220,7 +222,7 @@ templ SchedulerListPage(pc *PageContext, data SchedulerListViewData) {
 														@csrfField()
 														<input type="hidden" name="source" value={ job.Source }/>
 														<input type="hidden" name="name" value={ job.Name }/>
-														<button type="submit" class="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
+														<button type="submit" class="rounded border px-2 py-1 text-xs text-muted-foreground hover:bg-muted">
 															{ pc.T("scheduler.reset") }
 														</button>
 													</form>
@@ -228,25 +230,25 @@ templ SchedulerListPage(pc *PageContext, data SchedulerListViewData) {
 												if job.CanTrigger {
 													<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/scheduler/trigger/%s/%s", job.Source, job.Name)) } class="inline">
 														@csrfField()
-														<button type="submit" class="rounded bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-700" data-confirm={ pc.T("scheduler.trigger_confirm") } onclick="return confirm(this.dataset.confirm)">
+														<button type="submit" class="rounded bg-primary px-2 py-1 text-xs text-primary-foreground hover:bg-primary/90" data-confirm={ pc.T("scheduler.trigger_confirm") } onclick="return confirm(this.dataset.confirm)">
 															{ pc.T("scheduler.trigger_now") }
 														</button>
 													</form>
 												}
 											</div>
-										</td>
+										}
 									}
-								</tr>
+								}
 							}
-						</tbody>
-					</table>
+						}
+					}
 				</div>
 			} else {
-				<div class="p-6">
-					<p class="text-gray-500 dark:text-gray-400">{ pc.T("scheduler.no_jobs") }</p>
-				</div>
+				@card.Content() {
+					<p class="text-muted-foreground">{ pc.T("scheduler.no_jobs") }</p>
+				}
 			}
-		</div>
+		}
 		<!-- Cron Help -->
 		@schedulerCronHelp(pc)
 		<!-- Edit Schedule Modal -->
@@ -268,30 +270,30 @@ func jobSourceClass(source string) string {
 }
 
 templ schedulerCronHelp(pc *PageContext) {
-	<div class="mt-6 rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-		<div class="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-			<h2 class="text-lg font-semibold text-gray-900 dark:text-white">{ pc.T("scheduler.cron_help_title") }</h2>
+	@card.Card(card.Props{Class: "mt-6"}) {
+		<div class="border-b px-6 py-4">
+			<h2 class="text-lg font-semibold">{ pc.T("scheduler.cron_help_title") }</h2>
 		</div>
 		<div class="p-6">
 			<p class="mb-4 text-sm text-gray-500">{ pc.T("scheduler.cron_intro") }</p>
 			<h4 class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">{ pc.T("scheduler.interval_heading") }</h4>
 			<p class="mb-2 text-sm text-gray-500">{ pc.T("scheduler.interval_desc") }</p>
-			<div class="mb-4 overflow-x-auto">
-				<table class="max-w-lg text-sm">
-					<thead class="text-xs uppercase text-gray-500">
-						<tr>
-							<th class="py-1 pr-4 text-left">{ pc.T("scheduler.expression") }</th>
-							<th class="py-1 text-left">{ pc.T("scheduler.meaning") }</th>
-						</tr>
-					</thead>
-					<tbody class="text-gray-600 dark:text-gray-400">
-						<tr><td class="py-1 pr-4"><code class="text-xs">{ "@every 5m" }</code></td><td>{ pc.T("scheduler.ex_every_5m") }</td></tr>
-						<tr><td class="py-1 pr-4"><code class="text-xs">{ "@every 30m" }</code></td><td>{ pc.T("scheduler.ex_every_30m") }</td></tr>
-						<tr><td class="py-1 pr-4"><code class="text-xs">{ "@every 1h" }</code></td><td>{ pc.T("scheduler.ex_every_1h") }</td></tr>
-						<tr><td class="py-1 pr-4"><code class="text-xs">{ "@every 6h" }</code></td><td>{ pc.T("scheduler.ex_every_6h") }</td></tr>
-						<tr><td class="py-1 pr-4"><code class="text-xs">{ "@every 24h" }</code></td><td>{ pc.T("scheduler.ex_every_24h") }</td></tr>
-					</tbody>
-				</table>
+			<div class="mb-4 max-w-lg overflow-x-auto">
+				@table.Table() {
+					@table.Header() {
+						@table.Row() {
+							@table.Head(table.HeadProps{Class: "pr-4"}) { { pc.T("scheduler.expression") } }
+							@table.Head() { { pc.T("scheduler.meaning") } }
+						}
+					}
+					@table.Body() {
+						@table.Row() { @table.Cell(table.CellProps{Class: "pr-4"}) { <code class="text-xs">{ "@every 5m" }</code> } @table.Cell() { { pc.T("scheduler.ex_every_5m") } } }
+						@table.Row() { @table.Cell(table.CellProps{Class: "pr-4"}) { <code class="text-xs">{ "@every 30m" }</code> } @table.Cell() { { pc.T("scheduler.ex_every_30m") } } }
+						@table.Row() { @table.Cell(table.CellProps{Class: "pr-4"}) { <code class="text-xs">{ "@every 1h" }</code> } @table.Cell() { { pc.T("scheduler.ex_every_1h") } } }
+						@table.Row() { @table.Cell(table.CellProps{Class: "pr-4"}) { <code class="text-xs">{ "@every 6h" }</code> } @table.Cell() { { pc.T("scheduler.ex_every_6h") } } }
+						@table.Row() { @table.Cell(table.CellProps{Class: "pr-4"}) { <code class="text-xs">{ "@every 24h" }</code> } @table.Cell() { { pc.T("scheduler.ex_every_24h") } } }
+					}
+				}
 			</div>
 			<h4 class="mb-2 mt-4 text-sm font-semibold text-gray-900 dark:text-white">{ pc.T("scheduler.cron_heading") }</h4>
 			<p class="mb-2 text-sm text-gray-500">{ pc.T("scheduler.cron_desc") }</p>
@@ -308,27 +310,27 @@ templ schedulerCronHelp(pc *PageContext) {
 				<span class="text-amber-600">*</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
 				<span class="text-red-600">*</span>
 			</div>
-			<div class="overflow-x-auto">
-				<table class="max-w-lg text-sm">
-					<thead class="text-xs uppercase text-gray-500">
-						<tr>
-							<th class="py-1 pr-4 text-left">{ pc.T("scheduler.expression") }</th>
-							<th class="py-1 text-left">{ pc.T("scheduler.meaning") }</th>
-						</tr>
-					</thead>
-					<tbody class="text-gray-600 dark:text-gray-400">
-						<tr><td class="py-1 pr-4"><code class="text-xs">* * * * *</code></td><td>{ pc.T("scheduler.ex_every_min") }</td></tr>
-						<tr><td class="py-1 pr-4"><code class="text-xs">*/5 * * * *</code></td><td>{ pc.T("scheduler.ex_every_5min") }</td></tr>
-						<tr><td class="py-1 pr-4"><code class="text-xs">0 * * * *</code></td><td>{ pc.T("scheduler.ex_hourly") }</td></tr>
-						<tr><td class="py-1 pr-4"><code class="text-xs">0 2 * * *</code></td><td>{ pc.T("scheduler.ex_daily_2am") }</td></tr>
-						<tr><td class="py-1 pr-4"><code class="text-xs">0 0 * * 0</code></td><td>{ pc.T("scheduler.ex_weekly_sun") }</td></tr>
-						<tr><td class="py-1 pr-4"><code class="text-xs">0 0 1 * *</code></td><td>{ pc.T("scheduler.ex_monthly") }</td></tr>
-					</tbody>
-				</table>
+			<div class="max-w-lg overflow-x-auto">
+				@table.Table() {
+					@table.Header() {
+						@table.Row() {
+							@table.Head(table.HeadProps{Class: "pr-4"}) { { pc.T("scheduler.expression") } }
+							@table.Head() { { pc.T("scheduler.meaning") } }
+						}
+					}
+					@table.Body() {
+						@table.Row() { @table.Cell(table.CellProps{Class: "pr-4"}) { <code class="text-xs">* * * * *</code> } @table.Cell() { { pc.T("scheduler.ex_every_min") } } }
+						@table.Row() { @table.Cell(table.CellProps{Class: "pr-4"}) { <code class="text-xs">*/5 * * * *</code> } @table.Cell() { { pc.T("scheduler.ex_every_5min") } } }
+						@table.Row() { @table.Cell(table.CellProps{Class: "pr-4"}) { <code class="text-xs">0 * * * *</code> } @table.Cell() { { pc.T("scheduler.ex_hourly") } } }
+						@table.Row() { @table.Cell(table.CellProps{Class: "pr-4"}) { <code class="text-xs">0 2 * * *</code> } @table.Cell() { { pc.T("scheduler.ex_daily_2am") } } }
+						@table.Row() { @table.Cell(table.CellProps{Class: "pr-4"}) { <code class="text-xs">0 0 * * 0</code> } @table.Cell() { { pc.T("scheduler.ex_weekly_sun") } } }
+						@table.Row() { @table.Cell(table.CellProps{Class: "pr-4"}) { <code class="text-xs">0 0 1 * *</code> } @table.Cell() { { pc.T("scheduler.ex_monthly") } } }
+					}
+				}
 			</div>
-			<p class="mt-2 text-xs text-gray-400">{ pc.T("scheduler.cron_tip") }</p>
+			<p class="mt-2 text-xs text-muted-foreground">{ pc.T("scheduler.cron_tip") }</p>
 		</div>
-	</div>
+	}
 }
 
 templ schedulerEditModal(pc *PageContext) {
@@ -532,61 +534,63 @@ templ SchedulerTaskRunsPage(pc *PageContext, data SchedulerTaskRunsViewData) {
 			</div>
 		</div>
 		if len(data.Runs) > 0 {
-			<div class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+			@card.Card() {
 				<div class="overflow-x-auto">
-					<table class="w-full text-left text-sm">
-						<thead class="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
-							<tr>
-								<th class="px-4 py-3">{ pc.T("scheduler.run_status") }</th>
-								<th class="px-4 py-3">{ pc.T("scheduler.run_code") }</th>
-								<th class="px-4 py-3">{ pc.T("scheduler.run_duration") }</th>
-								<th class="px-4 py-3">{ pc.T("scheduler.run_started") }</th>
-								<th class="px-4 py-3">{ pc.T("scheduler.run_error") }</th>
-							</tr>
-						</thead>
-						<tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { { pc.T("scheduler.run_status") } }
+								@table.Head() { { pc.T("scheduler.run_code") } }
+								@table.Head() { { pc.T("scheduler.run_duration") } }
+								@table.Head() { { pc.T("scheduler.run_started") } }
+								@table.Head() { { pc.T("scheduler.run_error") } }
+							}
+						}
+						@table.Body() {
 							for _, run := range data.Runs {
-								<tr>
-									<td class="px-4 py-3">
+								@table.Row() {
+									@table.Cell() {
 										@runStatusBadge(pc, run.Status)
-									</td>
-									<td class="px-4 py-3">
+									}
+									@table.Cell() {
 										if run.HasStatusCode {
 											<span class={ runCodeClass(run.StatusCode) }>{ fmt.Sprint(run.StatusCode) }</span>
 										} else {
-											<span class="text-gray-400">-</span>
+											<span class="text-muted-foreground">-</span>
 										}
-									</td>
-									<td class="px-4 py-3">
+									}
+									@table.Cell() {
 										if run.HasDuration {
 											{ fmt.Sprint(run.DurationMs) }ms
 										} else {
-											<span class="text-gray-400">-</span>
+											<span class="text-muted-foreground">-</span>
 										}
-									</td>
-									<td class="px-4 py-3 text-xs text-gray-500">{ run.StartedAt }</td>
-									<td class="px-4 py-3">
+									}
+									@table.Cell(table.CellProps{Class: "text-xs text-muted-foreground"}) { { run.StartedAt } }
+									@table.Cell() {
 										if run.HasErrorMessage {
-											<small class="text-red-600" title={ run.ErrorMessage }>{ truncateStr(run.ErrorMessage, 60) }</small>
+											<small class="text-destructive" title={ run.ErrorMessage }>{ truncateStr(run.ErrorMessage, 60) }</small>
 										} else {
-											<span class="text-gray-400">-</span>
+											<span class="text-muted-foreground">-</span>
 										}
-									</td>
-								</tr>
+									}
+								}
 							}
-						</tbody>
-					</table>
+						}
+					}
 				</div>
 				if data.Pagination.TotalPages > 1 {
-					<div class="border-t border-gray-200 px-4 py-3 dark:border-gray-700">
+					@card.Footer() {
 						@Pagination(pc, data.Pagination)
-					</div>
+					}
 				}
-			</div>
+			}
 		} else {
-			<div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-				<p class="text-gray-500 dark:text-gray-400">{ pc.T("scheduler.no_runs") }</p>
-			</div>
+			@card.Card() {
+				@card.Content() {
+					<p class="text-muted-foreground">{ pc.T("scheduler.no_runs") }</p>
+				}
+			}
 		}
 	}
 }

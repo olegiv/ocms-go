@@ -11,6 +11,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
 // RedirectListItem holds data for a redirect in the list view.
@@ -70,24 +71,24 @@ templ RedirectsListPage(pc *PageContext, data RedirectsListData) {
 		}
 		if len(data.Redirects) > 0 {
 			@card.Card(card.Props{ID: "redirects-table"}) {
-				<div class="table-responsive">
-					<table class="table">
-						<thead>
-							<tr>
-								<th>{ pc.T("redirects.source_path") }</th>
-								<th>{ pc.T("redirects.target_url") }</th>
-								<th>{ pc.T("redirects.status_code") }</th>
-								<th>{ pc.T("redirects.target_type") }</th>
-								<th>{ pc.T("label.status") }</th>
-								<th class="text-right">{ pc.T("label.actions") }</th>
-							</tr>
-						</thead>
-						<tbody>
+				<div class="overflow-x-auto">
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { { pc.T("redirects.source_path") } }
+								@table.Head() { { pc.T("redirects.target_url") } }
+								@table.Head() { { pc.T("redirects.status_code") } }
+								@table.Head() { { pc.T("redirects.target_type") } }
+								@table.Head() { { pc.T("label.status") } }
+								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+							}
+						}
+						@table.Body() {
 							for _, redirect := range data.Redirects {
 								@RedirectRow(pc, redirect)
 							}
-						</tbody>
-					</table>
+						}
+					}
 				</div>
 			}
 			<div class="card-footer-info">
@@ -114,8 +115,8 @@ templ RedirectsListPage(pc *PageContext, data RedirectsListData) {
 
 // RedirectRow renders a single redirect table row.
 templ RedirectRow(pc *PageContext, redirect RedirectListItem) {
-	<tr id={ fmt.Sprintf("redirect-row-%d", redirect.ID) }>
-		<td>
+	@table.Row(table.RowProps{ID: fmt.Sprintf("redirect-row-%d", redirect.ID)}) {
+		@table.Cell() {
 			<a href={ templ.SafeURL(fmt.Sprintf("/admin/redirects/%d", redirect.ID)) } class="redirect-source-link">
 				if redirect.IsWildcard {
 					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline" title={ pc.T("redirects.wildcard") }><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path></svg>
@@ -124,16 +125,16 @@ templ RedirectRow(pc *PageContext, redirect RedirectListItem) {
 				}
 				<code>{ redirect.SourcePath }</code>
 			</a>
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			<div class="target-url-cell">
 				if strings.HasPrefix(redirect.TargetURL, "http") {
 					<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline" title="External URL"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>
 				}
 				<span class="target-url-text" title={ redirect.TargetURL }>{ truncateStr(redirect.TargetURL, 50) }</span>
 			</div>
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			if statusCodeBadgeClass(redirect.StatusCode) != "" {
 				@badge.Badge(badge.Props{Class: statusCodeBadgeClass(redirect.StatusCode)}) {
 					{ fmt.Sprintf("%d", redirect.StatusCode) }
@@ -143,8 +144,8 @@ templ RedirectRow(pc *PageContext, redirect RedirectListItem) {
 					{ fmt.Sprintf("%d", redirect.StatusCode) }
 				}
 			}
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			if redirect.TargetType == "_blank" {
 				@badge.Badge(badge.Props{Variant: badge.VariantOutline, Attributes: templ.Attributes{"title": "Opens in new window"}}) {
 					_blank
@@ -154,8 +155,8 @@ templ RedirectRow(pc *PageContext, redirect RedirectListItem) {
 					{ redirect.TargetType }
 				}
 			}
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			<button
 				type="button"
 				class={ toggleButtonClass(redirect.Enabled) }
@@ -172,16 +173,16 @@ templ RedirectRow(pc *PageContext, redirect RedirectListItem) {
 					{ pc.T("label.disabled") }
 				}
 			</button>
-		</td>
-		<td class="text-right">
+		}
+		@table.Cell(table.CellProps{Class: "text-right"}) {
 			<div class="action-buttons">
 				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/redirects/%d", redirect.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
 					@icon.Pencil(icon.Props{Size: 14})
 				}
 				@deleteRedirectModal(pc, redirect)
 			</div>
-		</td>
-	</tr>
+		}
+	}
 }
 
 templ deleteRedirectModal(pc *PageContext, redirect RedirectListItem) {

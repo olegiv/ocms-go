@@ -8,6 +8,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
 // ModuleViewItem holds data for a module in the list view.
@@ -76,20 +77,24 @@ templ ModulesPage(pc *PageContext, data ModulesViewData) {
 			if len(data.Hooks) > 0 {
 				@card.Card(card.Props{}) {
 					@card.Content() {
-						<div class="table-responsive">
-							<table class="table">
-								<thead>
-									<tr>
-										<th>{ pc.T("modules.hook_name") }</th>
-										<th>{ pc.T("modules.handlers") }</th>
-									</tr>
-								</thead>
-								<tbody>
+						<div class="overflow-x-auto">
+							@table.Table() {
+								@table.Header() {
+									@table.Row() {
+										@table.Head() {
+											{ pc.T("modules.hook_name") }
+										}
+										@table.Head() {
+											{ pc.T("modules.handlers") }
+										}
+									}
+								}
+								@table.Body() {
 									for _, hook := range data.Hooks {
 										@hookRow(pc, hook)
 									}
-								</tbody>
-							</table>
+								}
+							}
 						</div>
 					}
 				}
@@ -185,9 +190,11 @@ templ moduleCard(pc *PageContext, mod ModuleViewItem) {
 
 // hookRow renders a single hook row in the hooks table.
 templ hookRow(pc *PageContext, hook HookViewItem) {
-	<tr>
-		<td><code>{ hook.Name }</code></td>
-		<td>
+	@table.Row() {
+		@table.Cell() {
+			<code>{ hook.Name }</code>
+		}
+		@table.Cell() {
 			if len(hook.Handlers) > 0 {
 				<ul class="hook-handlers">
 					for _, handler := range hook.Handlers {
@@ -201,8 +208,8 @@ templ hookRow(pc *PageContext, hook HookViewItem) {
 			} else {
 				<span class="text-muted">{ pc.T("modules.no_handlers") }</span>
 			}
-		</td>
-	</tr>
+		}
+	}
 }
 
 // moduleToggleData returns the Alpine.js x-data JSON for a module card.
