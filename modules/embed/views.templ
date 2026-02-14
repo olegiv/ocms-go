@@ -5,6 +5,12 @@ package embed
 
 import (
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+	"github.com/olegiv/ocms-go/internal/views/components/badge"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/components/input"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/components/textarea"
 	"github.com/olegiv/ocms-go/modules/embed/providers"
 )
 
@@ -45,420 +51,201 @@ type EmbedProviderViewData struct {
 
 templ EmbedListPage(pc *adminviews.PageContext, data EmbedListViewData) {
 	@adminviews.AdminLayout(pc) {
-		<div class="page-header">
+		@adminviews.PageHeader(pc.T("embed.title"), pc.T("embed.description")) {
+		}
+		<div class="space-y-4">
 			<div>
-				<h1 class="page-title">{ pc.T("embed.title") }</h1>
-				<p class="page-description">{ pc.T("embed.description") }</p>
+				<h2 class="text-base font-semibold text-foreground">{ pc.T("embed.providers_title") }</h2>
+				<p class="text-sm text-muted-foreground">{ pc.T("embed.providers_description") }</p>
 			</div>
-		</div>
-		<div class="embed-providers">
-			<div class="section-header">
-				<h2>{ pc.T("embed.providers_title") }</h2>
-				<p>{ pc.T("embed.providers_description") }</p>
-			</div>
-			<div class="provider-cards">
-				if len(data.Providers) > 0 {
+			if len(data.Providers) > 0 {
+				<div class="grid gap-4 xl:grid-cols-2">
 					for _, p := range data.Providers {
-						<div class={ "card provider-card", templ.KV("provider-enabled", p.IsEnabled) }>
-							<div class="card-body">
-								<div class="provider-header">
-									<div class="provider-icon">
-										if p.ID == "dify" {
-											<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-												<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-												<path d="M8 10h.01"></path>
-												<path d="M12 10h.01"></path>
-												<path d="M16 10h.01"></path>
-											</svg>
-										} else {
-											<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-												<rect width="18" height="18" x="3" y="3" rx="2"></rect>
-												<path d="M7 7h10"></path>
-												<path d="M7 12h10"></path>
-												<path d="M7 17h10"></path>
-											</svg>
-										}
-									</div>
-									<div class="provider-info">
-										<h3>{ p.Name }</h3>
-										<p>{ p.Description }</p>
-									</div>
-									<div class="provider-status">
-										if p.IsEnabled {
-											<span class="badge badge-success">{ pc.T("embed.status_enabled") }</span>
-										} else if p.IsConfigured {
-											<span class="badge badge-warning">{ pc.T("embed.status_configured") }</span>
-										} else {
-											<span class="badge badge-secondary">{ pc.T("embed.status_not_configured") }</span>
-										}
-									</div>
+						@card.Card(card.Props{Class: "h-full"}) {
+							@card.Header(card.HeaderProps{Class: "flex-row items-start justify-between gap-3 border-b pb-4"}) {
+								<div class="space-y-1">
+									@card.Title(card.TitleProps{Class: "text-base"}) {
+										{ p.Name }
+									}
+									@card.Description() {
+										{ p.Description }
+									}
 								</div>
-								<div class="provider-actions">
-									<a href={ templ.URL("/admin/embed/" + p.ID) } class="btn btn-primary">
-										<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-											<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
-											<circle cx="12" cy="12" r="3"></circle>
-										</svg>
+								if p.IsEnabled {
+									@badge.Badge(badge.Props{}) {
+										{ pc.T("embed.status_enabled") }
+									}
+								} else if p.IsConfigured {
+									@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+										{ pc.T("embed.status_configured") }
+									}
+								} else {
+									@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+										{ pc.T("embed.status_not_configured") }
+									}
+								}
+							}
+							@card.Content(card.ContentProps{Class: "pt-4"}) {
+								<div class="flex flex-wrap items-center gap-2">
+									@button.Button(button.Props{Href: "/admin/embed/" + p.ID, Size: button.SizeSm}) {
 										{ pc.T("embed.configure_button") }
-									</a>
+									}
 									if p.IsConfigured {
-										<form method="POST" action={ templ.URL("/admin/embed/" + p.ID + "/toggle") } class="toggle-form">
+										<form method="POST" action={ templ.URL("/admin/embed/" + p.ID + "/toggle") } class="inline-block">
 											if p.IsEnabled {
 												<input type="hidden" name="enabled" value="0"/>
+												@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline, Size: button.SizeSm}) {
+													{ pc.T("embed.disable_button") }
+												}
 											} else {
 												<input type="hidden" name="enabled" value="1"/>
-											}
-											if p.IsEnabled {
-												<button type="submit" class="btn btn-outline-danger">
-													<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-														<path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
-														<line x1="12" x2="12" y1="2" y2="12"></line>
-													</svg>
-													{ pc.T("embed.disable_button") }
-												</button>
-											} else {
-												<button type="submit" class="btn btn-outline-success">
-													<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-														<circle cx="12" cy="12" r="10"></circle>
-														<polyline points="16 12 12 8 8 12"></polyline>
-														<line x1="12" x2="12" y1="16" y2="8"></line>
-													</svg>
+												@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantSecondary, Size: button.SizeSm}) {
 													{ pc.T("embed.enable_button") }
-												</button>
+												}
 											}
 										</form>
 									}
 								</div>
-							</div>
-						</div>
+							}
+						}
 					}
-				} else {
-					<div class="empty-state">
-						<p>{ pc.T("embed.no_providers") }</p>
-					</div>
+				</div>
+			} else {
+				@card.Card(card.Props{}) {
+					@card.Content(card.ContentProps{Class: "py-10 text-center"}) {
+						<p class="text-sm text-muted-foreground">{ pc.T("embed.no_providers") }</p>
+					}
 				}
-			</div>
+			}
 		</div>
-		<style>
-.embed-providers {
-    margin-top: 2rem;
-}
-
-.provider-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-    gap: 1.5rem;
-    margin-top: 1rem;
-}
-
-.provider-card {
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.provider-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.provider-card.provider-enabled {
-    border-left: 4px solid var(--success-color, #10b981);
-}
-
-.provider-header {
-    display: flex;
-    align-items: flex-start;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-}
-
-.provider-icon {
-    flex-shrink: 0;
-    width: 48px;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--primary-color, #3b82f6);
-    color: white;
-    border-radius: 8px;
-}
-
-.provider-info {
-    flex: 1;
-}
-
-.provider-info h3 {
-    margin: 0 0 0.25rem 0;
-    font-size: 1.125rem;
-}
-
-.provider-info p {
-    margin: 0;
-    color: var(--text-muted, #6b7280);
-    font-size: 0.875rem;
-}
-
-.provider-status {
-    flex-shrink: 0;
-}
-
-.provider-actions {
-    display: flex;
-    gap: 0.75rem;
-    justify-content: flex-end;
-}
-
-.toggle-form {
-    display: inline;
-}
-
-.empty-state {
-    text-align: center;
-    padding: 3rem;
-    color: var(--text-muted, #6b7280);
-}
-
-.badge {
-    display: inline-block;
-    padding: 0.25rem 0.5rem;
-    font-size: 0.75rem;
-    font-weight: 500;
-    border-radius: 4px;
-}
-
-.badge-success {
-    background: var(--success-bg, #d1fae5);
-    color: var(--success-color, #059669);
-}
-
-.badge-warning {
-    background: var(--warning-bg, #fef3c7);
-    color: var(--warning-color, #d97706);
-}
-
-.badge-secondary {
-    background: var(--secondary-bg, #f3f4f6);
-    color: var(--secondary-color, #6b7280);
-}
-		</style>
 	}
 }
 
 templ EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) {
 	@adminviews.AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ data.ProviderName }</h1>
-				<p class="page-description">{ data.ProviderDesc }</p>
-			</div>
-		</div>
-		<form method="POST" action={ templ.URL("/admin/embed/" + data.ProviderID) } class="embed-form">
-			<div class="card">
-				<div class="card-header">
-					<div class="provider-header">
-						<div class="provider-logo">
-							if data.ProviderID == "dify" {
-								<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-									<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-									<path d="M8 10h.01"></path>
-									<path d="M12 10h.01"></path>
-									<path d="M16 10h.01"></path>
-								</svg>
-							} else {
-								<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-									<rect width="18" height="18" x="3" y="3" rx="2"></rect>
-									<path d="M7 7h10"></path>
-									<path d="M7 12h10"></path>
-									<path d="M7 17h10"></path>
-								</svg>
-							}
-						</div>
-						<div class="provider-info">
-							<h2>{ pc.T("embed.settings_title") }</h2>
-							<p>{ pc.T("embed.settings_description") }</p>
-						</div>
-						<label class="switch">
-							<input type="checkbox" name="is_enabled" value="1" checked?={ data.IsEnabled }/>
-							<span class="slider"></span>
-						</label>
+		@adminviews.PageHeader(data.ProviderName, data.ProviderDesc) {
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/embed"}) {
+				{ pc.T("embed.back_button") }
+			}
+		}
+		<form method="POST" action={ templ.URL("/admin/embed/" + data.ProviderID) } class="space-y-4">
+			@card.Card(card.Props{}) {
+				@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
+					<div>
+						@card.Title(card.TitleProps{Class: "text-base"}) {
+							{ pc.T("embed.settings_title") }
+						}
+						@card.Description() {
+							{ pc.T("embed.settings_description") }
+						}
 					</div>
-				</div>
-				<div class="card-body">
+					<label class="checkbox-label">
+						<input type="checkbox" name="is_enabled" value="1" checked?={ data.IsEnabled }/>
+						<span>{ pc.T("embed.status_enabled") }</span>
+					</label>
+				}
+				@card.Content(card.ContentProps{Class: "space-y-5"}) {
 					for _, field := range data.Schema {
-						<div class="form-group">
-							<label for={ field.ID }>
-								{ field.Name }
-								if field.Required {
-									<span class="required">*</span>
+						<div class="space-y-2">
+							if field.Type == "checkbox" {
+								<label class="checkbox-label">
+									<input type="checkbox" name={ field.ID } value="1" checked?={ field.Default == "1" }/>
+									<span>{ field.Name }</span>
+								</label>
+							} else {
+								@label.Label(label.Props{For: field.ID, Class: "block mb-1"}) {
+									{ field.Name }
+									if field.Required {
+										<span class="text-destructive"> *</span>
+									}
 								}
-							</label>
+							}
 							if field.Type == "select" {
-								<select id={ field.ID } name={ field.ID } class="form-control">
+								<select
+									id={ field.ID }
+									name={ field.ID }
+									class="flex h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] dark:bg-input/30"
+								>
 									for _, opt := range field.Options {
 										<option value={ opt.Value } selected?={ opt.Value == field.Default }>{ opt.Label }</option>
 									}
 								</select>
 							} else if field.Type == "color" {
-								<div class="color-input-group">
+								<div class="flex items-center gap-2">
 									<input
 										type="color"
 										id={ field.ID + "_picker" }
 										value={ colorDefault(field.Default) }
-										class="form-control-color"
+										class="h-9 w-14 rounded-md border border-input bg-transparent p-1"
 										data-target={ field.ID }
 										onchange="document.getElementById(this.dataset.target).value = this.value"
 									/>
-									<input
-										type="text"
-										id={ field.ID }
-										name={ field.ID }
-										value={ field.Default }
-										placeholder={ field.Placeholder }
-										class="form-control"
-										pattern="^#[0-9A-Fa-f]{6}$"
-										data-picker={ field.ID + "_picker" }
-										onchange="document.getElementById(this.dataset.picker).value = this.value"
-									/>
+									@input.Input(input.Props{
+										ID:          field.ID,
+										Name:        field.ID,
+										Type:        input.TypeText,
+										Value:       field.Default,
+										Placeholder: field.Placeholder,
+										Attributes: templ.Attributes{
+											"pattern":    "^#[0-9A-Fa-f]{6}$",
+											"data-picker": field.ID + "_picker",
+											"onchange":   "document.getElementById(this.dataset.picker).value = this.value",
+											"maxlength":  "7",
+										},
+									})
 								</div>
-							} else if field.Type == "checkbox" {
-								<label class="checkbox-label">
-									<input type="checkbox" name={ field.ID } value="1" checked?={ field.Default == "1" }/>
-									<span>{ field.Description }</span>
-								</label>
 							} else if field.Type == "textarea" {
-								<textarea
-									id={ field.ID }
-									name={ field.ID }
-									placeholder={ field.Placeholder }
-									class="form-control"
-									rows="4"
-								>{ field.Default }</textarea>
-							} else {
-								<input
-									type={ inputType(field.Type) }
-									id={ field.ID }
-									name={ field.ID }
-									value={ field.Default }
-									placeholder={ field.Placeholder }
-									class="form-control"
-									maxlength={ maxLenForType(field.Type) }
-									required?={ field.Required }
-								/>
+								@textarea.Textarea(textarea.Props{
+									ID:          field.ID,
+									Name:        field.ID,
+									Value:       field.Default,
+									Placeholder: field.Placeholder,
+									Rows:        4,
+									Attributes: templ.Attributes{
+										"maxlength": maxLenForType(field.Type),
+									},
+								})
+							} else if field.Type != "checkbox" {
+								if field.Required {
+									@input.Input(input.Props{
+										ID:          field.ID,
+										Name:        field.ID,
+										Type:        input.Type(inputType(field.Type)),
+										Value:       field.Default,
+										Placeholder: field.Placeholder,
+										Attributes: templ.Attributes{
+											"maxlength": maxLenForType(field.Type),
+											"required":  "required",
+										},
+									})
+								} else {
+									@input.Input(input.Props{
+										ID:          field.ID,
+										Name:        field.ID,
+										Type:        input.Type(inputType(field.Type)),
+										Value:       field.Default,
+										Placeholder: field.Placeholder,
+										Attributes: templ.Attributes{
+											"maxlength": maxLenForType(field.Type),
+										},
+									})
+								}
 							}
 							if field.Description != "" && field.Type != "checkbox" {
-								<small class="form-text">{ field.Description }</small>
+								<p class="text-xs text-muted-foreground">{ field.Description }</p>
 							}
 						</div>
 					}
-				</div>
-			</div>
-			<div class="form-actions">
-				<a href="/admin/embed" class="btn btn-secondary">
-					<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<path d="m15 18-6-6 6-6"></path>
-					</svg>
+				}
+			}
+			<div class="flex items-center justify-end gap-2">
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/embed"}) {
 					{ pc.T("embed.back_button") }
-				</a>
-				<button type="submit" class="btn btn-primary">
-					<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-						<polyline points="17 21 17 13 7 13 7 21"></polyline>
-						<polyline points="7 3 7 8 15 8"></polyline>
-					</svg>
+				}
+				@button.Button(button.Props{Type: button.TypeSubmit}) {
 					{ pc.T("embed.save_button") }
-				</button>
+				}
 			</div>
 		</form>
-		<style>
-.embed-form .card {
-    margin-bottom: 1.5rem;
-}
-
-.provider-header {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-
-.provider-logo {
-    width: 48px;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--primary-color, #3b82f6);
-    color: white;
-    border-radius: 8px;
-}
-
-.provider-info {
-    flex: 1;
-}
-
-.provider-info h2 {
-    margin: 0 0 0.25rem 0;
-    font-size: 1.125rem;
-}
-
-.provider-info p {
-    margin: 0;
-    color: var(--text-muted, #6b7280);
-    font-size: 0.875rem;
-}
-
-.form-group {
-    margin-bottom: 1.25rem;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-weight: 500;
-}
-
-.form-group .required {
-    color: var(--danger-color, #ef4444);
-}
-
-.form-text {
-    display: block;
-    margin-top: 0.25rem;
-    color: var(--text-muted, #6b7280);
-    font-size: 0.875rem;
-}
-
-.color-input-group {
-    display: flex;
-    gap: 0.5rem;
-}
-
-.form-control-color {
-    width: 50px;
-    height: 38px;
-    padding: 0.25rem;
-    border: 1px solid var(--border-color, #d1d5db);
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.checkbox-label {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-weight: normal;
-    cursor: pointer;
-}
-
-.checkbox-label input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-}
-
-.form-actions {
-    display: flex;
-    gap: 1rem;
-    justify-content: flex-end;
-}
-		</style>
 	}
 }
