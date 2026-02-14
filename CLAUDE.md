@@ -107,6 +107,8 @@ The hook source is in `.claude/shared/global/hooks/`.
 
    **Frontend JS Policy**: Always prefer official Alpine.js plugins (`@alpinejs/*`) over third-party libraries. For example, use `@alpinejs/sort` instead of Sortable.js, `@alpinejs/mask` instead of input mask libraries. This reduces external dependencies and ensures consistent integration with Alpine's reactivity system.
 
+   **Admin Dashboard UX Policy**: Always check [templUI](https://templui.io/docs/components) ([repo](https://github.com/templui/templui)) for an existing component before creating custom ones. If no suitable templUI component exists, explain why and ask the user for confirmation before building from scratch.
+
 3. **Handler Pattern**: Each handler struct (in `internal/handler/`) receives `*sql.DB`, `*render.Renderer`, and `*scs.SessionManager`. Handlers call `store.New(db)` to get sqlc queries. Admin UI views use [templ](https://templ.guide/) components (`internal/views/admin/`) with type-safe Go code. Handler conversion functions in `internal/handler/templ.go` bridge store types to view types.
 
 4. **Middleware Chain**: Protected routes use middleware in order:
@@ -599,6 +601,17 @@ Code quality scanner for Go applications. Detects duplicate code, unhandled erro
 - "Check for package name collisions"
 
 **Invoke:** `@code-quality-auditor` or use the `/code-quality` command
+
+### frontend-developer
+Admin Dashboard UX developer. Creates and modifies admin UI components using templ and templUI.
+
+**Usage examples:**
+- "Add a data table to the pages list"
+- "Create a modal dialog for confirmation"
+- "Add a dropdown menu to the toolbar"
+- "Build a stats card for the dashboard"
+
+**Invoke:** `@frontend-developer`
 
 ## Claude Code Slash Commands
 
