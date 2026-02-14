@@ -5,6 +5,7 @@
     "author": "oCMS",
     "description": "Clean, minimal default theme for oCMS",
     "screenshot": "screenshot.svg",
+    "engine": "templ",
     "templates": {
         "home": "pages/home.html",
         "page": "pages/page.html",

@@ -14,6 +14,12 @@ import (
 	"strings"
 )
 
+// Theme engine constants.
+const (
+	ThemeEngineTempl = "templ"
+	ThemeEngineHTML  = "html"
+)
+
 // blankLinesRegex matches two or more consecutive newlines (with optional whitespace between).
 var blankLinesRegex = regexp.MustCompile(`(\r?\n\s*){2,}`)
 
@@ -24,6 +30,7 @@ type Config struct {
 	Author      string            `json:"author"`
 	Description string            `json:"description"`
 	Screenshot  string            `json:"screenshot"`
+	Engine      string            `json:"engine,omitempty"`
 	Templates   map[string]string `json:"templates"`
 	Settings    []Setting         `json:"settings"`
 	WidgetAreas []WidgetArea      `json:"widget_areas,omitempty"`
@@ -201,4 +208,22 @@ func (t *Theme) GetSettingDefault(key string) string {
 		return s.Default
 	}
 	return ""
+}
+
+// RenderEngine returns the normalized render engine for this theme.
+// If Config.Engine is explicitly "templ" or "html" (case-insensitive), that
+// value is returned. Otherwise embedded themes default to "templ" and
+// custom filesystem themes default to "html".
+func (t *Theme) RenderEngine() string {
+	switch strings.ToLower(t.Config.Engine) {
+	case ThemeEngineTempl:
+		return ThemeEngineTempl
+	case ThemeEngineHTML:
+		return ThemeEngineHTML
+	default:
+		if t.IsEmbedded {
+			return ThemeEngineTempl
+		}
+		return ThemeEngineHTML
+	}
 }

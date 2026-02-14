@@ -4,6 +4,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -1765,8 +1766,34 @@ type FormTemplateData struct {
 	CSRFToken template.HTML
 }
 
-// render renders a form page, preferring templ with fallback to the active theme template.
+// render renders a form page using the active theme's render engine.
+// For templ engine: renders via templ component.
+// For html engine: renders via html/template through activeTheme.RenderPage.
 func (h *FormsHandler) render(w http.ResponseWriter, r *http.Request, data FormTemplateData) {
+	activeTheme := h.themeManager.GetActiveTheme()
+
+	engine := theme.ThemeEngineTempl
+	if activeTheme != nil {
+		engine = activeTheme.RenderEngine()
+	}
+
+	if engine == theme.ThemeEngineHTML {
+		if activeTheme == nil {
+			slog.Error("html engine selected but no active theme for form")
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		var buf bytes.Buffer
+		if err := activeTheme.RenderPage(&buf, "form", data); err != nil {
+			slog.Error("html theme form render failed", "theme", activeTheme.Name, "error", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(buf.Bytes())
+		return
+	}
+
 	viewData := h.buildPublicFormViewData(r, data)
 	renderTempl(w, r, FrontendFormPage(viewData))
 }
