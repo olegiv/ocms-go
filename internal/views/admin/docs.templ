@@ -5,7 +5,9 @@ package admin
 
 import (
 	"fmt"
+	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
 )
 
@@ -64,15 +66,21 @@ templ DocsPage(pc *PageContext, data DocsViewData) {
 		@PageHeader(pc.T("docs.title"), pc.T("docs.description")) {
 		}
 		<!-- System Info -->
-		<div class="card mb-6">
-			<div class="card-header">
-				<h2 class="card-title">{ pc.T("docs.system_info") }</h2>
-			</div>
-			<div class="card-body">
+		@card.Card(card.Props{Class: "mb-6"}) {
+			@card.Header(card.HeaderProps{Class: "border-b pb-4"}) {
+				@card.Title() {
+					{ pc.T("docs.system_info") }
+				}
+			}
+			@card.Content() {
 				<div class="info-grid">
 					<div class="info-item">
 						<h4>{ pc.T("docs.ocms_version") }</h4>
-						<p><span class="badge badge-primary">{ data.System.Version }</span></p>
+						<p>
+							@badge.Badge(badge.Props{}) {
+								{ data.System.Version }
+							}
+						</p>
 					</div>
 					<div class="info-item">
 						<h4>{ pc.T("docs.git_commit") }</h4>
@@ -90,9 +98,13 @@ templ DocsPage(pc *PageContext, data DocsViewData) {
 						<h4>{ pc.T("docs.environment") }</h4>
 						<p>
 							if data.System.Environment == "production" {
-								<span class="badge badge-success">{ data.System.Environment }</span>
+								@badge.Badge(badge.Props{Class: "badge-success"}) {
+									{ data.System.Environment }
+								}
 							} else {
-								<span class="badge badge-warning">{ data.System.Environment }</span>
+								@badge.Badge(badge.Props{Class: "badge-warning"}) {
+									{ data.System.Environment }
+								}
 							}
 						</p>
 					</div>
@@ -121,15 +133,17 @@ templ DocsPage(pc *PageContext, data DocsViewData) {
 						<p>{ data.System.Uptime }</p>
 					</div>
 				</div>
-			</div>
-		</div>
+			}
+		}
 		<!-- Endpoint Reference -->
 		for _, group := range data.Endpoints {
-			<div class="card mb-6">
-				<div class="card-header">
-					<h2 class="card-title">{ group.Name }</h2>
-				</div>
-				<div class="card-body">
+			@card.Card(card.Props{Class: "mb-6"}) {
+				@card.Header(card.HeaderProps{Class: "border-b pb-4"}) {
+					@card.Title() {
+						{ group.Name }
+					}
+				}
+				@card.Content() {
 					<div class="table-responsive">
 						<table class="table">
 							<thead>
@@ -148,22 +162,28 @@ templ DocsPage(pc *PageContext, data DocsViewData) {
 										</td>
 										<td><code>{ ep.Path }</code></td>
 										<td>{ ep.Description }</td>
-										<td><span class="badge badge-info badge-sm">{ ep.Auth }</span></td>
+										<td>
+											@badge.Badge(badge.Props{Class: "badge-info badge-sm"}) {
+												{ ep.Auth }
+											}
+										</td>
 									</tr>
 								}
 							</tbody>
 						</table>
 					</div>
-				</div>
-			</div>
+				}
+			}
 		}
 		<!-- Guides -->
 		if len(data.Guides) > 0 {
-			<div class="card mb-6">
-				<div class="card-header">
-					<h2 class="card-title">{ pc.T("docs.guides") }</h2>
-				</div>
-				<div class="card-body">
+			@card.Card(card.Props{Class: "mb-6"}) {
+				@card.Header(card.HeaderProps{Class: "border-b pb-4"}) {
+					@card.Title() {
+						{ pc.T("docs.guides") }
+					}
+				}
+				@card.Content() {
 					<div class="info-grid">
 						for _, guide := range data.Guides {
 							<div class="info-item">
@@ -171,8 +191,8 @@ templ DocsPage(pc *PageContext, data DocsViewData) {
 							</div>
 						}
 					</div>
-				</div>
-			</div>
+				}
+			}
 		}
 	}
 }
@@ -186,11 +206,11 @@ templ DocsGuidePage(pc *PageContext, data DocsGuideViewData) {
 				{ pc.T("docs.back_to_docs") }
 			}
 		}
-		<div class="card">
-			<div class="card-body docs-content">
+		@card.Card(card.Props{}) {
+			@card.Content(card.ContentProps{Class: "docs-content"}) {
 				@templ.Raw(data.Content)
-			</div>
-		</div>
+			}
+		}
 	}
 }
 
@@ -198,14 +218,24 @@ templ DocsGuidePage(pc *PageContext, data DocsGuideViewData) {
 templ endpointMethodBadge(method string) {
 	switch method {
 		case "GET":
-			<span class="badge badge-success">GET</span>
+			@badge.Badge(badge.Props{Class: "badge-success"}) {
+				GET
+			}
 		case "POST":
-			<span class="badge badge-primary">POST</span>
+			@badge.Badge(badge.Props{}) {
+				POST
+			}
 		case "PUT":
-			<span class="badge badge-warning">PUT</span>
+			@badge.Badge(badge.Props{Class: "badge-warning"}) {
+				PUT
+			}
 		case "DELETE":
-			<span class="badge badge-danger">DELETE</span>
+			@badge.Badge(badge.Props{Variant: badge.VariantDestructive}) {
+				DELETE
+			}
 		default:
-			<span class="badge">{ method }</span>
+			@badge.Badge(badge.Props{}) {
+				{ method }
+			}
 	}
 }

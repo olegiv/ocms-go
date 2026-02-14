@@ -6,6 +6,7 @@ package admin
 import (
 	"fmt"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
 )
 
 // ExportViewData holds data for the export page.
@@ -80,17 +81,18 @@ templ ExportPage(pc *PageContext, data ExportViewData) {
 	@AdminLayout(pc) {
 		@PageHeader(pc.T("export.title"), pc.T("export.description")) {
 		}
-		<div class="card">
-			<form
-				method="POST"
-				action="/admin/export"
-				class="card-body"
-				x-data={ `{
-					includeMedia: true,
-					includeMediaFiles: false,
-					get willBeZip() { return this.includeMedia && this.includeMediaFiles; }
-				}` }
-			>
+		@card.Card(card.Props{}) {
+			@card.Content(card.ContentProps{}) {
+				<form
+					method="POST"
+					action="/admin/export"
+					class="p-6"
+					x-data={ `{
+						includeMedia: true,
+						includeMediaFiles: false,
+						get willBeZip() { return this.includeMedia && this.includeMediaFiles; }
+					}` }
+				>
 				<div class="export-sections">
 					<!-- Content Section -->
 					<div class="export-section">
@@ -227,8 +229,9 @@ templ ExportPage(pc *PageContext, data ExportViewData) {
 						</span>
 					}
 				</div>
-			</form>
-		</div>
+				</form>
+			}
+		}
 	}
 }
 
@@ -257,15 +260,16 @@ templ ImportPage(pc *PageContext, data ImportViewData) {
 
 // importFileUpload renders the file upload form (step 1).
 templ importFileUpload(pc *PageContext) {
-	<div class="card">
-		<form
-			method="POST"
-			action="/admin/import/validate"
-			enctype="multipart/form-data"
-			class="card-body"
-			x-data="importUploader()"
-			@submit="handleSubmit($event)"
-		>
+	@card.Card(card.Props{}) {
+		@card.Content(card.ContentProps{}) {
+			<form
+				method="POST"
+				action="/admin/import/validate"
+				enctype="multipart/form-data"
+				class="p-6"
+				x-data="importUploader()"
+				@submit="handleSubmit($event)"
+			>
 			<div class="media-dropzone">
 				<div
 					class="media-dropzone-area"
@@ -326,15 +330,16 @@ templ importFileUpload(pc *PageContext) {
 					{ pc.T("import.validate") }
 				}
 			</div>
-		</form>
-	</div>
+			</form>
+		}
+	}
 	@importUploaderScript()
 }
 
 // importValidationResults renders the validation results card (step 2a).
 templ importValidationResults(pc *PageContext, data ImportViewData) {
-	<div class="card">
-		<div class="card-body">
+	@card.Card(card.Props{}) {
+		@card.Content(card.ContentProps{}) {
 			if data.ValidationResult.Valid {
 				<div class="validation-success">
 					@iconSuccess()
@@ -391,14 +396,15 @@ templ importValidationResults(pc *PageContext, data ImportViewData) {
 					}
 				</div>
 			}
-		</div>
-	</div>
+		}
+	}
 }
 
 // importOptionsForm renders the import options form (step 2b).
 templ importOptionsForm(pc *PageContext, data ImportViewData) {
-	<div class="card">
-		<form method="POST" action="/admin/import" class="card-body">
+	@card.Card(card.Props{}) {
+		@card.Content(card.ContentProps{}) {
+			<form method="POST" action="/admin/import" class="p-6">
 			<h3 class="section-title">{ pc.T("import.options") }</h3>
 			<div class="import-sections">
 				<!-- Conflict Strategy -->
@@ -483,8 +489,9 @@ templ importOptionsForm(pc *PageContext, data ImportViewData) {
 					{ pc.T("import.start_import") }
 				}
 			</div>
-		</form>
-	</div>
+			</form>
+		}
+	}
 }
 
 // importCheckbox renders a checkbox with label and hint.
@@ -504,8 +511,8 @@ templ importCheckbox(name string, label string, hint string, checked bool) {
 
 // importResults renders the import results card (step 3).
 templ importResults(pc *PageContext, data ImportViewData) {
-	<div class="card">
-		<div class="card-body">
+	@card.Card(card.Props{}) {
+		@card.Content(card.ContentProps{}) {
 			if data.ImportResult.Success {
 				<div class="import-success">
 					@iconSuccessLarge()
@@ -596,8 +603,8 @@ templ importResults(pc *PageContext, data ImportViewData) {
 					{ pc.T("import.import_another") }
 				}
 			</div>
-		</div>
-	</div>
+		}
+	}
 }
 
 // importUploaderScript renders the Alpine.js import uploader component.

@@ -5,7 +5,9 @@ package admin
 
 import (
 	"fmt"
+	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
 )
 
 // ModuleViewItem holds data for a module in the list view.
@@ -57,23 +59,23 @@ templ ModulesPage(pc *PageContext, data ModulesViewData) {
 					}
 				</div>
 			} else {
-				<div class="card">
-					<div class="card-body">
+				@card.Card(card.Props{}) {
+					@card.Content() {
 						<div class="empty-state">
 							<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
 							<p>{ pc.T("modules.no_modules") }</p>
 							<span class="empty-hint">{ pc.T("modules.no_modules_hint") }</span>
 						</div>
-					</div>
-				</div>
+					}
+				}
 			}
 		</div>
 		<!-- Hooks Section -->
 		<div class="hooks-section">
 			<h2>{ pc.T("modules.hooks") }</h2>
 			if len(data.Hooks) > 0 {
-				<div class="card">
-					<div class="card-body">
+				@card.Card(card.Props{}) {
+					@card.Content() {
 						<div class="table-responsive">
 							<table class="table">
 								<thead>
@@ -89,18 +91,18 @@ templ ModulesPage(pc *PageContext, data ModulesViewData) {
 								</tbody>
 							</table>
 						</div>
-					</div>
-				</div>
+					}
+				}
 			} else {
-				<div class="card">
-					<div class="card-body">
+				@card.Card(card.Props{}) {
+					@card.Content() {
 						<div class="empty-state">
 							<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
 							<p>{ pc.T("modules.no_hooks") }</p>
 							<span class="empty-hint">{ pc.T("modules.no_hooks_hint") }</span>
 						</div>
-					</div>
-				</div>
+					}
+				}
 			}
 		</div>
 	}
@@ -129,11 +131,13 @@ templ moduleCard(pc *PageContext, mod ModuleViewItem) {
 						{ fmt.Sprintf("%d", mod.MigrationsApplied) }/{ fmt.Sprintf("%d", mod.MigrationCount) } { pc.T("modules.migrations") }
 					</span>
 					if mod.MigrationsPending > 0 {
-						<span class="badge badge-warning badge-sm">
+						@badge.Badge(badge.Props{Class: "badge-warning badge-sm"}) {
 							{ fmt.Sprintf("%d", mod.MigrationsPending) } { pc.T("modules.migrations_pending") }
-						</span>
+						}
 					} else {
-						<span class="badge badge-info badge-sm">{ pc.T("modules.up_to_date") }</span>
+						@badge.Badge(badge.Props{Class: "badge-info badge-sm"}) {
+							{ pc.T("modules.up_to_date") }
+						}
 					}
 				</div>
 			}

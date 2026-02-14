@@ -7,6 +7,8 @@ import "fmt"
 import "encoding/json"
 import "github.com/olegiv/ocms-go/internal/views/components/button"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
+import "github.com/olegiv/ocms-go/internal/views/components/badge"
+import "github.com/olegiv/ocms-go/internal/views/components/card"
 
 // =============================================================================
 // VIEW TYPES
@@ -204,7 +206,9 @@ templ FormsListPage(pc *PageContext, data FormsListViewData) {
 								<td><code>{ item.Slug }</code></td>
 								<td>
 									if item.LanguageCode != "" {
-										<span class="badge badge-outline">{ item.LanguageCode }</span>
+										@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+											{ item.LanguageCode }
+										}
 									} else {
 										<span class="text-muted">-</span>
 									}
@@ -218,15 +222,21 @@ templ FormsListPage(pc *PageContext, data FormsListViewData) {
 											{ " " + pc.T("forms.submission") }
 										}
 										if item.UnreadCount > 0 {
-											<span class="badge badge-primary">{ fmt.Sprintf("%d", item.UnreadCount) } { pc.T("forms.new_badge") }</span>
+											@badge.Badge(badge.Props{}) {
+												{ fmt.Sprintf("%d", item.UnreadCount) } { pc.T("forms.new_badge") }
+											}
 										}
 									</a>
 								</td>
 								<td>
 									if item.IsActive {
-										<span class="badge badge-success">{ pc.T("forms.active") }</span>
+										@badge.Badge(badge.Props{Class: "badge-success"}) {
+											{ pc.T("forms.active") }
+										}
 									} else {
-										<span class="badge badge-secondary">{ pc.T("forms.inactive") }</span>
+										@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+											{ pc.T("forms.inactive") }
+										}
 									}
 								</td>
 								<td>
@@ -257,8 +267,8 @@ templ FormsListPage(pc *PageContext, data FormsListViewData) {
 				</table>
 			</div>
 		} else {
-			<div class="card">
-				<div class="card-body">
+			@card.Card(card.Props{}) {
+				@card.Content(card.ContentProps{}) {
 					<div class="empty-state">
 						@iconFormDocLarge()
 						<p>{ pc.T("forms.no_forms") }</p>
@@ -269,8 +279,8 @@ templ FormsListPage(pc *PageContext, data FormsListViewData) {
 							}
 						</div>
 					</div>
-				</div>
-			</div>
+				}
+			}
 		}
 	}
 }
@@ -297,11 +307,11 @@ templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 		<div class="form-builder-container">
 			<div class="form-builder-main">
 				<!-- Form Settings -->
-				<div class="card">
-					<div class="card-header">
+				@card.Card(card.Props{}) {
+					@card.Header(card.HeaderProps{Class: "border-b pb-4"}) {
 						<h3>{ pc.T("forms.form_settings") }</h3>
-					</div>
-					<div class="card-body">
+					}
+					@card.Content(card.ContentProps{}) {
 						<form method="POST" action={ templ.SafeURL(formFormAction(data)) }>
 							@csrfField()
 							if data.IsEdit {
@@ -430,8 +440,8 @@ templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 								}
 							</div>
 						</form>
-					</div>
-				</div>
+					}
+				}
 				if data.IsEdit {
 					<!-- Field Builder -->
 					@formsFieldBuilder(pc, data)
@@ -470,14 +480,14 @@ func formPageTitle(pc *PageContext, isEdit bool) string {
 }
 
 templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
-	<div class="card mt-4" x-data="formFieldBuilder()">
-		<div class="card-header">
+	@card.Card(card.Props{Class: "mt-4", Attributes: templ.Attributes{"x-data": "formFieldBuilder()"}}) {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
 			<h3>{ pc.T("forms.form_fields") }</h3>
 			@button.Button(button.Props{Size: button.SizeSm, Attributes: templ.Attributes{"@click": "openAddModal()"}}) {
 				{ pc.T("forms.add_field") }
 			}
-		</div>
-		<div class="card-body">
+		}
+		@card.Content(card.ContentProps{}) {
 			<template x-if="fields.length === 0">
 				<div class="empty-state">
 					<p>{ pc.T("forms.no_fields") }</p>
@@ -496,9 +506,11 @@ templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
 						<div class="field-item-content">
 							<div class="field-item-label" x-text="field.label"></div>
 							<div class="field-item-meta">
-								<span class="badge badge-secondary" x-text="field.type"></span>
+								@badge.Badge(badge.Props{Variant: badge.VariantSecondary, Attributes: templ.Attributes{"x-text": "field.type"}})
 								<code x-text="field.name"></code>
-								<span class="badge badge-primary" x-show="field.is_required">{ pc.T("forms.required") }</span>
+								@badge.Badge(badge.Props{Attributes: templ.Attributes{"x-show": "field.is_required"}}) {
+									{ pc.T("forms.required") }
+								}
 							</div>
 						</div>
 						<div class="field-item-actions">
@@ -512,7 +524,7 @@ templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
 					</div>
 				</template>
 			</div>
-		</div>
+		}
 		<!-- Add/Edit Field Modal -->
 		<template x-if="showModal">
 			<div class="modal-overlay" x-show="showModal" @click.self="closeModal()" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;">
@@ -585,12 +597,12 @@ templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
 				</div>
 			</div>
 		</template>
-	</div>
+	}
 }
 
 templ formsTranslationsPanel(pc *PageContext, data FormFormViewData) {
-	<div class="card mt-4">
-		<div class="card-header">
+	@card.Card(card.Props{Class: "mt-4"}) {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
 			<h3>
 				@iconTranslate()
 				{ pc.T("forms.translations") }
@@ -600,8 +612,8 @@ templ formsTranslationsPanel(pc *PageContext, data FormFormViewData) {
 					{ pc.T("forms.current_language") }: { data.Language.Name }
 				</span>
 			}
-		</div>
-		<div class="card-body">
+		}
+		@card.Content(card.ContentProps{}) {
 			if len(data.Translations) > 0 {
 				<div class="translations-list">
 					<h4 class="translations-subtitle">{ pc.T("forms.existing_translations") }</h4>
@@ -642,8 +654,8 @@ templ formsTranslationsPanel(pc *PageContext, data FormFormViewData) {
 			if len(data.Translations) == 0 && len(data.MissingLanguages) == 0 {
 				<p class="translations-empty">{ pc.T("forms.all_translations_exist") }</p>
 			}
-		</div>
-	</div>
+		}
+	}
 }
 
 templ formsFieldBuilderScript(pc *PageContext, data FormFormViewData) {
@@ -864,9 +876,13 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 								</td>
 								<td>
 									if sub.IsRead {
-										<span class="badge badge-secondary">{ pc.T("forms.status_read") }</span>
+										@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+											{ pc.T("forms.status_read") }
+										}
 									} else {
-										<span class="badge badge-primary">{ pc.T("forms.status_new") }</span>
+										@badge.Badge(badge.Props{}) {
+											{ pc.T("forms.status_new") }
+										}
 									}
 								</td>
 								<td>
@@ -894,13 +910,15 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 				</table>
 			</div>
 			if data.Pagination.ShouldShow() {
-				<div class="card-footer">
-					@Pagination(pc, data.Pagination)
-				</div>
+				@card.Card(card.Props{}) {
+					@card.Footer(card.FooterProps{}) {
+						@Pagination(pc, data.Pagination)
+					}
+				}
 			}
 		} else {
-			<div class="card">
-				<div class="card-body">
+			@card.Card(card.Props{}) {
+				@card.Content(card.ContentProps{}) {
 					<div class="empty-state">
 						@iconMailLarge()
 						<p>{ pc.T("forms.no_submissions") }</p>
@@ -911,8 +929,8 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 							}
 						</div>
 					</div>
-				</div>
-			</div>
+				}
+			}
 		}
 	}
 }

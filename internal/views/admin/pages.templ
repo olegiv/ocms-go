@@ -6,7 +6,9 @@ package admin
 import "fmt"
 import "strings"
 import "encoding/json"
+import "github.com/olegiv/ocms-go/internal/views/components/badge"
 import "github.com/olegiv/ocms-go/internal/views/components/button"
+import "github.com/olegiv/ocms-go/internal/views/components/card"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
 
 // =============================================================================
@@ -315,6 +317,14 @@ func publishButtonClass(status string) string {
 	return "btn-success"
 }
 
+// statusBadgeClass returns the badge class for page status.
+func statusBadgeClass(status string) string {
+	if status == "published" {
+		return "badge-success"
+	}
+	return "badge-warning"
+}
+
 // =============================================================================
 // PAGES LIST PAGE
 // =============================================================================
@@ -437,7 +447,7 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 			</div>
 		}
 		if len(data.Pages) > 0 {
-			<div class="card" id="pages-table">
+			@card.Card(card.Props{ID: "pages-table"}) {
 				<div class="table-responsive">
 					<table class="table">
 						<thead>
@@ -460,14 +470,14 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 					</table>
 				</div>
 				if data.Pagination.ShouldShow() {
-					<div class="card-footer">
+					@card.Footer() {
 						@Pagination(pc, data.Pagination)
-					</div>
+					}
 				}
-			</div>
+			}
 		} else {
-			<div class="card">
-				<div class="card-body">
+			@card.Card() {
+				@card.Content() {
 					<div class="empty-state">
 						@iconFileLarge()
 						<p>{ pc.T("pages.no_pages") }</p>
@@ -482,8 +492,8 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 							}
 						</div>
 					</div>
-				</div>
-			</div>
+				}
+			}
 		}
 	}
 }
@@ -532,22 +542,22 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool) {
 			}
 		</td>
 		<td>
-			if page.IsScheduled {
-				<span class="badge badge-info" title={ page.ScheduledAtTitle }>
-					@iconClock12()
-					{ pc.T("status.scheduled") }
-				</span>
-			} else {
-				<span class={ "badge", templ.KV("badge-success", page.Status == "published"), templ.KV("badge-warning", page.Status != "published") }>
-					if page.Status == "published" {
-						{ pc.T("status.published") }
-					} else if page.Status == "draft" {
-						{ pc.T("status.draft") }
-					} else {
-						{ page.Status }
-					}
-				</span>
+		if page.IsScheduled {
+			@badge.Badge(badge.Props{Class: "badge-info", Attributes: templ.Attributes{"title": page.ScheduledAtTitle}}) {
+				@iconClock12()
+				{ pc.T("status.scheduled") }
 			}
+		} else {
+			@badge.Badge(badge.Props{Class: statusBadgeClass(page.Status)}) {
+				if page.Status == "published" {
+					{ pc.T("status.published") }
+				} else if page.Status == "draft" {
+					{ pc.T("status.draft") }
+				} else {
+					{ page.Status }
+				}
+			}
+		}
 		</td>
 		<td>{ page.UpdatedAt }</td>
 		<td class="text-right">
@@ -637,11 +647,11 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 				}
 			}
 		}
-		<div class="card">
+		@card.Card() {
 			<form
 				method="POST"
 				action={ templ.SafeURL(pageFormAction(data)) }
-				class="card-body"
+				class="p-6"
 				x-data={ pageFormXData(data) }
 			>
 				@csrfField()
@@ -699,7 +709,7 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 						<label for="status" class="form-label">{ pc.T("label.status") }</label>
 						if data.IsDemoMode && data.IsEdit && currentStatus(data.FormValues, data.PageStatus) == "published" {
 							<input type="hidden" name="status" value="published"/>
-							<span class="badge badge-success">{ pc.T("status.published") }</span>
+							@badge.Badge(badge.Props{Class: "badge-success"}) { { pc.T("status.published") } }
 						} else {
 							<select
 								id="status"
@@ -880,7 +890,7 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 					}
 				</div>
 			</form>
-		</div>
+		}
 		@pageFormScripts(pc, data)
 	}
 }
@@ -935,7 +945,7 @@ templ translationsPanel(pc *PageContext, data PageFormViewData) {
 							<a href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d", tr.PageID)) } class="translation-link">
 								{ tr.Title }
 							</a>
-							<span class={ "translation-status badge", templ.KV("badge-success", tr.Status == "published"), templ.KV("badge-warning", tr.Status != "published") }>
+							@badge.Badge(badge.Props{Class: "translation-status " + statusBadgeClass(tr.Status)}) {
 								if tr.Status == "published" {
 									{ pc.T("status.published") }
 								} else if tr.Status == "draft" {
@@ -943,7 +953,7 @@ templ translationsPanel(pc *PageContext, data PageFormViewData) {
 								} else {
 									{ tr.Status }
 								}
-							</span>
+							}
 						</div>
 						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/pages/%d", tr.PageID)}) {
 							{ pc.T("btn.edit") }
@@ -1075,7 +1085,7 @@ templ aliasesSection(pc *PageContext, data PageFormViewData) {
 			@iconChevronRight()
 			<span>{ pc.T("pages.aliases") }</span>
 			<template x-if="aliases.length > 0">
-				<span class="badge badge-info ml-2" x-text="aliases.length"></span>
+				@badge.Badge(badge.Props{Class: "badge-info ml-2", Attributes: templ.Attributes{"x-text": "aliases.length"}}) {}
 			</template>
 		</summary>
 		<div class="collapsible-content">
@@ -1262,7 +1272,7 @@ templ schedulingSection(pc *PageContext, data PageFormViewData) {
 			@iconChevronRight()
 			<span>{ pc.T("schedule.title") }</span>
 			if data.HasScheduledAt {
-				<span class="badge badge-info ml-2">{ pc.T("schedule.scheduled") }</span>
+				@badge.Badge(badge.Props{Class: "badge-info ml-2"}) { { pc.T("schedule.scheduled") } }
 			}
 		</summary>
 		<div class="collapsible-content">
@@ -1769,7 +1779,7 @@ templ PageVersionsPage(pc *PageContext, data PageVersionsViewData) {
 			}
 		}
 		if len(data.Versions) > 0 {
-			<div class="card">
+			@card.Card() {
 				<div class="table-responsive">
 					<table class="table">
 						<thead>
@@ -1789,21 +1799,21 @@ templ PageVersionsPage(pc *PageContext, data PageVersionsViewData) {
 					</table>
 				</div>
 				if data.Pagination.ShouldShow() {
-					<div class="card-footer">
+					@card.Footer() {
 						@Pagination(pc, data.Pagination)
-					</div>
+					}
 				}
-			</div>
+			}
 		} else {
-			<div class="card">
-				<div class="card-body">
+			@card.Card() {
+				@card.Content() {
 					<div class="empty-state">
 						@iconClockLarge()
 						<p>{ pc.T("versions.no_versions") }</p>
 						<span class="empty-hint">{ pc.T("versions.no_versions_hint") }</span>
 					</div>
-				</div>
-			</div>
+				}
+			}
 		}
 	}
 }
@@ -1811,7 +1821,7 @@ templ PageVersionsPage(pc *PageContext, data PageVersionsViewData) {
 templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionView) {
 	<tr>
 		<td>
-			<span class="badge badge-info">#{ fmt.Sprintf("%d", version.ID) }</span>
+			@badge.Badge(badge.Props{Class: "badge-info"}) { #{ fmt.Sprintf("%d", version.ID) } }
 		</td>
 		<td>
 			<span class="version-title">{ version.Title }</span>

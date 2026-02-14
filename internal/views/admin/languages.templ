@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
 )
 
@@ -73,7 +75,7 @@ templ LanguagesListPage(pc *PageContext, data LanguagesListData) {
 			}
 		}
 		if len(data.Languages) > 0 {
-			<div class="card" id="languages-table">
+			@card.Card(card.Props{ID: "languages-table"}) {
 				<div class="table-responsive">
 					<table class="table">
 						<thead>
@@ -94,13 +96,13 @@ templ LanguagesListPage(pc *PageContext, data LanguagesListData) {
 						</tbody>
 					</table>
 				</div>
-			</div>
+			}
 			<div class="card-footer-info">
 				<span class="text-muted">{ pc.T("languages.total_count", data.TotalLanguages) }</span>
 			</div>
 		} else {
-			<div class="card">
-				<div class="card-body">
+			@card.Card(card.Props{}) {
+				@card.Content() {
 					<div class="empty-state">
 						<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" x2="22" y1="12" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
 						<p>{ pc.T("languages.no_languages") }</p>
@@ -111,8 +113,8 @@ templ LanguagesListPage(pc *PageContext, data LanguagesListData) {
 							}
 						</div>
 					</div>
-				</div>
-			</div>
+				}
+			}
 		}
 	}
 }
@@ -126,20 +128,26 @@ templ LanguageRow(pc *PageContext, lang LanguageListItem) {
 		<td>
 			<span>{ lang.Name }</span>
 			if lang.IsDefault {
-				<span class="badge badge-primary">{ pc.T("languages.default") }</span>
+				@badge.Badge(badge.Props{}) {
+					{ pc.T("languages.default") }
+				}
 			}
 		</td>
 		<td>{ lang.NativeName }</td>
 		<td>
-			<span class={ languageDirectionBadgeClass(lang.Direction) }>
+			@badge.Badge(badge.Props{Class: languageDirectionBadgeClass(lang.Direction)}) {
 				{ strings.ToUpper(lang.Direction) }
-			</span>
+			}
 		</td>
 		<td>
 			if lang.IsActive {
-				<span class="badge badge-success">{ pc.T("label.active") }</span>
+				@badge.Badge(badge.Props{Class: "badge-success"}) {
+					{ pc.T("label.active") }
+				}
 			} else {
-				<span class="badge badge-secondary">{ pc.T("label.inactive") }</span>
+				@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+					{ pc.T("label.inactive") }
+				}
 			}
 		</td>
 		<td>{ fmt.Sprintf("%d", lang.Position) }</td>
@@ -210,8 +218,8 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 				{ pc.T("languages.back_to_languages") }
 			}
 		}
-		<div class="card">
-			<div class="card-body">
+		@card.Card(card.Props{}) {
+			@card.Content() {
 				<form method="POST" action={ languageFormAction(data) } class="form" x-data={ languageFormAlpineData(data) }>
 					if data.IsEdit {
 						<input type="hidden" name="_method" value="PUT"/>
@@ -386,8 +394,8 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 						}
 					</div>
 				</form>
-			</div>
-		</div>
+			}
+		}
 		if !data.IsEdit {
 			@languageFormScript()
 		}
@@ -422,9 +430,9 @@ templ languageFormScript() {
 
 func languageDirectionBadgeClass(direction string) string {
 	if direction == "rtl" {
-		return "badge badge-warning"
+		return "badge-warning"
 	}
-	return "badge badge-secondary"
+	return ""
 }
 
 func languageFormAction(data LanguageFormData) templ.SafeURL {

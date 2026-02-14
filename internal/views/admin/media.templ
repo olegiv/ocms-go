@@ -5,6 +5,7 @@ package admin
 
 import "fmt"
 import "github.com/olegiv/ocms-go/internal/views/components/button"
+import "github.com/olegiv/ocms-go/internal/views/components/card"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
 
 // =============================================================================
@@ -252,21 +253,21 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 					</div>
 				</div>
 				if len(data.Media) > 0 {
-					<div class="card">
+					@card.Card(card.Props{}) {
 						<div class="media-grid">
 							for _, item := range data.Media {
 								@mediaGridItem(pc, item)
 							}
 						</div>
 						if data.Pagination.ShouldShow() {
-							<div class="card-footer">
+							@card.Footer() {
 								@Pagination(pc, data.Pagination)
-							</div>
+							}
 						}
-					</div>
+					}
 				} else {
-					<div class="card">
-						<div class="card-body">
+					@card.Card(card.Props{}) {
+						@card.Content() {
 							<div class="empty-state media-empty">
 								@iconImagePlaceholderLarge()
 								<p>{ pc.T("media.no_media") }</p>
@@ -285,8 +286,8 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 									}
 								</div>
 							</div>
-						</div>
-					</div>
+						}
+					}
 				}
 			</main>
 		</div>
@@ -437,8 +438,8 @@ templ MediaUploadPage(pc *PageContext, data MediaUploadViewData) {
 				{ pc.T("media.back_to_library") }
 			}
 		}
-		<div class="card">
-			<div class="card-body">
+		@card.Card(card.Props{}) {
+			@card.Content() {
 				@csrfField()
 				<!-- Folder Selection -->
 				if len(data.Folders) > 0 {
@@ -454,8 +455,8 @@ templ MediaUploadPage(pc *PageContext, data MediaUploadViewData) {
 				}
 				<!-- Media Dropzone Component (Upload Mode) -->
 				@mediaDropzoneUpload(pc, data)
-			</div>
-		</div>
+			}
+		}
 	}
 }
 
@@ -566,7 +567,7 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 		}
 		<div class="media-edit-layout">
 			<!-- Preview Panel -->
-			<div class="card media-preview-panel">
+			@card.Card(card.Props{Class: "media-preview-panel"}) {
 				<div class="media-preview-container">
 					if data.Media.IsImage {
 						<img src={ data.Media.OriginalURL } alt={ data.Media.Alt } class="media-preview-image"/>
@@ -639,10 +640,10 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 						</form>
 					}
 				</div>
-			</div>
+			}
 			<!-- Edit Form Panel -->
-			<div class="card media-form-panel">
-				<div class="card-body">
+			@card.Card(card.Props{Class: "media-form-panel"}) {
+				@card.Content() {
 					<form action={ templ.SafeURL(fmt.Sprintf("/admin/media/%d", data.Media.ID)) } method="POST">
 						@csrfField()
 						<input type="hidden" name="_method" value="PUT"/>
@@ -717,12 +718,12 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 							}
 						</div>
 					</form>
-				</div>
-			</div>
+				}
+			}
 		</div>
 		<!-- Delete Section -->
-		<div class="card danger-zone" x-data="{ showConfirm: false }">
-			<div class="card-body">
+		@card.Card(card.Props{Class: "danger-zone", Attributes: templ.Attributes{"x-data": "{ showConfirm: false }"}}) {
+			@card.Content() {
 				<h3 class="danger-title">{ pc.T("media.danger_zone") }</h3>
 				<p class="danger-description">{ pc.T("media.danger_description") }</p>
 				@button.Button(button.Props{Variant: button.VariantDestructive, Type: button.TypeButton, Attributes: templ.Attributes{"@click": "showConfirm = true"}}) {
@@ -761,8 +762,8 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 						</div>
 					</div>
 				</div>
-			</div>
-		</div>
+			}
+		}
 		<script>
 		function copyMediaURL(btn) {
 			var url = btn.getAttribute('data-copy-url');
