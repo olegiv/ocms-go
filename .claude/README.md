@@ -11,7 +11,9 @@ This directory contains specialized AI agents and slash commands tailored for oC
 │   ├── db-manager.md
 │   ├── api-developer.md
 │   ├── module-developer.md
-│   └── security-auditor.md
+│   ├── security-auditor.md
+│   ├── code-quality-auditor.md
+│   └── frontend-developer.md
 ├── commands/            # Quick slash commands for common workflows
 │   ├── test.md
 │   ├── build.md
@@ -19,8 +21,10 @@ This directory contains specialized AI agents and slash commands tailored for oC
 │   ├── sqlc-generate.md
 │   ├── dev-server.md
 │   ├── api-test.md
-│   ├── security-scan.md
-│   └── clean.md
+│   ├── clean.md
+│   ├── commit-do.md
+│   ├── templui-add.md
+│   └── templui-list.md
 └── settings.local.json  # Local settings (gitignored)
 ```
 
@@ -59,6 +63,14 @@ Scans for vulnerabilities and ensures security best practices.
 - Reviews security configurations (CSRF, auth, rate limiting)
 - Creates audit reports in .audit/ directory
 
+### frontend-developer
+Creates and modifies admin UI components using templ and templUI.
+- Enforces templUI-first policy for all new components
+- Manages templUI CLI workflow (init, add, update, list)
+- Handles embedded asset integration (Tailwind CSS v4, JS, `//go:embed`)
+- Knows import path patterns and theme variable mappings
+- Guides JavaScript component integration into admin layout
+
 ## Commands
 
 Commands are quick, predefined workflows for common tasks.
@@ -87,6 +99,12 @@ Scan for security vulnerabilities.
 ### /clean
 Clean build artifacts and temp files.
 
+### /templui-add
+Add templUI components to the project. Handles CLI installation, `.templui.json` initialization, component download, Tailwind CSS source scanning, and post-install steps.
+
+### /templui-list
+List available templUI components or fetch documentation for a specific component. Shows installed vs available status.
+
 ## Usage
 
 ### Using Agents
@@ -103,6 +121,8 @@ Invoke agents with `@agent-name` followed by your task:
 @module-developer Create a notification module with email hooks
 
 @security-auditor Scan for vulnerabilities and create audit report
+
+@frontend-developer Build a confirmation dialog for page deletion using templUI
 ```
 
 ### Using Commands
@@ -125,6 +145,10 @@ Invoke commands with `/command-name`:
 /security-scan
 
 /clean
+
+/templui-list
+
+/templui-add button card
 ```
 
 ## When to Use Which
@@ -177,6 +201,21 @@ Invoke commands with `/command-name`:
 
 # Comprehensive security review
 @security-auditor Review all authentication flows and check for vulnerabilities
+```
+
+### templUI Workflow
+```
+# List available components
+/templui-list
+
+# Get docs for a specific component
+/templui-list datepicker
+
+# Add components to the project
+/templui-add button card dialog
+
+# Complex UI task using agent
+@frontend-developer Build a confirmation dialog for page deletion using templUI
 ```
 
 ## Customization
