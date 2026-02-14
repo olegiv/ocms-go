@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"github.com/olegiv/ocms-go/internal/views/components/alert"
 	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
@@ -374,10 +375,10 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 					</div>
 					if data.IsEdit && data.Language != nil && data.Language.IsDefault {
 						<div class="form-group form-group-full">
-							<div class="alert alert-info">
-								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
+							@alert.Alert(alert.Props{Class: "alert-info"}) {
+								@icon.Info(icon.Props{Size: 16})
 								<span>{ pc.T("languages.is_default_info") }</span>
-							</div>
+							}
 						</div>
 					}
 					<div class="form-actions">

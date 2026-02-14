@@ -5,6 +5,7 @@ package admin
 
 import "fmt"
 import "encoding/json"
+import "github.com/olegiv/ocms-go/internal/views/components/alert"
 import "github.com/olegiv/ocms-go/internal/views/components/button"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
 import "github.com/olegiv/ocms-go/internal/views/components/badge"
@@ -567,17 +568,17 @@ templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
 						</div>
 						<!-- Captcha field info -->
 						<template x-if="editingField && editingField.type === 'captcha'">
-							<div class="alert alert-info" style="margin-bottom: 1rem;">
+							@alert.Alert(alert.Props{Class: "alert-info mb-4"}) {
 								<strong>{ pc.T("forms.captcha_info_title") }</strong>
-								<p style="margin: 0.5rem 0 0 0;">{ pc.T("forms.captcha_info_text") }</p>
+								<p class="mt-2">{ pc.T("forms.captcha_info_text") }</p>
 								if !data.HcaptchaEnabled {
-									<div class="alert alert-warning" style="margin-top: 0.5rem; margin-bottom: 0;">
+									@alert.Alert(alert.Props{Class: "alert-warning mt-2 mb-0"}) {
 										<strong>{ pc.T("forms.captcha_warning_title") }</strong>
 										{ " " + pc.T("forms.captcha_warning_text") + " " }
 										<a href="/admin/hcaptcha">{ pc.T("forms.captcha_configure_link") }</a>
-									</div>
+									}
 								}
-							</div>
+							}
 						</template>
 						<div class="form-group" x-show="editingField && editingField.type !== 'captcha'">
 							<label class="checkbox-label">

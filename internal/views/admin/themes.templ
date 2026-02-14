@@ -5,6 +5,7 @@ package admin
 
 import (
 	"fmt"
+	"github.com/olegiv/ocms-go/internal/views/components/alert"
 	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
@@ -143,9 +144,9 @@ templ ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) {
 			<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/themes/%s/settings", data.ThemeName)) } class="p-6">
 				<input type="hidden" name="_method" value="PUT"/>
 				if data.IsDemoMode {
-					<div class="alert alert-warning" style="margin-bottom: 1.5rem;">
+					@alert.Alert(alert.Props{Class: "alert-warning mb-6"}) {
 						{ pc.T("themes.demo_readonly") }
-					</div>
+					}
 				}
 				if len(data.Settings) > 0 {
 					<div class="settings-grid">

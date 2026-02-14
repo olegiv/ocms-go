@@ -5,6 +5,7 @@ package admin
 
 import (
 	"fmt"
+	"github.com/olegiv/ocms-go/internal/views/components/alert"
 	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
@@ -91,10 +92,10 @@ templ CacheStatsPage(pc *PageContext, data CacheStatsViewData) {
 				</div>
 			</div>
 			if data.IsFallback {
-				<div class="alert alert-warning mt-3">
-					@iconWarning()
+				@alert.Alert(alert.Props{Class: "alert-warning mt-3"}) {
+					@icon.TriangleAlert(icon.Props{Size: 16})
 					<span>{ pc.T("cache.redis_failed") }</span>
-				</div>
+				}
 			}
 		</div>
 		<!-- Total Stats Summary -->
