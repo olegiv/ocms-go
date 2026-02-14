@@ -1,0 +1,54 @@
+# VCS / IDE / local assistant state
+.git/
+.idea/
+.vscode/
+.claude/
+.audit/
+
+# Dependencies, caches, temporary files
+node_modules/
+web/node_modules/
+.cache/
+.tmp/
+tmp/
+dist/
+build/
+coverage/
+*.out
+*.test
+
+# Runtime/dev artifacts
+data/
+uploads/
+logs/
+*.log
+*.pid
+*.db
+*.sqlite
+*.sqlite3
+
+# Build outputs
+bin/
+ocms
+
+# Generated frontend assets
+web/static/dist/
+web/static/css/admin-tw.css
+*.map
+
+# Generated Go code (source of truth: *.templ and SQL files)
+**/*_templ.go
+internal/store/*.sql.go
+internal/store/db.go
+
+# Secrets
+**/.env
+**/.env.*
+!**/.env.example
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
