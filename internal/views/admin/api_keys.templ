@@ -6,6 +6,7 @@ package admin
 import (
 	"fmt"
 	"time"
+	"github.com/olegiv/ocms-go/internal/views/components/alert"
 	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
@@ -275,12 +276,12 @@ templ apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) {
 	}
 	@card.Card(card.Props{}) {
 		@card.Content() {
-			<div class="alert alert-warning mb-6">
-				<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+			@alert.Alert(alert.Props{Class: "alert-warning mb-6"}) {
+				@icon.TriangleAlert(icon.Props{Size: 20})
 				<div>
 					<strong>{ pc.T("api_keys.important") }:</strong> { pc.T("api_keys.copy_warning") }
 				</div>
-			</div>
+			}
 			<div class="api-key-display">
 				<label class="form-label">{ pc.T("api_keys.your_key") }</label>
 				<div class="key-container" x-data="{ copied: false }">
