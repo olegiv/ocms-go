@@ -603,15 +603,16 @@ Code quality scanner for Go applications. Detects duplicate code, unhandled erro
 **Invoke:** `@code-quality-auditor` or use the `/code-quality` command
 
 ### frontend-developer
-Admin Dashboard UX developer. Creates and modifies admin UI components using templ and templUI.
+Admin Dashboard UX developer. Creates and modifies admin UI components using templ and templUI. Manages templUI CLI workflow (init, add, update, list) and handles embedded asset integration.
 
 **Usage examples:**
 - "Add a data table to the pages list"
 - "Create a modal dialog for confirmation"
 - "Add a dropdown menu to the toolbar"
 - "Build a stats card for the dashboard"
+- "Install templUI button and card components"
 
-**Invoke:** `@frontend-developer`
+**Invoke:** `@frontend-developer` or use `/templui-add` and `/templui-list` commands
 
 ## Claude Code Slash Commands
 
@@ -643,6 +644,12 @@ Scan the project for code quality issues including unhandled errors, duplicate c
 
 ### /commit-prepare
 Review changes and prepare a commit message. Runs `/code-quality` first and asks for confirmation if issues are found before proceeding with the commit message.
+
+### /templui-add
+Add templUI components to the project. Handles CLI installation, `.templui.json` initialization, component download, Tailwind CSS source scanning, and post-install steps (`templ generate`, `go mod tidy`, `make assets`).
+
+### /templui-list
+List available templUI components or fetch documentation for a specific component. Shows installed vs available status.
 
 ### /clean
 Clean build artifacts, compiled binaries, and development databases.
@@ -679,4 +686,10 @@ Deploy the application to Fly.io. Supports `--reset` (reset database), `--logs` 
 @security-auditor Scan for vulnerabilities and create an audit report
 
 /security-scan
+
+@frontend-developer Build a confirmation dialog for page deletion using templUI
+
+/templui-list
+
+/templui-add button card dialog
 ```
