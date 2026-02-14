@@ -10,6 +10,8 @@ import "encoding/json"
 import "github.com/olegiv/ocms-go/internal/views/components/button"
 import "github.com/olegiv/ocms-go/internal/views/components/card"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
+import "github.com/olegiv/ocms-go/internal/views/components/input"
+import "github.com/olegiv/ocms-go/internal/views/components/label"
 import "github.com/olegiv/ocms-go/internal/views/components/table"
 
 // WebhookListItemView represents a webhook in the list.
@@ -340,14 +342,18 @@ templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 					}
 					<!-- Name -->
 					<div>
-						<label for="name" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+						@label.Label(label.Props{For: "name", Class: "block mb-1"}) {
 							{ pc.T("webhooks.name") } <span class="text-red-500">*</span>
-						</label>
-						<input type="text" id="name" name="name"
-							class={ inputClass(data.Errors["name"]) }
-							value={ data.FormValues["name"] }
-							placeholder="e.g., Production Notification, Analytics Sync"
-							required autofocus maxlength="255"/>
+						}
+						@input.Input(input.Props{
+							ID:          "name",
+							Name:        "name",
+							Type:        input.TypeText,
+							Value:       data.FormValues["name"],
+							Placeholder: "e.g., Production Notification, Analytics Sync",
+							HasError:    data.Errors["name"] != "",
+							Attributes:  templ.Attributes{"required": true, "maxlength": "255", "autofocus": true},
+						})
 						if errMsg := data.Errors["name"]; errMsg != "" {
 							<p class="mt-1 text-sm text-red-600">{ errMsg }</p>
 						} else {
@@ -356,14 +362,18 @@ templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 					</div>
 					<!-- URL -->
 					<div>
-						<label for="url" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+						@label.Label(label.Props{For: "url", Class: "block mb-1"}) {
 							{ pc.T("webhooks.url") } <span class="text-red-500">*</span>
-						</label>
-						<input type="url" id="url" name="url"
-							class={ inputClass(data.Errors["url"]) }
-							value={ data.FormValues["url"] }
-							placeholder="https://example.com/webhook"
-							required maxlength="2048"/>
+						}
+						@input.Input(input.Props{
+							ID:          "url",
+							Name:        "url",
+							Type:        input.TypeURL,
+							Value:       data.FormValues["url"],
+							Placeholder: "https://example.com/webhook",
+							HasError:    data.Errors["url"] != "",
+							Attributes:  templ.Attributes{"required": true, "maxlength": "2048"},
+						})
 						if errMsg := data.Errors["url"]; errMsg != "" {
 							<p class="mt-1 text-sm text-red-600">{ errMsg }</p>
 						} else {
@@ -372,19 +382,21 @@ templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 					</div>
 					<!-- Secret -->
 					<div>
-						<label for="secret" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+						@label.Label(label.Props{For: "secret", Class: "block mb-1"}) {
 							{ pc.T("webhooks.secret") }
-						</label>
+						}
 						<div class="flex gap-1" x-data="{ showSecret: false, copied: false }">
-							<input :type="showSecret ? 'text' : 'password'" id="secret" name="secret"
-								class={ inputClass(data.Errors["secret"]) }
-								value={ data.FormValues["secret"] }
-								if data.IsEdit {
-									placeholder="Leave empty to keep existing"
-								} else {
-									placeholder="Auto-generated if empty"
-								}
-							/>
+							@input.Input(input.Props{
+								ID:        "secret",
+								Name:      "secret",
+								Value:     data.FormValues["secret"],
+								HasError:  data.Errors["secret"] != "",
+								NoTogglePassword: true,
+								Attributes: templ.Attributes{
+									":type":        "showSecret ? 'text' : 'password'",
+									"placeholder":  secretPlaceholder(data.IsEdit),
+								},
+							})
 							<button type="button" class="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700" @click="showSecret = !showSecret">
 								<span x-show="!showSecret">Show</span>
 								<span x-show="showSecret" x-cloak>Hide</span>
@@ -404,9 +416,9 @@ templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 					</div>
 					<!-- Events -->
 					<div>
-						<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+						@label.Label(label.Props{Class: "block mb-1"}) {
 							{ pc.T("webhooks.events") } <span class="text-red-500">*</span>
-						</label>
+						}
 						if errMsg := data.Errors["events"]; errMsg != "" {
 							<p class="mb-2 text-sm text-red-600">{ errMsg }</p>
 						}
@@ -472,7 +484,9 @@ templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 					</div>
 					<!-- Custom Headers -->
 					<div x-data={ fmt.Sprintf("{ headers: %s }", formHeadersJSON(data.FormHeaders)) }>
-						<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{ pc.T("webhooks.custom_headers") }</label>
+						@label.Label(label.Props{Class: "block mb-1"}) {
+							{ pc.T("webhooks.custom_headers") }
+						}
 						<p class="mb-2 text-xs text-gray-500">{ pc.T("webhooks.headers_hint") }</p>
 						<div class="space-y-2">
 							<template x-for="(value, key) in headers" :key="key">
@@ -518,7 +532,9 @@ templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 					<!-- Info (edit mode) -->
 					if data.IsEdit && data.CreatedAt != "" {
 						<div class="rounded-md bg-gray-50 p-4 dark:bg-gray-900">
-							<label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">{ pc.T("webhooks.info") }</label>
+							@label.Label(label.Props{Class: "block mb-2"}) {
+								{ pc.T("webhooks.info") }
+							}
 							<div class="grid grid-cols-2 gap-2 text-sm text-gray-600 dark:text-gray-400">
 								<span>{ pc.T("webhooks.created") }:</span><span>{ data.CreatedAt }</span>
 								<span>{ pc.T("webhooks.updated") }:</span><span>{ data.UpdatedAt }</span>
@@ -541,6 +557,13 @@ templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 			</div>
 		</div>
 	}
+}
+
+func secretPlaceholder(isEdit bool) string {
+	if isEdit {
+		return "Leave empty to keep existing"
+	}
+	return "Auto-generated if empty"
 }
 
 func webhookFormAction(data WebhookFormViewData) templ.SafeURL {

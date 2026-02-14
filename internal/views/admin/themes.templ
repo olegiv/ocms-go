@@ -10,6 +10,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
 )
 
 // ThemeViewItem holds data for a single theme in the list view.
@@ -152,9 +153,9 @@ templ ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) {
 					<div class="settings-grid">
 						for _, setting := range data.Settings {
 							<div class="form-group">
-								<label for={ setting.Key } class="form-label">
+								@label.Label(label.Props{For: setting.Key, Class: "block mb-1"}) {
 									{ pc.TDefault(fmt.Sprintf("theme_settings.%s", setting.Key), setting.Label) }
-								</label>
+								}
 								if setting.Type == "color" {
 									@themeSettingColor(pc, data, setting)
 								} else if setting.Type == "select" {

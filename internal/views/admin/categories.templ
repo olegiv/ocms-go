@@ -9,6 +9,8 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/input"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
@@ -222,20 +224,21 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 				<div class="form-grid">
 					<!-- Name -->
 					<div class="form-group">
-						<label for="name" class="form-label">
+						@label.Label(label.Props{For: "name", Class: "block mb-1"}) {
 							{ pc.T("label.name") } <span class="required">*</span>
-						</label>
-						<input
-							type="text"
-							id="name"
-							name="name"
-							class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["name"] != "") }
-							value={ categoryFormValue(data, "name") }
-							placeholder={ pc.T("categories.name_placeholder") }
-							required
-							maxlength="255"
-							@input="generateSlug($event.target.value)"
-						/>
+						}
+						@input.Input(input.Props{
+							ID: "name",
+							Name: "name",
+							Value: categoryFormValue(data, "name"),
+							Placeholder: pc.T("categories.name_placeholder"),
+							HasError: data.Errors["name"] != "",
+							Attributes: templ.Attributes{
+								"required": true,
+								"maxlength": "255",
+								"@input": "generateSlug($event.target.value)",
+							},
+						})
 						if data.Errors["name"] != "" {
 							<span class="form-error">{ data.Errors["name"] }</span>
 						} else {
@@ -244,20 +247,21 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 					</div>
 					<!-- Slug -->
 					<div class="form-group">
-						<label for="slug" class="form-label">
+						@label.Label(label.Props{For: "slug", Class: "block mb-1"}) {
 							{ pc.T("label.slug") } <span class="required">*</span>
-						</label>
-						<input
-							type="text"
-							id="slug"
-							name="slug"
-							class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["slug"] != "") }
-							value={ categoryFormValue(data, "slug") }
-							placeholder="category-slug"
-							x-model="slug"
-							@input="slugEdited = true"
-							maxlength="255"
-						/>
+						}
+						@input.Input(input.Props{
+							ID: "slug",
+							Name: "slug",
+							Value: categoryFormValue(data, "slug"),
+							Placeholder: "category-slug",
+							HasError: data.Errors["slug"] != "",
+							Attributes: templ.Attributes{
+								"maxlength": "255",
+								"x-model": "slug",
+								"@input": "slugEdited = true",
+							},
+						})
 						if data.Errors["slug"] != "" {
 							<span class="form-error">{ data.Errors["slug"] }</span>
 						} else {
@@ -267,7 +271,9 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 				</div>
 				<!-- Description -->
 				<div class="form-group">
-					<label for="description" class="form-label">{ pc.T("categories.description_label") }</label>
+					@label.Label(label.Props{For: "description", Class: "block mb-1"}) {
+						{ pc.T("categories.description_label") }
+					}
 					<textarea
 						id="description"
 						name="description"
@@ -284,7 +290,9 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 				<div class="form-grid">
 					<!-- Parent Category -->
 					<div class="form-group">
-						<label for="parent_id" class="form-label">{ pc.T("categories.parent_category") }</label>
+						@label.Label(label.Props{For: "parent_id", Class: "block mb-1"}) {
+							{ pc.T("categories.parent_category") }
+						}
 						<select
 							id="parent_id"
 							name="parent_id"
@@ -310,16 +318,20 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 					</div>
 					<!-- Position -->
 					<div class="form-group">
-						<label for="position" class="form-label">{ pc.T("label.position") }</label>
-						<input
-							type="number"
-							id="position"
-							name="position"
-							class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["position"] != "") }
-							value={ categoryFormValue(data, "position") }
-							min="0"
-							placeholder="0"
-						/>
+						@label.Label(label.Props{For: "position", Class: "block mb-1"}) {
+							{ pc.T("label.position") }
+						}
+						@input.Input(input.Props{
+							Type: input.TypeNumber,
+							ID: "position",
+							Name: "position",
+							Value: categoryFormValue(data, "position"),
+							Placeholder: "0",
+							HasError: data.Errors["position"] != "",
+							Attributes: templ.Attributes{
+								"min": "0",
+							},
+						})
 						if data.Errors["position"] != "" {
 							<span class="form-error">{ data.Errors["position"] }</span>
 						} else {
@@ -329,7 +341,9 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 					<!-- Language -->
 					if len(data.AllLanguages) > 1 {
 						<div class="form-group">
-							<label for="language_code" class="form-label">{ pc.T("label.language") }</label>
+							@label.Label(label.Props{For: "language_code", Class: "block mb-1"}) {
+								{ pc.T("label.language") }
+							}
 							<select
 								id="language_code"
 								name={ catLanguageFieldName(data.IsEdit) }

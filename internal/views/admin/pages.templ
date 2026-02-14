@@ -11,6 +11,8 @@ import "github.com/olegiv/ocms-go/internal/views/components/badge"
 import "github.com/olegiv/ocms-go/internal/views/components/button"
 import "github.com/olegiv/ocms-go/internal/views/components/card"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
+import "github.com/olegiv/ocms-go/internal/views/components/input"
+import "github.com/olegiv/ocms-go/internal/views/components/label"
 import "github.com/olegiv/ocms-go/internal/views/components/table"
 
 // =============================================================================
@@ -663,42 +665,38 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 				<div class="form-grid">
 					<!-- Title -->
 					<div class="form-group form-group-full">
-						<label for="title" class="form-label">
+						@label.Label(label.Props{For: "title", Class: "block mb-1"}) {
 							{ pc.T("label.title") } <span class="required">*</span>
-						</label>
-						<input
-							type="text"
-							id="title"
-							name="title"
-							class={ "form-input", templ.KV("is-invalid", data.Errors["title"] != "") }
-							value={ formVal(data.FormValues, "title", data.PageTitle) }
-							placeholder={ pc.T("hint.enter_page_title") }
-							required
-							maxlength="255"
-							@input="generateSlug($event.target.value)"
-						/>
+						}
+						@input.Input(input.Props{
+							ID:          "title",
+							Name:        "title",
+							Type:        input.TypeText,
+							Value:       formVal(data.FormValues, "title", data.PageTitle),
+							Placeholder: pc.T("hint.enter_page_title"),
+							HasError:    data.Errors["title"] != "",
+							Attributes:  templ.Attributes{"required": true, "maxlength": "255", "@input": "generateSlug($event.target.value)"},
+						})
 						if data.Errors["title"] != "" {
 							<span class="form-error">{ data.Errors["title"] }</span>
 						}
 					</div>
 					<!-- Slug -->
 					<div class="form-group">
-						<label for="slug" class="form-label">
+						@label.Label(label.Props{For: "slug", Class: "block mb-1"}) {
 							{ pc.T("label.slug") } <span class="required">*</span>
-						</label>
+						}
 						<div class="input-with-prefix">
 							<span class="input-prefix">/</span>
-							<input
-								type="text"
-								id="slug"
-								name="slug"
-								class={ "form-input", templ.KV("is-invalid", data.Errors["slug"] != "") }
-								value={ formVal(data.FormValues, "slug", data.PageSlug) }
-								placeholder={ pc.T("hint.page_slug") }
-								x-model="slug"
-								@input="slugEdited = true"
-								maxlength="255"
-							/>
+							@input.Input(input.Props{
+								ID:          "slug",
+								Name:        "slug",
+								Type:        input.TypeText,
+								Value:       formVal(data.FormValues, "slug", data.PageSlug),
+								Placeholder: pc.T("hint.page_slug"),
+								HasError:    data.Errors["slug"] != "",
+								Attributes:  templ.Attributes{"x-model": "slug", "@input": "slugEdited = true", "maxlength": "255"},
+							})
 						</div>
 						if data.Errors["slug"] != "" {
 							<span class="form-error">{ data.Errors["slug"] }</span>
@@ -708,7 +706,7 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 					</div>
 					<!-- Status -->
 					<div class="form-group">
-						<label for="status" class="form-label">{ pc.T("label.status") }</label>
+						@label.Label(label.Props{For: "status", Class: "block mb-1"}) { { pc.T("label.status") } }
 						if data.IsDemoMode && data.IsEdit && currentStatus(data.FormValues, data.PageStatus) == "published" {
 							<input type="hidden" name="status" value="published"/>
 							@badge.Badge(badge.Props{Class: "badge-success"}) { { pc.T("status.published") } }
@@ -740,7 +738,7 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 					</div>
 					<!-- Page Type -->
 					<div class="form-group">
-						<label for="page_type" class="form-label">{ pc.T("pages.page_type") }</label>
+						@label.Label(label.Props{For: "page_type", Class: "block mb-1"}) { { pc.T("pages.page_type") } }
 						<select
 							id="page_type"
 							name="page_type"
@@ -770,7 +768,7 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 					<!-- Language -->
 					if data.HasMultipleLanguages {
 						<div class="form-group">
-							<label for="language_code" class="form-label">{ pc.T("label.language") }</label>
+							@label.Label(label.Props{For: "language_code", Class: "block mb-1"}) { { pc.T("label.language") } }
 							<select
 								id="language_code"
 								name={ langSelectName(data.IsEdit) }
@@ -806,7 +804,7 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 					}
 					<!-- Body (TinyMCE Editor) -->
 					<div class="form-group form-group-full">
-						<label class="form-label">{ pc.T("label.content") }</label>
+						@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("label.content") } }
 						<div class="editor-container">
 							<textarea id="editor" name="body" class="tinymce-editor">
 								{ formVal(data.FormValues, "body", data.PageBody) }
@@ -826,7 +824,7 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 							data-mode="select"
 							data-initial-image={ featuredImageJSON(data.FeaturedImage) }
 						>
-							<label class="form-label">{ pc.T("media.featured_image") }</label>
+							@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("media.featured_image") } }
 							@mediaDropzoneSelectArea(pc)
 							<span class="form-hint">{ pc.T("media.featured_image_requirements") }</span>
 							@mediaDropzoneSelectModal(pc)
@@ -985,7 +983,7 @@ templ translationsPanel(pc *PageContext, data PageFormViewData) {
 
 templ tagSelector(pc *PageContext, tags []PageFormTagView) {
 	<div class="tag-selector" x-data="tagSelector()" x-init="init()" data-initial-tags={ tagsJSON(tags) }>
-		<label class="form-label">{ pc.T("tags.title") }</label>
+		@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("tags.title") } }
 		<!-- Selected Tags Display -->
 		<div class="selected-tags">
 			<template x-for="tag in selectedTags" :key="tag.id">
@@ -1047,7 +1045,7 @@ templ tagSelector(pc *PageContext, tags []PageFormTagView) {
 
 templ categorySelector(pc *PageContext, allCategories []PageCategoryNodeView, selectedCategories []PageFormCategoryView) {
 	<div class="category-selector" x-data="categorySelector()" data-initial-categories={ categoriesJSON(selectedCategories) }>
-		<label class="form-label">{ pc.T("categories.title") }</label>
+		@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("categories.title") } }
 		if len(allCategories) > 0 {
 			<div class="category-tree">
 				for _, cat := range allCategories {
@@ -1097,15 +1095,15 @@ templ aliasesSection(pc *PageContext, data PageFormViewData) {
 					<div class="alias-item">
 						<div class="input-with-prefix" style="flex: 1;">
 							<span class="input-prefix">/</span>
-							<input
-								type="text"
-								class="form-input"
-								x-model="alias.value"
-								name="aliases[]"
-								placeholder={ pc.T("pages.alias_placeholder") }
-								@input="validateAlias(index)"
-								maxlength="255"
-							/>
+							@input.Input(input.Props{
+								Name: "aliases[]",
+								Attributes: templ.Attributes{
+									"x-model":     "alias.value",
+									"placeholder":  pc.T("pages.alias_placeholder"),
+									"@input":      "validateAlias(index)",
+									"maxlength":   "255",
+								},
+							})
 						</div>
 						@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "removeAlias(index)", "title": pc.T("btn.remove")}}) {
 							@iconX14()
@@ -1146,18 +1144,15 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 		<div class="collapsible-content">
 			<!-- Meta Title -->
 			<div class="form-group" x-data="{ charCount: 0 }" x-init="charCount = $refs.metaTitleInput.value.length">
-				<label for="meta_title" class="form-label">{ pc.T("seo.meta_title") }</label>
-				<input
-					type="text"
-					id="meta_title"
-					name="meta_title"
-					class="form-input"
-					x-ref="metaTitleInput"
-					value={ formVal(data.FormValues, "meta_title", data.MetaTitle) }
-					placeholder={ pc.T("seo.meta_title_hint") }
-					maxlength="70"
-					@input="charCount = $event.target.value.length"
-				/>
+				@label.Label(label.Props{For: "meta_title", Class: "block mb-1"}) { { pc.T("seo.meta_title") } }
+				@input.Input(input.Props{
+					ID:          "meta_title",
+					Name:        "meta_title",
+					Type:        input.TypeText,
+					Value:       formVal(data.FormValues, "meta_title", data.MetaTitle),
+					Placeholder: pc.T("seo.meta_title_hint"),
+					Attributes:  templ.Attributes{"x-ref": "metaTitleInput", "maxlength": "70", "@input": "charCount = $event.target.value.length"},
+				})
 				<span class="form-hint">
 					<span x-text="charCount"></span>/60 { pc.T("seo.chars_recommended") }
 					<span x-show="charCount > 60" class="text-warning"> - { pc.T("seo.may_be_truncated") }</span>
@@ -1165,7 +1160,7 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 			</div>
 			<!-- Meta Description -->
 			<div class="form-group" x-data="{ charCount: 0 }" x-init="charCount = $refs.metaDescInput.value.length">
-				<label for="meta_description" class="form-label">{ pc.T("seo.meta_description") }</label>
+				@label.Label(label.Props{For: "meta_description", Class: "block mb-1"}) { { pc.T("seo.meta_description") } }
 				<textarea
 					id="meta_description"
 					name="meta_description"
@@ -1185,21 +1180,20 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 			</div>
 			<!-- Meta Keywords -->
 			<div class="form-group">
-				<label for="meta_keywords" class="form-label">{ pc.T("seo.meta_keywords") }</label>
-				<input
-					type="text"
-					id="meta_keywords"
-					name="meta_keywords"
-					class="form-input"
-					value={ formVal(data.FormValues, "meta_keywords", data.MetaKeywords) }
-					placeholder="keyword1, keyword2, keyword3"
-					maxlength="255"
-				/>
+				@label.Label(label.Props{For: "meta_keywords", Class: "block mb-1"}) { { pc.T("seo.meta_keywords") } }
+				@input.Input(input.Props{
+					ID:          "meta_keywords",
+					Name:        "meta_keywords",
+					Type:        input.TypeText,
+					Value:       formVal(data.FormValues, "meta_keywords", data.MetaKeywords),
+					Placeholder: "keyword1, keyword2, keyword3",
+					Attributes:  templ.Attributes{"maxlength": "255"},
+				})
 				<span class="form-hint">{ pc.T("seo.meta_keywords_hint") }</span>
 			</div>
 			<!-- OG Image -->
 			<div class="form-group">
-				<label class="form-label">{ pc.T("seo.og_image") }</label>
+				@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("seo.og_image") } }
 				<div class="media-picker" x-data={ ogImagePickerXData(data) }>
 					<input type="hidden" name="og_image_id" :value="selectedId"/>
 					<div class="media-picker-preview" x-show="selectedId">
@@ -1217,21 +1211,20 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 			</div>
 			<!-- Canonical URL -->
 			<div class="form-group">
-				<label for="canonical_url" class="form-label">{ pc.T("seo.canonical_url") }</label>
-				<input
-					type="url"
-					id="canonical_url"
-					name="canonical_url"
-					class="form-input"
-					value={ formVal(data.FormValues, "canonical_url", data.CanonicalURL) }
-					placeholder="https://example.com/original-page"
-					maxlength="2048"
-				/>
+				@label.Label(label.Props{For: "canonical_url", Class: "block mb-1"}) { { pc.T("seo.canonical_url") } }
+				@input.Input(input.Props{
+					ID:          "canonical_url",
+					Name:        "canonical_url",
+					Type:        input.TypeURL,
+					Value:       formVal(data.FormValues, "canonical_url", data.CanonicalURL),
+					Placeholder: "https://example.com/original-page",
+					Attributes:  templ.Attributes{"maxlength": "2048"},
+				})
 				<span class="form-hint">{ pc.T("seo.canonical_url_hint") }</span>
 			</div>
 			<!-- Robots Settings -->
 			<div class="form-group">
-				<label class="form-label">{ pc.T("seo.directives") }</label>
+				@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("seo.directives") } }
 				<div class="checkbox-group">
 					<label class="checkbox-label">
 						<input
@@ -1279,14 +1272,13 @@ templ schedulingSection(pc *PageContext, data PageFormViewData) {
 		</summary>
 		<div class="collapsible-content">
 			<div class="form-group">
-				<label for="scheduled_at" class="form-label">{ pc.T("schedule.datetime") }</label>
-				<input
-					type="datetime-local"
-					id="scheduled_at"
-					name="scheduled_at"
-					class="form-input"
-					value={ formVal(data.FormValues, "scheduled_at", data.ScheduledAt) }
-				/>
+				@label.Label(label.Props{For: "scheduled_at", Class: "block mb-1"}) { { pc.T("schedule.datetime") } }
+				@input.Input(input.Props{
+					ID:    "scheduled_at",
+					Name:  "scheduled_at",
+					Type:  input.TypeDateTime,
+					Value: formVal(data.FormValues, "scheduled_at", data.ScheduledAt),
+				})
 				<span class="form-hint">
 					{ pc.T("schedule.hint") }
 					if data.HasScheduledAt && data.ScheduledAtFmt != "" {
@@ -1370,7 +1362,11 @@ templ mediaDropzoneSelectModal(pc *PageContext) {
 			</div>
 			<div class="media-dropzone-modal-toolbar">
 				<div class="media-dropzone-modal-search">
-					<input type="text" placeholder={ pc.T("media.search_media") } x-model="searchQuery" @input.debounce.300ms="loadMedia()" class="form-input"/>
+					@input.Input(input.Props{
+						Type:        input.TypeText,
+						Placeholder: pc.T("media.search_media"),
+						Attributes:  templ.Attributes{"x-model": "searchQuery", "@input.debounce.300ms": "loadMedia()"},
+					})
 				</div>
 				<div class="media-dropzone-modal-filter">
 					<select x-model="filterType" @change="loadMedia()" class="form-select">
@@ -1463,16 +1459,27 @@ templ editorImageModal(pc *PageContext) {
 				</button>
 			</div>
 			<div class="editor-image-modal-toolbar">
-				<input type="text" id="editor-image-search" placeholder={ pc.T("media.search_media") } class="form-input"/>
+				@input.Input(input.Props{
+					ID:          "editor-image-search",
+					Type:        input.TypeText,
+					Placeholder: pc.T("media.search_media"),
+				})
 			</div>
 			<div class="editor-image-modal-content" id="editor-image-grid"></div>
 			<div id="editor-image-options" class="editor-image-options" style="display: none;">
 				<div class="form-group">
-					<label class="form-label">{ pc.T("editor.alt_text") } <span class="required">*</span></label>
-					<input type="text" id="editor-image-alt" class="form-input" maxlength="255" placeholder={ pc.T("media.alt_placeholder") }/>
+					@label.Label(label.Props{For: "editor-image-alt", Class: "block mb-1"}) {
+						{ pc.T("editor.alt_text") } <span class="required">*</span>
+					}
+					@input.Input(input.Props{
+						ID:          "editor-image-alt",
+						Type:        input.TypeText,
+						Placeholder: pc.T("media.alt_placeholder"),
+						Attributes:  templ.Attributes{"maxlength": "255"},
+					})
 				</div>
 				<div class="form-group">
-					<label class="form-label">{ pc.T("editor.image_size") }</label>
+					@label.Label(label.Props{For: "editor-image-size", Class: "block mb-1"}) { { pc.T("editor.image_size") } }
 					<select id="editor-image-size" class="form-select">
 						<option value="full">{ pc.T("editor.size_full") }</option>
 						<option value="medium" selected>{ pc.T("editor.size_medium") }</option>

@@ -11,6 +11,8 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/input"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
@@ -249,20 +251,21 @@ templ RedirectFormPage(pc *PageContext, data RedirectFormData) {
 					}
 					<div class="form-row">
 						<div class="form-group form-group-lg">
-							<label for="source_path" class="form-label">
+							@label.Label(label.Props{For: "source_path", Class: "block mb-1"}) {
 								{ pc.T("redirects.source_path") } <span class="required">*</span>
-							</label>
-							<input
-								type="text"
-								id="source_path"
-								name="source_path"
-								class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["source_path"] != "") }
-								value={ redirectFormValue(data, "source_path") }
-								placeholder="/old-page"
-								required
-								autofocus
-								maxlength="2048"
-							/>
+							}
+							@input.Input(input.Props{
+								ID: "source_path",
+								Name: "source_path",
+								Value: redirectFormValue(data, "source_path"),
+								Placeholder: "/old-page",
+								HasError: data.Errors["source_path"] != "",
+								Attributes: templ.Attributes{
+									"required": true,
+									"autofocus": true,
+									"maxlength": "2048",
+								},
+							})
 							if data.Errors["source_path"] != "" {
 								<span class="form-error">{ data.Errors["source_path"] }</span>
 							} else {
@@ -272,19 +275,20 @@ templ RedirectFormPage(pc *PageContext, data RedirectFormData) {
 					</div>
 					<div class="form-row">
 						<div class="form-group form-group-lg">
-							<label for="target_url" class="form-label">
+							@label.Label(label.Props{For: "target_url", Class: "block mb-1"}) {
 								{ pc.T("redirects.target_url") } <span class="required">*</span>
-							</label>
-							<input
-								type="text"
-								id="target_url"
-								name="target_url"
-								class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["target_url"] != "") }
-								value={ redirectFormValue(data, "target_url") }
-								placeholder="/new-page or https://example.com/page"
-								required
-								maxlength="2048"
-							/>
+							}
+							@input.Input(input.Props{
+								ID: "target_url",
+								Name: "target_url",
+								Value: redirectFormValue(data, "target_url"),
+								Placeholder: "/new-page or https://example.com/page",
+								HasError: data.Errors["target_url"] != "",
+								Attributes: templ.Attributes{
+									"required": true,
+									"maxlength": "2048",
+								},
+							})
 							if data.Errors["target_url"] != "" {
 								<span class="form-error">{ data.Errors["target_url"] }</span>
 							} else {
@@ -294,9 +298,9 @@ templ RedirectFormPage(pc *PageContext, data RedirectFormData) {
 					</div>
 					<div class="form-row form-row-2">
 						<div class="form-group">
-							<label for="status_code" class="form-label">
+							@label.Label(label.Props{For: "status_code", Class: "block mb-1"}) {
 								{ pc.T("redirects.status_code") } <span class="required">*</span>
-							</label>
+							}
 							<select
 								id="status_code"
 								name="status_code"
@@ -319,9 +323,9 @@ templ RedirectFormPage(pc *PageContext, data RedirectFormData) {
 							}
 						</div>
 						<div class="form-group">
-							<label for="target_type" class="form-label">
+							@label.Label(label.Props{For: "target_type", Class: "block mb-1"}) {
 								{ pc.T("redirects.target_type") }
-							</label>
+							}
 							<select
 								id="target_type"
 								name="target_type"
@@ -373,7 +377,9 @@ templ RedirectFormPage(pc *PageContext, data RedirectFormData) {
 					</div>
 					if data.IsEdit && data.Redirect != nil {
 						<div class="form-group">
-							<label class="form-label">{ pc.T("label.info") }</label>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("label.info") }
+							}
 							<div class="info-box">
 								<div class="info-row">
 									<span class="info-label">{ pc.T("label.created") }:</span>

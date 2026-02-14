@@ -7,6 +7,8 @@ import "fmt"
 import "github.com/olegiv/ocms-go/internal/views/components/button"
 import "github.com/olegiv/ocms-go/internal/views/components/card"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
+import "github.com/olegiv/ocms-go/internal/views/components/input"
+import "github.com/olegiv/ocms-go/internal/views/components/label"
 import "github.com/olegiv/ocms-go/internal/views/components/table"
 
 // SchedulerJobViewItem represents a system job in the scheduler list.
@@ -345,8 +347,14 @@ templ schedulerEditModal(pc *PageContext) {
 				<input type="hidden" name="source" id="editSource"/>
 				<input type="hidden" name="name" id="editName"/>
 				<div class="mb-4">
-					<label for="editScheduleInput" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{ pc.T("scheduler.cron_expression") }</label>
-					<input type="text" name="schedule" id="editScheduleInput" class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" required/>
+					@label.Label(label.Props{For: "editScheduleInput", Class: "block mb-1"}) {
+						{ pc.T("scheduler.cron_expression") }
+					}
+					@input.Input(input.Props{
+						ID:         "editScheduleInput",
+						Name:       "schedule",
+						Attributes: templ.Attributes{"required": true},
+					})
 					<p class="mt-1 text-xs text-gray-500">{ pc.T("scheduler.cron_help") }</p>
 					<div class="mt-2 rounded-md bg-gray-50 p-3 text-xs dark:bg-gray-900">
 						<div class="mb-1 font-semibold">{ pc.T("scheduler.quick_examples") }</div>
@@ -409,36 +417,43 @@ templ SchedulerTaskFormPage(pc *PageContext, data SchedulerTaskFormViewData) {
 				<form method="POST" action={ schedulerTaskFormAction(data) } class="space-y-6">
 					@csrfField()
 					<div>
-						<label for="name" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+						@label.Label(label.Props{For: "name", Class: "block mb-1"}) {
 							{ pc.T("scheduler.task_name") } <span class="text-red-500">*</span>
-						</label>
-						<input type="text" id="name" name="name"
-							class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-							value={ data.Name }
-							placeholder="e.g., Health Check, Cache Warmup"
-							required autofocus maxlength="255"/>
+						}
+						@input.Input(input.Props{
+							ID:          "name",
+							Name:        "name",
+							Value:       data.Name,
+							Placeholder: "e.g., Health Check, Cache Warmup",
+							Attributes:  templ.Attributes{"required": true, "autofocus": true, "maxlength": "255"},
+						})
 						<p class="mt-1 text-xs text-gray-500">{ pc.T("scheduler.task_name_hint") }</p>
 					</div>
 					<div>
-						<label for="url" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+						@label.Label(label.Props{For: "url", Class: "block mb-1"}) {
 							{ pc.T("scheduler.task_url") } <span class="text-red-500">*</span>
-						</label>
-						<input type="url" id="url" name="url"
-							class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-							value={ data.URL }
-							placeholder="https://example.com/api/health"
-							required maxlength="2048"/>
+						}
+						@input.Input(input.Props{
+							ID:          "url",
+							Name:        "url",
+							Type:        input.TypeURL,
+							Value:       data.URL,
+							Placeholder: "https://example.com/api/health",
+							Attributes:  templ.Attributes{"required": true, "maxlength": "2048"},
+						})
 						<p class="mt-1 text-xs text-gray-500">{ pc.T("scheduler.task_url_hint") }</p>
 					</div>
 					<div>
-						<label for="schedule" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+						@label.Label(label.Props{For: "schedule", Class: "block mb-1"}) {
 							{ pc.T("scheduler.task_schedule") } <span class="text-red-500">*</span>
-						</label>
-						<input type="text" id="schedule" name="schedule"
-							class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-							value={ data.Schedule }
-							placeholder="@every 5m"
-							required/>
+						}
+						@input.Input(input.Props{
+							ID:          "schedule",
+							Name:        "schedule",
+							Value:       data.Schedule,
+							Placeholder: "@every 5m",
+							Attributes:  templ.Attributes{"required": true},
+						})
 						<p class="mt-1 text-xs text-gray-500">{ pc.T("scheduler.task_schedule_hint") }</p>
 						<div class="mt-2 rounded-md bg-gray-50 p-3 text-xs dark:bg-gray-900">
 							<div class="mb-1 font-semibold">{ pc.T("scheduler.quick_examples") }</div>
@@ -453,13 +468,17 @@ templ SchedulerTaskFormPage(pc *PageContext, data SchedulerTaskFormViewData) {
 						</div>
 					</div>
 					<div>
-						<label for="timeout" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+						@label.Label(label.Props{For: "timeout", Class: "block mb-1"}) {
 							{ pc.T("scheduler.task_timeout") }
-						</label>
-						<input type="number" id="timeout" name="timeout"
-							class="w-48 rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-							value={ fmt.Sprint(data.TimeoutSeconds) }
-							min="1" max="300"/>
+						}
+						@input.Input(input.Props{
+							ID:         "timeout",
+							Name:       "timeout",
+							Type:       input.TypeNumber,
+							Value:      fmt.Sprint(data.TimeoutSeconds),
+							Class:      "w-48",
+							Attributes: templ.Attributes{"min": "1", "max": "300"},
+						})
 						<p class="mt-1 text-xs text-gray-500">{ pc.T("scheduler.task_timeout_hint") }</p>
 					</div>
 					<div class="flex items-center gap-3">
