@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOT'
+Usage:
+  ./scripts/codex-commands commit-prepare [quality|q]
+  ./scripts/codex-commands commit-do
+EOT
+}
+
+cmd="${1:-}"
+case "$cmd" in
+  commit-prepare)
+    shift || true
+    exec "$(dirname "$0")/codex/commit-prepare.sh" "${1:-}"
+    ;;
+  commit-do)
+    exec "$(dirname "$0")/codex/commit-do.sh"
+    ;;
+  ""|-h|--help)
+    usage
+    ;;
+  *)
+    echo "Unknown command: $cmd"
+    echo
+    usage
+    exit 1
+    ;;
+esac

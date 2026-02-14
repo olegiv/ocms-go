@@ -99,6 +99,12 @@ Scan for security vulnerabilities.
 ### /clean
 Clean build artifacts and temp files.
 
+### /commit-prepare
+Review changes and prepare a commit message draft.
+
+### /commit-do
+Create a commit with the prepared commit message.
+
 ### /templui-add
 Add templUI components to the project. Handles CLI installation, `.templui.json` initialization, component download, Tailwind CSS source scanning, and post-install steps.
 
@@ -146,9 +152,43 @@ Invoke commands with `/command-name`:
 
 /clean
 
+/commit-prepare
+
+/commit-do
+
 /templui-list
 
 /templui-add button card
+```
+
+### Using Codex-Compatible Command Wrapper
+
+If you are running in Codex, use the local wrapper that mirrors the
+Claude commit workflow:
+
+Note: Codex UI does not register these Claude slash commands, so typing
+`/commit-prepare` or `/commit-do` in Codex may show `No commands`.
+
+```bash
+./scripts/codex-commands commit-prepare [quality|q]
+./scripts/codex-commands commit-do
+
+# Equivalent Make targets:
+make commit-prepare
+make commit-do
+
+# Or ask Codex in chat to run them:
+run commit-prepare
+run commit-do
+```
+
+### Running Claude Command Directly from CLI
+
+You can also run the Claude slash-command workflow directly from shell:
+
+```bash
+claude -p "/commit-prepare" --dangerously-skip-permissions
+claude -p "/commit-do" --dangerously-skip-permissions
 ```
 
 ## When to Use Which

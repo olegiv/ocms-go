@@ -218,6 +218,8 @@ make run
 | `make migrate-status` | Show migration status |
 | `make migrate-create` | Create new migration file |
 | `make assets` | Install npm deps and compile SCSS |
+| `make commit-prepare` | Draft commit message to `.git/.codex/commit-message.txt` |
+| `make commit-do` | Create commit using prepared message |
 
 ### Default Admin Credentials
 
@@ -590,6 +592,17 @@ To update the shared Claude Code tools to the latest version:
 
 # Or manually
 git submodule update --remote --merge
+```
+
+If you are using Codex, Claude slash commands are not registered in the
+Codex UI and may show `No commands`. Use shell/make commands directly,
+or ask Codex in chat to run them.
+
+You can run commit slash-command equivalents through Claude CLI:
+
+```bash
+claude -p "/commit-prepare" --dangerously-skip-permissions
+claude -p "/commit-do" --dangerously-skip-permissions
 ```
 
 After updating, stage and commit the submodule change if you want to keep it:

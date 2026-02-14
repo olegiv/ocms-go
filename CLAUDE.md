@@ -37,6 +37,16 @@ make assets
 npm update                # Update htmx, alpine.js in package.json
 make assets               # Reinstall and copy to static/dist/js
 
+# Codex-compatible commit workflow
+make commit-prepare       # Draft message to .git/.codex/commit-message.txt
+make commit-do            # Commit using prepared message (no verify)
+# Codex note: /commit-prepare and /commit-do are not registered UI slash commands
+# and may show "No commands". Use make targets or ask in chat:
+# "run commit-prepare" / "run commit-do"
+# Run Claude slash command from CLI (non-interactive):
+claude -p "/commit-prepare" --dangerously-skip-permissions
+claude -p "/commit-do" --dangerously-skip-permissions
+
 # Database migrations
 make migrate-up          # Apply migrations
 make migrate-down        # Rollback
