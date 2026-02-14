@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
 )
 
@@ -67,7 +69,7 @@ templ RedirectsListPage(pc *PageContext, data RedirectsListData) {
 			}
 		}
 		if len(data.Redirects) > 0 {
-			<div class="card" id="redirects-table">
+			@card.Card(card.Props{ID: "redirects-table"}) {
 				<div class="table-responsive">
 					<table class="table">
 						<thead>
@@ -87,13 +89,13 @@ templ RedirectsListPage(pc *PageContext, data RedirectsListData) {
 						</tbody>
 					</table>
 				</div>
-			</div>
+			}
 			<div class="card-footer-info">
 				<span class="text-muted">{ pc.T("redirects.total_count", data.TotalCount) }</span>
 			</div>
 		} else {
-			<div class="card">
-				<div class="card-body">
+			@card.Card(card.Props{}) {
+				@card.Content() {
 					<div class="empty-state">
 						<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"></path><path d="M15 7h2a5 5 0 0 1 0 10h-2"></path><line x1="8" x2="16" y1="12" y2="12"></line></svg>
 						<p>{ pc.T("redirects.no_redirects") }</p>
@@ -104,8 +106,8 @@ templ RedirectsListPage(pc *PageContext, data RedirectsListData) {
 							}
 						</div>
 					</div>
-				</div>
-			</div>
+				}
+			}
 		}
 	}
 }
@@ -132,15 +134,25 @@ templ RedirectRow(pc *PageContext, redirect RedirectListItem) {
 			</div>
 		</td>
 		<td>
-			<span class={ statusCodeBadgeClass(redirect.StatusCode) }>
-				{ fmt.Sprintf("%d", redirect.StatusCode) }
-			</span>
+			if statusCodeBadgeClass(redirect.StatusCode) != "" {
+				@badge.Badge(badge.Props{Class: statusCodeBadgeClass(redirect.StatusCode)}) {
+					{ fmt.Sprintf("%d", redirect.StatusCode) }
+				}
+			} else {
+				@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+					{ fmt.Sprintf("%d", redirect.StatusCode) }
+				}
+			}
 		</td>
 		<td>
 			if redirect.TargetType == "_blank" {
-				<span class="badge badge-outline" title="Opens in new window">_blank</span>
+				@badge.Badge(badge.Props{Variant: badge.VariantOutline, Attributes: templ.Attributes{"title": "Opens in new window"}}) {
+					_blank
+				}
 			} else {
-				<span class="badge badge-muted">{ redirect.TargetType }</span>
+				@badge.Badge(badge.Props{Class: "badge-muted"}) {
+					{ redirect.TargetType }
+				}
 			}
 		</td>
 		<td>
@@ -228,8 +240,8 @@ templ RedirectFormPage(pc *PageContext, data RedirectFormData) {
 				}
 			}
 		}
-		<div class="card">
-			<div class="card-body">
+		@card.Card(card.Props{}) {
+			@card.Content() {
 				<form method="POST" action={ redirectFormAction(data) } class="form">
 					if data.IsEdit {
 						<input type="hidden" name="_method" value="PUT"/>
@@ -387,14 +399,16 @@ templ RedirectFormPage(pc *PageContext, data RedirectFormData) {
 						}
 					</div>
 				</form>
-			</div>
-		</div>
+			}
+		}
 		<!-- Help Section -->
-		<div class="card mt-4">
-			<div class="card-header">
-				<h3 class="card-title">{ pc.T("redirects.help_title") }</h3>
-			</div>
-			<div class="card-body">
+		@card.Card(card.Props{Class: "mt-4"}) {
+			@card.Header(card.HeaderProps{Class: "border-b pb-4"}) {
+				@card.Title() {
+					{ pc.T("redirects.help_title") }
+				}
+			}
+			@card.Content() {
 				<div class="help-section">
 					<h4>{ pc.T("redirects.help_wildcards_title") }</h4>
 					<p>{ pc.T("redirects.help_wildcards_desc") }</p>
@@ -419,8 +433,8 @@ templ RedirectFormPage(pc *PageContext, data RedirectFormData) {
 						<li><strong>_blank</strong> - { pc.T("redirects.help_target_blank") }</li>
 					</ul>
 				</div>
-			</div>
-		</div>
+			}
+		}
 	}
 }
 
@@ -494,11 +508,11 @@ func redirectCurrentTargetType(data RedirectFormData) string {
 func statusCodeBadgeClass(code int64) string {
 	switch code {
 	case 301:
-		return "badge badge-success"
+		return "badge-success"
 	case 302:
-		return "badge badge-warning"
+		return "badge-warning"
 	default:
-		return "badge badge-outline"
+		return ""
 	}
 }
 

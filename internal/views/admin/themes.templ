@@ -5,7 +5,9 @@ package admin
 
 import (
 	"fmt"
+	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
 )
 
@@ -105,15 +107,15 @@ templ ThemesListPage(pc *PageContext, data ThemesListData) {
 				}
 			</div>
 		} else {
-			<div class="card">
-				<div class="card-body">
+			@card.Card(card.Props{}) {
+				@card.Content() {
 					<div class="empty-state">
 						@iconThemePreviewPlaceholder()
 						<p>{ pc.T("themes.no_themes") }</p>
 						<span class="empty-hint">{ pc.T("themes.no_themes_hint") }</span>
 					</div>
-				</div>
-			</div>
+				}
+			}
 		}
 	}
 }
@@ -127,14 +129,18 @@ templ ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) {
 				{ pc.T("themes.back_to_themes") }
 			}
 		}
-		<div class="card">
-			<div class="card-header">
-				<h2 class="card-title">{ pc.T("themes.theme_settings") }</h2>
-				if data.IsActive {
-					<span class="badge badge-success">{ pc.T("themes.active_theme") }</span>
+		@card.Card(card.Props{}) {
+			@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
+				@card.Title() {
+					{ pc.T("themes.theme_settings") }
 				}
-			</div>
-			<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/themes/%s/settings", data.ThemeName)) } class="card-body">
+				if data.IsActive {
+					@badge.Badge(badge.Props{Class: "badge-success"}) {
+						{ pc.T("themes.active_theme") }
+					}
+				}
+			}
+			<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/themes/%s/settings", data.ThemeName)) } class="p-6">
 				<input type="hidden" name="_method" value="PUT"/>
 				if data.IsDemoMode {
 					<div class="alert alert-warning" style="margin-bottom: 1.5rem;">
@@ -182,7 +188,7 @@ templ ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) {
 					</div>
 				}
 			</form>
-		</div>
+		}
 		@themeSettingsScript(pc)
 		@themeSettingsStyle()
 	}

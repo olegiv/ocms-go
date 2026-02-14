@@ -6,7 +6,9 @@ package admin
 import (
 	"fmt"
 	"time"
+	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
 )
 
@@ -62,7 +64,7 @@ templ MenusListPage(pc *PageContext, data MenusListData) {
 			}
 		}
 		if len(data.Menus) > 0 {
-			<div class="card" id="menus-table">
+			@card.Card(card.Props{ID: "menus-table"}) {
 				<div class="table-responsive">
 					<table class="table">
 						<thead>
@@ -88,9 +90,13 @@ templ MenusListPage(pc *PageContext, data MenusListData) {
 									</td>
 									<td>
 										if menu.LanguageCode != "" {
-											<span class="badge badge-outline">{ menu.LanguageCode }</span>
+											@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+												{ menu.LanguageCode }
+											}
 										} else {
-											<span class="badge badge-muted">&mdash;</span>
+											@badge.Badge(badge.Props{Class: "badge-muted"}) {
+												&mdash;
+											}
 										}
 									</td>
 									<td>{ menu.UpdatedAt.Format("Jan 02, 2006") }</td>
@@ -102,7 +108,9 @@ templ MenusListPage(pc *PageContext, data MenusListData) {
 											if !menu.IsProtected {
 												@deleteMenuModal(pc, menu)
 											} else {
-												<span class="badge badge-muted" title={ pc.T("menus.protected") }>{ pc.T("menus.protected") }</span>
+												@badge.Badge(badge.Props{Class: "badge-muted", Attributes: templ.Attributes{"title": pc.T("menus.protected")}}) {
+													{ pc.T("menus.protected") }
+												}
 											}
 										</div>
 									</td>
@@ -111,10 +119,10 @@ templ MenusListPage(pc *PageContext, data MenusListData) {
 						</tbody>
 					</table>
 				</div>
-			</div>
+			}
 		} else {
-			<div class="card">
-				<div class="card-body">
+			@card.Card(card.Props{}) {
+				@card.Content() {
 					<div class="empty-state">
 						<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="6" y2="6"></line><line x1="3" x2="21" y1="12" y2="12"></line><line x1="3" x2="21" y1="18" y2="18"></line></svg>
 						<p>{ pc.T("menus.no_menus") }</p>
@@ -125,8 +133,8 @@ templ MenusListPage(pc *PageContext, data MenusListData) {
 							}
 						</div>
 					</div>
-				</div>
-			</div>
+				}
+			}
 		}
 	}
 }
@@ -180,15 +188,18 @@ templ MenuFormPage(pc *PageContext, data MenuFormData) {
 			}
 		}
 		<!-- Menu Settings Card -->
-		<div class="card mb-4">
-			<div class="card-header">
-				<h3 class="card-title">{ pc.T("menus.settings") }</h3>
-			</div>
-			<form
-				method="POST"
-				action={ menuFormAction(data) }
-				class="card-body"
-			>
+		@card.Card(card.Props{Class: "mb-4"}) {
+			@card.Header(card.HeaderProps{Class: "border-b pb-4"}) {
+				@card.Title() {
+					{ pc.T("menus.settings") }
+				}
+			}
+			@card.Content() {
+				<form
+					method="POST"
+					action={ menuFormAction(data) }
+					class="form"
+				>
 				if data.IsEdit {
 					<input type="hidden" name="_method" value="PUT"/>
 				}
@@ -265,7 +276,8 @@ templ MenuFormPage(pc *PageContext, data MenuFormData) {
 					}
 				</div>
 			</form>
-		</div>
+			}
+		}
 		if data.IsEdit && data.Menu != nil {
 			@menuBuilderSection(pc, data)
 		}
@@ -286,11 +298,13 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 		<div class="menu-builder-grid">
 			<!-- Left Panel: Add Items -->
 			<div class="menu-builder-panel">
-				<div class="card">
-					<div class="card-header">
-						<h3 class="card-title">{ pc.T("menus.add_items") }</h3>
-					</div>
-					<div class="card-body">
+				@card.Card(card.Props{}) {
+					@card.Header(card.HeaderProps{Class: "border-b pb-4"}) {
+						@card.Title() {
+							{ pc.T("menus.add_items") }
+						}
+					}
+					@card.Content() {
 						<!-- Add Custom Link -->
 						<div class="menu-add-section">
 							<h4 class="menu-add-title">{ pc.T("menus.custom_link") }</h4>
@@ -358,17 +372,19 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 								}
 							</div>
 						}
-					</div>
-				</div>
+					}
+				}
 			</div>
 			<!-- Right Panel: Menu Structure -->
 			<div class="menu-builder-panel menu-builder-main">
-				<div class="card">
-					<div class="card-header">
-						<h3 class="card-title">{ pc.T("menus.structure") }</h3>
+				@card.Card(card.Props{}) {
+					@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
+						@card.Title() {
+							{ pc.T("menus.structure") }
+						}
 						<span class="text-muted" x-show="hasChanges">{ pc.T("menus.unsaved_changes") }</span>
-					</div>
-					<div class="card-body">
+					}
+					@card.Content() {
 						<template x-if="items.length === 0">
 							<div class="menu-empty-state">
 								<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="6" y2="6"></line><line x1="3" x2="21" y1="12" y2="12"></line><line x1="3" x2="21" y1="18" y2="18"></line></svg>
@@ -452,8 +468,8 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 								<span x-show="saving">{ pc.T("menus.saving") }</span>
 							}
 						</div>
-					</div>
-				</div>
+					}
+				}
 			</div>
 		</div>
 		<!-- Edit Item Modal -->

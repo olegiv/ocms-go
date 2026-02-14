@@ -5,7 +5,9 @@ package admin
 
 import (
 	"fmt"
+	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
 )
 
@@ -68,7 +70,7 @@ templ CategoriesListPage(pc *PageContext, data CategoriesListData) {
 			}
 		}
 		if len(data.Categories) > 0 {
-			<div class="card" id="categories-table">
+			@card.Card(card.Props{ID: "categories-table"}) {
 				<div class="table-responsive">
 					<table class="table">
 						<thead>
@@ -103,7 +105,9 @@ templ CategoriesListPage(pc *PageContext, data CategoriesListData) {
 									</td>
 									<td>
 										if cat.LanguageCode != "" {
-											<span class="badge badge-outline">{ cat.LanguageCode }</span>
+											@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+												{ cat.LanguageCode }
+											}
 										} else {
 											<span class="text-muted">-</span>
 										}
@@ -116,7 +120,9 @@ templ CategoriesListPage(pc *PageContext, data CategoriesListData) {
 										}
 									</td>
 									<td>
-										<span class="badge badge-info">{ pc.T("categories.page_count", cat.UsageCount) }</span>
+										@badge.Badge(badge.Props{Class: "badge-info"}) {
+											{ pc.T("categories.page_count", cat.UsageCount) }
+										}
 									</td>
 									<td class="text-right">
 										<div class="action-buttons">
@@ -131,10 +137,10 @@ templ CategoriesListPage(pc *PageContext, data CategoriesListData) {
 						</tbody>
 					</table>
 				</div>
-			</div>
+			}
 		} else {
-			<div class="card">
-				<div class="card-body">
+			@card.Card(card.Props{}) {
+				@card.Content() {
 					<div class="empty-state">
 						<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
 						<p>{ pc.T("categories.no_categories") }</p>
@@ -145,8 +151,8 @@ templ CategoriesListPage(pc *PageContext, data CategoriesListData) {
 							}
 						</div>
 					</div>
-				</div>
-			</div>
+				}
+			}
 		}
 	}
 }
@@ -201,12 +207,12 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 				{ pc.T("categories.back_to_categories") }
 			}
 		}
-		<div class="card">
+		@card.Card(card.Props{}) {
 			<form
 				id="category-form"
 				method="POST"
 				action={ categoryFormAction(data) }
-				class="card-body"
+				class="p-6"
 				x-data={ categoryFormXData(data) }
 			>
 				if data.IsEdit {
@@ -368,7 +374,7 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 			if data.IsEdit && len(data.AllLanguages) > 1 {
 				@categoryTranslationsPanel(pc, data)
 			}
-		</div>
+		}
 		<script>
 		function categoryForm() {
 			return {

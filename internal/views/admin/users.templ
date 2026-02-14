@@ -8,6 +8,8 @@ import (
 	"time"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/badge"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
 )
 
 // UserListItem holds data for a user in the list view.
@@ -55,69 +57,73 @@ templ UsersListPage(pc *PageContext, data UsersListData) {
 			}
 		}
 		if len(data.Users) > 0 {
-			<div class="card" id="users-table">
-				<div class="table-responsive">
-					<table class="table">
-						<thead>
-							<tr>
-								<th>{ pc.T("label.name") }</th>
-								<th>{ pc.T("label.email") }</th>
-								<th>{ pc.T("label.role") }</th>
-								<th>{ pc.T("label.created_at") }</th>
-								<th>{ pc.T("users.last_login") }</th>
-								<th class="text-right">{ pc.T("label.actions") }</th>
-							</tr>
-						</thead>
-						<tbody>
-							for _, user := range data.Users {
-								<tr id={ fmt.Sprintf("user-row-%d", user.ID) }>
-									<td>
-										<div class="user-cell">
-											<div class="user-avatar-sm">{ string(user.Name[0]) }</div>
-											<span>{ user.Name }</span>
-											if user.IsCurrentUser {
-												<span class="badge badge-info">{ pc.T("users.you") }</span>
-											}
-										</div>
-									</td>
-									<td>{ user.Email }</td>
-									<td>
-										<span class={ "badge", roleBadgeClass(user.Role) }>
-											{ roleLabel(pc, user.Role) }
-										</span>
-									</td>
-									<td>{ user.CreatedAt.Format("Jan 02, 2006") }</td>
-									<td>
-										if user.LastLoginAt != nil {
-											{ user.LastLoginAt.Format("Jan 02, 2006 15:04") }
-										} else {
-											<span class="text-muted">{ pc.T("users.never") }</span>
-										}
-									</td>
-									<td class="text-right">
-										<div class="action-buttons">
-											@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/users/%d", user.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
-												@icon.Pencil(icon.Props{Size: 14})
-											}
-											if !user.IsCurrentUser {
-												@deleteUserModal(pc, user)
-											}
-										</div>
-									</td>
+			@card.Card(card.Props{ID: "users-table"}) {
+				@card.Content(card.ContentProps{Class: "p-0"}) {
+					<div class="table-responsive">
+						<table class="table">
+							<thead>
+								<tr>
+									<th>{ pc.T("label.name") }</th>
+									<th>{ pc.T("label.email") }</th>
+									<th>{ pc.T("label.role") }</th>
+									<th>{ pc.T("label.created_at") }</th>
+									<th>{ pc.T("users.last_login") }</th>
+									<th class="text-right">{ pc.T("label.actions") }</th>
 								</tr>
-							}
-						</tbody>
-					</table>
-				</div>
-				if data.Pagination.ShouldShow() {
-					<div class="card-footer">
-						@Pagination(pc, data.Pagination)
+							</thead>
+							<tbody>
+								for _, user := range data.Users {
+									<tr id={ fmt.Sprintf("user-row-%d", user.ID) }>
+										<td>
+											<div class="user-cell">
+												<div class="user-avatar-sm">{ string(user.Name[0]) }</div>
+												<span>{ user.Name }</span>
+												if user.IsCurrentUser {
+													@badge.Badge(badge.Props{Class: "badge-info"}) {
+														{ pc.T("users.you") }
+													}
+												}
+											</div>
+										</td>
+										<td>{ user.Email }</td>
+										<td>
+											@badge.Badge(badge.Props{Class: roleBadgeClass(user.Role)}) {
+												{ roleLabel(pc, user.Role) }
+											}
+										</td>
+										<td>{ user.CreatedAt.Format("Jan 02, 2006") }</td>
+										<td>
+											if user.LastLoginAt != nil {
+												{ user.LastLoginAt.Format("Jan 02, 2006 15:04") }
+											} else {
+												<span class="text-muted">{ pc.T("users.never") }</span>
+											}
+										</td>
+										<td class="text-right">
+											<div class="action-buttons">
+												@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/users/%d", user.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
+													@icon.Pencil(icon.Props{Size: 14})
+												}
+												if !user.IsCurrentUser {
+													@deleteUserModal(pc, user)
+												}
+											</div>
+										</td>
+									</tr>
+								}
+							</tbody>
+						</table>
 					</div>
 				}
-			</div>
+				if data.Pagination.ShouldShow() {
+					@card.Footer() {
+						@Pagination(pc, data.Pagination)
+					}
+				}
+			}
 		} else {
-			<div class="card">
-				<div class="card-body">
+			@card.Card() {
+				@card.Content() {
 					<div class="empty-state">
 						<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
 						<p>{ pc.T("users.no_users") }</p>
@@ -128,8 +134,8 @@ templ UsersListPage(pc *PageContext, data UsersListData) {
 							}
 						</div>
 					</div>
-				</div>
-			</div>
+				}
+			}
 		}
 	}
 }
@@ -178,12 +184,12 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 				{ pc.T("users.back_to_users") }
 			}
 		}
-		<div class="card">
+		@card.Card() {
 			<form
 				id="user-form"
 				method="POST"
 				action={ userFormAction(data) }
-				class="card-body"
+				class="p-6"
 			>
 				if data.IsEdit {
 					<input type="hidden" name="_method" value="PUT"/>
@@ -336,7 +342,7 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 					}
 				</div>
 			</form>
-		</div>
+		}
 	}
 }
 

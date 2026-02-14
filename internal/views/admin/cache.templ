@@ -5,7 +5,9 @@ package admin
 
 import (
 	"fmt"
+	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
 )
 
@@ -69,7 +71,9 @@ templ CacheStatsPage(pc *PageContext, data CacheStatsViewData) {
 							{ pc.T("cache.memory_cache") }
 						}
 						if data.IsFallback {
-							<span class="badge badge-warning ml-2">{ pc.T("cache.fallback") }</span>
+							@badge.Badge(badge.Props{Class: "badge-warning ml-2"}) {
+								{ pc.T("cache.fallback") }
+							}
 						}
 					</span>
 					<span class="backend-status">
@@ -133,11 +137,13 @@ templ CacheStatsPage(pc *PageContext, data CacheStatsViewData) {
 			</div>
 		</div>
 		<!-- Individual Cache Details -->
-		<div class="card">
-			<div class="card-header">
-				<h2 class="card-title">{ pc.T("cache.details") }</h2>
-			</div>
-			<div class="card-body">
+		@card.Card(card.Props{}) {
+			@card.Header(card.HeaderProps{Class: "border-b pb-4"}) {
+				@card.Title() {
+					{ pc.T("cache.details") }
+				}
+			}
+			@card.Content(card.ContentProps{}) {
 				<div class="table-responsive">
 					<table class="table">
 						<thead>
@@ -157,14 +163,16 @@ templ CacheStatsPage(pc *PageContext, data CacheStatsViewData) {
 						</tbody>
 					</table>
 				</div>
-			</div>
-		</div>
+			}
+		}
 		<!-- Cache Info -->
-		<div class="card mt-6">
-			<div class="card-header">
-				<h2 class="card-title">{ pc.T("cache.info_title") }</h2>
-			</div>
-			<div class="card-body">
+		@card.Card(card.Props{Class: "mt-6"}) {
+			@card.Header(card.HeaderProps{Class: "border-b pb-4"}) {
+				@card.Title() {
+					{ pc.T("cache.info_title") }
+				}
+			}
+			@card.Content(card.ContentProps{}) {
 				<div class="info-grid">
 					if data.IsRedis {
 						<div class="info-item">
@@ -198,8 +206,8 @@ templ CacheStatsPage(pc *PageContext, data CacheStatsViewData) {
 						<p>{ pc.T("cache.translations_description") }</p>
 					</div>
 				</div>
-			</div>
-		</div>
+			}
+		}
 	}
 }
 
@@ -223,11 +231,17 @@ templ cacheRow(pc *PageContext, c CacheItemView) {
 		<td>{ fmt.Sprintf("%d", c.Misses) }</td>
 		<td>
 			if c.HitRate > 80.0 {
-				<span class="badge badge-success">{ fmt.Sprintf("%.1f%%", c.HitRate) }</span>
+				@badge.Badge(badge.Props{Class: "badge-success"}) {
+					{ fmt.Sprintf("%.1f%%", c.HitRate) }
+				}
 			} else if c.HitRate > 50.0 {
-				<span class="badge badge-warning">{ fmt.Sprintf("%.1f%%", c.HitRate) }</span>
+				@badge.Badge(badge.Props{Class: "badge-warning"}) {
+					{ fmt.Sprintf("%.1f%%", c.HitRate) }
+				}
 			} else {
-				<span class="badge badge-muted">{ fmt.Sprintf("%.1f%%", c.HitRate) }</span>
+				@badge.Badge(badge.Props{Class: "badge-muted"}) {
+					{ fmt.Sprintf("%.1f%%", c.HitRate) }
+				}
 			}
 		</td>
 		<td>
