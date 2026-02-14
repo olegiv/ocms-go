@@ -3,7 +3,13 @@
 
 package admin
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/olegiv/ocms-go/internal/views/components/badge"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/components/icon"
+)
 
 // DashboardData holds the data for the dashboard page.
 type DashboardData struct {
@@ -66,54 +72,55 @@ type TranslationCoverage struct {
 
 // ActivityItem holds activity log data.
 type ActivityItem struct {
-	Category string
-	Level    string
-	Message  string
-	UserName string
-	TimeAgo  string
+	Category  string
+	Level     string
+	Message   string
+	UserName  string
+	TimeAgo   string
 	CreatedAt string
 }
 
 // DashboardPage renders the admin dashboard.
 templ DashboardPage(pc *PageContext, data DashboardData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
+		<!-- Page header -->
+		<div class="flex items-center justify-between mb-6">
 			<div>
-				<h1 class="page-title">{ pc.T("dashboard.title") }</h1>
-				<p class="page-description">{ pc.T("dashboard.welcome", pc.User.Name) }</p>
+				<h1 class="text-2xl font-bold text-foreground">{ pc.T("dashboard.title") }</h1>
+				<p class="text-sm text-muted-foreground mt-1">{ pc.T("dashboard.welcome", pc.User.Name) }</p>
 			</div>
-			<div class="page-actions">
-				<a href="/admin/pages/new" class="btn btn-primary">
-					@iconPlus()
+			<div>
+				@button.Button(button.Props{Href: "/admin/pages/new"}) {
+					@icon.Plus(icon.Props{Size: 16})
 					{ pc.T("pages.new") }
-				</a>
+				}
 			</div>
 		</div>
 		<!-- Primary stats -->
-		<div class="stats-grid">
-			@statCard("/admin/pages", pc.T("dashboard.total_pages"), fmt.Sprintf("%d", data.Stats.TotalPages), "stat-icon-blue", iconStatPages())
-			@statCard("/admin/pages?status=published", pc.T("dashboard.published_pages"), fmt.Sprintf("%d", data.Stats.PublishedPages), "stat-icon-green", iconStatPublished())
-			@statCard("/admin/pages?status=draft", pc.T("dashboard.draft_pages"), fmt.Sprintf("%d", data.Stats.DraftPages), "stat-icon-yellow", iconStatDraft())
-			@statCard("/admin/users", pc.T("dashboard.total_users"), fmt.Sprintf("%d", data.Stats.TotalUsers), "stat-icon-purple", iconStatUsers())
+		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+			@dashStatCard("/admin/pages", pc.T("dashboard.total_pages"), fmt.Sprintf("%d", data.Stats.TotalPages), "bg-blue-500/10 text-blue-500", icon.FileText)
+			@dashStatCard("/admin/pages?status=published", pc.T("dashboard.published_pages"), fmt.Sprintf("%d", data.Stats.PublishedPages), "bg-green-500/10 text-green-500", icon.CircleCheck)
+			@dashStatCard("/admin/pages?status=draft", pc.T("dashboard.draft_pages"), fmt.Sprintf("%d", data.Stats.DraftPages), "bg-yellow-500/10 text-yellow-500", icon.PenLine)
+			@dashStatCard("/admin/users", pc.T("dashboard.total_users"), fmt.Sprintf("%d", data.Stats.TotalUsers), "bg-purple-500/10 text-purple-500", icon.Users)
 		</div>
 		<!-- Secondary stats -->
-		<div class="stats-grid stats-grid-secondary">
-			@statCard("/admin/media", pc.T("dashboard.media_files"), fmt.Sprintf("%d", data.Stats.TotalMedia), "stat-icon-cyan", iconStatMedia())
-			@statCard("/admin/forms", pc.T("dashboard.total_forms"), fmt.Sprintf("%d", data.Stats.TotalForms), "stat-icon-indigo", iconStatForms())
+		<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+			@dashStatCard("/admin/media", pc.T("dashboard.media_files"), fmt.Sprintf("%d", data.Stats.TotalMedia), "bg-cyan-500/10 text-cyan-500", icon.Image)
+			@dashStatCard("/admin/forms", pc.T("dashboard.total_forms"), fmt.Sprintf("%d", data.Stats.TotalForms), "bg-indigo-500/10 text-indigo-500", icon.SquareCheck)
 			if data.Stats.UnreadSubmissions > 0 {
-				@statCardHighlight("/admin/forms", pc.T("dashboard.unread_submissions"), fmt.Sprintf("%d", data.Stats.UnreadSubmissions), "stat-icon-orange", iconStatSubmissions())
+				@dashStatCardHighlight("/admin/forms", pc.T("dashboard.unread_submissions"), fmt.Sprintf("%d", data.Stats.UnreadSubmissions), "bg-orange-500/10 text-orange-500", icon.Mail)
 			} else {
-				@statCard("/admin/forms", pc.T("dashboard.unread_submissions"), fmt.Sprintf("%d", data.Stats.UnreadSubmissions), "stat-icon-orange", iconStatSubmissions())
+				@dashStatCard("/admin/forms", pc.T("dashboard.unread_submissions"), fmt.Sprintf("%d", data.Stats.UnreadSubmissions), "bg-orange-500/10 text-orange-500", icon.Mail)
 			}
 		</div>
 		<!-- Tertiary stats -->
-		<div class="stats-grid stats-grid-tertiary">
-			@statCard("/admin/languages", pc.T("dashboard.languages"), fmt.Sprintf("%d", data.Stats.ActiveLanguages), "stat-icon-teal", iconStatLanguages())
-			@statCard("/admin/cache", pc.T("dashboard.cache_hit_rate"), fmt.Sprintf("%.0f%%", data.Stats.CacheHitRate), "stat-icon-emerald", iconStatCacheRate())
-			@statCard("/admin/cache", pc.T("dashboard.cache_items"), fmt.Sprintf("%d", data.Stats.CacheItems), "stat-icon-rose", iconStatCacheItems())
+		<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+			@dashStatCard("/admin/languages", pc.T("dashboard.languages"), fmt.Sprintf("%d", data.Stats.ActiveLanguages), "bg-teal-500/10 text-teal-500", icon.Languages)
+			@dashStatCard("/admin/cache", pc.T("dashboard.cache_hit_rate"), fmt.Sprintf("%.0f%%", data.Stats.CacheHitRate), "bg-emerald-500/10 text-emerald-500", icon.Gauge)
+			@dashStatCard("/admin/cache", pc.T("dashboard.cache_items"), fmt.Sprintf("%d", data.Stats.CacheItems), "bg-rose-500/10 text-rose-500", icon.Database)
 		</div>
 		<!-- Dashboard grid: activity + submissions + webhooks + quick actions -->
-		<div class="dashboard-grid">
+		<div class="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
 			@recentActivityCard(pc, data)
 			@recentSubmissionsCard(pc, data)
 			if data.Stats.TotalWebhooks > 0 {
@@ -130,316 +137,344 @@ templ DashboardPage(pc *PageContext, data DashboardData) {
 	}
 }
 
-// statCard renders a dashboard stat card with link.
-templ statCard(href string, label string, value string, iconClass string, icon templ.Component) {
-	<a href={ templ.SafeURL(href) } class="stat-card stat-card-link">
-		<div class={ "stat-icon " + iconClass }>
-			@icon
-		</div>
-		<div class="stat-content">
-			<div class="stat-label">{ label }</div>
-			<div class="stat-value">{ value }</div>
-		</div>
+// dashStatCard renders a dashboard stat card with link.
+templ dashStatCard(href string, label string, value string, iconClass string, ic func(...icon.Props) templ.Component) {
+	<a href={ templ.SafeURL(href) } class="no-underline text-inherit">
+		@card.Card(card.Props{Class: "transition-all hover:shadow-md hover:-translate-y-0.5"}) {
+			@card.Content(card.ContentProps{Class: "flex items-center gap-4 p-5"}) {
+				<div class={ "flex items-center justify-center w-12 h-12 rounded-lg shrink-0 " + iconClass }>
+					@ic(icon.Props{Size: 24})
+				</div>
+				<div class="min-w-0">
+					<div class="text-sm font-medium text-muted-foreground">{ label }</div>
+					<div class="text-2xl font-bold text-foreground mt-1">{ value }</div>
+				</div>
+			}
+		}
 	</a>
 }
 
-// statCardHighlight renders a highlighted stat card.
-templ statCardHighlight(href string, label string, value string, iconClass string, icon templ.Component) {
-	<a href={ templ.SafeURL(href) } class="stat-card stat-card-link stat-card-highlight">
-		<div class={ "stat-icon " + iconClass }>
-			@icon
-		</div>
-		<div class="stat-content">
-			<div class="stat-label">{ label }</div>
-			<div class="stat-value">{ value }</div>
-		</div>
+// dashStatCardHighlight renders a highlighted stat card.
+templ dashStatCardHighlight(href string, label string, value string, iconClass string, ic func(...icon.Props) templ.Component) {
+	<a href={ templ.SafeURL(href) } class="no-underline text-inherit">
+		@card.Card(card.Props{Class: "transition-all hover:shadow-md hover:-translate-y-0.5 border-warning shadow-[0_0_0_1px_rgba(234,179,8,0.2)]"}) {
+			@card.Content(card.ContentProps{Class: "flex items-center gap-4 p-5"}) {
+				<div class={ "flex items-center justify-center w-12 h-12 rounded-lg shrink-0 " + iconClass }>
+					@ic(icon.Props{Size: 24})
+				</div>
+				<div class="min-w-0">
+					<div class="text-sm font-medium text-muted-foreground">{ label }</div>
+					<div class="text-2xl font-bold text-foreground mt-1">{ value }</div>
+				</div>
+			}
+		}
 	</a>
 }
 
 templ recentActivityCard(pc *PageContext, data DashboardData) {
-	<div class="card">
-		<div class="card-header">
-			<h2 class="card-title">{ pc.T("dashboard.recent_activity") }</h2>
-			if len(data.RecentActivity) > 0 {
-				<a href="/admin/events" class="btn btn-sm btn-outline">{ pc.T("dashboard.view_all_events") }</a>
+	@card.Card() {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
+			@card.Title() {
+				{ pc.T("dashboard.recent_activity") }
 			}
-		</div>
-		<div class="card-body">
 			if len(data.RecentActivity) > 0 {
-				<div class="activity-timeline">
+				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: "/admin/events"}) {
+					{ pc.T("dashboard.view_all_events") }
+				}
+			}
+		}
+		@card.Content() {
+			if len(data.RecentActivity) > 0 {
+				<div class="flex flex-col">
 					for _, item := range data.RecentActivity {
-						<div class={ "activity-item activity-level-" + item.Level }>
-							<div class={ "activity-icon activity-icon-" + item.Category }>
-								@activityIcon(item.Category)
+						<div class={ "flex items-start gap-3 p-3 mb-2 last:mb-0 rounded-r-md bg-muted/50 hover:bg-muted transition-colors border-l-[3px] " + activityBorderClass(item.Level) }>
+							<div class={ "flex items-center justify-center w-8 h-8 rounded-md shrink-0 " + activityIconBgClass(item.Category) }>
+								@activityIconComponent(item.Category)
 							</div>
-							<div class="activity-content">
-								<div class="activity-message">{ item.Message }</div>
-								<div class="activity-meta">
+							<div class="flex-1 min-w-0">
+								<div class="text-sm text-foreground leading-snug break-words">{ item.Message }</div>
+								<div class="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
 									if item.UserName != "" {
-										<span class="activity-user">{ item.UserName }</span>
+										<span class="font-medium after:content-['·'] after:ml-2 after:text-muted-foreground/50">{ item.UserName }</span>
 									} else {
-										<span class="activity-user activity-system">{ pc.T("dashboard.system_action") }</span>
+										<span class="font-medium italic text-muted-foreground/70 after:content-['·'] after:ml-2 after:text-muted-foreground/50">{ pc.T("dashboard.system_action") }</span>
 									}
-									<span class="activity-time" title={ item.CreatedAt }>{ item.TimeAgo }</span>
+									<span title={ item.CreatedAt }>{ item.TimeAgo }</span>
 								</div>
 							</div>
-							<span class={ "activity-badge badge-" + item.Level }>{ pc.T("activity.category." + item.Category) }</span>
+							@activityLevelBadge(pc, item)
 						</div>
 					}
 				</div>
 			} else {
-				<div class="empty-state">
-					<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path><path d="m15 5 3 3"></path></svg>
-					<p>{ pc.T("dashboard.no_activity") }</p>
-					<span class="empty-hint">{ pc.T("dashboard.activity_hint") }</span>
+				<div class="text-center py-8 px-4">
+					@icon.PenLine(icon.Props{Size: 48, Class: "mx-auto mb-3 text-muted-foreground/30"})
+					<p class="text-base font-medium text-muted-foreground">{ pc.T("dashboard.no_activity") }</p>
+					<span class="block mt-2 text-sm text-muted-foreground/60">{ pc.T("dashboard.activity_hint") }</span>
 				</div>
 			}
-		</div>
-	</div>
+		}
+	}
 }
 
 templ recentSubmissionsCard(pc *PageContext, data DashboardData) {
-	<div class="card">
-		<div class="card-header">
-			<h2 class="card-title">{ pc.T("dashboard.recent_submissions") }</h2>
-			if len(data.RecentSubmissions) > 0 {
-				<a href="/admin/forms" class="btn btn-sm btn-outline">{ pc.T("dashboard.view_all_forms") }</a>
+	@card.Card() {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
+			@card.Title() {
+				{ pc.T("dashboard.recent_submissions") }
 			}
-		</div>
-		<div class="card-body">
 			if len(data.RecentSubmissions) > 0 {
-				<div class="submissions-list">
+				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: "/admin/forms"}) {
+					{ pc.T("dashboard.view_all_forms") }
+				}
+			}
+		}
+		@card.Content() {
+			if len(data.RecentSubmissions) > 0 {
+				<div class="flex flex-col gap-2">
 					for _, sub := range data.RecentSubmissions {
 						<a
 							href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/%d", sub.FormID, sub.ID)) }
-							class={ templ.KV("submission-item", true), templ.KV("submission-unread", !sub.IsRead) }
+							class={ "flex justify-between items-center p-3 rounded-md no-underline transition-colors",
+								submissionBgClass(sub.IsRead) }
 						>
-							<div class="submission-info">
-								<span class="submission-form">{ sub.FormName }</span>
-								<span class="submission-time">{ sub.CreatedAt }</span>
+							<div class="flex flex-col gap-1">
+								<span class="font-medium text-foreground">{ sub.FormName }</span>
+								<span class="text-xs text-muted-foreground">{ sub.CreatedAt }</span>
 							</div>
 							if !sub.IsRead {
-								<span class="badge badge-primary">{ pc.T("label.new") }</span>
+								@badge.Badge(badge.Props{}) {
+									{ pc.T("label.new") }
+								}
 							}
 						</a>
 					}
 				</div>
 			} else {
-				<div class="empty-state">
-					<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-					<p>{ pc.T("dashboard.no_submissions") }</p>
-					<span class="empty-hint">{ pc.T("dashboard.submissions_hint") }</span>
+				<div class="text-center py-8 px-4">
+					@icon.Mail(icon.Props{Size: 48, Class: "mx-auto mb-3 text-muted-foreground/30"})
+					<p class="text-base font-medium text-muted-foreground">{ pc.T("dashboard.no_submissions") }</p>
+					<span class="block mt-2 text-sm text-muted-foreground/60">{ pc.T("dashboard.submissions_hint") }</span>
 				</div>
 			}
-		</div>
-	</div>
+		}
+	}
 }
 
 templ webhookHealthCard(pc *PageContext, data DashboardData) {
-	<div class="card">
-		<div class="card-header">
-			<h2 class="card-title">{ pc.T("dashboard.webhook_health") }</h2>
-			<a href="/admin/webhooks" class="btn btn-sm btn-outline">{ pc.T("dashboard.view_webhooks") }</a>
-		</div>
-		<div class="card-body">
+	@card.Card() {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
+			@card.Title() {
+				{ pc.T("dashboard.webhook_health") }
+			}
+			@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: "/admin/webhooks"}) {
+				{ pc.T("dashboard.view_webhooks") }
+			}
+		}
+		@card.Content() {
 			if len(data.WebhookHealth) > 0 {
-				<div class="webhook-health-list">
+				<div class="flex flex-col gap-2">
 					for _, wh := range data.WebhookHealth {
-						<div class="webhook-health-item">
-							<div class="webhook-health-info">
-								<div class={ "webhook-health-indicator health-" + wh.HealthStatus } title={ fmt.Sprintf("%.1f%%", wh.SuccessRate) }>
-									<span class="health-dot"></span>
+						<div class="flex justify-between items-center p-2 rounded-md bg-muted/50">
+							<div class="flex items-center gap-2">
+								<div title={ fmt.Sprintf("%.1f%%", wh.SuccessRate) }>
+									<span class={ "inline-block w-2 h-2 rounded-full " + healthDotClass(wh.HealthStatus) }></span>
 								</div>
-								<span class="webhook-name">{ wh.Name }</span>
+								<span class="font-medium text-foreground">{ wh.Name }</span>
 								if !wh.IsActive {
-									<span class="badge badge-secondary badge-sm">{ pc.T("webhooks.inactive") }</span>
+									@badge.Badge(badge.Props{Variant: badge.VariantSecondary, Class: "text-[0.65rem] py-0 px-1"}) {
+										{ pc.T("webhooks.inactive") }
+									}
 								}
 							</div>
-							<span class="webhook-rate text-muted">{ fmt.Sprintf("%.0f%%", wh.SuccessRate) }</span>
+							<span class="text-xs text-muted-foreground">{ fmt.Sprintf("%.0f%%", wh.SuccessRate) }</span>
 						</div>
 					}
 				</div>
 				if data.Stats.FailedDeliveries24h > 0 {
-					<div class="webhook-alert">
-						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+					<div class="flex items-center gap-2 mt-3 p-2 bg-destructive/10 rounded-md text-destructive text-sm">
+						@icon.CircleAlert(icon.Props{Size: 16})
 						<span>{ fmt.Sprintf("%d", data.Stats.FailedDeliveries24h) } { pc.T("dashboard.failed_deliveries_24h") }</span>
 					</div>
 				}
 			} else {
-				<div class="empty-state-sm">
-					<p class="text-muted">{ pc.T("dashboard.no_webhook_activity") }</p>
+				<div class="text-center py-4">
+					<p class="text-muted-foreground">{ pc.T("dashboard.no_webhook_activity") }</p>
 				</div>
 			}
-		</div>
-	</div>
+		}
+	}
 }
 
 templ quickActionsCard(pc *PageContext) {
-	<div class="card">
-		<div class="card-header">
-			<h2 class="card-title">{ pc.T("dashboard.quick_actions") }</h2>
-		</div>
-		<div class="card-body">
-			<div class="quick-actions">
-				@quickAction("/admin/pages/new", pc.T("dashboard.create_page"), iconQACreatePage())
-				@quickAction("/admin/media/upload", pc.T("dashboard.upload_media"), iconQAUploadMedia())
-				@quickAction("/admin/forms/new", pc.T("dashboard.create_form"), iconQACreateForm())
-				@quickAction("/admin/menus", pc.T("dashboard.manage_menus"), iconQAMenus())
-				@quickAction("/admin/users/new", pc.T("dashboard.add_user"), iconQAAddUser())
-				@quickAction("/admin/export", pc.T("dashboard.export_content"), iconQAExport())
-				@quickAction("/admin/import", pc.T("dashboard.import_content"), iconQAImport())
-				@quickAction("/admin/config", pc.T("nav.settings"), iconQASettings())
+	@card.Card() {
+		@card.Header(card.HeaderProps{Class: "border-b pb-4"}) {
+			@card.Title() {
+				{ pc.T("dashboard.quick_actions") }
+			}
+		}
+		@card.Content() {
+			<div class="grid grid-cols-2 gap-3">
+				@dashQuickAction("/admin/pages/new", pc.T("dashboard.create_page"), icon.FilePlus)
+				@dashQuickAction("/admin/media/upload", pc.T("dashboard.upload_media"), icon.Upload)
+				@dashQuickAction("/admin/forms/new", pc.T("dashboard.create_form"), icon.SquareCheck)
+				@dashQuickAction("/admin/menus", pc.T("dashboard.manage_menus"), icon.Menu)
+				@dashQuickAction("/admin/users/new", pc.T("dashboard.add_user"), icon.UserPlus)
+				@dashQuickAction("/admin/export", pc.T("dashboard.export_content"), icon.Download)
+				@dashQuickAction("/admin/import", pc.T("dashboard.import_content"), icon.Upload)
+				@dashQuickAction("/admin/config", pc.T("nav.settings"), icon.Settings)
 			</div>
-		</div>
-	</div>
+		}
+	}
 }
 
 templ translationCoverageCard(pc *PageContext, data DashboardData) {
-	<div class="card">
-		<div class="card-header">
-			<h2 class="card-title">{ pc.T("dashboard.translation_coverage") }</h2>
-			<a href="/admin/languages" class="btn btn-sm btn-outline">{ pc.T("dashboard.manage_languages") }</a>
-		</div>
-		<div class="card-body">
-			<div class="translation-coverage-list">
+	@card.Card() {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
+			@card.Title() {
+				{ pc.T("dashboard.translation_coverage") }
+			}
+			@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: "/admin/languages"}) {
+				{ pc.T("dashboard.manage_languages") }
+			}
+		}
+		@card.Content() {
+			<div class="flex flex-col gap-2">
 				for _, tc := range data.TranslationCoverage {
-					<div class="translation-coverage-item">
-						<div class="translation-coverage-info">
-							<span class="language-code">{ tc.LanguageCode }</span>
-							<span class="language-name">{ pc.T("lang." + tc.LanguageCode) }</span>
+					<div class="flex justify-between items-center p-3 rounded-md bg-muted/50">
+						<div class="flex items-center gap-2">
+							<span class="font-mono font-semibold text-xs uppercase px-1 py-0.5 bg-muted rounded-sm">{ tc.LanguageCode }</span>
+							<span class="font-medium text-foreground">{ pc.T("lang." + tc.LanguageCode) }</span>
 							if tc.IsDefault {
-								<span class="badge badge-primary badge-sm">{ pc.T("languages.default") }</span>
+								@badge.Badge(badge.Props{Class: "text-[0.65rem] py-0 px-1"}) {
+									{ pc.T("languages.default") }
+								}
 							}
 						</div>
-						<span class="translation-count">{ fmt.Sprintf("%d", tc.TotalPages) } { pc.T("dashboard.pages_count") }</span>
+						<span class="text-sm text-muted-foreground">{ fmt.Sprintf("%d", tc.TotalPages) } { pc.T("dashboard.pages_count") }</span>
 					</div>
 				}
 			</div>
-		</div>
-	</div>
+		}
+	}
 }
 
 templ failedDeliveriesCard(pc *PageContext, data DashboardData) {
-	<div class="card">
-		<div class="card-header">
-			<h2 class="card-title">{ pc.T("dashboard.recent_failed_deliveries") }</h2>
-			<a href="/admin/webhooks" class="btn btn-sm btn-outline">{ pc.T("dashboard.view_webhooks") }</a>
-		</div>
-		<div class="card-body">
-			<div class="failed-deliveries-list">
+	@card.Card() {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
+			@card.Title() {
+				{ pc.T("dashboard.recent_failed_deliveries") }
+			}
+			@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: "/admin/webhooks"}) {
+				{ pc.T("dashboard.view_webhooks") }
+			}
+		}
+		@card.Content() {
+			<div class="flex flex-col gap-2">
 				for _, fd := range data.RecentFailedDeliveries {
-					<a href={ templ.SafeURL(fmt.Sprintf("/admin/webhooks/%d/deliveries", fd.WebhookID)) } class="failed-delivery-item">
-						<div class="failed-delivery-info">
-							<span class="webhook-name">{ fd.WebhookName }</span>
-							<span class="event-type">{ fd.Event }</span>
+					<a href={ templ.SafeURL(fmt.Sprintf("/admin/webhooks/%d/deliveries", fd.WebhookID)) } class="flex justify-between items-center p-3 rounded-md bg-muted/50 no-underline transition-colors hover:bg-muted border-l-[3px] border-l-destructive">
+						<div class="flex flex-col gap-1">
+							<span class="font-medium text-foreground">{ fd.WebhookName }</span>
+							<span class="text-xs text-muted-foreground font-mono">{ fd.Event }</span>
 						</div>
-						<div class="failed-delivery-meta">
-							<span class="badge badge-danger badge-sm">{ fd.Status }</span>
-							<span class="delivery-time">{ fd.CreatedAt }</span>
+						<div class="flex items-center gap-2">
+							@badge.Badge(badge.Props{Variant: badge.VariantDestructive, Class: "text-[0.65rem] py-0 px-1"}) {
+								{ fd.Status }
+							}
+							<span class="text-xs text-muted-foreground">{ fd.CreatedAt }</span>
 						</div>
 					</a>
 				}
 			</div>
-		</div>
-	</div>
-}
-
-templ quickAction(href string, label string, icon templ.Component) {
-	<a href={ templ.SafeURL(href) } class="quick-action">
-		@icon
-		<span>{ label }</span>
-	</a>
-}
-
-templ activityIcon(category string) {
-	switch category {
-		case "auth":
-			<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-		case "page":
-			<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg>
-		case "user":
-			<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-		case "config":
-			<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-		case "cache":
-			<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"></path></svg>
-		default:
-			<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
+		}
 	}
 }
 
-// Dashboard stat icons (24x24)
-
-templ iconStatPages() {
-	<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>
+templ dashQuickAction(href string, label string, ic func(...icon.Props) templ.Component) {
+	<a href={ templ.SafeURL(href) } class="flex flex-col items-center gap-2 p-4 bg-muted/50 rounded-md text-muted-foreground text-center no-underline transition-all hover:bg-primary hover:text-primary-foreground group">
+		@ic(icon.Props{Size: 20, Class: "text-muted-foreground group-hover:text-primary-foreground transition-colors"})
+		<span class="text-sm font-medium">{ label }</span>
+	</a>
 }
 
-templ iconStatPublished() {
-	<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+// Helper functions for conditional classes.
+
+func activityBorderClass(level string) string {
+	switch level {
+	case "info":
+		return "border-l-blue-500"
+	case "warning":
+		return "border-l-yellow-500"
+	case "error":
+		return "border-l-red-500"
+	default:
+		return "border-l-border"
+	}
 }
 
-templ iconStatDraft() {
-	<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+func activityIconBgClass(category string) string {
+	switch category {
+	case "auth":
+		return "bg-purple-500/10 text-purple-500"
+	case "page":
+		return "bg-blue-500/10 text-blue-500"
+	case "user":
+		return "bg-green-500/10 text-green-500"
+	case "config":
+		return "bg-yellow-500/10 text-yellow-500"
+	case "cache":
+		return "bg-cyan-500/10 text-cyan-500"
+	default:
+		return "bg-muted text-muted-foreground"
+	}
 }
 
-templ iconStatUsers() {
-	<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+templ activityIconComponent(category string) {
+	switch category {
+		case "auth":
+			@icon.Lock(icon.Props{Size: 16})
+		case "page":
+			@icon.FileText(icon.Props{Size: 16})
+		case "user":
+			@icon.Users(icon.Props{Size: 16})
+		case "config":
+			@icon.Settings(icon.Props{Size: 16})
+		case "cache":
+			@icon.Database(icon.Props{Size: 16})
+		default:
+			@icon.Info(icon.Props{Size: 16})
+	}
 }
 
-templ iconStatMedia() {
-	<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg>
+templ activityLevelBadge(pc *PageContext, item ActivityItem) {
+	switch item.Level {
+		case "info":
+			<span class="text-[0.65rem] px-2 py-0.5 rounded-full font-medium uppercase tracking-wide shrink-0 self-start bg-blue-500/10 text-blue-600">{ pc.T("activity.category." + item.Category) }</span>
+		case "warning":
+			<span class="text-[0.65rem] px-2 py-0.5 rounded-full font-medium uppercase tracking-wide shrink-0 self-start bg-yellow-500/10 text-yellow-600">{ pc.T("activity.category." + item.Category) }</span>
+		case "error":
+			<span class="text-[0.65rem] px-2 py-0.5 rounded-full font-medium uppercase tracking-wide shrink-0 self-start bg-red-500/10 text-red-600">{ pc.T("activity.category." + item.Category) }</span>
+		default:
+			<span class="text-[0.65rem] px-2 py-0.5 rounded-full font-medium uppercase tracking-wide shrink-0 self-start bg-muted text-muted-foreground">{ pc.T("activity.category." + item.Category) }</span>
+	}
 }
 
-templ iconStatForms() {
-	<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+func submissionBgClass(isRead bool) string {
+	if !isRead {
+		return "bg-primary/5 border-l-[3px] border-l-primary"
+	}
+	return "bg-muted/50 hover:bg-muted"
 }
 
-templ iconStatSubmissions() {
-	<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-}
-
-templ iconStatLanguages() {
-	<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" x2="22" y1="12" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-}
-
-templ iconStatCacheRate() {
-	<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 0 1 9-9"></path></svg>
-}
-
-templ iconStatCacheItems() {
-	<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"></path></svg>
-}
-
-// Quick action icons (20x20)
-
-templ iconQACreatePage() {
-	<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M12 18v-6"></path><path d="M9 15h6"></path></svg>
-}
-
-templ iconQAUploadMedia() {
-	<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" x2="12" y1="3" y2="15"></line></svg>
-}
-
-templ iconQACreateForm() {
-	<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
-}
-
-templ iconQAMenus() {
-	<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="6" y2="6"></line><line x1="3" x2="21" y1="12" y2="12"></line><line x1="3" x2="21" y1="18" y2="18"></line></svg>
-}
-
-templ iconQAAddUser() {
-	<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" x2="19" y1="8" y2="14"></line><line x1="22" x2="16" y1="11" y2="11"></line></svg>
-}
-
-templ iconQAExport() {
-	<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>
-}
-
-templ iconQAImport() {
-	<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" x2="12" y1="3" y2="15"></line></svg>
-}
-
-templ iconQASettings() {
-	<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+func healthDotClass(status string) string {
+	switch status {
+	case "green":
+		return "bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.4)]"
+	case "yellow":
+		return "bg-yellow-500 shadow-[0_0_4px_rgba(234,179,8,0.4)]"
+	case "red":
+		return "bg-red-500 shadow-[0_0_4px_rgba(239,68,68,0.4)]"
+	default:
+		return "bg-muted-foreground"
+	}
 }

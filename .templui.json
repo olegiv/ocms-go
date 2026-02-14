@@ -1,0 +1,7 @@
+{
+  "componentsDir": "internal/views/components",
+  "utilsDir": "internal/views/utils",
+  "moduleName": "github.com/olegiv/ocms-go",
+  "jsDir": "web/static/dist/js",
+  "jsPublicPath": "/static/dist/js"
+}

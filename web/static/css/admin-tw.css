@@ -2,6 +2,7 @@
 
 @source "../../templates/**/*.html";
 @source "../../../internal/views/**/*.templ";
+@source "../../../internal/views/components/**/*.templ";
 
 @custom-variant dark (&:is(.dark *));
 
