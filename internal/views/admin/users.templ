@@ -96,9 +96,9 @@ templ UsersListPage(pc *PageContext, data UsersListData) {
 									</td>
 									<td class="text-right">
 										<div class="action-buttons">
-											<a href={ templ.SafeURL(fmt.Sprintf("/admin/users/%d", user.ID)) } class="btn btn-sm btn-outline" title={ pc.T("btn.edit") }>
-												@iconEdit()
-											</a>
+											@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/users/%d", user.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
+												@icon.Pencil(icon.Props{Size: 14})
+											}
 											if !user.IsCurrentUser {
 												@deleteUserModal(pc, user)
 											}
@@ -123,7 +123,9 @@ templ UsersListPage(pc *PageContext, data UsersListData) {
 						<p>{ pc.T("users.no_users") }</p>
 						<span class="empty-hint">{ pc.T("users.create_first_hint") }</span>
 						<div class="empty-state-action">
-							<a href="/admin/users/new" class="btn btn-primary">{ pc.T("users.add_user") }</a>
+							@button.Button(button.Props{Href: "/admin/users/new"}) {
+								{ pc.T("users.add_user") }
+							}
 						</div>
 					</div>
 				</div>
@@ -134,14 +136,9 @@ templ UsersListPage(pc *PageContext, data UsersListData) {
 
 templ deleteUserModal(pc *PageContext, user UserListItem) {
 	<div x-data="{ showConfirm: false }" class="delete-action">
-		<button
-			type="button"
-			class="btn btn-sm btn-danger"
-			title={ pc.T("btn.delete") }
-			@click="showConfirm = true"
-		>
-			@iconDelete()
-		</button>
+		@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"title": pc.T("btn.delete"), "@click": "showConfirm = true"}}) {
+			@icon.Trash2(icon.Props{Size: 14})
+		}
 		<div
 			class="modal-overlay"
 			x-show="showConfirm"
@@ -160,17 +157,12 @@ templ deleteUserModal(pc *PageContext, user UserListItem) {
 					<p class="text-muted">{ pc.T("users.delete_warning") }</p>
 				</div>
 				<div class="modal-footer">
-					<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
-					<button
-						type="button"
-						class="btn btn-danger"
-						hx-delete={ fmt.Sprintf("/admin/users/%d", user.ID) }
-						hx-target={ fmt.Sprintf("#user-row-%d", user.ID) }
-						hx-swap="outerHTML"
-						@click="showConfirm = false"
-					>
+					@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "showConfirm = false"}}) {
+						{ pc.T("btn.cancel") }
+					}
+					@button.Button(button.Props{Variant: button.VariantDestructive, Attributes: templ.Attributes{"hx-delete": fmt.Sprintf("/admin/users/%d", user.ID), "hx-target": fmt.Sprintf("#user-row-%d", user.ID), "hx-swap": "outerHTML", "@click": "showConfirm = false"}}) {
 						{ pc.T("users.delete_user") }
-					</button>
+					}
 				</div>
 			</div>
 		</div>
@@ -330,16 +322,18 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 					</div>
 				</div>
 				<div class="form-actions">
-					<button type="submit" class="btn btn-primary">
+					@button.Button(button.Props{Type: button.TypeSubmit}) {
 						if data.IsEdit {
-							@iconSave()
+							@icon.Save(icon.Props{Size: 16})
 							{ pc.T("users.update") }
 						} else {
-							@iconUsers()
+							@icon.Users(icon.Props{Size: 16})
 							{ pc.T("users.create") }
 						}
-					</button>
-					<a href="/admin/users" class="btn btn-outline">{ pc.T("btn.cancel") }</a>
+					}
+					@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/users"}) {
+						{ pc.T("btn.cancel") }
+					}
 				</div>
 			</form>
 		</div>

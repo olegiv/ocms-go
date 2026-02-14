@@ -3,7 +3,10 @@
 
 package admin
 
-import "github.com/olegiv/ocms-go/internal/i18n"
+import (
+	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+)
 
 // LoginData holds data for the login page.
 type LoginData struct {
@@ -102,9 +105,9 @@ templ LoginPage(d LoginData) {
 							@templ.Raw(d.HcaptchaWidget)
 						</div>
 					}
-					<button type="submit" class="btn btn-primary btn-block">
+					@button.Button(button.Props{Type: button.TypeSubmit, FullWidth: true}) {
 						{ d.T("auth.login") }
-					</button>
+					}
 				</form>
 			</div>
 		</div>

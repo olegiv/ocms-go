@@ -99,7 +99,9 @@ templ RedirectsListPage(pc *PageContext, data RedirectsListData) {
 						<p>{ pc.T("redirects.no_redirects") }</p>
 						<span class="empty-hint">{ pc.T("redirects.no_redirects_hint") }</span>
 						<div class="empty-state-action">
-							<a href="/admin/redirects/new" class="btn btn-primary">{ pc.T("redirects.create") }</a>
+							@button.Button(button.Props{Href: "/admin/redirects/new"}) {
+								{ pc.T("redirects.create") }
+							}
 						</div>
 					</div>
 				</div>
@@ -161,9 +163,9 @@ templ RedirectRow(pc *PageContext, redirect RedirectListItem) {
 		</td>
 		<td class="text-right">
 			<div class="action-buttons">
-				<a href={ templ.SafeURL(fmt.Sprintf("/admin/redirects/%d", redirect.ID)) } class="btn btn-sm btn-outline" title={ pc.T("btn.edit") }>
-					@iconEdit()
-				</a>
+				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/redirects/%d", redirect.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
+					@icon.Pencil(icon.Props{Size: 14})
+				}
 				@deleteRedirectModal(pc, redirect)
 			</div>
 		</td>
@@ -172,14 +174,9 @@ templ RedirectRow(pc *PageContext, redirect RedirectListItem) {
 
 templ deleteRedirectModal(pc *PageContext, redirect RedirectListItem) {
 	<div x-data="{ showConfirm: false }" class="delete-action">
-		<button
-			type="button"
-			class="btn btn-sm btn-danger"
-			title={ pc.T("btn.delete") }
-			@click="showConfirm = true"
-		>
-			@iconDelete()
-		</button>
+		@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"title": pc.T("btn.delete"), "@click": "showConfirm = true"}}) {
+			@icon.Trash2(icon.Props{Size: 14})
+		}
 		<div
 			class="modal-overlay"
 			x-show="showConfirm"
@@ -201,17 +198,12 @@ templ deleteRedirectModal(pc *PageContext, redirect RedirectListItem) {
 					<p class="text-muted">{ pc.T("label.action_cannot_undone") }</p>
 				</div>
 				<div class="modal-footer">
-					<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
-					<button
-						type="button"
-						class="btn btn-danger"
-						hx-delete={ fmt.Sprintf("/admin/redirects/%d", redirect.ID) }
-						hx-target={ fmt.Sprintf("#redirect-row-%d", redirect.ID) }
-						hx-swap="outerHTML"
-						@click="showConfirm = false"
-					>
+					@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "showConfirm = false"}}) {
+						{ pc.T("btn.cancel") }
+					}
+					@button.Button(button.Props{Variant: button.VariantDestructive, Attributes: templ.Attributes{"hx-delete": fmt.Sprintf("/admin/redirects/%d", redirect.ID), "hx-target": fmt.Sprintf("#redirect-row-%d", redirect.ID), "hx-swap": "outerHTML", "@click": "showConfirm = false"}}) {
 						{ pc.T("redirects.delete_redirect") }
-					</button>
+					}
 				</div>
 			</div>
 		</div>
@@ -382,15 +374,17 @@ templ RedirectFormPage(pc *PageContext, data RedirectFormData) {
 						</div>
 					}
 					<div class="form-actions">
-						<button type="submit" class="btn btn-primary">
-							@iconSave()
+						@button.Button(button.Props{Type: button.TypeSubmit}) {
+							@icon.Save(icon.Props{Size: 16})
 							if data.IsEdit {
 								{ pc.T("redirects.update") }
 							} else {
 								{ pc.T("redirects.create") }
 							}
-						</button>
-						<a href="/admin/redirects" class="btn btn-outline">{ pc.T("btn.cancel") }</a>
+						}
+						@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/redirects"}) {
+							{ pc.T("btn.cancel") }
+						}
 					</div>
 				</form>
 			</div>

@@ -3,7 +3,10 @@
 
 package admin
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+)
 
 // ModuleViewItem holds data for a module in the list view.
 type ModuleViewItem struct {
@@ -136,15 +139,10 @@ templ moduleCard(pc *PageContext, mod ModuleViewItem) {
 			}
 			if mod.AdminURL != "" {
 				<div class="module-actions">
-					<a
-						href={ templ.SafeURL(mod.AdminURL) }
-						class="btn btn-sm btn-secondary module-dashboard-link"
-						:class="{ 'disabled': !isActive }"
-						x-bind:title="!isActive ? activateTitle : ''"
-					>
+					@button.Button(button.Props{Variant: button.VariantSecondary, Size: button.SizeSm, Href: mod.AdminURL, Class: "module-dashboard-link", Attributes: templ.Attributes{":class": "{ 'disabled': !isActive }", "x-bind:title": "!isActive ? activateTitle : ''"}}) {
 						@iconDashboard()
 						{ pc.T("modules.dashboard") }
-					</a>
+					}
 				</div>
 			}
 		</div>

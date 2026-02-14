@@ -5,6 +5,7 @@ package admin
 
 import (
 	"fmt"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
 )
 
 // EventItem holds data for a single event row.
@@ -67,7 +68,9 @@ templ EventsListPage(pc *PageContext, data EventsListData) {
 						if data.Level != "" || data.Category != "" {
 							<span class="empty-hint">{ pc.T("events.no_events_filter") }</span>
 							<div class="empty-state-action">
-								<a href="/admin/events" class="btn btn-primary">{ pc.T("events.clear_filters") }</a>
+								@button.Button(button.Props{Href: "/admin/events"}) {
+									{ pc.T("events.clear_filters") }
+								}
 							</div>
 						} else {
 							<span class="empty-hint">{ pc.T("events.no_events_hint") }</span>
@@ -103,9 +106,13 @@ templ eventsFilterBar(pc *PageContext, data EventsListData) {
 					</select>
 				</div>
 				<div class="filter-actions">
-					<button type="submit" class="btn btn-sm btn-primary">{ pc.T("events.filter") }</button>
+					@button.Button(button.Props{Size: button.SizeSm, Type: button.TypeSubmit}) {
+						{ pc.T("events.filter") }
+					}
 					if data.Level != "" || data.Category != "" {
-						<a href="/admin/events" class="btn btn-sm btn-outline">{ pc.T("events.clear") }</a>
+						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: "/admin/events"}) {
+							{ pc.T("events.clear") }
+						}
 					}
 				</div>
 			</form>
@@ -179,15 +186,9 @@ templ eventIPCell(pc *PageContext, event EventItem, sentinelActive bool) {
 			if event.IsBanned {
 				<span class="badge badge-danger ban-badge" data-ip={ event.RawIPAddress }>{ pc.T("sentinel.banned") }</span>
 			} else if !event.IsOwnIP && !event.IsWhitelisted {
-				<button
-					type="button"
-					class="btn btn-sm btn-danger ban-btn"
-					data-ip={ event.RawIPAddress }
-					data-url={ event.RequestURL }
-					onclick="banIP(this)"
-				>
+				@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Class: "ban-btn", Attributes: templ.Attributes{"data-ip": event.RawIPAddress, "data-url": event.RequestURL, "onclick": "banIP(this)"}}) {
 					{ pc.T("sentinel.ban_action") }
-				</button>
+				}
 			}
 		}
 	} else {

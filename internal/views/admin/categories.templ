@@ -120,9 +120,9 @@ templ CategoriesListPage(pc *PageContext, data CategoriesListData) {
 									</td>
 									<td class="text-right">
 										<div class="action-buttons">
-											<a href={ templ.SafeURL(fmt.Sprintf("/admin/categories/%d", cat.ID)) } class="btn btn-sm btn-outline" title={ pc.T("btn.edit") }>
-												@iconEdit()
-											</a>
+											@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/categories/%d", cat.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
+												@icon.Pencil(icon.Props{Size: 14})
+											}
 											@deleteCategoryModal(pc, cat)
 										</div>
 									</td>
@@ -140,7 +140,9 @@ templ CategoriesListPage(pc *PageContext, data CategoriesListData) {
 						<p>{ pc.T("categories.no_categories") }</p>
 						<span class="empty-hint">{ pc.T("categories.create_first_hint") }</span>
 						<div class="empty-state-action">
-							<a href="/admin/categories/new" class="btn btn-primary">{ pc.T("categories.new") }</a>
+							@button.Button(button.Props{Href: "/admin/categories/new"}) {
+								{ pc.T("categories.new") }
+							}
 						</div>
 					</div>
 				</div>
@@ -151,14 +153,9 @@ templ CategoriesListPage(pc *PageContext, data CategoriesListData) {
 
 templ deleteCategoryModal(pc *PageContext, cat CategoryListItem) {
 	<div x-data="{ showConfirm: false }" class="delete-action">
-		<button
-			type="button"
-			class="btn btn-sm btn-danger"
-			title={ pc.T("btn.delete") }
-			@click="showConfirm = true"
-		>
-			@iconDelete()
-		</button>
+		@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"title": pc.T("btn.delete"), "@click": "showConfirm = true"}}) {
+			@icon.Trash2(icon.Props{Size: 14})
+		}
 		<div
 			class="modal-overlay"
 			x-show="showConfirm"
@@ -183,17 +180,12 @@ templ deleteCategoryModal(pc *PageContext, cat CategoryListItem) {
 					<p class="text-muted">{ pc.T("categories.delete_warning") }</p>
 				</div>
 				<div class="modal-footer">
-					<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
-					<button
-						type="button"
-						class="btn btn-danger"
-						hx-delete={ fmt.Sprintf("/admin/categories/%d", cat.ID) }
-						hx-target={ fmt.Sprintf("#category-row-%d", cat.ID) }
-						hx-swap="outerHTML"
-						@click="showConfirm = false"
-					>
+					@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "showConfirm = false"}}) {
+						{ pc.T("btn.cancel") }
+					}
+					@button.Button(button.Props{Variant: button.VariantDestructive, Attributes: templ.Attributes{"hx-delete": fmt.Sprintf("/admin/categories/%d", cat.ID), "hx-target": fmt.Sprintf("#category-row-%d", cat.ID), "hx-swap": "outerHTML", "@click": "showConfirm = false"}}) {
 						{ pc.T("categories.delete_category") }
-					</button>
+					}
 				</div>
 			</div>
 		</div>
@@ -358,16 +350,18 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 					}
 				</div>
 				<div class="form-actions">
-					<button type="submit" class="btn btn-primary">
+					@button.Button(button.Props{Type: button.TypeSubmit}) {
 						if data.IsEdit {
-							@iconSave()
+							@icon.Save(icon.Props{Size: 16})
 							{ pc.T("categories.update") }
 						} else {
-							@iconCategories()
+							@icon.FolderTree(icon.Props{Size: 16})
 							{ pc.T("categories.create") }
 						}
-					</button>
-					<a href="/admin/categories" class="btn btn-outline">{ pc.T("btn.cancel") }</a>
+					}
+					@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/categories"}) {
+						{ pc.T("btn.cancel") }
+					}
 				</div>
 			</form>
 			<!-- Translations Panel (Edit mode only) -->
@@ -430,10 +424,10 @@ templ categoryTranslationsPanel(pc *PageContext, data CategoryFormData) {
 				<div class="translation-buttons">
 					for _, lang := range data.MissingLanguages {
 						<form action={ templ.SafeURL(fmt.Sprintf("/admin/categories/%d/translate/%s", data.Category.ID, lang.Code)) } method="POST" class="inline-form">
-							<button type="submit" class="btn btn-sm btn-outline translation-add-btn" title={ "Create " + lang.Name + " translation" }>
-								@iconPlusSmall()
+							@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Class: "translation-add-btn", Attributes: templ.Attributes{"title": "Create " + lang.Name + " translation"}}) {
+								@icon.Plus(icon.Props{Size: 14})
 								{ lang.Code } - { lang.Name }
-							</button>
+							}
 						</form>
 					}
 				</div>

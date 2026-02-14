@@ -3,7 +3,10 @@
 
 package admin
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+)
 
 // ExportViewData holds data for the export page.
 type ExportViewData struct{}
@@ -217,12 +220,12 @@ templ ExportPage(pc *PageContext, data ExportViewData) {
 					<p>{ pc.T("export.zip_info") }</p>
 				</div>
 				<div class="form-actions">
-					<button type="submit" class="btn btn-primary">
+					@button.Button(button.Props{Type: button.TypeSubmit}) {
 						@iconDownload()
 						<span x-text={ fmt.Sprintf("willBeZip ? '%s' : '%s'", pc.T("export.download_zip"), pc.T("export.download")) }>
 							{ pc.T("export.download") }
 						</span>
-					</button>
+					}
 				</div>
 			</form>
 		</div>
@@ -318,10 +321,10 @@ templ importFileUpload(pc *PageContext) {
 				<p>{ pc.T("import.info") }</p>
 			</div>
 			<div class="media-dropzone-buttons">
-				<button type="submit" class="btn btn-primary" :disabled="!selectedFile">
+				@button.Button(button.Props{Type: button.TypeSubmit, Attributes: templ.Attributes{":disabled": "!selectedFile"}}) {
 					@iconUpload()
 					{ pc.T("import.validate") }
-				</button>
+				}
 			</div>
 		</form>
 	</div>
@@ -472,13 +475,13 @@ templ importOptionsForm(pc *PageContext, data ImportViewData) {
 				</div>
 			</div>
 			<div class="form-actions">
-				<a href="/admin/import" class="btn btn-secondary">
+				@button.Button(button.Props{Variant: button.VariantSecondary, Href: "/admin/import"}) {
 					{ pc.T("btn.cancel") }
-				</a>
-				<button type="submit" class="btn btn-primary">
+				}
+				@button.Button(button.Props{Type: button.TypeSubmit}) {
 					@iconUpload()
 					{ pc.T("import.start_import") }
-				</button>
+				}
 			</div>
 		</form>
 	</div>
@@ -589,9 +592,9 @@ templ importResults(pc *PageContext, data ImportViewData) {
 				</div>
 			}
 			<div class="form-actions">
-				<a href="/admin/import" class="btn btn-primary">
+				@button.Button(button.Props{Href: "/admin/import"}) {
 					{ pc.T("import.import_another") }
-				</a>
+				}
 			</div>
 		</div>
 	</div>

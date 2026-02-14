@@ -106,7 +106,9 @@ templ LanguagesListPage(pc *PageContext, data LanguagesListData) {
 						<p>{ pc.T("languages.no_languages") }</p>
 						<span class="empty-hint">{ pc.T("languages.no_languages_hint") }</span>
 						<div class="empty-state-action">
-							<a href="/admin/languages/new" class="btn btn-primary">{ pc.T("languages.add") }</a>
+							@button.Button(button.Props{Href: "/admin/languages/new"}) {
+								{ pc.T("languages.add") }
+							}
 						</div>
 					</div>
 				</div>
@@ -145,14 +147,14 @@ templ LanguageRow(pc *PageContext, lang LanguageListItem) {
 			<div class="action-buttons">
 				if !lang.IsDefault {
 					<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/languages/%d/default", lang.ID)) } class="d-inline">
-						<button type="submit" class="btn btn-sm btn-outline" title={ pc.T("languages.set_default") }>
-							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-						</button>
+						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Attributes: templ.Attributes{"title": pc.T("languages.set_default")}}) {
+							@icon.Check(icon.Props{Size: 14})
+						}
 					</form>
 				}
-				<a href={ templ.SafeURL(fmt.Sprintf("/admin/languages/%d", lang.ID)) } class="btn btn-sm btn-outline" title={ pc.T("btn.edit") }>
-					@iconEdit()
-				</a>
+				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/languages/%d", lang.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
+					@icon.Pencil(icon.Props{Size: 14})
+				}
 				if !lang.IsDefault {
 					@deleteLanguageModal(pc, lang)
 				}
@@ -163,14 +165,9 @@ templ LanguageRow(pc *PageContext, lang LanguageListItem) {
 
 templ deleteLanguageModal(pc *PageContext, lang LanguageListItem) {
 	<div x-data="{ showConfirm: false }" class="delete-action">
-		<button
-			type="button"
-			class="btn btn-sm btn-danger"
-			title={ pc.T("btn.delete") }
-			@click="showConfirm = true"
-		>
-			@iconDelete()
-		</button>
+		@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"title": pc.T("btn.delete"), "@click": "showConfirm = true"}}) {
+			@icon.Trash2(icon.Props{Size: 14})
+		}
 		<div
 			class="modal-overlay"
 			x-show="showConfirm"
@@ -192,17 +189,12 @@ templ deleteLanguageModal(pc *PageContext, lang LanguageListItem) {
 					<p class="text-muted">{ pc.T("label.action_cannot_undone") } { pc.T("languages.delete_warning") }</p>
 				</div>
 				<div class="modal-footer">
-					<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
-					<button
-						type="button"
-						class="btn btn-danger"
-						hx-delete={ fmt.Sprintf("/admin/languages/%d", lang.ID) }
-						hx-target={ fmt.Sprintf("#language-row-%d", lang.ID) }
-						hx-swap="outerHTML"
-						@click="showConfirm = false"
-					>
+					@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "showConfirm = false"}}) {
+						{ pc.T("btn.cancel") }
+					}
+					@button.Button(button.Props{Variant: button.VariantDestructive, Attributes: templ.Attributes{"hx-delete": fmt.Sprintf("/admin/languages/%d", lang.ID), "hx-target": fmt.Sprintf("#language-row-%d", lang.ID), "hx-swap": "outerHTML", "@click": "showConfirm = false"}}) {
 						{ pc.T("languages.delete") }
-					</button>
+					}
 				</div>
 			</div>
 		</div>
@@ -381,15 +373,17 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 						</div>
 					}
 					<div class="form-actions">
-						<button type="submit" class="btn btn-primary">
-							@iconSave()
+						@button.Button(button.Props{Type: button.TypeSubmit}) {
+							@icon.Save(icon.Props{Size: 16})
 							if data.IsEdit {
 								{ pc.T("languages.update") }
 							} else {
 								{ pc.T("languages.create") }
 							}
-						</button>
-						<a href="/admin/languages" class="btn btn-outline">{ pc.T("btn.cancel") }</a>
+						}
+						@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/languages"}) {
+							{ pc.T("btn.cancel") }
+						}
 					</div>
 				</form>
 			</div>
