@@ -5,7 +5,6 @@
 package handler
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -2192,33 +2191,21 @@ func templComponent(templateName string, data any) templ.Component {
 	return nil
 }
 
-// render renders a page using templ components when available, with fallback to active theme.
+// render renders a page using templ components (no legacy theme fallback).
 func (h *FrontendHandler) render(w http.ResponseWriter, templateName string, data any) {
-	// Try templ component first
-	if comp := templComponent(templateName, data); comp != nil {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := comp.Render(context.Background(), w); err != nil {
-			slog.Error("templ render failed, falling back to theme", "template", templateName, "error", err)
-		} else {
-			return
-		}
-	}
-
-	// Fallback: render using active theme
-	activeTheme := h.themeManager.GetActiveTheme()
-	if activeTheme == nil {
-		logAndHTTPError(w, "No active theme", http.StatusInternalServerError, "no active theme")
-		return
-	}
-
-	buf := new(bytes.Buffer)
-	if err := activeTheme.RenderPage(buf, templateName, data); err != nil {
-		logAndHTTPError(w, "Template rendering error", http.StatusInternalServerError, "failed to render template", "template", templateName, "error", err)
+	comp := templComponent(templateName, data)
+	if comp == nil {
+		slog.Error("no templ component for template", "template", templateName)
+		h.renderInternalError(w)
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = buf.WriteTo(w)
+	if err := comp.Render(context.Background(), w); err != nil {
+		slog.Error("templ render failed", "template", templateName, "error", err)
+		h.renderInternalError(w)
+		return
+	}
 }
 
 // renderNotFound renders the 404 page.
@@ -2281,20 +2268,10 @@ func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request)
 func (h *FrontendHandler) renderInternalError(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusInternalServerError)
-	_, _ = fmt.Fprint(w, `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Error 500</title>
-<style>body{font-family:system-ui,sans-serif;max-width:600px;margin:100px auto;padding:20px;text-align:center}h1{color:#dc3545}</style>
-</head>
-<body>
-<h1>500 - Internal Server Error</h1>
-<p>An error occurred while processing your request.</p>
-<p><a href="/">Return to homepage</a></p>
-</body>
-</html>`)
+	if err := FrontendInternalErrorPage().Render(context.Background(), w); err != nil {
+		slog.Error("failed to render 500 page", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
 }
 
 // Favicon serves the favicon from theme settings or falls back to the default.

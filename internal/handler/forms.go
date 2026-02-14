@@ -4,7 +4,6 @@
 package handler
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -19,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/a-h/templ"
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
@@ -973,7 +973,7 @@ func (h *FormsHandler) Show(w http.ResponseWriter, r *http.Request) {
 		CSRFToken:        template.HTML(h.sessionManager.Token(r.Context())),
 	}
 
-	h.render(w, data)
+	h.render(w, r, data)
 }
 
 // Submit handles POST /forms/{slug} - processes form submission.
@@ -1147,7 +1147,7 @@ func (h *FormsHandler) renderFormWithErrors(w http.ResponseWriter, r *http.Reque
 		CSRFToken:        template.HTML(h.sessionManager.Token(r.Context())),
 	}
 
-	h.render(w, data)
+	h.render(w, r, data)
 }
 
 // renderFormSuccess renders the form success page.
@@ -1163,7 +1163,7 @@ func (h *FormsHandler) renderFormSuccess(w http.ResponseWriter, r *http.Request,
 		Values:           make(map[string]string),
 	}
 
-	h.render(w, data)
+	h.render(w, r, data)
 }
 
 // isValidEmail checks if the email is valid.
@@ -1765,26 +1765,109 @@ type FormTemplateData struct {
 	CSRFToken template.HTML
 }
 
-// render renders a form template using the active theme.
-func (h *FormsHandler) render(w http.ResponseWriter, data FormTemplateData) {
-	activeTheme := h.themeManager.GetActiveTheme()
-	if activeTheme == nil {
-		slog.Error("no active theme available")
-		http.Error(w, "No active theme", http.StatusInternalServerError)
-		return
+// render renders a form page, preferring templ with fallback to the active theme template.
+func (h *FormsHandler) render(w http.ResponseWriter, r *http.Request, data FormTemplateData) {
+	viewData := h.buildPublicFormViewData(r, data)
+	renderTempl(w, r, FrontendFormPage(viewData))
+}
+
+// buildPublicFormViewData converts FormTemplateData to the templ-friendly PublicFormViewData.
+func (h *FormsHandler) buildPublicFormViewData(r *http.Request, data FormTemplateData) PublicFormViewData {
+	fields := make([]PublicFormField, 0, len(data.Fields))
+	for _, f := range data.Fields {
+		pf := PublicFormField{
+			ID:         f.ID,
+			Type:       f.Type,
+			Name:       f.Name,
+			Label:      f.Label,
+			IsRequired: f.IsRequired,
+		}
+		if f.Placeholder.Valid {
+			pf.Placeholder = f.Placeholder.String
+		}
+		if f.HelpText.Valid {
+			pf.HelpText = f.HelpText.String
+		}
+		if f.Options.Valid && f.Options.String != "" && f.Options.String != "[]" {
+			pf.Options = parseFieldOptions(f.Options.String)
+		}
+		fields = append(fields, pf)
 	}
 
-	buf := new(bytes.Buffer)
-	if err := activeTheme.RenderPage(buf, "form", data); err != nil {
-		slog.Error("failed to render form template", "error", err)
-		http.Error(w, "Template rendering error", http.StatusInternalServerError)
-		return
+	successMsg := ""
+	if data.Form.SuccessMessage.Valid {
+		successMsg = data.Form.SuccessMessage.String
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if _, err := buf.WriteTo(w); err != nil {
-		slog.Error("failed to write response", "error", err)
+	description := ""
+	if data.Form.Description.Valid {
+		description = data.Form.Description.String
 	}
+
+	captchaWidget := h.getCaptchaWidget(r.Context())
+
+	return PublicFormViewData{
+		Base:           data.BaseTemplateData,
+		FormTitle:      data.Form.Title,
+		FormSlug:       data.Form.Slug,
+		Description:    description,
+		SuccessMessage: successMsg,
+		Fields:         fields,
+		Errors:         data.Errors,
+		Values:         data.Values,
+		Success:        data.Success,
+		CaptchaWidget:  captchaWidget,
+		Lang:           data.BaseTemplateData.LangCode,
+	}
+}
+
+// getCaptchaWidget safely fetches the captcha widget HTML via hooks.
+func (h *FormsHandler) getCaptchaWidget(ctx context.Context) string {
+	if h.hookRegistry == nil {
+		return ""
+	}
+	if !h.hookRegistry.HasHandlers(hcaptcha.HookFormCaptchaWidget) {
+		return ""
+	}
+	result, err := h.hookRegistry.Call(ctx, hcaptcha.HookFormCaptchaWidget, nil)
+	if err != nil {
+		slog.Error("failed to get captcha widget", "error", err)
+		return ""
+	}
+	if htmlStr, ok := result.(template.HTML); ok {
+		return string(htmlStr)
+	}
+	return ""
+}
+
+// parseFieldOptions parses a JSON string array into a Go string slice.
+func parseFieldOptions(jsonStr string) []string {
+	var opts []string
+	if err := json.Unmarshal([]byte(jsonStr), &opts); err != nil {
+		return nil
+	}
+	return opts
+}
+
+// formT is a helper for i18n translation in public form templates.
+func formT(lang, key string) string {
+	return i18n.T(lang, key)
+}
+
+// requiredAttr returns templ.Attributes with "required" if isRequired is true.
+func requiredAttr(isRequired bool) templ.Attributes {
+	if isRequired {
+		return templ.Attributes{"required": true}
+	}
+	return nil
+}
+
+// fieldValueContains checks if the comma-separated value string contains the given option.
+func fieldValueContains(value, option string) bool {
+	if value == "" {
+		return false
+	}
+	return strings.Contains(value, option)
 }
 
 // getBaseTemplateData builds base template data for form rendering.
