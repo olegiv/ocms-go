@@ -1,4 +1,4 @@
-make.PHONY: run stop restart build build-prod build-linux-amd64 build-darwin-arm64 build-all-platforms test clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ
+make.PHONY: run stop restart build build-prod build-linux-amd64 build-darwin-arm64 build-all-platforms test clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ commit-prepare commit-do
 
 # Build variables
 BINARY_NAME=ocms
@@ -103,3 +103,10 @@ sqlc:
 templ:
 	templ generate
 	@echo "Templ files generated"
+
+# Prepare and execute commit workflow (Codex/Claude-compatible)
+commit-prepare:
+	./scripts/codex-commands commit-prepare
+
+commit-do:
+	./scripts/codex-commands commit-do
