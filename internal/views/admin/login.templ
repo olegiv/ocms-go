@@ -6,6 +6,8 @@ package admin
 import (
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/input"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
 )
 
 // LoginData holds data for the login page.
@@ -75,30 +77,37 @@ templ LoginPage(d LoginData) {
 				<form method="POST" action="/login" class="auth-form">
 					@csrfField()
 					<div class="form-group">
-						<label for="email" class="form-label">{ d.T("label.email") }</label>
-						<input
-							type="email"
-							id="email"
-							name="email"
-							class="form-input"
-							placeholder="admin@example.com"
-							required
-							autofocus
-							data-msg-required={ d.T("validation.required") }
-							data-msg-email={ d.T("validation.email_invalid") }
-						/>
+						@label.Label(label.Props{For: "email", Class: "block mb-1"}) {
+							{ d.T("label.email") }
+						}
+						@input.Input(input.Props{
+							Type:        input.TypeEmail,
+							ID:          "email",
+							Name:        "email",
+							Placeholder: "admin@example.com",
+							Attributes: templ.Attributes{
+								"required":         true,
+								"autofocus":        true,
+								"data-msg-required": d.T("validation.required"),
+								"data-msg-email":   d.T("validation.email_invalid"),
+							},
+						})
 					</div>
 					<div class="form-group">
-						<label for="password" class="form-label">{ d.T("label.password") }</label>
-						<input
-							type="password"
-							id="password"
-							name="password"
-							class="form-input"
-							placeholder={ d.T("auth.password_placeholder") }
-							required
-							data-msg-required={ d.T("validation.required") }
-						/>
+						@label.Label(label.Props{For: "password", Class: "block mb-1"}) {
+							{ d.T("label.password") }
+						}
+						@input.Input(input.Props{
+							Type:        input.TypePassword,
+							ID:          "password",
+							Name:        "password",
+							Placeholder: d.T("auth.password_placeholder"),
+							NoTogglePassword: true,
+							Attributes: templ.Attributes{
+								"required":         true,
+								"data-msg-required": d.T("validation.required"),
+							},
+						})
 					</div>
 					if d.HcaptchaEnabled {
 						<div class="form-group captcha-group">

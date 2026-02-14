@@ -11,6 +11,8 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
+	"github.com/olegiv/ocms-go/internal/views/components/input"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
 )
 
 // UserListItem holds data for a user in the list view.
@@ -198,48 +200,51 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 				<div class="form-grid">
 					<!-- Name -->
 					<div class="form-group">
-						<label for="name" class="form-label">
+						@label.Label(label.Props{For: "name", Class: "block mb-1"}) {
 							{ pc.T("label.name") } <span class="required">*</span>
-						</label>
-						<input
-							type="text"
-							id="name"
-							name="name"
-							class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["name"] != "") }
-							value={ userFormValue(data, "name") }
-							placeholder={ pc.T("users.name_placeholder") }
-							required
-							autofocus
-							maxlength="255"
-						/>
+						}
+						@input.Input(input.Props{
+							ID: "name",
+							Name: "name",
+							Value: userFormValue(data, "name"),
+							Placeholder: pc.T("users.name_placeholder"),
+							HasError: data.Errors["name"] != "",
+							Attributes: templ.Attributes{
+								"required": true,
+								"autofocus": true,
+								"maxlength": "255",
+							},
+						})
 						if data.Errors["name"] != "" {
 							<span class="form-error">{ data.Errors["name"] }</span>
 						}
 					</div>
 					<!-- Email -->
 					<div class="form-group">
-						<label for="email" class="form-label">
+						@label.Label(label.Props{For: "email", Class: "block mb-1"}) {
 							{ pc.T("label.email") } <span class="required">*</span>
-						</label>
-						<input
-							type="email"
-							id="email"
-							name="email"
-							class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["email"] != "") }
-							value={ userFormValue(data, "email") }
-							placeholder={ pc.T("users.email_placeholder") }
-							required
-							maxlength="255"
-						/>
+						}
+						@input.Input(input.Props{
+							Type: input.TypeEmail,
+							ID: "email",
+							Name: "email",
+							Value: userFormValue(data, "email"),
+							Placeholder: pc.T("users.email_placeholder"),
+							HasError: data.Errors["email"] != "",
+							Attributes: templ.Attributes{
+								"required": true,
+								"maxlength": "255",
+							},
+						})
 						if data.Errors["email"] != "" {
 							<span class="form-error">{ data.Errors["email"] }</span>
 						}
 					</div>
 					<!-- Role -->
 					<div class="form-group">
-						<label for="role" class="form-label">
+						@label.Label(label.Props{For: "role", Class: "block mb-1"}) {
 							{ pc.T("label.role") } <span class="required">*</span>
-						</label>
+						}
 						<select
 							id="role"
 							name="role"
@@ -273,25 +278,26 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 					</div>
 					<!-- Password -->
 					<div class="form-group" x-data="passwordStrength()">
-						<label for="password" class="form-label">
+						@label.Label(label.Props{For: "password", Class: "block mb-1"}) {
 							{ pc.T("label.password") }
 							if !data.IsEdit {
 								<span class="required">*</span>
 							}
-						</label>
-						<input
-							type="password"
-							id="password"
-							name="password"
-							class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["password"] != "") }
-							placeholder={ passwordPlaceholder(pc, data.IsEdit) }
-							minlength="12"
-							if !data.IsEdit {
-								required
-							}
-							x-model="password"
-							@input="checkStrength()"
-						/>
+						}
+						@input.Input(input.Props{
+							Type: input.TypePassword,
+							NoTogglePassword: true,
+							ID: "password",
+							Name: "password",
+							Placeholder: passwordPlaceholder(pc, data.IsEdit),
+							HasError: data.Errors["password"] != "",
+							Attributes: templ.Attributes{
+								"minlength": "12",
+								"required": !data.IsEdit,
+								"x-model": "password",
+								"@input": "checkStrength()",
+							},
+						})
 						<div class="password-strength" x-show="password.length > 0">
 							<div class="password-strength-bar">
 								<div class="password-strength-fill" :class="strengthClass" :style="'width: ' + strengthPercent + '%'"></div>
@@ -306,23 +312,24 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 					</div>
 					<!-- Confirm Password -->
 					<div class="form-group">
-						<label for="password_confirm" class="form-label">
+						@label.Label(label.Props{For: "password_confirm", Class: "block mb-1"}) {
 							{ pc.T("label.confirm_password") }
 							if !data.IsEdit {
 								<span class="required">*</span>
 							}
-						</label>
-						<input
-							type="password"
-							id="password_confirm"
-							name="password_confirm"
-							class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["password_confirm"] != "") }
-							placeholder={ pc.T("users.confirm_password_placeholder") }
-							minlength="12"
-							if !data.IsEdit {
-								required
-							}
-						/>
+						}
+						@input.Input(input.Props{
+							Type: input.TypePassword,
+							NoTogglePassword: true,
+							ID: "password_confirm",
+							Name: "password_confirm",
+							Placeholder: pc.T("users.confirm_password_placeholder"),
+							HasError: data.Errors["password_confirm"] != "",
+							Attributes: templ.Attributes{
+								"minlength": "12",
+								"required": !data.IsEdit,
+							},
+						})
 						if data.Errors["password_confirm"] != "" {
 							<span class="form-error">{ data.Errors["password_confirm"] }</span>
 						}

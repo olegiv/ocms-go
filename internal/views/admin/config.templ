@@ -5,6 +5,8 @@ package admin
 
 import "fmt"
 import "strings"
+import "github.com/olegiv/ocms-go/internal/views/components/input"
+import "github.com/olegiv/ocms-go/internal/views/components/label"
 
 // ConfigItemView represents a non-translatable config item.
 type ConfigItemView struct {
@@ -52,7 +54,9 @@ templ ConfigPage(pc *PageContext, data ConfigViewData) {
 					<div class="space-y-6">
 						for _, item := range data.TranslatableItems {
 							<div class="space-y-2" x-data={ fmt.Sprintf("{ activeTab: '%s' }", item.Translations[0].LanguageCode) }>
-								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">{ item.Label }</label>
+								@label.Label(label.Props{Class: "block mb-1"}) {
+									{ item.Label }
+								}
 								<!-- Language tabs -->
 								<div class="flex gap-1 border-b border-gray-200 dark:border-gray-700">
 									for _, tr := range item.Translations {
@@ -67,15 +71,15 @@ templ ConfigPage(pc *PageContext, data ConfigViewData) {
 								<!-- Tab content -->
 								for _, tr := range item.Translations {
 									<div x-show={ fmt.Sprintf("activeTab === '%s'", tr.LanguageCode) } x-cloak>
-										<input
-											type="text"
-											id={ fmt.Sprintf("%s_%s", item.Key, tr.LanguageCode) }
-											name={ fmt.Sprintf("%s_%s", item.Key, tr.LanguageCode) }
-											class={ inputClass(data.Errors[fmt.Sprintf("%s_%s", item.Key, tr.LanguageCode)]) }
-											value={ tr.Value }
-											placeholder={ fmt.Sprintf("%s %s", pc.T("config.enter_value_for"), tr.LanguageName) }
-											maxlength="255"
-										/>
+										@input.Input(input.Props{
+											ID:          fmt.Sprintf("%s_%s", item.Key, tr.LanguageCode),
+											Name:        fmt.Sprintf("%s_%s", item.Key, tr.LanguageCode),
+											Type:        input.TypeText,
+											Value:       tr.Value,
+											Placeholder: fmt.Sprintf("%s %s", pc.T("config.enter_value_for"), tr.LanguageName),
+											HasError:    data.Errors[fmt.Sprintf("%s_%s", item.Key, tr.LanguageCode)] != "",
+											Attributes:  templ.Attributes{"maxlength": "255"},
+										})
 										if errMsg, ok := data.Errors[fmt.Sprintf("%s_%s", item.Key, tr.LanguageCode)]; ok && errMsg != "" {
 											<p class="mt-1 text-sm text-red-600 dark:text-red-400">{ errMsg }</p>
 										}
@@ -94,17 +98,17 @@ templ ConfigPage(pc *PageContext, data ConfigViewData) {
 					<div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
 						for _, item := range data.TranslatableItems {
 							<div>
-								<label for={ fmt.Sprintf("%s_%s", item.Key, item.Translations[0].LanguageCode) } class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+								@label.Label(label.Props{For: fmt.Sprintf("%s_%s", item.Key, item.Translations[0].LanguageCode), Class: "block mb-1"}) {
 									{ item.Label }
-								</label>
-								<input
-									type="text"
-									id={ fmt.Sprintf("%s_%s", item.Key, item.Translations[0].LanguageCode) }
-									name={ fmt.Sprintf("%s_%s", item.Key, item.Translations[0].LanguageCode) }
-									class={ inputClass(data.Errors[fmt.Sprintf("%s_%s", item.Key, item.Translations[0].LanguageCode)]) }
-									value={ item.Translations[0].Value }
-									maxlength="255"
-								/>
+								}
+								@input.Input(input.Props{
+									ID:         fmt.Sprintf("%s_%s", item.Key, item.Translations[0].LanguageCode),
+									Name:       fmt.Sprintf("%s_%s", item.Key, item.Translations[0].LanguageCode),
+									Type:       input.TypeText,
+									Value:      item.Translations[0].Value,
+									HasError:   data.Errors[fmt.Sprintf("%s_%s", item.Key, item.Translations[0].LanguageCode)] != "",
+									Attributes: templ.Attributes{"maxlength": "255"},
+								})
 								if item.Description != "" {
 									<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{ item.Description }</p>
 								}
@@ -122,9 +126,9 @@ templ ConfigPage(pc *PageContext, data ConfigViewData) {
 				<div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
 					for _, item := range data.Items {
 						<div>
-							<label for={ item.Key } class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+							@label.Label(label.Props{For: item.Key, Class: "block mb-1"}) {
 								{ item.Label }
-							</label>
+							}
 							if item.Type == "bool" {
 								<div class="flex items-center gap-2">
 									<input
@@ -140,25 +144,25 @@ templ ConfigPage(pc *PageContext, data ConfigViewData) {
 									<span class="text-sm text-gray-600 dark:text-gray-400">{ item.Description }</span>
 								</div>
 							} else if item.Type == "int" {
-								<input
-									type="number"
-									id={ item.Key }
-									name={ item.Key }
-									class={ inputClass(data.Errors[item.Key]) }
-									value={ item.Value }
-								/>
+								@input.Input(input.Props{
+									ID:       item.Key,
+									Name:     item.Key,
+									Type:     input.TypeNumber,
+									Value:    item.Value,
+									HasError: data.Errors[item.Key] != "",
+								})
 								if item.Description != "" {
 									<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{ item.Description }</p>
 								}
 							} else {
-								<input
-									type="text"
-									id={ item.Key }
-									name={ item.Key }
-									class={ inputClass(data.Errors[item.Key]) }
-									value={ item.Value }
-									maxlength="255"
-								/>
+								@input.Input(input.Props{
+									ID:         item.Key,
+									Name:       item.Key,
+									Type:       input.TypeText,
+									Value:      item.Value,
+									HasError:   data.Errors[item.Key] != "",
+									Attributes: templ.Attributes{"maxlength": "255"},
+								})
 								if item.Description != "" {
 									<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{ item.Description }</p>
 								}
@@ -188,10 +192,4 @@ templ ConfigPage(pc *PageContext, data ConfigViewData) {
 	}
 }
 
-func inputClass(errMsg string) string {
-	base := "w-full rounded-md border px-3 py-2 text-sm dark:bg-gray-700 dark:text-white"
-	if errMsg != "" {
-		return base + " border-red-300 focus:border-red-500 focus:ring-red-500 dark:border-red-600"
-	}
-	return base + " border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600"
-}
+

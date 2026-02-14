@@ -12,6 +12,8 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/components/input"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
@@ -229,7 +231,9 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 					<div class="form-grid">
 						if !data.IsEdit {
 							<div class="form-group form-group-full">
-								<label class="form-label">{ pc.T("languages.quick_select") }</label>
+								@label.Label(label.Props{Class: "block mb-1"}) {
+									{ pc.T("languages.quick_select") }
+								}
 								<p class="form-help">{ pc.T("languages.quick_select_hint") }</p>
 								<select
 									id="quick_select"
@@ -249,26 +253,23 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 							</div>
 						}
 						<div class="form-group">
-							<label for="code" class="form-label">
+							@label.Label(label.Props{For: "code", Class: "block mb-1"}) {
 								{ pc.T("languages.language_code") } <span class="required">*</span>
-							</label>
-							<input
-								type="text"
-								id="code"
-								name="code"
-								class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["code"] != "") }
-								value={ languageFormValue(data, "code") }
-								x-model="code"
-								placeholder={ pc.T("languages.code_placeholder") }
-								maxlength="5"
-								required
-								if data.IsEdit {
-									readonly
-								}
-								if !data.IsEdit {
-									autofocus
-								}
-							/>
+							}
+							@input.Input(input.Props{
+								ID: "code",
+								Name: "code",
+								Value: languageFormValue(data, "code"),
+								Placeholder: pc.T("languages.code_placeholder"),
+								HasError: data.Errors["code"] != "",
+								Readonly: data.IsEdit,
+								Attributes: templ.Attributes{
+									"x-model": "code",
+									"maxlength": "5",
+									"required": true,
+									"autofocus": !data.IsEdit,
+								},
+							})
 							if data.Errors["code"] != "" {
 								<span class="form-error">{ data.Errors["code"] }</span>
 							} else {
@@ -276,20 +277,21 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 							}
 						</div>
 						<div class="form-group">
-							<label for="name" class="form-label">
+							@label.Label(label.Props{For: "name", Class: "block mb-1"}) {
 								{ pc.T("label.name") } <span class="required">*</span>
-							</label>
-							<input
-								type="text"
-								id="name"
-								name="name"
-								class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["name"] != "") }
-								value={ languageFormValue(data, "name") }
-								x-model="name"
-								placeholder={ pc.T("languages.name_placeholder") }
-								required
-								maxlength="255"
-							/>
+							}
+							@input.Input(input.Props{
+								ID: "name",
+								Name: "name",
+								Value: languageFormValue(data, "name"),
+								Placeholder: pc.T("languages.name_placeholder"),
+								HasError: data.Errors["name"] != "",
+								Attributes: templ.Attributes{
+									"x-model": "name",
+									"required": true,
+									"maxlength": "255",
+								},
+							})
 							if data.Errors["name"] != "" {
 								<span class="form-error">{ data.Errors["name"] }</span>
 							} else {
@@ -297,20 +299,21 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 							}
 						</div>
 						<div class="form-group">
-							<label for="native_name" class="form-label">
+							@label.Label(label.Props{For: "native_name", Class: "block mb-1"}) {
 								{ pc.T("languages.native_name") } <span class="required">*</span>
-							</label>
-							<input
-								type="text"
-								id="native_name"
-								name="native_name"
-								class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["native_name"] != "") }
-								value={ languageFormValue(data, "native_name") }
-								x-model="nativeName"
-								placeholder={ pc.T("languages.native_placeholder") }
-								required
-								maxlength="255"
-							/>
+							}
+							@input.Input(input.Props{
+								ID: "native_name",
+								Name: "native_name",
+								Value: languageFormValue(data, "native_name"),
+								Placeholder: pc.T("languages.native_placeholder"),
+								HasError: data.Errors["native_name"] != "",
+								Attributes: templ.Attributes{
+									"x-model": "nativeName",
+									"required": true,
+									"maxlength": "255",
+								},
+							})
 							if data.Errors["native_name"] != "" {
 								<span class="form-error">{ data.Errors["native_name"] }</span>
 							} else {
@@ -318,9 +321,9 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 							}
 						</div>
 						<div class="form-group">
-							<label for="direction" class="form-label">
+							@label.Label(label.Props{For: "direction", Class: "block mb-1"}) {
 								{ pc.T("languages.text_direction") } <span class="required">*</span>
-							</label>
+							}
 							<select
 								id="direction"
 								name="direction"
@@ -338,16 +341,20 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 							}
 						</div>
 						<div class="form-group">
-							<label for="position" class="form-label">{ pc.T("languages.position") }</label>
-							<input
-								type="number"
-								id="position"
-								name="position"
-								class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["position"] != "") }
-								value={ languageFormValue(data, "position") }
-								placeholder="0"
-								min="0"
-							/>
+							@label.Label(label.Props{For: "position", Class: "block mb-1"}) {
+								{ pc.T("languages.position") }
+							}
+							@input.Input(input.Props{
+								Type: input.TypeNumber,
+								ID: "position",
+								Name: "position",
+								Value: languageFormValue(data, "position"),
+								Placeholder: "0",
+								HasError: data.Errors["position"] != "",
+								Attributes: templ.Attributes{
+									"min": "0",
+								},
+							})
 							if data.Errors["position"] != "" {
 								<span class="form-error">{ data.Errors["position"] }</span>
 							} else {
@@ -355,7 +362,9 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 							}
 						</div>
 						<div class="form-group">
-							<label class="form-label">{ pc.T("label.status") }</label>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("label.status") }
+							}
 							<div class="form-check">
 								<input
 									type="checkbox"

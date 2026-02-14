@@ -1,0 +1,43 @@
+// templui component label - version: v1.5.0 installed by templui v1.5.0
+// 📚 Documentation: https://templui.io/docs/components/label
+package label
+
+import "github.com/olegiv/ocms-go/internal/views/utils"
+
+type Props struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+	For        string
+	Error      string
+}
+
+templ Label(props ...Props) {
+	{{ var p Props }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	<label
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		if p.For != "" {
+			for={ p.For }
+		}
+		class={
+			utils.TwMerge(
+				"text-sm font-medium leading-none inline-block",
+				utils.If(len(p.Error) > 0, "text-destructive"),
+				p.Class,
+			),
+		}
+		data-tui-label-disabled-style="opacity-50 cursor-not-allowed"
+		{ p.Attributes... }
+	>
+		{ children... }
+	</label>
+}
+
+templ Script() {
+	<script defer nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/label.min.js") }></script>
+}

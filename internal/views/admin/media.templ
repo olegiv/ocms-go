@@ -7,6 +7,8 @@ import "fmt"
 import "github.com/olegiv/ocms-go/internal/views/components/button"
 import "github.com/olegiv/ocms-go/internal/views/components/card"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
+import "github.com/olegiv/ocms-go/internal/views/components/input"
+import "github.com/olegiv/ocms-go/internal/views/components/label"
 
 // =============================================================================
 // VIEW TYPES
@@ -185,17 +187,12 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 				<!-- New Folder Form -->
 				<div class="new-folder-form" x-show="showNewFolder" x-cloak>
 					<form hx-post="/admin/media/folders" hx-target="#folder-list" hx-swap="beforeend" @htmx:after-request="showNewFolder = false; newFolderName = ''">
-						<input
-							type="text"
-							name="name"
-							class="form-input form-input-sm"
-							placeholder={ pc.T("media.folder_name") }
-							x-model="newFolderName"
-							x-ref="newFolderInput"
-							@keydown.escape="showNewFolder = false"
-							required
-							maxlength="255"
-						/>
+						@input.Input(input.Props{
+							Name:        "name",
+							Type:        input.TypeText,
+							Placeholder: pc.T("media.folder_name"),
+							Attributes:  templ.Attributes{"x-model": "newFolderName", "x-ref": "newFolderInput", "@keydown.escape": "showNewFolder = false", "required": true, "maxlength": "255", "class": "form-input-sm"},
+						})
 						<div class="new-folder-actions">
 							@button.Button(button.Props{Size: button.SizeSm, Type: button.TypeSubmit}) {
 								{ pc.T("btn.create") }
@@ -241,7 +238,13 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 							}
 							<div class="search-input-wrapper">
 								@iconSearch16()
-								<input type="text" name="q" value={ data.Search } placeholder={ pc.T("media.search_files") } class="form-input search-input" aria-label={ pc.T("media.search_files") }/>
+								@input.Input(input.Props{
+									Name:        "q",
+									Type:        input.TypeText,
+									Value:       data.Search,
+									Placeholder: pc.T("media.search_files"),
+									Attributes:  templ.Attributes{"aria-label": pc.T("media.search_files"), "class": "search-input"},
+								})
 								if data.Search != "" {
 									<a href={ templ.SafeURL(mediaClearSearchURL(data.Filter)) } class="search-clear" title={ pc.T("btn.clear") }>&times;</a>
 								}
@@ -444,7 +447,9 @@ templ MediaUploadPage(pc *PageContext, data MediaUploadViewData) {
 				<!-- Folder Selection -->
 				if len(data.Folders) > 0 {
 					<div class="form-group">
-						<label for="folder_id" class="form-label">{ pc.T("media.folder_optional") }</label>
+						@label.Label(label.Props{For: "folder_id", Class: "block mb-1"}) {
+							{ pc.T("media.folder_optional") }
+						}
 						<select id="folder_id" name="folder_id" class="form-select">
 							<option value="">{ pc.T("media.no_folder") }</option>
 							for _, folder := range data.Folders {
@@ -648,35 +653,39 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 						@csrfField()
 						<input type="hidden" name="_method" value="PUT"/>
 						<div class="form-group">
-							<label for="filename" class="form-label">{ pc.T("media.filename") } <span class="required">*</span></label>
-							<input
-								type="text"
-								id="filename"
-								name="filename"
-								value={ mediaFormVal(data.FormValues, "filename", data.Media.Filename) }
-								class={ "form-input", templ.KV("is-invalid", data.Errors["filename"] != "") }
-								required
-								maxlength="255"
-							/>
+							@label.Label(label.Props{For: "filename", Class: "block mb-1"}) {
+								{ pc.T("media.filename") } <span class="required">*</span>
+							}
+							@input.Input(input.Props{
+								ID:         "filename",
+								Name:       "filename",
+								Type:       input.TypeText,
+								Value:      mediaFormVal(data.FormValues, "filename", data.Media.Filename),
+								HasError:   data.Errors["filename"] != "",
+								Attributes: templ.Attributes{"required": true, "maxlength": "255"},
+							})
 							if data.Errors["filename"] != "" {
 								<span class="form-error">{ data.Errors["filename"] }</span>
 							}
 						</div>
 						<div class="form-group">
-							<label for="alt" class="form-label">{ pc.T("media.alt_text") }</label>
-							<input
-								type="text"
-								id="alt"
-								name="alt"
-								value={ mediaFormVal(data.FormValues, "alt", data.Media.Alt) }
-								class="form-input"
-								placeholder={ pc.T("media.alt_placeholder") }
-								maxlength="255"
-							/>
+							@label.Label(label.Props{For: "alt", Class: "block mb-1"}) {
+								{ pc.T("media.alt_text") }
+							}
+							@input.Input(input.Props{
+								ID:          "alt",
+								Name:        "alt",
+								Type:        input.TypeText,
+								Value:       mediaFormVal(data.FormValues, "alt", data.Media.Alt),
+								Placeholder: pc.T("media.alt_placeholder"),
+								Attributes:  templ.Attributes{"maxlength": "255"},
+							})
 							<span class="form-hint">{ pc.T("media.alt_hint") }</span>
 						</div>
 						<div class="form-group">
-							<label for="caption" class="form-label">{ pc.T("media.caption") }</label>
+							@label.Label(label.Props{For: "caption", Class: "block mb-1"}) {
+								{ pc.T("media.caption") }
+							}
 							<textarea
 								id="caption"
 								name="caption"
@@ -695,7 +704,9 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 						}
 						if len(data.Folders) > 0 {
 							<div class="form-group">
-								<label for="folder_id" class="form-label">{ pc.T("media.folder") }</label>
+								@label.Label(label.Props{For: "folder_id", Class: "block mb-1"}) {
+									{ pc.T("media.folder") }
+								}
 								<select id="folder_id" name="folder_id" class="form-select">
 									<option value="">{ pc.T("media.no_folder") }</option>
 									for _, folder := range data.Folders {
@@ -780,19 +791,22 @@ templ mediaTranslationFields(pc *PageContext, lang MediaLanguageView, translatio
 	<fieldset class="translation-fieldset">
 		<legend class="translation-legend">{ lang.NativeName } ({ lang.Code })</legend>
 		<div class="form-group">
-			<label for={ "alt_" + lang.Code } class="form-label">{ pc.T("media.alt_text") }</label>
-			<input
-				type="text"
-				id={ "alt_" + lang.Code }
-				name={ "alt_" + lang.Code }
-				value={ translations[lang.Code].Alt }
-				class="form-input"
-				placeholder={ pc.T("media.alt_placeholder") }
-				maxlength="255"
-			/>
+			@label.Label(label.Props{For: "alt_" + lang.Code, Class: "block mb-1"}) {
+				{ pc.T("media.alt_text") }
+			}
+			@input.Input(input.Props{
+				ID:          "alt_" + lang.Code,
+				Name:        "alt_" + lang.Code,
+				Type:        input.TypeText,
+				Value:       translations[lang.Code].Alt,
+				Placeholder: pc.T("media.alt_placeholder"),
+				Attributes:  templ.Attributes{"maxlength": "255"},
+			})
 		</div>
 		<div class="form-group">
-			<label for={ "caption_" + lang.Code } class="form-label">{ pc.T("media.caption") }</label>
+			@label.Label(label.Props{For: "caption_" + lang.Code, Class: "block mb-1"}) {
+				{ pc.T("media.caption") }
+			}
 			<textarea
 				id={ "caption_" + lang.Code }
 				name={ "caption_" + lang.Code }

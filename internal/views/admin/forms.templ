@@ -11,6 +11,8 @@ import "github.com/olegiv/ocms-go/internal/views/components/icon"
 import "github.com/olegiv/ocms-go/internal/views/components/badge"
 import "github.com/olegiv/ocms-go/internal/views/components/card"
 import "github.com/olegiv/ocms-go/internal/views/components/table"
+import "github.com/olegiv/ocms-go/internal/views/components/input"
+import "github.com/olegiv/ocms-go/internal/views/components/label"
 
 // =============================================================================
 // VIEW TYPES
@@ -321,31 +323,35 @@ templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 							}
 							<div class="form-row">
 								<div class="form-group col-md-6">
-									<label for="name" class="form-label">{ pc.T("forms.internal_name") } *</label>
-									<input type="text"
-										id="name"
-										name="name"
-										class={ "form-input", templ.KV("is-invalid", data.Errors["name"] != "") }
-										value={ formFormVal(data.FormValues, "name", data.FormName, data.IsEdit) }
-										required
-										maxlength="255"
-									/>
+									@label.Label(label.Props{For: "name", Class: "block mb-1"}) {
+										{ pc.T("forms.internal_name") } *
+									}
+									@input.Input(input.Props{
+										ID: "name",
+										Name: "name",
+										Type: input.TypeText,
+										Value: formFormVal(data.FormValues, "name", data.FormName, data.IsEdit),
+										HasError: data.Errors["name"] != "",
+										Attributes: templ.Attributes{"required": true, "maxlength": "255"},
+									})
 									if data.Errors["name"] != "" {
 										<div class="form-error">{ data.Errors["name"] }</div>
 									}
 									<small class="form-text">{ pc.T("forms.internal_name_hint") }</small>
 								</div>
 								<div class="form-group col-md-6">
-									<label for="slug" class="form-label">{ pc.T("label.slug") } *</label>
-									<input type="text"
-										id="slug"
-										name="slug"
-										class={ "form-input", templ.KV("is-invalid", data.Errors["slug"] != "") }
-										value={ formFormVal(data.FormValues, "slug", data.FormSlug, data.IsEdit) }
-										pattern="[a-z0-9-]+"
-										placeholder="auto-generated-from-name"
-										maxlength="255"
-									/>
+									@label.Label(label.Props{For: "slug", Class: "block mb-1"}) {
+										{ pc.T("label.slug") } *
+									}
+									@input.Input(input.Props{
+										ID: "slug",
+										Name: "slug",
+										Type: input.TypeText,
+										Value: formFormVal(data.FormValues, "slug", data.FormSlug, data.IsEdit),
+										Placeholder: "auto-generated-from-name",
+										HasError: data.Errors["slug"] != "",
+										Attributes: templ.Attributes{"pattern": "[a-z0-9-]+", "maxlength": "255"},
+									})
 									if data.Errors["slug"] != "" {
 										<div class="form-error">{ data.Errors["slug"] }</div>
 									}
@@ -353,40 +359,48 @@ templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 								</div>
 							</div>
 							<div class="form-group">
-								<label for="title" class="form-label">{ pc.T("forms.display_title") } *</label>
-								<input type="text"
-									id="title"
-									name="title"
-									class={ "form-input", templ.KV("is-invalid", data.Errors["title"] != "") }
-									value={ formFormVal(data.FormValues, "title", data.FormTitle, data.IsEdit) }
-									required
-									maxlength="255"
-								/>
+								@label.Label(label.Props{For: "title", Class: "block mb-1"}) {
+									{ pc.T("forms.display_title") } *
+								}
+								@input.Input(input.Props{
+									ID: "title",
+									Name: "title",
+									Type: input.TypeText,
+									Value: formFormVal(data.FormValues, "title", data.FormTitle, data.IsEdit),
+									HasError: data.Errors["title"] != "",
+									Attributes: templ.Attributes{"required": true, "maxlength": "255"},
+								})
 								if data.Errors["title"] != "" {
 									<div class="form-error">{ data.Errors["title"] }</div>
 								}
 								<small class="form-text">{ pc.T("forms.display_title_hint") }</small>
 							</div>
 							<div class="form-group">
-								<label for="description" class="form-label">{ pc.T("label.description") }</label>
+								@label.Label(label.Props{For: "description", Class: "block mb-1"}) {
+									{ pc.T("label.description") }
+								}
 								<textarea id="description" name="description" class="form-input" rows="2">{ formFormVal(data.FormValues, "description", data.FormDescription, data.IsEdit) }</textarea>
 								<small class="form-text">{ pc.T("forms.description_hint") }</small>
 							</div>
 							<div class="form-group">
-								<label for="success_message" class="form-label">{ pc.T("forms.success_message") }</label>
+								@label.Label(label.Props{For: "success_message", Class: "block mb-1"}) {
+									{ pc.T("forms.success_message") }
+								}
 								<textarea id="success_message" name="success_message" class="form-input" rows="2">{ formFormVal(data.FormValues, "success_message", data.SuccessMessage, data.IsEdit) }</textarea>
 								<small class="form-text">{ pc.T("forms.success_message_hint") }</small>
 							</div>
 							<div class="form-group">
-								<label for="email_to" class="form-label">{ pc.T("forms.notification_email") }</label>
-								<input type="email"
-									id="email_to"
-									name="email_to"
-									class="form-input"
-									value={ formFormVal(data.FormValues, "email_to", data.EmailTo, data.IsEdit) }
-									placeholder="admin@example.com"
-									maxlength="255"
-								/>
+								@label.Label(label.Props{For: "email_to", Class: "block mb-1"}) {
+									{ pc.T("forms.notification_email") }
+								}
+								@input.Input(input.Props{
+									ID: "email_to",
+									Name: "email_to",
+									Type: input.TypeEmail,
+									Value: formFormVal(data.FormValues, "email_to", data.EmailTo, data.IsEdit),
+									Placeholder: "admin@example.com",
+									Attributes: templ.Attributes{"maxlength": "255"},
+								})
 								<small class="form-text">{ pc.T("forms.notification_email_hint") }</small>
 							</div>
 							<div class="form-group">
@@ -401,7 +415,9 @@ templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 							</div>
 							if data.HasMultipleLanguages {
 								<div class="form-group">
-									<label for="language_code" class="form-label">{ pc.T("label.language") }</label>
+									@label.Label(label.Props{For: "language_code", Class: "block mb-1"}) {
+										{ pc.T("label.language") }
+									}
 									<select
 										id="language_code"
 										name={ languageSelectName(data.IsEdit) }
@@ -537,7 +553,9 @@ templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
 					</div>
 					<div class="modal-body" style="padding:1rem;">
 						<div class="form-group">
-							<label class="form-label">{ pc.T("forms.field_type") } *</label>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("forms.field_type") } *
+							}
 							<select class="form-input" x-model="editingField.type">
 								<template x-for="t in (editingField && editingField.id ? fieldTypes : getAvailableFieldTypes())" :key="t">
 									<option :value="t" x-text="t"></option>
@@ -545,25 +563,48 @@ templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
 							</select>
 						</div>
 						<div class="form-group">
-							<label class="form-label">{ pc.T("forms.field_label") } *</label>
-							<input type="text" class="form-input" x-model="editingField.label" maxlength="255"/>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("forms.field_label") } *
+							}
+							@input.Input(input.Props{
+								Type: input.TypeText,
+								Attributes: templ.Attributes{"x-model": "editingField.label", "maxlength": "255"},
+							})
 						</div>
 						<div class="form-group" x-show="editingField && editingField.type !== 'captcha'">
-							<label class="form-label">{ pc.T("forms.field_name") }</label>
-							<input type="text" class="form-input" x-model="editingField.name" placeholder="auto-generated" maxlength="255"/>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("forms.field_name") }
+							}
+							@input.Input(input.Props{
+								Type: input.TypeText,
+								Placeholder: "auto-generated",
+								Attributes: templ.Attributes{"x-model": "editingField.name", "maxlength": "255"},
+							})
 							<small class="form-text">{ pc.T("forms.field_name_hint") }</small>
 						</div>
 						<div class="form-group" x-show="editingField && editingField.type !== 'captcha'">
-							<label class="form-label">{ pc.T("forms.field_placeholder") }</label>
-							<input type="text" class="form-input" x-model="editingField.placeholder" maxlength="255"/>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("forms.field_placeholder") }
+							}
+							@input.Input(input.Props{
+								Type: input.TypeText,
+								Attributes: templ.Attributes{"x-model": "editingField.placeholder", "maxlength": "255"},
+							})
 						</div>
 						<div class="form-group" x-show="editingField && editingField.type !== 'captcha'">
-							<label class="form-label">{ pc.T("forms.field_help_text") }</label>
-							<input type="text" class="form-input" x-model="editingField.help_text" maxlength="255"/>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("forms.field_help_text") }
+							}
+							@input.Input(input.Props{
+								Type: input.TypeText,
+								Attributes: templ.Attributes{"x-model": "editingField.help_text", "maxlength": "255"},
+							})
 							<small class="form-text">{ pc.T("forms.field_help_hint") }</small>
 						</div>
 						<div class="form-group" x-show="showOptionsField()">
-							<label class="form-label">{ pc.T("forms.field_options") }</label>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("forms.field_options") }
+							}
 							<textarea class="form-input" rows="4" x-model="editingField.options" placeholder={ "Option 1\nOption 2\nOption 3" }></textarea>
 							<small class="form-text">{ pc.T("forms.field_options_hint") }</small>
 						</div>

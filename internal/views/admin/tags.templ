@@ -10,6 +10,8 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/input"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
@@ -209,20 +211,21 @@ templ TagFormPage(pc *PageContext, data TagFormData) {
 				<div class="form-grid">
 					<!-- Name -->
 					<div class="form-group">
-						<label for="name" class="form-label">
+						@label.Label(label.Props{For: "name", Class: "block mb-1"}) {
 							{ pc.T("label.name") } <span class="required">*</span>
-						</label>
-						<input
-							type="text"
-							id="name"
-							name="name"
-							class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["name"] != "") }
-							value={ tagFormValue(data, "name") }
-							placeholder={ pc.T("tags.name_placeholder") }
-							required
-							maxlength="255"
-							@input="generateSlug($event.target.value)"
-						/>
+						}
+						@input.Input(input.Props{
+							ID: "name",
+							Name: "name",
+							Value: tagFormValue(data, "name"),
+							Placeholder: pc.T("tags.name_placeholder"),
+							HasError: data.Errors["name"] != "",
+							Attributes: templ.Attributes{
+								"required": true,
+								"maxlength": "255",
+								"@input": "generateSlug($event.target.value)",
+							},
+						})
 						if data.Errors["name"] != "" {
 							<span class="form-error">{ data.Errors["name"] }</span>
 						} else {
@@ -231,20 +234,21 @@ templ TagFormPage(pc *PageContext, data TagFormData) {
 					</div>
 					<!-- Slug -->
 					<div class="form-group">
-						<label for="slug" class="form-label">
+						@label.Label(label.Props{For: "slug", Class: "block mb-1"}) {
 							{ pc.T("label.slug") } <span class="required">*</span>
-						</label>
-						<input
-							type="text"
-							id="slug"
-							name="slug"
-							class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["slug"] != "") }
-							value={ tagFormValue(data, "slug") }
-							placeholder="tag-slug"
-							x-model="slug"
-							@input="slugEdited = true"
-							maxlength="255"
-						/>
+						}
+						@input.Input(input.Props{
+							ID: "slug",
+							Name: "slug",
+							Value: tagFormValue(data, "slug"),
+							Placeholder: "tag-slug",
+							HasError: data.Errors["slug"] != "",
+							Attributes: templ.Attributes{
+								"x-model": "slug",
+								"@input": "slugEdited = true",
+								"maxlength": "255",
+							},
+						})
 						if data.Errors["slug"] != "" {
 							<span class="form-error">{ data.Errors["slug"] }</span>
 						} else {
@@ -254,7 +258,9 @@ templ TagFormPage(pc *PageContext, data TagFormData) {
 					<!-- Language -->
 					if len(data.AllLanguages) > 1 {
 						<div class="form-group">
-							<label for="language_code" class="form-label">{ pc.T("label.language") }</label>
+							@label.Label(label.Props{For: "language_code", Class: "block mb-1"}) {
+								{ pc.T("label.language") }
+							}
 							<select
 								id="language_code"
 								name={ languageFieldName(data.IsEdit) }

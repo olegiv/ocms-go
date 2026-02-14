@@ -10,6 +10,8 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/input"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
@@ -206,36 +208,35 @@ templ MenuFormPage(pc *PageContext, data MenuFormData) {
 				}
 				<div class="form-grid">
 					<div class="form-group">
-						<label for="name" class="form-label">
+						@label.Label(label.Props{For: "name", Class: "block mb-1"}) {
 							{ pc.T("label.name") } <span class="required">*</span>
-						</label>
-						<input
-							type="text"
-							id="name"
-							name="name"
-							class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["name"] != "") }
-							value={ menuFormValue(data, "name") }
-							placeholder={ pc.T("menus.name_placeholder") }
-							required
-							maxlength="255"
-						/>
+						}
+						@input.Input(input.Props{
+							ID:          "name",
+							Name:        "name",
+							Type:        input.TypeText,
+							Value:       menuFormValue(data, "name"),
+							Placeholder: pc.T("menus.name_placeholder"),
+							HasError:    data.Errors["name"] != "",
+							Attributes:  templ.Attributes{"required": true, "maxlength": "255"},
+						})
 						if data.Errors["name"] != "" {
 							<span class="form-error">{ data.Errors["name"] }</span>
 						}
 					</div>
 					<div class="form-group">
-						<label for="slug" class="form-label">
+						@label.Label(label.Props{For: "slug", Class: "block mb-1"}) {
 							{ pc.T("label.slug") } <span class="required">*</span>
-						</label>
-						<input
-							type="text"
-							id="slug"
-							name="slug"
-							class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["slug"] != "") }
-							value={ menuFormValue(data, "slug") }
-							placeholder={ pc.T("menus.slug_placeholder") }
-							maxlength="255"
-						/>
+						}
+						@input.Input(input.Props{
+							ID:          "slug",
+							Name:        "slug",
+							Type:        input.TypeText,
+							Value:       menuFormValue(data, "slug"),
+							Placeholder: pc.T("menus.slug_placeholder"),
+							HasError:    data.Errors["slug"] != "",
+							Attributes:  templ.Attributes{"maxlength": "255"},
+						})
 						if data.Errors["slug"] != "" {
 							<span class="form-error">{ data.Errors["slug"] }</span>
 						} else {
@@ -243,9 +244,9 @@ templ MenuFormPage(pc *PageContext, data MenuFormData) {
 						}
 					</div>
 					<div class="form-group">
-						<label for="language_code" class="form-label">
+						@label.Label(label.Props{For: "language_code", Class: "block mb-1"}) {
 							{ pc.T("label.language") }
-						</label>
+						}
 						<select
 							id="language_code"
 							name="language_code"
@@ -310,15 +311,29 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 						<div class="menu-add-section">
 							<h4 class="menu-add-title">{ pc.T("menus.custom_link") }</h4>
 							<div class="form-group">
-								<label class="form-label">{ pc.T("label.title") }</label>
-								<input type="text" class="form-input" x-model="customLink.title" placeholder={ pc.T("menus.link_text") } maxlength="255"/>
+								@label.Label(label.Props{Class: "block mb-1"}) {
+									{ pc.T("label.title") }
+								}
+								@input.Input(input.Props{
+									Type:        input.TypeText,
+									Placeholder: pc.T("menus.link_text"),
+									Attributes:  templ.Attributes{"x-model": "customLink.title", "maxlength": "255"},
+								})
 							</div>
 							<div class="form-group">
-								<label class="form-label">URL</label>
-								<input type="text" class="form-input" x-model="customLink.url" placeholder="https://..." maxlength="2048"/>
+								@label.Label(label.Props{Class: "block mb-1"}) {
+									URL
+								}
+								@input.Input(input.Props{
+									Type:        input.TypeText,
+									Placeholder: "https://...",
+									Attributes:  templ.Attributes{"x-model": "customLink.url", "maxlength": "2048"},
+								})
 							</div>
 							<div class="form-group">
-								<label class="form-label">{ pc.T("menus.target") }</label>
+								@label.Label(label.Props{Class: "block mb-1"}) {
+									{ pc.T("menus.target") }
+								}
 								<select class="form-select" x-model="customLink.target">
 									for _, target := range data.Targets {
 										<option value={ target }>{ target }</option>
@@ -326,7 +341,9 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 								</select>
 							</div>
 							<div class="form-group">
-								<label class="form-label">{ pc.T("menus.parent_item") }</label>
+								@label.Label(label.Props{Class: "block mb-1"}) {
+									{ pc.T("menus.parent_item") }
+								}
 								<select class="form-select" x-model="customLink.parent_id">
 									<option value="0">&mdash; { pc.T("menus.top_level") } &mdash;</option>
 									<template x-for="opt in flattenItems()" :key="opt.id">
@@ -360,7 +377,9 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 									}
 								</div>
 								<div class="form-group">
-									<label class="form-label">{ pc.T("menus.parent_item") }</label>
+									@label.Label(label.Props{Class: "block mb-1"}) {
+										{ pc.T("menus.parent_item") }
+									}
 									<select class="form-select" x-model="pagesParentId">
 										<option value="0">&mdash; { pc.T("menus.top_level") } &mdash;</option>
 										<template x-for="opt in flattenItems()" :key="opt.id">
@@ -483,15 +502,27 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 					</div>
 					<div class="modal-body">
 						<div class="form-group">
-							<label class="form-label">{ pc.T("label.title") }</label>
-							<input type="text" class="form-input" x-model="editingItem.title" maxlength="255"/>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("label.title") }
+							}
+							@input.Input(input.Props{
+								Type:       input.TypeText,
+								Attributes: templ.Attributes{"x-model": "editingItem.title", "maxlength": "255"},
+							})
 						</div>
 						<div class="form-group" x-show="!editingItem.page_id">
-							<label class="form-label">URL</label>
-							<input type="text" class="form-input" x-model="editingItem.url" maxlength="2048"/>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								URL
+							}
+							@input.Input(input.Props{
+								Type:       input.TypeText,
+								Attributes: templ.Attributes{"x-model": "editingItem.url", "maxlength": "2048"},
+							})
 						</div>
 						<div class="form-group">
-							<label class="form-label">{ pc.T("menus.target") }</label>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("menus.target") }
+							}
 							<select class="form-select" x-model="editingItem.target">
 								for _, target := range data.Targets {
 									<option value={ target }>{ target }</option>
@@ -499,7 +530,9 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 							</select>
 						</div>
 						<div class="form-group">
-							<label class="form-label">{ pc.T("menus.parent_item") }</label>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("menus.parent_item") }
+							}
 							<select class="form-select" x-model="editingItem.parent_id">
 								<option value="0">&mdash; { pc.T("menus.top_level") } &mdash;</option>
 								<template x-for="opt in flattenItems()" :key="opt.id">
@@ -508,8 +541,14 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 							</select>
 						</div>
 						<div class="form-group">
-							<label class="form-label">{ pc.T("menus.css_class") }</label>
-							<input type="text" class="form-input" x-model="editingItem.css_class" placeholder={ pc.T("menus.css_class_placeholder") } maxlength="255"/>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("menus.css_class") }
+							}
+							@input.Input(input.Props{
+								Type:        input.TypeText,
+								Placeholder: pc.T("menus.css_class_placeholder"),
+								Attributes:  templ.Attributes{"x-model": "editingItem.css_class", "maxlength": "255"},
+							})
 						</div>
 						<div class="form-group">
 							<label class="checkbox-label">

@@ -11,6 +11,8 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/input"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
@@ -284,15 +286,16 @@ templ apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) {
 				</div>
 			}
 			<div class="api-key-display">
-				<label class="form-label">{ pc.T("api_keys.your_key") }</label>
+				@label.Label(label.Props{For: "generated-key", Class: "block mb-1"}) {
+					{ pc.T("api_keys.your_key") }
+				}
 				<div class="key-container" x-data="{ copied: false }">
-					<input
-						type="text"
-						class="form-input key-input"
-						value={ data.GeneratedKey }
-						readonly
-						id="generated-key"
-					/>
+					@input.Input(input.Props{
+						ID:       "generated-key",
+						Value:    data.GeneratedKey,
+						Readonly: true,
+						Class:    "key-input",
+					})
 					@button.Button(button.Props{Class: "copy-btn", Attributes: templ.Attributes{"@click": "navigator.clipboard.writeText(document.getElementById('generated-key').value); copied = true; setTimeout(() => copied = false, 2000)"}}) {
 						<span x-show="!copied">
 							@icon.Copy(icon.Props{Size: 16})
@@ -360,20 +363,21 @@ templ apiKeyEditForm(pc *PageContext, data APIKeyFormData) {
 					<input type="hidden" name="_method" value="PUT"/>
 				}
 				<div class="form-group">
-					<label for="name" class="form-label">
+					@label.Label(label.Props{For: "name", Class: "block mb-1"}) {
 						{ pc.T("label.name") } <span class="required">*</span>
-					</label>
-					<input
-						type="text"
-						id="name"
-						name="name"
-						class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["name"] != "") }
-						value={ apiKeyFormValue(data, "name") }
-						placeholder={ pc.T("api_keys.name_placeholder") }
-						required
-						autofocus
-						maxlength="255"
-					/>
+					}
+					@input.Input(input.Props{
+						ID:          "name",
+						Name:        "name",
+						Value:       apiKeyFormValue(data, "name"),
+						Placeholder: pc.T("api_keys.name_placeholder"),
+						HasError:    data.Errors["name"] != "",
+						Attributes: templ.Attributes{
+							"required":  true,
+							"autofocus": true,
+							"maxlength": "255",
+						},
+					})
 					if data.Errors["name"] != "" {
 						<span class="form-error">{ data.Errors["name"] }</span>
 					} else {
@@ -381,9 +385,9 @@ templ apiKeyEditForm(pc *PageContext, data APIKeyFormData) {
 					}
 				</div>
 				<div class="form-group">
-					<label class="form-label">
+					@label.Label(label.Props{Class: "block mb-1"}) {
 						{ pc.T("api_keys.permissions") } <span class="required">*</span>
-					</label>
+					}
 					if data.Errors["permissions"] != "" {
 						<span class="form-error form-label-block">{ data.Errors["permissions"] }</span>
 					}
@@ -410,15 +414,19 @@ templ apiKeyEditForm(pc *PageContext, data APIKeyFormData) {
 					</div>
 				</div>
 				<div class="form-group">
-					<label for="expires_at" class="form-label">{ pc.T("api_keys.expiration_date") }</label>
-					<input
-						type="date"
-						id="expires_at"
-						name="expires_at"
-						class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["expires_at"] != "") }
-						value={ apiKeyFormValue(data, "expires_at") }
-						min={ todayDate() }
-					/>
+					@label.Label(label.Props{For: "expires_at", Class: "block mb-1"}) {
+						{ pc.T("api_keys.expiration_date") }
+					}
+					@input.Input(input.Props{
+						ID:       "expires_at",
+						Name:     "expires_at",
+						Value:    apiKeyFormValue(data, "expires_at"),
+						HasError: data.Errors["expires_at"] != "",
+						Attributes: templ.Attributes{
+							"type": "date",
+							"min":  todayDate(),
+						},
+					})
 					if data.Errors["expires_at"] != "" {
 						<span class="form-error">{ data.Errors["expires_at"] }</span>
 					} else {
@@ -427,7 +435,9 @@ templ apiKeyEditForm(pc *PageContext, data APIKeyFormData) {
 				</div>
 				if data.IsEdit {
 					<div class="form-group">
-						<label class="form-label">{ pc.T("label.status") }</label>
+						@label.Label(label.Props{Class: "block mb-1"}) {
+							{ pc.T("label.status") }
+						}
 						<label class="checkbox-label">
 							<input
 								type="checkbox"
@@ -443,7 +453,9 @@ templ apiKeyEditForm(pc *PageContext, data APIKeyFormData) {
 					</div>
 					if data.APIKey != nil {
 						<div class="form-group">
-							<label class="form-label">{ pc.T("api_keys.key_info") }</label>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("api_keys.key_info") }
+							}
 							<div class="key-info-box">
 								<div class="info-row">
 									<span class="info-label">{ pc.T("api_keys.key_prefix") }:</span>

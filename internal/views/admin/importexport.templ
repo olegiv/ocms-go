@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
 )
 
 // ExportViewData holds data for the export page.
@@ -106,7 +107,9 @@ templ ExportPage(pc *PageContext, data ExportViewData) {
 								</label>
 							</div>
 							<div class="form-group export-sub-option nested-options">
-								<label for="page_status" class="form-label">{ pc.T("export.page_status") }</label>
+								@label.Label(label.Props{For: "page_status", Class: "block mb-1"}) {
+								{ pc.T("export.page_status") }
+							}
 								<select id="page_status" name="page_status" class="form-select">
 									<option value="all">{ pc.T("export.status_all") }</option>
 									<option value="published">{ pc.T("export.status_published") }</option>
