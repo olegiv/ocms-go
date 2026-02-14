@@ -5,6 +5,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -2191,8 +2192,27 @@ func templComponent(templateName string, data any) templ.Component {
 	return nil
 }
 
-// render renders a page using templ components (no legacy theme fallback).
+// render renders a page using the active theme's render engine.
+// For templ engine (embedded/core themes): renders via templ components.
+// For html engine (custom/ThemeForest themes): renders via html/template.
 func (h *FrontendHandler) render(w http.ResponseWriter, templateName string, data any) {
+	activeTheme := h.themeManager.GetActiveTheme()
+
+	// Determine engine: if no active theme, default to templ.
+	engine := theme.ThemeEngineTempl
+	if activeTheme != nil {
+		engine = activeTheme.RenderEngine()
+	}
+
+	if engine == theme.ThemeEngineHTML {
+		h.renderHTML(w, activeTheme, templateName, data)
+	} else {
+		h.renderTempl(w, templateName, data)
+	}
+}
+
+// renderTempl renders a page using templ components.
+func (h *FrontendHandler) renderTempl(w http.ResponseWriter, templateName string, data any) {
 	comp := templComponent(templateName, data)
 	if comp == nil {
 		slog.Error("no templ component for template", "template", templateName)
@@ -2206,6 +2226,25 @@ func (h *FrontendHandler) render(w http.ResponseWriter, templateName string, dat
 		h.renderInternalError(w)
 		return
 	}
+}
+
+// renderHTML renders a page using the html/template engine of the active theme.
+func (h *FrontendHandler) renderHTML(w http.ResponseWriter, activeTheme *theme.Theme, templateName string, data any) {
+	if activeTheme == nil {
+		slog.Error("html engine selected but no active theme")
+		h.renderInternalError(w)
+		return
+	}
+
+	var buf bytes.Buffer
+	if err := activeTheme.RenderPage(&buf, templateName, data); err != nil {
+		slog.Error("html theme render failed", "template", templateName, "theme", activeTheme.Name, "error", err)
+		h.renderInternalError(w)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(buf.Bytes())
 }
 
 // renderNotFound renders the 404 page.

@@ -5,6 +5,7 @@
     "author": "oCMS",
     "description": "A clean, magazine-style starter theme with card-based layouts and warm typography",
     "screenshot": "screenshot.svg",
+    "engine": "html",
     "templates": {
         "home": "pages/home.html",
         "page": "pages/page.html",
