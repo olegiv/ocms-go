@@ -42,12 +42,8 @@ type ModulesViewData struct {
 // ModulesPage renders the modules list page.
 templ ModulesPage(pc *PageContext, data ModulesViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("modules.title") }</h1>
-				<p class="page-description">{ pc.T("modules.description") }</p>
-			</div>
-		</div>
+		@PageHeader(pc.T("modules.title"), pc.T("modules.description")) {
+		}
 		<!-- Modules Section -->
 		<div class="modules-section">
 			<h2>{ pc.T("modules.registered") }</h2>

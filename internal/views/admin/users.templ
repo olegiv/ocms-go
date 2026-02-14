@@ -6,6 +6,8 @@ package admin
 import (
 	"fmt"
 	"time"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/icon"
 )
 
 // UserListItem holds data for a user in the list view.
@@ -46,18 +48,12 @@ type UserItem struct {
 // UsersListPage renders the users list page.
 templ UsersListPage(pc *PageContext, data UsersListData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("users.title") }</h1>
-				<p class="page-description">{ pc.T("users.description", data.TotalCount) }</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/users/new" class="btn btn-primary">
-					@iconUsers()
-					{ pc.T("users.add_user") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("users.title"), pc.T("users.description", data.TotalCount)) {
+			@button.Button(button.Props{Href: "/admin/users/new"}) {
+				@icon.Users(icon.Props{Size: 16})
+				{ pc.T("users.add_user") }
+			}
+		}
 		if len(data.Users) > 0 {
 			<div class="card" id="users-table">
 				<div class="table-responsive">
@@ -184,30 +180,12 @@ templ deleteUserModal(pc *PageContext, user UserListItem) {
 // UserFormPage renders the user create/edit form.
 templ UserFormPage(pc *PageContext, data UserFormData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">
-					if data.IsEdit {
-						{ pc.T("users.edit") }
-					} else {
-						{ pc.T("users.new") }
-					}
-				</h1>
-				<p class="page-description">
-					if data.IsEdit {
-						{ pc.T("users.edit_description") }
-					} else {
-						{ pc.T("users.new_description") }
-					}
-				</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/users" class="btn btn-outline">
-					@iconBack()
-					{ pc.T("users.back_to_users") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(userFormTitle(pc, data.IsEdit), userFormDescription(pc, data.IsEdit)) {
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/users"}) {
+				@icon.ArrowLeft(icon.Props{Size: 16})
+				{ pc.T("users.back_to_users") }
+			}
+		}
 		<div class="card">
 			<form
 				id="user-form"
@@ -423,4 +401,18 @@ func passwordPlaceholder(pc *PageContext, isEdit bool) string {
 		return pc.T("users.new_password_placeholder")
 	}
 	return pc.T("users.password_placeholder")
+}
+
+func userFormTitle(pc *PageContext, isEdit bool) string {
+	if isEdit {
+		return pc.T("users.edit")
+	}
+	return pc.T("users.new")
+}
+
+func userFormDescription(pc *PageContext, isEdit bool) string {
+	if isEdit {
+		return pc.T("users.edit_description")
+	}
+	return pc.T("users.new_description")
 }

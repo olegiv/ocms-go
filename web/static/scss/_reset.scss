@@ -1,5 +1,10 @@
 // CSS Reset / Normalize
+// Wrapped in @layer so Tailwind utility classes (in @layer utilities)
+// can override these base styles. Without this, unlayered rules like
+// `a { color: blue }` beat Tailwind's `text-primary-foreground`.
 @use 'variables' as *;
+
+@layer scss-base {
 
 *,
 *::before,
@@ -77,3 +82,5 @@ input:-webkit-autofill:hover,
 input:-webkit-autofill:focus {
   -webkit-box-shadow: 0 0 0 1000px $white inset;
 }
+
+} // @layer scss-base

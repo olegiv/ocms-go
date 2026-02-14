@@ -4,6 +4,8 @@
 package admin
 
 import "fmt"
+import "github.com/olegiv/ocms-go/internal/views/components/button"
+import "github.com/olegiv/ocms-go/internal/views/components/icon"
 
 // SchedulerJobViewItem represents a system job in the scheduler list.
 type SchedulerJobViewItem struct {
@@ -74,20 +76,14 @@ type SchedulerTaskRunsViewData struct {
 
 templ SchedulerListPage(pc *PageContext, data SchedulerListViewData) {
 	@AdminLayout(pc) {
-		<div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-			<div>
-				<h1 class="text-2xl font-bold text-gray-900 dark:text-white">{ pc.T("scheduler.title") }</h1>
-				<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{ pc.T("scheduler.description") }</p>
-			</div>
+		@PageHeader(pc.T("scheduler.title"), pc.T("scheduler.description")) {
 			if !data.IsDemoMode {
-				<div>
-					<a href="/admin/scheduler/tasks/new" class="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
-						@iconPlus()
-						{ pc.T("scheduler.new_task") }
-					</a>
-				</div>
+				@button.Button(button.Props{Href: "/admin/scheduler/tasks/new"}) {
+					@icon.Plus(icon.Props{Size: 16})
+					{ pc.T("scheduler.new_task") }
+				}
 			}
-		</div>
+		}
 		<!-- Custom Tasks -->
 		if len(data.Tasks) > 0 {
 			<div class="mb-6 rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -391,22 +387,21 @@ templ schedulerEditModal(pc *PageContext) {
 
 templ SchedulerTaskFormPage(pc *PageContext, data SchedulerTaskFormViewData) {
 	@AdminLayout(pc) {
-		<div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-			<div>
-				if data.IsEdit {
-					<h1 class="text-2xl font-bold text-gray-900 dark:text-white">{ pc.T("scheduler.edit_task") }</h1>
-				} else {
-					<h1 class="text-2xl font-bold text-gray-900 dark:text-white">{ pc.T("scheduler.new_task") }</h1>
-				}
-				<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{ pc.T("scheduler.task_form_description") }</p>
-			</div>
-			<div>
-				<a href="/admin/scheduler" class="inline-flex items-center gap-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
-					@iconChevronLeft()
+		if data.IsEdit {
+			@PageHeader(pc.T("scheduler.edit_task"), pc.T("scheduler.task_form_description")) {
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/scheduler"}) {
+					@icon.ArrowLeft(icon.Props{Size: 16})
 					{ pc.T("scheduler.back_to_scheduler") }
-				</a>
-			</div>
-		</div>
+				}
+			}
+		} else {
+			@PageHeader(pc.T("scheduler.new_task"), pc.T("scheduler.task_form_description")) {
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/scheduler"}) {
+					@icon.ArrowLeft(icon.Props{Size: 16})
+					{ pc.T("scheduler.back_to_scheduler") }
+				}
+			}
+		}
 		<div class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
 			<div class="p-6">
 				<form method="POST" action={ schedulerTaskFormAction(data) } class="space-y-6">
@@ -492,13 +487,7 @@ func schedulerTaskFormAction(data SchedulerTaskFormViewData) templ.SafeURL {
 
 templ SchedulerTaskRunsPage(pc *PageContext, data SchedulerTaskRunsViewData) {
 	@AdminLayout(pc) {
-		<div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-			<div>
-				<h1 class="text-2xl font-bold text-gray-900 dark:text-white">{ pc.T("scheduler.task_runs") }</h1>
-				<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-					{ data.TaskName } — <code class="rounded bg-gray-100 px-1 py-0.5 text-xs dark:bg-gray-700">{ data.TaskURL }</code>
-				</p>
-			</div>
+		@PageHeader(pc.T("scheduler.task_runs"), fmt.Sprintf("%s — %s", data.TaskName, data.TaskURL)) {
 			<div class="flex gap-2">
 				<a href="/admin/scheduler" class="inline-flex items-center gap-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
 					@iconChevronLeft()
@@ -514,7 +503,7 @@ templ SchedulerTaskRunsPage(pc *PageContext, data SchedulerTaskRunsViewData) {
 					</form>
 				}
 			</div>
-		</div>
+		}
 		<!-- Task Info Card -->
 		<div class="mb-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
 			<div class="grid grid-cols-2 gap-4 sm:grid-cols-4">

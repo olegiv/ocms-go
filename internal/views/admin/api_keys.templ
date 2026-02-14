@@ -6,6 +6,8 @@ package admin
 import (
 	"fmt"
 	"time"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/icon"
 )
 
 // APIKeyListItem holds data for a single API key in the list view.
@@ -68,18 +70,15 @@ type APIKeyFormData struct {
 // APIKeysListPage renders the API keys list page.
 templ APIKeysListPage(pc *PageContext, data APIKeysListData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("api_keys.title") }</h1>
-				<p class="page-description">{ pc.T("api_keys.description") } ({ fmt.Sprintf("%d", data.TotalKeys) } { pc.T("label.total") })</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/api-keys/new" class="btn btn-primary">
-					@iconAPIKeys()
-					{ pc.T("api_keys.create") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(
+			pc.T("api_keys.title"),
+			pc.T("api_keys.description") + " (" + fmt.Sprintf("%d", data.TotalKeys) + " " + pc.T("label.total") + ")",
+		) {
+			@button.Button(button.Props{Href: "/admin/api-keys/new"}) {
+				@icon.Key(icon.Props{Size: 16})
+				{ pc.T("api_keys.create") }
+			}
+		}
 		if len(data.APIKeys) > 0 {
 			<div class="card" id="api-keys-table">
 				<div class="table-responsive">
@@ -262,18 +261,12 @@ templ APIKeyFormPage(pc *PageContext, data APIKeyFormData) {
 
 // apiKeyGeneratedPage renders the success page showing the generated API key.
 templ apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) {
-	<div class="page-header">
-		<div>
-			<h1 class="page-title">{ pc.T("api_keys.key_created") }</h1>
-			<p class="page-description">{ pc.T("api_keys.key_generated") }</p>
-		</div>
-		<div class="page-actions">
-			<a href="/admin/api-keys" class="btn btn-outline">
-				@iconBack()
-				{ pc.T("api_keys.back_to_keys") }
-			</a>
-		</div>
-	</div>
+	@PageHeader(pc.T("api_keys.key_created"), pc.T("api_keys.key_generated")) {
+		@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/api-keys"}) {
+			@icon.ArrowLeft(icon.Props{Size: 16})
+			{ pc.T("api_keys.back_to_keys") }
+		}
+	}
 	<div class="card">
 		<div class="card-body">
 			<div class="alert alert-warning mb-6">
@@ -344,30 +337,12 @@ templ apiKeyGeneratedPage(pc *PageContext, data APIKeyFormData) {
 
 // apiKeyEditForm renders the create/edit form for API keys.
 templ apiKeyEditForm(pc *PageContext, data APIKeyFormData) {
-	<div class="page-header">
-		<div>
-			<h1 class="page-title">
-				if data.IsEdit {
-					{ pc.T("api_keys.edit_key") }
-				} else {
-					{ pc.T("api_keys.new_key") }
-				}
-			</h1>
-			<p class="page-description">
-				if data.IsEdit {
-					{ pc.T("api_keys.update_settings") }
-				} else {
-					{ pc.T("api_keys.create_new") }
-				}
-			</p>
-		</div>
-		<div class="page-actions">
-			<a href="/admin/api-keys" class="btn btn-outline">
-				@iconBack()
-				{ pc.T("api_keys.back_to_keys") }
-			</a>
-		</div>
-	</div>
+	@PageHeader(apiKeyFormTitle(pc, data.IsEdit), apiKeyFormDescription(pc, data.IsEdit)) {
+		@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/api-keys"}) {
+			@icon.ArrowLeft(icon.Props{Size: 16})
+			{ pc.T("api_keys.back_to_keys") }
+		}
+	}
 	<div class="card">
 		<div class="card-body">
 			<form method="POST" action={ apiKeyFormAction(data) } class="form">
@@ -527,5 +502,19 @@ func apiKeyFormCheckedActive(data APIKeyFormData) bool {
 
 func todayDate() string {
 	return time.Now().Format("2006-01-02")
+}
+
+func apiKeyFormTitle(pc *PageContext, isEdit bool) string {
+	if isEdit {
+		return pc.T("api_keys.edit_key")
+	}
+	return pc.T("api_keys.new_key")
+}
+
+func apiKeyFormDescription(pc *PageContext, isEdit bool) string {
+	if isEdit {
+		return pc.T("api_keys.update_settings")
+	}
+	return pc.T("api_keys.create_new")
 }
 

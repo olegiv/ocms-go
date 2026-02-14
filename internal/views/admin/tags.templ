@@ -6,6 +6,8 @@ package admin
 import (
 	"fmt"
 	"time"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/icon"
 )
 
 // TagListItem holds data for a tag in the list view.
@@ -61,18 +63,12 @@ type TagTranslation struct {
 // TagsListPage renders the tags list page.
 templ TagsListPage(pc *PageContext, data TagsListData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("tags.title") }</h1>
-				<p class="page-description">{ pc.T("tags.description", data.TotalCount) }</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/tags/new" class="btn btn-primary">
-					@iconTags()
-					{ pc.T("tags.new") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("tags.title"), pc.T("tags.description", data.TotalCount)) {
+			@button.Button(button.Props{Href: "/admin/tags/new"}) {
+				@icon.Tag(icon.Props{Size: 16})
+				{ pc.T("tags.new") }
+			}
+		}
 		if len(data.Tags) > 0 {
 			<div class="card" id="tags-table">
 				<div class="table-responsive">
@@ -194,30 +190,12 @@ templ deleteTagModal(pc *PageContext, tag TagListItem) {
 // TagFormPage renders the tag create/edit form.
 templ TagFormPage(pc *PageContext, data TagFormData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">
-					if data.IsEdit {
-						{ pc.T("tags.edit") }
-					} else {
-						{ pc.T("tags.new") }
-					}
-				</h1>
-				<p class="page-description">
-					if data.IsEdit {
-						{ pc.T("tags.edit_description") }
-					} else {
-						{ pc.T("tags.new_description") }
-					}
-				</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/tags" class="btn btn-outline">
-					@iconBack()
-					{ pc.T("tags.back_to_tags") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(tagFormTitle(pc, data.IsEdit), tagFormDescription(pc, data.IsEdit)) {
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/tags"}) {
+				@icon.ArrowLeft(icon.Props{Size: 16})
+				{ pc.T("tags.back_to_tags") }
+			}
+		}
 		<div class="card">
 			<form
 				id="tag-form"
@@ -449,4 +427,18 @@ func languageHiddenValue(data TagFormData) string {
 		return data.Language.Code
 	}
 	return ""
+}
+
+func tagFormTitle(pc *PageContext, isEdit bool) string {
+	if isEdit {
+		return pc.T("tags.edit")
+	}
+	return pc.T("tags.new")
+}
+
+func tagFormDescription(pc *PageContext, isEdit bool) string {
+	if isEdit {
+		return pc.T("tags.edit_description")
+	}
+	return pc.T("tags.new_description")
 }

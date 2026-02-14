@@ -6,6 +6,8 @@ package admin
 import (
 	"fmt"
 	"time"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/icon"
 )
 
 // MenuListItem holds data for a menu in the list view.
@@ -53,18 +55,12 @@ type MenuPageItem struct {
 // MenusListPage renders the menus list page.
 templ MenusListPage(pc *PageContext, data MenusListData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("menus.title") }</h1>
-				<p class="page-description">{ pc.T("menus.description") }</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/menus/new" class="btn btn-primary">
-					@iconPlus()
-					{ pc.T("menus.new") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("menus.title"), pc.T("menus.description")) {
+			@button.Button(button.Props{Href: "/admin/menus/new"}) {
+				@icon.Plus(icon.Props{Size: 16})
+				{ pc.T("menus.new") }
+			}
+		}
 		if len(data.Menus) > 0 {
 			<div class="card" id="menus-table">
 				<div class="table-responsive">
@@ -185,30 +181,12 @@ templ deleteMenuModal(pc *PageContext, menu MenuListItem) {
 // MenuFormPage renders the menu create/edit form.
 templ MenuFormPage(pc *PageContext, data MenuFormData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">
-					if data.IsEdit {
-						{ pc.T("menus.edit") }
-					} else {
-						{ pc.T("menus.new") }
-					}
-				</h1>
-				<p class="page-description">
-					if data.IsEdit {
-						{ pc.T("menus.edit_description") }
-					} else {
-						{ pc.T("menus.new_description") }
-					}
-				</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/menus" class="btn btn-outline">
-					@iconBack()
-					{ pc.T("menus.back_to_menus") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(menuFormTitle(pc, data.IsEdit), menuFormDescription(pc, data.IsEdit)) {
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/menus"}) {
+				@icon.ArrowLeft(icon.Props{Size: 16})
+				{ pc.T("menus.back_to_menus") }
+			}
+		}
 		<!-- Menu Settings Card -->
 		<div class="card mb-4">
 			<div class="card-header">
@@ -579,4 +557,18 @@ func menuCurrentLanguageCode(data MenuFormData) string {
 		return data.Menu.LanguageCode
 	}
 	return ""
+}
+
+func menuFormTitle(pc *PageContext, isEdit bool) string {
+	if isEdit {
+		return pc.T("menus.edit")
+	}
+	return pc.T("menus.new")
+}
+
+func menuFormDescription(pc *PageContext, isEdit bool) string {
+	if isEdit {
+		return pc.T("menus.edit_description")
+	}
+	return pc.T("menus.new_description")
 }
