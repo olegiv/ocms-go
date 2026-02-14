@@ -6,6 +6,8 @@ package admin
 import "fmt"
 import "strings"
 import "encoding/json"
+import "github.com/olegiv/ocms-go/internal/views/components/button"
+import "github.com/olegiv/ocms-go/internal/views/components/icon"
 
 // =============================================================================
 // VIEW TYPES
@@ -303,18 +305,12 @@ func scheduleOpen(data PageFormViewData) bool {
 
 templ PagesListPage(pc *PageContext, data PagesListViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("pages.title") }</h1>
-				<p class="page-description">{ pc.T("pages.total_count", data.TotalCount) }</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/pages/new" class="btn btn-primary">
-					@iconFilePlus()
-					{ pc.T("pages.new") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("pages.title"), pc.T("pages.total_count", data.TotalCount)) {
+			@button.Button(button.Props{Href: "/admin/pages/new"}) {
+				@icon.FileText(icon.Props{Size: 16})
+				{ pc.T("pages.new") }
+			}
+		}
 		<!-- Filters -->
 		<div class="filter-bar">
 			<div class="filter-group">
@@ -627,36 +623,25 @@ func publishTitle(pc *PageContext, status string) string {
 
 templ PageFormPage(pc *PageContext, data PageFormViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">
-					if data.IsEdit {
-						{ pc.T("pages.edit") }
-					} else {
-						{ pc.T("pages.new") }
-					}
-				</h1>
-				<p class="page-description">
-					if data.IsEdit {
-						{ pc.T("pages.edit_description") }
-					} else {
-						{ pc.T("pages.new_description") }
-					}
-				</p>
-			</div>
-			<div class="page-actions">
-				if data.IsEdit {
-					<a href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/versions", data.PageID)) } class="btn btn-outline">
-						@iconClockHistory()
-						{ pc.T("pages.version_history") }
-					</a>
-				}
-				<a href="/admin/pages" class="btn btn-outline">
-					@iconChevronLeft()
-					{ pc.T("pages.back_to_pages") }
+		if data.IsEdit {
+			@PageHeader(pc.T("pages.edit"), pc.T("pages.edit_description")) {
+				<a href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/versions", data.PageID)) } class="btn btn-outline">
+					@iconClockHistory()
+					{ pc.T("pages.version_history") }
 				</a>
-			</div>
-		</div>
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/pages"}) {
+					@icon.ArrowLeft(icon.Props{Size: 16})
+					{ pc.T("pages.back_to_pages") }
+				}
+			}
+		} else {
+			@PageHeader(pc.T("pages.new"), pc.T("pages.new_description")) {
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/pages"}) {
+					@icon.ArrowLeft(icon.Props{Size: 16})
+					{ pc.T("pages.back_to_pages") }
+				}
+			}
+		}
 		<div class="card">
 			<form
 				method="POST"
@@ -1775,24 +1760,12 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 
 templ PageVersionsPage(pc *PageContext, data PageVersionsViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("versions.title") }</h1>
-				<p class="page-description">
-					<a href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d", data.PageID)) } class="text-link">{ data.PageTitle }</a>
-					{ " " }&mdash; { fmt.Sprintf("%d", data.TotalCount) } { pc.T("versions.version") }
-					if data.TotalCount != 1 {
-						{ "s" }
-					}
-				</p>
-			</div>
-			<div class="page-actions">
-				<a href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d", data.PageID)) } class="btn btn-outline">
-					@iconArrowLeft()
-					{ pc.T("versions.back_to_page") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("versions.title"), "") {
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/admin/pages/%d", data.PageID)}) {
+				@icon.ArrowLeft(icon.Props{Size: 16})
+				{ pc.T("versions.back_to_page") }
+			}
+		}
 		if len(data.Versions) > 0 {
 			<div class="card">
 				<div class="table-responsive">

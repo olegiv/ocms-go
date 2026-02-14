@@ -41,12 +41,8 @@ type ConfigViewData struct {
 
 templ ConfigPage(pc *PageContext, data ConfigViewData) {
 	@AdminLayout(pc) {
-		<div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-			<div>
-				<h1 class="text-2xl font-bold text-gray-900 dark:text-white">{ pc.T("config.title") }</h1>
-				<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{ pc.T("config.description") }</p>
-			</div>
-		</div>
+		@PageHeader(pc.T("config.title"), pc.T("config.description")) {
+		}
 		<div class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
 			<form method="POST" action="/admin/config" class="p-6">
 				@csrfField()

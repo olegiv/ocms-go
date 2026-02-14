@@ -75,12 +75,8 @@ type ImportUploadedDataView struct {
 // ExportPage renders the content export page.
 templ ExportPage(pc *PageContext, data ExportViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("export.title") }</h1>
-				<p class="page-description">{ pc.T("export.description") }</p>
-			</div>
-		</div>
+		@PageHeader(pc.T("export.title"), pc.T("export.description")) {
+		}
 		<div class="card">
 			<form
 				method="POST"
@@ -236,12 +232,8 @@ templ ExportPage(pc *PageContext, data ExportViewData) {
 // ImportPage renders the content import page.
 templ ImportPage(pc *PageContext, data ImportViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("import.title") }</h1>
-				<p class="page-description">{ pc.T("import.description") }</p>
-			</div>
-		</div>
+		@PageHeader(pc.T("import.title"), pc.T("import.description")) {
+		}
 		// Step 1: File Upload
 		if data.ValidationResult == nil && data.ImportResult == nil {
 			@importFileUpload(pc)

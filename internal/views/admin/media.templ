@@ -4,6 +4,8 @@
 package admin
 
 import "fmt"
+import "github.com/olegiv/ocms-go/internal/views/components/button"
+import "github.com/olegiv/ocms-go/internal/views/components/icon"
 
 // =============================================================================
 // VIEW TYPES
@@ -132,18 +134,12 @@ func mediaFormVal(formValues map[string]string, key string, fallback string) str
 
 templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("media.title") }</h1>
-				<p class="page-description">{ pc.TDefault("media.description", fmt.Sprintf("%d", data.TotalCount)) }</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/media/upload" class="btn btn-primary">
-					@iconUpload()
-					{ pc.T("btn.upload") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("media.title"), pc.T("media.description", data.TotalCount)) {
+			@button.Button(button.Props{Href: "/admin/media/upload"}) {
+				@icon.Upload(icon.Props{Size: 16})
+				{ pc.T("btn.upload") }
+			}
+		}
 		<div class="media-layout" x-data="folderManager()">
 			<!-- Folder Sidebar -->
 			<aside class="folder-sidebar">
@@ -431,18 +427,12 @@ templ mediaGridItem(pc *PageContext, item MediaItemView) {
 
 templ MediaUploadPage(pc *PageContext, data MediaUploadViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("media.upload_title") }</h1>
-				<p class="page-description">{ pc.T("media.upload_description") }</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/media" class="btn btn-outline">
-					@iconChevronLeft16()
-					{ pc.T("media.back_to_library") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("media.upload_title"), pc.T("media.upload_description")) {
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/media"}) {
+				@icon.ArrowLeft(icon.Props{Size: 16})
+				{ pc.T("media.back_to_library") }
+			}
+		}
 		<div class="card">
 			<div class="card-body">
 				@csrfField()
@@ -564,18 +554,12 @@ templ mediaDropzoneUpload(pc *PageContext, data MediaUploadViewData) {
 
 templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("media.edit_title") }</h1>
-				<p class="page-description">{ pc.T("media.edit_description") }</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/media" class="btn btn-outline">
-					@iconChevronLeft16()
-					{ pc.T("media.back_to_library") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("media.edit_title"), pc.T("media.edit_description")) {
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/media"}) {
+				@icon.ArrowLeft(icon.Props{Size: 16})
+				{ pc.T("media.back_to_library") }
+			}
+		}
 		<div class="media-edit-layout">
 			<!-- Preview Panel -->
 			<div class="card media-preview-panel">

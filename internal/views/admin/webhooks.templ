@@ -7,6 +7,8 @@ import "fmt"
 import "strings"
 import "time"
 import "encoding/json"
+import "github.com/olegiv/ocms-go/internal/views/components/button"
+import "github.com/olegiv/ocms-go/internal/views/components/icon"
 
 // WebhookListItemView represents a webhook in the list.
 type WebhookListItemView struct {
@@ -119,20 +121,12 @@ func fmtTimeForDisplay(t time.Time) string {
 
 templ WebhooksListPage(pc *PageContext, data WebhooksListViewData) {
 	@AdminLayout(pc) {
-		<div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-			<div>
-				<h1 class="text-2xl font-bold text-gray-900 dark:text-white">{ pc.T("webhooks.title") }</h1>
-				<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-					{ pc.T("webhooks.description") } ({ fmt.Sprint(data.TotalWebhooks) } { pc.T("webhooks.total_count") })
-				</p>
-			</div>
-			<div>
-				<a href="/admin/webhooks/new" class="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
-					@iconPlus()
-					{ pc.T("webhooks.create") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("webhooks.title"), fmt.Sprintf("%s (%d %s)", pc.T("webhooks.description"), data.TotalWebhooks, pc.T("webhooks.total_count"))) {
+			@button.Button(button.Props{Href: "/admin/webhooks/new"}) {
+				@icon.Webhook(icon.Props{Size: 16})
+				{ pc.T("webhooks.create") }
+			}
+		}
 		if len(data.Webhooks) > 0 {
 			<div class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800" id="webhooks-table">
 				<div class="overflow-x-auto">
@@ -320,23 +314,21 @@ func webhookHealthClass(status string) string {
 
 templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 	@AdminLayout(pc) {
-		<div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-			<div>
-				if data.IsEdit {
-					<h1 class="text-2xl font-bold text-gray-900 dark:text-white">{ pc.T("webhooks.edit") }</h1>
-					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{ pc.T("webhooks.edit_description") }</p>
-				} else {
-					<h1 class="text-2xl font-bold text-gray-900 dark:text-white">{ pc.T("webhooks.new") }</h1>
-					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{ pc.T("webhooks.new_description") }</p>
-				}
-			</div>
-			<div>
-				<a href="/admin/webhooks" class="inline-flex items-center gap-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
-					@iconChevronLeft()
+		if data.IsEdit {
+			@PageHeader(pc.T("webhooks.edit"), pc.T("webhooks.edit_description")) {
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/webhooks"}) {
+					@icon.ArrowLeft(icon.Props{Size: 16})
 					{ pc.T("webhooks.back_to_list") }
-				</a>
-			</div>
-		</div>
+				}
+			}
+		} else {
+			@PageHeader(pc.T("webhooks.new"), pc.T("webhooks.new_description")) {
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/webhooks"}) {
+					@icon.ArrowLeft(icon.Props{Size: 16})
+					{ pc.T("webhooks.back_to_list") }
+				}
+			}
+		}
 		<div class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
 			<div class="p-6">
 				<form method="POST" action={ webhookFormAction(data) } class="space-y-6">
@@ -558,13 +550,7 @@ func webhookFormAction(data WebhookFormViewData) templ.SafeURL {
 
 templ WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) {
 	@AdminLayout(pc) {
-		<div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-			<div>
-				<h1 class="text-2xl font-bold text-gray-900 dark:text-white">{ pc.T("webhooks.deliveries_title") }</h1>
-				<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-					{ data.WebhookName } - { fmt.Sprint(data.TotalCount) } { pc.T("webhooks.deliveries") }
-				</p>
-			</div>
+		@PageHeader(pc.T("webhooks.deliveries_title"), fmt.Sprintf("%s - %d %s", data.WebhookName, data.TotalCount, pc.T("webhooks.deliveries"))) {
 			<div class="flex gap-2">
 				<a href={ templ.SafeURL(fmt.Sprintf("/admin/webhooks/%d", data.WebhookID)) } class="inline-flex items-center gap-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
 					@iconEdit()
@@ -578,7 +564,7 @@ templ WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) {
 					</button>
 				</form>
 			</div>
-		</div>
+		}
 		if len(data.Deliveries) > 0 {
 			<div class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
 				<div class="overflow-x-auto">

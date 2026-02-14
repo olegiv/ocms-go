@@ -3,7 +3,9 @@
 
 package admin
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // EventItem holds data for a single event row.
 type EventItem struct {
@@ -38,12 +40,10 @@ type EventsListData struct {
 // EventsListPage renders the events list page.
 templ EventsListPage(pc *PageContext, data EventsListData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("events.title") }</h1>
-				<p class="page-description">{ pc.T("events.description") } ({ fmt.Sprintf("%d", data.TotalEvents) } { pc.T("label.total") })</p>
-			</div>
-		</div>
+		@PageHeader(
+			pc.T("events.title"),
+			pc.T("events.description") + " (" + fmt.Sprintf("%d", data.TotalEvents) + " " + pc.T("label.total") + ")",
+		) {}
 		<!-- Filters -->
 		@eventsFilterBar(pc, data)
 		if len(data.Events) > 0 {

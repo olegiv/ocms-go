@@ -5,6 +5,8 @@ package admin
 
 import (
 	"fmt"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/icon"
 )
 
 // CategoryListItem holds data for a category in the list view.
@@ -59,18 +61,12 @@ type CategoryTranslation struct {
 // CategoriesListPage renders the categories list page.
 templ CategoriesListPage(pc *PageContext, data CategoriesListData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("categories.title") }</h1>
-				<p class="page-description">{ pc.T("categories.description", data.TotalCount) }</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/categories/new" class="btn btn-primary">
-					@iconCategories()
-					{ pc.T("categories.new") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("categories.title"), pc.T("categories.description", data.TotalCount)) {
+			@button.Button(button.Props{Href: "/admin/categories/new"}) {
+				@icon.FolderTree(icon.Props{Size: 16})
+				{ pc.T("categories.new") }
+			}
+		}
 		if len(data.Categories) > 0 {
 			<div class="card" id="categories-table">
 				<div class="table-responsive">
@@ -207,30 +203,12 @@ templ deleteCategoryModal(pc *PageContext, cat CategoryListItem) {
 // CategoryFormPage renders the category create/edit form.
 templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">
-					if data.IsEdit {
-						{ pc.T("categories.edit") }
-					} else {
-						{ pc.T("categories.new") }
-					}
-				</h1>
-				<p class="page-description">
-					if data.IsEdit {
-						{ pc.T("categories.edit_description") }
-					} else {
-						{ pc.T("categories.new_description") }
-					}
-				</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/categories" class="btn btn-outline">
-					@iconBack()
-					{ pc.T("categories.back_to_categories") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(categoryFormTitle(pc, data.IsEdit), categoryFormDescription(pc, data.IsEdit)) {
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/categories"}) {
+				@icon.ArrowLeft(icon.Props{Size: 16})
+				{ pc.T("categories.back_to_categories") }
+			}
+		}
 		<div class="card">
 			<form
 				id="category-form"
@@ -556,4 +534,18 @@ func truncateStr(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+func categoryFormTitle(pc *PageContext, isEdit bool) string {
+	if isEdit {
+		return pc.T("categories.edit")
+	}
+	return pc.T("categories.new")
+}
+
+func categoryFormDescription(pc *PageContext, isEdit bool) string {
+	if isEdit {
+		return pc.T("categories.edit_description")
+	}
+	return pc.T("categories.new_description")
 }

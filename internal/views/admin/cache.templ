@@ -39,26 +39,14 @@ type CacheStatsView struct {
 // CacheStatsPage renders the cache statistics page.
 templ CacheStatsPage(pc *PageContext, data CacheStatsViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("cache.title") }</h1>
-				<p class="page-description">{ pc.T("cache.description") }</p>
-				if data.ResetAt != "" {
-					<p class="page-description page-subtitle">
-						@iconClock()
-						{ pc.T("cache.stats_reset") } { data.ResetAt }
-					</p>
-				}
-			</div>
-			<div class="page-actions">
-				<form method="POST" action="/admin/cache/clear" class="d-inline">
-					<button type="submit" class="btn btn-danger" onclick="return confirm(this.dataset.msg)" data-msg={ pc.T("cache.clear_confirm") }>
-						@iconDelete()
-						{ pc.T("cache.clear_all") }
-					</button>
-				</form>
-			</div>
-		</div>
+		@PageHeader(pc.T("cache.title"), pc.T("cache.description")) {
+			<form method="POST" action="/admin/cache/clear" class="d-inline">
+				<button type="submit" class="btn btn-danger" onclick="return confirm(this.dataset.msg)" data-msg={ pc.T("cache.clear_confirm") }>
+					@iconDelete()
+					{ pc.T("cache.clear_all") }
+				</button>
+			</form>
+		}
 		<!-- Cache Backend Info -->
 		<div class="cache-backend-info mb-6">
 			<div class={ "backend-card", templ.KV("backend-redis", data.IsRedis), templ.KV("backend-memory", !data.IsRedis) }>

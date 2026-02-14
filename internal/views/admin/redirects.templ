@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/icon"
 )
 
 // RedirectListItem holds data for a redirect in the list view.
@@ -58,18 +60,12 @@ type RedirectFormData struct {
 // RedirectsListPage renders the redirects list page.
 templ RedirectsListPage(pc *PageContext, data RedirectsListData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("redirects.title") }</h1>
-				<p class="page-description">{ pc.T("redirects.description") }</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/redirects/new" class="btn btn-primary">
-					@iconPlus()
-					{ pc.T("redirects.new") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("redirects.title"), pc.T("redirects.description")) {
+			@button.Button(button.Props{Href: "/admin/redirects/new"}) {
+				@icon.ArrowRightLeft(icon.Props{Size: 16})
+				{ pc.T("redirects.new") }
+			}
+		}
 		if len(data.Redirects) > 0 {
 			<div class="card" id="redirects-table">
 				<div class="table-responsive">
@@ -225,30 +221,21 @@ templ deleteRedirectModal(pc *PageContext, redirect RedirectListItem) {
 // RedirectFormPage renders the redirect create/edit form.
 templ RedirectFormPage(pc *PageContext, data RedirectFormData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">
-					if data.IsEdit {
-						{ pc.T("redirects.edit") }
-					} else {
-						{ pc.T("redirects.new") }
-					}
-				</h1>
-				<p class="page-description">
-					if data.IsEdit {
-						{ pc.T("redirects.edit_description") }
-					} else {
-						{ pc.T("redirects.new_description") }
-					}
-				</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/redirects" class="btn btn-outline">
-					@iconBack()
+		if data.IsEdit {
+			@PageHeader(pc.T("redirects.edit"), pc.T("redirects.edit_description")) {
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/redirects"}) {
+					@icon.ArrowLeft(icon.Props{Size: 16})
 					{ pc.T("redirects.back_to_list") }
-				</a>
-			</div>
-		</div>
+				}
+			}
+		} else {
+			@PageHeader(pc.T("redirects.new"), pc.T("redirects.new_description")) {
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/redirects"}) {
+					@icon.ArrowLeft(icon.Props{Size: 16})
+					{ pc.T("redirects.back_to_list") }
+				}
+			}
+		}
 		<div class="card">
 			<div class="card-body">
 				<form method="POST" action={ redirectFormAction(data) } class="form">

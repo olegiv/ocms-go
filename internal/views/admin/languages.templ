@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/icon"
 )
 
 // LanguageListItem holds data for a language in the list view.
@@ -61,18 +63,15 @@ type LanguageFormData struct {
 // LanguagesListPage renders the languages list page.
 templ LanguagesListPage(pc *PageContext, data LanguagesListData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("languages.title") }</h1>
-				<p class="page-description">{ pc.T("languages.description") } ({ fmt.Sprintf("%d", data.TotalLanguages) } { pc.T("label.total") })</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/languages/new" class="btn btn-primary">
-					@iconPlus()
-					{ pc.T("languages.add") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(
+			pc.T("languages.title"),
+			pc.T("languages.description") + " (" + fmt.Sprintf("%d", data.TotalLanguages) + " " + pc.T("label.total") + ")",
+		) {
+			@button.Button(button.Props{Href: "/admin/languages/new"}) {
+				@icon.Plus(icon.Props{Size: 16})
+				{ pc.T("languages.add") }
+			}
+		}
 		if len(data.Languages) > 0 {
 			<div class="card" id="languages-table">
 				<div class="table-responsive">
@@ -213,30 +212,12 @@ templ deleteLanguageModal(pc *PageContext, lang LanguageListItem) {
 // LanguageFormPage renders the language create/edit form.
 templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">
-					if data.IsEdit {
-						{ pc.T("languages.edit_language") }
-					} else {
-						{ pc.T("languages.new_language") }
-					}
-				</h1>
-				<p class="page-description">
-					if data.IsEdit {
-						{ pc.T("languages.update_settings") }
-					} else {
-						{ pc.T("languages.add_new") }
-					}
-				</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/languages" class="btn btn-outline">
-					@iconBack()
-					{ pc.T("languages.back_to_languages") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(languageFormTitle(pc, data.IsEdit), languageFormDescription(pc, data.IsEdit)) {
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/languages"}) {
+				@icon.ArrowLeft(icon.Props{Size: 16})
+				{ pc.T("languages.back_to_languages") }
+			}
+		}
 		<div class="card">
 			<div class="card-body">
 				<form method="POST" action={ languageFormAction(data) } class="form" x-data={ languageFormAlpineData(data) }>
@@ -509,4 +490,18 @@ func languageFormAlpineData(data LanguageFormData) string {
 		return ""
 	}
 	return "languageForm()"
+}
+
+func languageFormTitle(pc *PageContext, isEdit bool) string {
+	if isEdit {
+		return pc.T("languages.edit_language")
+	}
+	return pc.T("languages.new_language")
+}
+
+func languageFormDescription(pc *PageContext, isEdit bool) string {
+	if isEdit {
+		return pc.T("languages.update_settings")
+	}
+	return pc.T("languages.add_new")
 }

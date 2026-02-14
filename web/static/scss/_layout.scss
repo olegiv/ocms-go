@@ -1,6 +1,11 @@
 // Layout utilities
 @use 'variables' as *;
 
+// Wrap all utility classes in @layer so they don't override Tailwind's
+// responsive variants (e.g. md:flex-row). Unlayered CSS always beats
+// @layer utilities in the cascade, breaking Tailwind breakpoints.
+@layer scss-utilities {
+
 .container {
   width: 100%;
   max-width: $breakpoint-xl;
@@ -138,3 +143,5 @@
 @media (min-width: $breakpoint-lg) {
   .lg\:grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
 }
+
+} // @layer scss-utilities

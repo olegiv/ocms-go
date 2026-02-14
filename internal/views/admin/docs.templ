@@ -3,7 +3,11 @@
 
 package admin
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/icon"
+)
 
 // DocsSystemInfoView holds system-level information for display.
 type DocsSystemInfoView struct {
@@ -57,12 +61,8 @@ type DocsGuideViewData struct {
 // DocsPage renders the documentation overview page.
 templ DocsPage(pc *PageContext, data DocsViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("docs.title") }</h1>
-				<p class="page-description">{ pc.T("docs.description") }</p>
-			</div>
-		</div>
+		@PageHeader(pc.T("docs.title"), pc.T("docs.description")) {
+		}
 		<!-- System Info -->
 		<div class="card mb-6">
 			<div class="card-header">
@@ -180,17 +180,12 @@ templ DocsPage(pc *PageContext, data DocsViewData) {
 // DocsGuidePage renders a single documentation guide page.
 templ DocsGuidePage(pc *PageContext, data DocsGuideViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ data.Title }</h1>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/docs" class="btn btn-outline">
-					@iconBack()
-					{ pc.T("docs.back_to_docs") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(data.Title, "") {
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/docs"}) {
+				@icon.ArrowLeft(icon.Props{Size: 16})
+				{ pc.T("docs.back_to_docs") }
+			}
+		}
 		<div class="card">
 			<div class="card-body docs-content">
 				@templ.Raw(data.Content)
