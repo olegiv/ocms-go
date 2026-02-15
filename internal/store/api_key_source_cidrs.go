@@ -31,3 +31,24 @@ func (q *Queries) ListAPIKeySourceCIDRs(ctx context.Context, apiKeyID int64) ([]
 	}
 	return cidrs, nil
 }
+
+// ReplaceAPIKeySourceCIDRs replaces source CIDR allowlist entries for an API key.
+func (q *Queries) ReplaceAPIKeySourceCIDRs(ctx context.Context, apiKeyID int64, cidrs []string) error {
+	if _, err := q.db.ExecContext(ctx, `
+		DELETE FROM api_key_source_cidrs
+		WHERE api_key_id = ?
+	`, apiKeyID); err != nil {
+		return err
+	}
+
+	for _, cidr := range cidrs {
+		if _, err := q.db.ExecContext(ctx, `
+			INSERT INTO api_key_source_cidrs (api_key_id, cidr)
+			VALUES (?, ?)
+		`, apiKeyID, cidr); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}

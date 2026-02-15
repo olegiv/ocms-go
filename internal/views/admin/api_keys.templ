@@ -14,6 +14,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/input"
 	"github.com/olegiv/ocms-go/internal/views/components/label"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
+	"github.com/olegiv/ocms-go/internal/views/components/textarea"
 )
 
 // APIKeyListItem holds data for a single API key in the list view.
@@ -433,6 +434,24 @@ templ apiKeyEditForm(pc *PageContext, data APIKeyFormData) {
 						<span class="form-hint">{ pc.T("api_keys.expiration_hint") }</span>
 					}
 				</div>
+				<div class="form-group">
+					@label.Label(label.Props{For: "source_cidrs", Class: "block mb-1"}) {
+						Source CIDR allowlist
+					}
+					@textarea.Textarea(textarea.Props{
+						ID:          "source_cidrs",
+						Name:        "source_cidrs",
+						Value:       apiKeyFormValue(data, "source_cidrs"),
+						HasError:    data.Errors["source_cidrs"] != "",
+						Placeholder: "Optional. Comma/newline-separated CIDR or IP entries.",
+						Rows:        4,
+					})
+					if data.Errors["source_cidrs"] != "" {
+						<span class="form-error">{ data.Errors["source_cidrs"] }</span>
+					} else {
+						<span class="form-hint">Restrict this key to specific source CIDRs/IPs. Leave empty for no per-key restriction.</span>
+					}
+				</div>
 				if data.IsEdit {
 					<div class="form-group">
 						@label.Label(label.Props{Class: "block mb-1"}) {
@@ -541,4 +560,3 @@ func apiKeyFormDescription(pc *PageContext, isEdit bool) string {
 	}
 	return pc.T("api_keys.create_new")
 }
-

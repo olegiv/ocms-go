@@ -53,6 +53,41 @@ func TestApplyDefaultAPIKeyExpiry(t *testing.T) {
 	})
 }
 
+func TestParseAPIKeySourceCIDRs(t *testing.T) {
+	t.Run("empty input", func(t *testing.T) {
+		got, errMsg := parseAPIKeySourceCIDRs("")
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+		if len(got) != 0 {
+			t.Fatalf("expected no entries, got %d", len(got))
+		}
+	})
+
+	t.Run("normalize and deduplicate", func(t *testing.T) {
+		got, errMsg := parseAPIKeySourceCIDRs("203.0.113.10,203.0.113.10/32\n2001:db8::1")
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+		if len(got) != 2 {
+			t.Fatalf("expected 2 entries, got %d", len(got))
+		}
+		if got[0] != "203.0.113.10/32" {
+			t.Errorf("first entry = %q, want %q", got[0], "203.0.113.10/32")
+		}
+		if got[1] != "2001:db8::1/128" {
+			t.Errorf("second entry = %q, want %q", got[1], "2001:db8::1/128")
+		}
+	})
+
+	t.Run("invalid entry", func(t *testing.T) {
+		_, errMsg := parseAPIKeySourceCIDRs("not-an-ip")
+		if errMsg == "" {
+			t.Fatal("expected validation error")
+		}
+	})
+}
+
 func TestAPIKeyCreate(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 

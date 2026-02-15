@@ -5,8 +5,10 @@ package handler
 
 import (
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
@@ -28,6 +30,7 @@ import (
 const APIKeysPerPage = 10
 
 const defaultAPIKeyLifetime = 90 * 24 * time.Hour
+const maxAPIKeySourceCIDRs = 64
 
 // APIKeysHandler handles API key management routes.
 type APIKeysHandler struct {
@@ -109,15 +112,17 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.FormValue("name"))
 	permissions := r.Form["permissions"]
 	expiresAtStr := r.FormValue("expires_at")
+	sourceCIDRsRaw := r.FormValue("source_cidrs")
 
 	// Validate form input
-	input, validationErrors := validateAPIKeyForm(name, permissions, expiresAtStr, true)
+	input, validationErrors := validateAPIKeyForm(name, permissions, expiresAtStr, sourceCIDRsRaw, true)
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
 		formValues := map[string]string{
-			"name":       name,
-			"expires_at": expiresAtStr,
+			"name":         name,
+			"expires_at":   expiresAtStr,
+			"source_cidrs": sourceCIDRsRaw,
 		}
 		h.renderAPIKeyForm(w, r, nil, validationErrors, formValues, false)
 		return
@@ -162,6 +167,17 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := h.queries.ReplaceAPIKeySourceCIDRs(r.Context(), apiKey.ID, input.SourceCIDRs); err != nil {
+		if isMissingAPIKeySourceCIDRTable(err) {
+			slog.Warn("api key source CIDR table missing; skipping per-key source allowlist", "key_id", apiKey.ID)
+		} else {
+			slog.Error("failed to save API key source CIDRs", "error", err, "key_id", apiKey.ID)
+			_ = h.queries.DeleteAPIKey(r.Context(), apiKey.ID)
+			flashError(w, r, h.renderer, redirectAdminAPIKeysNew, "Error creating API key")
+			return
+		}
+	}
+
 	slog.Info("API key created", "key_id", apiKey.ID, "name", apiKey.Name, "created_by", middleware.GetUserID(r))
 	_ = h.eventService.LogAPIKeyEvent(r.Context(), model.EventLevelInfo, "API key created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"key_id": apiKey.ID, "name": apiKey.Name})
 
@@ -193,8 +209,17 @@ func (h *APIKeysHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	formValues := make(map[string]string)
+	cidrs, err := h.queries.ListAPIKeySourceCIDRs(r.Context(), id)
+	if err != nil {
+		if !isMissingAPIKeySourceCIDRTable(err) {
+			slog.Warn("failed to load API key source CIDRs", "error", err, "key_id", id)
+		}
+	} else if len(cidrs) > 0 {
+		formValues["source_cidrs"] = strings.Join(cidrs, ", ")
+	}
 
-	h.renderAPIKeyForm(w, r, &apiKey, make(map[string]string), make(map[string]string), true)
+	h.renderAPIKeyForm(w, r, &apiKey, make(map[string]string), formValues, true)
 }
 
 // Update handles PUT /admin/api-keys/{id} - updates an existing API key.
@@ -223,16 +248,18 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.FormValue("name"))
 	permissions := r.Form["permissions"]
 	expiresAtStr := r.FormValue("expires_at")
+	sourceCIDRsRaw := r.FormValue("source_cidrs")
 	isActive := r.FormValue("is_active") == "on" || r.FormValue("is_active") == "true"
 
 	// Validate form input (don't require future expiry for edits)
-	input, validationErrors := validateAPIKeyForm(name, permissions, expiresAtStr, false)
+	input, validationErrors := validateAPIKeyForm(name, permissions, expiresAtStr, sourceCIDRsRaw, false)
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
 		formValues := map[string]string{
-			"name":       name,
-			"expires_at": expiresAtStr,
+			"name":         name,
+			"expires_at":   expiresAtStr,
+			"source_cidrs": sourceCIDRsRaw,
 		}
 		h.renderAPIKeyForm(w, r, &apiKey, validationErrors, formValues, true)
 		return
@@ -255,6 +282,16 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 		slog.Error("failed to update API key", "error", err)
 		flashError(w, r, h.renderer, redirectAdminAPIKeysSlash+idStr, "Error updating API key")
 		return
+	}
+
+	if err := h.queries.ReplaceAPIKeySourceCIDRs(r.Context(), id, input.SourceCIDRs); err != nil {
+		if isMissingAPIKeySourceCIDRTable(err) {
+			slog.Warn("api key source CIDR table missing; skipping per-key source allowlist", "key_id", id)
+		} else {
+			slog.Error("failed to update API key source CIDRs", "error", err, "key_id", id)
+			flashError(w, r, h.renderer, redirectAdminAPIKeysSlash+idStr, "Error updating API key")
+			return
+		}
 	}
 
 	slog.Info("API key updated", "key_id", id, "updated_by", middleware.GetUserID(r))
@@ -320,6 +357,7 @@ type apiKeyFormInput struct {
 	Name        string
 	Permissions []string
 	ExpiresAt   sql.NullTime
+	SourceCIDRs []string
 }
 
 func applyDefaultAPIKeyExpiry(expiresAt sql.NullTime, now time.Time) sql.NullTime {
@@ -334,7 +372,7 @@ func applyDefaultAPIKeyExpiry(expiresAt sql.NullTime, now time.Time) sql.NullTim
 
 // validateAPIKeyForm validates the API key form and returns validation errors.
 // requireFutureExpiry controls whether expiration date must be in the future.
-func validateAPIKeyForm(name string, permissions []string, expiresAtStr string, requireFutureExpiry bool) (apiKeyFormInput, map[string]string) {
+func validateAPIKeyForm(name string, permissions []string, expiresAtStr, sourceCIDRsRaw string, requireFutureExpiry bool) (apiKeyFormInput, map[string]string) {
 	errors := make(map[string]string)
 
 	if err := validateAPIKeyName(name); err != "" {
@@ -347,11 +385,16 @@ func validateAPIKeyForm(name string, permissions []string, expiresAtStr string, 
 	if expiresErr != "" {
 		errors["expires_at"] = expiresErr
 	}
+	sourceCIDRs, sourceCIDRsErr := parseAPIKeySourceCIDRs(sourceCIDRsRaw)
+	if sourceCIDRsErr != "" {
+		errors["source_cidrs"] = sourceCIDRsErr
+	}
 
 	return apiKeyFormInput{
 		Name:        name,
 		Permissions: permissions,
 		ExpiresAt:   expiresAt,
+		SourceCIDRs: sourceCIDRs,
 	}, errors
 }
 
@@ -401,6 +444,72 @@ func parseAPIKeyExpiration(expiresAtStr string, requireFuture bool) (sql.NullTim
 		Time:  t.Add(23*time.Hour + 59*time.Minute + 59*time.Second),
 		Valid: true,
 	}, ""
+}
+
+func parseAPIKeySourceCIDRs(raw string) ([]string, string) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, ""
+	}
+
+	parts := strings.FieldsFunc(trimmed, func(r rune) bool {
+		return r == ',' || r == ';' || r == '\n' || r == '\r' || r == '\t' || r == ' '
+	})
+
+	if len(parts) > maxAPIKeySourceCIDRs {
+		return nil, fmt.Sprintf("Too many source CIDR/IP entries (max %d)", maxAPIKeySourceCIDRs)
+	}
+
+	seen := make(map[string]struct{}, len(parts))
+	normalized := make([]string, 0, len(parts))
+
+	for _, part := range parts {
+		prefix, err := parseCIDROrIPForStorage(part)
+		if err != nil {
+			return nil, fmt.Sprintf("Invalid source CIDR/IP: %s", part)
+		}
+
+		value := prefix.String()
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		normalized = append(normalized, value)
+	}
+
+	return normalized, ""
+}
+
+func parseCIDROrIPForStorage(value string) (netip.Prefix, error) {
+	entry := strings.TrimSpace(value)
+	if entry == "" {
+		return netip.Prefix{}, fmt.Errorf("empty entry")
+	}
+
+	if strings.Contains(entry, "/") {
+		prefix, err := netip.ParsePrefix(entry)
+		if err != nil {
+			return netip.Prefix{}, err
+		}
+		return prefix.Masked(), nil
+	}
+
+	ip, err := netip.ParseAddr(entry)
+	if err != nil {
+		return netip.Prefix{}, err
+	}
+	if ip.Is4() {
+		return netip.PrefixFrom(ip.Unmap(), 32), nil
+	}
+	return netip.PrefixFrom(ip, 128), nil
+}
+
+func isMissingAPIKeySourceCIDRTable(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "no such table") && strings.Contains(msg, "api_key_source_cidrs")
 }
 
 // parseAPIKeyID parses API key ID from URL parameter.
