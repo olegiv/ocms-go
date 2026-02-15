@@ -54,6 +54,17 @@ var allowedExtensionsByMimeType = map[string]map[string]bool{
 	model.MimeTypeWebM: {".webm": true},
 }
 
+var canonicalExtensionByMimeType = map[string]string{
+	model.MimeTypeJPEG: ".jpg",
+	model.MimeTypePNG:  ".png",
+	model.MimeTypeGIF:  ".gif",
+	model.MimeTypeWebP: ".webp",
+	model.MimeTypeICO:  ".ico",
+	model.MimeTypePDF:  ".pdf",
+	model.MimeTypeMP4:  ".mp4",
+	model.MimeTypeWebM: ".webm",
+}
+
 // UploadResult contains the result of a media upload.
 type UploadResult struct {
 	Media    store.Medium
@@ -97,6 +108,10 @@ func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *
 
 	// Detect and validate MIME type from actual content (not client headers).
 	mimeType, err := detectAndValidateUploadMime(file, filename)
+	if err != nil {
+		return nil, err
+	}
+	filename, err = canonicalizeUploadFilename(filename, mimeType)
 	if err != nil {
 		return nil, err
 	}
@@ -375,6 +390,22 @@ func normalizeDetectedMIME(contentType string) string {
 	}
 
 	return normalized
+}
+
+func canonicalizeUploadFilename(filename, mimeType string) (string, error) {
+	canonicalExt, ok := canonicalExtensionByMimeType[mimeType]
+	if !ok {
+		return "", fmt.Errorf("unsupported mime type %s", mimeType)
+	}
+
+	base := strings.TrimSuffix(filename, filepath.Ext(filename))
+	base = strings.TrimSpace(base)
+	base = strings.Trim(base, ".")
+	if base == "" {
+		base = "file"
+	}
+
+	return sanitizeFilename(base + canonicalExt), nil
 }
 
 func sanitizeFilename(filename string) string {

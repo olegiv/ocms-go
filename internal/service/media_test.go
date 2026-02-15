@@ -162,6 +162,59 @@ func TestDetectAndValidateUploadMime(t *testing.T) {
 	})
 }
 
+func TestCanonicalizeUploadFilename(t *testing.T) {
+	tests := []struct {
+		name     string
+		filename string
+		mimeType string
+		want     string
+		wantErr  bool
+	}{
+		{
+			name:     "normalizes jpeg extension",
+			filename: "photo.jpeg",
+			mimeType: model.MimeTypeJPEG,
+			want:     "photo.jpg",
+		},
+		{
+			name:     "preserves sanitized basename",
+			filename: "my file.png",
+			mimeType: model.MimeTypePNG,
+			want:     "my-file.png",
+		},
+		{
+			name:     "empty basename falls back",
+			filename: ".jpeg",
+			mimeType: model.MimeTypeJPEG,
+			want:     "file.jpg",
+		},
+		{
+			name:     "unsupported mime",
+			filename: "note.txt",
+			mimeType: "text/plain",
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := canonicalizeUploadFilename(tt.filename, tt.mimeType)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("canonicalizeUploadFilename() error = %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("canonicalizeUploadFilename() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func tempMultipartFile(t *testing.T, content []byte) *os.File {
 	t.Helper()
 
