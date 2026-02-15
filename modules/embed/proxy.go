@@ -19,6 +19,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/util"
 )
 
@@ -64,6 +65,12 @@ func (m *Module) handleDifyChatMessagesProxy(w http.ResponseWriter, r *http.Requ
 			"path", r.URL.Path,
 			"origin", r.Header.Get("Origin"),
 			"referer", r.Header.Get("Referer"))
+		m.logEmbedSecurityEvent(r, "Embed proxy blocked by origin policy", map[string]any{
+			"provider": "dify",
+			"path":     r.URL.Path,
+			"origin":   r.Header.Get("Origin"),
+			"referer":  r.Header.Get("Referer"),
+		})
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -107,6 +114,12 @@ func (m *Module) handleDifySuggestedProxy(w http.ResponseWriter, r *http.Request
 			"path", r.URL.Path,
 			"origin", r.Header.Get("Origin"),
 			"referer", r.Header.Get("Referer"))
+		m.logEmbedSecurityEvent(r, "Embed proxy blocked by origin policy", map[string]any{
+			"provider": "dify",
+			"path":     r.URL.Path,
+			"origin":   r.Header.Get("Origin"),
+			"referer":  r.Header.Get("Referer"),
+		})
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -172,11 +185,19 @@ func (m *Module) proxyDifyRequest(
 
 	if !m.allowProxyBudget() {
 		m.ctx.Logger.Warn("embed proxy global rate limit exceeded", "path", r.URL.Path, "ip", r.RemoteAddr)
+		m.logEmbedSecurityEvent(r, "Embed proxy blocked by global rate limit", map[string]any{
+			"provider": "dify",
+			"path":     r.URL.Path,
+		})
 		http.Error(w, "Too many requests", http.StatusTooManyRequests)
 		return
 	}
 
 	if !m.acquireProxySlot() {
+		m.logEmbedSecurityEvent(r, "Embed proxy blocked by concurrency limit", map[string]any{
+			"provider": "dify",
+			"path":     r.URL.Path,
+		})
 		http.Error(w, "Service busy", http.StatusTooManyRequests)
 		return
 	}
@@ -249,6 +270,17 @@ func (m *Module) allowProxyBudget() bool {
 		return true
 	}
 	return m.globalRateLimiter.Allow()
+}
+
+func (m *Module) logEmbedSecurityEvent(r *http.Request, message string, metadata map[string]any) {
+	if m == nil || m.ctx == nil || m.ctx.Events == nil || r == nil {
+		return
+	}
+	clientIP := r.RemoteAddr
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		clientIP = host
+	}
+	_ = m.ctx.Events.LogSecurityEvent(r.Context(), model.EventLevelWarning, message, nil, clientIP, r.URL.Path, metadata)
 }
 
 func validateDifyIdentifier(value string, maxLen int, label string) error {
