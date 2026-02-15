@@ -88,6 +88,8 @@ func saveSettings(db *sql.DB, s *Settings) error {
 }
 
 // renderHeadScripts generates the tracking scripts for the <head> section.
+// SECURITY: Output is cast to template.HTML. All admin-controlled values
+// (GTM ID, GA4 ID, Matomo URL/ID) are escaped with template.HTMLEscapeString.
 func (m *Module) renderHeadScripts() template.HTML {
 	if m.settings == nil {
 		return ""
@@ -147,6 +149,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 }
 
 // renderBodyScripts generates the tracking scripts for the end of <body>.
+// SECURITY: Same protections as renderHeadScripts - values are HTML-escaped.
 func (m *Module) renderBodyScripts() template.HTML {
 	if m.settings == nil {
 		return ""

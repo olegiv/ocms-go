@@ -31,6 +31,8 @@ import (
 )
 
 // PageView represents a page with computed fields for template rendering.
+// SECURITY: Body is cast to template.HTML from admin-authored CMS content stored
+// in the database. Only admin/editor users can create or edit page content.
 type PageView struct {
 	ID                   int64
 	Title                string

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -111,79 +110,45 @@ func TestHealthHandler_Health_Public_Verbose(t *testing.T) {
 	}
 }
 
-func TestHealthHandler_Health_Authenticated(t *testing.T) {
+func TestHealthHandler_Health_Authenticated_NonAdmin(t *testing.T) {
 	handler := newTestHealthHandler(t)
 	rawKey := createTestAPIKey(t, handler)
 
-	tests := []struct {
-		name           string
-		queryVerbose   bool
-		wantSystemInfo bool
-	}{
-		{
-			name: "full details without verbose",
-		},
-		{
-			name:           "full details with verbose",
-			queryVerbose:   true,
-			wantSystemInfo: true,
-		},
+	// API key holders (non-admin) get basic response without checks or system info
+	req := httptest.NewRequest(http.MethodGet, "/health?verbose=true", nil)
+	addAPIKeyAuth(req, rawKey)
+	w := httptest.NewRecorder()
+
+	handler.Health(w, req)
+
+	assertStatus(t, w.Code, http.StatusOK)
+
+	var resp HealthStatus
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			path := "/health"
-			if tt.queryVerbose {
-				path += "?verbose=true"
-			}
+	if resp.Status != "healthy" {
+		t.Errorf("status = %q; want healthy", resp.Status)
+	}
 
-			req := httptest.NewRequest(http.MethodGet, path, nil)
-			addAPIKeyAuth(req, rawKey)
-			w := httptest.NewRecorder()
+	// Non-admin authenticated response should include basic fields
+	if resp.Timestamp.IsZero() {
+		t.Error("timestamp should not be zero")
+	}
+	if resp.Uptime == "" {
+		t.Error("uptime should not be empty")
+	}
+	if resp.Version == "" {
+		t.Error("version should not be empty")
+	}
 
-			handler.Health(w, req)
-
-			assertStatus(t, w.Code, http.StatusOK)
-
-			if ct := w.Header().Get("Content-Type"); ct != "application/json" {
-				t.Errorf("Content-Type = %q; want application/json", ct)
-			}
-
-			var resp HealthStatus
-			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-				t.Fatalf("failed to unmarshal response: %v", err)
-			}
-
-			if resp.Status != "healthy" {
-				t.Errorf("status = %q; want healthy", resp.Status)
-			}
-
-			// Authenticated response should include detailed fields
-			if resp.Timestamp.IsZero() {
-				t.Error("timestamp should not be zero")
-			}
-			if resp.Uptime == "" {
-				t.Error("uptime should not be empty")
-			}
-			if resp.Version == "" {
-				t.Error("version should not be empty")
-			}
-
-			if dbCheck, ok := resp.Checks["database"]; ok {
-				if dbCheck.Status != "healthy" {
-					t.Errorf("database check status = %q; want healthy", dbCheck.Status)
-				}
-			} else {
-				t.Error("expected database check in response")
-			}
-
-			if tt.wantSystemInfo && resp.System == nil {
-				t.Error("expected system info in response")
-			}
-			if !tt.wantSystemInfo && resp.System != nil {
-				t.Error("unexpected system info in response")
-			}
-		})
+	// Non-admin should NOT get checks or system info
+	if len(resp.Checks) > 0 {
+		t.Error("non-admin response should not contain checks")
+	}
+	if resp.System != nil {
+		t.Error("non-admin response should not contain system info")
 	}
 }
 
@@ -325,55 +290,24 @@ func TestHealthHandler_Readiness_NotReady_Authenticated(t *testing.T) {
 	_ = testNotReadyProbe(t, handler, rawKey)
 }
 
-func TestHealthHandler_DiskCheck_Authenticated(t *testing.T) {
+func TestHealthHandler_DiskCheck_NonAdmin(t *testing.T) {
 	handler := newTestHealthHandler(t)
 	rawKey := createTestAPIKey(t, handler)
 
-	tests := []struct {
-		name        string
-		setupDir    func(t *testing.T) string
-		wantHealthy bool
-	}{
-		{
-			name: "healthy with existing directory",
-			setupDir: func(t *testing.T) string {
-				return t.TempDir()
-			},
-			wantHealthy: true,
-		},
-		{
-			name: "healthy with non-existent directory",
-			setupDir: func(t *testing.T) string {
-				return filepath.Join(t.TempDir(), "nonexistent")
-			},
-			wantHealthy: true,
-		},
+	// Non-admin (API key) should not see disk checks
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	addAPIKeyAuth(req, rawKey)
+	w := httptest.NewRecorder()
+
+	handler.Health(w, req)
+
+	var resp HealthStatus
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			handler.uploadsDir = tt.setupDir(t)
-
-			req := httptest.NewRequest(http.MethodGet, "/health", nil)
-			addAPIKeyAuth(req, rawKey)
-			w := httptest.NewRecorder()
-
-			handler.Health(w, req)
-
-			var resp HealthStatus
-			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-				t.Fatalf("failed to unmarshal response: %v", err)
-			}
-
-			diskCheck, ok := resp.Checks["disk"]
-			if !ok {
-				t.Fatal("expected disk check in response")
-			}
-
-			if tt.wantHealthy && diskCheck.Status != "healthy" {
-				t.Errorf("disk check status = %q; want healthy", diskCheck.Status)
-			}
-		})
+	if len(resp.Checks) > 0 {
+		t.Error("non-admin should not see check details")
 	}
 }
 
@@ -402,10 +336,11 @@ func TestFormatBytes(t *testing.T) {
 	}
 }
 
-func TestHealthHandler_SystemInfo_Authenticated(t *testing.T) {
+func TestHealthHandler_SystemInfo_NonAdmin(t *testing.T) {
 	handler := newTestHealthHandler(t)
 	rawKey := createTestAPIKey(t, handler)
 
+	// Non-admin (API key) should not see system info even with verbose=true
 	req := httptest.NewRequest(http.MethodGet, "/health?verbose=true", nil)
 	addAPIKeyAuth(req, rawKey)
 	w := httptest.NewRecorder()
@@ -417,24 +352,8 @@ func TestHealthHandler_SystemInfo_Authenticated(t *testing.T) {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
-	if resp.System == nil {
-		t.Fatal("expected system info in response")
-	}
-
-	if resp.System.GoVersion == "" {
-		t.Error("go_version should not be empty")
-	}
-	if resp.System.NumGoroutine <= 0 {
-		t.Error("num_goroutines should be positive")
-	}
-	if resp.System.NumCPU <= 0 {
-		t.Error("num_cpus should be positive")
-	}
-	if resp.System.MemAlloc == "" {
-		t.Error("mem_alloc should not be empty")
-	}
-	if resp.System.MemSys == "" {
-		t.Error("mem_sys should not be empty")
+	if resp.System != nil {
+		t.Error("non-admin should not see system info")
 	}
 }
 
