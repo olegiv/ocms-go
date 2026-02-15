@@ -4,6 +4,8 @@
 package service
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/olegiv/ocms-go/internal/model"
@@ -117,4 +119,62 @@ func TestAllowedMimeTypes(t *testing.T) {
 			t.Errorf("Expected %q to NOT be in AllowedMimeTypes", mt)
 		}
 	}
+}
+
+func TestDetectAndValidateUploadMime(t *testing.T) {
+	t.Run("accepts valid png with png extension", func(t *testing.T) {
+		file := tempMultipartFile(t, []byte{
+			0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n',
+			0x00, 0x00, 0x00, 0x0d, 'I', 'H', 'D', 'R',
+		})
+		defer func() { _ = file.Close() }()
+
+		mimeType, err := detectAndValidateUploadMime(file, "image.png")
+		if err != nil {
+			t.Fatalf("expected valid upload, got error: %v", err)
+		}
+		if mimeType != model.MimeTypePNG {
+			t.Fatalf("expected mime %q, got %q", model.MimeTypePNG, mimeType)
+		}
+	})
+
+	t.Run("rejects extension mismatch", func(t *testing.T) {
+		file := tempMultipartFile(t, []byte{
+			0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n',
+			0x00, 0x00, 0x00, 0x0d, 'I', 'H', 'D', 'R',
+		})
+		defer func() { _ = file.Close() }()
+
+		_, err := detectAndValidateUploadMime(file, "image.html")
+		if err == nil {
+			t.Fatal("expected extension mismatch error, got nil")
+		}
+	})
+
+	t.Run("rejects disallowed content type even with allowed extension", func(t *testing.T) {
+		file := tempMultipartFile(t, []byte("<!doctype html><html><body>x</body></html>"))
+		defer func() { _ = file.Close() }()
+
+		_, err := detectAndValidateUploadMime(file, "image.png")
+		if err == nil {
+			t.Fatal("expected disallowed mime type error, got nil")
+		}
+	})
+}
+
+func tempMultipartFile(t *testing.T, content []byte) *os.File {
+	t.Helper()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "upload.bin")
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("failed to open temp file: %v", err)
+	}
+
+	return file
 }

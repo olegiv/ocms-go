@@ -6,9 +6,11 @@ package service
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,15 +32,26 @@ const (
 
 // AllowedMimeTypes defines the MIME types that can be uploaded.
 var AllowedMimeTypes = map[string]bool{
-	model.MimeTypeJPEG: true,
-	model.MimeTypePNG:  true,
-	model.MimeTypeGIF:  true,
-	model.MimeTypeWebP: true,
-	model.MimeTypeICO:  true,
+	model.MimeTypeJPEG:         true,
+	model.MimeTypePNG:          true,
+	model.MimeTypeGIF:          true,
+	model.MimeTypeWebP:         true,
+	model.MimeTypeICO:          true,
 	"image/vnd.microsoft.icon": true,
-	model.MimeTypePDF:  true,
-	model.MimeTypeMP4:  true,
-	model.MimeTypeWebM: true,
+	model.MimeTypePDF:          true,
+	model.MimeTypeMP4:          true,
+	model.MimeTypeWebM:         true,
+}
+
+var allowedExtensionsByMimeType = map[string]map[string]bool{
+	model.MimeTypeJPEG: {".jpg": true, ".jpeg": true},
+	model.MimeTypePNG:  {".png": true},
+	model.MimeTypeGIF:  {".gif": true},
+	model.MimeTypeWebP: {".webp": true},
+	model.MimeTypeICO:  {".ico": true},
+	model.MimeTypePDF:  {".pdf": true},
+	model.MimeTypeMP4:  {".mp4": true},
+	model.MimeTypeWebM: {".webm": true},
 }
 
 // UploadResult contains the result of a media upload.
@@ -73,21 +86,20 @@ func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *
 		return nil, fmt.Errorf("file size exceeds maximum allowed (%d bytes)", MaxUploadSize)
 	}
 
-	// Detect and validate MIME type
-	mimeType := header.Header.Get("Content-Type")
-	if mimeType == "" {
-		// Try to detect from extension
-		mimeType = getMimeTypeFromExtension(header.Filename)
-	}
-	if !AllowedMimeTypes[mimeType] {
-		return nil, fmt.Errorf("file type %s is not allowed", mimeType)
-	}
-
 	// Generate UUID for the file
 	fileUUID := uuid.New().String()
 
 	// Sanitize filename
 	filename := sanitizeFilename(header.Filename)
+	if filename == "" {
+		return nil, fmt.Errorf("invalid filename")
+	}
+
+	// Detect and validate MIME type from actual content (not client headers).
+	mimeType, err := detectAndValidateUploadMime(file, filename)
+	if err != nil {
+		return nil, err
+	}
 
 	queries := store.New(s.db)
 	now := time.Now()
@@ -316,6 +328,54 @@ func (s *MediaService) saveNonImageFile(file io.Reader, fileUUID, filename strin
 }
 
 // Helper functions
+
+func detectAndValidateUploadMime(file multipart.File, filename string) (string, error) {
+	const sniffLen = 512
+
+	sniff := make([]byte, sniffLen)
+	n, err := io.ReadFull(file, sniff)
+	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+		return "", fmt.Errorf("failed to inspect uploaded file: %w", err)
+	}
+	if n == 0 {
+		return "", fmt.Errorf("uploaded file is empty")
+	}
+
+	detected := normalizeDetectedMIME(http.DetectContentType(sniff[:n]))
+	if !AllowedMimeTypes[detected] {
+		return "", fmt.Errorf("file type %s is not allowed", detected)
+	}
+
+	ext := strings.ToLower(filepath.Ext(filename))
+	allowedExts, ok := allowedExtensionsByMimeType[detected]
+	if !ok || ext == "" || !allowedExts[ext] {
+		return "", fmt.Errorf("file extension %q does not match detected type %s", ext, detected)
+	}
+
+	seeker, ok := file.(io.Seeker)
+	if !ok {
+		return "", fmt.Errorf("unable to rewind uploaded file")
+	}
+	if _, err := seeker.Seek(0, io.SeekStart); err != nil {
+		return "", fmt.Errorf("failed to rewind uploaded file: %w", err)
+	}
+
+	return detected, nil
+}
+
+func normalizeDetectedMIME(contentType string) string {
+	normalized := strings.ToLower(strings.TrimSpace(contentType))
+	if idx := strings.Index(normalized, ";"); idx != -1 {
+		normalized = strings.TrimSpace(normalized[:idx])
+	}
+
+	// Normalize equivalent icon MIME type.
+	if normalized == "image/vnd.microsoft.icon" {
+		return model.MimeTypeICO
+	}
+
+	return normalized
+}
 
 func sanitizeFilename(filename string) string {
 	// Remove path separators
