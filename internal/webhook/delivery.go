@@ -10,10 +10,12 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // Delivery configuration constants
@@ -35,13 +37,27 @@ type DeliveryResult struct {
 	ShouldRetry  bool
 }
 
-// httpClient is the shared HTTP client with appropriate timeouts.
+// httpClient is the shared HTTP client with SSRF-safe transport.
+// The custom DialContext prevents connections to private/reserved IP ranges,
+// protecting against DNS rebinding and redirect-based SSRF attacks.
 var httpClient = &http.Client{
 	Timeout: RequestTimeout,
 	Transport: &http.Transport{
+		DialContext: util.SSRFSafeDialContext(&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}),
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 10,
 		IdleConnTimeout:     90 * time.Second,
+	},
+	// Prevent redirects to private IPs - the SSRF-safe DialContext
+	// handles this at connection time, but we also limit redirect count.
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return fmt.Errorf("stopped after 10 redirects")
+		}
+		return nil
 	},
 }
 

@@ -22,6 +22,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
@@ -640,8 +641,8 @@ func validateWebhookForm(input webhookFormInput, validateEvents bool) map[string
 
 	if input.URL == "" {
 		validationErrors["url"] = "URL is required"
-	} else if !strings.HasPrefix(input.URL, "http://") && !strings.HasPrefix(input.URL, "https://") {
-		validationErrors["url"] = "URL must start with http:// or https://"
+	} else if err := util.ValidateWebhookURL(input.URL); err != nil {
+		validationErrors["url"] = err.Error()
 	}
 
 	if len(input.Events) == 0 {
