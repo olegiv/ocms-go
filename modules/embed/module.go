@@ -90,8 +90,10 @@ func (m *Module) Shutdown() error {
 }
 
 // RegisterRoutes registers public routes for the module.
-func (m *Module) RegisterRoutes(_ chi.Router) {
-	// No public routes for embed module
+func (m *Module) RegisterRoutes(r chi.Router) {
+	// Public proxy routes used by frontend widgets.
+	r.Post("/embed/dify/chat-messages", m.handleDifyChatMessagesProxy)
+	r.Get("/embed/dify/messages/{messageID}/suggested", m.handleDifySuggestedProxy)
 }
 
 // RegisterAdminRoutes registers admin routes for the module.
@@ -195,4 +197,18 @@ func (m *Module) Migrations() []module.Migration {
 // ReloadSettings reloads settings from the database.
 func (m *Module) ReloadSettings() error {
 	return m.reloadSettings()
+}
+
+// getEnabledProviderSettings returns settings for an enabled provider.
+func (m *Module) getEnabledProviderSettings(providerID string) (map[string]string, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, ps := range m.settings {
+		if ps.ProviderID == providerID && ps.IsEnabled {
+			return ps.Settings, true
+		}
+	}
+
+	return nil, false
 }

@@ -147,15 +147,17 @@ func TestDifyProvider_RenderBody(t *testing.T) {
 				"dify-chat-toggle",
 				"dify-chat-window",
 				"dify-chat-messages",
-				"API='https://api.dify.ai/v1'",
-				"KEY='app-test-key-123'",
+				"PROXY_BASE='/embed/dify'",
 				"/chat-messages",
+				"/messages/'+encodeURIComponent(msgId)+'/suggested?user='+encodeURIComponent(userId)",
 				"AI Assistant", // default bot name
 				"#1C64F2",      // default primary color
 				"botMsg.textContent=full",
 				"d.textContent=String(t||'')",
 			},
 			excludes: []string{
+				"API='https://api.dify.ai/v1'",
+				"KEY='app-test-key-123'",
 				"botMsg.innerHTML",
 				"d.innerHTML=type==='bot'",
 			},

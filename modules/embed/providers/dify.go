@@ -202,8 +202,6 @@ func (p *DifyProvider) RenderBody(settings map[string]string) template.HTML {
 	}
 
 	// Escape values for safe JS/HTML output
-	safeAPIEndpoint := template.JSEscapeString(apiEndpoint)
-	safeAPIKey := template.JSEscapeString(apiKey)
 	safeWelcomeMessage := template.JSEscapeString(welcomeMessage)
 	safePrimaryColor := template.HTMLEscapeString(primaryColor)
 
@@ -276,7 +274,7 @@ func (p *DifyProvider) RenderBody(settings map[string]string) template.HTML {
 </style>
 <script>
 (function(){
-var API='%s',KEY='%s',WELCOME='%s',OPENERS=%s,SHOW_SUGGESTED=%s;
+var PROXY_BASE='/embed/dify',WELCOME='%s',OPENERS=%s,SHOW_SUGGESTED=%s;
 var convId=null,isOpen=false,busy=false,userId='user-'+Math.random().toString(36).substr(2,9),openersShown=false,lastMsgId=null;
 var tog=document.getElementById('dify-chat-toggle');
 var win=document.getElementById('dify-chat-window');
@@ -365,9 +363,9 @@ async function doSend(){
   send.disabled=true;
   showTyp();
   try{
-    var r=await fetch(API+'/chat-messages',{
+    var r=await fetch(PROXY_BASE+'/chat-messages',{
       method:'POST',
-      headers:{'Authorization':'Bearer '+KEY,'Content-Type':'application/json'},
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify({inputs:{},query:t,response_mode:'streaming',conversation_id:convId||'',user:userId})
     });
     if(!r.ok)throw new Error('API error: '+r.status);
@@ -399,7 +397,7 @@ async function doSend(){
     }
     if(SHOW_SUGGESTED&&msgId){
       try{
-        var sr=await fetch(API+'/messages/'+msgId+'/suggested?user='+userId,{headers:{'Authorization':'Bearer '+KEY}});
+        var sr=await fetch(PROXY_BASE+'/messages/'+encodeURIComponent(msgId)+'/suggested?user='+encodeURIComponent(userId));
         if(sr.ok){var sd=await sr.json();if(sd.data&&sd.data.length)showSuggestions(sd.data);}
       }catch(e){}
     }
@@ -431,8 +429,6 @@ inp.addEventListener('input',function(){this.style.height='auto';this.style.heig
 		safePrimaryColor, safePrimaryColor,
 		safePrimaryColor,
 		safePrimaryColor, // opener button hover border
-		safeAPIEndpoint,
-		safeAPIKey,
 		safeWelcomeMessage,
 		openerJS,
 		showSuggestedJS,
