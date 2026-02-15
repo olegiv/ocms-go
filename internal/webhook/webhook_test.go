@@ -4,8 +4,11 @@
 package webhook
 
 import (
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 func TestGenerateSignature(t *testing.T) {
@@ -450,5 +453,48 @@ func TestDeliveryResult(t *testing.T) {
 				t.Errorf("DeliveryResult.ShouldRetry = %v, want %v", tt.result.ShouldRetry, tt.wantRetry)
 			}
 		})
+	}
+}
+
+func TestAttemptDelivery_RejectsInvalidURL(t *testing.T) {
+	dispatcher := &Dispatcher{}
+	delivery := &QueuedDelivery{
+		URL:     "ftp://example.com/webhook",
+		Payload: []byte(`{"ok":true}`),
+	}
+
+	result := dispatcher.attemptDelivery(t.Context(), delivery)
+	if result.Success {
+		t.Fatal("attemptDelivery() should fail for invalid URL")
+	}
+	if result.ShouldRetry {
+		t.Fatal("attemptDelivery() should not retry for invalid URL")
+	}
+	if result.Error == nil || !strings.Contains(result.Error.Error(), "invalid webhook URL") {
+		t.Fatalf("attemptDelivery() error = %v, want invalid webhook URL error", result.Error)
+	}
+}
+
+func TestAttemptDelivery_EnforcesHTTPSPolicy(t *testing.T) {
+	util.SetRequireHTTPSOutbound(true)
+	t.Cleanup(func() {
+		util.SetRequireHTTPSOutbound(false)
+	})
+
+	dispatcher := &Dispatcher{}
+	delivery := &QueuedDelivery{
+		URL:     "http://example.com/webhook",
+		Payload: []byte(`{"ok":true}`),
+	}
+
+	result := dispatcher.attemptDelivery(t.Context(), delivery)
+	if result.Success {
+		t.Fatal("attemptDelivery() should fail when HTTPS-only policy is enabled")
+	}
+	if result.ShouldRetry {
+		t.Fatal("attemptDelivery() should not retry policy violations")
+	}
+	if result.Error == nil || !strings.Contains(result.Error.Error(), "https scheme") {
+		t.Fatalf("attemptDelivery() error = %v, want https scheme error", result.Error)
 	}
 }

@@ -166,6 +166,16 @@ func (d *Dispatcher) processDelivery(ctx context.Context, delivery *QueuedDelive
 
 // attemptDelivery performs the actual HTTP POST request.
 func (d *Dispatcher) attemptDelivery(ctx context.Context, delivery *QueuedDelivery) DeliveryResult {
+	// Re-validate destination at dispatch time to enforce current outbound
+	// policies for legacy/tampered records.
+	if err := util.ValidateWebhookURL(delivery.URL); err != nil {
+		return DeliveryResult{
+			Success:     false,
+			Error:       fmt.Errorf("invalid webhook URL: %w", err),
+			ShouldRetry: false, // Configuration error, don't retry
+		}
+	}
+
 	// Create request
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, delivery.URL, bytes.NewReader(delivery.Payload))
 	if err != nil {
