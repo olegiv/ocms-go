@@ -353,6 +353,18 @@ func run() error {
 	}))
 	slog.SetDefault(logger)
 
+	if cfg.Env == "production" {
+		if !cfg.RequireFormCaptcha {
+			slog.Warn("production security warning: OCMS_REQUIRE_FORM_CAPTCHA is disabled")
+		}
+		if strings.TrimSpace(cfg.APIAllowedCIDRs) == "" {
+			slog.Warn("production security warning: OCMS_API_ALLOWED_CIDRS is not configured")
+		}
+		if !cfg.RequireAPIKeyExpiry {
+			slog.Warn("production security warning: OCMS_REQUIRE_API_KEY_EXPIRY is disabled")
+		}
+	}
+
 	if err := middleware.ConfigureTrustedProxies(cfg.TrustedProxies); err != nil {
 		return fmt.Errorf("configuring trusted proxies: %w", err)
 	}
