@@ -80,6 +80,18 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 }
 
+func TestLoad_RejectSeedInProduction(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_DO_SEED", "true")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when OCMS_DO_SEED=true in production")
+	}
+}
+
 func TestLoad_RequiredSessionSecret(t *testing.T) {
 	os.Clearenv()
 	// Don't set OCMS_SESSION_SECRET

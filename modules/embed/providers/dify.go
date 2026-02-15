@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"html/template"
 	"strings"
+
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // DifyProvider implements the Provider interface for Dify AI chat.
@@ -122,6 +124,9 @@ func (p *DifyProvider) Validate(settings map[string]string) error {
 	}
 	if !strings.HasPrefix(apiEndpoint, "http://") && !strings.HasPrefix(apiEndpoint, "https://") {
 		return fmt.Errorf("API endpoint must start with http:// or https://")
+	}
+	if err := util.ValidateWebhookURL(apiEndpoint); err != nil {
+		return fmt.Errorf("API endpoint is invalid: %w", err)
 	}
 	if apiKey == "" {
 		return fmt.Errorf("API key is required")

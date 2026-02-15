@@ -8,19 +8,47 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 const (
 	maxDifyProxyBodyBytes = 1 << 20
 	difyProxyTimeout      = 90 * time.Second
+	maxDifyMessageIDLen   = 128
+	maxDifyUserIDLen      = 128
 )
+
+var difyProxyHTTPClient = &http.Client{
+	Timeout: difyProxyTimeout,
+	Transport: &http.Transport{
+		DialContext: util.SSRFSafeDialContext(&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}),
+		MaxIdleConns:        50,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+	},
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 5 {
+			return fmt.Errorf("stopped after 5 redirects")
+		}
+		if err := util.ValidateWebhookURL(req.URL.String()); err != nil {
+			return fmt.Errorf("redirect blocked: %w", err)
+		}
+		return nil
+	},
+}
 
 func (m *Module) handleDifyChatMessagesProxy(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -70,10 +98,18 @@ func (m *Module) handleDifySuggestedProxy(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Missing message ID", http.StatusBadRequest)
 		return
 	}
+	if len(messageID) > maxDifyMessageIDLen {
+		http.Error(w, "Message ID is too long", http.StatusBadRequest)
+		return
+	}
 
 	userID := strings.TrimSpace(r.URL.Query().Get("user"))
 	if userID == "" {
 		http.Error(w, "Missing user query parameter", http.StatusBadRequest)
+		return
+	}
+	if len(userID) > maxDifyUserIDLen {
+		http.Error(w, "User query parameter is too long", http.StatusBadRequest)
 		return
 	}
 
@@ -94,6 +130,10 @@ func (m *Module) getDifyProxyConfig() (apiEndpoint string, apiKey string, ok boo
 	if apiEndpoint == "" || apiKey == "" {
 		return "", "", false
 	}
+	if err := util.ValidateWebhookURL(apiEndpoint); err != nil {
+		m.ctx.Logger.Warn("invalid Dify endpoint in embed settings", "error", err)
+		return "", "", false
+	}
 	return apiEndpoint, apiKey, true
 }
 
@@ -108,6 +148,12 @@ func (m *Module) proxyDifyRequest(
 	if len(query) > 0 {
 		targetURL += "?" + query.Encode()
 	}
+
+	if !m.acquireProxySlot() {
+		http.Error(w, "Service busy", http.StatusTooManyRequests)
+		return
+	}
+	defer m.releaseProxySlot()
 
 	ctx, cancel := context.WithTimeout(r.Context(), difyProxyTimeout)
 	defer cancel()
@@ -129,7 +175,7 @@ func (m *Module) proxyDifyRequest(
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := difyProxyHTTPClient.Do(req)
 	if err != nil {
 		m.ctx.Logger.Error("Dify proxy request failed", "error", err)
 		http.Error(w, "Failed to contact upstream service", http.StatusBadGateway)
@@ -146,5 +192,27 @@ func (m *Module) proxyDifyRequest(
 
 	if _, err := io.Copy(w, resp.Body); err != nil {
 		m.ctx.Logger.Debug("Dify proxy response copy interrupted", "error", err)
+	}
+}
+
+func (m *Module) acquireProxySlot() bool {
+	if m.proxySemaphore == nil {
+		return true
+	}
+	select {
+	case m.proxySemaphore <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+func (m *Module) releaseProxySlot() {
+	if m.proxySemaphore == nil {
+		return
+	}
+	select {
+	case <-m.proxySemaphore:
+	default:
 	}
 }

@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/modules/embed/providers"
 )
@@ -21,13 +22,21 @@ import (
 //go:embed locales
 var localesFS embed.FS
 
+const (
+	embedProxyRateLimitRPS   = 2.0
+	embedProxyRateLimitBurst = 10
+	embedProxyMaxConcurrent  = 32
+)
+
 // Module implements the module.Module interface for the embed module.
 type Module struct {
 	module.BaseModule
-	ctx       *module.Context
-	providers []providers.Provider
-	settings  []*ProviderSettings
-	mu        sync.RWMutex
+	ctx               *module.Context
+	providers         []providers.Provider
+	settings          []*ProviderSettings
+	publicRateLimiter *middleware.GlobalRateLimiter
+	proxySemaphore    chan struct{}
+	mu                sync.RWMutex
 }
 
 // New creates a new instance of the embed module.
@@ -47,6 +56,8 @@ func New() *Module {
 // Init initializes the module with the given context.
 func (m *Module) Init(ctx *module.Context) error {
 	m.ctx = ctx
+	m.publicRateLimiter = middleware.NewGlobalRateLimiter(embedProxyRateLimitRPS, embedProxyRateLimitBurst)
+	m.proxySemaphore = make(chan struct{}, embedProxyMaxConcurrent)
 
 	// Load enabled provider settings
 	if err := m.reloadSettings(); err != nil {
@@ -56,6 +67,9 @@ func (m *Module) Init(ctx *module.Context) error {
 	m.ctx.Logger.Info("Embed module initialized",
 		"providers", len(m.providers),
 		"enabled", m.countEnabled(),
+		"proxy_rate_limit_rps", embedProxyRateLimitRPS,
+		"proxy_rate_limit_burst", embedProxyRateLimitBurst,
+		"proxy_max_concurrent", embedProxyMaxConcurrent,
 	)
 	return nil
 }
@@ -92,8 +106,14 @@ func (m *Module) Shutdown() error {
 // RegisterRoutes registers public routes for the module.
 func (m *Module) RegisterRoutes(r chi.Router) {
 	// Public proxy routes used by frontend widgets.
-	r.Post("/embed/dify/chat-messages", m.handleDifyChatMessagesProxy)
-	r.Get("/embed/dify/messages/{messageID}/suggested", m.handleDifySuggestedProxy)
+	// Apply dedicated rate limiting to reduce upstream abuse.
+	r.Group(func(r chi.Router) {
+		if m.publicRateLimiter != nil {
+			r.Use(m.publicRateLimiter.HTMLMiddleware())
+		}
+		r.Post("/embed/dify/chat-messages", m.handleDifyChatMessagesProxy)
+		r.Get("/embed/dify/messages/{messageID}/suggested", m.handleDifySuggestedProxy)
+	})
 }
 
 // RegisterAdminRoutes registers admin routes for the module.

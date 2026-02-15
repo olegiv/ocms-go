@@ -84,18 +84,18 @@ func TestDifyProvider_Validate(t *testing.T) {
 		{
 			name: "valid settings with https",
 			settings: map[string]string{
-				"api_endpoint": "https://api.dify.ai/v1",
+				"api_endpoint": "https://8.8.8.8/v1",
 				"api_key":      "app-test-key",
 			},
 			wantErr: false,
 		},
 		{
-			name: "valid settings with http (localhost)",
+			name: "invalid settings with localhost endpoint",
 			settings: map[string]string{
 				"api_endpoint": "http://localhost:8080/v1",
 				"api_key":      "app-test-key",
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 	}
 

@@ -85,6 +85,11 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("parsing config: %w", err)
 	}
 
+	// Production hardening: prevent default seeding in production.
+	if cfg.Env == "production" && cfg.DoSeed {
+		return nil, fmt.Errorf("OCMS_DO_SEED must be false in production")
+	}
+
 	// Validate session secret length
 	if len(cfg.SessionSecret) < MinSessionSecretLength {
 		return nil, fmt.Errorf("OCMS_SESSION_SECRET must be at least %d bytes long, got %d bytes; "+

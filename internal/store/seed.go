@@ -85,8 +85,8 @@ func Seed(ctx context.Context, db *sql.DB, doSeed bool) error {
 	slog.Info("created default admin user",
 		"id", user.ID,
 		"email", user.Email,
-		"password", DefaultAdminPassword,
 	)
+	slog.Warn("default admin password seeded; rotate immediately")
 
 	// Seed config values
 	if err := seedConfig(ctx, queries); err != nil {
