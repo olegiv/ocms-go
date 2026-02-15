@@ -6,6 +6,9 @@ package handler
 import (
 	"context"
 	"database/sql"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,6 +24,38 @@ func TestNewFormsHandler(t *testing.T) {
 	}
 	if h.queries == nil {
 		t.Error("queries should not be nil")
+	}
+}
+
+func TestFormsHandlerSubmit_RejectsOversizedPayload(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	queries := store.New(db)
+	now := time.Now()
+
+	_, err := queries.CreateForm(context.Background(), store.CreateFormParams{
+		Name:      "Contact Form",
+		Slug:      "contact-form",
+		Title:     "Contact",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateForm failed: %v", err)
+	}
+
+	h := NewFormsHandler(db, nil, sm, nil, nil, nil, nil, nil)
+
+	payload := "message=" + strings.Repeat("a", int(maxPublicFormBodyBytes)+1)
+	req := httptest.NewRequest(http.MethodPost, "/forms/contact-form", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = requestWithURLParams(req, map[string]string{"slug": "contact-form"})
+	w := httptest.NewRecorder()
+
+	h.Submit(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("status = %d; want %d", w.Code, http.StatusRequestEntityTooLarge)
 	}
 }
 

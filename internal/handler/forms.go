@@ -52,6 +52,8 @@ type FormsHandler struct {
 	frontendHandler *FrontendHandler
 }
 
+const maxPublicFormBodyBytes int64 = 64 * 1024
+
 // NewFormsHandler creates a new FormsHandler.
 func NewFormsHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, hr *module.HookRegistry, tm *theme.Manager, cm *cache.Manager, ms *service.MenuService, fh *FrontendHandler) *FormsHandler {
 	return &FormsHandler{
@@ -996,7 +998,13 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse the form data
+	r.Body = http.MaxBytesReader(w, r.Body, maxPublicFormBodyBytes)
 	if err := r.ParseForm(); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, "Form payload too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		slog.Error("failed to parse form", "error", err)
 		http.Error(w, "Invalid form data", http.StatusBadRequest)
 		return

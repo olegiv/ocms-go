@@ -624,6 +624,11 @@ func run() error {
 	publicRateLimiter := middleware.NewGlobalRateLimiter(10.0, 20)
 	slog.Info("public rate limiter initialized", "rate", "10 req/s", "burst", 20)
 
+	// Dedicated public form submission limiter to reduce spam/flood abuse.
+	// 1 request per second with a burst of 5 per IP.
+	formSubmitRateLimiter := middleware.NewGlobalRateLimiter(1.0, 5)
+	slog.Info("form submission rate limiter initialized", "rate", "1 req/s", "burst", 5)
+
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(db, renderer, sessionManager, loginProtection, hookRegistry)
 	adminHandler := handler.NewAdminHandler(db, renderer, sessionManager, cacheManager)
@@ -1001,7 +1006,7 @@ func run() error {
 		r.Use(csrfMiddleware)
 		r.Use(middleware.Language(db))
 		r.Get(handler.RouteFormsSlug, formsHandler.Show)
-		r.Post(handler.RouteFormsSlug, formsHandler.Submit)
+		r.With(formSubmitRateLimiter.HTMLMiddleware()).Post(handler.RouteFormsSlug, formsHandler.Submit)
 	})
 
 	// Favicon route - serve from theme settings or embedded default
