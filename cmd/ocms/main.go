@@ -1153,7 +1153,7 @@ func run() error {
 	// Serve uploaded media files from uploads directory (configured via OCMS_UPLOADS_DIR)
 	// Uploads: cache for 1 week (604800 seconds)
 	uploadsDirFS := http.Dir(cfg.UploadsDir)
-	uploadsHandler := middleware.StaticCache(604800)(http.StripPrefix("/uploads/", http.FileServer(uploadsDirFS)))
+	uploadsHandler := middleware.StaticCache(604800)(http.StripPrefix("/uploads/", middleware.SecureUploads(http.FileServer(uploadsDirFS))))
 	r.Handle("/uploads/*", uploadsHandler)
 
 	// Serve theme static files with caching (1 month = 2592000 seconds)
