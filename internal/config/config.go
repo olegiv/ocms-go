@@ -107,6 +107,9 @@ func Load() (*Config, error) {
 	if cfg.Env == "production" && cfg.DoSeed {
 		return nil, fmt.Errorf("OCMS_DO_SEED must be false in production")
 	}
+	if cfg.Env == "production" && cfg.RequireAPIAllowedCIDRs && strings.TrimSpace(cfg.APIAllowedCIDRs) == "" {
+		return nil, fmt.Errorf("OCMS_API_ALLOWED_CIDRS must be configured in production when OCMS_REQUIRE_API_ALLOWED_CIDRS is enabled")
+	}
 	if cfg.Env == "production" && cfg.RequireSanitizePageHTML && !cfg.SanitizePageHTML {
 		return nil, fmt.Errorf("OCMS_SANITIZE_PAGE_HTML must be true in production when OCMS_REQUIRE_SANITIZE_PAGE_HTML is enabled")
 	}

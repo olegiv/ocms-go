@@ -175,6 +175,19 @@ func TestLoad_RequireSanitizePageHTMLInProduction(t *testing.T) {
 	}
 }
 
+func TestLoad_RequireAPIAllowedCIDRsInProduction(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_REQUIRE_API_ALLOWED_CIDRS", "true")
+	setEnv(t, "OCMS_API_ALLOWED_CIDRS", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when OCMS_REQUIRE_API_ALLOWED_CIDRS=true and OCMS_API_ALLOWED_CIDRS is empty in production")
+	}
+}
+
 func TestLoad_RequiredSessionSecret(t *testing.T) {
 	os.Clearenv()
 	// Don't set OCMS_SESSION_SECRET
