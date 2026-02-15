@@ -209,6 +209,40 @@ func parseLogLevel(level string) slog.Level {
 	}
 }
 
+func auditRequiredFormCaptchaPosture(ctx context.Context, db *sql.DB, hooks *module.HookRegistry) error {
+	if hooks == nil || !hooks.HasHandlers(hcaptcha.HookFormCaptchaVerify) {
+		return fmt.Errorf(
+			"refusing to start in production: OCMS_REQUIRE_FORM_CAPTCHA is enabled but captcha verification is unavailable",
+		)
+	}
+
+	const query = `
+		SELECT COUNT(*)
+		FROM forms f
+		WHERE f.is_active = 1
+		  AND NOT EXISTS (
+		  	SELECT 1
+		  	FROM form_fields ff
+		  	WHERE ff.form_id = f.id
+		  	  AND ff.type = 'captcha'
+		  )
+	`
+
+	var formsMissingCaptcha int
+	if err := db.QueryRowContext(ctx, query).Scan(&formsMissingCaptcha); err != nil {
+		return fmt.Errorf("auditing form captcha posture: %w", err)
+	}
+
+	if formsMissingCaptcha > 0 {
+		return fmt.Errorf(
+			"refusing to start in production: %d active public form(s) are missing a captcha field while OCMS_REQUIRE_FORM_CAPTCHA is enabled",
+			formsMissingCaptcha,
+		)
+	}
+
+	return nil
+}
+
 // initI18nFromDB updates i18n settings from database (active languages, default language).
 func initI18nFromDB(ctx context.Context, queries *store.Queries) {
 	if activeLanguages, err := queries.ListActiveLanguages(ctx); err == nil {
@@ -665,6 +699,11 @@ func run() error {
 				"refusing to start in production: embed proxy is active (%d provider(s)) but OCMS_EMBED_ALLOWED_ORIGINS is not configured",
 				activeEmbedProviders,
 			)
+		}
+	}
+	if cfg.Env == "production" && cfg.RequireFormCaptcha {
+		if err := auditRequiredFormCaptchaPosture(ctx, db, hookRegistry); err != nil {
+			return err
 		}
 	}
 
