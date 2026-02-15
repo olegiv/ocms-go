@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/modules/embed/providers"
@@ -17,10 +18,10 @@ import (
 
 // ProviderListItem represents a provider in the list view.
 type ProviderListItem struct {
-	ID          string
-	Name        string
-	Description string
-	IsEnabled   bool
+	ID           string
+	Name         string
+	Description  string
+	IsEnabled    bool
 	IsConfigured bool
 }
 
@@ -191,6 +192,18 @@ func (m *Module) handleSaveProviderSettings(w http.ResponseWriter, r *http.Reque
 		"provider", ctx.ProviderID,
 		"enabled", isEnabled,
 	)
+	if m.ctx.Events != nil {
+		metadata := buildEmbedSettingsAuditMetadata(ctx.ProviderID, isEnabled, settings)
+		_ = m.ctx.Events.LogSecurityEvent(
+			r.Context(),
+			model.EventLevelInfo,
+			"Embed provider settings updated",
+			&ctx.User.ID,
+			middleware.GetClientIP(r),
+			middleware.GetRequestURL(r),
+			metadata,
+		)
+	}
 
 	m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "embed.success_save"), "success")
 	http.Redirect(w, r, "/admin/embed/"+ctx.ProviderID, http.StatusSeeOther)
@@ -252,6 +265,20 @@ func (m *Module) handleToggleProvider(w http.ResponseWriter, r *http.Request) {
 		"provider", ctx.ProviderID,
 		"enabled", enabled,
 	)
+	if m.ctx.Events != nil {
+		_ = m.ctx.Events.LogSecurityEvent(
+			r.Context(),
+			model.EventLevelInfo,
+			"Embed provider toggled",
+			&ctx.User.ID,
+			middleware.GetClientIP(r),
+			middleware.GetRequestURL(r),
+			map[string]any{
+				"provider": ctx.ProviderID,
+				"enabled":  enabled,
+			},
+		)
+	}
 
 	statusKey := "embed.success_disabled"
 	if enabled {
@@ -304,4 +331,24 @@ func (m *Module) getProviderContext(w http.ResponseWriter, r *http.Request) (pro
 		User:       user,
 		Lang:       lang,
 	}, true
+}
+
+func buildEmbedSettingsAuditMetadata(providerID string, enabled bool, settings map[string]string) map[string]any {
+	metadata := map[string]any{
+		"provider": providerID,
+		"enabled":  enabled,
+	}
+
+	if settings == nil {
+		return metadata
+	}
+
+	if endpoint := strings.TrimSpace(settings["api_endpoint"]); endpoint != "" {
+		metadata["api_endpoint"] = endpoint
+	}
+	if apiKey, ok := settings["api_key"]; ok {
+		metadata["has_api_key"] = strings.TrimSpace(apiKey) != ""
+	}
+
+	return metadata
 }
