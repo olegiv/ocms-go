@@ -61,6 +61,9 @@ type Config struct {
 
 	// Public forms security policy
 	RequireFormCaptcha bool `env:"OCMS_REQUIRE_FORM_CAPTCHA" envDefault:"false"` // Require captcha on all public form submissions
+
+	// Frontend content hardening
+	SanitizePageHTML bool `env:"OCMS_SANITIZE_PAGE_HTML" envDefault:"false"` // Sanitize page HTML before rendering to visitors
 }
 
 // IsDevelopment returns true if the application is running in development mode.

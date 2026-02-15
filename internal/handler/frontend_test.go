@@ -7,17 +7,18 @@ import (
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
 // faviconTestCase defines a test case for favicon handler tests.
 type faviconTestCase struct {
-	name           string
-	setupDB        func(*testing.T, *sql.DB) // optional DB setup
-	favicon        []byte
-	wantStatus     int
-	wantType       string // empty to skip check
-	wantCache      string // empty to skip check
+	name       string
+	setupDB    func(*testing.T, *sql.DB) // optional DB setup
+	favicon    []byte
+	wantStatus int
+	wantType   string // empty to skip check
+	wantCache  string // empty to skip check
 }
 
 func runFaviconTest(t *testing.T, tc faviconTestCase) {
@@ -208,5 +209,34 @@ func TestAuthorBoxVisibility(t *testing.T) {
 				t.Errorf("showAuthor = %v, want %v\nReason: %s", showAuthor, tt.wantShow, tt.wantDescription)
 			}
 		})
+	}
+}
+
+func TestFrontendHandler_TrustedPageBody_DefaultBypass(t *testing.T) {
+	h := &FrontendHandler{}
+
+	raw := `<p>Hello</p><script>alert('xss')</script>`
+	got := string(h.trustedPageBody(raw))
+
+	if got != raw {
+		t.Fatalf("trustedPageBody() = %q, want %q", got, raw)
+	}
+}
+
+func TestFrontendHandler_TrustedPageBody_SanitizesWhenEnabled(t *testing.T) {
+	h := &FrontendHandler{}
+	h.SetSanitizePageHTML(true)
+
+	raw := `<p>Hello</p><script>alert('xss')</script><a href="javascript:alert(1)">link</a>`
+	got := string(h.trustedPageBody(raw))
+
+	if strings.Contains(got, "<script") {
+		t.Fatalf("trustedPageBody() should strip script tags, got %q", got)
+	}
+	if strings.Contains(strings.ToLower(got), "javascript:") {
+		t.Fatalf("trustedPageBody() should strip javascript URLs, got %q", got)
+	}
+	if !strings.Contains(got, "<p>Hello</p>") {
+		t.Fatalf("trustedPageBody() should keep safe content, got %q", got)
 	}
 }

@@ -170,6 +170,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_ALLOWED_ORIGINS   Comma-separated allowed origins for embed proxy routes (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS  Reject production startup when embed proxy is active without origin allowlist (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_HTTPS_OUTBOUND  Require HTTPS for outbound integration URLs (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SANITIZE_PAGE_HTML  Sanitize page HTML before rendering to visitors (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "\nFor more information, see: https://github.com/olegiv/ocms-go\n")
 	}
 
@@ -382,6 +383,9 @@ func run() error {
 		}
 		if !cfg.RequireHTTPSOutbound {
 			slog.Warn("production security warning: OCMS_REQUIRE_HTTPS_OUTBOUND is disabled")
+		}
+		if !cfg.SanitizePageHTML {
+			slog.Warn("production security warning: OCMS_SANITIZE_PAGE_HTML is disabled")
 		}
 	}
 
@@ -753,6 +757,10 @@ func run() error {
 	mediaHandler := handler.NewMediaHandler(db, renderer, sessionManager, cfg.UploadsDir)
 	menusHandler := handler.NewMenusHandler(db, renderer, sessionManager)
 	frontendHandler := handler.NewFrontendHandler(db, themeManager, cacheManager, logger, renderer.GetMenuService(), eventService)
+	frontendHandler.SetSanitizePageHTML(cfg.SanitizePageHTML)
+	if cfg.SanitizePageHTML {
+		slog.Info("frontend page HTML sanitization enabled")
+	}
 	formsHandler := handler.NewFormsHandler(db, renderer, sessionManager, hookRegistry, themeManager, cacheManager, renderer.GetMenuService(), frontendHandler)
 	formsHandler.SetRequireCaptcha(cfg.RequireFormCaptcha)
 	if cfg.RequireFormCaptcha {

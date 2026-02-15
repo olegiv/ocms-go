@@ -21,6 +21,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
+	"github.com/microcosm-cc/bluemonday"
 
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/middleware"
@@ -31,8 +32,9 @@ import (
 )
 
 // PageView represents a page with computed fields for template rendering.
-// SECURITY: Body is cast to template.HTML from admin-authored CMS content stored
-// in the database. Only admin/editor users can create or edit page content.
+// SECURITY: Body is rendered as trusted HTML from admin-authored CMS content.
+// Deployments can enable OCMS_SANITIZE_PAGE_HTML to sanitize page HTML before
+// rendering for additional defense in depth.
 type PageView struct {
 	ID                   int64
 	Title                string
@@ -368,7 +370,10 @@ type FrontendHandler struct {
 	cacheManager  *cache.Manager
 	eventService  *service.EventService
 	logger        *slog.Logger
+	sanitizePages bool
 }
+
+var pageBodySanitizer = bluemonday.UGCPolicy()
 
 // NewFrontendHandler creates a new FrontendHandler.
 // If menuService is nil, a new one will be created. Pass a shared menuService for cache consistency.
@@ -392,6 +397,20 @@ func NewFrontendHandler(db *sql.DB, themeManager *theme.Manager, cacheManager *c
 		eventService:  eventService,
 		logger:        logger,
 	}
+}
+
+// SetSanitizePageHTML configures optional frontend sanitization of page HTML.
+func (h *FrontendHandler) SetSanitizePageHTML(enabled bool) {
+	h.sanitizePages = enabled
+}
+
+// trustedPageBody returns page HTML for rendering, optionally sanitizing to
+// strip scripts and dangerous attributes.
+func (h *FrontendHandler) trustedPageBody(raw string) template.HTML {
+	if !h.sanitizePages {
+		return template.HTML(raw)
+	}
+	return template.HTML(pageBodySanitizer.Sanitize(raw))
 }
 
 // Home handles the homepage.
@@ -1076,7 +1095,7 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 			ID:        sr.ID,
 			Title:     sr.Title,
 			Slug:      sr.Slug,
-			Body:      template.HTML(sr.Body),
+			Body:      h.trustedPageBody(sr.Body),
 			Excerpt:   sr.Excerpt,
 			Highlight: cleanHighlight,
 			URL:       "/" + sr.Slug,
@@ -1296,7 +1315,7 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 		ID:         p.ID,
 		Title:      p.Title,
 		Slug:       p.Slug,
-		Body:       template.HTML(p.Body),
+		Body:       h.trustedPageBody(p.Body),
 		URL:        "/" + p.Slug,
 		Status:     p.Status,
 		Type:       p.PageType,
