@@ -60,6 +60,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.RequireEmbedAllowedOrigins {
 		t.Error("RequireEmbedAllowedOrigins = true, want false")
 	}
+	if cfg.RequireHTTPSOutbound {
+		t.Error("RequireHTTPSOutbound = true, want false")
+	}
 }
 
 func TestLoad_CustomValues(t *testing.T) {
@@ -79,6 +82,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	setEnv(t, "OCMS_REQUIRE_API_KEY_SOURCE_CIDRS", "true")
 	setEnv(t, "OCMS_EMBED_ALLOWED_ORIGINS", "https://example.com,https://app.example.com")
 	setEnv(t, "OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS", "true")
+	setEnv(t, "OCMS_REQUIRE_HTTPS_OUTBOUND", "true")
 
 	cfg, err := Load()
 	if err != nil {
@@ -126,6 +130,9 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 	if !cfg.RequireEmbedAllowedOrigins {
 		t.Error("RequireEmbedAllowedOrigins = false, want true")
+	}
+	if !cfg.RequireHTTPSOutbound {
+		t.Error("RequireHTTPSOutbound = false, want true")
 	}
 }
 

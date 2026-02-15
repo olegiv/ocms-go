@@ -54,6 +54,7 @@ type Config struct {
 	// Embed proxy security configuration
 	EmbedAllowedOrigins        string `env:"OCMS_EMBED_ALLOWED_ORIGINS"`                            // Comma-separated origins allowed to call embed proxy routes
 	RequireEmbedAllowedOrigins bool   `env:"OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS" envDefault:"false"` // Refuse startup in production if embed proxy is active and no origin allowlist is configured
+	RequireHTTPSOutbound       bool   `env:"OCMS_REQUIRE_HTTPS_OUTBOUND" envDefault:"false"`        // Require HTTPS for outbound integration URLs (webhooks, scheduler, embeds)
 
 	// Seeding configuration
 	DoSeed bool `env:"OCMS_DO_SEED" envDefault:"false"` // Enable database seeding

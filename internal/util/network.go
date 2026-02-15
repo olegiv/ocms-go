@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -18,6 +19,7 @@ const MaxWebhookURLLength = 2048
 // privateIPBlocks contains CIDR ranges for private/reserved IP addresses
 // per RFC 1918, RFC 4193, RFC 3927, and RFC 5737.
 var privateIPBlocks []*net.IPNet
+var requireHTTPSOutbound atomic.Bool
 
 func init() {
 	cidrs := []string{
@@ -35,10 +37,10 @@ func init() {
 		"203.0.113.0/24",  // RFC 5737 - documentation
 		"224.0.0.0/4",     // RFC 5771 - multicast
 		"240.0.0.0/4",     // RFC 1112 - reserved
-		"::1/128",   // IPv6 loopback
-		"fe80::/10", // IPv6 link-local
-		"fc00::/7",  // RFC 4193 - IPv6 unique local
-		"::/128",    // IPv6 unspecified
+		"::1/128",         // IPv6 loopback
+		"fe80::/10",       // IPv6 link-local
+		"fc00::/7",        // RFC 4193 - IPv6 unique local
+		"::/128",          // IPv6 unspecified
 	}
 	for _, cidr := range cidrs {
 		_, block, err := net.ParseCIDR(cidr)
@@ -46,6 +48,16 @@ func init() {
 			privateIPBlocks = append(privateIPBlocks, block)
 		}
 	}
+}
+
+// SetRequireHTTPSOutbound configures whether outbound URL validation must
+// reject non-HTTPS schemes.
+func SetRequireHTTPSOutbound(required bool) {
+	requireHTTPSOutbound.Store(required)
+}
+
+func isHTTPSOutboundRequired() bool {
+	return requireHTTPSOutbound.Load()
 }
 
 // IsPrivateIP checks if an IP address falls within a private or reserved range.
@@ -74,7 +86,11 @@ func ValidateWebhookURL(rawURL string) error {
 		return fmt.Errorf("invalid URL format: %w", err)
 	}
 
-	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+	if isHTTPSOutboundRequired() {
+		if parsedURL.Scheme != "https" {
+			return fmt.Errorf("URL must use https scheme")
+		}
+	} else if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
 		return fmt.Errorf("URL must use http or https scheme")
 	}
 

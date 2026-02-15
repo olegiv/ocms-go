@@ -8,7 +8,17 @@ import (
 	"testing"
 )
 
+func setRequireHTTPSOutboundForTest(t *testing.T, required bool) {
+	t.Helper()
+	SetRequireHTTPSOutbound(required)
+	t.Cleanup(func() {
+		SetRequireHTTPSOutbound(false)
+	})
+}
+
 func TestValidateTaskURL(t *testing.T) {
+	SetRequireHTTPSOutbound(false)
+
 	tests := []struct {
 		name    string
 		url     string
@@ -85,6 +95,37 @@ func TestValidateTaskURL(t *testing.T) {
 				if err != nil {
 					t.Errorf("ValidateTaskURL(%q) = %v, want nil", tt.url, err)
 				}
+			}
+		})
+	}
+}
+
+func TestValidateTaskURL_RequireHTTPSOutbound(t *testing.T) {
+	setRequireHTTPSOutboundForTest(t, true)
+
+	tests := []struct {
+		name    string
+		url     string
+		wantErr bool
+		errMsg  string
+	}{
+		{"https allowed", "https://example.com/health", false, ""},
+		{"http rejected", "http://example.com/health", true, "only https URLs are allowed"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateTaskURL(tt.url)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("ValidateTaskURL(%q) = nil, want error containing %q", tt.url, tt.errMsg)
+				} else if tt.errMsg != "" && !containsSubstring(err.Error(), tt.errMsg) {
+					t.Errorf("ValidateTaskURL(%q) error = %q, want error containing %q", tt.url, err.Error(), tt.errMsg)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("ValidateTaskURL(%q) = %v, want nil", tt.url, err)
 			}
 		})
 	}

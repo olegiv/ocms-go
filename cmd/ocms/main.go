@@ -169,6 +169,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_SOURCE_CIDRS  Reject API keys without per-key CIDR restrictions (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_ALLOWED_ORIGINS   Comma-separated allowed origins for embed proxy routes (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS  Reject production startup when embed proxy is active without origin allowlist (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_HTTPS_OUTBOUND  Require HTTPS for outbound integration URLs (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "\nFor more information, see: https://github.com/olegiv/ocms-go\n")
 	}
 
@@ -379,6 +380,9 @@ func run() error {
 		if !cfg.RequireEmbedAllowedOrigins {
 			slog.Warn("production security warning: OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS is disabled")
 		}
+		if !cfg.RequireHTTPSOutbound {
+			slog.Warn("production security warning: OCMS_REQUIRE_HTTPS_OUTBOUND is disabled")
+		}
 	}
 
 	if err := middleware.ConfigureTrustedProxies(cfg.TrustedProxies); err != nil {
@@ -401,6 +405,11 @@ func run() error {
 	middleware.SetRequireAPIKeySourceCIDRs(cfg.RequireAPIKeySourceCIDRs)
 	if cfg.RequireAPIKeySourceCIDRs {
 		slog.Info("API key per-key source CIDR enforcement enabled")
+	}
+	util.SetRequireHTTPSOutbound(cfg.RequireHTTPSOutbound)
+	scheduler.SetRequireHTTPSOutbound(cfg.RequireHTTPSOutbound)
+	if cfg.RequireHTTPSOutbound {
+		slog.Info("HTTPS-only outbound URL policy enabled")
 	}
 
 	// Initialize i18n system for admin UI localization

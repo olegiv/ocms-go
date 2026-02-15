@@ -9,6 +9,14 @@ import (
 	"testing"
 )
 
+func setRequireHTTPSOutboundForTest(t *testing.T, required bool) {
+	t.Helper()
+	SetRequireHTTPSOutbound(required)
+	t.Cleanup(func() {
+		SetRequireHTTPSOutbound(false)
+	})
+}
+
 func TestIsPrivateIP(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -68,6 +76,8 @@ func TestIsPrivateIP_Nil(t *testing.T) {
 }
 
 func TestValidateWebhookURL(t *testing.T) {
+	SetRequireHTTPSOutbound(false)
+
 	tests := []struct {
 		name    string
 		url     string
@@ -210,6 +220,48 @@ func TestValidateWebhookURL(t *testing.T) {
 				if err != nil {
 					t.Errorf("ValidateWebhookURL(%q) = %v, want nil", tt.url, err)
 				}
+			}
+		})
+	}
+}
+
+func TestValidateWebhookURL_RequireHTTPSOutbound(t *testing.T) {
+	setRequireHTTPSOutboundForTest(t, true)
+
+	tests := []struct {
+		name    string
+		url     string
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "https is allowed",
+			url:     "https://example.com/webhook",
+			wantErr: false,
+		},
+		{
+			name:    "http is rejected",
+			url:     "http://example.com/webhook",
+			wantErr: true,
+			errMsg:  "https scheme",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateWebhookURL(tt.url)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("ValidateWebhookURL(%q) = nil, want error containing %q", tt.url, tt.errMsg)
+					return
+				}
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("ValidateWebhookURL(%q) error = %q, want error containing %q", tt.url, err.Error(), tt.errMsg)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("ValidateWebhookURL(%q) = %v, want nil", tt.url, err)
 			}
 		})
 	}

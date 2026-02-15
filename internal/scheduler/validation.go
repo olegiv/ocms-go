@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -34,6 +35,7 @@ var privateIPRanges = []string{
 
 // parsedPrivateRanges holds parsed CIDRs (initialized once).
 var parsedPrivateRanges []*net.IPNet
+var requireHTTPSOutbound atomic.Bool
 
 func init() {
 	for _, cidr := range privateIPRanges {
@@ -51,6 +53,16 @@ var blockedHostnames = []string{
 	"metadata.goog",
 }
 
+// SetRequireHTTPSOutbound configures whether task URL validation must reject
+// non-HTTPS schemes.
+func SetRequireHTTPSOutbound(required bool) {
+	requireHTTPSOutbound.Store(required)
+}
+
+func isHTTPSOutboundRequired() bool {
+	return requireHTTPSOutbound.Load()
+}
+
 // ValidateTaskURL checks that a URL is safe for server-side HTTP requests.
 // It blocks private IPs, localhost, cloud metadata endpoints, and non-HTTP schemes.
 func ValidateTaskURL(rawURL string) error {
@@ -63,8 +75,11 @@ func ValidateTaskURL(rawURL string) error {
 		return fmt.Errorf("invalid URL: %w", err)
 	}
 
-	// Only allow http and https
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+	if isHTTPSOutboundRequired() {
+		if parsed.Scheme != "https" {
+			return fmt.Errorf("only https URLs are allowed")
+		}
+	} else if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return fmt.Errorf("only http and https URLs are allowed")
 	}
 
