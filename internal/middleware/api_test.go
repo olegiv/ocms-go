@@ -197,6 +197,53 @@ func insertTestAPIKeySourceCIDR(t *testing.T, db *sql.DB, keyPrefix, cidr string
 	}
 }
 
+func TestAPIKeySourceTrackerObserve(t *testing.T) {
+	tracker := newAPIKeySourceTracker(10 * time.Minute)
+	now := time.Now()
+
+	changed, previous := tracker.Observe(42, "203.0.113.10", now)
+	if changed {
+		t.Fatal("first observation should not be marked as changed")
+	}
+	if previous != "" {
+		t.Fatalf("previous IP = %q, want empty", previous)
+	}
+
+	changed, previous = tracker.Observe(42, "203.0.113.10", now.Add(1*time.Minute))
+	if changed {
+		t.Fatal("same IP observation should not be marked as changed")
+	}
+	if previous != "" {
+		t.Fatalf("previous IP = %q, want empty", previous)
+	}
+
+	changed, previous = tracker.Observe(42, "198.51.100.20", now.Add(2*time.Minute))
+	if !changed {
+		t.Fatal("IP change should be marked as changed")
+	}
+	if previous != "203.0.113.10" {
+		t.Fatalf("previous IP = %q, want %q", previous, "203.0.113.10")
+	}
+}
+
+func TestAPIKeySourceTrackerObserve_ExpiresState(t *testing.T) {
+	tracker := newAPIKeySourceTracker(1 * time.Minute)
+	base := time.Now()
+
+	changed, previous := tracker.Observe(7, "203.0.113.1", base)
+	if changed || previous != "" {
+		t.Fatalf("first observation changed=%v previous=%q, want false and empty", changed, previous)
+	}
+
+	changed, previous = tracker.Observe(7, "198.51.100.2", base.Add(2*time.Minute))
+	if changed {
+		t.Fatal("expired state should not produce a change event")
+	}
+	if previous != "" {
+		t.Fatalf("previous IP = %q, want empty", previous)
+	}
+}
+
 func TestWriteAPIError(t *testing.T) {
 	w := httptest.NewRecorder()
 

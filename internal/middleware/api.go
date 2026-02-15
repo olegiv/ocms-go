@@ -35,6 +35,59 @@ type APIError struct {
 	} `json:"error"`
 }
 
+type apiKeySourceState struct {
+	ip       string
+	lastSeen time.Time
+}
+
+type apiKeySourceTrackerState struct {
+	entries map[int64]apiKeySourceState
+	mu      sync.Mutex
+	ttl     time.Duration
+}
+
+func newAPIKeySourceTracker(ttl time.Duration) *apiKeySourceTrackerState {
+	if ttl <= 0 {
+		ttl = 24 * time.Hour
+	}
+	return &apiKeySourceTrackerState{
+		entries: make(map[int64]apiKeySourceState),
+		ttl:     ttl,
+	}
+}
+
+func (t *apiKeySourceTrackerState) Observe(keyID int64, ip string, now time.Time) (changed bool, previousIP string) {
+	if keyID <= 0 || strings.TrimSpace(ip) == "" {
+		return false, ""
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	cutoff := now.Add(-t.ttl)
+	for id, state := range t.entries {
+		if state.lastSeen.Before(cutoff) {
+			delete(t.entries, id)
+		}
+	}
+
+	state, exists := t.entries[keyID]
+	if !exists {
+		t.entries[keyID] = apiKeySourceState{ip: ip, lastSeen: now}
+		return false, ""
+	}
+
+	if state.ip == ip {
+		state.lastSeen = now
+		t.entries[keyID] = state
+		return false, ""
+	}
+
+	prev := state.ip
+	t.entries[keyID] = apiKeySourceState{ip: ip, lastSeen: now}
+	return true, prev
+}
+
 var (
 	apiAllowedCIDRsMu          sync.RWMutex
 	apiAllowedCIDRs            []netip.Prefix
@@ -44,6 +97,7 @@ var (
 	requireAPIKeyExpiryMu      sync.RWMutex
 	requireAPIKeySourceCIDRs   bool
 	requireAPIKeySourceCIDRsMu sync.RWMutex
+	apiKeySourceTracker        = newAPIKeySourceTracker(24 * time.Hour)
 )
 
 // SetRequireAPIKeyExpiry configures whether API keys must have an expiration timestamp.
@@ -400,6 +454,14 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 			return nil, true
 		}
 		return nil, false
+	}
+
+	if changed, previousIP := apiKeySourceTracker.Observe(matchedKey.ID, clientIP, time.Now()); changed {
+		slog.Warn("API key source IP changed",
+			"key_id", matchedKey.ID,
+			"previous_ip", previousIP,
+			"current_ip", clientIP,
+			"path", r.URL.Path)
 	}
 
 	return matchedKey, false
