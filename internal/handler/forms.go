@@ -338,7 +338,6 @@ func (h *FormsHandler) getActiveFormBySlug(w http.ResponseWriter, r *http.Reques
 	return &form
 }
 
-
 // updateLanguageContext updates the request context with the form's language.
 // This ensures UI translations match the form's language, consistent with page handler behavior.
 func (h *FormsHandler) updateLanguageContext(w http.ResponseWriter, r *http.Request, languageCode string) *http.Request {
@@ -727,7 +726,7 @@ func (h *FormsHandler) AddField(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req AddFieldRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONWithLimit(w, r, &req, MaxJSONBodyBytes); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
@@ -804,7 +803,7 @@ func (h *FormsHandler) UpdateField(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req AddFieldRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONWithLimit(w, r, &req, MaxJSONBodyBytes); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
@@ -894,7 +893,7 @@ func (h *FormsHandler) ReorderFields(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req ReorderFieldsRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONWithLimit(w, r, &req, MaxJSONBodyBytes); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
@@ -1997,4 +1996,3 @@ func (h *FormsHandler) getBaseTemplateData(r *http.Request, title string) BaseTe
 
 	return data
 }
-

@@ -20,6 +20,11 @@ import (
 	"github.com/olegiv/ocms-go/internal/util"
 )
 
+const (
+	maxAPIMediaUploadRequestBytes int64 = 100 << 20 // 100 MiB
+	maxAPIMediaJSONBodyBytes      int64 = 1 << 20   // 1 MiB
+)
+
 // MediaResponse represents a media item in API responses.
 type MediaResponse struct {
 	ID           int64                      `json:"id"`
@@ -309,6 +314,9 @@ func (h *Handler) GetMedia(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	// Hard cap request body size before multipart parsing.
+	r.Body = http.MaxBytesReader(w, r.Body, maxAPIMediaUploadRequestBytes)
+
 	// Parse multipart form (20MB max)
 	if err := r.ParseMultipartForm(20 << 20); err != nil {
 		WriteBadRequest(w, "Failed to parse multipart form", nil)
@@ -429,7 +437,7 @@ func (h *Handler) UpdateMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdateMediaRequest
-	if err := decodeJSON(r, &req); err != nil {
+	if err := decodeJSON(w, r, &req, maxAPIMediaJSONBodyBytes); err != nil {
 		WriteBadRequest(w, "Invalid JSON body", nil)
 		return
 	}
@@ -542,7 +550,12 @@ func (h *Handler) populateMediaIncludes(ctx context.Context, resp *MediaResponse
 }
 
 // decodeJSON decodes JSON from request body.
-func decodeJSON(r *http.Request, v any) error {
+func decodeJSON(w http.ResponseWriter, r *http.Request, v any, maxBytes int64) error {
+	if maxBytes <= 0 {
+		maxBytes = maxAPIMediaJSONBodyBytes
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 	return json.NewDecoder(r.Body).Decode(v)
 }
 

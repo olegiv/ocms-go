@@ -220,6 +220,9 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 
 	user := middleware.GetUser(r)
 
+	// Hard cap request body size before multipart parsing.
+	r.Body = http.MaxBytesReader(w, r.Body, maxImportUploadBytes)
+
 	// Parse multipart form (max 100MB for zip files with media)
 	if err := r.ParseMultipartForm(maxImportUploadBytes); err != nil {
 		h.renderImportError(w, r, user, "Failed to parse form: "+err.Error())
