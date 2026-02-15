@@ -215,6 +215,9 @@ func WriteAPIError(w http.ResponseWriter, statusCode int, code, message string, 
 func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queries, required bool) (*store.ApiKey, bool) {
 	clientIP := GetClientIP(r)
 	if !isAPIClientAllowed(clientIP) {
+		slog.Warn("API key auth blocked by global source CIDR policy",
+			"ip", clientIP,
+			"path", r.URL.Path)
 		if required {
 			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key access is not allowed from this IP", nil)
 			return nil, true
@@ -295,6 +298,10 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 	}
 
 	if isAPIKeyExpiryRequired() && !matchedKey.ExpiresAt.Valid {
+		slog.Warn("API key auth blocked: missing expiry while expiry policy enabled",
+			"key_id", matchedKey.ID,
+			"path", r.URL.Path,
+			"ip", clientIP)
 		if required {
 			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key must have an expiration date", nil)
 			return nil, true
@@ -320,6 +327,10 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 		return nil, false
 	}
 	if !allowed {
+		slog.Warn("API key auth blocked by per-key source CIDR allowlist",
+			"key_id", matchedKey.ID,
+			"path", r.URL.Path,
+			"ip", clientIP)
 		if required {
 			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key access is not allowed from this IP", nil)
 			return nil, true
