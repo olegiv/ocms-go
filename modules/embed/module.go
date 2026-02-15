@@ -35,14 +35,15 @@ const (
 // Module implements the module.Module interface for the embed module.
 type Module struct {
 	module.BaseModule
-	ctx               *module.Context
-	providers         []providers.Provider
-	settings          []*ProviderSettings
-	publicRateLimiter *middleware.GlobalRateLimiter
-	globalRateLimiter *rate.Limiter
-	proxySemaphore    chan struct{}
-	allowedOrigins    map[string]struct{}
-	mu                sync.RWMutex
+	ctx                 *module.Context
+	providers           []providers.Provider
+	settings            []*ProviderSettings
+	publicRateLimiter   *middleware.GlobalRateLimiter
+	globalRateLimiter   *rate.Limiter
+	proxySemaphore      chan struct{}
+	allowedOrigins      map[string]struct{}
+	requireOriginPolicy bool
+	mu                  sync.RWMutex
 }
 
 // New creates a new instance of the embed module.
@@ -66,6 +67,7 @@ func (m *Module) Init(ctx *module.Context) error {
 	m.globalRateLimiter = rate.NewLimiter(rate.Limit(embedProxyGlobalRateLimitRPS), embedProxyGlobalRateLimitBurst)
 	m.proxySemaphore = make(chan struct{}, embedProxyMaxConcurrent)
 	if ctx.Config != nil {
+		m.requireOriginPolicy = ctx.Config.Env == "production"
 		origins, err := parseAllowedOrigins(ctx.Config.EmbedAllowedOrigins)
 		if err != nil {
 			return fmt.Errorf("parsing embed allowed origins: %w", err)
@@ -87,6 +89,7 @@ func (m *Module) Init(ctx *module.Context) error {
 		"proxy_global_rate_limit_burst", embedProxyGlobalRateLimitBurst,
 		"proxy_max_concurrent", embedProxyMaxConcurrent,
 		"allowed_origins", len(m.allowedOrigins),
+		"require_origin_policy", m.requireOriginPolicy,
 	)
 	return nil
 }

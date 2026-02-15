@@ -79,3 +79,27 @@ func TestIsRequestOriginAllowed(t *testing.T) {
 		}
 	})
 }
+
+func TestIsRequestOriginAllowed_NoAllowlist(t *testing.T) {
+	t.Run("allow when origin policy is not required", func(t *testing.T) {
+		mod := New()
+		mod.allowedOrigins = nil
+		mod.requireOriginPolicy = false
+
+		req := httptest.NewRequest("POST", "/embed/dify/chat-messages", nil)
+		if !mod.isRequestOriginAllowed(req) {
+			t.Fatal("expected request to be allowed without allowlist in non-production mode")
+		}
+	})
+
+	t.Run("block when origin policy is required", func(t *testing.T) {
+		mod := New()
+		mod.allowedOrigins = nil
+		mod.requireOriginPolicy = true
+
+		req := httptest.NewRequest("POST", "/embed/dify/chat-messages", nil)
+		if mod.isRequestOriginAllowed(req) {
+			t.Fatal("expected request to be blocked without allowlist in production mode")
+		}
+	})
+}

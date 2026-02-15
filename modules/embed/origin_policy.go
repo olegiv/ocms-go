@@ -57,7 +57,7 @@ func normalizeOrigin(value string) (string, error) {
 
 func (m *Module) isRequestOriginAllowed(r *http.Request) bool {
 	if len(m.allowedOrigins) == 0 {
-		return true
+		return !m.requireOriginPolicy
 	}
 
 	if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
