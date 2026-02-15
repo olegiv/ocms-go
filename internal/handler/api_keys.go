@@ -179,7 +179,12 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("API key created", "key_id", apiKey.ID, "name", apiKey.Name, "created_by", middleware.GetUserID(r))
-	_ = h.eventService.LogAPIKeyEvent(r.Context(), model.EventLevelInfo, "API key created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"key_id": apiKey.ID, "name": apiKey.Name})
+	_ = h.eventService.LogAPIKeyEvent(r.Context(), model.EventLevelInfo, "API key created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{
+		"key_id":                 apiKey.ID,
+		"name":                   apiKey.Name,
+		"source_cidr_count":      len(input.SourceCIDRs),
+		"source_cidr_restricted": len(input.SourceCIDRs) > 0,
+	})
 
 	// Render success page showing the generated key once
 	adminLang := h.renderer.GetAdminLang(r)
@@ -295,6 +300,11 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("API key updated", "key_id", id, "updated_by", middleware.GetUserID(r))
+	_ = h.eventService.LogAPIKeyEvent(r.Context(), model.EventLevelInfo, "API key updated", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{
+		"key_id":                 id,
+		"source_cidr_count":      len(input.SourceCIDRs),
+		"source_cidr_restricted": len(input.SourceCIDRs) > 0,
+	})
 	flashSuccess(w, r, h.renderer, redirectAdminAPIKeys, "API key updated successfully")
 }
 
