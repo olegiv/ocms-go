@@ -21,6 +21,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/geoip"
 	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -273,7 +274,7 @@ func (m *Module) TemplateFuncs() template.FuncMap {
 		"sentinelVersion": func() string {
 			return m.Version()
 		},
-		"countryName":     geoip.CountryName,
+		"countryName":      geoip.CountryName,
 		"sentinelIsActive": func() bool { return true },
 		"sentinelIsIPBanned": func(ip string) bool {
 			if ip == "" {
@@ -808,20 +809,5 @@ func (m *Module) Middleware() func(http.Handler) http.Handler {
 
 // getClientIP extracts the client IP from the request.
 func getClientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if before, _, ok := strings.Cut(xff, ","); ok {
-			return strings.TrimSpace(before)
-		}
-		return strings.TrimSpace(xff)
-	}
-
-	if ip := r.Header.Get("X-Real-IP"); ip != "" {
-		return ip
-	}
-
-	host := r.RemoteAddr
-	if idx := strings.LastIndex(host, ":"); idx != -1 {
-		host = host[:idx]
-	}
-	return host
+	return middleware.GetClientIP(r)
 }

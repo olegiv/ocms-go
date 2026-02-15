@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/olegiv/ocms-go/internal/middleware"
 )
 
 const (
@@ -124,23 +126,5 @@ func GetResponseFromForm(r *http.Request) string {
 
 // GetRemoteIP extracts the client IP from an HTTP request.
 func GetRemoteIP(r *http.Request) string {
-	// Check X-Forwarded-For header first (for reverse proxies)
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// Take the first IP in the list
-		if idx := strings.Index(xff, ","); idx > 0 {
-			return strings.TrimSpace(xff[:idx])
-		}
-		return strings.TrimSpace(xff)
-	}
-
-	// Check X-Real-IP header
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
-	}
-
-	// Fall back to RemoteAddr
-	if idx := strings.LastIndex(r.RemoteAddr, ":"); idx > 0 {
-		return r.RemoteAddr[:idx]
-	}
-	return r.RemoteAddr
+	return middleware.GetClientIP(r)
 }
