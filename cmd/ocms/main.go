@@ -170,6 +170,8 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_SOURCE_CIDRS  Reject API keys without per-key CIDR restrictions (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_ALLOWED_ORIGINS   Comma-separated allowed origins for embed proxy routes (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS  Reject production startup when embed proxy is active without origin allowlist (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_PROXY_TOKEN   Optional shared token required by embed proxy routes\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_PROXY_TOKEN  Reject production startup when embed proxy token policy is enabled without a token (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_HTTPS_OUTBOUND  Require HTTPS for outbound integration URLs (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SANITIZE_PAGE_HTML  Sanitize page HTML before rendering to visitors (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_SANITIZE_PAGE_HTML  Reject production startup when page HTML sanitization is disabled (default: false)\n")
@@ -569,6 +571,9 @@ func run() error {
 		}
 		if !cfg.RequireEmbedAllowedOrigins {
 			slog.Warn("production security warning: OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS is disabled")
+		}
+		if !cfg.RequireEmbedProxyToken {
+			slog.Warn("production security warning: OCMS_REQUIRE_EMBED_PROXY_TOKEN is disabled")
 		}
 		if !cfg.RequireHTTPSOutbound {
 			slog.Warn("production security warning: OCMS_REQUIRE_HTTPS_OUTBOUND is disabled")

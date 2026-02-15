@@ -6,6 +6,7 @@ package embed
 import (
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,6 +30,7 @@ const (
 	maxDifyMessageIDLen   = 128
 	maxDifyUserIDLen      = 128
 	maxDifyQueryLen       = 4096
+	embedProxyTokenHeader = "X-Embed-Proxy-Token"
 )
 
 var difyIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9._:@-]+$`)
@@ -70,6 +72,15 @@ func (m *Module) handleDifyChatMessagesProxy(w http.ResponseWriter, r *http.Requ
 			"path":     r.URL.Path,
 			"origin":   r.Header.Get("Origin"),
 			"referer":  r.Header.Get("Referer"),
+		})
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if !m.isProxyTokenAuthorized(r) {
+		m.ctx.Logger.Warn("blocked embed proxy request by token policy", "path", r.URL.Path)
+		m.logEmbedSecurityEvent(r, "Embed proxy blocked by token policy", map[string]any{
+			"provider": "dify",
+			"path":     r.URL.Path,
 		})
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
@@ -119,6 +130,15 @@ func (m *Module) handleDifySuggestedProxy(w http.ResponseWriter, r *http.Request
 			"path":     r.URL.Path,
 			"origin":   r.Header.Get("Origin"),
 			"referer":  r.Header.Get("Referer"),
+		})
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if !m.isProxyTokenAuthorized(r) {
+		m.ctx.Logger.Warn("blocked embed proxy request by token policy", "path", r.URL.Path)
+		m.logEmbedSecurityEvent(r, "Embed proxy blocked by token policy", map[string]any{
+			"provider": "dify",
+			"path":     r.URL.Path,
 		})
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
@@ -270,6 +290,24 @@ func (m *Module) allowProxyBudget() bool {
 		return true
 	}
 	return m.globalRateLimiter.Allow()
+}
+
+func (m *Module) isProxyTokenAuthorized(r *http.Request) bool {
+	if m == nil || !m.requireProxyToken {
+		return true
+	}
+
+	expected := strings.TrimSpace(m.proxyToken)
+	if expected == "" {
+		return false
+	}
+
+	provided := strings.TrimSpace(r.Header.Get(embedProxyTokenHeader))
+	if provided == "" {
+		return false
+	}
+
+	return subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
 }
 
 func (m *Module) logEmbedSecurityEvent(r *http.Request, message string, metadata map[string]any) {

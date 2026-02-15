@@ -60,6 +60,12 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.RequireEmbedAllowedOrigins {
 		t.Error("RequireEmbedAllowedOrigins = true, want false")
 	}
+	if cfg.RequireEmbedProxyToken {
+		t.Error("RequireEmbedProxyToken = true, want false")
+	}
+	if cfg.EmbedProxyToken != "" {
+		t.Errorf("EmbedProxyToken = %q, want empty", cfg.EmbedProxyToken)
+	}
 	if cfg.RequireHTTPSOutbound {
 		t.Error("RequireHTTPSOutbound = true, want false")
 	}
@@ -88,6 +94,8 @@ func TestLoad_CustomValues(t *testing.T) {
 	setEnv(t, "OCMS_REQUIRE_API_KEY_SOURCE_CIDRS", "true")
 	setEnv(t, "OCMS_EMBED_ALLOWED_ORIGINS", "https://example.com,https://app.example.com")
 	setEnv(t, "OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS", "true")
+	setEnv(t, "OCMS_EMBED_PROXY_TOKEN", "embed-token-test")
+	setEnv(t, "OCMS_REQUIRE_EMBED_PROXY_TOKEN", "true")
 	setEnv(t, "OCMS_REQUIRE_HTTPS_OUTBOUND", "true")
 	setEnv(t, "OCMS_SANITIZE_PAGE_HTML", "true")
 	setEnv(t, "OCMS_REQUIRE_SANITIZE_PAGE_HTML", "true")
@@ -139,6 +147,12 @@ func TestLoad_CustomValues(t *testing.T) {
 	if !cfg.RequireEmbedAllowedOrigins {
 		t.Error("RequireEmbedAllowedOrigins = false, want true")
 	}
+	if cfg.EmbedProxyToken != "embed-token-test" {
+		t.Errorf("EmbedProxyToken = %q, want %q", cfg.EmbedProxyToken, "embed-token-test")
+	}
+	if !cfg.RequireEmbedProxyToken {
+		t.Error("RequireEmbedProxyToken = false, want true")
+	}
 	if !cfg.RequireHTTPSOutbound {
 		t.Error("RequireHTTPSOutbound = false, want true")
 	}
@@ -185,6 +199,19 @@ func TestLoad_RequireAPIAllowedCIDRsInProduction(t *testing.T) {
 	_, err := Load()
 	if err == nil {
 		t.Fatal("Load() should fail when OCMS_REQUIRE_API_ALLOWED_CIDRS=true and OCMS_API_ALLOWED_CIDRS is empty in production")
+	}
+}
+
+func TestLoad_RequireEmbedProxyTokenInProduction(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_REQUIRE_EMBED_PROXY_TOKEN", "true")
+	setEnv(t, "OCMS_EMBED_PROXY_TOKEN", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when OCMS_REQUIRE_EMBED_PROXY_TOKEN=true and OCMS_EMBED_PROXY_TOKEN is empty in production")
 	}
 }
 

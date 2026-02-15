@@ -54,6 +54,8 @@ type Config struct {
 	// Embed proxy security configuration
 	EmbedAllowedOrigins        string `env:"OCMS_EMBED_ALLOWED_ORIGINS"`                            // Comma-separated origins allowed to call embed proxy routes
 	RequireEmbedAllowedOrigins bool   `env:"OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS" envDefault:"false"` // Refuse startup in production if embed proxy is active and no origin allowlist is configured
+	EmbedProxyToken            string `env:"OCMS_EMBED_PROXY_TOKEN"`                                // Optional shared token required for embed proxy requests
+	RequireEmbedProxyToken     bool   `env:"OCMS_REQUIRE_EMBED_PROXY_TOKEN" envDefault:"false"`     // Refuse startup in production if embed proxy token requirement is enabled but token is missing
 	RequireHTTPSOutbound       bool   `env:"OCMS_REQUIRE_HTTPS_OUTBOUND" envDefault:"false"`        // Require HTTPS for outbound integration URLs (webhooks, scheduler, embeds)
 
 	// Seeding configuration
@@ -109,6 +111,9 @@ func Load() (*Config, error) {
 	}
 	if cfg.Env == "production" && cfg.RequireAPIAllowedCIDRs && strings.TrimSpace(cfg.APIAllowedCIDRs) == "" {
 		return nil, fmt.Errorf("OCMS_API_ALLOWED_CIDRS must be configured in production when OCMS_REQUIRE_API_ALLOWED_CIDRS is enabled")
+	}
+	if cfg.Env == "production" && cfg.RequireEmbedProxyToken && strings.TrimSpace(cfg.EmbedProxyToken) == "" {
+		return nil, fmt.Errorf("OCMS_EMBED_PROXY_TOKEN must be configured in production when OCMS_REQUIRE_EMBED_PROXY_TOKEN is enabled")
 	}
 	if cfg.Env == "production" && cfg.RequireSanitizePageHTML && !cfg.SanitizePageHTML {
 		return nil, fmt.Errorf("OCMS_SANITIZE_PAGE_HTML must be true in production when OCMS_REQUIRE_SANITIZE_PAGE_HTML is enabled")

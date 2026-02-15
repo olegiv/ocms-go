@@ -43,6 +43,8 @@ type Module struct {
 	proxySemaphore      chan struct{}
 	allowedOrigins      map[string]struct{}
 	requireOriginPolicy bool
+	proxyToken          string
+	requireProxyToken   bool
 	mu                  sync.RWMutex
 }
 
@@ -73,6 +75,11 @@ func (m *Module) Init(ctx *module.Context) error {
 			return fmt.Errorf("parsing embed allowed origins: %w", err)
 		}
 		m.allowedOrigins = origins
+		m.proxyToken = strings.TrimSpace(ctx.Config.EmbedProxyToken)
+		m.requireProxyToken = ctx.Config.RequireEmbedProxyToken
+		if m.requireProxyToken && m.proxyToken == "" {
+			return fmt.Errorf("embed proxy token is required but OCMS_EMBED_PROXY_TOKEN is empty")
+		}
 	}
 
 	// Load enabled provider settings
@@ -90,6 +97,8 @@ func (m *Module) Init(ctx *module.Context) error {
 		"proxy_max_concurrent", embedProxyMaxConcurrent,
 		"allowed_origins", len(m.allowedOrigins),
 		"require_origin_policy", m.requireOriginPolicy,
+		"require_proxy_token", m.requireProxyToken,
+		"proxy_token_configured", m.proxyToken != "",
 	)
 	return nil
 }

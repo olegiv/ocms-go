@@ -103,3 +103,50 @@ func TestIsRequestOriginAllowed_NoAllowlist(t *testing.T) {
 		}
 	})
 }
+
+func TestIsProxyTokenAuthorized(t *testing.T) {
+	t.Run("allow when policy is disabled", func(t *testing.T) {
+		mod := New()
+		mod.requireProxyToken = false
+
+		req := httptest.NewRequest("POST", "/embed/dify/chat-messages", nil)
+		if !mod.isProxyTokenAuthorized(req) {
+			t.Fatal("expected proxy token check to pass when policy is disabled")
+		}
+	})
+
+	t.Run("block when token is missing", func(t *testing.T) {
+		mod := New()
+		mod.requireProxyToken = true
+		mod.proxyToken = "secret-token"
+
+		req := httptest.NewRequest("POST", "/embed/dify/chat-messages", nil)
+		if mod.isProxyTokenAuthorized(req) {
+			t.Fatal("expected proxy token check to fail when token is missing")
+		}
+	})
+
+	t.Run("block when token is incorrect", func(t *testing.T) {
+		mod := New()
+		mod.requireProxyToken = true
+		mod.proxyToken = "secret-token"
+
+		req := httptest.NewRequest("POST", "/embed/dify/chat-messages", nil)
+		req.Header.Set(embedProxyTokenHeader, "wrong-token")
+		if mod.isProxyTokenAuthorized(req) {
+			t.Fatal("expected proxy token check to fail when token is incorrect")
+		}
+	})
+
+	t.Run("allow when token matches", func(t *testing.T) {
+		mod := New()
+		mod.requireProxyToken = true
+		mod.proxyToken = "secret-token"
+
+		req := httptest.NewRequest("POST", "/embed/dify/chat-messages", nil)
+		req.Header.Set(embedProxyTokenHeader, "secret-token")
+		if !mod.isProxyTokenAuthorized(req) {
+			t.Fatal("expected proxy token check to pass with matching token")
+		}
+	})
+}
