@@ -164,6 +164,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REDIS_URL         Redis URL for distributed caching (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_TRUSTED_PROXIES   Comma-separated trusted proxy CIDRs/IPs (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_API_ALLOWED_CIDRS Comma-separated CIDRs/IPs allowed for API key access (optional)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_ALLOWED_CIDRS  Reject API key auth when global source CIDRs are not configured (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_EXPIRY  Reject API keys without expiration (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_SOURCE_CIDRS  Reject API keys without per-key CIDR restrictions (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_ALLOWED_ORIGINS   Comma-separated allowed origins for embed proxy routes (optional)\n")
@@ -362,6 +363,9 @@ func run() error {
 		if strings.TrimSpace(cfg.APIAllowedCIDRs) == "" {
 			slog.Warn("production security warning: OCMS_API_ALLOWED_CIDRS is not configured")
 		}
+		if !cfg.RequireAPIAllowedCIDRs {
+			slog.Warn("production security warning: OCMS_REQUIRE_API_ALLOWED_CIDRS is disabled")
+		}
 		if !cfg.RequireAPIKeyExpiry {
 			slog.Warn("production security warning: OCMS_REQUIRE_API_KEY_EXPIRY is disabled")
 		}
@@ -381,6 +385,10 @@ func run() error {
 	}
 	if strings.TrimSpace(cfg.APIAllowedCIDRs) != "" {
 		slog.Info("API source CIDR allowlist enabled")
+	}
+	middleware.SetRequireAPIAllowedCIDRs(cfg.RequireAPIAllowedCIDRs)
+	if cfg.RequireAPIAllowedCIDRs {
+		slog.Info("API global source CIDR requirement enabled")
 	}
 	middleware.SetRequireAPIKeyExpiry(cfg.RequireAPIKeyExpiry)
 	if cfg.RequireAPIKeyExpiry {

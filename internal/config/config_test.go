@@ -45,6 +45,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.APIAllowedCIDRs != "" {
 		t.Errorf("APIAllowedCIDRs = %q, want empty", cfg.APIAllowedCIDRs)
 	}
+	if cfg.RequireAPIAllowedCIDRs {
+		t.Error("RequireAPIAllowedCIDRs = true, want false")
+	}
 	if cfg.RequireAPIKeyExpiry {
 		t.Error("RequireAPIKeyExpiry = true, want false")
 	}
@@ -68,6 +71,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	setEnv(t, "OCMS_TRUSTED_PROXIES", "127.0.0.1/32,10.0.0.0/8")
 	setEnv(t, "OCMS_REQUIRE_FORM_CAPTCHA", "true")
 	setEnv(t, "OCMS_API_ALLOWED_CIDRS", "10.0.0.0/8,192.168.1.10")
+	setEnv(t, "OCMS_REQUIRE_API_ALLOWED_CIDRS", "true")
 	setEnv(t, "OCMS_REQUIRE_API_KEY_EXPIRY", "true")
 	setEnv(t, "OCMS_REQUIRE_API_KEY_SOURCE_CIDRS", "true")
 	setEnv(t, "OCMS_EMBED_ALLOWED_ORIGINS", "https://example.com,https://app.example.com")
@@ -103,6 +107,9 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 	if cfg.APIAllowedCIDRs != "10.0.0.0/8,192.168.1.10" {
 		t.Errorf("APIAllowedCIDRs = %q, want %q", cfg.APIAllowedCIDRs, "10.0.0.0/8,192.168.1.10")
+	}
+	if !cfg.RequireAPIAllowedCIDRs {
+		t.Error("RequireAPIAllowedCIDRs = false, want true")
 	}
 	if !cfg.RequireAPIKeyExpiry {
 		t.Error("RequireAPIKeyExpiry = false, want true")

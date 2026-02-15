@@ -38,6 +38,8 @@ type APIError struct {
 var (
 	apiAllowedCIDRsMu          sync.RWMutex
 	apiAllowedCIDRs            []netip.Prefix
+	requireAPIAllowedCIDRs     bool
+	requireAPIAllowedCIDRsMu   sync.RWMutex
 	requireAPIKeyExpiry        bool
 	requireAPIKeyExpiryMu      sync.RWMutex
 	requireAPIKeySourceCIDRs   bool
@@ -69,6 +71,20 @@ func isAPIKeySourceCIDRsRequired() bool {
 	requireAPIKeySourceCIDRsMu.RLock()
 	defer requireAPIKeySourceCIDRsMu.RUnlock()
 	return requireAPIKeySourceCIDRs
+}
+
+// SetRequireAPIAllowedCIDRs configures whether API auth requires at least one
+// global source CIDR restriction.
+func SetRequireAPIAllowedCIDRs(required bool) {
+	requireAPIAllowedCIDRsMu.Lock()
+	requireAPIAllowedCIDRs = required
+	requireAPIAllowedCIDRsMu.Unlock()
+}
+
+func isAPIAllowedCIDRsRequired() bool {
+	requireAPIAllowedCIDRsMu.RLock()
+	defer requireAPIAllowedCIDRsMu.RUnlock()
+	return requireAPIAllowedCIDRs
 }
 
 // ConfigureAPIAllowedCIDRs updates API source restrictions from a comma-separated
@@ -140,6 +156,12 @@ func isAPIClientAllowed(ip string) bool {
 		}
 	}
 	return false
+}
+
+func hasAPIAllowedCIDRsConfigured() bool {
+	apiAllowedCIDRsMu.RLock()
+	defer apiAllowedCIDRsMu.RUnlock()
+	return len(apiAllowedCIDRs) > 0
 }
 
 func parseCIDROrIP(value string) (netip.Prefix, error) {
@@ -234,6 +256,17 @@ func WriteAPIError(w http.ResponseWriter, statusCode int, code, message string, 
 // The second return value indicates if an error response was written.
 func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queries, required bool) (*store.ApiKey, bool) {
 	clientIP := GetClientIP(r)
+	if isAPIAllowedCIDRsRequired() && !hasAPIAllowedCIDRsConfigured() {
+		slog.Warn("API key auth blocked: global source CIDR policy required but not configured",
+			"path", r.URL.Path,
+			"ip", clientIP)
+		if required {
+			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key access policy is not configured", nil)
+			return nil, true
+		}
+		return nil, false
+	}
+
 	if !isAPIClientAllowed(clientIP) {
 		slog.Warn("API key auth blocked by global source CIDR policy",
 			"ip", clientIP,

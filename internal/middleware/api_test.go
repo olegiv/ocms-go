@@ -91,6 +91,14 @@ func setRequireAPIKeySourceCIDRsForTest(t *testing.T, required bool) {
 	})
 }
 
+func setRequireAPIAllowedCIDRsForTest(t *testing.T, required bool) {
+	t.Helper()
+	SetRequireAPIAllowedCIDRs(required)
+	t.Cleanup(func() {
+		SetRequireAPIAllowedCIDRs(false)
+	})
+}
+
 // simpleOKHandler returns an http.Handler that writes 200 OK.
 var simpleOKHandler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
@@ -358,6 +366,40 @@ func TestAPIKeyAuth_IPAllowlist(t *testing.T) {
 
 		if w.Code != http.StatusUnauthorized {
 			t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
+		}
+	})
+}
+
+func TestAPIKeyAuth_RequireGlobalCIDRPolicy(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+	setRequireAPIAllowedCIDRsForTest(t, true)
+
+	rawKey := insertTestAPIKey(t, db, "Require Global CIDR", []string{"pages:read"}, true, nil)
+	handler := APIKeyAuth(db)(simpleOKHandler)
+
+	t.Run("reject when global CIDR policy not configured", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+		req.Header.Set("Authorization", "Bearer "+rawKey)
+		req.RemoteAddr = "203.0.113.25:12345"
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
+		}
+	})
+
+	t.Run("allow when global CIDR policy is configured and matched", func(t *testing.T) {
+		setAPIAllowedCIDRsForTest(t, "203.0.113.0/24")
+		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+		req.Header.Set("Authorization", "Bearer "+rawKey)
+		req.RemoteAddr = "203.0.113.25:12345"
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
 		}
 	})
 }
