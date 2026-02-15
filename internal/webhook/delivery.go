@@ -12,6 +12,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/store"
@@ -198,6 +199,15 @@ func (d *Dispatcher) attemptDelivery(ctx context.Context, delivery *QueuedDelive
 
 	// Set custom headers from webhook configuration
 	for key, value := range delivery.Headers {
+		if !isSafeWebhookDeliveryHeader(key, value) {
+			d.logger.Warn(
+				"skipping unsafe webhook custom header",
+				"webhook_id", delivery.WebhookID,
+				"delivery_id", delivery.DeliveryID,
+				"header", key,
+			)
+			continue
+		}
 		req.Header.Set(key, value)
 	}
 
@@ -254,6 +264,61 @@ func (d *Dispatcher) attemptDelivery(ctx context.Context, delivery *QueuedDelive
 		Error:        fmt.Errorf("HTTP %d: %s", resp.StatusCode, http.StatusText(resp.StatusCode)),
 		ShouldRetry:  true,
 	}
+}
+
+func isSafeWebhookDeliveryHeader(name, value string) bool {
+	key := strings.TrimSpace(name)
+	if key == "" || len(key) > 64 {
+		return false
+	}
+	if !isValidWebhookDeliveryHeaderName(key) || isBlockedWebhookDeliveryHeader(key) {
+		return false
+	}
+	if len(value) > 1024 || hasInvalidWebhookDeliveryHeaderValue(value) {
+		return false
+	}
+	return true
+}
+
+func isValidWebhookDeliveryHeaderName(name string) bool {
+	const tokenChars = "!#$%&'*+-.^_`|~"
+	for i := 0; i < len(name); i++ {
+		ch := name[i]
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') {
+			continue
+		}
+		if strings.ContainsRune(tokenChars, rune(ch)) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func isBlockedWebhookDeliveryHeader(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "host", "content-length", "transfer-encoding", "connection",
+		"proxy-connection", "upgrade", "expect", "te", "trailer", "keep-alive":
+		return true
+	default:
+		return false
+	}
+}
+
+func hasInvalidWebhookDeliveryHeaderValue(value string) bool {
+	if strings.ContainsAny(value, "\r\n") {
+		return true
+	}
+	for i := 0; i < len(value); i++ {
+		ch := value[i]
+		if ch == '\t' {
+			continue
+		}
+		if ch < 0x20 || ch == 0x7f {
+			return true
+		}
+	}
+	return false
 }
 
 // calculateBackoff calculates the exponential backoff duration for a given attempt.

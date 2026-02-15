@@ -498,3 +498,26 @@ func TestAttemptDelivery_EnforcesHTTPSPolicy(t *testing.T) {
 		t.Fatalf("attemptDelivery() error = %v, want https scheme error", result.Error)
 	}
 }
+
+func TestIsSafeWebhookDeliveryHeader(t *testing.T) {
+	tests := []struct {
+		name   string
+		key    string
+		value  string
+		expect bool
+	}{
+		{name: "safe header", key: "X-Custom-Token", value: "abc123", expect: true},
+		{name: "blocked host header", key: "Host", value: "evil.example", expect: false},
+		{name: "invalid header name", key: "Bad Header", value: "x", expect: false},
+		{name: "invalid CRLF value", key: "X-Test", value: "ok\r\nInjected: yes", expect: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isSafeWebhookDeliveryHeader(tt.key, tt.value)
+			if got != tt.expect {
+				t.Errorf("isSafeWebhookDeliveryHeader(%q, %q) = %v, want %v", tt.key, tt.value, got, tt.expect)
+			}
+		})
+	}
+}

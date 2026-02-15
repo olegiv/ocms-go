@@ -30,6 +30,14 @@ import (
 // DeliveriesPerPage is the number of deliveries to display per page.
 const DeliveriesPerPage = 25
 
+const (
+	maxWebhookHeadersCount     = 20
+	maxWebhookHeaderNameLen    = 64
+	maxWebhookHeaderValueLen   = 1024
+	maxWebhookFormNameLen      = 255
+	webhookHeaderTokenCharsSet = "!#$%&'*+-.^_`|~"
+)
+
 // WebhooksHandler handles webhook management routes.
 type WebhooksHandler struct {
 	queries        *store.Queries
@@ -700,7 +708,7 @@ func validateWebhookForm(input webhookFormInput, validateEvents bool) map[string
 
 	if input.Name == "" {
 		validationErrors["name"] = "Name is required"
-	} else if len(input.Name) > 255 {
+	} else if len(input.Name) > maxWebhookFormNameLen {
 		validationErrors["name"] = "Name must be less than 255 characters"
 	}
 
@@ -730,6 +738,10 @@ func validateWebhookForm(input webhookFormInput, validateEvents bool) map[string
 		}
 	}
 
+	if err := validateWebhookHeaders(input.Headers); err != nil {
+		validationErrors["headers"] = err.Error()
+	}
+
 	return validationErrors
 }
 
@@ -739,6 +751,76 @@ func webhookDestinationMetadata(rawURL string) (scheme string, host string) {
 		return "", ""
 	}
 	return strings.ToLower(parsed.Scheme), strings.ToLower(parsed.Host)
+}
+
+func validateWebhookHeaders(headers map[string]string) error {
+	if len(headers) > maxWebhookHeadersCount {
+		return fmt.Errorf("maximum %d custom headers are allowed", maxWebhookHeadersCount)
+	}
+
+	for rawKey, value := range headers {
+		key := strings.TrimSpace(rawKey)
+		if key == "" {
+			return fmt.Errorf("header name cannot be empty")
+		}
+		if len(key) > maxWebhookHeaderNameLen {
+			return fmt.Errorf("header %q exceeds max name length of %d", key, maxWebhookHeaderNameLen)
+		}
+		if !isValidWebhookHeaderName(key) {
+			return fmt.Errorf("header %q has invalid name", key)
+		}
+		if isBlockedWebhookHeader(key) {
+			return fmt.Errorf("header %q is not allowed", key)
+		}
+		if len(value) > maxWebhookHeaderValueLen {
+			return fmt.Errorf("header %q exceeds max value length of %d", key, maxWebhookHeaderValueLen)
+		}
+		if hasInvalidWebhookHeaderValue(value) {
+			return fmt.Errorf("header %q has invalid value", key)
+		}
+	}
+
+	return nil
+}
+
+func isValidWebhookHeaderName(name string) bool {
+	for i := 0; i < len(name); i++ {
+		ch := name[i]
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') {
+			continue
+		}
+		if strings.ContainsRune(webhookHeaderTokenCharsSet, rune(ch)) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func isBlockedWebhookHeader(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "host", "content-length", "transfer-encoding", "connection",
+		"proxy-connection", "upgrade", "expect", "te", "trailer", "keep-alive":
+		return true
+	default:
+		return false
+	}
+}
+
+func hasInvalidWebhookHeaderValue(value string) bool {
+	if strings.ContainsAny(value, "\r\n") {
+		return true
+	}
+	for i := 0; i < len(value); i++ {
+		ch := value[i]
+		if ch == '\t' {
+			continue
+		}
+		if ch < 0x20 || ch == 0x7f {
+			return true
+		}
+	}
+	return false
 }
 
 // renderNewWebhookForm renders the new webhook form with the given data.
