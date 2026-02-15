@@ -682,9 +682,8 @@ func TestListCategories(t *testing.T) {
 	})
 
 	t.Run("with categories as tree", func(t *testing.T) {
-		parent := createTestCategory(t, db, "Parent", "parent", nil)
-		parentID := parent.ID
-		createTestCategory(t, db, "Child", "child", &parentID)
+		parentCat := createTestCategory(t, db, "Parent", "parent", nil)
+		createTestCategory(t, db, "Child", "child", &parentCat.ID)
 
 		req := newGetRequest(t, "/api/v1/categories", nil)
 		w := executeHandler(t, h.ListCategories, req)
@@ -888,10 +887,8 @@ func TestUpdateCategory(t *testing.T) {
 	t.Run("circular reference - child as parent", func(t *testing.T) {
 		// Create a hierarchy: grandparent -> parent -> child
 		grandparent := createTestCategory(t, db, "Grandparent", "grandparent", nil)
-		gpID := grandparent.ID
-		parent := createTestCategory(t, db, "Parent Cat", "parent-cat", &gpID)
-		pID := parent.ID
-		child := createTestCategory(t, db, "Child Cat", "child-cat", &pID)
+		parentCat := createTestCategory(t, db, "Parent Cat", "parent-cat", &grandparent.ID)
+		child := createTestCategory(t, db, "Child Cat", "child-cat", &parentCat.ID)
 
 		// Try to set child as parent of grandparent (circular reference)
 		body := fmt.Sprintf(`{"parent_id": %d}`, child.ID)
@@ -909,10 +906,8 @@ func TestUpdateCategory(t *testing.T) {
 	t.Run("circular reference - grandchild as parent", func(t *testing.T) {
 		// Create deeper hierarchy: root -> child -> grandchild
 		root := createTestCategory(t, db, "Root Cat", "root-cat", nil)
-		rootID := root.ID
-		childCat := createTestCategory(t, db, "Child2", "child2", &rootID)
-		childID := childCat.ID
-		grandchild := createTestCategory(t, db, "Grandchild", "grandchild", &childID)
+		midCat := createTestCategory(t, db, "Child2", "child2", &root.ID)
+		grandchild := createTestCategory(t, db, "Grandchild", "grandchild", &midCat.ID)
 
 		// Try to set grandchild as parent of root (circular reference)
 		body := fmt.Sprintf(`{"parent_id": %d}`, grandchild.ID)
@@ -925,8 +920,7 @@ func TestUpdateCategory(t *testing.T) {
 	t.Run("clear parent", func(t *testing.T) {
 		// Create a category with a parent
 		parentCat := createTestCategory(t, db, "Parent To Clear", "parent-to-clear", nil)
-		parentID := parentCat.ID
-		childCat := createTestCategory(t, db, "Has Parent", "has-parent", &parentID)
+		childCat := createTestCategory(t, db, "Has Parent", "has-parent", &parentCat.ID)
 
 		// Clear the parent by setting parent_id to 0
 		req := newJSONRequest(t, http.MethodPut, "/api/v1/categories/1", `{"parent_id": 0}`, map[string]string{"id": fmt.Sprintf("%d", childCat.ID)})
@@ -1026,8 +1020,7 @@ func TestDeleteCategory(t *testing.T) {
 
 	t.Run("delete category with children", func(t *testing.T) {
 		parent := createTestCategory(t, db, "Parent to Delete", "parent-to-delete", nil)
-		parentID := parent.ID
-		createTestCategory(t, db, "Child of Parent", "child-of-parent", &parentID)
+		createTestCategory(t, db, "Child of Parent", "child-of-parent", new(parent.ID))
 
 		req := newDeleteRequest(t, "/api/v1/categories/1", map[string]string{"id": fmt.Sprintf("%d", parent.ID)})
 		w := executeHandler(t, h.DeleteCategory, req)

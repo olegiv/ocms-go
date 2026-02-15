@@ -1553,8 +1553,7 @@ img {
 .dev-prose h6 {
     font-family: var(--dev-font-mono), monospace;
     color: var(--dev-text-bright);
-    margin-top: 2em;
-    margin-bottom: 0.75em;
+    margin: 2em 0 0.75em;
     line-height: 1.3;
 }
 
@@ -2055,7 +2054,7 @@ img {
     border: 1px solid var(--dev-border);
     border-radius: var(--dev-radius-sm);
     color: var(--dev-text);
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.75rem;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -2110,7 +2109,7 @@ img {
     padding: var(--dev-space-sm) var(--dev-space-md);
     color: var(--dev-text);
     text-decoration: none;
-    font-family: var(--dev-font-mono);
+    font-family: var(--dev-font-mono), monospace;
     font-size: 0.8125rem;
     transition: background 0.15s ease;
 }
@@ -2202,7 +2201,7 @@ img {
     border-radius: 6px;
     color: var(--dev-text);
     font-size: 1rem;
-    font-family: var(--dev-mono);
+    font-family: var(--dev-font-mono), monospace;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 
@@ -2266,7 +2265,7 @@ select.form-control {
     padding: 0.75rem 1.5rem;
     font-size: 1rem;
     font-weight: 500;
-    font-family: var(--dev-mono);
+    font-family: var(--dev-font-mono), monospace;
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s;
@@ -2318,7 +2317,7 @@ select.form-control {
     padding: 0.75rem 1.5rem;
     font-size: 1rem;
     font-weight: 500;
-    font-family: var(--dev-mono);
+    font-family: var(--dev-font-mono), monospace;
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s;

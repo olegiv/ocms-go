@@ -199,10 +199,10 @@ func seedDemoCategories(ctx context.Context, queries *Queries, langCode string) 
 		Description string
 		Position    int64
 	}{
-		{"Blog", "blog", "Latest news, tutorials, and updates", 1},
-		{"Portfolio", "portfolio", "Showcase of our work and projects", 2},
-		{"Services", "services", "Our professional services", 3},
-		{"Resources", "resources", "Helpful guides and documentation", 4},
+		{Name: "Blog", Slug: "blog", Description: "Latest news, tutorials, and updates", Position: 1},
+		{Name: "Portfolio", Slug: "portfolio", Description: "Showcase of our work and projects", Position: 2},
+		{Name: "Services", Slug: "services", Description: "Our professional services", Position: 3},
+		{Name: "Resources", Slug: "resources", Description: "Helpful guides and documentation", Position: 4},
 	}
 
 	ids := make(map[string]int64)
@@ -243,13 +243,13 @@ func seedDemoTags(ctx context.Context, queries *Queries, langCode string) (map[s
 		Name string
 		Slug string
 	}{
-		{"Tutorial", "tutorial"},
-		{"News", "news"},
-		{"Featured", "featured"},
-		{"Go", "go"},
-		{"Web Development", "web-development"},
-		{"Design", "design"},
-		{"Open Source", "open-source"},
+		{Name: "Tutorial", Slug: "tutorial"},
+		{Name: "News", Slug: "news"},
+		{Name: "Featured", Slug: "featured"},
+		{Name: "Go", Slug: "go"},
+		{Name: "Web Development", Slug: "web-development"},
+		{Name: "Design", Slug: "design"},
+		{Name: "Open Source", Slug: "open-source"},
 	}
 
 	ids := make(map[string]int64)
@@ -521,13 +521,13 @@ func seedDemoMenuItems(ctx context.Context, queries *Queries) error {
 		URL      string
 		Position int64
 	}{
-		{"Home", "/", 1},
-		{"Blog", "/category/blog", 2},
-		{"Portfolio", "/category/portfolio", 3},
-		{"Services", "/web-development-services", 4},
-		{"About", "/about", 5},
-		{"Contact", "/contact", 6},
-		{"Cookie Policy", "/cookie-policy", 7},
+		{Title: "Home", URL: "/", Position: 1},
+		{Title: "Blog", URL: "/category/blog", Position: 2},
+		{Title: "Portfolio", URL: "/category/portfolio", Position: 3},
+		{Title: "Services", URL: "/web-development-services", Position: 4},
+		{Title: "About", URL: "/about", Position: 5},
+		{Title: "Contact", URL: "/contact", Position: 6},
+		{Title: "Cookie Policy", URL: "/cookie-policy", Position: 7},
 	}
 
 	for _, item := range menuItems {
@@ -584,16 +584,16 @@ func seedDemoMedia(ctx context.Context, queries *Queries, userID int64, langCode
 	// Define demo images with different colors for variety
 	// All images are 2400x1600 to ensure all variants (including large 1920x1080) are created
 	images := []demoImage{
-		{"hero-banner.png", "Hero banner image", 2400, 1600, color.RGBA{59, 130, 246, 255}},           // Blue
-		{"about-image.png", "About page image", 2400, 1600, color.RGBA{16, 185, 129, 255}},            // Green
-		{"blog-post-1.png", "Blog post featured image", 2400, 1600, color.RGBA{245, 158, 11, 255}},    // Amber
-		{"blog-post-2.png", "Blog tutorial image", 2400, 1600, color.RGBA{139, 92, 246, 255}},         // Purple
-		{"blog-post-3.png", "Blog news image", 2400, 1600, color.RGBA{236, 72, 153, 255}},             // Pink
-		{"portfolio-1.png", "E-commerce project screenshot", 2400, 1600, color.RGBA{20, 184, 166, 255}}, // Teal
-		{"portfolio-2.png", "Corporate website screenshot", 2400, 1600, color.RGBA{99, 102, 241, 255}},  // Indigo
-		{"services-web.png", "Web development services", 2400, 1600, color.RGBA{239, 68, 68, 255}},     // Red
-		{"team-photo.png", "Team photo placeholder", 2400, 1600, color.RGBA{107, 114, 128, 255}},       // Gray
-		{"logo-sample.png", "Sample logo image", 2400, 1600, color.RGBA{34, 197, 94, 255}},             // Green-500
+		{Filename: "hero-banner.png", Alt: "Hero banner image", Width: 2400, Height: 1600, Color: color.RGBA{R: 59, G: 130, B: 246, A: 255}},    // Blue
+		{Filename: "about-image.png", Alt: "About page image", Width: 2400, Height: 1600, Color: color.RGBA{R: 16, G: 185, B: 129, A: 255}},   // Green
+		{Filename: "blog-post-1.png", Alt: "Blog post featured image", Width: 2400, Height: 1600, Color: color.RGBA{R: 245, G: 158, B: 11, A: 255}},  // Amber
+		{Filename: "blog-post-2.png", Alt: "Blog tutorial image", Width: 2400, Height: 1600, Color: color.RGBA{R: 139, G: 92, B: 246, A: 255}},  // Purple
+		{Filename: "blog-post-3.png", Alt: "Blog news image", Width: 2400, Height: 1600, Color: color.RGBA{R: 236, G: 72, B: 153, A: 255}},     // Pink
+		{Filename: "portfolio-1.png", Alt: "E-commerce project screenshot", Width: 2400, Height: 1600, Color: color.RGBA{R: 20, G: 184, B: 166, A: 255}}, // Teal
+		{Filename: "portfolio-2.png", Alt: "Corporate website screenshot", Width: 2400, Height: 1600, Color: color.RGBA{R: 99, G: 102, B: 241, A: 255}},  // Indigo
+		{Filename: "services-web.png", Alt: "Web development services", Width: 2400, Height: 1600, Color: color.RGBA{R: 239, G: 68, B: 68, A: 255}},    // Red
+		{Filename: "team-photo.png", Alt: "Team photo placeholder", Width: 2400, Height: 1600, Color: color.RGBA{R: 107, G: 114, B: 128, A: 255}},      // Gray
+		{Filename: "logo-sample.png", Alt: "Sample logo image", Width: 2400, Height: 1600, Color: color.RGBA{R: 34, G: 197, B: 94, A: 255}},            // Green-500
 	}
 
 	for _, img := range images {
@@ -620,10 +620,10 @@ type imageVariant struct {
 
 // demoImageVariants matches the variants defined in internal/model/media.go
 var demoImageVariants = []imageVariant{
-	{"thumbnail", 150, 150, true},
-	{"small", 400, 300, false},
-	{"medium", 800, 600, false},
-	{"large", 1920, 1080, false},
+	{name: "thumbnail", width: 150, height: 150, crop: true},
+	{name: "small", width: 400, height: 300, crop: false},
+	{name: "medium", width: 800, height: 600, crop: false},
+	{name: "large", width: 1920, height: 1080, crop: false},
 }
 
 func createDemoImage(ctx context.Context, queries *Queries, userID int64, langCode, uploadsDir string, img demoImage, now time.Time) (int64, error) {
@@ -635,7 +635,7 @@ func createDemoImage(ctx context.Context, queries *Queries, userID int64, langCo
 	rgba := image.NewRGBA(rect)
 
 	// Fill with the specified color
-	draw.Draw(rgba, rgba.Bounds(), &image.Uniform{img.Color}, image.Point{}, draw.Src)
+	draw.Draw(rgba, rgba.Bounds(), &image.Uniform{C: img.Color}, image.Point{}, draw.Src)
 
 	// Add a lighter center rectangle to make it look like a placeholder
 	centerRect := image.Rect(img.Width/4, img.Height/4, img.Width*3/4, img.Height*3/4)
@@ -645,7 +645,7 @@ func createDemoImage(ctx context.Context, queries *Queries, userID int64, langCo
 		B: min(img.Color.B+40, 255),
 		A: 255,
 	}
-	draw.Draw(rgba, centerRect, &image.Uniform{lighterColor}, image.Point{}, draw.Src)
+	draw.Draw(rgba, centerRect, &image.Uniform{C: lighterColor}, image.Point{}, draw.Src)
 
 	// Create directory structure for original
 	originalsDir := filepath.Join(uploadsDir, "originals", fileUUID)

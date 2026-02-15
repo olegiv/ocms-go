@@ -241,10 +241,9 @@ func (h *TaxonomyHandler) EditTagForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	langInfo := h.loadTagLanguageInfo(r.Context(), tag)
-	tagItem := convertTagItem(tag)
 
 	viewData := adminviews.TagFormData{
-		Tag:              &tagItem,
+		Tag:              new(convertTagItem(tag)),
 		Errors:           make(map[string]string),
 		FormValues:       make(map[string]string),
 		IsEdit:           true,
@@ -305,10 +304,9 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
 		langInfo := h.loadTagLanguageInfo(r.Context(), existingTag)
-		tagItem := convertTagItem(existingTag)
 
 		viewData := adminviews.TagFormData{
-			Tag:          &tagItem,
+			Tag:          new(convertTagItem(existingTag)),
 			Errors:       validationErrors,
 			FormValues:   formValues,
 			IsEdit:       true,
@@ -773,10 +771,9 @@ func (h *TaxonomyHandler) EditCategoryForm(w http.ResponseWriter, r *http.Reques
 	// Get all categories for parent selector (excluding self and descendants)
 	flatTree := h.buildFilteredCategoryTree(r.Context(), id)
 	langInfo := h.loadCategoryLanguageInfo(r.Context(), category)
-	catItem := convertCategoryItem(category)
 
 	viewData := adminviews.CategoryFormData{
-		Category:         &catItem,
+		Category:         new(convertCategoryItem(category)),
 		AllCategories:    convertCategoryListItems(flatTree),
 		Errors:           make(map[string]string),
 		FormValues:       make(map[string]string),
@@ -862,10 +859,9 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 	if len(validationErrors) > 0 {
 		flatTree := h.buildFilteredCategoryTree(r.Context(), id)
 		langInfo := h.loadCategoryLanguageInfo(r.Context(), existingCategory)
-		catItem := convertCategoryItem(existingCategory)
 
 		viewData := adminviews.CategoryFormData{
-			Category:      &catItem,
+			Category:      new(convertCategoryItem(existingCategory)),
 			AllCategories: convertCategoryListItems(flatTree),
 			Errors:        validationErrors,
 			FormValues:    formValues,

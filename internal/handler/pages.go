@@ -95,14 +95,12 @@ func (h *PagesHandler) dispatchPageEvent(ctx context.Context, eventType string, 
 
 	var languageCode *string
 	if page.LanguageCode != "" {
-		langCode := page.LanguageCode
-		languageCode = &langCode
+		languageCode = new(page.LanguageCode)
 	}
 
 	var publishedAt *string
 	if page.PublishedAt.Valid {
-		t := page.PublishedAt.Time.Format(time.RFC3339)
-		publishedAt = &t
+		publishedAt = new(page.PublishedAt.Time.Format(time.RFC3339))
 	}
 
 	data := webhook.PageEventData{

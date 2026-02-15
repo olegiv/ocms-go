@@ -265,7 +265,6 @@ func TestBuildArticleSchema(t *testing.T) {
 		DefaultOGImage: "/images/logo.png",
 	}
 
-	publishedAt := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
 	modifiedAt := time.Date(2025, 1, 20, 14, 30, 0, 0, time.UTC)
 
 	page := &PageData{
@@ -273,7 +272,7 @@ func TestBuildArticleSchema(t *testing.T) {
 		Slug:            "test-article",
 		MetaDescription: "Article description",
 		OGImageURL:      "/images/article.jpg",
-		PublishedAt:     &publishedAt,
+		PublishedAt:     new(time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)),
 		AuthorName:      "John Doe",
 	}
 

@@ -9,6 +9,7 @@ linters:
   enable:
     - dupl
     - errcheck
+    - errorlint
     - gocritic
     - gocyclo
     - govet
@@ -19,6 +20,7 @@ linters:
     - unconvert
     - unparam
     - unused
+    - usetesting
   settings:
     dupl:
       threshold: 200

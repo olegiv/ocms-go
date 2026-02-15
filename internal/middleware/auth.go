@@ -133,8 +133,7 @@ func GetUserID(r *http.Request) int64 {
 // Useful for optional user ID parameters in event logging.
 func GetUserIDPtr(r *http.Request) *int64 {
 	if user := GetUser(r); user != nil {
-		id := user.ID
-		return &id
+		return new(user.ID)
 	}
 	return nil
 }
@@ -264,14 +263,13 @@ func RequireRoleWithEventLog(minRole string, eventService *service.EventService)
 
 				// Log 403 to event log (visible in admin panel)
 				if eventService != nil {
-					userID := user.ID
 					metadata := map[string]any{
 						"method":        r.Method,
 						"status":        http.StatusForbidden,
 						"user_role":     user.Role,
 						"required_role": minRole,
 					}
-					_ = eventService.LogAuthEvent(r.Context(), "warning", "Access denied: insufficient permissions", &userID, r.RemoteAddr, r.URL.Path, metadata)
+					_ = eventService.LogAuthEvent(r.Context(), "warning", "Access denied: insufficient permissions", new(user.ID), r.RemoteAddr, r.URL.Path, metadata)
 				}
 
 				// Return 403 Forbidden for insufficient role

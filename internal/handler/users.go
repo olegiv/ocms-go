@@ -127,8 +127,7 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 			IsCurrentUser: u.ID == currentUserID,
 		}
 		if u.LastLoginAt.Valid {
-			t := u.LastLoginAt.Time
-			item.LastLoginAt = &t
+			item.LastLoginAt = new(u.LastLoginAt.Time)
 		}
 		viewUsers = append(viewUsers, item)
 	}

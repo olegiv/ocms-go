@@ -1772,17 +1772,12 @@ type FormTemplateData struct {
 func (h *FormsHandler) render(w http.ResponseWriter, r *http.Request, data FormTemplateData) {
 	activeTheme := h.themeManager.GetActiveTheme()
 
-	engine := theme.ThemeEngineTempl
+	engine := theme.EngineTempl
 	if activeTheme != nil {
 		engine = activeTheme.RenderEngine()
 	}
 
-	if engine == theme.ThemeEngineHTML {
-		if activeTheme == nil {
-			slog.Error("html engine selected but no active theme for form")
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
+	if engine == theme.EngineHTML {
 		var buf bytes.Buffer
 		if err := activeTheme.RenderPage(&buf, "form", data); err != nil {
 			slog.Error("html theme form render failed", "theme", activeTheme.Name, "error", err)
@@ -1994,8 +1989,8 @@ func (h *FormsHandler) getBaseTemplateData(r *http.Request, title string) BaseTe
 
 	// Load menus
 	if h.menuService != nil {
-		data.MainMenu = h.loadMenu("main", r.URL.Path, langCode)
-		data.FooterMenu = h.loadMenu("footer", r.URL.Path, langCode)
+		data.MainMenu = loadMenu(h.menuService, "main", r.URL.Path, langCode)
+		data.FooterMenu = loadMenu(h.menuService, "footer", r.URL.Path, langCode)
 		data.Navigation = data.MainMenu
 		data.FooterNav = data.FooterMenu
 	}
@@ -2003,33 +1998,3 @@ func (h *FormsHandler) getBaseTemplateData(r *http.Request, title string) BaseTe
 	return data
 }
 
-// loadMenu loads a menu by slug and language.
-func (h *FormsHandler) loadMenu(slug, currentPath, langCode string) []MenuItem {
-	var items []service.MenuItem
-	if langCode != "" {
-		items = h.menuService.GetMenuForLanguage(slug, langCode)
-	} else {
-		items = h.menuService.GetMenu(slug)
-	}
-	if items == nil {
-		return nil
-	}
-
-	return h.menuItemsToView(items, currentPath)
-}
-
-// menuItemsToView converts service menu items to view items.
-func (h *FormsHandler) menuItemsToView(items []service.MenuItem, currentPath string) []MenuItem {
-	result := make([]MenuItem, 0, len(items))
-	for _, item := range items {
-		mi := MenuItem{
-			Title:    item.Title,
-			URL:      item.URL,
-			Target:   item.Target,
-			IsActive: item.URL == currentPath,
-			Children: h.menuItemsToView(item.Children, currentPath),
-		}
-		result = append(result, mi)
-	}
-	return result
-}

@@ -16,7 +16,7 @@ import (
 func testDB(t *testing.T) (*sql.DB, func()) {
 	t.Helper()
 
-	f, err := os.CreateTemp("", "ocms-test-*.db")
+	f, err := os.CreateTemp(t.TempDir(), "ocms-test-*.db")
 	if err != nil {
 		t.Fatalf("creating temp file: %v", err)
 	}

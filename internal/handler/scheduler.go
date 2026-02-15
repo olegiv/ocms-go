@@ -34,7 +34,32 @@ const (
 	taskURLMaxLen          = 2048
 	taskTimeoutMin         = 1
 	taskTimeoutMax         = 300
+	taskTimeoutDefault     = 30
 )
+
+// parseTaskTimeout parses and clamps a timeout string to the allowed range.
+func parseTaskTimeout(s string) int64 {
+	timeout := int64(taskTimeoutDefault)
+	if s != "" {
+		if t, err := strconv.ParseInt(s, 10, 64); err == nil && t > 0 {
+			timeout = t
+		}
+	}
+	if timeout < taskTimeoutMin {
+		timeout = taskTimeoutMin
+	}
+	if timeout > taskTimeoutMax {
+		timeout = taskTimeoutMax
+	}
+	return timeout
+}
+
+// validateCronSchedule validates a cron schedule expression.
+func validateCronSchedule(schedule string) error {
+	cronParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+	_, err := cronParser.Parse(schedule)
+	return err
+}
 
 // SchedulerHandler handles scheduler admin routes.
 type SchedulerHandler struct {
@@ -350,26 +375,13 @@ func (h *SchedulerHandler) TaskCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate cron schedule syntax
-	cronParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
-	if _, cronErr := cronParser.Parse(schedule); cronErr != nil {
+	if cronErr := validateCronSchedule(schedule); cronErr != nil {
 		flashError(w, r, h.renderer, redirectAdminScheduler+"/tasks/new",
 			i18n.T(lang, "scheduler.error_invalid_schedule")+": "+cronErr.Error())
 		return
 	}
 
-	timeout := int64(30)
-	if timeoutStr != "" {
-		t, err := strconv.ParseInt(timeoutStr, 10, 64)
-		if err == nil && t > 0 {
-			timeout = t
-		}
-	}
-	if timeout < taskTimeoutMin {
-		timeout = taskTimeoutMin
-	}
-	if timeout > taskTimeoutMax {
-		timeout = taskTimeoutMax
-	}
+	timeout := parseTaskTimeout(timeoutStr)
 
 	now := time.Now()
 	userID := middleware.GetUserID(r)
@@ -464,26 +476,13 @@ func (h *SchedulerHandler) TaskUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate cron schedule syntax
-	cronParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
-	if _, cronErr := cronParser.Parse(schedule); cronErr != nil {
+	if cronErr := validateCronSchedule(schedule); cronErr != nil {
 		flashError(w, r, h.renderer, editRedirect,
 			i18n.T(lang, "scheduler.error_invalid_schedule")+": "+cronErr.Error())
 		return
 	}
 
-	timeout := int64(30)
-	if timeoutStr != "" {
-		t, parseErr := strconv.ParseInt(timeoutStr, 10, 64)
-		if parseErr == nil && t > 0 {
-			timeout = t
-		}
-	}
-	if timeout < taskTimeoutMin {
-		timeout = taskTimeoutMin
-	}
-	if timeout > taskTimeoutMax {
-		timeout = taskTimeoutMax
-	}
+	timeout := parseTaskTimeout(timeoutStr)
 
 	queries := store.New(h.db)
 	task, err := queries.UpdateScheduledTask(r.Context(), store.UpdateScheduledTaskParams{

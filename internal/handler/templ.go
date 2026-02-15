@@ -287,8 +287,7 @@ func convertLanguageOptionPtr(lang *store.Language) *adminviews.LanguageOption {
 	if lang == nil {
 		return nil
 	}
-	opt := convertLanguageOption(*lang)
-	return &opt
+	return new(convertLanguageOption(*lang))
 }
 
 // convertTagItem converts a store.Tag to a view TagItem.

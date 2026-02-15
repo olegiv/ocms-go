@@ -374,7 +374,7 @@ func (m *Module) renderFooterLink() template.HTML {
 		return ""
 	}
 
-	return template.HTML(`<a href="#" onclick="if(typeof klaro!=='undefined')klaro.show();return false;" class="privacy-settings-link">Cookie Settings</a>`)
+	return `<a href="#" onclick="if(typeof klaro!=='undefined')klaro.show();return false;" class="privacy-settings-link">Cookie Settings</a>`
 }
 
 // renderGCMDefaults generates the Google Consent Mode v2 default consent state.

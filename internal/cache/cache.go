@@ -178,8 +178,7 @@ func (c *SimpleCache) ResetStats() {
 	c.hits.Store(0)
 	c.misses.Store(0)
 	c.sets.Store(0)
-	now := time.Now()
-	c.statsResetAt.Store(&now)
+	c.statsResetAt.Store(new(time.Now()))
 }
 
 // Keys returns all keys in the cache (including expired ones).

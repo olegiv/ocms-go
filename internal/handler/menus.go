@@ -663,7 +663,6 @@ func (h *MenusHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 // processReorderItems recursively processes and updates menu item positions.
 func (h *MenusHandler) processReorderItems(r *http.Request, menuID int64, items []ReorderItem) error {
 	now := time.Now()
-	pos := int64(0)
 
 	var processItems func(items []ReorderItem, parentID sql.NullInt64, position *int64) error
 	processItems = func(items []ReorderItem, parentID sql.NullInt64, position *int64) error {
@@ -690,8 +689,7 @@ func (h *MenusHandler) processReorderItems(r *http.Request, menuID int64, items 
 
 			// Process children
 			if len(item.Children) > 0 {
-				childPos := int64(0)
-				if err = processItems(item.Children, util.NullInt64FromValue(item.ID), &childPos); err != nil {
+					if err = processItems(item.Children, util.NullInt64FromValue(item.ID), new(int64(0))); err != nil {
 					return err
 				}
 			}
@@ -699,7 +697,7 @@ func (h *MenusHandler) processReorderItems(r *http.Request, menuID int64, items 
 		return nil
 	}
 
-	return processItems(items, sql.NullInt64{Valid: false}, &pos)
+	return processItems(items, sql.NullInt64{Valid: false}, new(int64(0)))
 }
 
 // Helper functions

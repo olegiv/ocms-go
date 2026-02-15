@@ -10,9 +10,7 @@ import (
 
 func setEnv(t *testing.T, key, value string) {
 	t.Helper()
-	if err := os.Setenv(key, value); err != nil {
-		t.Fatalf("failed to set %s: %v", key, err)
-	}
+	t.Setenv(key, value)
 }
 
 func TestLoad_Defaults(t *testing.T) {

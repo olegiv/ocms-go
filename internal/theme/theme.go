@@ -16,8 +16,8 @@ import (
 
 // Theme engine constants.
 const (
-	ThemeEngineTempl = "templ"
-	ThemeEngineHTML  = "html"
+	EngineTempl = "templ"
+	EngineHTML  = "html"
 )
 
 // blankLinesRegex matches two or more consecutive newlines (with optional whitespace between).
@@ -216,14 +216,14 @@ func (t *Theme) GetSettingDefault(key string) string {
 // custom filesystem themes default to "html".
 func (t *Theme) RenderEngine() string {
 	switch strings.ToLower(t.Config.Engine) {
-	case ThemeEngineTempl:
-		return ThemeEngineTempl
-	case ThemeEngineHTML:
-		return ThemeEngineHTML
+	case EngineTempl:
+		return EngineTempl
+	case EngineHTML:
+		return EngineHTML
 	default:
 		if t.IsEmbedded {
-			return ThemeEngineTempl
+			return EngineTempl
 		}
-		return ThemeEngineHTML
+		return EngineHTML
 	}
 }
