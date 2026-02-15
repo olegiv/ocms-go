@@ -50,6 +50,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	setEnv(t, "OCMS_SERVER_PORT", "3000")
 	setEnv(t, "OCMS_ENV", "production")
 	setEnv(t, "OCMS_LOG_LEVEL", "debug")
+	setEnv(t, "OCMS_TRUSTED_PROXIES", "127.0.0.1/32,10.0.0.0/8")
 
 	cfg, err := Load()
 	if err != nil {
@@ -73,6 +74,9 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 	if cfg.LogLevel != "debug" {
 		t.Errorf("LogLevel = %q, want %q", cfg.LogLevel, "debug")
+	}
+	if cfg.TrustedProxies != "127.0.0.1/32,10.0.0.0/8" {
+		t.Errorf("TrustedProxies = %q, want %q", cfg.TrustedProxies, "127.0.0.1/32,10.0.0.0/8")
 	}
 }
 
@@ -301,4 +305,3 @@ func TestLoad_CustomDir(t *testing.T) {
 		}
 	})
 }
-

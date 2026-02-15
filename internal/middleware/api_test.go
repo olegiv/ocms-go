@@ -530,6 +530,8 @@ func TestGlobalRateLimiter_DifferentIPs(t *testing.T) {
 // testRateLimiterProxyHeader is a helper for testing rate limiting with proxy headers.
 func testRateLimiterProxyHeader(t *testing.T, handler http.Handler, headerName, headerValue string) {
 	t.Helper()
+	setTrustedProxiesForTest(t, "127.0.0.1/32")
+
 	// First request with proxy header
 	req := httptest.NewRequest("GET", "/api/test", nil)
 	req.Header.Set(headerName, headerValue)

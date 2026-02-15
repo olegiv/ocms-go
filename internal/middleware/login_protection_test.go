@@ -21,6 +21,18 @@ func testLoginProtectionConfig(maxAttempts int, lockoutDuration, attemptWindow t
 	}
 }
 
+func setTrustedProxiesForTest(t *testing.T, entries ...string) {
+	t.Helper()
+	if err := SetTrustedProxies(entries); err != nil {
+		t.Fatalf("SetTrustedProxies() error: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := SetTrustedProxies(nil); err != nil {
+			t.Fatalf("reset SetTrustedProxies() error: %v", err)
+		}
+	})
+}
+
 func TestDefaultLoginProtectionConfig(t *testing.T) {
 	cfg := DefaultLoginProtectionConfig()
 
@@ -218,67 +230,84 @@ func TestLoginProtectionAttemptWindowReset(t *testing.T) {
 }
 
 func TestGetClientIP(t *testing.T) {
-	tests := []struct {
-		name       string
-		remoteAddr string
-		xForwarded string
-		xRealIP    string
-		want       string
-	}{
-		{
-			name:       "simple remote addr",
-			remoteAddr: "192.168.1.1:12345",
-			want:       "192.168.1.1",
-		},
-		{
-			name:       "X-Forwarded-For single",
-			remoteAddr: "127.0.0.1:8080",
-			xForwarded: "10.0.0.1",
-			want:       "10.0.0.1",
-		},
-		{
-			name:       "X-Forwarded-For multiple",
-			remoteAddr: "127.0.0.1:8080",
-			xForwarded: "10.0.0.1, 10.0.0.2, 10.0.0.3",
-			want:       "10.0.0.1",
-		},
-		{
-			name:       "X-Real-IP",
-			remoteAddr: "127.0.0.1:8080",
-			xRealIP:    "10.0.0.5",
-			want:       "10.0.0.5",
-		},
-		{
-			name:       "X-Forwarded-For takes precedence over X-Real-IP",
-			remoteAddr: "127.0.0.1:8080",
-			xForwarded: "10.0.0.1",
-			xRealIP:    "10.0.0.5",
-			want:       "10.0.0.1",
-		},
-		{
-			name:       "X-Forwarded-For with spaces",
-			remoteAddr: "127.0.0.1:8080",
-			xForwarded: "  10.0.0.1  ",
-			want:       "10.0.0.1",
-		},
-	}
+	t.Run("defaults to RemoteAddr when no trusted proxies", func(t *testing.T) {
+		setTrustedProxiesForTest(t)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/", nil)
-			req.RemoteAddr = tt.remoteAddr
-			if tt.xForwarded != "" {
-				req.Header.Set("X-Forwarded-For", tt.xForwarded)
-			}
-			if tt.xRealIP != "" {
-				req.Header.Set("X-Real-IP", tt.xRealIP)
-			}
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "192.168.1.1:12345"
+		req.Header.Set("X-Forwarded-For", "10.0.0.1")
+		req.Header.Set("X-Real-IP", "10.0.0.5")
 
-			got := GetClientIP(req)
-			if got != tt.want {
-				t.Errorf("GetClientIP() = %q, want %q", got, tt.want)
-			}
-		})
+		got := GetClientIP(req)
+		if got != "192.168.1.1" {
+			t.Errorf("GetClientIP() = %q, want %q", got, "192.168.1.1")
+		}
+	})
+
+	t.Run("uses forwarded headers for trusted proxies", func(t *testing.T) {
+		setTrustedProxiesForTest(t, "127.0.0.1/32")
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "127.0.0.1:8080"
+		req.Header.Set("X-Forwarded-For", "10.0.0.1, 10.0.0.2")
+		req.Header.Set("X-Real-IP", "10.0.0.5")
+
+		got := GetClientIP(req)
+		if got != "10.0.0.1" {
+			t.Errorf("GetClientIP() = %q, want %q", got, "10.0.0.1")
+		}
+	})
+
+	t.Run("falls back to X-Real-IP when XFF has no valid IP", func(t *testing.T) {
+		setTrustedProxiesForTest(t, "127.0.0.1")
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "127.0.0.1:8080"
+		req.Header.Set("X-Forwarded-For", "invalid, also-invalid")
+		req.Header.Set("X-Real-IP", "10.0.0.5")
+
+		got := GetClientIP(req)
+		if got != "10.0.0.5" {
+			t.Errorf("GetClientIP() = %q, want %q", got, "10.0.0.5")
+		}
+	})
+
+	t.Run("falls back to remote when proxy headers invalid", func(t *testing.T) {
+		setTrustedProxiesForTest(t, "127.0.0.0/8")
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "127.0.0.1:8080"
+		req.Header.Set("X-Forwarded-For", "invalid")
+		req.Header.Set("X-Real-IP", "also-invalid")
+
+		got := GetClientIP(req)
+		if got != "127.0.0.1" {
+			t.Errorf("GetClientIP() = %q, want %q", got, "127.0.0.1")
+		}
+	})
+}
+
+func TestSetTrustedProxies_Validation(t *testing.T) {
+	t.Run("accepts CIDR and single IP", func(t *testing.T) {
+		if err := SetTrustedProxies([]string{"127.0.0.1", "10.0.0.0/8"}); err != nil {
+			t.Fatalf("SetTrustedProxies() error = %v", err)
+		}
+	})
+
+	t.Run("rejects invalid CIDR", func(t *testing.T) {
+		if err := SetTrustedProxies([]string{"10.0.0.0/99"}); err == nil {
+			t.Fatal("SetTrustedProxies() expected error, got nil")
+		}
+	})
+
+	t.Run("rejects invalid IP", func(t *testing.T) {
+		if err := SetTrustedProxies([]string{"not-an-ip"}); err == nil {
+			t.Fatal("SetTrustedProxies() expected error, got nil")
+		}
+	})
+
+	if err := SetTrustedProxies(nil); err != nil {
+		t.Fatalf("reset SetTrustedProxies() error: %v", err)
 	}
 }
 

@@ -6,8 +6,11 @@
 package middleware
 
 import (
+	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -37,6 +40,11 @@ type loginAttempt struct {
 	lockedUntil time.Time
 	lockouts    int // Number of times account has been locked (for exponential backoff)
 }
+
+var (
+	trustedProxiesMu     sync.RWMutex
+	trustedProxyPrefixes []netip.Prefix
+)
 
 // LoginProtectionConfig holds configuration for login protection.
 type LoginProtectionConfig struct {
@@ -272,24 +280,126 @@ func GetRequestURL(r *http.Request) string {
 // It checks X-Forwarded-For and X-Real-IP headers for proxied requests,
 // and falls back to RemoteAddr with port stripped.
 func GetClientIP(r *http.Request) string {
+	remoteIP, remoteIPString := parseRemoteAddrIP(r.RemoteAddr)
+
+	// Only trust forwarding headers when traffic comes from an explicitly
+	// trusted reverse proxy network.
+	if !isTrustedProxy(remoteIP) {
+		return remoteIPString
+	}
+
 	// Check X-Forwarded-For header (can contain multiple IPs)
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// Take the first IP in the list
-		if idx := strings.Index(xff, ","); idx != -1 {
-			return strings.TrimSpace(xff[:idx])
+		for _, part := range strings.Split(xff, ",") {
+			if ip, ok := parseIP(part); ok {
+				return ip.String()
+			}
 		}
-		return strings.TrimSpace(xff)
 	}
 
 	// Check X-Real-IP header (set by reverse proxies)
-	if ip := r.Header.Get("X-Real-IP"); ip != "" {
-		return ip
+	if ip, ok := parseIP(r.Header.Get("X-Real-IP")); ok {
+		return ip.String()
 	}
 
-	// Fall back to RemoteAddr with port stripped
-	host := r.RemoteAddr
-	if idx := strings.LastIndex(host, ":"); idx != -1 {
-		host = host[:idx]
+	return remoteIPString
+}
+
+// ConfigureTrustedProxies updates trusted proxy ranges from a comma-separated
+// list of CIDRs/IPs. Empty input disables trust of forwarding headers.
+func ConfigureTrustedProxies(raw string) error {
+	if strings.TrimSpace(raw) == "" {
+		return SetTrustedProxies(nil)
 	}
-	return host
+
+	return SetTrustedProxies(strings.Split(raw, ","))
+}
+
+// SetTrustedProxies updates trusted proxy ranges from CIDR/IP entries.
+// IPs are treated as /32 (IPv4) or /128 (IPv6).
+func SetTrustedProxies(entries []string) error {
+	prefixes := make([]netip.Prefix, 0, len(entries))
+
+	for _, entry := range entries {
+		value := strings.TrimSpace(entry)
+		if value == "" {
+			continue
+		}
+
+		if strings.Contains(value, "/") {
+			prefix, err := netip.ParsePrefix(value)
+			if err != nil {
+				return fmt.Errorf("invalid trusted proxy CIDR %q: %w", value, err)
+			}
+			prefixes = append(prefixes, prefix.Masked())
+			continue
+		}
+
+		ip, err := netip.ParseAddr(value)
+		if err != nil {
+			return fmt.Errorf("invalid trusted proxy IP %q: %w", value, err)
+		}
+
+		if ip.Is4() {
+			prefixes = append(prefixes, netip.PrefixFrom(ip.Unmap(), 32))
+		} else {
+			prefixes = append(prefixes, netip.PrefixFrom(ip, 128))
+		}
+	}
+
+	trustedProxiesMu.Lock()
+	trustedProxyPrefixes = prefixes
+	trustedProxiesMu.Unlock()
+
+	return nil
+}
+
+func isTrustedProxy(remoteIP netip.Addr) bool {
+	if !remoteIP.IsValid() {
+		return false
+	}
+
+	trustedProxiesMu.RLock()
+	defer trustedProxiesMu.RUnlock()
+
+	for _, prefix := range trustedProxyPrefixes {
+		if prefix.Contains(remoteIP) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func parseRemoteAddrIP(remoteAddr string) (netip.Addr, string) {
+	host := strings.TrimSpace(remoteAddr)
+	if host == "" {
+		return netip.Addr{}, ""
+	}
+
+	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+		host = parsedHost
+	}
+
+	if ip, ok := parseIP(host); ok {
+		return ip, ip.String()
+	}
+
+	return netip.Addr{}, host
+}
+
+func parseIP(value string) (netip.Addr, bool) {
+	candidate := strings.TrimSpace(value)
+	candidate = strings.TrimPrefix(candidate, "[")
+	candidate = strings.TrimSuffix(candidate, "]")
+	if candidate == "" {
+		return netip.Addr{}, false
+	}
+
+	ip, err := netip.ParseAddr(candidate)
+	if err != nil {
+		return netip.Addr{}, false
+	}
+
+	return ip.Unmap(), true
 }

@@ -24,10 +24,10 @@ type Config struct {
 	ServerHost    string `env:"OCMS_SERVER_HOST" envDefault:"localhost"`
 	ServerPort    int    `env:"OCMS_SERVER_PORT" envDefault:"8080"`
 	Env           string `env:"OCMS_ENV" envDefault:"development"`
-	LogLevel    string `env:"OCMS_LOG_LEVEL" envDefault:"info"`
-	CustomDir   string `env:"OCMS_CUSTOM_DIR" envDefault:"./custom"`
-	UploadsDir  string `env:"OCMS_UPLOADS_DIR" envDefault:"./uploads"`
-	ActiveTheme string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`
+	LogLevel      string `env:"OCMS_LOG_LEVEL" envDefault:"info"`
+	CustomDir     string `env:"OCMS_CUSTOM_DIR" envDefault:"./custom"`
+	UploadsDir    string `env:"OCMS_UPLOADS_DIR" envDefault:"./uploads"`
+	ActiveTheme   string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`
 
 	// Cache configuration
 	RedisURL     string `env:"OCMS_REDIS_URL"`                         // Optional Redis URL for distributed caching
@@ -41,6 +41,9 @@ type Config struct {
 
 	// GeoIP configuration
 	GeoIPDBPath string `env:"OCMS_GEOIP_DB_PATH"` // Path to GeoLite2-Country.mmdb file
+
+	// Reverse proxy configuration
+	TrustedProxies string `env:"OCMS_TRUSTED_PROXIES"` // Comma-separated CIDRs/IPs of trusted reverse proxies
 
 	// Seeding configuration
 	DoSeed bool `env:"OCMS_DO_SEED" envDefault:"false"` // Enable database seeding
@@ -92,7 +95,7 @@ func Load() (*Config, error) {
 	// Reject known weak/default secrets
 	for _, weak := range knownWeakSecrets {
 		if cfg.SessionSecret == weak {
-			return nil, fmt.Errorf("OCMS_SESSION_SECRET is a known default value and must not be used; "+
+			return nil, fmt.Errorf("OCMS_SESSION_SECRET is a known default value and must not be used; " +
 				"generate a secure secret with: openssl rand -base64 32")
 		}
 	}

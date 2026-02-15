@@ -161,6 +161,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_CUSTOM_DIR        Custom content directory (default: ./custom)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_ACTIVE_THEME      Active theme name (default: default)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REDIS_URL         Redis URL for distributed caching (optional)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_TRUSTED_PROXIES   Comma-separated trusted proxy CIDRs/IPs (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "\nFor more information, see: https://github.com/olegiv/ocms-go\n")
 	}
 
@@ -348,6 +349,10 @@ func run() error {
 		Level: logLevel,
 	}))
 	slog.SetDefault(logger)
+
+	if err := middleware.ConfigureTrustedProxies(cfg.TrustedProxies); err != nil {
+		return fmt.Errorf("configuring trusted proxies: %w", err)
+	}
 
 	// Initialize i18n system for admin UI localization
 	if err := i18n.Init(logger); err != nil {
