@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/go-chi/chi/v5"
+	"golang.org/x/time/rate"
 
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/module"
@@ -24,9 +25,11 @@ import (
 var localesFS embed.FS
 
 const (
-	embedProxyRateLimitRPS   = 2.0
-	embedProxyRateLimitBurst = 10
-	embedProxyMaxConcurrent  = 32
+	embedProxyRateLimitRPS         = 2.0
+	embedProxyRateLimitBurst       = 10
+	embedProxyGlobalRateLimitRPS   = 20.0
+	embedProxyGlobalRateLimitBurst = 40
+	embedProxyMaxConcurrent        = 32
 )
 
 // Module implements the module.Module interface for the embed module.
@@ -36,6 +39,7 @@ type Module struct {
 	providers         []providers.Provider
 	settings          []*ProviderSettings
 	publicRateLimiter *middleware.GlobalRateLimiter
+	globalRateLimiter *rate.Limiter
 	proxySemaphore    chan struct{}
 	allowedOrigins    map[string]struct{}
 	mu                sync.RWMutex
@@ -59,6 +63,7 @@ func New() *Module {
 func (m *Module) Init(ctx *module.Context) error {
 	m.ctx = ctx
 	m.publicRateLimiter = middleware.NewGlobalRateLimiter(embedProxyRateLimitRPS, embedProxyRateLimitBurst)
+	m.globalRateLimiter = rate.NewLimiter(rate.Limit(embedProxyGlobalRateLimitRPS), embedProxyGlobalRateLimitBurst)
 	m.proxySemaphore = make(chan struct{}, embedProxyMaxConcurrent)
 	if ctx.Config != nil {
 		origins, err := parseAllowedOrigins(ctx.Config.EmbedAllowedOrigins)
@@ -78,6 +83,8 @@ func (m *Module) Init(ctx *module.Context) error {
 		"enabled", m.countEnabled(),
 		"proxy_rate_limit_rps", embedProxyRateLimitRPS,
 		"proxy_rate_limit_burst", embedProxyRateLimitBurst,
+		"proxy_global_rate_limit_rps", embedProxyGlobalRateLimitRPS,
+		"proxy_global_rate_limit_burst", embedProxyGlobalRateLimitBurst,
 		"proxy_max_concurrent", embedProxyMaxConcurrent,
 		"allowed_origins", len(m.allowedOrigins),
 	)

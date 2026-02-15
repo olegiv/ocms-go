@@ -165,6 +165,12 @@ func (m *Module) proxyDifyRequest(
 		targetURL += "?" + query.Encode()
 	}
 
+	if !m.allowProxyBudget() {
+		m.ctx.Logger.Warn("embed proxy global rate limit exceeded", "path", r.URL.Path, "ip", r.RemoteAddr)
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+		return
+	}
+
 	if !m.acquireProxySlot() {
 		http.Error(w, "Service busy", http.StatusTooManyRequests)
 		return
@@ -231,6 +237,13 @@ func (m *Module) releaseProxySlot() {
 	case <-m.proxySemaphore:
 	default:
 	}
+}
+
+func (m *Module) allowProxyBudget() bool {
+	if m.globalRateLimiter == nil {
+		return true
+	}
+	return m.globalRateLimiter.Allow()
 }
 
 func validateDifyIdentifier(value string, maxLen int, label string) error {
