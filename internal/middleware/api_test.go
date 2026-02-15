@@ -83,6 +83,14 @@ func setRequireAPIKeyExpiryForTest(t *testing.T, required bool) {
 	})
 }
 
+func setRequireAPIKeySourceCIDRsForTest(t *testing.T, required bool) {
+	t.Helper()
+	SetRequireAPIKeySourceCIDRs(required)
+	t.Cleanup(func() {
+		SetRequireAPIKeySourceCIDRs(false)
+	})
+}
+
 // simpleOKHandler returns an http.Handler that writes 200 OK.
 var simpleOKHandler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
@@ -440,6 +448,64 @@ func TestAPIKeyAuth_PerKeySourceCIDRAllowlist_MissingTableBackwardCompatible(t *
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+	}
+}
+
+func TestAPIKeyAuth_RequirePerKeySourceCIDRs(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+	setRequireAPIKeySourceCIDRsForTest(t, true)
+
+	rawKeyNoCIDRs := insertTestAPIKey(t, db, "No CIDRs", []string{"pages:read"}, true, nil)
+	rawKeyWithCIDRs := insertTestAPIKey(t, db, "With CIDRs", []string{"pages:read"}, true, nil)
+	insertTestAPIKeySourceCIDR(t, db, model.ExtractAPIKeyPrefix(rawKeyWithCIDRs), "203.0.113.0/24")
+
+	handler := APIKeyAuth(db)(simpleOKHandler)
+
+	t.Run("reject key without per-key CIDRs", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+		req.Header.Set("Authorization", "Bearer "+rawKeyNoCIDRs)
+		req.RemoteAddr = "203.0.113.25:12345"
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
+		}
+	})
+
+	t.Run("allow key with per-key CIDRs", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+		req.Header.Set("Authorization", "Bearer "+rawKeyWithCIDRs)
+		req.RemoteAddr = "203.0.113.25:12345"
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+		}
+	})
+}
+
+func TestAPIKeyAuth_RequirePerKeySourceCIDRs_MissingTable(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+	setRequireAPIKeySourceCIDRsForTest(t, true)
+
+	rawKey := insertTestAPIKey(t, db, "No Table Key", []string{"pages:read"}, true, nil)
+	if _, err := db.Exec(`DROP TABLE api_key_source_cidrs`); err != nil {
+		t.Fatalf("failed to drop api_key_source_cidrs: %v", err)
+	}
+
+	handler := APIKeyAuth(db)(simpleOKHandler)
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req.Header.Set("Authorization", "Bearer "+rawKey)
+	req.RemoteAddr = "203.0.113.25:12345"
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
 	}
 }
 

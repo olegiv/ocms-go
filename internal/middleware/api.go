@@ -36,10 +36,12 @@ type APIError struct {
 }
 
 var (
-	apiAllowedCIDRsMu     sync.RWMutex
-	apiAllowedCIDRs       []netip.Prefix
-	requireAPIKeyExpiry   bool
-	requireAPIKeyExpiryMu sync.RWMutex
+	apiAllowedCIDRsMu          sync.RWMutex
+	apiAllowedCIDRs            []netip.Prefix
+	requireAPIKeyExpiry        bool
+	requireAPIKeyExpiryMu      sync.RWMutex
+	requireAPIKeySourceCIDRs   bool
+	requireAPIKeySourceCIDRsMu sync.RWMutex
 )
 
 // SetRequireAPIKeyExpiry configures whether API keys must have an expiration timestamp.
@@ -53,6 +55,20 @@ func isAPIKeyExpiryRequired() bool {
 	requireAPIKeyExpiryMu.RLock()
 	defer requireAPIKeyExpiryMu.RUnlock()
 	return requireAPIKeyExpiry
+}
+
+// SetRequireAPIKeySourceCIDRs configures whether API keys must have at least
+// one per-key source CIDR entry.
+func SetRequireAPIKeySourceCIDRs(required bool) {
+	requireAPIKeySourceCIDRsMu.Lock()
+	requireAPIKeySourceCIDRs = required
+	requireAPIKeySourceCIDRsMu.Unlock()
+}
+
+func isAPIKeySourceCIDRsRequired() bool {
+	requireAPIKeySourceCIDRsMu.RLock()
+	defer requireAPIKeySourceCIDRsMu.RUnlock()
+	return requireAPIKeySourceCIDRs
 }
 
 // ConfigureAPIAllowedCIDRs updates API source restrictions from a comma-separated
@@ -157,22 +173,26 @@ func isMissingAPIKeySourceCIDRTable(err error) bool {
 	return strings.Contains(msg, "no such table") && strings.Contains(msg, "api_key_source_cidrs")
 }
 
-func isAPIKeySourceAllowed(ctx context.Context, queries *store.Queries, keyID int64, clientIP string) (bool, error) {
+func isAPIKeySourceAllowed(ctx context.Context, queries *store.Queries, keyID int64, clientIP string) (bool, bool, error) {
 	cidrs, err := queries.ListAPIKeySourceCIDRs(ctx, keyID)
 	if err != nil {
 		if isMissingAPIKeySourceCIDRTable(err) {
+			if isAPIKeySourceCIDRsRequired() {
+				slog.Error("api_key_source_cidrs table missing while per-key source CIDR policy is enabled")
+				return false, false, nil
+			}
 			// Backward compatibility for databases that haven't applied migrations yet.
-			return true, nil
+			return true, false, nil
 		}
-		return false, err
+		return false, false, err
 	}
 	if len(cidrs) == 0 {
-		return true, nil
+		return true, false, nil
 	}
 
 	parsedClientIP, ok := parseIP(clientIP)
 	if !ok {
-		return false, nil
+		return false, true, nil
 	}
 
 	validRules := 0
@@ -184,7 +204,7 @@ func isAPIKeySourceAllowed(ctx context.Context, queries *store.Queries, keyID in
 		}
 		validRules++
 		if prefix.Contains(parsedClientIP) {
-			return true, nil
+			return true, true, nil
 		}
 	}
 
@@ -192,7 +212,7 @@ func isAPIKeySourceAllowed(ctx context.Context, queries *store.Queries, keyID in
 		slog.Warn("API key source allowlist has no valid entries", "key_id", keyID)
 	}
 
-	return false, nil
+	return false, true, nil
 }
 
 // WriteAPIError writes a JSON error response.
@@ -317,11 +337,22 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 		return nil, false
 	}
 
-	allowed, err := isAPIKeySourceAllowed(r.Context(), queries, matchedKey.ID, clientIP)
+	allowed, hasSourceCIDRs, err := isAPIKeySourceAllowed(r.Context(), queries, matchedKey.ID, clientIP)
 	if err != nil {
 		if required {
 			slog.Error("failed to load API key source CIDR allowlist", "error", err, "key_id", matchedKey.ID)
 			WriteAPIError(w, http.StatusInternalServerError, "internal_error", "Failed to validate API key source", nil)
+			return nil, true
+		}
+		return nil, false
+	}
+	if isAPIKeySourceCIDRsRequired() && !hasSourceCIDRs {
+		slog.Warn("API key auth blocked: missing per-key source CIDR while policy enabled",
+			"key_id", matchedKey.ID,
+			"path", r.URL.Path,
+			"ip", clientIP)
+		if required {
+			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key must have at least one source CIDR restriction", nil)
 			return nil, true
 		}
 		return nil, false

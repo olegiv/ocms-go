@@ -46,8 +46,9 @@ type Config struct {
 	TrustedProxies string `env:"OCMS_TRUSTED_PROXIES"` // Comma-separated CIDRs/IPs of trusted reverse proxies
 
 	// API access restriction configuration
-	APIAllowedCIDRs     string `env:"OCMS_API_ALLOWED_CIDRS"`                         // Comma-separated CIDRs/IPs allowed to use API keys
-	RequireAPIKeyExpiry bool   `env:"OCMS_REQUIRE_API_KEY_EXPIRY" envDefault:"false"` // Reject API keys without expiration
+	APIAllowedCIDRs          string `env:"OCMS_API_ALLOWED_CIDRS"`                               // Comma-separated CIDRs/IPs allowed to use API keys
+	RequireAPIKeyExpiry      bool   `env:"OCMS_REQUIRE_API_KEY_EXPIRY" envDefault:"false"`       // Reject API keys without expiration
+	RequireAPIKeySourceCIDRs bool   `env:"OCMS_REQUIRE_API_KEY_SOURCE_CIDRS" envDefault:"false"` // Reject API keys that have no per-key source CIDR entries
 
 	// Embed proxy security configuration
 	EmbedAllowedOrigins string `env:"OCMS_EMBED_ALLOWED_ORIGINS"` // Comma-separated origins allowed to call embed proxy routes

@@ -165,6 +165,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_TRUSTED_PROXIES   Comma-separated trusted proxy CIDRs/IPs (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_API_ALLOWED_CIDRS Comma-separated CIDRs/IPs allowed for API key access (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_EXPIRY  Reject API keys without expiration (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_SOURCE_CIDRS  Reject API keys without per-key CIDR restrictions (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_ALLOWED_ORIGINS   Comma-separated allowed origins for embed proxy routes (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "\nFor more information, see: https://github.com/olegiv/ocms-go\n")
 	}
@@ -364,6 +365,9 @@ func run() error {
 		if !cfg.RequireAPIKeyExpiry {
 			slog.Warn("production security warning: OCMS_REQUIRE_API_KEY_EXPIRY is disabled")
 		}
+		if !cfg.RequireAPIKeySourceCIDRs {
+			slog.Warn("production security warning: OCMS_REQUIRE_API_KEY_SOURCE_CIDRS is disabled")
+		}
 		if strings.TrimSpace(cfg.EmbedAllowedOrigins) == "" {
 			slog.Warn("production security warning: OCMS_EMBED_ALLOWED_ORIGINS is not configured")
 		}
@@ -381,6 +385,10 @@ func run() error {
 	middleware.SetRequireAPIKeyExpiry(cfg.RequireAPIKeyExpiry)
 	if cfg.RequireAPIKeyExpiry {
 		slog.Info("API key expiry enforcement enabled")
+	}
+	middleware.SetRequireAPIKeySourceCIDRs(cfg.RequireAPIKeySourceCIDRs)
+	if cfg.RequireAPIKeySourceCIDRs {
+		slog.Info("API key per-key source CIDR enforcement enabled")
 	}
 
 	// Initialize i18n system for admin UI localization
@@ -452,6 +460,25 @@ func run() error {
 		} else if nonExpiringActiveKeys > 0 {
 			slog.Warn("active API keys without expiration detected while expiry policy is enabled",
 				"count", nonExpiringActiveKeys)
+		}
+	}
+	if cfg.RequireAPIKeySourceCIDRs {
+		var keysWithoutSourceCIDRs int
+		err := db.QueryRow(`
+			SELECT COUNT(*)
+			FROM api_keys k
+			WHERE k.is_active = 1
+			  AND NOT EXISTS (
+			  	SELECT 1
+			  	FROM api_key_source_cidrs c
+			  	WHERE c.api_key_id = k.id
+			  )
+		`).Scan(&keysWithoutSourceCIDRs)
+		if err != nil {
+			slog.Warn("failed to audit API key source CIDR posture", "error", err)
+		} else if keysWithoutSourceCIDRs > 0 {
+			slog.Warn("active API keys without per-key source CIDRs detected while source CIDR policy is enabled",
+				"count", keysWithoutSourceCIDRs)
 		}
 	}
 	initI18nFromDB(ctx, queries)
