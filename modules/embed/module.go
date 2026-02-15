@@ -118,10 +118,13 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 
 // RegisterAdminRoutes registers admin routes for the module.
 func (m *Module) RegisterAdminRoutes(r chi.Router) {
-	r.Get("/embed", m.handleList)
-	r.Get("/embed/{provider}", m.handleProviderSettings)
-	r.Post("/embed/{provider}", m.handleSaveProviderSettings)
-	r.Post("/embed/{provider}/toggle", m.handleToggleProvider)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.RequireAdmin())
+		r.Get("/embed", m.handleList)
+		r.Get("/embed/{provider}", m.handleProviderSettings)
+		r.Post("/embed/{provider}", m.handleSaveProviderSettings)
+		r.Post("/embed/{provider}/toggle", m.handleToggleProvider)
+	})
 }
 
 // TemplateFuncs returns template functions provided by the module.
