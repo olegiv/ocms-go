@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -26,7 +27,10 @@ const (
 	difyProxyTimeout      = 90 * time.Second
 	maxDifyMessageIDLen   = 128
 	maxDifyUserIDLen      = 128
+	maxDifyQueryLen       = 4096
 )
+
+var difyIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9._:@-]+$`)
 
 var difyProxyHTTPClient = &http.Client{
 	Timeout: difyProxyTimeout,
@@ -85,6 +89,10 @@ func (m *Module) handleDifyChatMessagesProxy(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
 		return
 	}
+	if _, err := extractAndValidateDifyChatUser(body); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	m.proxyDifyRequest(w, r, apiEndpoint, apiKey, http.MethodPost, "/chat-messages", nil, body)
 }
@@ -110,22 +118,14 @@ func (m *Module) handleDifySuggestedProxy(w http.ResponseWriter, r *http.Request
 	}
 
 	messageID := strings.TrimSpace(chi.URLParam(r, "messageID"))
-	if messageID == "" {
-		http.Error(w, "Missing message ID", http.StatusBadRequest)
-		return
-	}
-	if len(messageID) > maxDifyMessageIDLen {
-		http.Error(w, "Message ID is too long", http.StatusBadRequest)
+	if err := validateDifyIdentifier(messageID, maxDifyMessageIDLen, "message ID"); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	userID := strings.TrimSpace(r.URL.Query().Get("user"))
-	if userID == "" {
-		http.Error(w, "Missing user query parameter", http.StatusBadRequest)
-		return
-	}
-	if len(userID) > maxDifyUserIDLen {
-		http.Error(w, "User query parameter is too long", http.StatusBadRequest)
+	if err := validateDifyIdentifier(userID, maxDifyUserIDLen, "user query parameter"); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -231,4 +231,38 @@ func (m *Module) releaseProxySlot() {
 	case <-m.proxySemaphore:
 	default:
 	}
+}
+
+func validateDifyIdentifier(value string, maxLen int, label string) error {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return fmt.Errorf("missing %s", label)
+	}
+	if len(trimmed) > maxLen {
+		return fmt.Errorf("%s is too long", label)
+	}
+	if !difyIdentifierPattern.MatchString(trimmed) {
+		return fmt.Errorf("invalid %s format", label)
+	}
+	return nil
+}
+
+func extractAndValidateDifyChatUser(body []byte) (string, error) {
+	type difyChatPayload struct {
+		User  string      `json:"user"`
+		Query interface{} `json:"query"`
+	}
+
+	var payload difyChatPayload
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", fmt.Errorf("invalid JSON body")
+	}
+	if err := validateDifyIdentifier(payload.User, maxDifyUserIDLen, "user"); err != nil {
+		return "", err
+	}
+	if queryText, ok := payload.Query.(string); ok && len(queryText) > maxDifyQueryLen {
+		return "", fmt.Errorf("query is too long")
+	}
+
+	return payload.User, nil
 }
