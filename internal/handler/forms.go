@@ -1116,14 +1116,15 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	// Check honeypot field (spam protection)
 	honeypot := r.FormValue("_website")
 	if honeypot != "" {
+		clientIP := middleware.GetClientIP(r)
 		// Bot detected, silently pretend success
-		slog.Info("honeypot triggered", "form_slug", slug, "ip", r.RemoteAddr)
+		slog.Info("honeypot triggered", "form_slug", slug, "ip", clientIP)
 		_ = service.NewEventService(h.db).LogSecurityEvent(
 			r.Context(),
 			model.EventLevelWarning,
 			"Public form honeypot triggered",
 			nil,
-			middleware.GetClientIP(r),
+			clientIP,
 			middleware.GetRequestURL(r),
 			map[string]any{
 				"form_id":   form.ID,

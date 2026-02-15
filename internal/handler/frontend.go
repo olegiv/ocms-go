@@ -2284,11 +2284,12 @@ func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Log 404 for monitoring and debugging
+	clientIP := middleware.GetClientIP(r)
 	h.logger.Info("page not found",
 		"status", http.StatusNotFound,
 		"method", r.Method,
 		"path", r.URL.Path,
-		"remote_addr", r.RemoteAddr,
+		"ip", clientIP,
 	)
 
 	// Log 404 to event log (visible in admin panel)
@@ -2298,7 +2299,7 @@ func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request)
 			"method": r.Method,
 			"status": http.StatusNotFound,
 		}
-		_ = h.eventService.LogSystemEvent(r.Context(), "info", "Page not found", userID, r.RemoteAddr, r.URL.Path, metadata)
+		_ = h.eventService.LogSystemEvent(r.Context(), "info", "Page not found", userID, clientIP, r.URL.Path, metadata)
 	}
 
 	base := h.getBaseTemplateData(r, "Page Not Found", "")

@@ -250,6 +250,8 @@ func RequireRoleWithEventLog(minRole string, eventService *service.EventService)
 			// Check role hierarchy
 			userLevel := roleLevel(user.Role)
 			if userLevel < minLevel {
+				clientIP := GetClientIP(r)
+
 				// Log 403 for security monitoring (application logs)
 				slog.Warn("access denied",
 					"status", http.StatusForbidden,
@@ -258,7 +260,7 @@ func RequireRoleWithEventLog(minRole string, eventService *service.EventService)
 					"user_id", user.ID,
 					"user_role", user.Role,
 					"required_role", minRole,
-					"remote_addr", r.RemoteAddr,
+					"ip", clientIP,
 				)
 
 				// Log 403 to event log (visible in admin panel)
@@ -269,7 +271,7 @@ func RequireRoleWithEventLog(minRole string, eventService *service.EventService)
 						"user_role":     user.Role,
 						"required_role": minRole,
 					}
-					_ = eventService.LogAuthEvent(r.Context(), "warning", "Access denied: insufficient permissions", new(user.ID), r.RemoteAddr, r.URL.Path, metadata)
+					_ = eventService.LogAuthEvent(r.Context(), "warning", "Access denied: insufficient permissions", new(user.ID), clientIP, r.URL.Path, metadata)
 				}
 
 				// Return 403 Forbidden for insufficient role
