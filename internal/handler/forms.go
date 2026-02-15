@@ -55,6 +55,7 @@ type FormsHandler struct {
 
 const maxPublicFormBodyBytes int64 = 64 * 1024
 const redactedFormValue = "[REDACTED]"
+const maxFormEventValueLen = 1024
 
 var sensitiveFormFieldTokens = []string{
 	"password",
@@ -126,7 +127,7 @@ func redactFormEventData(data map[string]string) map[string]string {
 			redacted[key] = redactedFormValue
 			continue
 		}
-		redacted[key] = value
+		redacted[key] = truncateFormEventValue(value, maxFormEventValueLen)
 	}
 	return redacted
 }
@@ -142,6 +143,13 @@ func isSensitiveFormFieldName(name string) bool {
 		}
 	}
 	return false
+}
+
+func truncateFormEventValue(value string, maxLen int) string {
+	if maxLen <= 0 || len(value) <= maxLen {
+		return value
+	}
+	return value[:maxLen]
 }
 
 // FormListItem represents a form with submission counts.

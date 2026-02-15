@@ -106,6 +106,7 @@ func TestRedactFormEventData(t *testing.T) {
 		"password":          "super-secret",
 		"api_token":         "tok_123",
 		"authorizationCode": "123456",
+		"notes":             strings.Repeat("x", maxFormEventValueLen+10),
 	}
 
 	redacted := redactFormEventData(input)
@@ -124,6 +125,9 @@ func TestRedactFormEventData(t *testing.T) {
 	}
 	if redacted["authorizationCode"] != redactedFormValue {
 		t.Errorf("authorizationCode should be redacted, got %q", redacted["authorizationCode"])
+	}
+	if len(redacted["notes"]) != maxFormEventValueLen {
+		t.Errorf("notes length = %d, want %d", len(redacted["notes"]), maxFormEventValueLen)
 	}
 }
 
