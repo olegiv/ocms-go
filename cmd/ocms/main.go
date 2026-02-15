@@ -243,6 +243,53 @@ func auditRequiredFormCaptchaPosture(ctx context.Context, db *sql.DB, hooks *mod
 	return nil
 }
 
+func auditRequiredHTTPSOutboundPosture(ctx context.Context, db *sql.DB) error {
+	countNonHTTPS := func(query string) (int, error) {
+		rows, err := db.QueryContext(ctx, query)
+		if err != nil {
+			return 0, err
+		}
+		defer func() { _ = rows.Close() }()
+
+		invalid := 0
+		for rows.Next() {
+			var rawURL string
+			if err := rows.Scan(&rawURL); err != nil {
+				return 0, err
+			}
+			parsed, err := url.Parse(strings.TrimSpace(rawURL))
+			if err != nil || !strings.EqualFold(parsed.Scheme, "https") || strings.TrimSpace(parsed.Host) == "" {
+				invalid++
+			}
+		}
+
+		if err := rows.Err(); err != nil {
+			return 0, err
+		}
+		return invalid, nil
+	}
+
+	invalidWebhooks, err := countNonHTTPS(`SELECT url FROM webhooks WHERE is_active = 1`)
+	if err != nil {
+		return fmt.Errorf("auditing webhook HTTPS posture: %w", err)
+	}
+
+	invalidTasks, err := countNonHTTPS(`SELECT url FROM scheduled_tasks WHERE is_active = 1`)
+	if err != nil {
+		return fmt.Errorf("auditing scheduler HTTPS posture: %w", err)
+	}
+
+	if invalidWebhooks > 0 || invalidTasks > 0 {
+		return fmt.Errorf(
+			"refusing to start in production: OCMS_REQUIRE_HTTPS_OUTBOUND is enabled but %d active webhook(s) and %d active scheduled task(s) use non-HTTPS URLs",
+			invalidWebhooks,
+			invalidTasks,
+		)
+	}
+
+	return nil
+}
+
 // initI18nFromDB updates i18n settings from database (active languages, default language).
 func initI18nFromDB(ctx context.Context, queries *store.Queries) {
 	if activeLanguages, err := queries.ListActiveLanguages(ctx); err == nil {
@@ -699,6 +746,11 @@ func run() error {
 				"refusing to start in production: embed proxy is active (%d provider(s)) but OCMS_EMBED_ALLOWED_ORIGINS is not configured",
 				activeEmbedProviders,
 			)
+		}
+	}
+	if cfg.Env == "production" && cfg.RequireHTTPSOutbound {
+		if err := auditRequiredHTTPSOutboundPosture(ctx, db); err != nil {
+			return err
 		}
 	}
 	if cfg.Env == "production" && cfg.RequireFormCaptcha {

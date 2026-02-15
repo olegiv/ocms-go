@@ -35,6 +35,16 @@ func newPolicyTestDB(t *testing.T) *sql.DB {
 			form_id INTEGER NOT NULL,
 			type TEXT NOT NULL
 		);
+		CREATE TABLE webhooks (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			url TEXT NOT NULL,
+			is_active INTEGER NOT NULL DEFAULT 1
+		);
+		CREATE TABLE scheduled_tasks (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			url TEXT NOT NULL,
+			is_active INTEGER NOT NULL DEFAULT 1
+		);
 	`)
 	if err != nil {
 		t.Fatalf("creating schema: %v", err)
@@ -102,5 +112,46 @@ func TestAuditRequiredFormCaptchaPosture_AllowsWhenCompliant(t *testing.T) {
 
 	if err := auditRequiredFormCaptchaPosture(context.Background(), db, hooks); err != nil {
 		t.Fatalf("expected compliant posture to pass, got: %v", err)
+	}
+}
+
+func TestAuditRequiredHTTPSOutboundPosture_RejectsNonHTTPSWebhook(t *testing.T) {
+	db := newPolicyTestDB(t)
+	if _, err := db.Exec(`INSERT INTO webhooks (url, is_active) VALUES ('http://example.com/webhook', 1)`); err != nil {
+		t.Fatalf("inserting webhook: %v", err)
+	}
+
+	if err := auditRequiredHTTPSOutboundPosture(context.Background(), db); err == nil {
+		t.Fatal("expected error when active webhook URL is non-HTTPS")
+	}
+}
+
+func TestAuditRequiredHTTPSOutboundPosture_RejectsNonHTTPSTask(t *testing.T) {
+	db := newPolicyTestDB(t)
+	if _, err := db.Exec(`INSERT INTO scheduled_tasks (url, is_active) VALUES ('http://example.com/health', 1)`); err != nil {
+		t.Fatalf("inserting scheduled task: %v", err)
+	}
+
+	if err := auditRequiredHTTPSOutboundPosture(context.Background(), db); err == nil {
+		t.Fatal("expected error when active scheduled task URL is non-HTTPS")
+	}
+}
+
+func TestAuditRequiredHTTPSOutboundPosture_AllowsCompliantConfig(t *testing.T) {
+	db := newPolicyTestDB(t)
+	_, err := db.Exec(`
+		INSERT INTO webhooks (url, is_active) VALUES
+			('https://example.com/webhook', 1),
+			('http://example.com/inactive-webhook', 0);
+		INSERT INTO scheduled_tasks (url, is_active) VALUES
+			('https://example.com/health', 1),
+			('http://example.com/inactive-task', 0);
+	`)
+	if err != nil {
+		t.Fatalf("inserting policy fixtures: %v", err)
+	}
+
+	if err := auditRequiredHTTPSOutboundPosture(context.Background(), db); err != nil {
+		t.Fatalf("expected compliant HTTPS posture to pass, got: %v", err)
 	}
 }
