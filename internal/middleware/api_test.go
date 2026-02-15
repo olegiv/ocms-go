@@ -50,6 +50,18 @@ func setupTestDB(t *testing.T) *sql.DB {
 	return db
 }
 
+func setAPIAllowedCIDRsForTest(t *testing.T, entries ...string) {
+	t.Helper()
+	if err := SetAPIAllowedCIDRs(entries); err != nil {
+		t.Fatalf("SetAPIAllowedCIDRs() error: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := SetAPIAllowedCIDRs(nil); err != nil {
+			t.Fatalf("reset SetAPIAllowedCIDRs() error: %v", err)
+		}
+	})
+}
+
 // simpleOKHandler returns an http.Handler that writes 200 OK.
 var simpleOKHandler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
@@ -267,6 +279,40 @@ func TestAPIKeyAuth_ValidKeyWithFutureExpiry(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
 	}
+}
+
+func TestAPIKeyAuth_IPAllowlist(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	setAPIAllowedCIDRsForTest(t, "203.0.113.0/24")
+	rawKey := insertTestAPIKey(t, db, "Allowlist Key", []string{"pages:read"}, true, nil)
+
+	handler := APIKeyAuth(db)(simpleOKHandler)
+
+	t.Run("allowed source IP", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+		req.Header.Set("Authorization", "Bearer "+rawKey)
+		req.RemoteAddr = "203.0.113.10:12345"
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+		}
+	})
+
+	t.Run("blocked source IP", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+		req.Header.Set("Authorization", "Bearer "+rawKey)
+		req.RemoteAddr = "198.51.100.10:12345"
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
+		}
+	})
 }
 
 func TestGetAPIKey_NoKey(t *testing.T) {

@@ -9,8 +9,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +35,82 @@ type APIError struct {
 	} `json:"error"`
 }
 
+var (
+	apiAllowedCIDRsMu sync.RWMutex
+	apiAllowedCIDRs   []netip.Prefix
+)
+
+// ConfigureAPIAllowedCIDRs updates API source restrictions from a comma-separated
+// list of CIDRs/IPs. Empty input disables API source restriction.
+func ConfigureAPIAllowedCIDRs(raw string) error {
+	if strings.TrimSpace(raw) == "" {
+		return SetAPIAllowedCIDRs(nil)
+	}
+	return SetAPIAllowedCIDRs(strings.Split(raw, ","))
+}
+
+// SetAPIAllowedCIDRs updates API source restrictions from CIDR/IP entries.
+// IPs are treated as /32 (IPv4) or /128 (IPv6).
+func SetAPIAllowedCIDRs(entries []string) error {
+	prefixes := make([]netip.Prefix, 0, len(entries))
+
+	for _, entry := range entries {
+		value := strings.TrimSpace(entry)
+		if value == "" {
+			continue
+		}
+
+		if strings.Contains(value, "/") {
+			prefix, err := netip.ParsePrefix(value)
+			if err != nil {
+				return fmt.Errorf("invalid API allowed CIDR %q: %w", value, err)
+			}
+			prefixes = append(prefixes, prefix.Masked())
+			continue
+		}
+
+		ip, err := netip.ParseAddr(value)
+		if err != nil {
+			return fmt.Errorf("invalid API allowed IP %q: %w", value, err)
+		}
+
+		if ip.Is4() {
+			prefixes = append(prefixes, netip.PrefixFrom(ip.Unmap(), 32))
+		} else {
+			prefixes = append(prefixes, netip.PrefixFrom(ip, 128))
+		}
+	}
+
+	apiAllowedCIDRsMu.Lock()
+	apiAllowedCIDRs = prefixes
+	apiAllowedCIDRsMu.Unlock()
+
+	return nil
+}
+
+func isAPIClientAllowed(ip string) bool {
+	apiAllowedCIDRsMu.RLock()
+	prefixes := append([]netip.Prefix(nil), apiAllowedCIDRs...)
+	apiAllowedCIDRsMu.RUnlock()
+
+	// No configured restriction.
+	if len(prefixes) == 0 {
+		return true
+	}
+
+	clientIP, ok := parseIP(ip)
+	if !ok {
+		return false
+	}
+
+	for _, prefix := range prefixes {
+		if prefix.Contains(clientIP) {
+			return true
+		}
+	}
+	return false
+}
+
 // WriteAPIError writes a JSON error response.
 func WriteAPIError(w http.ResponseWriter, statusCode int, code, message string, details map[string]string) {
 	w.Header().Set("Content-Type", "application/json")
@@ -51,6 +129,14 @@ func WriteAPIError(w http.ResponseWriter, statusCode int, code, message string, 
 // If required is true and validation fails, writes an error response and returns (nil, true).
 // The second return value indicates if an error response was written.
 func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queries, required bool) (*store.ApiKey, bool) {
+	if !isAPIClientAllowed(GetClientIP(r)) {
+		if required {
+			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key access is not allowed from this IP", nil)
+			return nil, true
+		}
+		return nil, false
+	}
+
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		if required {

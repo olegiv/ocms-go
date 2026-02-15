@@ -42,6 +42,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.RequireFormCaptcha {
 		t.Error("RequireFormCaptcha = true, want false")
 	}
+	if cfg.APIAllowedCIDRs != "" {
+		t.Errorf("APIAllowedCIDRs = %q, want empty", cfg.APIAllowedCIDRs)
+	}
 }
 
 func TestLoad_CustomValues(t *testing.T) {
@@ -55,6 +58,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	setEnv(t, "OCMS_LOG_LEVEL", "debug")
 	setEnv(t, "OCMS_TRUSTED_PROXIES", "127.0.0.1/32,10.0.0.0/8")
 	setEnv(t, "OCMS_REQUIRE_FORM_CAPTCHA", "true")
+	setEnv(t, "OCMS_API_ALLOWED_CIDRS", "10.0.0.0/8,192.168.1.10")
 
 	cfg, err := Load()
 	if err != nil {
@@ -84,6 +88,9 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 	if !cfg.RequireFormCaptcha {
 		t.Error("RequireFormCaptcha = false, want true")
+	}
+	if cfg.APIAllowedCIDRs != "10.0.0.0/8,192.168.1.10" {
+		t.Errorf("APIAllowedCIDRs = %q, want %q", cfg.APIAllowedCIDRs, "10.0.0.0/8,192.168.1.10")
 	}
 }
 
