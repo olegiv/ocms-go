@@ -177,8 +177,6 @@ const (
 const (
 	// LogCacheManagerInit is the log message for cache manager initialization.
 	LogCacheManagerInit = "cache manager initialized"
-	// UploadsDirPath is the default uploads directory path.
-	UploadsDirPath = "./uploads"
 	// HeaderContentType is the Content-Type HTTP header name.
 	HeaderContentType = "Content-Type"
 )

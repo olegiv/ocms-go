@@ -53,9 +53,3 @@ func demoGuardAPI(w http.ResponseWriter) bool {
 	http.Error(w, message, http.StatusForbidden)
 	return true
 }
-
-// IsDemoMode returns true if the application is running in demo mode.
-// This is a convenience wrapper around middleware.IsDemoMode().
-func IsDemoMode() bool {
-	return middleware.IsDemoMode()
-}

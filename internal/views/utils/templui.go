@@ -1,4 +1,5 @@
-// templui util templui.go - version: v1.5.0 installed by templui v1.5.0
+// Package utils provides utility functions for templUI components.
+// Installed by templui v1.5.0.
 package utils
 
 import (
@@ -18,7 +19,7 @@ func TwMerge(classes ...string) string {
 	return twmerge.Merge(classes...)
 }
 
-// TwIf returns value if condition is true, otherwise an empty value of type T.
+// If returns value if condition is true, otherwise an empty value of type T.
 // Example: true, "bg-red-500" → "bg-red-500"
 func If[T comparable](condition bool, value T) T {
 	var empty T
@@ -28,7 +29,7 @@ func If[T comparable](condition bool, value T) T {
 	return empty
 }
 
-// TwIfElse returns trueValue if condition is true, otherwise falseValue.
+// IfElse returns trueValue if condition is true, otherwise falseValue.
 // Example: true, "bg-red-500", "bg-gray-300" → "bg-red-500"
 func IfElse[T any](condition bool, trueValue T, falseValue T) T {
 	if condition {

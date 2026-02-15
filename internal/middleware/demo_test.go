@@ -6,7 +6,6 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"sync"
 	"testing"
 )
@@ -49,11 +48,8 @@ func TestIsDemoMode(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			resetDemoMode()
 			if tt.envValue != "" {
-				os.Setenv("OCMS_DEMO_MODE", tt.envValue)
-			} else {
-				os.Unsetenv("OCMS_DEMO_MODE")
+				t.Setenv("OCMS_DEMO_MODE", tt.envValue)
 			}
-			defer os.Unsetenv("OCMS_DEMO_MODE")
 
 			got := IsDemoMode()
 			if got != tt.want {
@@ -138,11 +134,8 @@ func TestBlockInDemoMode(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			resetDemoMode()
 			if tt.demoMode {
-				os.Setenv("OCMS_DEMO_MODE", "true")
-			} else {
-				os.Unsetenv("OCMS_DEMO_MODE")
+				t.Setenv("OCMS_DEMO_MODE", "true")
 			}
-			defer os.Unsetenv("OCMS_DEMO_MODE")
 
 			middleware := BlockInDemoMode(RestrictionCreateUser)
 			wrapped := middleware(handler)
@@ -201,11 +194,8 @@ func runDemoMiddlewareTests(t *testing.T, makeMiddleware func() func(http.Handle
 		t.Run(tt.name, func(t *testing.T) {
 			resetDemoMode()
 			if tt.demoMode {
-				os.Setenv("OCMS_DEMO_MODE", "true")
-			} else {
-				os.Unsetenv("OCMS_DEMO_MODE")
+				t.Setenv("OCMS_DEMO_MODE", "true")
 			}
-			defer os.Unsetenv("OCMS_DEMO_MODE")
 
 			mw := makeMiddleware()
 			wrapped := mw(handler)

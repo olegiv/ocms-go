@@ -29,43 +29,44 @@ func IsDemoMode() bool {
 type DemoRestriction string
 
 // Demo mode restrictions - operations that are blocked in demo mode.
+
 const (
-	// Content restrictions (block all modifications)
+	// RestrictionContentReadOnly blocks all content modifications in demo mode.
 	RestrictionContentReadOnly    DemoRestriction = "content_read_only"
 	RestrictionUnpublishContent   DemoRestriction = "unpublish_content"
-	RestrictionDeletePage      DemoRestriction = "delete_page"
-	RestrictionDeleteMedia    DemoRestriction = "delete_media"
-	RestrictionDeleteCategory DemoRestriction = "delete_category"
-	RestrictionDeleteTag      DemoRestriction = "delete_tag"
-	RestrictionDeleteMenu     DemoRestriction = "delete_menu"
-	RestrictionDeleteMenuItem DemoRestriction = "delete_menu_item"
-	RestrictionDeleteForm     DemoRestriction = "delete_form"
-	RestrictionDeleteWidget   DemoRestriction = "delete_widget"
+	RestrictionDeletePage         DemoRestriction = "delete_page"
+	RestrictionDeleteMedia        DemoRestriction = "delete_media"
+	RestrictionDeleteCategory     DemoRestriction = "delete_category"
+	RestrictionDeleteTag          DemoRestriction = "delete_tag"
+	RestrictionDeleteMenu         DemoRestriction = "delete_menu"
+	RestrictionDeleteMenuItem     DemoRestriction = "delete_menu_item"
+	RestrictionDeleteForm         DemoRestriction = "delete_form"
+	RestrictionDeleteWidget       DemoRestriction = "delete_widget"
 
-	// User management restrictions
+	// RestrictionCreateUser blocks user management in demo mode.
 	RestrictionCreateUser  DemoRestriction = "create_user"
 	RestrictionDeleteUser  DemoRestriction = "delete_user"
 	RestrictionEditUser    DemoRestriction = "edit_user"
 	RestrictionChangeRole  DemoRestriction = "change_role"
 
-	// System configuration restrictions
+	// RestrictionEditConfig blocks system configuration changes in demo mode.
 	RestrictionEditConfig    DemoRestriction = "edit_config"
 	RestrictionEditLanguages DemoRestriction = "edit_languages"
 
-	// Security-sensitive restrictions
-	RestrictionAPIKeys       DemoRestriction = "api_keys"
-	RestrictionWebhooks      DemoRestriction = "webhooks"
-	RestrictionExportData    DemoRestriction = "export_data"
-	RestrictionImportData    DemoRestriction = "import_data"
+	// RestrictionAPIKeys blocks security-sensitive operations in demo mode.
+	RestrictionAPIKeys        DemoRestriction = "api_keys"
+	RestrictionWebhooks       DemoRestriction = "webhooks"
+	RestrictionExportData     DemoRestriction = "export_data"
+	RestrictionImportData     DemoRestriction = "import_data"
 	RestrictionModules        DemoRestriction = "modules"
 	RestrictionModuleSettings DemoRestriction = "module_settings"
 	RestrictionThemeSettings  DemoRestriction = "theme_settings"
 	RestrictionClearCache     DemoRestriction = "clear_cache"
 
-	// Module-specific restrictions
+	// RestrictionSQLExecution blocks direct SQL execution in demo mode.
 	RestrictionSQLExecution DemoRestriction = "sql_execution"
 
-	// Scheduler restrictions
+	// RestrictionScheduler blocks scheduler management in demo mode.
 	RestrictionScheduler DemoRestriction = "scheduler"
 )
 

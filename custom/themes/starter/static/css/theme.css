@@ -63,7 +63,7 @@ html {
 }
 
 body.st-body {
-    font-family: var(--st-font-body);
+    font-family: var(--st-font-body), sans-serif;
     color: var(--st-text);
     background-color: var(--st-bg);
     line-height: 1.7;
@@ -89,7 +89,7 @@ img {
 }
 
 h1, h2, h3, h4, h5, h6 {
-    font-family: var(--st-font-heading);
+    font-family: var(--st-font-heading), serif;
     font-weight: 700;
     line-height: 1.3;
     color: var(--st-text);
@@ -114,7 +114,7 @@ h1, h2, h3, h4, h5, h6 {
     padding: 0.6rem 1.5rem;
     border: 2px solid transparent;
     border-radius: var(--st-radius);
-    font-family: var(--st-font-body);
+    font-family: var(--st-font-body), sans-serif;
     font-size: 0.9rem;
     font-weight: 600;
     cursor: pointer;
@@ -185,7 +185,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .st-header__title {
-    font-family: var(--st-font-heading);
+    font-family: var(--st-font-heading), serif;
     font-size: 1.4rem;
     font-weight: 700;
     color: var(--st-text);
@@ -377,7 +377,7 @@ h1, h2, h3, h4, h5, h6 {
     padding: 0.6rem 1rem;
     border: none;
     font-size: 0.9rem;
-    font-family: var(--st-font-body);
+    font-family: var(--st-font-body), sans-serif;
     outline: none;
     width: 250px;
     background: transparent;
@@ -836,13 +836,13 @@ h1, h2, h3, h4, h5, h6 {
     border-radius: var(--st-radius);
     overflow-x: auto;
     margin: 1.5rem 0;
-    font-family: var(--st-font-mono);
+    font-family: var(--st-font-mono), monospace;
     font-size: 0.9rem;
     line-height: 1.6;
 }
 
 .st-prose code {
-    font-family: var(--st-font-mono);
+    font-family: var(--st-font-mono), monospace;
     font-size: 0.9em;
     background: var(--st-bg-alt);
     padding: 0.15rem 0.4rem;
@@ -1038,7 +1038,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .st-error__code {
     display: block;
-    font-family: var(--st-font-heading);
+    font-family: var(--st-font-heading), serif;
     font-size: 6rem;
     font-weight: 700;
     color: var(--st-border);
@@ -1080,7 +1080,7 @@ h1, h2, h3, h4, h5, h6 {
     border: 1px solid var(--st-border);
     border-radius: var(--st-radius);
     font-size: 0.9rem;
-    font-family: var(--st-font-body);
+    font-family: var(--st-font-body), sans-serif;
 }
 
 .st-error__suggestions {
@@ -1136,7 +1136,7 @@ h1, h2, h3, h4, h5, h6 {
     padding: 0.8rem 1.25rem;
     border: none;
     font-size: 1rem;
-    font-family: var(--st-font-body);
+    font-family: var(--st-font-body), sans-serif;
     outline: none;
     background: transparent;
 }
@@ -1234,7 +1234,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .st-widget__title {
     font-size: 1rem;
-    font-family: var(--st-font-body);
+    font-family: var(--st-font-body), sans-serif;
     font-weight: 600;
     margin-bottom: 1rem;
     padding-bottom: 0.5rem;
@@ -1505,7 +1505,7 @@ h1, h2, h3, h4, h5, h6 {
     border: 1px solid var(--st-border);
     border-radius: var(--st-radius);
     font-size: 0.95rem;
-    font-family: var(--st-font-body);
+    font-family: var(--st-font-body), sans-serif;
     color: var(--st-text);
     background: var(--st-bg-card);
     transition: border-color var(--st-transition);

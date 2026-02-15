@@ -457,9 +457,9 @@ func (m *Module) Migrations() []module.Migration {
 	}
 }
 
-// reloadBannedIPs loads banned IP patterns from the database into memory.
-func (m *Module) reloadBannedIPs() error {
-	rows, err := m.ctx.DB.Query(`SELECT ip_pattern FROM sentinel_banned_ips`)
+// reloadPatterns loads string patterns from a database query into the given slice behind a mutex.
+func (m *Module) reloadPatterns(query string, mu *sync.RWMutex, dest *[]string) error {
+	rows, err := m.ctx.DB.Query(query)
 	if err != nil {
 		return err
 	}
@@ -474,78 +474,45 @@ func (m *Module) reloadBannedIPs() error {
 		patterns = append(patterns, pattern)
 	}
 
-	m.bannedMu.Lock()
-	m.bannedPatterns = patterns
-	m.bannedMu.Unlock()
+	mu.Lock()
+	*dest = patterns
+	mu.Unlock()
 
 	return rows.Err()
+}
+
+// reloadBannedIPs loads banned IP patterns from the database into memory.
+func (m *Module) reloadBannedIPs() error {
+	return m.reloadPatterns(`SELECT ip_pattern FROM sentinel_banned_ips`, &m.bannedMu, &m.bannedPatterns)
 }
 
 // reloadAutoBanPaths loads auto-ban path patterns from the database into memory.
 func (m *Module) reloadAutoBanPaths() error {
-	rows, err := m.ctx.DB.Query(`SELECT path_pattern FROM sentinel_autoban_paths`)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = rows.Close() }()
-
-	var patterns []string
-	for rows.Next() {
-		var pattern string
-		if err := rows.Scan(&pattern); err != nil {
-			return err
-		}
-		patterns = append(patterns, pattern)
-	}
-
-	m.pathsMu.Lock()
-	m.autoBanPaths = patterns
-	m.pathsMu.Unlock()
-
-	return rows.Err()
+	return m.reloadPatterns(`SELECT path_pattern FROM sentinel_autoban_paths`, &m.pathsMu, &m.autoBanPaths)
 }
 
 // reloadWhitelist loads whitelisted IP patterns from the database into memory.
 func (m *Module) reloadWhitelist() error {
-	rows, err := m.ctx.DB.Query(`SELECT ip_pattern FROM sentinel_whitelist`)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = rows.Close() }()
-
-	var patterns []string
-	for rows.Next() {
-		var pattern string
-		if err := rows.Scan(&pattern); err != nil {
-			return err
-		}
-		patterns = append(patterns, pattern)
-	}
-
-	m.whitelistMu.Lock()
-	m.whitelistPatterns = patterns
-	m.whitelistMu.Unlock()
-
-	return rows.Err()
+	return m.reloadPatterns(`SELECT ip_pattern FROM sentinel_whitelist`, &m.whitelistMu, &m.whitelistPatterns)
 }
 
 // reloadSettings loads settings from the database into memory.
 func (m *Module) reloadSettings() error {
-	// Default values if settings table doesn't exist yet
-	banCheck := true
-	autoBan := true
-
 	// Try to read settings from database
 	rows, err := m.ctx.DB.Query(`SELECT key, value FROM sentinel_settings`)
 	if err != nil {
 		// Table might not exist yet (before migration), use defaults
 		m.settingsMu.Lock()
-		m.banCheckEnabled = banCheck
-		m.autoBanEnabled = autoBan
+		m.banCheckEnabled = true
+		m.autoBanEnabled = true
 		m.settingsMu.Unlock()
 		return nil
 	}
 	defer func() { _ = rows.Close() }()
+
+	// Start with defaults, override from DB rows
+	banCheck := true
+	autoBan := true
 
 	for rows.Next() {
 		var key, value string

@@ -185,11 +185,10 @@ func TestScanMediaFiles_NonExistentPath(t *testing.T) {
 
 func TestScanMediaFiles_FileNotDirectory(t *testing.T) {
 	// Create a temp file (not directory)
-	tempFile, err := os.CreateTemp("", "test-file-*.txt")
+	tempFile, err := os.CreateTemp(t.TempDir(), "test-file-*.txt")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer func() { _ = os.Remove(tempFile.Name()) }()
 	_ = tempFile.Close()
 
 	_, err = ScanMediaFiles(tempFile.Name())

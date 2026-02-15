@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-
 	"github.com/olegiv/ocms-go/internal/middleware"
 )
 

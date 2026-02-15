@@ -392,8 +392,7 @@ func TestTemplateFuncs_Deref(t *testing.T) {
 	funcs := (&Renderer{}).TemplateFuncs()
 	deref := funcs["deref"].(func(*int64) int64)
 
-	val := int64(42)
-	if got := deref(&val); got != 42 {
+	if got := deref(new(int64(42))); got != 42 {
 		t.Errorf("deref(&42) = %d, want 42", got)
 	}
 

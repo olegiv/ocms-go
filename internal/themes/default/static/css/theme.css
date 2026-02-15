@@ -378,8 +378,7 @@ p {
 .sub-menu .sub-menu.flip-left {
     left: auto;
     right: 100%;
-    margin-left: 0;
-    margin-right: 4px;
+    margin: 0 4px 0 0;
 }
 
 /* Mobile menu toggle - Hamburger with animation */
@@ -1258,7 +1257,7 @@ a.tag:hover {
 
 .footer-privacy-link {
     margin-top: var(--spacing-xs);
-    font-size: var(--font-size-small);
+    font-size: 0.875rem;
 }
 
 .footer-privacy-link a {
@@ -1293,7 +1292,7 @@ a.tag:hover {
     display: block;
     font-weight: 600;
     font-size: 0.9rem;
-    color: var(--text-primary);
+    color: var(--text-color);
     margin-bottom: var(--spacing-sm);
     white-space: nowrap;
     overflow: hidden;
@@ -1892,7 +1891,7 @@ a.tag:hover {
     border-radius: var(--radius-md);
     color: var(--text-color);
     font-size: 1rem;
-    font-family: var(--font-family);
+    font-family: var(--font-family), sans-serif;
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
@@ -1956,7 +1955,7 @@ select.form-control {
     padding: 0.75rem 1.5rem;
     font-size: 1rem;
     font-weight: 500;
-    font-family: var(--font-family);
+    font-family: var(--font-family), sans-serif;
     border-radius: var(--radius-md);
     cursor: pointer;
     transition: all var(--transition-fast);
@@ -2010,7 +2009,7 @@ select.form-control {
     padding: 0.75rem 1.5rem;
     font-size: 1rem;
     font-weight: 500;
-    font-family: var(--font-family);
+    font-family: var(--font-family), sans-serif;
     border-radius: var(--radius-md);
     cursor: pointer;
     transition: all var(--transition-fast);

@@ -277,18 +277,7 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			}
 			return template.JS(b)
 		},
-		"formatBytes": func(bytes int64) string {
-			const unit = 1024
-			if bytes < unit {
-				return fmt.Sprintf("%d B", bytes)
-			}
-			div, exp := int64(unit), 0
-			for n := bytes / unit; n >= unit; n /= unit {
-				div *= unit
-				exp++
-			}
-			return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
-		},
+		"formatBytes": FormatBytes,
 		"formatNumber": func(n int64) string {
 			if n < 1000 {
 				return strconv.FormatInt(n, 10)
@@ -672,7 +661,7 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 	}
 
 	// Render to buffer first to catch errors
-	buf := new(bytes.Buffer)
+	var buf bytes.Buffer
 
 	// Public templates use "body" instead of "base"
 	templateName := "base"
@@ -680,7 +669,7 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 		templateName = "body"
 	}
 
-	if err := tmpl.ExecuteTemplate(buf, templateName, data); err != nil {
+	if err := tmpl.ExecuteTemplate(&buf, templateName, data); err != nil {
 		return fmt.Errorf("executing template %s: %w", name, err)
 	}
 
@@ -894,7 +883,7 @@ func (r *Renderer) AdminLangOptions() []AdminLangOption {
 		opts := f()
 		result := make([]AdminLangOption, len(opts))
 		for i, o := range opts {
-			result[i] = AdminLangOption(o)
+			result[i] = o
 		}
 		return result
 	}

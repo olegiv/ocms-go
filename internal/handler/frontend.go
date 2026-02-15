@@ -1773,8 +1773,8 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 	}
 
 	// Load menus by slug and language
-	data.MainMenu = h.loadMenu("main", r.URL.Path, langCode)
-	data.FooterMenu = h.loadMenu("footer", r.URL.Path, langCode)
+	data.MainMenu = loadMenu(h.menuService, "main", r.URL.Path, langCode)
+	data.FooterMenu = loadMenu(h.menuService, "footer", r.URL.Path, langCode)
 	// Navigation/FooterNav are aliases for MainMenu/FooterMenu (for template compatibility)
 	data.Navigation = data.MainMenu
 	data.FooterNav = data.FooterMenu
@@ -1815,22 +1815,22 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 }
 
 // loadMenu loads a menu by slug and language, and marks active items.
-func (h *FrontendHandler) loadMenu(slug, currentPath, langCode string) []MenuItem {
+func loadMenu(ms *service.MenuService, slug, currentPath, langCode string) []MenuItem {
 	var items []service.MenuItem
 	if langCode != "" {
-		items = h.menuService.GetMenuForLanguage(slug, langCode)
+		items = ms.GetMenuForLanguage(slug, langCode)
 	} else {
-		items = h.menuService.GetMenu(slug)
+		items = ms.GetMenu(slug)
 	}
 	if items == nil {
 		return nil
 	}
 
-	return h.menuItemsToView(items, currentPath)
+	return menuItemsToView(items, currentPath)
 }
 
 // menuItemsToView converts service menu items to view items with active state.
-func (h *FrontendHandler) menuItemsToView(items []service.MenuItem, currentPath string) []MenuItem {
+func menuItemsToView(items []service.MenuItem, currentPath string) []MenuItem {
 	result := make([]MenuItem, 0, len(items))
 	for _, item := range items {
 		mi := MenuItem{
@@ -1838,7 +1838,7 @@ func (h *FrontendHandler) menuItemsToView(items []service.MenuItem, currentPath 
 			URL:      item.URL,
 			Target:   item.Target,
 			IsActive: item.URL == currentPath,
-			Children: h.menuItemsToView(item.Children, currentPath),
+			Children: menuItemsToView(item.Children, currentPath),
 		}
 		result = append(result, mi)
 	}
@@ -2199,12 +2199,12 @@ func (h *FrontendHandler) render(w http.ResponseWriter, templateName string, dat
 	activeTheme := h.themeManager.GetActiveTheme()
 
 	// Determine engine: if no active theme, default to templ.
-	engine := theme.ThemeEngineTempl
+	engine := theme.EngineTempl
 	if activeTheme != nil {
 		engine = activeTheme.RenderEngine()
 	}
 
-	if engine == theme.ThemeEngineHTML {
+	if engine == theme.EngineHTML {
 		h.renderHTML(w, activeTheme, templateName, data)
 	} else {
 		h.renderTempl(w, templateName, data)

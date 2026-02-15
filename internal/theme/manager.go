@@ -526,8 +526,7 @@ func (m *Manager) ListThemes() []*Config {
 		if theme == nil {
 			continue
 		}
-		cfg := theme.Config
-		configs = append(configs, &cfg)
+		configs = append(configs, new(theme.Config))
 	}
 	return configs
 }

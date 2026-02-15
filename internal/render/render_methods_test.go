@@ -48,7 +48,7 @@ func TestHcaptchaWidgetHTML_WithFunc(t *testing.T) {
 	r := &Renderer{}
 	r.AddTemplateFuncs(template.FuncMap{
 		"hcaptchaWidget": func() template.HTML {
-			return template.HTML(`<div class="h-captcha" data-sitekey="test"></div>`)
+			return `<div class="h-captcha" data-sitekey="test"></div>`
 		},
 	})
 

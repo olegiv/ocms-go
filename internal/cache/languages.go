@@ -125,9 +125,8 @@ func (c *LanguageCache) GetDefault(ctx context.Context) (*store.Language, error)
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.defaultLang != nil {
-		lang := *c.defaultLang
 		c.cache.hits.Add(1)
-		return &lang, nil
+		return new(*c.defaultLang), nil
 	}
 	c.cache.misses.Add(1)
 	return nil, nil
@@ -177,8 +176,7 @@ func (c *LanguageCache) loadAll(ctx context.Context) error {
 			c.active = append(c.active, lang)
 		}
 		if lang.IsDefault {
-			langCopy := lang
-			c.defaultLang = &langCopy
+			c.defaultLang = new(lang)
 		}
 	}
 

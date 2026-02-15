@@ -5,13 +5,14 @@ package scheduler
 
 import (
 	"database/sql"
-	"log/slog"
-	"os"
+	"errors"
 	"testing"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/robfig/cron/v3"
+
+	"github.com/olegiv/ocms-go/internal/testutil"
 )
 
 // testDB creates an in-memory SQLite database for testing.
@@ -30,14 +31,9 @@ func testDB(t *testing.T) *sql.DB {
 	return db
 }
 
-// testLogger creates a test logger that discards output.
-func testLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-}
-
 func TestNewRegistry(t *testing.T) {
 	db := testDB(t)
-	logger := testLogger()
+	logger := testutil.TestLoggerSilent()
 
 	registry := NewRegistry(db, logger)
 
@@ -67,7 +63,7 @@ func TestNewRegistry(t *testing.T) {
 
 func TestRegister(t *testing.T) {
 	db := testDB(t)
-	logger := testLogger()
+	logger := testutil.TestLoggerSilent()
 	registry := NewRegistry(db, logger)
 
 	cronInst := cron.New()
@@ -114,7 +110,7 @@ func TestRegister(t *testing.T) {
 
 func TestUpdateSchedule(t *testing.T) {
 	db := testDB(t)
-	logger := testLogger()
+	logger := testutil.TestLoggerSilent()
 	registry := NewRegistry(db, logger)
 
 	cronInst := cron.New()
@@ -167,7 +163,7 @@ func TestUpdateSchedule(t *testing.T) {
 
 func TestResetSchedule(t *testing.T) {
 	db := testDB(t)
-	logger := testLogger()
+	logger := testutil.TestLoggerSilent()
 	registry := NewRegistry(db, logger)
 
 	cronInst := cron.New()
@@ -220,14 +216,14 @@ func TestResetSchedule(t *testing.T) {
 	// Verify override removed from DB
 	var overrideSchedule string
 	err = db.QueryRow("SELECT override_schedule FROM scheduler_overrides WHERE source = ? AND name = ?", "core", "test-job").Scan(&overrideSchedule)
-	if err != sql.ErrNoRows {
+	if !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("expected sql.ErrNoRows, got %v (override should be deleted)", err)
 	}
 }
 
 func TestTriggerNow(t *testing.T) {
 	db := testDB(t)
-	logger := testLogger()
+	logger := testutil.TestLoggerSilent()
 	registry := NewRegistry(db, logger)
 
 	cronInst := cron.New()
@@ -261,12 +257,12 @@ func TestTriggerNow(t *testing.T) {
 
 func TestTriggerNowNotFound(t *testing.T) {
 	db := testDB(t)
-	logger := testLogger()
+	logger := testutil.TestLoggerSilent()
 	registry := NewRegistry(db, logger)
 
 	err := registry.TriggerNow("core", "nonexistent-job")
 	if err == nil {
-		t.Error("expected error for nonexistent job")
+		t.Fatal("expected error for nonexistent job")
 	}
 	if err.Error() != "job not found: core:nonexistent-job" {
 		t.Errorf("unexpected error message: %v", err)
@@ -275,7 +271,7 @@ func TestTriggerNowNotFound(t *testing.T) {
 
 func TestTriggerNowNoTriggerFunc(t *testing.T) {
 	db := testDB(t)
-	logger := testLogger()
+	logger := testutil.TestLoggerSilent()
 	registry := NewRegistry(db, logger)
 
 	cronInst := cron.New()
@@ -293,7 +289,7 @@ func TestTriggerNowNoTriggerFunc(t *testing.T) {
 
 	err = registry.TriggerNow("core", "test-job")
 	if err == nil {
-		t.Error("expected error when trigger function is nil")
+		t.Fatal("expected error when trigger function is nil")
 	}
 	if err.Error() != "manual trigger not available for: core:test-job" {
 		t.Errorf("unexpected error message: %v", err)
@@ -302,7 +298,7 @@ func TestTriggerNowNoTriggerFunc(t *testing.T) {
 
 func TestGetEffectiveSchedule(t *testing.T) {
 	db := testDB(t)
-	logger := testLogger()
+	logger := testutil.TestLoggerSilent()
 	registry := NewRegistry(db, logger)
 
 	// Test default schedule (no override)
@@ -327,7 +323,7 @@ func TestGetEffectiveSchedule(t *testing.T) {
 
 func TestUpdateScheduleInvalidCron(t *testing.T) {
 	db := testDB(t)
-	logger := testLogger()
+	logger := testutil.TestLoggerSilent()
 	registry := NewRegistry(db, logger)
 
 	cronInst := cron.New()
@@ -358,7 +354,7 @@ func TestUpdateScheduleInvalidCron(t *testing.T) {
 
 func TestListSorted(t *testing.T) {
 	db := testDB(t)
-	logger := testLogger()
+	logger := testutil.TestLoggerSilent()
 	registry := NewRegistry(db, logger)
 
 	cronInst := cron.New()
@@ -412,7 +408,7 @@ func TestListSorted(t *testing.T) {
 
 func TestRegistryTimingInfo(t *testing.T) {
 	db := testDB(t)
-	logger := testLogger()
+	logger := testutil.TestLoggerSilent()
 	registry := NewRegistry(db, logger)
 
 	cronInst := cron.New()
@@ -455,7 +451,7 @@ func TestRegistryTimingInfo(t *testing.T) {
 
 func TestResetScheduleAlreadyDefault(t *testing.T) {
 	db := testDB(t)
-	logger := testLogger()
+	logger := testutil.TestLoggerSilent()
 	registry := NewRegistry(db, logger)
 
 	cronInst := cron.New()
@@ -480,7 +476,7 @@ func TestResetScheduleAlreadyDefault(t *testing.T) {
 
 func TestUpdateScheduleNotFound(t *testing.T) {
 	db := testDB(t)
-	logger := testLogger()
+	logger := testutil.TestLoggerSilent()
 	registry := NewRegistry(db, logger)
 
 	err := registry.UpdateSchedule("core", "nonexistent-job", "@every 30m")
@@ -494,7 +490,7 @@ func TestUpdateScheduleNotFound(t *testing.T) {
 
 func TestUnregister(t *testing.T) {
 	db := testDB(t)
-	logger := testLogger()
+	logger := testutil.TestLoggerSilent()
 	registry := NewRegistry(db, logger)
 
 	cronInst := cron.New()
@@ -528,7 +524,7 @@ func TestUnregister(t *testing.T) {
 
 func TestUnregisterRemovesOverride(t *testing.T) {
 	db := testDB(t)
-	logger := testLogger()
+	logger := testutil.TestLoggerSilent()
 	registry := NewRegistry(db, logger)
 
 	cronInst := cron.New()
@@ -564,7 +560,7 @@ func TestUnregisterRemovesOverride(t *testing.T) {
 	// Verify override is removed from DB
 	err = db.QueryRow("SELECT override_schedule FROM scheduler_overrides WHERE source = ? AND name = ?",
 		"core", "test-job").Scan(&overrideSchedule)
-	if err != sql.ErrNoRows {
+	if !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("expected sql.ErrNoRows after unregister, got %v", err)
 	}
 
@@ -590,7 +586,7 @@ func TestUnregisterRemovesOverride(t *testing.T) {
 
 func TestUnregisterNonexistent(t *testing.T) {
 	db := testDB(t)
-	logger := testLogger()
+	logger := testutil.TestLoggerSilent()
 	registry := NewRegistry(db, logger)
 
 	// Should not panic or error
@@ -605,7 +601,7 @@ func TestUnregisterNonexistent(t *testing.T) {
 
 func TestResetScheduleNotFound(t *testing.T) {
 	db := testDB(t)
-	logger := testLogger()
+	logger := testutil.TestLoggerSilent()
 	registry := NewRegistry(db, logger)
 
 	err := registry.ResetSchedule("core", "nonexistent-job")

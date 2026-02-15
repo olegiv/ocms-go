@@ -6,13 +6,13 @@ package sentinel
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/render"
@@ -223,8 +223,18 @@ func writeJSONError(w http.ResponseWriter, message string, status int) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"success": false, "error": message})
 }
 
-// handleDelete handles DELETE /admin/sentinel/{id} - removes an IP ban.
-func (m *Module) handleDelete(w http.ResponseWriter, r *http.Request) {
+// sentinelDeleteParams holds the parameters for deleting a sentinel entry.
+type sentinelDeleteParams struct {
+	getLabel    func(id int64) (string, error)
+	deleteFn   func(id int64) error
+	getErrMsg  string
+	delErrMsg  string
+	logAction  string
+	logField   string
+}
+
+// handleDeleteEntry is a generic handler for deleting sentinel entries (bans, paths, whitelist).
+func (m *Module) handleDeleteEntry(w http.ResponseWriter, r *http.Request, p sentinelDeleteParams) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -232,19 +242,19 @@ func (m *Module) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ban, err := m.getBanByID(id)
+	label, err := p.getLabel(id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Not Found", http.StatusNotFound)
 			return
 		}
-		m.ctx.Logger.Error("failed to get ban", "error", err, "id", id)
+		m.ctx.Logger.Error(p.getErrMsg, "error", err, "id", id)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	if err := m.deleteBan(id); err != nil {
-		m.ctx.Logger.Error("failed to delete ban", "error", err, "id", id)
+	if err := p.deleteFn(id); err != nil {
+		m.ctx.Logger.Error(p.delErrMsg, "error", err, "id", id)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -253,9 +263,21 @@ func (m *Module) handleDelete(w http.ResponseWriter, r *http.Request) {
 	if user == nil {
 		return
 	}
-	m.ctx.Logger.Info("IP ban removed", "ip_pattern", ban.IPPattern, "removed_by", user.ID)
+	m.ctx.Logger.Info(p.logAction, p.logField, label, "removed_by", user.ID)
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleDelete handles DELETE /admin/sentinel/{id} - removes an IP ban.
+func (m *Module) handleDelete(w http.ResponseWriter, r *http.Request) {
+	m.handleDeleteEntry(w, r, sentinelDeleteParams{
+		getLabel:  func(id int64) (string, error) { b, err := m.getBanByID(id); if err != nil { return "", err }; return b.IPPattern, nil },
+		deleteFn:  m.deleteBan,
+		getErrMsg: "failed to get ban",
+		delErrMsg: "failed to delete ban",
+		logAction: "IP ban removed",
+		logField:  "ip_pattern",
+	})
 }
 
 // ============================================================================
@@ -335,37 +357,14 @@ func (m *Module) handleCreatePath(w http.ResponseWriter, r *http.Request) {
 
 // handleDeletePath handles DELETE /admin/sentinel/paths/{id} - removes an auto-ban path.
 func (m *Module) handleDeletePath(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
-		return
-	}
-
-	path, err := m.getPathByID(id)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, "Not Found", http.StatusNotFound)
-			return
-		}
-		m.ctx.Logger.Error("failed to get path", "error", err, "id", id)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	if err := m.deleteAutoBanPath(id); err != nil {
-		m.ctx.Logger.Error("failed to delete path", "error", err, "id", id)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	user := requireUser(w, r)
-	if user == nil {
-		return
-	}
-	m.ctx.Logger.Info("auto-ban path removed", "path_pattern", path.PathPattern, "removed_by", user.ID)
-
-	w.WriteHeader(http.StatusNoContent)
+	m.handleDeleteEntry(w, r, sentinelDeleteParams{
+		getLabel:  func(id int64) (string, error) { p, err := m.getPathByID(id); if err != nil { return "", err }; return p.PathPattern, nil },
+		deleteFn:  m.deleteAutoBanPath,
+		getErrMsg: "failed to get path",
+		delErrMsg: "failed to delete path",
+		logAction: "auto-ban path removed",
+		logField:  "path_pattern",
+	})
 }
 
 // ============================================================================
@@ -390,37 +389,14 @@ func (m *Module) handleCreateWhitelist(w http.ResponseWriter, r *http.Request) {
 
 // handleDeleteWhitelist handles DELETE /admin/sentinel/whitelist/{id} - removes whitelist entry.
 func (m *Module) handleDeleteWhitelist(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
-		return
-	}
-
-	entry, err := m.getWhitelistByID(id)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, "Not Found", http.StatusNotFound)
-			return
-		}
-		m.ctx.Logger.Error("failed to get whitelist entry", "error", err, "id", id)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	if err := m.deleteWhitelistEntry(id); err != nil {
-		m.ctx.Logger.Error("failed to delete whitelist entry", "error", err, "id", id)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	user := requireUser(w, r)
-	if user == nil {
-		return
-	}
-	m.ctx.Logger.Info("whitelist entry removed", "ip_pattern", entry.IPPattern, "removed_by", user.ID)
-
-	w.WriteHeader(http.StatusNoContent)
+	m.handleDeleteEntry(w, r, sentinelDeleteParams{
+		getLabel:  func(id int64) (string, error) { e, err := m.getWhitelistByID(id); if err != nil { return "", err }; return e.IPPattern, nil },
+		deleteFn:  m.deleteWhitelistEntry,
+		getErrMsg: "failed to get whitelist entry",
+		delErrMsg: "failed to delete whitelist entry",
+		logAction: "whitelist entry removed",
+		logField:  "ip_pattern",
+	})
 }
 
 // ============================================================================

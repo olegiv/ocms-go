@@ -453,12 +453,10 @@ func (e *Exporter) exportMedia(ctx context.Context, data *ExportData, userMap ma
 		}
 
 		if m.Width.Valid {
-			w := m.Width.Int64
-			exportMedia.Width = &w
+			exportMedia.Width = new(m.Width.Int64)
 		}
 		if m.Height.Valid {
-			h := m.Height.Int64
-			exportMedia.Height = &h
+			exportMedia.Height = new(m.Height.Int64)
 		}
 
 		if m.FolderID.Valid {
@@ -534,14 +532,12 @@ func (e *Exporter) exportPages(
 
 		// Handle published_at
 		if page.PublishedAt.Valid {
-			t := page.PublishedAt.Time
-			exportPage.PublishedAt = &t
+			exportPage.PublishedAt = new(page.PublishedAt.Time)
 		}
 
 		// Handle scheduled_at
 		if page.ScheduledAt.Valid {
-			t := page.ScheduledAt.Time
-			exportPage.ScheduledAt = &t
+			exportPage.ScheduledAt = new(page.ScheduledAt.Time)
 		}
 
 		// Handle language

@@ -19,28 +19,14 @@ import (
 )
 
 // setupTempUploadDir creates a temporary directory for uploads and changes to it.
-// Returns a cleanup function that restores the original working directory.
+// Returns a cleanup function that removes the temp directory.
 func setupTempUploadDir(t *testing.T) func() {
 	t.Helper()
 
-	tmpDir, err := os.MkdirTemp("", "ocms-upload-test-*")
-	if err != nil {
-		t.Fatalf("creating temp dir: %v", err)
-	}
-
-	oldWd, err := os.Getwd()
-	if err != nil {
-		_ = os.RemoveAll(tmpDir)
-		t.Fatalf("getting working directory: %v", err)
-	}
-
-	if err := os.Chdir(tmpDir); err != nil {
-		_ = os.RemoveAll(tmpDir)
-		t.Fatalf("changing to temp dir: %v", err)
-	}
+	tmpDir := t.TempDir()
+	t.Chdir(tmpDir)
 
 	return func() {
-		_ = os.Chdir(oldWd)
 		_ = os.RemoveAll(tmpDir)
 	}
 }

@@ -5,7 +5,6 @@ package handler
 
 import (
 	"database/sql"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -18,19 +17,15 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/scheduler"
+	"github.com/olegiv/ocms-go/internal/testutil"
 )
-
-// testSchedulerLogger creates a test logger that discards output.
-func testSchedulerLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-}
 
 // testSchedulerRegistry creates a test scheduler registry with an in-memory database.
 func testSchedulerRegistry(t *testing.T) (*scheduler.Registry, *sql.DB) {
 	t.Helper()
 
 	db := testDB(t)
-	logger := testSchedulerLogger()
+	logger := testutil.TestLoggerSilent()
 	registry := scheduler.NewRegistry(db, logger)
 
 	return registry, db

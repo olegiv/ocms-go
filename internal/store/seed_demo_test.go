@@ -5,7 +5,6 @@ package store
 
 import (
 	"image"
-	"os"
 	"testing"
 )
 
@@ -110,7 +109,7 @@ func TestSeedDemo_Disabled(t *testing.T) {
 	}
 
 	// Demo mode not set (default)
-	os.Unsetenv("OCMS_DEMO_MODE")
+	t.Setenv("OCMS_DEMO_MODE", "")
 
 	if err := SeedDemo(ctx, db); err != nil {
 		t.Fatalf("SeedDemo: %v", err)

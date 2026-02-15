@@ -59,8 +59,7 @@ func TestLogEvent(t *testing.T) {
 	svc := NewEventService(db)
 	ctx := context.Background()
 
-	userID := int64(123)
-	err := svc.LogEvent(ctx, model.EventLevelInfo, model.EventCategoryMigrator, "Test message", &userID, "192.168.1.100", "/admin/migrator", map[string]any{
+	err := svc.LogEvent(ctx, model.EventLevelInfo, model.EventCategoryMigrator, "Test message", new(int64(123)), "192.168.1.100", "/admin/migrator", map[string]any{
 		"key": "value",
 	})
 	if err != nil {
@@ -199,8 +198,7 @@ func TestLogMigratorEvent(t *testing.T) {
 	svc := NewEventService(db)
 	ctx := context.Background()
 
-	userID := int64(1)
-	err := svc.LogMigratorEvent(ctx, model.EventLevelInfo, "Content imported from elefant", &userID, "10.0.0.1", "/admin/migrator/elefant/import", map[string]any{
+	err := svc.LogMigratorEvent(ctx, model.EventLevelInfo, "Content imported from elefant", new(int64(1)), "10.0.0.1", "/admin/migrator/elefant/import", map[string]any{
 		"source":         "elefant",
 		"posts_imported": 10,
 		"tags_imported":  5,
