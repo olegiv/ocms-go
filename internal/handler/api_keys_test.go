@@ -53,6 +53,55 @@ func TestApplyDefaultAPIKeyExpiry(t *testing.T) {
 	})
 }
 
+func TestParseAPIKeyExpiration(t *testing.T) {
+	now := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
+
+	t.Run("empty", func(t *testing.T) {
+		got, errMsg := parseAPIKeyExpirationAt("", true, now)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+		if got.Valid {
+			t.Fatal("expected empty expiration for empty input")
+		}
+	})
+
+	t.Run("invalid format", func(t *testing.T) {
+		_, errMsg := parseAPIKeyExpirationAt("15-02-2026", true, now)
+		if errMsg == "" {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("past date when future required", func(t *testing.T) {
+		_, errMsg := parseAPIKeyExpirationAt("2026-02-14", true, now)
+		if errMsg != "Expiration date must be in the future" {
+			t.Fatalf("error = %q, want %q", errMsg, "Expiration date must be in the future")
+		}
+	})
+
+	t.Run("too far in future", func(t *testing.T) {
+		_, errMsg := parseAPIKeyExpirationAt("2028-02-15", true, now)
+		if errMsg == "" {
+			t.Fatal("expected max-lifetime validation error")
+		}
+	})
+
+	t.Run("valid within max lifetime", func(t *testing.T) {
+		got, errMsg := parseAPIKeyExpirationAt("2027-02-14", true, now)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+		if !got.Valid {
+			t.Fatal("expected parsed expiration to be valid")
+		}
+		want := time.Date(2027, 2, 14, 23, 59, 59, 0, time.UTC)
+		if !got.Time.Equal(want) {
+			t.Fatalf("expiresAt = %s, want %s", got.Time, want)
+		}
+	})
+}
+
 func TestParseAPIKeySourceCIDRs(t *testing.T) {
 	t.Run("empty input", func(t *testing.T) {
 		got, errMsg := parseAPIKeySourceCIDRs("")

@@ -30,6 +30,7 @@ import (
 const APIKeysPerPage = 10
 
 const defaultAPIKeyLifetime = 90 * 24 * time.Hour
+const maxAPIKeyLifetime = 365 * 24 * time.Hour
 const maxAPIKeySourceCIDRs = 64
 
 // APIKeysHandler handles API key management routes.
@@ -439,6 +440,10 @@ func validateAPIKeyPermissions(permissions []string) string {
 // parseAPIKeyExpiration parses expiration date string and returns NullTime and error message.
 // If requireFuture is true, the date must be in the future.
 func parseAPIKeyExpiration(expiresAtStr string, requireFuture bool) (sql.NullTime, string) {
+	return parseAPIKeyExpirationAt(expiresAtStr, requireFuture, time.Now())
+}
+
+func parseAPIKeyExpirationAt(expiresAtStr string, requireFuture bool, now time.Time) (sql.NullTime, string) {
 	if expiresAtStr == "" {
 		return sql.NullTime{}, ""
 	}
@@ -446,12 +451,16 @@ func parseAPIKeyExpiration(expiresAtStr string, requireFuture bool) (sql.NullTim
 	if err != nil {
 		return sql.NullTime{}, "Invalid date format"
 	}
-	if requireFuture && t.Before(time.Now()) {
+	if requireFuture && t.Before(now) {
 		return sql.NullTime{}, "Expiration date must be in the future"
 	}
-	// Set to end of day
+	expiresAt := t.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+	if expiresAt.After(now.Add(maxAPIKeyLifetime)) {
+		return sql.NullTime{}, fmt.Sprintf("Expiration date must be within %d days", int(maxAPIKeyLifetime.Hours()/24))
+	}
+	// Set to end of day.
 	return sql.NullTime{
-		Time:  t.Add(23*time.Hour + 59*time.Minute + 59*time.Second),
+		Time:  expiresAt,
 		Valid: true,
 	}, ""
 }
