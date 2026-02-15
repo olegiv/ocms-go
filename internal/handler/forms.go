@@ -54,6 +54,8 @@ type FormsHandler struct {
 }
 
 const maxPublicFormBodyBytes int64 = 64 * 1024
+const maxPublicFormFieldValueBytes = 4 * 1024
+const maxPublicFormSubmissionDataBytes = 16 * 1024
 const redactedFormValue = "[REDACTED]"
 const maxFormEventValueLen = 1024
 
@@ -1106,6 +1108,7 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	// Collect values and validate
 	values := make(map[string]string)
 	validationErrors := make(map[string]string)
+	totalValueBytes := 0
 
 	for _, field := range fields {
 		// Skip captcha fields - don't store their values
@@ -1115,6 +1118,24 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 
 		value := strings.TrimSpace(r.FormValue(field.Name))
 		values[field.Name] = value
+		if len(value) > maxPublicFormFieldValueBytes {
+			slog.Warn("form submission blocked: field value too large",
+				"form_id", form.ID,
+				"form_slug", slug,
+				"field_name", field.Name,
+				"field_value_len", len(value))
+			http.Error(w, "Form field value too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		totalValueBytes += len(value)
+		if totalValueBytes > maxPublicFormSubmissionDataBytes {
+			slog.Warn("form submission blocked: total field payload too large",
+				"form_id", form.ID,
+				"form_slug", slug,
+				"total_value_bytes", totalValueBytes)
+			http.Error(w, "Form submission too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 
 		// Required validation
 		if field.IsRequired && value == "" {
@@ -1173,6 +1194,14 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("failed to marshal form data", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	if len(dataJSON) > maxPublicFormSubmissionDataBytes {
+		slog.Warn("form submission blocked: serialized payload too large",
+			"form_id", form.ID,
+			"form_slug", slug,
+			"data_json_bytes", len(dataJSON))
+		http.Error(w, "Form submission too large", http.StatusRequestEntityTooLarge)
 		return
 	}
 
