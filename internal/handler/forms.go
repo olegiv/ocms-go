@@ -1072,6 +1072,18 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	if honeypot != "" {
 		// Bot detected, silently pretend success
 		slog.Info("honeypot triggered", "form_slug", slug, "ip", r.RemoteAddr)
+		_ = service.NewEventService(h.db).LogSecurityEvent(
+			r.Context(),
+			model.EventLevelWarning,
+			"Public form honeypot triggered",
+			nil,
+			middleware.GetClientIP(r),
+			middleware.GetRequestURL(r),
+			map[string]any{
+				"form_id":   form.ID,
+				"form_slug": slug,
+			},
+		)
 		h.renderFormSuccess(w, r, *form, fields)
 		return
 	}
@@ -1124,6 +1136,20 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 				"form_slug", slug,
 				"field_name", field.Name,
 				"field_value_len", len(value))
+			_ = service.NewEventService(h.db).LogSecurityEvent(
+				r.Context(),
+				model.EventLevelWarning,
+				"Public form submission blocked: field value too large",
+				nil,
+				middleware.GetClientIP(r),
+				middleware.GetRequestURL(r),
+				map[string]any{
+					"form_id":         form.ID,
+					"form_slug":       slug,
+					"field_name":      field.Name,
+					"field_value_len": len(value),
+				},
+			)
 			http.Error(w, "Form field value too large", http.StatusRequestEntityTooLarge)
 			return
 		}
@@ -1133,6 +1159,19 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 				"form_id", form.ID,
 				"form_slug", slug,
 				"total_value_bytes", totalValueBytes)
+			_ = service.NewEventService(h.db).LogSecurityEvent(
+				r.Context(),
+				model.EventLevelWarning,
+				"Public form submission blocked: payload too large",
+				nil,
+				middleware.GetClientIP(r),
+				middleware.GetRequestURL(r),
+				map[string]any{
+					"form_id":           form.ID,
+					"form_slug":         slug,
+					"total_value_bytes": totalValueBytes,
+				},
+			)
 			http.Error(w, "Form submission too large", http.StatusRequestEntityTooLarge)
 			return
 		}
@@ -1201,6 +1240,19 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 			"form_id", form.ID,
 			"form_slug", slug,
 			"data_json_bytes", len(dataJSON))
+		_ = service.NewEventService(h.db).LogSecurityEvent(
+			r.Context(),
+			model.EventLevelWarning,
+			"Public form submission blocked: serialized payload too large",
+			nil,
+			middleware.GetClientIP(r),
+			middleware.GetRequestURL(r),
+			map[string]any{
+				"form_id":         form.ID,
+				"form_slug":       slug,
+				"data_json_bytes": len(dataJSON),
+			},
+		)
 		http.Error(w, "Form submission too large", http.StatusRequestEntityTooLarge)
 		return
 	}
