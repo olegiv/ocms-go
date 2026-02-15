@@ -45,6 +45,16 @@ func newPolicyTestDB(t *testing.T) *sql.DB {
 			url TEXT NOT NULL,
 			is_active INTEGER NOT NULL DEFAULT 1
 		);
+		CREATE TABLE api_keys (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			is_active INTEGER NOT NULL DEFAULT 1,
+			expires_at DATETIME
+		);
+		CREATE TABLE api_key_source_cidrs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			api_key_id INTEGER NOT NULL,
+			cidr TEXT NOT NULL
+		);
 	`)
 	if err != nil {
 		t.Fatalf("creating schema: %v", err)
@@ -153,5 +163,66 @@ func TestAuditRequiredHTTPSOutboundPosture_AllowsCompliantConfig(t *testing.T) {
 
 	if err := auditRequiredHTTPSOutboundPosture(context.Background(), db); err != nil {
 		t.Fatalf("expected compliant HTTPS posture to pass, got: %v", err)
+	}
+}
+
+func TestAuditRequiredAPIKeyExpiryPosture_RejectsNonExpiringActiveKeys(t *testing.T) {
+	db := newPolicyTestDB(t)
+	if _, err := db.Exec(`INSERT INTO api_keys (is_active, expires_at) VALUES (1, NULL)`); err != nil {
+		t.Fatalf("inserting api key: %v", err)
+	}
+
+	if err := auditRequiredAPIKeyExpiryPosture(context.Background(), db); err == nil {
+		t.Fatal("expected error when active API key has no expiry")
+	}
+}
+
+func TestAuditRequiredAPIKeyExpiryPosture_AllowsCompliantConfig(t *testing.T) {
+	db := newPolicyTestDB(t)
+	_, err := db.Exec(`
+		INSERT INTO api_keys (is_active, expires_at) VALUES
+			(1, '2030-01-01T00:00:00Z'),
+			(0, NULL);
+	`)
+	if err != nil {
+		t.Fatalf("inserting api key fixtures: %v", err)
+	}
+
+	if err := auditRequiredAPIKeyExpiryPosture(context.Background(), db); err != nil {
+		t.Fatalf("expected compliant API key expiry posture to pass, got: %v", err)
+	}
+}
+
+func TestAuditRequiredAPIKeySourceCIDRPosture_RejectsMissingCIDRs(t *testing.T) {
+	db := newPolicyTestDB(t)
+	if _, err := db.Exec(`INSERT INTO api_keys (is_active, expires_at) VALUES (1, '2030-01-01T00:00:00Z')`); err != nil {
+		t.Fatalf("inserting api key: %v", err)
+	}
+
+	if err := auditRequiredAPIKeySourceCIDRPosture(context.Background(), db); err == nil {
+		t.Fatal("expected error when active API key has no source CIDR")
+	}
+}
+
+func TestAuditRequiredAPIKeySourceCIDRPosture_AllowsCompliantConfig(t *testing.T) {
+	db := newPolicyTestDB(t)
+
+	res, err := db.Exec(`INSERT INTO api_keys (is_active, expires_at) VALUES (1, '2030-01-01T00:00:00Z')`)
+	if err != nil {
+		t.Fatalf("inserting api key: %v", err)
+	}
+	keyID, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("reading api key id: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO api_key_source_cidrs (api_key_id, cidr) VALUES (?, '203.0.113.0/24')`, keyID); err != nil {
+		t.Fatalf("inserting source cidr: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO api_keys (is_active, expires_at) VALUES (0, NULL)`); err != nil {
+		t.Fatalf("inserting inactive api key: %v", err)
+	}
+
+	if err := auditRequiredAPIKeySourceCIDRPosture(context.Background(), db); err != nil {
+		t.Fatalf("expected compliant API key source CIDR posture to pass, got: %v", err)
 	}
 }

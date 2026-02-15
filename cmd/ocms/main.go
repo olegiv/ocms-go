@@ -290,6 +290,49 @@ func auditRequiredHTTPSOutboundPosture(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
+func auditRequiredAPIKeyExpiryPosture(ctx context.Context, db *sql.DB) error {
+	var nonExpiringActiveKeys int
+	err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM api_keys WHERE is_active = 1 AND expires_at IS NULL`).Scan(&nonExpiringActiveKeys)
+	if err != nil {
+		return fmt.Errorf("auditing API key expiry posture: %w", err)
+	}
+
+	if nonExpiringActiveKeys > 0 {
+		return fmt.Errorf(
+			"refusing to start in production: OCMS_REQUIRE_API_KEY_EXPIRY is enabled but %d active API key(s) have no expiration",
+			nonExpiringActiveKeys,
+		)
+	}
+
+	return nil
+}
+
+func auditRequiredAPIKeySourceCIDRPosture(ctx context.Context, db *sql.DB) error {
+	var keysWithoutSourceCIDRs int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM api_keys k
+		WHERE k.is_active = 1
+		  AND NOT EXISTS (
+		  	SELECT 1
+		  	FROM api_key_source_cidrs c
+		  	WHERE c.api_key_id = k.id
+		  )
+	`).Scan(&keysWithoutSourceCIDRs)
+	if err != nil {
+		return fmt.Errorf("auditing API key source CIDR posture: %w", err)
+	}
+
+	if keysWithoutSourceCIDRs > 0 {
+		return fmt.Errorf(
+			"refusing to start in production: OCMS_REQUIRE_API_KEY_SOURCE_CIDRS is enabled but %d active API key(s) have no source CIDR restriction",
+			keysWithoutSourceCIDRs,
+		)
+	}
+
+	return nil
+}
+
 // initI18nFromDB updates i18n settings from database (active languages, default language).
 func initI18nFromDB(ctx context.Context, queries *store.Queries) {
 	if activeLanguages, err := queries.ListActiveLanguages(ctx); err == nil {
@@ -574,33 +617,14 @@ func run() error {
 			)
 		}
 	}
-	if cfg.RequireAPIKeyExpiry {
-		var nonExpiringActiveKeys int
-		err := db.QueryRow(`SELECT COUNT(*) FROM api_keys WHERE is_active = 1 AND expires_at IS NULL`).Scan(&nonExpiringActiveKeys)
-		if err != nil {
-			slog.Warn("failed to audit API key expiry posture", "error", err)
-		} else if nonExpiringActiveKeys > 0 {
-			slog.Warn("active API keys without expiration detected while expiry policy is enabled",
-				"count", nonExpiringActiveKeys)
+	if cfg.Env == "production" && cfg.RequireAPIKeyExpiry {
+		if err := auditRequiredAPIKeyExpiryPosture(ctx, db); err != nil {
+			return err
 		}
 	}
-	if cfg.RequireAPIKeySourceCIDRs {
-		var keysWithoutSourceCIDRs int
-		err := db.QueryRow(`
-			SELECT COUNT(*)
-			FROM api_keys k
-			WHERE k.is_active = 1
-			  AND NOT EXISTS (
-			  	SELECT 1
-			  	FROM api_key_source_cidrs c
-			  	WHERE c.api_key_id = k.id
-			  )
-		`).Scan(&keysWithoutSourceCIDRs)
-		if err != nil {
-			slog.Warn("failed to audit API key source CIDR posture", "error", err)
-		} else if keysWithoutSourceCIDRs > 0 {
-			slog.Warn("active API keys without per-key source CIDRs detected while source CIDR policy is enabled",
-				"count", keysWithoutSourceCIDRs)
+	if cfg.Env == "production" && cfg.RequireAPIKeySourceCIDRs {
+		if err := auditRequiredAPIKeySourceCIDRPosture(ctx, db); err != nil {
+			return err
 		}
 	}
 	initI18nFromDB(ctx, queries)
