@@ -168,6 +168,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_EXPIRY  Reject API keys without expiration (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_SOURCE_CIDRS  Reject API keys without per-key CIDR restrictions (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_ALLOWED_ORIGINS   Comma-separated allowed origins for embed proxy routes (optional)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS  Reject production startup when embed proxy is active without origin allowlist (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "\nFor more information, see: https://github.com/olegiv/ocms-go\n")
 	}
 
@@ -374,6 +375,9 @@ func run() error {
 		}
 		if strings.TrimSpace(cfg.EmbedAllowedOrigins) == "" {
 			slog.Warn("production security warning: OCMS_EMBED_ALLOWED_ORIGINS is not configured")
+		}
+		if !cfg.RequireEmbedAllowedOrigins {
+			slog.Warn("production security warning: OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS is disabled")
 		}
 	}
 
@@ -632,6 +636,20 @@ func run() error {
 
 	// Set module registry on renderer for sidebar modules
 	renderer.SetSidebarModuleProvider(moduleRegistry)
+
+	if cfg.Env == "production" && cfg.RequireEmbedAllowedOrigins && strings.TrimSpace(cfg.EmbedAllowedOrigins) == "" {
+		var activeEmbedProviders int
+		err := db.QueryRow(`SELECT COUNT(*) FROM embed_settings WHERE is_enabled = 1`).Scan(&activeEmbedProviders)
+		if err != nil {
+			return fmt.Errorf("auditing embed origin policy posture: %w", err)
+		}
+		if activeEmbedProviders > 0 {
+			return fmt.Errorf(
+				"refusing to start in production: embed proxy is active (%d provider(s)) but OCMS_EMBED_ALLOWED_ORIGINS is not configured",
+				activeEmbedProviders,
+			)
+		}
+	}
 
 	// Set up hook registry to check module active status
 	hookRegistry.SetIsModuleActive(moduleRegistry.IsActive)

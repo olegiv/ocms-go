@@ -52,7 +52,8 @@ type Config struct {
 	RequireAPIKeySourceCIDRs bool   `env:"OCMS_REQUIRE_API_KEY_SOURCE_CIDRS" envDefault:"false"` // Reject API keys that have no per-key source CIDR entries
 
 	// Embed proxy security configuration
-	EmbedAllowedOrigins string `env:"OCMS_EMBED_ALLOWED_ORIGINS"` // Comma-separated origins allowed to call embed proxy routes
+	EmbedAllowedOrigins        string `env:"OCMS_EMBED_ALLOWED_ORIGINS"`                            // Comma-separated origins allowed to call embed proxy routes
+	RequireEmbedAllowedOrigins bool   `env:"OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS" envDefault:"false"` // Refuse startup in production if embed proxy is active and no origin allowlist is configured
 
 	// Seeding configuration
 	DoSeed bool `env:"OCMS_DO_SEED" envDefault:"false"` // Enable database seeding
