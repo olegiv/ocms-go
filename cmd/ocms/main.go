@@ -704,7 +704,6 @@ func run() error {
 		r.Use(csrfMiddleware)
 		r.Get(handler.RouteLogin, authHandler.LoginForm)
 		r.With(loginProtection.Middleware()).Post(handler.RouteLogin, authHandler.Login)
-		r.Get(handler.RouteLogout, authHandler.Logout)
 		r.Post(handler.RouteLogout, authHandler.Logout)
 		r.Post(handler.RouteLanguage, authHandler.SetLanguage)
 	})

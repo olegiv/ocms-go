@@ -260,6 +260,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 // Logout handles user logout.
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	// Get user ID for logging before destroying session
 	userID := h.sessionManager.GetInt64(r.Context(), SessionKeyUserID)
 

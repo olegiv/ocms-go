@@ -39,7 +39,9 @@
                 <a href="/admin/users/{{if .User}}{{.User.ID}}{{end}}" class="dropdown-item">{{T .AdminLang "nav.profile"}}</a>
                 <a href="/admin/config" class="dropdown-item">{{T .AdminLang "nav.settings"}}</a>
                 <div class="dropdown-divider"></div>
-                <a href="/logout" class="dropdown-item">{{T .AdminLang "nav.logout"}}</a>
+                <form action="/logout" method="POST" class="dropdown-form">
+                    <button type="submit" class="dropdown-item dropdown-item-btn">{{T .AdminLang "nav.logout"}}</button>
+                </form>
             </div>
         </div>
     </div>

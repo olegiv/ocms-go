@@ -53,7 +53,10 @@ templ Header(pc *PageContext) {
 					<a href={ templ.SafeURL(fmt.Sprintf("/admin/users/%d", pc.User.ID)) } class="dropdown-item">{ pc.T("nav.profile") }</a>
 					<a href="/admin/config" class="dropdown-item">{ pc.T("nav.settings") }</a>
 					<div class="dropdown-divider"></div>
-					<a href="/logout" class="dropdown-item">{ pc.T("nav.logout") }</a>
+					<form action="/logout" method="POST" class="dropdown-form">
+						@csrfField()
+						<button type="submit" class="dropdown-item dropdown-item-btn">{ pc.T("nav.logout") }</button>
+					</form>
 				</div>
 			</div>
 		</div>
