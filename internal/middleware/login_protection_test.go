@@ -271,12 +271,25 @@ func TestGetClientIP(t *testing.T) {
 		}
 	})
 
-	t.Run("falls back to X-Real-IP when XFF has no valid IP", func(t *testing.T) {
+	t.Run("fails closed to remote when XFF is present but invalid", func(t *testing.T) {
 		setTrustedProxiesForTest(t, "127.0.0.1")
 
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.RemoteAddr = "127.0.0.1:8080"
 		req.Header.Set("X-Forwarded-For", "invalid, also-invalid")
+		req.Header.Set("X-Real-IP", "10.0.0.5")
+
+		got := GetClientIP(req)
+		if got != "127.0.0.1" {
+			t.Errorf("GetClientIP() = %q, want %q", got, "127.0.0.1")
+		}
+	})
+
+	t.Run("uses X-Real-IP when XFF is absent", func(t *testing.T) {
+		setTrustedProxiesForTest(t, "127.0.0.1")
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "127.0.0.1:8080"
 		req.Header.Set("X-Real-IP", "10.0.0.5")
 
 		got := GetClientIP(req)

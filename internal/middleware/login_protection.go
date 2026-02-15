@@ -291,13 +291,15 @@ func GetClientIP(r *http.Request) string {
 
 	// Check X-Forwarded-For header (can contain multiple IPs).
 	// Use the first untrusted entry from the right side of the chain.
+	// If header is present but unusable, fail closed to remote peer IP.
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		if ip, ok := firstUntrustedXFFIP(xff); ok {
 			return ip.String()
 		}
+		return remoteIPString
 	}
 
-	// Check X-Real-IP header (set by reverse proxies)
+	// Check X-Real-IP header only when X-Forwarded-For is absent.
 	if ip, ok := parseIP(r.Header.Get("X-Real-IP")); ok {
 		return ip.String()
 	}
