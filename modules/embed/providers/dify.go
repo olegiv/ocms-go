@@ -6,6 +6,7 @@ package providers
 import (
 	"fmt"
 	"html/template"
+	"net/url"
 	"strings"
 
 	"github.com/olegiv/ocms-go/internal/util"
@@ -40,7 +41,7 @@ func (p *DifyProvider) SettingsSchema() []SettingField {
 		{
 			ID:          "api_endpoint",
 			Name:        "API Endpoint",
-			Description: "Dify API endpoint URL (e.g., https://api.dify.ai/v1 or your self-hosted URL)",
+			Description: "Dify API endpoint URL using HTTPS (e.g., https://api.dify.ai/v1 or your self-hosted URL)",
 			Type:        "url",
 			Required:    true,
 			Default:     "https://api.dify.ai/v1",
@@ -122,8 +123,12 @@ func (p *DifyProvider) Validate(settings map[string]string) error {
 	if apiEndpoint == "" {
 		return fmt.Errorf("API endpoint is required")
 	}
-	if !strings.HasPrefix(apiEndpoint, "http://") && !strings.HasPrefix(apiEndpoint, "https://") {
-		return fmt.Errorf("API endpoint must start with http:// or https://")
+	parsedEndpoint, err := url.Parse(apiEndpoint)
+	if err != nil {
+		return fmt.Errorf("API endpoint is invalid: %w", err)
+	}
+	if !strings.EqualFold(parsedEndpoint.Scheme, "https") {
+		return fmt.Errorf("API endpoint must use https://")
 	}
 	if err := util.ValidateWebhookURL(apiEndpoint); err != nil {
 		return fmt.Errorf("API endpoint is invalid: %w", err)

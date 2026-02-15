@@ -90,6 +90,14 @@ func TestDifyProvider_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "invalid settings with http endpoint",
+			settings: map[string]string{
+				"api_endpoint": "http://8.8.8.8/v1",
+				"api_key":      "app-test-key",
+			},
+			wantErr: true,
+		},
+		{
 			name: "invalid settings with localhost endpoint",
 			settings: map[string]string{
 				"api_endpoint": "http://localhost:8080/v1",

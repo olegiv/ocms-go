@@ -4,8 +4,12 @@
 package embed
 
 import (
+	"io"
+	"log/slog"
 	"strings"
 	"testing"
+
+	"github.com/olegiv/ocms-go/internal/module"
 )
 
 func TestValidateDifyIdentifier(t *testing.T) {
@@ -70,4 +74,54 @@ func TestExtractAndValidateDifyChatUser(t *testing.T) {
 			t.Fatal("expected error")
 		}
 	})
+}
+
+func TestGetDifyProxyConfig_RejectsInsecureEndpoint(t *testing.T) {
+	mod := New()
+	mod.ctx = &module.Context{
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	mod.settings = []*ProviderSettings{
+		{
+			ProviderID: "dify",
+			IsEnabled:  true,
+			Settings: map[string]string{
+				"api_endpoint": "http://8.8.8.8/v1",
+				"api_key":      "app-test-key",
+			},
+		},
+	}
+
+	_, _, ok := mod.getDifyProxyConfig()
+	if ok {
+		t.Fatal("expected insecure http endpoint to be rejected")
+	}
+}
+
+func TestGetDifyProxyConfig_AllowsHTTPS(t *testing.T) {
+	mod := New()
+	mod.ctx = &module.Context{
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	mod.settings = []*ProviderSettings{
+		{
+			ProviderID: "dify",
+			IsEnabled:  true,
+			Settings: map[string]string{
+				"api_endpoint": "https://api.dify.ai/v1",
+				"api_key":      "app-test-key",
+			},
+		},
+	}
+
+	endpoint, apiKey, ok := mod.getDifyProxyConfig()
+	if !ok {
+		t.Fatal("expected https endpoint to be accepted")
+	}
+	if endpoint != "https://api.dify.ai/v1" {
+		t.Errorf("endpoint = %q, want %q", endpoint, "https://api.dify.ai/v1")
+	}
+	if apiKey != "app-test-key" {
+		t.Errorf("apiKey = %q, want %q", apiKey, "app-test-key")
+	}
 }

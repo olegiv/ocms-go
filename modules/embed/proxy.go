@@ -146,6 +146,11 @@ func (m *Module) getDifyProxyConfig() (apiEndpoint string, apiKey string, ok boo
 	if apiEndpoint == "" || apiKey == "" {
 		return "", "", false
 	}
+	parsedEndpoint, err := url.Parse(apiEndpoint)
+	if err != nil || !strings.EqualFold(parsedEndpoint.Scheme, "https") {
+		m.ctx.Logger.Warn("invalid Dify endpoint scheme in embed settings", "api_endpoint", apiEndpoint)
+		return "", "", false
+	}
 	if err := util.ValidateWebhookURL(apiEndpoint); err != nil {
 		m.ctx.Logger.Warn("invalid Dify endpoint in embed settings", "error", err)
 		return "", "", false
