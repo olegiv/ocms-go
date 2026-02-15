@@ -5,7 +5,6 @@ package handler
 
 import (
 	"database/sql"
-	"encoding/json"
 	"log/slog"
 	"net/http"
 
@@ -104,7 +103,7 @@ func (h *ModulesHandler) handleModuleToggle(w http.ResponseWriter, r *http.Reque
 		Value bool `json:"active"`
 		Show  bool `json:"show"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONWithLimit(w, r, &req, MaxJSONBodyBytes); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}

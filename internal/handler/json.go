@@ -5,6 +5,8 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 )
 
@@ -39,6 +41,16 @@ func decodeJSONWithLimit(w http.ResponseWriter, r *http.Request, v any, maxBytes
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
 
-	return dec.Decode(v)
+	if err := dec.Decode(v); err != nil {
+		return err
+	}
+
+	// Ensure there is exactly one JSON object in the request body.
+	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return errors.New("request body must contain only one JSON object")
+	}
+
+	return nil
 }

@@ -4,6 +4,7 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -123,4 +124,54 @@ func TestWriteJSONSuccessOverwritesSuccess(t *testing.T) {
 
 	// assertJSONResponse checks that success is true
 	assertJSONResponse(t, w, http.StatusOK, true)
+}
+
+func TestDecodeJSONWithLimit(t *testing.T) {
+	type payload struct {
+		Name string `json:"name"`
+	}
+
+	t.Run("accepts valid single object", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(`{"name":"ok"}`))
+		w := httptest.NewRecorder()
+		var got payload
+
+		err := decodeJSONWithLimit(w, req, &got, 1024)
+		if err != nil {
+			t.Fatalf("decodeJSONWithLimit() error = %v, want nil", err)
+		}
+		if got.Name != "ok" {
+			t.Fatalf("decoded name = %q, want %q", got.Name, "ok")
+		}
+	})
+
+	t.Run("rejects unknown fields", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(`{"name":"ok","extra":1}`))
+		w := httptest.NewRecorder()
+		var got payload
+
+		if err := decodeJSONWithLimit(w, req, &got, 1024); err == nil {
+			t.Fatal("decodeJSONWithLimit() expected unknown-field error")
+		}
+	})
+
+	t.Run("rejects multiple JSON objects", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(`{"name":"one"}{"name":"two"}`))
+		w := httptest.NewRecorder()
+		var got payload
+
+		if err := decodeJSONWithLimit(w, req, &got, 1024); err == nil {
+			t.Fatal("decodeJSONWithLimit() expected multi-object error")
+		}
+	})
+
+	t.Run("enforces body size limit", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(`{"name":"0123456789"}`))
+		w := httptest.NewRecorder()
+		var got payload
+
+		if err := decodeJSONWithLimit(w, req, &got, 8); err == nil {
+			t.Fatal("decodeJSONWithLimit() expected size-limit error")
+		}
+	})
 }

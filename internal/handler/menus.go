@@ -452,7 +452,7 @@ func (h *MenusHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req AddItemRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONWithLimit(w, r, &req, MaxJSONBodyBytes); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
@@ -522,7 +522,7 @@ func (h *MenusHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdateItemRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONWithLimit(w, r, &req, MaxJSONBodyBytes); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
@@ -643,7 +643,7 @@ func (h *MenusHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req ReorderRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONWithLimit(w, r, &req, MaxJSONBodyBytes); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
@@ -689,7 +689,7 @@ func (h *MenusHandler) processReorderItems(r *http.Request, menuID int64, items 
 
 			// Process children
 			if len(item.Children) > 0 {
-					if err = processItems(item.Children, util.NullInt64FromValue(item.ID), new(int64(0))); err != nil {
+				if err = processItems(item.Children, util.NullInt64FromValue(item.ID), new(int64(0))); err != nil {
 					return err
 				}
 			}
