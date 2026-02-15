@@ -1844,7 +1844,7 @@ func (h *FormsHandler) buildPublicFormViewData(r *http.Request, data FormTemplat
 		Values:         data.Values,
 		Success:        data.Success,
 		CaptchaWidget:  captchaWidget,
-		Lang:           data.BaseTemplateData.LangCode,
+		Lang:           data.LangCode,
 	}
 }
 

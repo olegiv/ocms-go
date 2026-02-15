@@ -218,8 +218,14 @@ make run
 | `make migrate-status` | Show migration status |
 | `make migrate-create` | Create new migration file |
 | `make assets` | Install npm deps and compile SCSS |
-| `make commit-prepare` | Draft commit message to `.git/.codex/commit-message.txt` |
-| `make commit-do` | Create commit using prepared message |
+| `make commit-prepare` | Proxy to Claude slash command `/commit-prepare` |
+| `make commit-do` | Proxy to Claude slash command `/commit-do` |
+| `make code-quality` | Proxy to Claude slash command `/code-quality` |
+| `make security-audit` | Proxy to Claude slash command `/security-audit` |
+| `make commit-prepare-local` | Run local commit-prepare shell script |
+| `make commit-do-local` | Run local commit-do shell script |
+| `make code-quality-local` | Run local code quality shell script (`golangci-lint`, `nilaway`, `go test`) |
+| `make security-audit-local` | Run local security audit shell script (writes to `.audit/`) |
 
 ### Default Admin Credentials
 
@@ -598,11 +604,28 @@ If you are using Codex, Claude slash commands are not registered in the
 Codex UI and may show `No commands`. Use shell/make commands directly,
 or ask Codex in chat to run them.
 
-You can run commit slash-command equivalents through Claude CLI:
+You can run slash-command equivalents through Claude CLI:
 
 ```bash
 claude -p "/commit-prepare" --dangerously-skip-permissions
 claude -p "/commit-do" --dangerously-skip-permissions
+claude -p "/code-quality" --dangerously-skip-permissions
+claude -p "/security-audit" --dangerously-skip-permissions
+```
+
+Codex wrapper commands (Claude proxy by default):
+
+```bash
+./scripts/codex-commands code-quality
+./scripts/codex-commands security-audit
+./scripts/codex-commands commit-prepare
+./scripts/codex-commands commit-do
+
+# Explicit local fallback scripts
+./scripts/codex-commands code-quality-local
+./scripts/codex-commands security-audit-local
+./scripts/codex-commands commit-prepare-local
+./scripts/codex-commands commit-do-local
 ```
 
 After updating, stage and commit the submodule change if you want to keep it:

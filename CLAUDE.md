@@ -37,15 +37,23 @@ make assets
 npm update                # Update htmx, alpine.js in package.json
 make assets               # Reinstall and copy to static/dist/js
 
-# Codex-compatible commit workflow
-make commit-prepare       # Draft message to .git/.codex/commit-message.txt
-make commit-do            # Commit using prepared message (no verify)
-# Codex note: /commit-prepare and /commit-do are not registered UI slash commands
-# and may show "No commands". Use make targets or ask in chat:
-# "run commit-prepare" / "run commit-do"
+# Codex-compatible workflow commands
+make commit-prepare       # Proxy to Claude /commit-prepare
+make commit-do            # Proxy to Claude /commit-do
+make code-quality         # Proxy to Claude /code-quality
+make security-audit       # Proxy to Claude /security-audit
+make commit-prepare-local # Run local commit-prepare shell script
+make commit-do-local      # Run local commit-do shell script
+make code-quality-local   # Run local quality checks shell script
+make security-audit-local # Run local security audit shell script
+# Codex note: /code-quality, /security-audit, /commit-prepare, and /commit-do
+# are not registered UI slash commands and may show "No commands". Use make
+# targets or ask in chat: "run code-quality", "run security-audit", etc.
 # Run Claude slash command from CLI (non-interactive):
 claude -p "/commit-prepare" --dangerously-skip-permissions
 claude -p "/commit-do" --dangerously-skip-permissions
+claude -p "/code-quality" --dangerously-skip-permissions
+claude -p "/security-audit" --dangerously-skip-permissions
 
 # Database migrations
 make migrate-up          # Apply migrations
@@ -610,7 +618,7 @@ Security vulnerability scanner and auditor. Identifies security issues and ensur
 - "Review CSRF protection"
 - "Audit API authentication"
 
-**Invoke:** `@security-auditor` or use the `/security-scan` command
+**Invoke:** `@security-auditor` or use the `/security-audit` command
 
 ### code-quality-auditor
 Code quality scanner for Go applications. Detects duplicate code, unhandled errors, constant comparisons, empty slice literals, and package name collisions.
@@ -657,8 +665,8 @@ Start the development server with asset compilation. Runs `make dev` and reports
 ### /api-test
 Test REST API endpoints with actual HTTP requests. Starts server, runs curl tests, and reports results.
 
-### /security-scan
-Scan the project for vulnerabilities using govulncheck. Saves audit report to `.audit/` directory.
+### /security-audit
+Perform a comprehensive security audit and store reports in `.audit/`.
 
 ### /code-quality
 Scan the project for code quality issues including unhandled errors, duplicate code, constant comparisons, empty slice literals, and package name collisions. Runs `go vet`, `staticcheck`, and `errcheck`.
@@ -706,7 +714,7 @@ Deploy the application to Fly.io. Supports `--reset` (reset database), `--logs` 
 
 @security-auditor Scan for vulnerabilities and create an audit report
 
-/security-scan
+/security-audit
 
 @frontend-developer Build a confirmation dialog for page deletion using templUI
 

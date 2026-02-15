@@ -1,4 +1,4 @@
-make.PHONY: run stop restart build build-prod build-linux-amd64 build-darwin-arm64 build-all-platforms test clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ commit-prepare commit-do
+make.PHONY: run stop restart build build-prod build-linux-amd64 build-darwin-arm64 build-all-platforms test clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ commit-prepare commit-do code-quality security-audit commit-prepare-local commit-do-local code-quality-local security-audit-local
 
 # Build variables
 BINARY_NAME=ocms
@@ -110,3 +110,21 @@ commit-prepare:
 
 commit-do:
 	./scripts/codex-commands commit-do
+
+code-quality:
+	./scripts/codex-commands code-quality
+
+security-audit:
+	./scripts/codex-commands security-audit
+
+commit-prepare-local:
+	./scripts/codex-commands commit-prepare-local
+
+commit-do-local:
+	./scripts/codex-commands commit-do-local
+
+code-quality-local:
+	./scripts/codex-commands code-quality-local
+
+security-audit-local:
+	./scripts/codex-commands security-audit-local

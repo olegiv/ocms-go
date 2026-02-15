@@ -4,8 +4,14 @@ set -euo pipefail
 usage() {
   cat <<'EOT'
 Usage:
-  ./scripts/codex-commands commit-prepare [quality|q]
-  ./scripts/codex-commands commit-do
+  ./scripts/codex-commands commit-prepare [args...]
+  ./scripts/codex-commands commit-do [args...]
+  ./scripts/codex-commands commit-prepare-local
+  ./scripts/codex-commands commit-do-local
+  ./scripts/codex-commands code-quality [args...]
+  ./scripts/codex-commands security-audit [args...]
+  ./scripts/codex-commands code-quality-local
+  ./scripts/codex-commands security-audit-local
 EOT
 }
 
@@ -13,10 +19,31 @@ cmd="${1:-}"
 case "$cmd" in
   commit-prepare)
     shift || true
-    exec "$(dirname "$0")/codex/commit-prepare.sh" "${1:-}"
+    exec "$(dirname "$0")/codex/proxy-claude-command.sh" "/commit-prepare" "$@"
     ;;
   commit-do)
+    shift || true
+    exec "$(dirname "$0")/codex/proxy-claude-command.sh" "/commit-do" "$@"
+    ;;
+  commit-prepare-local)
+    exec "$(dirname "$0")/codex/commit-prepare.sh"
+    ;;
+  commit-do-local)
     exec "$(dirname "$0")/codex/commit-do.sh"
+    ;;
+  code-quality)
+    shift || true
+    exec "$(dirname "$0")/codex/proxy-claude-command.sh" "/code-quality" "$@"
+    ;;
+  security-audit)
+    shift || true
+    exec "$(dirname "$0")/codex/proxy-claude-command.sh" "/security-audit" "$@"
+    ;;
+  code-quality-local)
+    exec "$(dirname "$0")/codex/code-quality.sh"
+    ;;
+  security-audit-local)
+    exec "$(dirname "$0")/codex/security-audit.sh"
     ;;
   ""|-h|--help)
     usage
