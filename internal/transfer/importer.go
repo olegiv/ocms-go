@@ -14,6 +14,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -25,6 +26,18 @@ import (
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
+
+const (
+	maxZipMediaFiles                  = 5000
+	maxZipMediaFileUncompressedBytes  = 32 << 20  // 32 MB per media file
+	maxZipMediaTotalUncompressedBytes = 512 << 20 // 512 MB total extracted media
+)
+
+type mediaZipPath struct {
+	mediaType string
+	uuid      string
+	filename  string
+}
 
 // Importer handles importing CMS content from JSON format.
 type Importer struct {
@@ -254,7 +267,14 @@ func (i *Importer) ImportFromZip(ctx context.Context, zipReader *zip.Reader, opt
 	// If importing media files, extract them first (before the transaction)
 	var mediaFileMap map[string]string // maps FilePath in JSON to extracted path
 	if opts.ImportMediaFiles && !opts.DryRun {
-		mediaFileMap = i.extractMediaFiles(zipReader)
+		var extractErr error
+		mediaFileMap, extractErr = i.extractMediaFiles(zipReader)
+		if extractErr != nil {
+			for _, extractedPath := range mediaFileMap {
+				_ = os.RemoveAll(filepath.Dir(extractedPath))
+			}
+			return nil, fmt.Errorf("failed to extract media files: %w", extractErr)
+		}
 	}
 
 	// Perform the regular import
@@ -294,10 +314,12 @@ func (i *Importer) ImportFromZipBytes(ctx context.Context, data []byte, opts Imp
 
 // extractMediaFiles extracts media files from the zip to the uploads directory
 // and generates any missing image variants.
-func (i *Importer) extractMediaFiles(zipReader *zip.Reader) map[string]string {
+func (i *Importer) extractMediaFiles(zipReader *zip.Reader) (map[string]string, error) {
 	mediaFileMap := make(map[string]string)
 	// Track originals for variant generation: uuid -> filename
 	originals := make(map[string]string)
+	var mediaFilesCount int
+	var totalExtractedBytes int64
 
 	for _, f := range zipReader.File {
 		// Check if this is a media file (in media/ directory)
@@ -310,19 +332,35 @@ func (i *Importer) extractMediaFiles(zipReader *zip.Reader) map[string]string {
 			continue
 		}
 
-		// Extract the file
-		extractedPath, err := i.extractMediaFile(f)
+		mediaFilesCount++
+		if mediaFilesCount > maxZipMediaFiles {
+			return mediaFileMap, fmt.Errorf("zip contains too many media files (%d > %d)", mediaFilesCount, maxZipMediaFiles)
+		}
+
+		if f.UncompressedSize64 > uint64(maxZipMediaFileUncompressedBytes) {
+			return mediaFileMap, fmt.Errorf("media file %q exceeds max size (%d bytes)", f.Name, maxZipMediaFileUncompressedBytes)
+		}
+
+		parsedPath, err := parseMediaZipPath(f.Name)
 		if err != nil {
-			i.logger.Warn("failed to extract media file", "file", f.Name, "error", err)
-			continue
+			return mediaFileMap, err
+		}
+
+		// Extract the file
+		extractedPath, extractedBytes, err := i.extractMediaFile(f, parsedPath)
+		if err != nil {
+			return mediaFileMap, err
+		}
+		totalExtractedBytes += extractedBytes
+		if totalExtractedBytes > maxZipMediaTotalUncompressedBytes {
+			return mediaFileMap, fmt.Errorf("total extracted media size exceeds max size (%d bytes)", maxZipMediaTotalUncompressedBytes)
 		}
 
 		mediaFileMap[f.Name] = extractedPath
 
 		// Track originals for variant generation
-		parts := strings.Split(f.Name, "/")
-		if len(parts) >= 4 && parts[1] == "originals" {
-			originals[parts[2]] = parts[3] // uuid -> filename
+		if parsedPath.mediaType == "originals" {
+			originals[parsedPath.uuid] = parsedPath.filename // uuid -> filename
 		}
 	}
 
@@ -331,7 +369,7 @@ func (i *Importer) extractMediaFiles(zipReader *zip.Reader) map[string]string {
 		i.generateMissingVariants(originals)
 	}
 
-	return mediaFileMap
+	return mediaFileMap, nil
 }
 
 // generateMissingVariants creates any missing image variants for the given originals.
@@ -382,48 +420,120 @@ func (i *Importer) detectMimeType(filename string) string {
 }
 
 // extractMediaFile extracts a single media file from the zip.
-func (i *Importer) extractMediaFile(f *zip.File) (string, error) {
-	// Parse the path: media/{type}/{uuid}/{filename}
-	parts := strings.Split(f.Name, "/")
-	if len(parts) < 4 {
-		return "", fmt.Errorf("invalid media path: %s", f.Name)
+func (i *Importer) extractMediaFile(f *zip.File, parsedPath mediaZipPath) (string, int64, error) {
+	destDir := filepath.Join(i.uploadDir, parsedPath.mediaType, parsedPath.uuid)
+	destPath := filepath.Join(destDir, parsedPath.filename)
+	if err := ensurePathWithinBase(i.uploadDir, destDir); err != nil {
+		return "", 0, err
 	}
-
-	// Construct destination path
-	// f.Name example: media/originals/{uuid}/{filename}
-	// Destination: {uploadDir}/{type}/{uuid}/{filename}
-	mediaType := parts[1] // "originals", "thumbnail", etc.
-	uuid := parts[2]      // UUID
-	filename := parts[3]  // filename
-
-	destDir := filepath.Join(i.uploadDir, mediaType, uuid)
-	destPath := filepath.Join(destDir, filename)
+	if err := ensurePathWithinBase(i.uploadDir, destPath); err != nil {
+		return "", 0, err
+	}
 
 	// Create directory structure
 	if err := os.MkdirAll(destDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create directory: %w", err)
+		return "", 0, fmt.Errorf("failed to create directory: %w", err)
 	}
 
 	// Open zip file
 	rc, err := f.Open()
 	if err != nil {
-		return "", fmt.Errorf("failed to open zip entry: %w", err)
+		return "", 0, fmt.Errorf("failed to open zip entry: %w", err)
 	}
 	defer func() { _ = rc.Close() }()
 
 	// Create destination file
 	destFile, err := os.Create(destPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to create destination file: %w", err)
+		return "", 0, fmt.Errorf("failed to create destination file: %w", err)
 	}
 	defer func() { _ = destFile.Close() }()
 
-	// Copy content
-	if _, err := io.Copy(destFile, rc); err != nil {
-		return "", fmt.Errorf("failed to copy file content: %w", err)
+	// Copy content with hard limit to prevent zip bombs.
+	written, err := copyWithLimit(destFile, rc, maxZipMediaFileUncompressedBytes)
+	if err != nil {
+		_ = os.Remove(destPath)
+		return "", 0, fmt.Errorf("failed to copy file content: %w", err)
 	}
 
-	return destPath, nil
+	return destPath, written, nil
+}
+
+func parseMediaZipPath(zipPath string) (mediaZipPath, error) {
+	cleanPath := path.Clean(zipPath)
+	if cleanPath != zipPath {
+		return mediaZipPath{}, fmt.Errorf("invalid media path %q: path normalization mismatch", zipPath)
+	}
+
+	parts := strings.Split(cleanPath, "/")
+	if len(parts) != 4 || parts[0] != "media" {
+		return mediaZipPath{}, fmt.Errorf("invalid media path %q: expected media/{type}/{uuid}/{filename}", zipPath)
+	}
+
+	if err := validateZipPathSegment(parts[1]); err != nil {
+		return mediaZipPath{}, fmt.Errorf("invalid media type in path %q: %w", zipPath, err)
+	}
+	if err := validateZipPathSegment(parts[2]); err != nil {
+		return mediaZipPath{}, fmt.Errorf("invalid media uuid in path %q: %w", zipPath, err)
+	}
+	if err := validateZipPathSegment(parts[3]); err != nil {
+		return mediaZipPath{}, fmt.Errorf("invalid filename in path %q: %w", zipPath, err)
+	}
+
+	return mediaZipPath{
+		mediaType: parts[1],
+		uuid:      parts[2],
+		filename:  parts[3],
+	}, nil
+}
+
+func validateZipPathSegment(value string) error {
+	switch {
+	case value == "":
+		return fmt.Errorf("segment is empty")
+	case value == "." || value == "..":
+		return fmt.Errorf("segment contains traversal")
+	case strings.Contains(value, "/") || strings.Contains(value, "\\"):
+		return fmt.Errorf("segment contains path separators")
+	case path.Clean(value) != value:
+		return fmt.Errorf("segment is not normalized")
+	default:
+		return nil
+	}
+}
+
+func ensurePathWithinBase(basePath, targetPath string) error {
+	baseClean := filepath.Clean(basePath)
+	targetClean := filepath.Clean(targetPath)
+
+	rel, err := filepath.Rel(baseClean, targetClean)
+	if err != nil {
+		return fmt.Errorf("cannot validate path %q: %w", targetPath, err)
+	}
+
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("path %q escapes upload directory", targetPath)
+	}
+
+	return nil
+}
+
+func copyWithLimit(dst io.Writer, src io.Reader, maxBytes int64) (int64, error) {
+	if maxBytes <= 0 {
+		return 0, fmt.Errorf("copy limit must be positive")
+	}
+
+	limited := &io.LimitedReader{R: src, N: maxBytes + 1}
+	written, err := io.Copy(dst, limited)
+	if err != nil {
+		return written, err
+	}
+
+	if written > maxBytes {
+		return written, fmt.Errorf("content exceeds max size (%d bytes)", maxBytes)
+	}
+
+	return written, nil
 }
 
 // ValidateZipFile validates a zip import file and returns information about its contents.
@@ -439,6 +549,40 @@ func (i *Importer) ValidateZipFile(ctx context.Context, path string) (*Validatio
 
 // ValidateZip validates a zip archive and returns information about its contents.
 func (i *Importer) ValidateZip(ctx context.Context, zipReader *zip.Reader) (*ValidationResult, error) {
+	mediaCount := 0
+	totalMediaBytes := uint64(0)
+	for _, mediaFile := range zipReader.File {
+		if !strings.HasPrefix(mediaFile.Name, "media/") || mediaFile.FileInfo().IsDir() {
+			continue
+		}
+		mediaCount++
+		if mediaCount > maxZipMediaFiles {
+			return &ValidationResult{
+				Valid:  false,
+				Errors: []ImportError{{Entity: "zip", ID: "", Message: fmt.Sprintf("zip contains too many media files (%d > %d)", mediaCount, maxZipMediaFiles)}},
+			}, nil
+		}
+		if _, err := parseMediaZipPath(mediaFile.Name); err != nil {
+			return &ValidationResult{
+				Valid:  false,
+				Errors: []ImportError{{Entity: "zip", ID: "", Message: err.Error()}},
+			}, nil
+		}
+		if mediaFile.UncompressedSize64 > uint64(maxZipMediaFileUncompressedBytes) {
+			return &ValidationResult{
+				Valid:  false,
+				Errors: []ImportError{{Entity: "zip", ID: "", Message: fmt.Sprintf("media file %q exceeds max size (%d bytes)", mediaFile.Name, maxZipMediaFileUncompressedBytes)}},
+			}, nil
+		}
+		totalMediaBytes += mediaFile.UncompressedSize64
+		if totalMediaBytes > uint64(maxZipMediaTotalUncompressedBytes) {
+			return &ValidationResult{
+				Valid:  false,
+				Errors: []ImportError{{Entity: "zip", ID: "", Message: fmt.Sprintf("total media size exceeds max size (%d bytes)", maxZipMediaTotalUncompressedBytes)}},
+			}, nil
+		}
+	}
+
 	// Find and read export.json
 	for _, f := range zipReader.File {
 		if f.Name == "export.json" {
@@ -466,13 +610,6 @@ func (i *Importer) ValidateZip(ctx context.Context, zipReader *zip.Reader) (*Val
 				return nil, err
 			}
 
-			// Add media file count
-			mediaCount := 0
-			for _, mf := range zipReader.File {
-				if strings.HasPrefix(mf.Name, "media/") && !mf.FileInfo().IsDir() {
-					mediaCount++
-				}
-			}
 			result.Entities["media_files"] = mediaCount
 
 			return result, nil

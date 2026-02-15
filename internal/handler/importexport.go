@@ -9,10 +9,12 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -24,6 +26,8 @@ import (
 	"github.com/olegiv/ocms-go/internal/transfer"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
+
+const maxImportUploadBytes int64 = 100 << 20 // 100 MB
 
 // ImportExportHandler handles import/export routes.
 type ImportExportHandler struct {
@@ -165,6 +169,23 @@ func importBreadcrumbs(lang string) []render.Breadcrumb {
 	}
 }
 
+func readImportFileContent(r io.Reader, maxBytes int64) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, errors.New("failed to read file: invalid file size limit")
+	}
+
+	limited := io.LimitReader(r, maxBytes+1)
+	content, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+	if int64(len(content)) > maxBytes {
+		return nil, fmt.Errorf("file is too large (max %d MB)", maxBytes/(1<<20))
+	}
+
+	return content, nil
+}
+
 // renderImportPage renders the import template with the given data.
 func (h *ImportExportHandler) renderImportPage(w http.ResponseWriter, r *http.Request, _ interface{}, data ImportFormData) {
 	lang := middleware.GetAdminLang(r)
@@ -200,7 +221,7 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 	user := middleware.GetUser(r)
 
 	// Parse multipart form (max 100MB for zip files with media)
-	if err := r.ParseMultipartForm(100 << 20); err != nil {
+	if err := r.ParseMultipartForm(maxImportUploadBytes); err != nil {
 		h.renderImportError(w, r, user, "Failed to parse form: "+err.Error())
 		return
 	}
@@ -213,20 +234,25 @@ func (h *ImportExportHandler) ImportValidate(w http.ResponseWriter, r *http.Requ
 	}
 	defer func() { _ = file.Close() }()
 
+	if header.Size > maxImportUploadBytes {
+		h.renderImportError(w, r, user, fmt.Sprintf("File is too large (max %d MB)", maxImportUploadBytes/(1<<20)))
+		return
+	}
+
 	// Check file extension
-	filename := header.Filename
-	isZipFile := len(filename) >= 4 && filename[len(filename)-4:] == ".zip"
-	isJSONFile := len(filename) >= 5 && filename[len(filename)-5:] == ".json"
+	filename := strings.ToLower(header.Filename)
+	isZipFile := strings.HasSuffix(filename, ".zip")
+	isJSONFile := strings.HasSuffix(filename, ".json")
 
 	if !isZipFile && !isJSONFile {
 		h.renderImportError(w, r, user, "Only JSON and ZIP files are supported")
 		return
 	}
 
-	// Read file content
-	content, err := io.ReadAll(file)
+	// Read file content with a hard cap to prevent memory exhaustion.
+	content, err := readImportFileContent(file, maxImportUploadBytes)
 	if err != nil {
-		h.renderImportError(w, r, user, "Failed to read file: "+err.Error())
+		h.renderImportError(w, r, user, err.Error())
 		return
 	}
 
