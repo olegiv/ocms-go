@@ -4,6 +4,9 @@
 package sentinel
 
 import (
+	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -246,4 +249,49 @@ func TestIsValidPathPattern(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDecodeJSONStrict(t *testing.T) {
+	type payload struct {
+		IP string `json:"ip"`
+	}
+
+	t.Run("accepts valid object", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/admin/sentinel/ban", bytes.NewBufferString(`{"ip":"1.2.3.4"}`))
+		w := httptest.NewRecorder()
+		var got payload
+		if err := decodeJSONStrict(w, req, &got, maxSentinelJSONBodyBytes); err != nil {
+			t.Fatalf("decodeJSONStrict() error = %v, want nil", err)
+		}
+		if got.IP != "1.2.3.4" {
+			t.Fatalf("decoded IP = %q, want %q", got.IP, "1.2.3.4")
+		}
+	})
+
+	t.Run("rejects unknown field", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/admin/sentinel/ban", bytes.NewBufferString(`{"ip":"1.2.3.4","extra":1}`))
+		w := httptest.NewRecorder()
+		var got payload
+		if err := decodeJSONStrict(w, req, &got, maxSentinelJSONBodyBytes); err == nil {
+			t.Fatal("decodeJSONStrict() expected unknown-field error")
+		}
+	})
+
+	t.Run("rejects multiple objects", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/admin/sentinel/ban", bytes.NewBufferString(`{"ip":"1.2.3.4"}{"ip":"5.6.7.8"}`))
+		w := httptest.NewRecorder()
+		var got payload
+		if err := decodeJSONStrict(w, req, &got, maxSentinelJSONBodyBytes); err == nil {
+			t.Fatal("decodeJSONStrict() expected multi-object error")
+		}
+	})
+
+	t.Run("enforces size limit", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/admin/sentinel/ban", bytes.NewBufferString(`{"ip":"0123456789"}`))
+		w := httptest.NewRecorder()
+		var got payload
+		if err := decodeJSONStrict(w, req, &got, 8); err == nil {
+			t.Fatal("decodeJSONStrict() expected size-limit error")
+		}
+	})
 }

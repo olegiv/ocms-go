@@ -7,6 +7,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,6 +20,8 @@ import (
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 )
+
+const maxSentinelJSONBodyBytes int64 = 8 << 10 // 8 KiB
 
 // requireUser returns the authenticated user or writes a 401 response.
 // Returns nil if the user is not authenticated (caller should return immediately).
@@ -176,7 +180,7 @@ func (m *Module) handleBanAjax(w http.ResponseWriter, r *http.Request) {
 		IP  string `json:"ip"`
 		URL string `json:"url"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONStrict(w, r, &req, maxSentinelJSONBodyBytes); err != nil {
 		writeJSONError(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
@@ -216,6 +220,23 @@ func (m *Module) handleBanAjax(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
 
+func decodeJSONStrict(w http.ResponseWriter, r *http.Request, v any, maxBytes int64) error {
+	if maxBytes <= 0 {
+		maxBytes = maxSentinelJSONBodyBytes
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		return err
+	}
+	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return fmt.Errorf("request body must contain only one JSON object")
+	}
+	return nil
+}
+
 // writeJSONError writes a JSON error response.
 func writeJSONError(w http.ResponseWriter, message string, status int) {
 	w.Header().Set("Content-Type", "application/json")
@@ -225,12 +246,12 @@ func writeJSONError(w http.ResponseWriter, message string, status int) {
 
 // sentinelDeleteParams holds the parameters for deleting a sentinel entry.
 type sentinelDeleteParams struct {
-	getLabel    func(id int64) (string, error)
-	deleteFn   func(id int64) error
-	getErrMsg  string
-	delErrMsg  string
-	logAction  string
-	logField   string
+	getLabel  func(id int64) (string, error)
+	deleteFn  func(id int64) error
+	getErrMsg string
+	delErrMsg string
+	logAction string
+	logField  string
 }
 
 // handleDeleteEntry is a generic handler for deleting sentinel entries (bans, paths, whitelist).
@@ -271,7 +292,13 @@ func (m *Module) handleDeleteEntry(w http.ResponseWriter, r *http.Request, p sen
 // handleDelete handles DELETE /admin/sentinel/{id} - removes an IP ban.
 func (m *Module) handleDelete(w http.ResponseWriter, r *http.Request) {
 	m.handleDeleteEntry(w, r, sentinelDeleteParams{
-		getLabel:  func(id int64) (string, error) { b, err := m.getBanByID(id); if err != nil { return "", err }; return b.IPPattern, nil },
+		getLabel: func(id int64) (string, error) {
+			b, err := m.getBanByID(id)
+			if err != nil {
+				return "", err
+			}
+			return b.IPPattern, nil
+		},
 		deleteFn:  m.deleteBan,
 		getErrMsg: "failed to get ban",
 		delErrMsg: "failed to delete ban",
@@ -358,7 +385,13 @@ func (m *Module) handleCreatePath(w http.ResponseWriter, r *http.Request) {
 // handleDeletePath handles DELETE /admin/sentinel/paths/{id} - removes an auto-ban path.
 func (m *Module) handleDeletePath(w http.ResponseWriter, r *http.Request) {
 	m.handleDeleteEntry(w, r, sentinelDeleteParams{
-		getLabel:  func(id int64) (string, error) { p, err := m.getPathByID(id); if err != nil { return "", err }; return p.PathPattern, nil },
+		getLabel: func(id int64) (string, error) {
+			p, err := m.getPathByID(id)
+			if err != nil {
+				return "", err
+			}
+			return p.PathPattern, nil
+		},
 		deleteFn:  m.deleteAutoBanPath,
 		getErrMsg: "failed to get path",
 		delErrMsg: "failed to delete path",
@@ -390,7 +423,13 @@ func (m *Module) handleCreateWhitelist(w http.ResponseWriter, r *http.Request) {
 // handleDeleteWhitelist handles DELETE /admin/sentinel/whitelist/{id} - removes whitelist entry.
 func (m *Module) handleDeleteWhitelist(w http.ResponseWriter, r *http.Request) {
 	m.handleDeleteEntry(w, r, sentinelDeleteParams{
-		getLabel:  func(id int64) (string, error) { e, err := m.getWhitelistByID(id); if err != nil { return "", err }; return e.IPPattern, nil },
+		getLabel: func(id int64) (string, error) {
+			e, err := m.getWhitelistByID(id)
+			if err != nil {
+				return "", err
+			}
+			return e.IPPattern, nil
+		},
 		deleteFn:  m.deleteWhitelistEntry,
 		getErrMsg: "failed to get whitelist entry",
 		delErrMsg: "failed to delete whitelist entry",
