@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -25,6 +26,8 @@ type Handler struct {
 	queries      *store.Queries
 	cacheManager *cache.Manager
 }
+
+const maxAPIJSONBodyBytes int64 = 1 << 20 // 1 MiB
 
 // NewHandler creates a new API handler.
 func NewHandler(db *sql.DB) *Handler {
@@ -131,6 +134,27 @@ func WriteForbidden(w http.ResponseWriter, message string) {
 // WriteInternalError writes a 500 Internal Server Error response.
 func WriteInternalError(w http.ResponseWriter, message string) {
 	WriteError(w, http.StatusInternalServerError, "internal_error", message, nil)
+}
+
+// decodeJSON decodes a JSON body with strict validation.
+func decodeJSON(w http.ResponseWriter, r *http.Request, v any, maxBytes int64) error {
+	if maxBytes <= 0 {
+		maxBytes = maxAPIJSONBodyBytes
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		return err
+	}
+
+	// Require exactly one JSON object.
+	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return fmt.Errorf("request body must contain only one JSON object")
+	}
+
+	return nil
 }
 
 // WriteValidationError writes a 422 Unprocessable Entity response with field errors.

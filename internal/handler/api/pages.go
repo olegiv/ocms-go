@@ -7,7 +7,6 @@ package api
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -427,7 +426,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var req CreatePageRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(w, r, &req, maxAPIJSONBodyBytes); err != nil {
 		WriteBadRequest(w, "Invalid JSON body", nil)
 		return
 	}
@@ -585,7 +584,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdatePageRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(w, r, &req, maxAPIJSONBodyBytes); err != nil {
 		WriteBadRequest(w, "Invalid JSON body", nil)
 		return
 	}

@@ -7,7 +7,6 @@ package api
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -22,7 +21,6 @@ import (
 
 const (
 	maxAPIMediaUploadRequestBytes int64 = 100 << 20 // 100 MiB
-	maxAPIMediaJSONBodyBytes      int64 = 1 << 20   // 1 MiB
 )
 
 // MediaResponse represents a media item in API responses.
@@ -437,7 +435,7 @@ func (h *Handler) UpdateMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdateMediaRequest
-	if err := decodeJSON(w, r, &req, maxAPIMediaJSONBodyBytes); err != nil {
+	if err := decodeJSON(w, r, &req, maxAPIJSONBodyBytes); err != nil {
 		WriteBadRequest(w, "Invalid JSON body", nil)
 		return
 	}
@@ -547,16 +545,6 @@ func (h *Handler) populateMediaIncludes(ctx context.Context, resp *MediaResponse
 			}
 		}
 	}
-}
-
-// decodeJSON decodes JSON from request body.
-func decodeJSON(w http.ResponseWriter, r *http.Request, v any, maxBytes int64) error {
-	if maxBytes <= 0 {
-		maxBytes = maxAPIMediaJSONBodyBytes
-	}
-
-	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
-	return json.NewDecoder(r.Body).Decode(v)
 }
 
 // requireMediaForAPI parses media ID from URL and fetches the media item.
