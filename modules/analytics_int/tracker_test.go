@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/olegiv/ocms-go/internal/middleware"
 )
 
 // runStringExtractTests runs table-driven tests for string extraction functions.
@@ -61,39 +63,44 @@ func TestGetRealIP(t *testing.T) {
 		name       string
 		remoteAddr string
 		headers    map[string]string
+		trusted    []string
 		expected   string
 	}{
 		{
 			name:       "X-Real-IP header",
 			remoteAddr: "127.0.0.1:12345",
+			trusted:    []string{"127.0.0.1/32"},
 			headers:    map[string]string{"X-Real-IP": "203.0.113.50"},
 			expected:   "203.0.113.50",
 		},
 		{
 			name:       "X-Forwarded-For single IP",
 			remoteAddr: "127.0.0.1:12345",
+			trusted:    []string{"127.0.0.1/32"},
 			headers:    map[string]string{"X-Forwarded-For": "198.51.100.178"},
 			expected:   "198.51.100.178",
 		},
 		{
-			name:       "X-Forwarded-For multiple IPs",
+			name:       "X-Forwarded-For multiple IPs with trusted hop",
 			remoteAddr: "127.0.0.1:12345",
+			trusted:    []string{"127.0.0.1/32", "150.172.238.0/24"},
 			headers:    map[string]string{"X-Forwarded-For": "203.0.113.195, 70.41.3.18, 150.172.238.178"},
-			expected:   "203.0.113.195",
+			expected:   "70.41.3.18",
 		},
 		{
 			name:       "X-Real-IP takes precedence",
 			remoteAddr: "127.0.0.1:12345",
+			trusted:    []string{"127.0.0.1/32"},
 			headers: map[string]string{
 				"X-Real-IP":       "203.0.113.50",
 				"X-Forwarded-For": "198.51.100.178",
 			},
-			expected: "203.0.113.50",
+			expected: "198.51.100.178",
 		},
 		{
-			name:       "fallback to RemoteAddr",
+			name:       "fallback to RemoteAddr when untrusted peer sends headers",
 			remoteAddr: "192.168.1.100:54321",
-			headers:    map[string]string{},
+			headers:    map[string]string{"X-Forwarded-For": "198.51.100.178"},
 			expected:   "192.168.1.100",
 		},
 		{
@@ -106,6 +113,15 @@ func TestGetRealIP(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if err := middleware.SetTrustedProxies(tt.trusted); err != nil {
+				t.Fatalf("SetTrustedProxies() error = %v", err)
+			}
+			t.Cleanup(func() {
+				if err := middleware.SetTrustedProxies(nil); err != nil {
+					t.Fatalf("reset SetTrustedProxies() error: %v", err)
+				}
+			})
+
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			req.RemoteAddr = tt.remoteAddr
 			for k, v := range tt.headers {
