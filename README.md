@@ -186,8 +186,17 @@ sudo dnf install vips-devel
 | `OCMS_HCAPTCHA_SECRET_KEY` | hCaptcha secret key for login protection | - | No |
 | `OCMS_GEOIP_DB_PATH` | Path to GeoLite2-Country.mmdb for country detection | - | No |
 | `OCMS_UPLOADS_DIR` | Directory for uploaded media files | `./uploads` | No |
+| `OCMS_TRUSTED_PROXIES` | Trusted reverse-proxy CIDRs/IPs for client IP extraction | - | No |
+| `OCMS_API_ALLOWED_CIDRS` | Global source CIDRs/IPs allowed to use API keys | - | No |
+| `OCMS_REQUIRE_API_ALLOWED_CIDRS` | Fail API key auth when global API source CIDRs are not configured | `false` | No |
+| `OCMS_REQUIRE_API_KEY_EXPIRY` | Require API keys to have expiration timestamps | `false` | No |
+| `OCMS_REQUIRE_API_KEY_SOURCE_CIDRS` | Require API keys to have per-key source CIDR restrictions | `false` | No |
+| `OCMS_EMBED_ALLOWED_ORIGINS` | Allowed browser origins for public embed proxy routes | - | No |
+| `OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS` | Fail startup in production if embed proxy is active without origin allowlist | `false` | No |
 | `OCMS_EMBED_PROXY_TOKEN` | Shared token required by embed proxy routes when enabled | - | No |
 | `OCMS_REQUIRE_EMBED_PROXY_TOKEN` | Fail startup in production if embed proxy token policy is enabled without token | `false` | No |
+| `OCMS_REQUIRE_HTTPS_OUTBOUND` | Require HTTPS for outbound integration URLs | `false` | No |
+| `OCMS_REQUIRE_FORM_CAPTCHA` | Require captcha on all public form submissions | `false` | No |
 | `OCMS_SANITIZE_PAGE_HTML` | Sanitize page HTML before rendering to visitors | `false` | No |
 | `OCMS_REQUIRE_SANITIZE_PAGE_HTML` | Fail startup in production if page HTML sanitization is disabled | `false` | No |
 | `OCMS_DEMO_MODE` | Enable demo content seeding (users, pages, media) | `false` | No |
