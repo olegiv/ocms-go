@@ -329,3 +329,43 @@ func TestWebhookToggleActive(t *testing.T) {
 		t.Error("IsActive should be false after toggle")
 	}
 }
+
+func TestWebhookDestinationMetadata(t *testing.T) {
+	tests := []struct {
+		name       string
+		rawURL     string
+		wantScheme string
+		wantHost   string
+	}{
+		{
+			name:       "normalizes scheme and host",
+			rawURL:     " HTTPS://Example.COM:8443/path?token=secret ",
+			wantScheme: "https",
+			wantHost:   "example.com:8443",
+		},
+		{
+			name:       "invalid URL returns empty",
+			rawURL:     "://bad",
+			wantScheme: "",
+			wantHost:   "",
+		},
+		{
+			name:       "missing scheme returns empty",
+			rawURL:     "example.com/webhook",
+			wantScheme: "",
+			wantHost:   "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotScheme, gotHost := webhookDestinationMetadata(tt.rawURL)
+			if gotScheme != tt.wantScheme {
+				t.Errorf("webhookDestinationMetadata(%q) scheme = %q, want %q", tt.rawURL, gotScheme, tt.wantScheme)
+			}
+			if gotHost != tt.wantHost {
+				t.Errorf("webhookDestinationMetadata(%q) host = %q, want %q", tt.rawURL, gotHost, tt.wantHost)
+			}
+		})
+	}
+}

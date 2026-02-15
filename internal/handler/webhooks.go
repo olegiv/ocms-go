@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -264,7 +265,22 @@ func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("webhook created", "webhook_id", webhook.ID, "name", webhook.Name, "created_by", middleware.GetUserID(r))
-	_ = h.eventService.LogWebhookEvent(r.Context(), model.EventLevelInfo, "Webhook created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"webhook_id": webhook.ID, "name": webhook.Name, "url": webhook.Url})
+	scheme, host := webhookDestinationMetadata(webhook.Url)
+	_ = h.eventService.LogWebhookEvent(
+		r.Context(),
+		model.EventLevelInfo,
+		"Webhook created",
+		middleware.GetUserIDPtr(r),
+		middleware.GetClientIP(r),
+		middleware.GetRequestURL(r),
+		map[string]any{
+			"webhook_id":          webhook.ID,
+			"name":                webhook.Name,
+			"destination_scheme":  scheme,
+			"destination_host":    host,
+			"destination_changed": false,
+		},
+	)
 	flashSuccess(w, r, h.renderer, redirectAdminWebhooks, "Webhook created successfully")
 }
 
@@ -352,6 +368,10 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Update webhook
 	now := time.Now()
+	oldScheme, oldHost := webhookDestinationMetadata(webhook.Url)
+	newScheme, newHost := webhookDestinationMetadata(input.URL)
+	destinationChanged := oldScheme != newScheme || oldHost != newHost
+
 	_, err = h.queries.UpdateWebhook(r.Context(), store.UpdateWebhookParams{
 		ID:        id,
 		Name:      input.Name,
@@ -369,7 +389,52 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("webhook updated", "webhook_id", id, "updated_by", middleware.GetUserID(r))
-	_ = h.eventService.LogWebhookEvent(r.Context(), model.EventLevelInfo, "Webhook updated", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"webhook_id": id})
+	eventMetadata := map[string]any{
+		"webhook_id":           id,
+		"destination_scheme":   newScheme,
+		"destination_host":     newHost,
+		"destination_changed":  destinationChanged,
+		"previous_scheme":      oldScheme,
+		"previous_destination": oldHost,
+		"current_destination":  newHost,
+		"current_scheme":       newScheme,
+	}
+	_ = h.eventService.LogWebhookEvent(
+		r.Context(),
+		model.EventLevelInfo,
+		"Webhook updated",
+		middleware.GetUserIDPtr(r),
+		middleware.GetClientIP(r),
+		middleware.GetRequestURL(r),
+		eventMetadata,
+	)
+	if destinationChanged {
+		slog.Warn(
+			"webhook destination changed",
+			"webhook_id", id,
+			"old_scheme", oldScheme,
+			"old_host", oldHost,
+			"new_scheme", newScheme,
+			"new_host", newHost,
+			"updated_by", middleware.GetUserID(r),
+		)
+		_ = h.eventService.LogSecurityEvent(
+			r.Context(),
+			model.EventLevelWarning,
+			"Webhook destination changed",
+			middleware.GetUserIDPtr(r),
+			middleware.GetClientIP(r),
+			middleware.GetRequestURL(r),
+			map[string]any{
+				"webhook_id":          id,
+				"old_destination":     oldHost,
+				"old_scheme":          oldScheme,
+				"new_destination":     newHost,
+				"new_scheme":          newScheme,
+				"destination_changed": true,
+			},
+		)
+	}
 	flashSuccess(w, r, h.renderer, redirectAdminWebhooks, "Webhook updated successfully")
 }
 
@@ -666,6 +731,14 @@ func validateWebhookForm(input webhookFormInput, validateEvents bool) map[string
 	}
 
 	return validationErrors
+}
+
+func webhookDestinationMetadata(rawURL string) (scheme string, host string) {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", ""
+	}
+	return strings.ToLower(parsed.Scheme), strings.ToLower(parsed.Host)
 }
 
 // renderNewWebhookForm renders the new webhook form with the given data.
