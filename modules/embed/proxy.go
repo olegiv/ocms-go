@@ -20,6 +20,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -204,7 +205,7 @@ func (m *Module) proxyDifyRequest(
 	}
 
 	if !m.allowProxyBudget() {
-		m.ctx.Logger.Warn("embed proxy global rate limit exceeded", "path", r.URL.Path, "ip", r.RemoteAddr)
+		m.ctx.Logger.Warn("embed proxy global rate limit exceeded", "path", r.URL.Path, "ip", embedClientIP(r))
 		m.logEmbedSecurityEvent(r, "Embed proxy blocked by global rate limit", map[string]any{
 			"provider": "dify",
 			"path":     r.URL.Path,
@@ -314,11 +315,15 @@ func (m *Module) logEmbedSecurityEvent(r *http.Request, message string, metadata
 	if m == nil || m.ctx == nil || m.ctx.Events == nil || r == nil {
 		return
 	}
-	clientIP := r.RemoteAddr
-	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		clientIP = host
-	}
+	clientIP := embedClientIP(r)
 	_ = m.ctx.Events.LogSecurityEvent(r.Context(), model.EventLevelWarning, message, nil, clientIP, r.URL.Path, metadata)
+}
+
+func embedClientIP(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	return middleware.GetClientIP(r)
 }
 
 func validateDifyIdentifier(value string, maxLen int, label string) error {
