@@ -244,17 +244,30 @@ func TestGetClientIP(t *testing.T) {
 		}
 	})
 
-	t.Run("uses forwarded headers for trusted proxies", func(t *testing.T) {
-		setTrustedProxiesForTest(t, "127.0.0.1/32")
+	t.Run("uses first untrusted IP from right in XFF chain", func(t *testing.T) {
+		setTrustedProxiesForTest(t, "127.0.0.1/32", "10.0.0.0/8")
 
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.RemoteAddr = "127.0.0.1:8080"
-		req.Header.Set("X-Forwarded-For", "10.0.0.1, 10.0.0.2")
+		req.Header.Set("X-Forwarded-For", "203.0.113.9, 10.0.0.2")
 		req.Header.Set("X-Real-IP", "10.0.0.5")
 
 		got := GetClientIP(req)
-		if got != "10.0.0.1" {
-			t.Errorf("GetClientIP() = %q, want %q", got, "10.0.0.1")
+		if got != "203.0.113.9" {
+			t.Errorf("GetClientIP() = %q, want %q", got, "203.0.113.9")
+		}
+	})
+
+	t.Run("ignores spoofed left-most XFF when trusted hops are present", func(t *testing.T) {
+		setTrustedProxiesForTest(t, "127.0.0.1/32", "10.0.0.0/8")
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "127.0.0.1:8080"
+		req.Header.Set("X-Forwarded-For", "198.51.100.200, 198.51.100.9, 10.0.0.7")
+
+		got := GetClientIP(req)
+		if got != "198.51.100.9" {
+			t.Errorf("GetClientIP() = %q, want %q", got, "198.51.100.9")
 		}
 	})
 

@@ -277,8 +277,9 @@ func GetRequestURL(r *http.Request) string {
 }
 
 // GetClientIP extracts the client IP from the request.
-// It checks X-Forwarded-For and X-Real-IP headers for proxied requests,
-// and falls back to RemoteAddr with port stripped.
+// It trusts forwarding headers only when the direct peer is a trusted proxy.
+// For X-Forwarded-For chains it returns the first untrusted hop from the right,
+// which is more resilient to spoofed left-most values.
 func GetClientIP(r *http.Request) string {
 	remoteIP, remoteIPString := parseRemoteAddrIP(r.RemoteAddr)
 
@@ -288,12 +289,11 @@ func GetClientIP(r *http.Request) string {
 		return remoteIPString
 	}
 
-	// Check X-Forwarded-For header (can contain multiple IPs)
+	// Check X-Forwarded-For header (can contain multiple IPs).
+	// Use the first untrusted entry from the right side of the chain.
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		for _, part := range strings.Split(xff, ",") {
-			if ip, ok := parseIP(part); ok {
-				return ip.String()
-			}
+		if ip, ok := firstUntrustedXFFIP(xff); ok {
+			return ip.String()
 		}
 	}
 
@@ -303,6 +303,28 @@ func GetClientIP(r *http.Request) string {
 	}
 
 	return remoteIPString
+}
+
+func firstUntrustedXFFIP(xff string) (netip.Addr, bool) {
+	parts := strings.Split(xff, ",")
+	ips := make([]netip.Addr, 0, len(parts))
+	for _, part := range parts {
+		if ip, ok := parseIP(part); ok {
+			ips = append(ips, ip)
+		}
+	}
+	if len(ips) == 0 {
+		return netip.Addr{}, false
+	}
+
+	for i := len(ips) - 1; i >= 0; i-- {
+		if !isTrustedProxy(ips[i]) {
+			return ips[i], true
+		}
+	}
+
+	// All entries are trusted proxies; fall back to the left-most address.
+	return ips[0], true
 }
 
 // ConfigureTrustedProxies updates trusted proxy ranges from a comma-separated
