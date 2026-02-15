@@ -92,7 +92,7 @@ func TestAuditRequiredFormCaptchaPosture_RejectsMissingVerifier(t *testing.T) {
 	db := newPolicyTestDB(t)
 	hooks := newHookRegistryWithCaptcha(false)
 
-	if err := auditRequiredFormCaptchaPosture(context.Background(), db, hooks); err == nil {
+	if err := auditRequiredFormCaptchaPosture(context.Background(), db, hooks, false); err == nil {
 		t.Fatal("expected error when captcha verifier hook is missing")
 	}
 }
@@ -105,7 +105,7 @@ func TestAuditRequiredFormCaptchaPosture_RejectsActiveFormsWithoutCaptcha(t *tes
 		t.Fatalf("inserting form: %v", err)
 	}
 
-	if err := auditRequiredFormCaptchaPosture(context.Background(), db, hooks); err == nil {
+	if err := auditRequiredFormCaptchaPosture(context.Background(), db, hooks, true); err == nil {
 		t.Fatal("expected error when active form lacks captcha field")
 	}
 }
@@ -126,8 +126,29 @@ func TestAuditRequiredFormCaptchaPosture_AllowsWhenCompliant(t *testing.T) {
 		t.Fatalf("inserting captcha field: %v", err)
 	}
 
-	if err := auditRequiredFormCaptchaPosture(context.Background(), db, hooks); err != nil {
+	if err := auditRequiredFormCaptchaPosture(context.Background(), db, hooks, true); err != nil {
 		t.Fatalf("expected compliant posture to pass, got: %v", err)
+	}
+}
+
+func TestAuditRequiredFormCaptchaPosture_RejectsDisabledVerifier(t *testing.T) {
+	db := newPolicyTestDB(t)
+	hooks := newHookRegistryWithCaptcha(true)
+
+	res, err := db.Exec(`INSERT INTO forms (is_active) VALUES (1)`)
+	if err != nil {
+		t.Fatalf("inserting form: %v", err)
+	}
+	formID, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("reading form id: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO form_fields (form_id, type) VALUES (?, 'captcha')`, formID); err != nil {
+		t.Fatalf("inserting captcha field: %v", err)
+	}
+
+	if err := auditRequiredFormCaptchaPosture(context.Background(), db, hooks, false); err == nil {
+		t.Fatal("expected error when captcha verifier is not fully enabled")
 	}
 }
 

@@ -212,10 +212,15 @@ func parseLogLevel(level string) slog.Level {
 	}
 }
 
-func auditRequiredFormCaptchaPosture(ctx context.Context, db *sql.DB, hooks *module.HookRegistry) error {
+func auditRequiredFormCaptchaPosture(ctx context.Context, db *sql.DB, hooks *module.HookRegistry, verifierEnabled bool) error {
 	if hooks == nil || !hooks.HasHandlers(hcaptcha.HookFormCaptchaVerify) {
 		return fmt.Errorf(
 			"refusing to start in production: OCMS_REQUIRE_FORM_CAPTCHA is enabled but captcha verification is unavailable",
+		)
+	}
+	if !verifierEnabled {
+		return fmt.Errorf(
+			"refusing to start in production: OCMS_REQUIRE_FORM_CAPTCHA is enabled but captcha verifier is not fully configured",
 		)
 	}
 
@@ -850,7 +855,13 @@ func run() error {
 		}
 	}
 	if cfg.Env == "production" && cfg.RequireFormCaptcha {
-		if err := auditRequiredFormCaptchaPosture(ctx, db, hookRegistry); err != nil {
+		captchaVerifierEnabled := false
+		if mod, ok := moduleRegistry.Get("hcaptcha"); ok {
+			if captchaMod, ok := mod.(*hcaptcha.Module); ok {
+				captchaVerifierEnabled = captchaMod.IsEnabled()
+			}
+		}
+		if err := auditRequiredFormCaptchaPosture(ctx, db, hookRegistry, captchaVerifierEnabled); err != nil {
 			return err
 		}
 	}
