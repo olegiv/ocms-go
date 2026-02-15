@@ -119,6 +119,9 @@ func (s *WidgetService) InvalidateCache() {
 }
 
 // toWidgetView converts a store.Widget to WidgetView with HTML sanitization.
+// SECURITY: Content is sanitized with bluemonday.UGCPolicy() before casting to
+// template.HTML. This allows safe HTML (bold, links, images) while stripping
+// dangerous elements (scripts, event handlers, iframes).
 func toWidgetView(w store.Widget) WidgetView {
 	sanitizedContent := htmlSanitizer.Sanitize(w.Content.String)
 	return WidgetView{

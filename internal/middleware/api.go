@@ -280,57 +280,90 @@ func RequireAnyPermission(requiredPerms ...string) func(http.Handler) http.Handl
 	}
 }
 
-// limiterCache is a generic rate limiter cache with double-check locking.
-type limiterCache[K comparable] struct {
-	limiters map[K]*rate.Limiter
-	mu       sync.RWMutex
-	rate     rate.Limit
-	burst    int
+// limiterEntry holds a rate limiter and its last access time for TTL eviction.
+type limiterEntry struct {
+	limiter  *rate.Limiter
+	lastUsed time.Time
 }
 
-// newLimiterCache creates a new limiter cache.
+// limiterCacheTTL is the time after which idle entries are evicted.
+const limiterCacheTTL = 10 * time.Minute
+
+// limiterCacheCleanupInterval is how often the cleanup goroutine runs.
+const limiterCacheCleanupInterval = 5 * time.Minute
+
+// limiterCache is a generic rate limiter cache with TTL-based eviction.
+type limiterCache[K comparable] struct {
+	entries map[K]*limiterEntry
+	mu      sync.RWMutex
+	rate    rate.Limit
+	burst   int
+}
+
+// newLimiterCache creates a new limiter cache with periodic TTL-based cleanup.
 func newLimiterCache[K comparable](rps float64, burst int) *limiterCache[K] {
-	return &limiterCache[K]{
-		limiters: make(map[K]*rate.Limiter),
-		rate:     rate.Limit(rps),
-		burst:    burst,
+	lc := &limiterCache[K]{
+		entries: make(map[K]*limiterEntry),
+		rate:    rate.Limit(rps),
+		burst:   burst,
 	}
+	go lc.cleanupLoop()
+	return lc
 }
 
 // get returns the rate limiter for a specific key, creating one if needed.
 func (lc *limiterCache[K]) get(key K) *rate.Limiter {
+	now := time.Now()
+
 	lc.mu.RLock()
-	limiter, exists := lc.limiters[key]
+	entry, exists := lc.entries[key]
 	lc.mu.RUnlock()
 
 	if exists {
-		return limiter
+		lc.mu.Lock()
+		entry.lastUsed = now
+		lc.mu.Unlock()
+		return entry.limiter
 	}
 
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
 
 	// Double-check after acquiring write lock
-	if limiter, exists = lc.limiters[key]; exists {
-		return limiter
+	if entry, exists = lc.entries[key]; exists {
+		entry.lastUsed = now
+		return entry.limiter
 	}
 
-	limiter = rate.NewLimiter(lc.rate, lc.burst)
-	lc.limiters[key] = limiter
+	limiter := rate.NewLimiter(lc.rate, lc.burst)
+	lc.entries[key] = &limiterEntry{
+		limiter:  limiter,
+		lastUsed: now,
+	}
 	return limiter
 }
 
-// clearIfExceeds clears all entries if the cache exceeds maxSize.
-// Returns true if the cache was cleared.
-func (lc *limiterCache[K]) clearIfExceeds(maxSize int) bool {
+// cleanupLoop periodically evicts entries that haven't been used within the TTL.
+func (lc *limiterCache[K]) cleanupLoop() {
+	ticker := time.NewTicker(limiterCacheCleanupInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		lc.evictExpired()
+	}
+}
+
+// evictExpired removes entries older than limiterCacheTTL.
+func (lc *limiterCache[K]) evictExpired() {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
 
-	if len(lc.limiters) > maxSize {
-		lc.limiters = make(map[K]*rate.Limiter)
-		return true
+	cutoff := time.Now().Add(-limiterCacheTTL)
+	for key, entry := range lc.entries {
+		if entry.lastUsed.Before(cutoff) {
+			delete(lc.entries, key)
+		}
 	}
-	return false
 }
 
 // APIRateLimit creates middleware that rate limits requests per API key.

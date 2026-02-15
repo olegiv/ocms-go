@@ -117,6 +117,8 @@ func (m *Module) TemplateFuncs() template.FuncMap {
 }
 
 // renderScripts generates all enabled provider scripts using the provided render function.
+// SECURITY: Output is cast to template.HTML. Provider settings are admin-controlled
+// and individual values are escaped with template.HTMLEscapeString before embedding.
 func (m *Module) renderScripts(renderFn func(providers.Provider, map[string]string) template.HTML) template.HTML {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

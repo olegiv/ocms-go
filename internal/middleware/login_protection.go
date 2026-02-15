@@ -223,10 +223,7 @@ func (lp *LoginProtection) cleanup() {
 func (lp *LoginProtection) cleanupStaleEntries() {
 	now := time.Now()
 
-	// Cleanup IP limiters if too many entries
-	if lp.ipLimiters.clearIfExceeds(10000) {
-		slog.Info("cleared IP rate limiters due to size")
-	}
+	// IP rate limiters are cleaned up automatically via TTL-based eviction
 
 	// Cleanup old login attempts
 	lp.attemptsMu.Lock()

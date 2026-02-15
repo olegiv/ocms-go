@@ -169,6 +169,8 @@ func (m *Module) Migrations() []module.Migration {
 }
 
 // renderBar generates the HTML for the informer notification bar.
+// SECURITY: Output is cast to template.HTML. All admin-controlled values
+// (colors, text, link URL) are escaped with html.EscapeString before embedding.
 func (m *Module) renderBar() template.HTML {
 	if m.settings == nil || !m.settings.Enabled || m.settings.Text == "" {
 		return ""

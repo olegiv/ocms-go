@@ -105,7 +105,18 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Authenticated callers get full details
+	// Authenticated non-admin: basic response without system info or check details
+	if !h.isAdmin(r) {
+		_ = json.NewEncoder(w).Encode(HealthStatus{
+			Status:    overallStatus,
+			Timestamp: time.Now().UTC(),
+			Uptime:    time.Since(h.startTime).Round(time.Second).String(),
+			Version:   "1.0.0",
+		})
+		return
+	}
+
+	// Admin only: full details including checks and optional system info
 	status := HealthStatus{
 		Status:    overallStatus,
 		Timestamp: time.Now().UTC(),
@@ -207,6 +218,34 @@ func (h *HealthHandler) checkSessionAuth(r *http.Request) (authenticated bool) {
 	if userID > 0 {
 		user, err := h.queries.GetUserByID(r.Context(), userID)
 		if err == nil && (user.Role == RoleAdmin || user.Role == RoleEditor) {
+			return true
+		}
+	}
+	return false
+}
+
+// isAdmin checks if the request comes from an authenticated admin user.
+// Returns false for editors, API key holders, and unauthenticated callers.
+func (h *HealthHandler) isAdmin(r *http.Request) bool {
+	if h.sm == nil {
+		return false
+	}
+	return h.checkSessionRole(r, RoleAdmin)
+}
+
+// checkSessionRole checks if the request has a valid session with the given role.
+// Returns false (without panicking) if session data is not loaded into context.
+func (h *HealthHandler) checkSessionRole(r *http.Request, role string) (hasRole bool) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			hasRole = false
+		}
+	}()
+
+	userID := h.sm.GetInt64(r.Context(), SessionKeyUserID)
+	if userID > 0 {
+		user, err := h.queries.GetUserByID(r.Context(), userID)
+		if err == nil && user.Role == role {
 			return true
 		}
 	}
