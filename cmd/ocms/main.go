@@ -444,6 +444,16 @@ func run() error {
 
 	// Update i18n from database settings
 	queries := store.New(db)
+	if cfg.RequireAPIKeyExpiry {
+		var nonExpiringActiveKeys int
+		err := db.QueryRow(`SELECT COUNT(*) FROM api_keys WHERE is_active = 1 AND expires_at IS NULL`).Scan(&nonExpiringActiveKeys)
+		if err != nil {
+			slog.Warn("failed to audit API key expiry posture", "error", err)
+		} else if nonExpiringActiveKeys > 0 {
+			slog.Warn("active API keys without expiration detected while expiry policy is enabled",
+				"count", nonExpiringActiveKeys)
+		}
+	}
 	initI18nFromDB(ctx, queries)
 
 	// Initialize session manager
