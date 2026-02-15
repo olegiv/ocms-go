@@ -246,6 +246,35 @@ func TestRedactFormEventData(t *testing.T) {
 	}
 }
 
+func TestBuildFormEventDataForMode(t *testing.T) {
+	input := map[string]string{
+		"name":     "Alice",
+		"password": "super-secret",
+		"notes":    strings.Repeat("x", maxFormEventValueLen+10),
+	}
+
+	redacted := buildFormEventDataForMode(input, formWebhookDataModeRedacted)
+	if redacted["password"] != redactedFormValue {
+		t.Errorf("redacted password = %q, want %q", redacted["password"], redactedFormValue)
+	}
+	if len(redacted["notes"]) != maxFormEventValueLen {
+		t.Errorf("redacted notes length = %d, want %d", len(redacted["notes"]), maxFormEventValueLen)
+	}
+
+	full := buildFormEventDataForMode(input, formWebhookDataModeFull)
+	if full["password"] != "super-secret" {
+		t.Errorf("full password = %q, want %q", full["password"], "super-secret")
+	}
+	if len(full["notes"]) != maxFormEventValueLen {
+		t.Errorf("full notes length = %d, want %d", len(full["notes"]), maxFormEventValueLen)
+	}
+
+	none := buildFormEventDataForMode(input, formWebhookDataModeNone)
+	if none != nil {
+		t.Errorf("none mode data = %#v, want nil", none)
+	}
+}
+
 func TestFormCreate(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 

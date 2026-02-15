@@ -62,7 +62,8 @@ type Config struct {
 	DoSeed bool `env:"OCMS_DO_SEED" envDefault:"false"` // Enable database seeding
 
 	// Public forms security policy
-	RequireFormCaptcha bool `env:"OCMS_REQUIRE_FORM_CAPTCHA" envDefault:"false"` // Require captcha on all public form submissions
+	RequireFormCaptcha  bool   `env:"OCMS_REQUIRE_FORM_CAPTCHA" envDefault:"false"`      // Require captcha on all public form submissions
+	WebhookFormDataMode string `env:"OCMS_WEBHOOK_FORM_DATA_MODE" envDefault:"redacted"` // form.submitted webhook payload mode: redacted|none|full
 
 	// Frontend content hardening
 	SanitizePageHTML        bool `env:"OCMS_SANITIZE_PAGE_HTML" envDefault:"false"`         // Sanitize page HTML before rendering to visitors
@@ -117,6 +118,15 @@ func Load() (*Config, error) {
 	}
 	if cfg.Env == "production" && cfg.RequireSanitizePageHTML && !cfg.SanitizePageHTML {
 		return nil, fmt.Errorf("OCMS_SANITIZE_PAGE_HTML must be true in production when OCMS_REQUIRE_SANITIZE_PAGE_HTML is enabled")
+	}
+	cfg.WebhookFormDataMode = strings.ToLower(strings.TrimSpace(cfg.WebhookFormDataMode))
+	if cfg.WebhookFormDataMode == "" {
+		cfg.WebhookFormDataMode = "redacted"
+	}
+	switch cfg.WebhookFormDataMode {
+	case "", "redacted", "none", "full":
+	default:
+		return nil, fmt.Errorf("OCMS_WEBHOOK_FORM_DATA_MODE must be one of: redacted, none, full")
 	}
 
 	// Validate session secret length

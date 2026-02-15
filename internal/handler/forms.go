@@ -51,6 +51,7 @@ type FormsHandler struct {
 	menuService     *service.MenuService
 	frontendHandler *FrontendHandler
 	requireCaptcha  bool
+	webhookDataMode string
 }
 
 const maxPublicFormBodyBytes int64 = 64 * 1024
@@ -58,6 +59,11 @@ const maxPublicFormFieldValueBytes = 4 * 1024
 const maxPublicFormSubmissionDataBytes = 16 * 1024
 const redactedFormValue = "[REDACTED]"
 const maxFormEventValueLen = 1024
+const (
+	formWebhookDataModeRedacted = "redacted"
+	formWebhookDataModeNone     = "none"
+	formWebhookDataModeFull     = "full"
+)
 
 var sensitiveFormFieldTokens = []string{
 	"password",
@@ -86,6 +92,7 @@ func NewFormsHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 		cacheManager:    cm,
 		menuService:     ms,
 		frontendHandler: fh,
+		webhookDataMode: formWebhookDataModeRedacted,
 	}
 }
 
@@ -99,6 +106,12 @@ func (h *FormsHandler) SetRequireCaptcha(required bool) {
 	h.requireCaptcha = required
 }
 
+// SetWebhookFormDataMode configures how form.submitted webhook payload data is emitted.
+// Supported modes: redacted, none, full.
+func (h *FormsHandler) SetWebhookFormDataMode(mode string) {
+	h.webhookDataMode = normalizeFormWebhookDataMode(mode)
+}
+
 // dispatchFormEvent dispatches a form submission webhook event.
 func (h *FormsHandler) dispatchFormEvent(ctx context.Context, form store.Form, submissionID int64, data map[string]string) {
 	if h.dispatcher == nil {
@@ -110,7 +123,8 @@ func (h *FormsHandler) dispatchFormEvent(ctx context.Context, form store.Form, s
 		FormName:     form.Name,
 		FormSlug:     form.Slug,
 		SubmissionID: submissionID,
-		Data:         redactFormEventData(data),
+		Data:         buildFormEventDataForMode(data, h.webhookDataMode),
+		DataMode:     h.webhookDataMode,
 		SubmittedAt:  time.Now(),
 	}
 
@@ -132,6 +146,38 @@ func redactFormEventData(data map[string]string) map[string]string {
 		redacted[key] = truncateFormEventValue(value, maxFormEventValueLen)
 	}
 	return redacted
+}
+
+func truncateFormEventData(data map[string]string) map[string]string {
+	truncated := make(map[string]string, len(data))
+	for key, value := range data {
+		truncated[key] = truncateFormEventValue(value, maxFormEventValueLen)
+	}
+	return truncated
+}
+
+func buildFormEventDataForMode(data map[string]string, mode string) map[string]string {
+	switch normalizeFormWebhookDataMode(mode) {
+	case formWebhookDataModeNone:
+		return nil
+	case formWebhookDataModeFull:
+		return truncateFormEventData(data)
+	default:
+		return redactFormEventData(data)
+	}
+}
+
+func normalizeFormWebhookDataMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", formWebhookDataModeRedacted:
+		return formWebhookDataModeRedacted
+	case formWebhookDataModeNone:
+		return formWebhookDataModeNone
+	case formWebhookDataModeFull:
+		return formWebhookDataModeFull
+	default:
+		return formWebhookDataModeRedacted
+	}
 }
 
 func isSensitiveFormFieldName(name string) bool {
