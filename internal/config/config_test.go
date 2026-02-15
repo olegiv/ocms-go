@@ -66,6 +66,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.SanitizePageHTML {
 		t.Error("SanitizePageHTML = true, want false")
 	}
+	if cfg.RequireSanitizePageHTML {
+		t.Error("RequireSanitizePageHTML = true, want false")
+	}
 }
 
 func TestLoad_CustomValues(t *testing.T) {
@@ -87,6 +90,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	setEnv(t, "OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS", "true")
 	setEnv(t, "OCMS_REQUIRE_HTTPS_OUTBOUND", "true")
 	setEnv(t, "OCMS_SANITIZE_PAGE_HTML", "true")
+	setEnv(t, "OCMS_REQUIRE_SANITIZE_PAGE_HTML", "true")
 
 	cfg, err := Load()
 	if err != nil {
@@ -141,6 +145,9 @@ func TestLoad_CustomValues(t *testing.T) {
 	if !cfg.SanitizePageHTML {
 		t.Error("SanitizePageHTML = false, want true")
 	}
+	if !cfg.RequireSanitizePageHTML {
+		t.Error("RequireSanitizePageHTML = false, want true")
+	}
 }
 
 func TestLoad_RejectSeedInProduction(t *testing.T) {
@@ -152,6 +159,19 @@ func TestLoad_RejectSeedInProduction(t *testing.T) {
 	_, err := Load()
 	if err == nil {
 		t.Fatal("Load() should fail when OCMS_DO_SEED=true in production")
+	}
+}
+
+func TestLoad_RequireSanitizePageHTMLInProduction(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_REQUIRE_SANITIZE_PAGE_HTML", "true")
+	setEnv(t, "OCMS_SANITIZE_PAGE_HTML", "false")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when OCMS_REQUIRE_SANITIZE_PAGE_HTML=true and OCMS_SANITIZE_PAGE_HTML=false in production")
 	}
 }
 

@@ -171,6 +171,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS  Reject production startup when embed proxy is active without origin allowlist (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_HTTPS_OUTBOUND  Require HTTPS for outbound integration URLs (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SANITIZE_PAGE_HTML  Sanitize page HTML before rendering to visitors (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_SANITIZE_PAGE_HTML  Reject production startup when page HTML sanitization is disabled (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "\nFor more information, see: https://github.com/olegiv/ocms-go\n")
 	}
 
@@ -386,6 +387,9 @@ func run() error {
 		}
 		if !cfg.SanitizePageHTML {
 			slog.Warn("production security warning: OCMS_SANITIZE_PAGE_HTML is disabled")
+		}
+		if !cfg.RequireSanitizePageHTML {
+			slog.Warn("production security warning: OCMS_REQUIRE_SANITIZE_PAGE_HTML is disabled")
 		}
 	}
 

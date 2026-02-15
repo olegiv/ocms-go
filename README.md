@@ -186,6 +186,8 @@ sudo dnf install vips-devel
 | `OCMS_HCAPTCHA_SECRET_KEY` | hCaptcha secret key for login protection | - | No |
 | `OCMS_GEOIP_DB_PATH` | Path to GeoLite2-Country.mmdb for country detection | - | No |
 | `OCMS_UPLOADS_DIR` | Directory for uploaded media files | `./uploads` | No |
+| `OCMS_SANITIZE_PAGE_HTML` | Sanitize page HTML before rendering to visitors | `false` | No |
+| `OCMS_REQUIRE_SANITIZE_PAGE_HTML` | Fail startup in production if page HTML sanitization is disabled | `false` | No |
 | `OCMS_DEMO_MODE` | Enable demo content seeding (users, pages, media) | `false` | No |
 
 ## Development

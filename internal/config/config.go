@@ -63,7 +63,8 @@ type Config struct {
 	RequireFormCaptcha bool `env:"OCMS_REQUIRE_FORM_CAPTCHA" envDefault:"false"` // Require captcha on all public form submissions
 
 	// Frontend content hardening
-	SanitizePageHTML bool `env:"OCMS_SANITIZE_PAGE_HTML" envDefault:"false"` // Sanitize page HTML before rendering to visitors
+	SanitizePageHTML        bool `env:"OCMS_SANITIZE_PAGE_HTML" envDefault:"false"`         // Sanitize page HTML before rendering to visitors
+	RequireSanitizePageHTML bool `env:"OCMS_REQUIRE_SANITIZE_PAGE_HTML" envDefault:"false"` // Reject startup in production if page HTML sanitization is disabled
 }
 
 // IsDevelopment returns true if the application is running in development mode.
@@ -105,6 +106,9 @@ func Load() (*Config, error) {
 	// Production hardening: prevent default seeding in production.
 	if cfg.Env == "production" && cfg.DoSeed {
 		return nil, fmt.Errorf("OCMS_DO_SEED must be false in production")
+	}
+	if cfg.Env == "production" && cfg.RequireSanitizePageHTML && !cfg.SanitizePageHTML {
+		return nil, fmt.Errorf("OCMS_SANITIZE_PAGE_HTML must be true in production when OCMS_REQUIRE_SANITIZE_PAGE_HTML is enabled")
 	}
 
 	// Validate session secret length
