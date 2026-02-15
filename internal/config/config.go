@@ -46,7 +46,8 @@ type Config struct {
 	TrustedProxies string `env:"OCMS_TRUSTED_PROXIES"` // Comma-separated CIDRs/IPs of trusted reverse proxies
 
 	// API access restriction configuration
-	APIAllowedCIDRs string `env:"OCMS_API_ALLOWED_CIDRS"` // Comma-separated CIDRs/IPs allowed to use API keys
+	APIAllowedCIDRs     string `env:"OCMS_API_ALLOWED_CIDRS"`                         // Comma-separated CIDRs/IPs allowed to use API keys
+	RequireAPIKeyExpiry bool   `env:"OCMS_REQUIRE_API_KEY_EXPIRY" envDefault:"false"` // Reject API keys without expiration
 
 	// Seeding configuration
 	DoSeed bool `env:"OCMS_DO_SEED" envDefault:"false"` // Enable database seeding

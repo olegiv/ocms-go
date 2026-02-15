@@ -62,6 +62,14 @@ func setAPIAllowedCIDRsForTest(t *testing.T, entries ...string) {
 	})
 }
 
+func setRequireAPIKeyExpiryForTest(t *testing.T, required bool) {
+	t.Helper()
+	SetRequireAPIKeyExpiry(required)
+	t.Cleanup(func() {
+		SetRequireAPIKeyExpiry(false)
+	})
+}
+
 // simpleOKHandler returns an http.Handler that writes 200 OK.
 var simpleOKHandler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
@@ -311,6 +319,40 @@ func TestAPIKeyAuth_IPAllowlist(t *testing.T) {
 
 		if w.Code != http.StatusUnauthorized {
 			t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
+		}
+	})
+}
+
+func TestAPIKeyAuth_RequireExpiry(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+	setRequireAPIKeyExpiryForTest(t, true)
+
+	rawKeyNoExpiry := insertTestAPIKey(t, db, "No Expiry", []string{"pages:read"}, true, nil)
+	expires := time.Now().Add(24 * time.Hour)
+	rawKeyWithExpiry := insertTestAPIKey(t, db, "With Expiry", []string{"pages:read"}, true, &expires)
+
+	handler := APIKeyAuth(db)(simpleOKHandler)
+
+	t.Run("reject key without expiry", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+		req.Header.Set("Authorization", "Bearer "+rawKeyNoExpiry)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
+		}
+	})
+
+	t.Run("allow key with expiry", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+		req.Header.Set("Authorization", "Bearer "+rawKeyWithExpiry)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
 		}
 	})
 }

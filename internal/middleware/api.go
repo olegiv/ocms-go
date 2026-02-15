@@ -36,9 +36,24 @@ type APIError struct {
 }
 
 var (
-	apiAllowedCIDRsMu sync.RWMutex
-	apiAllowedCIDRs   []netip.Prefix
+	apiAllowedCIDRsMu     sync.RWMutex
+	apiAllowedCIDRs       []netip.Prefix
+	requireAPIKeyExpiry   bool
+	requireAPIKeyExpiryMu sync.RWMutex
 )
+
+// SetRequireAPIKeyExpiry configures whether API keys must have an expiration timestamp.
+func SetRequireAPIKeyExpiry(required bool) {
+	requireAPIKeyExpiryMu.Lock()
+	requireAPIKeyExpiry = required
+	requireAPIKeyExpiryMu.Unlock()
+}
+
+func isAPIKeyExpiryRequired() bool {
+	requireAPIKeyExpiryMu.RLock()
+	defer requireAPIKeyExpiryMu.RUnlock()
+	return requireAPIKeyExpiry
+}
 
 // ConfigureAPIAllowedCIDRs updates API source restrictions from a comma-separated
 // list of CIDRs/IPs. Empty input disables API source restriction.
@@ -204,6 +219,14 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 	if !matchedKey.IsActive {
 		if required {
 			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key is inactive", nil)
+			return nil, true
+		}
+		return nil, false
+	}
+
+	if isAPIKeyExpiryRequired() && !matchedKey.ExpiresAt.Valid {
+		if required {
+			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key must have an expiration date", nil)
 			return nil, true
 		}
 		return nil, false

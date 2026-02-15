@@ -164,6 +164,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REDIS_URL         Redis URL for distributed caching (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_TRUSTED_PROXIES   Comma-separated trusted proxy CIDRs/IPs (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_API_ALLOWED_CIDRS Comma-separated CIDRs/IPs allowed for API key access (optional)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_EXPIRY  Reject API keys without expiration (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "\nFor more information, see: https://github.com/olegiv/ocms-go\n")
 	}
 
@@ -360,6 +361,10 @@ func run() error {
 	}
 	if strings.TrimSpace(cfg.APIAllowedCIDRs) != "" {
 		slog.Info("API source CIDR allowlist enabled")
+	}
+	middleware.SetRequireAPIKeyExpiry(cfg.RequireAPIKeyExpiry)
+	if cfg.RequireAPIKeyExpiry {
+		slog.Info("API key expiry enforcement enabled")
 	}
 
 	// Initialize i18n system for admin UI localization
