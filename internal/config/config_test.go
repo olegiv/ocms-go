@@ -39,6 +39,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.LogLevel != "info" {
 		t.Errorf("LogLevel = %q, want %q", cfg.LogLevel, "info")
 	}
+	if cfg.RequireFormCaptcha {
+		t.Error("RequireFormCaptcha = true, want false")
+	}
 }
 
 func TestLoad_CustomValues(t *testing.T) {
@@ -51,6 +54,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	setEnv(t, "OCMS_ENV", "production")
 	setEnv(t, "OCMS_LOG_LEVEL", "debug")
 	setEnv(t, "OCMS_TRUSTED_PROXIES", "127.0.0.1/32,10.0.0.0/8")
+	setEnv(t, "OCMS_REQUIRE_FORM_CAPTCHA", "true")
 
 	cfg, err := Load()
 	if err != nil {
@@ -77,6 +81,9 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 	if cfg.TrustedProxies != "127.0.0.1/32,10.0.0.0/8" {
 		t.Errorf("TrustedProxies = %q, want %q", cfg.TrustedProxies, "127.0.0.1/32,10.0.0.0/8")
+	}
+	if !cfg.RequireFormCaptcha {
+		t.Error("RequireFormCaptcha = false, want true")
 	}
 }
 

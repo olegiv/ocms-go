@@ -50,6 +50,7 @@ type FormsHandler struct {
 	cacheManager    *cache.Manager
 	menuService     *service.MenuService
 	frontendHandler *FrontendHandler
+	requireCaptcha  bool
 }
 
 const maxPublicFormBodyBytes int64 = 64 * 1024
@@ -72,6 +73,11 @@ func NewFormsHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 // SetDispatcher sets the webhook dispatcher for event dispatching.
 func (h *FormsHandler) SetDispatcher(d *webhook.Dispatcher) {
 	h.dispatcher = d
+}
+
+// SetRequireCaptcha configures whether captcha is mandatory for all public form submissions.
+func (h *FormsHandler) SetRequireCaptcha(required bool) {
+	h.requireCaptcha = required
 }
 
 // dispatchFormEvent dispatches a form submission webhook event.
@@ -283,13 +289,13 @@ func hasCaptchaField(fields []store.FormField) bool {
 // Returns error message if verification fails, empty string on success.
 func (h *FormsHandler) verifyCaptcha(ctx context.Context, r *http.Request, lang string) string {
 	if h.hookRegistry == nil {
-		return "" // No hook registry, skip verification
+		return i18n.T(lang, "hcaptcha.error_verification")
 	}
 
 	// Check if captcha hooks are registered (hCaptcha module is active)
 	if !h.hookRegistry.HasHandlers(hcaptcha.HookFormCaptchaVerify) {
 		slog.Warn("captcha field present but hCaptcha module not active")
-		return "" // Module not active, skip verification
+		return i18n.T(lang, "hcaptcha.error_verification")
 	}
 
 	// Build verification request
@@ -1021,6 +1027,23 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 
 	// Note: CSRF protection is handled by the middleware (filippo.io/csrf/gorilla)
 	// which uses Fetch metadata headers - no form token validation needed here.
+
+	if h.requireCaptcha {
+		if !hasCaptchaField(fields) {
+			slog.Warn("form submission blocked: captcha required but field not configured",
+				"form_id", form.ID,
+				"form_slug", slug)
+			http.Error(w, "Form submission is temporarily unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if h.hookRegistry == nil || !h.hookRegistry.HasHandlers(hcaptcha.HookFormCaptchaVerify) {
+			slog.Warn("form submission blocked: captcha required but verifier unavailable",
+				"form_id", form.ID,
+				"form_slug", slug)
+			http.Error(w, "Form submission is temporarily unavailable", http.StatusServiceUnavailable)
+			return
+		}
+	}
 
 	// Verify captcha if form has captcha field
 	if hasCaptchaField(fields) {

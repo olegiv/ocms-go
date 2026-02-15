@@ -47,6 +47,9 @@ type Config struct {
 
 	// Seeding configuration
 	DoSeed bool `env:"OCMS_DO_SEED" envDefault:"false"` // Enable database seeding
+
+	// Public forms security policy
+	RequireFormCaptcha bool `env:"OCMS_REQUIRE_FORM_CAPTCHA" envDefault:"false"` // Require captcha on all public form submissions
 }
 
 // IsDevelopment returns true if the application is running in development mode.

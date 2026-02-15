@@ -59,6 +59,46 @@ func TestFormsHandlerSubmit_RejectsOversizedPayload(t *testing.T) {
 	}
 }
 
+func TestFormsHandlerSubmit_RequireCaptchaPolicy_NoCaptchaField(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	queries := store.New(db)
+	now := time.Now()
+
+	form, err := queries.CreateForm(context.Background(), store.CreateFormParams{
+		Name:      "Contact Form",
+		Slug:      "contact-form",
+		Title:     "Contact",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateForm failed: %v", err)
+	}
+
+	h := NewFormsHandler(db, nil, sm, nil, nil, nil, nil, nil)
+	h.SetRequireCaptcha(true)
+
+	req := httptest.NewRequest(http.MethodPost, "/forms/contact-form", strings.NewReader("name=Alice"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = requestWithURLParams(req, map[string]string{"slug": "contact-form"})
+	w := httptest.NewRecorder()
+
+	h.Submit(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d; want %d", w.Code, http.StatusServiceUnavailable)
+	}
+
+	count, err := queries.CountFormSubmissions(context.Background(), form.ID)
+	if err != nil {
+		t.Fatalf("CountFormSubmissions failed: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("submission count = %d; want 0", count)
+	}
+}
+
 func TestFormCreate(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 
