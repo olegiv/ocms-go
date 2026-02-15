@@ -10,6 +10,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/olegiv/ocms-go/internal/auth"
 )
 
 // testDB creates a temporary test database.
@@ -81,14 +83,14 @@ func createTestPage(t *testing.T, q *Queries, ctx context.Context, authorID int6
 	t.Helper()
 	now := time.Now()
 	page, err := q.CreatePage(ctx, CreatePageParams{
-		Title:      "Test Page",
-		Slug:       slug,
-		Body:       "<p>Test content</p>",
-		Status:     "published",
-		AuthorID:   authorID,
+		Title:        "Test Page",
+		Slug:         slug,
+		Body:         "<p>Test content</p>",
+		Status:       "published",
+		AuthorID:     authorID,
 		LanguageCode: getDefaultLangCode(t, q, ctx),
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		t.Fatalf("CreatePage(%s): %v", slug, err)
@@ -135,13 +137,13 @@ func createTestForm(t *testing.T, q *Queries, ctx context.Context, slug string) 
 	t.Helper()
 	now := time.Now()
 	form, err := q.CreateForm(ctx, CreateFormParams{
-		Name:       "Test Form",
-		Slug:       slug,
-		Title:      "Test Form",
-		IsActive:   true,
+		Name:         "Test Form",
+		Slug:         slug,
+		Title:        "Test Form",
+		IsActive:     true,
 		LanguageCode: getDefaultLangCode(t, q, ctx),
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		t.Fatalf("CreateForm(%s): %v", slug, err)
@@ -370,6 +372,56 @@ func TestSeedDisabled(t *testing.T) {
 	}
 	if menuCount != 0 {
 		t.Errorf("menu count = %d, want 0 when doSeed=false", menuCount)
+	}
+}
+
+func TestHasDefaultAdminCredentials(t *testing.T) {
+	db, cleanup, ctx, q := testSetup(t)
+	defer cleanup()
+
+	hasDefaults, err := HasDefaultAdminCredentials(ctx, q)
+	if err != nil {
+		t.Fatalf("HasDefaultAdminCredentials (before seed): %v", err)
+	}
+	if hasDefaults {
+		t.Fatal("expected no default admin credentials before seed")
+	}
+
+	if err := Seed(ctx, db, true); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+
+	hasDefaults, err = HasDefaultAdminCredentials(ctx, q)
+	if err != nil {
+		t.Fatalf("HasDefaultAdminCredentials (after seed): %v", err)
+	}
+	if !hasDefaults {
+		t.Fatal("expected seeded default admin credentials to be detected")
+	}
+
+	now := time.Now()
+	newHash, err := auth.HashPassword("totally-new-password-123!")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+	admin, err := q.GetUserByEmail(ctx, DefaultAdminEmail)
+	if err != nil {
+		t.Fatalf("GetUserByEmail: %v", err)
+	}
+	if err := q.UpdateUserPassword(ctx, UpdateUserPasswordParams{
+		PasswordHash: newHash,
+		UpdatedAt:    now,
+		ID:           admin.ID,
+	}); err != nil {
+		t.Fatalf("UpdateUserPassword: %v", err)
+	}
+
+	hasDefaults, err = HasDefaultAdminCredentials(ctx, q)
+	if err != nil {
+		t.Fatalf("HasDefaultAdminCredentials (after rotation): %v", err)
+	}
+	if hasDefaults {
+		t.Fatal("expected default admin credentials to be false after password rotation")
 	}
 }
 
@@ -648,7 +700,7 @@ func TestCreateCategory(t *testing.T) {
 	cat, err := q.CreateCategory(ctx, CreateCategoryParams{
 		Name: "Test Category", Slug: "test-category",
 		Description: sql.NullString{String: "A test category", Valid: true},
-		ParentID: sql.NullInt64{Valid: false}, LanguageCode: langCode, Position: 0,
+		ParentID:    sql.NullInt64{Valid: false}, LanguageCode: langCode, Position: 0,
 		CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
@@ -835,11 +887,11 @@ func TestFormSubmission(t *testing.T) {
 
 	sub, err := q.CreateFormSubmission(ctx, CreateFormSubmissionParams{
 		FormID: form.ID, Data: `{"name":"John","email":"john@example.com"}`,
-		IpAddress:  sql.NullString{String: "127.0.0.1", Valid: true},
-		UserAgent:  sql.NullString{String: "Mozilla/5.0", Valid: true},
-		IsRead:     false,
+		IpAddress:    sql.NullString{String: "127.0.0.1", Valid: true},
+		UserAgent:    sql.NullString{String: "Mozilla/5.0", Valid: true},
+		IsRead:       false,
 		LanguageCode: form.LanguageCode,
-		CreatedAt:  now,
+		CreatedAt:    now,
 	})
 	if err != nil {
 		t.Fatalf("CreateFormSubmission: %v", err)
@@ -873,11 +925,11 @@ func TestCountUnreadSubmissions(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		_, err := q.CreateFormSubmission(ctx, CreateFormSubmissionParams{
-			FormID:     form.ID,
-			Data:       `{"test":"data"}`,
-			IsRead:     false,
+			FormID:       form.ID,
+			Data:         `{"test":"data"}`,
+			IsRead:       false,
 			LanguageCode: form.LanguageCode,
-			CreatedAt:  now,
+			CreatedAt:    now,
 		})
 		if err != nil {
 			t.Fatalf("CreateFormSubmission: %v", err)

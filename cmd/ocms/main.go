@@ -452,6 +452,18 @@ func run() error {
 
 	// Update i18n from database settings
 	queries := store.New(db)
+	if cfg.Env == "production" {
+		hasDefaultAdminCreds, err := store.HasDefaultAdminCredentials(ctx, queries)
+		if err != nil {
+			return fmt.Errorf("auditing default admin credentials: %w", err)
+		}
+		if hasDefaultAdminCreds {
+			return fmt.Errorf(
+				"refusing to start in production: default seeded admin credentials are still active for %s; rotate credentials before startup",
+				store.DefaultAdminEmail,
+			)
+		}
+	}
 	if cfg.RequireAPIKeyExpiry {
 		var nonExpiringActiveKeys int
 		err := db.QueryRow(`SELECT COUNT(*) FROM api_keys WHERE is_active = 1 AND expires_at IS NULL`).Scan(&nonExpiringActiveKeys)

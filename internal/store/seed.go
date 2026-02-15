@@ -101,6 +101,29 @@ func Seed(ctx context.Context, db *sql.DB, doSeed bool) error {
 	return nil
 }
 
+// HasDefaultAdminCredentials returns true when the seeded default admin
+// credentials are still valid for the default admin account.
+func HasDefaultAdminCredentials(ctx context.Context, queries *Queries) (bool, error) {
+	user, err := queries.GetUserByEmail(ctx, DefaultAdminEmail)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("loading default admin account: %w", err)
+	}
+
+	// Only enforce the default-credential check for admin role accounts.
+	if user.Role != "admin" {
+		return false, nil
+	}
+
+	valid, err := auth.CheckPassword(DefaultAdminPassword, user.PasswordHash)
+	if err != nil {
+		return false, fmt.Errorf("verifying default admin credentials: %w", err)
+	}
+	return valid, nil
+}
+
 // seedConfig creates default configuration values.
 func seedConfig(ctx context.Context, queries *Queries) error {
 	// Check if any config exists
