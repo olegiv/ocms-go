@@ -24,6 +24,35 @@ func TestNewAPIKeysHandler(t *testing.T) {
 	}
 }
 
+func TestApplyDefaultAPIKeyExpiry(t *testing.T) {
+	now := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
+
+	t.Run("preserve explicit expiry", func(t *testing.T) {
+		explicit := sql.NullTime{
+			Time:  now.Add(24 * time.Hour),
+			Valid: true,
+		}
+		got := applyDefaultAPIKeyExpiry(explicit, now)
+		if !got.Valid {
+			t.Fatal("expiry should be valid")
+		}
+		if !got.Time.Equal(explicit.Time) {
+			t.Errorf("expiry = %s, want %s", got.Time, explicit.Time)
+		}
+	})
+
+	t.Run("assign default expiry when missing", func(t *testing.T) {
+		got := applyDefaultAPIKeyExpiry(sql.NullTime{}, now)
+		if !got.Valid {
+			t.Fatal("default expiry should be valid")
+		}
+		want := now.Add(defaultAPIKeyLifetime)
+		if !got.Time.Equal(want) {
+			t.Errorf("expiry = %s, want %s", got.Time, want)
+		}
+	})
+}
+
 func TestAPIKeyCreate(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 

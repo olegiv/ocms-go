@@ -27,6 +27,8 @@ import (
 // APIKeysPerPage is the number of API keys to display per page.
 const APIKeysPerPage = 10
 
+const defaultAPIKeyLifetime = 90 * 24 * time.Hour
+
 // APIKeysHandler handles API key management routes.
 type APIKeysHandler struct {
 	queries        *store.Queries
@@ -142,12 +144,13 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Create API key
 	now := time.Now()
+	expiresAt := applyDefaultAPIKeyExpiry(input.ExpiresAt, now)
 	apiKey, err := h.queries.CreateAPIKey(r.Context(), store.CreateAPIKeyParams{
 		Name:        input.Name,
 		KeyHash:     keyHash,
 		KeyPrefix:   prefix,
 		Permissions: permissionsJSON,
-		ExpiresAt:   input.ExpiresAt,
+		ExpiresAt:   expiresAt,
 		IsActive:    true,
 		CreatedBy:   middleware.GetUserID(r),
 		CreatedAt:   now,
@@ -317,6 +320,16 @@ type apiKeyFormInput struct {
 	Name        string
 	Permissions []string
 	ExpiresAt   sql.NullTime
+}
+
+func applyDefaultAPIKeyExpiry(expiresAt sql.NullTime, now time.Time) sql.NullTime {
+	if expiresAt.Valid {
+		return expiresAt
+	}
+	return sql.NullTime{
+		Time:  now.Add(defaultAPIKeyLifetime),
+		Valid: true,
+	}
 }
 
 // validateAPIKeyForm validates the API key form and returns validation errors.
