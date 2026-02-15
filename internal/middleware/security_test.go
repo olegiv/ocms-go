@@ -198,6 +198,28 @@ func TestBuildCSP(t *testing.T) {
 	}
 }
 
+func TestDefaultSecurityHeadersConfig_ProductionCSPIsStrict(t *testing.T) {
+	cfg := DefaultSecurityHeadersConfig(false)
+	if strings.Contains(cfg.ContentSecurityPolicy, "script-src") &&
+		strings.Contains(cfg.ContentSecurityPolicy, "script-src 'self' 'unsafe-inline'") {
+		t.Error("production CSP must not allow 'unsafe-inline' for scripts")
+	}
+	if strings.Contains(cfg.ContentSecurityPolicy, "script-src") &&
+		strings.Contains(cfg.ContentSecurityPolicy, "'unsafe-eval'") {
+		t.Error("production CSP must not allow 'unsafe-eval'")
+	}
+}
+
+func TestDefaultSecurityHeadersConfig_DevelopmentCSPAllowsUnsafeDirectives(t *testing.T) {
+	cfg := DefaultSecurityHeadersConfig(true)
+	if !strings.Contains(cfg.ContentSecurityPolicy, "'unsafe-inline'") {
+		t.Error("development CSP should allow 'unsafe-inline' for DX")
+	}
+	if !strings.Contains(cfg.ContentSecurityPolicy, "'unsafe-eval'") {
+		t.Error("development CSP should allow 'unsafe-eval' for DX")
+	}
+}
+
 func TestIntToStr(t *testing.T) {
 	tests := []struct {
 		input    int

@@ -169,8 +169,8 @@ func (m *Module) Migrations() []module.Migration {
 }
 
 // renderBar generates the HTML for the informer notification bar.
-// SECURITY: Output is cast to template.HTML. All admin-controlled values
-// (colors, text, link URL) are escaped with html.EscapeString before embedding.
+// SECURITY: Output is cast to template.HTML. All admin-controlled values are
+// escaped with html.EscapeString before embedding.
 func (m *Module) renderBar() template.HTML {
 	if m.settings == nil || !m.settings.Enabled || m.settings.Text == "" {
 		return ""
@@ -178,12 +178,13 @@ func (m *Module) renderBar() template.HTML {
 
 	bgColor := html.EscapeString(m.settings.BgColor)
 	textColor := html.EscapeString(m.settings.TextColor)
+	text := html.EscapeString(m.settings.Text)
 
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf(`<div id="informer-bar" style="display:none;background:%s;color:%s;" class="informer-bar">`, bgColor, textColor))
 	b.WriteString(`<div class="informer-bar-content">`)
 	b.WriteString(`<span class="informer-bar-spinner"></span>`)
-	b.WriteString(fmt.Sprintf(`<span class="informer-bar-text">%s</span>`, m.settings.Text))
+	b.WriteString(fmt.Sprintf(`<span class="informer-bar-text">%s</span>`, text))
 	b.WriteString(`</div>`)
 	b.WriteString(fmt.Sprintf(`<button type="button" class="informer-bar-close" aria-label="Close" style="color:%s;" onclick="dismissInformer()">`, textColor))
 	b.WriteString(`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`)

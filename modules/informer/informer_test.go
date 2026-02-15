@@ -156,7 +156,7 @@ func TestRenderBarEnabled(t *testing.T) {
 	}
 }
 
-func TestRenderBarAllowsHTML(t *testing.T) {
+func TestRenderBarEscapesHTML(t *testing.T) {
 	m := &Module{
 		settings: &Settings{
 			Enabled:   true,
@@ -168,8 +168,11 @@ func TestRenderBarAllowsHTML(t *testing.T) {
 
 	output := string(m.renderBar())
 
-	if !strings.Contains(output, `<a href="/sale">sale page</a>`) {
-		t.Error("output should render HTML in text as-is (admin-only input)")
+	if strings.Contains(output, `<a href="/sale">sale page</a>`) {
+		t.Error("output should not render raw HTML")
+	}
+	if !strings.Contains(output, `Check our &lt;a href=&#34;/sale&#34;&gt;sale page&lt;/a&gt;!`) {
+		t.Error("output should escape HTML in notification text")
 	}
 }
 
