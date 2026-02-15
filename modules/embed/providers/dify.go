@@ -333,25 +333,20 @@ function hideSuggestions(){var e=document.getElementById('dify-suggestions');if(
 function addMsg(t,type){
   var d=document.createElement('div');
   d.className='dify-msg dify-msg-'+type;
-  d.innerHTML=type==='bot'?fmt(t):esc(t);
+  d.textContent=String(t||'');
+  d.style.whiteSpace='pre-wrap';
   msgs.appendChild(d);
   msgs.scrollTop=msgs.scrollHeight;
   return d;
-}
-
-function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-
-function fmt(t){
-  return t.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g,'<em>$1</em>')
-    .replace(/\n/g,'<br>');
 }
 
 function showTyp(){
   var d=document.createElement('div');
   d.className='dify-msg dify-msg-bot dify-typing';
   d.id='dify-typ';
-  d.innerHTML='<span></span><span></span><span></span>';
+  for(var i=0;i<3;i++){
+    d.appendChild(document.createElement('span'));
+  }
   msgs.appendChild(d);
   msgs.scrollTop=msgs.scrollHeight;
 }
@@ -392,7 +387,7 @@ async function doSend(){
             var d=JSON.parse(ln.slice(6));
             if(d.event==='message'||d.event==='agent_message'){
               full+=(d.answer||'');
-              botMsg.innerHTML=fmt(full);
+              botMsg.textContent=full;
               msgs.scrollTop=msgs.scrollHeight;
               if(d.message_id)msgId=d.message_id;
             }

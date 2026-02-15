@@ -152,6 +152,12 @@ func TestDifyProvider_RenderBody(t *testing.T) {
 				"/chat-messages",
 				"AI Assistant", // default bot name
 				"#1C64F2",      // default primary color
+				"botMsg.textContent=full",
+				"d.textContent=String(t||'')",
+			},
+			excludes: []string{
+				"botMsg.innerHTML",
+				"d.innerHTML=type==='bot'",
 			},
 		},
 		{
