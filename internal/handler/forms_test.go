@@ -99,6 +99,34 @@ func TestFormsHandlerSubmit_RequireCaptchaPolicy_NoCaptchaField(t *testing.T) {
 	}
 }
 
+func TestRedactFormEventData(t *testing.T) {
+	input := map[string]string{
+		"name":              "Alice",
+		"email":             "alice@example.com",
+		"password":          "super-secret",
+		"api_token":         "tok_123",
+		"authorizationCode": "123456",
+	}
+
+	redacted := redactFormEventData(input)
+
+	if redacted["name"] != "Alice" {
+		t.Errorf("name = %q, want %q", redacted["name"], "Alice")
+	}
+	if redacted["email"] != "alice@example.com" {
+		t.Errorf("email = %q, want %q", redacted["email"], "alice@example.com")
+	}
+	if redacted["password"] != redactedFormValue {
+		t.Errorf("password should be redacted, got %q", redacted["password"])
+	}
+	if redacted["api_token"] != redactedFormValue {
+		t.Errorf("api_token should be redacted, got %q", redacted["api_token"])
+	}
+	if redacted["authorizationCode"] != redactedFormValue {
+		t.Errorf("authorizationCode should be redacted, got %q", redacted["authorizationCode"])
+	}
+}
+
 func TestFormCreate(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 

@@ -54,6 +54,22 @@ type FormsHandler struct {
 }
 
 const maxPublicFormBodyBytes int64 = 64 * 1024
+const redactedFormValue = "[REDACTED]"
+
+var sensitiveFormFieldTokens = []string{
+	"password",
+	"passwd",
+	"token",
+	"secret",
+	"api_key",
+	"apikey",
+	"authorization",
+	"auth",
+	"ssn",
+	"credit",
+	"card",
+	"cvv",
+}
 
 // NewFormsHandler creates a new FormsHandler.
 func NewFormsHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManager, hr *module.HookRegistry, tm *theme.Manager, cm *cache.Manager, ms *service.MenuService, fh *FrontendHandler) *FormsHandler {
@@ -91,7 +107,7 @@ func (h *FormsHandler) dispatchFormEvent(ctx context.Context, form store.Form, s
 		FormName:     form.Name,
 		FormSlug:     form.Slug,
 		SubmissionID: submissionID,
-		Data:         data,
+		Data:         redactFormEventData(data),
 		SubmittedAt:  time.Now(),
 	}
 
@@ -101,6 +117,31 @@ func (h *FormsHandler) dispatchFormEvent(ctx context.Context, form store.Form, s
 			"event_type", model.EventFormSubmitted,
 			"form_id", form.ID)
 	}
+}
+
+func redactFormEventData(data map[string]string) map[string]string {
+	redacted := make(map[string]string, len(data))
+	for key, value := range data {
+		if isSensitiveFormFieldName(key) {
+			redacted[key] = redactedFormValue
+			continue
+		}
+		redacted[key] = value
+	}
+	return redacted
+}
+
+func isSensitiveFormFieldName(name string) bool {
+	normalized := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(name), "-", "_"))
+	if normalized == "" {
+		return false
+	}
+	for _, token := range sensitiveFormFieldTokens {
+		if strings.Contains(normalized, token) {
+			return true
+		}
+	}
+	return false
 }
 
 // FormListItem represents a form with submission counts.
