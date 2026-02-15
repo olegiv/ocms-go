@@ -126,6 +126,75 @@ func isAPIClientAllowed(ip string) bool {
 	return false
 }
 
+func parseCIDROrIP(value string) (netip.Prefix, error) {
+	entry := strings.TrimSpace(value)
+	if entry == "" {
+		return netip.Prefix{}, fmt.Errorf("empty CIDR/IP entry")
+	}
+	if strings.Contains(entry, "/") {
+		prefix, err := netip.ParsePrefix(entry)
+		if err != nil {
+			return netip.Prefix{}, err
+		}
+		return prefix.Masked(), nil
+	}
+
+	ip, err := netip.ParseAddr(entry)
+	if err != nil {
+		return netip.Prefix{}, err
+	}
+	if ip.Is4() {
+		return netip.PrefixFrom(ip.Unmap(), 32), nil
+	}
+	return netip.PrefixFrom(ip, 128), nil
+}
+
+func isMissingAPIKeySourceCIDRTable(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "no such table") && strings.Contains(msg, "api_key_source_cidrs")
+}
+
+func isAPIKeySourceAllowed(ctx context.Context, queries *store.Queries, keyID int64, clientIP string) (bool, error) {
+	cidrs, err := queries.ListAPIKeySourceCIDRs(ctx, keyID)
+	if err != nil {
+		if isMissingAPIKeySourceCIDRTable(err) {
+			// Backward compatibility for databases that haven't applied migrations yet.
+			return true, nil
+		}
+		return false, err
+	}
+	if len(cidrs) == 0 {
+		return true, nil
+	}
+
+	parsedClientIP, ok := parseIP(clientIP)
+	if !ok {
+		return false, nil
+	}
+
+	validRules := 0
+	for _, cidr := range cidrs {
+		prefix, err := parseCIDROrIP(cidr)
+		if err != nil {
+			slog.Warn("invalid API key source CIDR entry", "key_id", keyID, "cidr", cidr, "error", err)
+			continue
+		}
+		validRules++
+		if prefix.Contains(parsedClientIP) {
+			return true, nil
+		}
+	}
+
+	if validRules == 0 {
+		slog.Warn("API key source allowlist has no valid entries", "key_id", keyID)
+	}
+
+	return false, nil
+}
+
 // WriteAPIError writes a JSON error response.
 func WriteAPIError(w http.ResponseWriter, statusCode int, code, message string, details map[string]string) {
 	w.Header().Set("Content-Type", "application/json")
@@ -144,7 +213,8 @@ func WriteAPIError(w http.ResponseWriter, statusCode int, code, message string, 
 // If required is true and validation fails, writes an error response and returns (nil, true).
 // The second return value indicates if an error response was written.
 func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queries, required bool) (*store.ApiKey, bool) {
-	if !isAPIClientAllowed(GetClientIP(r)) {
+	clientIP := GetClientIP(r)
+	if !isAPIClientAllowed(clientIP) {
 		if required {
 			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key access is not allowed from this IP", nil)
 			return nil, true
@@ -235,6 +305,23 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 	if matchedKey.ExpiresAt.Valid && time.Now().After(matchedKey.ExpiresAt.Time) {
 		if required {
 			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key has expired", nil)
+			return nil, true
+		}
+		return nil, false
+	}
+
+	allowed, err := isAPIKeySourceAllowed(r.Context(), queries, matchedKey.ID, clientIP)
+	if err != nil {
+		if required {
+			slog.Error("failed to load API key source CIDR allowlist", "error", err, "key_id", matchedKey.ID)
+			WriteAPIError(w, http.StatusInternalServerError, "internal_error", "Failed to validate API key source", nil)
+			return nil, true
+		}
+		return nil, false
+	}
+	if !allowed {
+		if required {
+			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key access is not allowed from this IP", nil)
 			return nil, true
 		}
 		return nil, false

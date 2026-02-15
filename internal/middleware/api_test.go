@@ -26,6 +26,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
+	db.SetMaxOpenConns(1)
 
 	// Create api_keys table
 	_, err = db.Exec(`
@@ -41,6 +42,18 @@ func setupTestDB(t *testing.T) *sql.DB {
 			created_by INTEGER NOT NULL DEFAULT 1,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		t.Fatalf("failed to create table: %v", err)
+	}
+
+	_, err = db.Exec(`
+		CREATE TABLE api_key_source_cidrs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			api_key_id INTEGER NOT NULL,
+			cidr TEXT NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)
 	`)
 	if err != nil {
@@ -148,6 +161,24 @@ func insertTestAPIKey(t *testing.T, db *sql.DB, name string, permissions []strin
 	}
 
 	return rawKey
+}
+
+func insertTestAPIKeySourceCIDR(t *testing.T, db *sql.DB, keyPrefix, cidr string) {
+	t.Helper()
+
+	var keyID int64
+	err := db.QueryRow(`SELECT id FROM api_keys WHERE key_prefix = ?`, keyPrefix).Scan(&keyID)
+	if err != nil {
+		t.Fatalf("failed to lookup api key by prefix: %v", err)
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO api_key_source_cidrs (api_key_id, cidr)
+		VALUES (?, ?)
+	`, keyID, cidr)
+	if err != nil {
+		t.Fatalf("failed to insert api key source cidr: %v", err)
+	}
 }
 
 func TestWriteAPIError(t *testing.T) {
@@ -355,6 +386,61 @@ func TestAPIKeyAuth_RequireExpiry(t *testing.T) {
 			t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
 		}
 	})
+}
+
+func TestAPIKeyAuth_PerKeySourceCIDRAllowlist(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	rawKey := insertTestAPIKey(t, db, "Per-Key Allowlist", []string{"pages:read"}, true, nil)
+	insertTestAPIKeySourceCIDR(t, db, model.ExtractAPIKeyPrefix(rawKey), "203.0.113.0/24")
+
+	handler := APIKeyAuth(db)(simpleOKHandler)
+
+	t.Run("allowed by per-key CIDR", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+		req.Header.Set("Authorization", "Bearer "+rawKey)
+		req.RemoteAddr = "203.0.113.25:12345"
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+		}
+	})
+
+	t.Run("blocked by per-key CIDR", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+		req.Header.Set("Authorization", "Bearer "+rawKey)
+		req.RemoteAddr = "198.51.100.25:12345"
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
+		}
+	})
+}
+
+func TestAPIKeyAuth_PerKeySourceCIDRAllowlist_MissingTableBackwardCompatible(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	rawKey := insertTestAPIKey(t, db, "No Table Key", []string{"pages:read"}, true, nil)
+	if _, err := db.Exec(`DROP TABLE api_key_source_cidrs`); err != nil {
+		t.Fatalf("failed to drop api_key_source_cidrs: %v", err)
+	}
+
+	handler := APIKeyAuth(db)(simpleOKHandler)
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req.Header.Set("Authorization", "Bearer "+rawKey)
+	req.RemoteAddr = "198.51.100.25:12345"
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+	}
 }
 
 func TestGetAPIKey_NoKey(t *testing.T) {
