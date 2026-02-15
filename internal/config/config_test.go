@@ -48,6 +48,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.RequireAPIKeyExpiry {
 		t.Error("RequireAPIKeyExpiry = true, want false")
 	}
+	if cfg.EmbedAllowedOrigins != "" {
+		t.Errorf("EmbedAllowedOrigins = %q, want empty", cfg.EmbedAllowedOrigins)
+	}
 }
 
 func TestLoad_CustomValues(t *testing.T) {
@@ -63,6 +66,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	setEnv(t, "OCMS_REQUIRE_FORM_CAPTCHA", "true")
 	setEnv(t, "OCMS_API_ALLOWED_CIDRS", "10.0.0.0/8,192.168.1.10")
 	setEnv(t, "OCMS_REQUIRE_API_KEY_EXPIRY", "true")
+	setEnv(t, "OCMS_EMBED_ALLOWED_ORIGINS", "https://example.com,https://app.example.com")
 
 	cfg, err := Load()
 	if err != nil {
@@ -98,6 +102,9 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 	if !cfg.RequireAPIKeyExpiry {
 		t.Error("RequireAPIKeyExpiry = false, want true")
+	}
+	if cfg.EmbedAllowedOrigins != "https://example.com,https://app.example.com" {
+		t.Errorf("EmbedAllowedOrigins = %q, want %q", cfg.EmbedAllowedOrigins, "https://example.com,https://app.example.com")
 	}
 }
 

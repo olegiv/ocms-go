@@ -49,6 +49,9 @@ type Config struct {
 	APIAllowedCIDRs     string `env:"OCMS_API_ALLOWED_CIDRS"`                         // Comma-separated CIDRs/IPs allowed to use API keys
 	RequireAPIKeyExpiry bool   `env:"OCMS_REQUIRE_API_KEY_EXPIRY" envDefault:"false"` // Reject API keys without expiration
 
+	// Embed proxy security configuration
+	EmbedAllowedOrigins string `env:"OCMS_EMBED_ALLOWED_ORIGINS"` // Comma-separated origins allowed to call embed proxy routes
+
 	// Seeding configuration
 	DoSeed bool `env:"OCMS_DO_SEED" envDefault:"false"` // Enable database seeding
 

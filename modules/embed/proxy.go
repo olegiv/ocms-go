@@ -55,6 +55,14 @@ func (m *Module) handleDifyChatMessagesProxy(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if !m.isRequestOriginAllowed(r) {
+		m.ctx.Logger.Warn("blocked embed proxy request by origin policy",
+			"path", r.URL.Path,
+			"origin", r.Header.Get("Origin"),
+			"referer", r.Header.Get("Referer"))
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 
 	apiEndpoint, apiKey, ok := m.getDifyProxyConfig()
 	if !ok {
@@ -84,6 +92,14 @@ func (m *Module) handleDifyChatMessagesProxy(w http.ResponseWriter, r *http.Requ
 func (m *Module) handleDifySuggestedProxy(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !m.isRequestOriginAllowed(r) {
+		m.ctx.Logger.Warn("blocked embed proxy request by origin policy",
+			"path", r.URL.Path,
+			"origin", r.Header.Get("Origin"),
+			"referer", r.Header.Get("Referer"))
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 

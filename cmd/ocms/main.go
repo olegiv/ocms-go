@@ -165,6 +165,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_TRUSTED_PROXIES   Comma-separated trusted proxy CIDRs/IPs (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_API_ALLOWED_CIDRS Comma-separated CIDRs/IPs allowed for API key access (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_EXPIRY  Reject API keys without expiration (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_ALLOWED_ORIGINS   Comma-separated allowed origins for embed proxy routes (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "\nFor more information, see: https://github.com/olegiv/ocms-go\n")
 	}
 
@@ -362,6 +363,9 @@ func run() error {
 		}
 		if !cfg.RequireAPIKeyExpiry {
 			slog.Warn("production security warning: OCMS_REQUIRE_API_KEY_EXPIRY is disabled")
+		}
+		if strings.TrimSpace(cfg.EmbedAllowedOrigins) == "" {
+			slog.Warn("production security warning: OCMS_EMBED_ALLOWED_ORIGINS is not configured")
 		}
 	}
 

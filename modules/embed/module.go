@@ -8,6 +8,7 @@ package embed
 import (
 	"database/sql"
 	"embed"
+	"fmt"
 	"html/template"
 	"strings"
 	"sync"
@@ -36,6 +37,7 @@ type Module struct {
 	settings          []*ProviderSettings
 	publicRateLimiter *middleware.GlobalRateLimiter
 	proxySemaphore    chan struct{}
+	allowedOrigins    map[string]struct{}
 	mu                sync.RWMutex
 }
 
@@ -58,6 +60,13 @@ func (m *Module) Init(ctx *module.Context) error {
 	m.ctx = ctx
 	m.publicRateLimiter = middleware.NewGlobalRateLimiter(embedProxyRateLimitRPS, embedProxyRateLimitBurst)
 	m.proxySemaphore = make(chan struct{}, embedProxyMaxConcurrent)
+	if ctx.Config != nil {
+		origins, err := parseAllowedOrigins(ctx.Config.EmbedAllowedOrigins)
+		if err != nil {
+			return fmt.Errorf("parsing embed allowed origins: %w", err)
+		}
+		m.allowedOrigins = origins
+	}
 
 	// Load enabled provider settings
 	if err := m.reloadSettings(); err != nil {
@@ -70,6 +79,7 @@ func (m *Module) Init(ctx *module.Context) error {
 		"proxy_rate_limit_rps", embedProxyRateLimitRPS,
 		"proxy_rate_limit_burst", embedProxyRateLimitBurst,
 		"proxy_max_concurrent", embedProxyMaxConcurrent,
+		"allowed_origins", len(m.allowedOrigins),
 	)
 	return nil
 }
