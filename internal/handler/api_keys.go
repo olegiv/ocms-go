@@ -35,10 +35,11 @@ const maxAPIKeySourceCIDRs = 64
 
 // APIKeysHandler handles API key management routes.
 type APIKeysHandler struct {
-	queries        *store.Queries
-	renderer       *render.Renderer
-	sessionManager *scs.SessionManager
-	eventService   *service.EventService
+	queries            *store.Queries
+	renderer           *render.Renderer
+	sessionManager     *scs.SessionManager
+	eventService       *service.EventService
+	requireSourceCIDRs bool
 }
 
 // NewAPIKeysHandler creates a new APIKeysHandler.
@@ -49,6 +50,12 @@ func NewAPIKeysHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionMan
 		sessionManager: sm,
 		eventService:   service.NewEventService(db),
 	}
+}
+
+// SetRequireSourceCIDRs configures whether API key create/update requires
+// at least one per-key source CIDR/IP entry.
+func (h *APIKeysHandler) SetRequireSourceCIDRs(required bool) {
+	h.requireSourceCIDRs = required
 }
 
 // List handles GET /admin/api-keys - displays a paginated list of API keys.
@@ -116,7 +123,7 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 	sourceCIDRsRaw := r.FormValue("source_cidrs")
 
 	// Validate form input
-	input, validationErrors := validateAPIKeyForm(name, permissions, expiresAtStr, sourceCIDRsRaw, true)
+	input, validationErrors := validateAPIKeyForm(name, permissions, expiresAtStr, sourceCIDRsRaw, true, h.requireSourceCIDRs)
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
@@ -258,7 +265,7 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 	isActive := r.FormValue("is_active") == "on" || r.FormValue("is_active") == "true"
 
 	// Validate form input (don't require future expiry for edits)
-	input, validationErrors := validateAPIKeyForm(name, permissions, expiresAtStr, sourceCIDRsRaw, false)
+	input, validationErrors := validateAPIKeyForm(name, permissions, expiresAtStr, sourceCIDRsRaw, false, h.requireSourceCIDRs)
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
@@ -383,7 +390,7 @@ func applyDefaultAPIKeyExpiry(expiresAt sql.NullTime, now time.Time) sql.NullTim
 
 // validateAPIKeyForm validates the API key form and returns validation errors.
 // requireFutureExpiry controls whether expiration date must be in the future.
-func validateAPIKeyForm(name string, permissions []string, expiresAtStr, sourceCIDRsRaw string, requireFutureExpiry bool) (apiKeyFormInput, map[string]string) {
+func validateAPIKeyForm(name string, permissions []string, expiresAtStr, sourceCIDRsRaw string, requireFutureExpiry, requireSourceCIDRs bool) (apiKeyFormInput, map[string]string) {
 	errors := make(map[string]string)
 
 	if err := validateAPIKeyName(name); err != "" {
@@ -399,6 +406,9 @@ func validateAPIKeyForm(name string, permissions []string, expiresAtStr, sourceC
 	sourceCIDRs, sourceCIDRsErr := parseAPIKeySourceCIDRs(sourceCIDRsRaw)
 	if sourceCIDRsErr != "" {
 		errors["source_cidrs"] = sourceCIDRsErr
+	}
+	if requireSourceCIDRs && len(sourceCIDRs) == 0 {
+		errors["source_cidrs"] = "At least one source CIDR/IP is required"
 	}
 
 	return apiKeyFormInput{

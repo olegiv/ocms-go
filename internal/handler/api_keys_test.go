@@ -137,6 +137,36 @@ func TestParseAPIKeySourceCIDRs(t *testing.T) {
 	})
 }
 
+func TestValidateAPIKeyForm_RequireSourceCIDRs(t *testing.T) {
+	t.Run("reject when source CIDRs are required but missing", func(t *testing.T) {
+		_, errs := validateAPIKeyForm(
+			"Key With Policy",
+			[]string{"pages:read"},
+			"",
+			"",
+			true,
+			true,
+		)
+		if errs["source_cidrs"] == "" {
+			t.Fatal("expected source_cidrs validation error")
+		}
+	})
+
+	t.Run("allow when source CIDRs are present", func(t *testing.T) {
+		_, errs := validateAPIKeyForm(
+			"Key With CIDRs",
+			[]string{"pages:read"},
+			"",
+			"203.0.113.0/24",
+			true,
+			true,
+		)
+		if errs["source_cidrs"] != "" {
+			t.Fatalf("unexpected source_cidrs validation error: %s", errs["source_cidrs"])
+		}
+	})
+}
+
 func TestAPIKeyCreate(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 
