@@ -55,6 +55,12 @@ func newPolicyTestDB(t *testing.T) *sql.DB {
 			api_key_id INTEGER NOT NULL,
 			cidr TEXT NOT NULL
 		);
+		CREATE TABLE embed_settings (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			provider TEXT NOT NULL,
+			settings TEXT NOT NULL DEFAULT '{}',
+			is_enabled INTEGER NOT NULL DEFAULT 0
+		);
 	`)
 	if err != nil {
 		t.Fatalf("creating schema: %v", err)
@@ -224,5 +230,39 @@ func TestAuditRequiredAPIKeySourceCIDRPosture_AllowsCompliantConfig(t *testing.T
 
 	if err := auditRequiredAPIKeySourceCIDRPosture(context.Background(), db); err != nil {
 		t.Fatalf("expected compliant API key source CIDR posture to pass, got: %v", err)
+	}
+}
+
+func TestAuditRequiredEmbedHTTPSPosture_RejectsNonHTTPSEndpoint(t *testing.T) {
+	db := newPolicyTestDB(t)
+
+	_, err := db.Exec(`
+		INSERT INTO embed_settings (provider, settings, is_enabled)
+		VALUES ('dify', '{"api_endpoint":"http://example.com/v1"}', 1)
+	`)
+	if err != nil {
+		t.Fatalf("inserting embed settings: %v", err)
+	}
+
+	if err := auditRequiredEmbedHTTPSPosture(context.Background(), db); err == nil {
+		t.Fatal("expected error when active embed endpoint is non-HTTPS")
+	}
+}
+
+func TestAuditRequiredEmbedHTTPSPosture_AllowsCompliantConfig(t *testing.T) {
+	db := newPolicyTestDB(t)
+
+	_, err := db.Exec(`
+		INSERT INTO embed_settings (provider, settings, is_enabled)
+		VALUES
+			('dify', '{"api_endpoint":"https://example.com/v1"}', 1),
+			('dify', '{"api_endpoint":"http://example.com/v1"}', 0)
+	`)
+	if err != nil {
+		t.Fatalf("inserting embed settings fixtures: %v", err)
+	}
+
+	if err := auditRequiredEmbedHTTPSPosture(context.Background(), db); err != nil {
+		t.Fatalf("expected compliant embed HTTPS posture to pass, got: %v", err)
 	}
 }

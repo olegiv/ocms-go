@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -284,6 +285,69 @@ func auditRequiredHTTPSOutboundPosture(ctx context.Context, db *sql.DB) error {
 			"refusing to start in production: OCMS_REQUIRE_HTTPS_OUTBOUND is enabled but %d active webhook(s) and %d active scheduled task(s) use non-HTTPS URLs",
 			invalidWebhooks,
 			invalidTasks,
+		)
+	}
+
+	return nil
+}
+
+func isMissingEmbedSettingsTable(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "no such table") && strings.Contains(msg, "embed_settings")
+}
+
+func auditRequiredEmbedHTTPSPosture(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, `SELECT provider, settings FROM embed_settings WHERE is_enabled = 1`)
+	if err != nil {
+		if isMissingEmbedSettingsTable(err) {
+			return nil
+		}
+		return fmt.Errorf("auditing embed HTTPS posture: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var invalidCount int
+	for rows.Next() {
+		var providerID string
+		var rawSettings string
+		if err := rows.Scan(&providerID, &rawSettings); err != nil {
+			return fmt.Errorf("auditing embed HTTPS posture: %w", err)
+		}
+
+		// Current built-in outbound embed provider is Dify.
+		if providerID != "dify" {
+			continue
+		}
+
+		var settings map[string]any
+		if err := json.Unmarshal([]byte(rawSettings), &settings); err != nil {
+			invalidCount++
+			continue
+		}
+
+		apiEndpoint, _ := settings["api_endpoint"].(string)
+		apiEndpoint = strings.TrimSpace(apiEndpoint)
+		parsedEndpoint, err := url.Parse(apiEndpoint)
+		if err != nil || !strings.EqualFold(parsedEndpoint.Scheme, "https") || strings.TrimSpace(parsedEndpoint.Host) == "" {
+			invalidCount++
+			continue
+		}
+		if err := util.ValidateWebhookURL(apiEndpoint); err != nil {
+			invalidCount++
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("auditing embed HTTPS posture: %w", err)
+	}
+
+	if invalidCount > 0 {
+		return fmt.Errorf(
+			"refusing to start in production: OCMS_REQUIRE_HTTPS_OUTBOUND is enabled but %d active embed provider endpoint(s) are invalid or non-HTTPS",
+			invalidCount,
 		)
 	}
 
@@ -774,6 +838,9 @@ func run() error {
 	}
 	if cfg.Env == "production" && cfg.RequireHTTPSOutbound {
 		if err := auditRequiredHTTPSOutboundPosture(ctx, db); err != nil {
+			return err
+		}
+		if err := auditRequiredEmbedHTTPSPosture(ctx, db); err != nil {
 			return err
 		}
 	}
