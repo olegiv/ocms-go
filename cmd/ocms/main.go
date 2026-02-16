@@ -143,6 +143,43 @@ func registerFrontendRoutes(r chi.Router, h *handler.FrontendHandler) {
 	})
 }
 
+func logSeedingSecuritySignals(ctx context.Context, cfg *config.Config, events *service.EventService, hasDefaultAdminCreds bool) {
+	if cfg == nil || events == nil {
+		return
+	}
+
+	if cfg.DoSeed {
+		_ = events.LogSecurityEvent(
+			ctx,
+			"warning",
+			"Database seeding is enabled",
+			nil,
+			"",
+			"",
+			map[string]any{
+				"environment":   cfg.Env,
+				"seed_enabled":  true,
+				"default_admin": store.DefaultAdminEmail,
+			},
+		)
+	}
+
+	if hasDefaultAdminCreds {
+		_ = events.LogSecurityEvent(
+			ctx,
+			"warning",
+			"Default seeded admin credentials are still active",
+			nil,
+			"",
+			"",
+			map[string]any{
+				"environment":   cfg.Env,
+				"default_admin": store.DefaultAdminEmail,
+			},
+		)
+	}
+}
+
 func main() {
 	// Parse CLI flags
 	showVersion := flag.Bool("version", false, "Show version information")
@@ -876,6 +913,7 @@ func run() error {
 	logger = slog.New(eventLogHandler)
 	slog.SetDefault(logger)
 	slog.Info("event log integration enabled", "min_level", "warn")
+	eventService := service.NewEventService(db)
 
 	// Seed default data
 	ctx := context.Background()
@@ -892,11 +930,12 @@ func run() error {
 
 	// Update i18n from database settings
 	queries := store.New(db)
+	hasDefaultAdminCreds, err := store.HasDefaultAdminCredentials(ctx, queries)
+	if err != nil {
+		return fmt.Errorf("auditing default admin credentials: %w", err)
+	}
+	logSeedingSecuritySignals(ctx, cfg, eventService, hasDefaultAdminCreds)
 	if cfg.Env == "production" {
-		hasDefaultAdminCreds, err := store.HasDefaultAdminCredentials(ctx, queries)
-		if err != nil {
-			return fmt.Errorf("auditing default admin credentials: %w", err)
-		}
 		if hasDefaultAdminCreds {
 			return fmt.Errorf(
 				"refusing to start in production: default seeded admin credentials are still active for %s; rotate credentials before startup",
@@ -1000,9 +1039,6 @@ func run() error {
 
 	// Initialize hook registry
 	hookRegistry := module.NewHookRegistry(logger)
-
-	// Initialize event service for modules
-	eventService := service.NewEventService(db)
 
 	// Initialize module registry
 	moduleRegistry := module.NewRegistry(logger)
