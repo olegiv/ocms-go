@@ -209,6 +209,29 @@ func TestDetectSuspiciousPageHTMLTokens(t *testing.T) {
 	})
 }
 
+func TestValidatePageBodySecurityPolicy(t *testing.T) {
+	t.Run("disabled policy allows suspicious body", func(t *testing.T) {
+		errMsg := validatePageBodySecurityPolicy(`<script>alert(1)</script>`, false)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+	})
+
+	t.Run("enabled policy blocks suspicious body", func(t *testing.T) {
+		errMsg := validatePageBodySecurityPolicy(`<script>alert(1)</script>`, true)
+		if errMsg == "" {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("enabled policy allows clean body", func(t *testing.T) {
+		errMsg := validatePageBodySecurityPolicy(`<p>hello</p>`, true)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+	})
+}
+
 // TestPageScheduling tests page scheduling logic
 func TestPageScheduling(t *testing.T) {
 	now := time.Now()

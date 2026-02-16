@@ -74,6 +74,7 @@ type Config struct {
 	// Frontend content hardening
 	SanitizePageHTML        bool `env:"OCMS_SANITIZE_PAGE_HTML" envDefault:"false"`         // Sanitize page HTML before rendering to visitors
 	RequireSanitizePageHTML bool `env:"OCMS_REQUIRE_SANITIZE_PAGE_HTML" envDefault:"false"` // Reject startup in production if page HTML sanitization is disabled
+	BlockSuspiciousPageHTML bool `env:"OCMS_BLOCK_SUSPICIOUS_PAGE_HTML" envDefault:"false"` // Reject page create/update when suspicious HTML patterns are detected
 }
 
 // IsDevelopment returns true if the application is running in development mode.

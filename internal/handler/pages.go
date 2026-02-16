@@ -60,12 +60,13 @@ var suspiciousPageHTMLTokens = []string{
 
 // PagesHandler handles page management routes.
 type PagesHandler struct {
-	queries        *store.Queries
-	renderer       *render.Renderer
-	sessionManager *scs.SessionManager
-	dispatcher     *webhook.Dispatcher
-	eventService   *service.EventService
-	cacheManager   *cache.Manager
+	queries               *store.Queries
+	renderer              *render.Renderer
+	sessionManager        *scs.SessionManager
+	dispatcher            *webhook.Dispatcher
+	eventService          *service.EventService
+	cacheManager          *cache.Manager
+	blockSuspiciousMarkup bool
 }
 
 // NewPagesHandler creates a new PagesHandler.
@@ -86,6 +87,12 @@ func (h *PagesHandler) SetDispatcher(d *webhook.Dispatcher) {
 // SetCacheManager sets the cache manager for cache invalidation.
 func (h *PagesHandler) SetCacheManager(cm *cache.Manager) {
 	h.cacheManager = cm
+}
+
+// SetBlockSuspiciousMarkup configures whether page writes should be blocked
+// when suspicious HTML tokens are detected in body content.
+func (h *PagesHandler) SetBlockSuspiciousMarkup(block bool) {
+	h.blockSuspiciousMarkup = block
 }
 
 // invalidatePageCache invalidates the page cache after a page is modified.
@@ -562,6 +569,9 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if errMsg := h.validateFeaturedImageSize(r.Context(), input.FeaturedImageID, lang); errMsg != "" {
 		validationErrors["featured_image_id"] = errMsg
 	}
+	if bodyErr := validatePageBodySecurityPolicy(input.Body, h.blockSuspiciousMarkup); bodyErr != "" {
+		validationErrors["body"] = bodyErr
+	}
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
@@ -822,6 +832,9 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Featured image size validation
 	if errMsg := h.validateFeaturedImageSize(r.Context(), input.FeaturedImageID, lang); errMsg != "" {
 		validationErrors["featured_image_id"] = errMsg
+	}
+	if bodyErr := validatePageBodySecurityPolicy(input.Body, h.blockSuspiciousMarkup); bodyErr != "" {
+		validationErrors["body"] = bodyErr
 	}
 
 	// If there are validation errors, re-render the form
@@ -1543,6 +1556,17 @@ func detectSuspiciousPageHTMLTokens(body string) []string {
 		}
 	}
 	return matches
+}
+
+func validatePageBodySecurityPolicy(body string, blockSuspicious bool) string {
+	if !blockSuspicious {
+		return ""
+	}
+	tokens := detectSuspiciousPageHTMLTokens(body)
+	if len(tokens) == 0 {
+		return ""
+	}
+	return "Body contains suspicious HTML markup that is blocked by policy"
 }
 
 // savePageTags saves tag associations for a page from form values.

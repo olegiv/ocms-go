@@ -183,6 +183,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_HTTPS_OUTBOUND  Require HTTPS for outbound integration URLs (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SANITIZE_PAGE_HTML  Sanitize page HTML before rendering to visitors (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_SANITIZE_PAGE_HTML  Reject production startup when page HTML sanitization is disabled (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_BLOCK_SUSPICIOUS_PAGE_HTML  Reject page writes with suspicious HTML markup (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "\nFor more information, see: https://github.com/olegiv/ocms-go\n")
 	}
 
@@ -761,6 +762,9 @@ func run() error {
 		if !cfg.RequireSanitizePageHTML {
 			slog.Warn("production security warning: OCMS_REQUIRE_SANITIZE_PAGE_HTML is disabled")
 		}
+		if !cfg.BlockSuspiciousPageHTML {
+			slog.Warn("production security warning: OCMS_BLOCK_SUSPICIOUS_PAGE_HTML is disabled")
+		}
 	}
 
 	if err := middleware.ConfigureTrustedProxies(cfg.TrustedProxies); err != nil {
@@ -1148,6 +1152,10 @@ func run() error {
 	adminHandler := handler.NewAdminHandler(db, renderer, sessionManager, cacheManager)
 	usersHandler := handler.NewUsersHandler(db, renderer, sessionManager)
 	pagesHandler := handler.NewPagesHandler(db, renderer, sessionManager)
+	pagesHandler.SetBlockSuspiciousMarkup(cfg.BlockSuspiciousPageHTML)
+	if cfg.BlockSuspiciousPageHTML {
+		slog.Info("page suspicious HTML blocking policy enabled")
+	}
 	configHandler := handler.NewConfigHandler(db, renderer, sessionManager, cacheManager)
 	eventsHandler := handler.NewEventsHandler(db, renderer, sessionManager)
 	taxonomyHandler := handler.NewTaxonomyHandler(db, renderer, sessionManager)
