@@ -89,15 +89,17 @@ func (t *apiKeySourceTrackerState) Observe(keyID int64, ip string, now time.Time
 }
 
 var (
-	apiAllowedCIDRsMu          sync.RWMutex
-	apiAllowedCIDRs            []netip.Prefix
-	requireAPIAllowedCIDRs     bool
-	requireAPIAllowedCIDRsMu   sync.RWMutex
-	requireAPIKeyExpiry        bool
-	requireAPIKeyExpiryMu      sync.RWMutex
-	requireAPIKeySourceCIDRs   bool
-	requireAPIKeySourceCIDRsMu sync.RWMutex
-	apiKeySourceTracker        = newAPIKeySourceTracker(24 * time.Hour)
+	apiAllowedCIDRsMu            sync.RWMutex
+	apiAllowedCIDRs              []netip.Prefix
+	requireAPIAllowedCIDRs       bool
+	requireAPIAllowedCIDRsMu     sync.RWMutex
+	requireAPIKeyExpiry          bool
+	requireAPIKeyExpiryMu        sync.RWMutex
+	requireAPIKeySourceCIDRs     bool
+	requireAPIKeySourceCIDRsMu   sync.RWMutex
+	revokeAPIKeyOnSourceChange   bool
+	revokeAPIKeyOnSourceChangeMu sync.RWMutex
+	apiKeySourceTracker          = newAPIKeySourceTracker(24 * time.Hour)
 )
 
 // SetRequireAPIKeyExpiry configures whether API keys must have an expiration timestamp.
@@ -125,6 +127,21 @@ func isAPIKeySourceCIDRsRequired() bool {
 	requireAPIKeySourceCIDRsMu.RLock()
 	defer requireAPIKeySourceCIDRsMu.RUnlock()
 	return requireAPIKeySourceCIDRs
+}
+
+// SetRevokeAPIKeyOnSourceIPChange configures whether API keys should be
+// deactivated when their observed source IP changes and no per-key source CIDRs
+// are configured for the key.
+func SetRevokeAPIKeyOnSourceIPChange(enabled bool) {
+	revokeAPIKeyOnSourceChangeMu.Lock()
+	revokeAPIKeyOnSourceChange = enabled
+	revokeAPIKeyOnSourceChangeMu.Unlock()
+}
+
+func shouldRevokeAPIKeyOnSourceIPChange() bool {
+	revokeAPIKeyOnSourceChangeMu.RLock()
+	defer revokeAPIKeyOnSourceChangeMu.RUnlock()
+	return revokeAPIKeyOnSourceChange
 }
 
 // SetRequireAPIAllowedCIDRs configures whether API auth requires at least one
@@ -462,6 +479,29 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 			"previous_ip", previousIP,
 			"current_ip", clientIP,
 			"path", r.URL.Path)
+		if shouldRevokeAPIKeyOnSourceIPChange() && !hasSourceCIDRs {
+			if err := queries.DeactivateAPIKey(r.Context(), store.DeactivateAPIKeyParams{
+				UpdatedAt: time.Now(),
+				ID:        matchedKey.ID,
+			}); err != nil {
+				slog.Error("failed to deactivate API key after source IP anomaly",
+					"error", err,
+					"key_id", matchedKey.ID,
+					"path", r.URL.Path,
+					"ip", clientIP)
+			} else {
+				slog.Warn("API key deactivated due to source IP anomaly",
+					"key_id", matchedKey.ID,
+					"previous_ip", previousIP,
+					"current_ip", clientIP,
+					"path", r.URL.Path)
+				if required {
+					WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key was deactivated due to source IP anomaly", nil)
+					return nil, true
+				}
+				return nil, false
+			}
+		}
 	}
 
 	return matchedKey, false

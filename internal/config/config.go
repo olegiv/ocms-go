@@ -47,10 +47,11 @@ type Config struct {
 	RequireTrustedProxies bool   `env:"OCMS_REQUIRE_TRUSTED_PROXIES" envDefault:"false"` // Reject startup in production when trusted proxies are not configured
 
 	// API access restriction configuration
-	APIAllowedCIDRs          string `env:"OCMS_API_ALLOWED_CIDRS"`                               // Comma-separated CIDRs/IPs allowed to use API keys
-	RequireAPIAllowedCIDRs   bool   `env:"OCMS_REQUIRE_API_ALLOWED_CIDRS" envDefault:"false"`    // Reject API key auth if no global source CIDRs are configured
-	RequireAPIKeyExpiry      bool   `env:"OCMS_REQUIRE_API_KEY_EXPIRY" envDefault:"false"`       // Reject API keys without expiration
-	RequireAPIKeySourceCIDRs bool   `env:"OCMS_REQUIRE_API_KEY_SOURCE_CIDRS" envDefault:"false"` // Reject API keys that have no per-key source CIDR entries
+	APIAllowedCIDRs              string `env:"OCMS_API_ALLOWED_CIDRS"`                                     // Comma-separated CIDRs/IPs allowed to use API keys
+	RequireAPIAllowedCIDRs       bool   `env:"OCMS_REQUIRE_API_ALLOWED_CIDRS" envDefault:"false"`          // Reject API key auth if no global source CIDRs are configured
+	RequireAPIKeyExpiry          bool   `env:"OCMS_REQUIRE_API_KEY_EXPIRY" envDefault:"false"`             // Reject API keys without expiration
+	RequireAPIKeySourceCIDRs     bool   `env:"OCMS_REQUIRE_API_KEY_SOURCE_CIDRS" envDefault:"false"`       // Reject API keys that have no per-key source CIDR entries
+	RevokeAPIKeyOnSourceIPChange bool   `env:"OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE" envDefault:"false"` // Deactivate API keys when source IP changes and no per-key source CIDRs are configured
 
 	// Embed proxy security configuration
 	EmbedAllowedOrigins        string `env:"OCMS_EMBED_ALLOWED_ORIGINS"`                            // Comma-separated origins allowed to call embed proxy routes

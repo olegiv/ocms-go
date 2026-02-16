@@ -99,6 +99,16 @@ func setRequireAPIAllowedCIDRsForTest(t *testing.T, required bool) {
 	})
 }
 
+func setRevokeAPIKeyOnSourceIPChangeForTest(t *testing.T, enabled bool) {
+	t.Helper()
+	SetRevokeAPIKeyOnSourceIPChange(enabled)
+	apiKeySourceTracker = newAPIKeySourceTracker(24 * time.Hour)
+	t.Cleanup(func() {
+		SetRevokeAPIKeyOnSourceIPChange(false)
+		apiKeySourceTracker = newAPIKeySourceTracker(24 * time.Hour)
+	})
+}
+
 // simpleOKHandler returns an http.Handler that writes 200 OK.
 var simpleOKHandler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
@@ -595,6 +605,79 @@ func TestAPIKeyAuth_RequirePerKeySourceCIDRs_MissingTable(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
+	}
+}
+
+func TestAPIKeyAuth_RevokeOnSourceIPChange(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+	setRevokeAPIKeyOnSourceIPChangeForTest(t, true)
+
+	rawKey := insertTestAPIKey(t, db, "Revoke On Source Change", []string{"pages:read"}, true, nil)
+	handler := APIKeyAuth(db)(simpleOKHandler)
+
+	req1 := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req1.Header.Set("Authorization", "Bearer "+rawKey)
+	req1.RemoteAddr = "203.0.113.10:12345"
+	w1 := httptest.NewRecorder()
+	handler.ServeHTTP(w1, req1)
+	if w1.Code != http.StatusOK {
+		t.Fatalf("first request status = %d, want %d", w1.Code, http.StatusOK)
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req2.Header.Set("Authorization", "Bearer "+rawKey)
+	req2.RemoteAddr = "198.51.100.20:12345"
+	w2 := httptest.NewRecorder()
+	handler.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusUnauthorized {
+		t.Fatalf("second request status = %d, want %d", w2.Code, http.StatusUnauthorized)
+	}
+
+	var isActive bool
+	err := db.QueryRow(`SELECT is_active FROM api_keys WHERE key_prefix = ?`, model.ExtractAPIKeyPrefix(rawKey)).Scan(&isActive)
+	if err != nil {
+		t.Fatalf("failed to load key active status: %v", err)
+	}
+	if isActive {
+		t.Fatal("expected key to be deactivated after source IP anomaly")
+	}
+}
+
+func TestAPIKeyAuth_RevokeOnSourceIPChange_SkipsWhenPerKeyCIDRsConfigured(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+	setRevokeAPIKeyOnSourceIPChangeForTest(t, true)
+
+	rawKey := insertTestAPIKey(t, db, "No Revoke With CIDRs", []string{"pages:read"}, true, nil)
+	insertTestAPIKeySourceCIDR(t, db, model.ExtractAPIKeyPrefix(rawKey), "203.0.113.0/24")
+	handler := APIKeyAuth(db)(simpleOKHandler)
+
+	req1 := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req1.Header.Set("Authorization", "Bearer "+rawKey)
+	req1.RemoteAddr = "203.0.113.10:12345"
+	w1 := httptest.NewRecorder()
+	handler.ServeHTTP(w1, req1)
+	if w1.Code != http.StatusOK {
+		t.Fatalf("first request status = %d, want %d", w1.Code, http.StatusOK)
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req2.Header.Set("Authorization", "Bearer "+rawKey)
+	req2.RemoteAddr = "203.0.113.11:12345"
+	w2 := httptest.NewRecorder()
+	handler.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("second request status = %d, want %d", w2.Code, http.StatusOK)
+	}
+
+	var isActive bool
+	err := db.QueryRow(`SELECT is_active FROM api_keys WHERE key_prefix = ?`, model.ExtractAPIKeyPrefix(rawKey)).Scan(&isActive)
+	if err != nil {
+		t.Fatalf("failed to load key active status: %v", err)
+	}
+	if !isActive {
+		t.Fatal("expected key to remain active when per-key source CIDRs are configured")
 	}
 }
 

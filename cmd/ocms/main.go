@@ -171,6 +171,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_ALLOWED_CIDRS  Reject API key auth when global source CIDRs are not configured (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_EXPIRY  Reject API keys without expiration (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_SOURCE_CIDRS  Reject API keys without per-key CIDR restrictions (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE  Deactivate API keys when source IP changes without per-key CIDRs (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_ALLOWED_ORIGINS   Comma-separated allowed origins for embed proxy routes (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS  Reject production startup when embed proxy is active without origin allowlist (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_PROXY_TOKEN   Optional shared token required by embed proxy routes\n")
@@ -583,6 +584,9 @@ func run() error {
 		if !cfg.RequireAPIKeySourceCIDRs {
 			slog.Warn("production security warning: OCMS_REQUIRE_API_KEY_SOURCE_CIDRS is disabled")
 		}
+		if !cfg.RevokeAPIKeyOnSourceIPChange {
+			slog.Warn("production security warning: OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE is disabled")
+		}
 		if strings.TrimSpace(cfg.EmbedAllowedOrigins) == "" {
 			slog.Warn("production security warning: OCMS_EMBED_ALLOWED_ORIGINS is not configured")
 		}
@@ -623,6 +627,10 @@ func run() error {
 	middleware.SetRequireAPIKeySourceCIDRs(cfg.RequireAPIKeySourceCIDRs)
 	if cfg.RequireAPIKeySourceCIDRs {
 		slog.Info("API key per-key source CIDR enforcement enabled")
+	}
+	middleware.SetRevokeAPIKeyOnSourceIPChange(cfg.RevokeAPIKeyOnSourceIPChange)
+	if cfg.RevokeAPIKeyOnSourceIPChange {
+		slog.Info("API key source IP anomaly auto-revocation enabled")
 	}
 	util.SetRequireHTTPSOutbound(cfg.RequireHTTPSOutbound)
 	scheduler.SetRequireHTTPSOutbound(cfg.RequireHTTPSOutbound)

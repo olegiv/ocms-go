@@ -63,6 +63,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.RequireAPIKeySourceCIDRs {
 		t.Error("RequireAPIKeySourceCIDRs = true, want false")
 	}
+	if cfg.RevokeAPIKeyOnSourceIPChange {
+		t.Error("RevokeAPIKeyOnSourceIPChange = true, want false")
+	}
 	if cfg.EmbedAllowedOrigins != "" {
 		t.Errorf("EmbedAllowedOrigins = %q, want empty", cfg.EmbedAllowedOrigins)
 	}
@@ -104,6 +107,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	setEnv(t, "OCMS_REQUIRE_API_ALLOWED_CIDRS", "true")
 	setEnv(t, "OCMS_REQUIRE_API_KEY_EXPIRY", "true")
 	setEnv(t, "OCMS_REQUIRE_API_KEY_SOURCE_CIDRS", "true")
+	setEnv(t, "OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE", "true")
 	setEnv(t, "OCMS_EMBED_ALLOWED_ORIGINS", "https://example.com,https://app.example.com")
 	setEnv(t, "OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS", "true")
 	setEnv(t, "OCMS_EMBED_PROXY_TOKEN", "embed-token-test")
@@ -161,6 +165,9 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 	if !cfg.RequireAPIKeySourceCIDRs {
 		t.Error("RequireAPIKeySourceCIDRs = false, want true")
+	}
+	if !cfg.RevokeAPIKeyOnSourceIPChange {
+		t.Error("RevokeAPIKeyOnSourceIPChange = false, want true")
 	}
 	if cfg.EmbedAllowedOrigins != "https://example.com,https://app.example.com" {
 		t.Errorf("EmbedAllowedOrigins = %q, want %q", cfg.EmbedAllowedOrigins, "https://example.com,https://app.example.com")

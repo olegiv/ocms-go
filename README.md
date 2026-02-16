@@ -192,6 +192,7 @@ sudo dnf install vips-devel
 | `OCMS_REQUIRE_API_ALLOWED_CIDRS` | Fail API key auth when global API source CIDRs are not configured | `false` | No |
 | `OCMS_REQUIRE_API_KEY_EXPIRY` | Require API keys to have expiration timestamps | `false` | No |
 | `OCMS_REQUIRE_API_KEY_SOURCE_CIDRS` | Require API keys to have per-key source CIDR restrictions | `false` | No |
+| `OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE` | Deactivate API keys when source IP changes and the key has no per-key CIDRs | `false` | No |
 | `OCMS_EMBED_ALLOWED_ORIGINS` | Allowed browser origins for public embed proxy routes | - | No |
 | `OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS` | Fail startup in production if embed proxy is active without origin allowlist | `false` | No |
 | `OCMS_EMBED_PROXY_TOKEN` | Shared token required by embed proxy routes when enabled | - | No |
