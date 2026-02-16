@@ -187,6 +187,7 @@ sudo dnf install vips-devel
 | `OCMS_GEOIP_DB_PATH` | Path to GeoLite2-Country.mmdb for country detection | - | No |
 | `OCMS_UPLOADS_DIR` | Directory for uploaded media files | `./uploads` | No |
 | `OCMS_TRUSTED_PROXIES` | Trusted reverse-proxy CIDRs/IPs; forwarding headers are ignored unless peer is trusted | - | No |
+| `OCMS_REQUIRE_TRUSTED_PROXIES` | Fail startup in production if trusted proxy CIDRs/IPs are not configured | `false` | No |
 | `OCMS_API_ALLOWED_CIDRS` | Global source CIDRs/IPs allowed to use API keys | - | No |
 | `OCMS_REQUIRE_API_ALLOWED_CIDRS` | Fail API key auth when global API source CIDRs are not configured | `false` | No |
 | `OCMS_REQUIRE_API_KEY_EXPIRY` | Require API keys to have expiration timestamps | `false` | No |

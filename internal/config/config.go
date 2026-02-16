@@ -43,7 +43,8 @@ type Config struct {
 	GeoIPDBPath string `env:"OCMS_GEOIP_DB_PATH"` // Path to GeoLite2-Country.mmdb file
 
 	// Reverse proxy configuration
-	TrustedProxies string `env:"OCMS_TRUSTED_PROXIES"` // Comma-separated CIDRs/IPs of trusted reverse proxies
+	TrustedProxies        string `env:"OCMS_TRUSTED_PROXIES"`                            // Comma-separated CIDRs/IPs of trusted reverse proxies
+	RequireTrustedProxies bool   `env:"OCMS_REQUIRE_TRUSTED_PROXIES" envDefault:"false"` // Reject startup in production when trusted proxies are not configured
 
 	// API access restriction configuration
 	APIAllowedCIDRs          string `env:"OCMS_API_ALLOWED_CIDRS"`                               // Comma-separated CIDRs/IPs allowed to use API keys
@@ -113,6 +114,9 @@ func Load() (*Config, error) {
 	}
 	if cfg.Env == "production" && cfg.RequireAPIAllowedCIDRs && strings.TrimSpace(cfg.APIAllowedCIDRs) == "" {
 		return nil, fmt.Errorf("OCMS_API_ALLOWED_CIDRS must be configured in production when OCMS_REQUIRE_API_ALLOWED_CIDRS is enabled")
+	}
+	if cfg.Env == "production" && cfg.RequireTrustedProxies && strings.TrimSpace(cfg.TrustedProxies) == "" {
+		return nil, fmt.Errorf("OCMS_TRUSTED_PROXIES must be configured in production when OCMS_REQUIRE_TRUSTED_PROXIES is enabled")
 	}
 	if cfg.Env == "production" && cfg.RequireEmbedProxyToken && strings.TrimSpace(cfg.EmbedProxyToken) == "" {
 		return nil, fmt.Errorf("OCMS_EMBED_PROXY_TOKEN must be configured in production when OCMS_REQUIRE_EMBED_PROXY_TOKEN is enabled")

@@ -166,6 +166,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_ACTIVE_THEME      Active theme name (default: default)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REDIS_URL         Redis URL for distributed caching (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_TRUSTED_PROXIES   Comma-separated trusted proxy CIDRs/IPs (optional)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_TRUSTED_PROXIES  Reject production startup when trusted proxies are not configured (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_API_ALLOWED_CIDRS Comma-separated CIDRs/IPs allowed for API key access (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_ALLOWED_CIDRS  Reject API key auth when global source CIDRs are not configured (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_EXPIRY  Reject API keys without expiration (default: false)\n")
@@ -566,6 +567,9 @@ func run() error {
 		}
 		if !cfg.RequireWebhookFormDataMinimization {
 			slog.Warn("production security warning: OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION is disabled")
+		}
+		if !cfg.RequireTrustedProxies {
+			slog.Warn("production security warning: OCMS_REQUIRE_TRUSTED_PROXIES is disabled")
 		}
 		if strings.TrimSpace(cfg.APIAllowedCIDRs) == "" {
 			slog.Warn("production security warning: OCMS_API_ALLOWED_CIDRS is not configured")

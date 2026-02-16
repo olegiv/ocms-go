@@ -48,6 +48,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.RequireWebhookFormDataMinimization {
 		t.Error("RequireWebhookFormDataMinimization = true, want false")
 	}
+	if cfg.RequireTrustedProxies {
+		t.Error("RequireTrustedProxies = true, want false")
+	}
 	if cfg.APIAllowedCIDRs != "" {
 		t.Errorf("APIAllowedCIDRs = %q, want empty", cfg.APIAllowedCIDRs)
 	}
@@ -93,6 +96,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	setEnv(t, "OCMS_ENV", "production")
 	setEnv(t, "OCMS_LOG_LEVEL", "debug")
 	setEnv(t, "OCMS_TRUSTED_PROXIES", "127.0.0.1/32,10.0.0.0/8")
+	setEnv(t, "OCMS_REQUIRE_TRUSTED_PROXIES", "true")
 	setEnv(t, "OCMS_REQUIRE_FORM_CAPTCHA", "true")
 	setEnv(t, "OCMS_WEBHOOK_FORM_DATA_MODE", "none")
 	setEnv(t, "OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION", "true")
@@ -133,6 +137,9 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 	if cfg.TrustedProxies != "127.0.0.1/32,10.0.0.0/8" {
 		t.Errorf("TrustedProxies = %q, want %q", cfg.TrustedProxies, "127.0.0.1/32,10.0.0.0/8")
+	}
+	if !cfg.RequireTrustedProxies {
+		t.Error("RequireTrustedProxies = false, want true")
 	}
 	if !cfg.RequireFormCaptcha {
 		t.Error("RequireFormCaptcha = false, want true")
@@ -213,6 +220,19 @@ func TestLoad_RequireAPIAllowedCIDRsInProduction(t *testing.T) {
 	_, err := Load()
 	if err == nil {
 		t.Fatal("Load() should fail when OCMS_REQUIRE_API_ALLOWED_CIDRS=true and OCMS_API_ALLOWED_CIDRS is empty in production")
+	}
+}
+
+func TestLoad_RequireTrustedProxiesInProduction(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_REQUIRE_TRUSTED_PROXIES", "true")
+	setEnv(t, "OCMS_TRUSTED_PROXIES", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when OCMS_REQUIRE_TRUSTED_PROXIES=true and OCMS_TRUSTED_PROXIES is empty in production")
 	}
 }
 
