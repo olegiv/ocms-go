@@ -539,6 +539,11 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 					"key_id", matchedKey.ID,
 					"path", r.URL.Path,
 					"ip", clientIP)
+				if required {
+					WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key access denied due to source IP anomaly", nil)
+					return nil, true
+				}
+				return nil, false
 			} else {
 				slog.Warn("API key deactivated due to source IP anomaly",
 					"key_id", matchedKey.ID,

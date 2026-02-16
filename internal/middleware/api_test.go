@@ -736,6 +736,37 @@ func TestAPIKeyAuth_RevokeOnSourceIPChange_SkipsWhenPerKeyCIDRsConfigured(t *tes
 	}
 }
 
+func TestAPIKeyAuth_RevokeOnSourceIPChange_FailClosedOnDeactivateError(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+	setRevokeAPIKeyOnSourceIPChangeForTest(t, true)
+
+	rawKey := insertTestAPIKey(t, db, "Revoke Fail Closed", []string{"pages:read"}, true, nil)
+	handler := APIKeyAuth(db)(simpleOKHandler)
+
+	req1 := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req1.Header.Set("Authorization", "Bearer "+rawKey)
+	req1.RemoteAddr = "203.0.113.10:12345"
+	w1 := httptest.NewRecorder()
+	handler.ServeHTTP(w1, req1)
+	if w1.Code != http.StatusOK {
+		t.Fatalf("first request status = %d, want %d", w1.Code, http.StatusOK)
+	}
+
+	if _, err := db.Exec(`PRAGMA query_only = ON`); err != nil {
+		t.Fatalf("failed to enable sqlite query_only mode: %v", err)
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req2.Header.Set("Authorization", "Bearer "+rawKey)
+	req2.RemoteAddr = "198.51.100.20:12345"
+	w2 := httptest.NewRecorder()
+	handler.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusUnauthorized {
+		t.Fatalf("second request status = %d, want %d", w2.Code, http.StatusUnauthorized)
+	}
+}
+
 func TestGetAPIKey_NoKey(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/test", nil)
 	apiKey := GetAPIKey(req)
