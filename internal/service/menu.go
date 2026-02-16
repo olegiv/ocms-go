@@ -250,4 +250,3 @@ func (s *MenuService) buildMenuTree(items []store.ListMenuItemsWithPageRow) []Me
 
 	return roots
 }
-

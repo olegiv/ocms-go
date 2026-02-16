@@ -48,14 +48,14 @@ func TestExportWithMediaToZip(t *testing.T) {
 
 	// Create media record in database
 	media, err := ts.Queries.CreateMedia(ts.Ctx, store.CreateMediaParams{
-		Uuid:       testMediaUUID,
-		Filename:   testFilename,
-		MimeType:   "image/jpeg",
-		Size:       int64(len(testContent)),
-		UploadedBy: ts.User.ID,
+		Uuid:         testMediaUUID,
+		Filename:     testFilename,
+		MimeType:     "image/jpeg",
+		Size:         int64(len(testContent)),
+		UploadedBy:   ts.User.ID,
 		LanguageCode: lang.Code,
-		CreatedAt:  ts.Now,
-		UpdatedAt:  ts.Now,
+		CreatedAt:    ts.Now,
+		UpdatedAt:    ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create media record: %v", err)
@@ -195,14 +195,14 @@ func TestImportFromZip(t *testing.T) {
 
 	// Create media record
 	_, err = srcQueries.CreateMedia(ctx, store.CreateMediaParams{
-		Uuid:       testMediaUUID,
-		Filename:   testFilename,
-		MimeType:   "image/png",
-		Size:       int64(len(testContent)),
-		UploadedBy: user.ID,
+		Uuid:         testMediaUUID,
+		Filename:     testFilename,
+		MimeType:     "image/png",
+		Size:         int64(len(testContent)),
+		UploadedBy:   user.ID,
 		LanguageCode: lang.Code,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create media record: %v", err)

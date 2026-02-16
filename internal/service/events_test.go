@@ -177,9 +177,15 @@ func TestLogLevels(t *testing.T) {
 		logFn    func(*EventService, context.Context) error
 		expected string
 	}{
-		{"info", func(svc *EventService, ctx context.Context) error { return svc.LogInfo(ctx, model.EventCategoryPage, "Page created", nil, "", "", nil) }, "info"},
-		{"warning", func(svc *EventService, ctx context.Context) error { return svc.LogWarning(ctx, model.EventCategorySystem, "Low disk space", nil, "", "", nil) }, "warning"},
-		{"error", func(svc *EventService, ctx context.Context) error { return svc.LogError(ctx, model.EventCategoryAuth, "Login failed", nil, "", "", nil) }, "error"},
+		{"info", func(svc *EventService, ctx context.Context) error {
+			return svc.LogInfo(ctx, model.EventCategoryPage, "Page created", nil, "", "", nil)
+		}, "info"},
+		{"warning", func(svc *EventService, ctx context.Context) error {
+			return svc.LogWarning(ctx, model.EventCategorySystem, "Low disk space", nil, "", "", nil)
+		}, "warning"},
+		{"error", func(svc *EventService, ctx context.Context) error {
+			return svc.LogError(ctx, model.EventCategoryAuth, "Login failed", nil, "", "", nil)
+		}, "error"},
 	}
 
 	for _, tt := range tests {
@@ -234,18 +240,42 @@ func TestLogCategoryEvents(t *testing.T) {
 		logFn    func(*EventService, context.Context) error
 		expected string
 	}{
-		{"auth", func(svc *EventService, ctx context.Context) error { return svc.LogAuthEvent(ctx, model.EventLevelInfo, "User logged in", nil, "", "", nil) }, "auth"},
-		{"page", func(svc *EventService, ctx context.Context) error { return svc.LogPageEvent(ctx, model.EventLevelInfo, "Page published", nil, "", "", nil) }, "page"},
-		{"user", func(svc *EventService, ctx context.Context) error { return svc.LogUserEvent(ctx, model.EventLevelInfo, "User created", nil, "", "", nil) }, "user"},
-		{"config", func(svc *EventService, ctx context.Context) error { return svc.LogConfigEvent(ctx, model.EventLevelInfo, "Config updated", nil, "", "", nil) }, "config"},
-		{"system", func(svc *EventService, ctx context.Context) error { return svc.LogSystemEvent(ctx, model.EventLevelInfo, "System started", nil, "", "", nil) }, "system"},
-		{"cache", func(svc *EventService, ctx context.Context) error { return svc.LogCacheEvent(ctx, model.EventLevelInfo, "Cache cleared", nil, "", "", nil) }, "cache"},
-		{"media", func(svc *EventService, ctx context.Context) error { return svc.LogMediaEvent(ctx, model.EventLevelInfo, "Media uploaded", nil, "", "", nil) }, "media"},
-		{"tag", func(svc *EventService, ctx context.Context) error { return svc.LogTagEvent(ctx, model.EventLevelInfo, "Tag created", nil, "", "", nil) }, "tag"},
-		{"category", func(svc *EventService, ctx context.Context) error { return svc.LogCategoryEvent(ctx, model.EventLevelInfo, "Category created", nil, "", "", nil) }, "category"},
-		{"menu", func(svc *EventService, ctx context.Context) error { return svc.LogMenuEvent(ctx, model.EventLevelInfo, "Menu created", nil, "", "", nil) }, "menu"},
-		{"api_key", func(svc *EventService, ctx context.Context) error { return svc.LogAPIKeyEvent(ctx, model.EventLevelInfo, "API key created", nil, "", "", nil) }, "api_key"},
-		{"webhook", func(svc *EventService, ctx context.Context) error { return svc.LogWebhookEvent(ctx, model.EventLevelInfo, "Webhook created", nil, "", "", nil) }, "webhook"},
+		{"auth", func(svc *EventService, ctx context.Context) error {
+			return svc.LogAuthEvent(ctx, model.EventLevelInfo, "User logged in", nil, "", "", nil)
+		}, "auth"},
+		{"page", func(svc *EventService, ctx context.Context) error {
+			return svc.LogPageEvent(ctx, model.EventLevelInfo, "Page published", nil, "", "", nil)
+		}, "page"},
+		{"user", func(svc *EventService, ctx context.Context) error {
+			return svc.LogUserEvent(ctx, model.EventLevelInfo, "User created", nil, "", "", nil)
+		}, "user"},
+		{"config", func(svc *EventService, ctx context.Context) error {
+			return svc.LogConfigEvent(ctx, model.EventLevelInfo, "Config updated", nil, "", "", nil)
+		}, "config"},
+		{"system", func(svc *EventService, ctx context.Context) error {
+			return svc.LogSystemEvent(ctx, model.EventLevelInfo, "System started", nil, "", "", nil)
+		}, "system"},
+		{"cache", func(svc *EventService, ctx context.Context) error {
+			return svc.LogCacheEvent(ctx, model.EventLevelInfo, "Cache cleared", nil, "", "", nil)
+		}, "cache"},
+		{"media", func(svc *EventService, ctx context.Context) error {
+			return svc.LogMediaEvent(ctx, model.EventLevelInfo, "Media uploaded", nil, "", "", nil)
+		}, "media"},
+		{"tag", func(svc *EventService, ctx context.Context) error {
+			return svc.LogTagEvent(ctx, model.EventLevelInfo, "Tag created", nil, "", "", nil)
+		}, "tag"},
+		{"category", func(svc *EventService, ctx context.Context) error {
+			return svc.LogCategoryEvent(ctx, model.EventLevelInfo, "Category created", nil, "", "", nil)
+		}, "category"},
+		{"menu", func(svc *EventService, ctx context.Context) error {
+			return svc.LogMenuEvent(ctx, model.EventLevelInfo, "Menu created", nil, "", "", nil)
+		}, "menu"},
+		{"api_key", func(svc *EventService, ctx context.Context) error {
+			return svc.LogAPIKeyEvent(ctx, model.EventLevelInfo, "API key created", nil, "", "", nil)
+		}, "api_key"},
+		{"webhook", func(svc *EventService, ctx context.Context) error {
+			return svc.LogWebhookEvent(ctx, model.EventLevelInfo, "Webhook created", nil, "", "", nil)
+		}, "webhook"},
 	}
 
 	for _, tt := range tests {

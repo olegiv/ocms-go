@@ -1411,8 +1411,7 @@ a.tag:hover {
 
     .header-actions {
         order: 1;
-        margin-left: auto;
-        margin-right: var(--spacing-sm);
+        margin: 0 var(--spacing-sm) 0 auto;
     }
 
     /* Mobile Nav - Slide down */
@@ -1815,8 +1814,7 @@ a.tag:hover {
 
 /* RTL Support */
 [dir="rtl"] .language-switcher {
-    margin-left: 0;
-    margin-right: var(--spacing-md);
+    margin: 0 var(--spacing-md) 0 0;
 }
 
 [dir="rtl"] .language-dropdown {

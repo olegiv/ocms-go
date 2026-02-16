@@ -15,28 +15,28 @@ import (
 
 func TestValidateDifyIdentifier(t *testing.T) {
 	t.Run("valid identifier", func(t *testing.T) {
-		err := validateDifyIdentifier("user_123-abc@example.com", maxDifyUserIDLen, "user")
+		err := validateDifyIdentifier("user_123-abc@example.com", "user")
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
 	})
 
 	t.Run("missing identifier", func(t *testing.T) {
-		err := validateDifyIdentifier("", maxDifyUserIDLen, "user")
+		err := validateDifyIdentifier("", "user")
 		if err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
 	t.Run("too long identifier", func(t *testing.T) {
-		err := validateDifyIdentifier(strings.Repeat("a", maxDifyUserIDLen+1), maxDifyUserIDLen, "user")
+		err := validateDifyIdentifier(strings.Repeat("a", maxDifyIdentifierLen+1), "user")
 		if err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
 	t.Run("invalid characters", func(t *testing.T) {
-		err := validateDifyIdentifier("user with spaces", maxDifyUserIDLen, "user")
+		err := validateDifyIdentifier("user with spaces", "user")
 		if err == nil {
 			t.Fatal("expected error")
 		}

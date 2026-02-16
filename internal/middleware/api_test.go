@@ -136,9 +136,9 @@ func setAPIKeyMaxTTLDaysForTest(t *testing.T, days int) {
 	})
 }
 
-func setRevokeAPIKeyOnSourceIPChangeForTest(t *testing.T, enabled bool) {
+func setRevokeAPIKeyOnSourceIPChangeForTest(t *testing.T) {
 	t.Helper()
-	SetRevokeAPIKeyOnSourceIPChange(enabled)
+	SetRevokeAPIKeyOnSourceIPChange(true)
 	apiKeySourceTracker = newAPIKeySourceTracker(24 * time.Hour)
 	t.Cleanup(func() {
 		SetRevokeAPIKeyOnSourceIPChange(false)
@@ -695,7 +695,7 @@ func TestAPIKeyAuth_RequirePerKeySourceCIDRs_MissingTable(t *testing.T) {
 func TestAPIKeyAuth_RevokeOnSourceIPChange(t *testing.T) {
 	db := setupTestDB(t)
 	defer func() { _ = db.Close() }()
-	setRevokeAPIKeyOnSourceIPChangeForTest(t, true)
+	setRevokeAPIKeyOnSourceIPChangeForTest(t)
 
 	rawKey := insertTestAPIKey(t, db, "Revoke On Source Change", []string{"pages:read"}, true, nil)
 	handler := APIKeyAuth(db)(simpleOKHandler)
@@ -758,7 +758,7 @@ func TestAPIKeyAuth_RevokeOnSourceIPChange(t *testing.T) {
 func TestAPIKeyAuth_RevokeOnSourceIPChange_SkipsWhenPerKeyCIDRsConfigured(t *testing.T) {
 	db := setupTestDB(t)
 	defer func() { _ = db.Close() }()
-	setRevokeAPIKeyOnSourceIPChangeForTest(t, true)
+	setRevokeAPIKeyOnSourceIPChangeForTest(t)
 
 	rawKey := insertTestAPIKey(t, db, "No Revoke With CIDRs", []string{"pages:read"}, true, nil)
 	insertTestAPIKeySourceCIDR(t, db, model.ExtractAPIKeyPrefix(rawKey), "203.0.113.0/24")
@@ -814,7 +814,7 @@ func TestAPIKeyAuth_RevokeOnSourceIPChange_SkipsWhenPerKeyCIDRsConfigured(t *tes
 func TestAPIKeyAuth_RevokeOnSourceIPChange_FailClosedOnDeactivateError(t *testing.T) {
 	db := setupTestDB(t)
 	defer func() { _ = db.Close() }()
-	setRevokeAPIKeyOnSourceIPChangeForTest(t, true)
+	setRevokeAPIKeyOnSourceIPChangeForTest(t)
 
 	rawKey := insertTestAPIKey(t, db, "Revoke Fail Closed", []string{"pages:read"}, true, nil)
 	handler := APIKeyAuth(db)(simpleOKHandler)
@@ -845,7 +845,7 @@ func TestAPIKeyAuth_RevokeOnSourceIPChange_FailClosedOnDeactivateError(t *testin
 func TestAPIKeyAuth_RevokeOnSourceIPChange_PersistsBaselineAcrossTrackerReset(t *testing.T) {
 	db := setupTestDB(t)
 	defer func() { _ = db.Close() }()
-	setRevokeAPIKeyOnSourceIPChangeForTest(t, true)
+	setRevokeAPIKeyOnSourceIPChangeForTest(t)
 
 	rawKey := insertTestAPIKey(t, db, "Revoke Persistent Baseline", []string{"pages:read"}, true, nil)
 	handler := APIKeyAuth(db)(simpleOKHandler)

@@ -218,7 +218,7 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 	return template.FuncMap{
 		"lower": strings.ToLower,
 		"upper": strings.ToUpper,
-		"now": time.Now,
+		"now":   time.Now,
 		"timeBefore": func(t1, t2 time.Time) bool {
 			return t1.Before(t2)
 		},
@@ -364,7 +364,7 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			}
 			return false
 		},
-		"hasPrefix": strings.HasPrefix,
+		"hasPrefix":  strings.HasPrefix,
 		"isDemoMode": middleware.IsDemoMode,
 		"maskIP": func(ip string) string {
 			if !middleware.IsDemoMode() {
@@ -464,7 +464,7 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			englishFallback := []struct {
 				Code string
 				Name string
-			}{{"en", "English"}}
+			}{{Code: "en", Name: "English"}}
 
 			if r.db == nil {
 				return englishFallback
@@ -873,7 +873,7 @@ type AdminLangOption struct {
 func (r *Renderer) AdminLangOptions() []AdminLangOption {
 	fn, ok := r.TemplateFuncs()["adminLangOptions"]
 	if !ok {
-		return []AdminLangOption{{"en", "English"}}
+		return []AdminLangOption{{Code: "en", Name: "English"}}
 	}
 	type anonLangOpt = struct {
 		Code string
@@ -887,7 +887,7 @@ func (r *Renderer) AdminLangOptions() []AdminLangOption {
 		}
 		return result
 	}
-	return []AdminLangOption{{"en", "English"}}
+	return []AdminLangOption{{Code: "en", Name: "English"}}
 }
 
 // SentinelIsActive returns whether the sentinel module is active.

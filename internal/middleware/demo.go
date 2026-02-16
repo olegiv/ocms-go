@@ -32,22 +32,22 @@ type DemoRestriction string
 
 const (
 	// RestrictionContentReadOnly blocks all content modifications in demo mode.
-	RestrictionContentReadOnly    DemoRestriction = "content_read_only"
-	RestrictionUnpublishContent   DemoRestriction = "unpublish_content"
-	RestrictionDeletePage         DemoRestriction = "delete_page"
-	RestrictionDeleteMedia        DemoRestriction = "delete_media"
-	RestrictionDeleteCategory     DemoRestriction = "delete_category"
-	RestrictionDeleteTag          DemoRestriction = "delete_tag"
-	RestrictionDeleteMenu         DemoRestriction = "delete_menu"
-	RestrictionDeleteMenuItem     DemoRestriction = "delete_menu_item"
-	RestrictionDeleteForm         DemoRestriction = "delete_form"
-	RestrictionDeleteWidget       DemoRestriction = "delete_widget"
+	RestrictionContentReadOnly  DemoRestriction = "content_read_only"
+	RestrictionUnpublishContent DemoRestriction = "unpublish_content"
+	RestrictionDeletePage       DemoRestriction = "delete_page"
+	RestrictionDeleteMedia      DemoRestriction = "delete_media"
+	RestrictionDeleteCategory   DemoRestriction = "delete_category"
+	RestrictionDeleteTag        DemoRestriction = "delete_tag"
+	RestrictionDeleteMenu       DemoRestriction = "delete_menu"
+	RestrictionDeleteMenuItem   DemoRestriction = "delete_menu_item"
+	RestrictionDeleteForm       DemoRestriction = "delete_form"
+	RestrictionDeleteWidget     DemoRestriction = "delete_widget"
 
 	// RestrictionCreateUser blocks user management in demo mode.
-	RestrictionCreateUser  DemoRestriction = "create_user"
-	RestrictionDeleteUser  DemoRestriction = "delete_user"
-	RestrictionEditUser    DemoRestriction = "edit_user"
-	RestrictionChangeRole  DemoRestriction = "change_role"
+	RestrictionCreateUser DemoRestriction = "create_user"
+	RestrictionDeleteUser DemoRestriction = "delete_user"
+	RestrictionEditUser   DemoRestriction = "edit_user"
+	RestrictionChangeRole DemoRestriction = "change_role"
 
 	// RestrictionEditConfig blocks system configuration changes in demo mode.
 	RestrictionEditConfig    DemoRestriction = "edit_config"
@@ -78,30 +78,30 @@ func DemoModeMessageDetailed(restriction DemoRestriction) string {
 	messages := map[DemoRestriction]string{
 		RestrictionContentReadOnly:  "Content is read-only in demo mode",
 		RestrictionUnpublishContent: "Unpublishing content is disabled in demo mode",
-		RestrictionDeletePage:      "Deleting pages is disabled in demo mode",
-		RestrictionDeleteMedia:    "Deleting media is disabled in demo mode",
-		RestrictionDeleteCategory: "Deleting categories is disabled in demo mode",
-		RestrictionDeleteTag:      "Deleting tags is disabled in demo mode",
-		RestrictionDeleteMenu:     "Deleting menus is disabled in demo mode",
-		RestrictionDeleteMenuItem: "Deleting menu items is disabled in demo mode",
-		RestrictionDeleteForm:     "Deleting forms is disabled in demo mode",
-		RestrictionDeleteWidget:   "Deleting widgets is disabled in demo mode",
-		RestrictionCreateUser:     "Creating users is disabled in demo mode",
-		RestrictionDeleteUser:     "Deleting users is disabled in demo mode",
-		RestrictionEditUser:       "Editing users is disabled in demo mode",
-		RestrictionChangeRole:     "Changing user roles is disabled in demo mode",
-		RestrictionEditConfig:     "Editing site configuration is disabled in demo mode",
-		RestrictionEditLanguages:  "Editing languages is disabled in demo mode",
-		RestrictionAPIKeys:        "API key management is disabled in demo mode",
-		RestrictionWebhooks:       "Webhook management is disabled in demo mode",
-		RestrictionExportData:     "Data export is disabled in demo mode",
-		RestrictionImportData:     "Data import is disabled in demo mode",
-		RestrictionModules:        "Module management is disabled in demo mode",
-		RestrictionModuleSettings: "Changing module settings is disabled in demo mode",
-		RestrictionThemeSettings:  "Changing theme settings is disabled in demo mode",
-		RestrictionClearCache:     "Clearing cache is disabled in demo mode",
-		RestrictionSQLExecution:   "SQL execution is disabled in demo mode",
-		RestrictionScheduler:      "Scheduler management is disabled in demo mode",
+		RestrictionDeletePage:       "Deleting pages is disabled in demo mode",
+		RestrictionDeleteMedia:      "Deleting media is disabled in demo mode",
+		RestrictionDeleteCategory:   "Deleting categories is disabled in demo mode",
+		RestrictionDeleteTag:        "Deleting tags is disabled in demo mode",
+		RestrictionDeleteMenu:       "Deleting menus is disabled in demo mode",
+		RestrictionDeleteMenuItem:   "Deleting menu items is disabled in demo mode",
+		RestrictionDeleteForm:       "Deleting forms is disabled in demo mode",
+		RestrictionDeleteWidget:     "Deleting widgets is disabled in demo mode",
+		RestrictionCreateUser:       "Creating users is disabled in demo mode",
+		RestrictionDeleteUser:       "Deleting users is disabled in demo mode",
+		RestrictionEditUser:         "Editing users is disabled in demo mode",
+		RestrictionChangeRole:       "Changing user roles is disabled in demo mode",
+		RestrictionEditConfig:       "Editing site configuration is disabled in demo mode",
+		RestrictionEditLanguages:    "Editing languages is disabled in demo mode",
+		RestrictionAPIKeys:          "API key management is disabled in demo mode",
+		RestrictionWebhooks:         "Webhook management is disabled in demo mode",
+		RestrictionExportData:       "Data export is disabled in demo mode",
+		RestrictionImportData:       "Data import is disabled in demo mode",
+		RestrictionModules:          "Module management is disabled in demo mode",
+		RestrictionModuleSettings:   "Changing module settings is disabled in demo mode",
+		RestrictionThemeSettings:    "Changing theme settings is disabled in demo mode",
+		RestrictionClearCache:       "Clearing cache is disabled in demo mode",
+		RestrictionSQLExecution:     "SQL execution is disabled in demo mode",
+		RestrictionScheduler:        "Scheduler management is disabled in demo mode",
 	}
 
 	if msg, ok := messages[restriction]; ok {

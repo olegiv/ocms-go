@@ -19,13 +19,13 @@ import (
 
 // Bookmark represents a saved bookmark.
 type Bookmark struct {
-	ID                int64     `json:"id"`
-	Title             string    `json:"title"`
-	URL               string    `json:"url"`
-	Description       string    `json:"description"`
-	IsFavorite        bool      `json:"is_favorite"`
-	CreatedAt         time.Time `json:"created_at"`
-	CreatedAtFormatted string   `json:"-"`
+	ID                 int64     `json:"id"`
+	Title              string    `json:"title"`
+	URL                string    `json:"url"`
+	Description        string    `json:"description"`
+	IsFavorite         bool      `json:"is_favorite"`
+	CreatedAt          time.Time `json:"created_at"`
+	CreatedAtFormatted string    `json:"-"`
 }
 
 // adminPageData holds data passed to the admin template.

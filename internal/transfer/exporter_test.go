@@ -92,14 +92,14 @@ func TestExportWithData(t *testing.T) {
 
 	// Create test page
 	_, err = ts.Queries.CreatePage(ts.Ctx, store.CreatePageParams{
-		Title:      "Test Page",
-		Slug:       "test-page",
-		Body:       "Test content",
-		Status:     "published",
-		AuthorID:   ts.User.ID,
+		Title:        "Test Page",
+		Slug:         "test-page",
+		Body:         "Test content",
+		Status:       "published",
+		AuthorID:     ts.User.ID,
 		LanguageCode: lang.Code,
-		CreatedAt:  ts.Now,
-		UpdatedAt:  ts.Now,
+		CreatedAt:    ts.Now,
+		UpdatedAt:    ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create page: %v", err)
@@ -107,12 +107,12 @@ func TestExportWithData(t *testing.T) {
 
 	// Create test category
 	_, err = ts.Queries.CreateCategory(ts.Ctx, store.CreateCategoryParams{
-		Name:       "Test Category",
-		Slug:       "test-category",
+		Name:         "Test Category",
+		Slug:         "test-category",
 		LanguageCode: lang.Code,
-		Position:   0,
-		CreatedAt:  ts.Now,
-		UpdatedAt:  ts.Now,
+		Position:     0,
+		CreatedAt:    ts.Now,
+		UpdatedAt:    ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create category: %v", err)
@@ -120,11 +120,11 @@ func TestExportWithData(t *testing.T) {
 
 	// Create test tag
 	_, err = ts.Queries.CreateTag(ts.Ctx, store.CreateTagParams{
-		Name:       "Test Tag",
-		Slug:       "test-tag",
+		Name:         "Test Tag",
+		Slug:         "test-tag",
 		LanguageCode: lang.Code,
-		CreatedAt:  ts.Now,
-		UpdatedAt:  ts.Now,
+		CreatedAt:    ts.Now,
+		UpdatedAt:    ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create tag: %v", err)
@@ -184,28 +184,28 @@ func TestExportOptionsFiltering(t *testing.T) {
 
 	// Create pages with different statuses
 	_, err = ts.Queries.CreatePage(ts.Ctx, store.CreatePageParams{
-		Title:      "Published Page",
-		Slug:       "published-page",
-		Body:       "Published content",
-		Status:     "published",
-		AuthorID:   ts.User.ID,
+		Title:        "Published Page",
+		Slug:         "published-page",
+		Body:         "Published content",
+		Status:       "published",
+		AuthorID:     ts.User.ID,
 		LanguageCode: lang.Code,
-		CreatedAt:  ts.Now,
-		UpdatedAt:  ts.Now,
+		CreatedAt:    ts.Now,
+		UpdatedAt:    ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create published page: %v", err)
 	}
 
 	_, err = ts.Queries.CreatePage(ts.Ctx, store.CreatePageParams{
-		Title:      "Draft Page",
-		Slug:       "draft-page",
-		Body:       "Draft content",
-		Status:     "draft",
-		AuthorID:   ts.User.ID,
+		Title:        "Draft Page",
+		Slug:         "draft-page",
+		Body:         "Draft content",
+		Status:       "draft",
+		AuthorID:     ts.User.ID,
 		LanguageCode: lang.Code,
-		CreatedAt:  ts.Now,
-		UpdatedAt:  ts.Now,
+		CreatedAt:    ts.Now,
+		UpdatedAt:    ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create draft page: %v", err)
@@ -319,12 +319,12 @@ func TestExportCategoryHierarchy(t *testing.T) {
 
 	// Create parent category
 	parent, err := queries.CreateCategory(ctx, store.CreateCategoryParams{
-		Name:       "Parent Category",
-		Slug:       "parent-category",
+		Name:         "Parent Category",
+		Slug:         "parent-category",
 		LanguageCode: lang.Code,
-		Position:   0,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		Position:     0,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create parent category: %v", err)
@@ -332,13 +332,13 @@ func TestExportCategoryHierarchy(t *testing.T) {
 
 	// Create child category
 	_, err = queries.CreateCategory(ctx, store.CreateCategoryParams{
-		Name:       "Child Category",
-		Slug:       "child-category",
+		Name:         "Child Category",
+		Slug:         "child-category",
 		LanguageCode: lang.Code,
-		ParentID:   sql.NullInt64{Int64: parent.ID, Valid: true},
-		Position:   0,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		ParentID:     sql.NullInt64{Int64: parent.ID, Valid: true},
+		Position:     0,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create child category: %v", err)
@@ -392,11 +392,11 @@ func TestExportMenuWithItems(t *testing.T) {
 
 	// Create menu
 	menu, err := queries.CreateMenu(ctx, store.CreateMenuParams{
-		Name:       "Test Menu",
-		Slug:       "test-menu",
+		Name:         "Test Menu",
+		Slug:         "test-menu",
 		LanguageCode: lang.Code,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create menu: %v", err)
@@ -470,13 +470,13 @@ func TestExportFormWithFields(t *testing.T) {
 
 	// Create form
 	form, err := queries.CreateForm(ctx, store.CreateFormParams{
-		Name:       "Contact Form",
-		Slug:       "contact",
-		Title:      "Contact Us",
-		IsActive:   true,
+		Name:         "Contact Form",
+		Slug:         "contact",
+		Title:        "Contact Us",
+		IsActive:     true,
 		LanguageCode: lang.Code,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create form: %v", err)
@@ -484,30 +484,30 @@ func TestExportFormWithFields(t *testing.T) {
 
 	// Create form fields
 	_, err = queries.CreateFormField(ctx, store.CreateFormFieldParams{
-		FormID:     form.ID,
-		Type:       "text",
-		Name:       "name",
-		Label:      "Your Name",
-		IsRequired: true,
-		Position:   0,
+		FormID:       form.ID,
+		Type:         "text",
+		Name:         "name",
+		Label:        "Your Name",
+		IsRequired:   true,
+		Position:     0,
 		LanguageCode: lang.Code,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create form field: %v", err)
 	}
 
 	_, err = queries.CreateFormField(ctx, store.CreateFormFieldParams{
-		FormID:     form.ID,
-		Type:       "email",
-		Name:       "email",
-		Label:      "Your Email",
-		IsRequired: true,
-		Position:   1,
+		FormID:       form.ID,
+		Type:         "email",
+		Name:         "email",
+		Label:        "Your Email",
+		IsRequired:   true,
+		Position:     1,
 		LanguageCode: lang.Code,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create form field: %v", err)
@@ -566,14 +566,14 @@ func TestExportPageWithTranslations(t *testing.T) {
 
 	// Create English page
 	enPage, err := ts.Queries.CreatePage(ts.Ctx, store.CreatePageParams{
-		Title:      "Hello World",
-		Slug:       "hello-world",
-		Body:       "English content",
-		Status:     "published",
-		AuthorID:   ts.User.ID,
+		Title:        "Hello World",
+		Slug:         "hello-world",
+		Body:         "English content",
+		Status:       "published",
+		AuthorID:     ts.User.ID,
 		LanguageCode: enLang.Code,
-		CreatedAt:  ts.Now,
-		UpdatedAt:  ts.Now,
+		CreatedAt:    ts.Now,
+		UpdatedAt:    ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create English page: %v", err)
@@ -581,14 +581,14 @@ func TestExportPageWithTranslations(t *testing.T) {
 
 	// Create Russian page
 	ruPage, err := ts.Queries.CreatePage(ts.Ctx, store.CreatePageParams{
-		Title:      "Привет мир",
-		Slug:       "privet-mir",
-		Body:       "Russian content",
-		Status:     "published",
-		AuthorID:   ts.User.ID,
+		Title:        "Привет мир",
+		Slug:         "privet-mir",
+		Body:         "Russian content",
+		Status:       "published",
+		AuthorID:     ts.User.ID,
 		LanguageCode: ruLang.Code,
-		CreatedAt:  ts.Now,
-		UpdatedAt:  ts.Now,
+		CreatedAt:    ts.Now,
+		UpdatedAt:    ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create Russian page: %v", err)

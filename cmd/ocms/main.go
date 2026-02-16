@@ -713,6 +713,276 @@ func registerModules(registry *module.Registry, sentinelModule *sentinel.Module,
 	return internalAnalyticsModule, nil
 }
 
+// serveThemeStaticFile serves a static file from an embedded or external theme.
+func serveThemeStaticFile(w http.ResponseWriter, r *http.Request, themeManager *theme.Manager) {
+	themeName := chi.URLParam(r, "themeName")
+	thm, err := themeManager.GetTheme(themeName)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Security headers for static files
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+	w.Header().Set("Cache-Control", "public, max-age=2592000")
+
+	// Strip the prefix to get the requested file path
+	reqPath := r.URL.Path
+	prefix := fmt.Sprintf("/themes/%s/static/", themeName)
+	requestedPath := reqPath[len(prefix):]
+
+	// Clean the path to resolve any .. sequences
+	// Use path.Clean (not filepath.Clean) for URL paths - filepath.Clean uses
+	// OS-specific separators (backslashes on Windows), which breaks embed.FS
+	// lookups that require forward slashes.
+	cleanPath := path.Clean(requestedPath)
+
+	// Reject paths that try to escape (start with .. or are absolute)
+	if strings.HasPrefix(cleanPath, "..") || path.IsAbs(cleanPath) {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Handle embedded vs external themes
+	if thm.IsEmbedded && thm.EmbeddedFS != nil {
+		// Serve from embedded filesystem
+		embeddedPath := "static/" + cleanPath
+		data, err := fs.ReadFile(thm.EmbeddedFS, embeddedPath)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+
+		// Set content type based on file extension
+		contentType := handler.ContentTypeByExtension(cleanPath)
+		w.Header().Set("Content-Type", contentType)
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
+		_, _ = w.Write(data)
+		return
+	}
+
+	// Serve from filesystem for external themes
+	filePath := filepath.Join(thm.StaticPath, cleanPath)
+
+	// Verify the resolved path is within the static directory
+	absStaticPath, err := filepath.Abs(thm.StaticPath)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	absFilePath, err := filepath.Abs(filePath)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Check that file is within static directory
+	if !strings.HasPrefix(absFilePath, absStaticPath+string(filepath.Separator)) && absFilePath != absStaticPath {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Verify containment using filepath.Rel (CodeQL-recognized pattern)
+	rel, err := filepath.Rel(absStaticPath, absFilePath)
+	if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
+		http.NotFound(w, r)
+		return
+	}
+
+	http.ServeFile(w, r, absFilePath)
+}
+
+// runPostModulePostureAudits runs production security posture checks that depend on module state.
+func runPostModulePostureAudits(ctx context.Context, cfg *config.Config, db *sql.DB, moduleRegistry *module.Registry, hookRegistry *module.HookRegistry) error {
+	if cfg.Env != "production" {
+		return nil
+	}
+	if cfg.RequireEmbedAllowedOrigins && strings.TrimSpace(cfg.EmbedAllowedOrigins) == "" {
+		var activeEmbedProviders int
+		err := db.QueryRow(`SELECT COUNT(*) FROM embed_settings WHERE is_enabled = 1`).Scan(&activeEmbedProviders)
+		if err != nil {
+			return fmt.Errorf("auditing embed origin policy posture: %w", err)
+		}
+		if activeEmbedProviders > 0 {
+			return fmt.Errorf(
+				"refusing to start in production: embed proxy is active (%d provider(s)) but OCMS_EMBED_ALLOWED_ORIGINS is not configured",
+				activeEmbedProviders,
+			)
+		}
+	}
+	if cfg.RequireEmbedAllowedUpstreamHosts {
+		if err := auditRequiredEmbedUpstreamHostPolicyPosture(ctx, db, cfg.EmbedAllowedUpstreamHosts); err != nil {
+			return err
+		}
+	}
+	if cfg.RequireHTTPSOutbound {
+		if err := auditRequiredHTTPSOutboundPosture(ctx, db); err != nil {
+			return err
+		}
+		if err := auditRequiredEmbedHTTPSPosture(ctx, db); err != nil {
+			return err
+		}
+	}
+	if cfg.RequireFormCaptcha {
+		captchaVerifierEnabled := false
+		if mod, ok := moduleRegistry.Get("hcaptcha"); ok {
+			if captchaMod, ok := mod.(*hcaptcha.Module); ok {
+				captchaVerifierEnabled = captchaMod.IsEnabled()
+			}
+		}
+		if err := auditRequiredFormCaptchaPosture(ctx, db, hookRegistry, captchaVerifierEnabled); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// runPreModulePostureAudits runs production security posture checks that don't depend on modules.
+func runPreModulePostureAudits(ctx context.Context, cfg *config.Config, db *sql.DB, hasDefaultAdminCreds bool, allowedEmbedUpstreamHosts map[string]struct{}) error {
+	if cfg.Env != "production" {
+		return nil
+	}
+	if hasDefaultAdminCreds {
+		return fmt.Errorf(
+			"refusing to start in production: default seeded admin credentials are still active for %s; rotate credentials before startup",
+			store.DefaultAdminEmail,
+		)
+	}
+	if cfg.RequireBlockSuspiciousPageHTML {
+		if err := auditRequiredSuspiciousPageHTMLPosture(ctx, db); err != nil {
+			return err
+		}
+	}
+	if cfg.RequireAPIKeyExpiry {
+		if err := auditRequiredAPIKeyExpiryPosture(ctx, db); err != nil {
+			return err
+		}
+	}
+	if cfg.APIKeyMaxTTLDays > 0 {
+		if err := auditRequiredAPIKeyMaxTTLPosture(ctx, db, cfg.APIKeyMaxTTLDays); err != nil {
+			return err
+		}
+	}
+	if cfg.RequireAPIKeySourceCIDRs {
+		if err := auditRequiredAPIKeySourceCIDRPosture(ctx, db); err != nil {
+			return err
+		}
+	}
+	if len(allowedEmbedUpstreamHosts) > 0 {
+		if err := auditEmbedUpstreamHostPosture(ctx, db, allowedEmbedUpstreamHosts); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// configureMiddlewareDefaults applies middleware security settings from configuration.
+func configureMiddlewareDefaults(cfg *config.Config) error {
+	if err := middleware.ConfigureTrustedProxies(cfg.TrustedProxies); err != nil {
+		return fmt.Errorf("configuring trusted proxies: %w", err)
+	}
+	if err := middleware.ConfigureAPIAllowedCIDRs(cfg.APIAllowedCIDRs); err != nil {
+		return fmt.Errorf("configuring API allowed CIDRs: %w", err)
+	}
+	if strings.TrimSpace(cfg.APIAllowedCIDRs) != "" {
+		slog.Info("API source CIDR allowlist enabled")
+	}
+	middleware.SetRequireAPIAllowedCIDRs(cfg.RequireAPIAllowedCIDRs)
+	if cfg.RequireAPIAllowedCIDRs {
+		slog.Info("API global source CIDR requirement enabled")
+	}
+	middleware.SetRequireAPIKeyExpiry(cfg.RequireAPIKeyExpiry)
+	if cfg.RequireAPIKeyExpiry {
+		slog.Info("API key expiry enforcement enabled")
+	}
+	middleware.SetRequireAPIKeySourceCIDRs(cfg.RequireAPIKeySourceCIDRs)
+	if cfg.RequireAPIKeySourceCIDRs {
+		slog.Info("API key per-key source CIDR enforcement enabled")
+	}
+	middleware.SetRevokeAPIKeyOnSourceIPChange(cfg.RevokeAPIKeyOnSourceIPChange)
+	if cfg.RevokeAPIKeyOnSourceIPChange {
+		slog.Info("API key source IP anomaly auto-revocation enabled")
+	}
+	middleware.SetAPIKeyMaxTTLDays(cfg.APIKeyMaxTTLDays)
+	if cfg.APIKeyMaxTTLDays > 0 {
+		slog.Info("API key max lifetime policy enabled", "max_ttl_days", cfg.APIKeyMaxTTLDays)
+	}
+	util.SetRequireHTTPSOutbound(cfg.RequireHTTPSOutbound)
+	scheduler.SetRequireHTTPSOutbound(cfg.RequireHTTPSOutbound)
+	if cfg.RequireHTTPSOutbound {
+		slog.Info("HTTPS-only outbound URL policy enabled")
+	}
+	return nil
+}
+
+// logProductionSecurityWarnings logs slog warnings for disabled production security settings.
+func logProductionSecurityWarnings(cfg *config.Config) {
+	if cfg.Env != "production" {
+		return
+	}
+	if !cfg.RequireFormCaptcha {
+		slog.Warn("production security warning: OCMS_REQUIRE_FORM_CAPTCHA is disabled")
+	}
+	if cfg.WebhookFormDataMode == "full" {
+		slog.Warn("production security warning: OCMS_WEBHOOK_FORM_DATA_MODE=full may expose sensitive submission data to webhook endpoints")
+	}
+	if !cfg.RequireWebhookFormDataMinimization {
+		slog.Warn("production security warning: OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION is disabled")
+	}
+	if !cfg.RequireTrustedProxies {
+		slog.Warn("production security warning: OCMS_REQUIRE_TRUSTED_PROXIES is disabled")
+	}
+	if strings.TrimSpace(cfg.APIAllowedCIDRs) == "" {
+		slog.Warn("production security warning: OCMS_API_ALLOWED_CIDRS is not configured")
+	}
+	if !cfg.RequireAPIAllowedCIDRs {
+		slog.Warn("production security warning: OCMS_REQUIRE_API_ALLOWED_CIDRS is disabled")
+	}
+	if !cfg.RequireAPIKeyExpiry {
+		slog.Warn("production security warning: OCMS_REQUIRE_API_KEY_EXPIRY is disabled")
+	}
+	if !cfg.RequireAPIKeySourceCIDRs {
+		slog.Warn("production security warning: OCMS_REQUIRE_API_KEY_SOURCE_CIDRS is disabled")
+	}
+	if !cfg.RevokeAPIKeyOnSourceIPChange {
+		slog.Warn("production security warning: OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE is disabled")
+	}
+	if cfg.APIKeyMaxTTLDays <= 0 {
+		slog.Warn("production security warning: OCMS_API_KEY_MAX_TTL_DAYS is not configured")
+	}
+	if strings.TrimSpace(cfg.EmbedAllowedOrigins) == "" {
+		slog.Warn("production security warning: OCMS_EMBED_ALLOWED_ORIGINS is not configured")
+	}
+	if strings.TrimSpace(cfg.EmbedAllowedUpstreamHosts) == "" {
+		slog.Warn("production security warning: OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS is not configured")
+	}
+	if !cfg.RequireEmbedAllowedOrigins {
+		slog.Warn("production security warning: OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS is disabled")
+	}
+	if !cfg.RequireEmbedAllowedUpstreamHosts {
+		slog.Warn("production security warning: OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS is disabled")
+	}
+	if strings.TrimSpace(cfg.EmbedProxyToken) == "" {
+		slog.Warn("production security warning: OCMS_EMBED_PROXY_TOKEN is not configured; active embed proxy routes will be blocked at module init")
+	}
+	if !cfg.RequireHTTPSOutbound {
+		slog.Warn("production security warning: OCMS_REQUIRE_HTTPS_OUTBOUND is disabled")
+	}
+	if !cfg.SanitizePageHTML {
+		slog.Warn("production security warning: OCMS_SANITIZE_PAGE_HTML is disabled")
+	}
+	if !cfg.RequireSanitizePageHTML {
+		slog.Warn("production security warning: OCMS_REQUIRE_SANITIZE_PAGE_HTML is disabled")
+	}
+	if !cfg.BlockSuspiciousPageHTML {
+		slog.Warn("production security warning: OCMS_BLOCK_SUSPICIOUS_PAGE_HTML is disabled")
+	}
+	if !cfg.RequireBlockSuspiciousPageHTML {
+		slog.Warn("production security warning: OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML is disabled")
+	}
+}
+
 // loadActiveTheme determines and activates the appropriate theme.
 func loadActiveTheme(ctx context.Context, queries *store.Queries, themeManager *theme.Manager, renderer *render.Renderer, cfg *config.Config) {
 	themeManager.SetFuncMap(renderer.TemplateFuncs())
@@ -770,102 +1040,10 @@ func run() error {
 	}))
 	slog.SetDefault(logger)
 
-	if cfg.Env == "production" {
-		if !cfg.RequireFormCaptcha {
-			slog.Warn("production security warning: OCMS_REQUIRE_FORM_CAPTCHA is disabled")
-		}
-		if cfg.WebhookFormDataMode == "full" {
-			slog.Warn("production security warning: OCMS_WEBHOOK_FORM_DATA_MODE=full may expose sensitive submission data to webhook endpoints")
-		}
-		if !cfg.RequireWebhookFormDataMinimization {
-			slog.Warn("production security warning: OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION is disabled")
-		}
-		if !cfg.RequireTrustedProxies {
-			slog.Warn("production security warning: OCMS_REQUIRE_TRUSTED_PROXIES is disabled")
-		}
-		if strings.TrimSpace(cfg.APIAllowedCIDRs) == "" {
-			slog.Warn("production security warning: OCMS_API_ALLOWED_CIDRS is not configured")
-		}
-		if !cfg.RequireAPIAllowedCIDRs {
-			slog.Warn("production security warning: OCMS_REQUIRE_API_ALLOWED_CIDRS is disabled")
-		}
-		if !cfg.RequireAPIKeyExpiry {
-			slog.Warn("production security warning: OCMS_REQUIRE_API_KEY_EXPIRY is disabled")
-		}
-		if !cfg.RequireAPIKeySourceCIDRs {
-			slog.Warn("production security warning: OCMS_REQUIRE_API_KEY_SOURCE_CIDRS is disabled")
-		}
-		if !cfg.RevokeAPIKeyOnSourceIPChange {
-			slog.Warn("production security warning: OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE is disabled")
-		}
-		if cfg.APIKeyMaxTTLDays <= 0 {
-			slog.Warn("production security warning: OCMS_API_KEY_MAX_TTL_DAYS is not configured")
-		}
-		if strings.TrimSpace(cfg.EmbedAllowedOrigins) == "" {
-			slog.Warn("production security warning: OCMS_EMBED_ALLOWED_ORIGINS is not configured")
-		}
-		if strings.TrimSpace(cfg.EmbedAllowedUpstreamHosts) == "" {
-			slog.Warn("production security warning: OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS is not configured")
-		}
-		if !cfg.RequireEmbedAllowedOrigins {
-			slog.Warn("production security warning: OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS is disabled")
-		}
-		if !cfg.RequireEmbedAllowedUpstreamHosts {
-			slog.Warn("production security warning: OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS is disabled")
-		}
-		if strings.TrimSpace(cfg.EmbedProxyToken) == "" {
-			slog.Warn("production security warning: OCMS_EMBED_PROXY_TOKEN is not configured; active embed proxy routes will be blocked at module init")
-		}
-		if !cfg.RequireHTTPSOutbound {
-			slog.Warn("production security warning: OCMS_REQUIRE_HTTPS_OUTBOUND is disabled")
-		}
-		if !cfg.SanitizePageHTML {
-			slog.Warn("production security warning: OCMS_SANITIZE_PAGE_HTML is disabled")
-		}
-		if !cfg.RequireSanitizePageHTML {
-			slog.Warn("production security warning: OCMS_REQUIRE_SANITIZE_PAGE_HTML is disabled")
-		}
-		if !cfg.BlockSuspiciousPageHTML {
-			slog.Warn("production security warning: OCMS_BLOCK_SUSPICIOUS_PAGE_HTML is disabled")
-		}
-		if !cfg.RequireBlockSuspiciousPageHTML {
-			slog.Warn("production security warning: OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML is disabled")
-		}
-	}
+	logProductionSecurityWarnings(cfg)
 
-	if err := middleware.ConfigureTrustedProxies(cfg.TrustedProxies); err != nil {
-		return fmt.Errorf("configuring trusted proxies: %w", err)
-	}
-	if err := middleware.ConfigureAPIAllowedCIDRs(cfg.APIAllowedCIDRs); err != nil {
-		return fmt.Errorf("configuring API allowed CIDRs: %w", err)
-	}
-	if strings.TrimSpace(cfg.APIAllowedCIDRs) != "" {
-		slog.Info("API source CIDR allowlist enabled")
-	}
-	middleware.SetRequireAPIAllowedCIDRs(cfg.RequireAPIAllowedCIDRs)
-	if cfg.RequireAPIAllowedCIDRs {
-		slog.Info("API global source CIDR requirement enabled")
-	}
-	middleware.SetRequireAPIKeyExpiry(cfg.RequireAPIKeyExpiry)
-	if cfg.RequireAPIKeyExpiry {
-		slog.Info("API key expiry enforcement enabled")
-	}
-	middleware.SetRequireAPIKeySourceCIDRs(cfg.RequireAPIKeySourceCIDRs)
-	if cfg.RequireAPIKeySourceCIDRs {
-		slog.Info("API key per-key source CIDR enforcement enabled")
-	}
-	middleware.SetRevokeAPIKeyOnSourceIPChange(cfg.RevokeAPIKeyOnSourceIPChange)
-	if cfg.RevokeAPIKeyOnSourceIPChange {
-		slog.Info("API key source IP anomaly auto-revocation enabled")
-	}
-	middleware.SetAPIKeyMaxTTLDays(cfg.APIKeyMaxTTLDays)
-	if cfg.APIKeyMaxTTLDays > 0 {
-		slog.Info("API key max lifetime policy enabled", "max_ttl_days", cfg.APIKeyMaxTTLDays)
-	}
-	util.SetRequireHTTPSOutbound(cfg.RequireHTTPSOutbound)
-	scheduler.SetRequireHTTPSOutbound(cfg.RequireHTTPSOutbound)
-	if cfg.RequireHTTPSOutbound {
-		slog.Info("HTTPS-only outbound URL policy enabled")
+	if err := configureMiddlewareDefaults(cfg); err != nil {
+		return err
 	}
 
 	// Initialize i18n system for admin UI localization
@@ -935,38 +1113,8 @@ func run() error {
 		return fmt.Errorf("auditing default admin credentials: %w", err)
 	}
 	logSeedingSecuritySignals(ctx, cfg, eventService, hasDefaultAdminCreds)
-	if cfg.Env == "production" {
-		if hasDefaultAdminCreds {
-			return fmt.Errorf(
-				"refusing to start in production: default seeded admin credentials are still active for %s; rotate credentials before startup",
-				store.DefaultAdminEmail,
-			)
-		}
-	}
-	if cfg.Env == "production" && cfg.RequireBlockSuspiciousPageHTML {
-		if err := auditRequiredSuspiciousPageHTMLPosture(ctx, db); err != nil {
-			return err
-		}
-	}
-	if cfg.Env == "production" && cfg.RequireAPIKeyExpiry {
-		if err := auditRequiredAPIKeyExpiryPosture(ctx, db); err != nil {
-			return err
-		}
-	}
-	if cfg.Env == "production" && cfg.APIKeyMaxTTLDays > 0 {
-		if err := auditRequiredAPIKeyMaxTTLPosture(ctx, db, cfg.APIKeyMaxTTLDays); err != nil {
-			return err
-		}
-	}
-	if cfg.Env == "production" && cfg.RequireAPIKeySourceCIDRs {
-		if err := auditRequiredAPIKeySourceCIDRPosture(ctx, db); err != nil {
-			return err
-		}
-	}
-	if cfg.Env == "production" && len(allowedEmbedUpstreamHosts) > 0 {
-		if err := auditEmbedUpstreamHostPosture(ctx, db, allowedEmbedUpstreamHosts); err != nil {
-			return err
-		}
+	if err := runPreModulePostureAudits(ctx, cfg, db, hasDefaultAdminCreds, allowedEmbedUpstreamHosts); err != nil {
+		return err
 	}
 	initI18nFromDB(ctx, queries)
 
@@ -1097,42 +1245,8 @@ func run() error {
 	// Set module registry on renderer for sidebar modules
 	renderer.SetSidebarModuleProvider(moduleRegistry)
 
-	if cfg.Env == "production" && cfg.RequireEmbedAllowedOrigins && strings.TrimSpace(cfg.EmbedAllowedOrigins) == "" {
-		var activeEmbedProviders int
-		err := db.QueryRow(`SELECT COUNT(*) FROM embed_settings WHERE is_enabled = 1`).Scan(&activeEmbedProviders)
-		if err != nil {
-			return fmt.Errorf("auditing embed origin policy posture: %w", err)
-		}
-		if activeEmbedProviders > 0 {
-			return fmt.Errorf(
-				"refusing to start in production: embed proxy is active (%d provider(s)) but OCMS_EMBED_ALLOWED_ORIGINS is not configured",
-				activeEmbedProviders,
-			)
-		}
-	}
-	if cfg.Env == "production" && cfg.RequireEmbedAllowedUpstreamHosts {
-		if err := auditRequiredEmbedUpstreamHostPolicyPosture(ctx, db, cfg.EmbedAllowedUpstreamHosts); err != nil {
-			return err
-		}
-	}
-	if cfg.Env == "production" && cfg.RequireHTTPSOutbound {
-		if err := auditRequiredHTTPSOutboundPosture(ctx, db); err != nil {
-			return err
-		}
-		if err := auditRequiredEmbedHTTPSPosture(ctx, db); err != nil {
-			return err
-		}
-	}
-	if cfg.Env == "production" && cfg.RequireFormCaptcha {
-		captchaVerifierEnabled := false
-		if mod, ok := moduleRegistry.Get("hcaptcha"); ok {
-			if captchaMod, ok := mod.(*hcaptcha.Module); ok {
-				captchaVerifierEnabled = captchaMod.IsEnabled()
-			}
-		}
-		if err := auditRequiredFormCaptchaPosture(ctx, db, hookRegistry, captchaVerifierEnabled); err != nil {
-			return err
-		}
+	if err := runPostModulePostureAudits(ctx, cfg, db, moduleRegistry, hookRegistry); err != nil {
+		return err
 	}
 
 	// Set up hook registry to check module active status
@@ -1642,82 +1756,7 @@ func run() error {
 	// Serve theme static files with caching (1 month = 2592000 seconds)
 	// Supports both embedded themes (from binary) and external themes (from filesystem)
 	r.Get("/themes/{themeName}/static/*", func(w http.ResponseWriter, r *http.Request) {
-		themeName := chi.URLParam(r, "themeName")
-		thm, err := themeManager.GetTheme(themeName)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-
-		// Security headers for static files
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-		w.Header().Set("Cache-Control", "public, max-age=2592000")
-
-		// Strip the prefix to get the requested file path
-		reqPath := r.URL.Path
-		prefix := fmt.Sprintf("/themes/%s/static/", themeName)
-		requestedPath := reqPath[len(prefix):]
-
-		// Clean the path to resolve any .. sequences
-		// Use path.Clean (not filepath.Clean) for URL paths - filepath.Clean uses
-		// OS-specific separators (backslashes on Windows), which breaks embed.FS
-		// lookups that require forward slashes.
-		cleanPath := path.Clean(requestedPath)
-
-		// Reject paths that try to escape (start with .. or are absolute)
-		if strings.HasPrefix(cleanPath, "..") || path.IsAbs(cleanPath) {
-			http.NotFound(w, r)
-			return
-		}
-
-		// Handle embedded vs external themes
-		if thm.IsEmbedded && thm.EmbeddedFS != nil {
-			// Serve from embedded filesystem
-			embeddedPath := "static/" + cleanPath
-			data, err := fs.ReadFile(thm.EmbeddedFS, embeddedPath)
-			if err != nil {
-				http.NotFound(w, r)
-				return
-			}
-
-			// Set content type based on file extension
-			contentType := handler.ContentTypeByExtension(cleanPath)
-			w.Header().Set("Content-Type", contentType)
-			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
-			_, _ = w.Write(data)
-			return
-		}
-
-		// Serve from filesystem for external themes
-		filePath := filepath.Join(thm.StaticPath, cleanPath)
-
-		// Verify the resolved path is within the static directory
-		absStaticPath, err := filepath.Abs(thm.StaticPath)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		absFilePath, err := filepath.Abs(filePath)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-
-		// Check that file is within static directory
-		if !strings.HasPrefix(absFilePath, absStaticPath+string(filepath.Separator)) && absFilePath != absStaticPath {
-			http.NotFound(w, r)
-			return
-		}
-
-		// Verify containment using filepath.Rel (CodeQL-recognized pattern)
-		rel, err := filepath.Rel(absStaticPath, absFilePath)
-		if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
-			http.NotFound(w, r)
-			return
-		}
-
-		http.ServeFile(w, r, absFilePath)
+		serveThemeStaticFile(w, r, themeManager)
 	})
 
 	// Register module public routes

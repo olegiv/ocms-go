@@ -226,8 +226,8 @@ func (i *Importer) ImportFromReader(ctx context.Context, r io.Reader, opts Impor
 }
 
 // ImportFromFile reads and imports from a file path.
-func (i *Importer) ImportFromFile(ctx context.Context, path string, opts ImportOptions) (*ImportResult, error) {
-	f, err := os.Open(path)
+func (i *Importer) ImportFromFile(ctx context.Context, filePath string, opts ImportOptions) (*ImportResult, error) {
+	f, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
@@ -281,8 +281,8 @@ func (i *Importer) ImportFromZip(ctx context.Context, zipReader *zip.Reader, opt
 	result, err := i.Import(ctx, &exportData, opts)
 	if err != nil {
 		// Clean up extracted files on failure
-		for _, path := range mediaFileMap {
-			_ = os.RemoveAll(filepath.Dir(path))
+		for _, mediaPath := range mediaFileMap {
+			_ = os.RemoveAll(filepath.Dir(mediaPath))
 		}
 		return result, err
 	}
@@ -291,8 +291,8 @@ func (i *Importer) ImportFromZip(ctx context.Context, zipReader *zip.Reader, opt
 }
 
 // ImportFromZipFile imports from a zip file path.
-func (i *Importer) ImportFromZipFile(ctx context.Context, path string, opts ImportOptions) (*ImportResult, error) {
-	zipReader, err := zip.OpenReader(path)
+func (i *Importer) ImportFromZipFile(ctx context.Context, filePath string, opts ImportOptions) (*ImportResult, error) {
+	zipReader, err := zip.OpenReader(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open zip file: %w", err)
 	}
@@ -537,8 +537,8 @@ func copyWithLimit(dst io.Writer, src io.Reader, maxBytes int64) (int64, error) 
 }
 
 // ValidateZipFile validates a zip import file and returns information about its contents.
-func (i *Importer) ValidateZipFile(ctx context.Context, path string) (*ValidationResult, error) {
-	zipReader, err := zip.OpenReader(path)
+func (i *Importer) ValidateZipFile(ctx context.Context, filePath string) (*ValidationResult, error) {
+	zipReader, err := zip.OpenReader(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open zip file: %w", err)
 	}
@@ -715,8 +715,8 @@ func (i *Importer) Validate(data *ExportData) []ImportError {
 }
 
 // ValidateFile validates an import file and returns information about its contents.
-func (i *Importer) ValidateFile(ctx context.Context, path string) (*ValidationResult, error) {
-	f, err := os.Open(path)
+func (i *Importer) ValidateFile(ctx context.Context, filePath string) (*ValidationResult, error) {
+	f, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
@@ -1852,9 +1852,9 @@ func (i *Importer) buildOrCreateFolders(ctx context.Context, queries *store.Quer
 
 	now := time.Now()
 
-	for path := range paths {
+	for folderPath := range paths {
 		// Check if folder exists by building/finding path
-		parts := strings.Split(path, "/")
+		parts := strings.Split(folderPath, "/")
 		var parentID sql.NullInt64
 
 		currentPath := ""

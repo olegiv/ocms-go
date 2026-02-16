@@ -64,7 +64,7 @@ func TestDB(t *testing.T) (*sql.DB, func()) {
 // Use this in any test that creates a theme.Manager and calls LoadThemes or SetFuncMap.
 func MinimalThemeFuncMap() template.FuncMap {
 	return template.FuncMap{
-		"safeHTML":              func(s string) string { return s },
+		"safeHTML":             func(s string) string { return s },
 		"safeCSS":              func(s string) string { return s },
 		"safeURL":              func(s string) string { return s },
 		"T":                    func(lang, key string, args ...any) string { return key },

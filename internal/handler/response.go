@@ -180,13 +180,13 @@ func requireEntityWithCustomError[T any](
 
 // deleteEntityParams holds parameters for a generic delete operation.
 type deleteEntityParams[T any] struct {
-	EntityName     string                              // e.g., "tag", "category"
-	IDField        string                              // e.g., "tag_id", "category_id"
-	RedirectURL    string                              // URL to redirect after success
-	SuccessMessage string                              // Flash message on success
-	RequireFn      func(int64) (T, bool)               // function to fetch and validate entity
-	DeleteFn       func(context.Context, int64) error  // function to delete entity
-	GetSlug        func(T) string                      // function to get slug for logging
+	EntityName     string                             // e.g., "tag", "category"
+	IDField        string                             // e.g., "tag_id", "category_id"
+	RedirectURL    string                             // URL to redirect after success
+	SuccessMessage string                             // Flash message on success
+	RequireFn      func(int64) (T, bool)              // function to fetch and validate entity
+	DeleteFn       func(context.Context, int64) error // function to delete entity
+	GetSlug        func(T) string                     // function to get slug for logging
 }
 
 // handleDeleteEntity performs a generic delete operation with HTMX support.

@@ -11,10 +11,10 @@ import (
 
 func TestSanitizeFilename(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		want     string
-		wantErr  bool
+		name    string
+		input   string
+		want    string
+		wantErr bool
 	}{
 		{
 			name:  "simple filename",
@@ -208,9 +208,9 @@ func TestSafeJoinPath(t *testing.T) {
 
 func TestContainsPathTraversal(t *testing.T) {
 	tests := []struct {
-		name  string
-		path  string
-		want  bool
+		name string
+		path string
+		want bool
 	}{
 		{
 			name: "simple path",

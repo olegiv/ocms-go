@@ -61,7 +61,7 @@ func TestIsDemoMode(t *testing.T) {
 
 func TestDemoModeMessageDetailed(t *testing.T) {
 	tests := []struct {
-		restriction DemoRestriction
+		restriction  DemoRestriction
 		wantContains string
 	}{
 		{RestrictionDeletePage, "Deleting pages"},

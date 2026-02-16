@@ -321,8 +321,7 @@ img {
     .dev-sub-menu > .dev-nav-item > .dev-nav-link {
         padding-left: var(--dev-space-xl);
         border-left: 2px solid var(--dev-border);
-        margin-left: var(--dev-space-md);
-        margin-right: 0;
+        margin: 0 0 0 var(--dev-space-md);
     }
 
     .dev-sub-menu > .dev-nav-item > .dev-nav-link:hover {
@@ -332,14 +331,12 @@ img {
     /* Level 3 items */
     .dev-sub-menu .dev-sub-menu > .dev-nav-item > .dev-nav-link {
         padding-left: calc(var(--dev-space-xl) + var(--dev-space-lg));
-        margin-left: calc(var(--dev-space-md) * 2);
-        margin-right: 0;
+        margin: 0 0 0 calc(var(--dev-space-md) * 2);
     }
 
     /* Level 3 wrapper (if has children) */
     .dev-sub-menu .dev-sub-menu .dev-nav-link-wrapper {
-        margin-left: calc(var(--dev-space-md) * 2);
-        margin-right: 0;
+        margin: 0 0 0 calc(var(--dev-space-md) * 2);
     }
 
     /* Nested submenu - also accordion */
@@ -508,16 +505,14 @@ img {
         position: absolute;
         top: 0;
         left: 100%;
-        margin-left: 0;
-        margin-top: -1px;
+        margin: -1px 0 0 0;
     }
 
     /* Flip flyout to left when near viewport edge */
     .dev-sub-menu .dev-sub-menu.flip-left {
         left: auto;
         right: 100%;
-        margin-left: 0;
-        margin-right: 0;
+        margin: 0;
     }
 }
 
@@ -636,9 +631,8 @@ img {
     font-weight: 600;
     font-size: 0.9rem;
     color: var(--dev-text-bright);
-    margin-bottom: var(--dev-space-sm);
+    margin: 0 0 var(--dev-space-sm) calc(-1 * var(--dev-space-sm));
     padding: var(--dev-space-xs) var(--dev-space-sm);
-    margin-left: calc(-1 * var(--dev-space-sm));
     border-radius: var(--dev-radius-sm);
     white-space: nowrap;
     overflow: hidden;

@@ -265,9 +265,9 @@ func TestPartialDefineBlocks(t *testing.T) {
 	themePath := starterThemePath(t)
 
 	partials := map[string]string{
-		"header.html":    `{{define "header.html"}}`,
-		"footer.html":    `{{define "footer.html"}}`,
-		"sidebar.html":   `{{define "sidebar.html"}}`,
+		"header.html":     `{{define "header.html"}}`,
+		"footer.html":     `{{define "footer.html"}}`,
+		"sidebar.html":    `{{define "sidebar.html"}}`,
 		"pagination.html": `{{define "pagination.html"}}`,
 	}
 

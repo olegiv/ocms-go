@@ -97,10 +97,10 @@ func TestUsersHandler_Delete_SelfDelete(t *testing.T) {
 	// Try to delete self - requires user context
 	req, w := newAuthenticatedDeleteRequest(t, sm, "/admin/users/1",
 		map[string]string{"id": "1"}, new(createTestUser(t, db, testUser{
-		Email: "admin@example.com",
-		Name:  "Admin User",
-		Role:  "admin",
-	})))
+			Email: "admin@example.com",
+			Name:  "Admin User",
+			Role:  "admin",
+		})))
 
 	handler.Delete(w, req)
 
@@ -130,10 +130,10 @@ func TestUsersHandler_Delete_BadRequest(t *testing.T) {
 
 			req, w := newAuthenticatedDeleteRequest(t, sm, "/admin/users/"+tt.id,
 				map[string]string{"id": tt.id}, new(createTestUser(t, db, testUser{
-				Email: "admin@example.com",
-				Name:  "Admin User",
-				Role:  "admin",
-			})))
+					Email: "admin@example.com",
+					Name:  "Admin User",
+					Role:  "admin",
+				})))
 
 			handler.Delete(w, req)
 
@@ -157,10 +157,10 @@ func TestUsersHandler_Delete_LastAdmin_Blocked(t *testing.T) {
 	// Try to delete the last admin using HTMX request
 	req, w := newAuthenticatedDeleteRequest(t, sm, "/admin/users/1",
 		map[string]string{"id": "1"}, new(createTestUser(t, db, testUser{
-		Email: "deleter@example.com",
-		Name:  "Deleter User",
-		Role:  "editor",
-	})))
+			Email: "deleter@example.com",
+			Name:  "Deleter User",
+			Role:  "editor",
+		})))
 	req.Header.Set("HX-Request", "true")
 
 	handler.Delete(w, req)
@@ -211,10 +211,10 @@ func TestUsersHandler_Delete_HTMX(t *testing.T) {
 	targetIDStr := fmt.Sprintf("%d", target.ID)
 	req, w := newAuthenticatedDeleteRequest(t, sm, "/admin/users/"+targetIDStr,
 		map[string]string{"id": targetIDStr}, new(createTestUser(t, db, testUser{
-		Email: "admin@example.com",
-		Name:  "Admin User",
-		Role:  "admin",
-	})))
+			Email: "admin@example.com",
+			Name:  "Admin User",
+			Role:  "admin",
+		})))
 	req.Header.Set("HX-Request", "true")
 
 	handler.Delete(w, req)

@@ -417,7 +417,7 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 		Slug:         setup.TranslatedSlug,
 		LanguageCode: setup.TargetContext.TargetLang.Code,
 		CreatedAt:    setup.Now,
-		UpdatedAt:  setup.Now,
+		UpdatedAt:    setup.Now,
 	})
 	if err != nil {
 		slog.Error("failed to create translated tag", "error", err)
@@ -1191,7 +1191,9 @@ func (h *TaxonomyHandler) loadTagLanguageInfo(ctx context.Context, tag store.Tag
 	return loadLanguageInfo(
 		ctx, h.queries, model.EntityTypeTag, tag.ID, tag.LanguageCode,
 		func(id int64) (store.Tag, error) { return h.queries.GetTagByID(ctx, id) },
-		func(lang store.Language, t store.Tag) TagTranslationInfo { return TagTranslationInfo{Language: lang, Tag: t} },
+		func(lang store.Language, t store.Tag) TagTranslationInfo {
+			return TagTranslationInfo{Language: lang, Tag: t}
+		},
 	)
 }
 
@@ -1202,7 +1204,9 @@ type categoryLanguageInfo = entityLanguageInfo[CategoryTranslationInfo]
 func (h *TaxonomyHandler) loadCategoryLanguageInfo(ctx context.Context, category store.Category) categoryLanguageInfo {
 	info := loadLanguageInfo(ctx, h.queries, model.EntityTypeCategory, category.ID, category.LanguageCode,
 		func(id int64) (store.Category, error) { return h.queries.GetCategoryByID(ctx, id) },
-		func(lang store.Language, c store.Category) CategoryTranslationInfo { return CategoryTranslationInfo{Language: lang, Category: c} })
+		func(lang store.Language, c store.Category) CategoryTranslationInfo {
+			return CategoryTranslationInfo{Language: lang, Category: c}
+		})
 	return info
 }
 

@@ -27,11 +27,13 @@ import (
 	"github.com/olegiv/ocms-go/internal/webhook"
 )
 
-// User roles
 const (
-	RoleAdmin  = "admin"
+	// RoleAdmin represents an administrator with full system access.
+	RoleAdmin = "admin"
+	// RoleEditor represents an editor who can manage content.
 	RoleEditor = "editor"
-	RolePublic = "public" // Public users have no admin access
+	// RolePublic represents public users with no admin access.
+	RolePublic = "public"
 )
 
 // ValidRoles contains all valid user roles.

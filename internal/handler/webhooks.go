@@ -648,7 +648,7 @@ type webhookFormInput struct {
 // parseWebhookFormInput extracts and parses webhook form values.
 func parseWebhookFormInput(r *http.Request) webhookFormInput {
 	name := strings.TrimSpace(r.FormValue("name"))
-	url := strings.TrimSpace(r.FormValue("url"))
+	webhookURL := strings.TrimSpace(r.FormValue("url"))
 	secret := strings.TrimSpace(r.FormValue("secret"))
 	events := r.Form["events"]
 	isActive := r.FormValue("is_active") == "on" || r.FormValue("is_active") == "true" || r.FormValue("is_active") == "1"
@@ -666,7 +666,7 @@ func parseWebhookFormInput(r *http.Request) webhookFormInput {
 
 	return webhookFormInput{
 		Name:     name,
-		URL:      url,
+		URL:      webhookURL,
 		Secret:   secret,
 		Events:   events,
 		IsActive: isActive,

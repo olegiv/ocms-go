@@ -32,9 +32,7 @@ import (
 const (
 	maxDifyProxyBodyBytes    = 1 << 20
 	difyProxyTimeout         = 90 * time.Second
-	maxDifyMessageIDLen      = 128
-	maxDifyUserIDLen         = 128
-	maxDifyConversationIDLen = 128
+	maxDifyIdentifierLen     = 128
 	maxDifyQueryLen          = 4096
 	maxDifyInputsCount       = 32
 	maxDifyInputKeyLen       = 64
@@ -217,13 +215,13 @@ func (m *Module) handleDifySuggestedProxy(w http.ResponseWriter, r *http.Request
 	}
 
 	messageID := strings.TrimSpace(chi.URLParam(r, "messageID"))
-	if err := validateDifyIdentifier(messageID, maxDifyMessageIDLen, "message ID"); err != nil {
+	if err := validateDifyIdentifier(messageID, "message ID"); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	userID := strings.TrimSpace(r.URL.Query().Get("user"))
-	if err := validateDifyIdentifier(userID, maxDifyUserIDLen, "user query parameter"); err != nil {
+	if err := validateDifyIdentifier(userID, "user query parameter"); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -323,6 +321,11 @@ func (m *Module) proxyDifyRequest(
 			"path":        r.URL.Path,
 			"target_host": req.URL.Host,
 		})
+		http.Error(w, "Failed to contact upstream service", http.StatusBadGateway)
+		return
+	}
+	if resp == nil {
+		m.ctx.Logger.Error("Dify proxy returned nil response")
 		http.Error(w, "Failed to contact upstream service", http.StatusBadGateway)
 		return
 	}
@@ -528,12 +531,12 @@ func embedClientIP(r *http.Request) string {
 	return middleware.GetClientIP(r)
 }
 
-func validateDifyIdentifier(value string, maxLen int, label string) error {
+func validateDifyIdentifier(value string, label string) error {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
 		return fmt.Errorf("missing %s", label)
 	}
-	if len(trimmed) > maxLen {
+	if len(trimmed) > maxDifyIdentifierLen {
 		return fmt.Errorf("%s is too long", label)
 	}
 	if !difyIdentifierPattern.MatchString(trimmed) {
@@ -598,7 +601,7 @@ func validateAndSanitizeDifyChatPayload(body []byte) ([]byte, string, error) {
 	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		return nil, "", fmt.Errorf("request body must contain only one JSON object")
 	}
-	if err := validateDifyIdentifier(payload.User, maxDifyUserIDLen, "user"); err != nil {
+	if err := validateDifyIdentifier(payload.User, "user"); err != nil {
 		return nil, "", err
 	}
 
@@ -624,7 +627,7 @@ func validateAndSanitizeDifyChatPayload(body []byte) ([]byte, string, error) {
 
 	conversationID := strings.TrimSpace(payload.ConversationID)
 	if conversationID != "" {
-		if err := validateDifyIdentifier(conversationID, maxDifyConversationIDLen, "conversation_id"); err != nil {
+		if err := validateDifyIdentifier(conversationID, "conversation_id"); err != nil {
 			return nil, "", err
 		}
 	}

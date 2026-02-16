@@ -6,6 +6,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"time"
 )
@@ -59,7 +60,7 @@ func IsMissingAPIKeySourceStateTableError(err error) bool {
 	if err == nil {
 		return false
 	}
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return false
 	}
 	msg := strings.ToLower(err.Error())

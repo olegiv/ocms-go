@@ -584,16 +584,16 @@ func seedDemoMedia(ctx context.Context, queries *Queries, userID int64, langCode
 	// Define demo images with different colors for variety
 	// All images are 2400x1600 to ensure all variants (including large 1920x1080) are created
 	images := []demoImage{
-		{Filename: "hero-banner.png", Alt: "Hero banner image", Width: 2400, Height: 1600, Color: color.RGBA{R: 59, G: 130, B: 246, A: 255}},    // Blue
-		{Filename: "about-image.png", Alt: "About page image", Width: 2400, Height: 1600, Color: color.RGBA{R: 16, G: 185, B: 129, A: 255}},   // Green
-		{Filename: "blog-post-1.png", Alt: "Blog post featured image", Width: 2400, Height: 1600, Color: color.RGBA{R: 245, G: 158, B: 11, A: 255}},  // Amber
-		{Filename: "blog-post-2.png", Alt: "Blog tutorial image", Width: 2400, Height: 1600, Color: color.RGBA{R: 139, G: 92, B: 246, A: 255}},  // Purple
-		{Filename: "blog-post-3.png", Alt: "Blog news image", Width: 2400, Height: 1600, Color: color.RGBA{R: 236, G: 72, B: 153, A: 255}},     // Pink
+		{Filename: "hero-banner.png", Alt: "Hero banner image", Width: 2400, Height: 1600, Color: color.RGBA{R: 59, G: 130, B: 246, A: 255}},             // Blue
+		{Filename: "about-image.png", Alt: "About page image", Width: 2400, Height: 1600, Color: color.RGBA{R: 16, G: 185, B: 129, A: 255}},              // Green
+		{Filename: "blog-post-1.png", Alt: "Blog post featured image", Width: 2400, Height: 1600, Color: color.RGBA{R: 245, G: 158, B: 11, A: 255}},      // Amber
+		{Filename: "blog-post-2.png", Alt: "Blog tutorial image", Width: 2400, Height: 1600, Color: color.RGBA{R: 139, G: 92, B: 246, A: 255}},           // Purple
+		{Filename: "blog-post-3.png", Alt: "Blog news image", Width: 2400, Height: 1600, Color: color.RGBA{R: 236, G: 72, B: 153, A: 255}},               // Pink
 		{Filename: "portfolio-1.png", Alt: "E-commerce project screenshot", Width: 2400, Height: 1600, Color: color.RGBA{R: 20, G: 184, B: 166, A: 255}}, // Teal
 		{Filename: "portfolio-2.png", Alt: "Corporate website screenshot", Width: 2400, Height: 1600, Color: color.RGBA{R: 99, G: 102, B: 241, A: 255}},  // Indigo
-		{Filename: "services-web.png", Alt: "Web development services", Width: 2400, Height: 1600, Color: color.RGBA{R: 239, G: 68, B: 68, A: 255}},    // Red
-		{Filename: "team-photo.png", Alt: "Team photo placeholder", Width: 2400, Height: 1600, Color: color.RGBA{R: 107, G: 114, B: 128, A: 255}},      // Gray
-		{Filename: "logo-sample.png", Alt: "Sample logo image", Width: 2400, Height: 1600, Color: color.RGBA{R: 34, G: 197, B: 94, A: 255}},            // Green-500
+		{Filename: "services-web.png", Alt: "Web development services", Width: 2400, Height: 1600, Color: color.RGBA{R: 239, G: 68, B: 68, A: 255}},      // Red
+		{Filename: "team-photo.png", Alt: "Team photo placeholder", Width: 2400, Height: 1600, Color: color.RGBA{R: 107, G: 114, B: 128, A: 255}},        // Gray
+		{Filename: "logo-sample.png", Alt: "Sample logo image", Width: 2400, Height: 1600, Color: color.RGBA{R: 34, G: 197, B: 94, A: 255}},              // Green-500
 	}
 
 	for _, img := range images {

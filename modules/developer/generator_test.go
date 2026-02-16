@@ -111,11 +111,11 @@ func createTestFixtures(t *testing.T, db *sql.DB) *testFixtures {
 	menu, err := q.GetMenuBySlug(ctx, "main")
 	if err != nil {
 		menu, err = q.CreateMenu(ctx, store.CreateMenuParams{
-			Name:       "Main Menu",
-			Slug:       "main",
+			Name:         "Main Menu",
+			Slug:         "main",
 			LanguageCode: lang.Code,
-			CreatedAt:  now,
-			UpdatedAt:  now,
+			CreatedAt:    now,
+			UpdatedAt:    now,
 		})
 		if err != nil {
 			t.Fatalf("CreateMenu: %v", err)
@@ -602,22 +602,22 @@ func TestGenerateMenuItemsWithLanguageSpecificMenus(t *testing.T) {
 
 	// Create menus WITH language_id (like the real database)
 	menuEN, err := q.CreateMenu(ctx, store.CreateMenuParams{
-		Name:       "Main EN",
-		Slug:       "main-en",
+		Name:         "Main EN",
+		Slug:         "main-en",
 		LanguageCode: fixtures.Language.Code,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		t.Fatalf("CreateMenu EN: %v", err)
 	}
 
 	menuRU, err := q.CreateMenu(ctx, store.CreateMenuParams{
-		Name:       "Main RU",
-		Slug:       "main-ru",
+		Name:         "Main RU",
+		Slug:         "main-ru",
 		LanguageCode: fixtures.Language2.Code,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		t.Fatalf("CreateMenu RU: %v", err)
