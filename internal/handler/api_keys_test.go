@@ -32,7 +32,7 @@ func TestApplyDefaultAPIKeyExpiry(t *testing.T) {
 			Time:  now.Add(24 * time.Hour),
 			Valid: true,
 		}
-		got := applyDefaultAPIKeyExpiry(explicit, now)
+		got := applyDefaultAPIKeyExpiry(explicit, now, 0)
 		if !got.Valid {
 			t.Fatal("expiry should be valid")
 		}
@@ -42,13 +42,62 @@ func TestApplyDefaultAPIKeyExpiry(t *testing.T) {
 	})
 
 	t.Run("assign default expiry when missing", func(t *testing.T) {
-		got := applyDefaultAPIKeyExpiry(sql.NullTime{}, now)
+		got := applyDefaultAPIKeyExpiry(sql.NullTime{}, now, 0)
 		if !got.Valid {
 			t.Fatal("default expiry should be valid")
 		}
 		want := now.Add(defaultAPIKeyLifetime)
 		if !got.Time.Equal(want) {
 			t.Errorf("expiry = %s, want %s", got.Time, want)
+		}
+	})
+
+	t.Run("shorten default expiry to max ttl policy", func(t *testing.T) {
+		got := applyDefaultAPIKeyExpiry(sql.NullTime{}, now, 30)
+		if !got.Valid {
+			t.Fatal("default expiry should be valid")
+		}
+		want := now.Add(30 * 24 * time.Hour)
+		if !got.Time.Equal(want) {
+			t.Errorf("expiry = %s, want %s", got.Time, want)
+		}
+	})
+}
+
+func TestValidateAPIKeyLifetimePolicy(t *testing.T) {
+	createdAt := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
+
+	t.Run("disabled policy allows empty expiry", func(t *testing.T) {
+		errMsg := validateAPIKeyLifetimePolicy(sql.NullTime{}, createdAt, 0)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+	})
+
+	t.Run("require expiry when policy enabled", func(t *testing.T) {
+		errMsg := validateAPIKeyLifetimePolicy(sql.NullTime{}, createdAt, 30)
+		if errMsg == "" {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("reject expiry beyond policy window", func(t *testing.T) {
+		errMsg := validateAPIKeyLifetimePolicy(sql.NullTime{
+			Time:  createdAt.Add(90 * 24 * time.Hour),
+			Valid: true,
+		}, createdAt, 30)
+		if errMsg == "" {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("allow expiry within policy window", func(t *testing.T) {
+		errMsg := validateAPIKeyLifetimePolicy(sql.NullTime{
+			Time:  createdAt.Add(7 * 24 * time.Hour),
+			Valid: true,
+		}, createdAt, 30)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
 		}
 	})
 }

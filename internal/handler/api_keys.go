@@ -40,6 +40,7 @@ type APIKeysHandler struct {
 	sessionManager     *scs.SessionManager
 	eventService       *service.EventService
 	requireSourceCIDRs bool
+	maxTTLDays         int
 }
 
 // NewAPIKeysHandler creates a new APIKeysHandler.
@@ -56,6 +57,16 @@ func NewAPIKeysHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionMan
 // at least one per-key source CIDR/IP entry.
 func (h *APIKeysHandler) SetRequireSourceCIDRs(required bool) {
 	h.requireSourceCIDRs = required
+}
+
+// SetMaxTTLDays configures the optional maximum lifetime policy for API keys.
+// Values <= 0 disable policy enforcement in the admin create/update forms.
+func (h *APIKeysHandler) SetMaxTTLDays(days int) {
+	if days <= 0 {
+		h.maxTTLDays = 0
+		return
+	}
+	h.maxTTLDays = days
 }
 
 // List handles GET /admin/api-keys - displays a paginated list of API keys.
@@ -157,7 +168,16 @@ func (h *APIKeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Create API key
 	now := time.Now()
-	expiresAt := applyDefaultAPIKeyExpiry(input.ExpiresAt, now)
+	expiresAt := applyDefaultAPIKeyExpiry(input.ExpiresAt, now, h.maxTTLDays)
+	if lifetimeErr := validateAPIKeyLifetimePolicy(expiresAt, now, h.maxTTLDays); lifetimeErr != "" {
+		formValues := map[string]string{
+			"name":         name,
+			"expires_at":   expiresAtStr,
+			"source_cidrs": sourceCIDRsRaw,
+		}
+		h.renderAPIKeyForm(w, r, nil, map[string]string{"expires_at": lifetimeErr}, formValues, false)
+		return
+	}
 	apiKey, err := h.queries.CreateAPIKey(r.Context(), store.CreateAPIKeyParams{
 		Name:        input.Name,
 		KeyHash:     keyHash,
@@ -277,6 +297,15 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 		h.renderAPIKeyForm(w, r, &apiKey, validationErrors, formValues, true)
 		return
 	}
+	if lifetimeErr := validateAPIKeyLifetimePolicy(input.ExpiresAt, apiKey.CreatedAt, h.maxTTLDays); lifetimeErr != "" {
+		formValues := map[string]string{
+			"name":         name,
+			"expires_at":   expiresAtStr,
+			"source_cidrs": sourceCIDRsRaw,
+		}
+		h.renderAPIKeyForm(w, r, &apiKey, map[string]string{"expires_at": lifetimeErr}, formValues, true)
+		return
+	}
 
 	// Convert permissions to JSON
 	permissionsJSON := model.PermissionsToJSON(input.Permissions)
@@ -378,14 +407,35 @@ type apiKeyFormInput struct {
 	SourceCIDRs []string
 }
 
-func applyDefaultAPIKeyExpiry(expiresAt sql.NullTime, now time.Time) sql.NullTime {
+func applyDefaultAPIKeyExpiry(expiresAt sql.NullTime, now time.Time, maxTTLDays int) sql.NullTime {
 	if expiresAt.Valid {
 		return expiresAt
 	}
+	lifetime := defaultAPIKeyLifetime
+	if maxTTLDays > 0 {
+		policyLifetime := time.Duration(maxTTLDays) * 24 * time.Hour
+		if policyLifetime < lifetime {
+			lifetime = policyLifetime
+		}
+	}
 	return sql.NullTime{
-		Time:  now.Add(defaultAPIKeyLifetime),
+		Time:  now.Add(lifetime),
 		Valid: true,
 	}
+}
+
+func validateAPIKeyLifetimePolicy(expiresAt sql.NullTime, createdAt time.Time, maxTTLDays int) string {
+	if maxTTLDays <= 0 {
+		return ""
+	}
+	if !expiresAt.Valid {
+		return "Expiration date is required when max API key lifetime policy is enabled"
+	}
+	maxAllowed := createdAt.Add(time.Duration(maxTTLDays) * 24 * time.Hour)
+	if expiresAt.Time.After(maxAllowed) {
+		return fmt.Sprintf("Expiration date must be within %d days of key creation", maxTTLDays)
+	}
+	return ""
 }
 
 // validateAPIKeyForm validates the API key form and returns validation errors.
