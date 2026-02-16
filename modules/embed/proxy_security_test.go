@@ -92,6 +92,18 @@ func TestHandleDifyProxyToken(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 		}
+		if got := w.Header().Get("Cache-Control"); got != "no-store" {
+			t.Fatalf("cache-control = %q, want %q", got, "no-store")
+		}
+		if got := w.Header().Get("Pragma"); got != "no-cache" {
+			t.Fatalf("pragma = %q, want %q", got, "no-cache")
+		}
+		if got := w.Header().Get("Expires"); got != "0" {
+			t.Fatalf("expires = %q, want %q", got, "0")
+		}
+		if got := w.Header().Get("Vary"); got != "Origin" {
+			t.Fatalf("vary = %q, want %q", got, "Origin")
+		}
 
 		var payload map[string]any
 		if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
