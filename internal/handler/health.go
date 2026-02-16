@@ -4,6 +4,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -58,6 +59,7 @@ type HealthStatus struct {
 	Version   string           `json:"version"`
 	Checks    map[string]Check `json:"checks"`
 	System    *SystemInfo      `json:"system,omitempty"`
+	Security  *SecuritySummary `json:"security,omitempty"`
 }
 
 // Check represents a single health check result.
@@ -74,6 +76,17 @@ type SystemInfo struct {
 	NumCPU       int    `json:"num_cpus"`
 	MemAlloc     string `json:"mem_alloc"`
 	MemSys       string `json:"mem_sys"`
+}
+
+// SecuritySummary provides a compact security signal snapshot.
+type SecuritySummary struct {
+	WindowHours          int    `json:"window_hours"`
+	Status               string `json:"status"`
+	SecurityEvents       int64  `json:"security_events"`
+	WarningEvents        int64  `json:"warning_events"`
+	ErrorEvents          int64  `json:"error_events"`
+	EmbedProxySignals    int64  `json:"embed_proxy_signals"`
+	APIKeyAnomalySignals int64  `json:"api_key_anomaly_signals"`
 }
 
 // Health handles GET /health requests.
@@ -126,6 +139,7 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 			"database": dbCheck,
 			"disk":     diskCheck,
 		},
+		Security: h.getSecuritySummary(r.Context(), time.Now().UTC()),
 	}
 
 	if r.URL.Query().Get("verbose") == "true" {
@@ -133,6 +147,68 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = json.NewEncoder(w).Encode(status)
+}
+
+func (h *HealthHandler) getSecuritySummary(ctx context.Context, now time.Time) *SecuritySummary {
+	if h == nil || h.db == nil {
+		return nil
+	}
+
+	since := now.Add(-24 * time.Hour)
+	const windowHours = 24
+
+	summary := &SecuritySummary{
+		WindowHours: windowHours,
+		Status:      "ok",
+	}
+
+	count := func(query string, args ...any) (int64, error) {
+		var value int64
+		err := h.db.QueryRowContext(ctx, query, args...).Scan(&value)
+		return value, err
+	}
+
+	var err error
+	if summary.SecurityEvents, err = count(
+		`SELECT COUNT(*) FROM events WHERE category = ? AND created_at >= ?`,
+		model.EventCategorySecurity, since,
+	); err != nil {
+		return nil
+	}
+
+	if summary.WarningEvents, err = count(
+		`SELECT COUNT(*) FROM events WHERE category = ? AND level = ? AND created_at >= ?`,
+		model.EventCategorySecurity, model.EventLevelWarning, since,
+	); err != nil {
+		return nil
+	}
+
+	if summary.ErrorEvents, err = count(
+		`SELECT COUNT(*) FROM events WHERE category = ? AND level = ? AND created_at >= ?`,
+		model.EventCategorySecurity, model.EventLevelError, since,
+	); err != nil {
+		return nil
+	}
+
+	if summary.EmbedProxySignals, err = count(
+		`SELECT COUNT(*) FROM events WHERE category = ? AND request_url LIKE ? AND created_at >= ?`,
+		model.EventCategorySecurity, "/embed/%", since,
+	); err != nil {
+		return nil
+	}
+
+	if summary.APIKeyAnomalySignals, err = count(
+		`SELECT COUNT(*) FROM events WHERE category = ? AND message LIKE ? AND created_at >= ?`,
+		model.EventCategorySecurity, "API key source IP changed%", since,
+	); err != nil {
+		return nil
+	}
+
+	if summary.WarningEvents > 0 || summary.ErrorEvents > 0 {
+		summary.Status = "alert"
+	}
+
+	return summary
 }
 
 // Liveness handles GET /health/live - simple liveness check.

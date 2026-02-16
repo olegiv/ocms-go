@@ -5,6 +5,7 @@ package handler
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -354,6 +355,80 @@ func TestHealthHandler_SystemInfo_NonAdmin(t *testing.T) {
 
 	if resp.System != nil {
 		t.Error("non-admin should not see system info")
+	}
+}
+
+func TestHealthHandler_GetSecuritySummary(t *testing.T) {
+	handler := newTestHealthHandler(t)
+	now := time.Now().UTC()
+
+	_, err := handler.queries.CreateEvent(context.Background(), store.CreateEventParams{
+		Level:      model.EventLevelWarning,
+		Category:   model.EventCategorySecurity,
+		Message:    "Embed proxy blocked by token policy",
+		UserID:     sql.NullInt64{},
+		Metadata:   "{}",
+		IpAddress:  "203.0.113.10",
+		RequestUrl: "/embed/dify/chat-messages",
+		CreatedAt:  now.Add(-1 * time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("failed to create embed security event: %v", err)
+	}
+
+	_, err = handler.queries.CreateEvent(context.Background(), store.CreateEventParams{
+		Level:      model.EventLevelError,
+		Category:   model.EventCategorySecurity,
+		Message:    "API key source IP changed for key",
+		UserID:     sql.NullInt64{},
+		Metadata:   "{}",
+		IpAddress:  "198.51.100.15",
+		RequestUrl: "/api/v1/pages",
+		CreatedAt:  now.Add(-30 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("failed to create api key anomaly event: %v", err)
+	}
+
+	// Outside 24h window and should be ignored.
+	_, err = handler.queries.CreateEvent(context.Background(), store.CreateEventParams{
+		Level:      model.EventLevelWarning,
+		Category:   model.EventCategorySecurity,
+		Message:    "Old event",
+		UserID:     sql.NullInt64{},
+		Metadata:   "{}",
+		IpAddress:  "192.0.2.2",
+		RequestUrl: "/embed/dify/chat-messages",
+		CreatedAt:  now.Add(-25 * time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("failed to create old security event: %v", err)
+	}
+
+	summary := handler.getSecuritySummary(context.Background(), now)
+	if summary == nil {
+		t.Fatal("expected security summary")
+	}
+	if summary.WindowHours != 24 {
+		t.Fatalf("window_hours = %d, want 24", summary.WindowHours)
+	}
+	if summary.SecurityEvents != 2 {
+		t.Fatalf("security_events = %d, want 2", summary.SecurityEvents)
+	}
+	if summary.WarningEvents != 1 {
+		t.Fatalf("warning_events = %d, want 1", summary.WarningEvents)
+	}
+	if summary.ErrorEvents != 1 {
+		t.Fatalf("error_events = %d, want 1", summary.ErrorEvents)
+	}
+	if summary.EmbedProxySignals != 1 {
+		t.Fatalf("embed_proxy_signals = %d, want 1", summary.EmbedProxySignals)
+	}
+	if summary.APIKeyAnomalySignals != 1 {
+		t.Fatalf("api_key_anomaly_signals = %d, want 1", summary.APIKeyAnomalySignals)
+	}
+	if summary.Status != "alert" {
+		t.Fatalf("status = %q, want alert", summary.Status)
 	}
 }
 
