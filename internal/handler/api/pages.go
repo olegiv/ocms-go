@@ -148,6 +148,14 @@ const (
 	filterByTag
 )
 
+var suspiciousPageMarkupTokens = []string{
+	"<script",
+	"javascript:",
+	"onerror=",
+	"onload=",
+	"<iframe",
+}
+
 // listPagesByFilter returns pages filtered by category or tag with published-only option.
 func (h *Handler) listPagesByFilter(ctx context.Context, publishedOnly bool, filterType pageFilterType, filterID, limit, offset int64) ([]store.Page, int64, error) {
 	// Select query functions based on filter type and published status
@@ -452,6 +460,10 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 		WriteValidationError(w, map[string]string{"status": "Status must be 'draft' or 'published'"})
 		return
 	}
+	if bodyErr := validatePageBodyMarkupPolicy(req.Body, h.blockSuspiciousPageMarkup); bodyErr != "" {
+		WriteValidationError(w, map[string]string{"body": bodyErr})
+		return
+	}
 
 	// Check slug uniqueness
 	if !h.checkPageSlugUnique(w, ctx, req.Slug) {
@@ -625,6 +637,10 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		params.Slug = *req.Slug
 	}
 	if req.Body != nil {
+		if bodyErr := validatePageBodyMarkupPolicy(*req.Body, h.blockSuspiciousPageMarkup); bodyErr != "" {
+			WriteValidationError(w, map[string]string{"body": bodyErr})
+			return
+		}
 		params.Body = *req.Body
 	}
 	if req.Status != nil {
@@ -860,4 +876,22 @@ func (h *Handler) checkPageSlugUniqueExcluding(w http.ResponseWriter, ctx contex
 			ID:   pageID,
 		})
 	})
+}
+
+func validatePageBodyMarkupPolicy(body string, blockSuspicious bool) string {
+	if !blockSuspicious {
+		return ""
+	}
+	if strings.TrimSpace(body) == "" {
+		return ""
+	}
+
+	lowerBody := strings.ToLower(body)
+	for _, token := range suspiciousPageMarkupTokens {
+		if strings.Contains(lowerBody, token) {
+			return "Body contains suspicious HTML markup that is blocked by policy"
+		}
+	}
+
+	return ""
 }

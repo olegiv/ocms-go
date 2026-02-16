@@ -132,3 +132,26 @@ func TestStoreTagToResponse(t *testing.T) {
 		})
 	}
 }
+
+func TestValidatePageBodyMarkupPolicy(t *testing.T) {
+	t.Run("disabled policy allows suspicious body", func(t *testing.T) {
+		errMsg := validatePageBodyMarkupPolicy(`<script>alert(1)</script>`, false)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+	})
+
+	t.Run("enabled policy blocks suspicious body", func(t *testing.T) {
+		errMsg := validatePageBodyMarkupPolicy(`<img src=x onerror="alert(1)">`, true)
+		if errMsg == "" {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("enabled policy allows clean body", func(t *testing.T) {
+		errMsg := validatePageBodyMarkupPolicy(`<p>Hello</p>`, true)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+	})
+}

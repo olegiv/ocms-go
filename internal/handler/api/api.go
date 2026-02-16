@@ -22,9 +22,10 @@ import (
 
 // Handler holds shared dependencies for all API handlers.
 type Handler struct {
-	db           *sql.DB
-	queries      *store.Queries
-	cacheManager *cache.Manager
+	db                        *sql.DB
+	queries                   *store.Queries
+	cacheManager              *cache.Manager
+	blockSuspiciousPageMarkup bool
 }
 
 const maxAPIJSONBodyBytes int64 = 1 << 20 // 1 MiB
@@ -40,6 +41,12 @@ func NewHandler(db *sql.DB) *Handler {
 // SetCacheManager sets the cache manager for cache invalidation.
 func (h *Handler) SetCacheManager(cm *cache.Manager) {
 	h.cacheManager = cm
+}
+
+// SetBlockSuspiciousPageMarkup configures whether API page write operations
+// reject suspicious HTML body content.
+func (h *Handler) SetBlockSuspiciousPageMarkup(block bool) {
+	h.blockSuspiciousPageMarkup = block
 }
 
 // invalidatePageCache invalidates the page cache after a page is modified.

@@ -1180,6 +1180,7 @@ func run() error {
 	schedulerHandler := handler.NewSchedulerHandler(db, renderer, sessionManager, schedulerRegistry, taskExecutor, eventService)
 	languagesHandler := handler.NewLanguagesHandler(db, renderer, sessionManager)
 	apiHandler := api.NewHandler(db)
+	apiHandler.SetBlockSuspiciousPageMarkup(cfg.BlockSuspiciousPageHTML)
 	apiDocsHandler, err := api.NewDocsHandler(api.DocsConfig{
 		DB:         db,
 		TemplateFS: templatesFS,
