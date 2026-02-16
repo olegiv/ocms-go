@@ -55,12 +55,13 @@ type Config struct {
 	APIKeyMaxTTLDays             int    `env:"OCMS_API_KEY_MAX_TTL_DAYS" envDefault:"0"`                   // Maximum allowed API key lifetime in days (0 disables)
 
 	// Embed proxy security configuration
-	EmbedAllowedOrigins        string `env:"OCMS_EMBED_ALLOWED_ORIGINS"`                            // Comma-separated origins allowed to call embed proxy routes
-	EmbedAllowedUpstreamHosts  string `env:"OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS"`                     // Comma-separated allowed upstream hosts for embed provider endpoints
-	RequireEmbedAllowedOrigins bool   `env:"OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS" envDefault:"false"` // Refuse startup in production if embed proxy is active and no origin allowlist is configured
-	EmbedProxyToken            string `env:"OCMS_EMBED_PROXY_TOKEN"`                                // Optional shared token required for embed proxy requests
-	RequireEmbedProxyToken     bool   `env:"OCMS_REQUIRE_EMBED_PROXY_TOKEN" envDefault:"false"`     // Refuse startup in production if embed proxy token requirement is enabled but token is missing
-	RequireHTTPSOutbound       bool   `env:"OCMS_REQUIRE_HTTPS_OUTBOUND" envDefault:"false"`        // Require HTTPS for outbound integration URLs (webhooks, scheduler, embeds)
+	EmbedAllowedOrigins              string `env:"OCMS_EMBED_ALLOWED_ORIGINS"`                                   // Comma-separated origins allowed to call embed proxy routes
+	EmbedAllowedUpstreamHosts        string `env:"OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS"`                            // Comma-separated allowed upstream hosts for embed provider endpoints
+	RequireEmbedAllowedOrigins       bool   `env:"OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS" envDefault:"false"`        // Refuse startup in production if embed proxy is active and no origin allowlist is configured
+	RequireEmbedAllowedUpstreamHosts bool   `env:"OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS" envDefault:"false"` // Refuse startup in production if embed proxy is active and no upstream host allowlist is configured
+	EmbedProxyToken                  string `env:"OCMS_EMBED_PROXY_TOKEN"`                                       // Optional shared token required for embed proxy requests
+	RequireEmbedProxyToken           bool   `env:"OCMS_REQUIRE_EMBED_PROXY_TOKEN" envDefault:"false"`            // Refuse startup in production if embed proxy token requirement is enabled but token is missing
+	RequireHTTPSOutbound             bool   `env:"OCMS_REQUIRE_HTTPS_OUTBOUND" envDefault:"false"`               // Require HTTPS for outbound integration URLs (webhooks, scheduler, embeds)
 
 	// Seeding configuration
 	DoSeed bool `env:"OCMS_DO_SEED" envDefault:"false"` // Enable database seeding

@@ -341,3 +341,33 @@ func TestAuditEmbedUpstreamHostPosture_AllowsCompliantHost(t *testing.T) {
 		t.Fatalf("expected compliant host posture to pass, got: %v", err)
 	}
 }
+
+func TestAuditRequiredEmbedUpstreamHostPolicyPosture_RejectsMissingAllowlist(t *testing.T) {
+	db := newPolicyTestDB(t)
+	_, err := db.Exec(`
+		INSERT INTO embed_settings (provider, settings, is_enabled)
+		VALUES ('dify', '{"api_endpoint":"https://api.dify.ai/v1"}', 1)
+	`)
+	if err != nil {
+		t.Fatalf("inserting embed settings fixture: %v", err)
+	}
+
+	if err := auditRequiredEmbedUpstreamHostPolicyPosture(context.Background(), db, ""); err == nil {
+		t.Fatal("expected error when upstream host allowlist is required but missing")
+	}
+}
+
+func TestAuditRequiredEmbedUpstreamHostPolicyPosture_AllowsConfiguredAllowlist(t *testing.T) {
+	db := newPolicyTestDB(t)
+	_, err := db.Exec(`
+		INSERT INTO embed_settings (provider, settings, is_enabled)
+		VALUES ('dify', '{"api_endpoint":"https://api.dify.ai/v1"}', 1)
+	`)
+	if err != nil {
+		t.Fatalf("inserting embed settings fixture: %v", err)
+	}
+
+	if err := auditRequiredEmbedUpstreamHostPolicyPosture(context.Background(), db, "api.dify.ai"); err != nil {
+		t.Fatalf("expected configured allowlist to pass, got: %v", err)
+	}
+}

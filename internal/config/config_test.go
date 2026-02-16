@@ -78,6 +78,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.RequireEmbedAllowedOrigins {
 		t.Error("RequireEmbedAllowedOrigins = true, want false")
 	}
+	if cfg.RequireEmbedAllowedUpstreamHosts {
+		t.Error("RequireEmbedAllowedUpstreamHosts = true, want false")
+	}
 	if cfg.RequireEmbedProxyToken {
 		t.Error("RequireEmbedProxyToken = true, want false")
 	}
@@ -118,6 +121,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	setEnv(t, "OCMS_EMBED_ALLOWED_ORIGINS", "https://example.com,https://app.example.com")
 	setEnv(t, "OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS", "api.dify.ai,dify.internal.example")
 	setEnv(t, "OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS", "true")
+	setEnv(t, "OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS", "true")
 	setEnv(t, "OCMS_EMBED_PROXY_TOKEN", "embed-token-test")
 	setEnv(t, "OCMS_REQUIRE_EMBED_PROXY_TOKEN", "true")
 	setEnv(t, "OCMS_REQUIRE_HTTPS_OUTBOUND", "true")
@@ -188,6 +192,9 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 	if !cfg.RequireEmbedAllowedOrigins {
 		t.Error("RequireEmbedAllowedOrigins = false, want true")
+	}
+	if !cfg.RequireEmbedAllowedUpstreamHosts {
+		t.Error("RequireEmbedAllowedUpstreamHosts = false, want true")
 	}
 	if cfg.EmbedProxyToken != "embed-token-test" {
 		t.Errorf("EmbedProxyToken = %q, want %q", cfg.EmbedProxyToken, "embed-token-test")

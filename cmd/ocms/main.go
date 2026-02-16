@@ -177,6 +177,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_ALLOWED_ORIGINS   Comma-separated allowed origins for embed proxy routes (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS   Comma-separated allowed hosts for embed provider endpoints (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS  Reject production startup when embed proxy is active without origin allowlist (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS  Reject production startup when embed proxy is active without upstream host allowlist (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_PROXY_TOKEN   Optional shared token required by embed proxy routes\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_PROXY_TOKEN  Reject production startup when embed proxy token policy is enabled without a token (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_HTTPS_OUTBOUND  Require HTTPS for outbound integration URLs (default: false)\n")
@@ -458,6 +459,25 @@ func auditEmbedUpstreamHostPosture(ctx context.Context, db *sql.DB, allowedHosts
 	return nil
 }
 
+func auditRequiredEmbedUpstreamHostPolicyPosture(ctx context.Context, db *sql.DB, configuredHosts string) error {
+	if strings.TrimSpace(configuredHosts) != "" {
+		return nil
+	}
+
+	var activeEmbedProviders int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM embed_settings WHERE is_enabled = 1`).Scan(&activeEmbedProviders); err != nil {
+		return fmt.Errorf("auditing embed upstream host policy posture: %w", err)
+	}
+	if activeEmbedProviders > 0 {
+		return fmt.Errorf(
+			"refusing to start in production: embed proxy is active (%d provider(s)) but OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS is not configured",
+			activeEmbedProviders,
+		)
+	}
+
+	return nil
+}
+
 func auditRequiredAPIKeyExpiryPosture(ctx context.Context, db *sql.DB) error {
 	var nonExpiringActiveKeys int
 	err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM api_keys WHERE is_active = 1 AND expires_at IS NULL`).Scan(&nonExpiringActiveKeys)
@@ -725,6 +745,9 @@ func run() error {
 		}
 		if !cfg.RequireEmbedAllowedOrigins {
 			slog.Warn("production security warning: OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS is disabled")
+		}
+		if !cfg.RequireEmbedAllowedUpstreamHosts {
+			slog.Warn("production security warning: OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS is disabled")
 		}
 		if !cfg.RequireEmbedProxyToken {
 			slog.Warn("production security warning: OCMS_REQUIRE_EMBED_PROXY_TOKEN is disabled")
@@ -1011,6 +1034,11 @@ func run() error {
 				"refusing to start in production: embed proxy is active (%d provider(s)) but OCMS_EMBED_ALLOWED_ORIGINS is not configured",
 				activeEmbedProviders,
 			)
+		}
+	}
+	if cfg.Env == "production" && cfg.RequireEmbedAllowedUpstreamHosts {
+		if err := auditRequiredEmbedUpstreamHostPolicyPosture(ctx, db, cfg.EmbedAllowedUpstreamHosts); err != nil {
+			return err
 		}
 	}
 	if cfg.Env == "production" && cfg.RequireHTTPSOutbound {
