@@ -1050,6 +1050,7 @@ func run() error {
 	}
 	apiKeysHandler := handler.NewAPIKeysHandler(db, renderer, sessionManager)
 	apiKeysHandler.SetRequireSourceCIDRs(cfg.RequireAPIKeySourceCIDRs)
+	apiKeysHandler.SetRequireExpiry(cfg.RequireAPIKeyExpiry)
 	apiKeysHandler.SetMaxTTLDays(cfg.APIKeyMaxTTLDays)
 	webhooksHandler := handler.NewWebhooksHandler(db, renderer, sessionManager)
 	redirectsHandler := handler.NewRedirectsHandler(db, renderer, sessionManager, redirectsMiddleware)

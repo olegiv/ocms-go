@@ -40,6 +40,7 @@ type APIKeysHandler struct {
 	sessionManager     *scs.SessionManager
 	eventService       *service.EventService
 	requireSourceCIDRs bool
+	requireExpiry      bool
 	maxTTLDays         int
 }
 
@@ -57,6 +58,12 @@ func NewAPIKeysHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionMan
 // at least one per-key source CIDR/IP entry.
 func (h *APIKeysHandler) SetRequireSourceCIDRs(required bool) {
 	h.requireSourceCIDRs = required
+}
+
+// SetRequireExpiry configures whether API key updates must keep an explicit
+// expiration date.
+func (h *APIKeysHandler) SetRequireExpiry(required bool) {
+	h.requireExpiry = required
 }
 
 // SetMaxTTLDays configures the optional maximum lifetime policy for API keys.
@@ -297,6 +304,15 @@ func (h *APIKeysHandler) Update(w http.ResponseWriter, r *http.Request) {
 		h.renderAPIKeyForm(w, r, &apiKey, validationErrors, formValues, true)
 		return
 	}
+	if expiryErr := validateAPIKeyExpiryPolicy(input.ExpiresAt, h.requireExpiry); expiryErr != "" {
+		formValues := map[string]string{
+			"name":         name,
+			"expires_at":   expiresAtStr,
+			"source_cidrs": sourceCIDRsRaw,
+		}
+		h.renderAPIKeyForm(w, r, &apiKey, map[string]string{"expires_at": expiryErr}, formValues, true)
+		return
+	}
 	if lifetimeErr := validateAPIKeyLifetimePolicy(input.ExpiresAt, apiKey.CreatedAt, h.maxTTLDays); lifetimeErr != "" {
 		formValues := map[string]string{
 			"name":         name,
@@ -434,6 +450,13 @@ func validateAPIKeyLifetimePolicy(expiresAt sql.NullTime, createdAt time.Time, m
 	maxAllowed := createdAt.Add(time.Duration(maxTTLDays) * 24 * time.Hour)
 	if expiresAt.Time.After(maxAllowed) {
 		return fmt.Sprintf("Expiration date must be within %d days of key creation", maxTTLDays)
+	}
+	return ""
+}
+
+func validateAPIKeyExpiryPolicy(expiresAt sql.NullTime, requireExpiry bool) string {
+	if requireExpiry && !expiresAt.Valid {
+		return "Expiration date is required by policy"
 	}
 	return ""
 }

@@ -102,6 +102,32 @@ func TestValidateAPIKeyLifetimePolicy(t *testing.T) {
 	})
 }
 
+func TestValidateAPIKeyExpiryPolicy(t *testing.T) {
+	t.Run("disabled policy allows empty expiry", func(t *testing.T) {
+		errMsg := validateAPIKeyExpiryPolicy(sql.NullTime{}, false)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+	})
+
+	t.Run("enabled policy rejects empty expiry", func(t *testing.T) {
+		errMsg := validateAPIKeyExpiryPolicy(sql.NullTime{}, true)
+		if errMsg == "" {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("enabled policy accepts explicit expiry", func(t *testing.T) {
+		errMsg := validateAPIKeyExpiryPolicy(sql.NullTime{
+			Time:  time.Now().Add(24 * time.Hour),
+			Valid: true,
+		}, true)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+	})
+}
+
 func TestParseAPIKeyExpiration(t *testing.T) {
 	now := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
 
