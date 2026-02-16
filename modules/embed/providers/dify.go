@@ -286,6 +286,7 @@ func (p *DifyProvider) RenderBody(settings map[string]string) template.HTML {
 (function(){
 var PROXY_BASE='/embed/dify',WELCOME='%s',OPENERS=%s,SHOW_SUGGESTED=%s;
 var convId=null,isOpen=false,busy=false,userId='user-'+Math.random().toString(36).substr(2,9),openersShown=false,lastMsgId=null;
+var proxyToken='',proxyTokenExp=0;
 var tog=document.getElementById('dify-chat-toggle');
 var win=document.getElementById('dify-chat-window');
 var cls=document.getElementById('dify-chat-close');
@@ -361,6 +362,33 @@ function showTyp(){
 
 function hideTyp(){var e=document.getElementById('dify-typ');if(e)e.remove();}
 
+async function ensureProxyToken(forceRefresh){
+  if(forceRefresh){proxyToken='';proxyTokenExp=0;}
+  var now=Math.floor(Date.now()/1000);
+  if(proxyToken&&now<proxyTokenExp-5)return proxyToken;
+  var tr=await fetch(PROXY_BASE+'/token',{method:'GET',credentials:'same-origin'});
+  if(!tr.ok)throw new Error('Token error: '+tr.status);
+  var td=await tr.json();
+  if(!td||typeof td.token!=='string'||!td.token)throw new Error('Token payload error');
+  proxyToken=td.token;
+  proxyTokenExp=Number(td.expires_at)||0;
+  return proxyToken;
+}
+
+async function proxyFetch(path,init){
+  var token=await ensureProxyToken(false);
+  var opts=init||{};
+  opts.headers=opts.headers||{};
+  opts.headers['X-Embed-Proxy-Token']=token;
+  var resp=await fetch(PROXY_BASE+path,opts);
+  if((resp.status===401||resp.status===403)&&path!=='/token'){
+    token=await ensureProxyToken(true);
+    opts.headers['X-Embed-Proxy-Token']=token;
+    resp=await fetch(PROXY_BASE+path,opts);
+  }
+  return resp;
+}
+
 async function doSend(){
   var t=inp.value.trim();
   if(!t||busy)return;
@@ -373,7 +401,7 @@ async function doSend(){
   send.disabled=true;
   showTyp();
   try{
-    var r=await fetch(PROXY_BASE+'/chat-messages',{
+    var r=await proxyFetch('/chat-messages',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({inputs:{},query:t,response_mode:'streaming',conversation_id:convId||'',user:userId})
@@ -407,7 +435,7 @@ async function doSend(){
     }
     if(SHOW_SUGGESTED&&msgId){
       try{
-        var sr=await fetch(PROXY_BASE+'/messages/'+encodeURIComponent(msgId)+'/suggested?user='+encodeURIComponent(userId));
+        var sr=await proxyFetch('/messages/'+encodeURIComponent(msgId)+'/suggested?user='+encodeURIComponent(userId),{method:'GET'});
         if(sr.ok){var sd=await sr.json();if(sd.data&&sd.data.length)showSuggestions(sd.data);}
       }catch(e){}
     }

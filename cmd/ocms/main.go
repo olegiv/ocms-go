@@ -178,8 +178,8 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS   Comma-separated allowed hosts for embed provider endpoints (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS  Reject production startup when embed proxy is active without origin allowlist (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS  Reject production startup when embed proxy is active without upstream host allowlist (default: false)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_PROXY_TOKEN   Optional shared token for embed proxy routes (enforced when set)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_PROXY_TOKEN  Reject production startup when embed proxy token policy is enabled without a token (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_PROXY_TOKEN   Secret used to issue short-lived signed embed proxy tokens\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_PROXY_TOKEN  Enforce embed proxy token requirement outside production as well (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_HTTPS_OUTBOUND  Require HTTPS for outbound integration URLs (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SANITIZE_PAGE_HTML  Sanitize page HTML before rendering to visitors (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_SANITIZE_PAGE_HTML  Reject production startup when page HTML sanitization is disabled (default: false)\n")
@@ -776,8 +776,8 @@ func run() error {
 		if !cfg.RequireEmbedAllowedUpstreamHosts {
 			slog.Warn("production security warning: OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS is disabled")
 		}
-		if !cfg.RequireEmbedProxyToken {
-			slog.Warn("production security warning: OCMS_REQUIRE_EMBED_PROXY_TOKEN is disabled")
+		if strings.TrimSpace(cfg.EmbedProxyToken) == "" {
+			slog.Warn("production security warning: OCMS_EMBED_PROXY_TOKEN is not configured; active embed proxy routes will be blocked at module init")
 		}
 		if !cfg.RequireHTTPSOutbound {
 			slog.Warn("production security warning: OCMS_REQUIRE_HTTPS_OUTBOUND is disabled")

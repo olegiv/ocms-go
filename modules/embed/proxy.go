@@ -6,7 +6,11 @@ package embed
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,10 +40,20 @@ const (
 	maxDifyInputKeyLen       = 64
 	maxDifyInputValueLen     = 512
 	embedProxyTokenHeader    = "X-Embed-Proxy-Token"
+	embedProxyTokenTTL       = 90 * time.Second
+	embedProxyTokenSkew      = 10 * time.Second
+	embedProxyTokenNonceSize = 16
 )
 
 var difyIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9._:@-]+$`)
 var difyInputKeyPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+
+type embedProxySignedTokenClaims struct {
+	Origin string `json:"origin"`
+	Exp    int64  `json:"exp"`
+	Iat    int64  `json:"iat"`
+	Nonce  string `json:"nonce"`
+}
 
 var difyProxyHTTPClient = &http.Client{
 	Timeout: difyProxyTimeout,
@@ -61,6 +75,43 @@ var difyProxyHTTPClient = &http.Client{
 		}
 		return nil
 	},
+}
+
+func (m *Module) handleDifyProxyToken(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !m.isRequestOriginAllowed(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if strings.TrimSpace(m.proxyToken) == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	origin, err := requestOrigin(r)
+	if err != nil {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	token, expiresAt, err := m.issueSignedProxyToken(origin, time.Now())
+	if err != nil {
+		m.ctx.Logger.Error("failed to issue embed proxy token", "error", err)
+		http.Error(w, "Failed to issue proxy token", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"token":       token,
+		"expires_at":  expiresAt.Unix(),
+		"ttl_seconds": int(embedProxyTokenTTL.Seconds()),
+	})
 }
 
 func (m *Module) handleDifyChatMessagesProxy(w http.ResponseWriter, r *http.Request) {
@@ -339,7 +390,121 @@ func (m *Module) isProxyTokenAuthorized(r *http.Request) bool {
 		return false
 	}
 
-	return subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
+	origin, err := requestOrigin(r)
+	if err != nil {
+		return false
+	}
+
+	return m.validateSignedProxyToken(provided, origin, time.Now()) == nil
+}
+
+func requestOrigin(r *http.Request) (string, error) {
+	if r == nil {
+		return "", fmt.Errorf("missing request")
+	}
+
+	if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
+		return normalizeOrigin(origin)
+	}
+
+	if referer := strings.TrimSpace(r.Header.Get("Referer")); referer != "" {
+		u, err := url.Parse(referer)
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			return "", fmt.Errorf("invalid referer origin")
+		}
+		return strings.ToLower(u.Scheme + "://" + u.Host), nil
+	}
+
+	return "", fmt.Errorf("missing request origin")
+}
+
+func (m *Module) issueSignedProxyToken(origin string, now time.Time) (string, time.Time, error) {
+	secret := strings.TrimSpace(m.proxyToken)
+	if secret == "" {
+		return "", time.Time{}, fmt.Errorf("proxy token secret is not configured")
+	}
+	if origin == "" {
+		return "", time.Time{}, fmt.Errorf("origin is required")
+	}
+
+	nonceBytes := make([]byte, embedProxyTokenNonceSize)
+	if _, err := rand.Read(nonceBytes); err != nil {
+		return "", time.Time{}, fmt.Errorf("generating token nonce: %w", err)
+	}
+
+	issuedAt := now.UTC()
+	expiresAt := issuedAt.Add(embedProxyTokenTTL)
+	claims := embedProxySignedTokenClaims{
+		Origin: origin,
+		Exp:    expiresAt.Unix(),
+		Iat:    issuedAt.Unix(),
+		Nonce:  base64.RawURLEncoding.EncodeToString(nonceBytes),
+	}
+
+	claimsJSON, err := json.Marshal(claims)
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("encoding token claims: %w", err)
+	}
+	claimsPart := base64.RawURLEncoding.EncodeToString(claimsJSON)
+
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(claimsPart))
+	signaturePart := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+
+	return claimsPart + "." + signaturePart, expiresAt, nil
+}
+
+func (m *Module) validateSignedProxyToken(token, requestOrigin string, now time.Time) error {
+	secret := strings.TrimSpace(m.proxyToken)
+	if secret == "" {
+		return fmt.Errorf("proxy token secret is not configured")
+	}
+
+	parts := strings.Split(token, ".")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid token format")
+	}
+	claimsPart := strings.TrimSpace(parts[0])
+	signaturePart := strings.TrimSpace(parts[1])
+	if claimsPart == "" || signaturePart == "" {
+		return fmt.Errorf("invalid token format")
+	}
+
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(claimsPart))
+	expectedSignature := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	if subtle.ConstantTimeCompare([]byte(signaturePart), []byte(expectedSignature)) != 1 {
+		return fmt.Errorf("invalid token signature")
+	}
+
+	claimsJSON, err := base64.RawURLEncoding.DecodeString(claimsPart)
+	if err != nil {
+		return fmt.Errorf("invalid token payload")
+	}
+
+	var claims embedProxySignedTokenClaims
+	if err := json.Unmarshal(claimsJSON, &claims); err != nil {
+		return fmt.Errorf("invalid token payload")
+	}
+	if claims.Origin == "" || claims.Nonce == "" {
+		return fmt.Errorf("invalid token claims")
+	}
+	if claims.Origin != requestOrigin {
+		return fmt.Errorf("token origin mismatch")
+	}
+
+	nowUnix := now.UTC().Unix()
+	if nowUnix > claims.Exp+int64(embedProxyTokenSkew.Seconds()) {
+		return fmt.Errorf("token expired")
+	}
+	if nowUnix+int64(embedProxyTokenSkew.Seconds()) < claims.Iat {
+		return fmt.Errorf("token not yet valid")
+	}
+	if claims.Iat > claims.Exp {
+		return fmt.Errorf("invalid token lifetime")
+	}
+
+	return nil
 }
 
 func (m *Module) logEmbedSecurityEvent(r *http.Request, message string, metadata map[string]any) {

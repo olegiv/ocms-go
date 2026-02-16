@@ -82,7 +82,7 @@ func (m *Module) Init(ctx *module.Context) error {
 		}
 		m.allowedUpstreamHosts = upstreamHosts
 		m.proxyToken = strings.TrimSpace(ctx.Config.EmbedProxyToken)
-		m.requireProxyToken = ctx.Config.RequireEmbedProxyToken
+		m.requireProxyToken = ctx.Config.Env == "production" || ctx.Config.RequireEmbedProxyToken
 		if m.requireProxyToken && m.proxyToken == "" {
 			return fmt.Errorf("embed proxy token is required but OCMS_EMBED_PROXY_TOKEN is empty")
 		}
@@ -148,6 +148,7 @@ func (m *Module) RegisterRoutes(r chi.Router) {
 		if m.publicRateLimiter != nil {
 			r.Use(m.publicRateLimiter.HTMLMiddleware())
 		}
+		r.Get("/embed/dify/token", m.handleDifyProxyToken)
 		r.Post("/embed/dify/chat-messages", m.handleDifyChatMessagesProxy)
 		r.Get("/embed/dify/messages/{messageID}/suggested", m.handleDifySuggestedProxy)
 	})

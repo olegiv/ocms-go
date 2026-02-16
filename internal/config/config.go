@@ -59,8 +59,8 @@ type Config struct {
 	EmbedAllowedUpstreamHosts        string `env:"OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS"`                            // Comma-separated allowed upstream hosts for embed provider endpoints
 	RequireEmbedAllowedOrigins       bool   `env:"OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS" envDefault:"false"`        // Refuse startup in production if embed proxy is active and no origin allowlist is configured
 	RequireEmbedAllowedUpstreamHosts bool   `env:"OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS" envDefault:"false"` // Refuse startup in production if embed proxy is active and no upstream host allowlist is configured
-	EmbedProxyToken                  string `env:"OCMS_EMBED_PROXY_TOKEN"`                                       // Optional shared token required for embed proxy requests
-	RequireEmbedProxyToken           bool   `env:"OCMS_REQUIRE_EMBED_PROXY_TOKEN" envDefault:"false"`            // Refuse startup in production if embed proxy token requirement is enabled but token is missing
+	EmbedProxyToken                  string `env:"OCMS_EMBED_PROXY_TOKEN"`                                       // Shared secret used to mint short-lived signed embed proxy tokens
+	RequireEmbedProxyToken           bool   `env:"OCMS_REQUIRE_EMBED_PROXY_TOKEN" envDefault:"false"`            // Force embed proxy token requirement outside production as well
 	RequireHTTPSOutbound             bool   `env:"OCMS_REQUIRE_HTTPS_OUTBOUND" envDefault:"false"`               // Require HTTPS for outbound integration URLs (webhooks, scheduler, embeds)
 
 	// Seeding configuration

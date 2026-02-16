@@ -156,8 +156,10 @@ func TestDifyProvider_RenderBody(t *testing.T) {
 				"dify-chat-window",
 				"dify-chat-messages",
 				"PROXY_BASE='/embed/dify'",
+				"/token",
 				"/chat-messages",
 				"/messages/'+encodeURIComponent(msgId)+'/suggested?user='+encodeURIComponent(userId)",
+				"X-Embed-Proxy-Token",
 				"AI Assistant", // default bot name
 				"#1C64F2",      // default primary color
 				"botMsg.textContent=full",

@@ -6,6 +6,7 @@ package embed
 import (
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestParseAllowedOrigins(t *testing.T) {
@@ -175,18 +176,24 @@ func TestIsProxyTokenAuthorized(t *testing.T) {
 		mod.proxyToken = "configured-token"
 
 		req := httptest.NewRequest("POST", "/embed/dify/chat-messages", nil)
+		req.Header.Set("Origin", "https://example.com")
 		if mod.isProxyTokenAuthorized(req) {
 			t.Fatal("expected proxy token check to fail when token is configured but header is missing")
 		}
 	})
 
-	t.Run("allow when configured token matches even if policy flag is disabled", func(t *testing.T) {
+	t.Run("allow when configured signed token matches even if policy flag is disabled", func(t *testing.T) {
 		mod := New()
 		mod.requireProxyToken = false
 		mod.proxyToken = "configured-token"
 
 		req := httptest.NewRequest("POST", "/embed/dify/chat-messages", nil)
-		req.Header.Set(embedProxyTokenHeader, "configured-token")
+		req.Header.Set("Origin", "https://example.com")
+		token, _, err := mod.issueSignedProxyToken("https://example.com", time.Now())
+		if err != nil {
+			t.Fatalf("issueSignedProxyToken() error: %v", err)
+		}
+		req.Header.Set(embedProxyTokenHeader, token)
 		if !mod.isProxyTokenAuthorized(req) {
 			t.Fatal("expected proxy token check to pass with matching configured token")
 		}
@@ -198,32 +205,62 @@ func TestIsProxyTokenAuthorized(t *testing.T) {
 		mod.proxyToken = "secret-token"
 
 		req := httptest.NewRequest("POST", "/embed/dify/chat-messages", nil)
+		req.Header.Set("Origin", "https://example.com")
 		if mod.isProxyTokenAuthorized(req) {
 			t.Fatal("expected proxy token check to fail when token is missing")
 		}
 	})
 
-	t.Run("block when token is incorrect", func(t *testing.T) {
+	t.Run("block when signed token origin mismatches", func(t *testing.T) {
 		mod := New()
 		mod.requireProxyToken = true
 		mod.proxyToken = "secret-token"
 
 		req := httptest.NewRequest("POST", "/embed/dify/chat-messages", nil)
-		req.Header.Set(embedProxyTokenHeader, "wrong-token")
+		req.Header.Set("Origin", "https://example.com")
+		token, _, err := mod.issueSignedProxyToken("https://other.example", time.Now())
+		if err != nil {
+			t.Fatalf("issueSignedProxyToken() error: %v", err)
+		}
+		req.Header.Set(embedProxyTokenHeader, token)
 		if mod.isProxyTokenAuthorized(req) {
-			t.Fatal("expected proxy token check to fail when token is incorrect")
+			t.Fatal("expected proxy token check to fail when token origin mismatches")
 		}
 	})
 
-	t.Run("allow when token matches", func(t *testing.T) {
+	t.Run("allow when signed token matches", func(t *testing.T) {
 		mod := New()
 		mod.requireProxyToken = true
 		mod.proxyToken = "secret-token"
 
 		req := httptest.NewRequest("POST", "/embed/dify/chat-messages", nil)
-		req.Header.Set(embedProxyTokenHeader, "secret-token")
+		req.Header.Set("Origin", "https://example.com")
+		token, _, err := mod.issueSignedProxyToken("https://example.com", time.Now())
+		if err != nil {
+			t.Fatalf("issueSignedProxyToken() error: %v", err)
+		}
+		req.Header.Set(embedProxyTokenHeader, token)
 		if !mod.isProxyTokenAuthorized(req) {
 			t.Fatal("expected proxy token check to pass with matching token")
+		}
+	})
+
+	t.Run("block when signed token is expired", func(t *testing.T) {
+		mod := New()
+		mod.requireProxyToken = true
+		mod.proxyToken = "secret-token"
+
+		issuedAt := time.Now().Add(-2 * embedProxyTokenTTL)
+		token, _, err := mod.issueSignedProxyToken("https://example.com", issuedAt)
+		if err != nil {
+			t.Fatalf("issueSignedProxyToken() error: %v", err)
+		}
+
+		req := httptest.NewRequest("POST", "/embed/dify/chat-messages", nil)
+		req.Header.Set("Origin", "https://example.com")
+		req.Header.Set(embedProxyTokenHeader, token)
+		if mod.isProxyTokenAuthorized(req) {
+			t.Fatal("expected proxy token check to fail with expired token")
 		}
 	})
 }
