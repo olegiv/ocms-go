@@ -165,9 +165,15 @@ func (m *Module) handleSaveProviderSettings(w http.ResponseWriter, r *http.Reque
 	// Load existing settings to preserve position
 	existingPS, _ := loadProviderSettings(m.ctx.DB, ctx.ProviderID)
 	position := 0
+	oldEndpoint := ""
 	if existingPS != nil {
 		position = existingPS.Position
+		oldEndpoint = strings.TrimSpace(existingPS.Settings["api_endpoint"])
 	}
+	newEndpoint := strings.TrimSpace(settings["api_endpoint"])
+	oldScheme, oldHost := embedEndpointMetadata(oldEndpoint)
+	newScheme, newHost := embedEndpointMetadata(newEndpoint)
+	endpointChanged := oldScheme != newScheme || oldHost != newHost
 
 	// Save settings
 	ps := &ProviderSettings{
@@ -195,7 +201,7 @@ func (m *Module) handleSaveProviderSettings(w http.ResponseWriter, r *http.Reque
 		"enabled", isEnabled,
 	)
 	if m.ctx.Events != nil {
-		metadata := buildEmbedSettingsAuditMetadata(ctx.ProviderID, isEnabled, settings)
+		metadata := buildEmbedSettingsAuditMetadata(ctx.ProviderID, isEnabled, settings, endpointChanged, oldScheme, oldHost, newScheme, newHost)
 		_ = m.ctx.Events.LogSecurityEvent(
 			r.Context(),
 			model.EventLevelInfo,
@@ -205,6 +211,33 @@ func (m *Module) handleSaveProviderSettings(w http.ResponseWriter, r *http.Reque
 			middleware.GetRequestURL(r),
 			metadata,
 		)
+		if endpointChanged {
+			m.ctx.Logger.Warn(
+				"embed provider endpoint changed",
+				"provider", ctx.ProviderID,
+				"old_scheme", oldScheme,
+				"old_host", oldHost,
+				"new_scheme", newScheme,
+				"new_host", newHost,
+				"updated_by", ctx.User.Email,
+			)
+			_ = m.ctx.Events.LogSecurityEvent(
+				r.Context(),
+				model.EventLevelWarning,
+				"Embed provider endpoint changed",
+				&ctx.User.ID,
+				middleware.GetClientIP(r),
+				middleware.GetRequestURL(r),
+				map[string]any{
+					"provider":         ctx.ProviderID,
+					"endpoint_changed": true,
+					"old_scheme":       oldScheme,
+					"old_host":         oldHost,
+					"new_scheme":       newScheme,
+					"new_host":         newHost,
+				},
+			)
+		}
 	}
 
 	m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "embed.success_save"), "success")
@@ -335,10 +368,17 @@ func (m *Module) getProviderContext(w http.ResponseWriter, r *http.Request) (pro
 	}, true
 }
 
-func buildEmbedSettingsAuditMetadata(providerID string, enabled bool, settings map[string]string) map[string]any {
+func buildEmbedSettingsAuditMetadata(
+	providerID string,
+	enabled bool,
+	settings map[string]string,
+	endpointChanged bool,
+	oldScheme, oldHost, newScheme, newHost string,
+) map[string]any {
 	metadata := map[string]any{
-		"provider": providerID,
-		"enabled":  enabled,
+		"provider":         providerID,
+		"enabled":          enabled,
+		"endpoint_changed": endpointChanged,
 	}
 
 	if settings == nil {
@@ -348,11 +388,26 @@ func buildEmbedSettingsAuditMetadata(providerID string, enabled bool, settings m
 	if endpoint := strings.TrimSpace(settings["api_endpoint"]); endpoint != "" {
 		metadata["api_endpoint"] = endpoint
 	}
+	if endpointChanged {
+		metadata["old_scheme"] = oldScheme
+		metadata["old_host"] = oldHost
+		metadata["new_scheme"] = newScheme
+		metadata["new_host"] = newHost
+	}
 	if apiKey, ok := settings["api_key"]; ok {
 		metadata["has_api_key"] = strings.TrimSpace(apiKey) != ""
 	}
 
 	return metadata
+}
+
+func embedEndpointMetadata(rawEndpoint string) (scheme string, host string) {
+	parsed, err := url.Parse(strings.TrimSpace(rawEndpoint))
+	if err != nil || parsed == nil {
+		return "", ""
+	}
+
+	return strings.ToLower(strings.TrimSpace(parsed.Scheme)), strings.ToLower(strings.TrimSpace(parsed.Hostname()))
 }
 
 func (m *Module) validateProviderRuntimePolicy(providerID string, settings map[string]string) error {

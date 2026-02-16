@@ -13,7 +13,7 @@ func TestBuildEmbedSettingsAuditMetadata(t *testing.T) {
 	metadata := buildEmbedSettingsAuditMetadata("dify", true, map[string]string{
 		"api_endpoint": "https://api.dify.ai/v1",
 		"api_key":      "secret-value",
-	})
+	}, true, "https", "old.example", "https", "api.dify.ai")
 
 	if metadata["provider"] != "dify" {
 		t.Errorf("provider = %v, want %q", metadata["provider"], "dify")
@@ -27,8 +27,32 @@ func TestBuildEmbedSettingsAuditMetadata(t *testing.T) {
 	if metadata["has_api_key"] != true {
 		t.Errorf("has_api_key = %v, want %v", metadata["has_api_key"], true)
 	}
+	if metadata["endpoint_changed"] != true {
+		t.Errorf("endpoint_changed = %v, want %v", metadata["endpoint_changed"], true)
+	}
+	if metadata["old_host"] != "old.example" {
+		t.Errorf("old_host = %v, want %q", metadata["old_host"], "old.example")
+	}
+	if metadata["new_host"] != "api.dify.ai" {
+		t.Errorf("new_host = %v, want %q", metadata["new_host"], "api.dify.ai")
+	}
 	if _, ok := metadata["api_key"]; ok {
 		t.Fatal("metadata must not include raw api_key")
+	}
+}
+
+func TestEmbedEndpointMetadata(t *testing.T) {
+	scheme, host := embedEndpointMetadata("https://API.Dify.AI/v1")
+	if scheme != "https" {
+		t.Fatalf("scheme = %q, want %q", scheme, "https")
+	}
+	if host != "api.dify.ai" {
+		t.Fatalf("host = %q, want %q", host, "api.dify.ai")
+	}
+
+	scheme, host = embedEndpointMetadata("://bad-url")
+	if scheme != "" || host != "" {
+		t.Fatalf("invalid URL metadata = (%q, %q), want empty values", scheme, host)
 	}
 }
 
