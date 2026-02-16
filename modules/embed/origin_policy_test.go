@@ -42,6 +42,60 @@ func TestParseAllowedOrigins(t *testing.T) {
 	})
 }
 
+func TestParseAllowedHosts(t *testing.T) {
+	t.Run("empty config", func(t *testing.T) {
+		allowed, err := parseAllowedHosts("")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(allowed) != 0 {
+			t.Fatalf("expected empty allowlist, got %d", len(allowed))
+		}
+	})
+
+	t.Run("valid list", func(t *testing.T) {
+		allowed, err := parseAllowedHosts("api.dify.ai, dify.internal.example")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(allowed) != 2 {
+			t.Fatalf("expected 2 hosts, got %d", len(allowed))
+		}
+		if _, ok := allowed["api.dify.ai"]; !ok {
+			t.Fatal("missing api.dify.ai")
+		}
+		if _, ok := allowed["dify.internal.example"]; !ok {
+			t.Fatal("missing dify.internal.example")
+		}
+	})
+
+	t.Run("invalid host with scheme", func(t *testing.T) {
+		if _, err := parseAllowedHosts("https://api.dify.ai"); err == nil {
+			t.Fatal("expected error for host with scheme")
+		}
+	})
+
+	t.Run("invalid host with port", func(t *testing.T) {
+		if _, err := parseAllowedHosts("api.dify.ai:443"); err == nil {
+			t.Fatal("expected error for host with port")
+		}
+	})
+}
+
+func TestIsUpstreamHostAllowed(t *testing.T) {
+	mod := New()
+	mod.allowedUpstreamHosts = map[string]struct{}{
+		"api.dify.ai": {},
+	}
+
+	if !mod.isUpstreamHostAllowed("api.dify.ai") {
+		t.Fatal("expected api.dify.ai to be allowed")
+	}
+	if mod.isUpstreamHostAllowed("evil.example") {
+		t.Fatal("expected evil.example to be blocked")
+	}
+}
+
 func TestIsRequestOriginAllowed(t *testing.T) {
 	mod := New()
 	mod.allowedOrigins = map[string]struct{}{

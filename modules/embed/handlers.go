@@ -4,7 +4,9 @@
 package embed
 
 import (
+	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -154,6 +156,11 @@ func (m *Module) handleSaveProviderSettings(w http.ResponseWriter, r *http.Reque
 	// Validate if enabling
 	if isEnabled {
 		if err := ctx.Provider.Validate(settings); err != nil {
+			m.ctx.Render.SetFlash(r, err.Error(), "error")
+			http.Redirect(w, r, "/admin/embed/"+ctx.ProviderID, http.StatusSeeOther)
+			return
+		}
+		if err := m.validateProviderRuntimePolicy(ctx.ProviderID, settings); err != nil {
 			m.ctx.Render.SetFlash(r, err.Error(), "error")
 			http.Redirect(w, r, "/admin/embed/"+ctx.ProviderID, http.StatusSeeOther)
 			return
@@ -351,4 +358,26 @@ func buildEmbedSettingsAuditMetadata(providerID string, enabled bool, settings m
 	}
 
 	return metadata
+}
+
+func (m *Module) validateProviderRuntimePolicy(providerID string, settings map[string]string) error {
+	if m == nil {
+		return nil
+	}
+	if providerID != "dify" || len(m.allowedUpstreamHosts) == 0 {
+		return nil
+	}
+
+	endpoint := strings.TrimSpace(settings["api_endpoint"])
+	if endpoint == "" {
+		return nil
+	}
+	parsedEndpoint, err := url.Parse(endpoint)
+	if err != nil {
+		return fmt.Errorf("API endpoint is invalid: %w", err)
+	}
+	if !m.isUpstreamHostAllowed(parsedEndpoint.Hostname()) {
+		return fmt.Errorf("API endpoint host %q is not allowed by OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS policy", parsedEndpoint.Hostname())
+	}
+	return nil
 }

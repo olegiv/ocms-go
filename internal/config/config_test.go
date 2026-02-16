@@ -72,6 +72,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.EmbedAllowedOrigins != "" {
 		t.Errorf("EmbedAllowedOrigins = %q, want empty", cfg.EmbedAllowedOrigins)
 	}
+	if cfg.EmbedAllowedUpstreamHosts != "" {
+		t.Errorf("EmbedAllowedUpstreamHosts = %q, want empty", cfg.EmbedAllowedUpstreamHosts)
+	}
 	if cfg.RequireEmbedAllowedOrigins {
 		t.Error("RequireEmbedAllowedOrigins = true, want false")
 	}
@@ -113,6 +116,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	setEnv(t, "OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE", "true")
 	setEnv(t, "OCMS_API_KEY_MAX_TTL_DAYS", "90")
 	setEnv(t, "OCMS_EMBED_ALLOWED_ORIGINS", "https://example.com,https://app.example.com")
+	setEnv(t, "OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS", "api.dify.ai,dify.internal.example")
 	setEnv(t, "OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS", "true")
 	setEnv(t, "OCMS_EMBED_PROXY_TOKEN", "embed-token-test")
 	setEnv(t, "OCMS_REQUIRE_EMBED_PROXY_TOKEN", "true")
@@ -178,6 +182,9 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 	if cfg.EmbedAllowedOrigins != "https://example.com,https://app.example.com" {
 		t.Errorf("EmbedAllowedOrigins = %q, want %q", cfg.EmbedAllowedOrigins, "https://example.com,https://app.example.com")
+	}
+	if cfg.EmbedAllowedUpstreamHosts != "api.dify.ai,dify.internal.example" {
+		t.Errorf("EmbedAllowedUpstreamHosts = %q, want %q", cfg.EmbedAllowedUpstreamHosts, "api.dify.ai,dify.internal.example")
 	}
 	if !cfg.RequireEmbedAllowedOrigins {
 		t.Error("RequireEmbedAllowedOrigins = false, want true")

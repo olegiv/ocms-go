@@ -125,3 +125,28 @@ func TestGetDifyProxyConfig_AllowsHTTPS(t *testing.T) {
 		t.Errorf("apiKey = %q, want %q", apiKey, "app-test-key")
 	}
 }
+
+func TestGetDifyProxyConfig_EnforcesUpstreamHostAllowlist(t *testing.T) {
+	mod := New()
+	mod.ctx = &module.Context{
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	mod.allowedUpstreamHosts = map[string]struct{}{
+		"api.dify.ai": {},
+	}
+	mod.settings = []*ProviderSettings{
+		{
+			ProviderID: "dify",
+			IsEnabled:  true,
+			Settings: map[string]string{
+				"api_endpoint": "https://evil.example/v1",
+				"api_key":      "app-test-key",
+			},
+		},
+	}
+
+	_, _, ok := mod.getDifyProxyConfig()
+	if ok {
+		t.Fatal("expected endpoint host outside allowlist to be rejected")
+	}
+}

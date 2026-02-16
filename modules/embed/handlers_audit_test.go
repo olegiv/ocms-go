@@ -27,3 +27,22 @@ func TestBuildEmbedSettingsAuditMetadata(t *testing.T) {
 		t.Fatal("metadata must not include raw api_key")
 	}
 }
+
+func TestValidateProviderRuntimePolicy(t *testing.T) {
+	mod := New()
+	mod.allowedUpstreamHosts = map[string]struct{}{
+		"api.dify.ai": {},
+	}
+
+	if err := mod.validateProviderRuntimePolicy("dify", map[string]string{
+		"api_endpoint": "https://api.dify.ai/v1",
+	}); err != nil {
+		t.Fatalf("expected allowed host to pass, got %v", err)
+	}
+
+	if err := mod.validateProviderRuntimePolicy("dify", map[string]string{
+		"api_endpoint": "https://evil.example/v1",
+	}); err == nil {
+		t.Fatal("expected disallowed host to be rejected")
+	}
+}

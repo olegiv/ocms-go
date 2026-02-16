@@ -35,17 +35,18 @@ const (
 // Module implements the module.Module interface for the embed module.
 type Module struct {
 	module.BaseModule
-	ctx                 *module.Context
-	providers           []providers.Provider
-	settings            []*ProviderSettings
-	publicRateLimiter   *middleware.GlobalRateLimiter
-	globalRateLimiter   *rate.Limiter
-	proxySemaphore      chan struct{}
-	allowedOrigins      map[string]struct{}
-	requireOriginPolicy bool
-	proxyToken          string
-	requireProxyToken   bool
-	mu                  sync.RWMutex
+	ctx                  *module.Context
+	providers            []providers.Provider
+	settings             []*ProviderSettings
+	publicRateLimiter    *middleware.GlobalRateLimiter
+	globalRateLimiter    *rate.Limiter
+	proxySemaphore       chan struct{}
+	allowedOrigins       map[string]struct{}
+	allowedUpstreamHosts map[string]struct{}
+	requireOriginPolicy  bool
+	proxyToken           string
+	requireProxyToken    bool
+	mu                   sync.RWMutex
 }
 
 // New creates a new instance of the embed module.
@@ -75,6 +76,11 @@ func (m *Module) Init(ctx *module.Context) error {
 			return fmt.Errorf("parsing embed allowed origins: %w", err)
 		}
 		m.allowedOrigins = origins
+		upstreamHosts, err := parseAllowedHosts(ctx.Config.EmbedAllowedUpstreamHosts)
+		if err != nil {
+			return fmt.Errorf("parsing embed allowed upstream hosts: %w", err)
+		}
+		m.allowedUpstreamHosts = upstreamHosts
 		m.proxyToken = strings.TrimSpace(ctx.Config.EmbedProxyToken)
 		m.requireProxyToken = ctx.Config.RequireEmbedProxyToken
 		if m.requireProxyToken && m.proxyToken == "" {
@@ -96,6 +102,7 @@ func (m *Module) Init(ctx *module.Context) error {
 		"proxy_global_rate_limit_burst", embedProxyGlobalRateLimitBurst,
 		"proxy_max_concurrent", embedProxyMaxConcurrent,
 		"allowed_origins", len(m.allowedOrigins),
+		"allowed_upstream_hosts", len(m.allowedUpstreamHosts),
 		"require_origin_policy", m.requireOriginPolicy,
 		"require_proxy_token", m.requireProxyToken,
 		"proxy_token_configured", m.proxyToken != "",

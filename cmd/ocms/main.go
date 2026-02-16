@@ -174,6 +174,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE  Deactivate API keys when source IP changes without per-key CIDRs (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_API_KEY_MAX_TTL_DAYS  Maximum API key lifetime in days (0 disables, default: 0)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_ALLOWED_ORIGINS   Comma-separated allowed origins for embed proxy routes (optional)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS   Comma-separated allowed hosts for embed provider endpoints (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS  Reject production startup when embed proxy is active without origin allowlist (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_PROXY_TOKEN   Optional shared token required by embed proxy routes\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_PROXY_TOKEN  Reject production startup when embed proxy token policy is enabled without a token (default: false)\n")
@@ -623,6 +624,9 @@ func run() error {
 		}
 		if strings.TrimSpace(cfg.EmbedAllowedOrigins) == "" {
 			slog.Warn("production security warning: OCMS_EMBED_ALLOWED_ORIGINS is not configured")
+		}
+		if strings.TrimSpace(cfg.EmbedAllowedUpstreamHosts) == "" {
+			slog.Warn("production security warning: OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS is not configured")
 		}
 		if !cfg.RequireEmbedAllowedOrigins {
 			slog.Warn("production security warning: OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS is disabled")

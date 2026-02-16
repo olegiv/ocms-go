@@ -185,6 +185,12 @@ func (m *Module) getDifyProxyConfig() (apiEndpoint string, apiKey string, ok boo
 		m.ctx.Logger.Warn("invalid Dify endpoint scheme in embed settings", "api_endpoint", apiEndpoint)
 		return "", "", false
 	}
+	if !m.isUpstreamHostAllowed(parsedEndpoint.Hostname()) {
+		m.ctx.Logger.Warn("Dify endpoint host blocked by allowlist policy",
+			"api_endpoint", apiEndpoint,
+			"host", parsedEndpoint.Hostname())
+		return "", "", false
+	}
 	if err := util.ValidateWebhookURL(apiEndpoint); err != nil {
 		m.ctx.Logger.Warn("invalid Dify endpoint in embed settings", "error", err)
 		return "", "", false
