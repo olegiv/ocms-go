@@ -286,6 +286,68 @@ func isMissingAPIKeySourceCIDRTable(err error) bool {
 	return strings.Contains(msg, "no such table") && strings.Contains(msg, "api_key_source_cidrs")
 }
 
+func isMissingEventsTable(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "no such table") && strings.Contains(msg, "events")
+}
+
+func logAPIKeySourceAnomalyEvent(
+	ctx context.Context,
+	queries *store.Queries,
+	keyID int64,
+	previousIP,
+	currentIP,
+	requestPath,
+	status string,
+	hasSourceCIDRs,
+	revokePolicyEnabled bool,
+) {
+	if queries == nil {
+		return
+	}
+
+	message := "API key source IP anomaly detected"
+	switch status {
+	case "revoked":
+		message = "API key deactivated due to source IP anomaly"
+	case "revoke_failed":
+		message = "API key revocation failed after source IP anomaly"
+	}
+
+	metadata, err := json.Marshal(map[string]any{
+		"api_key_id":            keyID,
+		"previous_ip":           previousIP,
+		"current_ip":            currentIP,
+		"status":                status,
+		"has_source_cidrs":      hasSourceCIDRs,
+		"revoke_policy_enabled": revokePolicyEnabled,
+	})
+	if err != nil {
+		slog.Warn("failed to marshal API key source anomaly metadata", "error", err, "key_id", keyID)
+		return
+	}
+
+	_, err = queries.CreateEvent(ctx, store.CreateEventParams{
+		Level:      model.EventLevelWarning,
+		Category:   model.EventCategorySecurity,
+		Message:    message,
+		UserID:     sql.NullInt64{Valid: false},
+		Metadata:   string(metadata),
+		IpAddress:  currentIP,
+		RequestUrl: requestPath,
+		CreatedAt:  time.Now(),
+	})
+	if err != nil {
+		if isMissingEventsTable(err) {
+			return
+		}
+		slog.Warn("failed to persist API key source anomaly event", "error", err, "key_id", keyID, "status", status)
+	}
+}
+
 func isAPIKeySourceAllowed(ctx context.Context, queries *store.Queries, keyID int64, clientIP string) (bool, bool, error) {
 	cidrs, err := queries.ListAPIKeySourceCIDRs(ctx, keyID)
 	if err != nil {
@@ -534,6 +596,17 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 				UpdatedAt: time.Now(),
 				ID:        matchedKey.ID,
 			}); err != nil {
+				logAPIKeySourceAnomalyEvent(
+					r.Context(),
+					queries,
+					matchedKey.ID,
+					previousIP,
+					clientIP,
+					r.URL.Path,
+					"revoke_failed",
+					hasSourceCIDRs,
+					true,
+				)
 				slog.Error("failed to deactivate API key after source IP anomaly",
 					"error", err,
 					"key_id", matchedKey.ID,
@@ -545,6 +618,17 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 				}
 				return nil, false
 			} else {
+				logAPIKeySourceAnomalyEvent(
+					r.Context(),
+					queries,
+					matchedKey.ID,
+					previousIP,
+					clientIP,
+					r.URL.Path,
+					"revoked",
+					hasSourceCIDRs,
+					true,
+				)
 				slog.Warn("API key deactivated due to source IP anomaly",
 					"key_id", matchedKey.ID,
 					"previous_ip", previousIP,
@@ -557,6 +641,18 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 				return nil, false
 			}
 		}
+
+		logAPIKeySourceAnomalyEvent(
+			r.Context(),
+			queries,
+			matchedKey.ID,
+			previousIP,
+			clientIP,
+			r.URL.Path,
+			"observed",
+			hasSourceCIDRs,
+			shouldRevokeAPIKeyOnSourceIPChange(),
+		)
 	}
 
 	return matchedKey, false

@@ -60,6 +60,23 @@ func setupTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("failed to create table: %v", err)
 	}
 
+	_, err = db.Exec(`
+		CREATE TABLE events (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			level TEXT NOT NULL,
+			category TEXT NOT NULL,
+			message TEXT NOT NULL,
+			user_id INTEGER,
+			metadata TEXT NOT NULL DEFAULT '{}',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			ip_address TEXT NOT NULL DEFAULT '',
+			request_url TEXT NOT NULL DEFAULT ''
+		)
+	`)
+	if err != nil {
+		t.Fatalf("failed to create events table: %v", err)
+	}
+
 	return db
 }
 
@@ -697,6 +714,33 @@ func TestAPIKeyAuth_RevokeOnSourceIPChange(t *testing.T) {
 	if isActive {
 		t.Fatal("expected key to be deactivated after source IP anomaly")
 	}
+
+	var eventMessage string
+	var eventCategory string
+	var eventMetadata string
+	err = db.QueryRow(`
+		SELECT message, category, metadata
+		FROM events
+		ORDER BY id DESC
+		LIMIT 1
+	`).Scan(&eventMessage, &eventCategory, &eventMetadata)
+	if err != nil {
+		t.Fatalf("failed to load anomaly event: %v", err)
+	}
+	if eventCategory != model.EventCategorySecurity {
+		t.Fatalf("event category = %q, want %q", eventCategory, model.EventCategorySecurity)
+	}
+	if eventMessage != "API key deactivated due to source IP anomaly" {
+		t.Fatalf("event message = %q, want revoked anomaly message", eventMessage)
+	}
+
+	var meta map[string]any
+	if err := json.Unmarshal([]byte(eventMetadata), &meta); err != nil {
+		t.Fatalf("failed to decode event metadata: %v", err)
+	}
+	if meta["status"] != "revoked" {
+		t.Fatalf("event metadata status = %v, want %q", meta["status"], "revoked")
+	}
 }
 
 func TestAPIKeyAuth_RevokeOnSourceIPChange_SkipsWhenPerKeyCIDRsConfigured(t *testing.T) {
@@ -733,6 +777,25 @@ func TestAPIKeyAuth_RevokeOnSourceIPChange_SkipsWhenPerKeyCIDRsConfigured(t *tes
 	}
 	if !isActive {
 		t.Fatal("expected key to remain active when per-key source CIDRs are configured")
+	}
+
+	var eventMetadata string
+	err = db.QueryRow(`
+		SELECT metadata
+		FROM events
+		ORDER BY id DESC
+		LIMIT 1
+	`).Scan(&eventMetadata)
+	if err != nil {
+		t.Fatalf("failed to load anomaly event: %v", err)
+	}
+
+	var meta map[string]any
+	if err := json.Unmarshal([]byte(eventMetadata), &meta); err != nil {
+		t.Fatalf("failed to decode event metadata: %v", err)
+	}
+	if meta["status"] != "observed" {
+		t.Fatalf("event metadata status = %v, want %q", meta["status"], "observed")
 	}
 }
 
