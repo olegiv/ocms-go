@@ -184,6 +184,31 @@ func TestPageStatusValidation(t *testing.T) {
 	}
 }
 
+func TestDetectSuspiciousPageHTMLTokens(t *testing.T) {
+	t.Run("no suspicious tokens", func(t *testing.T) {
+		tokens := detectSuspiciousPageHTMLTokens("<p>Hello world</p>")
+		if len(tokens) != 0 {
+			t.Fatalf("expected no suspicious tokens, got %v", tokens)
+		}
+	})
+
+	t.Run("detect script and javascript url", func(t *testing.T) {
+		body := `<script>alert(1)</script><a href="javascript:alert(1)">click</a>`
+		tokens := detectSuspiciousPageHTMLTokens(body)
+		if len(tokens) == 0 {
+			t.Fatal("expected suspicious tokens to be detected")
+		}
+	})
+
+	t.Run("detect event handler attributes", func(t *testing.T) {
+		body := `<img src=x onerror="alert(1)">`
+		tokens := detectSuspiciousPageHTMLTokens(body)
+		if len(tokens) == 0 {
+			t.Fatal("expected suspicious tokens to be detected")
+		}
+	})
+}
+
 // TestPageScheduling tests page scheduling logic
 func TestPageScheduling(t *testing.T) {
 	now := time.Now()

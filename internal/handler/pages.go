@@ -50,6 +50,14 @@ var ValidPageTypes = []string{PageTypePost, PageTypePage}
 // PagesPerPage is the number of pages to display per page.
 const PagesPerPage = 10
 
+var suspiciousPageHTMLTokens = []string{
+	"<script",
+	"javascript:",
+	"onerror=",
+	"onload=",
+	"<iframe",
+}
+
 // PagesHandler handles page management routes.
 type PagesHandler struct {
 	queries        *store.Queries
@@ -634,6 +642,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("page created", "page_id", newPage.ID, "slug", newPage.Slug, "created_by", middleware.GetUserID(r))
 	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": newPage.ID, "slug": newPage.Slug})
+	h.logSuspiciousPageContentEvent(r, newPage.ID, newPage.Slug, input.Body, "created")
 
 	// Dispatch page.created webhook event
 	h.dispatchPageEvent(r.Context(), model.EventPageCreated, newPage, middleware.GetUserEmail(r))
@@ -908,6 +917,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("page updated", "page_id", updatedPage.ID, "slug", updatedPage.Slug, "updated_by", middleware.GetUserID(r))
 	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page updated", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": updatedPage.ID, "slug": updatedPage.Slug})
+	h.logSuspiciousPageContentEvent(r, updatedPage.ID, updatedPage.Slug, input.Body, "updated")
 
 	// Dispatch page.updated webhook event
 	h.dispatchPageEvent(r.Context(), model.EventPageUpdated, updatedPage, middleware.GetUserEmail(r))
@@ -1153,9 +1163,9 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		NoIndex:           page.NoIndex,
 		NoFollow:          page.NoFollow,
 		CanonicalUrl:      page.CanonicalUrl,
-		ScheduledAt:       page.ScheduledAt,        // Keep scheduling intact
-		LanguageCode:      page.LanguageCode,       // Keep language intact
-		HideFeaturedImage: page.HideFeaturedImage,  // Keep setting intact
+		ScheduledAt:       page.ScheduledAt,       // Keep scheduling intact
+		LanguageCode:      page.LanguageCode,      // Keep language intact
+		HideFeaturedImage: page.HideFeaturedImage, // Keep setting intact
 		UpdatedAt:         now,
 	})
 	if err != nil {
@@ -1242,9 +1252,9 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		ScheduledAt:       sql.NullTime{},
 		LanguageCode:      tc.TargetLang.Code,
 		HideFeaturedImage: sourcePage.HideFeaturedImage,
-		PageType:          sourcePage.PageType,        // Inherit page type from source
+		PageType:          sourcePage.PageType,         // Inherit page type from source
 		ExcludeFromLists:  sourcePage.ExcludeFromLists, // Inherit exclude flag from source
-		PublishedAt:       sql.NullTime{},             // Not published yet
+		PublishedAt:       sql.NullTime{},              // Not published yet
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	})
@@ -1492,6 +1502,47 @@ func (h *PagesHandler) validateFeaturedImageSize(ctx context.Context, featuredIm
 	}
 
 	return ""
+}
+
+func (h *PagesHandler) logSuspiciousPageContentEvent(r *http.Request, pageID int64, slug, body, action string) {
+	if h == nil || h.eventService == nil || r == nil {
+		return
+	}
+
+	tokens := detectSuspiciousPageHTMLTokens(body)
+	if len(tokens) == 0 {
+		return
+	}
+
+	_ = h.eventService.LogSecurityEvent(
+		r.Context(),
+		model.EventLevelWarning,
+		"Suspicious page HTML content detected",
+		middleware.GetUserIDPtr(r),
+		middleware.GetClientIP(r),
+		middleware.GetRequestURL(r),
+		map[string]any{
+			"page_id": pageID,
+			"slug":    slug,
+			"action":  action,
+			"tokens":  tokens,
+		},
+	)
+}
+
+func detectSuspiciousPageHTMLTokens(body string) []string {
+	if strings.TrimSpace(body) == "" {
+		return nil
+	}
+
+	lowerBody := strings.ToLower(body)
+	matches := make([]string, 0, len(suspiciousPageHTMLTokens))
+	for _, token := range suspiciousPageHTMLTokens {
+		if strings.Contains(lowerBody, token) {
+			matches = append(matches, token)
+		}
+	}
+	return matches
 }
 
 // savePageTags saves tag associations for a page from form values.
