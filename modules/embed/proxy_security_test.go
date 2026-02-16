@@ -46,3 +46,29 @@ func TestEmbedClientIP(t *testing.T) {
 		}
 	})
 }
+
+func TestShouldAuditUpstreamStatus(t *testing.T) {
+	testCases := []struct {
+		name   string
+		status int
+		want   bool
+	}{
+		{name: "200", status: http.StatusOK, want: false},
+		{name: "400", status: http.StatusBadRequest, want: false},
+		{name: "401", status: http.StatusUnauthorized, want: true},
+		{name: "403", status: http.StatusForbidden, want: true},
+		{name: "404", status: http.StatusNotFound, want: false},
+		{name: "429", status: http.StatusTooManyRequests, want: true},
+		{name: "500", status: http.StatusInternalServerError, want: true},
+		{name: "503", status: http.StatusServiceUnavailable, want: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := shouldAuditUpstreamStatus(tc.status)
+			if got != tc.want {
+				t.Fatalf("shouldAuditUpstreamStatus(%d) = %v, want %v", tc.status, got, tc.want)
+			}
+		})
+	}
+}

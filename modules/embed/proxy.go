@@ -247,10 +247,24 @@ func (m *Module) proxyDifyRequest(
 	resp, err := difyProxyHTTPClient.Do(req)
 	if err != nil {
 		m.ctx.Logger.Error("Dify proxy request failed", "error", err)
+		m.logEmbedSecurityEvent(r, "Embed proxy upstream request failed", map[string]any{
+			"provider":    "dify",
+			"path":        r.URL.Path,
+			"target_host": req.URL.Host,
+		})
 		http.Error(w, "Failed to contact upstream service", http.StatusBadGateway)
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
+
+	if shouldAuditUpstreamStatus(resp.StatusCode) {
+		m.logEmbedSecurityEvent(r, "Embed proxy upstream returned error status", map[string]any{
+			"provider":    "dify",
+			"path":        r.URL.Path,
+			"status_code": resp.StatusCode,
+			"target_host": req.URL.Host,
+		})
+	}
 
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Cache-Control", "no-store")
@@ -358,4 +372,16 @@ func extractAndValidateDifyChatUser(body []byte) (string, error) {
 	}
 
 	return payload.User, nil
+}
+
+func shouldAuditUpstreamStatus(statusCode int) bool {
+	if statusCode >= http.StatusInternalServerError {
+		return true
+	}
+	switch statusCode {
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusTooManyRequests:
+		return true
+	default:
+		return false
+	}
 }
