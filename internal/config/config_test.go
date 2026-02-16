@@ -45,6 +45,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.WebhookFormDataMode != "redacted" {
 		t.Errorf("WebhookFormDataMode = %q, want %q", cfg.WebhookFormDataMode, "redacted")
 	}
+	if cfg.RequireWebhookFormDataMinimization {
+		t.Error("RequireWebhookFormDataMinimization = true, want false")
+	}
 	if cfg.APIAllowedCIDRs != "" {
 		t.Errorf("APIAllowedCIDRs = %q, want empty", cfg.APIAllowedCIDRs)
 	}
@@ -92,6 +95,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	setEnv(t, "OCMS_TRUSTED_PROXIES", "127.0.0.1/32,10.0.0.0/8")
 	setEnv(t, "OCMS_REQUIRE_FORM_CAPTCHA", "true")
 	setEnv(t, "OCMS_WEBHOOK_FORM_DATA_MODE", "none")
+	setEnv(t, "OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION", "true")
 	setEnv(t, "OCMS_API_ALLOWED_CIDRS", "10.0.0.0/8,192.168.1.10")
 	setEnv(t, "OCMS_REQUIRE_API_ALLOWED_CIDRS", "true")
 	setEnv(t, "OCMS_REQUIRE_API_KEY_EXPIRY", "true")
@@ -135,6 +139,9 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 	if cfg.WebhookFormDataMode != "none" {
 		t.Errorf("WebhookFormDataMode = %q, want %q", cfg.WebhookFormDataMode, "none")
+	}
+	if !cfg.RequireWebhookFormDataMinimization {
+		t.Error("RequireWebhookFormDataMinimization = false, want true")
 	}
 	if cfg.APIAllowedCIDRs != "10.0.0.0/8,192.168.1.10" {
 		t.Errorf("APIAllowedCIDRs = %q, want %q", cfg.APIAllowedCIDRs, "10.0.0.0/8,192.168.1.10")
@@ -230,6 +237,19 @@ func TestLoad_InvalidWebhookFormDataMode(t *testing.T) {
 	_, err := Load()
 	if err == nil {
 		t.Fatal("Load() should fail when OCMS_WEBHOOK_FORM_DATA_MODE is invalid")
+	}
+}
+
+func TestLoad_RequireWebhookFormDataMinimizationInProduction(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_WEBHOOK_FORM_DATA_MODE", "full")
+	setEnv(t, "OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION", "true")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when OCMS_WEBHOOK_FORM_DATA_MODE=full and OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION=true in production")
 	}
 }
 

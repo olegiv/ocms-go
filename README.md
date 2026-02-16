@@ -198,6 +198,7 @@ sudo dnf install vips-devel
 | `OCMS_REQUIRE_HTTPS_OUTBOUND` | Require HTTPS for outbound integration URLs | `false` | No |
 | `OCMS_REQUIRE_FORM_CAPTCHA` | Require captcha on all public form submissions | `false` | No |
 | `OCMS_WEBHOOK_FORM_DATA_MODE` | `form.submitted` payload data mode (`redacted`/`none`/`full`) | `redacted` | No |
+| `OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION` | Fail startup in production when form webhook payload mode is `full` | `false` | No |
 | `OCMS_SANITIZE_PAGE_HTML` | Sanitize page HTML before rendering to visitors | `false` | No |
 | `OCMS_REQUIRE_SANITIZE_PAGE_HTML` | Fail startup in production if page HTML sanitization is disabled | `false` | No |
 | `OCMS_DEMO_MODE` | Enable demo content seeding (users, pages, media) | `false` | No |

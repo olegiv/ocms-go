@@ -161,6 +161,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_ENV               Environment: development|production (default: development)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_FORM_CAPTCHA  Require captcha for all public forms (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_WEBHOOK_FORM_DATA_MODE  form.submitted payload mode: redacted|none|full (default: redacted)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION  Reject production startup when webhook payload mode is full (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_CUSTOM_DIR        Custom content directory (default: ./custom)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_ACTIVE_THEME      Active theme name (default: default)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REDIS_URL         Redis URL for distributed caching (optional)\n")
@@ -562,6 +563,9 @@ func run() error {
 		}
 		if cfg.WebhookFormDataMode == "full" {
 			slog.Warn("production security warning: OCMS_WEBHOOK_FORM_DATA_MODE=full may expose sensitive submission data to webhook endpoints")
+		}
+		if !cfg.RequireWebhookFormDataMinimization {
+			slog.Warn("production security warning: OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION is disabled")
 		}
 		if strings.TrimSpace(cfg.APIAllowedCIDRs) == "" {
 			slog.Warn("production security warning: OCMS_API_ALLOWED_CIDRS is not configured")
