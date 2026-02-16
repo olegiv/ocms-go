@@ -144,7 +144,7 @@ func (m *Module) shouldTrack(r *http.Request) bool {
 
 // trackPageView records a page view.
 func (m *Module) trackPageView(r *http.Request) {
-	// Get real IP (respects X-Real-IP and X-Forwarded-For from chi middleware)
+	// Get client IP using shared trusted-proxy policy.
 	ip := getRealIP(r)
 	userAgent := r.UserAgent()
 
