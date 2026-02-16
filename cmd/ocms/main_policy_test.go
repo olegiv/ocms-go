@@ -287,3 +287,57 @@ func TestAuditRequiredEmbedHTTPSPosture_AllowsCompliantConfig(t *testing.T) {
 		t.Fatalf("expected compliant embed HTTPS posture to pass, got: %v", err)
 	}
 }
+
+func TestParseAllowedEmbedUpstreamHosts(t *testing.T) {
+	t.Run("valid entries", func(t *testing.T) {
+		hosts, err := parseAllowedEmbedUpstreamHosts("api.dify.ai,dify.internal.example")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(hosts) != 2 {
+			t.Fatalf("expected 2 hosts, got %d", len(hosts))
+		}
+	})
+
+	t.Run("reject host with scheme", func(t *testing.T) {
+		if _, err := parseAllowedEmbedUpstreamHosts("https://api.dify.ai"); err == nil {
+			t.Fatal("expected error for host containing scheme")
+		}
+	})
+}
+
+func TestAuditEmbedUpstreamHostPosture_RejectsDisallowedHost(t *testing.T) {
+	db := newPolicyTestDB(t)
+
+	_, err := db.Exec(`
+		INSERT INTO embed_settings (provider, settings, is_enabled)
+		VALUES ('dify', '{"api_endpoint":"https://evil.example/v1"}', 1)
+	`)
+	if err != nil {
+		t.Fatalf("inserting embed settings: %v", err)
+	}
+
+	allowed := map[string]struct{}{"api.dify.ai": {}}
+	if err := auditEmbedUpstreamHostPosture(context.Background(), db, allowed); err == nil {
+		t.Fatal("expected error when active embed endpoint host is not allowlisted")
+	}
+}
+
+func TestAuditEmbedUpstreamHostPosture_AllowsCompliantHost(t *testing.T) {
+	db := newPolicyTestDB(t)
+
+	_, err := db.Exec(`
+		INSERT INTO embed_settings (provider, settings, is_enabled)
+		VALUES
+			('dify', '{"api_endpoint":"https://api.dify.ai/v1"}', 1),
+			('dify', '{"api_endpoint":"https://evil.example/v1"}', 0)
+	`)
+	if err != nil {
+		t.Fatalf("inserting embed settings fixtures: %v", err)
+	}
+
+	allowed := map[string]struct{}{"api.dify.ai": {}}
+	if err := auditEmbedUpstreamHostPosture(context.Background(), db, allowed); err != nil {
+		t.Fatalf("expected compliant host posture to pass, got: %v", err)
+	}
+}

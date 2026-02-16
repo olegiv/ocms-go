@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -367,6 +368,96 @@ func auditRequiredEmbedHTTPSPosture(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
+func parseAllowedEmbedUpstreamHosts(raw string) (map[string]struct{}, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, nil
+	}
+
+	entries := strings.Split(trimmed, ",")
+	allowed := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		host := strings.TrimSpace(strings.ToLower(entry))
+		host = strings.Trim(host, ".")
+		if host == "" {
+			return nil, fmt.Errorf("embed upstream host allowlist contains empty entry")
+		}
+		if strings.Contains(host, "://") || strings.Contains(host, "/") {
+			return nil, fmt.Errorf("invalid embed upstream host allowlist entry %q", entry)
+		}
+		if _, _, err := net.SplitHostPort(host); err == nil {
+			return nil, fmt.Errorf("embed upstream host allowlist entry must not include port: %q", entry)
+		}
+		if strings.Contains(host, ":") {
+			return nil, fmt.Errorf("embed upstream host allowlist entry must not include port: %q", entry)
+		}
+
+		allowed[host] = struct{}{}
+	}
+
+	return allowed, nil
+}
+
+func auditEmbedUpstreamHostPosture(ctx context.Context, db *sql.DB, allowedHosts map[string]struct{}) error {
+	if len(allowedHosts) == 0 {
+		return nil
+	}
+
+	rows, err := db.QueryContext(ctx, `SELECT provider, settings FROM embed_settings WHERE is_enabled = 1`)
+	if err != nil {
+		if isMissingEmbedSettingsTable(err) {
+			return nil
+		}
+		return fmt.Errorf("auditing embed upstream host posture: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var invalidCount int
+	for rows.Next() {
+		var providerID string
+		var rawSettings string
+		if err := rows.Scan(&providerID, &rawSettings); err != nil {
+			return fmt.Errorf("auditing embed upstream host posture: %w", err)
+		}
+		if providerID != "dify" {
+			continue
+		}
+
+		var settings map[string]any
+		if err := json.Unmarshal([]byte(rawSettings), &settings); err != nil {
+			invalidCount++
+			continue
+		}
+		apiEndpoint, _ := settings["api_endpoint"].(string)
+		parsedEndpoint, err := url.Parse(strings.TrimSpace(apiEndpoint))
+		if err != nil {
+			invalidCount++
+			continue
+		}
+		host := strings.Trim(strings.ToLower(parsedEndpoint.Hostname()), ".")
+		if host == "" {
+			invalidCount++
+			continue
+		}
+		if _, ok := allowedHosts[host]; !ok {
+			invalidCount++
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("auditing embed upstream host posture: %w", err)
+	}
+
+	if invalidCount > 0 {
+		return fmt.Errorf(
+			"refusing to start in production: OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS is configured but %d active embed provider endpoint(s) use non-allowlisted hosts",
+			invalidCount,
+		)
+	}
+
+	return nil
+}
+
 func auditRequiredAPIKeyExpiryPosture(ctx context.Context, db *sql.DB) error {
 	var nonExpiringActiveKeys int
 	err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM api_keys WHERE is_active = 1 AND expires_at IS NULL`).Scan(&nonExpiringActiveKeys)
@@ -576,6 +667,10 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
+	allowedEmbedUpstreamHosts, err := parseAllowedEmbedUpstreamHosts(cfg.EmbedAllowedUpstreamHosts)
+	if err != nil {
+		return fmt.Errorf("parsing OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS: %w", err)
+	}
 
 	// Create version info from build-time injected values
 	versionInfo := &version.Info{
@@ -765,6 +860,11 @@ func run() error {
 	}
 	if cfg.Env == "production" && cfg.RequireAPIKeySourceCIDRs {
 		if err := auditRequiredAPIKeySourceCIDRPosture(ctx, db); err != nil {
+			return err
+		}
+	}
+	if cfg.Env == "production" && len(allowedEmbedUpstreamHosts) > 0 {
+		if err := auditEmbedUpstreamHostPosture(ctx, db, allowedEmbedUpstreamHosts); err != nil {
 			return err
 		}
 	}
