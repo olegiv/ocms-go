@@ -5,6 +5,7 @@ package api
 
 import (
 	"database/sql"
+	"strings"
 	"testing"
 	"time"
 
@@ -152,6 +153,26 @@ func TestValidatePageBodyMarkupPolicy(t *testing.T) {
 		errMsg := validatePageBodyMarkupPolicy(`<p>Hello</p>`, true)
 		if errMsg != "" {
 			t.Fatalf("unexpected error: %s", errMsg)
+		}
+	})
+}
+
+func TestSanitizePageBodyForStorage(t *testing.T) {
+	raw := `<p>Hello</p><script>alert(1)</script>`
+
+	t.Run("returns raw body when disabled", func(t *testing.T) {
+		if got := sanitizePageBodyForStorage(raw, false); got != raw {
+			t.Fatalf("sanitizePageBodyForStorage() = %q, want %q", got, raw)
+		}
+	})
+
+	t.Run("sanitizes body when enabled", func(t *testing.T) {
+		got := sanitizePageBodyForStorage(raw, true)
+		if strings.Contains(got, "<script") {
+			t.Fatalf("sanitizePageBodyForStorage() should strip script tags, got %q", got)
+		}
+		if !strings.Contains(got, "<p>Hello</p>") {
+			t.Fatalf("sanitizePageBodyForStorage() should keep safe markup, got %q", got)
 		}
 	})
 }

@@ -26,6 +26,7 @@ type Handler struct {
 	queries                   *store.Queries
 	cacheManager              *cache.Manager
 	blockSuspiciousPageMarkup bool
+	sanitizePageHTML          bool
 }
 
 const maxAPIJSONBodyBytes int64 = 1 << 20 // 1 MiB
@@ -47,6 +48,12 @@ func (h *Handler) SetCacheManager(cm *cache.Manager) {
 // reject suspicious HTML body content.
 func (h *Handler) SetBlockSuspiciousPageMarkup(block bool) {
 	h.blockSuspiciousPageMarkup = block
+}
+
+// SetSanitizePageHTML configures whether API page write operations sanitize
+// HTML body content before persistence.
+func (h *Handler) SetSanitizePageHTML(enabled bool) {
+	h.sanitizePageHTML = enabled
 }
 
 // invalidatePageCache invalidates the page cache after a page is modified.

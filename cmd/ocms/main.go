@@ -1187,6 +1187,7 @@ func run() error {
 	usersHandler := handler.NewUsersHandler(db, renderer, sessionManager)
 	pagesHandler := handler.NewPagesHandler(db, renderer, sessionManager)
 	pagesHandler.SetBlockSuspiciousMarkup(cfg.BlockSuspiciousPageHTML)
+	pagesHandler.SetSanitizePageHTML(cfg.SanitizePageHTML)
 	if cfg.BlockSuspiciousPageHTML {
 		slog.Info("page suspicious HTML blocking policy enabled")
 	}
@@ -1215,6 +1216,7 @@ func run() error {
 	languagesHandler := handler.NewLanguagesHandler(db, renderer, sessionManager)
 	apiHandler := api.NewHandler(db)
 	apiHandler.SetBlockSuspiciousPageMarkup(cfg.BlockSuspiciousPageHTML)
+	apiHandler.SetSanitizePageHTML(cfg.SanitizePageHTML)
 	apiDocsHandler, err := api.NewDocsHandler(api.DocsConfig{
 		DB:         db,
 		TemplateFS: templatesFS,

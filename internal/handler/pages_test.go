@@ -232,6 +232,28 @@ func TestValidatePageBodySecurityPolicy(t *testing.T) {
 	})
 }
 
+func TestPagesHandlerNormalizePageBodyForStorage(t *testing.T) {
+	raw := `<p>Hello</p><script>alert(1)</script>`
+
+	t.Run("returns raw body when sanitization is disabled", func(t *testing.T) {
+		h := &PagesHandler{}
+		if got := h.normalizePageBodyForStorage(raw); got != raw {
+			t.Fatalf("normalizePageBodyForStorage() = %q, want %q", got, raw)
+		}
+	})
+
+	t.Run("sanitizes body when enabled", func(t *testing.T) {
+		h := &PagesHandler{sanitizePageHTML: true}
+		got := h.normalizePageBodyForStorage(raw)
+		if strings.Contains(got, "<script") {
+			t.Fatalf("normalizePageBodyForStorage() should strip script tags, got %q", got)
+		}
+		if !strings.Contains(got, "<p>Hello</p>") {
+			t.Fatalf("normalizePageBodyForStorage() should keep safe markup, got %q", got)
+		}
+	})
+}
+
 // TestPageScheduling tests page scheduling logic
 func TestPageScheduling(t *testing.T) {
 	now := time.Now()

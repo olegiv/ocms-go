@@ -18,6 +18,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/handler"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -464,6 +465,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 		WriteValidationError(w, map[string]string{"body": bodyErr})
 		return
 	}
+	normalizedBody := sanitizePageBodyForStorage(req.Body, h.sanitizePageHTML)
 
 	// Check slug uniqueness
 	if !h.checkPageSlugUnique(w, ctx, req.Slug) {
@@ -490,7 +492,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	params := store.CreatePageParams{
 		Title:        req.Title,
 		Slug:         req.Slug,
-		Body:         req.Body,
+		Body:         normalizedBody,
 		Status:       req.Status,
 		AuthorID:     apiKey.CreatedBy, // Use API key creator as author
 		LanguageCode: langCode,
@@ -641,7 +643,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 			WriteValidationError(w, map[string]string{"body": bodyErr})
 			return
 		}
-		params.Body = *req.Body
+		params.Body = sanitizePageBodyForStorage(*req.Body, h.sanitizePageHTML)
 	}
 	if req.Status != nil {
 		if *req.Status != model.PageStatusDraft && *req.Status != model.PageStatusPublished {
@@ -894,4 +896,11 @@ func validatePageBodyMarkupPolicy(body string, blockSuspicious bool) string {
 	}
 
 	return ""
+}
+
+func sanitizePageBodyForStorage(raw string, enabled bool) string {
+	if !enabled {
+		return raw
+	}
+	return security.SanitizePageHTML(raw)
 }

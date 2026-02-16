@@ -21,10 +21,10 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
-	"github.com/microcosm-cc/bluemonday"
 
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/seo"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -373,8 +373,6 @@ type FrontendHandler struct {
 	sanitizePages bool
 }
 
-var pageBodySanitizer = bluemonday.UGCPolicy()
-
 // NewFrontendHandler creates a new FrontendHandler.
 // If menuService is nil, a new one will be created. Pass a shared menuService for cache consistency.
 func NewFrontendHandler(db *sql.DB, themeManager *theme.Manager, cacheManager *cache.Manager, logger *slog.Logger, menuService *service.MenuService, eventService *service.EventService) *FrontendHandler {
@@ -410,7 +408,7 @@ func (h *FrontendHandler) trustedPageBody(raw string) template.HTML {
 	if !h.sanitizePages {
 		return template.HTML(raw)
 	}
-	return template.HTML(pageBodySanitizer.Sanitize(raw))
+	return template.HTML(security.SanitizePageHTML(raw))
 }
 
 // Home handles the homepage.

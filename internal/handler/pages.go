@@ -22,6 +22,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
+	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
@@ -67,6 +68,7 @@ type PagesHandler struct {
 	eventService          *service.EventService
 	cacheManager          *cache.Manager
 	blockSuspiciousMarkup bool
+	sanitizePageHTML      bool
 }
 
 // NewPagesHandler creates a new PagesHandler.
@@ -93,6 +95,11 @@ func (h *PagesHandler) SetCacheManager(cm *cache.Manager) {
 // when suspicious HTML tokens are detected in body content.
 func (h *PagesHandler) SetBlockSuspiciousMarkup(block bool) {
 	h.blockSuspiciousMarkup = block
+}
+
+// SetSanitizePageHTML configures whether page HTML is sanitized before write.
+func (h *PagesHandler) SetSanitizePageHTML(sanitize bool) {
+	h.sanitizePageHTML = sanitize
 }
 
 // invalidatePageCache invalidates the page cache after a page is modified.
@@ -569,7 +576,8 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if errMsg := h.validateFeaturedImageSize(r.Context(), input.FeaturedImageID, lang); errMsg != "" {
 		validationErrors["featured_image_id"] = errMsg
 	}
-	if bodyErr := validatePageBodySecurityPolicy(input.Body, h.blockSuspiciousMarkup); bodyErr != "" {
+	rawBody := input.Body
+	if bodyErr := validatePageBodySecurityPolicy(rawBody, h.blockSuspiciousMarkup); bodyErr != "" {
 		validationErrors["body"] = bodyErr
 	}
 
@@ -602,11 +610,12 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if input.Status == PageStatusPublished {
 		publishedAt = sql.NullTime{Time: now, Valid: true}
 	}
+	normalizedBody := h.normalizePageBodyForStorage(rawBody)
 
 	newPage, err := h.queries.CreatePage(r.Context(), store.CreatePageParams{
 		Title:             input.Title,
 		Slug:              input.Slug,
-		Body:              input.Body,
+		Body:              normalizedBody,
 		Status:            input.Status,
 		AuthorID:          userID,
 		FeaturedImageID:   input.FeaturedImageID,
@@ -636,7 +645,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	_, err = h.queries.CreatePageVersion(r.Context(), store.CreatePageVersionParams{
 		PageID:    newPage.ID,
 		Title:     input.Title,
-		Body:      input.Body,
+		Body:      normalizedBody,
 		ChangedBy: userID,
 		CreatedAt: now,
 	})
@@ -652,7 +661,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("page created", "page_id", newPage.ID, "slug", newPage.Slug, "created_by", middleware.GetUserID(r))
 	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": newPage.ID, "slug": newPage.Slug})
-	h.logSuspiciousPageContentEvent(r, newPage.ID, newPage.Slug, input.Body, "created")
+	h.logSuspiciousPageContentEvent(r, newPage.ID, newPage.Slug, rawBody, "created")
 
 	// Dispatch page.created webhook event
 	h.dispatchPageEvent(r.Context(), model.EventPageCreated, newPage, middleware.GetUserEmail(r))
@@ -833,7 +842,8 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if errMsg := h.validateFeaturedImageSize(r.Context(), input.FeaturedImageID, lang); errMsg != "" {
 		validationErrors["featured_image_id"] = errMsg
 	}
-	if bodyErr := validatePageBodySecurityPolicy(input.Body, h.blockSuspiciousMarkup); bodyErr != "" {
+	rawBody := input.Body
+	if bodyErr := validatePageBodySecurityPolicy(rawBody, h.blockSuspiciousMarkup); bodyErr != "" {
 		validationErrors["body"] = bodyErr
 	}
 
@@ -866,12 +876,13 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		// Unpublishing - clear published_at
 		publishedAt = sql.NullTime{Valid: false}
 	}
+	normalizedBody := h.normalizePageBodyForStorage(rawBody)
 
 	updatedPage, err := h.queries.UpdatePage(r.Context(), store.UpdatePageParams{
 		ID:                id,
 		Title:             input.Title,
 		Slug:              input.Slug,
-		Body:              input.Body,
+		Body:              normalizedBody,
 		Status:            status,
 		FeaturedImageID:   input.FeaturedImageID,
 		MetaTitle:         input.MetaTitle,
@@ -896,11 +907,11 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create new version (only if title or body changed)
-	if input.Title != existingPage.Title || input.Body != existingPage.Body {
+	if input.Title != existingPage.Title || normalizedBody != existingPage.Body {
 		_, err = h.queries.CreatePageVersion(r.Context(), store.CreatePageVersionParams{
 			PageID:    id,
 			Title:     input.Title,
-			Body:      input.Body,
+			Body:      normalizedBody,
 			ChangedBy: middleware.GetUserID(r),
 			CreatedAt: now,
 		})
@@ -930,7 +941,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("page updated", "page_id", updatedPage.ID, "slug", updatedPage.Slug, "updated_by", middleware.GetUserID(r))
 	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page updated", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": updatedPage.ID, "slug": updatedPage.Slug})
-	h.logSuspiciousPageContentEvent(r, updatedPage.ID, updatedPage.Slug, input.Body, "updated")
+	h.logSuspiciousPageContentEvent(r, updatedPage.ID, updatedPage.Slug, rawBody, "updated")
 
 	// Dispatch page.updated webhook event
 	h.dispatchPageEvent(r.Context(), model.EventPageUpdated, updatedPage, middleware.GetUserEmail(r))
@@ -1159,10 +1170,12 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		flashError(w, r, h.renderer, versionsURL, "Version does not belong to this page")
 		return
 	}
-	if bodyErr := validatePageBodySecurityPolicy(version.Body, h.blockSuspiciousMarkup); bodyErr != "" {
+	rawVersionBody := version.Body
+	if bodyErr := validatePageBodySecurityPolicy(rawVersionBody, h.blockSuspiciousMarkup); bodyErr != "" {
 		flashError(w, r, h.renderer, versionsURL, bodyErr)
 		return
 	}
+	normalizedBody := h.normalizePageBodyForStorage(rawVersionBody)
 
 	// Update page with version content (keeping SEO fields and scheduling intact)
 	now := time.Now()
@@ -1170,7 +1183,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		ID:                id,
 		Title:             version.Title,
 		Slug:              page.Slug, // Keep the current slug
-		Body:              version.Body,
+		Body:              normalizedBody,
 		Status:            page.Status, // Keep the current status
 		FeaturedImageID:   page.FeaturedImageID,
 		MetaTitle:         page.MetaTitle,
@@ -1195,7 +1208,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 	_, err = h.queries.CreatePageVersion(r.Context(), store.CreatePageVersionParams{
 		PageID:    id,
 		Title:     version.Title,
-		Body:      version.Body,
+		Body:      normalizedBody,
 		ChangedBy: middleware.GetUserID(r),
 		CreatedAt: now,
 	})
@@ -1206,7 +1219,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("page version restored", "page_id", id, "version_id", versionId, "restored_by", middleware.GetUserID(r))
 	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page version restored", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": id, "version_id": versionId})
-	h.logSuspiciousPageContentEvent(r, page.ID, page.Slug, version.Body, "restored")
+	h.logSuspiciousPageContentEvent(r, page.ID, page.Slug, rawVersionBody, "restored")
 	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id), "Version restored successfully")
 }
 
@@ -1572,6 +1585,13 @@ func validatePageBodySecurityPolicy(body string, blockSuspicious bool) string {
 		return ""
 	}
 	return "Body contains suspicious HTML markup that is blocked by policy"
+}
+
+func (h *PagesHandler) normalizePageBodyForStorage(raw string) string {
+	if h == nil || !h.sanitizePageHTML {
+		return raw
+	}
+	return security.SanitizePageHTML(raw)
 }
 
 // savePageTags saves tag associations for a page from form values.
