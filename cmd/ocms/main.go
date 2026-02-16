@@ -1196,6 +1196,7 @@ func run() error {
 	webhooksHandler := handler.NewWebhooksHandler(db, renderer, sessionManager)
 	redirectsHandler := handler.NewRedirectsHandler(db, renderer, sessionManager, redirectsMiddleware)
 	importExportHandler := handler.NewImportExportHandler(db, renderer, sessionManager)
+	importExportHandler.SetBlockSuspiciousMarkup(cfg.BlockSuspiciousPageHTML)
 	healthHandler := handler.NewHealthHandler(db, sessionManager, cfg.UploadsDir)
 	docsHandler := handler.NewDocsHandler(renderer, sessionManager, cfg, moduleRegistry, healthHandler.StartTime(), versionInfo)
 
