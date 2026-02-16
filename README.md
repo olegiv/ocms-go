@@ -198,7 +198,7 @@ sudo dnf install vips-devel
 | `OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS` | Allowed upstream hosts for embed provider API endpoints | - | No |
 | `OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS` | Fail startup in production if embed proxy is active without origin allowlist | `false` | No |
 | `OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS` | Fail startup in production if embed proxy is active without upstream host allowlist | `false` | No |
-| `OCMS_EMBED_PROXY_TOKEN` | Shared token required by embed proxy routes when enabled | - | No |
+| `OCMS_EMBED_PROXY_TOKEN` | Shared token for embed proxy routes; when set, requests must include `X-Embed-Proxy-Token` | - | No |
 | `OCMS_REQUIRE_EMBED_PROXY_TOKEN` | Fail startup in production if embed proxy token policy is enabled without token | `false` | No |
 | `OCMS_REQUIRE_HTTPS_OUTBOUND` | Require HTTPS for outbound integration URLs | `false` | No |
 | `OCMS_REQUIRE_FORM_CAPTCHA` | Require captcha on all public form submissions | `false` | No |

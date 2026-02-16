@@ -178,7 +178,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS   Comma-separated allowed hosts for embed provider endpoints (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS  Reject production startup when embed proxy is active without origin allowlist (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS  Reject production startup when embed proxy is active without upstream host allowlist (default: false)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_PROXY_TOKEN   Optional shared token required by embed proxy routes\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_PROXY_TOKEN   Optional shared token for embed proxy routes (enforced when set)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_PROXY_TOKEN  Reject production startup when embed proxy token policy is enabled without a token (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_HTTPS_OUTBOUND  Require HTTPS for outbound integration URLs (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SANITIZE_PAGE_HTML  Sanitize page HTML before rendering to visitors (default: false)\n")

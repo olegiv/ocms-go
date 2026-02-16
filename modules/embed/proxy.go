@@ -325,13 +325,13 @@ func (m *Module) allowProxyBudget() bool {
 }
 
 func (m *Module) isProxyTokenAuthorized(r *http.Request) bool {
-	if m == nil || !m.requireProxyToken {
+	if m == nil {
 		return true
 	}
 
 	expected := strings.TrimSpace(m.proxyToken)
 	if expected == "" {
-		return false
+		return !m.requireProxyToken
 	}
 
 	provided := strings.TrimSpace(r.Header.Get(embedProxyTokenHeader))

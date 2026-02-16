@@ -106,6 +106,7 @@ func (m *Module) Init(ctx *module.Context) error {
 		"require_origin_policy", m.requireOriginPolicy,
 		"require_proxy_token", m.requireProxyToken,
 		"proxy_token_configured", m.proxyToken != "",
+		"proxy_token_enforced", m.requireProxyToken || m.proxyToken != "",
 	)
 	return nil
 }

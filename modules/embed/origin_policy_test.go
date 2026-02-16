@@ -169,6 +169,29 @@ func TestIsProxyTokenAuthorized(t *testing.T) {
 		}
 	})
 
+	t.Run("block when token is configured but header is missing", func(t *testing.T) {
+		mod := New()
+		mod.requireProxyToken = false
+		mod.proxyToken = "configured-token"
+
+		req := httptest.NewRequest("POST", "/embed/dify/chat-messages", nil)
+		if mod.isProxyTokenAuthorized(req) {
+			t.Fatal("expected proxy token check to fail when token is configured but header is missing")
+		}
+	})
+
+	t.Run("allow when configured token matches even if policy flag is disabled", func(t *testing.T) {
+		mod := New()
+		mod.requireProxyToken = false
+		mod.proxyToken = "configured-token"
+
+		req := httptest.NewRequest("POST", "/embed/dify/chat-messages", nil)
+		req.Header.Set(embedProxyTokenHeader, "configured-token")
+		if !mod.isProxyTokenAuthorized(req) {
+			t.Fatal("expected proxy token check to pass with matching configured token")
+		}
+	})
+
 	t.Run("block when token is missing", func(t *testing.T) {
 		mod := New()
 		mod.requireProxyToken = true
