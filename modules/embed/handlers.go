@@ -414,7 +414,13 @@ func (m *Module) validateProviderRuntimePolicy(providerID string, settings map[s
 	if m == nil {
 		return nil
 	}
-	if providerID != "dify" || len(m.allowedUpstreamHosts) == 0 {
+	if providerID != "dify" {
+		return nil
+	}
+	if len(m.allowedUpstreamHosts) == 0 {
+		if m.requireUpstreamHostPolicy {
+			return fmt.Errorf("OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS must be configured before enabling Dify provider")
+		}
 		return nil
 	}
 

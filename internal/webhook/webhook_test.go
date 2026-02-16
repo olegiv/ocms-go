@@ -4,6 +4,8 @@
 package webhook
 
 import (
+	"context"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -496,6 +498,49 @@ func TestAttemptDelivery_EnforcesHTTPSPolicy(t *testing.T) {
 	}
 	if result.Error == nil || !strings.Contains(result.Error.Error(), "https scheme") {
 		t.Fatalf("attemptDelivery() error = %v, want https scheme error", result.Error)
+	}
+}
+
+func TestShouldRetryURLValidationError(t *testing.T) {
+	tests := []struct {
+		name  string
+		err   error
+		retry bool
+	}{
+		{
+			name:  "dns timeout",
+			err:   &net.DNSError{IsTimeout: true},
+			retry: true,
+		},
+		{
+			name:  "dns temporary",
+			err:   &net.DNSError{IsTemporary: true},
+			retry: true,
+		},
+		{
+			name:  "dns not found",
+			err:   &net.DNSError{IsNotFound: true},
+			retry: false,
+		},
+		{
+			name:  "context deadline exceeded",
+			err:   context.DeadlineExceeded,
+			retry: true,
+		},
+		{
+			name:  "policy violation error",
+			err:   util.ValidateWebhookURL("ftp://example.com/webhook"),
+			retry: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldRetryURLValidationError(tt.err)
+			if got != tt.retry {
+				t.Fatalf("shouldRetryURLValidationError() = %v, want %v", got, tt.retry)
+			}
+		})
 	}
 }
 

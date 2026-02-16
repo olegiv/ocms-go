@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -173,7 +174,7 @@ func (d *Dispatcher) attemptDelivery(ctx context.Context, delivery *QueuedDelive
 		return DeliveryResult{
 			Success:     false,
 			Error:       fmt.Errorf("invalid webhook URL: %w", err),
-			ShouldRetry: false, // Configuration error, don't retry
+			ShouldRetry: shouldRetryURLValidationError(err),
 		}
 	}
 
@@ -264,6 +265,24 @@ func (d *Dispatcher) attemptDelivery(ctx context.Context, delivery *QueuedDelive
 		Error:        fmt.Errorf("HTTP %d: %s", resp.StatusCode, http.StatusText(resp.StatusCode)),
 		ShouldRetry:  true,
 	}
+}
+
+func shouldRetryURLValidationError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return dnsErr.IsTimeout || dnsErr.IsTemporary
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return netErr.Timeout()
+	}
+
+	return errors.Is(err, context.DeadlineExceeded)
 }
 
 func isSafeWebhookDeliveryHeader(name, value string) bool {

@@ -4,6 +4,7 @@
 package embed
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/olegiv/ocms-go/modules/embed/providers"
@@ -72,6 +73,34 @@ func TestValidateProviderRuntimePolicy(t *testing.T) {
 		"api_endpoint": "https://evil.example/v1",
 	}); err == nil {
 		t.Fatal("expected disallowed host to be rejected")
+	}
+}
+
+func TestValidateProviderRuntimePolicy_RequireAllowlistConfigured(t *testing.T) {
+	mod := New()
+	mod.requireUpstreamHostPolicy = true
+	mod.allowedUpstreamHosts = nil
+
+	err := mod.validateProviderRuntimePolicy("dify", map[string]string{
+		"api_endpoint": "https://api.dify.ai/v1",
+	})
+	if err == nil {
+		t.Fatal("expected required allowlist policy to reject empty host allowlist")
+	}
+	if got := err.Error(); got == "" || !strings.Contains(got, "OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateProviderRuntimePolicy_AllowlistOptionalWhenNotRequired(t *testing.T) {
+	mod := New()
+	mod.requireUpstreamHostPolicy = false
+	mod.allowedUpstreamHosts = nil
+
+	if err := mod.validateProviderRuntimePolicy("dify", map[string]string{
+		"api_endpoint": "https://api.dify.ai/v1",
+	}); err != nil {
+		t.Fatalf("expected optional allowlist mode to pass, got %v", err)
 	}
 }
 
