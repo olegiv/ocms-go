@@ -77,6 +77,18 @@ func setupTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("failed to create events table: %v", err)
 	}
 
+	_, err = db.Exec(`
+		CREATE TABLE api_key_source_state (
+			api_key_id INTEGER PRIMARY KEY,
+			last_ip TEXT NOT NULL,
+			last_seen_at DATETIME NOT NULL,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		t.Fatalf("failed to create api_key_source_state table: %v", err)
+	}
+
 	return db
 }
 
@@ -827,6 +839,46 @@ func TestAPIKeyAuth_RevokeOnSourceIPChange_FailClosedOnDeactivateError(t *testin
 	handler.ServeHTTP(w2, req2)
 	if w2.Code != http.StatusUnauthorized {
 		t.Fatalf("second request status = %d, want %d", w2.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestAPIKeyAuth_RevokeOnSourceIPChange_PersistsBaselineAcrossTrackerReset(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+	setRevokeAPIKeyOnSourceIPChangeForTest(t, true)
+
+	rawKey := insertTestAPIKey(t, db, "Revoke Persistent Baseline", []string{"pages:read"}, true, nil)
+	handler := APIKeyAuth(db)(simpleOKHandler)
+
+	req1 := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req1.Header.Set("Authorization", "Bearer "+rawKey)
+	req1.RemoteAddr = "203.0.113.10:12345"
+	w1 := httptest.NewRecorder()
+	handler.ServeHTTP(w1, req1)
+	if w1.Code != http.StatusOK {
+		t.Fatalf("first request status = %d, want %d", w1.Code, http.StatusOK)
+	}
+
+	// Simulate process restart where in-memory tracker is reset.
+	apiKeySourceTracker = newAPIKeySourceTracker(24 * time.Hour)
+	handlerAfterRestart := APIKeyAuth(db)(simpleOKHandler)
+
+	req2 := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req2.Header.Set("Authorization", "Bearer "+rawKey)
+	req2.RemoteAddr = "198.51.100.20:12345"
+	w2 := httptest.NewRecorder()
+	handlerAfterRestart.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusUnauthorized {
+		t.Fatalf("second request status = %d, want %d", w2.Code, http.StatusUnauthorized)
+	}
+
+	var isActive bool
+	err := db.QueryRow(`SELECT is_active FROM api_keys WHERE key_prefix = ?`, model.ExtractAPIKeyPrefix(rawKey)).Scan(&isActive)
+	if err != nil {
+		t.Fatalf("failed to load key active status: %v", err)
+	}
+	if isActive {
+		t.Fatal("expected key to be deactivated after source IP anomaly across tracker reset")
 	}
 }
 

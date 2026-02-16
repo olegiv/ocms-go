@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -284,6 +285,48 @@ func isMissingAPIKeySourceCIDRTable(err error) bool {
 	}
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "no such table") && strings.Contains(msg, "api_key_source_cidrs")
+}
+
+func observeAPIKeySourceChange(ctx context.Context, queries *store.Queries, keyID int64, ip string, now time.Time) (bool, string) {
+	if keyID <= 0 || strings.TrimSpace(ip) == "" {
+		return false, ""
+	}
+
+	// Persisted baseline (preferred): survives restarts and process swaps.
+	if queries != nil {
+		cleanupBefore := now.Add(-24 * time.Hour)
+		if err := queries.DeleteStaleAPIKeySourceState(ctx, cleanupBefore); err != nil && !store.IsMissingAPIKeySourceStateTableError(err) {
+			slog.Warn("failed to cleanup stale API key source state", "error", err)
+		}
+
+		state, err := queries.GetAPIKeySourceState(ctx, keyID)
+		switch {
+		case err == nil:
+			previousIP := strings.TrimSpace(state.LastIP)
+			if previousIP == ip {
+				if upsertErr := queries.UpsertAPIKeySourceState(ctx, keyID, ip, now); upsertErr != nil && !store.IsMissingAPIKeySourceStateTableError(upsertErr) {
+					slog.Warn("failed to persist API key source state", "error", upsertErr, "key_id", keyID)
+				}
+				return false, ""
+			}
+			if upsertErr := queries.UpsertAPIKeySourceState(ctx, keyID, ip, now); upsertErr != nil && !store.IsMissingAPIKeySourceStateTableError(upsertErr) {
+				slog.Warn("failed to persist API key source state", "error", upsertErr, "key_id", keyID)
+			}
+			return previousIP != "", previousIP
+		case errors.Is(err, sql.ErrNoRows):
+			if upsertErr := queries.UpsertAPIKeySourceState(ctx, keyID, ip, now); upsertErr != nil && !store.IsMissingAPIKeySourceStateTableError(upsertErr) {
+				slog.Warn("failed to initialize API key source state", "error", upsertErr, "key_id", keyID)
+			}
+			return false, ""
+		case store.IsMissingAPIKeySourceStateTableError(err):
+			// Fall back to in-memory tracker for pre-migration databases.
+		default:
+			slog.Warn("failed to read API key source state", "error", err, "key_id", keyID)
+			// Fall back to in-memory tracker below.
+		}
+	}
+
+	return apiKeySourceTracker.Observe(keyID, ip, now)
 }
 
 func isMissingEventsTable(err error) bool {
@@ -585,7 +628,7 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 		return nil, false
 	}
 
-	if changed, previousIP := apiKeySourceTracker.Observe(matchedKey.ID, clientIP, time.Now()); changed {
+	if changed, previousIP := observeAPIKeySourceChange(r.Context(), queries, matchedKey.ID, clientIP, time.Now()); changed {
 		slog.Warn("API key source IP changed",
 			"key_id", matchedKey.ID,
 			"previous_ip", previousIP,
