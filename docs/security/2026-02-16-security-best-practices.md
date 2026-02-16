@@ -1,7 +1,7 @@
 # Security Best Practices Report
 
 Date: 2026-02-15
-Scope: ``
+Scope: `.`
 Reviewer mode: Active security audit (Go backend + browser JS frontend)
 
 ## Executive Summary
