@@ -155,12 +155,7 @@ func (m *Module) handleSaveProviderSettings(w http.ResponseWriter, r *http.Reque
 
 	// Validate if enabling
 	if isEnabled {
-		if err := ctx.Provider.Validate(settings); err != nil {
-			m.ctx.Render.SetFlash(r, err.Error(), "error")
-			http.Redirect(w, r, "/admin/embed/"+ctx.ProviderID, http.StatusSeeOther)
-			return
-		}
-		if err := m.validateProviderRuntimePolicy(ctx.ProviderID, settings); err != nil {
+		if err := m.validateProviderEnableSettings(ctx.ProviderID, ctx.Provider, settings); err != nil {
 			m.ctx.Render.SetFlash(r, err.Error(), "error")
 			http.Redirect(w, r, "/admin/embed/"+ctx.ProviderID, http.StatusSeeOther)
 			return
@@ -248,8 +243,8 @@ func (m *Module) handleToggleProvider(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := ctx.Provider.Validate(ps.Settings); err != nil {
-			m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "embed.error_configure_first"), "error")
+		if err := m.validateProviderEnableSettings(ctx.ProviderID, ctx.Provider, ps.Settings); err != nil {
+			m.ctx.Render.SetFlash(r, err.Error(), "error")
 			http.Redirect(w, r, "/admin/embed/"+ctx.ProviderID, http.StatusSeeOther)
 			return
 		}
@@ -380,4 +375,14 @@ func (m *Module) validateProviderRuntimePolicy(providerID string, settings map[s
 		return fmt.Errorf("API endpoint host %q is not allowed by OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS policy", parsedEndpoint.Hostname())
 	}
 	return nil
+}
+
+func (m *Module) validateProviderEnableSettings(providerID string, provider providers.Provider, settings map[string]string) error {
+	if provider == nil {
+		return fmt.Errorf("provider is required")
+	}
+	if err := provider.Validate(settings); err != nil {
+		return err
+	}
+	return m.validateProviderRuntimePolicy(providerID, settings)
 }

@@ -3,7 +3,11 @@
 
 package embed
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/olegiv/ocms-go/modules/embed/providers"
+)
 
 func TestBuildEmbedSettingsAuditMetadata(t *testing.T) {
 	metadata := buildEmbedSettingsAuditMetadata("dify", true, map[string]string{
@@ -44,5 +48,29 @@ func TestValidateProviderRuntimePolicy(t *testing.T) {
 		"api_endpoint": "https://evil.example/v1",
 	}); err == nil {
 		t.Fatal("expected disallowed host to be rejected")
+	}
+}
+
+func TestValidateProviderEnableSettings(t *testing.T) {
+	mod := New()
+	mod.allowedUpstreamHosts = map[string]struct{}{
+		"api.dify.ai": {},
+	}
+
+	provider := providers.NewDify()
+	validSettings := map[string]string{
+		"api_endpoint": "https://api.dify.ai/v1",
+		"api_key":      "app-test-key",
+	}
+	if err := mod.validateProviderEnableSettings("dify", provider, validSettings); err != nil {
+		t.Fatalf("expected valid settings to pass, got %v", err)
+	}
+
+	disallowedHostSettings := map[string]string{
+		"api_endpoint": "https://evil.example/v1",
+		"api_key":      "app-test-key",
+	}
+	if err := mod.validateProviderEnableSettings("dify", provider, disallowedHostSettings); err == nil {
+		t.Fatal("expected disallowed host to fail provider enable validation")
 	}
 }
