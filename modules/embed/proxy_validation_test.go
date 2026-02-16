@@ -4,6 +4,7 @@
 package embed
 
 import (
+	"encoding/json"
 	"io"
 	"log/slog"
 	"strings"
@@ -70,6 +71,85 @@ func TestExtractAndValidateDifyChatUser(t *testing.T) {
 	t.Run("query too long", func(t *testing.T) {
 		body := `{"user":"user-1","query":"` + strings.Repeat("x", maxDifyQueryLen+1) + `"}`
 		_, err := extractAndValidateDifyChatUser([]byte(body))
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("query must be string", func(t *testing.T) {
+		_, err := extractAndValidateDifyChatUser([]byte(`{"user":"user-1","query":123}`))
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("query must not be empty", func(t *testing.T) {
+		_, err := extractAndValidateDifyChatUser([]byte(`{"user":"user-1","query":"   "}`))
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("rejects unsupported response mode", func(t *testing.T) {
+		_, err := extractAndValidateDifyChatUser([]byte(`{"user":"user-1","query":"hello","response_mode":"blocking"}`))
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("rejects invalid conversation id", func(t *testing.T) {
+		_, err := extractAndValidateDifyChatUser([]byte(`{"user":"user-1","query":"hello","conversation_id":"bad id"}`))
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}
+
+func TestValidateAndSanitizeDifyChatPayload(t *testing.T) {
+	body := []byte(`{
+		"user": "user-1",
+		"query": "hello",
+		"response_mode": "",
+		"inputs": {"plan":"pro","flag":true,"score":1}
+	}`)
+
+	sanitizedBody, user, err := validateAndSanitizeDifyChatPayload(body)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if user != "user-1" {
+		t.Fatalf("user = %q, want %q", user, "user-1")
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(sanitizedBody, &payload); err != nil {
+		t.Fatalf("unmarshal sanitized payload: %v", err)
+	}
+	if payload["response_mode"] != "streaming" {
+		t.Fatalf("response_mode = %v, want streaming", payload["response_mode"])
+	}
+
+	inputs, _ := payload["inputs"].(map[string]any)
+	if len(inputs) != 3 {
+		t.Fatalf("inputs length = %d, want 3", len(inputs))
+	}
+
+	t.Run("rejects unknown field", func(t *testing.T) {
+		_, _, err := validateAndSanitizeDifyChatPayload([]byte(`{"user":"user-1","query":"hello","unexpected":true}`))
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("rejects nested inputs", func(t *testing.T) {
+		_, _, err := validateAndSanitizeDifyChatPayload([]byte(`{"user":"user-1","query":"hello","inputs":{"nested":{"a":1}}}`))
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("rejects malformed input key", func(t *testing.T) {
+		_, _, err := validateAndSanitizeDifyChatPayload([]byte(`{"user":"user-1","query":"hello","inputs":{"bad key":"x"}}`))
 		if err == nil {
 			t.Fatal("expected error")
 		}

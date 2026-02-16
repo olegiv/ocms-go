@@ -26,15 +26,20 @@ import (
 )
 
 const (
-	maxDifyProxyBodyBytes = 1 << 20
-	difyProxyTimeout      = 90 * time.Second
-	maxDifyMessageIDLen   = 128
-	maxDifyUserIDLen      = 128
-	maxDifyQueryLen       = 4096
-	embedProxyTokenHeader = "X-Embed-Proxy-Token"
+	maxDifyProxyBodyBytes    = 1 << 20
+	difyProxyTimeout         = 90 * time.Second
+	maxDifyMessageIDLen      = 128
+	maxDifyUserIDLen         = 128
+	maxDifyConversationIDLen = 128
+	maxDifyQueryLen          = 4096
+	maxDifyInputsCount       = 32
+	maxDifyInputKeyLen       = 64
+	maxDifyInputValueLen     = 512
+	embedProxyTokenHeader    = "X-Embed-Proxy-Token"
 )
 
 var difyIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9._:@-]+$`)
+var difyInputKeyPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 
 var difyProxyHTTPClient = &http.Client{
 	Timeout: difyProxyTimeout,
@@ -108,12 +113,18 @@ func (m *Module) handleDifyChatMessagesProxy(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
 		return
 	}
-	if _, err := extractAndValidateDifyChatUser(body); err != nil {
+	sanitizedBody, _, err := validateAndSanitizeDifyChatPayload(body)
+	if err != nil {
+		m.logEmbedSecurityEvent(r, "Embed proxy rejected invalid chat payload", map[string]any{
+			"provider": "dify",
+			"path":     r.URL.Path,
+			"reason":   err.Error(),
+		})
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	m.proxyDifyRequest(w, r, apiEndpoint, apiKey, http.MethodPost, "/chat-messages", nil, body)
+	m.proxyDifyRequest(w, r, apiEndpoint, apiKey, http.MethodPost, "/chat-messages", nil, sanitizedBody)
 }
 
 func (m *Module) handleDifySuggestedProxy(w http.ResponseWriter, r *http.Request) {
@@ -360,24 +371,115 @@ func validateDifyIdentifier(value string, maxLen int, label string) error {
 	return nil
 }
 
-func extractAndValidateDifyChatUser(body []byte) (string, error) {
-	type difyChatPayload struct {
-		User  string      `json:"user"`
-		Query interface{} `json:"query"`
+type difyChatPayload struct {
+	Inputs         map[string]any `json:"inputs"`
+	Query          any            `json:"query"`
+	ResponseMode   string         `json:"response_mode"`
+	ConversationID string         `json:"conversation_id"`
+	User           string         `json:"user"`
+}
+
+func sanitizeDifyInputs(inputs map[string]any) (map[string]any, error) {
+	if len(inputs) == 0 {
+		return map[string]any{}, nil
 	}
+	if len(inputs) > maxDifyInputsCount {
+		return nil, fmt.Errorf("inputs has too many fields")
+	}
+
+	sanitized := make(map[string]any, len(inputs))
+	for rawKey, rawValue := range inputs {
+		key := strings.TrimSpace(rawKey)
+		if key == "" {
+			return nil, fmt.Errorf("inputs contains empty field name")
+		}
+		if len(key) > maxDifyInputKeyLen {
+			return nil, fmt.Errorf("inputs field name is too long")
+		}
+		if !difyInputKeyPattern.MatchString(key) {
+			return nil, fmt.Errorf("inputs field name has invalid format")
+		}
+
+		switch value := rawValue.(type) {
+		case nil, bool, float64:
+			sanitized[key] = value
+		case string:
+			if len(value) > maxDifyInputValueLen {
+				return nil, fmt.Errorf("inputs field value is too long")
+			}
+			sanitized[key] = value
+		default:
+			return nil, fmt.Errorf("inputs field value must be scalar")
+		}
+	}
+
+	return sanitized, nil
+}
+
+func validateAndSanitizeDifyChatPayload(body []byte) ([]byte, string, error) {
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.DisallowUnknownFields()
 
 	var payload difyChatPayload
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return "", fmt.Errorf("invalid JSON body")
+	if err := dec.Decode(&payload); err != nil {
+		return nil, "", fmt.Errorf("invalid JSON body")
+	}
+	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return nil, "", fmt.Errorf("request body must contain only one JSON object")
 	}
 	if err := validateDifyIdentifier(payload.User, maxDifyUserIDLen, "user"); err != nil {
-		return "", err
-	}
-	if queryText, ok := payload.Query.(string); ok && len(queryText) > maxDifyQueryLen {
-		return "", fmt.Errorf("query is too long")
+		return nil, "", err
 	}
 
-	return payload.User, nil
+	queryText, ok := payload.Query.(string)
+	if !ok {
+		return nil, "", fmt.Errorf("query must be a string")
+	}
+	queryText = strings.TrimSpace(queryText)
+	if queryText == "" {
+		return nil, "", fmt.Errorf("query must not be empty")
+	}
+	if len(queryText) > maxDifyQueryLen {
+		return nil, "", fmt.Errorf("query is too long")
+	}
+
+	responseMode := strings.TrimSpace(payload.ResponseMode)
+	if responseMode == "" {
+		responseMode = "streaming"
+	}
+	if responseMode != "streaming" {
+		return nil, "", fmt.Errorf("response_mode must be streaming")
+	}
+
+	conversationID := strings.TrimSpace(payload.ConversationID)
+	if conversationID != "" {
+		if err := validateDifyIdentifier(conversationID, maxDifyConversationIDLen, "conversation_id"); err != nil {
+			return nil, "", err
+		}
+	}
+
+	sanitizedInputs, err := sanitizeDifyInputs(payload.Inputs)
+	if err != nil {
+		return nil, "", err
+	}
+
+	sanitizedBody, err := json.Marshal(difyChatPayload{
+		Inputs:         sanitizedInputs,
+		Query:          queryText,
+		ResponseMode:   responseMode,
+		ConversationID: conversationID,
+		User:           payload.User,
+	})
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to encode validated payload")
+	}
+
+	return sanitizedBody, payload.User, nil
+}
+
+func extractAndValidateDifyChatUser(body []byte) (string, error) {
+	_, user, err := validateAndSanitizeDifyChatPayload(body)
+	return user, err
 }
 
 func shouldAuditUpstreamStatus(statusCode int) bool {
