@@ -66,6 +66,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.RevokeAPIKeyOnSourceIPChange {
 		t.Error("RevokeAPIKeyOnSourceIPChange = true, want false")
 	}
+	if cfg.APIKeyMaxTTLDays != 0 {
+		t.Errorf("APIKeyMaxTTLDays = %d, want 0", cfg.APIKeyMaxTTLDays)
+	}
 	if cfg.EmbedAllowedOrigins != "" {
 		t.Errorf("EmbedAllowedOrigins = %q, want empty", cfg.EmbedAllowedOrigins)
 	}
@@ -108,6 +111,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	setEnv(t, "OCMS_REQUIRE_API_KEY_EXPIRY", "true")
 	setEnv(t, "OCMS_REQUIRE_API_KEY_SOURCE_CIDRS", "true")
 	setEnv(t, "OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE", "true")
+	setEnv(t, "OCMS_API_KEY_MAX_TTL_DAYS", "90")
 	setEnv(t, "OCMS_EMBED_ALLOWED_ORIGINS", "https://example.com,https://app.example.com")
 	setEnv(t, "OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS", "true")
 	setEnv(t, "OCMS_EMBED_PROXY_TOKEN", "embed-token-test")
@@ -168,6 +172,9 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 	if !cfg.RevokeAPIKeyOnSourceIPChange {
 		t.Error("RevokeAPIKeyOnSourceIPChange = false, want true")
+	}
+	if cfg.APIKeyMaxTTLDays != 90 {
+		t.Errorf("APIKeyMaxTTLDays = %d, want %d", cfg.APIKeyMaxTTLDays, 90)
 	}
 	if cfg.EmbedAllowedOrigins != "https://example.com,https://app.example.com" {
 		t.Errorf("EmbedAllowedOrigins = %q, want %q", cfg.EmbedAllowedOrigins, "https://example.com,https://app.example.com")
@@ -264,6 +271,17 @@ func TestLoad_InvalidWebhookFormDataMode(t *testing.T) {
 	_, err := Load()
 	if err == nil {
 		t.Fatal("Load() should fail when OCMS_WEBHOOK_FORM_DATA_MODE is invalid")
+	}
+}
+
+func TestLoad_InvalidAPIKeyMaxTTLDays(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_API_KEY_MAX_TTL_DAYS", "-1")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when OCMS_API_KEY_MAX_TTL_DAYS is negative")
 	}
 }
 

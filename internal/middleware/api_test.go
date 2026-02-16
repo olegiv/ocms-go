@@ -99,6 +99,14 @@ func setRequireAPIAllowedCIDRsForTest(t *testing.T, required bool) {
 	})
 }
 
+func setAPIKeyMaxTTLDaysForTest(t *testing.T, days int) {
+	t.Helper()
+	SetAPIKeyMaxTTLDays(days)
+	t.Cleanup(func() {
+		SetAPIKeyMaxTTLDays(0)
+	})
+}
+
 func setRevokeAPIKeyOnSourceIPChangeForTest(t *testing.T, enabled bool) {
 	t.Helper()
 	SetRevokeAPIKeyOnSourceIPChange(enabled)
@@ -491,6 +499,53 @@ func TestAPIKeyAuth_RequireExpiry(t *testing.T) {
 
 		if w.Code != http.StatusOK {
 			t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+		}
+	})
+}
+
+func TestAPIKeyAuth_MaxTTLPolicy(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+	setAPIKeyMaxTTLDaysForTest(t, 7)
+
+	rawKeyNoExpiry := insertTestAPIKey(t, db, "No Expiry", []string{"pages:read"}, true, nil)
+	expiryWithinTTL := time.Now().Add(3 * 24 * time.Hour)
+	rawKeyWithinTTL := insertTestAPIKey(t, db, "Within TTL", []string{"pages:read"}, true, &expiryWithinTTL)
+	expiryBeyondTTL := time.Now().Add(30 * 24 * time.Hour)
+	rawKeyBeyondTTL := insertTestAPIKey(t, db, "Beyond TTL", []string{"pages:read"}, true, &expiryBeyondTTL)
+
+	handler := APIKeyAuth(db)(simpleOKHandler)
+
+	t.Run("reject key without expiry", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+		req.Header.Set("Authorization", "Bearer "+rawKeyNoExpiry)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
+		}
+	})
+
+	t.Run("allow key within max ttl", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+		req.Header.Set("Authorization", "Bearer "+rawKeyWithinTTL)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+		}
+	})
+
+	t.Run("reject key beyond max ttl", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+		req.Header.Set("Authorization", "Bearer "+rawKeyBeyondTTL)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
 		}
 	})
 }

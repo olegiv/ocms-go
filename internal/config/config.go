@@ -52,6 +52,7 @@ type Config struct {
 	RequireAPIKeyExpiry          bool   `env:"OCMS_REQUIRE_API_KEY_EXPIRY" envDefault:"false"`             // Reject API keys without expiration
 	RequireAPIKeySourceCIDRs     bool   `env:"OCMS_REQUIRE_API_KEY_SOURCE_CIDRS" envDefault:"false"`       // Reject API keys that have no per-key source CIDR entries
 	RevokeAPIKeyOnSourceIPChange bool   `env:"OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE" envDefault:"false"` // Deactivate API keys when source IP changes and no per-key source CIDRs are configured
+	APIKeyMaxTTLDays             int    `env:"OCMS_API_KEY_MAX_TTL_DAYS" envDefault:"0"`                   // Maximum allowed API key lifetime in days (0 disables)
 
 	// Embed proxy security configuration
 	EmbedAllowedOrigins        string `env:"OCMS_EMBED_ALLOWED_ORIGINS"`                            // Comma-separated origins allowed to call embed proxy routes
@@ -136,6 +137,9 @@ func Load() (*Config, error) {
 	}
 	if cfg.Env == "production" && cfg.RequireWebhookFormDataMinimization && cfg.WebhookFormDataMode == "full" {
 		return nil, fmt.Errorf("OCMS_WEBHOOK_FORM_DATA_MODE=full is not allowed in production when OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION is enabled")
+	}
+	if cfg.APIKeyMaxTTLDays < 0 {
+		return nil, fmt.Errorf("OCMS_API_KEY_MAX_TTL_DAYS must be >= 0")
 	}
 
 	// Validate session secret length

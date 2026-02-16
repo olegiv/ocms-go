@@ -97,6 +97,8 @@ var (
 	requireAPIKeyExpiryMu        sync.RWMutex
 	requireAPIKeySourceCIDRs     bool
 	requireAPIKeySourceCIDRsMu   sync.RWMutex
+	apiKeyMaxTTL                 time.Duration
+	apiKeyMaxTTLMu               sync.RWMutex
 	revokeAPIKeyOnSourceChange   bool
 	revokeAPIKeyOnSourceChangeMu sync.RWMutex
 	apiKeySourceTracker          = newAPIKeySourceTracker(24 * time.Hour)
@@ -127,6 +129,24 @@ func isAPIKeySourceCIDRsRequired() bool {
 	requireAPIKeySourceCIDRsMu.RLock()
 	defer requireAPIKeySourceCIDRsMu.RUnlock()
 	return requireAPIKeySourceCIDRs
+}
+
+// SetAPIKeyMaxTTLDays configures an optional maximum API key lifetime.
+// Values <= 0 disable max lifetime enforcement.
+func SetAPIKeyMaxTTLDays(days int) {
+	apiKeyMaxTTLMu.Lock()
+	if days <= 0 {
+		apiKeyMaxTTL = 0
+	} else {
+		apiKeyMaxTTL = time.Duration(days) * 24 * time.Hour
+	}
+	apiKeyMaxTTLMu.Unlock()
+}
+
+func getAPIKeyMaxTTL() time.Duration {
+	apiKeyMaxTTLMu.RLock()
+	defer apiKeyMaxTTLMu.RUnlock()
+	return apiKeyMaxTTL
 }
 
 // SetRevokeAPIKeyOnSourceIPChange configures whether API keys should be
@@ -439,6 +459,36 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 			return nil, true
 		}
 		return nil, false
+	}
+
+	if maxTTL := getAPIKeyMaxTTL(); maxTTL > 0 {
+		if !matchedKey.ExpiresAt.Valid {
+			slog.Warn("API key auth blocked: missing expiry while max TTL policy enabled",
+				"key_id", matchedKey.ID,
+				"path", r.URL.Path,
+				"ip", clientIP)
+			if required {
+				WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key must have an expiration date", nil)
+				return nil, true
+			}
+			return nil, false
+		}
+
+		maxAllowedExpiry := matchedKey.CreatedAt.Add(maxTTL)
+		if matchedKey.ExpiresAt.Time.After(maxAllowedExpiry) {
+			slog.Warn("API key auth blocked: key lifetime exceeds max TTL policy",
+				"key_id", matchedKey.ID,
+				"path", r.URL.Path,
+				"ip", clientIP,
+				"created_at", matchedKey.CreatedAt,
+				"expires_at", matchedKey.ExpiresAt.Time,
+				"max_allowed_expires_at", maxAllowedExpiry)
+			if required {
+				WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key lifetime exceeds maximum allowed policy", nil)
+				return nil, true
+			}
+			return nil, false
+		}
 	}
 
 	allowed, hasSourceCIDRs, err := isAPIKeySourceAllowed(r.Context(), queries, matchedKey.ID, clientIP)

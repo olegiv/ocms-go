@@ -172,6 +172,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_EXPIRY  Reject API keys without expiration (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_SOURCE_CIDRS  Reject API keys without per-key CIDR restrictions (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE  Deactivate API keys when source IP changes without per-key CIDRs (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_API_KEY_MAX_TTL_DAYS  Maximum API key lifetime in days (0 disables, default: 0)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_ALLOWED_ORIGINS   Comma-separated allowed origins for embed proxy routes (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS  Reject production startup when embed proxy is active without origin allowlist (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_PROXY_TOKEN   Optional shared token required by embed proxy routes\n")
@@ -376,6 +377,36 @@ func auditRequiredAPIKeyExpiryPosture(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf(
 			"refusing to start in production: OCMS_REQUIRE_API_KEY_EXPIRY is enabled but %d active API key(s) have no expiration",
 			nonExpiringActiveKeys,
+		)
+	}
+
+	return nil
+}
+
+func auditRequiredAPIKeyMaxTTLPosture(ctx context.Context, db *sql.DB, maxTTLDays int) error {
+	if maxTTLDays <= 0 {
+		return nil
+	}
+
+	var keysOutsideTTL int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM api_keys
+		WHERE is_active = 1
+		  AND (
+		  	expires_at IS NULL
+		  	OR datetime(expires_at) > datetime(created_at, '+' || ? || ' days')
+		  )
+	`, maxTTLDays).Scan(&keysOutsideTTL)
+	if err != nil {
+		return fmt.Errorf("auditing API key max TTL posture: %w", err)
+	}
+
+	if keysOutsideTTL > 0 {
+		return fmt.Errorf(
+			"refusing to start in production: OCMS_API_KEY_MAX_TTL_DAYS=%d but %d active API key(s) exceed this lifetime policy",
+			maxTTLDays,
+			keysOutsideTTL,
 		)
 	}
 
@@ -587,6 +618,9 @@ func run() error {
 		if !cfg.RevokeAPIKeyOnSourceIPChange {
 			slog.Warn("production security warning: OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE is disabled")
 		}
+		if cfg.APIKeyMaxTTLDays <= 0 {
+			slog.Warn("production security warning: OCMS_API_KEY_MAX_TTL_DAYS is not configured")
+		}
 		if strings.TrimSpace(cfg.EmbedAllowedOrigins) == "" {
 			slog.Warn("production security warning: OCMS_EMBED_ALLOWED_ORIGINS is not configured")
 		}
@@ -631,6 +665,10 @@ func run() error {
 	middleware.SetRevokeAPIKeyOnSourceIPChange(cfg.RevokeAPIKeyOnSourceIPChange)
 	if cfg.RevokeAPIKeyOnSourceIPChange {
 		slog.Info("API key source IP anomaly auto-revocation enabled")
+	}
+	middleware.SetAPIKeyMaxTTLDays(cfg.APIKeyMaxTTLDays)
+	if cfg.APIKeyMaxTTLDays > 0 {
+		slog.Info("API key max lifetime policy enabled", "max_ttl_days", cfg.APIKeyMaxTTLDays)
 	}
 	util.SetRequireHTTPSOutbound(cfg.RequireHTTPSOutbound)
 	scheduler.SetRequireHTTPSOutbound(cfg.RequireHTTPSOutbound)
@@ -713,6 +751,11 @@ func run() error {
 	}
 	if cfg.Env == "production" && cfg.RequireAPIKeyExpiry {
 		if err := auditRequiredAPIKeyExpiryPosture(ctx, db); err != nil {
+			return err
+		}
+	}
+	if cfg.Env == "production" && cfg.APIKeyMaxTTLDays > 0 {
+		if err := auditRequiredAPIKeyMaxTTLPosture(ctx, db, cfg.APIKeyMaxTTLDays); err != nil {
 			return err
 		}
 	}
