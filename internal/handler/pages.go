@@ -1159,6 +1159,10 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		flashError(w, r, h.renderer, versionsURL, "Version does not belong to this page")
 		return
 	}
+	if bodyErr := validatePageBodySecurityPolicy(version.Body, h.blockSuspiciousMarkup); bodyErr != "" {
+		flashError(w, r, h.renderer, versionsURL, bodyErr)
+		return
+	}
 
 	// Update page with version content (keeping SEO fields and scheduling intact)
 	now := time.Now()
@@ -1202,6 +1206,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("page version restored", "page_id", id, "version_id", versionId, "restored_by", middleware.GetUserID(r))
 	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page version restored", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": id, "version_id": versionId})
+	h.logSuspiciousPageContentEvent(r, page.ID, page.Slug, version.Body, "restored")
 	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id), "Version restored successfully")
 }
 
