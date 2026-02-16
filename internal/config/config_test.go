@@ -306,6 +306,17 @@ func TestLoad_InvalidAPIKeyMaxTTLDays(t *testing.T) {
 	}
 }
 
+func TestLoad_APIKeyMaxTTLDaysTooLarge(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_API_KEY_MAX_TTL_DAYS", "366")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when OCMS_API_KEY_MAX_TTL_DAYS exceeds max allowed days")
+	}
+}
+
 func TestLoad_RequireWebhookFormDataMinimizationInProduction(t *testing.T) {
 	os.Clearenv()
 	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")

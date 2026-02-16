@@ -106,6 +106,9 @@ func (c Config) GeoIPEnabled() bool {
 // AES-256 requires 32 bytes minimum for secure encryption.
 const MinSessionSecretLength = 32
 
+// MaxAPIKeyTTLDays is the maximum allowed API key max TTL policy window.
+const MaxAPIKeyTTLDays = 365
+
 // Load parses environment variables and returns a Config struct.
 func Load() (*Config, error) {
 	cfg := &Config{}
@@ -143,6 +146,9 @@ func Load() (*Config, error) {
 	}
 	if cfg.APIKeyMaxTTLDays < 0 {
 		return nil, fmt.Errorf("OCMS_API_KEY_MAX_TTL_DAYS must be >= 0")
+	}
+	if cfg.APIKeyMaxTTLDays > MaxAPIKeyTTLDays {
+		return nil, fmt.Errorf("OCMS_API_KEY_MAX_TTL_DAYS must be <= %d", MaxAPIKeyTTLDays)
 	}
 
 	// Validate session secret length
