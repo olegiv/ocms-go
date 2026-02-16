@@ -40,6 +40,7 @@ Quick start:
 ```bash
 git clone https://github.com/olegiv/ocms-go.git
 cd ocms-go
+make install-hooks
 make assets
 OCMS_SESSION_SECRET=your-secret-key-32-bytes make dev
 ```

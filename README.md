@@ -218,6 +218,9 @@ sudo dnf install vips-devel
 # Set required environment variable
 export OCMS_SESSION_SECRET="your-secret-key-at-least-32-bytes"
 
+# Install repository-managed git hooks (run once per clone)
+make install-hooks
+
 # Run with asset compilation
 make dev
 
@@ -248,6 +251,8 @@ make run
 | `make commit-do-local` | Run local commit-do shell script |
 | `make code-quality-local` | Run local code quality shell script (`golangci-lint`, `nilaway`, `go test`) |
 | `make security-audit-local` | Run local security audit shell script (writes to `.audit/`) |
+| `make install-hooks` | Configure git to use repository-managed hooks from `.githooks` |
+| `make check-no-absolute-paths` | Fail if tracked files contain local absolute paths (`/Users/...`, `/home/...`, `C:\Users\...`) |
 
 ### Default Admin Credentials
 

@@ -18,7 +18,10 @@ fi
 
 git add .
 
-# Bypass project pre-commit hook only for explicit commit command usage.
+# Enforce path guard even when skipping git hooks in this helper flow.
+"$ROOT_DIR/scripts/check-no-absolute-paths.sh" --staged
+
+# Bypass git hooks only for explicit commit command helper usage.
 git commit --no-verify -F "$MSG_FILE"
 
 echo
