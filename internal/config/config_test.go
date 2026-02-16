@@ -99,6 +99,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.BlockSuspiciousPageHTML {
 		t.Error("BlockSuspiciousPageHTML = true, want false")
 	}
+	if cfg.RequireBlockSuspiciousPageHTML {
+		t.Error("RequireBlockSuspiciousPageHTML = true, want false")
+	}
 }
 
 func TestLoad_CustomValues(t *testing.T) {
@@ -131,6 +134,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	setEnv(t, "OCMS_SANITIZE_PAGE_HTML", "true")
 	setEnv(t, "OCMS_REQUIRE_SANITIZE_PAGE_HTML", "true")
 	setEnv(t, "OCMS_BLOCK_SUSPICIOUS_PAGE_HTML", "true")
+	setEnv(t, "OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML", "true")
 
 	cfg, err := Load()
 	if err != nil {
@@ -218,6 +222,9 @@ func TestLoad_CustomValues(t *testing.T) {
 	if !cfg.BlockSuspiciousPageHTML {
 		t.Error("BlockSuspiciousPageHTML = false, want true")
 	}
+	if !cfg.RequireBlockSuspiciousPageHTML {
+		t.Error("RequireBlockSuspiciousPageHTML = false, want true")
+	}
 }
 
 func TestLoad_RejectSeedInProduction(t *testing.T) {
@@ -242,6 +249,19 @@ func TestLoad_RequireSanitizePageHTMLInProduction(t *testing.T) {
 	_, err := Load()
 	if err == nil {
 		t.Fatal("Load() should fail when OCMS_REQUIRE_SANITIZE_PAGE_HTML=true and OCMS_SANITIZE_PAGE_HTML=false in production")
+	}
+}
+
+func TestLoad_RequireBlockSuspiciousPageHTMLInProduction(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML", "true")
+	setEnv(t, "OCMS_BLOCK_SUSPICIOUS_PAGE_HTML", "false")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML=true and OCMS_BLOCK_SUSPICIOUS_PAGE_HTML=false in production")
 	}
 }
 

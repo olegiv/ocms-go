@@ -61,6 +61,10 @@ func newPolicyTestDB(t *testing.T) *sql.DB {
 			settings TEXT NOT NULL DEFAULT '{}',
 			is_enabled INTEGER NOT NULL DEFAULT 0
 		);
+		CREATE TABLE pages (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			body TEXT NOT NULL DEFAULT ''
+		);
 	`)
 	if err != nil {
 		t.Fatalf("creating schema: %v", err)
@@ -251,6 +255,28 @@ func TestAuditRequiredAPIKeySourceCIDRPosture_AllowsCompliantConfig(t *testing.T
 
 	if err := auditRequiredAPIKeySourceCIDRPosture(context.Background(), db); err != nil {
 		t.Fatalf("expected compliant API key source CIDR posture to pass, got: %v", err)
+	}
+}
+
+func TestAuditRequiredSuspiciousPageHTMLPosture_RejectsSuspiciousPages(t *testing.T) {
+	db := newPolicyTestDB(t)
+	if _, err := db.Exec(`INSERT INTO pages (body) VALUES ('<script>alert(1)</script>')`); err != nil {
+		t.Fatalf("inserting page: %v", err)
+	}
+
+	if err := auditRequiredSuspiciousPageHTMLPosture(context.Background(), db); err == nil {
+		t.Fatal("expected error when page body contains suspicious HTML")
+	}
+}
+
+func TestAuditRequiredSuspiciousPageHTMLPosture_AllowsCleanPages(t *testing.T) {
+	db := newPolicyTestDB(t)
+	if _, err := db.Exec(`INSERT INTO pages (body) VALUES ('<p>Safe content</p>')`); err != nil {
+		t.Fatalf("inserting page: %v", err)
+	}
+
+	if err := auditRequiredSuspiciousPageHTMLPosture(context.Background(), db); err != nil {
+		t.Fatalf("expected clean page content posture to pass, got: %v", err)
 	}
 }
 

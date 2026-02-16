@@ -184,6 +184,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SANITIZE_PAGE_HTML  Sanitize page HTML before rendering to visitors (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_SANITIZE_PAGE_HTML  Reject production startup when page HTML sanitization is disabled (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_BLOCK_SUSPICIOUS_PAGE_HTML  Reject page writes with suspicious HTML markup (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML  Reject production startup when suspicious page markup blocking is disabled (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "\nFor more information, see: https://github.com/olegiv/ocms-go\n")
 	}
 
@@ -552,6 +553,31 @@ func auditRequiredAPIKeySourceCIDRPosture(ctx context.Context, db *sql.DB) error
 	return nil
 }
 
+func auditRequiredSuspiciousPageHTMLPosture(ctx context.Context, db *sql.DB) error {
+	var suspiciousCount int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM pages
+		WHERE LOWER(body) LIKE '%<script%'
+		   OR LOWER(body) LIKE '%javascript:%'
+		   OR LOWER(body) LIKE '%onerror=%'
+		   OR LOWER(body) LIKE '%onload=%'
+		   OR LOWER(body) LIKE '%<iframe%'
+	`).Scan(&suspiciousCount)
+	if err != nil {
+		return fmt.Errorf("auditing suspicious page html posture: %w", err)
+	}
+
+	if suspiciousCount > 0 {
+		return fmt.Errorf(
+			"refusing to start in production: found %d page(s) with suspicious HTML markers while OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML is enabled",
+			suspiciousCount,
+		)
+	}
+
+	return nil
+}
+
 // initI18nFromDB updates i18n settings from database (active languages, default language).
 func initI18nFromDB(ctx context.Context, queries *store.Queries) {
 	if activeLanguages, err := queries.ListActiveLanguages(ctx); err == nil {
@@ -765,6 +791,9 @@ func run() error {
 		if !cfg.BlockSuspiciousPageHTML {
 			slog.Warn("production security warning: OCMS_BLOCK_SUSPICIOUS_PAGE_HTML is disabled")
 		}
+		if !cfg.RequireBlockSuspiciousPageHTML {
+			slog.Warn("production security warning: OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML is disabled")
+		}
 	}
 
 	if err := middleware.ConfigureTrustedProxies(cfg.TrustedProxies); err != nil {
@@ -873,6 +902,11 @@ func run() error {
 				"refusing to start in production: default seeded admin credentials are still active for %s; rotate credentials before startup",
 				store.DefaultAdminEmail,
 			)
+		}
+	}
+	if cfg.Env == "production" && cfg.RequireBlockSuspiciousPageHTML {
+		if err := auditRequiredSuspiciousPageHTMLPosture(ctx, db); err != nil {
+			return err
 		}
 	}
 	if cfg.Env == "production" && cfg.RequireAPIKeyExpiry {

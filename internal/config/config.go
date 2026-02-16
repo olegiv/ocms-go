@@ -72,9 +72,10 @@ type Config struct {
 	RequireWebhookFormDataMinimization bool   `env:"OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION" envDefault:"false"` // Reject startup in production when webhook form payload mode is full
 
 	// Frontend content hardening
-	SanitizePageHTML        bool `env:"OCMS_SANITIZE_PAGE_HTML" envDefault:"false"`         // Sanitize page HTML before rendering to visitors
-	RequireSanitizePageHTML bool `env:"OCMS_REQUIRE_SANITIZE_PAGE_HTML" envDefault:"false"` // Reject startup in production if page HTML sanitization is disabled
-	BlockSuspiciousPageHTML bool `env:"OCMS_BLOCK_SUSPICIOUS_PAGE_HTML" envDefault:"false"` // Reject page create/update when suspicious HTML patterns are detected
+	SanitizePageHTML               bool `env:"OCMS_SANITIZE_PAGE_HTML" envDefault:"false"`                 // Sanitize page HTML before rendering to visitors
+	RequireSanitizePageHTML        bool `env:"OCMS_REQUIRE_SANITIZE_PAGE_HTML" envDefault:"false"`         // Reject startup in production if page HTML sanitization is disabled
+	BlockSuspiciousPageHTML        bool `env:"OCMS_BLOCK_SUSPICIOUS_PAGE_HTML" envDefault:"false"`         // Reject page create/update when suspicious HTML patterns are detected
+	RequireBlockSuspiciousPageHTML bool `env:"OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML" envDefault:"false"` // Reject startup in production if suspicious page HTML blocking is disabled
 }
 
 // IsDevelopment returns true if the application is running in development mode.
@@ -131,6 +132,9 @@ func Load() (*Config, error) {
 	}
 	if cfg.Env == "production" && cfg.RequireSanitizePageHTML && !cfg.SanitizePageHTML {
 		return nil, fmt.Errorf("OCMS_SANITIZE_PAGE_HTML must be true in production when OCMS_REQUIRE_SANITIZE_PAGE_HTML is enabled")
+	}
+	if cfg.Env == "production" && cfg.RequireBlockSuspiciousPageHTML && !cfg.BlockSuspiciousPageHTML {
+		return nil, fmt.Errorf("OCMS_BLOCK_SUSPICIOUS_PAGE_HTML must be true in production when OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML is enabled")
 	}
 	cfg.WebhookFormDataMode = strings.ToLower(strings.TrimSpace(cfg.WebhookFormDataMode))
 	if cfg.WebhookFormDataMode == "" {
