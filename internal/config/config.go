@@ -6,6 +6,7 @@ package config
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 
 	"github.com/caarlos0/env/v11"
@@ -117,8 +118,9 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("parsing config: %w", err)
 	}
 
-	// Production hardening: prevent default seeding in production.
-	if cfg.Env == "production" && cfg.DoSeed {
+	// Production hardening: prevent default seeding in production
+	// (allowed when demo mode is explicitly enabled).
+	if cfg.Env == "production" && cfg.DoSeed && os.Getenv("OCMS_DEMO_MODE") != "true" {
 		return nil, fmt.Errorf("OCMS_DO_SEED must be false in production")
 	}
 	if cfg.Env == "production" && cfg.RequireAPIAllowedCIDRs && strings.TrimSpace(cfg.APIAllowedCIDRs) == "" {
