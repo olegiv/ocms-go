@@ -188,6 +188,7 @@ mkdir -p "$INSTANCE_DIR"/{data,uploads,custom/themes,backups,logs}
 
 # Generate session secret
 SESSION_SECRET=$(openssl rand -base64 32)
+EMBED_PROXY_TOKEN=$(openssl rand -base64 32)
 
 # Create .env file
 echo_info "Creating environment config..."
@@ -204,6 +205,9 @@ OCMS_SERVER_PORT=$PORT
 OCMS_ENV=production
 OCMS_LOG_LEVEL=warn
 
+# Production safety
+OCMS_DO_SEED=false
+
 # Database (relative to WorkingDirectory)
 OCMS_DB_PATH=./data/ocms.db
 
@@ -212,6 +216,16 @@ OCMS_DB_PATH=./data/ocms.db
 # Place custom themes in ./custom/themes/ to override or extend them.
 OCMS_CUSTOM_DIR=./custom
 OCMS_ACTIVE_THEME=default
+
+# Embed proxy hardening (update values for your deployment)
+# Origin matching is exact (scheme + host). Add additional hostnames
+# (for example apex + www) as a comma-separated list.
+OCMS_EMBED_ALLOWED_ORIGINS=https://$DOMAIN
+# Replace with self-hosted Dify API host if needed.
+OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS=api.dify.ai
+OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS=true
+OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS=true
+OCMS_EMBED_PROXY_TOKEN=$EMBED_PROXY_TOKEN
 
 # Optional: Redis for distributed caching
 # OCMS_REDIS_URL=redis://localhost:6379/0
@@ -287,5 +301,6 @@ echo "  3. Enable:   sudo systemctl enable --now ocms@$SITE_ID"
 echo "  4. Logs:     sudo journalctl -u ocms@$SITE_ID -f"
 echo "  5. Login:    https://$DOMAIN/admin/"
 echo "               Default: admin@example.com / changeme1234"
+echo "  6. Verify:   OCMS_EMBED_ALLOWED_ORIGINS includes all public hostnames"
 
 print_nginx_snippet "$PORT" "$DOMAIN"
