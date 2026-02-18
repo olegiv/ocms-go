@@ -72,6 +72,23 @@ document.addEventListener('input', function(e) {
     }
 });
 
+function safeHistoryFallbackURL(rawURL) {
+    if (typeof rawURL !== 'string' || rawURL.trim() === '') {
+        return '/admin';
+    }
+
+    try {
+        const parsed = new URL(rawURL, window.location.origin);
+        const protocolAllowed = parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        if (!protocolAllowed || parsed.origin !== window.location.origin) {
+            return '/admin';
+        }
+        return parsed.pathname + parsed.search + parsed.hash;
+    } catch (err) {
+        return '/admin';
+    }
+}
+
 document.addEventListener('click', function(e) {
     const clearBtn = e.target.closest('[data-clear-target]');
     if (clearBtn) {
@@ -95,9 +112,7 @@ document.addEventListener('click', function(e) {
         return;
     }
     const fallbackURL = historyBackBtn.getAttribute('data-fallback-url');
-    if (fallbackURL) {
-        window.location.href = fallbackURL;
-    }
+    window.location.href = safeHistoryFallbackURL(fallbackURL);
 });
 
 // HTMX loading state handlers
