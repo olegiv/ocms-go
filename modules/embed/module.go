@@ -10,6 +10,7 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
+	"os"
 	"strings"
 	"sync"
 
@@ -85,7 +86,7 @@ func (m *Module) Init(ctx *module.Context) error {
 		m.allowedUpstreamHosts = upstreamHosts
 		m.requireUpstreamHostPolicy = ctx.Config.RequireEmbedAllowedUpstreamHosts
 		m.proxyToken = strings.TrimSpace(ctx.Config.EmbedProxyToken)
-		m.requireProxyToken = ctx.Config.Env == "production" || ctx.Config.RequireEmbedProxyToken
+		m.requireProxyToken = (ctx.Config.Env == "production" && os.Getenv("OCMS_DEMO_MODE") != "true") || ctx.Config.RequireEmbedProxyToken
 		if m.requireProxyToken && m.proxyToken == "" {
 			return fmt.Errorf("embed proxy token is required but OCMS_EMBED_PROXY_TOKEN is empty")
 		}
