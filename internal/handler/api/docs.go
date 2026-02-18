@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -63,6 +64,7 @@ func (h *DocsHandler) parseTemplate() error {
 type docsData struct {
 	SiteName string
 	BaseURL  string
+	CSPNonce string
 }
 
 // getSiteName retrieves the site name from the database.
@@ -104,6 +106,7 @@ func (h *DocsHandler) ServeDocs(w http.ResponseWriter, r *http.Request) {
 	data := docsData{
 		SiteName: siteName,
 		BaseURL:  baseURL,
+		CSPNonce: middleware.GetCSPNonce(r),
 	}
 
 	// Render to buffer first

@@ -471,7 +471,7 @@ templ PrivacyPage(pc *adminviews.PageContext, data PrivacyViewData) {
     margin-top: 1.5rem;
 }
 		</style>
-		<script>
+		<script nonce={ templ.GetNonce(ctx) }>
 function privacySettings() {
     // Predefined services configuration
     const predefinedServices = {

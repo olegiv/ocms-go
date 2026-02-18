@@ -3,7 +3,15 @@
 
 package admin
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/olegiv/ocms-go/internal/views/components/alert"
+	"github.com/olegiv/ocms-go/internal/views/components/badge"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/table"
+)
 
 // CacheStatsViewData holds data for the cache stats page.
 type CacheStatsViewData struct {
@@ -39,26 +47,14 @@ type CacheStatsView struct {
 // CacheStatsPage renders the cache statistics page.
 templ CacheStatsPage(pc *PageContext, data CacheStatsViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("cache.title") }</h1>
-				<p class="page-description">{ pc.T("cache.description") }</p>
-				if data.ResetAt != "" {
-					<p class="page-description page-subtitle">
-						@iconClock()
-						{ pc.T("cache.stats_reset") } { data.ResetAt }
-					</p>
+		@PageHeader(pc.T("cache.title"), pc.T("cache.description")) {
+			<form method="POST" action="/admin/cache/clear" class="d-inline">
+				@button.Button(button.Props{Variant: button.VariantDestructive, Type: button.TypeSubmit, Attributes: templ.Attributes{"onclick": "return confirm(this.dataset.msg)", "data-msg": pc.T("cache.clear_confirm")}}) {
+					@icon.Trash2(icon.Props{Size: 16})
+					{ pc.T("cache.clear_all") }
 				}
-			</div>
-			<div class="page-actions">
-				<form method="POST" action="/admin/cache/clear" class="d-inline">
-					<button type="submit" class="btn btn-danger" onclick="return confirm(this.dataset.msg)" data-msg={ pc.T("cache.clear_confirm") }>
-						@iconDelete()
-						{ pc.T("cache.clear_all") }
-					</button>
-				</form>
-			</div>
-		</div>
+			</form>
+		}
 		<!-- Cache Backend Info -->
 		<div class="cache-backend-info mb-6">
 			<div class={ "backend-card", templ.KV("backend-redis", data.IsRedis), templ.KV("backend-memory", !data.IsRedis) }>
@@ -77,7 +73,9 @@ templ CacheStatsPage(pc *PageContext, data CacheStatsViewData) {
 							{ pc.T("cache.memory_cache") }
 						}
 						if data.IsFallback {
-							<span class="badge badge-warning ml-2">{ pc.T("cache.fallback") }</span>
+							@badge.Badge(badge.Props{Class: "badge-warning ml-2"}) {
+								{ pc.T("cache.fallback") }
+							}
 						}
 					</span>
 					<span class="backend-status">
@@ -95,10 +93,10 @@ templ CacheStatsPage(pc *PageContext, data CacheStatsViewData) {
 				</div>
 			</div>
 			if data.IsFallback {
-				<div class="alert alert-warning mt-3">
-					@iconWarning()
+				@alert.Alert(alert.Props{Class: "alert-warning mt-3"}) {
+					@icon.TriangleAlert(icon.Props{Size: 16})
 					<span>{ pc.T("cache.redis_failed") }</span>
-				</div>
+				}
 			}
 		</div>
 		<!-- Total Stats Summary -->
@@ -141,38 +139,54 @@ templ CacheStatsPage(pc *PageContext, data CacheStatsViewData) {
 			</div>
 		</div>
 		<!-- Individual Cache Details -->
-		<div class="card">
-			<div class="card-header">
-				<h2 class="card-title">{ pc.T("cache.details") }</h2>
-			</div>
-			<div class="card-body">
-				<div class="table-responsive">
-					<table class="table">
-						<thead>
-							<tr>
-								<th>{ pc.T("cache.cache_name") }</th>
-								<th>{ pc.T("cache.items") }</th>
-								<th>{ pc.T("cache.hits") }</th>
-								<th>{ pc.T("cache.misses") }</th>
-								<th>{ pc.T("cache.hit_rate") }</th>
-								<th>{ pc.T("label.actions") }</th>
-							</tr>
-						</thead>
-						<tbody>
+		@card.Card(card.Props{}) {
+			@card.Header(card.HeaderProps{Class: "border-b pb-4"}) {
+				@card.Title() {
+					{ pc.T("cache.details") }
+				}
+			}
+			@card.Content(card.ContentProps{}) {
+				<div class="overflow-x-auto">
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() {
+									{ pc.T("cache.cache_name") }
+								}
+								@table.Head() {
+									{ pc.T("cache.items") }
+								}
+								@table.Head() {
+									{ pc.T("cache.hits") }
+								}
+								@table.Head() {
+									{ pc.T("cache.misses") }
+								}
+								@table.Head() {
+									{ pc.T("cache.hit_rate") }
+								}
+								@table.Head() {
+									{ pc.T("label.actions") }
+								}
+							}
+						}
+						@table.Body() {
 							for _, c := range data.Caches {
 								@cacheRow(pc, c)
 							}
-						</tbody>
-					</table>
+						}
+					}
 				</div>
-			</div>
-		</div>
+			}
+		}
 		<!-- Cache Info -->
-		<div class="card mt-6">
-			<div class="card-header">
-				<h2 class="card-title">{ pc.T("cache.info_title") }</h2>
-			</div>
-			<div class="card-body">
+		@card.Card(card.Props{Class: "mt-6"}) {
+			@card.Header(card.HeaderProps{Class: "border-b pb-4"}) {
+				@card.Title() {
+					{ pc.T("cache.info_title") }
+				}
+			}
+			@card.Content(card.ContentProps{}) {
 				<div class="info-grid">
 					if data.IsRedis {
 						<div class="info-item">
@@ -206,15 +220,15 @@ templ CacheStatsPage(pc *PageContext, data CacheStatsViewData) {
 						<p>{ pc.T("cache.translations_description") }</p>
 					</div>
 				</div>
-			</div>
-		</div>
+			}
+		}
 	}
 }
 
 // cacheRow renders a single cache row in the details table.
 templ cacheRow(pc *PageContext, c CacheItemView) {
-	<tr>
-		<td>
+	@table.Row() {
+		@table.Cell() {
 			<strong>{ cacheKindName(pc, c) }</strong>
 			if c.Kind == "sitemap" {
 				if c.CachedAt != "" {
@@ -225,23 +239,35 @@ templ cacheRow(pc *PageContext, c CacheItemView) {
 					<small class="text-muted">{ pc.T("cache.not_cached") }</small>
 				}
 			}
-		</td>
-		<td>{ fmt.Sprintf("%d", c.Items) }</td>
-		<td>{ fmt.Sprintf("%d", c.Hits) }</td>
-		<td>{ fmt.Sprintf("%d", c.Misses) }</td>
-		<td>
+		}
+		@table.Cell() {
+			{ fmt.Sprintf("%d", c.Items) }
+		}
+		@table.Cell() {
+			{ fmt.Sprintf("%d", c.Hits) }
+		}
+		@table.Cell() {
+			{ fmt.Sprintf("%d", c.Misses) }
+		}
+		@table.Cell() {
 			if c.HitRate > 80.0 {
-				<span class="badge badge-success">{ fmt.Sprintf("%.1f%%", c.HitRate) }</span>
+				@badge.Badge(badge.Props{Class: "badge-success"}) {
+					{ fmt.Sprintf("%.1f%%", c.HitRate) }
+				}
 			} else if c.HitRate > 50.0 {
-				<span class="badge badge-warning">{ fmt.Sprintf("%.1f%%", c.HitRate) }</span>
+				@badge.Badge(badge.Props{Class: "badge-warning"}) {
+					{ fmt.Sprintf("%.1f%%", c.HitRate) }
+				}
 			} else {
-				<span class="badge badge-muted">{ fmt.Sprintf("%.1f%%", c.HitRate) }</span>
+				@badge.Badge(badge.Props{Class: "badge-muted"}) {
+					{ fmt.Sprintf("%.1f%%", c.HitRate) }
+				}
 			}
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			@cacheClearButton(pc, c)
-		</td>
-	</tr>
+		}
+	}
 }
 
 // cacheClearButton renders the clear button for a cache row if applicable.
@@ -250,31 +276,41 @@ templ cacheClearButton(pc *PageContext, c CacheItemView) {
 		case "config":
 			if c.Items > 0 {
 				<form method="POST" action="/admin/cache/clear/config" class="d-inline">
-					<button type="submit" class="btn btn-sm btn-outline" title={ pc.T("cache.clear_config") }>{ pc.T("cache.clear") }</button>
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Attributes: templ.Attributes{"title": pc.T("cache.clear_config")}}) {
+						{ pc.T("cache.clear") }
+					}
 				</form>
 			}
 		case "sitemap":
 			if c.CachedAt != "" {
 				<form method="POST" action="/admin/cache/clear/sitemap" class="d-inline">
-					<button type="submit" class="btn btn-sm btn-outline" title={ pc.T("cache.clear_sitemap") }>{ pc.T("cache.clear") }</button>
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Attributes: templ.Attributes{"title": pc.T("cache.clear_sitemap")}}) {
+						{ pc.T("cache.clear") }
+					}
 				</form>
 			}
 		case "page":
 			if c.Items > 0 {
 				<form method="POST" action="/admin/cache/clear/pages" class="d-inline">
-					<button type="submit" class="btn btn-sm btn-outline" title={ pc.T("cache.clear_pages") }>{ pc.T("cache.clear") }</button>
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Attributes: templ.Attributes{"title": pc.T("cache.clear_pages")}}) {
+						{ pc.T("cache.clear") }
+					}
 				</form>
 			}
 		case "menu":
 			if c.Items > 0 {
 				<form method="POST" action="/admin/cache/clear/menus" class="d-inline">
-					<button type="submit" class="btn btn-sm btn-outline" title={ pc.T("cache.clear_menus") }>{ pc.T("cache.clear") }</button>
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Attributes: templ.Attributes{"title": pc.T("cache.clear_menus")}}) {
+						{ pc.T("cache.clear") }
+					}
 				</form>
 			}
 		case "language":
 			if c.Items > 0 {
 				<form method="POST" action="/admin/cache/clear/languages" class="d-inline">
-					<button type="submit" class="btn btn-sm btn-outline" title={ pc.T("cache.clear_languages") }>{ pc.T("cache.clear") }</button>
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Attributes: templ.Attributes{"title": pc.T("cache.clear_languages")}}) {
+						{ pc.T("cache.clear") }
+					}
 				</form>
 			}
 	}

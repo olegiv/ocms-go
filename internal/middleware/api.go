@@ -9,8 +9,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +36,403 @@ type APIError struct {
 	} `json:"error"`
 }
 
+type apiKeySourceState struct {
+	ip       string
+	lastSeen time.Time
+}
+
+type apiKeySourceTrackerState struct {
+	entries map[int64]apiKeySourceState
+	mu      sync.Mutex
+	ttl     time.Duration
+}
+
+func newAPIKeySourceTracker(ttl time.Duration) *apiKeySourceTrackerState {
+	if ttl <= 0 {
+		ttl = 24 * time.Hour
+	}
+	return &apiKeySourceTrackerState{
+		entries: make(map[int64]apiKeySourceState),
+		ttl:     ttl,
+	}
+}
+
+func (t *apiKeySourceTrackerState) Observe(keyID int64, ip string, now time.Time) (changed bool, previousIP string) {
+	if keyID <= 0 || strings.TrimSpace(ip) == "" {
+		return false, ""
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	cutoff := now.Add(-t.ttl)
+	for id, state := range t.entries {
+		if state.lastSeen.Before(cutoff) {
+			delete(t.entries, id)
+		}
+	}
+
+	state, exists := t.entries[keyID]
+	if !exists {
+		t.entries[keyID] = apiKeySourceState{ip: ip, lastSeen: now}
+		return false, ""
+	}
+
+	if state.ip == ip {
+		state.lastSeen = now
+		t.entries[keyID] = state
+		return false, ""
+	}
+
+	prev := state.ip
+	t.entries[keyID] = apiKeySourceState{ip: ip, lastSeen: now}
+	return true, prev
+}
+
+var (
+	apiAllowedCIDRsMu            sync.RWMutex
+	apiAllowedCIDRs              []netip.Prefix
+	requireAPIAllowedCIDRs       bool
+	requireAPIAllowedCIDRsMu     sync.RWMutex
+	requireAPIKeyExpiry          bool
+	requireAPIKeyExpiryMu        sync.RWMutex
+	requireAPIKeySourceCIDRs     bool
+	requireAPIKeySourceCIDRsMu   sync.RWMutex
+	apiKeyMaxTTL                 time.Duration
+	apiKeyMaxTTLMu               sync.RWMutex
+	revokeAPIKeyOnSourceChange   bool
+	revokeAPIKeyOnSourceChangeMu sync.RWMutex
+	apiKeySourceTracker          = newAPIKeySourceTracker(24 * time.Hour)
+)
+
+// SetRequireAPIKeyExpiry configures whether API keys must have an expiration timestamp.
+func SetRequireAPIKeyExpiry(required bool) {
+	requireAPIKeyExpiryMu.Lock()
+	requireAPIKeyExpiry = required
+	requireAPIKeyExpiryMu.Unlock()
+}
+
+func isAPIKeyExpiryRequired() bool {
+	requireAPIKeyExpiryMu.RLock()
+	defer requireAPIKeyExpiryMu.RUnlock()
+	return requireAPIKeyExpiry
+}
+
+// SetRequireAPIKeySourceCIDRs configures whether API keys must have at least
+// one per-key source CIDR entry.
+func SetRequireAPIKeySourceCIDRs(required bool) {
+	requireAPIKeySourceCIDRsMu.Lock()
+	requireAPIKeySourceCIDRs = required
+	requireAPIKeySourceCIDRsMu.Unlock()
+}
+
+func isAPIKeySourceCIDRsRequired() bool {
+	requireAPIKeySourceCIDRsMu.RLock()
+	defer requireAPIKeySourceCIDRsMu.RUnlock()
+	return requireAPIKeySourceCIDRs
+}
+
+// SetAPIKeyMaxTTLDays configures an optional maximum API key lifetime.
+// Values <= 0 disable max lifetime enforcement.
+func SetAPIKeyMaxTTLDays(days int) {
+	apiKeyMaxTTLMu.Lock()
+	if days <= 0 {
+		apiKeyMaxTTL = 0
+	} else {
+		apiKeyMaxTTL = time.Duration(days) * 24 * time.Hour
+	}
+	apiKeyMaxTTLMu.Unlock()
+}
+
+func getAPIKeyMaxTTL() time.Duration {
+	apiKeyMaxTTLMu.RLock()
+	defer apiKeyMaxTTLMu.RUnlock()
+	return apiKeyMaxTTL
+}
+
+// SetRevokeAPIKeyOnSourceIPChange configures whether API keys should be
+// deactivated when their observed source IP changes and no per-key source CIDRs
+// are configured for the key.
+func SetRevokeAPIKeyOnSourceIPChange(enabled bool) {
+	revokeAPIKeyOnSourceChangeMu.Lock()
+	revokeAPIKeyOnSourceChange = enabled
+	revokeAPIKeyOnSourceChangeMu.Unlock()
+}
+
+func shouldRevokeAPIKeyOnSourceIPChange() bool {
+	revokeAPIKeyOnSourceChangeMu.RLock()
+	defer revokeAPIKeyOnSourceChangeMu.RUnlock()
+	return revokeAPIKeyOnSourceChange
+}
+
+// SetRequireAPIAllowedCIDRs configures whether API auth requires at least one
+// global source CIDR restriction.
+func SetRequireAPIAllowedCIDRs(required bool) {
+	requireAPIAllowedCIDRsMu.Lock()
+	requireAPIAllowedCIDRs = required
+	requireAPIAllowedCIDRsMu.Unlock()
+}
+
+func isAPIAllowedCIDRsRequired() bool {
+	requireAPIAllowedCIDRsMu.RLock()
+	defer requireAPIAllowedCIDRsMu.RUnlock()
+	return requireAPIAllowedCIDRs
+}
+
+// ConfigureAPIAllowedCIDRs updates API source restrictions from a comma-separated
+// list of CIDRs/IPs. Empty input disables API source restriction.
+func ConfigureAPIAllowedCIDRs(raw string) error {
+	if strings.TrimSpace(raw) == "" {
+		return SetAPIAllowedCIDRs(nil)
+	}
+	return SetAPIAllowedCIDRs(strings.Split(raw, ","))
+}
+
+// SetAPIAllowedCIDRs updates API source restrictions from CIDR/IP entries.
+// IPs are treated as /32 (IPv4) or /128 (IPv6).
+func SetAPIAllowedCIDRs(entries []string) error {
+	prefixes := make([]netip.Prefix, 0, len(entries))
+
+	for _, entry := range entries {
+		value := strings.TrimSpace(entry)
+		if value == "" {
+			continue
+		}
+
+		if strings.Contains(value, "/") {
+			prefix, err := netip.ParsePrefix(value)
+			if err != nil {
+				return fmt.Errorf("invalid API allowed CIDR %q: %w", value, err)
+			}
+			prefixes = append(prefixes, prefix.Masked())
+			continue
+		}
+
+		ip, err := netip.ParseAddr(value)
+		if err != nil {
+			return fmt.Errorf("invalid API allowed IP %q: %w", value, err)
+		}
+
+		if ip.Is4() {
+			prefixes = append(prefixes, netip.PrefixFrom(ip.Unmap(), 32))
+		} else {
+			prefixes = append(prefixes, netip.PrefixFrom(ip, 128))
+		}
+	}
+
+	apiAllowedCIDRsMu.Lock()
+	apiAllowedCIDRs = prefixes
+	apiAllowedCIDRsMu.Unlock()
+
+	return nil
+}
+
+func isAPIClientAllowed(ip string) bool {
+	apiAllowedCIDRsMu.RLock()
+	prefixes := append([]netip.Prefix(nil), apiAllowedCIDRs...)
+	apiAllowedCIDRsMu.RUnlock()
+
+	// No configured restriction.
+	if len(prefixes) == 0 {
+		return true
+	}
+
+	clientIP, ok := parseIP(ip)
+	if !ok {
+		return false
+	}
+
+	for _, prefix := range prefixes {
+		if prefix.Contains(clientIP) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasAPIAllowedCIDRsConfigured() bool {
+	apiAllowedCIDRsMu.RLock()
+	defer apiAllowedCIDRsMu.RUnlock()
+	return len(apiAllowedCIDRs) > 0
+}
+
+func parseCIDROrIP(value string) (netip.Prefix, error) {
+	entry := strings.TrimSpace(value)
+	if entry == "" {
+		return netip.Prefix{}, fmt.Errorf("empty CIDR/IP entry")
+	}
+	if strings.Contains(entry, "/") {
+		prefix, err := netip.ParsePrefix(entry)
+		if err != nil {
+			return netip.Prefix{}, err
+		}
+		return prefix.Masked(), nil
+	}
+
+	ip, err := netip.ParseAddr(entry)
+	if err != nil {
+		return netip.Prefix{}, err
+	}
+	if ip.Is4() {
+		return netip.PrefixFrom(ip.Unmap(), 32), nil
+	}
+	return netip.PrefixFrom(ip, 128), nil
+}
+
+func isMissingAPIKeySourceCIDRTable(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "no such table") && strings.Contains(msg, "api_key_source_cidrs")
+}
+
+func observeAPIKeySourceChange(ctx context.Context, queries *store.Queries, keyID int64, ip string, now time.Time) (bool, string) {
+	if keyID <= 0 || strings.TrimSpace(ip) == "" {
+		return false, ""
+	}
+
+	// Persisted baseline (preferred): survives restarts and process swaps.
+	if queries != nil {
+		cleanupBefore := now.Add(-24 * time.Hour)
+		if err := queries.DeleteStaleAPIKeySourceState(ctx, cleanupBefore); err != nil && !store.IsMissingAPIKeySourceStateTableError(err) {
+			slog.Warn("failed to cleanup stale API key source state", "error", err)
+		}
+
+		state, err := queries.GetAPIKeySourceState(ctx, keyID)
+		switch {
+		case err == nil:
+			previousIP := strings.TrimSpace(state.LastIP)
+			if previousIP == ip {
+				if upsertErr := queries.UpsertAPIKeySourceState(ctx, keyID, ip, now); upsertErr != nil && !store.IsMissingAPIKeySourceStateTableError(upsertErr) {
+					slog.Warn("failed to persist API key source state", "error", upsertErr, "key_id", keyID)
+				}
+				return false, ""
+			}
+			if upsertErr := queries.UpsertAPIKeySourceState(ctx, keyID, ip, now); upsertErr != nil && !store.IsMissingAPIKeySourceStateTableError(upsertErr) {
+				slog.Warn("failed to persist API key source state", "error", upsertErr, "key_id", keyID)
+			}
+			return previousIP != "", previousIP
+		case errors.Is(err, sql.ErrNoRows):
+			if upsertErr := queries.UpsertAPIKeySourceState(ctx, keyID, ip, now); upsertErr != nil && !store.IsMissingAPIKeySourceStateTableError(upsertErr) {
+				slog.Warn("failed to initialize API key source state", "error", upsertErr, "key_id", keyID)
+			}
+			return false, ""
+		case store.IsMissingAPIKeySourceStateTableError(err):
+			// Fall back to in-memory tracker for pre-migration databases.
+		default:
+			slog.Warn("failed to read API key source state", "error", err, "key_id", keyID)
+			// Fall back to in-memory tracker below.
+		}
+	}
+
+	return apiKeySourceTracker.Observe(keyID, ip, now)
+}
+
+func isMissingEventsTable(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "no such table") && strings.Contains(msg, "events")
+}
+
+func logAPIKeySourceAnomalyEvent(
+	ctx context.Context,
+	queries *store.Queries,
+	keyID int64,
+	previousIP,
+	currentIP,
+	requestPath,
+	status string,
+	hasSourceCIDRs,
+	revokePolicyEnabled bool,
+) {
+	if queries == nil {
+		return
+	}
+
+	message := "API key source IP anomaly detected"
+	switch status {
+	case "revoked":
+		message = "API key deactivated due to source IP anomaly"
+	case "revoke_failed":
+		message = "API key revocation failed after source IP anomaly"
+	}
+
+	metadata, err := json.Marshal(map[string]any{
+		"api_key_id":            keyID,
+		"previous_ip":           previousIP,
+		"current_ip":            currentIP,
+		"status":                status,
+		"has_source_cidrs":      hasSourceCIDRs,
+		"revoke_policy_enabled": revokePolicyEnabled,
+	})
+	if err != nil {
+		slog.Warn("failed to marshal API key source anomaly metadata", "error", err, "key_id", keyID)
+		return
+	}
+
+	_, err = queries.CreateEvent(ctx, store.CreateEventParams{
+		Level:      model.EventLevelWarning,
+		Category:   model.EventCategorySecurity,
+		Message:    message,
+		UserID:     sql.NullInt64{Valid: false},
+		Metadata:   string(metadata),
+		IpAddress:  currentIP,
+		RequestUrl: requestPath,
+		CreatedAt:  time.Now(),
+	})
+	if err != nil {
+		if isMissingEventsTable(err) {
+			return
+		}
+		slog.Warn("failed to persist API key source anomaly event", "error", err, "key_id", keyID, "status", status)
+	}
+}
+
+func isAPIKeySourceAllowed(ctx context.Context, queries *store.Queries, keyID int64, clientIP string) (bool, bool, error) {
+	cidrs, err := queries.ListAPIKeySourceCIDRs(ctx, keyID)
+	if err != nil {
+		if isMissingAPIKeySourceCIDRTable(err) {
+			if isAPIKeySourceCIDRsRequired() {
+				slog.Error("api_key_source_cidrs table missing while per-key source CIDR policy is enabled")
+				return false, false, nil
+			}
+			// Backward compatibility for databases that haven't applied migrations yet.
+			return true, false, nil
+		}
+		return false, false, err
+	}
+	if len(cidrs) == 0 {
+		return true, false, nil
+	}
+
+	parsedClientIP, ok := parseIP(clientIP)
+	if !ok {
+		return false, true, nil
+	}
+
+	validRules := 0
+	for _, cidr := range cidrs {
+		prefix, err := parseCIDROrIP(cidr)
+		if err != nil {
+			slog.Warn("invalid API key source CIDR entry", "key_id", keyID, "cidr", cidr, "error", err)
+			continue
+		}
+		validRules++
+		if prefix.Contains(parsedClientIP) {
+			return true, true, nil
+		}
+	}
+
+	if validRules == 0 {
+		slog.Warn("API key source allowlist has no valid entries", "key_id", keyID)
+	}
+
+	return false, true, nil
+}
+
 // WriteAPIError writes a JSON error response.
 func WriteAPIError(w http.ResponseWriter, statusCode int, code, message string, details map[string]string) {
 	w.Header().Set("Content-Type", "application/json")
@@ -51,6 +451,29 @@ func WriteAPIError(w http.ResponseWriter, statusCode int, code, message string, 
 // If required is true and validation fails, writes an error response and returns (nil, true).
 // The second return value indicates if an error response was written.
 func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queries, required bool) (*store.ApiKey, bool) {
+	clientIP := GetClientIP(r)
+	if isAPIAllowedCIDRsRequired() && !hasAPIAllowedCIDRsConfigured() {
+		slog.Warn("API key auth blocked: global source CIDR policy required but not configured",
+			"path", r.URL.Path,
+			"ip", clientIP)
+		if required {
+			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key access policy is not configured", nil)
+			return nil, true
+		}
+		return nil, false
+	}
+
+	if !isAPIClientAllowed(clientIP) {
+		slog.Warn("API key auth blocked by global source CIDR policy",
+			"ip", clientIP,
+			"path", r.URL.Path)
+		if required {
+			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key access is not allowed from this IP", nil)
+			return nil, true
+		}
+		return nil, false
+	}
+
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		if required {
@@ -123,12 +546,156 @@ func validateAPIKey(w http.ResponseWriter, r *http.Request, queries *store.Queri
 		return nil, false
 	}
 
+	if isAPIKeyExpiryRequired() && !matchedKey.ExpiresAt.Valid {
+		slog.Warn("API key auth blocked: missing expiry while expiry policy enabled",
+			"key_id", matchedKey.ID,
+			"path", r.URL.Path,
+			"ip", clientIP)
+		if required {
+			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key must have an expiration date", nil)
+			return nil, true
+		}
+		return nil, false
+	}
+
 	if matchedKey.ExpiresAt.Valid && time.Now().After(matchedKey.ExpiresAt.Time) {
 		if required {
 			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key has expired", nil)
 			return nil, true
 		}
 		return nil, false
+	}
+
+	if maxTTL := getAPIKeyMaxTTL(); maxTTL > 0 {
+		if !matchedKey.ExpiresAt.Valid {
+			slog.Warn("API key auth blocked: missing expiry while max TTL policy enabled",
+				"key_id", matchedKey.ID,
+				"path", r.URL.Path,
+				"ip", clientIP)
+			if required {
+				WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key must have an expiration date", nil)
+				return nil, true
+			}
+			return nil, false
+		}
+
+		maxAllowedExpiry := matchedKey.CreatedAt.Add(maxTTL)
+		if matchedKey.ExpiresAt.Time.After(maxAllowedExpiry) {
+			slog.Warn("API key auth blocked: key lifetime exceeds max TTL policy",
+				"key_id", matchedKey.ID,
+				"path", r.URL.Path,
+				"ip", clientIP,
+				"created_at", matchedKey.CreatedAt,
+				"expires_at", matchedKey.ExpiresAt.Time,
+				"max_allowed_expires_at", maxAllowedExpiry)
+			if required {
+				WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key lifetime exceeds maximum allowed policy", nil)
+				return nil, true
+			}
+			return nil, false
+		}
+	}
+
+	allowed, hasSourceCIDRs, err := isAPIKeySourceAllowed(r.Context(), queries, matchedKey.ID, clientIP)
+	if err != nil {
+		if required {
+			slog.Error("failed to load API key source CIDR allowlist", "error", err, "key_id", matchedKey.ID)
+			WriteAPIError(w, http.StatusInternalServerError, "internal_error", "Failed to validate API key source", nil)
+			return nil, true
+		}
+		return nil, false
+	}
+	if isAPIKeySourceCIDRsRequired() && !hasSourceCIDRs {
+		slog.Warn("API key auth blocked: missing per-key source CIDR while policy enabled",
+			"key_id", matchedKey.ID,
+			"path", r.URL.Path,
+			"ip", clientIP)
+		if required {
+			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key must have at least one source CIDR restriction", nil)
+			return nil, true
+		}
+		return nil, false
+	}
+	if !allowed {
+		slog.Warn("API key auth blocked by per-key source CIDR allowlist",
+			"key_id", matchedKey.ID,
+			"path", r.URL.Path,
+			"ip", clientIP)
+		if required {
+			WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key access is not allowed from this IP", nil)
+			return nil, true
+		}
+		return nil, false
+	}
+
+	if changed, previousIP := observeAPIKeySourceChange(r.Context(), queries, matchedKey.ID, clientIP, time.Now()); changed {
+		slog.Warn("API key source IP changed",
+			"key_id", matchedKey.ID,
+			"previous_ip", previousIP,
+			"current_ip", clientIP,
+			"path", r.URL.Path)
+		if shouldRevokeAPIKeyOnSourceIPChange() && !hasSourceCIDRs {
+			if err := queries.DeactivateAPIKey(r.Context(), store.DeactivateAPIKeyParams{
+				UpdatedAt: time.Now(),
+				ID:        matchedKey.ID,
+			}); err != nil {
+				logAPIKeySourceAnomalyEvent(
+					r.Context(),
+					queries,
+					matchedKey.ID,
+					previousIP,
+					clientIP,
+					r.URL.Path,
+					"revoke_failed",
+					hasSourceCIDRs,
+					true,
+				)
+				slog.Error("failed to deactivate API key after source IP anomaly",
+					"error", err,
+					"key_id", matchedKey.ID,
+					"path", r.URL.Path,
+					"ip", clientIP)
+				if required {
+					WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key access denied due to source IP anomaly", nil)
+					return nil, true
+				}
+				return nil, false
+			} else {
+				logAPIKeySourceAnomalyEvent(
+					r.Context(),
+					queries,
+					matchedKey.ID,
+					previousIP,
+					clientIP,
+					r.URL.Path,
+					"revoked",
+					hasSourceCIDRs,
+					true,
+				)
+				slog.Warn("API key deactivated due to source IP anomaly",
+					"key_id", matchedKey.ID,
+					"previous_ip", previousIP,
+					"current_ip", clientIP,
+					"path", r.URL.Path)
+				if required {
+					WriteAPIError(w, http.StatusUnauthorized, "unauthorized", "API key was deactivated due to source IP anomaly", nil)
+					return nil, true
+				}
+				return nil, false
+			}
+		}
+
+		logAPIKeySourceAnomalyEvent(
+			r.Context(),
+			queries,
+			matchedKey.ID,
+			previousIP,
+			clientIP,
+			r.URL.Path,
+			"observed",
+			hasSourceCIDRs,
+			shouldRevokeAPIKeyOnSourceIPChange(),
+		)
 	}
 
 	return matchedKey, false
@@ -280,57 +847,90 @@ func RequireAnyPermission(requiredPerms ...string) func(http.Handler) http.Handl
 	}
 }
 
-// limiterCache is a generic rate limiter cache with double-check locking.
-type limiterCache[K comparable] struct {
-	limiters map[K]*rate.Limiter
-	mu       sync.RWMutex
-	rate     rate.Limit
-	burst    int
+// limiterEntry holds a rate limiter and its last access time for TTL eviction.
+type limiterEntry struct {
+	limiter  *rate.Limiter
+	lastUsed time.Time
 }
 
-// newLimiterCache creates a new limiter cache.
+// limiterCacheTTL is the time after which idle entries are evicted.
+const limiterCacheTTL = 10 * time.Minute
+
+// limiterCacheCleanupInterval is how often the cleanup goroutine runs.
+const limiterCacheCleanupInterval = 5 * time.Minute
+
+// limiterCache is a generic rate limiter cache with TTL-based eviction.
+type limiterCache[K comparable] struct {
+	entries map[K]*limiterEntry
+	mu      sync.RWMutex
+	rate    rate.Limit
+	burst   int
+}
+
+// newLimiterCache creates a new limiter cache with periodic TTL-based cleanup.
 func newLimiterCache[K comparable](rps float64, burst int) *limiterCache[K] {
-	return &limiterCache[K]{
-		limiters: make(map[K]*rate.Limiter),
-		rate:     rate.Limit(rps),
-		burst:    burst,
+	lc := &limiterCache[K]{
+		entries: make(map[K]*limiterEntry),
+		rate:    rate.Limit(rps),
+		burst:   burst,
 	}
+	go lc.cleanupLoop()
+	return lc
 }
 
 // get returns the rate limiter for a specific key, creating one if needed.
 func (lc *limiterCache[K]) get(key K) *rate.Limiter {
+	now := time.Now()
+
 	lc.mu.RLock()
-	limiter, exists := lc.limiters[key]
+	entry, exists := lc.entries[key]
 	lc.mu.RUnlock()
 
 	if exists {
-		return limiter
+		lc.mu.Lock()
+		entry.lastUsed = now
+		lc.mu.Unlock()
+		return entry.limiter
 	}
 
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
 
 	// Double-check after acquiring write lock
-	if limiter, exists = lc.limiters[key]; exists {
-		return limiter
+	if entry, exists = lc.entries[key]; exists {
+		entry.lastUsed = now
+		return entry.limiter
 	}
 
-	limiter = rate.NewLimiter(lc.rate, lc.burst)
-	lc.limiters[key] = limiter
+	limiter := rate.NewLimiter(lc.rate, lc.burst)
+	lc.entries[key] = &limiterEntry{
+		limiter:  limiter,
+		lastUsed: now,
+	}
 	return limiter
 }
 
-// clearIfExceeds clears all entries if the cache exceeds maxSize.
-// Returns true if the cache was cleared.
-func (lc *limiterCache[K]) clearIfExceeds(maxSize int) bool {
+// cleanupLoop periodically evicts entries that haven't been used within the TTL.
+func (lc *limiterCache[K]) cleanupLoop() {
+	ticker := time.NewTicker(limiterCacheCleanupInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		lc.evictExpired()
+	}
+}
+
+// evictExpired removes entries older than limiterCacheTTL.
+func (lc *limiterCache[K]) evictExpired() {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
 
-	if len(lc.limiters) > maxSize {
-		lc.limiters = make(map[K]*rate.Limiter)
-		return true
+	cutoff := time.Now().Add(-limiterCacheTTL)
+	for key, entry := range lc.entries {
+		if entry.lastUsed.Before(cutoff) {
+			delete(lc.entries, key)
+		}
 	}
-	return false
 }
 
 // APIRateLimit creates middleware that rate limits requests per API key.

@@ -80,7 +80,7 @@ func TestRenderBarDisabled(t *testing.T) {
 		},
 	}
 
-	output := m.renderBar()
+	output := m.renderBar("")
 	if output != "" {
 		t.Error("expected empty output when module is disabled")
 	}
@@ -94,7 +94,7 @@ func TestRenderBarEmptyText(t *testing.T) {
 		},
 	}
 
-	output := m.renderBar()
+	output := m.renderBar("")
 	if output != "" {
 		t.Error("expected empty output when text is empty")
 	}
@@ -105,7 +105,7 @@ func TestRenderBarNilSettings(t *testing.T) {
 		settings: nil,
 	}
 
-	output := m.renderBar()
+	output := m.renderBar("")
 	if output != "" {
 		t.Error("expected empty output when settings is nil")
 	}
@@ -121,7 +121,7 @@ func TestRenderBarEnabled(t *testing.T) {
 		},
 	}
 
-	output := string(m.renderBar())
+	output := string(m.renderBar(""))
 
 	if !strings.Contains(output, "informer-bar") {
 		t.Error("output should contain informer-bar id")
@@ -156,20 +156,46 @@ func TestRenderBarEnabled(t *testing.T) {
 	}
 }
 
-func TestRenderBarAllowsHTML(t *testing.T) {
+func TestRenderBarRendersSanitizedHTML(t *testing.T) {
 	m := &Module{
 		settings: &Settings{
 			Enabled:   true,
-			Text:      `Check our <a href="/sale">sale page</a>!`,
+			Text:      `Check our <a href="/sale"><strong>sale page</strong></a>!`,
 			BgColor:   "#000000",
 			TextColor: "#ffffff",
 		},
 	}
 
-	output := string(m.renderBar())
+	output := string(m.renderBar(""))
 
-	if !strings.Contains(output, `<a href="/sale">sale page</a>`) {
-		t.Error("output should render HTML in text as-is (admin-only input)")
+	if strings.Contains(output, `&lt;a`) {
+		t.Error("output should render sanitized HTML, not escaped tags")
+	}
+	if !strings.Contains(output, `<a href="/sale"`) {
+		t.Error("output should keep safe link markup")
+	}
+	if !strings.Contains(output, `<strong>sale page</strong>`) {
+		t.Error("output should keep safe formatting tags")
+	}
+}
+
+func TestRenderBarSanitizesUnsafeHTML(t *testing.T) {
+	m := &Module{
+		settings: &Settings{
+			Enabled:   true,
+			Text:      `Hello<script>xss-marker()</script><a href="javascript:alert('xss')">bad</a>`,
+			BgColor:   "#000000",
+			TextColor: "#ffffff",
+		},
+	}
+
+	output := string(m.renderBar(""))
+
+	if strings.Contains(output, "xss-marker") {
+		t.Error("output should remove script content from notification text")
+	}
+	if strings.Contains(strings.ToLower(output), "javascript:alert") {
+		t.Error("output should remove javascript: URLs from notification text")
 	}
 }
 
@@ -184,7 +210,7 @@ func TestRenderBarCookieScript(t *testing.T) {
 		},
 	}
 
-	output := string(m.renderBar())
+	output := string(m.renderBar(""))
 
 	if !strings.Contains(output, "setCookie") {
 		t.Error("output should contain setCookie function")
@@ -217,7 +243,7 @@ func TestRenderBarCloseButton(t *testing.T) {
 		},
 	}
 
-	output := string(m.renderBar())
+	output := string(m.renderBar(""))
 
 	if !strings.Contains(output, `aria-label="Close"`) {
 		t.Error("close button should have aria-label for accessibility")

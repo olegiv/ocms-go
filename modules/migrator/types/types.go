@@ -59,15 +59,15 @@ type ImportOptions struct {
 
 // ImportResult contains the results of an import operation.
 type ImportResult struct {
-	TagsImported   int
-	MediaImported  int
-	PostsImported  int
-	UsersImported  int
-	TagsSkipped    int
-	MediaSkipped   int
-	PostsSkipped   int
-	UsersSkipped   int
-	Errors         []string
+	TagsImported  int
+	MediaImported int
+	PostsImported int
+	UsersImported int
+	TagsSkipped   int
+	MediaSkipped  int
+	PostsSkipped  int
+	UsersSkipped  int
+	Errors        []string
 }
 
 // TotalImported returns the total number of items imported.

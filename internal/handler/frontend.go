@@ -19,10 +19,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/seo"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
@@ -30,6 +32,9 @@ import (
 )
 
 // PageView represents a page with computed fields for template rendering.
+// SECURITY: Body is rendered as trusted HTML from admin-authored CMS content.
+// Deployments can enable OCMS_SANITIZE_PAGE_HTML to sanitize page HTML before
+// rendering for additional defense in depth.
 type PageView struct {
 	ID                   int64
 	Title                string
@@ -198,6 +203,7 @@ type BaseTemplateData struct {
 	LangDirection      string            // Current language direction (ltr/rtl)
 	LangPrefix         string            // URL prefix for current language (e.g., "/ru" or "" for default)
 	ShowLanguagePicker bool              // Whether to show language picker
+	CSPNonce           string            // CSP nonce for inline scripts
 }
 
 // FooterWidget represents a widget in the footer area.
@@ -365,6 +371,7 @@ type FrontendHandler struct {
 	cacheManager  *cache.Manager
 	eventService  *service.EventService
 	logger        *slog.Logger
+	sanitizePages bool
 }
 
 // NewFrontendHandler creates a new FrontendHandler.
@@ -389,6 +396,20 @@ func NewFrontendHandler(db *sql.DB, themeManager *theme.Manager, cacheManager *c
 		eventService:  eventService,
 		logger:        logger,
 	}
+}
+
+// SetSanitizePageHTML configures optional frontend sanitization of page HTML.
+func (h *FrontendHandler) SetSanitizePageHTML(enabled bool) {
+	h.sanitizePages = enabled
+}
+
+// trustedPageBody returns page HTML for rendering, optionally sanitizing to
+// strip scripts and dangerous attributes.
+func (h *FrontendHandler) trustedPageBody(raw string) template.HTML {
+	if !h.sanitizePages {
+		return template.HTML(raw)
+	}
+	return template.HTML(security.SanitizePageHTML(raw))
 }
 
 // Home handles the homepage.
@@ -554,7 +575,7 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 		ShowAllPostsLink: len(recentPageViews) > 6,
 	}
 
-	h.render(w, "home", data)
+	h.render(w, r, "home", data)
 }
 
 // Page handles single page display.
@@ -729,7 +750,7 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 		RecentPages:      sidebarRecent,
 	}
 
-	h.render(w, "page", data)
+	h.render(w, r, "page", data)
 }
 
 // PageByID handles /page/{id} - redirects to the canonical slug URL.
@@ -854,7 +875,7 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 		RecentPages:      sidebarRecent,
 	}
 
-	h.render(w, "category", data)
+	h.render(w, r, "category", data)
 }
 
 // Tag handles tag archive display.
@@ -928,7 +949,7 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 		RecentPages:      sidebarRecent,
 	}
 
-	h.render(w, "tag", data)
+	h.render(w, r, "tag", data)
 }
 
 // Blog handles the blog listing page displaying all published posts.
@@ -1010,7 +1031,7 @@ func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
 		RecentPages:      sidebarRecent,
 	}
 
-	h.render(w, "list", data)
+	h.render(w, r, "list", data)
 }
 
 // Search handles search results display using FTS5 full-text search.
@@ -1042,7 +1063,7 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 			Tags:             sidebarTags,
 			RecentPages:      sidebarRecent,
 		}
-		h.render(w, "search", data)
+		h.render(w, r, "search", data)
 		return
 	}
 
@@ -1073,7 +1094,7 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 			ID:        sr.ID,
 			Title:     sr.Title,
 			Slug:      sr.Slug,
-			Body:      template.HTML(sr.Body),
+			Body:      h.trustedPageBody(sr.Body),
 			Excerpt:   sr.Excerpt,
 			Highlight: cleanHighlight,
 			URL:       "/" + sr.Slug,
@@ -1122,7 +1143,7 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 		RecentPages:      sidebarRecent,
 	}
 
-	h.render(w, "search", data)
+	h.render(w, r, "search", data)
 }
 
 // NotFound renders the 404 page.
@@ -1293,7 +1314,7 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 		ID:         p.ID,
 		Title:      p.Title,
 		Slug:       p.Slug,
-		Body:       template.HTML(p.Body),
+		Body:       h.trustedPageBody(p.Body),
 		URL:        "/" + p.Slug,
 		Status:     p.Status,
 		Type:       p.PageType,
@@ -1697,6 +1718,7 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		ThemeSettings:   site.Settings,
 		ShowSearch:      true,
 		SearchQuery:     r.URL.Query().Get("q"),
+		CSPNonce:        middleware.GetCSPNonce(r),
 	}
 
 	// Get site logo and custom CSS from cache
@@ -1772,8 +1794,8 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 	}
 
 	// Load menus by slug and language
-	data.MainMenu = h.loadMenu("main", r.URL.Path, langCode)
-	data.FooterMenu = h.loadMenu("footer", r.URL.Path, langCode)
+	data.MainMenu = loadMenu(h.menuService, "main", r.URL.Path, langCode)
+	data.FooterMenu = loadMenu(h.menuService, "footer", r.URL.Path, langCode)
 	// Navigation/FooterNav are aliases for MainMenu/FooterMenu (for template compatibility)
 	data.Navigation = data.MainMenu
 	data.FooterNav = data.FooterMenu
@@ -1814,22 +1836,22 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 }
 
 // loadMenu loads a menu by slug and language, and marks active items.
-func (h *FrontendHandler) loadMenu(slug, currentPath, langCode string) []MenuItem {
+func loadMenu(ms *service.MenuService, slug, currentPath, langCode string) []MenuItem {
 	var items []service.MenuItem
 	if langCode != "" {
-		items = h.menuService.GetMenuForLanguage(slug, langCode)
+		items = ms.GetMenuForLanguage(slug, langCode)
 	} else {
-		items = h.menuService.GetMenu(slug)
+		items = ms.GetMenu(slug)
 	}
 	if items == nil {
 		return nil
 	}
 
-	return h.menuItemsToView(items, currentPath)
+	return menuItemsToView(items, currentPath)
 }
 
 // menuItemsToView converts service menu items to view items with active state.
-func (h *FrontendHandler) menuItemsToView(items []service.MenuItem, currentPath string) []MenuItem {
+func menuItemsToView(items []service.MenuItem, currentPath string) []MenuItem {
 	result := make([]MenuItem, 0, len(items))
 	for _, item := range items {
 		mi := MenuItem{
@@ -1837,7 +1859,7 @@ func (h *FrontendHandler) menuItemsToView(items []service.MenuItem, currentPath 
 			URL:      item.URL,
 			Target:   item.Target,
 			IsActive: item.URL == currentPath,
-			Children: h.menuItemsToView(item.Children, currentPath),
+			Children: menuItemsToView(item.Children, currentPath),
 		}
 		result = append(result, mi)
 	}
@@ -2155,23 +2177,96 @@ func (h *FrontendHandler) buildPagination(currentPage, totalItems int, baseURL s
 	return pagination
 }
 
-// render renders a template using the active theme.
-func (h *FrontendHandler) render(w http.ResponseWriter, templateName string, data any) {
+// templComponent maps a template name and data to a templ.Component.
+// Returns nil if no templ component is available for the given template/data pair.
+func templComponent(templateName string, data any) templ.Component {
+	switch templateName {
+	case "home":
+		if d, ok := data.(HomeData); ok {
+			return FrontendHomePage(d)
+		}
+	case "page":
+		if d, ok := data.(PageData); ok {
+			return FrontendPageDetail(d)
+		}
+	case "list":
+		if d, ok := data.(ListData); ok {
+			return FrontendListPage(d)
+		}
+	case "category":
+		if d, ok := data.(CategoryPageData); ok {
+			return FrontendCategoryPage(d)
+		}
+	case "tag":
+		if d, ok := data.(TagPageData); ok {
+			return FrontendTagPage(d)
+		}
+	case "search":
+		if d, ok := data.(SearchData); ok {
+			return FrontendSearchPage(d)
+		}
+	case "404":
+		if d, ok := data.(NotFoundData); ok {
+			return FrontendNotFoundPage(d)
+		}
+	}
+	return nil
+}
+
+// render renders a page using the active theme's render engine.
+// For templ engine (embedded/core themes): renders via templ components.
+// For html engine (custom/ThemeForest themes): renders via html/template.
+func (h *FrontendHandler) render(w http.ResponseWriter, r *http.Request, templateName string, data any) {
 	activeTheme := h.themeManager.GetActiveTheme()
-	if activeTheme == nil {
-		logAndHTTPError(w, "No active theme", http.StatusInternalServerError, "no active theme")
-		return
+
+	// Determine engine: if no active theme, default to templ.
+	engine := theme.EngineTempl
+	if activeTheme != nil {
+		engine = activeTheme.RenderEngine()
 	}
 
-	// Render to buffer first to catch errors
-	buf := new(bytes.Buffer)
-	if err := activeTheme.RenderPage(buf, templateName, data); err != nil {
-		logAndHTTPError(w, "Template rendering error", http.StatusInternalServerError, "failed to render template", "template", templateName, "error", err)
+	if engine == theme.EngineHTML {
+		h.renderHTML(w, activeTheme, templateName, data)
+	} else {
+		h.renderTempl(w, r, templateName, data)
+	}
+}
+
+// renderTempl renders a page using templ components.
+func (h *FrontendHandler) renderTempl(w http.ResponseWriter, r *http.Request, templateName string, data any) {
+	comp := templComponent(templateName, data)
+	if comp == nil {
+		slog.Error("no templ component for template", "template", templateName)
+		h.renderInternalError(w)
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = buf.WriteTo(w)
+	ctx := templ.WithNonce(r.Context(), middleware.GetCSPNonce(r))
+	if err := comp.Render(ctx, w); err != nil {
+		slog.Error("templ render failed", "template", templateName, "error", err)
+		h.renderInternalError(w)
+		return
+	}
+}
+
+// renderHTML renders a page using the html/template engine of the active theme.
+func (h *FrontendHandler) renderHTML(w http.ResponseWriter, activeTheme *theme.Theme, templateName string, data any) {
+	if activeTheme == nil {
+		slog.Error("html engine selected but no active theme")
+		h.renderInternalError(w)
+		return
+	}
+
+	var buf bytes.Buffer
+	if err := activeTheme.RenderPage(&buf, templateName, data); err != nil {
+		slog.Error("html theme render failed", "template", templateName, "theme", activeTheme.Name, "error", err)
+		h.renderInternalError(w)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(buf.Bytes())
 }
 
 // renderNotFound renders the 404 page.
@@ -2190,11 +2285,12 @@ func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Log 404 for monitoring and debugging
+	clientIP := middleware.GetClientIP(r)
 	h.logger.Info("page not found",
 		"status", http.StatusNotFound,
 		"method", r.Method,
 		"path", r.URL.Path,
-		"remote_addr", r.RemoteAddr,
+		"ip", clientIP,
 	)
 
 	// Log 404 to event log (visible in admin panel)
@@ -2204,7 +2300,7 @@ func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request)
 			"method": r.Method,
 			"status": http.StatusNotFound,
 		}
-		_ = h.eventService.LogSystemEvent(r.Context(), "info", "Page not found", userID, r.RemoteAddr, r.URL.Path, metadata)
+		_ = h.eventService.LogSystemEvent(r.Context(), "info", "Page not found", userID, clientIP, r.URL.Path, metadata)
 	}
 
 	base := h.getBaseTemplateData(r, "Page Not Found", "")
@@ -2227,27 +2323,17 @@ func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request)
 		SuggestedPages:   suggestedPages,
 	}
 	w.WriteHeader(http.StatusNotFound)
-	h.render(w, "404", data)
+	h.render(w, r, "404", data)
 }
 
 // renderInternalError renders a 500 Internal Server Error page.
 func (h *FrontendHandler) renderInternalError(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusInternalServerError)
-	_, _ = fmt.Fprint(w, `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Error 500</title>
-<style>body{font-family:system-ui,sans-serif;max-width:600px;margin:100px auto;padding:20px;text-align:center}h1{color:#dc3545}</style>
-</head>
-<body>
-<h1>500 - Internal Server Error</h1>
-<p>An error occurred while processing your request.</p>
-<p><a href="/">Return to homepage</a></p>
-</body>
-</html>`)
+	if err := FrontendInternalErrorPage().Render(context.Background(), w); err != nil {
+		slog.Error("failed to render 500 page", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
 }
 
 // Favicon serves the favicon from theme settings or falls back to the default.

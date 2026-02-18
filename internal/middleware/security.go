@@ -5,9 +5,14 @@
 package middleware
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"net/http"
 	"strings"
 )
+
+const cspNoncePlaceholder = "{{nonce}}"
 
 // SecurityHeadersConfig holds configuration for security headers.
 type SecurityHeadersConfig struct {
@@ -60,7 +65,7 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 		// More permissive in development for easier debugging
 		cfg.ContentSecurityPolicy = buildCSP(map[string]string{
 			"default-src": "'self'",
-			"script-src":  "'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://esm.sh https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
+			"script-src":  "'self' 'nonce-{{nonce}}' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://esm.sh https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
 			"style-src":   "'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com https://fonts.googleapis.com https://www.googletagmanager.com",
 			"img-src":     "'self' data: blob: https:",
 			"font-src":    "'self' data: https://fonts.gstatic.com",
@@ -74,7 +79,7 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 		// Strict CSP for production
 		cfg.ContentSecurityPolicy = buildCSP(map[string]string{
 			"default-src": "'self'",
-			"script-src":  "'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://esm.sh https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
+			"script-src":  "'self' 'nonce-{{nonce}}' 'unsafe-eval' https://unpkg.com https://esm.sh https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://hcaptcha.com https://*.hcaptcha.com https://*.dify.ai https://udify.app",
 			"style-src":   "'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com https://fonts.googleapis.com https://www.googletagmanager.com",
 			"img-src":     "'self' data: blob: https:",
 			"font-src":    "'self' data: https://fonts.gstatic.com",
@@ -156,6 +161,9 @@ func SecurityHeaders(cfg SecurityHeadersConfig) func(http.Handler) http.Handler 
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			nonce := generateCSPNonce()
+			r = r.WithContext(context.WithValue(r.Context(), ContextKeyCSPNonce, nonce))
+
 			// Check if path should be excluded
 			if len(excludeMap) > 0 {
 				for path := range excludeMap {
@@ -168,7 +176,7 @@ func SecurityHeaders(cfg SecurityHeadersConfig) func(http.Handler) http.Handler 
 
 			// Content-Security-Policy
 			if cfg.ContentSecurityPolicy != "" {
-				w.Header().Set("Content-Security-Policy", cfg.ContentSecurityPolicy)
+				w.Header().Set("Content-Security-Policy", applyCSPNonce(cfg.ContentSecurityPolicy, nonce))
 			}
 
 			// Strict-Transport-Security (only in production over HTTPS)
@@ -208,6 +216,31 @@ func SecurityHeaders(cfg SecurityHeadersConfig) func(http.Handler) http.Handler 
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// GetCSPNonce retrieves the request CSP nonce from context.
+// Returns empty string if not present.
+func GetCSPNonce(r *http.Request) string {
+	nonce, ok := r.Context().Value(ContextKeyCSPNonce).(string)
+	if !ok {
+		return ""
+	}
+	return nonce
+}
+
+func applyCSPNonce(policy, nonce string) string {
+	if policy == "" || nonce == "" || !strings.Contains(policy, cspNoncePlaceholder) {
+		return policy
+	}
+	return strings.ReplaceAll(policy, cspNoncePlaceholder, nonce)
+}
+
+func generateCSPNonce() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "ocmsnoncefallback"
+	}
+	return base64.RawStdEncoding.EncodeToString(b[:])
 }
 
 // intToStr is a simple integer to string conversion without importing strconv.

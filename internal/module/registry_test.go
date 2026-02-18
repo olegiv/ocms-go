@@ -393,14 +393,14 @@ func TestMigrationNotRerun(t *testing.T) {
 	logger := testutil.TestLoggerSilent()
 	r := NewRegistry(logger)
 
-	runCount := new(int)
+	var runCount int
 	m := newMockModule("rerun", "1.0.0")
 	m.migrations = []Migration{
 		{
 			Version:     1,
 			Description: "Test migration",
 			Up: func(db *sql.DB) error {
-				*runCount++
+				runCount++
 				return nil
 			},
 		},
@@ -415,8 +415,8 @@ func TestMigrationNotRerun(t *testing.T) {
 
 	// First init - should run migration
 	_ = r.InitAll(ctx)
-	if *runCount != 1 {
-		t.Errorf("expected migration to run once, ran %d times", *runCount)
+	if want := 1; runCount != want {
+		t.Errorf("expected migration to run once, ran %d times", runCount)
 	}
 
 	// Create new registry and init again - should not rerun
@@ -427,7 +427,7 @@ func TestMigrationNotRerun(t *testing.T) {
 			Version:     1,
 			Description: "Test migration",
 			Up: func(db *sql.DB) error {
-				*runCount++
+				runCount++
 				return nil
 			},
 		},
@@ -435,8 +435,8 @@ func TestMigrationNotRerun(t *testing.T) {
 	_ = r2.Register(m2)
 	_ = r2.InitAll(ctx)
 
-	if *runCount != 1 {
-		t.Errorf("expected migration not to rerun, ran %d times", *runCount)
+	if want := 1; runCount != want {
+		t.Errorf("expected migration not to rerun, ran %d times", runCount)
 	}
 }
 

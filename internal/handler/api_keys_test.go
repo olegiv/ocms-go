@@ -24,6 +24,224 @@ func TestNewAPIKeysHandler(t *testing.T) {
 	}
 }
 
+func TestApplyDefaultAPIKeyExpiry(t *testing.T) {
+	now := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
+
+	t.Run("preserve explicit expiry", func(t *testing.T) {
+		explicit := sql.NullTime{
+			Time:  now.Add(24 * time.Hour),
+			Valid: true,
+		}
+		got := applyDefaultAPIKeyExpiry(explicit, now, 0)
+		if !got.Valid {
+			t.Fatal("expiry should be valid")
+		}
+		if !got.Time.Equal(explicit.Time) {
+			t.Errorf("expiry = %s, want %s", got.Time, explicit.Time)
+		}
+	})
+
+	t.Run("assign default expiry when missing", func(t *testing.T) {
+		got := applyDefaultAPIKeyExpiry(sql.NullTime{}, now, 0)
+		if !got.Valid {
+			t.Fatal("default expiry should be valid")
+		}
+		want := now.Add(defaultAPIKeyLifetime)
+		if !got.Time.Equal(want) {
+			t.Errorf("expiry = %s, want %s", got.Time, want)
+		}
+	})
+
+	t.Run("shorten default expiry to max ttl policy", func(t *testing.T) {
+		got := applyDefaultAPIKeyExpiry(sql.NullTime{}, now, 30)
+		if !got.Valid {
+			t.Fatal("default expiry should be valid")
+		}
+		want := now.Add(30 * 24 * time.Hour)
+		if !got.Time.Equal(want) {
+			t.Errorf("expiry = %s, want %s", got.Time, want)
+		}
+	})
+}
+
+func TestValidateAPIKeyLifetimePolicy(t *testing.T) {
+	createdAt := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
+
+	t.Run("disabled policy allows empty expiry", func(t *testing.T) {
+		errMsg := validateAPIKeyLifetimePolicy(sql.NullTime{}, createdAt, 0)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+	})
+
+	t.Run("require expiry when policy enabled", func(t *testing.T) {
+		errMsg := validateAPIKeyLifetimePolicy(sql.NullTime{}, createdAt, 30)
+		if errMsg == "" {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("reject expiry beyond policy window", func(t *testing.T) {
+		errMsg := validateAPIKeyLifetimePolicy(sql.NullTime{
+			Time:  createdAt.Add(90 * 24 * time.Hour),
+			Valid: true,
+		}, createdAt, 30)
+		if errMsg == "" {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("allow expiry within policy window", func(t *testing.T) {
+		errMsg := validateAPIKeyLifetimePolicy(sql.NullTime{
+			Time:  createdAt.Add(7 * 24 * time.Hour),
+			Valid: true,
+		}, createdAt, 30)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+	})
+}
+
+func TestValidateAPIKeyExpiryPolicy(t *testing.T) {
+	t.Run("disabled policy allows empty expiry", func(t *testing.T) {
+		errMsg := validateAPIKeyExpiryPolicy(sql.NullTime{}, false)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+	})
+
+	t.Run("enabled policy rejects empty expiry", func(t *testing.T) {
+		errMsg := validateAPIKeyExpiryPolicy(sql.NullTime{}, true)
+		if errMsg == "" {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("enabled policy accepts explicit expiry", func(t *testing.T) {
+		errMsg := validateAPIKeyExpiryPolicy(sql.NullTime{
+			Time:  time.Now().Add(24 * time.Hour),
+			Valid: true,
+		}, true)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+	})
+}
+
+func TestParseAPIKeyExpiration(t *testing.T) {
+	now := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
+
+	t.Run("empty", func(t *testing.T) {
+		got, errMsg := parseAPIKeyExpirationAt("", true, now)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+		if got.Valid {
+			t.Fatal("expected empty expiration for empty input")
+		}
+	})
+
+	t.Run("invalid format", func(t *testing.T) {
+		_, errMsg := parseAPIKeyExpirationAt("15-02-2026", true, now)
+		if errMsg == "" {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("past date when future required", func(t *testing.T) {
+		_, errMsg := parseAPIKeyExpirationAt("2026-02-14", true, now)
+		if errMsg != "Expiration date must be in the future" {
+			t.Fatalf("error = %q, want %q", errMsg, "Expiration date must be in the future")
+		}
+	})
+
+	t.Run("too far in future", func(t *testing.T) {
+		_, errMsg := parseAPIKeyExpirationAt("2028-02-15", true, now)
+		if errMsg == "" {
+			t.Fatal("expected max-lifetime validation error")
+		}
+	})
+
+	t.Run("valid within max lifetime", func(t *testing.T) {
+		got, errMsg := parseAPIKeyExpirationAt("2027-02-14", true, now)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+		if !got.Valid {
+			t.Fatal("expected parsed expiration to be valid")
+		}
+		want := time.Date(2027, 2, 14, 23, 59, 59, 0, time.UTC)
+		if !got.Time.Equal(want) {
+			t.Fatalf("expiresAt = %s, want %s", got.Time, want)
+		}
+	})
+}
+
+func TestParseAPIKeySourceCIDRs(t *testing.T) {
+	t.Run("empty input", func(t *testing.T) {
+		got, errMsg := parseAPIKeySourceCIDRs("")
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+		if len(got) != 0 {
+			t.Fatalf("expected no entries, got %d", len(got))
+		}
+	})
+
+	t.Run("normalize and deduplicate", func(t *testing.T) {
+		got, errMsg := parseAPIKeySourceCIDRs("203.0.113.10,203.0.113.10/32\n2001:db8::1")
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+		if len(got) != 2 {
+			t.Fatalf("expected 2 entries, got %d", len(got))
+		}
+		if got[0] != "203.0.113.10/32" {
+			t.Errorf("first entry = %q, want %q", got[0], "203.0.113.10/32")
+		}
+		if got[1] != "2001:db8::1/128" {
+			t.Errorf("second entry = %q, want %q", got[1], "2001:db8::1/128")
+		}
+	})
+
+	t.Run("invalid entry", func(t *testing.T) {
+		_, errMsg := parseAPIKeySourceCIDRs("not-an-ip")
+		if errMsg == "" {
+			t.Fatal("expected validation error")
+		}
+	})
+}
+
+func TestValidateAPIKeyForm_RequireSourceCIDRs(t *testing.T) {
+	t.Run("reject when source CIDRs are required but missing", func(t *testing.T) {
+		_, errs := validateAPIKeyForm(
+			"Key With Policy",
+			[]string{"pages:read"},
+			"",
+			"",
+			true,
+			true,
+		)
+		if errs["source_cidrs"] == "" {
+			t.Fatal("expected source_cidrs validation error")
+		}
+	})
+
+	t.Run("allow when source CIDRs are present", func(t *testing.T) {
+		_, errs := validateAPIKeyForm(
+			"Key With CIDRs",
+			[]string{"pages:read"},
+			"",
+			"203.0.113.0/24",
+			true,
+			true,
+		)
+		if errs["source_cidrs"] != "" {
+			t.Fatalf("unexpected source_cidrs validation error: %s", errs["source_cidrs"])
+		}
+	})
+}
+
 func TestAPIKeyCreate(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 

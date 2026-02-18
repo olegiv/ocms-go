@@ -79,14 +79,22 @@ func (m *Module) RegisterAdminRoutes(r chi.Router) {
 func (m *Module) TemplateFuncs() template.FuncMap {
 	return template.FuncMap{
 		// analyticsExtHead returns tracking scripts for the <head> section
-		"analyticsExtHead": func() template.HTML {
-			return m.renderHeadScripts()
+		"analyticsExtHead": func(args ...any) template.HTML {
+			return m.renderHeadScripts(firstStringArg(args...))
 		},
 		// analyticsExtBody returns tracking scripts for the end of <body>
-		"analyticsExtBody": func() template.HTML {
-			return m.renderBodyScripts()
+		"analyticsExtBody": func(args ...any) template.HTML {
+			return m.renderBodyScripts(firstStringArg(args...))
 		},
 	}
+}
+
+func firstStringArg(args ...any) string {
+	if len(args) == 0 {
+		return ""
+	}
+	s, _ := args[0].(string)
+	return s
 }
 
 // AdminURL returns the admin dashboard URL for the module.

@@ -5,6 +5,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -328,4 +329,94 @@ func TestWebhookToggleActive(t *testing.T) {
 	if updated.IsActive {
 		t.Error("IsActive should be false after toggle")
 	}
+}
+
+func TestWebhookDestinationMetadata(t *testing.T) {
+	tests := []struct {
+		name       string
+		rawURL     string
+		wantScheme string
+		wantHost   string
+	}{
+		{
+			name:       "normalizes scheme and host",
+			rawURL:     " HTTPS://Example.COM:8443/path?token=secret ",
+			wantScheme: "https",
+			wantHost:   "example.com:8443",
+		},
+		{
+			name:       "invalid URL returns empty",
+			rawURL:     "://bad",
+			wantScheme: "",
+			wantHost:   "",
+		},
+		{
+			name:       "missing scheme returns empty",
+			rawURL:     "example.com/webhook",
+			wantScheme: "",
+			wantHost:   "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotScheme, gotHost := webhookDestinationMetadata(tt.rawURL)
+			if gotScheme != tt.wantScheme {
+				t.Errorf("webhookDestinationMetadata(%q) scheme = %q, want %q", tt.rawURL, gotScheme, tt.wantScheme)
+			}
+			if gotHost != tt.wantHost {
+				t.Errorf("webhookDestinationMetadata(%q) host = %q, want %q", tt.rawURL, gotHost, tt.wantHost)
+			}
+		})
+	}
+}
+
+func TestValidateWebhookHeaders(t *testing.T) {
+	t.Run("accepts safe headers", func(t *testing.T) {
+		err := validateWebhookHeaders(map[string]string{
+			"Authorization": "Bearer token",
+			"X-Custom-ID":   "abc123",
+		})
+		if err != nil {
+			t.Fatalf("validateWebhookHeaders() error = %v, want nil", err)
+		}
+	})
+
+	t.Run("rejects blocked protocol header", func(t *testing.T) {
+		err := validateWebhookHeaders(map[string]string{
+			"Host": "evil.example",
+		})
+		if err == nil {
+			t.Fatal("validateWebhookHeaders() expected error for blocked header")
+		}
+	})
+
+	t.Run("rejects invalid header name", func(t *testing.T) {
+		err := validateWebhookHeaders(map[string]string{
+			"Bad Header": "value",
+		})
+		if err == nil {
+			t.Fatal("validateWebhookHeaders() expected error for invalid name")
+		}
+	})
+
+	t.Run("rejects header value with CRLF", func(t *testing.T) {
+		err := validateWebhookHeaders(map[string]string{
+			"X-Test": "ok\r\nInjected: yes",
+		})
+		if err == nil {
+			t.Fatal("validateWebhookHeaders() expected error for invalid value")
+		}
+	})
+
+	t.Run("rejects too many headers", func(t *testing.T) {
+		headers := make(map[string]string, maxWebhookHeadersCount+1)
+		for i := 0; i <= maxWebhookHeadersCount; i++ {
+			headers[fmt.Sprintf("X-Test-%d", i)] = "v"
+		}
+		err := validateWebhookHeaders(headers)
+		if err == nil {
+			t.Fatal("validateWebhookHeaders() expected error for header count")
+		}
+	})
 }

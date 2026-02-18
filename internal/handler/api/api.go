@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -21,10 +22,14 @@ import (
 
 // Handler holds shared dependencies for all API handlers.
 type Handler struct {
-	db           *sql.DB
-	queries      *store.Queries
-	cacheManager *cache.Manager
+	db                        *sql.DB
+	queries                   *store.Queries
+	cacheManager              *cache.Manager
+	blockSuspiciousPageMarkup bool
+	sanitizePageHTML          bool
 }
+
+const maxAPIJSONBodyBytes int64 = 1 << 20 // 1 MiB
 
 // NewHandler creates a new API handler.
 func NewHandler(db *sql.DB) *Handler {
@@ -37,6 +42,18 @@ func NewHandler(db *sql.DB) *Handler {
 // SetCacheManager sets the cache manager for cache invalidation.
 func (h *Handler) SetCacheManager(cm *cache.Manager) {
 	h.cacheManager = cm
+}
+
+// SetBlockSuspiciousPageMarkup configures whether API page write operations
+// reject suspicious HTML body content.
+func (h *Handler) SetBlockSuspiciousPageMarkup(block bool) {
+	h.blockSuspiciousPageMarkup = block
+}
+
+// SetSanitizePageHTML configures whether API page write operations sanitize
+// HTML body content before persistence.
+func (h *Handler) SetSanitizePageHTML(enabled bool) {
+	h.sanitizePageHTML = enabled
 }
 
 // invalidatePageCache invalidates the page cache after a page is modified.
@@ -131,6 +148,27 @@ func WriteForbidden(w http.ResponseWriter, message string) {
 // WriteInternalError writes a 500 Internal Server Error response.
 func WriteInternalError(w http.ResponseWriter, message string) {
 	WriteError(w, http.StatusInternalServerError, "internal_error", message, nil)
+}
+
+// decodeJSON decodes a JSON body with strict validation.
+func decodeJSON(w http.ResponseWriter, r *http.Request, v any, maxBytes int64) error {
+	if maxBytes <= 0 {
+		maxBytes = maxAPIJSONBodyBytes
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		return err
+	}
+
+	// Require exactly one JSON object.
+	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return fmt.Errorf("request body must contain only one JSON object")
+	}
+
+	return nil
 }
 
 // WriteValidationError writes a 422 Unprocessable Entity response with field errors.

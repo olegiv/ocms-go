@@ -8,26 +8,48 @@ package embed
 import (
 	"database/sql"
 	"embed"
+	"fmt"
 	"html/template"
+	"os"
 	"strings"
 	"sync"
 
 	"github.com/go-chi/chi/v5"
+	"golang.org/x/time/rate"
 
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/util"
 	"github.com/olegiv/ocms-go/modules/embed/providers"
 )
 
 //go:embed locales
 var localesFS embed.FS
 
+const (
+	embedProxyRateLimitRPS         = 2.0
+	embedProxyRateLimitBurst       = 10
+	embedProxyGlobalRateLimitRPS   = 20.0
+	embedProxyGlobalRateLimitBurst = 40
+	embedProxyMaxConcurrent        = 32
+)
+
 // Module implements the module.Module interface for the embed module.
 type Module struct {
 	module.BaseModule
-	ctx       *module.Context
-	providers []providers.Provider
-	settings  []*ProviderSettings
-	mu        sync.RWMutex
+	ctx                       *module.Context
+	providers                 []providers.Provider
+	settings                  []*ProviderSettings
+	publicRateLimiter         *middleware.GlobalRateLimiter
+	globalRateLimiter         *rate.Limiter
+	proxySemaphore            chan struct{}
+	allowedOrigins            map[string]struct{}
+	allowedUpstreamHosts      map[string]struct{}
+	requireOriginPolicy       bool
+	requireUpstreamHostPolicy bool
+	proxyToken                string
+	requireProxyToken         bool
+	mu                        sync.RWMutex
 }
 
 // New creates a new instance of the embed module.
@@ -47,6 +69,28 @@ func New() *Module {
 // Init initializes the module with the given context.
 func (m *Module) Init(ctx *module.Context) error {
 	m.ctx = ctx
+	m.publicRateLimiter = middleware.NewGlobalRateLimiter(embedProxyRateLimitRPS, embedProxyRateLimitBurst)
+	m.globalRateLimiter = rate.NewLimiter(rate.Limit(embedProxyGlobalRateLimitRPS), embedProxyGlobalRateLimitBurst)
+	m.proxySemaphore = make(chan struct{}, embedProxyMaxConcurrent)
+	if ctx.Config != nil {
+		m.requireOriginPolicy = ctx.Config.Env == "production"
+		origins, err := parseAllowedOrigins(ctx.Config.EmbedAllowedOrigins)
+		if err != nil {
+			return fmt.Errorf("parsing embed allowed origins: %w", err)
+		}
+		m.allowedOrigins = origins
+		upstreamHosts, err := parseAllowedHosts(ctx.Config.EmbedAllowedUpstreamHosts)
+		if err != nil {
+			return fmt.Errorf("parsing embed allowed upstream hosts: %w", err)
+		}
+		m.allowedUpstreamHosts = upstreamHosts
+		m.requireUpstreamHostPolicy = ctx.Config.RequireEmbedAllowedUpstreamHosts
+		m.proxyToken = strings.TrimSpace(ctx.Config.EmbedProxyToken)
+		m.requireProxyToken = (ctx.Config.Env == "production" && os.Getenv("OCMS_DEMO_MODE") != "true") || ctx.Config.RequireEmbedProxyToken
+		if m.requireProxyToken && m.proxyToken == "" {
+			return fmt.Errorf("embed proxy token is required but OCMS_EMBED_PROXY_TOKEN is empty")
+		}
+	}
 
 	// Load enabled provider settings
 	if err := m.reloadSettings(); err != nil {
@@ -56,6 +100,18 @@ func (m *Module) Init(ctx *module.Context) error {
 	m.ctx.Logger.Info("Embed module initialized",
 		"providers", len(m.providers),
 		"enabled", m.countEnabled(),
+		"proxy_rate_limit_rps", embedProxyRateLimitRPS,
+		"proxy_rate_limit_burst", embedProxyRateLimitBurst,
+		"proxy_global_rate_limit_rps", embedProxyGlobalRateLimitRPS,
+		"proxy_global_rate_limit_burst", embedProxyGlobalRateLimitBurst,
+		"proxy_max_concurrent", embedProxyMaxConcurrent,
+		"allowed_origins", len(m.allowedOrigins),
+		"allowed_upstream_hosts", len(m.allowedUpstreamHosts),
+		"require_origin_policy", m.requireOriginPolicy,
+		"require_upstream_host_policy", m.requireUpstreamHostPolicy,
+		"require_proxy_token", m.requireProxyToken,
+		"proxy_token_configured", m.proxyToken != "",
+		"proxy_token_enforced", m.requireProxyToken || m.proxyToken != "",
 	)
 	return nil
 }
@@ -90,34 +146,56 @@ func (m *Module) Shutdown() error {
 }
 
 // RegisterRoutes registers public routes for the module.
-func (m *Module) RegisterRoutes(_ chi.Router) {
-	// No public routes for embed module
+func (m *Module) RegisterRoutes(r chi.Router) {
+	// Public proxy routes used by frontend widgets.
+	// Apply dedicated rate limiting to reduce upstream abuse.
+	r.Group(func(r chi.Router) {
+		if m.publicRateLimiter != nil {
+			r.Use(m.publicRateLimiter.HTMLMiddleware())
+		}
+		r.Get("/embed/dify/token", m.handleDifyProxyToken)
+		r.Post("/embed/dify/chat-messages", m.handleDifyChatMessagesProxy)
+		r.Get("/embed/dify/messages/{messageID}/suggested", m.handleDifySuggestedProxy)
+	})
 }
 
 // RegisterAdminRoutes registers admin routes for the module.
 func (m *Module) RegisterAdminRoutes(r chi.Router) {
-	r.Get("/embed", m.handleList)
-	r.Get("/embed/{provider}", m.handleProviderSettings)
-	r.Post("/embed/{provider}", m.handleSaveProviderSettings)
-	r.Post("/embed/{provider}/toggle", m.handleToggleProvider)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.RequireAdmin())
+		r.Get("/embed", m.handleList)
+		r.Get("/embed/{provider}", m.handleProviderSettings)
+		r.Post("/embed/{provider}", m.handleSaveProviderSettings)
+		r.Post("/embed/{provider}/toggle", m.handleToggleProvider)
+	})
 }
 
 // TemplateFuncs returns template functions provided by the module.
 func (m *Module) TemplateFuncs() template.FuncMap {
 	return template.FuncMap{
 		// embedHead returns scripts for the <head> section
-		"embedHead": func() template.HTML {
-			return m.renderHead()
+		"embedHead": func(args ...any) template.HTML {
+			return m.renderHead(firstStringArg(args...))
 		},
 		// embedBody returns scripts for before </body>
-		"embedBody": func() template.HTML {
-			return m.renderBody()
+		"embedBody": func(args ...any) template.HTML {
+			return m.renderBody(firstStringArg(args...))
 		},
 	}
 }
 
+func firstStringArg(args ...any) string {
+	if len(args) == 0 {
+		return ""
+	}
+	s, _ := args[0].(string)
+	return s
+}
+
 // renderScripts generates all enabled provider scripts using the provided render function.
-func (m *Module) renderScripts(renderFn func(providers.Provider, map[string]string) template.HTML) template.HTML {
+// SECURITY: Output is cast to template.HTML. Provider settings are admin-controlled
+// and individual values are escaped with template.HTMLEscapeString before embedding.
+func (m *Module) renderScripts(renderFn func(providers.Provider, map[string]string) template.HTML, nonce string) template.HTML {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -127,23 +205,24 @@ func (m *Module) renderScripts(renderFn func(providers.Provider, map[string]stri
 		if provider == nil {
 			continue
 		}
-		scripts.WriteString(string(renderFn(provider, ps.Settings)))
+		rendered := string(renderFn(provider, ps.Settings))
+		scripts.WriteString(util.AddNonceToScriptTags(rendered, nonce))
 	}
 	return template.HTML(scripts.String())
 }
 
 // renderHead generates all enabled provider head scripts.
-func (m *Module) renderHead() template.HTML {
+func (m *Module) renderHead(nonce string) template.HTML {
 	return m.renderScripts(func(p providers.Provider, s map[string]string) template.HTML {
 		return p.RenderHead(s)
-	})
+	}, nonce)
 }
 
 // renderBody generates all enabled provider body scripts.
-func (m *Module) renderBody() template.HTML {
+func (m *Module) renderBody(nonce string) template.HTML {
 	return m.renderScripts(func(p providers.Provider, s map[string]string) template.HTML {
 		return p.RenderBody(s)
-	})
+	}, nonce)
 }
 
 // AdminURL returns the admin dashboard URL for the module.
@@ -193,4 +272,18 @@ func (m *Module) Migrations() []module.Migration {
 // ReloadSettings reloads settings from the database.
 func (m *Module) ReloadSettings() error {
 	return m.reloadSettings()
+}
+
+// getEnabledProviderSettings returns settings for an enabled provider.
+func (m *Module) getEnabledProviderSettings(providerID string) (map[string]string, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, ps := range m.settings {
+		if ps.ProviderID == providerID && ps.IsEnabled {
+			return ps.Settings, true
+		}
+	}
+
+	return nil, false
 }

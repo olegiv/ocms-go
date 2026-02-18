@@ -122,7 +122,7 @@ func generateSlugFromTitle(title string) string {
 	for _, r := range title {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
 			result += string(r)
-		} else if (r >= 'A' && r <= 'Z') {
+		} else if r >= 'A' && r <= 'Z' {
 			result += string(r + 32) // lowercase
 		} else if r == ' ' || r == '-' || r == '_' {
 			if len(result) > 0 && result[len(result)-1] != '-' {

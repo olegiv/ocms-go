@@ -4,7 +4,12 @@
 package sentinel
 
 import (
+	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/olegiv/ocms-go/internal/middleware"
 )
 
 func TestMatchIPPattern(t *testing.T) {
@@ -49,6 +54,64 @@ func TestMatchIPPattern(t *testing.T) {
 			got := matchIPPattern(tt.pattern, tt.ip)
 			if got != tt.want {
 				t.Errorf("matchIPPattern(%q, %q) = %v, want %v", tt.pattern, tt.ip, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetClientIP(t *testing.T) {
+	tests := []struct {
+		name       string
+		remoteAddr string
+		headers    map[string]string
+		trusted    []string
+		want       string
+	}{
+		{
+			name:       "uses remote address when no trusted proxies configured",
+			remoteAddr: "192.168.1.10:12345",
+			headers:    map[string]string{"X-Forwarded-For": "198.51.100.9"},
+			want:       "192.168.1.10",
+		},
+		{
+			name:       "uses XFF with trusted peer",
+			remoteAddr: "127.0.0.1:12345",
+			headers:    map[string]string{"X-Forwarded-For": "198.51.100.9, 10.0.0.1"},
+			trusted:    []string{"127.0.0.1/32", "10.0.0.0/8"},
+			want:       "198.51.100.9",
+		},
+		{
+			name:       "invalid XFF fails closed to remote",
+			remoteAddr: "127.0.0.1:12345",
+			headers: map[string]string{
+				"X-Forwarded-For": "invalid",
+				"X-Real-IP":       "203.0.113.5",
+			},
+			trusted: []string{"127.0.0.1/32"},
+			want:    "127.0.0.1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := middleware.SetTrustedProxies(tt.trusted); err != nil {
+				t.Fatalf("SetTrustedProxies() error: %v", err)
+			}
+			t.Cleanup(func() {
+				if err := middleware.SetTrustedProxies(nil); err != nil {
+					t.Fatalf("reset SetTrustedProxies() error: %v", err)
+				}
+			})
+
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.RemoteAddr = tt.remoteAddr
+			for key, value := range tt.headers {
+				req.Header.Set(key, value)
+			}
+
+			got := getClientIP(req)
+			if got != tt.want {
+				t.Errorf("getClientIP() = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -246,4 +309,49 @@ func TestIsValidPathPattern(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDecodeJSONStrict(t *testing.T) {
+	type payload struct {
+		IP string `json:"ip"`
+	}
+
+	t.Run("accepts valid object", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/admin/sentinel/ban", bytes.NewBufferString(`{"ip":"1.2.3.4"}`))
+		w := httptest.NewRecorder()
+		var got payload
+		if err := decodeJSONStrict(w, req, &got, maxSentinelJSONBodyBytes); err != nil {
+			t.Fatalf("decodeJSONStrict() error = %v, want nil", err)
+		}
+		if got.IP != "1.2.3.4" {
+			t.Fatalf("decoded IP = %q, want %q", got.IP, "1.2.3.4")
+		}
+	})
+
+	t.Run("rejects unknown field", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/admin/sentinel/ban", bytes.NewBufferString(`{"ip":"1.2.3.4","extra":1}`))
+		w := httptest.NewRecorder()
+		var got payload
+		if err := decodeJSONStrict(w, req, &got, maxSentinelJSONBodyBytes); err == nil {
+			t.Fatal("decodeJSONStrict() expected unknown-field error")
+		}
+	})
+
+	t.Run("rejects multiple objects", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/admin/sentinel/ban", bytes.NewBufferString(`{"ip":"1.2.3.4"}{"ip":"5.6.7.8"}`))
+		w := httptest.NewRecorder()
+		var got payload
+		if err := decodeJSONStrict(w, req, &got, maxSentinelJSONBodyBytes); err == nil {
+			t.Fatal("decodeJSONStrict() expected multi-object error")
+		}
+	})
+
+	t.Run("enforces size limit", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/admin/sentinel/ban", bytes.NewBufferString(`{"ip":"0123456789"}`))
+		w := httptest.NewRecorder()
+		var got payload
+		if err := decodeJSONStrict(w, req, &got, 8); err == nil {
+			t.Fatal("decodeJSONStrict() expected size-limit error")
+		}
+	})
 }

@@ -10,9 +10,7 @@ import (
 
 func setEnv(t *testing.T, key, value string) {
 	t.Helper()
-	if err := os.Setenv(key, value); err != nil {
-		t.Fatalf("failed to set %s: %v", key, err)
-	}
+	t.Setenv(key, value)
 }
 
 func TestLoad_Defaults(t *testing.T) {
@@ -41,6 +39,69 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.LogLevel != "info" {
 		t.Errorf("LogLevel = %q, want %q", cfg.LogLevel, "info")
 	}
+	if cfg.RequireFormCaptcha {
+		t.Error("RequireFormCaptcha = true, want false")
+	}
+	if cfg.WebhookFormDataMode != "redacted" {
+		t.Errorf("WebhookFormDataMode = %q, want %q", cfg.WebhookFormDataMode, "redacted")
+	}
+	if cfg.RequireWebhookFormDataMinimization {
+		t.Error("RequireWebhookFormDataMinimization = true, want false")
+	}
+	if cfg.RequireTrustedProxies {
+		t.Error("RequireTrustedProxies = true, want false")
+	}
+	if cfg.APIAllowedCIDRs != "" {
+		t.Errorf("APIAllowedCIDRs = %q, want empty", cfg.APIAllowedCIDRs)
+	}
+	if cfg.RequireAPIAllowedCIDRs {
+		t.Error("RequireAPIAllowedCIDRs = true, want false")
+	}
+	if cfg.RequireAPIKeyExpiry {
+		t.Error("RequireAPIKeyExpiry = true, want false")
+	}
+	if cfg.RequireAPIKeySourceCIDRs {
+		t.Error("RequireAPIKeySourceCIDRs = true, want false")
+	}
+	if cfg.RevokeAPIKeyOnSourceIPChange {
+		t.Error("RevokeAPIKeyOnSourceIPChange = true, want false")
+	}
+	if cfg.APIKeyMaxTTLDays != 0 {
+		t.Errorf("APIKeyMaxTTLDays = %d, want 0", cfg.APIKeyMaxTTLDays)
+	}
+	if cfg.EmbedAllowedOrigins != "" {
+		t.Errorf("EmbedAllowedOrigins = %q, want empty", cfg.EmbedAllowedOrigins)
+	}
+	if cfg.EmbedAllowedUpstreamHosts != "" {
+		t.Errorf("EmbedAllowedUpstreamHosts = %q, want empty", cfg.EmbedAllowedUpstreamHosts)
+	}
+	if cfg.RequireEmbedAllowedOrigins {
+		t.Error("RequireEmbedAllowedOrigins = true, want false")
+	}
+	if cfg.RequireEmbedAllowedUpstreamHosts {
+		t.Error("RequireEmbedAllowedUpstreamHosts = true, want false")
+	}
+	if cfg.RequireEmbedProxyToken {
+		t.Error("RequireEmbedProxyToken = true, want false")
+	}
+	if cfg.EmbedProxyToken != "" {
+		t.Errorf("EmbedProxyToken = %q, want empty", cfg.EmbedProxyToken)
+	}
+	if cfg.RequireHTTPSOutbound {
+		t.Error("RequireHTTPSOutbound = true, want false")
+	}
+	if cfg.SanitizePageHTML {
+		t.Error("SanitizePageHTML = true, want false")
+	}
+	if cfg.RequireSanitizePageHTML {
+		t.Error("RequireSanitizePageHTML = true, want false")
+	}
+	if cfg.BlockSuspiciousPageHTML {
+		t.Error("BlockSuspiciousPageHTML = true, want false")
+	}
+	if cfg.RequireBlockSuspiciousPageHTML {
+		t.Error("RequireBlockSuspiciousPageHTML = true, want false")
+	}
 }
 
 func TestLoad_CustomValues(t *testing.T) {
@@ -52,6 +113,28 @@ func TestLoad_CustomValues(t *testing.T) {
 	setEnv(t, "OCMS_SERVER_PORT", "3000")
 	setEnv(t, "OCMS_ENV", "production")
 	setEnv(t, "OCMS_LOG_LEVEL", "debug")
+	setEnv(t, "OCMS_TRUSTED_PROXIES", "127.0.0.1/32,10.0.0.0/8")
+	setEnv(t, "OCMS_REQUIRE_TRUSTED_PROXIES", "true")
+	setEnv(t, "OCMS_REQUIRE_FORM_CAPTCHA", "true")
+	setEnv(t, "OCMS_WEBHOOK_FORM_DATA_MODE", "none")
+	setEnv(t, "OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION", "true")
+	setEnv(t, "OCMS_API_ALLOWED_CIDRS", "10.0.0.0/8,192.168.1.10")
+	setEnv(t, "OCMS_REQUIRE_API_ALLOWED_CIDRS", "true")
+	setEnv(t, "OCMS_REQUIRE_API_KEY_EXPIRY", "true")
+	setEnv(t, "OCMS_REQUIRE_API_KEY_SOURCE_CIDRS", "true")
+	setEnv(t, "OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE", "true")
+	setEnv(t, "OCMS_API_KEY_MAX_TTL_DAYS", "90")
+	setEnv(t, "OCMS_EMBED_ALLOWED_ORIGINS", "https://example.com,https://app.example.com")
+	setEnv(t, "OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS", "api.dify.ai,dify.internal.example")
+	setEnv(t, "OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS", "true")
+	setEnv(t, "OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS", "true")
+	setEnv(t, "OCMS_EMBED_PROXY_TOKEN", "embed-token-test")
+	setEnv(t, "OCMS_REQUIRE_EMBED_PROXY_TOKEN", "true")
+	setEnv(t, "OCMS_REQUIRE_HTTPS_OUTBOUND", "true")
+	setEnv(t, "OCMS_SANITIZE_PAGE_HTML", "true")
+	setEnv(t, "OCMS_REQUIRE_SANITIZE_PAGE_HTML", "true")
+	setEnv(t, "OCMS_BLOCK_SUSPICIOUS_PAGE_HTML", "true")
+	setEnv(t, "OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML", "true")
 
 	cfg, err := Load()
 	if err != nil {
@@ -75,6 +158,195 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 	if cfg.LogLevel != "debug" {
 		t.Errorf("LogLevel = %q, want %q", cfg.LogLevel, "debug")
+	}
+	if cfg.TrustedProxies != "127.0.0.1/32,10.0.0.0/8" {
+		t.Errorf("TrustedProxies = %q, want %q", cfg.TrustedProxies, "127.0.0.1/32,10.0.0.0/8")
+	}
+	if !cfg.RequireTrustedProxies {
+		t.Error("RequireTrustedProxies = false, want true")
+	}
+	if !cfg.RequireFormCaptcha {
+		t.Error("RequireFormCaptcha = false, want true")
+	}
+	if cfg.WebhookFormDataMode != "none" {
+		t.Errorf("WebhookFormDataMode = %q, want %q", cfg.WebhookFormDataMode, "none")
+	}
+	if !cfg.RequireWebhookFormDataMinimization {
+		t.Error("RequireWebhookFormDataMinimization = false, want true")
+	}
+	if cfg.APIAllowedCIDRs != "10.0.0.0/8,192.168.1.10" {
+		t.Errorf("APIAllowedCIDRs = %q, want %q", cfg.APIAllowedCIDRs, "10.0.0.0/8,192.168.1.10")
+	}
+	if !cfg.RequireAPIAllowedCIDRs {
+		t.Error("RequireAPIAllowedCIDRs = false, want true")
+	}
+	if !cfg.RequireAPIKeyExpiry {
+		t.Error("RequireAPIKeyExpiry = false, want true")
+	}
+	if !cfg.RequireAPIKeySourceCIDRs {
+		t.Error("RequireAPIKeySourceCIDRs = false, want true")
+	}
+	if !cfg.RevokeAPIKeyOnSourceIPChange {
+		t.Error("RevokeAPIKeyOnSourceIPChange = false, want true")
+	}
+	if cfg.APIKeyMaxTTLDays != 90 {
+		t.Errorf("APIKeyMaxTTLDays = %d, want %d", cfg.APIKeyMaxTTLDays, 90)
+	}
+	if cfg.EmbedAllowedOrigins != "https://example.com,https://app.example.com" {
+		t.Errorf("EmbedAllowedOrigins = %q, want %q", cfg.EmbedAllowedOrigins, "https://example.com,https://app.example.com")
+	}
+	if cfg.EmbedAllowedUpstreamHosts != "api.dify.ai,dify.internal.example" {
+		t.Errorf("EmbedAllowedUpstreamHosts = %q, want %q", cfg.EmbedAllowedUpstreamHosts, "api.dify.ai,dify.internal.example")
+	}
+	if !cfg.RequireEmbedAllowedOrigins {
+		t.Error("RequireEmbedAllowedOrigins = false, want true")
+	}
+	if !cfg.RequireEmbedAllowedUpstreamHosts {
+		t.Error("RequireEmbedAllowedUpstreamHosts = false, want true")
+	}
+	if cfg.EmbedProxyToken != "embed-token-test" {
+		t.Errorf("EmbedProxyToken = %q, want %q", cfg.EmbedProxyToken, "embed-token-test")
+	}
+	if !cfg.RequireEmbedProxyToken {
+		t.Error("RequireEmbedProxyToken = false, want true")
+	}
+	if !cfg.RequireHTTPSOutbound {
+		t.Error("RequireHTTPSOutbound = false, want true")
+	}
+	if !cfg.SanitizePageHTML {
+		t.Error("SanitizePageHTML = false, want true")
+	}
+	if !cfg.RequireSanitizePageHTML {
+		t.Error("RequireSanitizePageHTML = false, want true")
+	}
+	if !cfg.BlockSuspiciousPageHTML {
+		t.Error("BlockSuspiciousPageHTML = false, want true")
+	}
+	if !cfg.RequireBlockSuspiciousPageHTML {
+		t.Error("RequireBlockSuspiciousPageHTML = false, want true")
+	}
+}
+
+func TestLoad_RejectSeedInProduction(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_DO_SEED", "true")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when OCMS_DO_SEED=true in production")
+	}
+}
+
+func TestLoad_RequireSanitizePageHTMLInProduction(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_REQUIRE_SANITIZE_PAGE_HTML", "true")
+	setEnv(t, "OCMS_SANITIZE_PAGE_HTML", "false")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when OCMS_REQUIRE_SANITIZE_PAGE_HTML=true and OCMS_SANITIZE_PAGE_HTML=false in production")
+	}
+}
+
+func TestLoad_RequireBlockSuspiciousPageHTMLInProduction(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML", "true")
+	setEnv(t, "OCMS_BLOCK_SUSPICIOUS_PAGE_HTML", "false")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML=true and OCMS_BLOCK_SUSPICIOUS_PAGE_HTML=false in production")
+	}
+}
+
+func TestLoad_RequireAPIAllowedCIDRsInProduction(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_REQUIRE_API_ALLOWED_CIDRS", "true")
+	setEnv(t, "OCMS_API_ALLOWED_CIDRS", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when OCMS_REQUIRE_API_ALLOWED_CIDRS=true and OCMS_API_ALLOWED_CIDRS is empty in production")
+	}
+}
+
+func TestLoad_RequireTrustedProxiesInProduction(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_REQUIRE_TRUSTED_PROXIES", "true")
+	setEnv(t, "OCMS_TRUSTED_PROXIES", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when OCMS_REQUIRE_TRUSTED_PROXIES=true and OCMS_TRUSTED_PROXIES is empty in production")
+	}
+}
+
+func TestLoad_RequireEmbedProxyTokenInProduction(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_REQUIRE_EMBED_PROXY_TOKEN", "true")
+	setEnv(t, "OCMS_EMBED_PROXY_TOKEN", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when OCMS_REQUIRE_EMBED_PROXY_TOKEN=true and OCMS_EMBED_PROXY_TOKEN is empty in production")
+	}
+}
+
+func TestLoad_InvalidWebhookFormDataMode(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_WEBHOOK_FORM_DATA_MODE", "invalid")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when OCMS_WEBHOOK_FORM_DATA_MODE is invalid")
+	}
+}
+
+func TestLoad_InvalidAPIKeyMaxTTLDays(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_API_KEY_MAX_TTL_DAYS", "-1")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when OCMS_API_KEY_MAX_TTL_DAYS is negative")
+	}
+}
+
+func TestLoad_APIKeyMaxTTLDaysTooLarge(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_API_KEY_MAX_TTL_DAYS", "366")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when OCMS_API_KEY_MAX_TTL_DAYS exceeds max allowed days")
+	}
+}
+
+func TestLoad_RequireWebhookFormDataMinimizationInProduction(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_WEBHOOK_FORM_DATA_MODE", "full")
+	setEnv(t, "OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION", "true")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when OCMS_WEBHOOK_FORM_DATA_MODE=full and OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION=true in production")
 	}
 }
 
@@ -303,4 +575,3 @@ func TestLoad_CustomDir(t *testing.T) {
 		}
 	})
 }
-

@@ -184,6 +184,76 @@ func TestPageStatusValidation(t *testing.T) {
 	}
 }
 
+func TestDetectSuspiciousPageHTMLTokens(t *testing.T) {
+	t.Run("no suspicious tokens", func(t *testing.T) {
+		tokens := detectSuspiciousPageHTMLTokens("<p>Hello world</p>")
+		if len(tokens) != 0 {
+			t.Fatalf("expected no suspicious tokens, got %v", tokens)
+		}
+	})
+
+	t.Run("detect script and javascript url", func(t *testing.T) {
+		body := `<script>alert(1)</script><a href="javascript:alert(1)">click</a>`
+		tokens := detectSuspiciousPageHTMLTokens(body)
+		if len(tokens) == 0 {
+			t.Fatal("expected suspicious tokens to be detected")
+		}
+	})
+
+	t.Run("detect event handler attributes", func(t *testing.T) {
+		body := `<img src=x onerror="alert(1)">`
+		tokens := detectSuspiciousPageHTMLTokens(body)
+		if len(tokens) == 0 {
+			t.Fatal("expected suspicious tokens to be detected")
+		}
+	})
+}
+
+func TestValidatePageBodySecurityPolicy(t *testing.T) {
+	t.Run("disabled policy allows suspicious body", func(t *testing.T) {
+		errMsg := validatePageBodySecurityPolicy(`<script>alert(1)</script>`, false)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+	})
+
+	t.Run("enabled policy blocks suspicious body", func(t *testing.T) {
+		errMsg := validatePageBodySecurityPolicy(`<script>alert(1)</script>`, true)
+		if errMsg == "" {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("enabled policy allows clean body", func(t *testing.T) {
+		errMsg := validatePageBodySecurityPolicy(`<p>hello</p>`, true)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+	})
+}
+
+func TestPagesHandlerNormalizePageBodyForStorage(t *testing.T) {
+	raw := `<p>Hello</p><script>alert(1)</script>`
+
+	t.Run("returns raw body when sanitization is disabled", func(t *testing.T) {
+		h := &PagesHandler{}
+		if got := h.normalizePageBodyForStorage(raw); got != raw {
+			t.Fatalf("normalizePageBodyForStorage() = %q, want %q", got, raw)
+		}
+	})
+
+	t.Run("sanitizes body when enabled", func(t *testing.T) {
+		h := &PagesHandler{sanitizePageHTML: true}
+		got := h.normalizePageBodyForStorage(raw)
+		if strings.Contains(got, "<script") {
+			t.Fatalf("normalizePageBodyForStorage() should strip script tags, got %q", got)
+		}
+		if !strings.Contains(got, "<p>Hello</p>") {
+			t.Fatalf("normalizePageBodyForStorage() should keep safe markup, got %q", got)
+		}
+	})
+}
+
 // TestPageScheduling tests page scheduling logic
 func TestPageScheduling(t *testing.T) {
 	now := time.Now()

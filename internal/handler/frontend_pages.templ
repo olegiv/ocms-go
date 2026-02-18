@@ -1,0 +1,383 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package handler
+
+import (
+	"fmt"
+
+	"github.com/olegiv/ocms-go/internal/views/components/badge"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
+)
+
+// FrontendHomePage renders the homepage.
+templ FrontendHomePage(data HomeData) {
+	@frontendBaseLayout(data.BaseTemplateData) {
+		@frontendNav(data.BaseTemplateData)
+		<main class="fe-main min-h-[60vh]">
+			if data.HeroEnabled {
+				<section class="fe-hero border-b bg-muted/30 py-16 sm:py-20 lg:py-24">
+					<div class="fe-container mx-auto max-w-6xl px-4 text-center sm:px-6 lg:px-8">
+						if data.HeroTitle != "" {
+							<h1 class="fe-hero-title text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">{ data.HeroTitle }</h1>
+						}
+						if data.HeroSubtitle != "" {
+							<p class="fe-hero-subtitle mx-auto mt-4 max-w-2xl text-lg text-muted-foreground sm:text-xl">{ data.HeroSubtitle }</p>
+						}
+						if data.HeroCTA != "" && data.HeroCTAURL != "" {
+							<div class="mt-8">
+								@button.Button(button.Props{Href: data.HeroCTAURL, Size: button.SizeLg}) {
+									{ data.HeroCTA }
+								}
+							</div>
+						}
+					</div>
+				</section>
+			}
+			<div class="fe-container fe-content-grid mx-auto max-w-6xl gap-8 px-4 py-10 sm:px-6 lg:grid lg:grid-cols-[1fr_280px] lg:px-8">
+				<div class="fe-content-main">
+					if len(data.RecentPages) > 0 {
+						<section class="fe-post-list">
+							<h2 class="fe-section-title mb-6 text-2xl font-bold tracking-tight text-foreground">Recent Posts</h2>
+							<div class="grid gap-6 sm:grid-cols-2">
+								for _, p := range data.RecentPages {
+									@postCard(p)
+								}
+							</div>
+						</section>
+						if data.ShowAllPostsLink {
+							<div class="fe-more-link mt-8 text-center">
+								@button.Button(button.Props{Href: data.BaseTemplateData.LangPrefix + "/blog", Variant: button.VariantOutline}) {
+									View All Posts
+								}
+							</div>
+						}
+					} else {
+						<p class="fe-empty text-center text-muted-foreground">No posts yet.</p>
+					}
+				</div>
+				if data.BaseTemplateData.ShowSidebar {
+					@frontendSidebar(data.Categories, data.Tags, pageViewsFromRecent(data.RecentPosts))
+				}
+			</div>
+		</main>
+		@frontendFooter(data.BaseTemplateData)
+	}
+}
+
+// FrontendPageDetail renders a single page/post.
+templ FrontendPageDetail(data PageData) {
+	@frontendBaseLayout(data.BaseTemplateData) {
+		@frontendNav(data.BaseTemplateData)
+		<main class="fe-main min-h-[60vh]">
+			<div class="fe-container fe-content-grid mx-auto max-w-6xl gap-8 px-4 py-10 sm:px-6 lg:grid lg:grid-cols-[1fr_280px] lg:px-8">
+				<article class="fe-content-main fe-article min-w-0">
+					if data.Page != nil {
+						if data.Page.FeaturedImage != "" && !data.Page.HideFeaturedImage {
+							<div class="fe-article-hero mb-8 overflow-hidden rounded-lg">
+								<img
+									src={ data.Page.FeaturedImage }
+									alt={ imageAlt(data.Page.FeaturedImageAlt, data.Page.Title) }
+									class="fe-article-hero-img aspect-[2/1] w-full object-cover"
+								/>
+							</div>
+						}
+						<header class="fe-article-header mb-8 space-y-4">
+							<h1 class="fe-article-title text-3xl font-bold tracking-tight text-foreground sm:text-4xl">{ data.Page.Title }</h1>
+							<div class="fe-article-meta flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+								if data.Page.Author != nil {
+									<span class="fe-article-author font-medium text-foreground">{ data.Page.Author.Name }</span>
+									<span>&middot;</span>
+								}
+								if data.Page.PublishedAtFormatted != "" {
+									<time>{ data.Page.PublishedAtFormatted }</time>
+								}
+								if data.Page.ReadingTime > 0 {
+									<span>&middot;</span>
+									<span>{ fmt.Sprintf("%d min read", data.Page.ReadingTime) }</span>
+								}
+							</div>
+							if len(data.Page.Categories) > 0 || len(data.Page.Tags) > 0 {
+								<div class="fe-article-taxonomy flex flex-wrap gap-1.5">
+									for _, cat := range data.Page.Categories {
+										<a href={ templ.SafeURL(cat.URL) } class="fe-article-cat no-underline">
+											@badge.Badge(badge.Props{Variant: badge.VariantDefault, Class: "cursor-pointer"}) {
+												{ cat.Name }
+											}
+										</a>
+									}
+									for _, tag := range data.Page.Tags {
+										<a href={ templ.SafeURL(tag.URL) } class="fe-article-tag no-underline">
+											@badge.Badge(badge.Props{Variant: badge.VariantOutline, Class: "cursor-pointer"}) {
+												{ tag.Name }
+											}
+										</a>
+									}
+								</div>
+							}
+						</header>
+						<div class="fe-article-body prose prose-neutral max-w-none dark:prose-invert">
+							@templ.Raw(string(data.Page.Body))
+						</div>
+						if data.ShowAuthorBox && data.Page.Author != nil {
+							<div class="fe-author-box mt-10">
+								@card.Card() {
+									@card.Content(card.ContentProps{Class: "flex items-start gap-4"}) {
+										<div class="fe-author-info space-y-1">
+											<strong class="text-base font-semibold text-foreground">{ data.Page.Author.Name }</strong>
+											if data.Page.Author.Bio != "" {
+												<p class="text-sm text-muted-foreground">{ data.Page.Author.Bio }</p>
+											}
+										</div>
+									}
+								}
+							</div>
+						}
+						if len(data.RelatedPages) > 0 {
+							<section class="fe-related mt-12">
+								<h2 class="fe-section-title mb-6 text-2xl font-bold tracking-tight text-foreground">Related Posts</h2>
+								<div class="fe-post-grid grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+									for _, rp := range data.RelatedPages {
+										@postCard(rp)
+									}
+								</div>
+							</section>
+						}
+					}
+				</article>
+				if data.BaseTemplateData.ShowSidebar {
+					@frontendSidebar(data.Categories, data.Tags, data.RecentPages)
+				}
+			</div>
+		</main>
+		@frontendFooter(data.BaseTemplateData)
+	}
+}
+
+// FrontendListPage renders a paginated list of posts (blog, archives).
+templ FrontendListPage(data ListData) {
+	@frontendBaseLayout(data.BaseTemplateData) {
+		@frontendNav(data.BaseTemplateData)
+		<main class="fe-main min-h-[60vh]">
+			<div class="fe-container mx-auto max-w-6xl border-b px-4 py-10 sm:px-6 lg:px-8">
+				<h1 class="fe-page-title text-3xl font-bold tracking-tight text-foreground sm:text-4xl">{ data.BaseTemplateData.Title }</h1>
+				if data.Description != "" {
+					<p class="fe-page-desc mt-2 text-lg text-muted-foreground">{ data.Description }</p>
+				}
+			</div>
+			<div class="fe-container fe-content-grid mx-auto max-w-6xl gap-8 px-4 py-10 sm:px-6 lg:grid lg:grid-cols-[1fr_280px] lg:px-8">
+				<div class="fe-content-main">
+					if len(data.Pages) > 0 {
+						<div class="fe-post-list grid gap-6 sm:grid-cols-2">
+							for _, p := range data.Pages {
+								@postCard(p)
+							}
+						</div>
+						@frontendPagination(data.Pagination)
+					} else {
+						<p class="fe-empty text-center text-muted-foreground">No posts found.</p>
+					}
+				</div>
+				@frontendSidebar(data.Categories, data.Tags, data.RecentPages)
+			</div>
+		</main>
+		@frontendFooter(data.BaseTemplateData)
+	}
+}
+
+// FrontendCategoryPage renders a category archive page.
+templ FrontendCategoryPage(data CategoryPageData) {
+	@frontendBaseLayout(data.BaseTemplateData) {
+		@frontendNav(data.BaseTemplateData)
+		<main class="fe-main min-h-[60vh]">
+			<div class="fe-container mx-auto max-w-6xl border-b px-4 py-10 sm:px-6 lg:px-8">
+				<h1 class="fe-page-title text-3xl font-bold tracking-tight text-foreground sm:text-4xl">{ data.Category.Name }</h1>
+				if data.Category.Description != "" {
+					<p class="fe-page-desc mt-2 text-lg text-muted-foreground">{ data.Category.Description }</p>
+				}
+				<p class="fe-page-count mt-2 text-sm text-muted-foreground">{ fmt.Sprintf("%d posts", data.PageCount) }</p>
+			</div>
+			if len(data.Subcategories) > 0 {
+				<div class="fe-container mx-auto max-w-6xl px-4 py-4 sm:px-6 lg:px-8">
+					<div class="fe-subcategories flex flex-wrap gap-2">
+						for _, sub := range data.Subcategories {
+							<a href={ templ.SafeURL(sub.URL) } class="fe-subcat-link no-underline">
+								@badge.Badge(badge.Props{Variant: badge.VariantOutline, Class: "cursor-pointer gap-1.5"}) {
+									{ sub.Name }
+									<span class="fe-subcat-count text-muted-foreground/70">{ fmt.Sprint(sub.Count) }</span>
+								}
+							</a>
+						}
+					</div>
+				</div>
+			}
+			<div class="fe-container fe-content-grid mx-auto max-w-6xl gap-8 px-4 py-10 sm:px-6 lg:grid lg:grid-cols-[1fr_280px] lg:px-8">
+				<div class="fe-content-main">
+					if len(data.Pages) > 0 {
+						<div class="fe-post-list grid gap-6 sm:grid-cols-2">
+							for _, p := range data.Pages {
+								@postCard(p)
+							}
+						</div>
+						@frontendPagination(data.Pagination)
+					} else {
+						<p class="fe-empty text-center text-muted-foreground">No posts in this category.</p>
+					}
+				</div>
+				@frontendSidebar(data.Categories, data.Tags, data.RecentPages)
+			</div>
+		</main>
+		@frontendFooter(data.BaseTemplateData)
+	}
+}
+
+// FrontendTagPage renders a tag archive page.
+templ FrontendTagPage(data TagPageData) {
+	@frontendBaseLayout(data.BaseTemplateData) {
+		@frontendNav(data.BaseTemplateData)
+		<main class="fe-main min-h-[60vh]">
+			<div class="fe-container mx-auto max-w-6xl border-b px-4 py-10 sm:px-6 lg:px-8">
+				<h1 class="fe-page-title text-3xl font-bold tracking-tight text-foreground sm:text-4xl">{ data.Tag.Name }</h1>
+				<p class="fe-page-count mt-2 text-sm text-muted-foreground">{ fmt.Sprintf("%d posts", data.PageCount) }</p>
+			</div>
+			if len(data.RelatedTags) > 0 {
+				<div class="fe-container mx-auto max-w-6xl px-4 py-4 sm:px-6 lg:px-8">
+					<div class="fe-related-tags flex flex-wrap gap-1.5">
+						for _, rt := range data.RelatedTags {
+							<a href={ templ.SafeURL(rt.URL) } class="fe-tag no-underline">
+								@badge.Badge(badge.Props{Variant: badge.VariantSecondary, Class: "cursor-pointer hover:bg-secondary/80"}) {
+									{ rt.Name }
+								}
+							</a>
+						}
+					</div>
+				</div>
+			}
+			<div class="fe-container fe-content-grid mx-auto max-w-6xl gap-8 px-4 py-10 sm:px-6 lg:grid lg:grid-cols-[1fr_280px] lg:px-8">
+				<div class="fe-content-main">
+					if len(data.Pages) > 0 {
+						<div class="fe-post-list grid gap-6 sm:grid-cols-2">
+							for _, p := range data.Pages {
+								@postCard(p)
+							}
+						</div>
+						@frontendPagination(data.Pagination)
+					} else {
+						<p class="fe-empty text-center text-muted-foreground">No posts with this tag.</p>
+					}
+				</div>
+				@frontendSidebar(data.Categories, data.Tags, data.RecentPages)
+			</div>
+		</main>
+		@frontendFooter(data.BaseTemplateData)
+	}
+}
+
+// FrontendSearchPage renders the search results page.
+templ FrontendSearchPage(data SearchData) {
+	@frontendBaseLayout(data.BaseTemplateData) {
+		@frontendNav(data.BaseTemplateData)
+		<main class="fe-main min-h-[60vh]">
+			<div class="fe-container mx-auto max-w-6xl border-b px-4 py-10 sm:px-6 lg:px-8">
+				<h1 class="fe-page-title mb-6 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Search</h1>
+				@searchForm(data.BaseTemplateData.LangPrefix, data.Query)
+				if data.Query != "" {
+					<p class="fe-search-summary mt-4 text-sm text-muted-foreground">
+						{ fmt.Sprintf("%d results for \"%s\"", data.ResultCount, data.Query) }
+					</p>
+				}
+			</div>
+			<div class="fe-container fe-content-grid mx-auto max-w-6xl gap-8 px-4 py-10 sm:px-6 lg:grid lg:grid-cols-[1fr_280px] lg:px-8">
+				<div class="fe-content-main">
+					if len(data.Pages) > 0 {
+						<div class="fe-post-list space-y-4">
+							for _, p := range data.Pages {
+								@searchResultCard(p)
+							}
+						</div>
+						@frontendPagination(data.Pagination)
+					} else {
+						if data.Query != "" {
+							<p class="fe-empty text-center text-muted-foreground">No results found. Try a different search term.</p>
+						}
+					}
+				</div>
+				@frontendSidebar(data.Categories, data.Tags, data.RecentPages)
+			</div>
+		</main>
+		@frontendFooter(data.BaseTemplateData)
+	}
+}
+
+// FrontendNotFoundPage renders the 404 page.
+templ FrontendNotFoundPage(data NotFoundData) {
+	@frontendBaseLayout(data.BaseTemplateData) {
+		@frontendNav(data.BaseTemplateData)
+		<main class="fe-main min-h-[60vh]">
+			<div class="fe-container fe-404 mx-auto max-w-6xl px-4 py-20 text-center sm:px-6 lg:px-8">
+				<h1 class="fe-404-title text-7xl font-bold tracking-tight text-muted-foreground/50 sm:text-9xl">404</h1>
+				<p class="fe-404-text mt-4 text-2xl font-semibold text-foreground">Page not found</p>
+				<p class="fe-404-sub mt-2 text-muted-foreground">The page you're looking for doesn't exist or has been moved.</p>
+				<div class="mt-8">
+					@button.Button(button.Props{Href: data.BaseTemplateData.LangPrefix + "/"}) {
+						Go Home
+					}
+				</div>
+				if len(data.SuggestedPages) > 0 {
+					<section class="fe-suggested mt-12">
+						<h2 class="fe-section-title mb-4 text-lg font-semibold text-foreground">You might be looking for</h2>
+						<ul class="fe-suggested-list inline-flex flex-col gap-2">
+							for _, p := range data.SuggestedPages {
+								<li class="list-none">
+									@button.Button(button.Props{Href: p.URL, Variant: button.VariantLink}) {
+										{ p.Title }
+									}
+								</li>
+							}
+						</ul>
+					</section>
+				}
+			</div>
+		</main>
+		@frontendFooter(data.BaseTemplateData)
+	}
+}
+
+// searchResultCard renders a search result with highlight.
+templ searchResultCard(p PageView) {
+	<article class="fe-post-card fe-search-result">
+		@card.Card(card.Props{Class: "transition-shadow hover:shadow-md"}) {
+			@card.Content(card.ContentProps{Class: "space-y-2"}) {
+				<h2 class="fe-post-card-title text-lg font-semibold leading-tight">
+					<a href={ templ.SafeURL(p.URL) } class="text-foreground no-underline hover:text-primary transition-colors">{ p.Title }</a>
+				</h2>
+				<div class="fe-post-card-meta text-sm text-muted-foreground">
+					if p.PublishedAtFormatted != "" {
+						<time>{ p.PublishedAtFormatted }</time>
+					}
+				</div>
+				if p.Highlight != "" {
+					<div class="fe-search-highlight text-sm text-muted-foreground [&_mark]:rounded-sm [&_mark]:bg-warning/30 [&_mark]:px-0.5 [&_mark]:text-foreground">
+						@templ.Raw(p.Highlight)
+					</div>
+				} else if p.Excerpt != "" {
+					<p class="fe-post-card-excerpt text-sm text-muted-foreground line-clamp-3">{ p.Excerpt }</p>
+				}
+			}
+		}
+	</article>
+}
+
+// pageViewsFromRecent converts RecentPost slice to PageView slice for sidebar reuse.
+func pageViewsFromRecent(posts []RecentPost) []PageView {
+	views := make([]PageView, 0, len(posts))
+	for _, p := range posts {
+		views = append(views, PageView{
+			URL:                 p.URL,
+			Title:               p.Title,
+			PublishedAtFormatted: p.Date,
+		})
+	}
+	return views
+}

@@ -1,6 +1,9 @@
 package informer
 
-import adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+import (
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+	"github.com/olegiv/ocms-go/internal/security"
+)
 
 type InformerViewData struct {
 	Enabled   bool
@@ -117,7 +120,7 @@ templ InformerPage(pc *adminviews.PageContext, data InformerViewData) {
 								<span class="informer-preview-spinner"></span>
 								<span id="informer-preview-text">
 									if data.Text != "" {
-										{ data.Text }
+										@templ.Raw(security.SanitizePageHTML(data.Text))
 									} else {
 										{ pc.T("informer.text_placeholder") }
 									}
@@ -270,7 +273,7 @@ templ InformerPage(pc *adminviews.PageContext, data InformerViewData) {
     margin-top: 1.5rem;
 }
 </style>
-		<script>
+		<script nonce={ templ.GetNonce(ctx) }>
 (function() {
     // Sync color picker with text display
     var bgColor = document.getElementById('bg_color');
@@ -296,8 +299,34 @@ templ InformerPage(pc *adminviews.PageContext, data InformerViewData) {
         });
     }
     if (textInput && previewText) {
+        function sanitizePreviewHTML(value) {
+            var html = String(value || '');
+            var tpl = document.createElement('template');
+            tpl.innerHTML = html;
+
+            tpl.content.querySelectorAll('script,style,iframe,object,embed,link,meta,base,svg,math').forEach(function(node) {
+                node.remove();
+            });
+
+            tpl.content.querySelectorAll('*').forEach(function(node) {
+                Array.from(node.attributes).forEach(function(attr) {
+                    var attrName = attr.name.toLowerCase();
+                    var attrValue = attr.value || '';
+                    if (attrName.indexOf('on') === 0 || attrName === 'style') {
+                        node.removeAttribute(attr.name);
+                        return;
+                    }
+                    if ((attrName === 'href' || attrName === 'src') && /^\s*javascript:/i.test(attrValue)) {
+                        node.removeAttribute(attr.name);
+                    }
+                });
+            });
+
+            return tpl.innerHTML;
+        }
+
         textInput.addEventListener('input', function() {
-            previewText.textContent = this.value || this.placeholder;
+            previewText.innerHTML = this.value ? sanitizePreviewHTML(this.value) : this.placeholder;
         });
     }
 })();

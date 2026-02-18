@@ -7,13 +7,17 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // Delivery configuration constants
@@ -35,13 +39,27 @@ type DeliveryResult struct {
 	ShouldRetry  bool
 }
 
-// httpClient is the shared HTTP client with appropriate timeouts.
+// httpClient is the shared HTTP client with SSRF-safe transport.
+// The custom DialContext prevents connections to private/reserved IP ranges,
+// protecting against DNS rebinding and redirect-based SSRF attacks.
 var httpClient = &http.Client{
 	Timeout: RequestTimeout,
 	Transport: &http.Transport{
+		DialContext: util.SSRFSafeDialContext(&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}),
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 10,
 		IdleConnTimeout:     90 * time.Second,
+	},
+	// Prevent redirects to private IPs - the SSRF-safe DialContext
+	// handles this at connection time, but we also limit redirect count.
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return fmt.Errorf("stopped after 10 redirects")
+		}
+		return nil
 	},
 }
 
@@ -150,6 +168,16 @@ func (d *Dispatcher) processDelivery(ctx context.Context, delivery *QueuedDelive
 
 // attemptDelivery performs the actual HTTP POST request.
 func (d *Dispatcher) attemptDelivery(ctx context.Context, delivery *QueuedDelivery) DeliveryResult {
+	// Re-validate destination at dispatch time to enforce current outbound
+	// policies for legacy/tampered records.
+	if err := util.ValidateWebhookURL(delivery.URL); err != nil {
+		return DeliveryResult{
+			Success:     false,
+			Error:       fmt.Errorf("invalid webhook URL: %w", err),
+			ShouldRetry: shouldRetryURLValidationError(err),
+		}
+	}
+
 	// Create request
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, delivery.URL, bytes.NewReader(delivery.Payload))
 	if err != nil {
@@ -172,6 +200,15 @@ func (d *Dispatcher) attemptDelivery(ctx context.Context, delivery *QueuedDelive
 
 	// Set custom headers from webhook configuration
 	for key, value := range delivery.Headers {
+		if !isSafeWebhookDeliveryHeader(key, value) {
+			d.logger.Warn(
+				"skipping unsafe webhook custom header",
+				"webhook_id", delivery.WebhookID,
+				"delivery_id", delivery.DeliveryID,
+				"header", key,
+			)
+			continue
+		}
 		req.Header.Set(key, value)
 	}
 
@@ -228,6 +265,79 @@ func (d *Dispatcher) attemptDelivery(ctx context.Context, delivery *QueuedDelive
 		Error:        fmt.Errorf("HTTP %d: %s", resp.StatusCode, http.StatusText(resp.StatusCode)),
 		ShouldRetry:  true,
 	}
+}
+
+func shouldRetryURLValidationError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return dnsErr.IsTimeout || dnsErr.IsTemporary
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return netErr.Timeout()
+	}
+
+	return errors.Is(err, context.DeadlineExceeded)
+}
+
+func isSafeWebhookDeliveryHeader(name, value string) bool {
+	key := strings.TrimSpace(name)
+	if key == "" || len(key) > 64 {
+		return false
+	}
+	if !isValidWebhookDeliveryHeaderName(key) || isBlockedWebhookDeliveryHeader(key) {
+		return false
+	}
+	if len(value) > 1024 || hasInvalidWebhookDeliveryHeaderValue(value) {
+		return false
+	}
+	return true
+}
+
+func isValidWebhookDeliveryHeaderName(name string) bool {
+	const tokenChars = "!#$%&'*+-.^_`|~"
+	for i := 0; i < len(name); i++ {
+		ch := name[i]
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') {
+			continue
+		}
+		if strings.ContainsRune(tokenChars, rune(ch)) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func isBlockedWebhookDeliveryHeader(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "host", "content-length", "transfer-encoding", "connection",
+		"proxy-connection", "upgrade", "expect", "te", "trailer", "keep-alive":
+		return true
+	default:
+		return false
+	}
+}
+
+func hasInvalidWebhookDeliveryHeaderValue(value string) bool {
+	if strings.ContainsAny(value, "\r\n") {
+		return true
+	}
+	for i := 0; i < len(value); i++ {
+		ch := value[i]
+		if ch == '\t' {
+			continue
+		}
+		if ch < 0x20 || ch == 0x7f {
+			return true
+		}
+	}
+	return false
 }
 
 // calculateBackoff calculates the exponential backoff duration for a given attempt.

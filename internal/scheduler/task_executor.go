@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 const (
@@ -47,6 +49,10 @@ func NewTaskExecutor(db *sql.DB, logger *slog.Logger, registry *Registry, cronIn
 		httpClient: &http.Client{
 			Timeout: defaultHTTPTimeout,
 			Transport: &http.Transport{
+				DialContext: util.SSRFSafeDialContext(&net.Dialer{
+					Timeout:   10 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}),
 				MaxIdleConns:       10,
 				IdleConnTimeout:    90 * time.Second,
 				DisableCompression: false,

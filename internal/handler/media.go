@@ -31,6 +31,9 @@ import (
 // MediaPerPage is the number of media items to display per page.
 const MediaPerPage = 24
 
+// maxMediaUploadRequestBytes is the maximum size for a multipart upload request body.
+const maxMediaUploadRequestBytes int64 = 100 << 20 // 100 MiB
+
 // MediaHandler handles media library routes.
 type MediaHandler struct {
 	db             *sql.DB
@@ -263,6 +266,9 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := middleware.GetUserID(r)
+
+	// Hard cap request body size to avoid unbounded multipart parsing.
+	r.Body = http.MaxBytesReader(w, r.Body, maxMediaUploadRequestBytes)
 
 	// Parse multipart form with max memory
 	if err := r.ParseMultipartForm(service.MaxUploadSize); err != nil {

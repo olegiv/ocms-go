@@ -186,6 +186,28 @@ sudo dnf install vips-devel
 | `OCMS_HCAPTCHA_SECRET_KEY` | hCaptcha secret key for login protection | - | No |
 | `OCMS_GEOIP_DB_PATH` | Path to GeoLite2-Country.mmdb for country detection | - | No |
 | `OCMS_UPLOADS_DIR` | Directory for uploaded media files | `./uploads` | No |
+| `OCMS_TRUSTED_PROXIES` | Trusted reverse-proxy CIDRs/IPs; forwarding headers are ignored unless peer is trusted | - | No |
+| `OCMS_REQUIRE_TRUSTED_PROXIES` | Fail startup in production if trusted proxy CIDRs/IPs are not configured | `false` | No |
+| `OCMS_API_ALLOWED_CIDRS` | Global source CIDRs/IPs allowed to use API keys | - | No |
+| `OCMS_REQUIRE_API_ALLOWED_CIDRS` | Fail API key auth when global API source CIDRs are not configured | `false` | No |
+| `OCMS_REQUIRE_API_KEY_EXPIRY` | Require API keys to have expiration timestamps | `false` | No |
+| `OCMS_REQUIRE_API_KEY_SOURCE_CIDRS` | Require API keys to have per-key source CIDR restrictions | `false` | No |
+| `OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE` | Deactivate API keys when source IP changes and the key has no per-key CIDRs | `false` | No |
+| `OCMS_API_KEY_MAX_TTL_DAYS` | Maximum API key lifetime in days (`0` disables, max `365`) | `0` | No |
+| `OCMS_EMBED_ALLOWED_ORIGINS` | Allowed browser origins for public embed proxy routes; required for working browser embed requests in production | - | No |
+| `OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS` | Allowed upstream hosts for embed provider API endpoints | - | No |
+| `OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS` | Fail startup in production if embed proxy is active without origin allowlist | `false` | No |
+| `OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS` | Fail startup in production if embed proxy is active without upstream host allowlist | `false` | No |
+| `OCMS_EMBED_PROXY_TOKEN` | Secret used to mint short-lived signed embed proxy tokens; required for active embed proxy in production | - | No |
+| `OCMS_REQUIRE_EMBED_PROXY_TOKEN` | Enforce embed proxy token requirement in non-production too | `false` | No |
+| `OCMS_REQUIRE_HTTPS_OUTBOUND` | Require HTTPS for outbound integration URLs | `false` | No |
+| `OCMS_REQUIRE_FORM_CAPTCHA` | Require captcha on all public form submissions | `false` | No |
+| `OCMS_WEBHOOK_FORM_DATA_MODE` | `form.submitted` payload data mode (`redacted`/`none`/`full`) | `redacted` | No |
+| `OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION` | Fail startup in production when form webhook payload mode is `full` | `false` | No |
+| `OCMS_SANITIZE_PAGE_HTML` | Sanitize page HTML before rendering to visitors | `false` | No |
+| `OCMS_REQUIRE_SANITIZE_PAGE_HTML` | Fail startup in production if page HTML sanitization is disabled | `false` | No |
+| `OCMS_BLOCK_SUSPICIOUS_PAGE_HTML` | Reject page writes containing suspicious HTML patterns | `false` | No |
+| `OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML` | Fail startup in production when suspicious page markup blocking is disabled or existing pages contain suspicious markers | `false` | No |
 | `OCMS_DEMO_MODE` | Enable demo content seeding (users, pages, media) | `false` | No |
 
 ## Development
@@ -195,6 +217,9 @@ sudo dnf install vips-devel
 ```bash
 # Set required environment variable
 export OCMS_SESSION_SECRET="your-secret-key-at-least-32-bytes"
+
+# Install repository-managed git hooks (run once per clone)
+make install-hooks
 
 # Run with asset compilation
 make dev
@@ -218,6 +243,16 @@ make run
 | `make migrate-status` | Show migration status |
 | `make migrate-create` | Create new migration file |
 | `make assets` | Install npm deps and compile SCSS |
+| `make commit-prepare` | Proxy to Claude slash command `/commit-prepare` |
+| `make commit-do` | Proxy to Claude slash command `/commit-do` |
+| `make code-quality` | Proxy to Claude slash command `/code-quality` |
+| `make security-audit` | Proxy to Claude slash command `/security-audit` |
+| `make commit-prepare-local` | Run local commit-prepare shell script |
+| `make commit-do-local` | Run local commit-do shell script |
+| `make code-quality-local` | Run local code quality shell script (`golangci-lint`, `nilaway`, `go test`) |
+| `make security-audit-local` | Run local security audit shell script (writes to `.audit/`) |
+| `make install-hooks` | Configure git to use repository-managed hooks from `.githooks` |
+| `make check-no-absolute-paths` | Fail if tracked files contain local absolute paths (`/Users/...`, `/home/...`, `C:\Users\...`) |
 
 ### Default Admin Credentials
 
@@ -294,6 +329,14 @@ OCMS_SESSION_SECRET=your-secure-secret-key-at-least-32-bytes
 OCMS_ENV=production
 OCMS_DO_SEED=false
 OCMS_ACTIVE_THEME=default
+
+# Hardened embed proxy baseline (when embed module/provider is enabled)
+# Origin matching is exact (scheme + host). Include all real hostnames.
+OCMS_EMBED_ALLOWED_ORIGINS=https://example.com,https://www.example.com
+OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS=api.dify.ai
+OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS=true
+OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS=true
+OCMS_EMBED_PROXY_TOKEN=replace-with-embed-proxy-token
 
 # Optional: Redis caching
 OCMS_REDIS_URL=redis://redis:6379/0
@@ -590,6 +633,34 @@ To update the shared Claude Code tools to the latest version:
 
 # Or manually
 git submodule update --remote --merge
+```
+
+If you are using Codex, Claude slash commands are not registered in the
+Codex UI and may show `No commands`. Use shell/make commands directly,
+or ask Codex in chat to run them.
+
+You can run slash-command equivalents through Claude CLI:
+
+```bash
+claude -p "/commit-prepare" --dangerously-skip-permissions
+claude -p "/commit-do" --dangerously-skip-permissions
+claude -p "/code-quality" --dangerously-skip-permissions
+claude -p "/security-audit" --dangerously-skip-permissions
+```
+
+Codex wrapper commands (Claude proxy by default):
+
+```bash
+./scripts/codex-commands code-quality
+./scripts/codex-commands security-audit
+./scripts/codex-commands commit-prepare
+./scripts/codex-commands commit-do
+
+# Explicit local fallback scripts
+./scripts/codex-commands code-quality-local
+./scripts/codex-commands security-audit-local
+./scripts/codex-commands commit-prepare-local
+./scripts/codex-commands commit-do-local
 ```
 
 After updating, stage and commit the submodule change if you want to keep it:

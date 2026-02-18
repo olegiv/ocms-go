@@ -193,7 +193,7 @@ templ DeveloperPage(pc *adminviews.PageContext, data DeveloperViewData) {
 				</div>
 			</div>
 		</div>
-		<script>
+		<script nonce={ templ.GetNonce(ctx) }>
 		document.addEventListener('DOMContentLoaded', function() {
 			const generateForm = document.getElementById('generate-form');
 			if (generateForm) {

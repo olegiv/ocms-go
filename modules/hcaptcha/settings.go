@@ -83,6 +83,8 @@ func saveSettings(db *sql.DB, s *Settings) error {
 }
 
 // RenderWidget returns the hCaptcha widget HTML.
+// SECURITY: Output is cast to template.HTML. Admin-controlled values
+// (site key, theme, size) are escaped with template.HTMLEscapeString.
 func (m *Module) RenderWidget() template.HTML {
 	if !m.IsEnabled() {
 		return ""

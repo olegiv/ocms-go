@@ -6,6 +6,7 @@ package config
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 
 	"github.com/caarlos0/env/v11"
@@ -24,10 +25,10 @@ type Config struct {
 	ServerHost    string `env:"OCMS_SERVER_HOST" envDefault:"localhost"`
 	ServerPort    int    `env:"OCMS_SERVER_PORT" envDefault:"8080"`
 	Env           string `env:"OCMS_ENV" envDefault:"development"`
-	LogLevel    string `env:"OCMS_LOG_LEVEL" envDefault:"info"`
-	CustomDir   string `env:"OCMS_CUSTOM_DIR" envDefault:"./custom"`
-	UploadsDir  string `env:"OCMS_UPLOADS_DIR" envDefault:"./uploads"`
-	ActiveTheme string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`
+	LogLevel      string `env:"OCMS_LOG_LEVEL" envDefault:"info"`
+	CustomDir     string `env:"OCMS_CUSTOM_DIR" envDefault:"./custom"`
+	UploadsDir    string `env:"OCMS_UPLOADS_DIR" envDefault:"./uploads"`
+	ActiveTheme   string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`
 
 	// Cache configuration
 	RedisURL     string `env:"OCMS_REDIS_URL"`                         // Optional Redis URL for distributed caching
@@ -42,8 +43,40 @@ type Config struct {
 	// GeoIP configuration
 	GeoIPDBPath string `env:"OCMS_GEOIP_DB_PATH"` // Path to GeoLite2-Country.mmdb file
 
+	// Reverse proxy configuration
+	TrustedProxies        string `env:"OCMS_TRUSTED_PROXIES"`                            // Comma-separated CIDRs/IPs of trusted reverse proxies
+	RequireTrustedProxies bool   `env:"OCMS_REQUIRE_TRUSTED_PROXIES" envDefault:"false"` // Reject startup in production when trusted proxies are not configured
+
+	// API access restriction configuration
+	APIAllowedCIDRs              string `env:"OCMS_API_ALLOWED_CIDRS"`                                     // Comma-separated CIDRs/IPs allowed to use API keys
+	RequireAPIAllowedCIDRs       bool   `env:"OCMS_REQUIRE_API_ALLOWED_CIDRS" envDefault:"false"`          // Reject API key auth if no global source CIDRs are configured
+	RequireAPIKeyExpiry          bool   `env:"OCMS_REQUIRE_API_KEY_EXPIRY" envDefault:"false"`             // Reject API keys without expiration
+	RequireAPIKeySourceCIDRs     bool   `env:"OCMS_REQUIRE_API_KEY_SOURCE_CIDRS" envDefault:"false"`       // Reject API keys that have no per-key source CIDR entries
+	RevokeAPIKeyOnSourceIPChange bool   `env:"OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE" envDefault:"false"` // Deactivate API keys when source IP changes and no per-key source CIDRs are configured
+	APIKeyMaxTTLDays             int    `env:"OCMS_API_KEY_MAX_TTL_DAYS" envDefault:"0"`                   // Maximum allowed API key lifetime in days (0 disables)
+
+	// Embed proxy security configuration
+	EmbedAllowedOrigins              string `env:"OCMS_EMBED_ALLOWED_ORIGINS"`                                   // Comma-separated origins allowed to call embed proxy routes
+	EmbedAllowedUpstreamHosts        string `env:"OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS"`                            // Comma-separated allowed upstream hosts for embed provider endpoints
+	RequireEmbedAllowedOrigins       bool   `env:"OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS" envDefault:"false"`        // Refuse startup in production if embed proxy is active and no origin allowlist is configured
+	RequireEmbedAllowedUpstreamHosts bool   `env:"OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS" envDefault:"false"` // Refuse startup in production if embed proxy is active and no upstream host allowlist is configured
+	EmbedProxyToken                  string `env:"OCMS_EMBED_PROXY_TOKEN"`                                       // Shared secret used to mint short-lived signed embed proxy tokens
+	RequireEmbedProxyToken           bool   `env:"OCMS_REQUIRE_EMBED_PROXY_TOKEN" envDefault:"false"`            // Force embed proxy token requirement outside production as well
+	RequireHTTPSOutbound             bool   `env:"OCMS_REQUIRE_HTTPS_OUTBOUND" envDefault:"false"`               // Require HTTPS for outbound integration URLs (webhooks, scheduler, embeds)
+
 	// Seeding configuration
 	DoSeed bool `env:"OCMS_DO_SEED" envDefault:"false"` // Enable database seeding
+
+	// Public forms security policy
+	RequireFormCaptcha                 bool   `env:"OCMS_REQUIRE_FORM_CAPTCHA" envDefault:"false"`                   // Require captcha on all public form submissions
+	WebhookFormDataMode                string `env:"OCMS_WEBHOOK_FORM_DATA_MODE" envDefault:"redacted"`              // form.submitted webhook payload mode: redacted|none|full
+	RequireWebhookFormDataMinimization bool   `env:"OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION" envDefault:"false"` // Reject startup in production when webhook form payload mode is full
+
+	// Frontend content hardening
+	SanitizePageHTML               bool `env:"OCMS_SANITIZE_PAGE_HTML" envDefault:"false"`                 // Sanitize page HTML before rendering to visitors
+	RequireSanitizePageHTML        bool `env:"OCMS_REQUIRE_SANITIZE_PAGE_HTML" envDefault:"false"`         // Reject startup in production if page HTML sanitization is disabled
+	BlockSuspiciousPageHTML        bool `env:"OCMS_BLOCK_SUSPICIOUS_PAGE_HTML" envDefault:"false"`         // Reject page create/update when suspicious HTML patterns are detected
+	RequireBlockSuspiciousPageHTML bool `env:"OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML" envDefault:"false"` // Reject startup in production if suspicious page HTML blocking is disabled
 }
 
 // IsDevelopment returns true if the application is running in development mode.
@@ -75,11 +108,53 @@ func (c Config) GeoIPEnabled() bool {
 // AES-256 requires 32 bytes minimum for secure encryption.
 const MinSessionSecretLength = 32
 
+// MaxAPIKeyTTLDays is the maximum allowed API key max TTL policy window.
+const MaxAPIKeyTTLDays = 365
+
 // Load parses environment variables and returns a Config struct.
 func Load() (*Config, error) {
 	cfg := &Config{}
 	if err := env.Parse(cfg); err != nil {
 		return nil, fmt.Errorf("parsing config: %w", err)
+	}
+
+	// Production hardening: prevent default seeding in production
+	// (allowed when demo mode is explicitly enabled).
+	if cfg.Env == "production" && cfg.DoSeed && os.Getenv("OCMS_DEMO_MODE") != "true" {
+		return nil, fmt.Errorf("OCMS_DO_SEED must be false in production")
+	}
+	if cfg.Env == "production" && cfg.RequireAPIAllowedCIDRs && strings.TrimSpace(cfg.APIAllowedCIDRs) == "" {
+		return nil, fmt.Errorf("OCMS_API_ALLOWED_CIDRS must be configured in production when OCMS_REQUIRE_API_ALLOWED_CIDRS is enabled")
+	}
+	if cfg.Env == "production" && cfg.RequireTrustedProxies && strings.TrimSpace(cfg.TrustedProxies) == "" {
+		return nil, fmt.Errorf("OCMS_TRUSTED_PROXIES must be configured in production when OCMS_REQUIRE_TRUSTED_PROXIES is enabled")
+	}
+	if cfg.Env == "production" && cfg.RequireEmbedProxyToken && strings.TrimSpace(cfg.EmbedProxyToken) == "" {
+		return nil, fmt.Errorf("OCMS_EMBED_PROXY_TOKEN must be configured in production when OCMS_REQUIRE_EMBED_PROXY_TOKEN is enabled")
+	}
+	if cfg.Env == "production" && cfg.RequireSanitizePageHTML && !cfg.SanitizePageHTML {
+		return nil, fmt.Errorf("OCMS_SANITIZE_PAGE_HTML must be true in production when OCMS_REQUIRE_SANITIZE_PAGE_HTML is enabled")
+	}
+	if cfg.Env == "production" && cfg.RequireBlockSuspiciousPageHTML && !cfg.BlockSuspiciousPageHTML {
+		return nil, fmt.Errorf("OCMS_BLOCK_SUSPICIOUS_PAGE_HTML must be true in production when OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML is enabled")
+	}
+	cfg.WebhookFormDataMode = strings.ToLower(strings.TrimSpace(cfg.WebhookFormDataMode))
+	if cfg.WebhookFormDataMode == "" {
+		cfg.WebhookFormDataMode = "redacted"
+	}
+	switch cfg.WebhookFormDataMode {
+	case "", "redacted", "none", "full":
+	default:
+		return nil, fmt.Errorf("OCMS_WEBHOOK_FORM_DATA_MODE must be one of: redacted, none, full")
+	}
+	if cfg.Env == "production" && cfg.RequireWebhookFormDataMinimization && cfg.WebhookFormDataMode == "full" {
+		return nil, fmt.Errorf("OCMS_WEBHOOK_FORM_DATA_MODE=full is not allowed in production when OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION is enabled")
+	}
+	if cfg.APIKeyMaxTTLDays < 0 {
+		return nil, fmt.Errorf("OCMS_API_KEY_MAX_TTL_DAYS must be >= 0")
+	}
+	if cfg.APIKeyMaxTTLDays > MaxAPIKeyTTLDays {
+		return nil, fmt.Errorf("OCMS_API_KEY_MAX_TTL_DAYS must be <= %d", MaxAPIKeyTTLDays)
 	}
 
 	// Validate session secret length
@@ -92,7 +167,7 @@ func Load() (*Config, error) {
 	// Reject known weak/default secrets
 	for _, weak := range knownWeakSecrets {
 		if cfg.SessionSecret == weak {
-			return nil, fmt.Errorf("OCMS_SESSION_SECRET is a known default value and must not be used; "+
+			return nil, fmt.Errorf("OCMS_SESSION_SECRET is a known default value and must not be used; " +
 				"generate a secure secret with: openssl rand -base64 32")
 		}
 	}

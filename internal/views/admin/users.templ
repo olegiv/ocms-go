@@ -6,6 +6,13 @@ package admin
 import (
 	"fmt"
 	"time"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/badge"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/components/table"
+	"github.com/olegiv/ocms-go/internal/views/components/input"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
 )
 
 // UserListItem holds data for a user in the list view.
@@ -46,106 +53,101 @@ type UserItem struct {
 // UsersListPage renders the users list page.
 templ UsersListPage(pc *PageContext, data UsersListData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("users.title") }</h1>
-				<p class="page-description">{ pc.T("users.description", data.TotalCount) }</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/users/new" class="btn btn-primary">
-					@iconUsers()
-					{ pc.T("users.add_user") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("users.title"), pc.T("users.description", data.TotalCount)) {
+			@button.Button(button.Props{Href: "/admin/users/new"}) {
+				@icon.Users(icon.Props{Size: 16})
+				{ pc.T("users.add_user") }
+			}
+		}
 		if len(data.Users) > 0 {
-			<div class="card" id="users-table">
-				<div class="table-responsive">
-					<table class="table">
-						<thead>
-							<tr>
-								<th>{ pc.T("label.name") }</th>
-								<th>{ pc.T("label.email") }</th>
-								<th>{ pc.T("label.role") }</th>
-								<th>{ pc.T("label.created_at") }</th>
-								<th>{ pc.T("users.last_login") }</th>
-								<th class="text-right">{ pc.T("label.actions") }</th>
-							</tr>
-						</thead>
-						<tbody>
-							for _, user := range data.Users {
-								<tr id={ fmt.Sprintf("user-row-%d", user.ID) }>
-									<td>
-										<div class="user-cell">
-											<div class="user-avatar-sm">{ string(user.Name[0]) }</div>
-											<span>{ user.Name }</span>
-											if user.IsCurrentUser {
-												<span class="badge badge-info">{ pc.T("users.you") }</span>
-											}
-										</div>
-									</td>
-									<td>{ user.Email }</td>
-									<td>
-										<span class={ "badge", roleBadgeClass(user.Role) }>
-											{ roleLabel(pc, user.Role) }
-										</span>
-									</td>
-									<td>{ user.CreatedAt.Format("Jan 02, 2006") }</td>
-									<td>
-										if user.LastLoginAt != nil {
-											{ user.LastLoginAt.Format("Jan 02, 2006 15:04") }
-										} else {
-											<span class="text-muted">{ pc.T("users.never") }</span>
-										}
-									</td>
-									<td class="text-right">
-										<div class="action-buttons">
-											<a href={ templ.SafeURL(fmt.Sprintf("/admin/users/%d", user.ID)) } class="btn btn-sm btn-outline" title={ pc.T("btn.edit") }>
-												@iconEdit()
-											</a>
-											if !user.IsCurrentUser {
-												@deleteUserModal(pc, user)
-											}
-										</div>
-									</td>
-								</tr>
+			@card.Card(card.Props{ID: "users-table"}) {
+				@card.Content(card.ContentProps{Class: "p-0"}) {
+					<div class="overflow-x-auto">
+						@table.Table() {
+							@table.Header() {
+								@table.Row() {
+									@table.Head() { { pc.T("label.name") } }
+									@table.Head() { { pc.T("label.email") } }
+									@table.Head() { { pc.T("label.role") } }
+									@table.Head() { { pc.T("label.created_at") } }
+									@table.Head() { { pc.T("users.last_login") } }
+									@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+								}
 							}
-						</tbody>
-					</table>
-				</div>
-				if data.Pagination.ShouldShow() {
-					<div class="card-footer">
-						@Pagination(pc, data.Pagination)
+							@table.Body() {
+								for _, user := range data.Users {
+									@table.Row(table.RowProps{ID: fmt.Sprintf("user-row-%d", user.ID)}) {
+										@table.Cell() {
+											<div class="user-cell">
+												<div class="user-avatar-sm">{ string(user.Name[0]) }</div>
+												<span>{ user.Name }</span>
+												if user.IsCurrentUser {
+													@badge.Badge(badge.Props{Class: "badge-info"}) {
+														{ pc.T("users.you") }
+													}
+												}
+											</div>
+										}
+										@table.Cell() { { user.Email } }
+										@table.Cell() {
+											@badge.Badge(badge.Props{Class: roleBadgeClass(user.Role)}) {
+												{ roleLabel(pc, user.Role) }
+											}
+										}
+										@table.Cell() { { user.CreatedAt.Format("Jan 02, 2006") } }
+										@table.Cell() {
+											if user.LastLoginAt != nil {
+												{ user.LastLoginAt.Format("Jan 02, 2006 15:04") }
+											} else {
+												<span class="text-muted">{ pc.T("users.never") }</span>
+											}
+										}
+										@table.Cell(table.CellProps{Class: "text-right"}) {
+											<div class="action-buttons">
+												@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/users/%d", user.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
+													@icon.Pencil(icon.Props{Size: 14})
+												}
+												if !user.IsCurrentUser {
+													@deleteUserModal(pc, user)
+												}
+											</div>
+										}
+									}
+								}
+							}
+						}
 					</div>
 				}
-			</div>
+				if data.Pagination.ShouldShow() {
+					@card.Footer() {
+						@Pagination(pc, data.Pagination)
+					}
+				}
+			}
 		} else {
-			<div class="card">
-				<div class="card-body">
+			@card.Card() {
+				@card.Content() {
 					<div class="empty-state">
 						<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
 						<p>{ pc.T("users.no_users") }</p>
 						<span class="empty-hint">{ pc.T("users.create_first_hint") }</span>
 						<div class="empty-state-action">
-							<a href="/admin/users/new" class="btn btn-primary">{ pc.T("users.add_user") }</a>
+							@button.Button(button.Props{Href: "/admin/users/new"}) {
+								{ pc.T("users.add_user") }
+							}
 						</div>
 					</div>
-				</div>
-			</div>
+				}
+			}
 		}
 	}
 }
 
 templ deleteUserModal(pc *PageContext, user UserListItem) {
 	<div x-data="{ showConfirm: false }" class="delete-action">
-		<button
-			type="button"
-			class="btn btn-sm btn-danger"
-			title={ pc.T("btn.delete") }
-			@click="showConfirm = true"
-		>
-			@iconDelete()
-		</button>
+		@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"title": pc.T("btn.delete"), "@click": "showConfirm = true"}}) {
+			@icon.Trash2(icon.Props{Size: 14})
+		}
 		<div
 			class="modal-overlay"
 			x-show="showConfirm"
@@ -164,17 +166,12 @@ templ deleteUserModal(pc *PageContext, user UserListItem) {
 					<p class="text-muted">{ pc.T("users.delete_warning") }</p>
 				</div>
 				<div class="modal-footer">
-					<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
-					<button
-						type="button"
-						class="btn btn-danger"
-						hx-delete={ fmt.Sprintf("/admin/users/%d", user.ID) }
-						hx-target={ fmt.Sprintf("#user-row-%d", user.ID) }
-						hx-swap="outerHTML"
-						@click="showConfirm = false"
-					>
+					@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "showConfirm = false"}}) {
+						{ pc.T("btn.cancel") }
+					}
+					@button.Button(button.Props{Variant: button.VariantDestructive, Attributes: templ.Attributes{"hx-delete": fmt.Sprintf("/admin/users/%d", user.ID), "hx-target": fmt.Sprintf("#user-row-%d", user.ID), "hx-swap": "outerHTML", "@click": "showConfirm = false"}}) {
 						{ pc.T("users.delete_user") }
-					</button>
+					}
 				</div>
 			</div>
 		</div>
@@ -184,36 +181,18 @@ templ deleteUserModal(pc *PageContext, user UserListItem) {
 // UserFormPage renders the user create/edit form.
 templ UserFormPage(pc *PageContext, data UserFormData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">
-					if data.IsEdit {
-						{ pc.T("users.edit") }
-					} else {
-						{ pc.T("users.new") }
-					}
-				</h1>
-				<p class="page-description">
-					if data.IsEdit {
-						{ pc.T("users.edit_description") }
-					} else {
-						{ pc.T("users.new_description") }
-					}
-				</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/users" class="btn btn-outline">
-					@iconBack()
-					{ pc.T("users.back_to_users") }
-				</a>
-			</div>
-		</div>
-		<div class="card">
+		@PageHeader(userFormTitle(pc, data.IsEdit), userFormDescription(pc, data.IsEdit)) {
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/users"}) {
+				@icon.ArrowLeft(icon.Props{Size: 16})
+				{ pc.T("users.back_to_users") }
+			}
+		}
+		@card.Card() {
 			<form
 				id="user-form"
 				method="POST"
 				action={ userFormAction(data) }
-				class="card-body"
+				class="p-6"
 			>
 				if data.IsEdit {
 					<input type="hidden" name="_method" value="PUT"/>
@@ -221,48 +200,51 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 				<div class="form-grid">
 					<!-- Name -->
 					<div class="form-group">
-						<label for="name" class="form-label">
+						@label.Label(label.Props{For: "name", Class: "block mb-1"}) {
 							{ pc.T("label.name") } <span class="required">*</span>
-						</label>
-						<input
-							type="text"
-							id="name"
-							name="name"
-							class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["name"] != "") }
-							value={ userFormValue(data, "name") }
-							placeholder={ pc.T("users.name_placeholder") }
-							required
-							autofocus
-							maxlength="255"
-						/>
+						}
+						@input.Input(input.Props{
+							ID: "name",
+							Name: "name",
+							Value: userFormValue(data, "name"),
+							Placeholder: pc.T("users.name_placeholder"),
+							HasError: data.Errors["name"] != "",
+							Attributes: templ.Attributes{
+								"required": true,
+								"autofocus": true,
+								"maxlength": "255",
+							},
+						})
 						if data.Errors["name"] != "" {
 							<span class="form-error">{ data.Errors["name"] }</span>
 						}
 					</div>
 					<!-- Email -->
 					<div class="form-group">
-						<label for="email" class="form-label">
+						@label.Label(label.Props{For: "email", Class: "block mb-1"}) {
 							{ pc.T("label.email") } <span class="required">*</span>
-						</label>
-						<input
-							type="email"
-							id="email"
-							name="email"
-							class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["email"] != "") }
-							value={ userFormValue(data, "email") }
-							placeholder={ pc.T("users.email_placeholder") }
-							required
-							maxlength="255"
-						/>
+						}
+						@input.Input(input.Props{
+							Type: input.TypeEmail,
+							ID: "email",
+							Name: "email",
+							Value: userFormValue(data, "email"),
+							Placeholder: pc.T("users.email_placeholder"),
+							HasError: data.Errors["email"] != "",
+							Attributes: templ.Attributes{
+								"required": true,
+								"maxlength": "255",
+							},
+						})
 						if data.Errors["email"] != "" {
 							<span class="form-error">{ data.Errors["email"] }</span>
 						}
 					</div>
 					<!-- Role -->
 					<div class="form-group">
-						<label for="role" class="form-label">
+						@label.Label(label.Props{For: "role", Class: "block mb-1"}) {
 							{ pc.T("label.role") } <span class="required">*</span>
-						</label>
+						}
 						<select
 							id="role"
 							name="role"
@@ -296,25 +278,26 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 					</div>
 					<!-- Password -->
 					<div class="form-group" x-data="passwordStrength()">
-						<label for="password" class="form-label">
+						@label.Label(label.Props{For: "password", Class: "block mb-1"}) {
 							{ pc.T("label.password") }
 							if !data.IsEdit {
 								<span class="required">*</span>
 							}
-						</label>
-						<input
-							type="password"
-							id="password"
-							name="password"
-							class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["password"] != "") }
-							placeholder={ passwordPlaceholder(pc, data.IsEdit) }
-							minlength="12"
-							if !data.IsEdit {
-								required
-							}
-							x-model="password"
-							@input="checkStrength()"
-						/>
+						}
+						@input.Input(input.Props{
+							Type: input.TypePassword,
+							NoTogglePassword: true,
+							ID: "password",
+							Name: "password",
+							Placeholder: passwordPlaceholder(pc, data.IsEdit),
+							HasError: data.Errors["password"] != "",
+							Attributes: templ.Attributes{
+								"minlength": "12",
+								"required": !data.IsEdit,
+								"x-model": "password",
+								"@input": "checkStrength()",
+							},
+						})
 						<div class="password-strength" x-show="password.length > 0">
 							<div class="password-strength-bar">
 								<div class="password-strength-fill" :class="strengthClass" :style="'width: ' + strengthPercent + '%'"></div>
@@ -329,42 +312,45 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 					</div>
 					<!-- Confirm Password -->
 					<div class="form-group">
-						<label for="password_confirm" class="form-label">
+						@label.Label(label.Props{For: "password_confirm", Class: "block mb-1"}) {
 							{ pc.T("label.confirm_password") }
 							if !data.IsEdit {
 								<span class="required">*</span>
 							}
-						</label>
-						<input
-							type="password"
-							id="password_confirm"
-							name="password_confirm"
-							class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["password_confirm"] != "") }
-							placeholder={ pc.T("users.confirm_password_placeholder") }
-							minlength="12"
-							if !data.IsEdit {
-								required
-							}
-						/>
+						}
+						@input.Input(input.Props{
+							Type: input.TypePassword,
+							NoTogglePassword: true,
+							ID: "password_confirm",
+							Name: "password_confirm",
+							Placeholder: pc.T("users.confirm_password_placeholder"),
+							HasError: data.Errors["password_confirm"] != "",
+							Attributes: templ.Attributes{
+								"minlength": "12",
+								"required": !data.IsEdit,
+							},
+						})
 						if data.Errors["password_confirm"] != "" {
 							<span class="form-error">{ data.Errors["password_confirm"] }</span>
 						}
 					</div>
 				</div>
 				<div class="form-actions">
-					<button type="submit" class="btn btn-primary">
+					@button.Button(button.Props{Type: button.TypeSubmit}) {
 						if data.IsEdit {
-							@iconSave()
+							@icon.Save(icon.Props{Size: 16})
 							{ pc.T("users.update") }
 						} else {
-							@iconUsers()
+							@icon.Users(icon.Props{Size: 16})
 							{ pc.T("users.create") }
 						}
-					</button>
-					<a href="/admin/users" class="btn btn-outline">{ pc.T("btn.cancel") }</a>
+					}
+					@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/users"}) {
+						{ pc.T("btn.cancel") }
+					}
 				</div>
 			</form>
-		</div>
+		}
 	}
 }
 
@@ -423,4 +409,18 @@ func passwordPlaceholder(pc *PageContext, isEdit bool) string {
 		return pc.T("users.new_password_placeholder")
 	}
 	return pc.T("users.password_placeholder")
+}
+
+func userFormTitle(pc *PageContext, isEdit bool) string {
+	if isEdit {
+		return pc.T("users.edit")
+	}
+	return pc.T("users.new")
+}
+
+func userFormDescription(pc *PageContext, isEdit bool) string {
+	if isEdit {
+		return pc.T("users.edit_description")
+	}
+	return pc.T("users.new_description")
 }

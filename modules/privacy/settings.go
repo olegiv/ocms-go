@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"html/template"
 	"strings"
+
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // Settings holds the privacy/consent configuration.
@@ -231,7 +233,7 @@ func boolToInt(b bool) int {
 
 // renderHeadScripts generates privacy/consent scripts for the <head> section.
 // This MUST be called BEFORE analytics scripts for proper GCM initialization.
-func (m *Module) renderHeadScripts() template.HTML {
+func (m *Module) renderHeadScripts(nonce string) template.HTML {
 	if m.settings == nil || !m.settings.Enabled {
 		return ""
 	}
@@ -268,7 +270,22 @@ func (m *Module) renderHeadScripts() template.HTML {
 	scripts.WriteString(`<script defer src="/static/dist/js/klaro.min.js"></script>
 `)
 
-	return template.HTML(scripts.String())
+	// 7. Footer link behavior (avoids inline onclick handlers)
+	scripts.WriteString(`<script>
+document.addEventListener('click', function(event) {
+  const target = event.target && event.target.closest('[data-privacy-open="true"]');
+  if (!target) {
+    return;
+  }
+  event.preventDefault();
+  if (typeof window.klaro !== 'undefined' && typeof window.klaro.show === 'function') {
+    window.klaro.show();
+  }
+});
+</script>
+`)
+
+	return template.HTML(util.AddNonceToScriptTags(scripts.String(), nonce))
 }
 
 // getPositionCSS returns CSS for positioning the Klaro notice.
@@ -374,7 +391,7 @@ func (m *Module) renderFooterLink() template.HTML {
 		return ""
 	}
 
-	return template.HTML(`<a href="#" onclick="if(typeof klaro!=='undefined')klaro.show();return false;" class="privacy-settings-link">Cookie Settings</a>`)
+	return `<a href="#" class="privacy-settings-link" data-privacy-open="true">Cookie Settings</a>`
 }
 
 // renderGCMDefaults generates the Google Consent Mode v2 default consent state.

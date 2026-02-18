@@ -271,7 +271,7 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 		TotalEvents: totalEvents,
 		Level:       level,
 		Category:    category,
-		Levels: []string{model.EventLevelInfo, model.EventLevelWarning, model.EventLevelError},
+		Levels:      []string{model.EventLevelInfo, model.EventLevelWarning, model.EventLevelError},
 		Categories: []string{
 			model.EventCategoryAuth,
 			model.EventCategoryPage,

@@ -7,7 +7,6 @@ package api
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,6 +17,10 @@ import (
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
+)
+
+const (
+	maxAPIMediaUploadRequestBytes int64 = 100 << 20 // 100 MiB
 )
 
 // MediaResponse represents a media item in API responses.
@@ -309,6 +312,9 @@ func (h *Handler) GetMedia(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	// Hard cap request body size before multipart parsing.
+	r.Body = http.MaxBytesReader(w, r.Body, maxAPIMediaUploadRequestBytes)
+
 	// Parse multipart form (20MB max)
 	if err := r.ParseMultipartForm(20 << 20); err != nil {
 		WriteBadRequest(w, "Failed to parse multipart form", nil)
@@ -429,7 +435,7 @@ func (h *Handler) UpdateMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdateMediaRequest
-	if err := decodeJSON(r, &req); err != nil {
+	if err := decodeJSON(w, r, &req, maxAPIJSONBodyBytes); err != nil {
 		WriteBadRequest(w, "Invalid JSON body", nil)
 		return
 	}
@@ -539,11 +545,6 @@ func (h *Handler) populateMediaIncludes(ctx context.Context, resp *MediaResponse
 			}
 		}
 	}
-}
-
-// decodeJSON decodes JSON from request body.
-func decodeJSON(r *http.Request, v any) error {
-	return json.NewDecoder(r.Body).Decode(v)
 }
 
 // requireMediaForAPI parses media ID from URL and fetches the media item.

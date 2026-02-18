@@ -71,6 +71,28 @@ Arguments:
 - `port` (optional) — auto-assigned from 8081 if omitted
 - `group` (optional) — defaults to `psaserv`
 
+### 2.1 Review generated `.env` (embed hardening)
+
+After provisioning, review the generated env file and confirm embed variables
+for your real domains/hosts:
+
+```bash
+sudo nano /var/www/vhosts/example.com/ocms/.env
+```
+
+Recommended production baseline when embed module/provider is enabled:
+
+```bash
+# Embed proxy hardening (origin match is exact: scheme + host)
+OCMS_EMBED_ALLOWED_ORIGINS=https://example.com,https://www.example.com
+OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS=api.dify.ai
+OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS=true
+OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS=true
+OCMS_EMBED_PROXY_TOKEN=replace-with-embed-proxy-token
+```
+
+If you use self-hosted Dify, replace `api.dify.ai` with your API hostname.
+
 ### 3. Configure Nginx in Plesk
 
 Go to **Websites & Domains → example.com → Apache & nginx Settings → Additional nginx directives** and paste the snippet printed by `setup-site.sh`.

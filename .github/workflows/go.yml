@@ -18,6 +18,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Check for local absolute paths
+      run: ./scripts/check-no-absolute-paths.sh --all
+
     - name: Set up Go
       uses: actions/setup-go@v5
       with:

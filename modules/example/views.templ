@@ -192,7 +192,7 @@ templ ExamplePage(pc *adminviews.PageContext, data ExampleViewData) {
 				</div>
 			}
 		</div>
-		<script>
+		<script nonce={ templ.GetNonce(ctx) }>
 		document.addEventListener('DOMContentLoaded', function() {
 			const itemsSection = document.querySelector('.items-section');
 			const confirmDelete = itemsSection.dataset.confirmDelete;

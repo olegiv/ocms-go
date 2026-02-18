@@ -218,7 +218,7 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 	return template.FuncMap{
 		"lower": strings.ToLower,
 		"upper": strings.ToUpper,
-		"now": time.Now,
+		"now":   time.Now,
 		"timeBefore": func(t1, t2 time.Time) bool {
 			return t1.Before(t2)
 		},
@@ -277,18 +277,7 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			}
 			return template.JS(b)
 		},
-		"formatBytes": func(bytes int64) string {
-			const unit = 1024
-			if bytes < unit {
-				return fmt.Sprintf("%d B", bytes)
-			}
-			div, exp := int64(unit), 0
-			for n := bytes / unit; n >= unit; n /= unit {
-				div *= unit
-				exp++
-			}
-			return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
-		},
+		"formatBytes": FormatBytes,
 		"formatNumber": func(n int64) string {
 			if n < 1000 {
 				return strconv.FormatInt(n, 10)
@@ -375,7 +364,7 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			}
 			return false
 		},
-		"hasPrefix": strings.HasPrefix,
+		"hasPrefix":  strings.HasPrefix,
 		"isDemoMode": middleware.IsDemoMode,
 		"maskIP": func(ip string) string {
 			if !middleware.IsDemoMode() {
@@ -475,7 +464,7 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 			englishFallback := []struct {
 				Code string
 				Name string
-			}{{"en", "English"}}
+			}{{Code: "en", Name: "English"}}
 
 			if r.db == nil {
 				return englishFallback
@@ -610,6 +599,7 @@ type TemplateData struct {
 	CurrentPath    string          // Current request path for active link detection
 	AdminLang      string          // Admin UI language code (en, ru, etc.)
 	SidebarModules []SidebarModule // Modules to display in admin sidebar
+	CSPNonce       string          // CSP nonce for inline scripts
 }
 
 // Render renders a template with the given data.
@@ -622,6 +612,7 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 	// Add default data
 	data.CurrentYear = time.Now().Year()
 	data.CurrentPath = req.URL.Path
+	data.CSPNonce = middleware.GetCSPNonce(req)
 
 	// CSRF token and field are no longer needed with filippo.io/csrf/gorilla
 	// as it uses Fetch metadata headers for protection instead of tokens.
@@ -672,7 +663,7 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 	}
 
 	// Render to buffer first to catch errors
-	buf := new(bytes.Buffer)
+	var buf bytes.Buffer
 
 	// Public templates use "body" instead of "base"
 	templateName := "base"
@@ -680,7 +671,7 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 		templateName = "body"
 	}
 
-	if err := tmpl.ExecuteTemplate(buf, templateName, data); err != nil {
+	if err := tmpl.ExecuteTemplate(&buf, templateName, data); err != nil {
 		return fmt.Errorf("executing template %s: %w", name, err)
 	}
 
@@ -884,7 +875,7 @@ type AdminLangOption struct {
 func (r *Renderer) AdminLangOptions() []AdminLangOption {
 	fn, ok := r.TemplateFuncs()["adminLangOptions"]
 	if !ok {
-		return []AdminLangOption{{"en", "English"}}
+		return []AdminLangOption{{Code: "en", Name: "English"}}
 	}
 	type anonLangOpt = struct {
 		Code string
@@ -894,11 +885,11 @@ func (r *Renderer) AdminLangOptions() []AdminLangOption {
 		opts := f()
 		result := make([]AdminLangOption, len(opts))
 		for i, o := range opts {
-			result[i] = AdminLangOption(o)
+			result[i] = o
 		}
 		return result
 	}
-	return []AdminLangOption{{"en", "English"}}
+	return []AdminLangOption{{Code: "en", Name: "English"}}
 }
 
 // SentinelIsActive returns whether the sentinel module is active.
@@ -1038,7 +1029,8 @@ func (r *Renderer) BuildPageContext(req *http.Request, title string, breadcrumbs
 // This is used by modules to render templ-based admin pages.
 func Templ(w http.ResponseWriter, r *http.Request, component templ.Component) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := component.Render(r.Context(), w); err != nil {
+	ctx := templ.WithNonce(r.Context(), middleware.GetCSPNonce(r))
+	if err := component.Render(ctx, w); err != nil {
 		slog.Error("templ render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}

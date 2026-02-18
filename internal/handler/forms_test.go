@@ -6,6 +6,9 @@ package handler
 import (
 	"context"
 	"database/sql"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,6 +24,254 @@ func TestNewFormsHandler(t *testing.T) {
 	}
 	if h.queries == nil {
 		t.Error("queries should not be nil")
+	}
+}
+
+func TestFormsHandlerSubmit_RejectsOversizedPayload(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	queries := store.New(db)
+	now := time.Now()
+
+	_, err := queries.CreateForm(context.Background(), store.CreateFormParams{
+		Name:      "Contact Form",
+		Slug:      "contact-form",
+		Title:     "Contact",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateForm failed: %v", err)
+	}
+
+	h := NewFormsHandler(db, nil, sm, nil, nil, nil, nil, nil)
+
+	payload := "message=" + strings.Repeat("a", int(maxPublicFormBodyBytes)+1)
+	req := httptest.NewRequest(http.MethodPost, "/forms/contact-form", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = requestWithURLParams(req, map[string]string{"slug": "contact-form"})
+	w := httptest.NewRecorder()
+
+	h.Submit(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("status = %d; want %d", w.Code, http.StatusRequestEntityTooLarge)
+	}
+}
+
+func TestFormsHandlerSubmit_RequireCaptchaPolicy_NoCaptchaField(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	queries := store.New(db)
+	now := time.Now()
+
+	form, err := queries.CreateForm(context.Background(), store.CreateFormParams{
+		Name:      "Contact Form",
+		Slug:      "contact-form",
+		Title:     "Contact",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateForm failed: %v", err)
+	}
+
+	h := NewFormsHandler(db, nil, sm, nil, nil, nil, nil, nil)
+	h.SetRequireCaptcha(true)
+
+	req := httptest.NewRequest(http.MethodPost, "/forms/contact-form", strings.NewReader("name=Alice"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = requestWithURLParams(req, map[string]string{"slug": "contact-form"})
+	w := httptest.NewRecorder()
+
+	h.Submit(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d; want %d", w.Code, http.StatusServiceUnavailable)
+	}
+
+	count, err := queries.CountFormSubmissions(context.Background(), form.ID)
+	if err != nil {
+		t.Fatalf("CountFormSubmissions failed: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("submission count = %d; want 0", count)
+	}
+}
+
+func TestFormsHandlerSubmit_RejectsOversizedFieldValue(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	queries := store.New(db)
+	now := time.Now()
+
+	form, err := queries.CreateForm(context.Background(), store.CreateFormParams{
+		Name:      "Contact Form",
+		Slug:      "contact-form",
+		Title:     "Contact",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateForm failed: %v", err)
+	}
+	if _, err := queries.CreateFormField(context.Background(), store.CreateFormFieldParams{
+		FormID:     form.ID,
+		Type:       "text",
+		Name:       "message",
+		Label:      "Message",
+		IsRequired: true,
+		Position:   0,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}); err != nil {
+		t.Fatalf("CreateFormField failed: %v", err)
+	}
+
+	h := NewFormsHandler(db, nil, sm, nil, nil, nil, nil, nil)
+
+	payload := "message=" + strings.Repeat("a", maxPublicFormFieldValueBytes+1)
+	req := httptest.NewRequest(http.MethodPost, "/forms/contact-form", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = requestWithURLParams(req, map[string]string{"slug": "contact-form"})
+	w := httptest.NewRecorder()
+
+	h.Submit(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("status = %d; want %d", w.Code, http.StatusRequestEntityTooLarge)
+	}
+
+	count, err := queries.CountFormSubmissions(context.Background(), form.ID)
+	if err != nil {
+		t.Fatalf("CountFormSubmissions failed: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("submission count = %d; want 0", count)
+	}
+}
+
+func TestFormsHandlerSubmit_RejectsOversizedSubmissionData(t *testing.T) {
+	db, sm := testHandlerSetup(t)
+	queries := store.New(db)
+	now := time.Now()
+
+	form, err := queries.CreateForm(context.Background(), store.CreateFormParams{
+		Name:      "Contact Form",
+		Slug:      "contact-form",
+		Title:     "Contact",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("CreateForm failed: %v", err)
+	}
+
+	fieldNames := []string{"f1", "f2", "f3", "f4", "f5"}
+	for i, name := range fieldNames {
+		if _, err := queries.CreateFormField(context.Background(), store.CreateFormFieldParams{
+			FormID:     form.ID,
+			Type:       "text",
+			Name:       name,
+			Label:      "Field " + name,
+			IsRequired: false,
+			Position:   int64(i),
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		}); err != nil {
+			t.Fatalf("CreateFormField(%s) failed: %v", name, err)
+		}
+	}
+
+	h := NewFormsHandler(db, nil, sm, nil, nil, nil, nil, nil)
+
+	value := strings.Repeat("a", maxPublicFormFieldValueBytes)
+	payload := strings.Join([]string{
+		"f1=" + value,
+		"f2=" + value,
+		"f3=" + value,
+		"f4=" + value,
+		"f5=" + value,
+	}, "&")
+	req := httptest.NewRequest(http.MethodPost, "/forms/contact-form", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = requestWithURLParams(req, map[string]string{"slug": "contact-form"})
+	w := httptest.NewRecorder()
+
+	h.Submit(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("status = %d; want %d", w.Code, http.StatusRequestEntityTooLarge)
+	}
+
+	count, err := queries.CountFormSubmissions(context.Background(), form.ID)
+	if err != nil {
+		t.Fatalf("CountFormSubmissions failed: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("submission count = %d; want 0", count)
+	}
+}
+
+func TestRedactFormEventData(t *testing.T) {
+	input := map[string]string{
+		"name":              "Alice",
+		"email":             "alice@example.com",
+		"password":          "super-secret",
+		"api_token":         "tok_123",
+		"authorizationCode": "123456",
+		"notes":             strings.Repeat("x", maxFormEventValueLen+10),
+	}
+
+	redacted := redactFormEventData(input)
+
+	if redacted["name"] != "Alice" {
+		t.Errorf("name = %q, want %q", redacted["name"], "Alice")
+	}
+	if redacted["email"] != "alice@example.com" {
+		t.Errorf("email = %q, want %q", redacted["email"], "alice@example.com")
+	}
+	if redacted["password"] != redactedFormValue {
+		t.Errorf("password should be redacted, got %q", redacted["password"])
+	}
+	if redacted["api_token"] != redactedFormValue {
+		t.Errorf("api_token should be redacted, got %q", redacted["api_token"])
+	}
+	if redacted["authorizationCode"] != redactedFormValue {
+		t.Errorf("authorizationCode should be redacted, got %q", redacted["authorizationCode"])
+	}
+	if len(redacted["notes"]) != maxFormEventValueLen {
+		t.Errorf("notes length = %d, want %d", len(redacted["notes"]), maxFormEventValueLen)
+	}
+}
+
+func TestBuildFormEventDataForMode(t *testing.T) {
+	input := map[string]string{
+		"name":     "Alice",
+		"password": "super-secret",
+		"notes":    strings.Repeat("x", maxFormEventValueLen+10),
+	}
+
+	redacted := buildFormEventDataForMode(input, formWebhookDataModeRedacted)
+	if redacted["password"] != redactedFormValue {
+		t.Errorf("redacted password = %q, want %q", redacted["password"], redactedFormValue)
+	}
+	if len(redacted["notes"]) != maxFormEventValueLen {
+		t.Errorf("redacted notes length = %d, want %d", len(redacted["notes"]), maxFormEventValueLen)
+	}
+
+	full := buildFormEventDataForMode(input, formWebhookDataModeFull)
+	if full["password"] != "super-secret" {
+		t.Errorf("full password = %q, want %q", full["password"], "super-secret")
+	}
+	if len(full["notes"]) != maxFormEventValueLen {
+		t.Errorf("full notes length = %d, want %d", len(full["notes"]), maxFormEventValueLen)
+	}
+
+	none := buildFormEventDataForMode(input, formWebhookDataModeNone)
+	if none != nil {
+		t.Errorf("none mode data = %#v, want nil", none)
 	}
 }
 

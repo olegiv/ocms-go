@@ -11,7 +11,9 @@ This directory contains specialized AI agents and slash commands tailored for oC
 │   ├── db-manager.md
 │   ├── api-developer.md
 │   ├── module-developer.md
-│   └── security-auditor.md
+│   ├── security-auditor.md
+│   ├── code-quality-auditor.md
+│   └── frontend-developer.md
 ├── commands/            # Quick slash commands for common workflows
 │   ├── test.md
 │   ├── build.md
@@ -19,8 +21,13 @@ This directory contains specialized AI agents and slash commands tailored for oC
 │   ├── sqlc-generate.md
 │   ├── dev-server.md
 │   ├── api-test.md
-│   ├── security-scan.md
-│   └── clean.md
+│   ├── code-quality.md
+│   ├── security-audit.md
+│   ├── clean.md
+│   ├── commit-prepare.md
+│   ├── commit-do.md
+│   ├── templui-add.md
+│   └── templui-list.md
 └── settings.local.json  # Local settings (gitignored)
 ```
 
@@ -59,6 +66,14 @@ Scans for vulnerabilities and ensures security best practices.
 - Reviews security configurations (CSRF, auth, rate limiting)
 - Creates audit reports in .audit/ directory
 
+### frontend-developer
+Creates and modifies admin UI components using templ and templUI.
+- Enforces templUI-first policy for all new components
+- Manages templUI CLI workflow (init, add, update, list)
+- Handles embedded asset integration (Tailwind CSS v4, JS, `//go:embed`)
+- Knows import path patterns and theme variable mappings
+- Guides JavaScript component integration into admin layout
+
 ## Commands
 
 Commands are quick, predefined workflows for common tasks.
@@ -81,11 +96,26 @@ Start development server with hot reload.
 ### /api-test
 Test API endpoints with curl requests.
 
-### /security-scan
-Scan for security vulnerabilities.
+### /security-audit
+Perform a comprehensive security audit and store reports in `.audit/`.
+
+### /code-quality
+Run code quality checks for the Go project, including CSP template safety and high-risk DOM-XSS sink checks (`innerHTML`, redirect sinks).
 
 ### /clean
 Clean build artifacts and temp files.
+
+### /commit-prepare
+Review changes and prepare a commit message draft.
+
+### /commit-do
+Create a commit with the prepared commit message.
+
+### /templui-add
+Add templUI components to the project. Handles CLI installation, `.templui.json` initialization, component download, Tailwind CSS source scanning, and post-install steps.
+
+### /templui-list
+List available templUI components or fetch documentation for a specific component. Shows installed vs available status.
 
 ## Usage
 
@@ -103,6 +133,8 @@ Invoke agents with `@agent-name` followed by your task:
 @module-developer Create a notification module with email hooks
 
 @security-auditor Scan for vulnerabilities and create audit report
+
+@frontend-developer Build a confirmation dialog for page deletion using templUI
 ```
 
 ### Using Commands
@@ -122,9 +154,68 @@ Invoke commands with `/command-name`:
 
 /api-test
 
-/security-scan
+/code-quality
+
+/security-audit
 
 /clean
+
+/commit-prepare
+
+/commit-do
+
+/templui-list
+
+/templui-add button card
+```
+
+### Using Codex-Compatible Command Wrapper
+
+If you are running in Codex, use the local wrapper that mirrors the
+Claude slash-command workflow:
+
+Note: Codex UI does not register these Claude slash commands, so typing
+`/code-quality`, `/security-audit`, `/commit-prepare`, or `/commit-do`
+in Codex may show `No commands`.
+
+```bash
+./scripts/codex-commands code-quality
+./scripts/codex-commands security-audit
+./scripts/codex-commands commit-prepare
+./scripts/codex-commands commit-do
+
+# Explicit local fallback scripts:
+./scripts/codex-commands code-quality-local
+./scripts/codex-commands security-audit-local
+./scripts/codex-commands commit-prepare-local
+./scripts/codex-commands commit-do-local
+
+# Equivalent Make targets:
+make code-quality
+make security-audit
+make commit-prepare
+make commit-do
+make code-quality-local
+make security-audit-local
+make commit-prepare-local
+make commit-do-local
+
+# Or ask Codex in chat to run them:
+run code-quality
+run security-audit
+run commit-prepare
+run commit-do
+```
+
+### Running Claude Command Directly from CLI
+
+You can also run the Claude slash-command workflow directly from shell:
+
+```bash
+claude -p "/commit-prepare" --dangerously-skip-permissions
+claude -p "/commit-do" --dangerously-skip-permissions
+claude -p "/code-quality" --dangerously-skip-permissions
+claude -p "/security-audit" --dangerously-skip-permissions
 ```
 
 ## When to Use Which
@@ -173,10 +264,25 @@ Invoke commands with `/command-name`:
 ### Security Audit
 ```
 # Quick vulnerability scan
-/security-scan
+/security-audit
 
 # Comprehensive security review
 @security-auditor Review all authentication flows and check for vulnerabilities
+```
+
+### templUI Workflow
+```
+# List available components
+/templui-list
+
+# Get docs for a specific component
+/templui-list datepicker
+
+# Add components to the project
+/templui-add button card dialog
+
+# Complex UI task using agent
+@frontend-developer Build a confirmation dialog for page deletion using templUI
 ```
 
 ## Customization

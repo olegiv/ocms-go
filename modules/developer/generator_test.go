@@ -19,28 +19,14 @@ import (
 )
 
 // setupTempUploadDir creates a temporary directory for uploads and changes to it.
-// Returns a cleanup function that restores the original working directory.
+// Returns a cleanup function that removes the temp directory.
 func setupTempUploadDir(t *testing.T) func() {
 	t.Helper()
 
-	tmpDir, err := os.MkdirTemp("", "ocms-upload-test-*")
-	if err != nil {
-		t.Fatalf("creating temp dir: %v", err)
-	}
-
-	oldWd, err := os.Getwd()
-	if err != nil {
-		_ = os.RemoveAll(tmpDir)
-		t.Fatalf("getting working directory: %v", err)
-	}
-
-	if err := os.Chdir(tmpDir); err != nil {
-		_ = os.RemoveAll(tmpDir)
-		t.Fatalf("changing to temp dir: %v", err)
-	}
+	tmpDir := t.TempDir()
+	t.Chdir(tmpDir)
 
 	return func() {
-		_ = os.Chdir(oldWd)
 		_ = os.RemoveAll(tmpDir)
 	}
 }
@@ -125,11 +111,11 @@ func createTestFixtures(t *testing.T, db *sql.DB) *testFixtures {
 	menu, err := q.GetMenuBySlug(ctx, "main")
 	if err != nil {
 		menu, err = q.CreateMenu(ctx, store.CreateMenuParams{
-			Name:       "Main Menu",
-			Slug:       "main",
+			Name:         "Main Menu",
+			Slug:         "main",
 			LanguageCode: lang.Code,
-			CreatedAt:  now,
-			UpdatedAt:  now,
+			CreatedAt:    now,
+			UpdatedAt:    now,
 		})
 		if err != nil {
 			t.Fatalf("CreateMenu: %v", err)
@@ -616,22 +602,22 @@ func TestGenerateMenuItemsWithLanguageSpecificMenus(t *testing.T) {
 
 	// Create menus WITH language_id (like the real database)
 	menuEN, err := q.CreateMenu(ctx, store.CreateMenuParams{
-		Name:       "Main EN",
-		Slug:       "main-en",
+		Name:         "Main EN",
+		Slug:         "main-en",
 		LanguageCode: fixtures.Language.Code,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		t.Fatalf("CreateMenu EN: %v", err)
 	}
 
 	menuRU, err := q.CreateMenu(ctx, store.CreateMenuParams{
-		Name:       "Main RU",
-		Slug:       "main-ru",
+		Name:         "Main RU",
+		Slug:         "main-ru",
 		LanguageCode: fixtures.Language2.Code,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		t.Fatalf("CreateMenu RU: %v", err)

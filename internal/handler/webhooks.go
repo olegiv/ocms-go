@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -22,11 +23,20 @@ import (
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
 // DeliveriesPerPage is the number of deliveries to display per page.
 const DeliveriesPerPage = 25
+
+const (
+	maxWebhookHeadersCount     = 20
+	maxWebhookHeaderNameLen    = 64
+	maxWebhookHeaderValueLen   = 1024
+	maxWebhookFormNameLen      = 255
+	webhookHeaderTokenCharsSet = "!#$%&'*+-.^_`|~"
+)
 
 // WebhooksHandler handles webhook management routes.
 type WebhooksHandler struct {
@@ -263,7 +273,22 @@ func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("webhook created", "webhook_id", webhook.ID, "name", webhook.Name, "created_by", middleware.GetUserID(r))
-	_ = h.eventService.LogWebhookEvent(r.Context(), model.EventLevelInfo, "Webhook created", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"webhook_id": webhook.ID, "name": webhook.Name, "url": webhook.Url})
+	scheme, host := webhookDestinationMetadata(webhook.Url)
+	_ = h.eventService.LogWebhookEvent(
+		r.Context(),
+		model.EventLevelInfo,
+		"Webhook created",
+		middleware.GetUserIDPtr(r),
+		middleware.GetClientIP(r),
+		middleware.GetRequestURL(r),
+		map[string]any{
+			"webhook_id":          webhook.ID,
+			"name":                webhook.Name,
+			"destination_scheme":  scheme,
+			"destination_host":    host,
+			"destination_changed": false,
+		},
+	)
 	flashSuccess(w, r, h.renderer, redirectAdminWebhooks, "Webhook created successfully")
 }
 
@@ -351,6 +376,10 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Update webhook
 	now := time.Now()
+	oldScheme, oldHost := webhookDestinationMetadata(webhook.Url)
+	newScheme, newHost := webhookDestinationMetadata(input.URL)
+	destinationChanged := oldScheme != newScheme || oldHost != newHost
+
 	_, err = h.queries.UpdateWebhook(r.Context(), store.UpdateWebhookParams{
 		ID:        id,
 		Name:      input.Name,
@@ -368,7 +397,52 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("webhook updated", "webhook_id", id, "updated_by", middleware.GetUserID(r))
-	_ = h.eventService.LogWebhookEvent(r.Context(), model.EventLevelInfo, "Webhook updated", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"webhook_id": id})
+	eventMetadata := map[string]any{
+		"webhook_id":           id,
+		"destination_scheme":   newScheme,
+		"destination_host":     newHost,
+		"destination_changed":  destinationChanged,
+		"previous_scheme":      oldScheme,
+		"previous_destination": oldHost,
+		"current_destination":  newHost,
+		"current_scheme":       newScheme,
+	}
+	_ = h.eventService.LogWebhookEvent(
+		r.Context(),
+		model.EventLevelInfo,
+		"Webhook updated",
+		middleware.GetUserIDPtr(r),
+		middleware.GetClientIP(r),
+		middleware.GetRequestURL(r),
+		eventMetadata,
+	)
+	if destinationChanged {
+		slog.Warn(
+			"webhook destination changed",
+			"webhook_id", id,
+			"old_scheme", oldScheme,
+			"old_host", oldHost,
+			"new_scheme", newScheme,
+			"new_host", newHost,
+			"updated_by", middleware.GetUserID(r),
+		)
+		_ = h.eventService.LogSecurityEvent(
+			r.Context(),
+			model.EventLevelWarning,
+			"Webhook destination changed",
+			middleware.GetUserIDPtr(r),
+			middleware.GetClientIP(r),
+			middleware.GetRequestURL(r),
+			map[string]any{
+				"webhook_id":          id,
+				"old_destination":     oldHost,
+				"old_scheme":          oldScheme,
+				"new_destination":     newHost,
+				"new_scheme":          newScheme,
+				"destination_changed": true,
+			},
+		)
+	}
 	flashSuccess(w, r, h.renderer, redirectAdminWebhooks, "Webhook updated successfully")
 }
 
@@ -574,7 +648,7 @@ type webhookFormInput struct {
 // parseWebhookFormInput extracts and parses webhook form values.
 func parseWebhookFormInput(r *http.Request) webhookFormInput {
 	name := strings.TrimSpace(r.FormValue("name"))
-	url := strings.TrimSpace(r.FormValue("url"))
+	webhookURL := strings.TrimSpace(r.FormValue("url"))
 	secret := strings.TrimSpace(r.FormValue("secret"))
 	events := r.Form["events"]
 	isActive := r.FormValue("is_active") == "on" || r.FormValue("is_active") == "true" || r.FormValue("is_active") == "1"
@@ -592,7 +666,7 @@ func parseWebhookFormInput(r *http.Request) webhookFormInput {
 
 	return webhookFormInput{
 		Name:     name,
-		URL:      url,
+		URL:      webhookURL,
 		Secret:   secret,
 		Events:   events,
 		IsActive: isActive,
@@ -634,14 +708,14 @@ func validateWebhookForm(input webhookFormInput, validateEvents bool) map[string
 
 	if input.Name == "" {
 		validationErrors["name"] = "Name is required"
-	} else if len(input.Name) > 255 {
+	} else if len(input.Name) > maxWebhookFormNameLen {
 		validationErrors["name"] = "Name must be less than 255 characters"
 	}
 
 	if input.URL == "" {
 		validationErrors["url"] = "URL is required"
-	} else if !strings.HasPrefix(input.URL, "http://") && !strings.HasPrefix(input.URL, "https://") {
-		validationErrors["url"] = "URL must start with http:// or https://"
+	} else if err := util.ValidateWebhookURL(input.URL); err != nil {
+		validationErrors["url"] = err.Error()
 	}
 
 	if len(input.Events) == 0 {
@@ -664,7 +738,89 @@ func validateWebhookForm(input webhookFormInput, validateEvents bool) map[string
 		}
 	}
 
+	if err := validateWebhookHeaders(input.Headers); err != nil {
+		validationErrors["headers"] = err.Error()
+	}
+
 	return validationErrors
+}
+
+func webhookDestinationMetadata(rawURL string) (scheme string, host string) {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", ""
+	}
+	return strings.ToLower(parsed.Scheme), strings.ToLower(parsed.Host)
+}
+
+func validateWebhookHeaders(headers map[string]string) error {
+	if len(headers) > maxWebhookHeadersCount {
+		return fmt.Errorf("maximum %d custom headers are allowed", maxWebhookHeadersCount)
+	}
+
+	for rawKey, value := range headers {
+		key := strings.TrimSpace(rawKey)
+		if key == "" {
+			return fmt.Errorf("header name cannot be empty")
+		}
+		if len(key) > maxWebhookHeaderNameLen {
+			return fmt.Errorf("header %q exceeds max name length of %d", key, maxWebhookHeaderNameLen)
+		}
+		if !isValidWebhookHeaderName(key) {
+			return fmt.Errorf("header %q has invalid name", key)
+		}
+		if isBlockedWebhookHeader(key) {
+			return fmt.Errorf("header %q is not allowed", key)
+		}
+		if len(value) > maxWebhookHeaderValueLen {
+			return fmt.Errorf("header %q exceeds max value length of %d", key, maxWebhookHeaderValueLen)
+		}
+		if hasInvalidWebhookHeaderValue(value) {
+			return fmt.Errorf("header %q has invalid value", key)
+		}
+	}
+
+	return nil
+}
+
+func isValidWebhookHeaderName(name string) bool {
+	for i := 0; i < len(name); i++ {
+		ch := name[i]
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') {
+			continue
+		}
+		if strings.ContainsRune(webhookHeaderTokenCharsSet, rune(ch)) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func isBlockedWebhookHeader(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "host", "content-length", "transfer-encoding", "connection",
+		"proxy-connection", "upgrade", "expect", "te", "trailer", "keep-alive":
+		return true
+	default:
+		return false
+	}
+}
+
+func hasInvalidWebhookHeaderValue(value string) bool {
+	if strings.ContainsAny(value, "\r\n") {
+		return true
+	}
+	for i := 0; i < len(value); i++ {
+		ch := value[i]
+		if ch == '\t' {
+			continue
+		}
+		if ch < 0x20 || ch == 0x7f {
+			return true
+		}
+	}
+	return false
 }
 
 // renderNewWebhookForm renders the new webhook form with the given data.

@@ -4,10 +4,13 @@
 package scheduler
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/url"
 	"strings"
+	"sync/atomic"
+	"time"
 )
 
 // privateIPRanges defines CIDR blocks for private/reserved networks.
@@ -18,20 +21,21 @@ var privateIPRanges = []string{
 	"127.0.0.0/8",
 	"169.254.0.0/16", // link-local (includes cloud metadata 169.254.169.254)
 	"0.0.0.0/8",
-	"100.64.0.0/10",  // shared address space (RFC 6598)
-	"192.0.0.0/24",   // IETF protocol assignments
-	"192.0.2.0/24",   // documentation (TEST-NET-1)
-	"198.18.0.0/15",  // benchmarking
+	"100.64.0.0/10",   // shared address space (RFC 6598)
+	"192.0.0.0/24",    // IETF protocol assignments
+	"192.0.2.0/24",    // documentation (TEST-NET-1)
+	"198.18.0.0/15",   // benchmarking
 	"198.51.100.0/24", // documentation (TEST-NET-2)
-	"203.0.113.0/24", // documentation (TEST-NET-3)
-	"fc00::/7",       // unique local
-	"fe80::/10",      // link-local
-	"::1/128",        // IPv6 loopback
-	"::/128",         // IPv6 unspecified
+	"203.0.113.0/24",  // documentation (TEST-NET-3)
+	"fc00::/7",        // unique local
+	"fe80::/10",       // link-local
+	"::1/128",         // IPv6 loopback
+	"::/128",          // IPv6 unspecified
 }
 
 // parsedPrivateRanges holds parsed CIDRs (initialized once).
 var parsedPrivateRanges []*net.IPNet
+var requireHTTPSOutbound atomic.Bool
 
 func init() {
 	for _, cidr := range privateIPRanges {
@@ -49,6 +53,16 @@ var blockedHostnames = []string{
 	"metadata.goog",
 }
 
+// SetRequireHTTPSOutbound configures whether task URL validation must reject
+// non-HTTPS schemes.
+func SetRequireHTTPSOutbound(required bool) {
+	requireHTTPSOutbound.Store(required)
+}
+
+func isHTTPSOutboundRequired() bool {
+	return requireHTTPSOutbound.Load()
+}
+
 // ValidateTaskURL checks that a URL is safe for server-side HTTP requests.
 // It blocks private IPs, localhost, cloud metadata endpoints, and non-HTTP schemes.
 func ValidateTaskURL(rawURL string) error {
@@ -61,8 +75,11 @@ func ValidateTaskURL(rawURL string) error {
 		return fmt.Errorf("invalid URL: %w", err)
 	}
 
-	// Only allow http and https
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+	if isHTTPSOutboundRequired() {
+		if parsed.Scheme != "https" {
+			return fmt.Errorf("only https URLs are allowed")
+		}
+	} else if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return fmt.Errorf("only http and https URLs are allowed")
 	}
 
@@ -82,20 +99,18 @@ func ValidateTaskURL(rawURL string) error {
 		}
 	}
 
-	// Resolve hostname to IP addresses
-	ips, err := net.LookupHost(hostname)
+	// Resolve hostname to IP addresses.
+	resolveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ips, err := net.DefaultResolver.LookupIPAddr(resolveCtx, hostname)
 	if err != nil {
 		return fmt.Errorf("cannot resolve hostname %q: %w", hostname, err)
 	}
 
 	// Check all resolved IPs against private ranges
-	for _, ipStr := range ips {
-		ip := net.ParseIP(ipStr)
-		if ip == nil {
-			continue
-		}
-		if isPrivateIP(ip) {
-			return fmt.Errorf("URL resolves to private/reserved IP address (%s)", ipStr)
+	for _, ipAddr := range ips {
+		if isPrivateIP(ipAddr.IP) {
+			return fmt.Errorf("URL resolves to private/reserved IP address (%s)", ipAddr.IP.String())
 		}
 	}
 

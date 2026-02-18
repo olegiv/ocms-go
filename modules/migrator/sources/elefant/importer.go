@@ -748,4 +748,3 @@ func (s *Source) importUsers(ctx context.Context, queries *store.Queries, reader
 
 	return nil
 }
-

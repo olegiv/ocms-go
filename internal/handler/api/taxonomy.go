@@ -7,7 +7,6 @@ package api
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -228,7 +227,7 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdateTagRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(w, r, &req, maxAPIJSONBodyBytes); err != nil {
 		WriteBadRequest(w, "Invalid JSON body", nil)
 		return
 	}
@@ -445,7 +444,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdateCategoryRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(w, r, &req, maxAPIJSONBodyBytes); err != nil {
 		WriteBadRequest(w, "Invalid JSON body", nil)
 		return
 	}
@@ -576,7 +575,7 @@ type nameSlugProvider interface {
 // Returns the decoded request and true if successful, or zero value and false if error (response written).
 func decodeAndValidateNameSlug[T nameSlugProvider](w http.ResponseWriter, r *http.Request) (T, bool) {
 	var req T
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(w, r, &req, maxAPIJSONBodyBytes); err != nil {
 		WriteBadRequest(w, "Invalid JSON body", nil)
 		return req, false
 	}

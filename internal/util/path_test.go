@@ -11,10 +11,10 @@ import (
 
 func TestSanitizeFilename(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		want     string
-		wantErr  bool
+		name    string
+		input   string
+		want    string
+		wantErr bool
 	}{
 		{
 			name:  "simple filename",
@@ -84,11 +84,7 @@ func TestSanitizeFilename(t *testing.T) {
 
 func TestValidatePathWithinBase(t *testing.T) {
 	// Create a temporary directory structure for testing
-	tmpDir, err := os.MkdirTemp("", "path_test")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
+	tmpDir := t.TempDir()
 
 	uploadsDir := filepath.Join(tmpDir, "uploads")
 	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
@@ -163,11 +159,7 @@ func TestValidatePathWithinBase(t *testing.T) {
 
 func TestSafeJoinPath(t *testing.T) {
 	// Create a temporary directory for testing
-	tmpDir, err := os.MkdirTemp("", "path_test")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
+	tmpDir := t.TempDir()
 
 	tests := []struct {
 		name       string
@@ -216,9 +208,9 @@ func TestSafeJoinPath(t *testing.T) {
 
 func TestContainsPathTraversal(t *testing.T) {
 	tests := []struct {
-		name  string
-		path  string
-		want  bool
+		name string
+		path string
+		want bool
 	}{
 		{
 			name: "simple path",

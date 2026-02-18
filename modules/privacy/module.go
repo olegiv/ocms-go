@@ -80,8 +80,8 @@ func (m *Module) TemplateFuncs() template.FuncMap {
 	return template.FuncMap{
 		// privacyHead returns consent scripts for the <head> section
 		// MUST be called BEFORE analyticsExtHead for proper GCM initialization
-		"privacyHead": func() template.HTML {
-			return m.renderHeadScripts()
+		"privacyHead": func(args ...any) template.HTML {
+			return m.renderHeadScripts(firstStringArg(args...))
 		},
 		// privacyFooterLink returns a link to open the consent modal
 		// Returns empty string if privacy is disabled
@@ -89,6 +89,14 @@ func (m *Module) TemplateFuncs() template.FuncMap {
 			return m.renderFooterLink()
 		},
 	}
+}
+
+func firstStringArg(args ...any) string {
+	if len(args) == 0 {
+		return ""
+	}
+	s, _ := args[0].(string)
+	return s
 }
 
 // AdminURL returns the admin dashboard URL for the module.

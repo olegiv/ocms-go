@@ -7,6 +7,14 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"github.com/olegiv/ocms-go/internal/views/components/alert"
+	"github.com/olegiv/ocms-go/internal/views/components/badge"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/components/input"
+	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
 // LanguageListItem holds data for a language in the list view.
@@ -61,117 +69,117 @@ type LanguageFormData struct {
 // LanguagesListPage renders the languages list page.
 templ LanguagesListPage(pc *PageContext, data LanguagesListData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("languages.title") }</h1>
-				<p class="page-description">{ pc.T("languages.description") } ({ fmt.Sprintf("%d", data.TotalLanguages) } { pc.T("label.total") })</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/languages/new" class="btn btn-primary">
-					@iconPlus()
-					{ pc.T("languages.add") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(
+			pc.T("languages.title"),
+			pc.T("languages.description") + " (" + fmt.Sprintf("%d", data.TotalLanguages) + " " + pc.T("label.total") + ")",
+		) {
+			@button.Button(button.Props{Href: "/admin/languages/new"}) {
+				@icon.Plus(icon.Props{Size: 16})
+				{ pc.T("languages.add") }
+			}
+		}
 		if len(data.Languages) > 0 {
-			<div class="card" id="languages-table">
-				<div class="table-responsive">
-					<table class="table">
-						<thead>
-							<tr>
-								<th>{ pc.T("languages.code") }</th>
-								<th>{ pc.T("label.name") }</th>
-								<th>{ pc.T("languages.native_name") }</th>
-								<th>{ pc.T("languages.direction") }</th>
-								<th>{ pc.T("label.status") }</th>
-								<th>{ pc.T("languages.position") }</th>
-								<th class="text-right">{ pc.T("label.actions") }</th>
-							</tr>
-						</thead>
-						<tbody>
+			@card.Card(card.Props{ID: "languages-table"}) {
+				<div class="overflow-x-auto">
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { { pc.T("languages.code") } }
+								@table.Head() { { pc.T("label.name") } }
+								@table.Head() { { pc.T("languages.native_name") } }
+								@table.Head() { { pc.T("languages.direction") } }
+								@table.Head() { { pc.T("label.status") } }
+								@table.Head() { { pc.T("languages.position") } }
+								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+							}
+						}
+						@table.Body() {
 							for _, lang := range data.Languages {
 								@LanguageRow(pc, lang)
 							}
-						</tbody>
-					</table>
+						}
+					}
 				</div>
-			</div>
+			}
 			<div class="card-footer-info">
 				<span class="text-muted">{ pc.T("languages.total_count", data.TotalLanguages) }</span>
 			</div>
 		} else {
-			<div class="card">
-				<div class="card-body">
+			@card.Card(card.Props{}) {
+				@card.Content() {
 					<div class="empty-state">
 						<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" x2="22" y1="12" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
 						<p>{ pc.T("languages.no_languages") }</p>
 						<span class="empty-hint">{ pc.T("languages.no_languages_hint") }</span>
 						<div class="empty-state-action">
-							<a href="/admin/languages/new" class="btn btn-primary">{ pc.T("languages.add") }</a>
+							@button.Button(button.Props{Href: "/admin/languages/new"}) {
+								{ pc.T("languages.add") }
+							}
 						</div>
 					</div>
-				</div>
-			</div>
+				}
+			}
 		}
 	}
 }
 
 // LanguageRow renders a single language table row.
 templ LanguageRow(pc *PageContext, lang LanguageListItem) {
-	<tr id={ fmt.Sprintf("language-row-%d", lang.ID) }>
-		<td>
+	@table.Row(table.RowProps{ID: fmt.Sprintf("language-row-%d", lang.ID)}) {
+		@table.Cell() {
 			<code class="language-code">{ lang.Code }</code>
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			<span>{ lang.Name }</span>
 			if lang.IsDefault {
-				<span class="badge badge-primary">{ pc.T("languages.default") }</span>
+				@badge.Badge(badge.Props{}) {
+					{ pc.T("languages.default") }
+				}
 			}
-		</td>
-		<td>{ lang.NativeName }</td>
-		<td>
-			<span class={ languageDirectionBadgeClass(lang.Direction) }>
+		}
+		@table.Cell() { { lang.NativeName } }
+		@table.Cell() {
+			@badge.Badge(badge.Props{Class: languageDirectionBadgeClass(lang.Direction)}) {
 				{ strings.ToUpper(lang.Direction) }
-			</span>
-		</td>
-		<td>
-			if lang.IsActive {
-				<span class="badge badge-success">{ pc.T("label.active") }</span>
-			} else {
-				<span class="badge badge-secondary">{ pc.T("label.inactive") }</span>
 			}
-		</td>
-		<td>{ fmt.Sprintf("%d", lang.Position) }</td>
-		<td class="text-right">
+		}
+		@table.Cell() {
+			if lang.IsActive {
+				@badge.Badge(badge.Props{Class: "badge-success"}) {
+					{ pc.T("label.active") }
+				}
+			} else {
+				@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+					{ pc.T("label.inactive") }
+				}
+			}
+		}
+		@table.Cell() { { fmt.Sprintf("%d", lang.Position) } }
+		@table.Cell(table.CellProps{Class: "text-right"}) {
 			<div class="action-buttons">
 				if !lang.IsDefault {
 					<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/languages/%d/default", lang.ID)) } class="d-inline">
-						<button type="submit" class="btn btn-sm btn-outline" title={ pc.T("languages.set_default") }>
-							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-						</button>
+						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Attributes: templ.Attributes{"title": pc.T("languages.set_default")}}) {
+							@icon.Check(icon.Props{Size: 14})
+						}
 					</form>
 				}
-				<a href={ templ.SafeURL(fmt.Sprintf("/admin/languages/%d", lang.ID)) } class="btn btn-sm btn-outline" title={ pc.T("btn.edit") }>
-					@iconEdit()
-				</a>
+				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/languages/%d", lang.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
+					@icon.Pencil(icon.Props{Size: 14})
+				}
 				if !lang.IsDefault {
 					@deleteLanguageModal(pc, lang)
 				}
 			</div>
-		</td>
-	</tr>
+		}
+	}
 }
 
 templ deleteLanguageModal(pc *PageContext, lang LanguageListItem) {
 	<div x-data="{ showConfirm: false }" class="delete-action">
-		<button
-			type="button"
-			class="btn btn-sm btn-danger"
-			title={ pc.T("btn.delete") }
-			@click="showConfirm = true"
-		>
-			@iconDelete()
-		</button>
+		@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"title": pc.T("btn.delete"), "@click": "showConfirm = true"}}) {
+			@icon.Trash2(icon.Props{Size: 14})
+		}
 		<div
 			class="modal-overlay"
 			x-show="showConfirm"
@@ -193,17 +201,12 @@ templ deleteLanguageModal(pc *PageContext, lang LanguageListItem) {
 					<p class="text-muted">{ pc.T("label.action_cannot_undone") } { pc.T("languages.delete_warning") }</p>
 				</div>
 				<div class="modal-footer">
-					<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
-					<button
-						type="button"
-						class="btn btn-danger"
-						hx-delete={ fmt.Sprintf("/admin/languages/%d", lang.ID) }
-						hx-target={ fmt.Sprintf("#language-row-%d", lang.ID) }
-						hx-swap="outerHTML"
-						@click="showConfirm = false"
-					>
+					@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "showConfirm = false"}}) {
+						{ pc.T("btn.cancel") }
+					}
+					@button.Button(button.Props{Variant: button.VariantDestructive, Attributes: templ.Attributes{"hx-delete": fmt.Sprintf("/admin/languages/%d", lang.ID), "hx-target": fmt.Sprintf("#language-row-%d", lang.ID), "hx-swap": "outerHTML", "@click": "showConfirm = false"}}) {
 						{ pc.T("languages.delete") }
-					</button>
+					}
 				</div>
 			</div>
 		</div>
@@ -213,32 +216,14 @@ templ deleteLanguageModal(pc *PageContext, lang LanguageListItem) {
 // LanguageFormPage renders the language create/edit form.
 templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">
-					if data.IsEdit {
-						{ pc.T("languages.edit_language") }
-					} else {
-						{ pc.T("languages.new_language") }
-					}
-				</h1>
-				<p class="page-description">
-					if data.IsEdit {
-						{ pc.T("languages.update_settings") }
-					} else {
-						{ pc.T("languages.add_new") }
-					}
-				</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/languages" class="btn btn-outline">
-					@iconBack()
-					{ pc.T("languages.back_to_languages") }
-				</a>
-			</div>
-		</div>
-		<div class="card">
-			<div class="card-body">
+		@PageHeader(languageFormTitle(pc, data.IsEdit), languageFormDescription(pc, data.IsEdit)) {
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/languages"}) {
+				@icon.ArrowLeft(icon.Props{Size: 16})
+				{ pc.T("languages.back_to_languages") }
+			}
+		}
+		@card.Card(card.Props{}) {
+			@card.Content() {
 				<form method="POST" action={ languageFormAction(data) } class="form" x-data={ languageFormAlpineData(data) }>
 					if data.IsEdit {
 						<input type="hidden" name="_method" value="PUT"/>
@@ -246,7 +231,9 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 					<div class="form-grid">
 						if !data.IsEdit {
 							<div class="form-group form-group-full">
-								<label class="form-label">{ pc.T("languages.quick_select") }</label>
+								@label.Label(label.Props{Class: "block mb-1"}) {
+									{ pc.T("languages.quick_select") }
+								}
 								<p class="form-help">{ pc.T("languages.quick_select_hint") }</p>
 								<select
 									id="quick_select"
@@ -266,26 +253,23 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 							</div>
 						}
 						<div class="form-group">
-							<label for="code" class="form-label">
+							@label.Label(label.Props{For: "code", Class: "block mb-1"}) {
 								{ pc.T("languages.language_code") } <span class="required">*</span>
-							</label>
-							<input
-								type="text"
-								id="code"
-								name="code"
-								class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["code"] != "") }
-								value={ languageFormValue(data, "code") }
-								x-model="code"
-								placeholder={ pc.T("languages.code_placeholder") }
-								maxlength="5"
-								required
-								if data.IsEdit {
-									readonly
-								}
-								if !data.IsEdit {
-									autofocus
-								}
-							/>
+							}
+							@input.Input(input.Props{
+								ID: "code",
+								Name: "code",
+								Value: languageFormValue(data, "code"),
+								Placeholder: pc.T("languages.code_placeholder"),
+								HasError: data.Errors["code"] != "",
+								Readonly: data.IsEdit,
+								Attributes: templ.Attributes{
+									"x-model": "code",
+									"maxlength": "5",
+									"required": true,
+									"autofocus": !data.IsEdit,
+								},
+							})
 							if data.Errors["code"] != "" {
 								<span class="form-error">{ data.Errors["code"] }</span>
 							} else {
@@ -293,20 +277,21 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 							}
 						</div>
 						<div class="form-group">
-							<label for="name" class="form-label">
+							@label.Label(label.Props{For: "name", Class: "block mb-1"}) {
 								{ pc.T("label.name") } <span class="required">*</span>
-							</label>
-							<input
-								type="text"
-								id="name"
-								name="name"
-								class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["name"] != "") }
-								value={ languageFormValue(data, "name") }
-								x-model="name"
-								placeholder={ pc.T("languages.name_placeholder") }
-								required
-								maxlength="255"
-							/>
+							}
+							@input.Input(input.Props{
+								ID: "name",
+								Name: "name",
+								Value: languageFormValue(data, "name"),
+								Placeholder: pc.T("languages.name_placeholder"),
+								HasError: data.Errors["name"] != "",
+								Attributes: templ.Attributes{
+									"x-model": "name",
+									"required": true,
+									"maxlength": "255",
+								},
+							})
 							if data.Errors["name"] != "" {
 								<span class="form-error">{ data.Errors["name"] }</span>
 							} else {
@@ -314,20 +299,21 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 							}
 						</div>
 						<div class="form-group">
-							<label for="native_name" class="form-label">
+							@label.Label(label.Props{For: "native_name", Class: "block mb-1"}) {
 								{ pc.T("languages.native_name") } <span class="required">*</span>
-							</label>
-							<input
-								type="text"
-								id="native_name"
-								name="native_name"
-								class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["native_name"] != "") }
-								value={ languageFormValue(data, "native_name") }
-								x-model="nativeName"
-								placeholder={ pc.T("languages.native_placeholder") }
-								required
-								maxlength="255"
-							/>
+							}
+							@input.Input(input.Props{
+								ID: "native_name",
+								Name: "native_name",
+								Value: languageFormValue(data, "native_name"),
+								Placeholder: pc.T("languages.native_placeholder"),
+								HasError: data.Errors["native_name"] != "",
+								Attributes: templ.Attributes{
+									"x-model": "nativeName",
+									"required": true,
+									"maxlength": "255",
+								},
+							})
 							if data.Errors["native_name"] != "" {
 								<span class="form-error">{ data.Errors["native_name"] }</span>
 							} else {
@@ -335,9 +321,9 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 							}
 						</div>
 						<div class="form-group">
-							<label for="direction" class="form-label">
+							@label.Label(label.Props{For: "direction", Class: "block mb-1"}) {
 								{ pc.T("languages.text_direction") } <span class="required">*</span>
-							</label>
+							}
 							<select
 								id="direction"
 								name="direction"
@@ -355,16 +341,20 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 							}
 						</div>
 						<div class="form-group">
-							<label for="position" class="form-label">{ pc.T("languages.position") }</label>
-							<input
-								type="number"
-								id="position"
-								name="position"
-								class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["position"] != "") }
-								value={ languageFormValue(data, "position") }
-								placeholder="0"
-								min="0"
-							/>
+							@label.Label(label.Props{For: "position", Class: "block mb-1"}) {
+								{ pc.T("languages.position") }
+							}
+							@input.Input(input.Props{
+								Type: input.TypeNumber,
+								ID: "position",
+								Name: "position",
+								Value: languageFormValue(data, "position"),
+								Placeholder: "0",
+								HasError: data.Errors["position"] != "",
+								Attributes: templ.Attributes{
+									"min": "0",
+								},
+							})
 							if data.Errors["position"] != "" {
 								<span class="form-error">{ data.Errors["position"] }</span>
 							} else {
@@ -372,7 +362,9 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 							}
 						</div>
 						<div class="form-group">
-							<label class="form-label">{ pc.T("label.status") }</label>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("label.status") }
+							}
 							<div class="form-check">
 								<input
 									type="checkbox"
@@ -393,26 +385,28 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 					</div>
 					if data.IsEdit && data.Language != nil && data.Language.IsDefault {
 						<div class="form-group form-group-full">
-							<div class="alert alert-info">
-								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
+							@alert.Alert(alert.Props{Class: "alert-info"}) {
+								@icon.Info(icon.Props{Size: 16})
 								<span>{ pc.T("languages.is_default_info") }</span>
-							</div>
+							}
 						</div>
 					}
 					<div class="form-actions">
-						<button type="submit" class="btn btn-primary">
-							@iconSave()
+						@button.Button(button.Props{Type: button.TypeSubmit}) {
+							@icon.Save(icon.Props{Size: 16})
 							if data.IsEdit {
 								{ pc.T("languages.update") }
 							} else {
 								{ pc.T("languages.create") }
 							}
-						</button>
-						<a href="/admin/languages" class="btn btn-outline">{ pc.T("btn.cancel") }</a>
+						}
+						@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/languages"}) {
+							{ pc.T("btn.cancel") }
+						}
 					</div>
 				</form>
-			</div>
-		</div>
+			}
+		}
 		if !data.IsEdit {
 			@languageFormScript()
 		}
@@ -421,7 +415,7 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 
 // languageFormScript renders the Alpine.js script for the quick-select feature.
 templ languageFormScript() {
-	<script>
+	<script nonce={ templ.GetNonce(ctx) }>
 	function languageForm() {
 		return {
 			code: '',
@@ -447,9 +441,9 @@ templ languageFormScript() {
 
 func languageDirectionBadgeClass(direction string) string {
 	if direction == "rtl" {
-		return "badge badge-warning"
+		return "badge-warning"
 	}
-	return "badge badge-secondary"
+	return ""
 }
 
 func languageFormAction(data LanguageFormData) templ.SafeURL {
@@ -509,4 +503,18 @@ func languageFormAlpineData(data LanguageFormData) string {
 		return ""
 	}
 	return "languageForm()"
+}
+
+func languageFormTitle(pc *PageContext, isEdit bool) string {
+	if isEdit {
+		return pc.T("languages.edit_language")
+	}
+	return pc.T("languages.new_language")
+}
+
+func languageFormDescription(pc *PageContext, isEdit bool) string {
+	if isEdit {
+		return pc.T("languages.update_settings")
+	}
+	return pc.T("languages.add_new")
 }

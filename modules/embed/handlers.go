@@ -4,13 +4,15 @@
 package embed
 
 import (
+	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/modules/embed/providers"
@@ -18,10 +20,10 @@ import (
 
 // ProviderListItem represents a provider in the list view.
 type ProviderListItem struct {
-	ID          string
-	Name        string
-	Description string
-	IsEnabled   bool
+	ID           string
+	Name         string
+	Description  string
+	IsEnabled    bool
 	IsConfigured bool
 }
 
@@ -153,7 +155,7 @@ func (m *Module) handleSaveProviderSettings(w http.ResponseWriter, r *http.Reque
 
 	// Validate if enabling
 	if isEnabled {
-		if err := ctx.Provider.Validate(settings); err != nil {
+		if err := m.validateProviderEnableSettings(ctx.ProviderID, ctx.Provider, settings); err != nil {
 			m.ctx.Render.SetFlash(r, err.Error(), "error")
 			http.Redirect(w, r, "/admin/embed/"+ctx.ProviderID, http.StatusSeeOther)
 			return
@@ -163,9 +165,15 @@ func (m *Module) handleSaveProviderSettings(w http.ResponseWriter, r *http.Reque
 	// Load existing settings to preserve position
 	existingPS, _ := loadProviderSettings(m.ctx.DB, ctx.ProviderID)
 	position := 0
+	oldEndpoint := ""
 	if existingPS != nil {
 		position = existingPS.Position
+		oldEndpoint = strings.TrimSpace(existingPS.Settings["api_endpoint"])
 	}
+	newEndpoint := strings.TrimSpace(settings["api_endpoint"])
+	oldScheme, oldHost := embedEndpointMetadata(oldEndpoint)
+	newScheme, newHost := embedEndpointMetadata(newEndpoint)
+	endpointChanged := oldScheme != newScheme || oldHost != newHost
 
 	// Save settings
 	ps := &ProviderSettings{
@@ -192,6 +200,45 @@ func (m *Module) handleSaveProviderSettings(w http.ResponseWriter, r *http.Reque
 		"provider", ctx.ProviderID,
 		"enabled", isEnabled,
 	)
+	if m.ctx.Events != nil {
+		metadata := buildEmbedSettingsAuditMetadata(ctx.ProviderID, isEnabled, settings, endpointChanged, oldScheme, oldHost, newScheme, newHost)
+		_ = m.ctx.Events.LogSecurityEvent(
+			r.Context(),
+			model.EventLevelInfo,
+			"Embed provider settings updated",
+			&ctx.User.ID,
+			middleware.GetClientIP(r),
+			middleware.GetRequestURL(r),
+			metadata,
+		)
+		if endpointChanged {
+			m.ctx.Logger.Warn(
+				"embed provider endpoint changed",
+				"provider", ctx.ProviderID,
+				"old_scheme", oldScheme,
+				"old_host", oldHost,
+				"new_scheme", newScheme,
+				"new_host", newHost,
+				"updated_by", ctx.User.Email,
+			)
+			_ = m.ctx.Events.LogSecurityEvent(
+				r.Context(),
+				model.EventLevelWarning,
+				"Embed provider endpoint changed",
+				&ctx.User.ID,
+				middleware.GetClientIP(r),
+				middleware.GetRequestURL(r),
+				map[string]any{
+					"provider":         ctx.ProviderID,
+					"endpoint_changed": true,
+					"old_scheme":       oldScheme,
+					"old_host":         oldHost,
+					"new_scheme":       newScheme,
+					"new_host":         newHost,
+				},
+			)
+		}
+	}
 
 	m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "embed.success_save"), "success")
 	http.Redirect(w, r, "/admin/embed/"+ctx.ProviderID, http.StatusSeeOther)
@@ -229,8 +276,8 @@ func (m *Module) handleToggleProvider(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := ctx.Provider.Validate(ps.Settings); err != nil {
-			m.ctx.Render.SetFlash(r, i18n.T(ctx.Lang, "embed.error_configure_first"), "error")
+		if err := m.validateProviderEnableSettings(ctx.ProviderID, ctx.Provider, ps.Settings); err != nil {
+			m.ctx.Render.SetFlash(r, err.Error(), "error")
 			http.Redirect(w, r, "/admin/embed/"+ctx.ProviderID, http.StatusSeeOther)
 			return
 		}
@@ -253,6 +300,20 @@ func (m *Module) handleToggleProvider(w http.ResponseWriter, r *http.Request) {
 		"provider", ctx.ProviderID,
 		"enabled", enabled,
 	)
+	if m.ctx.Events != nil {
+		_ = m.ctx.Events.LogSecurityEvent(
+			r.Context(),
+			model.EventLevelInfo,
+			"Embed provider toggled",
+			&ctx.User.ID,
+			middleware.GetClientIP(r),
+			middleware.GetRequestURL(r),
+			map[string]any{
+				"provider": ctx.ProviderID,
+				"enabled":  enabled,
+			},
+		)
+	}
 
 	statusKey := "embed.success_disabled"
 	if enabled {
@@ -305,4 +366,84 @@ func (m *Module) getProviderContext(w http.ResponseWriter, r *http.Request) (pro
 		User:       user,
 		Lang:       lang,
 	}, true
+}
+
+func buildEmbedSettingsAuditMetadata(
+	providerID string,
+	enabled bool,
+	settings map[string]string,
+	endpointChanged bool,
+	oldScheme, oldHost, newScheme, newHost string,
+) map[string]any {
+	metadata := map[string]any{
+		"provider":         providerID,
+		"enabled":          enabled,
+		"endpoint_changed": endpointChanged,
+	}
+
+	if settings == nil {
+		return metadata
+	}
+
+	if endpoint := strings.TrimSpace(settings["api_endpoint"]); endpoint != "" {
+		metadata["api_endpoint"] = endpoint
+	}
+	if endpointChanged {
+		metadata["old_scheme"] = oldScheme
+		metadata["old_host"] = oldHost
+		metadata["new_scheme"] = newScheme
+		metadata["new_host"] = newHost
+	}
+	if apiKey, ok := settings["api_key"]; ok {
+		metadata["has_api_key"] = strings.TrimSpace(apiKey) != ""
+	}
+
+	return metadata
+}
+
+func embedEndpointMetadata(rawEndpoint string) (scheme string, host string) {
+	parsed, err := url.Parse(strings.TrimSpace(rawEndpoint))
+	if err != nil || parsed == nil {
+		return "", ""
+	}
+
+	return strings.ToLower(strings.TrimSpace(parsed.Scheme)), strings.ToLower(strings.TrimSpace(parsed.Hostname()))
+}
+
+func (m *Module) validateProviderRuntimePolicy(providerID string, settings map[string]string) error {
+	if m == nil {
+		return nil
+	}
+	if providerID != "dify" {
+		return nil
+	}
+	if len(m.allowedUpstreamHosts) == 0 {
+		if m.requireUpstreamHostPolicy {
+			return fmt.Errorf("OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS must be configured before enabling Dify provider")
+		}
+		return nil
+	}
+
+	endpoint := strings.TrimSpace(settings["api_endpoint"])
+	if endpoint == "" {
+		return nil
+	}
+	parsedEndpoint, err := url.Parse(endpoint)
+	if err != nil {
+		return fmt.Errorf("API endpoint is invalid: %w", err)
+	}
+	if !m.isUpstreamHostAllowed(parsedEndpoint.Hostname()) {
+		return fmt.Errorf("API endpoint host %q is not allowed by OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS policy", parsedEndpoint.Hostname())
+	}
+	return nil
+}
+
+func (m *Module) validateProviderEnableSettings(providerID string, provider providers.Provider, settings map[string]string) error {
+	if provider == nil {
+		return fmt.Errorf("provider is required")
+	}
+	if err := provider.Validate(settings); err != nil {
+		return err
+	}
+	return m.validateProviderRuntimePolicy(providerID, settings)
 }

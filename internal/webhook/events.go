@@ -52,7 +52,8 @@ type FormEventData struct {
 	FormName     string            `json:"form_name"`
 	FormSlug     string            `json:"form_slug"`
 	SubmissionID int64             `json:"submission_id"`
-	Data         map[string]string `json:"data"`
+	Data         map[string]string `json:"data,omitempty"`
+	DataMode     string            `json:"data_mode,omitempty"`
 	SubmittedAt  time.Time         `json:"submitted_at"`
 }
 

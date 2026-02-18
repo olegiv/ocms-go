@@ -3,7 +3,9 @@
 
 package admin
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // AdminLayout renders the full admin page with sidebar, header, and content.
 templ AdminLayout(pc *PageContext) {
@@ -39,14 +41,14 @@ templ AdminLayout(pc *PageContext) {
 			</div>
 		</div>
 		<!-- HTMX -->
-		<script src="/static/dist/js/htmx.min.js" integrity="sha384-/TgkGk7p307TH7EXJDuUlgG3Ce1UVolAOFopFekQkkXihi5u/6OCvVKyz1W+idaz" crossorigin="anonymous"></script>
+		<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/htmx.min.js" integrity="sha384-/TgkGk7p307TH7EXJDuUlgG3Ce1UVolAOFopFekQkkXihi5u/6OCvVKyz1W+idaz" crossorigin="anonymous"></script>
 		<!-- Alpine.js Sort Plugin -->
-		<script defer src="/static/dist/js/alpine-sort.min.js"></script>
+		<script nonce={ templ.GetNonce(ctx) } defer src="/static/dist/js/alpine-sort.min.js"></script>
 		<!-- Alpine.js -->
-		<script defer src="/static/dist/js/alpine.min.js" integrity="sha384-LXWjKwDZz29o7TduNe+r/UxaolHh5FsSvy2W7bDHSZ8jJeGgDeuNnsDNHoxpSgDi" crossorigin="anonymous"></script>
+		<script defer nonce={ templ.GetNonce(ctx) } src="/static/dist/js/alpine.min.js" integrity="sha384-LXWjKwDZz29o7TduNe+r/UxaolHh5FsSvy2W7bDHSZ8jJeGgDeuNnsDNHoxpSgDi" crossorigin="anonymous"></script>
 		<!-- Admin core utilities -->
-		<script src="/static/dist/js/admin-core.js"></script>
-		<script src="/static/dist/js/media-dropzone.js"></script>
+		<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/admin-core.js"></script>
+		<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/media-dropzone.js"></script>
 	</body>
 	</html>
 }
@@ -83,6 +85,21 @@ templ Alert(pc *PageContext) {
 			</div>
 		</div>
 	}
+}
+
+// PageHeader renders a page header with title, optional description, and optional action buttons.
+templ PageHeader(title string, description string) {
+	<div class="flex flex-col gap-4 mb-6 md:flex-row md:items-center md:justify-between">
+		<div>
+			<h1 class="text-2xl font-bold text-foreground">{ title }</h1>
+			if description != "" {
+				<p class="text-sm text-muted-foreground mt-1">{ description }</p>
+			}
+		</div>
+		<div class="flex gap-2">
+			{ children... }
+		</div>
+	</div>
 }
 
 // Breadcrumbs renders navigation breadcrumbs with Schema.org markup.

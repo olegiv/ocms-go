@@ -6,6 +6,14 @@ package admin
 import "fmt"
 import "strings"
 import "encoding/json"
+import "github.com/olegiv/ocms-go/internal/views/components/alert"
+import "github.com/olegiv/ocms-go/internal/views/components/badge"
+import "github.com/olegiv/ocms-go/internal/views/components/button"
+import "github.com/olegiv/ocms-go/internal/views/components/card"
+import "github.com/olegiv/ocms-go/internal/views/components/icon"
+import "github.com/olegiv/ocms-go/internal/views/components/input"
+import "github.com/olegiv/ocms-go/internal/views/components/label"
+import "github.com/olegiv/ocms-go/internal/views/components/table"
 
 // =============================================================================
 // VIEW TYPES
@@ -297,40 +305,52 @@ func scheduleOpen(data PageFormViewData) bool {
 	return formVal(data.FormValues, "scheduled_at", "") != "" || data.HasScheduledAt
 }
 
+// pagesFilterVariant returns the button variant for filter buttons.
+func pagesFilterVariant(isActive bool) button.Variant {
+	if isActive {
+		return button.VariantDefault
+	}
+	return button.VariantOutline
+}
+
+// publishButtonClass returns the class name for publish/unpublish button.
+func publishButtonClass(status string) string {
+	if status == "published" {
+		return "btn-warning"
+	}
+	return "btn-success"
+}
+
+// statusBadgeClass returns the badge class for page status.
+func statusBadgeClass(status string) string {
+	if status == "published" {
+		return "badge-success"
+	}
+	return "badge-warning"
+}
+
 // =============================================================================
 // PAGES LIST PAGE
 // =============================================================================
 
 templ PagesListPage(pc *PageContext, data PagesListViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("pages.title") }</h1>
-				<p class="page-description">{ pc.T("pages.total_count", data.TotalCount) }</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/pages/new" class="btn btn-primary">
-					@iconFilePlus()
-					{ pc.T("pages.new") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("pages.title"), pc.T("pages.total_count", data.TotalCount)) {
+			@button.Button(button.Props{Href: "/admin/pages/new"}) {
+				@icon.FileText(icon.Props{Size: 16})
+				{ pc.T("pages.new") }
+			}
+		}
 		<!-- Filters -->
 		<div class="filter-bar">
 			<div class="filter-group">
 				<label class="filter-label">{ pc.T("label.status") }:</label>
 				<div class="filter-buttons">
-					<a
-						href={ templ.SafeURL(pagesListURL("", data.CategoryFilter, data.SearchFilter, 0)) }
-						class={ "btn btn-sm", templ.KV("btn-primary", data.StatusFilter == ""), templ.KV("btn-outline", data.StatusFilter != "") }
-					>
+					@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == ""), Size: button.SizeSm, Href: pagesListURL("", data.CategoryFilter, data.SearchFilter, 0)}) {
 						{ pc.T("label.all") }
-					</a>
+					}
 					for _, s := range data.Statuses {
-						<a
-							href={ templ.SafeURL(pagesListURL(s, data.CategoryFilter, data.SearchFilter, 0)) }
-							class={ "btn btn-sm", templ.KV("btn-primary", data.StatusFilter == s), templ.KV("btn-outline", data.StatusFilter != s) }
-						>
+						@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == s), Size: button.SizeSm, Href: pagesListURL(s, data.CategoryFilter, data.SearchFilter, 0)}) {
 							if s == "draft" {
 								{ pc.T("status.draft") }
 							} else if s == "published" {
@@ -338,15 +358,12 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 							} else {
 								{ s }
 							}
-						</a>
+						}
 					}
-					<a
-						href={ templ.SafeURL(pagesListURL("scheduled", data.CategoryFilter, data.SearchFilter, 0)) }
-						class={ "btn btn-sm", templ.KV("btn-primary", data.StatusFilter == "scheduled"), templ.KV("btn-outline", data.StatusFilter != "scheduled") }
-					>
+					@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == "scheduled"), Size: button.SizeSm, Href: pagesListURL("scheduled", data.CategoryFilter, data.SearchFilter, 0)}) {
 						@iconClock12()
 						{ pc.T("status.scheduled") }
-					</a>
+					}
 				</div>
 			</div>
 			if len(data.AllCategories) > 0 {
@@ -362,7 +379,7 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 						if data.LanguageFilter != "" {
 							<input type="hidden" name="language" value={ data.LanguageFilter }/>
 						}
-						<select name="category" class="form-select form-select-sm" onchange="this.form.submit()">
+						<select name="category" class="form-select form-select-sm" data-auto-submit="true">
 							<option value="">{ pc.T("pages.all_categories") }</option>
 							for _, cat := range data.AllCategories {
 								<option
@@ -392,7 +409,7 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 						if data.SearchFilter != "" {
 							<input type="hidden" name="search" value={ data.SearchFilter }/>
 						}
-						<select name="language" class="form-select form-select-sm" onchange="this.form.submit()">
+						<select name="language" class="form-select form-select-sm" data-auto-submit="true">
 							<option value="">{ pc.T("pages.all_languages") }</option>
 							for _, lang := range data.AllLanguages {
 								<option
@@ -416,13 +433,13 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 					}
 					<div class="search-input-wrapper">
 						<input type="text" name="search" value={ data.SearchFilter } placeholder={ pc.T("pages.search_placeholder") } class="form-control form-control-sm" aria-label={ pc.T("btn.search") }/>
-						<button type="submit" class="btn btn-sm btn-outline search-btn" title={ pc.T("btn.search") }>
+						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Class: "search-btn", Attributes: templ.Attributes{"title": pc.T("btn.search")}}) {
 							@iconSearch14()
-						</button>
+						}
 						if data.SearchFilter != "" {
-							<a href={ templ.SafeURL(pagesListURL(data.StatusFilter, data.CategoryFilter, "", 0)) } class="btn btn-sm btn-outline clear-search-btn" title={ pc.T("btn.clear") }>
+							@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: pagesListURL(data.StatusFilter, data.CategoryFilter, "", 0), Class: "clear-search-btn", Attributes: templ.Attributes{"title": pc.T("btn.clear")}}) {
 								@iconX14()
-							</a>
+							}
 						}
 					</div>
 				</form>
@@ -434,37 +451,37 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 			</div>
 		}
 		if len(data.Pages) > 0 {
-			<div class="card" id="pages-table">
-				<div class="table-responsive">
-					<table class="table">
-						<thead>
-							<tr>
-								<th class="col-w-60">{ pc.T("label.image") }</th>
-								<th>{ pc.T("label.title") }</th>
-								<th>{ pc.T("label.tags") }</th>
-								<th>{ pc.T("label.categories") }</th>
-								<th>{ pc.T("label.language") }</th>
-								<th>{ pc.T("label.status") }</th>
-								<th>{ pc.T("label.updated_at") }</th>
-								<th class="text-right">{ pc.T("label.actions") }</th>
-							</tr>
-						</thead>
-						<tbody>
+			@card.Card(card.Props{ID: "pages-table"}) {
+				<div class="overflow-x-auto">
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head(table.HeadProps{Class: "w-[60px]"}) { { pc.T("label.image") } }
+								@table.Head() { { pc.T("label.title") } }
+								@table.Head() { { pc.T("label.tags") } }
+								@table.Head() { { pc.T("label.categories") } }
+								@table.Head() { { pc.T("label.language") } }
+								@table.Head() { { pc.T("label.status") } }
+								@table.Head() { { pc.T("label.updated_at") } }
+								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+							}
+						}
+						@table.Body() {
 							for _, page := range data.Pages {
 								@pageListRow(pc, page, data.IsDemoMode)
 							}
-						</tbody>
-					</table>
+						}
+					}
 				</div>
 				if data.Pagination.ShouldShow() {
-					<div class="card-footer">
+					@card.Footer() {
 						@Pagination(pc, data.Pagination)
-					</div>
+					}
 				}
-			</div>
+			}
 		} else {
-			<div class="card">
-				<div class="card-body">
+			@card.Card() {
+				@card.Content() {
 					<div class="empty-state">
 						@iconFileLarge()
 						<p>{ pc.T("pages.no_pages") }</p>
@@ -474,18 +491,20 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 							<span class="empty-hint">{ pc.T("pages.create_first_hint") }</span>
 						}
 						<div class="empty-state-action">
-							<a href="/admin/pages/new" class="btn btn-primary">{ pc.T("pages.new") }</a>
+							@button.Button(button.Props{Href: "/admin/pages/new"}) {
+								{ pc.T("pages.new") }
+							}
 						</div>
 					</div>
-				</div>
-			</div>
+				}
+			}
 		}
 	}
 }
 
 templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool) {
-	<tr id={ fmt.Sprintf("page-row-%d", page.ID) }>
-		<td class="page-image-cell">
+	@table.Row(table.RowProps{ID: fmt.Sprintf("page-row-%d", page.ID)}) {
+		@table.Cell(table.CellProps{Class: "page-image-cell"}) {
 			if page.FeaturedImage != nil {
 				<img src={ page.FeaturedImage.Thumbnail } alt={ page.Title } class="page-thumbnail"/>
 			} else {
@@ -493,11 +512,11 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool) {
 					@iconImagePlaceholder()
 				</div>
 			}
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			<a href={ templ.SafeURL(fmt.Sprintf("/%s", page.Slug)) } class="page-title-link" target="_blank">{ page.Title }</a>
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			if len(page.Tags) > 0 {
 				<div class="tag-list">
 					for _, tag := range page.Tags {
@@ -507,8 +526,8 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool) {
 			} else {
 				<span class="text-muted">&mdash;</span>
 			}
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			if len(page.Categories) > 0 {
 				<div class="category-list">
 					for _, cat := range page.Categories {
@@ -518,63 +537,54 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool) {
 			} else {
 				<span class="text-muted">&mdash;</span>
 			}
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			if page.Language != nil {
 				<span class="language-badge" title={ page.Language.Name }>{ page.Language.Code }</span>
 			} else {
 				<span class="text-muted">&mdash;</span>
 			}
-		</td>
-		<td>
-			if page.IsScheduled {
-				<span class="badge badge-info" title={ page.ScheduledAtTitle }>
-					@iconClock12()
-					{ pc.T("status.scheduled") }
-				</span>
-			} else {
-				<span class={ "badge", templ.KV("badge-success", page.Status == "published"), templ.KV("badge-warning", page.Status != "published") }>
-					if page.Status == "published" {
-						{ pc.T("status.published") }
-					} else if page.Status == "draft" {
-						{ pc.T("status.draft") }
-					} else {
-						{ page.Status }
-					}
-				</span>
+		}
+		@table.Cell() {
+		if page.IsScheduled {
+			@badge.Badge(badge.Props{Class: "badge-info", Attributes: templ.Attributes{"title": page.ScheduledAtTitle}}) {
+				@iconClock12()
+				{ pc.T("status.scheduled") }
 			}
-		</td>
-		<td>{ page.UpdatedAt }</td>
-		<td class="text-right">
+		} else {
+			@badge.Badge(badge.Props{Class: statusBadgeClass(page.Status)}) {
+				if page.Status == "published" {
+					{ pc.T("status.published") }
+				} else if page.Status == "draft" {
+					{ pc.T("status.draft") }
+				} else {
+					{ page.Status }
+				}
+			}
+		}
+		}
+		@table.Cell() { { page.UpdatedAt } }
+		@table.Cell(table.CellProps{Class: "text-right"}) {
 			<div class="action-buttons">
 				if !page.IsDemoPublished {
 					<form action={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/publish", page.ID)) } method="POST" class="inline-form">
 						@csrfField()
-						<button
-							type="submit"
-							class={ "btn btn-sm", templ.KV("btn-warning", page.Status == "published"), templ.KV("btn-success", page.Status != "published") }
-							title={ publishTitle(pc, page.Status) }
-						>
+						@button.Button(button.Props{Size: button.SizeSm, Type: button.TypeSubmit, Class: publishButtonClass(page.Status), Attributes: templ.Attributes{"title": publishTitle(pc, page.Status)}}) {
 							if page.Status == "published" {
 								@iconEyeOff()
 							} else {
 								@iconEye()
 							}
-						</button>
+						}
 					</form>
 				}
-				<a href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d", page.ID)) } class="btn btn-sm btn-outline" title={ pc.T("btn.edit") }>
+				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/pages/%d", page.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
 					@iconEdit()
-				</a>
+				}
 				<div x-data="{ showConfirm: false }" class="delete-action">
-					<button
-						type="button"
-						class="btn btn-sm btn-danger"
-						title={ pc.T("btn.delete") }
-						@click="showConfirm = true"
-					>
+					@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "showConfirm = true", "title": pc.T("btn.delete")}}) {
 						@iconTrash()
-					</button>
+					}
 					<!-- Delete Confirmation Modal -->
 					<div
 						class="modal-overlay"
@@ -594,24 +604,19 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool) {
 								<p class="text-muted">{ pc.T("pages.delete_warning") }</p>
 							</div>
 							<div class="modal-footer">
-								<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
-								<button
-									type="button"
-									class="btn btn-danger"
-									hx-delete={ fmt.Sprintf("/admin/pages/%d", page.ID) }
-									hx-target={ fmt.Sprintf("#page-row-%d", page.ID) }
-									hx-swap="outerHTML"
-									@click="showConfirm = false"
-								>
+								@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "showConfirm = false"}}) {
+									{ pc.T("btn.cancel") }
+								}
+								@button.Button(button.Props{Variant: button.VariantDestructive, Attributes: templ.Attributes{"hx-delete": fmt.Sprintf("/admin/pages/%d", page.ID), "hx-target": fmt.Sprintf("#page-row-%d", page.ID), "hx-swap": "outerHTML", "@click": "showConfirm = false"}}) {
 									{ pc.T("pages.delete_page") }
-								</button>
+								}
 							</div>
 						</div>
 					</div>
 				</div>
 			</div>
-		</td>
-	</tr>
+		}
+	}
 }
 
 func publishTitle(pc *PageContext, status string) string {
@@ -627,41 +632,30 @@ func publishTitle(pc *PageContext, status string) string {
 
 templ PageFormPage(pc *PageContext, data PageFormViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">
-					if data.IsEdit {
-						{ pc.T("pages.edit") }
-					} else {
-						{ pc.T("pages.new") }
-					}
-				</h1>
-				<p class="page-description">
-					if data.IsEdit {
-						{ pc.T("pages.edit_description") }
-					} else {
-						{ pc.T("pages.new_description") }
-					}
-				</p>
-			</div>
-			<div class="page-actions">
-				if data.IsEdit {
-					<a href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/versions", data.PageID)) } class="btn btn-outline">
-						@iconClockHistory()
-						{ pc.T("pages.version_history") }
-					</a>
+		if data.IsEdit {
+			@PageHeader(pc.T("pages.edit"), pc.T("pages.edit_description")) {
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/admin/pages/%d/versions", data.PageID)}) {
+					@iconClockHistory()
+					{ pc.T("pages.version_history") }
 				}
-				<a href="/admin/pages" class="btn btn-outline">
-					@iconChevronLeft()
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/pages"}) {
+					@icon.ArrowLeft(icon.Props{Size: 16})
 					{ pc.T("pages.back_to_pages") }
-				</a>
-			</div>
-		</div>
-		<div class="card">
+				}
+			}
+		} else {
+			@PageHeader(pc.T("pages.new"), pc.T("pages.new_description")) {
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/pages"}) {
+					@icon.ArrowLeft(icon.Props{Size: 16})
+					{ pc.T("pages.back_to_pages") }
+				}
+			}
+		}
+		@card.Card() {
 			<form
 				method="POST"
 				action={ templ.SafeURL(pageFormAction(data)) }
-				class="card-body"
+				class="p-6"
 				x-data={ pageFormXData(data) }
 			>
 				@csrfField()
@@ -671,42 +665,38 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 				<div class="form-grid">
 					<!-- Title -->
 					<div class="form-group form-group-full">
-						<label for="title" class="form-label">
+						@label.Label(label.Props{For: "title", Class: "block mb-1"}) {
 							{ pc.T("label.title") } <span class="required">*</span>
-						</label>
-						<input
-							type="text"
-							id="title"
-							name="title"
-							class={ "form-input", templ.KV("is-invalid", data.Errors["title"] != "") }
-							value={ formVal(data.FormValues, "title", data.PageTitle) }
-							placeholder={ pc.T("hint.enter_page_title") }
-							required
-							maxlength="255"
-							@input="generateSlug($event.target.value)"
-						/>
+						}
+						@input.Input(input.Props{
+							ID:          "title",
+							Name:        "title",
+							Type:        input.TypeText,
+							Value:       formVal(data.FormValues, "title", data.PageTitle),
+							Placeholder: pc.T("hint.enter_page_title"),
+							HasError:    data.Errors["title"] != "",
+							Attributes:  templ.Attributes{"required": true, "maxlength": "255", "@input": "generateSlug($event.target.value)"},
+						})
 						if data.Errors["title"] != "" {
 							<span class="form-error">{ data.Errors["title"] }</span>
 						}
 					</div>
 					<!-- Slug -->
 					<div class="form-group">
-						<label for="slug" class="form-label">
+						@label.Label(label.Props{For: "slug", Class: "block mb-1"}) {
 							{ pc.T("label.slug") } <span class="required">*</span>
-						</label>
+						}
 						<div class="input-with-prefix">
 							<span class="input-prefix">/</span>
-							<input
-								type="text"
-								id="slug"
-								name="slug"
-								class={ "form-input", templ.KV("is-invalid", data.Errors["slug"] != "") }
-								value={ formVal(data.FormValues, "slug", data.PageSlug) }
-								placeholder={ pc.T("hint.page_slug") }
-								x-model="slug"
-								@input="slugEdited = true"
-								maxlength="255"
-							/>
+							@input.Input(input.Props{
+								ID:          "slug",
+								Name:        "slug",
+								Type:        input.TypeText,
+								Value:       formVal(data.FormValues, "slug", data.PageSlug),
+								Placeholder: pc.T("hint.page_slug"),
+								HasError:    data.Errors["slug"] != "",
+								Attributes:  templ.Attributes{"x-model": "slug", "@input": "slugEdited = true", "maxlength": "255"},
+							})
 						</div>
 						if data.Errors["slug"] != "" {
 							<span class="form-error">{ data.Errors["slug"] }</span>
@@ -716,10 +706,10 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 					</div>
 					<!-- Status -->
 					<div class="form-group">
-						<label for="status" class="form-label">{ pc.T("label.status") }</label>
+						@label.Label(label.Props{For: "status", Class: "block mb-1"}) { { pc.T("label.status") } }
 						if data.IsDemoMode && data.IsEdit && currentStatus(data.FormValues, data.PageStatus) == "published" {
 							<input type="hidden" name="status" value="published"/>
-							<span class="badge badge-success">{ pc.T("status.published") }</span>
+							@badge.Badge(badge.Props{Class: "badge-success"}) { { pc.T("status.published") } }
 						} else {
 							<select
 								id="status"
@@ -748,7 +738,7 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 					</div>
 					<!-- Page Type -->
 					<div class="form-group">
-						<label for="page_type" class="form-label">{ pc.T("pages.page_type") }</label>
+						@label.Label(label.Props{For: "page_type", Class: "block mb-1"}) { { pc.T("pages.page_type") } }
 						<select
 							id="page_type"
 							name="page_type"
@@ -778,7 +768,7 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 					<!-- Language -->
 					if data.HasMultipleLanguages {
 						<div class="form-group">
-							<label for="language_code" class="form-label">{ pc.T("label.language") }</label>
+							@label.Label(label.Props{For: "language_code", Class: "block mb-1"}) { { pc.T("label.language") } }
 							<select
 								id="language_code"
 								name={ langSelectName(data.IsEdit) }
@@ -814,7 +804,7 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 					}
 					<!-- Body (TinyMCE Editor) -->
 					<div class="form-group form-group-full">
-						<label class="form-label">{ pc.T("label.content") }</label>
+						@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("label.content") } }
 						<div class="editor-container">
 							<textarea id="editor" name="body" class="tinymce-editor">
 								{ formVal(data.FormValues, "body", data.PageBody) }
@@ -834,7 +824,7 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 							data-mode="select"
 							data-initial-image={ featuredImageJSON(data.FeaturedImage) }
 						>
-							<label class="form-label">{ pc.T("media.featured_image") }</label>
+							@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("media.featured_image") } }
 							@mediaDropzoneSelectArea(pc)
 							<span class="form-hint">{ pc.T("media.featured_image_requirements") }</span>
 							@mediaDropzoneSelectModal(pc)
@@ -888,17 +878,19 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 					</div>
 				</div>
 				<div class="form-actions">
-					<a href="/admin/pages" class="btn btn-outline">{ pc.T("btn.cancel") }</a>
-					<button type="submit" class="btn btn-primary">
+					@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/pages"}) {
+						{ pc.T("btn.cancel") }
+					}
+					@button.Button(button.Props{Type: button.TypeSubmit}) {
 						if data.IsEdit {
 							{ pc.T("pages.update") }
 						} else {
 							{ pc.T("pages.create") }
 						}
-					</button>
+					}
 				</div>
 			</form>
-		</div>
+		}
 		@pageFormScripts(pc, data)
 	}
 }
@@ -953,7 +945,7 @@ templ translationsPanel(pc *PageContext, data PageFormViewData) {
 							<a href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d", tr.PageID)) } class="translation-link">
 								{ tr.Title }
 							</a>
-							<span class={ "translation-status badge", templ.KV("badge-success", tr.Status == "published"), templ.KV("badge-warning", tr.Status != "published") }>
+							@badge.Badge(badge.Props{Class: "translation-status " + statusBadgeClass(tr.Status)}) {
 								if tr.Status == "published" {
 									{ pc.T("status.published") }
 								} else if tr.Status == "draft" {
@@ -961,11 +953,11 @@ templ translationsPanel(pc *PageContext, data PageFormViewData) {
 								} else {
 									{ tr.Status }
 								}
-							</span>
+							}
 						</div>
-						<a href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d", tr.PageID)) } class="btn btn-sm btn-outline">
+						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/pages/%d", tr.PageID)}) {
 							{ pc.T("btn.edit") }
-						</a>
+						}
 					</div>
 				}
 			</div>
@@ -975,17 +967,10 @@ templ translationsPanel(pc *PageContext, data PageFormViewData) {
 				<h4 class="translations-subtitle">{ pc.T("pages.add_translation") }</h4>
 				<div class="translation-buttons">
 					for _, lang := range data.MissingLanguages {
-						<button
-							type="button"
-							class="btn btn-sm btn-outline translation-add-btn"
-							title={ lang.Name }
-							data-page-id={ fmt.Sprintf("%d", data.PageID) }
-							data-lang-code={ lang.Code }
-							onclick="createTranslation(this.dataset.pageId, this.dataset.langCode)"
-						>
+						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Class: "translation-add-btn", Attributes: templ.Attributes{"title": lang.Name, "data-page-id": fmt.Sprintf("%d", data.PageID), "data-lang-code": lang.Code, "onclick": "createTranslation(this.dataset.pageId, this.dataset.langCode)"}}) {
 							@iconPlus14()
 							{ lang.Code } - { lang.Name }
-						</button>
+						}
 					}
 				</div>
 			</div>
@@ -998,7 +983,7 @@ templ translationsPanel(pc *PageContext, data PageFormViewData) {
 
 templ tagSelector(pc *PageContext, tags []PageFormTagView) {
 	<div class="tag-selector" x-data="tagSelector()" x-init="init()" data-initial-tags={ tagsJSON(tags) }>
-		<label class="form-label">{ pc.T("tags.title") }</label>
+		@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("tags.title") } }
 		<!-- Selected Tags Display -->
 		<div class="selected-tags">
 			<template x-for="tag in selectedTags" :key="tag.id">
@@ -1060,7 +1045,7 @@ templ tagSelector(pc *PageContext, tags []PageFormTagView) {
 
 templ categorySelector(pc *PageContext, allCategories []PageCategoryNodeView, selectedCategories []PageFormCategoryView) {
 	<div class="category-selector" x-data="categorySelector()" data-initial-categories={ categoriesJSON(selectedCategories) }>
-		<label class="form-label">{ pc.T("categories.title") }</label>
+		@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("categories.title") } }
 		if len(allCategories) > 0 {
 			<div class="category-tree">
 				for _, cat := range allCategories {
@@ -1085,7 +1070,9 @@ templ categorySelector(pc *PageContext, allCategories []PageCategoryNodeView, se
 		} else {
 			<div class="category-empty">
 				<p>{ pc.T("categories.no_available") }</p>
-				<a href="/admin/categories/new" class="btn btn-sm btn-outline">{ pc.T("categories.new") }</a>
+				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: "/admin/categories/new"}) {
+					{ pc.T("categories.new") }
+				}
 			</div>
 		}
 		<span class="form-hint">{ pc.T("categories.select_hint") }</span>
@@ -1098,7 +1085,7 @@ templ aliasesSection(pc *PageContext, data PageFormViewData) {
 			@iconChevronRight()
 			<span>{ pc.T("pages.aliases") }</span>
 			<template x-if="aliases.length > 0">
-				<span class="badge badge-info ml-2" x-text="aliases.length"></span>
+				@badge.Badge(badge.Props{Class: "badge-info ml-2", Attributes: templ.Attributes{"x-text": "aliases.length"}}) {}
 			</template>
 		</summary>
 		<div class="collapsible-content">
@@ -1108,27 +1095,27 @@ templ aliasesSection(pc *PageContext, data PageFormViewData) {
 					<div class="alias-item">
 						<div class="input-with-prefix" style="flex: 1;">
 							<span class="input-prefix">/</span>
-							<input
-								type="text"
-								class="form-input"
-								x-model="alias.value"
-								name="aliases[]"
-								placeholder={ pc.T("pages.alias_placeholder") }
-								@input="validateAlias(index)"
-								maxlength="255"
-							/>
+							@input.Input(input.Props{
+								Name: "aliases[]",
+								Attributes: templ.Attributes{
+									"x-model":     "alias.value",
+									"placeholder":  pc.T("pages.alias_placeholder"),
+									"@input":      "validateAlias(index)",
+									"maxlength":   "255",
+								},
+							})
 						</div>
-						<button type="button" class="btn btn-sm btn-outline btn-danger" @click="removeAlias(index)" title={ pc.T("btn.remove") }>
+						@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "removeAlias(index)", "title": pc.T("btn.remove")}}) {
 							@iconX14()
-						</button>
+						}
 					</div>
 				</template>
 			</div>
 			<!-- Add New Alias Button -->
-			<button type="button" class="btn btn-sm btn-outline mt-2" @click="addAlias()">
+			@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Class: "mt-2", Attributes: templ.Attributes{"@click": "addAlias()"}}) {
 				@iconPlus14()
 				{ pc.T("pages.add_alias") }
-			</button>
+			}
 			if data.Errors["aliases"] != "" {
 				<span class="form-error mt-2">{ data.Errors["aliases"] }</span>
 			}
@@ -1157,18 +1144,15 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 		<div class="collapsible-content">
 			<!-- Meta Title -->
 			<div class="form-group" x-data="{ charCount: 0 }" x-init="charCount = $refs.metaTitleInput.value.length">
-				<label for="meta_title" class="form-label">{ pc.T("seo.meta_title") }</label>
-				<input
-					type="text"
-					id="meta_title"
-					name="meta_title"
-					class="form-input"
-					x-ref="metaTitleInput"
-					value={ formVal(data.FormValues, "meta_title", data.MetaTitle) }
-					placeholder={ pc.T("seo.meta_title_hint") }
-					maxlength="70"
-					@input="charCount = $event.target.value.length"
-				/>
+				@label.Label(label.Props{For: "meta_title", Class: "block mb-1"}) { { pc.T("seo.meta_title") } }
+				@input.Input(input.Props{
+					ID:          "meta_title",
+					Name:        "meta_title",
+					Type:        input.TypeText,
+					Value:       formVal(data.FormValues, "meta_title", data.MetaTitle),
+					Placeholder: pc.T("seo.meta_title_hint"),
+					Attributes:  templ.Attributes{"x-ref": "metaTitleInput", "maxlength": "70", "@input": "charCount = $event.target.value.length"},
+				})
 				<span class="form-hint">
 					<span x-text="charCount"></span>/60 { pc.T("seo.chars_recommended") }
 					<span x-show="charCount > 60" class="text-warning"> - { pc.T("seo.may_be_truncated") }</span>
@@ -1176,7 +1160,7 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 			</div>
 			<!-- Meta Description -->
 			<div class="form-group" x-data="{ charCount: 0 }" x-init="charCount = $refs.metaDescInput.value.length">
-				<label for="meta_description" class="form-label">{ pc.T("seo.meta_description") }</label>
+				@label.Label(label.Props{For: "meta_description", Class: "block mb-1"}) { { pc.T("seo.meta_description") } }
 				<textarea
 					id="meta_description"
 					name="meta_description"
@@ -1196,51 +1180,51 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 			</div>
 			<!-- Meta Keywords -->
 			<div class="form-group">
-				<label for="meta_keywords" class="form-label">{ pc.T("seo.meta_keywords") }</label>
-				<input
-					type="text"
-					id="meta_keywords"
-					name="meta_keywords"
-					class="form-input"
-					value={ formVal(data.FormValues, "meta_keywords", data.MetaKeywords) }
-					placeholder="keyword1, keyword2, keyword3"
-					maxlength="255"
-				/>
+				@label.Label(label.Props{For: "meta_keywords", Class: "block mb-1"}) { { pc.T("seo.meta_keywords") } }
+				@input.Input(input.Props{
+					ID:          "meta_keywords",
+					Name:        "meta_keywords",
+					Type:        input.TypeText,
+					Value:       formVal(data.FormValues, "meta_keywords", data.MetaKeywords),
+					Placeholder: "keyword1, keyword2, keyword3",
+					Attributes:  templ.Attributes{"maxlength": "255"},
+				})
 				<span class="form-hint">{ pc.T("seo.meta_keywords_hint") }</span>
 			</div>
 			<!-- OG Image -->
 			<div class="form-group">
-				<label class="form-label">{ pc.T("seo.og_image") }</label>
+				@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("seo.og_image") } }
 				<div class="media-picker" x-data={ ogImagePickerXData(data) }>
 					<input type="hidden" name="og_image_id" :value="selectedId"/>
 					<div class="media-picker-preview" x-show="selectedId">
 						<img :src="selectedPath" alt="OG Image Preview" class="media-preview-img"/>
-						<button type="button" class="btn btn-sm btn-outline media-remove-btn" @click="clearSelection()">{ pc.T("btn.remove") }</button>
+						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Class: "media-remove-btn", Attributes: templ.Attributes{"@click": "clearSelection()"}}) {
+							{ pc.T("btn.remove") }
+						}
 					</div>
-					<button type="button" class="btn btn-outline" @click="openMediaModal()" x-show="!selectedId">
+					@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "openMediaModal()", "x-show": "!selectedId"}}) {
 						@iconImage16()
 						{ pc.T("seo.select_og_image") }
-					</button>
+					}
 					<span class="form-hint">{ pc.T("seo.og_image_hint") }</span>
 				</div>
 			</div>
 			<!-- Canonical URL -->
 			<div class="form-group">
-				<label for="canonical_url" class="form-label">{ pc.T("seo.canonical_url") }</label>
-				<input
-					type="url"
-					id="canonical_url"
-					name="canonical_url"
-					class="form-input"
-					value={ formVal(data.FormValues, "canonical_url", data.CanonicalURL) }
-					placeholder="https://example.com/original-page"
-					maxlength="2048"
-				/>
+				@label.Label(label.Props{For: "canonical_url", Class: "block mb-1"}) { { pc.T("seo.canonical_url") } }
+				@input.Input(input.Props{
+					ID:          "canonical_url",
+					Name:        "canonical_url",
+					Type:        input.TypeURL,
+					Value:       formVal(data.FormValues, "canonical_url", data.CanonicalURL),
+					Placeholder: "https://example.com/original-page",
+					Attributes:  templ.Attributes{"maxlength": "2048"},
+				})
 				<span class="form-hint">{ pc.T("seo.canonical_url_hint") }</span>
 			</div>
 			<!-- Robots Settings -->
 			<div class="form-group">
-				<label class="form-label">{ pc.T("seo.directives") }</label>
+				@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("seo.directives") } }
 				<div class="checkbox-group">
 					<label class="checkbox-label">
 						<input
@@ -1283,19 +1267,18 @@ templ schedulingSection(pc *PageContext, data PageFormViewData) {
 			@iconChevronRight()
 			<span>{ pc.T("schedule.title") }</span>
 			if data.HasScheduledAt {
-				<span class="badge badge-info ml-2">{ pc.T("schedule.scheduled") }</span>
+				@badge.Badge(badge.Props{Class: "badge-info ml-2"}) { { pc.T("schedule.scheduled") } }
 			}
 		</summary>
 		<div class="collapsible-content">
 			<div class="form-group">
-				<label for="scheduled_at" class="form-label">{ pc.T("schedule.datetime") }</label>
-				<input
-					type="datetime-local"
-					id="scheduled_at"
-					name="scheduled_at"
-					class="form-input"
-					value={ formVal(data.FormValues, "scheduled_at", data.ScheduledAt) }
-				/>
+				@label.Label(label.Props{For: "scheduled_at", Class: "block mb-1"}) { { pc.T("schedule.datetime") } }
+				@input.Input(input.Props{
+					ID:    "scheduled_at",
+					Name:  "scheduled_at",
+					Type:  input.TypeDateTime,
+					Value: formVal(data.FormValues, "scheduled_at", data.ScheduledAt),
+				})
 				<span class="form-hint">
 					{ pc.T("schedule.hint") }
 					if data.HasScheduledAt && data.ScheduledAtFmt != "" {
@@ -1304,8 +1287,8 @@ templ schedulingSection(pc *PageContext, data PageFormViewData) {
 					}
 				</span>
 			</div>
-			<div class="alert alert-info mt-3">
-				@iconInfo16()
+			@alert.Alert(alert.Props{Class: "alert-info mt-3"}) {
+				@icon.Info(icon.Props{Size: 16})
 				<div>
 					<strong>{ pc.T("schedule.how_it_works") }:</strong>
 					<ul class="ml-4 mt-1">
@@ -1314,7 +1297,7 @@ templ schedulingSection(pc *PageContext, data PageFormViewData) {
 						<li>{ pc.T("schedule.step3") }</li>
 					</ul>
 				</div>
-			</div>
+			}
 		</div>
 	</details>
 }
@@ -1353,14 +1336,14 @@ templ mediaDropzoneSelectArea(pc *PageContext) {
 				</template>
 			</div>
 			<div class="media-dropzone-actions">
-				<button type="button" class="btn btn-sm btn-outline" @click="openPicker()">
+				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "openPicker()"}}) {
 					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" x2="12" y1="3" y2="15"></line></svg>
 					{ pc.T("btn.change") }
-				</button>
-				<button type="button" class="btn btn-sm btn-outline btn-danger" @click="clearSelection()">
+				}
+				@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "clearSelection()"}}) {
 					@iconX14()
 					{ pc.T("btn.remove") }
-				</button>
+				}
 			</div>
 			<input type="hidden" name="featured_image_id" :value="selectedImage?.id"/>
 		</div>
@@ -1379,7 +1362,11 @@ templ mediaDropzoneSelectModal(pc *PageContext) {
 			</div>
 			<div class="media-dropzone-modal-toolbar">
 				<div class="media-dropzone-modal-search">
-					<input type="text" placeholder={ pc.T("media.search_media") } x-model="searchQuery" @input.debounce.300ms="loadMedia()" class="form-input"/>
+					@input.Input(input.Props{
+						Type:        input.TypeText,
+						Placeholder: pc.T("media.search_media"),
+						Attributes:  templ.Attributes{"x-model": "searchQuery", "@input.debounce.300ms": "loadMedia()"},
+					})
 				</div>
 				<div class="media-dropzone-modal-filter">
 					<select x-model="filterType" @change="loadMedia()" class="form-select">
@@ -1400,7 +1387,9 @@ templ mediaDropzoneSelectModal(pc *PageContext) {
 					<div class="media-dropzone-modal-empty">
 						@iconImagePlaceholderLarge()
 						<p>{ pc.T("media.no_media") }</p>
-						<a href="/admin/media/upload" class="btn btn-primary btn-sm">{ pc.T("media.upload") }</a>
+						@button.Button(button.Props{Size: button.SizeSm, Href: "/admin/media/upload"}) {
+							{ pc.T("media.upload") }
+						}
 					</div>
 				</template>
 				<template x-if="!loading && mediaItems.length > 0">
@@ -1434,20 +1423,22 @@ templ mediaDropzoneSelectModal(pc *PageContext) {
 			</div>
 			<template x-if="totalPages > 1">
 				<div class="media-dropzone-modal-pagination">
-					<button type="button" class="btn btn-sm btn-outline" :disabled="currentPage <= 1" @click="prevPage()">
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Attributes: templ.Attributes{":disabled": "currentPage <= 1", "@click": "prevPage()"}}) {
 						{ pc.T("pagination.previous") }
-					</button>
+					}
 					<span>{ pc.T("pagination.page") } <span x-text="currentPage"></span> { pc.T("pagination.of") } <span x-text="totalPages"></span></span>
-					<button type="button" class="btn btn-sm btn-outline" :disabled="currentPage >= totalPages" @click="nextPage()">
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Attributes: templ.Attributes{":disabled": "currentPage >= totalPages", "@click": "nextPage()"}}) {
 						{ pc.T("pagination.next") }
-					</button>
+					}
 				</div>
 			</template>
 			<div class="media-dropzone-modal-footer">
-				<button type="button" class="btn btn-outline" @click="closeModal()">{ pc.T("btn.cancel") }</button>
-				<button type="button" class="btn btn-primary" :disabled="!tempSelected" @click="confirmSelection()">
+				@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "closeModal()"}}) {
+					{ pc.T("btn.cancel") }
+				}
+				@button.Button(button.Props{Attributes: templ.Attributes{":disabled": "!tempSelected", "@click": "confirmSelection()"}}) {
 					{ pc.T("media.select_image") }
-				</button>
+				}
 			</div>
 		</div>
 	</div>
@@ -1468,16 +1459,27 @@ templ editorImageModal(pc *PageContext) {
 				</button>
 			</div>
 			<div class="editor-image-modal-toolbar">
-				<input type="text" id="editor-image-search" placeholder={ pc.T("media.search_media") } class="form-input"/>
+				@input.Input(input.Props{
+					ID:          "editor-image-search",
+					Type:        input.TypeText,
+					Placeholder: pc.T("media.search_media"),
+				})
 			</div>
 			<div class="editor-image-modal-content" id="editor-image-grid"></div>
 			<div id="editor-image-options" class="editor-image-options" style="display: none;">
 				<div class="form-group">
-					<label class="form-label">{ pc.T("editor.alt_text") } <span class="required">*</span></label>
-					<input type="text" id="editor-image-alt" class="form-input" maxlength="255" placeholder={ pc.T("media.alt_placeholder") }/>
+					@label.Label(label.Props{For: "editor-image-alt", Class: "block mb-1"}) {
+						{ pc.T("editor.alt_text") } <span class="required">*</span>
+					}
+					@input.Input(input.Props{
+						ID:          "editor-image-alt",
+						Type:        input.TypeText,
+						Placeholder: pc.T("media.alt_placeholder"),
+						Attributes:  templ.Attributes{"maxlength": "255"},
+					})
 				</div>
 				<div class="form-group">
-					<label class="form-label">{ pc.T("editor.image_size") }</label>
+					@label.Label(label.Props{For: "editor-image-size", Class: "block mb-1"}) { { pc.T("editor.image_size") } }
 					<select id="editor-image-size" class="form-select">
 						<option value="full">{ pc.T("editor.size_full") }</option>
 						<option value="medium" selected>{ pc.T("editor.size_medium") }</option>
@@ -1486,8 +1488,12 @@ templ editorImageModal(pc *PageContext) {
 				</div>
 			</div>
 			<div class="editor-image-modal-footer">
-				<button type="button" class="btn btn-outline" id="editor-image-cancel-btn">{ pc.T("btn.cancel") }</button>
-				<button type="button" class="btn btn-primary" id="editor-image-insert-btn" disabled>{ pc.T("editor.insert_image") }</button>
+				@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"id": "editor-image-cancel-btn"}}) {
+					{ pc.T("btn.cancel") }
+				}
+				@button.Button(button.Props{Disabled: true, Attributes: templ.Attributes{"id": "editor-image-insert-btn"}}) {
+					{ pc.T("editor.insert_image") }
+				}
 			</div>
 		</div>
 	</div>
@@ -1499,8 +1505,8 @@ templ editorImageModal(pc *PageContext) {
 
 templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 	<!-- TinyMCE Editor Scripts -->
-	<script src="/static/dist/js/tinymce/tinymce.min.js"></script>
-	<script>
+	<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/tinymce/tinymce.min.js"></script>
+	<script nonce={ templ.GetNonce(ctx) }>
 	// Store TinyMCE editor instance
 	let tinymceEditor = null;
 
@@ -1649,7 +1655,7 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 		});
 	});
 	</script>
-	<script>
+	<script nonce={ templ.GetNonce(ctx) }>
 	function createTranslation(pageId, langCode) {
 		fetch(`/admin/pages/${pageId}/translate/${langCode}`, {
 			method: 'POST',
@@ -1775,97 +1781,75 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 
 templ PageVersionsPage(pc *PageContext, data PageVersionsViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("versions.title") }</h1>
-				<p class="page-description">
-					<a href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d", data.PageID)) } class="text-link">{ data.PageTitle }</a>
-					{ " " }&mdash; { fmt.Sprintf("%d", data.TotalCount) } { pc.T("versions.version") }
-					if data.TotalCount != 1 {
-						{ "s" }
-					}
-				</p>
-			</div>
-			<div class="page-actions">
-				<a href={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d", data.PageID)) } class="btn btn-outline">
-					@iconArrowLeft()
-					{ pc.T("versions.back_to_page") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("versions.title"), "") {
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/admin/pages/%d", data.PageID)}) {
+				@icon.ArrowLeft(icon.Props{Size: 16})
+				{ pc.T("versions.back_to_page") }
+			}
+		}
 		if len(data.Versions) > 0 {
-			<div class="card">
-				<div class="table-responsive">
-					<table class="table">
-						<thead>
-							<tr>
-								<th>{ pc.T("versions.version") }</th>
-								<th>{ pc.T("label.title") }</th>
-								<th>{ pc.T("versions.changed_by") }</th>
-								<th>{ pc.T("versions.date") }</th>
-								<th class="text-right">{ pc.T("label.actions") }</th>
-							</tr>
-						</thead>
-						<tbody>
+			@card.Card() {
+				<div class="overflow-x-auto">
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { { pc.T("versions.version") } }
+								@table.Head() { { pc.T("label.title") } }
+								@table.Head() { { pc.T("versions.changed_by") } }
+								@table.Head() { { pc.T("versions.date") } }
+								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+							}
+						}
+						@table.Body() {
 							for _, version := range data.Versions {
 								@versionRow(pc, data, version)
 							}
-						</tbody>
-					</table>
+						}
+					}
 				</div>
 				if data.Pagination.ShouldShow() {
-					<div class="card-footer">
+					@card.Footer() {
 						@Pagination(pc, data.Pagination)
-					</div>
+					}
 				}
-			</div>
+			}
 		} else {
-			<div class="card">
-				<div class="card-body">
+			@card.Card() {
+				@card.Content() {
 					<div class="empty-state">
 						@iconClockLarge()
 						<p>{ pc.T("versions.no_versions") }</p>
 						<span class="empty-hint">{ pc.T("versions.no_versions_hint") }</span>
 					</div>
-				</div>
-			</div>
+				}
+			}
 		}
 	}
 }
 
 templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionView) {
-	<tr>
-		<td>
-			<span class="badge badge-info">#{ fmt.Sprintf("%d", version.ID) }</span>
-		</td>
-		<td>
+	@table.Row() {
+		@table.Cell() {
+			@badge.Badge(badge.Props{Class: "badge-info"}) { #{ fmt.Sprintf("%d", version.ID) } }
+		}
+		@table.Cell() {
 			<span class="version-title">{ version.Title }</span>
-		</td>
-		<td>
+		}
+		@table.Cell() {
 			<span class="user-name">{ version.ChangedByName }</span>
-		</td>
-		<td>{ version.CreatedAt }</td>
-		<td class="text-right">
+		}
+		@table.Cell() { { version.CreatedAt } }
+		@table.Cell(table.CellProps{Class: "text-right"}) {
 			<div class="action-buttons">
 				<div x-data="{ showPreview: false, showConfirm: false }" class="version-actions">
 					<!-- Preview Button -->
-					<button
-						type="button"
-						class="btn btn-sm btn-outline"
-						title={ pc.T("versions.preview") }
-						@click="showPreview = true"
-					>
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "showPreview = true", "title": pc.T("versions.preview")}}) {
 						@iconEye()
-					</button>
+					}
 					<!-- Restore Button -->
-					<button
-						type="button"
-						class="btn btn-sm btn-primary"
-						title={ pc.T("versions.restore") }
-						@click="showConfirm = true"
-					>
+					@button.Button(button.Props{Size: button.SizeSm, Attributes: templ.Attributes{"@click": "showConfirm = true", "title": pc.T("versions.restore")}}) {
 						@iconRestore()
-					</button>
+					}
 					<!-- Preview Modal -->
 					<div
 						class="modal-overlay"
@@ -1900,10 +1884,14 @@ templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersion
 								</div>
 							</div>
 							<div class="modal-footer">
-								<button type="button" class="btn btn-outline" @click="showPreview = false">{ pc.T("btn.close") }</button>
+								@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "showPreview = false"}}) {
+									{ pc.T("btn.close") }
+								}
 								<form action={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/versions/%d/restore", data.PageID, version.ID)) } method="POST" class="inline-form">
 									@csrfField()
-									<button type="submit" class="btn btn-primary">{ pc.T("versions.restore_this") }</button>
+									@button.Button(button.Props{Type: button.TypeSubmit}) {
+										{ pc.T("versions.restore_this") }
+									}
 								</form>
 							</div>
 						</div>
@@ -1927,18 +1915,22 @@ templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersion
 								<p class="text-muted">{ pc.T("versions.restore_note") }</p>
 							</div>
 							<div class="modal-footer">
-								<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
+								@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "showConfirm = false"}}) {
+									{ pc.T("btn.cancel") }
+								}
 								<form action={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/versions/%d/restore", data.PageID, version.ID)) } method="POST" class="inline-form">
 									@csrfField()
-									<button type="submit" class="btn btn-primary">{ pc.T("versions.restore_version") }</button>
+									@button.Button(button.Props{Type: button.TypeSubmit}) {
+										{ pc.T("versions.restore_version") }
+									}
 								</form>
 							</div>
 						</div>
 					</div>
 				</div>
 			</div>
-		</td>
-	</tr>
+		}
+	}
 }
 
 // =============================================================================
@@ -1999,8 +1991,4 @@ templ iconPlus14() {
 
 templ iconImage16() {
 	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg>
-}
-
-templ iconInfo16() {
-	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
 }

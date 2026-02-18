@@ -5,6 +5,14 @@ package admin
 
 import "fmt"
 import "encoding/json"
+import "github.com/olegiv/ocms-go/internal/views/components/alert"
+import "github.com/olegiv/ocms-go/internal/views/components/button"
+import "github.com/olegiv/ocms-go/internal/views/components/icon"
+import "github.com/olegiv/ocms-go/internal/views/components/badge"
+import "github.com/olegiv/ocms-go/internal/views/components/card"
+import "github.com/olegiv/ocms-go/internal/views/components/table"
+import "github.com/olegiv/ocms-go/internal/views/components/input"
+import "github.com/olegiv/ocms-go/internal/views/components/label"
 
 // =============================================================================
 // VIEW TYPES
@@ -172,42 +180,44 @@ func formCurrentLanguageCode(formValues map[string]string, lang *LanguageOption,
 
 templ FormsListPage(pc *PageContext, data FormsListViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<h1 class="page-title">{ pc.T("forms.title") }</h1>
-			<div class="page-actions">
-				<a href="/admin/forms/new" class="btn btn-primary">{ pc.T("forms.new") }</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("forms.title"), "") {
+			@button.Button(button.Props{Href: "/admin/forms/new"}) {
+				@icon.Plus(icon.Props{Size: 16})
+				{ pc.T("forms.new") }
+			}
+		}
 		if len(data.Forms) > 0 {
-			<div class="table-container">
-				<table class="table">
-					<thead>
-						<tr>
-							<th>{ pc.T("label.name") }</th>
-							<th>{ pc.T("label.title") }</th>
-							<th>{ pc.T("label.slug") }</th>
-							<th>{ pc.T("label.language") }</th>
-							<th>{ pc.T("forms.submissions") }</th>
-							<th>{ pc.T("label.status") }</th>
-							<th>{ pc.T("label.actions") }</th>
-						</tr>
-					</thead>
-					<tbody>
+			<div class="overflow-x-auto">
+				@table.Table() {
+					@table.Header() {
+						@table.Row() {
+							@table.Head() { { pc.T("label.name") } }
+							@table.Head() { { pc.T("label.title") } }
+							@table.Head() { { pc.T("label.slug") } }
+							@table.Head() { { pc.T("label.language") } }
+							@table.Head() { { pc.T("forms.submissions") } }
+							@table.Head() { { pc.T("label.status") } }
+							@table.Head() { { pc.T("label.actions") } }
+						}
+					}
+					@table.Body() {
 						for _, item := range data.Forms {
-							<tr>
-								<td>
+							@table.Row() {
+								@table.Cell() {
 									<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d", item.ID)) } class="link-primary">{ item.Name }</a>
-								</td>
-								<td>{ item.Title }</td>
-								<td><code>{ item.Slug }</code></td>
-								<td>
+								}
+								@table.Cell() { { item.Title } }
+								@table.Cell() { <code>{ item.Slug }</code> }
+								@table.Cell() {
 									if item.LanguageCode != "" {
-										<span class="badge badge-outline">{ item.LanguageCode }</span>
+										@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+											{ item.LanguageCode }
+										}
 									} else {
 										<span class="text-muted">-</span>
 									}
-								</td>
-								<td>
+								}
+								@table.Cell() {
 									<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions", item.ID)) } class="link-secondary">
 										{ fmt.Sprintf("%d", item.SubmissionCount) }
 										if item.SubmissionCount != 1 {
@@ -216,50 +226,65 @@ templ FormsListPage(pc *PageContext, data FormsListViewData) {
 											{ " " + pc.T("forms.submission") }
 										}
 										if item.UnreadCount > 0 {
-											<span class="badge badge-primary">{ fmt.Sprintf("%d", item.UnreadCount) } { pc.T("forms.new_badge") }</span>
+											@badge.Badge(badge.Props{}) {
+												{ fmt.Sprintf("%d", item.UnreadCount) } { pc.T("forms.new_badge") }
+											}
 										}
 									</a>
-								</td>
-								<td>
+								}
+								@table.Cell() {
 									if item.IsActive {
-										<span class="badge badge-success">{ pc.T("forms.active") }</span>
+										@badge.Badge(badge.Props{Class: "badge-success"}) {
+											{ pc.T("forms.active") }
+										}
 									} else {
-										<span class="badge badge-secondary">{ pc.T("forms.inactive") }</span>
+										@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+											{ pc.T("forms.inactive") }
+										}
 									}
-								</td>
-								<td>
+								}
+								@table.Cell() {
 									<div class="btn-group">
-										<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d", item.ID)) } class="btn btn-sm btn-secondary">{ pc.T("btn.edit") }</a>
-										<a href={ templ.SafeURL(fmt.Sprintf("/forms/%s", item.Slug)) } class="btn btn-sm btn-outline" target="_blank">{ pc.T("forms.preview") }</a>
-										<button type="button"
-											class="btn btn-sm btn-danger"
-											hx-delete={ fmt.Sprintf("/admin/forms/%d", item.ID) }
-											hx-confirm={ pc.T("forms.confirm_delete") }
-											hx-target="closest tr"
-											hx-swap="outerHTML"
-										>
+										@button.Button(button.Props{Variant: button.VariantSecondary, Size: button.SizeSm, Href: fmt.Sprintf("/admin/forms/%d", item.ID)}) {
+											{ pc.T("btn.edit") }
+										}
+										@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/forms/%s", item.Slug), Target: "_blank"}) {
+											{ pc.T("forms.preview") }
+										}
+										@button.Button(button.Props{
+											Variant: button.VariantDestructive,
+											Size: button.SizeSm,
+											Attributes: templ.Attributes{
+												"hx-delete": fmt.Sprintf("/admin/forms/%d", item.ID),
+												"hx-confirm": pc.T("forms.confirm_delete"),
+												"hx-target": "closest tr",
+												"hx-swap": "outerHTML",
+											},
+										}) {
 											{ pc.T("btn.delete") }
-										</button>
+										}
 									</div>
-								</td>
-							</tr>
+								}
+							}
 						}
-					</tbody>
-				</table>
+					}
+				}
 			</div>
 		} else {
-			<div class="card">
-				<div class="card-body">
+			@card.Card(card.Props{}) {
+				@card.Content(card.ContentProps{}) {
 					<div class="empty-state">
 						@iconFormDocLarge()
 						<p>{ pc.T("forms.no_forms") }</p>
 						<span class="empty-hint">{ pc.T("forms.no_forms_hint") }</span>
 						<div class="empty-state-action">
-							<a href="/admin/forms/new" class="btn btn-primary">{ pc.T("forms.create") }</a>
+							@button.Button(button.Props{Href: "/admin/forms/new"}) {
+								{ pc.T("forms.create") }
+							}
 						</div>
 					</div>
-				</div>
-			</div>
+				}
+			}
 		}
 	}
 }
@@ -270,30 +295,27 @@ templ FormsListPage(pc *PageContext, data FormsListViewData) {
 
 templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<h1 class="page-title">
-				if data.IsEdit {
-					{ pc.T("forms.edit") }
-				} else {
-					{ pc.T("forms.new") }
+		@PageHeader(formPageTitle(pc, data.IsEdit), "") {
+			@button.Button(button.Props{Variant: button.VariantSecondary, Href: "/admin/forms"}) {
+				{ pc.T("forms.back_to_forms") }
+			}
+			if data.IsEdit {
+				@button.Button(button.Props{Variant: button.VariantSecondary, Href: fmt.Sprintf("/admin/forms/%d/submissions", data.FormID)}) {
+					{ pc.T("forms.view_submissions") }
 				}
-			</h1>
-			<div class="page-actions">
-				<a href="/admin/forms" class="btn btn-secondary">{ pc.T("forms.back_to_forms") }</a>
-				if data.IsEdit {
-					<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions", data.FormID)) } class="btn btn-secondary">{ pc.T("forms.view_submissions") }</a>
-					<a href={ templ.SafeURL(fmt.Sprintf("/forms/%s", data.FormSlug)) } class="btn btn-outline" target="_blank">{ pc.T("forms.preview") }</a>
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/forms/%s", data.FormSlug), Target: "_blank"}) {
+					{ pc.T("forms.preview") }
 				}
-			</div>
-		</div>
+			}
+		}
 		<div class="form-builder-container">
 			<div class="form-builder-main">
 				<!-- Form Settings -->
-				<div class="card">
-					<div class="card-header">
+				@card.Card(card.Props{}) {
+					@card.Header(card.HeaderProps{Class: "border-b pb-4"}) {
 						<h3>{ pc.T("forms.form_settings") }</h3>
-					</div>
-					<div class="card-body">
+					}
+					@card.Content(card.ContentProps{}) {
 						<form method="POST" action={ templ.SafeURL(formFormAction(data)) }>
 							@csrfField()
 							if data.IsEdit {
@@ -301,31 +323,35 @@ templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 							}
 							<div class="form-row">
 								<div class="form-group col-md-6">
-									<label for="name" class="form-label">{ pc.T("forms.internal_name") } *</label>
-									<input type="text"
-										id="name"
-										name="name"
-										class={ "form-input", templ.KV("is-invalid", data.Errors["name"] != "") }
-										value={ formFormVal(data.FormValues, "name", data.FormName, data.IsEdit) }
-										required
-										maxlength="255"
-									/>
+									@label.Label(label.Props{For: "name", Class: "block mb-1"}) {
+										{ pc.T("forms.internal_name") } *
+									}
+									@input.Input(input.Props{
+										ID: "name",
+										Name: "name",
+										Type: input.TypeText,
+										Value: formFormVal(data.FormValues, "name", data.FormName, data.IsEdit),
+										HasError: data.Errors["name"] != "",
+										Attributes: templ.Attributes{"required": true, "maxlength": "255"},
+									})
 									if data.Errors["name"] != "" {
 										<div class="form-error">{ data.Errors["name"] }</div>
 									}
 									<small class="form-text">{ pc.T("forms.internal_name_hint") }</small>
 								</div>
 								<div class="form-group col-md-6">
-									<label for="slug" class="form-label">{ pc.T("label.slug") } *</label>
-									<input type="text"
-										id="slug"
-										name="slug"
-										class={ "form-input", templ.KV("is-invalid", data.Errors["slug"] != "") }
-										value={ formFormVal(data.FormValues, "slug", data.FormSlug, data.IsEdit) }
-										pattern="[a-z0-9-]+"
-										placeholder="auto-generated-from-name"
-										maxlength="255"
-									/>
+									@label.Label(label.Props{For: "slug", Class: "block mb-1"}) {
+										{ pc.T("label.slug") } *
+									}
+									@input.Input(input.Props{
+										ID: "slug",
+										Name: "slug",
+										Type: input.TypeText,
+										Value: formFormVal(data.FormValues, "slug", data.FormSlug, data.IsEdit),
+										Placeholder: "auto-generated-from-name",
+										HasError: data.Errors["slug"] != "",
+										Attributes: templ.Attributes{"pattern": "[a-z0-9-]+", "maxlength": "255"},
+									})
 									if data.Errors["slug"] != "" {
 										<div class="form-error">{ data.Errors["slug"] }</div>
 									}
@@ -333,40 +359,48 @@ templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 								</div>
 							</div>
 							<div class="form-group">
-								<label for="title" class="form-label">{ pc.T("forms.display_title") } *</label>
-								<input type="text"
-									id="title"
-									name="title"
-									class={ "form-input", templ.KV("is-invalid", data.Errors["title"] != "") }
-									value={ formFormVal(data.FormValues, "title", data.FormTitle, data.IsEdit) }
-									required
-									maxlength="255"
-								/>
+								@label.Label(label.Props{For: "title", Class: "block mb-1"}) {
+									{ pc.T("forms.display_title") } *
+								}
+								@input.Input(input.Props{
+									ID: "title",
+									Name: "title",
+									Type: input.TypeText,
+									Value: formFormVal(data.FormValues, "title", data.FormTitle, data.IsEdit),
+									HasError: data.Errors["title"] != "",
+									Attributes: templ.Attributes{"required": true, "maxlength": "255"},
+								})
 								if data.Errors["title"] != "" {
 									<div class="form-error">{ data.Errors["title"] }</div>
 								}
 								<small class="form-text">{ pc.T("forms.display_title_hint") }</small>
 							</div>
 							<div class="form-group">
-								<label for="description" class="form-label">{ pc.T("label.description") }</label>
+								@label.Label(label.Props{For: "description", Class: "block mb-1"}) {
+									{ pc.T("label.description") }
+								}
 								<textarea id="description" name="description" class="form-input" rows="2">{ formFormVal(data.FormValues, "description", data.FormDescription, data.IsEdit) }</textarea>
 								<small class="form-text">{ pc.T("forms.description_hint") }</small>
 							</div>
 							<div class="form-group">
-								<label for="success_message" class="form-label">{ pc.T("forms.success_message") }</label>
+								@label.Label(label.Props{For: "success_message", Class: "block mb-1"}) {
+									{ pc.T("forms.success_message") }
+								}
 								<textarea id="success_message" name="success_message" class="form-input" rows="2">{ formFormVal(data.FormValues, "success_message", data.SuccessMessage, data.IsEdit) }</textarea>
 								<small class="form-text">{ pc.T("forms.success_message_hint") }</small>
 							</div>
 							<div class="form-group">
-								<label for="email_to" class="form-label">{ pc.T("forms.notification_email") }</label>
-								<input type="email"
-									id="email_to"
-									name="email_to"
-									class="form-input"
-									value={ formFormVal(data.FormValues, "email_to", data.EmailTo, data.IsEdit) }
-									placeholder="admin@example.com"
-									maxlength="255"
-								/>
+								@label.Label(label.Props{For: "email_to", Class: "block mb-1"}) {
+									{ pc.T("forms.notification_email") }
+								}
+								@input.Input(input.Props{
+									ID: "email_to",
+									Name: "email_to",
+									Type: input.TypeEmail,
+									Value: formFormVal(data.FormValues, "email_to", data.EmailTo, data.IsEdit),
+									Placeholder: "admin@example.com",
+									Attributes: templ.Attributes{"maxlength": "255"},
+								})
 								<small class="form-text">{ pc.T("forms.notification_email_hint") }</small>
 							</div>
 							<div class="form-group">
@@ -381,7 +415,9 @@ templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 							</div>
 							if data.HasMultipleLanguages {
 								<div class="form-group">
-									<label for="language_code" class="form-label">{ pc.T("label.language") }</label>
+									@label.Label(label.Props{For: "language_code", Class: "block mb-1"}) {
+										{ pc.T("label.language") }
+									}
 									<select
 										id="language_code"
 										name={ languageSelectName(data.IsEdit) }
@@ -410,18 +446,20 @@ templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 								<input type="hidden" name="language_code" value={ data.Language.Code }/>
 							}
 							<div class="form-actions">
-								<button type="submit" class="btn btn-primary">
+								@button.Button(button.Props{Type: button.TypeSubmit}) {
 									if data.IsEdit {
 										{ pc.T("forms.update_form") }
 									} else {
 										{ pc.T("forms.create_form") }
 									}
-								</button>
-								<a href="/admin/forms" class="btn btn-secondary">{ pc.T("btn.cancel") }</a>
+								}
+								@button.Button(button.Props{Variant: button.VariantSecondary, Href: "/admin/forms"}) {
+									{ pc.T("btn.cancel") }
+								}
 							</div>
 						</form>
-					</div>
-				</div>
+					}
+				}
 				if data.IsEdit {
 					<!-- Field Builder -->
 					@formsFieldBuilder(pc, data)
@@ -452,15 +490,22 @@ func languageSelectName(isEdit bool) string {
 	return "language_code"
 }
 
+func formPageTitle(pc *PageContext, isEdit bool) string {
+	if isEdit {
+		return pc.T("forms.edit")
+	}
+	return pc.T("forms.new")
+}
+
 templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
-	<div class="card mt-4" x-data="formFieldBuilder()">
-		<div class="card-header">
+	@card.Card(card.Props{Class: "mt-4", Attributes: templ.Attributes{"x-data": "formFieldBuilder()"}}) {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
 			<h3>{ pc.T("forms.form_fields") }</h3>
-			<button type="button" class="btn btn-primary btn-sm" @click="openAddModal()">
+			@button.Button(button.Props{Size: button.SizeSm, Attributes: templ.Attributes{"@click": "openAddModal()"}}) {
 				{ pc.T("forms.add_field") }
-			</button>
-		</div>
-		<div class="card-body">
+			}
+		}
+		@card.Content(card.ContentProps{}) {
 			<template x-if="fields.length === 0">
 				<div class="empty-state">
 					<p>{ pc.T("forms.no_fields") }</p>
@@ -479,23 +524,25 @@ templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
 						<div class="field-item-content">
 							<div class="field-item-label" x-text="field.label"></div>
 							<div class="field-item-meta">
-								<span class="badge badge-secondary" x-text="field.type"></span>
+								@badge.Badge(badge.Props{Variant: badge.VariantSecondary, Attributes: templ.Attributes{"x-text": "field.type"}})
 								<code x-text="field.name"></code>
-								<span class="badge badge-primary" x-show="field.is_required">{ pc.T("forms.required") }</span>
+								@badge.Badge(badge.Props{Attributes: templ.Attributes{"x-show": "field.is_required"}}) {
+									{ pc.T("forms.required") }
+								}
 							</div>
 						</div>
 						<div class="field-item-actions">
-							<button type="button" class="btn btn-sm btn-secondary" @click="openEditModal(field)">
+							@button.Button(button.Props{Variant: button.VariantSecondary, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "openEditModal(field)"}}) {
 								{ pc.T("btn.edit") }
-							</button>
-							<button type="button" class="btn btn-sm btn-danger" @click="deleteField(field.id)">
+							}
+							@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"@click": "deleteField(field.id)"}}) {
 								{ pc.T("btn.delete") }
-							</button>
+							}
 						</div>
 					</div>
 				</template>
 			</div>
-		</div>
+		}
 		<!-- Add/Edit Field Modal -->
 		<template x-if="showModal">
 			<div class="modal-overlay" x-show="showModal" @click.self="closeModal()" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;">
@@ -506,7 +553,9 @@ templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
 					</div>
 					<div class="modal-body" style="padding:1rem;">
 						<div class="form-group">
-							<label class="form-label">{ pc.T("forms.field_type") } *</label>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("forms.field_type") } *
+							}
 							<select class="form-input" x-model="editingField.type">
 								<template x-for="t in (editingField && editingField.id ? fieldTypes : getAvailableFieldTypes())" :key="t">
 									<option :value="t" x-text="t"></option>
@@ -514,41 +563,64 @@ templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
 							</select>
 						</div>
 						<div class="form-group">
-							<label class="form-label">{ pc.T("forms.field_label") } *</label>
-							<input type="text" class="form-input" x-model="editingField.label" maxlength="255"/>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("forms.field_label") } *
+							}
+							@input.Input(input.Props{
+								Type: input.TypeText,
+								Attributes: templ.Attributes{"x-model": "editingField.label", "maxlength": "255"},
+							})
 						</div>
 						<div class="form-group" x-show="editingField && editingField.type !== 'captcha'">
-							<label class="form-label">{ pc.T("forms.field_name") }</label>
-							<input type="text" class="form-input" x-model="editingField.name" placeholder="auto-generated" maxlength="255"/>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("forms.field_name") }
+							}
+							@input.Input(input.Props{
+								Type: input.TypeText,
+								Placeholder: "auto-generated",
+								Attributes: templ.Attributes{"x-model": "editingField.name", "maxlength": "255"},
+							})
 							<small class="form-text">{ pc.T("forms.field_name_hint") }</small>
 						</div>
 						<div class="form-group" x-show="editingField && editingField.type !== 'captcha'">
-							<label class="form-label">{ pc.T("forms.field_placeholder") }</label>
-							<input type="text" class="form-input" x-model="editingField.placeholder" maxlength="255"/>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("forms.field_placeholder") }
+							}
+							@input.Input(input.Props{
+								Type: input.TypeText,
+								Attributes: templ.Attributes{"x-model": "editingField.placeholder", "maxlength": "255"},
+							})
 						</div>
 						<div class="form-group" x-show="editingField && editingField.type !== 'captcha'">
-							<label class="form-label">{ pc.T("forms.field_help_text") }</label>
-							<input type="text" class="form-input" x-model="editingField.help_text" maxlength="255"/>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("forms.field_help_text") }
+							}
+							@input.Input(input.Props{
+								Type: input.TypeText,
+								Attributes: templ.Attributes{"x-model": "editingField.help_text", "maxlength": "255"},
+							})
 							<small class="form-text">{ pc.T("forms.field_help_hint") }</small>
 						</div>
 						<div class="form-group" x-show="showOptionsField()">
-							<label class="form-label">{ pc.T("forms.field_options") }</label>
+							@label.Label(label.Props{Class: "block mb-1"}) {
+								{ pc.T("forms.field_options") }
+							}
 							<textarea class="form-input" rows="4" x-model="editingField.options" placeholder={ "Option 1\nOption 2\nOption 3" }></textarea>
 							<small class="form-text">{ pc.T("forms.field_options_hint") }</small>
 						</div>
 						<!-- Captcha field info -->
 						<template x-if="editingField && editingField.type === 'captcha'">
-							<div class="alert alert-info" style="margin-bottom: 1rem;">
+							@alert.Alert(alert.Props{Class: "alert-info mb-4"}) {
 								<strong>{ pc.T("forms.captcha_info_title") }</strong>
-								<p style="margin: 0.5rem 0 0 0;">{ pc.T("forms.captcha_info_text") }</p>
+								<p class="mt-2">{ pc.T("forms.captcha_info_text") }</p>
 								if !data.HcaptchaEnabled {
-									<div class="alert alert-warning" style="margin-top: 0.5rem; margin-bottom: 0;">
+									@alert.Alert(alert.Props{Class: "alert-warning mt-2 mb-0"}) {
 										<strong>{ pc.T("forms.captcha_warning_title") }</strong>
 										{ " " + pc.T("forms.captcha_warning_text") + " " }
 										<a href="/admin/hcaptcha">{ pc.T("forms.captcha_configure_link") }</a>
-									</div>
+									}
 								}
-							</div>
+							}
 						</template>
 						<div class="form-group" x-show="editingField && editingField.type !== 'captcha'">
 							<label class="checkbox-label">
@@ -558,18 +630,22 @@ templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
 						</div>
 					</div>
 					<div class="modal-footer" style="padding:1rem;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:0.5rem;">
-						<button type="button" class="btn btn-outline" @click="closeModal()">{ pc.T("btn.cancel") }</button>
-						<button type="button" class="btn btn-primary" @click="saveField()">{ pc.T("forms.save_field") }</button>
+						@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "closeModal()"}}) {
+							{ pc.T("btn.cancel") }
+						}
+						@button.Button(button.Props{Attributes: templ.Attributes{"@click": "saveField()"}}) {
+							{ pc.T("forms.save_field") }
+						}
 					</div>
 				</div>
 			</div>
 		</template>
-	</div>
+	}
 }
 
 templ formsTranslationsPanel(pc *PageContext, data FormFormViewData) {
-	<div class="card mt-4">
-		<div class="card-header">
+	@card.Card(card.Props{Class: "mt-4"}) {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
 			<h3>
 				@iconTranslate()
 				{ pc.T("forms.translations") }
@@ -579,8 +655,8 @@ templ formsTranslationsPanel(pc *PageContext, data FormFormViewData) {
 					{ pc.T("forms.current_language") }: { data.Language.Name }
 				</span>
 			}
-		</div>
-		<div class="card-body">
+		}
+		@card.Content(card.ContentProps{}) {
 			if len(data.Translations) > 0 {
 				<div class="translations-list">
 					<h4 class="translations-subtitle">{ pc.T("forms.existing_translations") }</h4>
@@ -603,10 +679,16 @@ templ formsTranslationsPanel(pc *PageContext, data FormFormViewData) {
 						for _, lang := range data.MissingLanguages {
 							<form action={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/translate/%s", data.FormID, lang.Code)) } method="POST" class="inline-form">
 								@csrfField()
-								<button type="submit" class="btn btn-sm btn-outline translation-add-btn" title={ "Create " + lang.Name + " translation" }>
+								@button.Button(button.Props{
+									Variant: button.VariantOutline,
+									Size: button.SizeSm,
+									Type: button.TypeSubmit,
+									Class: "translation-add-btn",
+									Attributes: templ.Attributes{"title": "Create " + lang.Name + " translation"},
+								}) {
 									@iconPlus14()
 									{ lang.Code } - { lang.Name }
-								</button>
+								}
 							</form>
 						}
 					</div>
@@ -615,12 +697,12 @@ templ formsTranslationsPanel(pc *PageContext, data FormFormViewData) {
 			if len(data.Translations) == 0 && len(data.MissingLanguages) == 0 {
 				<p class="translations-empty">{ pc.T("forms.all_translations_exist") }</p>
 			}
-		</div>
-	</div>
+		}
+	}
 }
 
 templ formsFieldBuilderScript(pc *PageContext, data FormFormViewData) {
-	<script>
+	<script nonce={ templ.GetNonce(ctx) }>
 	function formFieldBuilder() {
 		return {
 			formId: { fmt.Sprintf("%d", data.FormID) },
@@ -774,18 +856,19 @@ templ formsFieldBuilderScript(pc *PageContext, data FormFormViewData) {
 
 templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<h1 class="page-title">{ pc.T("forms.submissions") } - { data.FormName }</h1>
-			<div class="page-actions">
-				if len(data.Submissions) > 0 && !data.IsDemoMode {
-					<form action={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/export", data.FormID)) } method="POST" class="d-inline">
-						@csrfField()
-						<button type="submit" class="btn btn-secondary">{ pc.T("forms.export_csv") }</button>
-					</form>
-				}
-				<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d", data.FormID)) } class="btn btn-outline">{ pc.T("forms.back_to_form") }</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("forms.submissions") + " - " + data.FormName, "") {
+			if len(data.Submissions) > 0 && !data.IsDemoMode {
+				<form action={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/export", data.FormID)) } method="POST" class="d-inline">
+					@csrfField()
+					@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit}) {
+						{ pc.T("forms.export_csv") }
+					}
+				</form>
+			}
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/admin/forms/%d", data.FormID)}) {
+				{ pc.T("forms.back_to_form") }
+			}
+		}
 		<div class="stats-bar">
 			<div class="stat">
 				<span class="stat-value">{ fmt.Sprintf("%d", data.TotalCount) }</span>
@@ -797,88 +880,112 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 			</div>
 		</div>
 		if len(data.Submissions) > 0 {
-			<div class="table-container">
-				<table class="table">
-					<thead>
-						<tr>
-							<th class="col-w-60">ID</th>
-							<th>{ pc.T("forms.preview") }</th>
-							<th class="col-w-160">{ pc.T("forms.submitted") }</th>
-							<th class="col-w-120">{ pc.T("forms.ip_address") }</th>
-							<th class="col-w-80">{ pc.T("label.status") }</th>
-							<th class="col-w-150">{ pc.T("label.actions") }</th>
-						</tr>
-					</thead>
-					<tbody>
-						for _, sub := range data.Submissions {
-							<tr class={ templ.KV("unread", !sub.IsRead) }>
-								<td>
-									<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID)) } class="link-primary">
-										{ fmt.Sprintf("#%d", sub.ID) }
-									</a>
-								</td>
-								<td>
-									<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID)) } class="submission-preview">
-										if sub.Preview != "" {
-											{ sub.Preview }
-										} else {
-											<em>{ pc.T("forms.no_preview") }</em>
-										}
-									</a>
-								</td>
-								<td>{ sub.CreatedAt }</td>
-								<td>
-									if sub.IPAddress != "" {
-										<code>{ sub.IPAddress }</code>
-									} else {
-										<span class="text-muted">-</span>
-									}
-								</td>
-								<td>
-									if sub.IsRead {
-										<span class="badge badge-secondary">{ pc.T("forms.status_read") }</span>
-									} else {
-										<span class="badge badge-primary">{ pc.T("forms.status_new") }</span>
-									}
-								</td>
-								<td>
-									<div class="btn-group">
-										<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID)) } class="btn btn-sm btn-secondary">{ pc.T("forms.view") }</a>
-										<button type="button"
-											class="btn btn-sm btn-danger"
-											hx-delete={ fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID) }
-											hx-confirm={ pc.T("forms.confirm_delete_submission") }
-											hx-target="closest tr"
-											hx-swap="outerHTML"
-										>
-											{ pc.T("btn.delete") }
-										</button>
-									</div>
-								</td>
-							</tr>
+			<div class="overflow-x-auto">
+				@table.Table() {
+					@table.Header() {
+						@table.Row() {
+							@table.Head(table.HeadProps{Class: "w-[60px]"}) { ID }
+							@table.Head() { { pc.T("forms.preview") } }
+							@table.Head(table.HeadProps{Class: "w-[160px]"}) { { pc.T("forms.submitted") } }
+							@table.Head(table.HeadProps{Class: "w-[120px]"}) { { pc.T("forms.ip_address") } }
+							@table.Head(table.HeadProps{Class: "w-[80px]"}) { { pc.T("label.status") } }
+							@table.Head(table.HeadProps{Class: "w-[150px]"}) { { pc.T("label.actions") } }
 						}
-					</tbody>
-				</table>
+					}
+					@table.Body() {
+						for _, sub := range data.Submissions {
+							if !sub.IsRead {
+								@table.Row(table.RowProps{Class: "unread"}) {
+									@submissionRowCells(pc, data, sub)
+								}
+							} else {
+								@table.Row() {
+									@submissionRowCells(pc, data, sub)
+								}
+							}
+						}
+					}
+				}
 			</div>
 			if data.Pagination.ShouldShow() {
-				<div class="card-footer">
-					@Pagination(pc, data.Pagination)
-				</div>
+				@card.Card(card.Props{}) {
+					@card.Footer(card.FooterProps{}) {
+						@Pagination(pc, data.Pagination)
+					}
+				}
 			}
 		} else {
-			<div class="card">
-				<div class="card-body">
+			@card.Card(card.Props{}) {
+				@card.Content(card.ContentProps{}) {
 					<div class="empty-state">
 						@iconMailLarge()
 						<p>{ pc.T("forms.no_submissions") }</p>
 						<span class="empty-hint">{ pc.T("forms.no_submissions_hint") }</span>
 						<div class="empty-state-action">
-							<a href={ templ.SafeURL(fmt.Sprintf("/forms/%s", data.FormSlug)) } class="btn btn-primary" target="_blank">{ pc.T("forms.view_form") }</a>
+							@button.Button(button.Props{Href: fmt.Sprintf("/forms/%s", data.FormSlug), Target: "_blank"}) {
+								{ pc.T("forms.view_form") }
+							}
 						</div>
 					</div>
-				</div>
-			</div>
+				}
+			}
 		}
+	}
+}
+
+// submissionRowCells renders the cells for a submission row (extracted to avoid duplication)
+templ submissionRowCells(pc *PageContext, data SubmissionsListViewData, sub SubmissionItemView) {
+	@table.Cell() {
+		<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID)) } class="link-primary">
+			{ fmt.Sprintf("#%d", sub.ID) }
+		</a>
+	}
+	@table.Cell() {
+		<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID)) } class="submission-preview">
+			if sub.Preview != "" {
+				{ sub.Preview }
+			} else {
+				<em>{ pc.T("forms.no_preview") }</em>
+			}
+		</a>
+	}
+	@table.Cell() { { sub.CreatedAt } }
+	@table.Cell() {
+		if sub.IPAddress != "" {
+			<code>{ sub.IPAddress }</code>
+		} else {
+			<span class="text-muted">-</span>
+		}
+	}
+	@table.Cell() {
+		if sub.IsRead {
+			@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+				{ pc.T("forms.status_read") }
+			}
+		} else {
+			@badge.Badge(badge.Props{}) {
+				{ pc.T("forms.status_new") }
+			}
+		}
+	}
+	@table.Cell() {
+		<div class="btn-group">
+			@button.Button(button.Props{Variant: button.VariantSecondary, Size: button.SizeSm, Href: fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID)}) {
+				{ pc.T("forms.view") }
+			}
+			@button.Button(button.Props{
+				Variant: button.VariantDestructive,
+				Size: button.SizeSm,
+				Attributes: templ.Attributes{
+					"hx-delete": fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID),
+					"hx-confirm": pc.T("forms.confirm_delete_submission"),
+					"hx-target": "closest tr",
+					"hx-swap": "outerHTML",
+				},
+			}) {
+				{ pc.T("btn.delete") }
+			}
+		</div>
 	}
 }
 
@@ -888,20 +995,21 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 
 templ FormsSubmissionViewPage(pc *PageContext, data SubmissionViewViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<h1 class="page-title">{ pc.T("forms.submission_title") } { fmt.Sprintf("#%d", data.SubmissionID) }</h1>
-			<div class="page-actions">
-				<button type="button"
-					class="btn btn-danger"
-					hx-delete={ fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, data.SubmissionID) }
-					hx-confirm={ pc.T("forms.confirm_delete_submission") }
-					hx-redirect={ fmt.Sprintf("/admin/forms/%d/submissions", data.FormID) }
-				>
-					{ pc.T("btn.delete") }
-				</button>
-				<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions", data.FormID)) } class="btn btn-outline">{ pc.T("forms.back_to_submissions") }</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("forms.submission_title") + " " + fmt.Sprintf("#%d", data.SubmissionID), "") {
+			@button.Button(button.Props{
+				Variant: button.VariantDestructive,
+				Attributes: templ.Attributes{
+					"hx-delete": fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, data.SubmissionID),
+					"hx-confirm": pc.T("forms.confirm_delete_submission"),
+					"hx-redirect": fmt.Sprintf("/admin/forms/%d/submissions", data.FormID),
+				},
+			}) {
+				{ pc.T("btn.delete") }
+			}
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/admin/forms/%d/submissions", data.FormID)}) {
+				{ pc.T("forms.back_to_submissions") }
+			}
+		}
 		<div class="submission-detail">
 			<div class="submission-meta">
 				<div class="meta-item">

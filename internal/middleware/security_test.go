@@ -66,6 +66,9 @@ func TestSecurityHeaders(t *testing.T) {
 			if tt.wantCSP && !strings.Contains(csp, "default-src") {
 				t.Error("CSP should contain default-src directive")
 			}
+			if tt.wantCSP && !strings.Contains(csp, "nonce-") {
+				t.Error("CSP should contain nonce in script-src")
+			}
 
 			// Check X-Frame-Options header
 			frame := rec.Header().Get("X-Frame-Options")
@@ -195,6 +198,45 @@ func TestBuildCSP(t *testing.T) {
 	}
 	if !strings.Contains(csp, "; ") {
 		t.Error("CSP directives should be separated by semicolons")
+	}
+}
+
+func TestDefaultSecurityHeadersConfig_ProductionCSPIsStrict(t *testing.T) {
+	cfg := DefaultSecurityHeadersConfig(false)
+	if strings.Contains(cfg.ContentSecurityPolicy, "script-src") &&
+		strings.Contains(cfg.ContentSecurityPolicy, "script-src 'self' 'unsafe-inline'") {
+		t.Error("production CSP must not allow 'unsafe-inline' for scripts")
+	}
+}
+
+func TestDefaultSecurityHeadersConfig_DevelopmentCSPAllowsUnsafeDirectives(t *testing.T) {
+	cfg := DefaultSecurityHeadersConfig(true)
+	if !strings.Contains(cfg.ContentSecurityPolicy, "'unsafe-inline'") {
+		t.Error("development CSP should allow 'unsafe-inline' for DX")
+	}
+	if !strings.Contains(cfg.ContentSecurityPolicy, "'unsafe-eval'") {
+		t.Error("development CSP should allow 'unsafe-eval' for DX")
+	}
+}
+
+func TestSecurityHeadersSetsCSPNonceInContext(t *testing.T) {
+	cfg := DefaultSecurityHeadersConfig(false)
+	var capturedNonce string
+
+	handler := SecurityHeaders(cfg)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		capturedNonce = GetCSPNonce(r)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if capturedNonce == "" {
+		t.Fatal("expected nonce in request context")
+	}
+	csp := rec.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "'nonce-"+capturedNonce+"'") {
+		t.Fatalf("expected CSP header to include request nonce, got: %s", csp)
 	}
 }
 

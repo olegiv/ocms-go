@@ -557,7 +557,20 @@ func DeveloperPage(pc *adminviews.PageContext, data DeveloperViewData) templ.Com
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</button></form></div></div></div></div><script>\n\t\tdocument.addEventListener('DOMContentLoaded', function() {\n\t\t\tconst generateForm = document.getElementById('generate-form');\n\t\t\tif (generateForm) {\n\t\t\t\tgenerateForm.addEventListener('submit', function(e) {\n\t\t\t\t\tconst confirmMsg = this.getAttribute('data-confirm');\n\t\t\t\t\tif (confirmMsg && !confirm(confirmMsg)) {\n\t\t\t\t\t\te.preventDefault();\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t}\n\n\t\t\tconst deleteForm = document.getElementById('delete-form');\n\t\t\tif (deleteForm) {\n\t\t\t\tdeleteForm.addEventListener('submit', function(e) {\n\t\t\t\t\tconst confirmMsg = this.getAttribute('data-confirm');\n\t\t\t\t\tif (confirmMsg && !confirm(confirmMsg)) {\n\t\t\t\t\t\te.preventDefault();\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t}\n\t\t});\n\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</button></form></div></div></div></div><script nonce=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var41 string
+			templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(templ.GetNonce(ctx))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/developer/views.templ`, Line: 196, Col: 37}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "\">\n\t\tdocument.addEventListener('DOMContentLoaded', function() {\n\t\t\tconst generateForm = document.getElementById('generate-form');\n\t\t\tif (generateForm) {\n\t\t\t\tgenerateForm.addEventListener('submit', function(e) {\n\t\t\t\t\tconst confirmMsg = this.getAttribute('data-confirm');\n\t\t\t\t\tif (confirmMsg && !confirm(confirmMsg)) {\n\t\t\t\t\t\te.preventDefault();\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t}\n\n\t\t\tconst deleteForm = document.getElementById('delete-form');\n\t\t\tif (deleteForm) {\n\t\t\t\tdeleteForm.addEventListener('submit', function(e) {\n\t\t\t\t\tconst confirmMsg = this.getAttribute('data-confirm');\n\t\t\t\t\tif (confirmMsg && !confirm(confirmMsg)) {\n\t\t\t\t\t\te.preventDefault();\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t}\n\t\t});\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

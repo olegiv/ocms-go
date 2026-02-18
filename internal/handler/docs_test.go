@@ -153,12 +153,12 @@ func TestDocsHandler_ListGuides(t *testing.T) {
 
 	// Create test markdown files
 	testFiles := map[string]string{
-		"webhooks.md":           "# Webhooks\nContent here",
-		"media.md":              "# Media\nContent here",
-		"PHASE1.md":             "# Phase 1\nShould be filtered",
-		"PHASE2.md":             "# Phase 2\nShould be filtered",
-		"reverse-proxy.md":      "# Reverse Proxy\nContent",
-		"not-markdown.txt":      "This is not markdown",
+		"webhooks.md":            "# Webhooks\nContent here",
+		"media.md":               "# Media\nContent here",
+		"PHASE1.md":              "# Phase 1\nShould be filtered",
+		"PHASE2.md":              "# Phase 2\nShould be filtered",
+		"reverse-proxy.md":       "# Reverse Proxy\nContent",
+		"not-markdown.txt":       "This is not markdown",
 		"deploy-ubuntu-plesk.md": "# Deploy\nContent",
 	}
 

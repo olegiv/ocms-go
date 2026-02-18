@@ -7,7 +7,6 @@ package api
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -19,6 +18,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/handler"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -148,6 +148,14 @@ const (
 	filterByCategory pageFilterType = iota
 	filterByTag
 )
+
+var suspiciousPageMarkupTokens = []string{
+	"<script",
+	"javascript:",
+	"onerror=",
+	"onload=",
+	"<iframe",
+}
 
 // listPagesByFilter returns pages filtered by category or tag with published-only option.
 func (h *Handler) listPagesByFilter(ctx context.Context, publishedOnly bool, filterType pageFilterType, filterID, limit, offset int64) ([]store.Page, int64, error) {
@@ -427,7 +435,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var req CreatePageRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(w, r, &req, maxAPIJSONBodyBytes); err != nil {
 		WriteBadRequest(w, "Invalid JSON body", nil)
 		return
 	}
@@ -453,6 +461,11 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 		WriteValidationError(w, map[string]string{"status": "Status must be 'draft' or 'published'"})
 		return
 	}
+	if bodyErr := validatePageBodyMarkupPolicy(req.Body, h.blockSuspiciousPageMarkup); bodyErr != "" {
+		WriteValidationError(w, map[string]string{"body": bodyErr})
+		return
+	}
+	normalizedBody := sanitizePageBodyForStorage(req.Body, h.sanitizePageHTML)
 
 	// Check slug uniqueness
 	if !h.checkPageSlugUnique(w, ctx, req.Slug) {
@@ -479,7 +492,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	params := store.CreatePageParams{
 		Title:        req.Title,
 		Slug:         req.Slug,
-		Body:         req.Body,
+		Body:         normalizedBody,
 		Status:       req.Status,
 		AuthorID:     apiKey.CreatedBy, // Use API key creator as author
 		LanguageCode: langCode,
@@ -585,7 +598,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdatePageRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(w, r, &req, maxAPIJSONBodyBytes); err != nil {
 		WriteBadRequest(w, "Invalid JSON body", nil)
 		return
 	}
@@ -626,7 +639,11 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		params.Slug = *req.Slug
 	}
 	if req.Body != nil {
-		params.Body = *req.Body
+		if bodyErr := validatePageBodyMarkupPolicy(*req.Body, h.blockSuspiciousPageMarkup); bodyErr != "" {
+			WriteValidationError(w, map[string]string{"body": bodyErr})
+			return
+		}
+		params.Body = sanitizePageBodyForStorage(*req.Body, h.sanitizePageHTML)
 	}
 	if req.Status != nil {
 		if *req.Status != model.PageStatusDraft && *req.Status != model.PageStatusPublished {
@@ -861,4 +878,29 @@ func (h *Handler) checkPageSlugUniqueExcluding(w http.ResponseWriter, ctx contex
 			ID:   pageID,
 		})
 	})
+}
+
+func validatePageBodyMarkupPolicy(body string, blockSuspicious bool) string {
+	if !blockSuspicious {
+		return ""
+	}
+	if strings.TrimSpace(body) == "" {
+		return ""
+	}
+
+	lowerBody := strings.ToLower(body)
+	for _, token := range suspiciousPageMarkupTokens {
+		if strings.Contains(lowerBody, token) {
+			return "Body contains suspicious HTML markup that is blocked by policy"
+		}
+	}
+
+	return ""
+}
+
+func sanitizePageBodyForStorage(raw string, enabled bool) string {
+	if !enabled {
+		return raw
+	}
+	return security.SanitizePageHTML(raw)
 }

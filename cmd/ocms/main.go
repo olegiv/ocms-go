@@ -6,11 +6,13 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -141,6 +143,43 @@ func registerFrontendRoutes(r chi.Router, h *handler.FrontendHandler) {
 	})
 }
 
+func logSeedingSecuritySignals(ctx context.Context, cfg *config.Config, events *service.EventService, hasDefaultAdminCreds bool) {
+	if cfg == nil || events == nil {
+		return
+	}
+
+	if cfg.DoSeed {
+		_ = events.LogSecurityEvent(
+			ctx,
+			"warning",
+			"Database seeding is enabled",
+			nil,
+			"",
+			"",
+			map[string]any{
+				"environment":   cfg.Env,
+				"seed_enabled":  true,
+				"default_admin": store.DefaultAdminEmail,
+			},
+		)
+	}
+
+	if hasDefaultAdminCreds {
+		_ = events.LogSecurityEvent(
+			ctx,
+			"warning",
+			"Default seeded admin credentials are still active",
+			nil,
+			"",
+			"",
+			map[string]any{
+				"environment":   cfg.Env,
+				"default_admin": store.DefaultAdminEmail,
+			},
+		)
+	}
+}
+
 func main() {
 	// Parse CLI flags
 	showVersion := flag.Bool("version", false, "Show version information")
@@ -158,9 +197,31 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_DB_PATH           SQLite database path (default: ./data/ocms.db)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SERVER_PORT       Server port (default: 8080)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_ENV               Environment: development|production (default: development)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_FORM_CAPTCHA  Require captcha for all public forms (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_WEBHOOK_FORM_DATA_MODE  form.submitted payload mode: redacted|none|full (default: redacted)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION  Reject production startup when webhook payload mode is full (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_CUSTOM_DIR        Custom content directory (default: ./custom)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_ACTIVE_THEME      Active theme name (default: default)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REDIS_URL         Redis URL for distributed caching (optional)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_TRUSTED_PROXIES   Comma-separated trusted proxy CIDRs/IPs (optional)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_TRUSTED_PROXIES  Reject production startup when trusted proxies are not configured (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_API_ALLOWED_CIDRS Comma-separated CIDRs/IPs allowed for API key access (optional)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_ALLOWED_CIDRS  Reject API key auth when global source CIDRs are not configured (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_EXPIRY  Reject API keys without expiration (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_SOURCE_CIDRS  Reject API keys without per-key CIDR restrictions (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE  Deactivate API keys when source IP changes without per-key CIDRs (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_API_KEY_MAX_TTL_DAYS  Maximum API key lifetime in days (0 disables, default: 0)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_ALLOWED_ORIGINS   Comma-separated allowed origins for embed proxy routes (optional)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS   Comma-separated allowed hosts for embed provider endpoints (optional)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS  Reject production startup when embed proxy is active without origin allowlist (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS  Reject production startup when embed proxy is active without upstream host allowlist (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_PROXY_TOKEN   Secret used to issue short-lived signed embed proxy tokens\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_PROXY_TOKEN  Enforce embed proxy token requirement outside production as well (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_HTTPS_OUTBOUND  Require HTTPS for outbound integration URLs (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SANITIZE_PAGE_HTML  Sanitize page HTML before rendering to visitors (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_SANITIZE_PAGE_HTML  Reject production startup when page HTML sanitization is disabled (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_BLOCK_SUSPICIOUS_PAGE_HTML  Reject page writes with suspicious HTML markup (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML  Reject production startup when suspicious page markup blocking is disabled (default: false)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "\nFor more information, see: https://github.com/olegiv/ocms-go\n")
 	}
 
@@ -196,6 +257,362 @@ func parseLogLevel(level string) slog.Level {
 	default:
 		return slog.LevelInfo
 	}
+}
+
+func auditRequiredFormCaptchaPosture(ctx context.Context, db *sql.DB, hooks *module.HookRegistry, verifierEnabled bool) error {
+	if hooks == nil || !hooks.HasHandlers(hcaptcha.HookFormCaptchaVerify) {
+		return fmt.Errorf(
+			"refusing to start in production: OCMS_REQUIRE_FORM_CAPTCHA is enabled but captcha verification is unavailable",
+		)
+	}
+	if !verifierEnabled {
+		return fmt.Errorf(
+			"refusing to start in production: OCMS_REQUIRE_FORM_CAPTCHA is enabled but captcha verifier is not fully configured",
+		)
+	}
+
+	const query = `
+		SELECT COUNT(*)
+		FROM forms f
+		WHERE f.is_active = 1
+		  AND NOT EXISTS (
+		  	SELECT 1
+		  	FROM form_fields ff
+		  	WHERE ff.form_id = f.id
+		  	  AND ff.type = 'captcha'
+		  )
+	`
+
+	var formsMissingCaptcha int
+	if err := db.QueryRowContext(ctx, query).Scan(&formsMissingCaptcha); err != nil {
+		return fmt.Errorf("auditing form captcha posture: %w", err)
+	}
+
+	if formsMissingCaptcha > 0 {
+		return fmt.Errorf(
+			"refusing to start in production: %d active public form(s) are missing a captcha field while OCMS_REQUIRE_FORM_CAPTCHA is enabled",
+			formsMissingCaptcha,
+		)
+	}
+
+	return nil
+}
+
+func auditRequiredHTTPSOutboundPosture(ctx context.Context, db *sql.DB) error {
+	countNonHTTPS := func(query string) (int, error) {
+		rows, err := db.QueryContext(ctx, query)
+		if err != nil {
+			return 0, err
+		}
+		defer func() { _ = rows.Close() }()
+
+		invalid := 0
+		for rows.Next() {
+			var rawURL string
+			if err := rows.Scan(&rawURL); err != nil {
+				return 0, err
+			}
+			parsed, err := url.Parse(strings.TrimSpace(rawURL))
+			if err != nil || !strings.EqualFold(parsed.Scheme, "https") || strings.TrimSpace(parsed.Host) == "" {
+				invalid++
+			}
+		}
+
+		if err := rows.Err(); err != nil {
+			return 0, err
+		}
+		return invalid, nil
+	}
+
+	invalidWebhooks, err := countNonHTTPS(`SELECT url FROM webhooks WHERE is_active = 1`)
+	if err != nil {
+		return fmt.Errorf("auditing webhook HTTPS posture: %w", err)
+	}
+
+	invalidTasks, err := countNonHTTPS(`SELECT url FROM scheduled_tasks WHERE is_active = 1`)
+	if err != nil {
+		return fmt.Errorf("auditing scheduler HTTPS posture: %w", err)
+	}
+
+	if invalidWebhooks > 0 || invalidTasks > 0 {
+		return fmt.Errorf(
+			"refusing to start in production: OCMS_REQUIRE_HTTPS_OUTBOUND is enabled but %d active webhook(s) and %d active scheduled task(s) use non-HTTPS URLs",
+			invalidWebhooks,
+			invalidTasks,
+		)
+	}
+
+	return nil
+}
+
+func isMissingEmbedSettingsTable(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "no such table") && strings.Contains(msg, "embed_settings")
+}
+
+func auditRequiredEmbedHTTPSPosture(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, `SELECT provider, settings FROM embed_settings WHERE is_enabled = 1`)
+	if err != nil {
+		if isMissingEmbedSettingsTable(err) {
+			return nil
+		}
+		return fmt.Errorf("auditing embed HTTPS posture: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var invalidCount int
+	for rows.Next() {
+		var providerID string
+		var rawSettings string
+		if err := rows.Scan(&providerID, &rawSettings); err != nil {
+			return fmt.Errorf("auditing embed HTTPS posture: %w", err)
+		}
+
+		// Current built-in outbound embed provider is Dify.
+		if providerID != "dify" {
+			continue
+		}
+
+		var settings map[string]any
+		if err := json.Unmarshal([]byte(rawSettings), &settings); err != nil {
+			invalidCount++
+			continue
+		}
+
+		apiEndpoint, _ := settings["api_endpoint"].(string)
+		apiEndpoint = strings.TrimSpace(apiEndpoint)
+		parsedEndpoint, err := url.Parse(apiEndpoint)
+		if err != nil || !strings.EqualFold(parsedEndpoint.Scheme, "https") || strings.TrimSpace(parsedEndpoint.Host) == "" {
+			invalidCount++
+			continue
+		}
+		if err := util.ValidateWebhookURL(apiEndpoint); err != nil {
+			invalidCount++
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("auditing embed HTTPS posture: %w", err)
+	}
+
+	if invalidCount > 0 {
+		return fmt.Errorf(
+			"refusing to start in production: OCMS_REQUIRE_HTTPS_OUTBOUND is enabled but %d active embed provider endpoint(s) are invalid or non-HTTPS",
+			invalidCount,
+		)
+	}
+
+	return nil
+}
+
+func parseAllowedEmbedUpstreamHosts(raw string) (map[string]struct{}, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, nil
+	}
+
+	entries := strings.Split(trimmed, ",")
+	allowed := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		host := strings.TrimSpace(strings.ToLower(entry))
+		host = strings.Trim(host, ".")
+		if host == "" {
+			return nil, fmt.Errorf("embed upstream host allowlist contains empty entry")
+		}
+		if strings.Contains(host, "://") || strings.Contains(host, "/") {
+			return nil, fmt.Errorf("invalid embed upstream host allowlist entry %q", entry)
+		}
+		if _, _, err := net.SplitHostPort(host); err == nil {
+			return nil, fmt.Errorf("embed upstream host allowlist entry must not include port: %q", entry)
+		}
+		if strings.Contains(host, ":") {
+			return nil, fmt.Errorf("embed upstream host allowlist entry must not include port: %q", entry)
+		}
+
+		allowed[host] = struct{}{}
+	}
+
+	return allowed, nil
+}
+
+func auditEmbedUpstreamHostPosture(ctx context.Context, db *sql.DB, allowedHosts map[string]struct{}) error {
+	if len(allowedHosts) == 0 {
+		return nil
+	}
+
+	rows, err := db.QueryContext(ctx, `SELECT provider, settings FROM embed_settings WHERE is_enabled = 1`)
+	if err != nil {
+		if isMissingEmbedSettingsTable(err) {
+			return nil
+		}
+		return fmt.Errorf("auditing embed upstream host posture: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var invalidCount int
+	for rows.Next() {
+		var providerID string
+		var rawSettings string
+		if err := rows.Scan(&providerID, &rawSettings); err != nil {
+			return fmt.Errorf("auditing embed upstream host posture: %w", err)
+		}
+		if providerID != "dify" {
+			continue
+		}
+
+		var settings map[string]any
+		if err := json.Unmarshal([]byte(rawSettings), &settings); err != nil {
+			invalidCount++
+			continue
+		}
+		apiEndpoint, _ := settings["api_endpoint"].(string)
+		parsedEndpoint, err := url.Parse(strings.TrimSpace(apiEndpoint))
+		if err != nil {
+			invalidCount++
+			continue
+		}
+		host := strings.Trim(strings.ToLower(parsedEndpoint.Hostname()), ".")
+		if host == "" {
+			invalidCount++
+			continue
+		}
+		if _, ok := allowedHosts[host]; !ok {
+			invalidCount++
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("auditing embed upstream host posture: %w", err)
+	}
+
+	if invalidCount > 0 {
+		return fmt.Errorf(
+			"refusing to start in production: OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS is configured but %d active embed provider endpoint(s) use non-allowlisted hosts",
+			invalidCount,
+		)
+	}
+
+	return nil
+}
+
+func auditRequiredEmbedUpstreamHostPolicyPosture(ctx context.Context, db *sql.DB, configuredHosts string) error {
+	if strings.TrimSpace(configuredHosts) != "" {
+		return nil
+	}
+
+	var activeEmbedProviders int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM embed_settings WHERE is_enabled = 1`).Scan(&activeEmbedProviders); err != nil {
+		return fmt.Errorf("auditing embed upstream host policy posture: %w", err)
+	}
+	if activeEmbedProviders > 0 {
+		return fmt.Errorf(
+			"refusing to start in production: embed proxy is active (%d provider(s)) but OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS is not configured",
+			activeEmbedProviders,
+		)
+	}
+
+	return nil
+}
+
+func auditRequiredAPIKeyExpiryPosture(ctx context.Context, db *sql.DB) error {
+	var nonExpiringActiveKeys int
+	err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM api_keys WHERE is_active = 1 AND expires_at IS NULL`).Scan(&nonExpiringActiveKeys)
+	if err != nil {
+		return fmt.Errorf("auditing API key expiry posture: %w", err)
+	}
+
+	if nonExpiringActiveKeys > 0 {
+		return fmt.Errorf(
+			"refusing to start in production: OCMS_REQUIRE_API_KEY_EXPIRY is enabled but %d active API key(s) have no expiration",
+			nonExpiringActiveKeys,
+		)
+	}
+
+	return nil
+}
+
+func auditRequiredAPIKeyMaxTTLPosture(ctx context.Context, db *sql.DB, maxTTLDays int) error {
+	if maxTTLDays <= 0 {
+		return nil
+	}
+
+	var keysOutsideTTL int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM api_keys
+		WHERE is_active = 1
+		  AND (
+		  	expires_at IS NULL
+		  	OR datetime(expires_at) > datetime(created_at, '+' || ? || ' days')
+		  )
+	`, maxTTLDays).Scan(&keysOutsideTTL)
+	if err != nil {
+		return fmt.Errorf("auditing API key max TTL posture: %w", err)
+	}
+
+	if keysOutsideTTL > 0 {
+		return fmt.Errorf(
+			"refusing to start in production: OCMS_API_KEY_MAX_TTL_DAYS=%d but %d active API key(s) exceed this lifetime policy",
+			maxTTLDays,
+			keysOutsideTTL,
+		)
+	}
+
+	return nil
+}
+
+func auditRequiredAPIKeySourceCIDRPosture(ctx context.Context, db *sql.DB) error {
+	var keysWithoutSourceCIDRs int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM api_keys k
+		WHERE k.is_active = 1
+		  AND NOT EXISTS (
+		  	SELECT 1
+		  	FROM api_key_source_cidrs c
+		  	WHERE c.api_key_id = k.id
+		  )
+	`).Scan(&keysWithoutSourceCIDRs)
+	if err != nil {
+		return fmt.Errorf("auditing API key source CIDR posture: %w", err)
+	}
+
+	if keysWithoutSourceCIDRs > 0 {
+		return fmt.Errorf(
+			"refusing to start in production: OCMS_REQUIRE_API_KEY_SOURCE_CIDRS is enabled but %d active API key(s) have no source CIDR restriction",
+			keysWithoutSourceCIDRs,
+		)
+	}
+
+	return nil
+}
+
+func auditRequiredSuspiciousPageHTMLPosture(ctx context.Context, db *sql.DB) error {
+	var suspiciousCount int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM pages
+		WHERE LOWER(body) LIKE '%<script%'
+		   OR LOWER(body) LIKE '%javascript:%'
+		   OR LOWER(body) LIKE '%onerror=%'
+		   OR LOWER(body) LIKE '%onload=%'
+		   OR LOWER(body) LIKE '%<iframe%'
+	`).Scan(&suspiciousCount)
+	if err != nil {
+		return fmt.Errorf("auditing suspicious page html posture: %w", err)
+	}
+
+	if suspiciousCount > 0 {
+		return fmt.Errorf(
+			"refusing to start in production: found %d page(s) with suspicious HTML markers while OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML is enabled",
+			suspiciousCount,
+		)
+	}
+
+	return nil
 }
 
 // initI18nFromDB updates i18n settings from database (active languages, default language).
@@ -296,6 +713,276 @@ func registerModules(registry *module.Registry, sentinelModule *sentinel.Module,
 	return internalAnalyticsModule, nil
 }
 
+// serveThemeStaticFile serves a static file from an embedded or external theme.
+func serveThemeStaticFile(w http.ResponseWriter, r *http.Request, themeManager *theme.Manager) {
+	themeName := chi.URLParam(r, "themeName")
+	thm, err := themeManager.GetTheme(themeName)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Security headers for static files
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+	w.Header().Set("Cache-Control", "public, max-age=2592000")
+
+	// Strip the prefix to get the requested file path
+	reqPath := r.URL.Path
+	prefix := fmt.Sprintf("/themes/%s/static/", themeName)
+	requestedPath := reqPath[len(prefix):]
+
+	// Clean the path to resolve any .. sequences
+	// Use path.Clean (not filepath.Clean) for URL paths - filepath.Clean uses
+	// OS-specific separators (backslashes on Windows), which breaks embed.FS
+	// lookups that require forward slashes.
+	cleanPath := path.Clean(requestedPath)
+
+	// Reject paths that try to escape (start with .. or are absolute)
+	if strings.HasPrefix(cleanPath, "..") || path.IsAbs(cleanPath) {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Handle embedded vs external themes
+	if thm.IsEmbedded && thm.EmbeddedFS != nil {
+		// Serve from embedded filesystem
+		embeddedPath := "static/" + cleanPath
+		data, err := fs.ReadFile(thm.EmbeddedFS, embeddedPath)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+
+		// Set content type based on file extension
+		contentType := handler.ContentTypeByExtension(cleanPath)
+		w.Header().Set("Content-Type", contentType)
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
+		_, _ = w.Write(data)
+		return
+	}
+
+	// Serve from filesystem for external themes
+	filePath := filepath.Join(thm.StaticPath, cleanPath)
+
+	// Verify the resolved path is within the static directory
+	absStaticPath, err := filepath.Abs(thm.StaticPath)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	absFilePath, err := filepath.Abs(filePath)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Check that file is within static directory
+	if !strings.HasPrefix(absFilePath, absStaticPath+string(filepath.Separator)) && absFilePath != absStaticPath {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Verify containment using filepath.Rel (CodeQL-recognized pattern)
+	rel, err := filepath.Rel(absStaticPath, absFilePath)
+	if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
+		http.NotFound(w, r)
+		return
+	}
+
+	http.ServeFile(w, r, absFilePath)
+}
+
+// runPostModulePostureAudits runs production security posture checks that depend on module state.
+func runPostModulePostureAudits(ctx context.Context, cfg *config.Config, db *sql.DB, moduleRegistry *module.Registry, hookRegistry *module.HookRegistry) error {
+	if cfg.Env != "production" {
+		return nil
+	}
+	if cfg.RequireEmbedAllowedOrigins && strings.TrimSpace(cfg.EmbedAllowedOrigins) == "" {
+		var activeEmbedProviders int
+		err := db.QueryRow(`SELECT COUNT(*) FROM embed_settings WHERE is_enabled = 1`).Scan(&activeEmbedProviders)
+		if err != nil {
+			return fmt.Errorf("auditing embed origin policy posture: %w", err)
+		}
+		if activeEmbedProviders > 0 {
+			return fmt.Errorf(
+				"refusing to start in production: embed proxy is active (%d provider(s)) but OCMS_EMBED_ALLOWED_ORIGINS is not configured",
+				activeEmbedProviders,
+			)
+		}
+	}
+	if cfg.RequireEmbedAllowedUpstreamHosts {
+		if err := auditRequiredEmbedUpstreamHostPolicyPosture(ctx, db, cfg.EmbedAllowedUpstreamHosts); err != nil {
+			return err
+		}
+	}
+	if cfg.RequireHTTPSOutbound {
+		if err := auditRequiredHTTPSOutboundPosture(ctx, db); err != nil {
+			return err
+		}
+		if err := auditRequiredEmbedHTTPSPosture(ctx, db); err != nil {
+			return err
+		}
+	}
+	if cfg.RequireFormCaptcha {
+		captchaVerifierEnabled := false
+		if mod, ok := moduleRegistry.Get("hcaptcha"); ok {
+			if captchaMod, ok := mod.(*hcaptcha.Module); ok {
+				captchaVerifierEnabled = captchaMod.IsEnabled()
+			}
+		}
+		if err := auditRequiredFormCaptchaPosture(ctx, db, hookRegistry, captchaVerifierEnabled); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// runPreModulePostureAudits runs production security posture checks that don't depend on modules.
+func runPreModulePostureAudits(ctx context.Context, cfg *config.Config, db *sql.DB, hasDefaultAdminCreds bool, allowedEmbedUpstreamHosts map[string]struct{}) error {
+	if cfg.Env != "production" {
+		return nil
+	}
+	if hasDefaultAdminCreds && os.Getenv("OCMS_DEMO_MODE") != "true" {
+		return fmt.Errorf(
+			"refusing to start in production: default seeded admin credentials are still active for %s; rotate credentials before startup",
+			store.DefaultAdminEmail,
+		)
+	}
+	if cfg.RequireBlockSuspiciousPageHTML {
+		if err := auditRequiredSuspiciousPageHTMLPosture(ctx, db); err != nil {
+			return err
+		}
+	}
+	if cfg.RequireAPIKeyExpiry {
+		if err := auditRequiredAPIKeyExpiryPosture(ctx, db); err != nil {
+			return err
+		}
+	}
+	if cfg.APIKeyMaxTTLDays > 0 {
+		if err := auditRequiredAPIKeyMaxTTLPosture(ctx, db, cfg.APIKeyMaxTTLDays); err != nil {
+			return err
+		}
+	}
+	if cfg.RequireAPIKeySourceCIDRs {
+		if err := auditRequiredAPIKeySourceCIDRPosture(ctx, db); err != nil {
+			return err
+		}
+	}
+	if len(allowedEmbedUpstreamHosts) > 0 {
+		if err := auditEmbedUpstreamHostPosture(ctx, db, allowedEmbedUpstreamHosts); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// configureMiddlewareDefaults applies middleware security settings from configuration.
+func configureMiddlewareDefaults(cfg *config.Config) error {
+	if err := middleware.ConfigureTrustedProxies(cfg.TrustedProxies); err != nil {
+		return fmt.Errorf("configuring trusted proxies: %w", err)
+	}
+	if err := middleware.ConfigureAPIAllowedCIDRs(cfg.APIAllowedCIDRs); err != nil {
+		return fmt.Errorf("configuring API allowed CIDRs: %w", err)
+	}
+	if strings.TrimSpace(cfg.APIAllowedCIDRs) != "" {
+		slog.Info("API source CIDR allowlist enabled")
+	}
+	middleware.SetRequireAPIAllowedCIDRs(cfg.RequireAPIAllowedCIDRs)
+	if cfg.RequireAPIAllowedCIDRs {
+		slog.Info("API global source CIDR requirement enabled")
+	}
+	middleware.SetRequireAPIKeyExpiry(cfg.RequireAPIKeyExpiry)
+	if cfg.RequireAPIKeyExpiry {
+		slog.Info("API key expiry enforcement enabled")
+	}
+	middleware.SetRequireAPIKeySourceCIDRs(cfg.RequireAPIKeySourceCIDRs)
+	if cfg.RequireAPIKeySourceCIDRs {
+		slog.Info("API key per-key source CIDR enforcement enabled")
+	}
+	middleware.SetRevokeAPIKeyOnSourceIPChange(cfg.RevokeAPIKeyOnSourceIPChange)
+	if cfg.RevokeAPIKeyOnSourceIPChange {
+		slog.Info("API key source IP anomaly auto-revocation enabled")
+	}
+	middleware.SetAPIKeyMaxTTLDays(cfg.APIKeyMaxTTLDays)
+	if cfg.APIKeyMaxTTLDays > 0 {
+		slog.Info("API key max lifetime policy enabled", "max_ttl_days", cfg.APIKeyMaxTTLDays)
+	}
+	util.SetRequireHTTPSOutbound(cfg.RequireHTTPSOutbound)
+	scheduler.SetRequireHTTPSOutbound(cfg.RequireHTTPSOutbound)
+	if cfg.RequireHTTPSOutbound {
+		slog.Info("HTTPS-only outbound URL policy enabled")
+	}
+	return nil
+}
+
+// logProductionSecurityWarnings logs slog warnings for disabled production security settings.
+func logProductionSecurityWarnings(cfg *config.Config) {
+	if cfg.Env != "production" {
+		return
+	}
+	if !cfg.RequireFormCaptcha {
+		slog.Warn("production security warning: OCMS_REQUIRE_FORM_CAPTCHA is disabled")
+	}
+	if cfg.WebhookFormDataMode == "full" {
+		slog.Warn("production security warning: OCMS_WEBHOOK_FORM_DATA_MODE=full may expose sensitive submission data to webhook endpoints")
+	}
+	if !cfg.RequireWebhookFormDataMinimization {
+		slog.Warn("production security warning: OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION is disabled")
+	}
+	if !cfg.RequireTrustedProxies {
+		slog.Warn("production security warning: OCMS_REQUIRE_TRUSTED_PROXIES is disabled")
+	}
+	if strings.TrimSpace(cfg.APIAllowedCIDRs) == "" {
+		slog.Warn("production security warning: OCMS_API_ALLOWED_CIDRS is not configured")
+	}
+	if !cfg.RequireAPIAllowedCIDRs {
+		slog.Warn("production security warning: OCMS_REQUIRE_API_ALLOWED_CIDRS is disabled")
+	}
+	if !cfg.RequireAPIKeyExpiry {
+		slog.Warn("production security warning: OCMS_REQUIRE_API_KEY_EXPIRY is disabled")
+	}
+	if !cfg.RequireAPIKeySourceCIDRs {
+		slog.Warn("production security warning: OCMS_REQUIRE_API_KEY_SOURCE_CIDRS is disabled")
+	}
+	if !cfg.RevokeAPIKeyOnSourceIPChange {
+		slog.Warn("production security warning: OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE is disabled")
+	}
+	if cfg.APIKeyMaxTTLDays <= 0 {
+		slog.Warn("production security warning: OCMS_API_KEY_MAX_TTL_DAYS is not configured")
+	}
+	if strings.TrimSpace(cfg.EmbedAllowedOrigins) == "" {
+		slog.Warn("production security warning: OCMS_EMBED_ALLOWED_ORIGINS is not configured")
+	}
+	if strings.TrimSpace(cfg.EmbedAllowedUpstreamHosts) == "" {
+		slog.Warn("production security warning: OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS is not configured")
+	}
+	if !cfg.RequireEmbedAllowedOrigins {
+		slog.Warn("production security warning: OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS is disabled")
+	}
+	if !cfg.RequireEmbedAllowedUpstreamHosts {
+		slog.Warn("production security warning: OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS is disabled")
+	}
+	if strings.TrimSpace(cfg.EmbedProxyToken) == "" {
+		slog.Warn("production security warning: OCMS_EMBED_PROXY_TOKEN is not configured; active embed proxy routes will be blocked at module init")
+	}
+	if !cfg.RequireHTTPSOutbound {
+		slog.Warn("production security warning: OCMS_REQUIRE_HTTPS_OUTBOUND is disabled")
+	}
+	if !cfg.SanitizePageHTML {
+		slog.Warn("production security warning: OCMS_SANITIZE_PAGE_HTML is disabled")
+	}
+	if !cfg.RequireSanitizePageHTML {
+		slog.Warn("production security warning: OCMS_REQUIRE_SANITIZE_PAGE_HTML is disabled")
+	}
+	if !cfg.BlockSuspiciousPageHTML {
+		slog.Warn("production security warning: OCMS_BLOCK_SUSPICIOUS_PAGE_HTML is disabled")
+	}
+	if !cfg.RequireBlockSuspiciousPageHTML {
+		slog.Warn("production security warning: OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML is disabled")
+	}
+}
+
 // loadActiveTheme determines and activates the appropriate theme.
 func loadActiveTheme(ctx context.Context, queries *store.Queries, themeManager *theme.Manager, renderer *render.Renderer, cfg *config.Config) {
 	themeManager.SetFuncMap(renderer.TemplateFuncs())
@@ -334,6 +1021,10 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
+	allowedEmbedUpstreamHosts, err := parseAllowedEmbedUpstreamHosts(cfg.EmbedAllowedUpstreamHosts)
+	if err != nil {
+		return fmt.Errorf("parsing OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS: %w", err)
+	}
 
 	// Create version info from build-time injected values
 	versionInfo := &version.Info{
@@ -348,6 +1039,12 @@ func run() error {
 		Level: logLevel,
 	}))
 	slog.SetDefault(logger)
+
+	logProductionSecurityWarnings(cfg)
+
+	if err := configureMiddlewareDefaults(cfg); err != nil {
+		return err
+	}
 
 	// Initialize i18n system for admin UI localization
 	if err := i18n.Init(logger); err != nil {
@@ -394,6 +1091,7 @@ func run() error {
 	logger = slog.New(eventLogHandler)
 	slog.SetDefault(logger)
 	slog.Info("event log integration enabled", "min_level", "warn")
+	eventService := service.NewEventService(db)
 
 	// Seed default data
 	ctx := context.Background()
@@ -410,6 +1108,14 @@ func run() error {
 
 	// Update i18n from database settings
 	queries := store.New(db)
+	hasDefaultAdminCreds, err := store.HasDefaultAdminCredentials(ctx, queries)
+	if err != nil {
+		return fmt.Errorf("auditing default admin credentials: %w", err)
+	}
+	logSeedingSecuritySignals(ctx, cfg, eventService, hasDefaultAdminCreds)
+	if err := runPreModulePostureAudits(ctx, cfg, db, hasDefaultAdminCreds, allowedEmbedUpstreamHosts); err != nil {
+		return err
+	}
 	initI18nFromDB(ctx, queries)
 
 	// Initialize session manager
@@ -482,9 +1188,6 @@ func run() error {
 	// Initialize hook registry
 	hookRegistry := module.NewHookRegistry(logger)
 
-	// Initialize event service for modules
-	eventService := service.NewEventService(db)
-
 	// Initialize module registry
 	moduleRegistry := module.NewRegistry(logger)
 
@@ -541,6 +1244,10 @@ func run() error {
 
 	// Set module registry on renderer for sidebar modules
 	renderer.SetSidebarModuleProvider(moduleRegistry)
+
+	if err := runPostModulePostureAudits(ctx, cfg, db, moduleRegistry, hookRegistry); err != nil {
+		return err
+	}
 
 	// Set up hook registry to check module active status
 	hookRegistry.SetIsModuleActive(moduleRegistry.IsActive)
@@ -619,18 +1326,38 @@ func run() error {
 	publicRateLimiter := middleware.NewGlobalRateLimiter(10.0, 20)
 	slog.Info("public rate limiter initialized", "rate", "10 req/s", "burst", 20)
 
+	// Dedicated public form submission limiter to reduce spam/flood abuse.
+	// 1 request per second with a burst of 5 per IP.
+	formSubmitRateLimiter := middleware.NewGlobalRateLimiter(1.0, 5)
+	slog.Info("form submission rate limiter initialized", "rate", "1 req/s", "burst", 5)
+
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(db, renderer, sessionManager, loginProtection, hookRegistry)
 	adminHandler := handler.NewAdminHandler(db, renderer, sessionManager, cacheManager)
 	usersHandler := handler.NewUsersHandler(db, renderer, sessionManager)
 	pagesHandler := handler.NewPagesHandler(db, renderer, sessionManager)
+	pagesHandler.SetBlockSuspiciousMarkup(cfg.BlockSuspiciousPageHTML)
+	pagesHandler.SetSanitizePageHTML(cfg.SanitizePageHTML)
+	if cfg.BlockSuspiciousPageHTML {
+		slog.Info("page suspicious HTML blocking policy enabled")
+	}
 	configHandler := handler.NewConfigHandler(db, renderer, sessionManager, cacheManager)
 	eventsHandler := handler.NewEventsHandler(db, renderer, sessionManager)
 	taxonomyHandler := handler.NewTaxonomyHandler(db, renderer, sessionManager)
 	mediaHandler := handler.NewMediaHandler(db, renderer, sessionManager, cfg.UploadsDir)
 	menusHandler := handler.NewMenusHandler(db, renderer, sessionManager)
 	frontendHandler := handler.NewFrontendHandler(db, themeManager, cacheManager, logger, renderer.GetMenuService(), eventService)
+	frontendHandler.SetSanitizePageHTML(cfg.SanitizePageHTML)
+	if cfg.SanitizePageHTML {
+		slog.Info("frontend page HTML sanitization enabled")
+	}
 	formsHandler := handler.NewFormsHandler(db, renderer, sessionManager, hookRegistry, themeManager, cacheManager, renderer.GetMenuService(), frontendHandler)
+	formsHandler.SetRequireCaptcha(cfg.RequireFormCaptcha)
+	if cfg.RequireFormCaptcha {
+		slog.Info("public forms captcha policy enabled")
+	}
+	formsHandler.SetWebhookFormDataMode(cfg.WebhookFormDataMode)
+	slog.Info("form webhook payload mode configured", "mode", cfg.WebhookFormDataMode)
 	themesHandler := handler.NewThemesHandler(db, renderer, sessionManager, themeManager, cacheManager)
 	widgetsHandler := handler.NewWidgetsHandler(db, renderer, sessionManager, themeManager)
 	modulesHandler := handler.NewModulesHandler(db, renderer, sessionManager, moduleRegistry, hookRegistry)
@@ -638,6 +1365,8 @@ func run() error {
 	schedulerHandler := handler.NewSchedulerHandler(db, renderer, sessionManager, schedulerRegistry, taskExecutor, eventService)
 	languagesHandler := handler.NewLanguagesHandler(db, renderer, sessionManager)
 	apiHandler := api.NewHandler(db)
+	apiHandler.SetBlockSuspiciousPageMarkup(cfg.BlockSuspiciousPageHTML)
+	apiHandler.SetSanitizePageHTML(cfg.SanitizePageHTML)
 	apiDocsHandler, err := api.NewDocsHandler(api.DocsConfig{
 		DB:         db,
 		TemplateFS: templatesFS,
@@ -647,9 +1376,13 @@ func run() error {
 		return fmt.Errorf("initializing api docs handler: %w", err)
 	}
 	apiKeysHandler := handler.NewAPIKeysHandler(db, renderer, sessionManager)
+	apiKeysHandler.SetRequireSourceCIDRs(cfg.RequireAPIKeySourceCIDRs)
+	apiKeysHandler.SetRequireExpiry(cfg.RequireAPIKeyExpiry)
+	apiKeysHandler.SetMaxTTLDays(cfg.APIKeyMaxTTLDays)
 	webhooksHandler := handler.NewWebhooksHandler(db, renderer, sessionManager)
 	redirectsHandler := handler.NewRedirectsHandler(db, renderer, sessionManager, redirectsMiddleware)
 	importExportHandler := handler.NewImportExportHandler(db, renderer, sessionManager)
+	importExportHandler.SetBlockSuspiciousMarkup(cfg.BlockSuspiciousPageHTML)
 	healthHandler := handler.NewHealthHandler(db, sessionManager, cfg.UploadsDir)
 	docsHandler := handler.NewDocsHandler(renderer, sessionManager, cfg, moduleRegistry, healthHandler.StartTime(), versionInfo)
 
@@ -699,7 +1432,6 @@ func run() error {
 		r.Use(csrfMiddleware)
 		r.Get(handler.RouteLogin, authHandler.LoginForm)
 		r.With(loginProtection.Middleware()).Post(handler.RouteLogin, authHandler.Login)
-		r.Get(handler.RouteLogout, authHandler.Logout)
 		r.Post(handler.RouteLogout, authHandler.Logout)
 		r.Post(handler.RouteLanguage, authHandler.SetLanguage)
 	})
@@ -997,7 +1729,7 @@ func run() error {
 		r.Use(csrfMiddleware)
 		r.Use(middleware.Language(db))
 		r.Get(handler.RouteFormsSlug, formsHandler.Show)
-		r.Post(handler.RouteFormsSlug, formsHandler.Submit)
+		r.With(formSubmitRateLimiter.HTMLMiddleware()).Post(handler.RouteFormsSlug, formsHandler.Submit)
 	})
 
 	// Favicon route - serve from theme settings or embedded default
@@ -1018,88 +1750,13 @@ func run() error {
 	// Serve uploaded media files from uploads directory (configured via OCMS_UPLOADS_DIR)
 	// Uploads: cache for 1 week (604800 seconds)
 	uploadsDirFS := http.Dir(cfg.UploadsDir)
-	uploadsHandler := middleware.StaticCache(604800)(http.StripPrefix("/uploads/", http.FileServer(uploadsDirFS)))
+	uploadsHandler := middleware.StaticCache(604800)(http.StripPrefix("/uploads/", middleware.SecureUploads(http.FileServer(uploadsDirFS))))
 	r.Handle("/uploads/*", uploadsHandler)
 
 	// Serve theme static files with caching (1 month = 2592000 seconds)
 	// Supports both embedded themes (from binary) and external themes (from filesystem)
 	r.Get("/themes/{themeName}/static/*", func(w http.ResponseWriter, r *http.Request) {
-		themeName := chi.URLParam(r, "themeName")
-		thm, err := themeManager.GetTheme(themeName)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-
-		// Security headers for static files
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-		w.Header().Set("Cache-Control", "public, max-age=2592000")
-
-		// Strip the prefix to get the requested file path
-		reqPath := r.URL.Path
-		prefix := fmt.Sprintf("/themes/%s/static/", themeName)
-		requestedPath := reqPath[len(prefix):]
-
-		// Clean the path to resolve any .. sequences
-		// Use path.Clean (not filepath.Clean) for URL paths - filepath.Clean uses
-		// OS-specific separators (backslashes on Windows), which breaks embed.FS
-		// lookups that require forward slashes.
-		cleanPath := path.Clean(requestedPath)
-
-		// Reject paths that try to escape (start with .. or are absolute)
-		if strings.HasPrefix(cleanPath, "..") || path.IsAbs(cleanPath) {
-			http.NotFound(w, r)
-			return
-		}
-
-		// Handle embedded vs external themes
-		if thm.IsEmbedded && thm.EmbeddedFS != nil {
-			// Serve from embedded filesystem
-			embeddedPath := "static/" + cleanPath
-			data, err := fs.ReadFile(thm.EmbeddedFS, embeddedPath)
-			if err != nil {
-				http.NotFound(w, r)
-				return
-			}
-
-			// Set content type based on file extension
-			contentType := handler.ContentTypeByExtension(cleanPath)
-			w.Header().Set("Content-Type", contentType)
-			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
-			_, _ = w.Write(data)
-			return
-		}
-
-		// Serve from filesystem for external themes
-		filePath := filepath.Join(thm.StaticPath, cleanPath)
-
-		// Verify the resolved path is within the static directory
-		absStaticPath, err := filepath.Abs(thm.StaticPath)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		absFilePath, err := filepath.Abs(filePath)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-
-		// Check that file is within static directory
-		if !strings.HasPrefix(absFilePath, absStaticPath+string(filepath.Separator)) && absFilePath != absStaticPath {
-			http.NotFound(w, r)
-			return
-		}
-
-		// Verify containment using filepath.Rel (CodeQL-recognized pattern)
-		rel, err := filepath.Rel(absStaticPath, absFilePath)
-		if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
-			http.NotFound(w, r)
-			return
-		}
-
-		http.ServeFile(w, r, absFilePath)
+		serveThemeStaticFile(w, r, themeManager)
 	})
 
 	// Register module public routes

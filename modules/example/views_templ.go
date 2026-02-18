@@ -447,7 +447,20 @@ func ExamplePage(pc *adminviews.PageContext, data ExampleViewData) templ.Compone
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</div><script>\n\t\tdocument.addEventListener('DOMContentLoaded', function() {\n\t\t\tconst itemsSection = document.querySelector('.items-section');\n\t\t\tconst confirmDelete = itemsSection.dataset.confirmDelete;\n\t\t\tconst deleteFailed = itemsSection.dataset.deleteFailed;\n\n\t\t\t// Handle delete button clicks\n\t\t\tdocument.querySelectorAll('.delete-item').forEach(function(btn) {\n\t\t\t\tbtn.addEventListener('click', function() {\n\t\t\t\t\tconst id = this.dataset.id;\n\t\t\t\t\tif (confirm(confirmDelete)) {\n\t\t\t\t\t\tfetch('/admin/example/items/' + id, {\n\t\t\t\t\t\t\tmethod: 'DELETE'\n\t\t\t\t\t\t}).then(function(response) {\n\t\t\t\t\t\t\tif (response.ok) {\n\t\t\t\t\t\t\t\twindow.location.reload();\n\t\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t\talert(deleteFailed);\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}).catch(function(err) {\n\t\t\t\t\t\t\tconsole.error('Error:', err);\n\t\t\t\t\t\t\talert(deleteFailed);\n\t\t\t\t\t\t});\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t});\n\t\t});\n\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</div><script nonce=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var30 string
+			templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(templ.GetNonce(ctx))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/example/views.templ`, Line: 195, Col: 37}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\">\n\t\tdocument.addEventListener('DOMContentLoaded', function() {\n\t\t\tconst itemsSection = document.querySelector('.items-section');\n\t\t\tconst confirmDelete = itemsSection.dataset.confirmDelete;\n\t\t\tconst deleteFailed = itemsSection.dataset.deleteFailed;\n\n\t\t\t// Handle delete button clicks\n\t\t\tdocument.querySelectorAll('.delete-item').forEach(function(btn) {\n\t\t\t\tbtn.addEventListener('click', function() {\n\t\t\t\t\tconst id = this.dataset.id;\n\t\t\t\t\tif (confirm(confirmDelete)) {\n\t\t\t\t\t\tfetch('/admin/example/items/' + id, {\n\t\t\t\t\t\t\tmethod: 'DELETE'\n\t\t\t\t\t\t}).then(function(response) {\n\t\t\t\t\t\t\tif (response.ok) {\n\t\t\t\t\t\t\t\twindow.location.reload();\n\t\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t\talert(deleteFailed);\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}).catch(function(err) {\n\t\t\t\t\t\t\tconsole.error('Error:', err);\n\t\t\t\t\t\t\talert(deleteFailed);\n\t\t\t\t\t\t});\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t});\n\t\t});\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

@@ -33,7 +33,7 @@
 
     {{/* JSON-LD Structured Data */}}
     {{if .JSONLD}}
-    <script type="application/ld+json">
+    <script nonce="{{.CSPNonce}}" type="application/ld+json">
 {{.JSONLD}}
     </script>
     {{end}}
@@ -63,22 +63,22 @@
     {{end}}
 
     {{/* Privacy/Consent scripts - MUST be before analytics for Google Consent Mode v2 */}}
-    {{if privacyHead}}{{privacyHead}}{{end}}
+    {{if privacyHead}}{{privacyHead .CSPNonce}}{{end}}
 
     {{/* External analytics tracking scripts (head) */}}
-    {{if analyticsExtHead}}{{analyticsExtHead}}{{end}}
+    {{if analyticsExtHead}}{{analyticsExtHead .CSPNonce}}{{end}}
 
     {{/* External embed scripts (head) */}}
-    {{if embedHead}}{{embedHead}}{{end}}
+    {{if embedHead}}{{embedHead .CSPNonce}}{{end}}
 
     {{block "head" .}}{{end}}
 </head>
 <body class="st-body{{if .BodyClass}} {{.BodyClass}}{{end}}">
     {{/* Informer notification bar (top of page) */}}
-    {{if informerBar}}{{informerBar}}{{end}}
+    {{if informerBar}}{{informerBar .CSPNonce}}{{end}}
 
     {{/* External analytics tracking scripts (body - noscript fallbacks) */}}
-    {{if analyticsExtBody}}{{analyticsExtBody}}{{end}}
+    {{if analyticsExtBody}}{{analyticsExtBody .CSPNonce}}{{end}}
 
     {{template "header.html" .}}
 
@@ -106,15 +106,15 @@
     {{template "footer.html" .}}
 
     {{/* Alpine.js Collapse Plugin (must load before Alpine) */}}
-    <script defer src="/static/dist/js/alpine-collapse.min.js"></script>
+    <script nonce="{{.CSPNonce}}" defer src="/static/dist/js/alpine-collapse.min.js"></script>
     {{/* Alpine.js */}}
-    <script defer src="/static/dist/js/alpine.min.js"></script>
+    <script nonce="{{.CSPNonce}}" defer src="/static/dist/js/alpine.min.js"></script>
     {{/* Theme JavaScript */}}
-    <script src="/themes/starter/static/js/theme.js"></script>
+    <script nonce="{{.CSPNonce}}" src="/themes/starter/static/js/theme.js"></script>
 
     {{block "scripts" .}}{{end}}
 
     {{/* External embed scripts (body - chat widgets, etc.) */}}
-    {{if embedBody}}{{embedBody}}{{end}}
+    {{if embedBody}}{{embedBody .CSPNonce}}{{end}}
 </body>
 </html>

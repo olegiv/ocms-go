@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/olegiv/ocms-go/internal/config"
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/testutil"
 	"github.com/olegiv/ocms-go/internal/testutil/moduleutil"
@@ -385,24 +386,28 @@ func TestGetRemoteIP(t *testing.T) {
 		xff        string
 		xri        string
 		remoteAddr string
+		trusted    []string
 		want       string
 	}{
 		{
 			name:       "X-Forwarded-For single",
 			xff:        "192.168.1.100",
 			remoteAddr: "10.0.0.1:12345",
+			trusted:    []string{"10.0.0.0/8"},
 			want:       "192.168.1.100",
 		},
 		{
 			name:       "X-Forwarded-For multiple",
 			xff:        "192.168.1.100, 10.0.0.1, 172.16.0.1",
-			remoteAddr: "10.0.0.1:12345",
-			want:       "192.168.1.100",
+			remoteAddr: "127.0.0.1:12345",
+			trusted:    []string{"127.0.0.1/32", "172.16.0.0/12"},
+			want:       "10.0.0.1",
 		},
 		{
 			name:       "X-Real-IP",
 			xri:        "192.168.1.200",
 			remoteAddr: "10.0.0.1:12345",
+			trusted:    []string{"10.0.0.0/8"},
 			want:       "192.168.1.200",
 		},
 		{
@@ -420,12 +425,30 @@ func TestGetRemoteIP(t *testing.T) {
 			xff:        "192.168.1.100",
 			xri:        "192.168.1.200",
 			remoteAddr: "10.0.0.1:12345",
+			trusted:    []string{"10.0.0.0/8"},
 			want:       "192.168.1.100",
+		},
+		{
+			name:       "invalid XFF fails closed to remote",
+			xff:        "invalid",
+			xri:        "192.168.1.200",
+			remoteAddr: "10.0.0.1:12345",
+			trusted:    []string{"10.0.0.0/8"},
+			want:       "10.0.0.1",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if err := middleware.SetTrustedProxies(tt.trusted); err != nil {
+				t.Fatalf("SetTrustedProxies() error = %v", err)
+			}
+			t.Cleanup(func() {
+				if err := middleware.SetTrustedProxies(nil); err != nil {
+					t.Fatalf("reset SetTrustedProxies() error: %v", err)
+				}
+			})
+
 			req := httptest.NewRequest("GET", "/", nil)
 			if tt.xff != "" {
 				req.Header.Set("X-Forwarded-For", tt.xff)

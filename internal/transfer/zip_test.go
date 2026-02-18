@@ -31,11 +31,7 @@ func TestExportWithMediaToZip(t *testing.T) {
 	}
 
 	// Create temp upload directory
-	uploadDir, err := os.MkdirTemp("", "ocms-test-uploads-*")
-	if err != nil {
-		t.Fatalf("failed to create temp upload dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(uploadDir) }()
+	uploadDir := t.TempDir()
 
 	// Create test media file on disk
 	testMediaUUID := "550e8400-e29b-41d4-a716-446655440000"
@@ -52,14 +48,14 @@ func TestExportWithMediaToZip(t *testing.T) {
 
 	// Create media record in database
 	media, err := ts.Queries.CreateMedia(ts.Ctx, store.CreateMediaParams{
-		Uuid:       testMediaUUID,
-		Filename:   testFilename,
-		MimeType:   "image/jpeg",
-		Size:       int64(len(testContent)),
-		UploadedBy: ts.User.ID,
+		Uuid:         testMediaUUID,
+		Filename:     testFilename,
+		MimeType:     "image/jpeg",
+		Size:         int64(len(testContent)),
+		UploadedBy:   ts.User.ID,
 		LanguageCode: lang.Code,
-		CreatedAt:  ts.Now,
-		UpdatedAt:  ts.Now,
+		CreatedAt:    ts.Now,
+		UpdatedAt:    ts.Now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create media record: %v", err)
@@ -182,11 +178,7 @@ func TestImportFromZip(t *testing.T) {
 	}
 
 	// Create temp upload directory for source
-	srcUploadDir, err := os.MkdirTemp("", "ocms-test-src-uploads-*")
-	if err != nil {
-		t.Fatalf("failed to create temp src upload dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(srcUploadDir) }()
+	srcUploadDir := t.TempDir()
 
 	// Create test media file
 	testMediaUUID := "550e8400-e29b-41d4-a716-446655440001"
@@ -203,14 +195,14 @@ func TestImportFromZip(t *testing.T) {
 
 	// Create media record
 	_, err = srcQueries.CreateMedia(ctx, store.CreateMediaParams{
-		Uuid:       testMediaUUID,
-		Filename:   testFilename,
-		MimeType:   "image/png",
-		Size:       int64(len(testContent)),
-		UploadedBy: user.ID,
+		Uuid:         testMediaUUID,
+		Filename:     testFilename,
+		MimeType:     "image/png",
+		Size:         int64(len(testContent)),
+		UploadedBy:   user.ID,
 		LanguageCode: lang.Code,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	})
 	if err != nil {
 		t.Fatalf("failed to create media record: %v", err)
@@ -239,11 +231,7 @@ func TestImportFromZip(t *testing.T) {
 	dstQueries := store.New(dstDB)
 
 	// Create temp upload directory for destination
-	dstUploadDir, err := os.MkdirTemp("", "ocms-test-dst-uploads-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dst upload dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(dstUploadDir) }()
+	dstUploadDir := t.TempDir()
 
 	// Import from zip
 	importer := NewImporter(dstQueries, dstDB, logger)
@@ -429,13 +417,12 @@ func TestExportWithMediaToFile(t *testing.T) {
 	}
 
 	// Create temp file for export
-	tmpFile, err := os.CreateTemp("", "ocms-export-test-*.zip")
+	tmpFile, err := os.CreateTemp(t.TempDir(), "ocms-export-test-*.zip")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
 	tmpPath := tmpFile.Name()
 	_ = tmpFile.Close()
-	defer func() { _ = os.Remove(tmpPath) }()
 
 	if err := exporter.ExportWithMediaToFile(ctx, opts, tmpPath); err != nil {
 		t.Fatalf("ExportWithMediaToFile failed: %v", err)

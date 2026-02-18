@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"strings"
 
-	"filippo.io/csrf/gorilla"
+	csrf "filippo.io/csrf/gorilla"
 )
 
 // CSRFConfig holds configuration for CSRF protection.

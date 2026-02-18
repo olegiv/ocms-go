@@ -155,7 +155,7 @@ func TestRenderHeadScripts_NilSettings(t *testing.T) {
 	m := New()
 	m.settings = nil
 
-	result := m.renderHeadScripts()
+	result := m.renderHeadScripts("")
 	if result != "" {
 		t.Errorf("renderHeadScripts with nil settings should return empty, got %q", result)
 	}
@@ -170,7 +170,7 @@ func TestRenderHeadScripts_GA4Only(t *testing.T) {
 		MatomoEnabled:    false,
 	}
 
-	result := string(m.renderHeadScripts())
+	result := string(m.renderHeadScripts(""))
 
 	// Should contain GA4 script
 	if !strings.Contains(result, "G-TESTID123") {
@@ -198,7 +198,7 @@ func TestRenderHeadScripts_GTMOnly(t *testing.T) {
 		MatomoEnabled:  false,
 	}
 
-	result := string(m.renderHeadScripts())
+	result := string(m.renderHeadScripts(""))
 
 	// Should contain GTM script
 	if !strings.Contains(result, "GTM-TESTID1") {
@@ -222,7 +222,7 @@ func TestRenderHeadScripts_GTMOverridesGA4(t *testing.T) {
 		MatomoEnabled:    false,
 	}
 
-	result := string(m.renderHeadScripts())
+	result := string(m.renderHeadScripts(""))
 
 	// Should contain GTM
 	if !strings.Contains(result, "GTM-TESTID1") {
@@ -245,7 +245,7 @@ func TestRenderHeadScripts_MatomoOnly(t *testing.T) {
 		MatomoSiteID:  "123",
 	}
 
-	result := string(m.renderHeadScripts())
+	result := string(m.renderHeadScripts(""))
 
 	// Should contain Matomo script
 	if !strings.Contains(result, "analytics.example.com") {
@@ -270,7 +270,7 @@ func TestRenderHeadScripts_MatomoURLTrailingSlash(t *testing.T) {
 		MatomoSiteID:  "1",
 	}
 
-	result := string(m.renderHeadScripts())
+	result := string(m.renderHeadScripts(""))
 
 	// Trailing slash should be removed and not doubled
 	if strings.Contains(result, "example.com//") {
@@ -282,7 +282,7 @@ func TestRenderBodyScripts_NilSettings(t *testing.T) {
 	m := New()
 	m.settings = nil
 
-	result := m.renderBodyScripts()
+	result := m.renderBodyScripts("")
 	if result != "" {
 		t.Errorf("renderBodyScripts with nil settings should return empty, got %q", result)
 	}
@@ -295,7 +295,7 @@ func TestRenderBodyScripts_GTMNoscript(t *testing.T) {
 		GTMContainerID: "GTM-BODYTEST",
 	}
 
-	result := string(m.renderBodyScripts())
+	result := string(m.renderBodyScripts(""))
 
 	// Should contain GTM noscript fallback
 	if !strings.Contains(result, "GTM-BODYTEST") {
@@ -317,7 +317,7 @@ func TestRenderBodyScripts_MatomoNoscript(t *testing.T) {
 		MatomoSiteID:  "99",
 	}
 
-	result := string(m.renderBodyScripts())
+	result := string(m.renderBodyScripts(""))
 
 	// Should contain Matomo noscript image tracker
 	if !strings.Contains(result, "matomo.test.com") {
@@ -346,7 +346,7 @@ func TestRenderHeadScripts_DisabledTrackers(t *testing.T) {
 		MatomoSiteID:     "999",
 	}
 
-	result := string(m.renderHeadScripts())
+	result := string(m.renderHeadScripts(""))
 
 	// Nothing should appear
 	if result != "" {
@@ -363,7 +363,7 @@ func TestRenderHeadScripts_EnabledWithoutID(t *testing.T) {
 		GTMContainerID:   "", // Empty ID
 	}
 
-	result := string(m.renderHeadScripts())
+	result := string(m.renderHeadScripts(""))
 
 	// Should be empty since IDs are not set
 	if result != "" {
@@ -378,7 +378,7 @@ func TestRenderScripts_HTMLEscaping(t *testing.T) {
 		GA4MeasurementID: "G-<script>alert('xss')</script>",
 	}
 
-	result := string(m.renderHeadScripts())
+	result := string(m.renderHeadScripts(""))
 
 	// Should not contain raw script tags
 	if strings.Contains(result, "<script>alert") {
@@ -472,8 +472,8 @@ func TestAllTrackersEnabled(t *testing.T) {
 		MatomoSiteID:     "1",
 	}
 
-	headResult := string(m.renderHeadScripts())
-	bodyResult := string(m.renderBodyScripts())
+	headResult := string(m.renderHeadScripts(""))
+	bodyResult := string(m.renderBodyScripts(""))
 
 	// GTM should be present (overrides GA4)
 	if !strings.Contains(headResult, "GTM-ALL123") {

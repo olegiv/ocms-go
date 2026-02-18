@@ -14,19 +14,18 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-
 	"github.com/olegiv/ocms-go/internal/middleware"
 )
 
 // Bookmark represents a saved bookmark.
 type Bookmark struct {
-	ID                int64     `json:"id"`
-	Title             string    `json:"title"`
-	URL               string    `json:"url"`
-	Description       string    `json:"description"`
-	IsFavorite        bool      `json:"is_favorite"`
-	CreatedAt         time.Time `json:"created_at"`
-	CreatedAtFormatted string   `json:"-"`
+	ID                 int64     `json:"id"`
+	Title              string    `json:"title"`
+	URL                string    `json:"url"`
+	Description        string    `json:"description"`
+	IsFavorite         bool      `json:"is_favorite"`
+	CreatedAt          time.Time `json:"created_at"`
+	CreatedAtFormatted string    `json:"-"`
 }
 
 // adminPageData holds data passed to the admin template.
@@ -34,6 +33,7 @@ type adminPageData struct {
 	Bookmarks []Bookmark
 	Version   string
 	DemoMode  bool
+	CSPNonce  string
 }
 
 // handlePublicList handles GET /bookmarks - public route returning JSON.
@@ -54,7 +54,7 @@ func (m *Module) handlePublicList(w http.ResponseWriter, _ *http.Request) {
 
 // handleAdminList handles GET /admin/bookmarks - renders the admin dashboard
 // using the module's own embedded template.
-func (m *Module) handleAdminList(w http.ResponseWriter, _ *http.Request) {
+func (m *Module) handleAdminList(w http.ResponseWriter, r *http.Request) {
 	items, err := m.listBookmarks()
 	if err != nil {
 		m.ctx.Logger.Error("failed to list bookmarks", "error", err)
@@ -72,6 +72,7 @@ func (m *Module) handleAdminList(w http.ResponseWriter, _ *http.Request) {
 		Bookmarks: items,
 		Version:   m.Version(),
 		DemoMode:  middleware.IsDemoMode(),
+		CSPNonce:  middleware.GetCSPNonce(r),
 	}); err != nil {
 		m.ctx.Logger.Error("failed to render admin template", "error", err)
 	}

@@ -3,7 +3,15 @@
 
 package admin
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/olegiv/ocms-go/internal/views/components/alert"
+	"github.com/olegiv/ocms-go/internal/views/components/badge"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
+)
 
 // ThemeViewItem holds data for a single theme in the list view.
 type ThemeViewItem struct {
@@ -47,12 +55,8 @@ type ThemeSettingsViewData struct {
 // ThemesListPage renders the themes list page.
 templ ThemesListPage(pc *PageContext, data ThemesListData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("themes.title") }</h1>
-				<p class="page-description">{ pc.T("themes.description") }</p>
-			</div>
-		</div>
+		@PageHeader(pc.T("themes.title"), pc.T("themes.description")) {
+		}
 		if len(data.Themes) > 0 {
 			<div class="themes-grid">
 				for _, thm := range data.Themes {
@@ -88,32 +92,32 @@ templ ThemesListPage(pc *PageContext, data ThemesListData) {
 							if !thm.IsActive {
 								<form method="POST" action="/admin/themes/activate" class="inline-form">
 									<input type="hidden" name="theme" value={ thm.Name }/>
-									<button type="submit" class="btn btn-primary">
-										@iconActivate()
+									@button.Button(button.Props{Type: button.TypeSubmit}) {
+										@icon.Check(icon.Props{Size: 16})
 										{ pc.T("themes.activate") }
-									</button>
+									}
 								</form>
 							}
 							if thm.HasSettings {
-								<a href={ templ.SafeURL(thm.SettingsURL) } class={ "btn", templ.KV("btn-primary", thm.IsActive), templ.KV("btn-secondary", !thm.IsActive) }>
-									@iconSettingsSmall()
+								@button.Button(button.Props{Variant: themeSettingsVariant(thm.IsActive), Href: thm.SettingsURL}) {
+									@icon.Settings(icon.Props{Size: 16})
 									{ pc.T("themes.settings") }
-								</a>
+								}
 							}
 						</div>
 					</div>
 				}
 			</div>
 		} else {
-			<div class="card">
-				<div class="card-body">
+			@card.Card(card.Props{}) {
+				@card.Content() {
 					<div class="empty-state">
 						@iconThemePreviewPlaceholder()
 						<p>{ pc.T("themes.no_themes") }</p>
 						<span class="empty-hint">{ pc.T("themes.no_themes_hint") }</span>
 					</div>
-				</div>
-			</div>
+				}
+			}
 		}
 	}
 }
@@ -121,39 +125,37 @@ templ ThemesListPage(pc *PageContext, data ThemesListData) {
 // ThemeSettingsPage renders the theme settings page.
 templ ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ data.ThemeConfigName } { pc.T("themes.settings_title") }</h1>
-				<p class="page-description">{ pc.T("themes.customize") }</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/themes" class="btn btn-secondary">
-					@iconBack()
-					{ pc.T("themes.back_to_themes") }
-				</a>
-			</div>
-		</div>
-		<div class="card">
-			<div class="card-header">
-				<h2 class="card-title">{ pc.T("themes.theme_settings") }</h2>
-				if data.IsActive {
-					<span class="badge badge-success">{ pc.T("themes.active_theme") }</span>
+		@PageHeader(data.ThemeConfigName + " " + pc.T("themes.settings_title"), pc.T("themes.customize")) {
+			@button.Button(button.Props{Variant: button.VariantSecondary, Href: "/admin/themes"}) {
+				@icon.ArrowLeft(icon.Props{Size: 16})
+				{ pc.T("themes.back_to_themes") }
+			}
+		}
+		@card.Card(card.Props{}) {
+			@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
+				@card.Title() {
+					{ pc.T("themes.theme_settings") }
 				}
-			</div>
-			<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/themes/%s/settings", data.ThemeName)) } class="card-body">
+				if data.IsActive {
+					@badge.Badge(badge.Props{Class: "badge-success"}) {
+						{ pc.T("themes.active_theme") }
+					}
+				}
+			}
+			<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/themes/%s/settings", data.ThemeName)) } class="p-6">
 				<input type="hidden" name="_method" value="PUT"/>
 				if data.IsDemoMode {
-					<div class="alert alert-warning" style="margin-bottom: 1.5rem;">
+					@alert.Alert(alert.Props{Class: "alert-warning mb-6"}) {
 						{ pc.T("themes.demo_readonly") }
-					</div>
+					}
 				}
 				if len(data.Settings) > 0 {
 					<div class="settings-grid">
 						for _, setting := range data.Settings {
 							<div class="form-group">
-								<label for={ setting.Key } class="form-label">
+								@label.Label(label.Props{For: setting.Key, Class: "block mb-1"}) {
 									{ pc.TDefault(fmt.Sprintf("theme_settings.%s", setting.Key), setting.Label) }
-								</label>
+								}
 								if setting.Type == "color" {
 									@themeSettingColor(pc, data, setting)
 								} else if setting.Type == "select" {
@@ -171,11 +173,13 @@ templ ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) {
 					</div>
 					if !data.IsDemoMode {
 						<div class="form-actions">
-							<button type="submit" class="btn btn-primary">
-								@iconSave()
+							@button.Button(button.Props{Type: button.TypeSubmit}) {
+								@icon.Save(icon.Props{Size: 16})
 								{ pc.T("themes.save_settings") }
-							</button>
-							<a href="/admin/themes" class="btn btn-secondary">{ pc.T("btn.cancel") }</a>
+							}
+							@button.Button(button.Props{Variant: button.VariantSecondary, Href: "/admin/themes"}) {
+								{ pc.T("btn.cancel") }
+							}
 						</div>
 					}
 				} else {
@@ -186,7 +190,7 @@ templ ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) {
 					</div>
 				}
 			</form>
-		</div>
+		}
 		@themeSettingsScript(pc)
 		@themeSettingsStyle()
 	}
@@ -252,14 +256,14 @@ templ themeSettingImage(pc *PageContext, data ThemeSettingsViewData, setting The
 			disabled?={ data.IsDemoMode }
 		/>
 		if !data.IsDemoMode {
-			<button type="button" class="btn btn-secondary btn-sm btn-media-browse" data-field-id={ setting.Key }>
+			@button.Button(button.Props{Variant: button.VariantSecondary, Size: button.SizeSm, Class: "btn-media-browse", Attributes: templ.Attributes{"data-field-id": setting.Key}}) {
 				@iconMediaBrowse()
 				{ pc.T("themes.browse") }
-			</button>
+			}
 			if setting.Value != "" {
-				<button type="button" class="btn btn-secondary btn-sm btn-image-clear" data-field-id={ setting.Key } title={ pc.T("btn.clear") }>
-					@iconClear()
-				</button>
+				@button.Button(button.Props{Variant: button.VariantSecondary, Size: button.SizeSm, Class: "btn-image-clear", Attributes: templ.Attributes{"data-field-id": setting.Key, "title": pc.T("btn.clear")}}) {
+					@icon.X(icon.Props{Size: 16})
+				}
 			}
 		}
 	</div>
@@ -283,7 +287,7 @@ templ themeSettingText(pc *PageContext, data ThemeSettingsViewData, setting Them
 
 // themeSettingsScript renders the JavaScript for theme settings interactions.
 templ themeSettingsScript(pc *PageContext) {
-	<script>
+	<script nonce={ templ.GetNonce(ctx) }>
 	// Sync color input with text display
 	document.querySelectorAll('.color-input').forEach(function(colorInput) {
 		var textInput = colorInput.nextElementSibling;
@@ -588,4 +592,12 @@ templ iconMediaBrowse() {
 
 templ iconClear() {
 	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+}
+
+// themeSettingsVariant returns the appropriate button variant based on whether the theme is active.
+func themeSettingsVariant(isActive bool) button.Variant {
+	if isActive {
+		return button.VariantDefault
+	}
+	return button.VariantSecondary
 }

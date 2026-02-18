@@ -635,10 +635,10 @@ func TestRegisterAdminRoutes(t *testing.T) {
 	m.RegisterAdminRoutes(r)
 
 	expectedRoutes := map[string]string{
-		"GET /bookmarks":            "admin list",
-		"POST /bookmarks":           "create",
+		"GET /bookmarks":              "admin list",
+		"POST /bookmarks":             "create",
 		"POST /bookmarks/{id}/toggle": "toggle favorite",
-		"DELETE /bookmarks/{id}":     "delete",
+		"DELETE /bookmarks/{id}":      "delete",
 	}
 
 	foundRoutes := make(map[string]bool)

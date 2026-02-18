@@ -1,4 +1,4 @@
-make.PHONY: run stop restart build build-prod build-linux-amd64 build-darwin-arm64 build-all-platforms test clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ
+make.PHONY: run stop restart build build-prod build-linux-amd64 build-darwin-arm64 build-all-platforms test clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ commit-prepare commit-do code-quality security-audit commit-prepare-local commit-do-local code-quality-local security-audit-local install-hooks check-no-absolute-paths
 
 # Build variables
 BINARY_NAME=ocms
@@ -22,6 +22,15 @@ DB_PATH := ./data/ocms.db
 # Build assets (SCSS to CSS)
 assets:
 	./scripts/build-assets.sh
+
+# Install repository-managed git hooks
+install-hooks:
+	git config core.hooksPath .githooks
+	@echo "Configured git hooks path: .githooks"
+
+# Scan tracked files for local absolute path leaks
+check-no-absolute-paths:
+	./scripts/check-no-absolute-paths.sh --all
 
 # Development server with asset build
 dev: assets
@@ -103,3 +112,28 @@ sqlc:
 templ:
 	templ generate
 	@echo "Templ files generated"
+
+# Prepare and execute commit workflow (Codex/Claude-compatible)
+commit-prepare:
+	./scripts/codex-commands commit-prepare
+
+commit-do:
+	./scripts/codex-commands commit-do
+
+code-quality:
+	./scripts/codex-commands code-quality
+
+security-audit:
+	./scripts/codex-commands security-audit
+
+commit-prepare-local:
+	./scripts/codex-commands commit-prepare-local
+
+commit-do-local:
+	./scripts/codex-commands commit-do-local
+
+code-quality-local:
+	./scripts/codex-commands code-quality-local
+
+security-audit-local:
+	./scripts/codex-commands security-audit-local

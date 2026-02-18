@@ -133,7 +133,7 @@
                     <td class="muted">{{.CreatedAtFormatted}}</td>
                     {{if not $.DemoMode}}
                     <td class="actions">
-                        <button type="button" class="btn btn-danger" onclick="deleteBookmark({{.ID}})">Delete</button>
+                        <button type="button" class="btn btn-danger js-delete-bookmark" data-bookmark-id="{{.ID}}">Delete</button>
                     </td>
                     {{end}}
                 </tr>
@@ -150,7 +150,7 @@
     </div>
     {{end}}
 
-    <script>
+    <script nonce="{{.CSPNonce}}">
     function deleteBookmark(id) {
         if (confirm('Are you sure you want to delete this bookmark?')) {
             fetch('/admin/bookmarks/' + id, { method: 'DELETE' })
@@ -158,6 +158,12 @@
                 .catch(function() { alert('Failed to delete'); });
         }
     }
+
+    document.querySelectorAll('.js-delete-bookmark').forEach(function(button) {
+        button.addEventListener('click', function() {
+            deleteBookmark(this.dataset.bookmarkId);
+        });
+    });
     </script>
 </body>
 </html>

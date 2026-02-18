@@ -4,6 +4,11 @@
 package admin
 
 import "fmt"
+import "github.com/olegiv/ocms-go/internal/views/components/button"
+import "github.com/olegiv/ocms-go/internal/views/components/card"
+import "github.com/olegiv/ocms-go/internal/views/components/icon"
+import "github.com/olegiv/ocms-go/internal/views/components/input"
+import "github.com/olegiv/ocms-go/internal/views/components/label"
 
 // =============================================================================
 // VIEW TYPES
@@ -126,32 +131,34 @@ func mediaFormVal(formValues map[string]string, key string, fallback string) str
 	return fallback
 }
 
+// mediaFilterVariant returns the button variant based on active state.
+func mediaFilterVariant(isActive bool) button.Variant {
+	if isActive {
+		return button.VariantDefault
+	}
+	return button.VariantOutline
+}
+
 // =============================================================================
 // LIBRARY PAGE
 // =============================================================================
 
 templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("media.title") }</h1>
-				<p class="page-description">{ pc.TDefault("media.description", fmt.Sprintf("%d", data.TotalCount)) }</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/media/upload" class="btn btn-primary">
-					@iconUpload()
-					{ pc.T("btn.upload") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("media.title"), pc.T("media.description", data.TotalCount)) {
+			@button.Button(button.Props{Href: "/admin/media/upload"}) {
+				@icon.Upload(icon.Props{Size: 16})
+				{ pc.T("btn.upload") }
+			}
+		}
 		<div class="media-layout" x-data="folderManager()">
 			<!-- Folder Sidebar -->
 			<aside class="folder-sidebar">
 				<div class="folder-sidebar-header">
 					<h3>{ pc.T("media.folders") }</h3>
-					<button type="button" class="btn btn-sm btn-outline" @click="showNewFolder = true" title={ pc.T("media.new_folder") }>
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeButton, Attributes: templ.Attributes{"@click": "showNewFolder = true", "title": pc.T("media.new_folder")}}) {
 						@iconPlus14()
-					</button>
+					}
 				</div>
 				<!-- Virtual Folders -->
 				<ul class="folder-list">
@@ -180,20 +187,19 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 				<!-- New Folder Form -->
 				<div class="new-folder-form" x-show="showNewFolder" x-cloak>
 					<form hx-post="/admin/media/folders" hx-target="#folder-list" hx-swap="beforeend" @htmx:after-request="showNewFolder = false; newFolderName = ''">
-						<input
-							type="text"
-							name="name"
-							class="form-input form-input-sm"
-							placeholder={ pc.T("media.folder_name") }
-							x-model="newFolderName"
-							x-ref="newFolderInput"
-							@keydown.escape="showNewFolder = false"
-							required
-							maxlength="255"
-						/>
+						@input.Input(input.Props{
+							Name:        "name",
+							Type:        input.TypeText,
+							Placeholder: pc.T("media.folder_name"),
+							Attributes:  templ.Attributes{"x-model": "newFolderName", "x-ref": "newFolderInput", "@keydown.escape": "showNewFolder = false", "required": true, "maxlength": "255", "class": "form-input-sm"},
+						})
 						<div class="new-folder-actions">
-							<button type="submit" class="btn btn-sm btn-primary">{ pc.T("btn.create") }</button>
-							<button type="button" class="btn btn-sm btn-outline" @click="showNewFolder = false">{ pc.T("btn.cancel") }</button>
+							@button.Button(button.Props{Size: button.SizeSm, Type: button.TypeSubmit}) {
+								{ pc.T("btn.create") }
+							}
+							@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeButton, Attributes: templ.Attributes{"@click": "showNewFolder = false"}}) {
+								{ pc.T("btn.cancel") }
+							}
 						</div>
 					</form>
 				</div>
@@ -205,21 +211,21 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 					<div class="filter-group">
 						<label class="filter-label">{ pc.T("media.type") }:</label>
 						<div class="filter-buttons">
-							<a href={ templ.SafeURL(mediaFilterURL("all", data.FolderID)) } class={ "btn btn-sm", templ.KV("btn-primary", data.Filter == "all"), templ.KV("btn-outline", data.Filter != "all") }>
+							@button.Button(button.Props{Variant: mediaFilterVariant(data.Filter == "all"), Size: button.SizeSm, Href: mediaFilterURL("all", data.FolderID)}) {
 								{ pc.T("label.all") }
-							</a>
-							<a href={ templ.SafeURL(mediaFilterURL("images", data.FolderID)) } class={ "btn btn-sm", templ.KV("btn-primary", data.Filter == "images"), templ.KV("btn-outline", data.Filter != "images") }>
+							}
+							@button.Button(button.Props{Variant: mediaFilterVariant(data.Filter == "images"), Size: button.SizeSm, Href: mediaFilterURL("images", data.FolderID)}) {
 								@iconImage14()
 								{ pc.T("media.images") }
-							</a>
-							<a href={ templ.SafeURL(mediaFilterURL("documents", data.FolderID)) } class={ "btn btn-sm", templ.KV("btn-primary", data.Filter == "documents"), templ.KV("btn-outline", data.Filter != "documents") }>
+							}
+							@button.Button(button.Props{Variant: mediaFilterVariant(data.Filter == "documents"), Size: button.SizeSm, Href: mediaFilterURL("documents", data.FolderID)}) {
 								@iconFileText14()
 								{ pc.T("media.documents") }
-							</a>
-							<a href={ templ.SafeURL(mediaFilterURL("videos", data.FolderID)) } class={ "btn btn-sm", templ.KV("btn-primary", data.Filter == "videos"), templ.KV("btn-outline", data.Filter != "videos") }>
+							}
+							@button.Button(button.Props{Variant: mediaFilterVariant(data.Filter == "videos"), Size: button.SizeSm, Href: mediaFilterURL("videos", data.FolderID)}) {
 								@iconVideo14()
 								{ pc.T("media.videos") }
-							</a>
+							}
 						</div>
 					</div>
 					<div class="filter-group search-group">
@@ -232,31 +238,39 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 							}
 							<div class="search-input-wrapper">
 								@iconSearch16()
-								<input type="text" name="q" value={ data.Search } placeholder={ pc.T("media.search_files") } class="form-input search-input" aria-label={ pc.T("media.search_files") }/>
+								@input.Input(input.Props{
+									Name:        "q",
+									Type:        input.TypeText,
+									Value:       data.Search,
+									Placeholder: pc.T("media.search_files"),
+									Attributes:  templ.Attributes{"aria-label": pc.T("media.search_files"), "class": "search-input"},
+								})
 								if data.Search != "" {
 									<a href={ templ.SafeURL(mediaClearSearchURL(data.Filter)) } class="search-clear" title={ pc.T("btn.clear") }>&times;</a>
 								}
 							</div>
-							<button type="submit" class="btn btn-sm btn-outline">{ pc.T("btn.search") }</button>
+							@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit}) {
+								{ pc.T("btn.search") }
+							}
 						</form>
 					</div>
 				</div>
 				if len(data.Media) > 0 {
-					<div class="card">
+					@card.Card(card.Props{}) {
 						<div class="media-grid">
 							for _, item := range data.Media {
 								@mediaGridItem(pc, item)
 							}
 						</div>
 						if data.Pagination.ShouldShow() {
-							<div class="card-footer">
+							@card.Footer() {
 								@Pagination(pc, data.Pagination)
-							</div>
+							}
 						}
-					</div>
+					}
 				} else {
-					<div class="card">
-						<div class="card-body">
+					@card.Card(card.Props{}) {
+						@card.Content() {
 							<div class="empty-state media-empty">
 								@iconImagePlaceholderLarge()
 								<p>{ pc.T("media.no_media") }</p>
@@ -270,15 +284,17 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 									<span class="empty-hint">{ pc.T("media.upload_first") }</span>
 								}
 								<div class="empty-state-action">
-									<a href="/admin/media/upload" class="btn btn-primary">{ pc.T("media.upload_files") }</a>
+									@button.Button(button.Props{Href: "/admin/media/upload"}) {
+										{ pc.T("media.upload_files") }
+									}
 								</div>
 							</div>
-						</div>
-					</div>
+						}
+					}
 				}
 			</main>
 		</div>
-		<script>
+		<script nonce={ templ.GetNonce(ctx) }>
 		function folderManager() {
 			return {
 				showNewFolder: false,
@@ -336,14 +352,12 @@ templ mediaFolderItem(pc *PageContext, data MediaLibraryViewData, folder MediaFo
 		<!-- Delete Confirmation -->
 		<div class="folder-delete-confirm" x-show="showDelete" x-cloak>
 			<span>{ pc.T("media.delete_folder") }</span>
-			<button
-				type="button"
-				class="btn btn-sm btn-danger"
-				hx-delete={ fmt.Sprintf("/admin/media/folders/%d", folder.ID) }
-				hx-target="closest .folder-item"
-				hx-swap="outerHTML"
-			>{ pc.T("label.yes") }</button>
-			<button type="button" class="btn btn-sm btn-outline" @click="showDelete = false">{ pc.T("label.no") }</button>
+			@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Type: button.TypeButton, Attributes: templ.Attributes{"hx-delete": fmt.Sprintf("/admin/media/folders/%d", folder.ID), "hx-target": "closest .folder-item", "hx-swap": "outerHTML"}}) {
+				{ pc.T("label.yes") }
+			}
+			@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeButton, Attributes: templ.Attributes{"@click": "showDelete = false"}}) {
+				{ pc.T("label.no") }
+			}
 		</div>
 	</li>
 }
@@ -374,20 +388,15 @@ templ mediaGridItem(pc *PageContext, item MediaItemView) {
 			<span class="media-meta">{ item.Size }</span>
 		</div>
 		<div class="media-actions">
-			<a href={ templ.SafeURL(fmt.Sprintf("/admin/media/%d", item.ID)) } class="btn btn-sm btn-outline" title={ pc.T("btn.edit") }>
+			@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/media/%d", item.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
 				@iconPencil14()
-			</a>
-			<a href={ templ.SafeURL(item.OriginalURL) } class="btn btn-sm btn-outline" title={ pc.T("btn.download") } download>
+			}
+			@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: item.OriginalURL, Attributes: templ.Attributes{"title": pc.T("btn.download"), "download": ""}}) {
 				@iconDownload14()
-			</a>
-			<button
-				type="button"
-				class="btn btn-sm btn-danger"
-				title={ pc.T("btn.delete") }
-				@click="showConfirm = true"
-			>
+			}
+			@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Type: button.TypeButton, Attributes: templ.Attributes{"title": pc.T("btn.delete"), "@click": "showConfirm = true"}}) {
 				@iconTrash14()
-			</button>
+			}
 		</div>
 		<!-- Delete Confirmation Modal -->
 		<div
@@ -408,17 +417,12 @@ templ mediaGridItem(pc *PageContext, item MediaItemView) {
 					<p class="text-muted">{ pc.T("media.delete_warning") }</p>
 				</div>
 				<div class="modal-footer">
-					<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
-					<button
-						type="button"
-						class="btn btn-danger"
-						hx-delete={ fmt.Sprintf("/admin/media/%d", item.ID) }
-						hx-target={ fmt.Sprintf("#media-item-%d", item.ID) }
-						hx-swap="outerHTML"
-						@click="showConfirm = false"
-					>
+					@button.Button(button.Props{Variant: button.VariantOutline, Type: button.TypeButton, Attributes: templ.Attributes{"@click": "showConfirm = false"}}) {
+						{ pc.T("btn.cancel") }
+					}
+					@button.Button(button.Props{Variant: button.VariantDestructive, Type: button.TypeButton, Attributes: templ.Attributes{"hx-delete": fmt.Sprintf("/admin/media/%d", item.ID), "hx-target": fmt.Sprintf("#media-item-%d", item.ID), "hx-swap": "outerHTML", "@click": "showConfirm = false"}}) {
 						{ pc.T("btn.delete") }
-					</button>
+					}
 				</div>
 			</div>
 		</div>
@@ -431,25 +435,21 @@ templ mediaGridItem(pc *PageContext, item MediaItemView) {
 
 templ MediaUploadPage(pc *PageContext, data MediaUploadViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("media.upload_title") }</h1>
-				<p class="page-description">{ pc.T("media.upload_description") }</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/media" class="btn btn-outline">
-					@iconChevronLeft16()
-					{ pc.T("media.back_to_library") }
-				</a>
-			</div>
-		</div>
-		<div class="card">
-			<div class="card-body">
+		@PageHeader(pc.T("media.upload_title"), pc.T("media.upload_description")) {
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/media"}) {
+				@icon.ArrowLeft(icon.Props{Size: 16})
+				{ pc.T("media.back_to_library") }
+			}
+		}
+		@card.Card(card.Props{}) {
+			@card.Content() {
 				@csrfField()
 				<!-- Folder Selection -->
 				if len(data.Folders) > 0 {
 					<div class="form-group">
-						<label for="folder_id" class="form-label">{ pc.T("media.folder_optional") }</label>
+						@label.Label(label.Props{For: "folder_id", Class: "block mb-1"}) {
+							{ pc.T("media.folder_optional") }
+						}
 						<select id="folder_id" name="folder_id" class="form-select">
 							<option value="">{ pc.T("media.no_folder") }</option>
 							for _, folder := range data.Folders {
@@ -460,8 +460,8 @@ templ MediaUploadPage(pc *PageContext, data MediaUploadViewData) {
 				}
 				<!-- Media Dropzone Component (Upload Mode) -->
 				@mediaDropzoneUpload(pc, data)
-			</div>
-		</div>
+			}
+		}
 	}
 }
 
@@ -540,10 +540,10 @@ templ mediaDropzoneUpload(pc *PageContext, data MediaUploadViewData) {
 			<span class="media-dropzone-progress-text" x-text="progress + '%'"></span>
 		</div>
 		<div class="media-dropzone-buttons">
-			<button type="button" class="btn btn-outline" @click="clearFiles()" x-show="files.length > 0 && !uploading">
+			@button.Button(button.Props{Variant: button.VariantOutline, Type: button.TypeButton, Attributes: templ.Attributes{"@click": "clearFiles()", "x-show": "files.length > 0 && !uploading"}}) {
 				{ pc.T("uploader.clear_all") }
-			</button>
-			<button type="button" class="btn btn-primary" :disabled="files.length === 0 || uploading || hasErrors" @click="upload()">
+			}
+			@button.Button(button.Props{Type: button.TypeButton, Attributes: templ.Attributes{":disabled": "files.length === 0 || uploading || hasErrors", "@click": "upload()"}}) {
 				<template x-if="!uploading">
 					<span>
 						@iconUpload()
@@ -553,7 +553,7 @@ templ mediaDropzoneUpload(pc *PageContext, data MediaUploadViewData) {
 				<template x-if="uploading">
 					<span>{ pc.T("uploader.uploading") }</span>
 				</template>
-			</button>
+			}
 		</div>
 	</div>
 }
@@ -564,21 +564,15 @@ templ mediaDropzoneUpload(pc *PageContext, data MediaUploadViewData) {
 
 templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("media.edit_title") }</h1>
-				<p class="page-description">{ pc.T("media.edit_description") }</p>
-			</div>
-			<div class="page-actions">
-				<a href="/admin/media" class="btn btn-outline">
-					@iconChevronLeft16()
-					{ pc.T("media.back_to_library") }
-				</a>
-			</div>
-		</div>
+		@PageHeader(pc.T("media.edit_title"), pc.T("media.edit_description")) {
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/media"}) {
+				@icon.ArrowLeft(icon.Props{Size: 16})
+				{ pc.T("media.back_to_library") }
+			}
+		}
 		<div class="media-edit-layout">
 			<!-- Preview Panel -->
-			<div class="card media-preview-panel">
+			@card.Card(card.Props{Class: "media-preview-panel"}) {
 				<div class="media-preview-container">
 					if data.Media.IsImage {
 						<img src={ data.Media.OriginalURL } alt={ data.Media.Alt } class="media-preview-image"/>
@@ -633,66 +627,65 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 					</div>
 				}
 				<div class="media-actions-panel">
-					<a href={ templ.SafeURL(data.Media.OriginalURL) } class="btn btn-outline btn-block" download>
+					@button.Button(button.Props{Variant: button.VariantOutline, FullWidth: true, Href: data.Media.OriginalURL, Attributes: templ.Attributes{"download": ""}}) {
 						@iconDownload16()
 						{ pc.T("media.download_original") }
-					</a>
-					<button
-						type="button"
-						class="btn btn-outline btn-block"
-						data-copy-url={ data.Media.OriginalURL }
-						onclick="copyMediaURL(this)"
-					>
+					}
+					@button.Button(button.Props{Variant: button.VariantOutline, FullWidth: true, Type: button.TypeButton, Attributes: templ.Attributes{"data-copy-url": data.Media.OriginalURL, "onclick": "copyMediaURL(this)"}}) {
 						@iconCopy16()
 						{ pc.T("media.copy_url") }
-					</button>
+					}
 					if data.Media.IsImage {
 						<form action={ templ.SafeURL(fmt.Sprintf("/admin/media/%d/regenerate", data.Media.ID)) } method="POST" class="btn-form">
 							@csrfField()
-							<button type="submit" class="btn btn-outline btn-block">
+							@button.Button(button.Props{Variant: button.VariantOutline, FullWidth: true, Type: button.TypeSubmit}) {
 								@iconRefresh16()
 								{ pc.T("media.regenerate_variants") }
-							</button>
+							}
 						</form>
 					}
 				</div>
-			</div>
+			}
 			<!-- Edit Form Panel -->
-			<div class="card media-form-panel">
-				<div class="card-body">
+			@card.Card(card.Props{Class: "media-form-panel"}) {
+				@card.Content() {
 					<form action={ templ.SafeURL(fmt.Sprintf("/admin/media/%d", data.Media.ID)) } method="POST">
 						@csrfField()
 						<input type="hidden" name="_method" value="PUT"/>
 						<div class="form-group">
-							<label for="filename" class="form-label">{ pc.T("media.filename") } <span class="required">*</span></label>
-							<input
-								type="text"
-								id="filename"
-								name="filename"
-								value={ mediaFormVal(data.FormValues, "filename", data.Media.Filename) }
-								class={ "form-input", templ.KV("is-invalid", data.Errors["filename"] != "") }
-								required
-								maxlength="255"
-							/>
+							@label.Label(label.Props{For: "filename", Class: "block mb-1"}) {
+								{ pc.T("media.filename") } <span class="required">*</span>
+							}
+							@input.Input(input.Props{
+								ID:         "filename",
+								Name:       "filename",
+								Type:       input.TypeText,
+								Value:      mediaFormVal(data.FormValues, "filename", data.Media.Filename),
+								HasError:   data.Errors["filename"] != "",
+								Attributes: templ.Attributes{"required": true, "maxlength": "255"},
+							})
 							if data.Errors["filename"] != "" {
 								<span class="form-error">{ data.Errors["filename"] }</span>
 							}
 						</div>
 						<div class="form-group">
-							<label for="alt" class="form-label">{ pc.T("media.alt_text") }</label>
-							<input
-								type="text"
-								id="alt"
-								name="alt"
-								value={ mediaFormVal(data.FormValues, "alt", data.Media.Alt) }
-								class="form-input"
-								placeholder={ pc.T("media.alt_placeholder") }
-								maxlength="255"
-							/>
+							@label.Label(label.Props{For: "alt", Class: "block mb-1"}) {
+								{ pc.T("media.alt_text") }
+							}
+							@input.Input(input.Props{
+								ID:          "alt",
+								Name:        "alt",
+								Type:        input.TypeText,
+								Value:       mediaFormVal(data.FormValues, "alt", data.Media.Alt),
+								Placeholder: pc.T("media.alt_placeholder"),
+								Attributes:  templ.Attributes{"maxlength": "255"},
+							})
 							<span class="form-hint">{ pc.T("media.alt_hint") }</span>
 						</div>
 						<div class="form-group">
-							<label for="caption" class="form-label">{ pc.T("media.caption") }</label>
+							@label.Label(label.Props{For: "caption", Class: "block mb-1"}) {
+								{ pc.T("media.caption") }
+							}
 							<textarea
 								id="caption"
 								name="caption"
@@ -711,7 +704,9 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 						}
 						if len(data.Folders) > 0 {
 							<div class="form-group">
-								<label for="folder_id" class="form-label">{ pc.T("media.folder") }</label>
+								@label.Label(label.Props{For: "folder_id", Class: "block mb-1"}) {
+									{ pc.T("media.folder") }
+								}
 								<select id="folder_id" name="folder_id" class="form-select">
 									<option value="">{ pc.T("media.no_folder") }</option>
 									for _, folder := range data.Folders {
@@ -726,26 +721,26 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 							</div>
 						}
 						<div class="form-actions">
-							<a href="/admin/media" class="btn btn-outline">{ pc.T("btn.cancel") }</a>
-							<button type="submit" class="btn btn-primary">{ pc.T("media.save_changes") }</button>
+							@button.Button(button.Props{Variant: button.VariantOutline, Href: "/admin/media"}) {
+								{ pc.T("btn.cancel") }
+							}
+							@button.Button(button.Props{Type: button.TypeSubmit}) {
+								{ pc.T("media.save_changes") }
+							}
 						</div>
 					</form>
-				</div>
-			</div>
+				}
+			}
 		</div>
 		<!-- Delete Section -->
-		<div class="card danger-zone" x-data="{ showConfirm: false }">
-			<div class="card-body">
+		@card.Card(card.Props{Class: "danger-zone", Attributes: templ.Attributes{"x-data": "{ showConfirm: false }"}}) {
+			@card.Content() {
 				<h3 class="danger-title">{ pc.T("media.danger_zone") }</h3>
 				<p class="danger-description">{ pc.T("media.danger_description") }</p>
-				<button
-					type="button"
-					class="btn btn-danger"
-					@click="showConfirm = true"
-				>
+				@button.Button(button.Props{Variant: button.VariantDestructive, Type: button.TypeButton, Attributes: templ.Attributes{"@click": "showConfirm = true"}}) {
 					@iconTrash16()
 					{ pc.T("media.delete_media") }
-				</button>
+				}
 				<!-- Delete Confirmation Modal -->
 				<div
 					class="modal-overlay"
@@ -765,20 +760,22 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 							<p class="text-muted">{ pc.T("media.delete_warning") }</p>
 						</div>
 						<div class="modal-footer">
-							<button type="button" class="btn btn-outline" @click="showConfirm = false">{ pc.T("btn.cancel") }</button>
+							@button.Button(button.Props{Variant: button.VariantOutline, Type: button.TypeButton, Attributes: templ.Attributes{"@click": "showConfirm = false"}}) {
+								{ pc.T("btn.cancel") }
+							}
 							<form action={ templ.SafeURL(fmt.Sprintf("/admin/media/%d", data.Media.ID)) } method="POST" class="inline-form">
 								@csrfField()
 								<input type="hidden" name="_method" value="DELETE"/>
-								<button type="submit" class="btn btn-danger">
+								@button.Button(button.Props{Variant: button.VariantDestructive, Type: button.TypeSubmit}) {
 									{ pc.T("media.delete_media") }
-								</button>
+								}
 							</form>
 						</div>
 					</div>
 				</div>
-			</div>
-		</div>
-		<script>
+			}
+		}
+		<script nonce={ templ.GetNonce(ctx) }>
 		function copyMediaURL(btn) {
 			var url = btn.getAttribute('data-copy-url');
 			navigator.clipboard.writeText(window.location.origin + url).then(function() {
@@ -794,19 +791,22 @@ templ mediaTranslationFields(pc *PageContext, lang MediaLanguageView, translatio
 	<fieldset class="translation-fieldset">
 		<legend class="translation-legend">{ lang.NativeName } ({ lang.Code })</legend>
 		<div class="form-group">
-			<label for={ "alt_" + lang.Code } class="form-label">{ pc.T("media.alt_text") }</label>
-			<input
-				type="text"
-				id={ "alt_" + lang.Code }
-				name={ "alt_" + lang.Code }
-				value={ translations[lang.Code].Alt }
-				class="form-input"
-				placeholder={ pc.T("media.alt_placeholder") }
-				maxlength="255"
-			/>
+			@label.Label(label.Props{For: "alt_" + lang.Code, Class: "block mb-1"}) {
+				{ pc.T("media.alt_text") }
+			}
+			@input.Input(input.Props{
+				ID:          "alt_" + lang.Code,
+				Name:        "alt_" + lang.Code,
+				Type:        input.TypeText,
+				Value:       translations[lang.Code].Alt,
+				Placeholder: pc.T("media.alt_placeholder"),
+				Attributes:  templ.Attributes{"maxlength": "255"},
+			})
 		</div>
 		<div class="form-group">
-			<label for={ "caption_" + lang.Code } class="form-label">{ pc.T("media.caption") }</label>
+			@label.Label(label.Props{For: "caption_" + lang.Code, Class: "block mb-1"}) {
+				{ pc.T("media.caption") }
+			}
 			<textarea
 				id={ "caption_" + lang.Code }
 				name={ "caption_" + lang.Code }

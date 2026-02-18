@@ -5,11 +5,11 @@ package handler
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -111,79 +111,45 @@ func TestHealthHandler_Health_Public_Verbose(t *testing.T) {
 	}
 }
 
-func TestHealthHandler_Health_Authenticated(t *testing.T) {
+func TestHealthHandler_Health_Authenticated_NonAdmin(t *testing.T) {
 	handler := newTestHealthHandler(t)
 	rawKey := createTestAPIKey(t, handler)
 
-	tests := []struct {
-		name           string
-		queryVerbose   bool
-		wantSystemInfo bool
-	}{
-		{
-			name: "full details without verbose",
-		},
-		{
-			name:           "full details with verbose",
-			queryVerbose:   true,
-			wantSystemInfo: true,
-		},
+	// API key holders (non-admin) get basic response without checks or system info
+	req := httptest.NewRequest(http.MethodGet, "/health?verbose=true", nil)
+	addAPIKeyAuth(req, rawKey)
+	w := httptest.NewRecorder()
+
+	handler.Health(w, req)
+
+	assertStatus(t, w.Code, http.StatusOK)
+
+	var resp HealthStatus
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			path := "/health"
-			if tt.queryVerbose {
-				path += "?verbose=true"
-			}
+	if resp.Status != "healthy" {
+		t.Errorf("status = %q; want healthy", resp.Status)
+	}
 
-			req := httptest.NewRequest(http.MethodGet, path, nil)
-			addAPIKeyAuth(req, rawKey)
-			w := httptest.NewRecorder()
+	// Non-admin authenticated response should include basic fields
+	if resp.Timestamp.IsZero() {
+		t.Error("timestamp should not be zero")
+	}
+	if resp.Uptime == "" {
+		t.Error("uptime should not be empty")
+	}
+	if resp.Version == "" {
+		t.Error("version should not be empty")
+	}
 
-			handler.Health(w, req)
-
-			assertStatus(t, w.Code, http.StatusOK)
-
-			if ct := w.Header().Get("Content-Type"); ct != "application/json" {
-				t.Errorf("Content-Type = %q; want application/json", ct)
-			}
-
-			var resp HealthStatus
-			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-				t.Fatalf("failed to unmarshal response: %v", err)
-			}
-
-			if resp.Status != "healthy" {
-				t.Errorf("status = %q; want healthy", resp.Status)
-			}
-
-			// Authenticated response should include detailed fields
-			if resp.Timestamp.IsZero() {
-				t.Error("timestamp should not be zero")
-			}
-			if resp.Uptime == "" {
-				t.Error("uptime should not be empty")
-			}
-			if resp.Version == "" {
-				t.Error("version should not be empty")
-			}
-
-			if dbCheck, ok := resp.Checks["database"]; ok {
-				if dbCheck.Status != "healthy" {
-					t.Errorf("database check status = %q; want healthy", dbCheck.Status)
-				}
-			} else {
-				t.Error("expected database check in response")
-			}
-
-			if tt.wantSystemInfo && resp.System == nil {
-				t.Error("expected system info in response")
-			}
-			if !tt.wantSystemInfo && resp.System != nil {
-				t.Error("unexpected system info in response")
-			}
-		})
+	// Non-admin should NOT get checks or system info
+	if len(resp.Checks) > 0 {
+		t.Error("non-admin response should not contain checks")
+	}
+	if resp.System != nil {
+		t.Error("non-admin response should not contain system info")
 	}
 }
 
@@ -325,55 +291,24 @@ func TestHealthHandler_Readiness_NotReady_Authenticated(t *testing.T) {
 	_ = testNotReadyProbe(t, handler, rawKey)
 }
 
-func TestHealthHandler_DiskCheck_Authenticated(t *testing.T) {
+func TestHealthHandler_DiskCheck_NonAdmin(t *testing.T) {
 	handler := newTestHealthHandler(t)
 	rawKey := createTestAPIKey(t, handler)
 
-	tests := []struct {
-		name        string
-		setupDir    func(t *testing.T) string
-		wantHealthy bool
-	}{
-		{
-			name: "healthy with existing directory",
-			setupDir: func(t *testing.T) string {
-				return t.TempDir()
-			},
-			wantHealthy: true,
-		},
-		{
-			name: "healthy with non-existent directory",
-			setupDir: func(t *testing.T) string {
-				return filepath.Join(t.TempDir(), "nonexistent")
-			},
-			wantHealthy: true,
-		},
+	// Non-admin (API key) should not see disk checks
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	addAPIKeyAuth(req, rawKey)
+	w := httptest.NewRecorder()
+
+	handler.Health(w, req)
+
+	var resp HealthStatus
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			handler.uploadsDir = tt.setupDir(t)
-
-			req := httptest.NewRequest(http.MethodGet, "/health", nil)
-			addAPIKeyAuth(req, rawKey)
-			w := httptest.NewRecorder()
-
-			handler.Health(w, req)
-
-			var resp HealthStatus
-			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-				t.Fatalf("failed to unmarshal response: %v", err)
-			}
-
-			diskCheck, ok := resp.Checks["disk"]
-			if !ok {
-				t.Fatal("expected disk check in response")
-			}
-
-			if tt.wantHealthy && diskCheck.Status != "healthy" {
-				t.Errorf("disk check status = %q; want healthy", diskCheck.Status)
-			}
-		})
+	if len(resp.Checks) > 0 {
+		t.Error("non-admin should not see check details")
 	}
 }
 
@@ -402,10 +337,11 @@ func TestFormatBytes(t *testing.T) {
 	}
 }
 
-func TestHealthHandler_SystemInfo_Authenticated(t *testing.T) {
+func TestHealthHandler_SystemInfo_NonAdmin(t *testing.T) {
 	handler := newTestHealthHandler(t)
 	rawKey := createTestAPIKey(t, handler)
 
+	// Non-admin (API key) should not see system info even with verbose=true
 	req := httptest.NewRequest(http.MethodGet, "/health?verbose=true", nil)
 	addAPIKeyAuth(req, rawKey)
 	w := httptest.NewRecorder()
@@ -417,24 +353,82 @@ func TestHealthHandler_SystemInfo_Authenticated(t *testing.T) {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
-	if resp.System == nil {
-		t.Fatal("expected system info in response")
+	if resp.System != nil {
+		t.Error("non-admin should not see system info")
+	}
+}
+
+func TestHealthHandler_GetSecuritySummary(t *testing.T) {
+	handler := newTestHealthHandler(t)
+	now := time.Now().UTC()
+
+	_, err := handler.queries.CreateEvent(context.Background(), store.CreateEventParams{
+		Level:      model.EventLevelWarning,
+		Category:   model.EventCategorySecurity,
+		Message:    "Embed proxy blocked by token policy",
+		UserID:     sql.NullInt64{},
+		Metadata:   "{}",
+		IpAddress:  "203.0.113.10",
+		RequestUrl: "/embed/dify/chat-messages",
+		CreatedAt:  now.Add(-1 * time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("failed to create embed security event: %v", err)
 	}
 
-	if resp.System.GoVersion == "" {
-		t.Error("go_version should not be empty")
+	_, err = handler.queries.CreateEvent(context.Background(), store.CreateEventParams{
+		Level:      model.EventLevelError,
+		Category:   model.EventCategorySecurity,
+		Message:    "API key source IP changed for key",
+		UserID:     sql.NullInt64{},
+		Metadata:   "{}",
+		IpAddress:  "198.51.100.15",
+		RequestUrl: "/api/v1/pages",
+		CreatedAt:  now.Add(-30 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("failed to create api key anomaly event: %v", err)
 	}
-	if resp.System.NumGoroutine <= 0 {
-		t.Error("num_goroutines should be positive")
+
+	// Outside 24h window and should be ignored.
+	_, err = handler.queries.CreateEvent(context.Background(), store.CreateEventParams{
+		Level:      model.EventLevelWarning,
+		Category:   model.EventCategorySecurity,
+		Message:    "Old event",
+		UserID:     sql.NullInt64{},
+		Metadata:   "{}",
+		IpAddress:  "192.0.2.2",
+		RequestUrl: "/embed/dify/chat-messages",
+		CreatedAt:  now.Add(-25 * time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("failed to create old security event: %v", err)
 	}
-	if resp.System.NumCPU <= 0 {
-		t.Error("num_cpus should be positive")
+
+	summary := handler.getSecuritySummary(context.Background(), now)
+	if summary == nil {
+		t.Fatal("expected security summary")
 	}
-	if resp.System.MemAlloc == "" {
-		t.Error("mem_alloc should not be empty")
+	if summary.WindowHours != 24 {
+		t.Fatalf("window_hours = %d, want 24", summary.WindowHours)
 	}
-	if resp.System.MemSys == "" {
-		t.Error("mem_sys should not be empty")
+	if summary.SecurityEvents != 2 {
+		t.Fatalf("security_events = %d, want 2", summary.SecurityEvents)
+	}
+	if summary.WarningEvents != 1 {
+		t.Fatalf("warning_events = %d, want 1", summary.WarningEvents)
+	}
+	if summary.ErrorEvents != 1 {
+		t.Fatalf("error_events = %d, want 1", summary.ErrorEvents)
+	}
+	if summary.EmbedProxySignals != 1 {
+		t.Fatalf("embed_proxy_signals = %d, want 1", summary.EmbedProxySignals)
+	}
+	if summary.APIKeyAnomalySignals != 1 {
+		t.Fatalf("api_key_anomaly_signals = %d, want 1", summary.APIKeyAnomalySignals)
+	}
+	if summary.Status != "alert" {
+		t.Fatalf("status = %q, want alert", summary.Status)
 	}
 }
 

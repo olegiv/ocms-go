@@ -1,3 +1,14 @@
+## Claude Code Permissions Alias
+
+This project includes a shell alias that defaults `claude` to `--dangerously-skip-permissions`.
+
+```bash
+# One-time setup: install the alias into your shell rc file
+./scripts/install-claude-alias.sh
+```
+
+The alias is defined in `.claude/claude-alias.sh` and sources automatically on new terminals after installation.
+
 ## Build and Development Commands
 
 ```bash
@@ -25,6 +36,24 @@ make assets
 # Update JS dependencies
 npm update                # Update htmx, alpine.js in package.json
 make assets               # Reinstall and copy to static/dist/js
+
+# Codex-compatible workflow commands
+make commit-prepare       # Proxy to Claude /commit-prepare
+make commit-do            # Proxy to Claude /commit-do
+make code-quality         # Proxy to Claude /code-quality
+make security-audit       # Proxy to Claude /security-audit
+make commit-prepare-local # Run local commit-prepare shell script
+make commit-do-local      # Run local commit-do shell script
+make code-quality-local   # Run local quality checks shell script
+make security-audit-local # Run local security audit shell script
+# Codex note: /code-quality, /security-audit, /commit-prepare, and /commit-do
+# are not registered UI slash commands and may show "No commands". Use make
+# targets or ask in chat: "run code-quality", "run security-audit", etc.
+# Run Claude slash command from CLI (non-interactive):
+claude -p "/commit-prepare" --dangerously-skip-permissions
+claude -p "/commit-do" --dangerously-skip-permissions
+claude -p "/code-quality" --dangerously-skip-permissions
+claude -p "/security-audit" --dangerously-skip-permissions
 
 # Database migrations
 make migrate-up          # Apply migrations
@@ -106,6 +135,8 @@ The hook source is in `.claude/shared/global/hooks/`.
 2. **Embedded Assets**: Templates and static files are embedded using `//go:embed` in `web/embed.go`. JS dependencies (htmx, Alpine.js) are managed via `package.json` and copied to `web/static/dist/js/` during build. Run `make assets` to compile SCSS and install JS deps. After modifying JS dependencies, use `go build -a` to force re-embedding.
 
    **Frontend JS Policy**: Always prefer official Alpine.js plugins (`@alpinejs/*`) over third-party libraries. For example, use `@alpinejs/sort` instead of Sortable.js, `@alpinejs/mask` instead of input mask libraries. This reduces external dependencies and ensures consistent integration with Alpine's reactivity system.
+
+   **Admin Dashboard UX Policy**: Always check [templUI](https://templui.io/docs/components) ([repo](https://github.com/templui/templui)) for an existing component before creating custom ones. If no suitable templUI component exists, explain why and ask the user for confirmation before building from scratch.
 
 3. **Handler Pattern**: Each handler struct (in `internal/handler/`) receives `*sql.DB`, `*render.Renderer`, and `*scs.SessionManager`. Handlers call `store.New(db)` to get sqlc queries. Admin UI views use [templ](https://templ.guide/) components (`internal/views/admin/`) with type-safe Go code. Handler conversion functions in `internal/handler/templ.go` bridge store types to view types.
 
@@ -587,10 +618,10 @@ Security vulnerability scanner and auditor. Identifies security issues and ensur
 - "Review CSRF protection"
 - "Audit API authentication"
 
-**Invoke:** `@security-auditor` or use the `/security-scan` command
+**Invoke:** `@security-auditor` or use the `/security-audit` command
 
 ### code-quality-auditor
-Code quality scanner for Go applications. Detects duplicate code, unhandled errors, constant comparisons, empty slice literals, and package name collisions.
+Code quality scanner for Go applications. Detects duplicate code, unhandled errors, constant comparisons, empty slice literals, package name collisions, and high-risk DOM-XSS sink flows (`innerHTML`, redirect sinks).
 
 **Usage examples:**
 - "Run a quick code quality scan"
@@ -599,6 +630,18 @@ Code quality scanner for Go applications. Detects duplicate code, unhandled erro
 - "Check for package name collisions"
 
 **Invoke:** `@code-quality-auditor` or use the `/code-quality` command
+
+### frontend-developer
+Admin Dashboard UX developer. Creates and modifies admin UI components using templ and templUI. Manages templUI CLI workflow (init, add, update, list) and handles embedded asset integration.
+
+**Usage examples:**
+- "Add a data table to the pages list"
+- "Create a modal dialog for confirmation"
+- "Add a dropdown menu to the toolbar"
+- "Build a stats card for the dashboard"
+- "Install templUI button and card components"
+
+**Invoke:** `@frontend-developer` or use `/templui-add` and `/templui-list` commands
 
 ## Claude Code Slash Commands
 
@@ -622,14 +665,20 @@ Start the development server with asset compilation. Runs `make dev` and reports
 ### /api-test
 Test REST API endpoints with actual HTTP requests. Starts server, runs curl tests, and reports results.
 
-### /security-scan
-Scan the project for vulnerabilities using govulncheck. Saves audit report to `.audit/` directory.
+### /security-audit
+Perform a comprehensive security audit and store reports in `.audit/`.
 
 ### /code-quality
-Scan the project for code quality issues including unhandled errors, duplicate code, constant comparisons, empty slice literals, and package name collisions. Runs `go vet`, `staticcheck`, and `errcheck`.
+Scan the project for code quality issues including unhandled errors, duplicate code, constant comparisons, empty slice literals, package name collisions, CSP template safety, and high-risk DOM-XSS sink flows (`innerHTML`, redirect sinks).
 
 ### /commit-prepare
 Review changes and prepare a commit message. Runs `/code-quality` first and asks for confirmation if issues are found before proceeding with the commit message.
+
+### /templui-add
+Add templUI components to the project. Handles CLI installation, `.templui.json` initialization, component download, Tailwind CSS source scanning, and post-install steps (`templ generate`, `go mod tidy`, `make assets`).
+
+### /templui-list
+List available templUI components or fetch documentation for a specific component. Shows installed vs available status.
 
 ### /clean
 Clean build artifacts, compiled binaries, and development databases.
@@ -665,5 +714,11 @@ Deploy the application to Fly.io. Supports `--reset` (reset database), `--logs` 
 
 @security-auditor Scan for vulnerabilities and create an audit report
 
-/security-scan
+/security-audit
+
+@frontend-developer Build a confirmation dialog for page deletion using templUI
+
+/templui-list
+
+/templui-add button card dialog
 ```

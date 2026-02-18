@@ -27,6 +27,7 @@ const (
 	ContextKeyUser        ContextKey = "user"
 	ContextKeySiteName    ContextKey = "site_name"
 	ContextKeyRequestPath ContextKey = "request_path"
+	ContextKeyCSPNonce    ContextKey = "csp_nonce"
 )
 
 // Session keys for storing user data and preferences.
@@ -133,8 +134,7 @@ func GetUserID(r *http.Request) int64 {
 // Useful for optional user ID parameters in event logging.
 func GetUserIDPtr(r *http.Request) *int64 {
 	if user := GetUser(r); user != nil {
-		id := user.ID
-		return &id
+		return new(user.ID)
 	}
 	return nil
 }
@@ -251,6 +251,8 @@ func RequireRoleWithEventLog(minRole string, eventService *service.EventService)
 			// Check role hierarchy
 			userLevel := roleLevel(user.Role)
 			if userLevel < minLevel {
+				clientIP := GetClientIP(r)
+
 				// Log 403 for security monitoring (application logs)
 				slog.Warn("access denied",
 					"status", http.StatusForbidden,
@@ -259,19 +261,18 @@ func RequireRoleWithEventLog(minRole string, eventService *service.EventService)
 					"user_id", user.ID,
 					"user_role", user.Role,
 					"required_role", minRole,
-					"remote_addr", r.RemoteAddr,
+					"ip", clientIP,
 				)
 
 				// Log 403 to event log (visible in admin panel)
 				if eventService != nil {
-					userID := user.ID
 					metadata := map[string]any{
 						"method":        r.Method,
 						"status":        http.StatusForbidden,
 						"user_role":     user.Role,
 						"required_role": minRole,
 					}
-					_ = eventService.LogAuthEvent(r.Context(), "warning", "Access denied: insufficient permissions", &userID, r.RemoteAddr, r.URL.Path, metadata)
+					_ = eventService.LogAuthEvent(r.Context(), "warning", "Access denied: insufficient permissions", new(user.ID), clientIP, r.URL.Path, metadata)
 				}
 
 				// Return 403 Forbidden for insufficient role

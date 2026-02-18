@@ -917,7 +917,7 @@
         </main>
     </div>
 
-    <script>
+    <script nonce="{{.CSPNonce}}">
         // Simple smooth scroll for anchor links
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function (e) {

@@ -77,10 +77,13 @@ templ Sidebar(pc *PageContext) {
 			}
 		</nav>
 		<div class="sidebar-footer">
-			<a href="/logout" class="nav-link">
-				@iconLogout()
-				<span>{ pc.T("nav.logout") }</span>
-			</a>
+			<form action="/logout" method="POST">
+				@csrfField()
+				<button type="submit" class="nav-link" style="width: 100%; background: none; border: none; cursor: pointer;">
+					@iconLogout()
+					<span>{ pc.T("nav.logout") }</span>
+				</button>
+			</form>
 		</div>
 	</aside>
 }

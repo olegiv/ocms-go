@@ -100,14 +100,14 @@ func TestScanMediaFiles(t *testing.T) {
 
 	// Create test files
 	testFiles := map[string]string{
-		"image1.jpg":           "fake jpeg content",
-		"image2.png":           "fake png content",
-		"subdir/image3.gif":    "fake gif content",
+		"image1.jpg":            "fake jpeg content",
+		"image2.png":            "fake png content",
+		"subdir/image3.gif":     "fake gif content",
 		"subdir/deep/video.mp4": "fake mp4 content",
-		"document.pdf":         "fake pdf content",
-		"ignored.txt":          "text file - should be ignored",
-		"ignored.html":         "html file - should be ignored",
-		".hidden.jpg":          "hidden file with valid extension",
+		"document.pdf":          "fake pdf content",
+		"ignored.txt":           "text file - should be ignored",
+		"ignored.html":          "html file - should be ignored",
+		".hidden.jpg":           "hidden file with valid extension",
 	}
 
 	for path, content := range testFiles {
@@ -185,11 +185,10 @@ func TestScanMediaFiles_NonExistentPath(t *testing.T) {
 
 func TestScanMediaFiles_FileNotDirectory(t *testing.T) {
 	// Create a temp file (not directory)
-	tempFile, err := os.CreateTemp("", "test-file-*.txt")
+	tempFile, err := os.CreateTemp(t.TempDir(), "test-file-*.txt")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer func() { _ = os.Remove(tempFile.Name()) }()
 	_ = tempFile.Close()
 
 	_, err = ScanMediaFiles(tempFile.Name())
@@ -401,34 +400,34 @@ func TestMakeUniqueSlug(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name         string
-		baseSlug     string
+		name          string
+		baseSlug      string
 		existingSlugs []string
-		expected     string
+		expected      string
 	}{
 		{
-			name:         "no existing slug",
-			baseSlug:     "my-post",
+			name:          "no existing slug",
+			baseSlug:      "my-post",
 			existingSlugs: nil,
-			expected:     "my-post",
+			expected:      "my-post",
 		},
 		{
-			name:         "one existing slug",
-			baseSlug:     "duplicate",
+			name:          "one existing slug",
+			baseSlug:      "duplicate",
 			existingSlugs: []string{"duplicate"},
-			expected:     "duplicate-2",
+			expected:      "duplicate-2",
 		},
 		{
-			name:         "multiple existing slugs",
-			baseSlug:     "popular",
+			name:          "multiple existing slugs",
+			baseSlug:      "popular",
 			existingSlugs: []string{"popular", "popular-2", "popular-3"},
-			expected:     "popular-4",
+			expected:      "popular-4",
 		},
 		{
-			name:         "gap in sequence",
-			baseSlug:     "gap",
+			name:          "gap in sequence",
+			baseSlug:      "gap",
 			existingSlugs: []string{"gap", "gap-3"},
-			expected:     "gap-2",
+			expected:      "gap-2",
 		},
 	}
 

@@ -289,8 +289,7 @@ func (m *Manager) AllStats() []ManagerCacheStats {
 
 	// Add sitemap-specific info
 	if m.Sitemap.IsCached() {
-		cachedAt := m.Sitemap.CachedAt()
-		stats[1].CachedAt = &cachedAt
+		stats[1].CachedAt = new(m.Sitemap.CachedAt())
 		stats[1].Size = m.Sitemap.Size()
 	}
 

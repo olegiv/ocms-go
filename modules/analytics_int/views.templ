@@ -192,7 +192,7 @@ templ AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) {
 								}
 							</div>
 						</div>
-						<script>
+						<script nonce={ templ.GetNonce(ctx) }>
 						(function() {
 							const chart = document.getElementById('views-chart');
 							if (!chart) return;
@@ -411,7 +411,7 @@ templ AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) {
 				</div>
 			</div>
 		</div>
-		<script>
+		<script nonce={ templ.GetNonce(ctx) }>
 		// Update real-time count every 30 seconds
 		setInterval(function() {
 			fetch('/admin/internal-analytics/api/realtime')

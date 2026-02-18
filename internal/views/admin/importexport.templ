@@ -3,7 +3,12 @@
 
 package admin
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
+)
 
 // ExportViewData holds data for the export page.
 type ExportViewData struct{}
@@ -75,23 +80,20 @@ type ImportUploadedDataView struct {
 // ExportPage renders the content export page.
 templ ExportPage(pc *PageContext, data ExportViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("export.title") }</h1>
-				<p class="page-description">{ pc.T("export.description") }</p>
-			</div>
-		</div>
-		<div class="card">
-			<form
-				method="POST"
-				action="/admin/export"
-				class="card-body"
-				x-data={ `{
-					includeMedia: true,
-					includeMediaFiles: false,
-					get willBeZip() { return this.includeMedia && this.includeMediaFiles; }
-				}` }
-			>
+		@PageHeader(pc.T("export.title"), pc.T("export.description")) {
+		}
+		@card.Card(card.Props{}) {
+			@card.Content(card.ContentProps{}) {
+				<form
+					method="POST"
+					action="/admin/export"
+					class="p-6"
+					x-data={ `{
+						includeMedia: true,
+						includeMediaFiles: false,
+						get willBeZip() { return this.includeMedia && this.includeMediaFiles; }
+					}` }
+				>
 				<div class="export-sections">
 					<!-- Content Section -->
 					<div class="export-section">
@@ -105,7 +107,9 @@ templ ExportPage(pc *PageContext, data ExportViewData) {
 								</label>
 							</div>
 							<div class="form-group export-sub-option nested-options">
-								<label for="page_status" class="form-label">{ pc.T("export.page_status") }</label>
+								@label.Label(label.Props{For: "page_status", Class: "block mb-1"}) {
+								{ pc.T("export.page_status") }
+							}
 								<select id="page_status" name="page_status" class="form-select">
 									<option value="all">{ pc.T("export.status_all") }</option>
 									<option value="published">{ pc.T("export.status_published") }</option>
@@ -221,27 +225,24 @@ templ ExportPage(pc *PageContext, data ExportViewData) {
 					<p>{ pc.T("export.zip_info") }</p>
 				</div>
 				<div class="form-actions">
-					<button type="submit" class="btn btn-primary">
+					@button.Button(button.Props{Type: button.TypeSubmit}) {
 						@iconDownload()
 						<span x-text={ fmt.Sprintf("willBeZip ? '%s' : '%s'", pc.T("export.download_zip"), pc.T("export.download")) }>
 							{ pc.T("export.download") }
 						</span>
-					</button>
+					}
 				</div>
-			</form>
-		</div>
+				</form>
+			}
+		}
 	}
 }
 
 // ImportPage renders the content import page.
 templ ImportPage(pc *PageContext, data ImportViewData) {
 	@AdminLayout(pc) {
-		<div class="page-header">
-			<div>
-				<h1 class="page-title">{ pc.T("import.title") }</h1>
-				<p class="page-description">{ pc.T("import.description") }</p>
-			</div>
-		</div>
+		@PageHeader(pc.T("import.title"), pc.T("import.description")) {
+		}
 		// Step 1: File Upload
 		if data.ValidationResult == nil && data.ImportResult == nil {
 			@importFileUpload(pc)
@@ -262,15 +263,16 @@ templ ImportPage(pc *PageContext, data ImportViewData) {
 
 // importFileUpload renders the file upload form (step 1).
 templ importFileUpload(pc *PageContext) {
-	<div class="card">
-		<form
-			method="POST"
-			action="/admin/import/validate"
-			enctype="multipart/form-data"
-			class="card-body"
-			x-data="importUploader()"
-			@submit="handleSubmit($event)"
-		>
+	@card.Card(card.Props{}) {
+		@card.Content(card.ContentProps{}) {
+			<form
+				method="POST"
+				action="/admin/import/validate"
+				enctype="multipart/form-data"
+				class="p-6"
+				x-data="importUploader()"
+				@submit="handleSubmit($event)"
+			>
 			<div class="media-dropzone">
 				<div
 					class="media-dropzone-area"
@@ -326,20 +328,21 @@ templ importFileUpload(pc *PageContext) {
 				<p>{ pc.T("import.info") }</p>
 			</div>
 			<div class="media-dropzone-buttons">
-				<button type="submit" class="btn btn-primary" :disabled="!selectedFile">
+				@button.Button(button.Props{Type: button.TypeSubmit, Attributes: templ.Attributes{":disabled": "!selectedFile"}}) {
 					@iconUpload()
 					{ pc.T("import.validate") }
-				</button>
+				}
 			</div>
-		</form>
-	</div>
+			</form>
+		}
+	}
 	@importUploaderScript()
 }
 
 // importValidationResults renders the validation results card (step 2a).
 templ importValidationResults(pc *PageContext, data ImportViewData) {
-	<div class="card">
-		<div class="card-body">
+	@card.Card(card.Props{}) {
+		@card.Content(card.ContentProps{}) {
 			if data.ValidationResult.Valid {
 				<div class="validation-success">
 					@iconSuccess()
@@ -396,14 +399,15 @@ templ importValidationResults(pc *PageContext, data ImportViewData) {
 					}
 				</div>
 			}
-		</div>
-	</div>
+		}
+	}
 }
 
 // importOptionsForm renders the import options form (step 2b).
 templ importOptionsForm(pc *PageContext, data ImportViewData) {
-	<div class="card">
-		<form method="POST" action="/admin/import" class="card-body">
+	@card.Card(card.Props{}) {
+		@card.Content(card.ContentProps{}) {
+			<form method="POST" action="/admin/import" class="p-6">
 			<h3 class="section-title">{ pc.T("import.options") }</h3>
 			<div class="import-sections">
 				<!-- Conflict Strategy -->
@@ -480,16 +484,17 @@ templ importOptionsForm(pc *PageContext, data ImportViewData) {
 				</div>
 			</div>
 			<div class="form-actions">
-				<a href="/admin/import" class="btn btn-secondary">
+				@button.Button(button.Props{Variant: button.VariantSecondary, Href: "/admin/import"}) {
 					{ pc.T("btn.cancel") }
-				</a>
-				<button type="submit" class="btn btn-primary">
+				}
+				@button.Button(button.Props{Type: button.TypeSubmit}) {
 					@iconUpload()
 					{ pc.T("import.start_import") }
-				</button>
+				}
 			</div>
-		</form>
-	</div>
+			</form>
+		}
+	}
 }
 
 // importCheckbox renders a checkbox with label and hint.
@@ -509,8 +514,8 @@ templ importCheckbox(name string, label string, hint string, checked bool) {
 
 // importResults renders the import results card (step 3).
 templ importResults(pc *PageContext, data ImportViewData) {
-	<div class="card">
-		<div class="card-body">
+	@card.Card(card.Props{}) {
+		@card.Content(card.ContentProps{}) {
 			if data.ImportResult.Success {
 				<div class="import-success">
 					@iconSuccessLarge()
@@ -597,17 +602,17 @@ templ importResults(pc *PageContext, data ImportViewData) {
 				</div>
 			}
 			<div class="form-actions">
-				<a href="/admin/import" class="btn btn-primary">
+				@button.Button(button.Props{Href: "/admin/import"}) {
 					{ pc.T("import.import_another") }
-				</a>
+				}
 			</div>
-		</div>
-	</div>
+		}
+	}
 }
 
 // importUploaderScript renders the Alpine.js import uploader component.
 templ importUploaderScript() {
-	<script>
+	<script nonce={ templ.GetNonce(ctx) }>
 	function importUploader() {
 		return {
 			selectedFile: null,

@@ -208,7 +208,7 @@ Note: Even when the module is active, hCaptcha protection only applies when `ena
 - All keys are HTML-escaped before injection
 - Settings require admin authentication
 - CSRF protection on form submission
-- Client IP extraction supports reverse proxy headers (X-Forwarded-For, X-Real-IP)
+- Client IP extraction follows `OCMS_TRUSTED_PROXIES`; forwarding headers are only trusted when the peer is a configured proxy
 - Verification timeout of 10 seconds prevents hanging
 
 ## Troubleshooting
@@ -233,7 +233,7 @@ sqlite3 ./data/ocms.db "UPDATE hcaptcha_settings SET enabled = 0"
 1. Verify secret key is correct
 2. Check server can reach `https://api.hcaptcha.com`
 3. Check server logs for specific error codes
-4. Ensure client IP is correctly detected (check proxy headers)
+4. Ensure `OCMS_TRUSTED_PROXIES` matches your reverse proxy/LB CIDRs
 
 ## Dependencies
 

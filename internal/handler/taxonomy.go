@@ -241,10 +241,9 @@ func (h *TaxonomyHandler) EditTagForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	langInfo := h.loadTagLanguageInfo(r.Context(), tag)
-	tagItem := convertTagItem(tag)
 
 	viewData := adminviews.TagFormData{
-		Tag:              &tagItem,
+		Tag:              new(convertTagItem(tag)),
 		Errors:           make(map[string]string),
 		FormValues:       make(map[string]string),
 		IsEdit:           true,
@@ -305,10 +304,9 @@ func (h *TaxonomyHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
 		langInfo := h.loadTagLanguageInfo(r.Context(), existingTag)
-		tagItem := convertTagItem(existingTag)
 
 		viewData := adminviews.TagFormData{
-			Tag:          &tagItem,
+			Tag:          new(convertTagItem(existingTag)),
 			Errors:       validationErrors,
 			FormValues:   formValues,
 			IsEdit:       true,
@@ -419,7 +417,7 @@ func (h *TaxonomyHandler) TranslateTag(w http.ResponseWriter, r *http.Request) {
 		Slug:         setup.TranslatedSlug,
 		LanguageCode: setup.TargetContext.TargetLang.Code,
 		CreatedAt:    setup.Now,
-		UpdatedAt:  setup.Now,
+		UpdatedAt:    setup.Now,
 	})
 	if err != nil {
 		slog.Error("failed to create translated tag", "error", err)
@@ -773,10 +771,9 @@ func (h *TaxonomyHandler) EditCategoryForm(w http.ResponseWriter, r *http.Reques
 	// Get all categories for parent selector (excluding self and descendants)
 	flatTree := h.buildFilteredCategoryTree(r.Context(), id)
 	langInfo := h.loadCategoryLanguageInfo(r.Context(), category)
-	catItem := convertCategoryItem(category)
 
 	viewData := adminviews.CategoryFormData{
-		Category:         &catItem,
+		Category:         new(convertCategoryItem(category)),
 		AllCategories:    convertCategoryListItems(flatTree),
 		Errors:           make(map[string]string),
 		FormValues:       make(map[string]string),
@@ -862,10 +859,9 @@ func (h *TaxonomyHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 	if len(validationErrors) > 0 {
 		flatTree := h.buildFilteredCategoryTree(r.Context(), id)
 		langInfo := h.loadCategoryLanguageInfo(r.Context(), existingCategory)
-		catItem := convertCategoryItem(existingCategory)
 
 		viewData := adminviews.CategoryFormData{
-			Category:      &catItem,
+			Category:      new(convertCategoryItem(existingCategory)),
 			AllCategories: convertCategoryListItems(flatTree),
 			Errors:        validationErrors,
 			FormValues:    formValues,
@@ -1195,7 +1191,9 @@ func (h *TaxonomyHandler) loadTagLanguageInfo(ctx context.Context, tag store.Tag
 	return loadLanguageInfo(
 		ctx, h.queries, model.EntityTypeTag, tag.ID, tag.LanguageCode,
 		func(id int64) (store.Tag, error) { return h.queries.GetTagByID(ctx, id) },
-		func(lang store.Language, t store.Tag) TagTranslationInfo { return TagTranslationInfo{Language: lang, Tag: t} },
+		func(lang store.Language, t store.Tag) TagTranslationInfo {
+			return TagTranslationInfo{Language: lang, Tag: t}
+		},
 	)
 }
 
@@ -1206,7 +1204,9 @@ type categoryLanguageInfo = entityLanguageInfo[CategoryTranslationInfo]
 func (h *TaxonomyHandler) loadCategoryLanguageInfo(ctx context.Context, category store.Category) categoryLanguageInfo {
 	info := loadLanguageInfo(ctx, h.queries, model.EntityTypeCategory, category.ID, category.LanguageCode,
 		func(id int64) (store.Category, error) { return h.queries.GetCategoryByID(ctx, id) },
-		func(lang store.Language, c store.Category) CategoryTranslationInfo { return CategoryTranslationInfo{Language: lang, Category: c} })
+		func(lang store.Language, c store.Category) CategoryTranslationInfo {
+			return CategoryTranslationInfo{Language: lang, Category: c}
+		})
 	return info
 }
 

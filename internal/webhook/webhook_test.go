@@ -4,8 +4,13 @@
 package webhook
 
 import (
+	"context"
+	"net"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 func TestGenerateSignature(t *testing.T) {
@@ -448,6 +453,115 @@ func TestDeliveryResult(t *testing.T) {
 			}
 			if tt.result.ShouldRetry != tt.wantRetry {
 				t.Errorf("DeliveryResult.ShouldRetry = %v, want %v", tt.result.ShouldRetry, tt.wantRetry)
+			}
+		})
+	}
+}
+
+func TestAttemptDelivery_RejectsInvalidURL(t *testing.T) {
+	dispatcher := &Dispatcher{}
+	delivery := &QueuedDelivery{
+		URL:     "ftp://example.com/webhook",
+		Payload: []byte(`{"ok":true}`),
+	}
+
+	result := dispatcher.attemptDelivery(t.Context(), delivery)
+	if result.Success {
+		t.Fatal("attemptDelivery() should fail for invalid URL")
+	}
+	if result.ShouldRetry {
+		t.Fatal("attemptDelivery() should not retry for invalid URL")
+	}
+	if result.Error == nil || !strings.Contains(result.Error.Error(), "invalid webhook URL") {
+		t.Fatalf("attemptDelivery() error = %v, want invalid webhook URL error", result.Error)
+	}
+}
+
+func TestAttemptDelivery_EnforcesHTTPSPolicy(t *testing.T) {
+	util.SetRequireHTTPSOutbound(true)
+	t.Cleanup(func() {
+		util.SetRequireHTTPSOutbound(false)
+	})
+
+	dispatcher := &Dispatcher{}
+	delivery := &QueuedDelivery{
+		URL:     "http://example.com/webhook",
+		Payload: []byte(`{"ok":true}`),
+	}
+
+	result := dispatcher.attemptDelivery(t.Context(), delivery)
+	if result.Success {
+		t.Fatal("attemptDelivery() should fail when HTTPS-only policy is enabled")
+	}
+	if result.ShouldRetry {
+		t.Fatal("attemptDelivery() should not retry policy violations")
+	}
+	if result.Error == nil || !strings.Contains(result.Error.Error(), "https scheme") {
+		t.Fatalf("attemptDelivery() error = %v, want https scheme error", result.Error)
+	}
+}
+
+func TestShouldRetryURLValidationError(t *testing.T) {
+	tests := []struct {
+		name  string
+		err   error
+		retry bool
+	}{
+		{
+			name:  "dns timeout",
+			err:   &net.DNSError{IsTimeout: true},
+			retry: true,
+		},
+		{
+			name:  "dns temporary",
+			err:   &net.DNSError{IsTemporary: true},
+			retry: true,
+		},
+		{
+			name:  "dns not found",
+			err:   &net.DNSError{IsNotFound: true},
+			retry: false,
+		},
+		{
+			name:  "context deadline exceeded",
+			err:   context.DeadlineExceeded,
+			retry: true,
+		},
+		{
+			name:  "policy violation error",
+			err:   util.ValidateWebhookURL("ftp://example.com/webhook"),
+			retry: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldRetryURLValidationError(tt.err)
+			if got != tt.retry {
+				t.Fatalf("shouldRetryURLValidationError() = %v, want %v", got, tt.retry)
+			}
+		})
+	}
+}
+
+func TestIsSafeWebhookDeliveryHeader(t *testing.T) {
+	tests := []struct {
+		name   string
+		key    string
+		value  string
+		expect bool
+	}{
+		{name: "safe header", key: "X-Custom-Token", value: "abc123", expect: true},
+		{name: "blocked host header", key: "Host", value: "evil.example", expect: false},
+		{name: "invalid header name", key: "Bad Header", value: "x", expect: false},
+		{name: "invalid CRLF value", key: "X-Test", value: "ok\r\nInjected: yes", expect: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isSafeWebhookDeliveryHeader(tt.key, tt.value)
+			if got != tt.expect {
+				t.Errorf("isSafeWebhookDeliveryHeader(%q, %q) = %v, want %v", tt.key, tt.value, got, tt.expect)
 			}
 		})
 	}

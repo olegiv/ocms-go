@@ -5,6 +5,7 @@ package api
 
 import (
 	"database/sql"
+	"strings"
 	"testing"
 	"time"
 
@@ -131,4 +132,47 @@ func TestStoreTagToResponse(t *testing.T) {
 			assertIDNameSlug(t, got.ID, tt.want.ID, got.Name, tt.want.Name, got.Slug, tt.want.Slug)
 		})
 	}
+}
+
+func TestValidatePageBodyMarkupPolicy(t *testing.T) {
+	t.Run("disabled policy allows suspicious body", func(t *testing.T) {
+		errMsg := validatePageBodyMarkupPolicy(`<script>alert(1)</script>`, false)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+	})
+
+	t.Run("enabled policy blocks suspicious body", func(t *testing.T) {
+		errMsg := validatePageBodyMarkupPolicy(`<img src=x onerror="alert(1)">`, true)
+		if errMsg == "" {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("enabled policy allows clean body", func(t *testing.T) {
+		errMsg := validatePageBodyMarkupPolicy(`<p>Hello</p>`, true)
+		if errMsg != "" {
+			t.Fatalf("unexpected error: %s", errMsg)
+		}
+	})
+}
+
+func TestSanitizePageBodyForStorage(t *testing.T) {
+	raw := `<p>Hello</p><script>alert(1)</script>`
+
+	t.Run("returns raw body when disabled", func(t *testing.T) {
+		if got := sanitizePageBodyForStorage(raw, false); got != raw {
+			t.Fatalf("sanitizePageBodyForStorage() = %q, want %q", got, raw)
+		}
+	})
+
+	t.Run("sanitizes body when enabled", func(t *testing.T) {
+		got := sanitizePageBodyForStorage(raw, true)
+		if strings.Contains(got, "<script") {
+			t.Fatalf("sanitizePageBodyForStorage() should strip script tags, got %q", got)
+		}
+		if !strings.Contains(got, "<p>Hello</p>") {
+			t.Fatalf("sanitizePageBodyForStorage() should keep safe markup, got %q", got)
+		}
+	})
 }

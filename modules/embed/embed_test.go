@@ -84,18 +84,26 @@ func TestDifyProvider_Validate(t *testing.T) {
 		{
 			name: "valid settings with https",
 			settings: map[string]string{
-				"api_endpoint": "https://api.dify.ai/v1",
+				"api_endpoint": "https://8.8.8.8/v1",
 				"api_key":      "app-test-key",
 			},
 			wantErr: false,
 		},
 		{
-			name: "valid settings with http (localhost)",
+			name: "invalid settings with http endpoint",
+			settings: map[string]string{
+				"api_endpoint": "http://8.8.8.8/v1",
+				"api_key":      "app-test-key",
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid settings with localhost endpoint",
 			settings: map[string]string{
 				"api_endpoint": "http://localhost:8080/v1",
 				"api_key":      "app-test-key",
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 	}
 
@@ -147,11 +155,23 @@ func TestDifyProvider_RenderBody(t *testing.T) {
 				"dify-chat-toggle",
 				"dify-chat-window",
 				"dify-chat-messages",
-				"API='https://api.dify.ai/v1'",
-				"KEY='app-test-key-123'",
+				"PROXY_BASE='/embed/dify'",
+				"/token",
 				"/chat-messages",
+				"/messages/'+encodeURIComponent(msgId)+'/suggested?user='+encodeURIComponent(userId)",
+				"X-Embed-Proxy-Token",
+				"proxyTokenOptional=false",
+				"if(tr.status===404)",
 				"AI Assistant", // default bot name
 				"#1C64F2",      // default primary color
+				"botMsg.textContent=full",
+				"d.textContent=String(t||'')",
+			},
+			excludes: []string{
+				"API='https://api.dify.ai/v1'",
+				"KEY='app-test-key-123'",
+				"botMsg.innerHTML",
+				"d.innerHTML=type==='bot'",
 			},
 		},
 		{

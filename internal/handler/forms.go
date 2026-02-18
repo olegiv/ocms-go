@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/a-h/templ"
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
@@ -49,6 +50,34 @@ type FormsHandler struct {
 	cacheManager    *cache.Manager
 	menuService     *service.MenuService
 	frontendHandler *FrontendHandler
+	requireCaptcha  bool
+	webhookDataMode string
+}
+
+const maxPublicFormBodyBytes int64 = 64 * 1024
+const maxPublicFormFieldValueBytes = 4 * 1024
+const maxPublicFormSubmissionDataBytes = 16 * 1024
+const redactedFormValue = "[REDACTED]"
+const maxFormEventValueLen = 1024
+const (
+	formWebhookDataModeRedacted = "redacted"
+	formWebhookDataModeNone     = "none"
+	formWebhookDataModeFull     = "full"
+)
+
+var sensitiveFormFieldTokens = []string{
+	"password",
+	"passwd",
+	"token",
+	"secret",
+	"api_key",
+	"apikey",
+	"authorization",
+	"auth",
+	"ssn",
+	"credit",
+	"card",
+	"cvv",
 }
 
 // NewFormsHandler creates a new FormsHandler.
@@ -63,12 +92,24 @@ func NewFormsHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 		cacheManager:    cm,
 		menuService:     ms,
 		frontendHandler: fh,
+		webhookDataMode: formWebhookDataModeRedacted,
 	}
 }
 
 // SetDispatcher sets the webhook dispatcher for event dispatching.
 func (h *FormsHandler) SetDispatcher(d *webhook.Dispatcher) {
 	h.dispatcher = d
+}
+
+// SetRequireCaptcha configures whether captcha is mandatory for all public form submissions.
+func (h *FormsHandler) SetRequireCaptcha(required bool) {
+	h.requireCaptcha = required
+}
+
+// SetWebhookFormDataMode configures how form.submitted webhook payload data is emitted.
+// Supported modes: redacted, none, full.
+func (h *FormsHandler) SetWebhookFormDataMode(mode string) {
+	h.webhookDataMode = normalizeFormWebhookDataMode(mode)
 }
 
 // dispatchFormEvent dispatches a form submission webhook event.
@@ -82,7 +123,8 @@ func (h *FormsHandler) dispatchFormEvent(ctx context.Context, form store.Form, s
 		FormName:     form.Name,
 		FormSlug:     form.Slug,
 		SubmissionID: submissionID,
-		Data:         data,
+		Data:         buildFormEventDataForMode(data, h.webhookDataMode),
+		DataMode:     h.webhookDataMode,
 		SubmittedAt:  time.Now(),
 	}
 
@@ -92,6 +134,70 @@ func (h *FormsHandler) dispatchFormEvent(ctx context.Context, form store.Form, s
 			"event_type", model.EventFormSubmitted,
 			"form_id", form.ID)
 	}
+}
+
+func redactFormEventData(data map[string]string) map[string]string {
+	redacted := make(map[string]string, len(data))
+	for key, value := range data {
+		if isSensitiveFormFieldName(key) {
+			redacted[key] = redactedFormValue
+			continue
+		}
+		redacted[key] = truncateFormEventValue(value, maxFormEventValueLen)
+	}
+	return redacted
+}
+
+func truncateFormEventData(data map[string]string) map[string]string {
+	truncated := make(map[string]string, len(data))
+	for key, value := range data {
+		truncated[key] = truncateFormEventValue(value, maxFormEventValueLen)
+	}
+	return truncated
+}
+
+func buildFormEventDataForMode(data map[string]string, mode string) map[string]string {
+	switch normalizeFormWebhookDataMode(mode) {
+	case formWebhookDataModeNone:
+		return nil
+	case formWebhookDataModeFull:
+		return truncateFormEventData(data)
+	default:
+		return redactFormEventData(data)
+	}
+}
+
+func normalizeFormWebhookDataMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", formWebhookDataModeRedacted:
+		return formWebhookDataModeRedacted
+	case formWebhookDataModeNone:
+		return formWebhookDataModeNone
+	case formWebhookDataModeFull:
+		return formWebhookDataModeFull
+	default:
+		return formWebhookDataModeRedacted
+	}
+}
+
+func isSensitiveFormFieldName(name string) bool {
+	normalized := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(name), "-", "_"))
+	if normalized == "" {
+		return false
+	}
+	for _, token := range sensitiveFormFieldTokens {
+		if strings.Contains(normalized, token) {
+			return true
+		}
+	}
+	return false
+}
+
+func truncateFormEventValue(value string, maxLen int) string {
+	if maxLen <= 0 || len(value) <= maxLen {
+		return value
+	}
+	return value[:maxLen]
 }
 
 // FormListItem represents a form with submission counts.
@@ -280,13 +386,13 @@ func hasCaptchaField(fields []store.FormField) bool {
 // Returns error message if verification fails, empty string on success.
 func (h *FormsHandler) verifyCaptcha(ctx context.Context, r *http.Request, lang string) string {
 	if h.hookRegistry == nil {
-		return "" // No hook registry, skip verification
+		return i18n.T(lang, "hcaptcha.error_verification")
 	}
 
 	// Check if captcha hooks are registered (hCaptcha module is active)
 	if !h.hookRegistry.HasHandlers(hcaptcha.HookFormCaptchaVerify) {
 		slog.Warn("captcha field present but hCaptcha module not active")
-		return "" // Module not active, skip verification
+		return i18n.T(lang, "hcaptcha.error_verification")
 	}
 
 	// Build verification request
@@ -336,7 +442,6 @@ func (h *FormsHandler) getActiveFormBySlug(w http.ResponseWriter, r *http.Reques
 	}
 	return &form
 }
-
 
 // updateLanguageContext updates the request context with the form's language.
 // This ensures UI translations match the form's language, consistent with page handler behavior.
@@ -726,7 +831,7 @@ func (h *FormsHandler) AddField(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req AddFieldRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONWithLimit(w, r, &req, MaxJSONBodyBytes); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
@@ -803,7 +908,7 @@ func (h *FormsHandler) UpdateField(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req AddFieldRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONWithLimit(w, r, &req, MaxJSONBodyBytes); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
@@ -893,7 +998,7 @@ func (h *FormsHandler) ReorderFields(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req ReorderFieldsRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONWithLimit(w, r, &req, MaxJSONBodyBytes); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
@@ -973,7 +1078,7 @@ func (h *FormsHandler) Show(w http.ResponseWriter, r *http.Request) {
 		CSRFToken:        template.HTML(h.sessionManager.Token(r.Context())),
 	}
 
-	h.render(w, data)
+	h.render(w, r, data)
 }
 
 // Submit handles POST /forms/{slug} - processes form submission.
@@ -996,7 +1101,13 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse the form data
+	r.Body = http.MaxBytesReader(w, r.Body, maxPublicFormBodyBytes)
 	if err := r.ParseForm(); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, "Form payload too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		slog.Error("failed to parse form", "error", err)
 		http.Error(w, "Invalid form data", http.StatusBadRequest)
 		return
@@ -1005,14 +1116,44 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	// Check honeypot field (spam protection)
 	honeypot := r.FormValue("_website")
 	if honeypot != "" {
+		clientIP := middleware.GetClientIP(r)
 		// Bot detected, silently pretend success
-		slog.Info("honeypot triggered", "form_slug", slug, "ip", r.RemoteAddr)
+		slog.Info("honeypot triggered", "form_slug", slug, "ip", clientIP)
+		_ = service.NewEventService(h.db).LogSecurityEvent(
+			r.Context(),
+			model.EventLevelWarning,
+			"Public form honeypot triggered",
+			nil,
+			clientIP,
+			middleware.GetRequestURL(r),
+			map[string]any{
+				"form_id":   form.ID,
+				"form_slug": slug,
+			},
+		)
 		h.renderFormSuccess(w, r, *form, fields)
 		return
 	}
 
 	// Note: CSRF protection is handled by the middleware (filippo.io/csrf/gorilla)
 	// which uses Fetch metadata headers - no form token validation needed here.
+
+	if h.requireCaptcha {
+		if !hasCaptchaField(fields) {
+			slog.Warn("form submission blocked: captcha required but field not configured",
+				"form_id", form.ID,
+				"form_slug", slug)
+			http.Error(w, "Form submission is temporarily unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if h.hookRegistry == nil || !h.hookRegistry.HasHandlers(hcaptcha.HookFormCaptchaVerify) {
+			slog.Warn("form submission blocked: captcha required but verifier unavailable",
+				"form_id", form.ID,
+				"form_slug", slug)
+			http.Error(w, "Form submission is temporarily unavailable", http.StatusServiceUnavailable)
+			return
+		}
+	}
 
 	// Verify captcha if form has captcha field
 	if hasCaptchaField(fields) {
@@ -1026,6 +1167,7 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	// Collect values and validate
 	values := make(map[string]string)
 	validationErrors := make(map[string]string)
+	totalValueBytes := 0
 
 	for _, field := range fields {
 		// Skip captcha fields - don't store their values
@@ -1035,6 +1177,51 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 
 		value := strings.TrimSpace(r.FormValue(field.Name))
 		values[field.Name] = value
+		if len(value) > maxPublicFormFieldValueBytes {
+			slog.Warn("form submission blocked: field value too large",
+				"form_id", form.ID,
+				"form_slug", slug,
+				"field_name", field.Name,
+				"field_value_len", len(value))
+			_ = service.NewEventService(h.db).LogSecurityEvent(
+				r.Context(),
+				model.EventLevelWarning,
+				"Public form submission blocked: field value too large",
+				nil,
+				middleware.GetClientIP(r),
+				middleware.GetRequestURL(r),
+				map[string]any{
+					"form_id":         form.ID,
+					"form_slug":       slug,
+					"field_name":      field.Name,
+					"field_value_len": len(value),
+				},
+			)
+			http.Error(w, "Form field value too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		totalValueBytes += len(value)
+		if totalValueBytes > maxPublicFormSubmissionDataBytes {
+			slog.Warn("form submission blocked: total field payload too large",
+				"form_id", form.ID,
+				"form_slug", slug,
+				"total_value_bytes", totalValueBytes)
+			_ = service.NewEventService(h.db).LogSecurityEvent(
+				r.Context(),
+				model.EventLevelWarning,
+				"Public form submission blocked: payload too large",
+				nil,
+				middleware.GetClientIP(r),
+				middleware.GetRequestURL(r),
+				map[string]any{
+					"form_id":           form.ID,
+					"form_slug":         slug,
+					"total_value_bytes": totalValueBytes,
+				},
+			)
+			http.Error(w, "Form submission too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 
 		// Required validation
 		if field.IsRequired && value == "" {
@@ -1095,6 +1282,27 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+	if len(dataJSON) > maxPublicFormSubmissionDataBytes {
+		slog.Warn("form submission blocked: serialized payload too large",
+			"form_id", form.ID,
+			"form_slug", slug,
+			"data_json_bytes", len(dataJSON))
+		_ = service.NewEventService(h.db).LogSecurityEvent(
+			r.Context(),
+			model.EventLevelWarning,
+			"Public form submission blocked: serialized payload too large",
+			nil,
+			middleware.GetClientIP(r),
+			middleware.GetRequestURL(r),
+			map[string]any{
+				"form_id":         form.ID,
+				"form_slug":       slug,
+				"data_json_bytes": len(dataJSON),
+			},
+		)
+		http.Error(w, "Form submission too large", http.StatusRequestEntityTooLarge)
+		return
+	}
 
 	// Save submission
 	submission, err := h.queries.CreateFormSubmission(r.Context(), store.CreateFormSubmissionParams{
@@ -1147,7 +1355,7 @@ func (h *FormsHandler) renderFormWithErrors(w http.ResponseWriter, r *http.Reque
 		CSRFToken:        template.HTML(h.sessionManager.Token(r.Context())),
 	}
 
-	h.render(w, data)
+	h.render(w, r, data)
 }
 
 // renderFormSuccess renders the form success page.
@@ -1163,7 +1371,7 @@ func (h *FormsHandler) renderFormSuccess(w http.ResponseWriter, r *http.Request,
 		Values:           make(map[string]string),
 	}
 
-	h.render(w, data)
+	h.render(w, r, data)
 }
 
 // isValidEmail checks if the email is valid.
@@ -1765,26 +1973,130 @@ type FormTemplateData struct {
 	CSRFToken template.HTML
 }
 
-// render renders a form template using the active theme.
-func (h *FormsHandler) render(w http.ResponseWriter, data FormTemplateData) {
+// render renders a form page using the active theme's render engine.
+// For templ engine: renders via templ component.
+// For html engine: renders via html/template through activeTheme.RenderPage.
+func (h *FormsHandler) render(w http.ResponseWriter, r *http.Request, data FormTemplateData) {
 	activeTheme := h.themeManager.GetActiveTheme()
-	if activeTheme == nil {
-		slog.Error("no active theme available")
-		http.Error(w, "No active theme", http.StatusInternalServerError)
+
+	engine := theme.EngineTempl
+	if activeTheme != nil {
+		engine = activeTheme.RenderEngine()
+	}
+
+	if engine == theme.EngineHTML {
+		var buf bytes.Buffer
+		if err := activeTheme.RenderPage(&buf, "form", data); err != nil {
+			slog.Error("html theme form render failed", "theme", activeTheme.Name, "error", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(buf.Bytes())
 		return
 	}
 
-	buf := new(bytes.Buffer)
-	if err := activeTheme.RenderPage(buf, "form", data); err != nil {
-		slog.Error("failed to render form template", "error", err)
-		http.Error(w, "Template rendering error", http.StatusInternalServerError)
-		return
+	viewData := h.buildPublicFormViewData(r, data)
+	renderTempl(w, r, FrontendFormPage(viewData))
+}
+
+// buildPublicFormViewData converts FormTemplateData to the templ-friendly PublicFormViewData.
+func (h *FormsHandler) buildPublicFormViewData(r *http.Request, data FormTemplateData) PublicFormViewData {
+	fields := make([]PublicFormField, 0, len(data.Fields))
+	for _, f := range data.Fields {
+		pf := PublicFormField{
+			ID:         f.ID,
+			Type:       f.Type,
+			Name:       f.Name,
+			Label:      f.Label,
+			IsRequired: f.IsRequired,
+		}
+		if f.Placeholder.Valid {
+			pf.Placeholder = f.Placeholder.String
+		}
+		if f.HelpText.Valid {
+			pf.HelpText = f.HelpText.String
+		}
+		if f.Options.Valid && f.Options.String != "" && f.Options.String != "[]" {
+			pf.Options = parseFieldOptions(f.Options.String)
+		}
+		fields = append(fields, pf)
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if _, err := buf.WriteTo(w); err != nil {
-		slog.Error("failed to write response", "error", err)
+	successMsg := ""
+	if data.Form.SuccessMessage.Valid {
+		successMsg = data.Form.SuccessMessage.String
 	}
+
+	description := ""
+	if data.Form.Description.Valid {
+		description = data.Form.Description.String
+	}
+
+	captchaWidget := h.getCaptchaWidget(r.Context())
+
+	return PublicFormViewData{
+		Base:           data.BaseTemplateData,
+		FormTitle:      data.Form.Title,
+		FormSlug:       data.Form.Slug,
+		Description:    description,
+		SuccessMessage: successMsg,
+		Fields:         fields,
+		Errors:         data.Errors,
+		Values:         data.Values,
+		Success:        data.Success,
+		CaptchaWidget:  captchaWidget,
+		Lang:           data.LangCode,
+	}
+}
+
+// getCaptchaWidget safely fetches the captcha widget HTML via hooks.
+func (h *FormsHandler) getCaptchaWidget(ctx context.Context) string {
+	if h.hookRegistry == nil {
+		return ""
+	}
+	if !h.hookRegistry.HasHandlers(hcaptcha.HookFormCaptchaWidget) {
+		return ""
+	}
+	result, err := h.hookRegistry.Call(ctx, hcaptcha.HookFormCaptchaWidget, nil)
+	if err != nil {
+		slog.Error("failed to get captcha widget", "error", err)
+		return ""
+	}
+	if htmlStr, ok := result.(template.HTML); ok {
+		return string(htmlStr)
+	}
+	return ""
+}
+
+// parseFieldOptions parses a JSON string array into a Go string slice.
+func parseFieldOptions(jsonStr string) []string {
+	var opts []string
+	if err := json.Unmarshal([]byte(jsonStr), &opts); err != nil {
+		return nil
+	}
+	return opts
+}
+
+// formT is a helper for i18n translation in public form templates.
+func formT(lang, key string) string {
+	return i18n.T(lang, key)
+}
+
+// requiredAttr returns templ.Attributes with "required" if isRequired is true.
+func requiredAttr(isRequired bool) templ.Attributes {
+	if isRequired {
+		return templ.Attributes{"required": true}
+	}
+	return nil
+}
+
+// fieldValueContains checks if the comma-separated value string contains the given option.
+func fieldValueContains(value, option string) bool {
+	if value == "" {
+		return false
+	}
+	return strings.Contains(value, option)
 }
 
 // getBaseTemplateData builds base template data for form rendering.
@@ -1884,42 +2196,11 @@ func (h *FormsHandler) getBaseTemplateData(r *http.Request, title string) BaseTe
 
 	// Load menus
 	if h.menuService != nil {
-		data.MainMenu = h.loadMenu("main", r.URL.Path, langCode)
-		data.FooterMenu = h.loadMenu("footer", r.URL.Path, langCode)
+		data.MainMenu = loadMenu(h.menuService, "main", r.URL.Path, langCode)
+		data.FooterMenu = loadMenu(h.menuService, "footer", r.URL.Path, langCode)
 		data.Navigation = data.MainMenu
 		data.FooterNav = data.FooterMenu
 	}
 
 	return data
-}
-
-// loadMenu loads a menu by slug and language.
-func (h *FormsHandler) loadMenu(slug, currentPath, langCode string) []MenuItem {
-	var items []service.MenuItem
-	if langCode != "" {
-		items = h.menuService.GetMenuForLanguage(slug, langCode)
-	} else {
-		items = h.menuService.GetMenu(slug)
-	}
-	if items == nil {
-		return nil
-	}
-
-	return h.menuItemsToView(items, currentPath)
-}
-
-// menuItemsToView converts service menu items to view items.
-func (h *FormsHandler) menuItemsToView(items []service.MenuItem, currentPath string) []MenuItem {
-	result := make([]MenuItem, 0, len(items))
-	for _, item := range items {
-		mi := MenuItem{
-			Title:    item.Title,
-			URL:      item.URL,
-			Target:   item.Target,
-			IsActive: item.URL == currentPath,
-			Children: h.menuItemsToView(item.Children, currentPath),
-		}
-		result = append(result, mi)
-	}
-	return result
 }

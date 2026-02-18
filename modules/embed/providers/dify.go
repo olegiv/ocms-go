@@ -6,7 +6,10 @@ package providers
 import (
 	"fmt"
 	"html/template"
+	"net/url"
 	"strings"
+
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // DifyProvider implements the Provider interface for Dify AI chat.
@@ -38,7 +41,7 @@ func (p *DifyProvider) SettingsSchema() []SettingField {
 		{
 			ID:          "api_endpoint",
 			Name:        "API Endpoint",
-			Description: "Dify API endpoint URL (e.g., https://api.dify.ai/v1 or your self-hosted URL)",
+			Description: "Dify API endpoint URL using HTTPS (e.g., https://api.dify.ai/v1 or your self-hosted URL)",
 			Type:        "url",
 			Required:    true,
 			Default:     "https://api.dify.ai/v1",
@@ -120,8 +123,15 @@ func (p *DifyProvider) Validate(settings map[string]string) error {
 	if apiEndpoint == "" {
 		return fmt.Errorf("API endpoint is required")
 	}
-	if !strings.HasPrefix(apiEndpoint, "http://") && !strings.HasPrefix(apiEndpoint, "https://") {
-		return fmt.Errorf("API endpoint must start with http:// or https://")
+	parsedEndpoint, err := url.Parse(apiEndpoint)
+	if err != nil {
+		return fmt.Errorf("API endpoint is invalid: %w", err)
+	}
+	if !strings.EqualFold(parsedEndpoint.Scheme, "https") {
+		return fmt.Errorf("API endpoint must use https://")
+	}
+	if err := util.ValidateWebhookURL(apiEndpoint); err != nil {
+		return fmt.Errorf("API endpoint is invalid: %w", err)
 	}
 	if apiKey == "" {
 		return fmt.Errorf("API key is required")
@@ -202,8 +212,6 @@ func (p *DifyProvider) RenderBody(settings map[string]string) template.HTML {
 	}
 
 	// Escape values for safe JS/HTML output
-	safeAPIEndpoint := template.JSEscapeString(apiEndpoint)
-	safeAPIKey := template.JSEscapeString(apiKey)
 	safeWelcomeMessage := template.JSEscapeString(welcomeMessage)
 	safePrimaryColor := template.HTMLEscapeString(primaryColor)
 
@@ -276,8 +284,9 @@ func (p *DifyProvider) RenderBody(settings map[string]string) template.HTML {
 </style>
 <script>
 (function(){
-var API='%s',KEY='%s',WELCOME='%s',OPENERS=%s,SHOW_SUGGESTED=%s;
+var PROXY_BASE='/embed/dify',WELCOME='%s',OPENERS=%s,SHOW_SUGGESTED=%s;
 var convId=null,isOpen=false,busy=false,userId='user-'+Math.random().toString(36).substr(2,9),openersShown=false,lastMsgId=null;
+var proxyToken='',proxyTokenExp=0,proxyTokenOptional=false;
 var tog=document.getElementById('dify-chat-toggle');
 var win=document.getElementById('dify-chat-window');
 var cls=document.getElementById('dify-chat-close');
@@ -333,30 +342,61 @@ function hideSuggestions(){var e=document.getElementById('dify-suggestions');if(
 function addMsg(t,type){
   var d=document.createElement('div');
   d.className='dify-msg dify-msg-'+type;
-  d.innerHTML=type==='bot'?fmt(t):esc(t);
+  d.textContent=String(t||'');
+  d.style.whiteSpace='pre-wrap';
   msgs.appendChild(d);
   msgs.scrollTop=msgs.scrollHeight;
   return d;
-}
-
-function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-
-function fmt(t){
-  return t.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g,'<em>$1</em>')
-    .replace(/\n/g,'<br>');
 }
 
 function showTyp(){
   var d=document.createElement('div');
   d.className='dify-msg dify-msg-bot dify-typing';
   d.id='dify-typ';
-  d.innerHTML='<span></span><span></span><span></span>';
+  for(var i=0;i<3;i++){
+    d.appendChild(document.createElement('span'));
+  }
   msgs.appendChild(d);
   msgs.scrollTop=msgs.scrollHeight;
 }
 
 function hideTyp(){var e=document.getElementById('dify-typ');if(e)e.remove();}
+
+async function ensureProxyToken(forceRefresh){
+  if(proxyTokenOptional)return '';
+  if(forceRefresh){proxyToken='';proxyTokenExp=0;}
+  var now=Math.floor(Date.now()/1000);
+  if(proxyToken&&now<proxyTokenExp-5)return proxyToken;
+  var tr=await fetch(PROXY_BASE+'/token',{method:'GET',credentials:'same-origin'});
+  if(tr.status===404){
+    proxyTokenOptional=true;
+    proxyToken='';
+    proxyTokenExp=0;
+    return '';
+  }
+  if(!tr.ok)throw new Error('Token error: '+tr.status);
+  var td=await tr.json();
+  if(!td||typeof td.token!=='string'||!td.token)throw new Error('Token payload error');
+  proxyToken=td.token;
+  proxyTokenExp=Number(td.expires_at)||0;
+  return proxyToken;
+}
+
+async function proxyFetch(path,init){
+  var token=await ensureProxyToken(false);
+  var opts=init||{};
+  opts.headers=opts.headers||{};
+  if(token)opts.headers['X-Embed-Proxy-Token']=token;
+  var resp=await fetch(PROXY_BASE+path,opts);
+  if((resp.status===401||resp.status===403)&&path!=='/token'){
+    token=await ensureProxyToken(true);
+    if(token){
+      opts.headers['X-Embed-Proxy-Token']=token;
+      resp=await fetch(PROXY_BASE+path,opts);
+    }
+  }
+  return resp;
+}
 
 async function doSend(){
   var t=inp.value.trim();
@@ -370,9 +410,9 @@ async function doSend(){
   send.disabled=true;
   showTyp();
   try{
-    var r=await fetch(API+'/chat-messages',{
+    var r=await proxyFetch('/chat-messages',{
       method:'POST',
-      headers:{'Authorization':'Bearer '+KEY,'Content-Type':'application/json'},
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify({inputs:{},query:t,response_mode:'streaming',conversation_id:convId||'',user:userId})
     });
     if(!r.ok)throw new Error('API error: '+r.status);
@@ -392,7 +432,7 @@ async function doSend(){
             var d=JSON.parse(ln.slice(6));
             if(d.event==='message'||d.event==='agent_message'){
               full+=(d.answer||'');
-              botMsg.innerHTML=fmt(full);
+              botMsg.textContent=full;
               msgs.scrollTop=msgs.scrollHeight;
               if(d.message_id)msgId=d.message_id;
             }
@@ -404,7 +444,7 @@ async function doSend(){
     }
     if(SHOW_SUGGESTED&&msgId){
       try{
-        var sr=await fetch(API+'/messages/'+msgId+'/suggested?user='+userId,{headers:{'Authorization':'Bearer '+KEY}});
+        var sr=await proxyFetch('/messages/'+encodeURIComponent(msgId)+'/suggested?user='+encodeURIComponent(userId),{method:'GET'});
         if(sr.ok){var sd=await sr.json();if(sd.data&&sd.data.length)showSuggestions(sd.data);}
       }catch(e){}
     }
@@ -436,8 +476,6 @@ inp.addEventListener('input',function(){this.style.height='auto';this.style.heig
 		safePrimaryColor, safePrimaryColor,
 		safePrimaryColor,
 		safePrimaryColor, // opener button hover border
-		safeAPIEndpoint,
-		safeAPIKey,
 		safeWelcomeMessage,
 		openerJS,
 		showSuggestedJS,

@@ -222,7 +222,7 @@ func TestRenderHeadScriptsDisabled(t *testing.T) {
 		},
 	}
 
-	output := m.renderHeadScripts()
+	output := m.renderHeadScripts("")
 	if output != "" {
 		t.Error("expected empty output when module is disabled")
 	}
@@ -238,7 +238,7 @@ func TestRenderHeadScriptsEnabled(t *testing.T) {
 		},
 	}
 
-	output := string(m.renderHeadScripts())
+	output := string(m.renderHeadScripts(""))
 
 	if !strings.Contains(output, "gtag('consent', 'default'") {
 		t.Error("output should contain GCM defaults script")
@@ -325,7 +325,7 @@ func TestRenderHeadScriptsWithDebug(t *testing.T) {
 		},
 	}
 
-	output := string(m.renderHeadScripts())
+	output := string(m.renderHeadScripts(""))
 
 	if !strings.Contains(output, "klaro_update") {
 		t.Error("output should contain debug script when debug is enabled")
@@ -343,7 +343,7 @@ func TestRenderHeadScriptsWithoutDebug(t *testing.T) {
 		},
 	}
 
-	output := string(m.renderHeadScripts())
+	output := string(m.renderHeadScripts(""))
 
 	if strings.Contains(output, "klaro_update") {
 		t.Error("output should NOT contain debug script when debug is disabled")
@@ -372,12 +372,16 @@ func TestRenderFooterLinkEnabled(t *testing.T) {
 
 	output := string(m.renderFooterLink())
 
-	if !strings.Contains(output, "klaro.show()") {
-		t.Error("output should contain klaro.show() call")
+	if strings.Contains(output, "onclick=") {
+		t.Error("output should not use inline onclick handlers")
 	}
 
 	if !strings.Contains(output, "privacy-settings-link") {
 		t.Error("output should contain privacy-settings-link class")
+	}
+
+	if !strings.Contains(output, `data-privacy-open="true"`) {
+		t.Error("output should contain privacy trigger data attribute")
 	}
 
 	if !strings.Contains(output, "Cookie Settings") {

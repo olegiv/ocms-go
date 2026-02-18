@@ -5,7 +5,6 @@ package handler
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -46,12 +45,12 @@ var WidgetTypes = []struct {
 	Name        string
 	Description string
 }{
-	{"text", "Text/HTML", "Custom text or HTML content"},
-	{"recent_posts", "Recent Posts", "Display recent blog posts"},
-	{"categories", "Categories", "Display category list"},
-	{"tags", "Tags", "Display tag cloud"},
-	{"search", "Search", "Search form widget"},
-	{"custom_menu", "Custom Menu", "Display a navigation menu"},
+	{ID: "text", Name: "Text/HTML", Description: "Custom text or HTML content"},
+	{ID: "recent_posts", Name: "Recent Posts", Description: "Display recent blog posts"},
+	{ID: "categories", Name: "Categories", Description: "Display category list"},
+	{ID: "tags", Name: "Tags", Description: "Display tag cloud"},
+	{ID: "search", Name: "Search", Description: "Search form widget"},
+	{ID: "custom_menu", Name: "Custom Menu", Description: "Display a navigation menu"},
 }
 
 // WidgetAreaWithWidgets represents a widget area with its widgets.
@@ -134,7 +133,7 @@ func (h *WidgetsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req CreateWidgetRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONWithLimit(w, r, &req, MaxJSONBodyBytes); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
@@ -212,7 +211,7 @@ func (h *WidgetsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdateWidgetRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONWithLimit(w, r, &req, MaxJSONBodyBytes); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
@@ -287,7 +286,7 @@ func (h *WidgetsHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req ReorderWidgetsRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONWithLimit(w, r, &req, MaxJSONBodyBytes); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
@@ -345,7 +344,7 @@ func (h *WidgetsHandler) MoveWidget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req MoveWidgetRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONWithLimit(w, r, &req, MaxJSONBodyBytes); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}

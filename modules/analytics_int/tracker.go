@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/olegiv/ocms-go/internal/middleware"
 )
 
 // responseWriter wraps http.ResponseWriter to capture the status code.
@@ -142,7 +144,7 @@ func (m *Module) shouldTrack(r *http.Request) bool {
 
 // trackPageView records a page view.
 func (m *Module) trackPageView(r *http.Request) {
-	// Get real IP (respects X-Real-IP and X-Forwarded-For from chi middleware)
+	// Get client IP using shared trusted-proxy policy.
 	ip := getRealIP(r)
 	userAgent := r.UserAgent()
 
@@ -200,33 +202,9 @@ func (m *Module) insertPageView(view *PageView) error {
 	return err
 }
 
-// getRealIP extracts the real client IP from the request.
-// It respects X-Real-IP and X-Forwarded-For headers set by reverse proxies.
+// getRealIP extracts the client IP using shared trusted-proxy-aware logic.
 func getRealIP(r *http.Request) string {
-	// Check X-Real-IP first (set by chi middleware.RealIP)
-	if ip := r.Header.Get("X-Real-IP"); ip != "" {
-		return ip
-	}
-
-	// Check X-Forwarded-For
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// Take the first IP in the list (client IP)
-		if idx := strings.Index(xff, ","); idx > 0 {
-			return strings.TrimSpace(xff[:idx])
-		}
-		return strings.TrimSpace(xff)
-	}
-
-	// Fall back to RemoteAddr
-	ip := r.RemoteAddr
-	if idx := strings.LastIndex(ip, ":"); idx > 0 {
-		ip = ip[:idx]
-	}
-	// Handle IPv6 addresses in brackets
-	ip = strings.TrimPrefix(ip, "[")
-	ip = strings.TrimSuffix(ip, "]")
-
-	return ip
+	return middleware.GetClientIP(r)
 }
 
 // extractReferrerDomain extracts the domain from a referrer URL.
