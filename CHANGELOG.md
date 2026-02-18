@@ -7,11 +7,109 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-02-18
+
+### Added
+
+#### Admin UI Migration to templ + Tailwind CSS
+- Migrate all admin pages from html/template to templ components
+- Type-safe view models and store-to-view conversion layer (`internal/handler/templ.go`)
+- Hybrid frontend render engine dispatch for gradual migration
+- templUI component integration: buttons, badges, cards, alerts, tables, inputs, labels, pagination, page headers
+- Tailwind CSS build step in Dockerfile
+- `HcaptchaWidgetHTML()`, `AdminLangOptions()` renderer helpers for templ views
+
+#### Embed Proxy (Dify Integration)
+- Backend proxy for Dify API calls with plain text output rendering
+- Signed embed proxy auth tokens with enforcement
+- Embed proxy rate budget and abuse auditing
+- HTTPS requirement for embed endpoints
+- Embed upstream host allowlist and policy enforcement
+- Admin-only restriction for embed settings
+
+#### API Key Security Policies
+- Source CIDR allowlists (global and per-key)
+- Expiry policy and maximum lifetime enforcement
+- Source IP anomaly detection and automatic revocation
+- Default expiry for new API keys
+- Legacy non-expiring API key warnings
+
+#### Page Content Security
+- HTML sanitization policy on write paths
+- Block suspicious page markup in production
+- Markup policy enforcement on imports, API writes, and version restores
+
+#### Form Submission Hardening
+- Public form submission payload size caps
+- Form field value length caps
+- Optional captcha policy for public forms
+- Webhook field redaction and payload minimization
+
+#### Production Startup Gates
+- Block startup on default admin credentials
+- Require embed origin, trusted proxy, API CIDR, and captcha configuration
+- Security signal summary in health endpoint
+
+#### CSP Nonce Support
+- CSP nonce wiring across the entire render pipeline
+- Nonce applied to all inline scripts and style tags
+
+#### Developer Tooling
+- AGENTS.md repo guidelines for AI agents
+- Codex-compatible commit workflow scripts and commands
+- templUI CLI commands and frontend-developer agent
+
 ### Changed
 - Update Go to 1.26.0
-- Migrate admin dashboard UI from html/template to templ components (`internal/views/admin/`)
-- Add type-safe view models and store-to-view conversion layer (`internal/handler/templ.go`)
-- Add `HcaptchaWidgetHTML()`, `AdminLangOptions()` renderer helper methods for templ views
+- Remove unused legacy admin, auth, and public HTML templates
+- Make logout POST-only across UI and routing
+- Trust proxy headers only from configured trusted proxies
+- Fail closed on malformed X-Forwarded-For chains
+
+### Fixed
+- Fix cross-platform WebM MIME type detection
+- Fix admin language switcher type assertion
+- Fix developer theme engine selection
+- Sanitize informer text instead of escaping
+- Harden admin fallback redirect URL handling
+
+### Security
+- Trusted proxy IP resolution with fail-closed behavior
+- Webhook URL SSRF protection and destination auditing
+- Upload MIME validation hardening and extension canonicalization
+- JSON and multipart request body size caps
+- Harden JSON decoding for admin, API, and Sentinel endpoints
+- Embed proxy origin allowlist and rate limiting
+- HTTPS policy enforcement for outbound URLs
+- Security audit remediation (SEC-001 through SEC-008)
+
+## [0.8.0] - 2026-02-12
+
+### Added
+
+#### Custom Modules
+- Custom bookmarks module example in `custom/modules/`
+- `init()` self-registration pattern for custom modules
+- Custom module documentation, tests, and translations
+
+#### Custom Themes
+- Sample custom theme "Starter" with magazine-style card layout
+- Starter theme tests, translations, and documentation
+
+#### Scheduler Admin UI
+- Scheduler admin interface with task management
+
+#### Demo Mode
+- Bookmarks module and theme settings read-only in demo mode
+
+### Changed
+- Update Go dependencies
+
+### Fixed
+- Fix scheduler SSRF and schedule override issues
+- Fix bookmarks module role checks and 404 handling
+- Fix taxonomy links losing language prefix
+- Fix dockerignore excluding custom modules
 
 ## [0.7.0] - 2026-02-09
 
@@ -317,7 +415,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/olegiv/ocms-go/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/olegiv/ocms-go/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/olegiv/ocms-go/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/olegiv/ocms-go/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/olegiv/ocms-go/compare/v0.4.0...v0.5.0
