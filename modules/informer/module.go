@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olegiv/ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/util"
 )
 
@@ -178,8 +179,8 @@ func (m *Module) Migrations() []module.Migration {
 }
 
 // renderBar generates the HTML for the informer notification bar.
-// SECURITY: Output is cast to template.HTML. All admin-controlled values are
-// escaped with html.EscapeString before embedding.
+// SECURITY: The informer text is sanitized with bluemonday UGC policy before
+// rendering as HTML. Style/script-adjacent values remain escaped.
 func (m *Module) renderBar(nonce string) template.HTML {
 	if m.settings == nil || !m.settings.Enabled || m.settings.Text == "" {
 		return ""
@@ -187,7 +188,7 @@ func (m *Module) renderBar(nonce string) template.HTML {
 
 	bgColor := html.EscapeString(m.settings.BgColor)
 	textColor := html.EscapeString(m.settings.TextColor)
-	text := html.EscapeString(m.settings.Text)
+	text := security.SanitizePageHTML(m.settings.Text)
 
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf(`<div id="informer-bar" style="display:none;background:%s;color:%s;" class="informer-bar">`, bgColor, textColor))
