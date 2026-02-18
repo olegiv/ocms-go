@@ -48,7 +48,7 @@ templ LoginPage(d LoginData) {
 						@iconGlobe()
 						<select
 							name="lang"
-							onchange="this.form.submit()"
+							data-auto-submit="true"
 							class="auth-lang-select"
 							aria-label={ d.T("admin.change_language") }
 						>
@@ -134,7 +134,7 @@ templ loginAlert(message string, alertType string) {
 
 // loginValidationScript adds client-side form validation and hCaptcha height fix.
 templ loginValidationScript() {
-	<script>
+	<script nonce={ templ.GetNonce(ctx) }>
 	document.addEventListener('DOMContentLoaded', function() {
 		const inputs = document.querySelectorAll('input[required]');
 		inputs.forEach(function(input) {
@@ -165,6 +165,14 @@ templ loginValidationScript() {
 			fixHCaptchaHeight();
 			if (++hcaptchaAttempts > 50) clearInterval(hcaptchaInterval);
 		}, 100);
+
+		document.querySelectorAll('[data-auto-submit="true"]').forEach(function(el) {
+			el.addEventListener('change', function() {
+				if (el.form) {
+					el.form.submit();
+				}
+			});
+		});
 	});
 	</script>
 }

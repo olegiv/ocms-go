@@ -177,8 +177,7 @@ templ EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) 
 										id={ field.ID + "_picker" }
 										value={ colorDefault(field.Default) }
 										class="h-9 w-14 rounded-md border border-input bg-transparent p-1"
-										data-target={ field.ID }
-										onchange="document.getElementById(this.dataset.target).value = this.value"
+										data-sync-target={ field.ID }
 									/>
 									@input.Input(input.Props{
 										ID:          field.ID,
@@ -187,10 +186,9 @@ templ EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) 
 										Value:       field.Default,
 										Placeholder: field.Placeholder,
 										Attributes: templ.Attributes{
-											"pattern":    "^#[0-9A-Fa-f]{6}$",
-											"data-picker": field.ID + "_picker",
-											"onchange":   "document.getElementById(this.dataset.picker).value = this.value",
-											"maxlength":  "7",
+											"pattern":          "^#[0-9A-Fa-f]{6}$",
+											"data-sync-picker": field.ID + "_picker",
+											"maxlength":        "7",
 										},
 									})
 								</div>

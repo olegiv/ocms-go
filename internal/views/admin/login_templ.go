@@ -104,7 +104,7 @@ func LoginPage(d LoginData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<select name=\"lang\" onchange=\"this.form.submit()\" class=\"auth-lang-select\" aria-label=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<select name=\"lang\" data-auto-submit=\"true\" class=\"auth-lang-select\" aria-label=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -434,7 +434,20 @@ func loginValidationScript() templ.Component {
 			templ_7745c5c3_Var18 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<script>\n\tdocument.addEventListener('DOMContentLoaded', function() {\n\t\tconst inputs = document.querySelectorAll('input[required]');\n\t\tinputs.forEach(function(input) {\n\t\t\tinput.addEventListener('invalid', function(e) {\n\t\t\t\te.preventDefault();\n\t\t\t\tif (input.validity.valueMissing) {\n\t\t\t\t\tinput.setCustomValidity(input.dataset.msgRequired || '');\n\t\t\t\t} else if (input.validity.typeMismatch && input.type === 'email') {\n\t\t\t\t\tinput.setCustomValidity(input.dataset.msgEmail || '');\n\t\t\t\t}\n\t\t\t\tinput.reportValidity();\n\t\t\t});\n\t\t\tinput.addEventListener('input', function() {\n\t\t\t\tinput.setCustomValidity('');\n\t\t\t});\n\t\t});\n\n\t\t// Fix hCaptcha iframe height to show test mode warning text properly\n\t\tfunction fixHCaptchaHeight() {\n\t\t\tconst iframe = document.querySelector('.h-captcha iframe');\n\t\t\tif (iframe && iframe.offsetHeight < 115) {\n\t\t\t\tiframe.style.setProperty('height', '115px', 'important');\n\t\t\t\tiframe.style.setProperty('min-height', '115px', 'important');\n\t\t\t}\n\t\t}\n\t\tlet hcaptchaAttempts = 0;\n\t\tconst hcaptchaInterval = setInterval(function() {\n\t\t\tfixHCaptchaHeight();\n\t\t\tif (++hcaptchaAttempts > 50) clearInterval(hcaptchaInterval);\n\t\t}, 100);\n\t});\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<script nonce=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var19 string
+		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(templ.GetNonce(ctx))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/login.templ`, Line: 137, Col: 36}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "\">\n\tdocument.addEventListener('DOMContentLoaded', function() {\n\t\tconst inputs = document.querySelectorAll('input[required]');\n\t\tinputs.forEach(function(input) {\n\t\t\tinput.addEventListener('invalid', function(e) {\n\t\t\t\te.preventDefault();\n\t\t\t\tif (input.validity.valueMissing) {\n\t\t\t\t\tinput.setCustomValidity(input.dataset.msgRequired || '');\n\t\t\t\t} else if (input.validity.typeMismatch && input.type === 'email') {\n\t\t\t\t\tinput.setCustomValidity(input.dataset.msgEmail || '');\n\t\t\t\t}\n\t\t\t\tinput.reportValidity();\n\t\t\t});\n\t\t\tinput.addEventListener('input', function() {\n\t\t\t\tinput.setCustomValidity('');\n\t\t\t});\n\t\t});\n\n\t\t// Fix hCaptcha iframe height to show test mode warning text properly\n\t\tfunction fixHCaptchaHeight() {\n\t\t\tconst iframe = document.querySelector('.h-captcha iframe');\n\t\t\tif (iframe && iframe.offsetHeight < 115) {\n\t\t\t\tiframe.style.setProperty('height', '115px', 'important');\n\t\t\t\tiframe.style.setProperty('min-height', '115px', 'important');\n\t\t\t}\n\t\t}\n\t\tlet hcaptchaAttempts = 0;\n\t\tconst hcaptchaInterval = setInterval(function() {\n\t\t\tfixHCaptchaHeight();\n\t\t\tif (++hcaptchaAttempts > 50) clearInterval(hcaptchaInterval);\n\t\t}, 100);\n\n\t\tdocument.querySelectorAll('[data-auto-submit=\"true\"]').forEach(function(el) {\n\t\t\tel.addEventListener('change', function() {\n\t\t\t\tif (el.form) {\n\t\t\t\t\tel.form.submit();\n\t\t\t\t}\n\t\t\t});\n\t\t});\n\t});\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

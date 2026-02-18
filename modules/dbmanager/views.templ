@@ -89,7 +89,7 @@ templ DBManagerPage(pc *adminviews.PageContext, data DBManagerViewData) {
 									</svg>
 									{ pc.T("dbmanager.execute_button") }
 								</button>
-								<button type="button" class="btn btn-secondary" onclick="document.getElementById('sql-query').value = ''">
+								<button type="button" class="btn btn-secondary" data-clear-target="sql-query">
 									{ pc.T("dbmanager.clear_button") }
 								</button>
 							</div>
@@ -317,7 +317,7 @@ templ DBManagerPage(pc *adminviews.PageContext, data DBManagerViewData) {
 		    white-space: nowrap;
 		}
 		</style>
-		<script>
+		<script nonce={ templ.GetNonce(ctx) }>
 		document.addEventListener('DOMContentLoaded', function() {
 		    // Click on history row to load query
 		    document.querySelectorAll('.history-row').forEach(function(row) {

@@ -2297,7 +2297,20 @@ func languageFormScript() templ.Component {
 			templ_7745c5c3_Var121 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 114, "<script>\n\tfunction languageForm() {\n\t\treturn {\n\t\t\tcode: '',\n\t\t\tname: '',\n\t\t\tnativeName: '',\n\t\t\tdirection: 'ltr',\n\t\t\tselectLanguage(value) {\n\t\t\t\tif (!value) return;\n\t\t\t\tconst parts = value.split('|');\n\t\t\t\tif (parts.length >= 4) {\n\t\t\t\t\tthis.code = parts[0];\n\t\t\t\t\tthis.name = parts[1];\n\t\t\t\t\tthis.nativeName = parts[2];\n\t\t\t\t\tthis.direction = parts[3];\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 114, "<script nonce=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var122 string
+		templ_7745c5c3_Var122, templ_7745c5c3_Err = templ.JoinStringErrs(templ.GetNonce(ctx))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/languages.templ`, Line: 418, Col: 36}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var122))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 115, "\">\n\tfunction languageForm() {\n\t\treturn {\n\t\t\tcode: '',\n\t\t\tname: '',\n\t\t\tnativeName: '',\n\t\t\tdirection: 'ltr',\n\t\t\tselectLanguage(value) {\n\t\t\t\tif (!value) return;\n\t\t\t\tconst parts = value.split('|');\n\t\t\t\tif (parts.length >= 4) {\n\t\t\t\t\tthis.code = parts[0];\n\t\t\t\t\tthis.name = parts[1];\n\t\t\t\t\tthis.nativeName = parts[2];\n\t\t\t\t\tthis.direction = parts[3];\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

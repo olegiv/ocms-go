@@ -287,7 +287,7 @@ templ themeSettingText(pc *PageContext, data ThemeSettingsViewData, setting Them
 
 // themeSettingsScript renders the JavaScript for theme settings interactions.
 templ themeSettingsScript(pc *PageContext) {
-	<script>
+	<script nonce={ templ.GetNonce(ctx) }>
 	// Sync color input with text display
 	document.querySelectorAll('.color-input').forEach(function(colorInput) {
 		var textInput = colorInput.nextElementSibling;

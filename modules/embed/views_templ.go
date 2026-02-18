@@ -962,20 +962,20 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "\" class=\"h-9 w-14 rounded-md border border-input bg-transparent p-1\" data-target=\"")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "\" class=\"h-9 w-14 rounded-md border border-input bg-transparent p-1\" data-sync-target=\"")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 							var templ_7745c5c3_Var53 string
 							templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(field.ID)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 180, Col: 32}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 180, Col: 37}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\" onchange=\"document.getElementById(this.dataset.target).value = this.value\">")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\">")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -986,10 +986,9 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 								Value:       field.Default,
 								Placeholder: field.Placeholder,
 								Attributes: templ.Attributes{
-									"pattern":     "^#[0-9A-Fa-f]{6}$",
-									"data-picker": field.ID + "_picker",
-									"onchange":    "document.getElementById(this.dataset.picker).value = this.value",
-									"maxlength":   "7",
+									"pattern":          "^#[0-9A-Fa-f]{6}$",
+									"data-sync-picker": field.ID + "_picker",
+									"maxlength":        "7",
 								},
 							}).Render(ctx, templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
@@ -1053,7 +1052,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 							var templ_7745c5c3_Var54 string
 							templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(field.Description)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 235, Col: 68}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 233, Col: 68}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 							if templ_7745c5c3_Err != nil {
@@ -1100,7 +1099,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 				var templ_7745c5c3_Var56 string
 				templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.back_button"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 243, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 241, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 				if templ_7745c5c3_Err != nil {
@@ -1127,7 +1126,7 @@ func EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) t
 				var templ_7745c5c3_Var58 string
 				templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("embed.save_button"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 246, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/embed/views.templ`, Line: 244, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 				if templ_7745c5c3_Err != nil {

@@ -415,7 +415,7 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 
 // languageFormScript renders the Alpine.js script for the quick-select feature.
 templ languageFormScript() {
-	<script>
+	<script nonce={ templ.GetNonce(ctx) }>
 	function languageForm() {
 		return {
 			code: '',

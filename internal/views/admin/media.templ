@@ -294,7 +294,7 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 				}
 			</main>
 		</div>
-		<script>
+		<script nonce={ templ.GetNonce(ctx) }>
 		function folderManager() {
 			return {
 				showNewFolder: false,
@@ -775,7 +775,7 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 				</div>
 			}
 		}
-		<script>
+		<script nonce={ templ.GetNonce(ctx) }>
 		function copyMediaURL(btn) {
 			var url = btn.getAttribute('data-copy-url');
 			navigator.clipboard.writeText(window.location.origin + url).then(function() {

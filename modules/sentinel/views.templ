@@ -394,7 +394,7 @@ templ SentinelPage(pc *adminviews.PageContext, data SentinelViewData) {
 			data-delete-failed={ pc.T("sentinel.delete_failed") }
 			style="display:none"
 		></div>
-		<script>
+		<script nonce={ templ.GetNonce(ctx) }>
 		document.addEventListener('DOMContentLoaded', function() {
 		    var sentinelData = document.getElementById('sentinel-data');
 		    var i18n = {

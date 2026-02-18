@@ -307,7 +307,7 @@ templ TagFormPage(pc *PageContext, data TagFormData) {
 				@tagTranslationsPanel(pc, data)
 			}
 		}
-		<script>
+		<script nonce={ templ.GetNonce(ctx) }>
 		function tagForm() {
 			return {
 				slug: document.getElementById('slug')?.value || '',

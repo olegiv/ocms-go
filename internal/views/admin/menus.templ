@@ -569,7 +569,7 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 			</div>
 		</template>
 	</div>
-	<script src="/static/dist/js/menu-builder.js"></script>
+	<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/menu-builder.js"></script>
 }
 
 // iconMenusSmall renders a small menu icon for the list table.

@@ -205,7 +205,7 @@ templ eventIPCell(pc *PageContext, event EventItem, sentinelActive bool) {
 
 // eventsScript renders the inline JavaScript for events page interactivity.
 templ eventsScript() {
-	<script>
+	<script nonce={ templ.GetNonce(ctx) }>
 	document.addEventListener('DOMContentLoaded', function() {
 		document.querySelectorAll('.details-text, .url-text').forEach(function(el) {
 			if (el.scrollWidth > el.clientWidth) {

@@ -131,7 +131,7 @@
     {{end}}
 </div>
 
-<script>
+<script nonce="{{.CSPNonce}}">
 document.addEventListener('DOMContentLoaded', function() {
     function fixHCaptchaHeight() {
         var iframe = document.querySelector('.h-captcha iframe');

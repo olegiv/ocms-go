@@ -161,7 +161,7 @@ templ WidgetsPage(pc *PageContext, data WidgetsViewData) {
 						</div>
 					</div>
 				</div>
-				<script>
+				<script nonce={ templ.GetNonce(ctx) }>
 				function widgetsManager() {
 					return {
 						showAddModal: false,

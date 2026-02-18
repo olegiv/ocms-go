@@ -165,7 +165,7 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 		</div>
 		<div id="migrator-data" data-confirm-import={ pc.T("migrator.confirm_import") } data-confirm-delete={ pc.T("migrator.confirm_delete") } data-source-name={ data.SourceName } style="display:none"></div>
 		<div class="migrator-form-container">
-			<form method="POST" action={ templ.URL("/admin/migrator/" + data.SourceName + "/import") } id="import-form" onsubmit="confirmImport(event)">
+			<form method="POST" action={ templ.URL("/admin/migrator/" + data.SourceName + "/import") } id="import-form" data-confirm={ pc.T("migrator.confirm_import") }>
 				<div class="card">
 					<div class="card-header">
 						<h2>{ pc.T("migrator.connection_settings") }</h2>
@@ -191,7 +191,7 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 							}
 						</div>
 						<div class="form-actions">
-							<button type="button" class="btn btn-secondary" id="test-connection-btn" onclick="testConnection()">
+							<button type="button" class="btn btn-secondary" id="test-connection-btn">
 								<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 									<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
 									<polyline points="22 4 12 14.01 9 11.01"></polyline>
@@ -266,7 +266,7 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 									<span class="stat-value">{ fmt.Sprintf("%d", data.ImportedCounts["user"]) }</span>
 								</div>
 							</div>
-							<form method="POST" action={ templ.URL("/admin/migrator/" + data.SourceName + "/delete") } onsubmit="return confirmDelete()">
+							<form method="POST" action={ templ.URL("/admin/migrator/" + data.SourceName + "/delete") } id="delete-imported-form" data-confirm={ pc.T("migrator.confirm_delete") }>
 								<button type="submit" class="btn btn-danger">
 									<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 										<path d="M3 6h18"></path>
@@ -425,7 +425,7 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 				background-color: #dc2626;
 			}
 		</style>
-		<script>
+		<script nonce={ templ.GetNonce(ctx) }>
 			function testConnection() {
 				const importForm = document.getElementById('import-form');
 				if (!importForm) return;
@@ -463,19 +463,24 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 				testForm.submit();
 			}
 
-			function confirmImport(event) {
-				const migratorData = document.getElementById('migrator-data');
-				const message = migratorData ? migratorData.dataset.confirmImport : 'Are you sure you want to start the import?';
-				if (!confirm(message)) {
-					event.preventDefault();
-				}
+			function bindConfirm(form) {
+				if (!form) return;
+				form.addEventListener('submit', function(event) {
+					const message = form.dataset.confirm || 'Are you sure?';
+					if (!confirm(message)) {
+						event.preventDefault();
+					}
+				});
 			}
 
-			function confirmDelete() {
-				const migratorData = document.getElementById('migrator-data');
-				const message = migratorData ? migratorData.dataset.confirmDelete : 'Are you sure you want to delete all imported content?';
-				return confirm(message);
-			}
+			document.addEventListener('DOMContentLoaded', function() {
+				const testButton = document.getElementById('test-connection-btn');
+				if (testButton) {
+					testButton.addEventListener('click', testConnection);
+				}
+				bindConfirm(document.getElementById('import-form'));
+				bindConfirm(document.getElementById('delete-imported-form'));
+			});
 		</script>
 	}
 }

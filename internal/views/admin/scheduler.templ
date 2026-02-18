@@ -152,14 +152,14 @@ templ SchedulerListPage(pc *PageContext, data SchedulerListViewData) {
 												if task.IsActive {
 													<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/scheduler/tasks/%d/trigger", task.ID)) } class="inline">
 														@csrfField()
-														<button type="submit" class="rounded bg-primary px-2 py-1 text-xs text-primary-foreground hover:bg-primary/90" data-confirm={ pc.T("scheduler.task_trigger_confirm") } onclick="return confirm(this.dataset.confirm)">
+															<button type="submit" class="js-confirm-action rounded bg-primary px-2 py-1 text-xs text-primary-foreground hover:bg-primary/90" data-confirm={ pc.T("scheduler.task_trigger_confirm") }>
 															{ pc.T("scheduler.trigger_now") }
 														</button>
 													</form>
 												}
 												<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/scheduler/tasks/%d/delete", task.ID)) } class="inline">
 													@csrfField()
-													<button type="submit" class="rounded border border-destructive px-2 py-1 text-xs text-destructive hover:bg-destructive/10" data-confirm={ pc.T("scheduler.task_delete_confirm") } onclick="return confirm(this.dataset.confirm)">
+														<button type="submit" class="js-confirm-action rounded border border-destructive px-2 py-1 text-xs text-destructive hover:bg-destructive/10" data-confirm={ pc.T("scheduler.task_delete_confirm") }>
 														{ pc.T("btn.delete") }
 													</button>
 												</form>
@@ -216,7 +216,7 @@ templ SchedulerListPage(pc *PageContext, data SchedulerListViewData) {
 									if !data.IsDemoMode {
 										@table.Cell() {
 											<div class="flex flex-wrap items-center gap-1">
-												<button type="button" class="rounded border px-2 py-1 text-xs text-muted-foreground hover:bg-muted" data-source={ job.Source } data-name={ job.Name } data-schedule={ job.Schedule } data-description={ job.Description } onclick="editSchedule(this.dataset.source, this.dataset.name, this.dataset.schedule, this.dataset.description)">
+													<button type="button" class="js-edit-schedule rounded border px-2 py-1 text-xs text-muted-foreground hover:bg-muted" data-source={ job.Source } data-name={ job.Name } data-schedule={ job.Schedule } data-description={ job.Description }>
 													{ pc.T("btn.edit") }
 												</button>
 												if job.IsOverridden {
@@ -232,7 +232,7 @@ templ SchedulerListPage(pc *PageContext, data SchedulerListViewData) {
 												if job.CanTrigger {
 													<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/scheduler/trigger/%s/%s", job.Source, job.Name)) } class="inline">
 														@csrfField()
-														<button type="submit" class="rounded bg-primary px-2 py-1 text-xs text-primary-foreground hover:bg-primary/90" data-confirm={ pc.T("scheduler.trigger_confirm") } onclick="return confirm(this.dataset.confirm)">
+															<button type="submit" class="js-confirm-action rounded bg-primary px-2 py-1 text-xs text-primary-foreground hover:bg-primary/90" data-confirm={ pc.T("scheduler.trigger_confirm") }>
 															{ pc.T("scheduler.trigger_now") }
 														</button>
 													</form>
@@ -340,7 +340,7 @@ templ schedulerEditModal(pc *PageContext) {
 		<div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
 			<div class="mb-4 flex items-center justify-between">
 				<h3 id="editModalTitle" class="text-lg font-semibold text-gray-900 dark:text-white">{ pc.T("scheduler.edit_schedule") }</h3>
-				<button type="button" onclick="closeEditModal()" class="text-gray-400 hover:text-gray-600">&times;</button>
+				<button type="button" class="js-close-edit-modal text-gray-400 hover:text-gray-600">&times;</button>
 			</div>
 			<form method="POST" action="/admin/scheduler/update">
 				@csrfField()
@@ -369,13 +369,13 @@ templ schedulerEditModal(pc *PageContext) {
 					</div>
 				</div>
 				<div class="flex justify-end gap-2">
-					<button type="button" class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700" onclick="closeEditModal()">{ pc.T("btn.cancel") }</button>
+					<button type="button" class="js-close-edit-modal rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">{ pc.T("btn.cancel") }</button>
 					<button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">{ pc.T("btn.save") }</button>
 				</div>
 			</form>
 		</div>
 	</div>
-	<script>
+	<script nonce={ templ.GetNonce(ctx) }>
 	function editSchedule(source, name, schedule, description) {
 		document.getElementById('editSource').value = source;
 		document.getElementById('editName').value = name;
@@ -391,6 +391,22 @@ templ schedulerEditModal(pc *PageContext) {
 	});
 	document.addEventListener('keydown', function(e) {
 		if (e.key === 'Escape') closeEditModal();
+	});
+	document.querySelectorAll('.js-edit-schedule').forEach(function(button) {
+		button.addEventListener('click', function() {
+			editSchedule(this.dataset.source, this.dataset.name, this.dataset.schedule, this.dataset.description);
+		});
+	});
+	document.querySelectorAll('.js-close-edit-modal').forEach(function(button) {
+		button.addEventListener('click', closeEditModal);
+	});
+	document.querySelectorAll('.js-confirm-action').forEach(function(button) {
+		button.addEventListener('click', function(event) {
+			const message = this.dataset.confirm;
+			if (message && !confirm(message)) {
+				event.preventDefault();
+			}
+		});
 	});
 	</script>
 }
@@ -517,7 +533,7 @@ templ SchedulerTaskRunsPage(pc *PageContext, data SchedulerTaskRunsViewData) {
 				if !data.IsDemoMode {
 					<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/scheduler/tasks/%d/trigger", data.TaskID)) } class="inline">
 						@csrfField()
-						<button type="submit" class="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700" data-confirm={ pc.T("scheduler.task_trigger_confirm") } onclick="return confirm(this.dataset.confirm)">
+							<button type="submit" class="js-confirm-action inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700" data-confirm={ pc.T("scheduler.task_trigger_confirm") }>
 							@iconPlay()
 							{ pc.T("scheduler.trigger_now") }
 						</button>

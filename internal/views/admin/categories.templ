@@ -390,7 +390,7 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 				@categoryTranslationsPanel(pc, data)
 			}
 		}
-		<script>
+		<script nonce={ templ.GetNonce(ctx) }>
 		function categoryForm() {
 			return {
 				slug: document.getElementById('slug')?.value || '',

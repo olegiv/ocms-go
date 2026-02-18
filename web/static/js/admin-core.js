@@ -30,6 +30,76 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
+// Declarative helpers for CSP-safe interactions
+document.addEventListener('change', function(e) {
+    const autoSubmit = e.target.closest('[data-auto-submit="true"]');
+    if (autoSubmit) {
+        const form = autoSubmit.form || autoSubmit.closest('form');
+        if (form) {
+            form.submit();
+        }
+        return;
+    }
+
+    const syncTarget = e.target.closest('[data-sync-target]');
+    if (syncTarget) {
+        const targetId = syncTarget.getAttribute('data-sync-target');
+        const target = targetId ? document.getElementById(targetId) : null;
+        if (target) {
+            target.value = syncTarget.value;
+        }
+    }
+
+    const syncPicker = e.target.closest('[data-sync-picker]');
+    if (syncPicker) {
+        const pickerId = syncPicker.getAttribute('data-sync-picker');
+        const picker = pickerId ? document.getElementById(pickerId) : null;
+        if (picker) {
+            picker.value = syncPicker.value;
+        }
+    }
+});
+
+document.addEventListener('input', function(e) {
+    const syncPicker = e.target.closest('[data-sync-picker]');
+    if (!syncPicker) {
+        return;
+    }
+    const pickerId = syncPicker.getAttribute('data-sync-picker');
+    const picker = pickerId ? document.getElementById(pickerId) : null;
+    if (picker) {
+        picker.value = syncPicker.value;
+    }
+});
+
+document.addEventListener('click', function(e) {
+    const clearBtn = e.target.closest('[data-clear-target]');
+    if (clearBtn) {
+        e.preventDefault();
+        const targetId = clearBtn.getAttribute('data-clear-target');
+        const target = targetId ? document.getElementById(targetId) : null;
+        if (target) {
+            target.value = '';
+            target.focus();
+        }
+        return;
+    }
+
+    const historyBackBtn = e.target.closest('[data-history-back="true"]');
+    if (!historyBackBtn) {
+        return;
+    }
+    e.preventDefault();
+    if (window.history.length > 1) {
+        window.history.back();
+        return;
+    }
+    const fallbackURL = historyBackBtn.getAttribute('data-fallback-url');
+    if (fallbackURL) {
+        window.location.href = fallbackURL;
+    }
+});
+
 // HTMX loading state handlers
 document.body.addEventListener('htmx:beforeRequest', function(e) {
     // Add loading class to buttons

@@ -702,7 +702,7 @@ templ formsTranslationsPanel(pc *PageContext, data FormFormViewData) {
 }
 
 templ formsFieldBuilderScript(pc *PageContext, data FormFormViewData) {
-	<script>
+	<script nonce={ templ.GetNonce(ctx) }>
 	function formFieldBuilder() {
 		return {
 			formId: { fmt.Sprintf("%d", data.FormID) },

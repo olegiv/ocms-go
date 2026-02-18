@@ -612,7 +612,7 @@ templ importResults(pc *PageContext, data ImportViewData) {
 
 // importUploaderScript renders the Alpine.js import uploader component.
 templ importUploaderScript() {
-	<script>
+	<script nonce={ templ.GetNonce(ctx) }>
 	function importUploader() {
 		return {
 			selectedFile: null,

@@ -344,585 +344,624 @@ func MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceFormV
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\" id=\"import-form\" onsubmit=\"confirmImport(event)\"><div class=\"card\"><div class=\"card-header\"><h2>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\" id=\"import-form\" data-confirm=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var21 string
-			templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.connection_settings"))
+			templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.confirm_import"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 171, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 168, Col: 157}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</h2></div><div class=\"card-body\"><div class=\"form-grid\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "\"><div class=\"card\"><div class=\"card-header\"><h2>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var22 string
+			templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.connection_settings"))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 171, Col: 48}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</h2></div><div class=\"card-body\"><div class=\"form-grid\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, field := range data.ConfigFields {
-				var templ_7745c5c3_Var22 = []any{"form-group", templ.KV("form-group-password", field.Type == "password")}
-				templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var22...)
+				var templ_7745c5c3_Var23 = []any{"form-group", templ.KV("form-group-password", field.Type == "password")}
+				templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var23...)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<div class=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var23 string
-				templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var22).String())
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 1, Col: 0}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "\"><label for=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<div class=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var24 string
-				templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(field.Name)
+				templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var23).String())
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 177, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 1, Col: 0}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\"><label for=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var25 string
-				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(field.Label)
+				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(field.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 178, Col: 23}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 177, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, " ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var26 string
+				templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(field.Label)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 178, Col: 23}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, " ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if field.Required {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<span class=\"required\">*</span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<span class=\"required\">*</span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</label> ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</label> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if field.Type == "password" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<input type=\"password\" id=\"")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var26 string
-					templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(field.Name)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 184, Col: 48}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "\" name=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<input type=\"password\" id=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var27 string
 					templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(field.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 184, Col: 68}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 184, Col: 48}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" value=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" name=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var28 string
-					templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(data.Config[field.Name])
+					templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(field.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 184, Col: 102}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 184, Col: 68}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\"")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					if field.Required {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, " required")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, " placeholder=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" value=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var29 string
-					templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(field.Placeholder)
+					templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(data.Config[field.Name])
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 184, Col: 165}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 184, Col: 102}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\" class=\"form-control\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-				} else if field.Type == "number" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<input type=\"number\" id=\"")
+					if field.Required {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, " required")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, " placeholder=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var30 string
-					templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(field.Name)
+					templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(field.Placeholder)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 186, Col: 46}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 184, Col: 165}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "\" name=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "\" class=\"form-control\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else if field.Type == "number" {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<input type=\"number\" id=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var31 string
 					templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(field.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 186, Col: 66}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 186, Col: 46}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\" value=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\" name=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var32 string
-					templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(data.Config[field.Name])
+					templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(field.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 186, Col: 100}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 186, Col: 66}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "\"")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					if field.Required {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, " required")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, " placeholder=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "\" value=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var33 string
-					templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(field.Placeholder)
+					templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(data.Config[field.Name])
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 186, Col: 163}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 186, Col: 100}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "\" class=\"form-control\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-				} else {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<input type=\"text\" id=\"")
+					if field.Required {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, " required")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, " placeholder=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var34 string
-					templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(field.Name)
+					templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(field.Placeholder)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 188, Col: 44}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 186, Col: 163}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "\" name=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "\" class=\"form-control\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<input type=\"text\" id=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var35 string
 					templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(field.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 188, Col: 64}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 188, Col: 44}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "\" value=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "\" name=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var36 string
-					templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(data.Config[field.Name])
+					templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(field.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 188, Col: 98}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 188, Col: 64}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "\"")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					if field.Required {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, " required")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, " placeholder=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "\" value=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var37 string
-					templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(field.Placeholder)
+					templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(data.Config[field.Name])
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 188, Col: 161}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 188, Col: 98}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "\" class=\"form-control\" maxlength=\"255\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					if field.Required {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, " required")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, " placeholder=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var38 string
+					templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(field.Placeholder)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 188, Col: 161}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "\" class=\"form-control\" maxlength=\"255\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</div><div class=\"form-actions\"><button type=\"button\" class=\"btn btn-secondary\" id=\"test-connection-btn\" onclick=\"testConnection()\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M22 11.08V12a10 10 0 1 1-5.93-9.14\"></path> <polyline points=\"22 4 12 14.01 9 11.01\"></polyline></svg> ")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var38 string
-			templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.test_connection"))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 199, Col: 42}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "</button></div></div></div><div class=\"card\"><div class=\"card-header\"><h2>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "</div><div class=\"form-actions\"><button type=\"button\" class=\"btn btn-secondary\" id=\"test-connection-btn\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M22 11.08V12a10 10 0 1 1-5.93-9.14\"></path> <polyline points=\"22 4 12 14.01 9 11.01\"></polyline></svg> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var39 string
-			templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.import_options"))
+			templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.test_connection"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 206, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 199, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "</h2></div><div class=\"card-body\"><div class=\"form-checkboxes\"><label class=\"checkbox-label\"><input type=\"checkbox\" name=\"import_tags\" checked> <span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "</button></div></div></div><div class=\"card\"><div class=\"card-header\"><h2>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var40 string
-			templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.option_import_tags"))
+			templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.import_options"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 212, Col: 51}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 206, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "</span></label> <label class=\"checkbox-label\"><input type=\"checkbox\" name=\"import_media\" checked> <span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "</h2></div><div class=\"card-body\"><div class=\"form-checkboxes\"><label class=\"checkbox-label\"><input type=\"checkbox\" name=\"import_tags\" checked> <span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var41 string
-			templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.option_import_media"))
+			templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.option_import_tags"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 216, Col: 52}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 212, Col: 51}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "</span></label> <label class=\"checkbox-label\"><input type=\"checkbox\" name=\"import_posts\" checked> <span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "</span></label> <label class=\"checkbox-label\"><input type=\"checkbox\" name=\"import_media\" checked> <span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var42 string
-			templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.option_import_posts"))
+			templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.option_import_media"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 220, Col: 52}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 216, Col: 52}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "</span></label> <label class=\"checkbox-label\"><input type=\"checkbox\" name=\"import_users\"> <span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "</span></label> <label class=\"checkbox-label\"><input type=\"checkbox\" name=\"import_posts\" checked> <span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var43 string
-			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.option_import_users"))
+			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.option_import_posts"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 224, Col: 52}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 220, Col: 52}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "</span></label> <label class=\"checkbox-label\"><input type=\"checkbox\" name=\"skip_existing\"> <span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "</span></label> <label class=\"checkbox-label\"><input type=\"checkbox\" name=\"import_users\"> <span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var44 string
-			templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.option_skip_existing"))
+			templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.option_import_users"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 228, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 224, Col: 52}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "</span></label></div></div></div><div class=\"form-submit\"><button type=\"submit\" class=\"btn btn-primary btn-lg\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"></path> <polyline points=\"7 10 12 15 17 10\"></polyline> <line x1=\"12\" x2=\"12\" y1=\"15\" y2=\"3\"></line></svg> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "</span></label> <label class=\"checkbox-label\"><input type=\"checkbox\" name=\"skip_existing\"> <span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var45 string
-			templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.start_import"))
+			templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.option_skip_existing"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 240, Col: 37}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 228, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "</button></div></form><div class=\"card card-danger\"><div class=\"card-header\"><h2>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "</span></label></div></div></div><div class=\"form-submit\"><button type=\"submit\" class=\"btn btn-primary btn-lg\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"></path> <polyline points=\"7 10 12 15 17 10\"></polyline> <line x1=\"12\" x2=\"12\" y1=\"15\" y2=\"3\"></line></svg> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var46 string
-			templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.imported_content"))
+			templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.start_import"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 246, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 240, Col: 37}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "</h2></div><div class=\"card-body\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "</button></div></form><div class=\"card card-danger\"><div class=\"card-header\"><h2>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var47 string
+			templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.imported_content"))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 246, Col: 44}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "</h2></div><div class=\"card-body\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if data.ImportedCounts != nil {
 				if data.ImportedCounts["page"] > 0 || data.ImportedCounts["tag"] > 0 || data.ImportedCounts["media"] > 0 || data.ImportedCounts["user"] > 0 {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "<div class=\"imported-stats\"><div class=\"stat-item\"><span class=\"stat-label\">")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var47 string
-					templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.imported_pages"))
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 253, Col: 67}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, ":</span> <span class=\"stat-value\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "<div class=\"imported-stats\"><div class=\"stat-item\"><span class=\"stat-label\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var48 string
-					templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", data.ImportedCounts["page"]))
+					templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.imported_pages"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 254, Col: 82}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 253, Col: 67}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "</span></div><div class=\"stat-item\"><span class=\"stat-label\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, ":</span> <span class=\"stat-value\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var49 string
-					templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.imported_tags"))
+					templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", data.ImportedCounts["page"]))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 257, Col: 66}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 254, Col: 82}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, ":</span> <span class=\"stat-value\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "</span></div><div class=\"stat-item\"><span class=\"stat-label\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var50 string
-					templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", data.ImportedCounts["tag"]))
+					templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.imported_tags"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 258, Col: 81}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 257, Col: 66}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "</span></div><div class=\"stat-item\"><span class=\"stat-label\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, ":</span> <span class=\"stat-value\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var51 string
-					templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.imported_media"))
+					templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", data.ImportedCounts["tag"]))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 261, Col: 67}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 258, Col: 81}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, ":</span> <span class=\"stat-value\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "</span></div><div class=\"stat-item\"><span class=\"stat-label\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var52 string
-					templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", data.ImportedCounts["media"]))
+					templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.imported_media"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 262, Col: 83}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 261, Col: 67}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, "</span></div><div class=\"stat-item\"><span class=\"stat-label\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, ":</span> <span class=\"stat-value\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var53 string
-					templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.imported_users"))
+					templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", data.ImportedCounts["media"]))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 265, Col: 67}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 262, Col: 83}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, ":</span> <span class=\"stat-value\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "</span></div><div class=\"stat-item\"><span class=\"stat-label\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var54 string
-					templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", data.ImportedCounts["user"]))
+					templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.imported_users"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 266, Col: 82}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 265, Col: 67}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "</span></div></div><form method=\"POST\" action=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, ":</span> <span class=\"stat-value\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var55 templ.SafeURL
-					templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL("/admin/migrator/" + data.SourceName + "/delete"))
+					var templ_7745c5c3_Var55 string
+					templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", data.ImportedCounts["user"]))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 269, Col: 95}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 266, Col: 82}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "\" onsubmit=\"return confirmDelete()\"><button type=\"submit\" class=\"btn btn-danger\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 6h18\"></path> <path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\"></path> <path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\"></path> <line x1=\"10\" x2=\"10\" y1=\"11\" y2=\"17\"></line> <line x1=\"14\" x2=\"14\" y1=\"11\" y2=\"17\"></line></svg> ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "</span></div></div><form method=\"POST\" action=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var56 string
-					templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.delete_imported"))
+					var templ_7745c5c3_Var56 templ.SafeURL
+					templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL("/admin/migrator/" + data.SourceName + "/delete"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 278, Col: 43}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 269, Col: 95}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "</button></form>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				} else {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "<p class=\"text-muted\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "\" id=\"delete-imported-form\" data-confirm=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var57 string
-					templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.no_imported_content"))
+					templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.confirm_delete"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 282, Col: 67}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 269, Col: 170}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var57))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "</p>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "\"><button type=\"submit\" class=\"btn btn-danger\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 6h18\"></path> <path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\"></path> <path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\"></path> <line x1=\"10\" x2=\"10\" y1=\"11\" y2=\"17\"></line> <line x1=\"14\" x2=\"14\" y1=\"11\" y2=\"17\"></line></svg> ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var58 string
+					templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.delete_imported"))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 278, Col: 43}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "</button></form>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "<p class=\"text-muted\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var59 string
+					templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.no_imported_content"))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 282, Col: 67}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var59))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "</p>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "<p class=\"text-muted\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "<p class=\"text-muted\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var58 string
-				templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.no_imported_content"))
+				var templ_7745c5c3_Var60 string
+				templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("migrator.no_imported_content"))
 				if templ_7745c5c3_Err != nil {
 					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 285, Col: 66}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var60))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "</div></div></div><style>\n\t\t\t.migrator-form-container {\n\t\t\t\tmax-width: 800px;\n\t\t\t\tmargin-top: 2rem;\n\t\t\t}\n\n\t\t\t.card {\n\t\t\t\tmargin-bottom: 1.5rem;\n\t\t\t}\n\n\t\t\t.card-header {\n\t\t\t\tpadding: 1rem 1.5rem;\n\t\t\t\tborder-bottom: 1px solid var(--border-color, #e5e7eb);\n\t\t\t}\n\n\t\t\t.card-header h2 {\n\t\t\t\tmargin: 0;\n\t\t\t\tfont-size: 1rem;\n\t\t\t\tfont-weight: 600;\n\t\t\t}\n\n\t\t\t.form-grid {\n\t\t\t\tdisplay: grid;\n\t\t\t\tgrid-template-columns: repeat(2, 1fr);\n\t\t\t\tgap: 1rem;\n\t\t\t}\n\n\t\t\t@media (max-width: 640px) {\n\t\t\t\t.form-grid {\n\t\t\t\t\tgrid-template-columns: 1fr;\n\t\t\t\t}\n\t\t\t}\n\n\t\t\t.form-group {\n\t\t\t\tdisplay: flex;\n\t\t\t\tflex-direction: column;\n\t\t\t\tgap: 0.375rem;\n\t\t\t}\n\n\t\t\t.form-group label {\n\t\t\t\tfont-weight: 500;\n\t\t\t\tfont-size: 0.875rem;\n\t\t\t}\n\n\t\t\t.form-group .required {\n\t\t\t\tcolor: var(--danger-color, #ef4444);\n\t\t\t}\n\n\t\t\t.form-control {\n\t\t\t\tpadding: 0.5rem 0.75rem;\n\t\t\t\tborder: 1px solid var(--border-color, #e5e7eb);\n\t\t\t\tborder-radius: 6px;\n\t\t\t\tfont-size: 0.875rem;\n\t\t\t}\n\n\t\t\t.form-control:focus {\n\t\t\t\toutline: none;\n\t\t\t\tborder-color: var(--primary-color, #3b82f6);\n\t\t\t\tbox-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);\n\t\t\t}\n\n\t\t\t.form-actions {\n\t\t\t\tmargin-top: 1rem;\n\t\t\t\tpadding-top: 1rem;\n\t\t\t\tborder-top: 1px solid var(--border-color, #e5e7eb);\n\t\t\t}\n\n\t\t\t.form-checkboxes {\n\t\t\t\tdisplay: flex;\n\t\t\t\tflex-direction: column;\n\t\t\t\tgap: 0.75rem;\n\t\t\t}\n\n\t\t\t.checkbox-label {\n\t\t\t\tdisplay: flex;\n\t\t\t\talign-items: center;\n\t\t\t\tgap: 0.5rem;\n\t\t\t\tcursor: pointer;\n\t\t\t}\n\n\t\t\t.checkbox-label input[type=\"checkbox\"] {\n\t\t\t\twidth: 18px;\n\t\t\t\theight: 18px;\n\t\t\t}\n\n\t\t\t.form-submit {\n\t\t\t\tmargin-top: 1.5rem;\n\t\t\t}\n\n\t\t\t.card-danger {\n\t\t\t\tmargin-top: 2rem;\n\t\t\t\tborder-color: var(--danger-color, #ef4444);\n\t\t\t}\n\n\t\t\t.card-danger .card-header {\n\t\t\t\tbackground-color: rgba(239, 68, 68, 0.1);\n\t\t\t\tborder-bottom-color: var(--danger-color, #ef4444);\n\t\t\t}\n\n\t\t\t.card-danger .card-header h2 {\n\t\t\t\tcolor: var(--danger-color, #ef4444);\n\t\t\t}\n\n\t\t\t.imported-stats {\n\t\t\t\tdisplay: flex;\n\t\t\t\tgap: 2rem;\n\t\t\t\tmargin-bottom: 1rem;\n\t\t\t}\n\n\t\t\t.stat-item {\n\t\t\t\tdisplay: flex;\n\t\t\t\tgap: 0.5rem;\n\t\t\t}\n\n\t\t\t.stat-label {\n\t\t\t\tfont-weight: 500;\n\t\t\t}\n\n\t\t\t.stat-value {\n\t\t\t\tfont-weight: 600;\n\t\t\t\tcolor: var(--primary-color, #3b82f6);\n\t\t\t}\n\n\t\t\t.text-muted {\n\t\t\t\tcolor: var(--text-muted, #6b7280);\n\t\t\t\tmargin: 0;\n\t\t\t}\n\n\t\t\t.btn-danger {\n\t\t\t\tbackground-color: var(--danger-color, #ef4444);\n\t\t\t\tcolor: white;\n\t\t\t\tborder: none;\n\t\t\t}\n\n\t\t\t.btn-danger:hover {\n\t\t\t\tbackground-color: #dc2626;\n\t\t\t}\n\t\t</style> <script>\n\t\t\tfunction testConnection() {\n\t\t\t\tconst importForm = document.getElementById('import-form');\n\t\t\t\tif (!importForm) return;\n\n\t\t\t\t// Validate required fields first\n\t\t\t\tconst inputs = importForm.querySelectorAll('input[required]');\n\t\t\t\tfor (let i = 0; i < inputs.length; i++) {\n\t\t\t\t\tif (!inputs[i].value.trim()) {\n\t\t\t\t\t\tinputs[i].focus();\n\t\t\t\t\t\tinputs[i].reportValidity();\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t}\n\n\t\t\t\t// Get source name from data attribute\n\t\t\t\tconst migratorData = document.getElementById('migrator-data');\n\t\t\t\tconst sourceName = migratorData ? migratorData.dataset.sourceName : '';\n\n\t\t\t\t// Create a form for testing connection\n\t\t\t\tconst testForm = document.createElement('form');\n\t\t\t\ttestForm.method = 'POST';\n\t\t\t\ttestForm.action = '/admin/migrator/' + sourceName + '/test';\n\n\t\t\t\t// Copy all input fields from the import form (config fields only)\n\t\t\t\tconst configInputs = importForm.querySelectorAll('input[type=\"text\"], input[type=\"password\"], input[type=\"number\"]');\n\t\t\t\tconfigInputs.forEach(function(input) {\n\t\t\t\t\tconst hidden = document.createElement('input');\n\t\t\t\t\thidden.type = 'hidden';\n\t\t\t\t\thidden.name = input.name;\n\t\t\t\t\thidden.value = input.value;\n\t\t\t\t\ttestForm.appendChild(hidden);\n\t\t\t\t});\n\n\t\t\t\tdocument.body.appendChild(testForm);\n\t\t\t\ttestForm.submit();\n\t\t\t}\n\n\t\t\tfunction confirmImport(event) {\n\t\t\t\tconst migratorData = document.getElementById('migrator-data');\n\t\t\t\tconst message = migratorData ? migratorData.dataset.confirmImport : 'Are you sure you want to start the import?';\n\t\t\t\tif (!confirm(message)) {\n\t\t\t\t\tevent.preventDefault();\n\t\t\t\t}\n\t\t\t}\n\n\t\t\tfunction confirmDelete() {\n\t\t\t\tconst migratorData = document.getElementById('migrator-data');\n\t\t\t\tconst message = migratorData ? migratorData.dataset.confirmDelete : 'Are you sure you want to delete all imported content?';\n\t\t\t\treturn confirm(message);\n\t\t\t}\n\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "</div></div></div><style>\n\t\t\t.migrator-form-container {\n\t\t\t\tmax-width: 800px;\n\t\t\t\tmargin-top: 2rem;\n\t\t\t}\n\n\t\t\t.card {\n\t\t\t\tmargin-bottom: 1.5rem;\n\t\t\t}\n\n\t\t\t.card-header {\n\t\t\t\tpadding: 1rem 1.5rem;\n\t\t\t\tborder-bottom: 1px solid var(--border-color, #e5e7eb);\n\t\t\t}\n\n\t\t\t.card-header h2 {\n\t\t\t\tmargin: 0;\n\t\t\t\tfont-size: 1rem;\n\t\t\t\tfont-weight: 600;\n\t\t\t}\n\n\t\t\t.form-grid {\n\t\t\t\tdisplay: grid;\n\t\t\t\tgrid-template-columns: repeat(2, 1fr);\n\t\t\t\tgap: 1rem;\n\t\t\t}\n\n\t\t\t@media (max-width: 640px) {\n\t\t\t\t.form-grid {\n\t\t\t\t\tgrid-template-columns: 1fr;\n\t\t\t\t}\n\t\t\t}\n\n\t\t\t.form-group {\n\t\t\t\tdisplay: flex;\n\t\t\t\tflex-direction: column;\n\t\t\t\tgap: 0.375rem;\n\t\t\t}\n\n\t\t\t.form-group label {\n\t\t\t\tfont-weight: 500;\n\t\t\t\tfont-size: 0.875rem;\n\t\t\t}\n\n\t\t\t.form-group .required {\n\t\t\t\tcolor: var(--danger-color, #ef4444);\n\t\t\t}\n\n\t\t\t.form-control {\n\t\t\t\tpadding: 0.5rem 0.75rem;\n\t\t\t\tborder: 1px solid var(--border-color, #e5e7eb);\n\t\t\t\tborder-radius: 6px;\n\t\t\t\tfont-size: 0.875rem;\n\t\t\t}\n\n\t\t\t.form-control:focus {\n\t\t\t\toutline: none;\n\t\t\t\tborder-color: var(--primary-color, #3b82f6);\n\t\t\t\tbox-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);\n\t\t\t}\n\n\t\t\t.form-actions {\n\t\t\t\tmargin-top: 1rem;\n\t\t\t\tpadding-top: 1rem;\n\t\t\t\tborder-top: 1px solid var(--border-color, #e5e7eb);\n\t\t\t}\n\n\t\t\t.form-checkboxes {\n\t\t\t\tdisplay: flex;\n\t\t\t\tflex-direction: column;\n\t\t\t\tgap: 0.75rem;\n\t\t\t}\n\n\t\t\t.checkbox-label {\n\t\t\t\tdisplay: flex;\n\t\t\t\talign-items: center;\n\t\t\t\tgap: 0.5rem;\n\t\t\t\tcursor: pointer;\n\t\t\t}\n\n\t\t\t.checkbox-label input[type=\"checkbox\"] {\n\t\t\t\twidth: 18px;\n\t\t\t\theight: 18px;\n\t\t\t}\n\n\t\t\t.form-submit {\n\t\t\t\tmargin-top: 1.5rem;\n\t\t\t}\n\n\t\t\t.card-danger {\n\t\t\t\tmargin-top: 2rem;\n\t\t\t\tborder-color: var(--danger-color, #ef4444);\n\t\t\t}\n\n\t\t\t.card-danger .card-header {\n\t\t\t\tbackground-color: rgba(239, 68, 68, 0.1);\n\t\t\t\tborder-bottom-color: var(--danger-color, #ef4444);\n\t\t\t}\n\n\t\t\t.card-danger .card-header h2 {\n\t\t\t\tcolor: var(--danger-color, #ef4444);\n\t\t\t}\n\n\t\t\t.imported-stats {\n\t\t\t\tdisplay: flex;\n\t\t\t\tgap: 2rem;\n\t\t\t\tmargin-bottom: 1rem;\n\t\t\t}\n\n\t\t\t.stat-item {\n\t\t\t\tdisplay: flex;\n\t\t\t\tgap: 0.5rem;\n\t\t\t}\n\n\t\t\t.stat-label {\n\t\t\t\tfont-weight: 500;\n\t\t\t}\n\n\t\t\t.stat-value {\n\t\t\t\tfont-weight: 600;\n\t\t\t\tcolor: var(--primary-color, #3b82f6);\n\t\t\t}\n\n\t\t\t.text-muted {\n\t\t\t\tcolor: var(--text-muted, #6b7280);\n\t\t\t\tmargin: 0;\n\t\t\t}\n\n\t\t\t.btn-danger {\n\t\t\t\tbackground-color: var(--danger-color, #ef4444);\n\t\t\t\tcolor: white;\n\t\t\t\tborder: none;\n\t\t\t}\n\n\t\t\t.btn-danger:hover {\n\t\t\t\tbackground-color: #dc2626;\n\t\t\t}\n\t\t</style> <script nonce=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var61 string
+			templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinStringErrs(templ.GetNonce(ctx))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/migrator/views.templ`, Line: 428, Col: 37}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, "\">\n\t\t\tfunction testConnection() {\n\t\t\t\tconst importForm = document.getElementById('import-form');\n\t\t\t\tif (!importForm) return;\n\n\t\t\t\t// Validate required fields first\n\t\t\t\tconst inputs = importForm.querySelectorAll('input[required]');\n\t\t\t\tfor (let i = 0; i < inputs.length; i++) {\n\t\t\t\t\tif (!inputs[i].value.trim()) {\n\t\t\t\t\t\tinputs[i].focus();\n\t\t\t\t\t\tinputs[i].reportValidity();\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t}\n\n\t\t\t\t// Get source name from data attribute\n\t\t\t\tconst migratorData = document.getElementById('migrator-data');\n\t\t\t\tconst sourceName = migratorData ? migratorData.dataset.sourceName : '';\n\n\t\t\t\t// Create a form for testing connection\n\t\t\t\tconst testForm = document.createElement('form');\n\t\t\t\ttestForm.method = 'POST';\n\t\t\t\ttestForm.action = '/admin/migrator/' + sourceName + '/test';\n\n\t\t\t\t// Copy all input fields from the import form (config fields only)\n\t\t\t\tconst configInputs = importForm.querySelectorAll('input[type=\"text\"], input[type=\"password\"], input[type=\"number\"]');\n\t\t\t\tconfigInputs.forEach(function(input) {\n\t\t\t\t\tconst hidden = document.createElement('input');\n\t\t\t\t\thidden.type = 'hidden';\n\t\t\t\t\thidden.name = input.name;\n\t\t\t\t\thidden.value = input.value;\n\t\t\t\t\ttestForm.appendChild(hidden);\n\t\t\t\t});\n\n\t\t\t\tdocument.body.appendChild(testForm);\n\t\t\t\ttestForm.submit();\n\t\t\t}\n\n\t\t\tfunction bindConfirm(form) {\n\t\t\t\tif (!form) return;\n\t\t\t\tform.addEventListener('submit', function(event) {\n\t\t\t\t\tconst message = form.dataset.confirm || 'Are you sure?';\n\t\t\t\t\tif (!confirm(message)) {\n\t\t\t\t\t\tevent.preventDefault();\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t}\n\n\t\t\tdocument.addEventListener('DOMContentLoaded', function() {\n\t\t\t\tconst testButton = document.getElementById('test-connection-btn');\n\t\t\t\tif (testButton) {\n\t\t\t\t\ttestButton.addEventListener('click', testConnection);\n\t\t\t\t}\n\t\t\t\tbindConfirm(document.getElementById('import-form'));\n\t\t\t\tbindConfirm(document.getElementById('delete-imported-form'));\n\t\t\t});\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
