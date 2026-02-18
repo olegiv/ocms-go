@@ -45,6 +45,9 @@ RUN mkdir -p web/static/dist/js \
     && sass web/static/scss/main.scss web/static/dist/main.css --style=compressed --no-source-map \
     && cp web/static/favicon.ico web/static/dist/ 2>/dev/null || true
 
+# Compile Tailwind CSS for admin dashboard
+RUN npx @tailwindcss/cli -i web/static/css/admin-tw.css -o web/static/dist/admin-tw.css --minify
+
 # Copy source JS files if they exist
 RUN if [ -d "web/static/js" ] && [ "$(ls -A web/static/js 2>/dev/null)" ]; then \
         cp web/static/js/*.js web/static/dist/js/ 2>/dev/null || true; \
