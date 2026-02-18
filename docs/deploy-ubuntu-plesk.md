@@ -86,8 +86,17 @@ OCMS_LOG_LEVEL=warn
 
 # Paths
 OCMS_DB_PATH=/var/lib/ocms/data/ocms.db
-OCMS_THEMES_DIR=/var/lib/ocms/themes
+OCMS_CUSTOM_DIR=/var/lib/ocms/custom
 OCMS_ACTIVE_THEME=default
+OCMS_DO_SEED=false
+
+# Hardened embed proxy baseline (when embed module/provider is enabled)
+# Origin matching is exact (scheme + host); include every public hostname.
+OCMS_EMBED_ALLOWED_ORIGINS=https://example.com,https://www.example.com
+OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS=api.dify.ai
+OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS=true
+OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS=true
+OCMS_EMBED_PROXY_TOKEN=replace-with-embed-proxy-token
 
 # Optional: Redis for distributed caching
 # OCMS_REDIS_URL=redis://localhost:6379/0
@@ -96,6 +105,9 @@ OCMS_ACTIVE_THEME=default
 # OCMS_HCAPTCHA_SITE_KEY=your-site-key
 # OCMS_HCAPTCHA_SECRET_KEY=your-secret-key
 ```
+
+If your chat is served from multiple hostnames (for example `example.com` and
+`www.example.com`), include all of them in `OCMS_EMBED_ALLOWED_ORIGINS`.
 
 Secure the file:
 
@@ -443,6 +455,9 @@ sudo systemctl start ocms
 - [ ] Changed default admin password
 - [ ] Set strong `OCMS_SESSION_SECRET` (32+ bytes)
 - [ ] Set `OCMS_ENV=production`
+- [ ] Configure `OCMS_EMBED_PROXY_TOKEN` when embed proxy is enabled
+- [ ] Configure and verify `OCMS_EMBED_ALLOWED_ORIGINS` for all public hostnames
+- [ ] Set `OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS` for your Dify API host
 - [ ] SSL/TLS enabled with valid certificate
 - [ ] HTTP redirects to HTTPS
 - [ ] `/etc/ocms/.env` permissions set to 600

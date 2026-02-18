@@ -194,7 +194,7 @@ sudo dnf install vips-devel
 | `OCMS_REQUIRE_API_KEY_SOURCE_CIDRS` | Require API keys to have per-key source CIDR restrictions | `false` | No |
 | `OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE` | Deactivate API keys when source IP changes and the key has no per-key CIDRs | `false` | No |
 | `OCMS_API_KEY_MAX_TTL_DAYS` | Maximum API key lifetime in days (`0` disables, max `365`) | `0` | No |
-| `OCMS_EMBED_ALLOWED_ORIGINS` | Allowed browser origins for public embed proxy routes | - | No |
+| `OCMS_EMBED_ALLOWED_ORIGINS` | Allowed browser origins for public embed proxy routes; required for working browser embed requests in production | - | No |
 | `OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS` | Allowed upstream hosts for embed provider API endpoints | - | No |
 | `OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS` | Fail startup in production if embed proxy is active without origin allowlist | `false` | No |
 | `OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS` | Fail startup in production if embed proxy is active without upstream host allowlist | `false` | No |
@@ -329,6 +329,14 @@ OCMS_SESSION_SECRET=your-secure-secret-key-at-least-32-bytes
 OCMS_ENV=production
 OCMS_DO_SEED=false
 OCMS_ACTIVE_THEME=default
+
+# Hardened embed proxy baseline (when embed module/provider is enabled)
+# Origin matching is exact (scheme + host). Include all real hostnames.
+OCMS_EMBED_ALLOWED_ORIGINS=https://example.com,https://www.example.com
+OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS=api.dify.ai
+OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS=true
+OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS=true
+OCMS_EMBED_PROXY_TOKEN=replace-with-embed-proxy-token
 
 # Optional: Redis caching
 OCMS_REDIS_URL=redis://redis:6379/0
