@@ -3,7 +3,9 @@
 
 package admin
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // AdminLayout renders the full admin page with sidebar, header, and content.
 templ AdminLayout(pc *PageContext) {
@@ -43,7 +45,7 @@ templ AdminLayout(pc *PageContext) {
 		<!-- Alpine.js Sort Plugin -->
 		<script defer src="/static/dist/js/alpine-sort.min.js"></script>
 		<!-- Alpine.js -->
-		<script defer src="/static/dist/js/alpine.min.js" integrity="sha384-LXWjKwDZz29o7TduNe+r/UxaolHh5FsSvy2W7bDHSZ8jJeGgDeuNnsDNHoxpSgDi" crossorigin="anonymous"></script>
+		<script defer nonce={ templ.GetNonce(ctx) } src="/static/dist/js/alpine.min.js" integrity="sha384-LXWjKwDZz29o7TduNe+r/UxaolHh5FsSvy2W7bDHSZ8jJeGgDeuNnsDNHoxpSgDi" crossorigin="anonymous"></script>
 		<!-- Admin core utilities -->
 		<script src="/static/dist/js/admin-core.js"></script>
 		<script src="/static/dist/js/media-dropzone.js"></script>

@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olegiv/ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 //go:embed locales
@@ -95,10 +96,18 @@ func (m *Module) RegisterAdminRoutes(r chi.Router) {
 // TemplateFuncs returns template functions provided by the module.
 func (m *Module) TemplateFuncs() template.FuncMap {
 	return template.FuncMap{
-		"informerBar": func() template.HTML {
-			return m.renderBar()
+		"informerBar": func(args ...any) template.HTML {
+			return m.renderBar(firstStringArg(args...))
 		},
 	}
+}
+
+func firstStringArg(args ...any) string {
+	if len(args) == 0 {
+		return ""
+	}
+	s, _ := args[0].(string)
+	return s
 }
 
 // AdminURL returns the admin dashboard URL for the module.
@@ -171,7 +180,7 @@ func (m *Module) Migrations() []module.Migration {
 // renderBar generates the HTML for the informer notification bar.
 // SECURITY: Output is cast to template.HTML. All admin-controlled values are
 // escaped with html.EscapeString before embedding.
-func (m *Module) renderBar() template.HTML {
+func (m *Module) renderBar(nonce string) template.HTML {
 	if m.settings == nil || !m.settings.Enabled || m.settings.Text == "" {
 		return ""
 	}
@@ -186,7 +195,7 @@ func (m *Module) renderBar() template.HTML {
 	b.WriteString(`<span class="informer-bar-spinner"></span>`)
 	b.WriteString(fmt.Sprintf(`<span class="informer-bar-text">%s</span>`, text))
 	b.WriteString(`</div>`)
-	b.WriteString(fmt.Sprintf(`<button type="button" class="informer-bar-close" aria-label="Close" style="color:%s;" onclick="dismissInformer()">`, textColor))
+	b.WriteString(fmt.Sprintf(`<button type="button" class="informer-bar-close" aria-label="Close" style="color:%s;">`, textColor))
 	b.WriteString(`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`)
 	b.WriteString(`</button>`)
 	b.WriteString(`</div>`)
@@ -211,8 +220,10 @@ function getCookie(n){var m=document.cookie.match(new RegExp('(?:^|; )'+n+'=([^;
 function setCookie(n,v,d){var e=new Date();e.setTime(e.getTime()+d*864e5);document.cookie=n+'='+encodeURIComponent(v)+';expires='+e.toUTCString()+';path=/;SameSite=Lax'}
 if(getCookie(cn)!==ver){var el=document.getElementById('informer-bar');if(el)el.style.display='flex'}
 window.dismissInformer=function(){var el=document.getElementById('informer-bar');if(el)el.style.display='none';setCookie(cn,ver,365)}
+var closeBtn=document.querySelector('#informer-bar .informer-bar-close');
+if(closeBtn){closeBtn.addEventListener('click',function(){window.dismissInformer()})}
 })();
 </script>`, cookieName, version))
 
-	return template.HTML(b.String())
+	return template.HTML(util.AddNonceToScriptTags(b.String(), nonce))
 }

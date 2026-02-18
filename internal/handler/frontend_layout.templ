@@ -57,7 +57,7 @@ templ frontendBaseLayout(base BaseTemplateData) {
 			}
 			<!-- JSON-LD structured data -->
 			if base.JSONLD != "" {
-				<script type="application/ld+json">
+				<script nonce={ templ.GetNonce(ctx) } type="application/ld+json">
 					{ string(base.JSONLD) }
 				</script>
 			}
@@ -73,9 +73,9 @@ templ frontendBaseLayout(base BaseTemplateData) {
 		<body class={ bodyClasses(base.BodyClass) }>
 			{ children... }
 			<!-- HTMX -->
-			<script src="/static/dist/js/htmx.min.js"></script>
+			<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/htmx.min.js"></script>
 			<!-- Alpine.js -->
-			<script defer src="/static/dist/js/alpine.min.js"></script>
+			<script nonce={ templ.GetNonce(ctx) } defer src="/static/dist/js/alpine.min.js"></script>
 		</body>
 	</html>
 }

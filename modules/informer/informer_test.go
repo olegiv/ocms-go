@@ -80,7 +80,7 @@ func TestRenderBarDisabled(t *testing.T) {
 		},
 	}
 
-	output := m.renderBar()
+	output := m.renderBar("")
 	if output != "" {
 		t.Error("expected empty output when module is disabled")
 	}
@@ -94,7 +94,7 @@ func TestRenderBarEmptyText(t *testing.T) {
 		},
 	}
 
-	output := m.renderBar()
+	output := m.renderBar("")
 	if output != "" {
 		t.Error("expected empty output when text is empty")
 	}
@@ -105,7 +105,7 @@ func TestRenderBarNilSettings(t *testing.T) {
 		settings: nil,
 	}
 
-	output := m.renderBar()
+	output := m.renderBar("")
 	if output != "" {
 		t.Error("expected empty output when settings is nil")
 	}
@@ -121,7 +121,7 @@ func TestRenderBarEnabled(t *testing.T) {
 		},
 	}
 
-	output := string(m.renderBar())
+	output := string(m.renderBar(""))
 
 	if !strings.Contains(output, "informer-bar") {
 		t.Error("output should contain informer-bar id")
@@ -166,7 +166,7 @@ func TestRenderBarEscapesHTML(t *testing.T) {
 		},
 	}
 
-	output := string(m.renderBar())
+	output := string(m.renderBar(""))
 
 	if strings.Contains(output, `<a href="/sale">sale page</a>`) {
 		t.Error("output should not render raw HTML")
@@ -187,7 +187,7 @@ func TestRenderBarCookieScript(t *testing.T) {
 		},
 	}
 
-	output := string(m.renderBar())
+	output := string(m.renderBar(""))
 
 	if !strings.Contains(output, "setCookie") {
 		t.Error("output should contain setCookie function")
@@ -220,7 +220,7 @@ func TestRenderBarCloseButton(t *testing.T) {
 		},
 	}
 
-	output := string(m.renderBar())
+	output := string(m.renderBar(""))
 
 	if !strings.Contains(output, `aria-label="Close"`) {
 		t.Error("close button should have aria-label for accessibility")

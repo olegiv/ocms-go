@@ -32,7 +32,7 @@
 
     <span class="form-hint">{{T .AdminLang "categories.select_hint"}}</span>
 </div>
-<script>
+<script nonce="{{.CSPNonce}}">
 function categorySelector() {
     return {
         selectedCategories: [],

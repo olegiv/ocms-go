@@ -62,7 +62,7 @@
 
     <span class="form-hint">{{T .AdminLang "tags.select_hint"}}</span>
 </div>
-<script>
+<script nonce="{{.CSPNonce}}">
 function tagSelector() {
     return {
         selectedTags: [],

@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"html/template"
 	"strings"
+
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // Settings holds the analytics configuration.
@@ -90,7 +92,7 @@ func saveSettings(db *sql.DB, s *Settings) error {
 // renderHeadScripts generates the tracking scripts for the <head> section.
 // SECURITY: Output is cast to template.HTML. All admin-controlled values
 // (GTM ID, GA4 ID, Matomo URL/ID) are escaped with template.HTMLEscapeString.
-func (m *Module) renderHeadScripts() template.HTML {
+func (m *Module) renderHeadScripts(nonce string) template.HTML {
 	if m.settings == nil {
 		return ""
 	}
@@ -145,12 +147,12 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 			template.HTMLEscapeString(m.settings.MatomoSiteID)))
 	}
 
-	return template.HTML(scripts.String())
+	return template.HTML(util.AddNonceToScriptTags(scripts.String(), nonce))
 }
 
 // renderBodyScripts generates the tracking scripts for the end of <body>.
 // SECURITY: Same protections as renderHeadScripts - values are HTML-escaped.
-func (m *Module) renderBodyScripts() template.HTML {
+func (m *Module) renderBodyScripts(nonce string) template.HTML {
 	if m.settings == nil {
 		return ""
 	}
@@ -176,5 +178,5 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 			template.HTMLEscapeString(m.settings.MatomoSiteID)))
 	}
 
-	return template.HTML(scripts.String())
+	return template.HTML(util.AddNonceToScriptTags(scripts.String(), nonce))
 }

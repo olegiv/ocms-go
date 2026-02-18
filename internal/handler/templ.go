@@ -96,7 +96,8 @@ func buildPageContext(
 // renderTempl renders a templ component as an HTTP response.
 func renderTempl(w http.ResponseWriter, r *http.Request, component templ.Component) {
 	w.Header().Set(HeaderContentType, "text/html; charset=utf-8")
-	if err := component.Render(r.Context(), w); err != nil {
+	ctx := templ.WithNonce(r.Context(), middleware.GetCSPNonce(r))
+	if err := component.Render(ctx, w); err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 }

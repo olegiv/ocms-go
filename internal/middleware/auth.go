@@ -27,6 +27,7 @@ const (
 	ContextKeyUser        ContextKey = "user"
 	ContextKeySiteName    ContextKey = "site_name"
 	ContextKeyRequestPath ContextKey = "request_path"
+	ContextKeyCSPNonce    ContextKey = "csp_nonce"
 )
 
 // Session keys for storing user data and preferences.

@@ -184,7 +184,7 @@
     {{end}}
 </div>
 
-<script>
+<script nonce="{{.CSPNonce}}">
 document.addEventListener('DOMContentLoaded', function() {
     // Fix hCaptcha iframe height to show test mode warning text properly
     // hCaptcha sets inline height of 76px which clips the warning message

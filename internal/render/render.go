@@ -599,6 +599,7 @@ type TemplateData struct {
 	CurrentPath    string          // Current request path for active link detection
 	AdminLang      string          // Admin UI language code (en, ru, etc.)
 	SidebarModules []SidebarModule // Modules to display in admin sidebar
+	CSPNonce       string          // CSP nonce for inline scripts
 }
 
 // Render renders a template with the given data.
@@ -611,6 +612,7 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 	// Add default data
 	data.CurrentYear = time.Now().Year()
 	data.CurrentPath = req.URL.Path
+	data.CSPNonce = middleware.GetCSPNonce(req)
 
 	// CSRF token and field are no longer needed with filippo.io/csrf/gorilla
 	// as it uses Fetch metadata headers for protection instead of tokens.
@@ -1027,7 +1029,8 @@ func (r *Renderer) BuildPageContext(req *http.Request, title string, breadcrumbs
 // This is used by modules to render templ-based admin pages.
 func Templ(w http.ResponseWriter, r *http.Request, component templ.Component) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := component.Render(r.Context(), w); err != nil {
+	ctx := templ.WithNonce(r.Context(), middleware.GetCSPNonce(r))
+	if err := component.Render(ctx, w); err != nil {
 		slog.Error("templ render error", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}

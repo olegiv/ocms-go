@@ -203,6 +203,7 @@ type BaseTemplateData struct {
 	LangDirection      string            // Current language direction (ltr/rtl)
 	LangPrefix         string            // URL prefix for current language (e.g., "/ru" or "" for default)
 	ShowLanguagePicker bool              // Whether to show language picker
+	CSPNonce           string            // CSP nonce for inline scripts
 }
 
 // FooterWidget represents a widget in the footer area.
@@ -574,7 +575,7 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 		ShowAllPostsLink: len(recentPageViews) > 6,
 	}
 
-	h.render(w, "home", data)
+	h.render(w, r, "home", data)
 }
 
 // Page handles single page display.
@@ -749,7 +750,7 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 		RecentPages:      sidebarRecent,
 	}
 
-	h.render(w, "page", data)
+	h.render(w, r, "page", data)
 }
 
 // PageByID handles /page/{id} - redirects to the canonical slug URL.
@@ -874,7 +875,7 @@ func (h *FrontendHandler) Category(w http.ResponseWriter, r *http.Request) {
 		RecentPages:      sidebarRecent,
 	}
 
-	h.render(w, "category", data)
+	h.render(w, r, "category", data)
 }
 
 // Tag handles tag archive display.
@@ -948,7 +949,7 @@ func (h *FrontendHandler) Tag(w http.ResponseWriter, r *http.Request) {
 		RecentPages:      sidebarRecent,
 	}
 
-	h.render(w, "tag", data)
+	h.render(w, r, "tag", data)
 }
 
 // Blog handles the blog listing page displaying all published posts.
@@ -1030,7 +1031,7 @@ func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
 		RecentPages:      sidebarRecent,
 	}
 
-	h.render(w, "list", data)
+	h.render(w, r, "list", data)
 }
 
 // Search handles search results display using FTS5 full-text search.
@@ -1062,7 +1063,7 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 			Tags:             sidebarTags,
 			RecentPages:      sidebarRecent,
 		}
-		h.render(w, "search", data)
+		h.render(w, r, "search", data)
 		return
 	}
 
@@ -1142,7 +1143,7 @@ func (h *FrontendHandler) Search(w http.ResponseWriter, r *http.Request) {
 		RecentPages:      sidebarRecent,
 	}
 
-	h.render(w, "search", data)
+	h.render(w, r, "search", data)
 }
 
 // NotFound renders the 404 page.
@@ -1717,6 +1718,7 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		ThemeSettings:   site.Settings,
 		ShowSearch:      true,
 		SearchQuery:     r.URL.Query().Get("q"),
+		CSPNonce:        middleware.GetCSPNonce(r),
 	}
 
 	// Get site logo and custom CSS from cache
@@ -2214,7 +2216,7 @@ func templComponent(templateName string, data any) templ.Component {
 // render renders a page using the active theme's render engine.
 // For templ engine (embedded/core themes): renders via templ components.
 // For html engine (custom/ThemeForest themes): renders via html/template.
-func (h *FrontendHandler) render(w http.ResponseWriter, templateName string, data any) {
+func (h *FrontendHandler) render(w http.ResponseWriter, r *http.Request, templateName string, data any) {
 	activeTheme := h.themeManager.GetActiveTheme()
 
 	// Determine engine: if no active theme, default to templ.
@@ -2226,12 +2228,12 @@ func (h *FrontendHandler) render(w http.ResponseWriter, templateName string, dat
 	if engine == theme.EngineHTML {
 		h.renderHTML(w, activeTheme, templateName, data)
 	} else {
-		h.renderTempl(w, templateName, data)
+		h.renderTempl(w, r, templateName, data)
 	}
 }
 
 // renderTempl renders a page using templ components.
-func (h *FrontendHandler) renderTempl(w http.ResponseWriter, templateName string, data any) {
+func (h *FrontendHandler) renderTempl(w http.ResponseWriter, r *http.Request, templateName string, data any) {
 	comp := templComponent(templateName, data)
 	if comp == nil {
 		slog.Error("no templ component for template", "template", templateName)
@@ -2240,7 +2242,8 @@ func (h *FrontendHandler) renderTempl(w http.ResponseWriter, templateName string
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := comp.Render(context.Background(), w); err != nil {
+	ctx := templ.WithNonce(r.Context(), middleware.GetCSPNonce(r))
+	if err := comp.Render(ctx, w); err != nil {
 		slog.Error("templ render failed", "template", templateName, "error", err)
 		h.renderInternalError(w)
 		return
@@ -2320,7 +2323,7 @@ func (h *FrontendHandler) renderNotFound(w http.ResponseWriter, r *http.Request)
 		SuggestedPages:   suggestedPages,
 	}
 	w.WriteHeader(http.StatusNotFound)
-	h.render(w, "404", data)
+	h.render(w, r, "404", data)
 }
 
 // renderInternalError renders a 500 Internal Server Error page.

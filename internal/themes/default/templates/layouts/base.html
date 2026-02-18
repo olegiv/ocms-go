@@ -33,7 +33,7 @@
 
     {{/* JSON-LD Structured Data */}}
     {{if .JSONLD}}
-    <script type="application/ld+json">
+    <script nonce="{{.CSPNonce}}" type="application/ld+json">
 {{.JSONLD}}
     </script>
     {{end}}
@@ -62,23 +62,23 @@
     {{end}}
 
     {{/* Privacy/Consent scripts - MUST be before analytics for Google Consent Mode v2 */}}
-    {{if privacyHead}}{{privacyHead}}{{end}}
+    {{if privacyHead}}{{privacyHead .CSPNonce}}{{end}}
 
     {{/* External analytics tracking scripts (head) */}}
-    {{if analyticsExtHead}}{{analyticsExtHead}}{{end}}
+    {{if analyticsExtHead}}{{analyticsExtHead .CSPNonce}}{{end}}
 
     {{/* External embed scripts (head) */}}
-    {{if embedHead}}{{embedHead}}{{end}}
+    {{if embedHead}}{{embedHead .CSPNonce}}{{end}}
 
     {{/* Additional head content */}}
     {{block "head" .}}{{end}}
 </head>
 <body class="{{if .BodyClass}}{{.BodyClass}}{{end}}">
     {{/* Informer notification bar (top of page) */}}
-    {{if informerBar}}{{informerBar}}{{end}}
+    {{if informerBar}}{{informerBar .CSPNonce}}{{end}}
 
     {{/* External analytics tracking scripts (body - noscript fallbacks) */}}
-    {{if analyticsExtBody}}{{analyticsExtBody}}{{end}}
+    {{if analyticsExtBody}}{{analyticsExtBody .CSPNonce}}{{end}}
 
     {{template "header.html" .}}
 
@@ -106,12 +106,12 @@
     {{template "footer.html" .}}
 
     {{/* Theme Scripts */}}
-    <script src="/themes/default/static/js/theme.js"></script>
+    <script nonce="{{.CSPNonce}}" src="/themes/default/static/js/theme.js"></script>
 
     {{/* Additional scripts */}}
     {{block "scripts" .}}{{end}}
 
     {{/* External embed scripts (body - chat widgets, etc.) */}}
-    {{if embedBody}}{{embedBody}}{{end}}
+    {{if embedBody}}{{embedBody .CSPNonce}}{{end}}
 </body>
 </html>

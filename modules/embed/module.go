@@ -18,6 +18,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/module"
+	"github.com/olegiv/ocms-go/internal/util"
 	"github.com/olegiv/ocms-go/modules/embed/providers"
 )
 
@@ -172,20 +173,28 @@ func (m *Module) RegisterAdminRoutes(r chi.Router) {
 func (m *Module) TemplateFuncs() template.FuncMap {
 	return template.FuncMap{
 		// embedHead returns scripts for the <head> section
-		"embedHead": func() template.HTML {
-			return m.renderHead()
+		"embedHead": func(args ...any) template.HTML {
+			return m.renderHead(firstStringArg(args...))
 		},
 		// embedBody returns scripts for before </body>
-		"embedBody": func() template.HTML {
-			return m.renderBody()
+		"embedBody": func(args ...any) template.HTML {
+			return m.renderBody(firstStringArg(args...))
 		},
 	}
+}
+
+func firstStringArg(args ...any) string {
+	if len(args) == 0 {
+		return ""
+	}
+	s, _ := args[0].(string)
+	return s
 }
 
 // renderScripts generates all enabled provider scripts using the provided render function.
 // SECURITY: Output is cast to template.HTML. Provider settings are admin-controlled
 // and individual values are escaped with template.HTMLEscapeString before embedding.
-func (m *Module) renderScripts(renderFn func(providers.Provider, map[string]string) template.HTML) template.HTML {
+func (m *Module) renderScripts(renderFn func(providers.Provider, map[string]string) template.HTML, nonce string) template.HTML {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -195,23 +204,24 @@ func (m *Module) renderScripts(renderFn func(providers.Provider, map[string]stri
 		if provider == nil {
 			continue
 		}
-		scripts.WriteString(string(renderFn(provider, ps.Settings)))
+		rendered := string(renderFn(provider, ps.Settings))
+		scripts.WriteString(util.AddNonceToScriptTags(rendered, nonce))
 	}
 	return template.HTML(scripts.String())
 }
 
 // renderHead generates all enabled provider head scripts.
-func (m *Module) renderHead() template.HTML {
+func (m *Module) renderHead(nonce string) template.HTML {
 	return m.renderScripts(func(p providers.Provider, s map[string]string) template.HTML {
 		return p.RenderHead(s)
-	})
+	}, nonce)
 }
 
 // renderBody generates all enabled provider body scripts.
-func (m *Module) renderBody() template.HTML {
+func (m *Module) renderBody(nonce string) template.HTML {
 	return m.renderScripts(func(p providers.Provider, s map[string]string) template.HTML {
 		return p.RenderBody(s)
-	})
+	}, nonce)
 }
 
 // AdminURL returns the admin dashboard URL for the module.
