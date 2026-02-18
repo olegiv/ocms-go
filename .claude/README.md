@@ -100,7 +100,7 @@ Test API endpoints with curl requests.
 Perform a comprehensive security audit and store reports in `.audit/`.
 
 ### /code-quality
-Run code quality checks for the Go project.
+Run code quality checks for the Go project, including CSP template safety and high-risk DOM-XSS sink checks (`innerHTML`, redirect sinks).
 
 ### /clean
 Clean build artifacts and temp files.

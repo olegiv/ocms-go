@@ -621,7 +621,7 @@ Security vulnerability scanner and auditor. Identifies security issues and ensur
 **Invoke:** `@security-auditor` or use the `/security-audit` command
 
 ### code-quality-auditor
-Code quality scanner for Go applications. Detects duplicate code, unhandled errors, constant comparisons, empty slice literals, and package name collisions.
+Code quality scanner for Go applications. Detects duplicate code, unhandled errors, constant comparisons, empty slice literals, package name collisions, and high-risk DOM-XSS sink flows (`innerHTML`, redirect sinks).
 
 **Usage examples:**
 - "Run a quick code quality scan"
@@ -669,7 +669,7 @@ Test REST API endpoints with actual HTTP requests. Starts server, runs curl test
 Perform a comprehensive security audit and store reports in `.audit/`.
 
 ### /code-quality
-Scan the project for code quality issues including unhandled errors, duplicate code, constant comparisons, empty slice literals, and package name collisions. Runs `go vet`, `staticcheck`, and `errcheck`.
+Scan the project for code quality issues including unhandled errors, duplicate code, constant comparisons, empty slice literals, package name collisions, CSP template safety, and high-risk DOM-XSS sink flows (`innerHTML`, redirect sinks).
 
 ### /commit-prepare
 Review changes and prepare a commit message. Runs `/code-quality` first and asks for confirmation if issues are found before proceeding with the commit message.
