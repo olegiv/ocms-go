@@ -160,6 +160,8 @@ func TestDifyProvider_RenderBody(t *testing.T) {
 				"/chat-messages",
 				"/messages/'+encodeURIComponent(msgId)+'/suggested?user='+encodeURIComponent(userId)",
 				"X-Embed-Proxy-Token",
+				"proxyTokenOptional=false",
+				"if(tr.status===404)",
 				"AI Assistant", // default bot name
 				"#1C64F2",      // default primary color
 				"botMsg.textContent=full",
