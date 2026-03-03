@@ -197,31 +197,33 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_DB_PATH           SQLite database path (default: ./data/ocms.db)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SERVER_PORT       Server port (default: 8080)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_ENV               Environment: development|production (default: development)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_FORM_CAPTCHA  Require captcha for all public forms (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_FORM_CAPTCHA  Require captcha for all public forms (default: false; production default when unset: true)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_WEBHOOK_FORM_DATA_MODE  form.submitted payload mode: redacted|none|full (default: redacted)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION  Reject production startup when webhook payload mode is full (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION  Reject production startup when webhook payload mode is full (default: false; production default when unset: true)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_CUSTOM_DIR        Custom content directory (default: ./custom)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_ACTIVE_THEME      Active theme name (default: default)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REDIS_URL         Redis URL for distributed caching (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_TRUSTED_PROXIES   Comma-separated trusted proxy CIDRs/IPs (optional)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_TRUSTED_PROXIES  Reject production startup when trusted proxies are not configured (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_TRUSTED_PROXIES  Reject production startup when trusted proxies are not configured (default: false; production default when unset: true)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_API_ALLOWED_CIDRS Comma-separated CIDRs/IPs allowed for API key access (optional)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_ALLOWED_CIDRS  Reject API key auth when global source CIDRs are not configured (default: false)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_EXPIRY  Reject API keys without expiration (default: false)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_SOURCE_CIDRS  Reject API keys without per-key CIDR restrictions (default: false)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE  Deactivate API keys when source IP changes without per-key CIDRs (default: false)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_API_KEY_MAX_TTL_DAYS  Maximum API key lifetime in days (0 disables, default: 0)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_ALLOWED_CIDRS  Reject API key auth when global source CIDRs are not configured (default: false; production default when unset: true)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_EXPIRY  Reject API keys without expiration (default: false; production default when unset: true)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_API_KEY_SOURCE_CIDRS  Reject API keys without per-key CIDR restrictions (default: false; production default when unset: true)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE  Deactivate API keys when source IP changes without per-key CIDRs (default: false; production default when unset: true)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_API_KEY_MAX_TTL_DAYS  Maximum API key lifetime in days (0 disables, default: 0; production default when unset: 90)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_ALLOWED_ORIGINS   Comma-separated allowed origins for embed proxy routes (optional)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS   Comma-separated allowed hosts for embed provider endpoints (optional)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS  Reject production startup when embed proxy is active without origin allowlist (default: false)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS  Reject production startup when embed proxy is active without upstream host allowlist (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS  Reject production startup when embed proxy is active without origin allowlist (default: false; production default when unset: true)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS  Reject production startup when embed proxy is active without upstream host allowlist (default: false; production default when unset: true)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_EMBED_PROXY_TOKEN   Secret used to issue short-lived signed embed proxy tokens\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_EMBED_PROXY_TOKEN  Enforce embed proxy token requirement outside production as well (default: false)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_HTTPS_OUTBOUND  Require HTTPS for outbound integration URLs (default: false)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SANITIZE_PAGE_HTML  Sanitize page HTML before rendering to visitors (default: false)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_SANITIZE_PAGE_HTML  Reject production startup when page HTML sanitization is disabled (default: false)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_BLOCK_SUSPICIOUS_PAGE_HTML  Reject page writes with suspicious HTML markup (default: false)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML  Reject production startup when suspicious page markup blocking is disabled (default: false)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_HTTPS_OUTBOUND  Require HTTPS for outbound integration URLs (default: false; production default when unset: true)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_WEBHOOK_ALLOWED_HOSTS   Comma-separated allowed destination hosts for webhooks (optional)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS  Reject production startup when active webhooks exist without destination host allowlist (default: false; production default when unset: true)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_SANITIZE_PAGE_HTML  Sanitize page HTML before rendering to visitors (default: false; production default when unset: true)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_SANITIZE_PAGE_HTML  Reject production startup when page HTML sanitization is disabled (default: false; production default when unset: true)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_BLOCK_SUSPICIOUS_PAGE_HTML  Reject page writes with suspicious HTML markup (default: false; production default when unset: true)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML  Reject production startup when suspicious page markup blocking is disabled (default: false; production default when unset: true)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "\nFor more information, see: https://github.com/olegiv/ocms-go\n")
 	}
 
@@ -511,6 +513,61 @@ func auditRequiredEmbedUpstreamHostPolicyPosture(ctx context.Context, db *sql.DB
 		return fmt.Errorf(
 			"refusing to start in production: embed proxy is active (%d provider(s)) but OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS is not configured",
 			activeEmbedProviders,
+		)
+	}
+
+	return nil
+}
+
+func auditWebhookAllowedHostPosture(ctx context.Context, db *sql.DB, allowedHosts map[string]struct{}) error {
+	if len(allowedHosts) == 0 {
+		return nil
+	}
+
+	rows, err := db.QueryContext(ctx, `SELECT url FROM webhooks WHERE is_active = 1`)
+	if err != nil {
+		return fmt.Errorf("auditing webhook destination host posture: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var invalidCount int
+	for rows.Next() {
+		var rawURL string
+		if err := rows.Scan(&rawURL); err != nil {
+			return fmt.Errorf("auditing webhook destination host posture: %w", err)
+		}
+		if err := webhook.ValidateDestinationHostPolicy(rawURL, allowedHosts, false); err != nil {
+			invalidCount++
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("auditing webhook destination host posture: %w", err)
+	}
+
+	if invalidCount > 0 {
+		return fmt.Errorf(
+			"refusing to start in production: OCMS_WEBHOOK_ALLOWED_HOSTS is configured but %d active webhook(s) use non-allowlisted destination hosts",
+			invalidCount,
+		)
+	}
+
+	return nil
+}
+
+func auditRequiredWebhookAllowedHostPolicyPosture(ctx context.Context, db *sql.DB, configuredHosts string) error {
+	if strings.TrimSpace(configuredHosts) != "" {
+		return nil
+	}
+
+	var activeWebhooks int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM webhooks WHERE is_active = 1`).Scan(&activeWebhooks); err != nil {
+		return fmt.Errorf("auditing webhook destination host policy posture: %w", err)
+	}
+	if activeWebhooks > 0 {
+		return fmt.Errorf(
+			"refusing to start in production: webhook delivery is active (%d webhook(s)) but OCMS_WEBHOOK_ALLOWED_HOSTS is not configured",
+			activeWebhooks,
 		)
 	}
 
@@ -839,7 +896,14 @@ func runPostModulePostureAudits(ctx context.Context, cfg *config.Config, db *sql
 }
 
 // runPreModulePostureAudits runs production security posture checks that don't depend on modules.
-func runPreModulePostureAudits(ctx context.Context, cfg *config.Config, db *sql.DB, hasDefaultAdminCreds bool, allowedEmbedUpstreamHosts map[string]struct{}) error {
+func runPreModulePostureAudits(
+	ctx context.Context,
+	cfg *config.Config,
+	db *sql.DB,
+	hasDefaultAdminCreds bool,
+	allowedEmbedUpstreamHosts map[string]struct{},
+	allowedWebhookHosts map[string]struct{},
+) error {
 	if cfg.Env != "production" {
 		return nil
 	}
@@ -871,6 +935,16 @@ func runPreModulePostureAudits(ctx context.Context, cfg *config.Config, db *sql.
 	}
 	if len(allowedEmbedUpstreamHosts) > 0 {
 		if err := auditEmbedUpstreamHostPosture(ctx, db, allowedEmbedUpstreamHosts); err != nil {
+			return err
+		}
+	}
+	if cfg.RequireWebhookAllowedHosts {
+		if err := auditRequiredWebhookAllowedHostPolicyPosture(ctx, db, cfg.WebhookAllowedHosts); err != nil {
+			return err
+		}
+	}
+	if len(allowedWebhookHosts) > 0 {
+		if err := auditWebhookAllowedHostPosture(ctx, db, allowedWebhookHosts); err != nil {
 			return err
 		}
 	}
@@ -912,6 +986,16 @@ func configureMiddlewareDefaults(cfg *config.Config) error {
 	scheduler.SetRequireHTTPSOutbound(cfg.RequireHTTPSOutbound)
 	if cfg.RequireHTTPSOutbound {
 		slog.Info("HTTPS-only outbound URL policy enabled")
+	}
+	if err := webhook.ConfigureAllowedHosts(cfg.WebhookAllowedHosts); err != nil {
+		return fmt.Errorf("configuring webhook allowed hosts: %w", err)
+	}
+	if strings.TrimSpace(cfg.WebhookAllowedHosts) != "" {
+		slog.Info("webhook destination host allowlist enabled")
+	}
+	webhook.SetRequireAllowedHosts(cfg.RequireWebhookAllowedHosts)
+	if cfg.RequireWebhookAllowedHosts {
+		slog.Info("webhook destination host allowlist requirement enabled")
 	}
 	return nil
 }
@@ -969,6 +1053,12 @@ func logProductionSecurityWarnings(cfg *config.Config) {
 	if !cfg.RequireHTTPSOutbound {
 		slog.Warn("production security warning: OCMS_REQUIRE_HTTPS_OUTBOUND is disabled")
 	}
+	if strings.TrimSpace(cfg.WebhookAllowedHosts) == "" {
+		slog.Warn("production security warning: OCMS_WEBHOOK_ALLOWED_HOSTS is not configured")
+	}
+	if !cfg.RequireWebhookAllowedHosts {
+		slog.Warn("production security warning: OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS is disabled")
+	}
 	if !cfg.SanitizePageHTML {
 		slog.Warn("production security warning: OCMS_SANITIZE_PAGE_HTML is disabled")
 	}
@@ -1024,6 +1114,10 @@ func run() error {
 	allowedEmbedUpstreamHosts, err := parseAllowedEmbedUpstreamHosts(cfg.EmbedAllowedUpstreamHosts)
 	if err != nil {
 		return fmt.Errorf("parsing OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS: %w", err)
+	}
+	allowedWebhookHosts, err := webhook.ParseAllowedHosts(cfg.WebhookAllowedHosts)
+	if err != nil {
+		return fmt.Errorf("parsing OCMS_WEBHOOK_ALLOWED_HOSTS: %w", err)
 	}
 
 	// Create version info from build-time injected values
@@ -1113,7 +1207,7 @@ func run() error {
 		return fmt.Errorf("auditing default admin credentials: %w", err)
 	}
 	logSeedingSecuritySignals(ctx, cfg, eventService, hasDefaultAdminCreds)
-	if err := runPreModulePostureAudits(ctx, cfg, db, hasDefaultAdminCreds, allowedEmbedUpstreamHosts); err != nil {
+	if err := runPreModulePostureAudits(ctx, cfg, db, hasDefaultAdminCreds, allowedEmbedUpstreamHosts, allowedWebhookHosts); err != nil {
 		return err
 	}
 	initI18nFromDB(ctx, queries)
@@ -1480,6 +1574,7 @@ func run() error {
 				List: pagesHandler.List, NewForm: pagesHandler.NewForm, Create: pagesHandler.Create,
 				EditForm: pagesHandler.EditForm, Update: pagesHandler.Update, Delete: pagesHandler.Delete,
 			})
+			r.Post(handler.RoutePages+handler.RouteSuffixBulkDelete, pagesHandler.BulkDelete)
 			r.Post(handler.RoutePagesID+"/publish", pagesHandler.TogglePublish)
 			r.Get(handler.RoutePagesID+"/versions", pagesHandler.Versions)
 			r.Post(handler.RoutePagesID+"/versions/{versionId}/restore", pagesHandler.RestoreVersion)
@@ -1490,6 +1585,7 @@ func run() error {
 				List: taxonomyHandler.ListTags, NewForm: taxonomyHandler.NewTagForm, Create: taxonomyHandler.CreateTag,
 				EditForm: taxonomyHandler.EditTagForm, Update: taxonomyHandler.UpdateTag, Delete: taxonomyHandler.DeleteTag,
 			})
+			r.Post(handler.RouteTags+handler.RouteSuffixBulkDelete, taxonomyHandler.BulkDeleteTags)
 			r.Get(handler.RouteTags+handler.RouteSuffixSearch, taxonomyHandler.SearchTags)
 			r.Post(handler.RouteTagsID+handler.RouteSuffixTranslate, taxonomyHandler.TranslateTag)
 
@@ -1510,6 +1606,7 @@ func run() error {
 			r.Put(handler.RouteMediaID, mediaHandler.Update)
 			r.Post(handler.RouteMediaID, mediaHandler.Update) // HTML forms can't send PUT
 			r.Delete(handler.RouteMediaID, mediaHandler.Delete)
+			r.Post(handler.RouteMedia+handler.RouteSuffixBulkDelete, mediaHandler.BulkDelete)
 			r.Post(handler.RouteMediaID+handler.RouteSuffixMove, mediaHandler.MoveMedia)
 			r.Post(handler.RouteMediaID+handler.RouteSuffixRegenerate, mediaHandler.RegenerateVariants)
 
@@ -1543,6 +1640,7 @@ func run() error {
 			r.Get(handler.RouteFormsID+"/submissions", formsHandler.Submissions)
 			r.Get(handler.RouteFormsID+handler.RouteSubmissionsSubID, formsHandler.ViewSubmission)
 			r.Delete(handler.RouteFormsID+handler.RouteSubmissionsSubID, formsHandler.DeleteSubmission)
+			r.Post(handler.RouteFormsID+"/submissions"+handler.RouteSuffixBulkDelete, formsHandler.BulkDeleteSubmissions)
 			r.Post(handler.RouteFormsID+"/submissions/export", formsHandler.ExportSubmissions)
 
 			// Form translation route
@@ -1573,6 +1671,7 @@ func run() error {
 				List: usersHandler.List, NewForm: usersHandler.NewForm, Create: usersHandler.Create,
 				EditForm: usersHandler.EditForm, Update: usersHandler.Update, Delete: usersHandler.Delete,
 			})
+			r.Post(handler.RouteUsers+handler.RouteSuffixBulkDelete, usersHandler.BulkDelete)
 
 			// Language management routes
 			registerCRUD(r, handler.RouteLanguages, handler.RouteLanguagesID, crudHandlers{
@@ -1598,6 +1697,7 @@ func run() error {
 				List: apiKeysHandler.List, NewForm: apiKeysHandler.NewForm, Create: apiKeysHandler.Create,
 				EditForm: apiKeysHandler.EditForm, Update: apiKeysHandler.Update, Delete: apiKeysHandler.Delete,
 			})
+			r.Post(handler.RouteAPIKeys+handler.RouteSuffixBulkDelete, apiKeysHandler.BulkDelete)
 
 			// Webhook management routes
 			registerCRUD(r, handler.RouteWebhooks, handler.RouteWebhooksID, crudHandlers{

@@ -883,6 +883,16 @@
             "translation": "Type"
         },
         {
+            "id": "media.sort_by",
+            "message": "Sort by",
+            "translation": "Sort by"
+        },
+        {
+            "id": "media.sort_direction",
+            "message": "Direction",
+            "translation": "Direction"
+        },
+        {
             "id": "media.images",
             "message": "Images",
             "translation": "Images"
@@ -4621,6 +4631,61 @@
             "id": "pagination.items",
             "message": "items",
             "translation": "items"
+        },
+        {
+            "id": "pagination.items_per_page",
+            "message": "Items per page",
+            "translation": "Items per page"
+        },
+        {
+            "id": "pagination.sort_none",
+            "message": "Not sorted",
+            "translation": "Not sorted"
+        },
+        {
+            "id": "pagination.sort_asc",
+            "message": "Ascending",
+            "translation": "Ascending"
+        },
+        {
+            "id": "pagination.sort_desc",
+            "message": "Descending",
+            "translation": "Descending"
+        },
+        {
+            "id": "pagination.selected_count",
+            "message": "selected",
+            "translation": "selected"
+        },
+        {
+            "id": "pagination.delete_selected",
+            "message": "Delete selected",
+            "translation": "Delete selected"
+        },
+        {
+            "id": "pagination.bulk_delete_confirm",
+            "message": "Delete selected items?",
+            "translation": "Delete selected items?"
+        },
+        {
+            "id": "pagination.bulk_delete_none",
+            "message": "No items selected",
+            "translation": "No items selected"
+        },
+        {
+            "id": "pagination.bulk_delete_success",
+            "message": "Selected items deleted",
+            "translation": "Selected items deleted"
+        },
+        {
+            "id": "pagination.bulk_delete_partial",
+            "message": "Some selected items could not be deleted",
+            "translation": "Some selected items could not be deleted"
+        },
+        {
+            "id": "pagination.bulk_delete_error",
+            "message": "Failed to delete selected items",
+            "translation": "Failed to delete selected items"
         },
         {
             "id": "time.just_now",

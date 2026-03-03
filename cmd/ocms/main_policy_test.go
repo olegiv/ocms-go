@@ -397,3 +397,66 @@ func TestAuditRequiredEmbedUpstreamHostPolicyPosture_AllowsConfiguredAllowlist(t
 		t.Fatalf("expected configured allowlist to pass, got: %v", err)
 	}
 }
+
+func TestAuditWebhookAllowedHostPosture_RejectsDisallowedDestination(t *testing.T) {
+	db := newPolicyTestDB(t)
+	_, err := db.Exec(`
+		INSERT INTO webhooks (url, is_active) VALUES
+			('https://hooks.evil.example/webhook', 1)
+	`)
+	if err != nil {
+		t.Fatalf("inserting webhook fixture: %v", err)
+	}
+
+	allowed := map[string]struct{}{"hooks.example.com": {}}
+	if err := auditWebhookAllowedHostPosture(context.Background(), db, allowed); err == nil {
+		t.Fatal("expected error when active webhook destination host is not allowlisted")
+	}
+}
+
+func TestAuditWebhookAllowedHostPosture_AllowsCompliantConfig(t *testing.T) {
+	db := newPolicyTestDB(t)
+	_, err := db.Exec(`
+		INSERT INTO webhooks (url, is_active) VALUES
+			('https://hooks.example.com/webhook', 1),
+			('https://hooks.evil.example/webhook', 0)
+	`)
+	if err != nil {
+		t.Fatalf("inserting webhook fixtures: %v", err)
+	}
+
+	allowed := map[string]struct{}{"hooks.example.com": {}}
+	if err := auditWebhookAllowedHostPosture(context.Background(), db, allowed); err != nil {
+		t.Fatalf("expected compliant webhook destination host posture to pass, got: %v", err)
+	}
+}
+
+func TestAuditRequiredWebhookAllowedHostPolicyPosture_RejectsMissingAllowlist(t *testing.T) {
+	db := newPolicyTestDB(t)
+	_, err := db.Exec(`
+		INSERT INTO webhooks (url, is_active) VALUES
+			('https://hooks.example.com/webhook', 1)
+	`)
+	if err != nil {
+		t.Fatalf("inserting webhook fixture: %v", err)
+	}
+
+	if err := auditRequiredWebhookAllowedHostPolicyPosture(context.Background(), db, ""); err == nil {
+		t.Fatal("expected error when webhook allowlist is required but missing")
+	}
+}
+
+func TestAuditRequiredWebhookAllowedHostPolicyPosture_AllowsConfiguredAllowlist(t *testing.T) {
+	db := newPolicyTestDB(t)
+	_, err := db.Exec(`
+		INSERT INTO webhooks (url, is_active) VALUES
+			('https://hooks.example.com/webhook', 1)
+	`)
+	if err != nil {
+		t.Fatalf("inserting webhook fixture: %v", err)
+	}
+
+	if err := auditRequiredWebhookAllowedHostPolicyPosture(context.Background(), db, "hooks.example.com"); err != nil {
+		t.Fatalf("expected configured webhook allowlist to pass, got: %v", err)
+	}
+}

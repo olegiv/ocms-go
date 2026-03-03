@@ -1409,6 +1409,13 @@ type SubmissionsListData struct {
 	Pagination  AdminPagination
 }
 
+var formSubmissionsSortableFields = map[string]SortConfig{
+	"id":         {DefaultDir: sortDirDesc},
+	"created_at": {DefaultDir: sortDirDesc},
+	"is_read":    {DefaultDir: sortDirAsc},
+	"ip_address": {DefaultDir: sortDirAsc},
+}
+
 // Submissions handles GET /admin/forms/{id}/submissions - lists form submissions.
 func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 	lang := h.renderer.GetAdminLang(r)
@@ -1424,13 +1431,9 @@ func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Pagination
-	page := 1
-	if p := r.URL.Query().Get("page"); p != "" {
-		if pInt, err := strconv.Atoi(p); err == nil && pInt > 0 {
-			page = pInt
-		}
-	}
-	perPage := 20
+	page := ParsePageParam(r)
+	perPage := ParsePerPageParam(r, 20, maxPerPageSelectionValue)
+	sortField, sortDir := parseSortParams(r, "created_at", sortDirDesc, formSubmissionsSortableFields)
 	offset := (page - 1) * perPage
 
 	// Get fields for display
@@ -1441,10 +1444,12 @@ func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get submissions
-	submissions, err := h.queries.GetFormSubmissions(r.Context(), store.GetFormSubmissionsParams{
-		FormID: formID,
-		Limit:  int64(perPage),
-		Offset: int64(offset),
+	submissions, err := h.queries.GetFormSubmissionsSorted(r.Context(), store.GetFormSubmissionsSortedParams{
+		FormID:    formID,
+		Limit:     int64(perPage),
+		Offset:    int64(offset),
+		SortField: sortField,
+		SortDir:   sortDir,
 	})
 	if err != nil {
 		slog.Error("failed to get submissions", "error", err, "form_id", formID)
@@ -1488,13 +1493,17 @@ func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 	totalCount, _ := h.queries.CountFormSubmissions(r.Context(), formID)
 	unreadCount, _ := h.queries.CountUnreadSubmissions(r.Context(), formID)
 
+	pagination := BuildAdminPagination(page, int(totalCount), perPage, fmt.Sprintf(redirectAdminFormsIDSubmissions, formID), r.URL.Query())
+	pagination.SortField = sortField
+	pagination.SortDir = sortDir
+
 	data := SubmissionsListData{
 		Form:        *form,
 		Fields:      fields,
 		Submissions: submissionItems,
 		TotalCount:  totalCount,
 		UnreadCount: unreadCount,
-		Pagination:  BuildAdminPagination(page, int(totalCount), perPage, fmt.Sprintf(redirectAdminFormsIDSubmissions, formID), r.URL.Query()),
+		Pagination:  pagination,
 	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer,
@@ -1634,6 +1643,57 @@ func (h *FormsHandler) DeleteSubmission(w http.ResponseWriter, r *http.Request) 
 	}
 
 	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminFormsIDSubmissions, formID), "Submission deleted successfully")
+}
+
+// BulkDeleteSubmissions handles POST /admin/forms/{id}/submissions/bulk-delete.
+func (h *FormsHandler) BulkDeleteSubmissions(w http.ResponseWriter, r *http.Request) {
+	if middleware.IsDemoMode() {
+		writeJSONError(w, http.StatusForbidden, middleware.DemoModeMessageDetailed(middleware.RestrictionContentReadOnly))
+		return
+	}
+
+	formID, ok := parseFieldIDParamJSON(w, r, "id")
+	if !ok {
+		return
+	}
+
+	ids, err := parseBulkActionIDs(w, r, defaultBulkActionMaxBatch)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	failed := make([]bulkActionFailedItem, 0)
+	deleted := 0
+
+	for _, subID := range ids {
+		submission, err := h.queries.GetFormSubmissionByID(r.Context(), subID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				failed = append(failed, bulkActionFailedItem{ID: subID, Reason: "Submission not found"})
+				continue
+			}
+			slog.Error("failed to load submission for bulk delete", "error", err, "sub_id", subID)
+			failed = append(failed, bulkActionFailedItem{ID: subID, Reason: "Error loading submission"})
+			continue
+		}
+
+		if submission.FormID != formID {
+			failed = append(failed, bulkActionFailedItem{ID: subID, Reason: "Submission does not belong to this form"})
+			continue
+		}
+
+		if err := h.queries.DeleteFormSubmission(r.Context(), subID); err != nil {
+			slog.Error("failed to bulk delete submission", "error", err, "sub_id", subID, "form_id", formID)
+			failed = append(failed, bulkActionFailedItem{ID: subID, Reason: "Error deleting submission"})
+			continue
+		}
+
+		slog.Info("submission deleted", "sub_id", subID, "form_id", formID, "deleted_by", middleware.GetUserID(r))
+		deleted++
+	}
+
+	writeBulkActionSuccess(w, deleted, failed)
 }
 
 // ExportSubmissions handles POST /admin/forms/{id}/submissions/export - exports submissions as CSV.

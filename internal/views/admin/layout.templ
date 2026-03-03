@@ -5,6 +5,7 @@ package admin
 
 import (
 	"fmt"
+	"github.com/olegiv/ocms-go/internal/views/utils"
 )
 
 // AdminLayout renders the full admin page with sidebar, header, and content.
@@ -47,8 +48,8 @@ templ AdminLayout(pc *PageContext) {
 		<!-- Alpine.js -->
 		<script defer nonce={ templ.GetNonce(ctx) } src="/static/dist/js/alpine.min.js" integrity="sha384-LXWjKwDZz29o7TduNe+r/UxaolHh5FsSvy2W7bDHSZ8jJeGgDeuNnsDNHoxpSgDi" crossorigin="anonymous"></script>
 		<!-- Admin core utilities -->
-		<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/admin-core.js"></script>
-		<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/media-dropzone.js"></script>
+		<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/admin-core.js") }></script>
+		<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/media-dropzone.js") }></script>
 	</body>
 	</html>
 }

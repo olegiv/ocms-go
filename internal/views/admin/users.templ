@@ -64,22 +64,95 @@ templ UsersListPage(pc *PageContext, data UsersListData) {
 				@card.Content(card.ContentProps{Class: "p-0"}) {
 					<div class="overflow-x-auto">
 						@table.Table() {
-							@table.Header() {
-								@table.Row() {
-									@table.Head() { { pc.T("label.name") } }
-									@table.Head() { { pc.T("label.email") } }
-									@table.Head() { { pc.T("label.role") } }
-									@table.Head() { { pc.T("label.created_at") } }
-									@table.Head() { { pc.T("users.last_login") } }
+						@table.Header() {
+							@table.Row() {
+								if data.Pagination.HasBulkAction() {
+									@table.Head(table.HeadProps{Class: "w-[44px]"}) {
+										<input
+											type="checkbox"
+											class="checkbox-input"
+											data-bulk-master="true"
+											data-bulk-scope={ data.Pagination.BulkScope() }
+											aria-label={ pc.T("btn.select_all") }
+										/>
+									}
+								}
+								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("name"))}}) {
+									<a
+										href={ data.Pagination.SortURL("name", sortDirAsc) }
+										class={ sortLinkClass(data.Pagination.SortState("name")) }
+										data-sort-state={ sortStateValue(data.Pagination.SortState("name")) }
+									>
+										<span>{ pc.T("label.name") }</span>
+										@SortIndicator(data.Pagination.SortState("name"))
+										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("name"))) }</span>
+									</a>
+								}
+								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("email"))}}) {
+									<a
+										href={ data.Pagination.SortURL("email", sortDirAsc) }
+										class={ sortLinkClass(data.Pagination.SortState("email")) }
+										data-sort-state={ sortStateValue(data.Pagination.SortState("email")) }
+									>
+										<span>{ pc.T("label.email") }</span>
+										@SortIndicator(data.Pagination.SortState("email"))
+										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("email"))) }</span>
+									</a>
+								}
+								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("role"))}}) {
+									<a
+										href={ data.Pagination.SortURL("role", sortDirAsc) }
+										class={ sortLinkClass(data.Pagination.SortState("role")) }
+										data-sort-state={ sortStateValue(data.Pagination.SortState("role")) }
+									>
+										<span>{ pc.T("label.role") }</span>
+										@SortIndicator(data.Pagination.SortState("role"))
+										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("role"))) }</span>
+									</a>
+								}
+								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("created_at"))}}) {
+									<a
+										href={ data.Pagination.SortURL("created_at", sortDirDesc) }
+										class={ sortLinkClass(data.Pagination.SortState("created_at")) }
+										data-sort-state={ sortStateValue(data.Pagination.SortState("created_at")) }
+									>
+										<span>{ pc.T("label.created_at") }</span>
+										@SortIndicator(data.Pagination.SortState("created_at"))
+										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("created_at"))) }</span>
+									</a>
+								}
+									@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("last_login_at"))}}) {
+										<a
+											href={ data.Pagination.SortURL("last_login_at", sortDirDesc) }
+											class={ sortLinkClass(data.Pagination.SortState("last_login_at")) }
+											data-sort-state={ sortStateValue(data.Pagination.SortState("last_login_at")) }
+										>
+											<span>{ pc.T("users.last_login") }</span>
+											@SortIndicator(data.Pagination.SortState("last_login_at"))
+											<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("last_login_at"))) }</span>
+										</a>
+									}
 									@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
 								}
 							}
 							@table.Body() {
-								for _, user := range data.Users {
-									@table.Row(table.RowProps{ID: fmt.Sprintf("user-row-%d", user.ID)}) {
-										@table.Cell() {
-											<div class="user-cell">
-												<div class="user-avatar-sm">{ string(user.Name[0]) }</div>
+							for _, user := range data.Users {
+								@table.Row(table.RowProps{ID: fmt.Sprintf("user-row-%d", user.ID)}) {
+									if data.Pagination.HasBulkAction() {
+										@table.Cell(table.CellProps{Class: "w-[44px]"}) {
+											<input
+												type="checkbox"
+												class="checkbox-input"
+												data-bulk-item="true"
+												data-bulk-id={ fmt.Sprintf("%d", user.ID) }
+												data-bulk-scope={ data.Pagination.BulkScope() }
+												aria-label={ pc.T("btn.select") }
+											/>
+										}
+									}
+									@table.Cell() {
+										<div class="user-cell">
+											<div class="user-avatar-sm">{ string(user.Name[0]) }</div>
 												<span>{ user.Name }</span>
 												if user.IsCurrentUser {
 													@badge.Badge(badge.Props{Class: "badge-info"}) {
@@ -118,7 +191,7 @@ templ UsersListPage(pc *PageContext, data UsersListData) {
 						}
 					</div>
 				}
-				if data.Pagination.ShouldShow() {
+				if data.Pagination.ShouldShow() || data.Pagination.HasBulkAction() {
 					@card.Footer() {
 						@Pagination(pc, data.Pagination)
 					}

@@ -647,6 +647,84 @@ select.form-control {
   color: $gray-600;
 }
 
+.admin-sort-link {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-1;
+  padding: 0.125rem $spacing-2;
+  border: 1px solid transparent;
+  border-radius: $radius-md;
+  color: $gray-600;
+  text-decoration: none;
+  transition:
+    color $transition-fast,
+    background-color $transition-fast,
+    border-color $transition-fast,
+    box-shadow $transition-fast;
+
+  &:hover {
+    color: $gray-900;
+  }
+
+  &:focus-visible {
+    outline: none;
+    border-color: rgba($primary, 0.45);
+    box-shadow: 0 0 0 3px rgba($primary, 0.2);
+  }
+
+  &[data-sort-state="asc"],
+  &[data-sort-state="desc"] {
+    color: $gray-900;
+    background-color: rgba($primary, 0.14);
+    border-color: rgba($primary, 0.4);
+    box-shadow: inset 0 0 0 1px rgba($primary, 0.12);
+  }
+}
+
+.admin-sort-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.78;
+  transition: color $transition-fast, opacity $transition-fast;
+}
+
+.admin-sort-indicator-muted {
+  color: $gray-500;
+}
+
+.admin-sort-indicator-active {
+  color: color.adjust($primary, $lightness: -8%);
+  opacity: 1;
+}
+
+.admin-media-sort-controls {
+  padding: $spacing-2;
+  border: 1px solid $gray-200;
+  border-radius: $radius-md;
+  background: rgba($primary, 0.04);
+}
+
+.admin-media-sort-form {
+  align-items: center;
+}
+
+.admin-media-sort-label {
+  color: $gray-700;
+  font-weight: $font-weight-semibold;
+}
+
+.admin-media-sort-select {
+  border-color: $gray-300;
+}
+
+.admin-media-sort-select[data-sort-state="asc"],
+.admin-media-sort-select[data-sort-state="desc"] {
+  border-color: rgba($primary, 0.55);
+  box-shadow: inset 0 0 0 1px rgba($primary, 0.12);
+  background-color: rgba($primary, 0.06);
+}
+
 .filter-buttons {
   display: flex;
   gap: $spacing-2;

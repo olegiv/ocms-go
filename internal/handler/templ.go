@@ -117,6 +117,10 @@ func convertPagination(p AdminPagination) adminviews.PaginationData {
 		CurrentPage: p.CurrentPage,
 		TotalPages:  p.TotalPages,
 		TotalItems:  p.TotalItems,
+		BaseURL:     p.BaseURL,
+		QueryString: p.QueryString,
+		SortField:   p.SortField,
+		SortDir:     p.SortDir,
 		HasFirst:    p.HasFirst,
 		HasPrev:     p.HasPrev,
 		HasNext:     p.HasNext,
@@ -1357,6 +1361,10 @@ func convertPagesListViewData(data PagesListData, renderer *render.Renderer, lan
 		pages = append(pages, item)
 	}
 
+	pagination := convertPagination(data.Pagination)
+	pagination.BulkAction = bulkPaginationAction(bulkScopePages, redirectAdminPages+RouteSuffixBulkDelete)
+	pagination.PerPageSelector = perPageSelector(data.Pagination.PerPage, perPageOptionsStandard)
+
 	return adminviews.PagesListViewData{
 		Pages:          pages,
 		TotalCount:     data.TotalCount,
@@ -1367,7 +1375,7 @@ func convertPagesListViewData(data PagesListData, renderer *render.Renderer, lan
 		AllCategories:  convertPageCategoryNodes(data.AllCategories),
 		AllLanguages:   convertLanguageOptions(data.AllLanguages),
 		Statuses:       data.Statuses,
-		Pagination:     convertPagination(data.Pagination),
+		Pagination:     pagination,
 		IsDemoMode:     middleware.IsDemoMode(),
 	}
 }
@@ -1683,6 +1691,10 @@ func convertMediaLibraryViewData(data MediaLibraryData) adminviews.MediaLibraryV
 		}
 	}
 
+	pagination := convertPagination(data.Pagination)
+	pagination.BulkAction = bulkPaginationAction(bulkScopeMedia, redirectAdminMedia+RouteSuffixBulkDelete)
+	pagination.PerPageSelector = perPageSelector(data.Pagination.PerPage, perPageOptionsMedia)
+
 	return adminviews.MediaLibraryViewData{
 		Media:      viewMedia,
 		Folders:    viewFolders,
@@ -1690,7 +1702,7 @@ func convertMediaLibraryViewData(data MediaLibraryData) adminviews.MediaLibraryV
 		Filter:     data.Filter,
 		FolderID:   data.FolderID,
 		Search:     data.Search,
-		Pagination: convertPagination(data.Pagination),
+		Pagination: pagination,
 	}
 }
 
@@ -1875,6 +1887,13 @@ func convertSubmissionsListViewData(data SubmissionsListData, renderer *render.R
 		}
 	}
 
+	pagination := convertPagination(data.Pagination)
+	pagination.BulkAction = bulkPaginationAction(
+		formSubmissionsBulkScope(data.Form.ID),
+		formSubmissionsBulkDeleteURL(data.Form.ID),
+	)
+	pagination.PerPageSelector = perPageSelector(data.Pagination.PerPage, perPageOptionsStandard)
+
 	return adminviews.SubmissionsListViewData{
 		FormID:      data.Form.ID,
 		FormName:    data.Form.Name,
@@ -1882,7 +1901,7 @@ func convertSubmissionsListViewData(data SubmissionsListData, renderer *render.R
 		TotalCount:  data.TotalCount,
 		UnreadCount: data.UnreadCount,
 		Submissions: subs,
-		Pagination:  convertPagination(data.Pagination),
+		Pagination:  pagination,
 		IsDemoMode:  middleware.IsDemoMode(),
 	}
 }

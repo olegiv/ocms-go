@@ -5,6 +5,7 @@ package handler
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -32,6 +33,14 @@ const APIKeysPerPage = 10
 const defaultAPIKeyLifetime = 90 * 24 * time.Hour
 const maxAPIKeyLifetime = 365 * 24 * time.Hour
 const maxAPIKeySourceCIDRs = 64
+
+var apiKeysSortableFields = map[string]SortConfig{
+	"name":         {DefaultDir: sortDirAsc},
+	"is_active":    {DefaultDir: sortDirDesc},
+	"last_used_at": {DefaultDir: sortDirDesc},
+	"expires_at":   {DefaultDir: sortDirAsc},
+	"created_at":   {DefaultDir: sortDirDesc},
+}
 
 // APIKeysHandler handles API key management routes.
 type APIKeysHandler struct {
@@ -81,6 +90,8 @@ func (h *APIKeysHandler) List(w http.ResponseWriter, r *http.Request) {
 	adminLang := h.renderer.GetAdminLang(r)
 
 	page := ParsePageParam(r)
+	perPage := ParsePerPageParam(r, APIKeysPerPage, maxPerPageSelectionValue)
+	sortField, sortDir := parseSortParams(r, "created_at", sortDirDesc, apiKeysSortableFields)
 
 	// Get total count
 	totalKeys, err := h.queries.CountAPIKeys(r.Context())
@@ -90,23 +101,32 @@ func (h *APIKeysHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Normalize page to valid range
-	page, _ = NormalizePagination(page, int(totalKeys), APIKeysPerPage)
-	offset := int64((page - 1) * APIKeysPerPage)
+	page, _ = NormalizePagination(page, int(totalKeys), perPage)
+	offset := int64((page - 1) * perPage)
 
 	// Fetch API keys for current page
-	apiKeys, err := h.queries.ListAPIKeys(r.Context(), store.ListAPIKeysParams{
-		Limit:  APIKeysPerPage,
-		Offset: offset,
+	apiKeys, err := h.queries.ListAPIKeysSorted(r.Context(), store.ListAPIKeysSortedParams{
+		Limit:     int64(perPage),
+		Offset:    offset,
+		SortField: sortField,
+		SortDir:   sortDir,
 	})
 	if err != nil {
 		logAndInternalError(w, "failed to list API keys", "error", err)
 		return
 	}
 
+	handlerPagination := BuildAdminPagination(page, int(totalKeys), perPage, redirectAdminAPIKeys, r.URL.Query())
+	handlerPagination.SortField = sortField
+	handlerPagination.SortDir = sortDir
+	pagination := convertPagination(handlerPagination)
+	pagination.BulkAction = bulkPaginationAction(bulkScopeAPIKeys, redirectAdminAPIKeys+RouteSuffixBulkDelete)
+	pagination.PerPageSelector = perPageSelector(perPage, perPageOptionsStandard)
+
 	viewData := adminviews.APIKeysListData{
 		APIKeys:    convertAPIKeyListItems(apiKeys),
 		TotalKeys:  totalKeys,
-		Pagination: convertPagination(BuildAdminPagination(page, int(totalKeys), APIKeysPerPage, redirectAdminAPIKeys, r.URL.Query())),
+		Pagination: pagination,
 	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(adminLang, "api_keys.title"), apiKeysBreadcrumbs(adminLang))
@@ -406,6 +426,51 @@ func (h *APIKeysHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	// Regular request - redirect with flash message
 	flashSuccess(w, r, h.renderer, redirectAdminAPIKeys, "API key revoked successfully")
+}
+
+// BulkDelete handles POST /admin/api-keys/bulk-delete - revokes multiple API keys.
+func (h *APIKeysHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
+	if middleware.IsDemoMode() {
+		writeJSONError(w, http.StatusForbidden, middleware.DemoModeMessageDetailed(middleware.RestrictionAPIKeys))
+		return
+	}
+
+	ids, err := parseBulkActionIDs(w, r, defaultBulkActionMaxBatch)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	failed := make([]bulkActionFailedItem, 0)
+	deleted := 0
+
+	for _, id := range ids {
+		apiKey, err := h.queries.GetAPIKeyByID(r.Context(), id)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				failed = append(failed, bulkActionFailedItem{ID: id, Reason: "API key not found"})
+				continue
+			}
+			slog.Error("failed to load API key for bulk revoke", "error", err, "key_id", id)
+			failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Error loading API key"})
+			continue
+		}
+
+		if err := h.queries.DeactivateAPIKey(r.Context(), store.DeactivateAPIKeyParams{
+			UpdatedAt: time.Now(),
+			ID:        id,
+		}); err != nil {
+			slog.Error("failed to bulk revoke API key", "error", err, "key_id", id)
+			failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Error revoking API key"})
+			continue
+		}
+
+		slog.Info("API key revoked", "key_id", id, "name", apiKey.Name, "revoked_by", middleware.GetUserID(r))
+		_ = h.eventService.LogAPIKeyEvent(r.Context(), model.EventLevelInfo, "API key revoked", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"key_id": id, "name": apiKey.Name})
+		deleted++
+	}
+
+	writeBulkActionSuccess(w, deleted, failed)
 }
 
 // sendDeleteError sends an error response for delete operations.

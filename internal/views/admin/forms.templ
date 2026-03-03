@@ -884,30 +884,93 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 				@table.Table() {
 					@table.Header() {
 						@table.Row() {
-							@table.Head(table.HeadProps{Class: "w-[60px]"}) { ID }
+							if data.Pagination.HasBulkAction() {
+								@table.Head(table.HeadProps{Class: "w-[44px]"}) {
+									<input
+										type="checkbox"
+										class="checkbox-input"
+										data-bulk-master="true"
+										data-bulk-scope={ data.Pagination.BulkScope() }
+										aria-label={ pc.T("btn.select_all") }
+									/>
+								}
+							}
+							@table.Head(table.HeadProps{
+								Class: "w-[60px]",
+								Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("id"))},
+							}) {
+								<a
+									href={ data.Pagination.SortURL("id", sortDirDesc) }
+									class={ sortLinkClass(data.Pagination.SortState("id")) }
+									data-sort-state={ sortStateValue(data.Pagination.SortState("id")) }
+								>
+									<span>ID</span>
+									@SortIndicator(data.Pagination.SortState("id"))
+									<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("id"))) }</span>
+								</a>
+							}
 							@table.Head() { { pc.T("forms.preview") } }
-							@table.Head(table.HeadProps{Class: "w-[160px]"}) { { pc.T("forms.submitted") } }
-							@table.Head(table.HeadProps{Class: "w-[120px]"}) { { pc.T("forms.ip_address") } }
-							@table.Head(table.HeadProps{Class: "w-[80px]"}) { { pc.T("label.status") } }
+							@table.Head(table.HeadProps{
+								Class: "w-[160px]",
+								Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("created_at"))},
+							}) {
+								<a
+									href={ data.Pagination.SortURL("created_at", sortDirDesc) }
+									class={ sortLinkClass(data.Pagination.SortState("created_at")) }
+									data-sort-state={ sortStateValue(data.Pagination.SortState("created_at")) }
+								>
+									<span>{ pc.T("forms.submitted") }</span>
+									@SortIndicator(data.Pagination.SortState("created_at"))
+									<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("created_at"))) }</span>
+								</a>
+							}
+							@table.Head(table.HeadProps{
+								Class: "w-[120px]",
+								Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("ip_address"))},
+							}) {
+								<a
+									href={ data.Pagination.SortURL("ip_address", sortDirAsc) }
+									class={ sortLinkClass(data.Pagination.SortState("ip_address")) }
+									data-sort-state={ sortStateValue(data.Pagination.SortState("ip_address")) }
+								>
+									<span>{ pc.T("forms.ip_address") }</span>
+									@SortIndicator(data.Pagination.SortState("ip_address"))
+									<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("ip_address"))) }</span>
+								</a>
+							}
+							@table.Head(table.HeadProps{
+								Class: "w-[80px]",
+								Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("is_read"))},
+							}) {
+								<a
+									href={ data.Pagination.SortURL("is_read", sortDirAsc) }
+									class={ sortLinkClass(data.Pagination.SortState("is_read")) }
+									data-sort-state={ sortStateValue(data.Pagination.SortState("is_read")) }
+								>
+									<span>{ pc.T("label.status") }</span>
+									@SortIndicator(data.Pagination.SortState("is_read"))
+									<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("is_read"))) }</span>
+								</a>
+							}
 							@table.Head(table.HeadProps{Class: "w-[150px]"}) { { pc.T("label.actions") } }
 						}
 					}
 					@table.Body() {
 						for _, sub := range data.Submissions {
 							if !sub.IsRead {
-								@table.Row(table.RowProps{Class: "unread"}) {
-									@submissionRowCells(pc, data, sub)
+								@table.Row(table.RowProps{ID: fmt.Sprintf("submission-row-%d", sub.ID), Class: "unread"}) {
+									@submissionRowCells(pc, data, sub, data.Pagination.BulkScope())
 								}
 							} else {
-								@table.Row() {
-									@submissionRowCells(pc, data, sub)
+								@table.Row(table.RowProps{ID: fmt.Sprintf("submission-row-%d", sub.ID)}) {
+									@submissionRowCells(pc, data, sub, data.Pagination.BulkScope())
 								}
 							}
 						}
 					}
 				}
 			</div>
-			if data.Pagination.ShouldShow() {
+			if data.Pagination.ShouldShow() || data.Pagination.HasBulkAction() {
 				@card.Card(card.Props{}) {
 					@card.Footer(card.FooterProps{}) {
 						@Pagination(pc, data.Pagination)
@@ -934,7 +997,19 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 }
 
 // submissionRowCells renders the cells for a submission row (extracted to avoid duplication)
-templ submissionRowCells(pc *PageContext, data SubmissionsListViewData, sub SubmissionItemView) {
+templ submissionRowCells(pc *PageContext, data SubmissionsListViewData, sub SubmissionItemView, bulkScope string) {
+	if bulkScope != "" {
+		@table.Cell(table.CellProps{Class: "w-[44px]"}) {
+			<input
+				type="checkbox"
+				class="checkbox-input"
+				data-bulk-item="true"
+				data-bulk-id={ fmt.Sprintf("%d", sub.ID) }
+				data-bulk-scope={ bulkScope }
+				aria-label={ pc.T("btn.select") }
+			/>
+		}
+	}
 	@table.Cell() {
 		<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID)) } class="link-primary">
 			{ fmt.Sprintf("#%d", sub.ID) }

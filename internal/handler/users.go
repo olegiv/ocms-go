@@ -42,6 +42,14 @@ var ValidRoles = []string{RoleAdmin, RoleEditor, RolePublic}
 // UsersPerPage is the number of users to display per page.
 const UsersPerPage = 10
 
+var usersSortableFields = map[string]SortConfig{
+	"name":          {DefaultDir: sortDirAsc},
+	"email":         {DefaultDir: sortDirAsc},
+	"role":          {DefaultDir: sortDirAsc},
+	"created_at":    {DefaultDir: sortDirDesc},
+	"last_login_at": {DefaultDir: sortDirDesc},
+}
+
 // MinPasswordLength is the minimum required password length.
 const MinPasswordLength = 12
 
@@ -94,6 +102,8 @@ func (h *UsersHandler) dispatchUserEvent(ctx context.Context, eventType string, 
 func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	lang := h.renderer.GetAdminLang(r)
 	page := ParsePageParam(r)
+	perPage := ParsePerPageParam(r, UsersPerPage, maxPerPageSelectionValue)
+	sortField, sortDir := parseSortParams(r, "created_at", sortDirDesc, usersSortableFields)
 	currentUserID := middleware.GetUserID(r)
 
 	// Get total user count
@@ -104,13 +114,15 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Normalize page to valid range
-	page, _ = NormalizePagination(page, int(totalUsers), UsersPerPage)
-	offset := int64((page - 1) * UsersPerPage)
+	page, _ = NormalizePagination(page, int(totalUsers), perPage)
+	offset := int64((page - 1) * perPage)
 
 	// Fetch users for current page
-	users, err := h.queries.ListUsers(r.Context(), store.ListUsersParams{
-		Limit:  UsersPerPage,
-		Offset: offset,
+	users, err := h.queries.ListUsersSorted(r.Context(), store.ListUsersSortedParams{
+		Limit:     int64(perPage),
+		Offset:    offset,
+		SortField: sortField,
+		SortDir:   sortDir,
 	})
 	if err != nil {
 		logAndInternalError(w, "failed to list users", "error", err)
@@ -134,10 +146,17 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 		viewUsers = append(viewUsers, item)
 	}
 
+	handlerPagination := BuildAdminPagination(page, int(totalUsers), perPage, redirectAdminUsers, r.URL.Query())
+	handlerPagination.SortField = sortField
+	handlerPagination.SortDir = sortDir
+	pagination := convertPagination(handlerPagination)
+	pagination.BulkAction = bulkPaginationAction(bulkScopeUsers, redirectAdminUsers+RouteSuffixBulkDelete)
+	pagination.PerPageSelector = perPageSelector(perPage, perPageOptionsStandard)
+
 	viewData := adminviews.UsersListData{
 		Users:      viewUsers,
 		TotalCount: totalUsers,
-		Pagination: convertPagination(BuildAdminPagination(page, int(totalUsers), UsersPerPage, redirectAdminUsers, r.URL.Query())),
+		Pagination: pagination,
 	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "nav.users"), usersBreadcrumbs(lang))
@@ -548,6 +567,73 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	// Regular request - redirect with flash message
 	flashSuccess(w, r, h.renderer, redirectAdminUsers, "User deleted successfully")
+}
+
+// BulkDelete handles POST /admin/users/bulk-delete - deletes multiple users.
+func (h *UsersHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
+	if middleware.IsDemoMode() {
+		writeJSONError(w, http.StatusForbidden, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteUser))
+		return
+	}
+
+	currentUser := middleware.GetUser(r)
+	if currentUser == nil {
+		writeJSONError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	ids, err := parseBulkActionIDs(w, r, defaultBulkActionMaxBatch)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	failed := make([]bulkActionFailedItem, 0)
+	deleted := 0
+
+	for _, id := range ids {
+		if currentUser.ID == id {
+			failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Cannot delete your own account"})
+			continue
+		}
+
+		deleteUser, err := h.queries.GetUserByID(r.Context(), id)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				failed = append(failed, bulkActionFailedItem{ID: id, Reason: "User not found"})
+				continue
+			}
+			slog.Error("failed to get user for bulk delete", "error", err, "user_id", id)
+			failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Error loading user"})
+			continue
+		}
+
+		if deleteUser.Role == RoleAdmin {
+			adminCount, err := h.queries.CountUsersByRole(r.Context(), RoleAdmin)
+			if err != nil {
+				slog.Error("failed to count admins for bulk delete", "error", err, "user_id", id)
+				failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Error checking admin count"})
+				continue
+			}
+			if adminCount <= 1 {
+				failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Cannot delete the last admin"})
+				continue
+			}
+		}
+
+		if err := h.queries.DeleteUser(r.Context(), id); err != nil {
+			slog.Error("failed to bulk delete user", "error", err, "user_id", id)
+			failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Error deleting user"})
+			continue
+		}
+
+		slog.Info("user deleted", "user_id", id, "email", deleteUser.Email, "deleted_by", currentUser.ID)
+		_ = h.eventService.LogUserEvent(r.Context(), model.EventLevelInfo, "User deleted", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"user_id": id, "email": deleteUser.Email})
+		h.dispatchUserEvent(r.Context(), model.EventUserDeleted, deleteUser)
+		deleted++
+	}
+
+	writeBulkActionSuccess(w, deleted, failed)
 }
 
 // sendDeleteError sends an error response for delete operations.

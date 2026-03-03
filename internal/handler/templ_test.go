@@ -5,9 +5,12 @@ package handler
 
 import (
 	"database/sql"
+	"fmt"
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -458,11 +461,15 @@ func TestConvertPagination(t *testing.T) {
 		CurrentPage: 2,
 		TotalPages:  5,
 		TotalItems:  100,
+		PerPage:     20,
 		HasFirst:    true,
 		HasPrev:     true,
 		HasNext:     true,
 		HasLast:     true,
 		BaseURL:     "/admin/pages",
+		QueryString: "status=draft&per_page=20&sort=title&dir=asc",
+		SortField:   "title",
+		SortDir:     "asc",
 		Pages: []AdminPaginationPage{
 			{Number: 1, URL: "/admin/pages?page=1", IsCurrent: false},
 			{Number: 2, URL: "/admin/pages?page=2", IsCurrent: true},
@@ -476,10 +483,94 @@ func TestConvertPagination(t *testing.T) {
 	if !got.HasFirst || !got.HasPrev || !got.HasNext || !got.HasLast {
 		t.Error("navigation flags should all be true")
 	}
+	if got.BaseURL != "/admin/pages" {
+		t.Fatalf("BaseURL = %q, want /admin/pages", got.BaseURL)
+	}
+	if got.QueryString != "status=draft&per_page=20&sort=title&dir=asc" {
+		t.Fatalf("QueryString = %q", got.QueryString)
+	}
+	if got.SortField != "title" || got.SortDir != "asc" {
+		t.Fatalf("sort = %s %s, want title asc", got.SortField, got.SortDir)
+	}
 	if len(got.Pages) != 3 {
 		t.Fatalf("len(Pages) = %d; want 3", len(got.Pages))
 	}
 	if !got.Pages[1].IsCurrent {
 		t.Error("Pages[1].IsCurrent should be true")
+	}
+	if got.BulkAction != nil {
+		t.Errorf("BulkAction = %#v, want nil by default", got.BulkAction)
+	}
+	if got.PerPageSelector != nil {
+		t.Errorf("PerPageSelector = %#v, want nil by default", got.PerPageSelector)
+	}
+}
+
+func TestConvertPagesListViewData_PerPageSelector(t *testing.T) {
+	data := PagesListData{
+		Pagination: BuildAdminPagination(1, 0, 20, redirectAdminPages, nil),
+	}
+
+	got := convertPagesListViewData(data, &render.Renderer{}, "en")
+	selector := got.Pagination.PerPageSelector
+	if selector == nil {
+		t.Fatal("PerPageSelector is nil")
+	}
+	if selector.Current != 20 {
+		t.Fatalf("selector.Current = %d, want 20", selector.Current)
+	}
+	if selector.Param != perPageQueryParam {
+		t.Fatalf("selector.Param = %q, want %q", selector.Param, perPageQueryParam)
+	}
+	if !slices.Equal(selector.Options, []int{10, 20, 50, 100}) {
+		t.Fatalf("selector.Options = %v, want %v", selector.Options, []int{10, 20, 50, 100})
+	}
+}
+
+func TestConvertMediaLibraryViewData_PerPageSelector(t *testing.T) {
+	data := MediaLibraryData{
+		Pagination: BuildAdminPagination(1, 0, 24, redirectAdminMedia, nil),
+	}
+
+	got := convertMediaLibraryViewData(data)
+	selector := got.Pagination.PerPageSelector
+	if selector == nil {
+		t.Fatal("PerPageSelector is nil")
+	}
+	if selector.Current != 24 {
+		t.Fatalf("selector.Current = %d, want 24", selector.Current)
+	}
+	if selector.Param != perPageQueryParam {
+		t.Fatalf("selector.Param = %q, want %q", selector.Param, perPageQueryParam)
+	}
+	if !slices.Equal(selector.Options, []int{10, 20, 24, 50, 100}) {
+		t.Fatalf("selector.Options = %v, want %v", selector.Options, []int{10, 20, 24, 50, 100})
+	}
+}
+
+func TestConvertSubmissionsListViewData_PerPageSelector(t *testing.T) {
+	formID := int64(7)
+	data := SubmissionsListData{
+		Form: store.Form{
+			ID:   formID,
+			Name: "Contact",
+			Slug: "contact",
+		},
+		Pagination: BuildAdminPagination(1, 0, 20, fmt.Sprintf(redirectAdminFormsIDSubmissions, formID), nil),
+	}
+
+	got := convertSubmissionsListViewData(data, &render.Renderer{}, "en")
+	selector := got.Pagination.PerPageSelector
+	if selector == nil {
+		t.Fatal("PerPageSelector is nil")
+	}
+	if selector.Current != 20 {
+		t.Fatalf("selector.Current = %d, want 20", selector.Current)
+	}
+	if selector.Param != perPageQueryParam {
+		t.Fatalf("selector.Param = %q, want %q", selector.Param, perPageQueryParam)
+	}
+	if !slices.Equal(selector.Options, []int{10, 20, 50, 100}) {
+		t.Fatalf("selector.Options = %v, want %v", selector.Options, []int{10, 20, 50, 100})
 	}
 }

@@ -71,6 +71,9 @@ A lightweight content management system built with Go, featuring a modern admin 
   - Quick actions
 - **Cache Management**: View cache stats and clear cache
 - **API Key Management**: Create and manage API keys
+- **Bulk List Actions**: Multi-select and bulk delete/revoke on paged admin lists (pages, tags, users, API keys, media, and form submissions)
+- **Per-Page Selector**: Choose items per page on delete-capable admin lists (URL query `per_page`, current-page state in URL only)
+- **List Sorting**: Sort delete-capable admin lists by safe whitelisted columns with clear active sort highlighting (URL queries `sort` + `dir`)
 - **SQLite Database**: Zero-configuration embedded database with migrations
 
 ### Multi-Language Support
@@ -187,27 +190,29 @@ sudo dnf install vips-devel
 | `OCMS_GEOIP_DB_PATH` | Path to GeoLite2-Country.mmdb for country detection | - | No |
 | `OCMS_UPLOADS_DIR` | Directory for uploaded media files | `./uploads` | No |
 | `OCMS_TRUSTED_PROXIES` | Trusted reverse-proxy CIDRs/IPs; forwarding headers are ignored unless peer is trusted | - | No |
-| `OCMS_REQUIRE_TRUSTED_PROXIES` | Fail startup in production if trusted proxy CIDRs/IPs are not configured | `false` | No |
+| `OCMS_REQUIRE_TRUSTED_PROXIES` | Fail startup in production if trusted proxy CIDRs/IPs are not configured | `false` (`true` in production when unset) | No |
 | `OCMS_API_ALLOWED_CIDRS` | Global source CIDRs/IPs allowed to use API keys | - | No |
-| `OCMS_REQUIRE_API_ALLOWED_CIDRS` | Fail API key auth when global API source CIDRs are not configured | `false` | No |
-| `OCMS_REQUIRE_API_KEY_EXPIRY` | Require API keys to have expiration timestamps | `false` | No |
-| `OCMS_REQUIRE_API_KEY_SOURCE_CIDRS` | Require API keys to have per-key source CIDR restrictions | `false` | No |
-| `OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE` | Deactivate API keys when source IP changes and the key has no per-key CIDRs | `false` | No |
-| `OCMS_API_KEY_MAX_TTL_DAYS` | Maximum API key lifetime in days (`0` disables, max `365`) | `0` | No |
+| `OCMS_REQUIRE_API_ALLOWED_CIDRS` | Fail API key auth when global API source CIDRs are not configured | `false` (`true` in production when unset) | No |
+| `OCMS_REQUIRE_API_KEY_EXPIRY` | Require API keys to have expiration timestamps | `false` (`true` in production when unset) | No |
+| `OCMS_REQUIRE_API_KEY_SOURCE_CIDRS` | Require API keys to have per-key source CIDR restrictions | `false` (`true` in production when unset) | No |
+| `OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE` | Deactivate API keys when source IP changes and the key has no per-key CIDRs | `false` (`true` in production when unset) | No |
+| `OCMS_API_KEY_MAX_TTL_DAYS` | Maximum API key lifetime in days (`0` disables, max `365`) | `0` (`90` in production when unset) | No |
 | `OCMS_EMBED_ALLOWED_ORIGINS` | Allowed browser origins for public embed proxy routes; required for working browser embed requests in production | - | No |
 | `OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS` | Allowed upstream hosts for embed provider API endpoints | - | No |
-| `OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS` | Fail startup in production if embed proxy is active without origin allowlist | `false` | No |
-| `OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS` | Fail startup in production if embed proxy is active without upstream host allowlist | `false` | No |
+| `OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS` | Fail startup in production if embed proxy is active without origin allowlist | `false` (`true` in production when unset) | No |
+| `OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS` | Fail startup in production if embed proxy is active without upstream host allowlist | `false` (`true` in production when unset) | No |
 | `OCMS_EMBED_PROXY_TOKEN` | Secret used to mint short-lived signed embed proxy tokens; required for active embed proxy in production | - | No |
 | `OCMS_REQUIRE_EMBED_PROXY_TOKEN` | Enforce embed proxy token requirement in non-production too | `false` | No |
-| `OCMS_REQUIRE_HTTPS_OUTBOUND` | Require HTTPS for outbound integration URLs | `false` | No |
-| `OCMS_REQUIRE_FORM_CAPTCHA` | Require captcha on all public form submissions | `false` | No |
+| `OCMS_REQUIRE_HTTPS_OUTBOUND` | Require HTTPS for outbound integration URLs | `false` (`true` in production when unset) | No |
+| `OCMS_REQUIRE_FORM_CAPTCHA` | Require captcha on all public form submissions | `false` (`true` in production when unset) | No |
 | `OCMS_WEBHOOK_FORM_DATA_MODE` | `form.submitted` payload data mode (`redacted`/`none`/`full`) | `redacted` | No |
-| `OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION` | Fail startup in production when form webhook payload mode is `full` | `false` | No |
-| `OCMS_SANITIZE_PAGE_HTML` | Sanitize page HTML before rendering to visitors | `false` | No |
-| `OCMS_REQUIRE_SANITIZE_PAGE_HTML` | Fail startup in production if page HTML sanitization is disabled | `false` | No |
-| `OCMS_BLOCK_SUSPICIOUS_PAGE_HTML` | Reject page writes containing suspicious HTML patterns | `false` | No |
-| `OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML` | Fail startup in production when suspicious page markup blocking is disabled or existing pages contain suspicious markers | `false` | No |
+| `OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION` | Fail startup in production when form webhook payload mode is `full` | `false` (`true` in production when unset) | No |
+| `OCMS_WEBHOOK_ALLOWED_HOSTS` | Allowed destination hosts for active webhook deliveries (exact hostname match) | - | No |
+| `OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS` | Fail startup in production when active webhooks exist without destination host allowlist | `false` (`true` in production when unset) | No |
+| `OCMS_SANITIZE_PAGE_HTML` | Sanitize page HTML before rendering to visitors | `false` (`true` in production when unset) | No |
+| `OCMS_REQUIRE_SANITIZE_PAGE_HTML` | Fail startup in production if page HTML sanitization is disabled | `false` (`true` in production when unset) | No |
+| `OCMS_BLOCK_SUSPICIOUS_PAGE_HTML` | Reject page writes containing suspicious HTML patterns | `false` (`true` in production when unset) | No |
+| `OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML` | Fail startup in production when suspicious page markup blocking is disabled or existing pages contain suspicious markers | `false` (`true` in production when unset) | No |
 | `OCMS_DEMO_MODE` | Enable demo content seeding (users, pages, media) | `false` | No |
 
 ## Development
@@ -329,6 +334,8 @@ OCMS_SESSION_SECRET=your-secure-secret-key-at-least-32-bytes
 OCMS_ENV=production
 OCMS_DO_SEED=false
 OCMS_ACTIVE_THEME=default
+OCMS_TRUSTED_PROXIES=127.0.0.1/32,10.0.0.0/8
+OCMS_API_ALLOWED_CIDRS=203.0.113.0/24
 
 # Hardened embed proxy baseline (when embed module/provider is enabled)
 # Origin matching is exact (scheme + host). Include all real hostnames.
@@ -337,13 +344,14 @@ OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS=api.dify.ai
 OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS=true
 OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS=true
 OCMS_EMBED_PROXY_TOKEN=replace-with-embed-proxy-token
+OCMS_WEBHOOK_ALLOWED_HOSTS=hooks.example.com,events.example.com
+
+# Required when OCMS_REQUIRE_FORM_CAPTCHA is enabled (enabled by default in production)
+OCMS_HCAPTCHA_SITE_KEY=your-site-key
+OCMS_HCAPTCHA_SECRET_KEY=your-secret-key
 
 # Optional: Redis caching
 OCMS_REDIS_URL=redis://redis:6379/0
-
-# Optional: hCaptcha protection
-OCMS_HCAPTCHA_SITE_KEY=your-site-key
-OCMS_HCAPTCHA_SECRET_KEY=your-secret-key
 ```
 
 Then start with:

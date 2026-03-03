@@ -30,9 +30,46 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
+function asElement(target) {
+    if (target instanceof Element) {
+        return target;
+    }
+    if (target && target.parentElement instanceof Element) {
+        return target.parentElement;
+    }
+    return null;
+}
+
+function closestMatch(target, selector) {
+    const element = asElement(target);
+    if (!element) {
+        return null;
+    }
+    return element.closest(selector);
+}
+
+function normalizeBulkScope(scope) {
+    return (scope || '').trim();
+}
+
 // Declarative helpers for CSP-safe interactions
 document.addEventListener('change', function(e) {
-    const autoSubmit = e.target.closest('[data-auto-submit="true"]');
+    const perPageSelector = closestMatch(e.target, 'select[data-per-page-selector="true"]');
+    if (perPageSelector) {
+        const selectedValue = Number.parseInt(perPageSelector.value, 10);
+        if (!Number.isInteger(selectedValue) || selectedValue <= 0) {
+            return;
+        }
+
+        const paramName = perPageSelector.getAttribute('data-per-page-param') || 'per_page';
+        const nextURL = new URL(window.location.href);
+        nextURL.searchParams.set(paramName, String(selectedValue));
+        nextURL.searchParams.set('page', '1');
+        window.location.assign(nextURL.toString());
+        return;
+    }
+
+    const autoSubmit = closestMatch(e.target, '[data-auto-submit="true"]');
     if (autoSubmit) {
         const form = autoSubmit.form || autoSubmit.closest('form');
         if (form) {
@@ -41,7 +78,7 @@ document.addEventListener('change', function(e) {
         return;
     }
 
-    const syncTarget = e.target.closest('[data-sync-target]');
+    const syncTarget = closestMatch(e.target, '[data-sync-target]');
     if (syncTarget) {
         const targetId = syncTarget.getAttribute('data-sync-target');
         const target = targetId ? document.getElementById(targetId) : null;
@@ -50,18 +87,30 @@ document.addEventListener('change', function(e) {
         }
     }
 
-    const syncPicker = e.target.closest('[data-sync-picker]');
+    const syncPicker = closestMatch(e.target, '[data-sync-picker]');
     if (syncPicker) {
         const pickerId = syncPicker.getAttribute('data-sync-picker');
         const picker = pickerId ? document.getElementById(pickerId) : null;
         if (picker) {
             picker.value = syncPicker.value;
         }
+        return;
+    }
+
+    const bulkItem = closestMatch(e.target, 'input[type="checkbox"][data-bulk-item="true"]');
+    if (bulkItem) {
+        updateBulkScopeState(bulkItem.getAttribute('data-bulk-scope'));
+        return;
+    }
+
+    const bulkMaster = closestMatch(e.target, 'input[type="checkbox"][data-bulk-master="true"]');
+    if (bulkMaster) {
+        setBulkScopeSelection(bulkMaster.getAttribute('data-bulk-scope'), bulkMaster.checked);
     }
 });
 
 document.addEventListener('input', function(e) {
-    const syncPicker = e.target.closest('[data-sync-picker]');
+    const syncPicker = closestMatch(e.target, '[data-sync-picker]');
     if (!syncPicker) {
         return;
     }
@@ -73,7 +122,7 @@ document.addEventListener('input', function(e) {
 });
 
 document.addEventListener('click', function(e) {
-    const clearBtn = e.target.closest('[data-clear-target]');
+    const clearBtn = closestMatch(e.target, '[data-clear-target]');
     if (clearBtn) {
         e.preventDefault();
         const targetId = clearBtn.getAttribute('data-clear-target');
@@ -85,8 +134,30 @@ document.addEventListener('click', function(e) {
         return;
     }
 
-    const historyBackBtn = e.target.closest('[data-history-back="true"]');
+    const historyBackBtn = closestMatch(e.target, '[data-history-back="true"]');
     if (!historyBackBtn) {
+        const bulkAction = closestMatch(e.target, '[data-bulk-action]');
+        if (!bulkAction) {
+            return;
+        }
+        e.preventDefault();
+        const scope = bulkAction.getAttribute('data-bulk-scope');
+        const action = bulkAction.getAttribute('data-bulk-action');
+        if (!scope || !action) {
+            return;
+        }
+
+        if (action === 'select-all') {
+            setBulkScopeSelection(scope, true);
+            return;
+        }
+        if (action === 'deselect-all') {
+            setBulkScopeSelection(scope, false);
+            return;
+        }
+        if (action === 'delete-selected') {
+            bulkDeleteSelected(scope);
+        }
         return;
     }
     e.preventDefault();
@@ -96,6 +167,185 @@ document.addEventListener('click', function(e) {
     }
     window.location.href = '/admin';
 });
+
+function getBulkItemCheckboxes(scope) {
+    const allItems = Array.from(document.querySelectorAll('input[type="checkbox"][data-bulk-item="true"]'));
+    const normalizedScope = normalizeBulkScope(scope);
+    if (!normalizedScope) {
+        return allItems;
+    }
+    const scopedItems = allItems.filter(function(el) {
+        return normalizeBulkScope(el.getAttribute('data-bulk-scope')) === normalizedScope;
+    });
+    if (scopedItems.length > 0) {
+        return scopedItems;
+    }
+    return allItems;
+}
+
+function getBulkMasterCheckboxes(scope) {
+    const allMasters = Array.from(document.querySelectorAll('input[type="checkbox"][data-bulk-master="true"]'));
+    const normalizedScope = normalizeBulkScope(scope);
+    if (!normalizedScope) {
+        return allMasters;
+    }
+    const scopedMasters = allMasters.filter(function(el) {
+        return normalizeBulkScope(el.getAttribute('data-bulk-scope')) === normalizedScope;
+    });
+    if (scopedMasters.length > 0) {
+        return scopedMasters;
+    }
+    return allMasters;
+}
+
+function getBulkSelectedCountTargets(scope) {
+    const allTargets = Array.from(document.querySelectorAll('[data-bulk-selected-count]'));
+    const normalizedScope = normalizeBulkScope(scope);
+    if (!normalizedScope) {
+        return allTargets;
+    }
+    const scopedTargets = allTargets.filter(function(el) {
+        return normalizeBulkScope(el.getAttribute('data-bulk-selected-count')) === normalizedScope;
+    });
+    if (scopedTargets.length > 0) {
+        return scopedTargets;
+    }
+    return allTargets;
+}
+
+function getBulkControls(scope) {
+    const controls = Array.from(document.querySelectorAll('[data-bulk-controls="true"]'));
+    if (controls.length === 0) {
+        return null;
+    }
+    const normalizedScope = normalizeBulkScope(scope);
+    if (!normalizedScope) {
+        return controls[0];
+    }
+    const scopedControls = controls.find(function(el) {
+        return normalizeBulkScope(el.getAttribute('data-bulk-scope')) === normalizedScope;
+    });
+    if (scopedControls) {
+        return scopedControls;
+    }
+    return controls[0];
+}
+
+function updateBulkScopeState(scope) {
+    if (!scope) {
+        return;
+    }
+    const items = getBulkItemCheckboxes(scope);
+    const selectedCount = items.filter(function(item) { return item.checked; }).length;
+
+    const masters = getBulkMasterCheckboxes(scope);
+    masters.forEach(function(master) {
+        master.checked = items.length > 0 && selectedCount === items.length;
+        master.indeterminate = selectedCount > 0 && selectedCount < items.length;
+    });
+
+    const countTargets = getBulkSelectedCountTargets(scope);
+    countTargets.forEach(function(target) {
+        target.textContent = String(selectedCount);
+    });
+}
+
+function setBulkScopeSelection(scope, checked) {
+    if (!scope) {
+        return;
+    }
+    const items = getBulkItemCheckboxes(scope);
+    items.forEach(function(item) {
+        item.checked = checked;
+    });
+    updateBulkScopeState(scope);
+}
+
+async function bulkDeleteSelected(scope) {
+    const controls = getBulkControls(scope);
+    if (!controls) {
+        showToast('Bulk actions are not configured', 'error');
+        return;
+    }
+
+    const selectedIDs = getBulkItemCheckboxes(scope)
+        .filter(function(item) { return item.checked; })
+        .map(function(item) { return Number.parseInt(item.getAttribute('data-bulk-id'), 10); })
+        .filter(function(id) { return Number.isInteger(id) && id > 0; });
+
+    const noneMessage = controls.getAttribute('data-bulk-none') || 'No items selected';
+    if (selectedIDs.length === 0) {
+        showToast(noneMessage, 'error');
+        return;
+    }
+
+    const confirmMessage = controls.getAttribute('data-bulk-confirm') || 'Delete selected items?';
+    if (!window.confirm(confirmMessage)) {
+        return;
+    }
+
+    const deleteURL = controls.getAttribute('data-bulk-delete-url');
+    if (!deleteURL) {
+        showToast('Bulk delete URL is missing', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch(deleteURL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ ids: selectedIDs })
+        });
+
+        let payload;
+        try {
+            payload = await response.json();
+        } catch (parseError) {
+            payload = null;
+        }
+
+        if (!response.ok || !payload || payload.success !== true) {
+            const errorMessage = payload && payload.error ? payload.error : (controls.getAttribute('data-bulk-error') || 'Bulk delete failed');
+            showToast(errorMessage, 'error');
+            return;
+        }
+
+        const deletedCount = Number.isFinite(payload.deleted) ? Number(payload.deleted) : 0;
+        const failedCount = Array.isArray(payload.failed) ? payload.failed.length : 0;
+
+        if (failedCount > 0) {
+            const partialMessage = controls.getAttribute('data-bulk-partial') || 'Bulk delete partially completed';
+            const totalCount = deletedCount + failedCount;
+            showToast(partialMessage + ' (' + deletedCount + '/' + totalCount + ')', 'info');
+        } else {
+            const successMessage = controls.getAttribute('data-bulk-success') || 'Bulk delete completed';
+            showToast(successMessage + ' (' + deletedCount + ')', 'success');
+        }
+
+        window.location.reload();
+    } catch (error) {
+        const errorMessage = controls.getAttribute('data-bulk-error') || 'Bulk delete failed';
+        showToast(errorMessage, 'error');
+    }
+}
+
+function initBulkScopes() {
+    const scopes = new Set();
+    Array.from(document.querySelectorAll('[data-bulk-scope]')).forEach(function(el) {
+        const scope = el.getAttribute('data-bulk-scope');
+        if (scope) {
+            scopes.add(scope);
+        }
+    });
+    scopes.forEach(function(scope) {
+        updateBulkScopeState(scope);
+    });
+}
+
+initBulkScopes();
 
 // HTMX loading state handlers
 document.body.addEventListener('htmx:beforeRequest', function(e) {

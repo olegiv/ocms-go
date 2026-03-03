@@ -63,6 +63,8 @@ type Config struct {
 	EmbedProxyToken                  string `env:"OCMS_EMBED_PROXY_TOKEN"`                                       // Shared secret used to mint short-lived signed embed proxy tokens
 	RequireEmbedProxyToken           bool   `env:"OCMS_REQUIRE_EMBED_PROXY_TOKEN" envDefault:"false"`            // Force embed proxy token requirement outside production as well
 	RequireHTTPSOutbound             bool   `env:"OCMS_REQUIRE_HTTPS_OUTBOUND" envDefault:"false"`               // Require HTTPS for outbound integration URLs (webhooks, scheduler, embeds)
+	WebhookAllowedHosts              string `env:"OCMS_WEBHOOK_ALLOWED_HOSTS"`                                   // Comma-separated exact hosts allowed for webhook destinations
+	RequireWebhookAllowedHosts       bool   `env:"OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS" envDefault:"false"`        // Reject startup in production when active webhooks exist without destination host allowlist
 
 	// Seeding configuration
 	DoSeed bool `env:"OCMS_DO_SEED" envDefault:"false"` // Enable database seeding
@@ -111,12 +113,17 @@ const MinSessionSecretLength = 32
 // MaxAPIKeyTTLDays is the maximum allowed API key max TTL policy window.
 const MaxAPIKeyTTLDays = 365
 
+// DefaultProductionAPIKeyMaxTTLDays is the secure default API key max TTL in production.
+const DefaultProductionAPIKeyMaxTTLDays = 90
+
 // Load parses environment variables and returns a Config struct.
 func Load() (*Config, error) {
 	cfg := &Config{}
 	if err := env.Parse(cfg); err != nil {
 		return nil, fmt.Errorf("parsing config: %w", err)
 	}
+
+	applyProductionSecurityDefaults(cfg)
 
 	// Production hardening: prevent default seeding in production
 	// (allowed when demo mode is explicitly enabled).
@@ -179,6 +186,44 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func applyProductionSecurityDefaults(cfg *Config) {
+	if cfg == nil || cfg.Env != "production" {
+		return
+	}
+
+	// Apply secure defaults only when the operator did not explicitly set a value.
+	setBoolIfUnset("OCMS_REQUIRE_FORM_CAPTCHA", &cfg.RequireFormCaptcha, true)
+	setBoolIfUnset("OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION", &cfg.RequireWebhookFormDataMinimization, true)
+	setBoolIfUnset("OCMS_REQUIRE_TRUSTED_PROXIES", &cfg.RequireTrustedProxies, true)
+	setBoolIfUnset("OCMS_REQUIRE_API_ALLOWED_CIDRS", &cfg.RequireAPIAllowedCIDRs, true)
+	setBoolIfUnset("OCMS_REQUIRE_API_KEY_EXPIRY", &cfg.RequireAPIKeyExpiry, true)
+	setBoolIfUnset("OCMS_REQUIRE_API_KEY_SOURCE_CIDRS", &cfg.RequireAPIKeySourceCIDRs, true)
+	setBoolIfUnset("OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE", &cfg.RevokeAPIKeyOnSourceIPChange, true)
+	setBoolIfUnset("OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS", &cfg.RequireEmbedAllowedOrigins, true)
+	setBoolIfUnset("OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS", &cfg.RequireEmbedAllowedUpstreamHosts, true)
+	setBoolIfUnset("OCMS_REQUIRE_HTTPS_OUTBOUND", &cfg.RequireHTTPSOutbound, true)
+	setBoolIfUnset("OCMS_SANITIZE_PAGE_HTML", &cfg.SanitizePageHTML, true)
+	setBoolIfUnset("OCMS_REQUIRE_SANITIZE_PAGE_HTML", &cfg.RequireSanitizePageHTML, true)
+	setBoolIfUnset("OCMS_BLOCK_SUSPICIOUS_PAGE_HTML", &cfg.BlockSuspiciousPageHTML, true)
+	setBoolIfUnset("OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML", &cfg.RequireBlockSuspiciousPageHTML, true)
+	setBoolIfUnset("OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS", &cfg.RequireWebhookAllowedHosts, true)
+	setIntIfUnset("OCMS_API_KEY_MAX_TTL_DAYS", &cfg.APIKeyMaxTTLDays, DefaultProductionAPIKeyMaxTTLDays)
+}
+
+func setBoolIfUnset(key string, target *bool, value bool) {
+	if _, ok := os.LookupEnv(key); ok {
+		return
+	}
+	*target = value
+}
+
+func setIntIfUnset(key string, target *int, value int) {
+	if _, ok := os.LookupEnv(key); ok {
+		return
+	}
+	*target = value
 }
 
 // hasMinimumEntropy checks that a secret contains at least 3 character classes

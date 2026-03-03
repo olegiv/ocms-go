@@ -80,17 +80,70 @@ templ TagsListPage(pc *PageContext, data TagsListData) {
 					@table.Table() {
 						@table.Header() {
 							@table.Row() {
-								@table.Head() { { pc.T("label.name") } }
+								if data.Pagination.HasBulkAction() {
+									@table.Head(table.HeadProps{Class: "w-[44px]"}) {
+										<input
+											type="checkbox"
+											class="checkbox-input"
+											data-bulk-master="true"
+											data-bulk-scope={ data.Pagination.BulkScope() }
+											aria-label={ pc.T("btn.select_all") }
+										/>
+									}
+								}
+								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("name"))}}) {
+									<a
+										href={ data.Pagination.SortURL("name", sortDirAsc) }
+										class={ sortLinkClass(data.Pagination.SortState("name")) }
+										data-sort-state={ sortStateValue(data.Pagination.SortState("name")) }
+									>
+										<span>{ pc.T("label.name") }</span>
+										@SortIndicator(data.Pagination.SortState("name"))
+										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("name"))) }</span>
+									</a>
+								}
 								@table.Head() { { pc.T("label.slug") } }
 								@table.Head() { { pc.T("label.language") } }
-								@table.Head() { { pc.T("nav.pages") } }
-								@table.Head() { { pc.T("label.created_at") } }
+								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("usage_count"))}}) {
+									<a
+										href={ data.Pagination.SortURL("usage_count", sortDirDesc) }
+										class={ sortLinkClass(data.Pagination.SortState("usage_count")) }
+										data-sort-state={ sortStateValue(data.Pagination.SortState("usage_count")) }
+									>
+										<span>{ pc.T("nav.pages") }</span>
+										@SortIndicator(data.Pagination.SortState("usage_count"))
+										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("usage_count"))) }</span>
+									</a>
+								}
+								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("created_at"))}}) {
+									<a
+										href={ data.Pagination.SortURL("created_at", sortDirDesc) }
+										class={ sortLinkClass(data.Pagination.SortState("created_at")) }
+										data-sort-state={ sortStateValue(data.Pagination.SortState("created_at")) }
+									>
+										<span>{ pc.T("label.created_at") }</span>
+										@SortIndicator(data.Pagination.SortState("created_at"))
+										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("created_at"))) }</span>
+									</a>
+								}
 								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
 							}
 						}
 						@table.Body() {
 							for _, tag := range data.Tags {
 								@table.Row(table.RowProps{ID: fmt.Sprintf("tag-row-%d", tag.ID)}) {
+									if data.Pagination.HasBulkAction() {
+										@table.Cell(table.CellProps{Class: "w-[44px]"}) {
+											<input
+												type="checkbox"
+												class="checkbox-input"
+												data-bulk-item="true"
+												data-bulk-id={ fmt.Sprintf("%d", tag.ID) }
+												data-bulk-scope={ data.Pagination.BulkScope() }
+												aria-label={ pc.T("btn.select") }
+											/>
+										}
+									}
 									@table.Cell() {
 										<a href={ templ.SafeURL(fmt.Sprintf("/admin/tags/%d", tag.ID)) } class="tag-name-link">{ tag.Name }</a>
 									}
@@ -125,7 +178,7 @@ templ TagsListPage(pc *PageContext, data TagsListData) {
 						}
 					}
 				</div>
-				if data.Pagination.ShouldShow() {
+				if data.Pagination.ShouldShow() || data.Pagination.HasBulkAction() {
 					@card.Footer() {
 						@Pagination(pc, data.Pagination)
 					}

@@ -28,6 +28,8 @@ const (
 	RouteSuffixTranslate = "/translate/{langCode}"
 	// RouteSuffixFolders is the suffix for folder routes.
 	RouteSuffixFolders = "/folders"
+	// RouteSuffixBulkDelete is the suffix for bulk delete/revoke routes.
+	RouteSuffixBulkDelete = "/bulk-delete"
 
 	// RouteParamID is the ID parameter pattern.
 	RouteParamID = "/{id}"

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/store"
+	webhookpkg "github.com/olegiv/ocms-go/internal/webhook"
 )
 
 func TestNewWebhooksHandler(t *testing.T) {
@@ -419,4 +420,54 @@ func TestValidateWebhookHeaders(t *testing.T) {
 			t.Fatal("validateWebhookHeaders() expected error for header count")
 		}
 	})
+}
+
+func TestValidateWebhookForm_RejectsDisallowedDestinationHost(t *testing.T) {
+	if err := webhookpkg.ConfigureAllowedHosts("hooks.example.com"); err != nil {
+		t.Fatalf("ConfigureAllowedHosts() error: %v", err)
+	}
+	webhookpkg.SetRequireAllowedHosts(false)
+	t.Cleanup(func() {
+		_ = webhookpkg.ConfigureAllowedHosts("")
+		webhookpkg.SetRequireAllowedHosts(false)
+	})
+
+	input := webhookFormInput{
+		Name:     "Webhook",
+		URL:      "https://1.1.1.1/webhook",
+		Secret:   "secret",
+		Events:   []string{"page.created"},
+		IsActive: true,
+		Headers:  map[string]string{},
+	}
+
+	errs := validateWebhookForm(input, false)
+	if errs["url"] == "" {
+		t.Fatal("validateWebhookForm() expected URL error when destination host is not allowlisted")
+	}
+}
+
+func TestValidateWebhookForm_RejectsWhenAllowlistRequiredButMissing(t *testing.T) {
+	if err := webhookpkg.ConfigureAllowedHosts(""); err != nil {
+		t.Fatalf("ConfigureAllowedHosts() error: %v", err)
+	}
+	webhookpkg.SetRequireAllowedHosts(true)
+	t.Cleanup(func() {
+		_ = webhookpkg.ConfigureAllowedHosts("")
+		webhookpkg.SetRequireAllowedHosts(false)
+	})
+
+	input := webhookFormInput{
+		Name:     "Webhook",
+		URL:      "https://1.1.1.1/webhook",
+		Secret:   "secret",
+		Events:   []string{"page.created"},
+		IsActive: true,
+		Headers:  map[string]string{},
+	}
+
+	errs := validateWebhookForm(input, false)
+	if errs["url"] == "" {
+		t.Fatal("validateWebhookForm() expected URL error when allowlist is required but missing")
+	}
 }

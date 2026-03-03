@@ -5,6 +5,7 @@ package admin
 
 import "fmt"
 import "strings"
+import "net/url"
 import "encoding/json"
 import "github.com/olegiv/ocms-go/internal/views/components/alert"
 import "github.com/olegiv/ocms-go/internal/views/components/badge"
@@ -214,25 +215,50 @@ func featuredImageJSON(img *PageFormFeaturedImageView) string {
 	return string(b)
 }
 
-// pagesListURL builds a filter URL for the pages list.
-func pagesListURL(status string, categoryFilter int64, searchFilter string, page int) string {
-	var params []string
+// pagesListURL builds a filter URL for the pages list while preserving query state.
+func pagesListURL(p PaginationData, status string, categoryFilter int64, languageFilter string, searchFilter string) string {
+	params := make(url.Values)
+	if p.QueryString != "" {
+		if parsed, err := url.ParseQuery(p.QueryString); err == nil {
+			for k, values := range parsed {
+				if len(values) == 0 {
+					continue
+				}
+				params[k] = append([]string(nil), values...)
+			}
+		}
+	}
+
+	params.Del("page")
 	if status != "" {
-		params = append(params, fmt.Sprintf("status=%s", status))
+		params.Set("status", status)
+	} else {
+		params.Del("status")
 	}
 	if categoryFilter > 0 {
-		params = append(params, fmt.Sprintf("category=%d", categoryFilter))
+		params.Set("category", fmt.Sprintf("%d", categoryFilter))
+	} else {
+		params.Del("category")
+	}
+	if languageFilter != "" {
+		params.Set("language", languageFilter)
+	} else {
+		params.Del("language")
 	}
 	if searchFilter != "" {
-		params = append(params, fmt.Sprintf("search=%s", searchFilter))
+		params.Set("search", searchFilter)
+	} else {
+		params.Del("search")
 	}
-	if page > 0 {
-		params = append(params, fmt.Sprintf("page=%d", page))
+
+	baseURL := p.BaseURL
+	if baseURL == "" {
+		baseURL = "/admin/pages"
 	}
-	if len(params) == 0 {
-		return "/admin/pages"
+	if encoded := params.Encode(); encoded != "" {
+		return baseURL + "?" + encoded
 	}
-	return "/admin/pages?" + strings.Join(params, "&")
+	return baseURL
 }
 
 // depthPadding returns CSS padding-left for tree depth.
@@ -346,11 +372,11 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 			<div class="filter-group">
 				<label class="filter-label">{ pc.T("label.status") }:</label>
 				<div class="filter-buttons">
-					@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == ""), Size: button.SizeSm, Href: pagesListURL("", data.CategoryFilter, data.SearchFilter, 0)}) {
+					@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == ""), Size: button.SizeSm, Href: pagesListURL(data.Pagination, "", data.CategoryFilter, data.LanguageFilter, data.SearchFilter)}) {
 						{ pc.T("label.all") }
 					}
 					for _, s := range data.Statuses {
-						@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == s), Size: button.SizeSm, Href: pagesListURL(s, data.CategoryFilter, data.SearchFilter, 0)}) {
+						@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == s), Size: button.SizeSm, Href: pagesListURL(data.Pagination, s, data.CategoryFilter, data.LanguageFilter, data.SearchFilter)}) {
 							if s == "draft" {
 								{ pc.T("status.draft") }
 							} else if s == "published" {
@@ -360,7 +386,7 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 							}
 						}
 					}
-					@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == "scheduled"), Size: button.SizeSm, Href: pagesListURL("scheduled", data.CategoryFilter, data.SearchFilter, 0)}) {
+					@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == "scheduled"), Size: button.SizeSm, Href: pagesListURL(data.Pagination, "scheduled", data.CategoryFilter, data.LanguageFilter, data.SearchFilter)}) {
 						@iconClock12()
 						{ pc.T("status.scheduled") }
 					}
@@ -378,6 +404,13 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 						}
 						if data.LanguageFilter != "" {
 							<input type="hidden" name="language" value={ data.LanguageFilter }/>
+						}
+						if data.Pagination.SortField != "" {
+							<input type="hidden" name="sort" value={ data.Pagination.SortField }/>
+							<input type="hidden" name="dir" value={ data.Pagination.SortDir }/>
+						}
+						if data.Pagination.HasPerPageSelector() {
+							<input type="hidden" name="per_page" value={ fmt.Sprintf("%d", data.Pagination.PerPageSelector.Current) }/>
 						}
 						<select name="category" class="form-select form-select-sm" data-auto-submit="true">
 							<option value="">{ pc.T("pages.all_categories") }</option>
@@ -409,6 +442,13 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 						if data.SearchFilter != "" {
 							<input type="hidden" name="search" value={ data.SearchFilter }/>
 						}
+						if data.Pagination.SortField != "" {
+							<input type="hidden" name="sort" value={ data.Pagination.SortField }/>
+							<input type="hidden" name="dir" value={ data.Pagination.SortDir }/>
+						}
+						if data.Pagination.HasPerPageSelector() {
+							<input type="hidden" name="per_page" value={ fmt.Sprintf("%d", data.Pagination.PerPageSelector.Current) }/>
+						}
 						<select name="language" class="form-select form-select-sm" data-auto-submit="true">
 							<option value="">{ pc.T("pages.all_languages") }</option>
 							for _, lang := range data.AllLanguages {
@@ -431,13 +471,23 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 					if data.CategoryFilter > 0 {
 						<input type="hidden" name="category" value={ fmt.Sprintf("%d", data.CategoryFilter) }/>
 					}
+					if data.LanguageFilter != "" {
+						<input type="hidden" name="language" value={ data.LanguageFilter }/>
+					}
+					if data.Pagination.SortField != "" {
+						<input type="hidden" name="sort" value={ data.Pagination.SortField }/>
+						<input type="hidden" name="dir" value={ data.Pagination.SortDir }/>
+					}
+					if data.Pagination.HasPerPageSelector() {
+						<input type="hidden" name="per_page" value={ fmt.Sprintf("%d", data.Pagination.PerPageSelector.Current) }/>
+					}
 					<div class="search-input-wrapper">
 						<input type="text" name="search" value={ data.SearchFilter } placeholder={ pc.T("pages.search_placeholder") } class="form-control form-control-sm" aria-label={ pc.T("btn.search") }/>
 						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Class: "search-btn", Attributes: templ.Attributes{"title": pc.T("btn.search")}}) {
 							@iconSearch14()
 						}
 						if data.SearchFilter != "" {
-							@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: pagesListURL(data.StatusFilter, data.CategoryFilter, "", 0), Class: "clear-search-btn", Attributes: templ.Attributes{"title": pc.T("btn.clear")}}) {
+							@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: pagesListURL(data.Pagination, data.StatusFilter, data.CategoryFilter, data.LanguageFilter, ""), Class: "clear-search-btn", Attributes: templ.Attributes{"title": pc.T("btn.clear")}}) {
 								@iconX14()
 							}
 						}
@@ -456,24 +506,65 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 					@table.Table() {
 						@table.Header() {
 							@table.Row() {
+								if data.Pagination.HasBulkAction() {
+									@table.Head(table.HeadProps{Class: "w-[44px]"}) {
+										<input
+											type="checkbox"
+											class="checkbox-input"
+											data-bulk-master="true"
+											data-bulk-scope={ data.Pagination.BulkScope() }
+											aria-label={ pc.T("btn.select_all") }
+										/>
+									}
+								}
 								@table.Head(table.HeadProps{Class: "w-[60px]"}) { { pc.T("label.image") } }
-								@table.Head() { { pc.T("label.title") } }
+								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("title"))}}) {
+									<a
+										href={ data.Pagination.SortURL("title", sortDirAsc) }
+										class={ sortLinkClass(data.Pagination.SortState("title")) }
+										data-sort-state={ sortStateValue(data.Pagination.SortState("title")) }
+									>
+										<span>{ pc.T("label.title") }</span>
+										@SortIndicator(data.Pagination.SortState("title"))
+										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("title"))) }</span>
+									</a>
+								}
 								@table.Head() { { pc.T("label.tags") } }
 								@table.Head() { { pc.T("label.categories") } }
 								@table.Head() { { pc.T("label.language") } }
-								@table.Head() { { pc.T("label.status") } }
-								@table.Head() { { pc.T("label.updated_at") } }
+								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("status"))}}) {
+									<a
+										href={ data.Pagination.SortURL("status", sortDirAsc) }
+										class={ sortLinkClass(data.Pagination.SortState("status")) }
+										data-sort-state={ sortStateValue(data.Pagination.SortState("status")) }
+									>
+										<span>{ pc.T("label.status") }</span>
+										@SortIndicator(data.Pagination.SortState("status"))
+										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("status"))) }</span>
+									</a>
+								}
+								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("updated_at"))}}) {
+									<a
+										href={ data.Pagination.SortURL("updated_at", sortDirDesc) }
+										class={ sortLinkClass(data.Pagination.SortState("updated_at")) }
+										data-sort-state={ sortStateValue(data.Pagination.SortState("updated_at")) }
+									>
+										<span>{ pc.T("label.updated_at") }</span>
+										@SortIndicator(data.Pagination.SortState("updated_at"))
+										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("updated_at"))) }</span>
+									</a>
+								}
 								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
 							}
 						}
 						@table.Body() {
 							for _, page := range data.Pages {
-								@pageListRow(pc, page, data.IsDemoMode)
+								@pageListRow(pc, page, data.IsDemoMode, data.Pagination.BulkScope())
 							}
 						}
 					}
 				</div>
-				if data.Pagination.ShouldShow() {
+				if data.Pagination.ShouldShow() || data.Pagination.HasBulkAction() {
 					@card.Footer() {
 						@Pagination(pc, data.Pagination)
 					}
@@ -502,8 +593,20 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 	}
 }
 
-templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool) {
+templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool, bulkScope string) {
 	@table.Row(table.RowProps{ID: fmt.Sprintf("page-row-%d", page.ID)}) {
+		if bulkScope != "" {
+			@table.Cell(table.CellProps{Class: "w-[44px]"}) {
+				<input
+					type="checkbox"
+					class="checkbox-input"
+					data-bulk-item="true"
+					data-bulk-id={ fmt.Sprintf("%d", page.ID) }
+					data-bulk-scope={ bulkScope }
+					aria-label={ pc.T("btn.select") }
+				/>
+			}
+		}
 		@table.Cell(table.CellProps{Class: "page-image-cell"}) {
 			if page.FeaturedImage != nil {
 				<img src={ page.FeaturedImage.Thumbnail } alt={ page.Title } class="page-thumbnail"/>

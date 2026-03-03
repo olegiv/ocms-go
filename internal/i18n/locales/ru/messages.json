@@ -883,6 +883,16 @@
             "translation": "Тип"
         },
         {
+            "id": "media.sort_by",
+            "message": "Sort by",
+            "translation": "Сортировать по"
+        },
+        {
+            "id": "media.sort_direction",
+            "message": "Direction",
+            "translation": "Направление"
+        },
+        {
             "id": "media.images",
             "message": "Images",
             "translation": "Изображения"
@@ -4106,6 +4116,61 @@
             "id": "pagination.items",
             "message": "items",
             "translation": "записей"
+        },
+        {
+            "id": "pagination.items_per_page",
+            "message": "Items per page",
+            "translation": "Элементов на странице"
+        },
+        {
+            "id": "pagination.sort_none",
+            "message": "Not sorted",
+            "translation": "Без сортировки"
+        },
+        {
+            "id": "pagination.sort_asc",
+            "message": "Ascending",
+            "translation": "По возрастанию"
+        },
+        {
+            "id": "pagination.sort_desc",
+            "message": "Descending",
+            "translation": "По убыванию"
+        },
+        {
+            "id": "pagination.selected_count",
+            "message": "selected",
+            "translation": "выбрано"
+        },
+        {
+            "id": "pagination.delete_selected",
+            "message": "Delete selected",
+            "translation": "Удалить выбранные"
+        },
+        {
+            "id": "pagination.bulk_delete_confirm",
+            "message": "Delete selected items?",
+            "translation": "Удалить выбранные элементы?"
+        },
+        {
+            "id": "pagination.bulk_delete_none",
+            "message": "No items selected",
+            "translation": "Нет выбранных элементов"
+        },
+        {
+            "id": "pagination.bulk_delete_success",
+            "message": "Selected items deleted",
+            "translation": "Выбранные элементы удалены"
+        },
+        {
+            "id": "pagination.bulk_delete_partial",
+            "message": "Some selected items could not be deleted",
+            "translation": "Часть выбранных элементов не удалось удалить"
+        },
+        {
+            "id": "pagination.bulk_delete_error",
+            "message": "Failed to delete selected items",
+            "translation": "Не удалось удалить выбранные элементы"
         },
         {
             "id": "time.just_now",

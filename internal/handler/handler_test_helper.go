@@ -152,6 +152,18 @@ func testDB(t *testing.T) *sql.DB {
 			FOREIGN KEY (folder_id) REFERENCES media_folders(id) ON DELETE SET NULL
 		);
 
+		CREATE TABLE media_variants (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			media_id INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+			type TEXT NOT NULL,
+			width INTEGER NOT NULL,
+			height INTEGER NOT NULL,
+			size INTEGER NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE INDEX idx_media_variants_media_id ON media_variants(media_id);
+		CREATE INDEX idx_media_variants_type ON media_variants(type);
+
 		CREATE TABLE forms (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
