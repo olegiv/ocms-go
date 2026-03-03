@@ -556,18 +556,24 @@ func TestAttemptDelivery_RejectsWhenAllowlistRequiredButMissing(t *testing.T) {
 }
 
 func TestParseAllowedHosts(t *testing.T) {
-	hosts, err := ParseAllowedHosts(" Hooks.EXAMPLE.com,events.example.com. ")
+	hosts, err := ParseAllowedHosts(" Hooks.EXAMPLE.com,events.example.com.,[2001:db8::10],2001:db8::11 ")
 	if err != nil {
 		t.Fatalf("ParseAllowedHosts() error: %v", err)
 	}
-	if len(hosts) != 2 {
-		t.Fatalf("ParseAllowedHosts() returned %d hosts, want 2", len(hosts))
+	if len(hosts) != 4 {
+		t.Fatalf("ParseAllowedHosts() returned %d hosts, want 4", len(hosts))
 	}
 	if _, ok := hosts["hooks.example.com"]; !ok {
 		t.Fatal("ParseAllowedHosts() missing normalized hooks.example.com entry")
 	}
 	if _, ok := hosts["events.example.com"]; !ok {
 		t.Fatal("ParseAllowedHosts() missing normalized events.example.com entry")
+	}
+	if _, ok := hosts["2001:db8::10"]; !ok {
+		t.Fatal("ParseAllowedHosts() missing normalized 2001:db8::10 entry")
+	}
+	if _, ok := hosts["2001:db8::11"]; !ok {
+		t.Fatal("ParseAllowedHosts() missing normalized 2001:db8::11 entry")
 	}
 }
 
@@ -576,6 +582,8 @@ func TestParseAllowedHosts_InvalidEntries(t *testing.T) {
 		"https://hooks.example.com",
 		"hooks.example.com/path",
 		"hooks.example.com:8443",
+		"[2001:db8::10]:443",
+		"[2001:db8::10",
 		"",
 	}
 	for _, raw := range tests {
@@ -589,6 +597,17 @@ func TestParseAllowedHosts_InvalidEntries(t *testing.T) {
 		if err == nil {
 			t.Fatalf("ParseAllowedHosts(%q) expected error", raw)
 		}
+	}
+}
+
+func TestValidateDestinationHostPolicy_AllowsIPv6Literal(t *testing.T) {
+	hosts, err := ParseAllowedHosts("2001:db8::10")
+	if err != nil {
+		t.Fatalf("ParseAllowedHosts() error: %v", err)
+	}
+
+	if err := ValidateDestinationHostPolicy("https://[2001:db8::10]/webhook", hosts, false); err != nil {
+		t.Fatalf("ValidateDestinationHostPolicy() unexpected error: %v", err)
 	}
 }
 

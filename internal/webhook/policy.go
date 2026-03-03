@@ -65,7 +65,6 @@ func ParseAllowedHosts(raw string) (map[string]struct{}, error) {
 
 func normalizeAllowedHostEntry(entry string) (string, error) {
 	host := strings.TrimSpace(strings.ToLower(entry))
-	host = strings.Trim(host, ".")
 	if host == "" {
 		return "", fmt.Errorf("webhook destination host allowlist contains empty entry")
 	}
@@ -79,7 +78,32 @@ func normalizeAllowedHostEntry(entry string) (string, error) {
 		return "", fmt.Errorf("webhook destination host allowlist entry must not include port: %q", entry)
 	}
 	if strings.Contains(host, ":") {
-		return "", fmt.Errorf("webhook destination host allowlist entry must not include port: %q", entry)
+		// IPv6 literals are valid destination hosts. Accept both bracketed and
+		// non-bracketed forms, normalize to canonical unbracketed form, and
+		// reject non-IPv6 colon-delimited values.
+		candidate := host
+		if strings.HasPrefix(candidate, "[") || strings.HasSuffix(candidate, "]") {
+			if !strings.HasPrefix(candidate, "[") || !strings.HasSuffix(candidate, "]") {
+				return "", fmt.Errorf("invalid webhook destination host allowlist entry %q", entry)
+			}
+			candidate = strings.TrimPrefix(strings.TrimSuffix(candidate, "]"), "[")
+		}
+		ip := net.ParseIP(candidate)
+		if ip == nil || ip.To4() != nil {
+			return "", fmt.Errorf("webhook destination host allowlist entry must not include port: %q", entry)
+		}
+		return ip.String(), nil
+	}
+
+	host = strings.Trim(host, ".")
+	if host == "" {
+		return "", fmt.Errorf("webhook destination host allowlist contains empty entry")
+	}
+	if strings.Contains(host, "[") || strings.Contains(host, "]") {
+		return "", fmt.Errorf("invalid webhook destination host allowlist entry %q", entry)
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.String(), nil
 	}
 	return host, nil
 }
@@ -106,6 +130,9 @@ func DestinationHost(rawURL string) (string, error) {
 	host := strings.Trim(strings.ToLower(parsed.Hostname()), ".")
 	if host == "" {
 		return "", fmt.Errorf("invalid webhook destination URL: missing hostname")
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.String(), nil
 	}
 	return host, nil
 }
