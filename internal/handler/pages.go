@@ -167,6 +167,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	lang := h.renderer.GetAdminLang(r)
 
 	page := ParsePageParam(r)
+	perPage := ParsePerPageParam(r, PagesPerPage, maxPerPageSelectionValue)
 
 	// Get status filter from query string
 	statusFilter := r.URL.Query().Get("status")
@@ -242,8 +243,8 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Normalize page to valid range
-	page, _ = NormalizePagination(page, int(totalCount), PagesPerPage)
-	offset := int64((page - 1) * PagesPerPage)
+	page, _ = NormalizePagination(page, int(totalCount), perPage)
+	offset := int64((page - 1) * perPage)
 
 	// Fetch pages for current page
 	// Priority: search > language > category > status > all
@@ -256,7 +257,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 				Title:        searchPattern,
 				Body:         searchPattern,
 				Slug:         searchPattern,
-				Limit:        PagesPerPage,
+				Limit:        int64(perPage),
 				Offset:       offset,
 			})
 		case statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled":
@@ -265,7 +266,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 				Title:  searchPattern,
 				Body:   searchPattern,
 				Slug:   searchPattern,
-				Limit:  PagesPerPage,
+				Limit:  int64(perPage),
 				Offset: offset,
 			})
 		default:
@@ -273,7 +274,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 				Title:  searchPattern,
 				Body:   searchPattern,
 				Slug:   searchPattern,
-				Limit:  PagesPerPage,
+				Limit:  int64(perPage),
 				Offset: offset,
 			})
 		}
@@ -282,36 +283,36 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 			pages, err = h.queries.ListPagesByLanguageAndStatus(r.Context(), store.ListPagesByLanguageAndStatusParams{
 				LanguageCode: languageFilter,
 				Status:       statusFilter,
-				Limit:        PagesPerPage,
+				Limit:        int64(perPage),
 				Offset:       offset,
 			})
 		} else {
 			pages, err = h.queries.ListPagesByLanguage(r.Context(), store.ListPagesByLanguageParams{
 				LanguageCode: languageFilter,
-				Limit:        PagesPerPage,
+				Limit:        int64(perPage),
 				Offset:       offset,
 			})
 		}
 	case categoryFilter > 0:
 		pages, err = h.queries.ListPagesByCategory(r.Context(), store.ListPagesByCategoryParams{
 			CategoryID: categoryFilter,
-			Limit:      PagesPerPage,
+			Limit:      int64(perPage),
 			Offset:     offset,
 		})
 	case statusFilter == "scheduled":
 		pages, err = h.queries.ListScheduledPages(r.Context(), store.ListScheduledPagesParams{
-			Limit:  PagesPerPage,
+			Limit:  int64(perPage),
 			Offset: offset,
 		})
 	case statusFilter != "" && statusFilter != "all":
 		pages, err = h.queries.ListPagesByStatus(r.Context(), store.ListPagesByStatusParams{
 			Status: statusFilter,
-			Limit:  PagesPerPage,
+			Limit:  int64(perPage),
 			Offset: offset,
 		})
 	default:
 		pages, err = h.queries.ListPages(r.Context(), store.ListPagesParams{
-			Limit:  PagesPerPage,
+			Limit:  int64(perPage),
 			Offset: offset,
 		})
 	}
@@ -396,7 +397,7 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		AllCategories:      categoryTree,
 		AllLanguages:       allLanguages,
 		Statuses:           ValidPageStatuses,
-		Pagination:         BuildAdminPagination(page, int(totalCount), PagesPerPage, redirectAdminPages, r.URL.Query()),
+		Pagination:         BuildAdminPagination(page, int(totalCount), perPage, redirectAdminPages, r.URL.Query()),
 	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.title"), pagesBreadcrumbs(lang))

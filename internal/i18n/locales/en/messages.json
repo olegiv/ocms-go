@@ -4623,6 +4623,11 @@
             "translation": "items"
         },
         {
+            "id": "pagination.items_per_page",
+            "message": "Items per page",
+            "translation": "Items per page"
+        },
+        {
             "id": "pagination.selected_count",
             "message": "selected",
             "translation": "selected"

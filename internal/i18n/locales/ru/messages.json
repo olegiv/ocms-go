@@ -4108,6 +4108,11 @@
             "translation": "записей"
         },
         {
+            "id": "pagination.items_per_page",
+            "message": "Items per page",
+            "translation": "Элементов на странице"
+        },
+        {
             "id": "pagination.selected_count",
             "message": "selected",
             "translation": "выбрано"

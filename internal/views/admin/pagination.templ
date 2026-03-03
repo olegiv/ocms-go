@@ -25,6 +25,7 @@ type PaginationData struct {
 	LastURL     string
 	Pages       []PaginationPage
 	BulkAction  *PaginationBulkAction
+	PerPageSelector *PaginationPerPageSelector
 }
 
 // PaginationPage represents a single page link.
@@ -42,6 +43,14 @@ type PaginationBulkAction struct {
 	DeleteURL string
 }
 
+// PaginationPerPageSelector configures an optional items-per-page selector.
+type PaginationPerPageSelector struct {
+	Enabled bool
+	Param   string
+	Current int
+	Options []int
+}
+
 // ShouldShow returns true if pagination should be displayed.
 func (p PaginationData) ShouldShow() bool {
 	return p.TotalPages > 1
@@ -50,6 +59,15 @@ func (p PaginationData) ShouldShow() bool {
 // HasBulkAction returns true if pager bulk actions are enabled.
 func (p PaginationData) HasBulkAction() bool {
 	return p.BulkAction != nil && p.BulkAction.Enabled && p.BulkAction.Scope != "" && p.BulkAction.DeleteURL != ""
+}
+
+// HasPerPageSelector returns true if the items-per-page selector should be shown.
+func (p PaginationData) HasPerPageSelector() bool {
+	return p.PerPageSelector != nil &&
+		p.PerPageSelector.Enabled &&
+		p.PerPageSelector.Current > 0 &&
+		p.PerPageSelector.Param != "" &&
+		len(p.PerPageSelector.Options) > 0
 }
 
 // BulkScope returns the configured bulk scope or empty string.
@@ -62,7 +80,7 @@ func (p PaginationData) BulkScope() string {
 
 // Pagination renders pagination controls for admin lists.
 templ Pagination(pc *PageContext, p PaginationData) {
-	if p.ShouldShow() || p.HasBulkAction() {
+	if p.ShouldShow() || p.HasBulkAction() || p.HasPerPageSelector() {
 		<div class="flex items-center justify-between flex-wrap gap-4">
 			<div class="text-sm text-muted-foreground">
 				{ pc.T("pagination.page") } { fmt.Sprintf("%d", p.CurrentPage) } { pc.T("pagination.of") } { fmt.Sprintf("%d", p.TotalPages) }
@@ -71,6 +89,20 @@ templ Pagination(pc *PageContext, p PaginationData) {
 				}
 			</div>
 			<div class="flex items-center gap-2">
+				if p.HasPerPageSelector() {
+					<label class="flex items-center gap-2 text-sm text-muted-foreground">
+						<span>{ pc.T("pagination.items_per_page") }</span>
+						<select
+							class="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+							data-per-page-selector="true"
+							data-per-page-param={ p.PerPageSelector.Param }
+						>
+							for _, option := range p.PerPageSelector.Options {
+								<option value={ fmt.Sprintf("%d", option) } selected?={ option == p.PerPageSelector.Current }>{ fmt.Sprintf("%d", option) }</option>
+							}
+						</select>
+					</label>
+				}
 				if p.HasBulkAction() {
 					<div
 						class="flex items-center gap-2 flex-wrap"

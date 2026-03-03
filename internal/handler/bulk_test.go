@@ -64,3 +64,45 @@ func TestParseBulkActionIDs(t *testing.T) {
 		}
 	})
 }
+
+func TestNormalizePerPageOptions(t *testing.T) {
+	options := normalizePerPageOptions([]int{10, 20, 20, 0, 50, 101}, 24)
+	if !slices.Equal(options, []int{10, 20, 50, 24}) {
+		t.Fatalf("normalizePerPageOptions() = %v, want %v", options, []int{10, 20, 50, 24})
+	}
+}
+
+func TestPerPageSelector(t *testing.T) {
+	t.Run("creates selector and appends current when missing", func(t *testing.T) {
+		selector := perPageSelector(24, []int{10, 20, 50, 100})
+		if selector == nil {
+			t.Fatal("perPageSelector() returned nil")
+		}
+		if selector.Param != perPageQueryParam {
+			t.Fatalf("selector.Param = %q, want %q", selector.Param, perPageQueryParam)
+		}
+		if selector.Current != 24 {
+			t.Fatalf("selector.Current = %d, want 24", selector.Current)
+		}
+		if !slices.Equal(selector.Options, []int{10, 20, 50, 100, 24}) {
+			t.Fatalf("selector.Options = %v, want %v", selector.Options, []int{10, 20, 50, 100, 24})
+		}
+	})
+
+	t.Run("falls back to first option for invalid current", func(t *testing.T) {
+		selector := perPageSelector(0, []int{10, 20, 50})
+		if selector == nil {
+			t.Fatal("perPageSelector() returned nil")
+		}
+		if selector.Current != 10 {
+			t.Fatalf("selector.Current = %d, want 10", selector.Current)
+		}
+	})
+
+	t.Run("returns nil for empty normalized options", func(t *testing.T) {
+		selector := perPageSelector(0, []int{0, -1, 1000})
+		if selector != nil {
+			t.Fatalf("perPageSelector() = %#v, want nil", selector)
+		}
+	})
+}

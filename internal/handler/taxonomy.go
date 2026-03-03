@@ -59,6 +59,7 @@ type TagsListData struct {
 func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 	lang := middleware.GetAdminLang(r)
 	page := ParsePageParam(r)
+	perPage := ParsePerPageParam(r, TagsPerPage, maxPerPageSelectionValue)
 
 	// Get total count
 	totalCount, err := h.queries.CountTags(r.Context())
@@ -69,12 +70,12 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Normalize page to valid range
-	page, _ = NormalizePagination(page, int(totalCount), TagsPerPage)
-	offset := int64((page - 1) * TagsPerPage)
+	page, _ = NormalizePagination(page, int(totalCount), perPage)
+	offset := int64((page - 1) * perPage)
 
 	// Fetch tags with usage counts
 	tags, err := h.queries.GetTagUsageCounts(r.Context(), store.GetTagUsageCountsParams{
-		Limit:  TagsPerPage,
+		Limit:  int64(perPage),
 		Offset: offset,
 	})
 	if err != nil {
@@ -96,8 +97,9 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	pagination := convertPagination(BuildAdminPagination(page, int(totalCount), TagsPerPage, redirectAdminTags, r.URL.Query()))
+	pagination := convertPagination(BuildAdminPagination(page, int(totalCount), perPage, redirectAdminTags, r.URL.Query()))
 	pagination.BulkAction = bulkPaginationAction(bulkScopeTags, redirectAdminTags+RouteSuffixBulkDelete)
+	pagination.PerPageSelector = perPageSelector(perPage, perPageOptionsStandard)
 
 	viewData := adminviews.TagsListData{
 		Tags:       viewTags,

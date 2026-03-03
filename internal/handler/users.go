@@ -94,6 +94,7 @@ func (h *UsersHandler) dispatchUserEvent(ctx context.Context, eventType string, 
 func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	lang := h.renderer.GetAdminLang(r)
 	page := ParsePageParam(r)
+	perPage := ParsePerPageParam(r, UsersPerPage, maxPerPageSelectionValue)
 	currentUserID := middleware.GetUserID(r)
 
 	// Get total user count
@@ -104,12 +105,12 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Normalize page to valid range
-	page, _ = NormalizePagination(page, int(totalUsers), UsersPerPage)
-	offset := int64((page - 1) * UsersPerPage)
+	page, _ = NormalizePagination(page, int(totalUsers), perPage)
+	offset := int64((page - 1) * perPage)
 
 	// Fetch users for current page
 	users, err := h.queries.ListUsers(r.Context(), store.ListUsersParams{
-		Limit:  UsersPerPage,
+		Limit:  int64(perPage),
 		Offset: offset,
 	})
 	if err != nil {
@@ -134,8 +135,9 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 		viewUsers = append(viewUsers, item)
 	}
 
-	pagination := convertPagination(BuildAdminPagination(page, int(totalUsers), UsersPerPage, redirectAdminUsers, r.URL.Query()))
+	pagination := convertPagination(BuildAdminPagination(page, int(totalUsers), perPage, redirectAdminUsers, r.URL.Query()))
 	pagination.BulkAction = bulkPaginationAction(bulkScopeUsers, redirectAdminUsers+RouteSuffixBulkDelete)
+	pagination.PerPageSelector = perPageSelector(perPage, perPageOptionsStandard)
 
 	viewData := adminviews.UsersListData{
 		Users:      viewUsers,

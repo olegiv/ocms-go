@@ -1424,13 +1424,8 @@ func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Pagination
-	page := 1
-	if p := r.URL.Query().Get("page"); p != "" {
-		if pInt, err := strconv.Atoi(p); err == nil && pInt > 0 {
-			page = pInt
-		}
-	}
-	perPage := 20
+	page := ParsePageParam(r)
+	perPage := ParsePerPageParam(r, 20, maxPerPageSelectionValue)
 	offset := (page - 1) * perPage
 
 	// Get fields for display

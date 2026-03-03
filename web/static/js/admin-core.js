@@ -54,6 +54,21 @@ function normalizeBulkScope(scope) {
 
 // Declarative helpers for CSP-safe interactions
 document.addEventListener('change', function(e) {
+    const perPageSelector = closestMatch(e.target, 'select[data-per-page-selector="true"]');
+    if (perPageSelector) {
+        const selectedValue = Number.parseInt(perPageSelector.value, 10);
+        if (!Number.isInteger(selectedValue) || selectedValue <= 0) {
+            return;
+        }
+
+        const paramName = perPageSelector.getAttribute('data-per-page-param') || 'per_page';
+        const nextURL = new URL(window.location.href);
+        nextURL.searchParams.set(paramName, String(selectedValue));
+        nextURL.searchParams.set('page', '1');
+        window.location.assign(nextURL.toString());
+        return;
+    }
+
     const autoSubmit = closestMatch(e.target, '[data-auto-submit="true"]');
     if (autoSubmit) {
         const form = autoSubmit.form || autoSubmit.closest('form');

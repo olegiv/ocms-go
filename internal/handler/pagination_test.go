@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -301,6 +302,30 @@ func TestBuildAdminPaginationWithQueryParams(t *testing.T) {
 	gotURL := p.PageURL(2)
 	if gotURL == "" {
 		t.Error("PageURL should not be empty")
+	}
+}
+
+func TestBuildAdminPagination_PreservesPerPageQuery(t *testing.T) {
+	params := url.Values{
+		"status":   []string{"draft"},
+		"per_page": []string{"50"},
+		"page":     []string{"3"}, // Should be excluded and rebuilt for requested page.
+	}
+
+	p := BuildAdminPagination(3, 120, 50, "/admin/pages", params)
+	gotURL := p.PageURL(2)
+
+	if !strings.Contains(gotURL, "per_page=50") {
+		t.Errorf("PageURL() = %q, expected per_page query", gotURL)
+	}
+	if !strings.Contains(gotURL, "status=draft") {
+		t.Errorf("PageURL() = %q, expected status query", gotURL)
+	}
+	if strings.Contains(gotURL, "page=3") {
+		t.Errorf("PageURL() = %q, expected source page to be replaced", gotURL)
+	}
+	if !strings.Contains(gotURL, "page=2") {
+		t.Errorf("PageURL() = %q, expected requested page query", gotURL)
 	}
 }
 

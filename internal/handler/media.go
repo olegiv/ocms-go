@@ -116,6 +116,7 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 	lang := h.renderer.GetAdminLang(r)
 
 	page := ParsePageParam(r)
+	perPage := ParsePerPageParam(r, MediaPerPage, maxPerPageSelectionValue)
 
 	// Get filter
 	filter := r.URL.Query().Get("filter")
@@ -143,9 +144,9 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Normalize page to valid range
-	page, _ = NormalizePagination(page, int(totalCount), MediaPerPage)
+	page, _ = NormalizePagination(page, int(totalCount), perPage)
 
-	offset := int64((page - 1) * MediaPerPage)
+	offset := int64((page - 1) * perPage)
 
 	// Fetch media
 	var mediaList []store.Medium
@@ -154,7 +155,7 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 		mediaList, err = h.queries.SearchMedia(r.Context(), store.SearchMediaParams{
 			Filename: "%" + search + "%",
 			Alt:      util.NullStringFromValue("%" + search + "%"),
-			Limit:    MediaPerPage,
+			Limit:    int64(perPage),
 		})
 	case filter != "all":
 		var mimePattern string
@@ -170,18 +171,18 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 		}
 		mediaList, err = h.queries.ListMediaByType(r.Context(), store.ListMediaByTypeParams{
 			MimeType: mimePattern,
-			Limit:    MediaPerPage,
+			Limit:    int64(perPage),
 			Offset:   offset,
 		})
 	case folderID != nil:
 		mediaList, err = h.queries.ListMediaInFolder(r.Context(), store.ListMediaInFolderParams{
 			FolderID: util.NullInt64FromPtr(folderID),
-			Limit:    MediaPerPage,
+			Limit:    int64(perPage),
 			Offset:   offset,
 		})
 	default:
 		mediaList, err = h.queries.ListMedia(r.Context(), store.ListMediaParams{
-			Limit:  MediaPerPage,
+			Limit:  int64(perPage),
 			Offset: offset,
 		})
 	}
@@ -216,7 +217,7 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 		Filter:     filter,
 		FolderID:   folderID,
 		Search:     search,
-		Pagination: BuildAdminPagination(page, int(totalCount), MediaPerPage, redirectAdminMedia, r.URL.Query()),
+		Pagination: BuildAdminPagination(page, int(totalCount), perPage, redirectAdminMedia, r.URL.Query()),
 	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "media.title"), mediaBreadcrumbs(lang))

@@ -82,6 +82,7 @@ func (h *APIKeysHandler) List(w http.ResponseWriter, r *http.Request) {
 	adminLang := h.renderer.GetAdminLang(r)
 
 	page := ParsePageParam(r)
+	perPage := ParsePerPageParam(r, APIKeysPerPage, maxPerPageSelectionValue)
 
 	// Get total count
 	totalKeys, err := h.queries.CountAPIKeys(r.Context())
@@ -91,12 +92,12 @@ func (h *APIKeysHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Normalize page to valid range
-	page, _ = NormalizePagination(page, int(totalKeys), APIKeysPerPage)
-	offset := int64((page - 1) * APIKeysPerPage)
+	page, _ = NormalizePagination(page, int(totalKeys), perPage)
+	offset := int64((page - 1) * perPage)
 
 	// Fetch API keys for current page
 	apiKeys, err := h.queries.ListAPIKeys(r.Context(), store.ListAPIKeysParams{
-		Limit:  APIKeysPerPage,
+		Limit:  int64(perPage),
 		Offset: offset,
 	})
 	if err != nil {
@@ -104,8 +105,9 @@ func (h *APIKeysHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pagination := convertPagination(BuildAdminPagination(page, int(totalKeys), APIKeysPerPage, redirectAdminAPIKeys, r.URL.Query()))
+	pagination := convertPagination(BuildAdminPagination(page, int(totalKeys), perPage, redirectAdminAPIKeys, r.URL.Query()))
 	pagination.BulkAction = bulkPaginationAction(bulkScopeAPIKeys, redirectAdminAPIKeys+RouteSuffixBulkDelete)
+	pagination.PerPageSelector = perPageSelector(perPage, perPageOptionsStandard)
 
 	viewData := adminviews.APIKeysListData{
 		APIKeys:    convertAPIKeyListItems(apiKeys),

@@ -14,6 +14,8 @@ import (
 
 const (
 	defaultBulkActionMaxBatch = 200
+	maxPerPageSelectionValue  = 100
+	perPageQueryParam         = "per_page"
 
 	bulkScopePages    = "pages-list"
 	bulkScopeTags     = "tags-list"
@@ -21,6 +23,11 @@ const (
 	bulkScopeAPIKeys  = "api-keys-list"
 	bulkScopeMedia    = "media-library"
 	bulkScopeFormsSub = "form-submissions-"
+)
+
+var (
+	perPageOptionsStandard = []int{10, 20, 50, 100}
+	perPageOptionsMedia    = []int{10, 20, 24, 50, 100}
 )
 
 type bulkIDsPayload struct {
@@ -84,6 +91,44 @@ func bulkPaginationAction(scope string, deleteURL string) *adminviews.Pagination
 		Scope:     scope,
 		DeleteURL: deleteURL,
 	}
+}
+
+func perPageSelector(current int, options []int) *adminviews.PaginationPerPageSelector {
+	normalized := normalizePerPageOptions(options, current)
+	if len(normalized) == 0 {
+		return nil
+	}
+	if current <= 0 || current > maxPerPageSelectionValue {
+		current = normalized[0]
+	}
+	return &adminviews.PaginationPerPageSelector{
+		Enabled: true,
+		Param:   perPageQueryParam,
+		Current: current,
+		Options: normalized,
+	}
+}
+
+func normalizePerPageOptions(options []int, current int) []int {
+	seen := make(map[int]struct{}, len(options)+1)
+	normalized := make([]int, 0, len(options)+1)
+	appendUnique := func(value int) {
+		if value <= 0 || value > maxPerPageSelectionValue {
+			return
+		}
+		if _, exists := seen[value]; exists {
+			return
+		}
+		seen[value] = struct{}{}
+		normalized = append(normalized, value)
+	}
+
+	for _, option := range options {
+		appendUnique(option)
+	}
+	appendUnique(current)
+
+	return normalized
 }
 
 func formSubmissionsBulkScope(formID int64) string {
