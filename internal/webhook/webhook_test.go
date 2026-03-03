@@ -13,6 +13,18 @@ import (
 	"github.com/olegiv/ocms-go/internal/util"
 )
 
+func setWebhookHostPolicyForTest(t *testing.T, raw string, required bool) {
+	t.Helper()
+	if err := ConfigureAllowedHosts(raw); err != nil {
+		t.Fatalf("ConfigureAllowedHosts(%q) error: %v", raw, err)
+	}
+	SetRequireAllowedHosts(required)
+	t.Cleanup(func() {
+		_ = ConfigureAllowedHosts("")
+		SetRequireAllowedHosts(false)
+	})
+}
+
 func TestGenerateSignature(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -498,6 +510,85 @@ func TestAttemptDelivery_EnforcesHTTPSPolicy(t *testing.T) {
 	}
 	if result.Error == nil || !strings.Contains(result.Error.Error(), "https scheme") {
 		t.Fatalf("attemptDelivery() error = %v, want https scheme error", result.Error)
+	}
+}
+
+func TestAttemptDelivery_RejectsDisallowedHostByPolicy(t *testing.T) {
+	setWebhookHostPolicyForTest(t, "hooks.example.com", false)
+
+	dispatcher := &Dispatcher{}
+	delivery := &QueuedDelivery{
+		URL:     "https://1.1.1.1/webhook",
+		Payload: []byte(`{"ok":true}`),
+	}
+
+	result := dispatcher.attemptDelivery(t.Context(), delivery)
+	if result.Success {
+		t.Fatal("attemptDelivery() should fail when destination host is not allowlisted")
+	}
+	if result.ShouldRetry {
+		t.Fatal("attemptDelivery() should not retry destination host allowlist violations")
+	}
+	if result.Error == nil || !strings.Contains(result.Error.Error(), "allowlist") {
+		t.Fatalf("attemptDelivery() error = %v, want allowlist error", result.Error)
+	}
+}
+
+func TestAttemptDelivery_RejectsWhenAllowlistRequiredButMissing(t *testing.T) {
+	setWebhookHostPolicyForTest(t, "", true)
+
+	dispatcher := &Dispatcher{}
+	delivery := &QueuedDelivery{
+		URL:     "https://1.1.1.1/webhook",
+		Payload: []byte(`{"ok":true}`),
+	}
+
+	result := dispatcher.attemptDelivery(t.Context(), delivery)
+	if result.Success {
+		t.Fatal("attemptDelivery() should fail when allowlist is required but not configured")
+	}
+	if result.ShouldRetry {
+		t.Fatal("attemptDelivery() should not retry allowlist policy violations")
+	}
+	if result.Error == nil || !strings.Contains(result.Error.Error(), "allowlist is required") {
+		t.Fatalf("attemptDelivery() error = %v, want required allowlist error", result.Error)
+	}
+}
+
+func TestParseAllowedHosts(t *testing.T) {
+	hosts, err := ParseAllowedHosts(" Hooks.EXAMPLE.com,events.example.com. ")
+	if err != nil {
+		t.Fatalf("ParseAllowedHosts() error: %v", err)
+	}
+	if len(hosts) != 2 {
+		t.Fatalf("ParseAllowedHosts() returned %d hosts, want 2", len(hosts))
+	}
+	if _, ok := hosts["hooks.example.com"]; !ok {
+		t.Fatal("ParseAllowedHosts() missing normalized hooks.example.com entry")
+	}
+	if _, ok := hosts["events.example.com"]; !ok {
+		t.Fatal("ParseAllowedHosts() missing normalized events.example.com entry")
+	}
+}
+
+func TestParseAllowedHosts_InvalidEntries(t *testing.T) {
+	tests := []string{
+		"https://hooks.example.com",
+		"hooks.example.com/path",
+		"hooks.example.com:8443",
+		"",
+	}
+	for _, raw := range tests {
+		_, err := ParseAllowedHosts(raw)
+		if raw == "" {
+			if err != nil {
+				t.Fatalf("ParseAllowedHosts(\"\") error = %v, want nil", err)
+			}
+			continue
+		}
+		if err == nil {
+			t.Fatalf("ParseAllowedHosts(%q) expected error", raw)
+		}
 	}
 }
 

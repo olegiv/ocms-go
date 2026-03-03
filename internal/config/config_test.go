@@ -90,6 +90,12 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.RequireHTTPSOutbound {
 		t.Error("RequireHTTPSOutbound = true, want false")
 	}
+	if cfg.WebhookAllowedHosts != "" {
+		t.Errorf("WebhookAllowedHosts = %q, want empty", cfg.WebhookAllowedHosts)
+	}
+	if cfg.RequireWebhookAllowedHosts {
+		t.Error("RequireWebhookAllowedHosts = true, want false")
+	}
 	if cfg.SanitizePageHTML {
 		t.Error("SanitizePageHTML = true, want false")
 	}
@@ -131,6 +137,8 @@ func TestLoad_CustomValues(t *testing.T) {
 	setEnv(t, "OCMS_EMBED_PROXY_TOKEN", "embed-token-test")
 	setEnv(t, "OCMS_REQUIRE_EMBED_PROXY_TOKEN", "true")
 	setEnv(t, "OCMS_REQUIRE_HTTPS_OUTBOUND", "true")
+	setEnv(t, "OCMS_WEBHOOK_ALLOWED_HOSTS", "hooks.example.com,events.example.com")
+	setEnv(t, "OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS", "true")
 	setEnv(t, "OCMS_SANITIZE_PAGE_HTML", "true")
 	setEnv(t, "OCMS_REQUIRE_SANITIZE_PAGE_HTML", "true")
 	setEnv(t, "OCMS_BLOCK_SUSPICIOUS_PAGE_HTML", "true")
@@ -213,6 +221,12 @@ func TestLoad_CustomValues(t *testing.T) {
 	if !cfg.RequireHTTPSOutbound {
 		t.Error("RequireHTTPSOutbound = false, want true")
 	}
+	if cfg.WebhookAllowedHosts != "hooks.example.com,events.example.com" {
+		t.Errorf("WebhookAllowedHosts = %q, want %q", cfg.WebhookAllowedHosts, "hooks.example.com,events.example.com")
+	}
+	if !cfg.RequireWebhookAllowedHosts {
+		t.Error("RequireWebhookAllowedHosts = false, want true")
+	}
 	if !cfg.SanitizePageHTML {
 		t.Error("SanitizePageHTML = false, want true")
 	}
@@ -236,6 +250,100 @@ func TestLoad_RejectSeedInProduction(t *testing.T) {
 	_, err := Load()
 	if err == nil {
 		t.Fatal("Load() should fail when OCMS_DO_SEED=true in production")
+	}
+}
+
+func TestLoad_ProductionSecureDefaultsWhenUnset(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_TRUSTED_PROXIES", "127.0.0.1/32")
+	setEnv(t, "OCMS_API_ALLOWED_CIDRS", "203.0.113.10/32")
+	setEnv(t, "OCMS_EMBED_ALLOWED_ORIGINS", "https://example.com")
+	setEnv(t, "OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS", "api.dify.ai")
+	setEnv(t, "OCMS_WEBHOOK_ALLOWED_HOSTS", "hooks.example.com")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	if !cfg.RequireFormCaptcha {
+		t.Error("RequireFormCaptcha = false, want true in production when unset")
+	}
+	if !cfg.RequireWebhookFormDataMinimization {
+		t.Error("RequireWebhookFormDataMinimization = false, want true in production when unset")
+	}
+	if !cfg.RequireTrustedProxies {
+		t.Error("RequireTrustedProxies = false, want true in production when unset")
+	}
+	if !cfg.RequireAPIAllowedCIDRs {
+		t.Error("RequireAPIAllowedCIDRs = false, want true in production when unset")
+	}
+	if !cfg.RequireAPIKeyExpiry {
+		t.Error("RequireAPIKeyExpiry = false, want true in production when unset")
+	}
+	if !cfg.RequireAPIKeySourceCIDRs {
+		t.Error("RequireAPIKeySourceCIDRs = false, want true in production when unset")
+	}
+	if !cfg.RevokeAPIKeyOnSourceIPChange {
+		t.Error("RevokeAPIKeyOnSourceIPChange = false, want true in production when unset")
+	}
+	if !cfg.RequireEmbedAllowedOrigins {
+		t.Error("RequireEmbedAllowedOrigins = false, want true in production when unset")
+	}
+	if !cfg.RequireEmbedAllowedUpstreamHosts {
+		t.Error("RequireEmbedAllowedUpstreamHosts = false, want true in production when unset")
+	}
+	if !cfg.RequireHTTPSOutbound {
+		t.Error("RequireHTTPSOutbound = false, want true in production when unset")
+	}
+	if !cfg.RequireWebhookAllowedHosts {
+		t.Error("RequireWebhookAllowedHosts = false, want true in production when unset")
+	}
+	if !cfg.SanitizePageHTML {
+		t.Error("SanitizePageHTML = false, want true in production when unset")
+	}
+	if !cfg.RequireSanitizePageHTML {
+		t.Error("RequireSanitizePageHTML = false, want true in production when unset")
+	}
+	if !cfg.BlockSuspiciousPageHTML {
+		t.Error("BlockSuspiciousPageHTML = false, want true in production when unset")
+	}
+	if !cfg.RequireBlockSuspiciousPageHTML {
+		t.Error("RequireBlockSuspiciousPageHTML = false, want true in production when unset")
+	}
+	if cfg.APIKeyMaxTTLDays != DefaultProductionAPIKeyMaxTTLDays {
+		t.Errorf("APIKeyMaxTTLDays = %d, want %d", cfg.APIKeyMaxTTLDays, DefaultProductionAPIKeyMaxTTLDays)
+	}
+}
+
+func TestLoad_ProductionSecureDefaults_ExplicitOverrideRespected(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_ENV", "production")
+	setEnv(t, "OCMS_TRUSTED_PROXIES", "127.0.0.1/32")
+	setEnv(t, "OCMS_API_ALLOWED_CIDRS", "203.0.113.10/32")
+	setEnv(t, "OCMS_EMBED_ALLOWED_ORIGINS", "https://example.com")
+	setEnv(t, "OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS", "api.dify.ai")
+	setEnv(t, "OCMS_WEBHOOK_ALLOWED_HOSTS", "hooks.example.com")
+	setEnv(t, "OCMS_REQUIRE_API_KEY_EXPIRY", "false")
+	setEnv(t, "OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS", "false")
+	setEnv(t, "OCMS_API_KEY_MAX_TTL_DAYS", "0")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	if cfg.RequireAPIKeyExpiry {
+		t.Error("RequireAPIKeyExpiry = true, want false due to explicit override")
+	}
+	if cfg.RequireWebhookAllowedHosts {
+		t.Error("RequireWebhookAllowedHosts = true, want false due to explicit override")
+	}
+	if cfg.APIKeyMaxTTLDays != 0 {
+		t.Errorf("APIKeyMaxTTLDays = %d, want 0 due to explicit override", cfg.APIKeyMaxTTLDays)
 	}
 }
 

@@ -170,7 +170,7 @@ func (d *Dispatcher) processDelivery(ctx context.Context, delivery *QueuedDelive
 func (d *Dispatcher) attemptDelivery(ctx context.Context, delivery *QueuedDelivery) DeliveryResult {
 	// Re-validate destination at dispatch time to enforce current outbound
 	// policies for legacy/tampered records.
-	if err := util.ValidateWebhookURL(delivery.URL); err != nil {
+	if err := ValidateDestinationURL(delivery.URL); err != nil {
 		return DeliveryResult{
 			Success:     false,
 			Error:       fmt.Errorf("invalid webhook URL: %w", err),
