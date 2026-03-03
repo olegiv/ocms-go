@@ -80,6 +80,17 @@ templ TagsListPage(pc *PageContext, data TagsListData) {
 					@table.Table() {
 						@table.Header() {
 							@table.Row() {
+								if data.Pagination.HasBulkAction() {
+									@table.Head(table.HeadProps{Class: "w-[44px]"}) {
+										<input
+											type="checkbox"
+											class="checkbox-input"
+											data-bulk-master="true"
+											data-bulk-scope={ data.Pagination.BulkScope() }
+											aria-label={ pc.T("btn.select_all") }
+										/>
+									}
+								}
 								@table.Head() { { pc.T("label.name") } }
 								@table.Head() { { pc.T("label.slug") } }
 								@table.Head() { { pc.T("label.language") } }
@@ -91,6 +102,18 @@ templ TagsListPage(pc *PageContext, data TagsListData) {
 						@table.Body() {
 							for _, tag := range data.Tags {
 								@table.Row(table.RowProps{ID: fmt.Sprintf("tag-row-%d", tag.ID)}) {
+									if data.Pagination.HasBulkAction() {
+										@table.Cell(table.CellProps{Class: "w-[44px]"}) {
+											<input
+												type="checkbox"
+												class="checkbox-input"
+												data-bulk-item="true"
+												data-bulk-id={ fmt.Sprintf("%d", tag.ID) }
+												data-bulk-scope={ data.Pagination.BulkScope() }
+												aria-label={ pc.T("btn.select") }
+											/>
+										}
+									}
 									@table.Cell() {
 										<a href={ templ.SafeURL(fmt.Sprintf("/admin/tags/%d", tag.ID)) } class="tag-name-link">{ tag.Name }</a>
 									}
@@ -125,7 +148,7 @@ templ TagsListPage(pc *PageContext, data TagsListData) {
 						}
 					}
 				</div>
-				if data.Pagination.ShouldShow() {
+				if data.Pagination.ShouldShow() || data.Pagination.HasBulkAction() {
 					@card.Footer() {
 						@Pagination(pc, data.Pagination)
 					}

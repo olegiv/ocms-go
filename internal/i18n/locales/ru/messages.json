@@ -4108,6 +4108,41 @@
             "translation": "записей"
         },
         {
+            "id": "pagination.selected_count",
+            "message": "selected",
+            "translation": "выбрано"
+        },
+        {
+            "id": "pagination.delete_selected",
+            "message": "Delete selected",
+            "translation": "Удалить выбранные"
+        },
+        {
+            "id": "pagination.bulk_delete_confirm",
+            "message": "Delete selected items?",
+            "translation": "Удалить выбранные элементы?"
+        },
+        {
+            "id": "pagination.bulk_delete_none",
+            "message": "No items selected",
+            "translation": "Нет выбранных элементов"
+        },
+        {
+            "id": "pagination.bulk_delete_success",
+            "message": "Selected items deleted",
+            "translation": "Выбранные элементы удалены"
+        },
+        {
+            "id": "pagination.bulk_delete_partial",
+            "message": "Some selected items could not be deleted",
+            "translation": "Часть выбранных элементов не удалось удалить"
+        },
+        {
+            "id": "pagination.bulk_delete_error",
+            "message": "Failed to delete selected items",
+            "translation": "Не удалось удалить выбранные элементы"
+        },
+        {
             "id": "time.just_now",
             "message": "Just now",
             "translation": "Только что"

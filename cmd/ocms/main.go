@@ -1480,6 +1480,7 @@ func run() error {
 				List: pagesHandler.List, NewForm: pagesHandler.NewForm, Create: pagesHandler.Create,
 				EditForm: pagesHandler.EditForm, Update: pagesHandler.Update, Delete: pagesHandler.Delete,
 			})
+			r.Post(handler.RoutePages+handler.RouteSuffixBulkDelete, pagesHandler.BulkDelete)
 			r.Post(handler.RoutePagesID+"/publish", pagesHandler.TogglePublish)
 			r.Get(handler.RoutePagesID+"/versions", pagesHandler.Versions)
 			r.Post(handler.RoutePagesID+"/versions/{versionId}/restore", pagesHandler.RestoreVersion)
@@ -1490,6 +1491,7 @@ func run() error {
 				List: taxonomyHandler.ListTags, NewForm: taxonomyHandler.NewTagForm, Create: taxonomyHandler.CreateTag,
 				EditForm: taxonomyHandler.EditTagForm, Update: taxonomyHandler.UpdateTag, Delete: taxonomyHandler.DeleteTag,
 			})
+			r.Post(handler.RouteTags+handler.RouteSuffixBulkDelete, taxonomyHandler.BulkDeleteTags)
 			r.Get(handler.RouteTags+handler.RouteSuffixSearch, taxonomyHandler.SearchTags)
 			r.Post(handler.RouteTagsID+handler.RouteSuffixTranslate, taxonomyHandler.TranslateTag)
 
@@ -1510,6 +1512,7 @@ func run() error {
 			r.Put(handler.RouteMediaID, mediaHandler.Update)
 			r.Post(handler.RouteMediaID, mediaHandler.Update) // HTML forms can't send PUT
 			r.Delete(handler.RouteMediaID, mediaHandler.Delete)
+			r.Post(handler.RouteMedia+handler.RouteSuffixBulkDelete, mediaHandler.BulkDelete)
 			r.Post(handler.RouteMediaID+handler.RouteSuffixMove, mediaHandler.MoveMedia)
 			r.Post(handler.RouteMediaID+handler.RouteSuffixRegenerate, mediaHandler.RegenerateVariants)
 
@@ -1543,6 +1546,7 @@ func run() error {
 			r.Get(handler.RouteFormsID+"/submissions", formsHandler.Submissions)
 			r.Get(handler.RouteFormsID+handler.RouteSubmissionsSubID, formsHandler.ViewSubmission)
 			r.Delete(handler.RouteFormsID+handler.RouteSubmissionsSubID, formsHandler.DeleteSubmission)
+			r.Post(handler.RouteFormsID+"/submissions"+handler.RouteSuffixBulkDelete, formsHandler.BulkDeleteSubmissions)
 			r.Post(handler.RouteFormsID+"/submissions/export", formsHandler.ExportSubmissions)
 
 			// Form translation route
@@ -1573,6 +1577,7 @@ func run() error {
 				List: usersHandler.List, NewForm: usersHandler.NewForm, Create: usersHandler.Create,
 				EditForm: usersHandler.EditForm, Update: usersHandler.Update, Delete: usersHandler.Delete,
 			})
+			r.Post(handler.RouteUsers+handler.RouteSuffixBulkDelete, usersHandler.BulkDelete)
 
 			// Language management routes
 			registerCRUD(r, handler.RouteLanguages, handler.RouteLanguagesID, crudHandlers{
@@ -1598,6 +1603,7 @@ func run() error {
 				List: apiKeysHandler.List, NewForm: apiKeysHandler.NewForm, Create: apiKeysHandler.Create,
 				EditForm: apiKeysHandler.EditForm, Update: apiKeysHandler.Update, Delete: apiKeysHandler.Delete,
 			})
+			r.Post(handler.RouteAPIKeys+handler.RouteSuffixBulkDelete, apiKeysHandler.BulkDelete)
 
 			// Webhook management routes
 			registerCRUD(r, handler.RouteWebhooks, handler.RouteWebhooksID, crudHandlers{

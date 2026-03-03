@@ -482,4 +482,7 @@ func TestConvertPagination(t *testing.T) {
 	if !got.Pages[1].IsCurrent {
 		t.Error("Pages[1].IsCurrent should be true")
 	}
+	if got.BulkAction != nil {
+		t.Errorf("BulkAction = %#v, want nil by default", got.BulkAction)
+	}
 }

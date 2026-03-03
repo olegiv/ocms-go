@@ -1636,6 +1636,57 @@ func (h *FormsHandler) DeleteSubmission(w http.ResponseWriter, r *http.Request) 
 	flashSuccess(w, r, h.renderer, fmt.Sprintf(redirectAdminFormsIDSubmissions, formID), "Submission deleted successfully")
 }
 
+// BulkDeleteSubmissions handles POST /admin/forms/{id}/submissions/bulk-delete.
+func (h *FormsHandler) BulkDeleteSubmissions(w http.ResponseWriter, r *http.Request) {
+	if middleware.IsDemoMode() {
+		writeJSONError(w, http.StatusForbidden, middleware.DemoModeMessageDetailed(middleware.RestrictionContentReadOnly))
+		return
+	}
+
+	formID, ok := parseFieldIDParamJSON(w, r, "id")
+	if !ok {
+		return
+	}
+
+	ids, err := parseBulkActionIDs(w, r, defaultBulkActionMaxBatch)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	failed := make([]bulkActionFailedItem, 0)
+	deleted := 0
+
+	for _, subID := range ids {
+		submission, err := h.queries.GetFormSubmissionByID(r.Context(), subID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				failed = append(failed, bulkActionFailedItem{ID: subID, Reason: "Submission not found"})
+				continue
+			}
+			slog.Error("failed to load submission for bulk delete", "error", err, "sub_id", subID)
+			failed = append(failed, bulkActionFailedItem{ID: subID, Reason: "Error loading submission"})
+			continue
+		}
+
+		if submission.FormID != formID {
+			failed = append(failed, bulkActionFailedItem{ID: subID, Reason: "Submission does not belong to this form"})
+			continue
+		}
+
+		if err := h.queries.DeleteFormSubmission(r.Context(), subID); err != nil {
+			slog.Error("failed to bulk delete submission", "error", err, "sub_id", subID, "form_id", formID)
+			failed = append(failed, bulkActionFailedItem{ID: subID, Reason: "Error deleting submission"})
+			continue
+		}
+
+		slog.Info("submission deleted", "sub_id", subID, "form_id", formID, "deleted_by", middleware.GetUserID(r))
+		deleted++
+	}
+
+	writeBulkActionSuccess(w, deleted, failed)
+}
+
 // ExportSubmissions handles POST /admin/forms/{id}/submissions/export - exports submissions as CSV.
 func (h *FormsHandler) ExportSubmissions(w http.ResponseWriter, r *http.Request) {
 	formID := parseFieldIDParam(w, r, "id")

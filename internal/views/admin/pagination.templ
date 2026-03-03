@@ -24,6 +24,7 @@ type PaginationData struct {
 	NextURL     string
 	LastURL     string
 	Pages       []PaginationPage
+	BulkAction  *PaginationBulkAction
 }
 
 // PaginationPage represents a single page link.
@@ -34,14 +35,34 @@ type PaginationPage struct {
 	IsEllipsis bool
 }
 
+// PaginationBulkAction configures optional bulk actions for list pages.
+type PaginationBulkAction struct {
+	Enabled   bool
+	Scope     string
+	DeleteURL string
+}
+
 // ShouldShow returns true if pagination should be displayed.
 func (p PaginationData) ShouldShow() bool {
 	return p.TotalPages > 1
 }
 
+// HasBulkAction returns true if pager bulk actions are enabled.
+func (p PaginationData) HasBulkAction() bool {
+	return p.BulkAction != nil && p.BulkAction.Enabled && p.BulkAction.Scope != "" && p.BulkAction.DeleteURL != ""
+}
+
+// BulkScope returns the configured bulk scope or empty string.
+func (p PaginationData) BulkScope() string {
+	if !p.HasBulkAction() {
+		return ""
+	}
+	return p.BulkAction.Scope
+}
+
 // Pagination renders pagination controls for admin lists.
 templ Pagination(pc *PageContext, p PaginationData) {
-	if p.ShouldShow() {
+	if p.ShouldShow() || p.HasBulkAction() {
 		<div class="flex items-center justify-between flex-wrap gap-4">
 			<div class="text-sm text-muted-foreground">
 				{ pc.T("pagination.page") } { fmt.Sprintf("%d", p.CurrentPage) } { pc.T("pagination.of") } { fmt.Sprintf("%d", p.TotalPages) }
@@ -50,37 +71,86 @@ templ Pagination(pc *PageContext, p PaginationData) {
 				}
 			</div>
 			<div class="flex items-center gap-2">
-				<!-- First Page -->
-				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: p.FirstURL, Disabled: !p.HasFirst, Attributes: templ.Attributes{"title": pc.T("pagination.first"), "aria-label": pc.T("pagination.first")}}) {
-					@icon.ChevronsLeft(icon.Props{Size: 14})
+				if p.HasBulkAction() {
+					<div
+						class="flex items-center gap-2 flex-wrap"
+						data-bulk-controls="true"
+						data-bulk-scope={ p.BulkScope() }
+						data-bulk-delete-url={ p.BulkAction.DeleteURL }
+						data-bulk-confirm={ pc.T("pagination.bulk_delete_confirm") }
+						data-bulk-none={ pc.T("pagination.bulk_delete_none") }
+						data-bulk-success={ pc.T("pagination.bulk_delete_success") }
+						data-bulk-partial={ pc.T("pagination.bulk_delete_partial") }
+						data-bulk-error={ pc.T("pagination.bulk_delete_error") }
+					>
+						<span class="text-sm text-muted-foreground">
+							<span data-bulk-selected-count={ p.BulkScope() }>0</span> { pc.T("pagination.selected_count") }
+						</span>
+						@button.Button(button.Props{
+							Variant: button.VariantOutline,
+							Size: button.SizeSm,
+							Attributes: templ.Attributes{
+								"data-bulk-action": "select-all",
+								"data-bulk-scope": p.BulkScope(),
+							},
+						}) {
+							{ pc.T("btn.select_all") }
+						}
+						@button.Button(button.Props{
+							Variant: button.VariantOutline,
+							Size: button.SizeSm,
+							Attributes: templ.Attributes{
+								"data-bulk-action": "deselect-all",
+								"data-bulk-scope": p.BulkScope(),
+							},
+						}) {
+							{ pc.T("btn.deselect_all") }
+						}
+						@button.Button(button.Props{
+							Variant: button.VariantDestructive,
+							Size: button.SizeSm,
+							Attributes: templ.Attributes{
+								"data-bulk-action": "delete-selected",
+								"data-bulk-scope": p.BulkScope(),
+							},
+						}) {
+							{ pc.T("pagination.delete_selected") }
+						}
+					</div>
 				}
-				<!-- Previous Page -->
-				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: p.PrevURL, Disabled: !p.HasPrev, Attributes: templ.Attributes{"title": pc.T("pagination.previous"), "aria-label": pc.T("pagination.previous")}}) {
-					@icon.ChevronLeft(icon.Props{Size: 14})
-				}
-				<!-- Page Numbers -->
-				<div class="flex items-center gap-1">
-					for _, page := range p.Pages {
-						if page.IsEllipsis {
-							<span class="px-2 text-muted-foreground">&hellip;</span>
-						} else if page.IsCurrent {
-							@button.Button(button.Props{Size: button.SizeSm, Disabled: true}) {
-								{ fmt.Sprintf("%d", page.Number) }
-							}
-						} else {
-							@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: page.URL}) {
-								{ fmt.Sprintf("%d", page.Number) }
+				if p.ShouldShow() {
+					<!-- First Page -->
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: p.FirstURL, Disabled: !p.HasFirst, Attributes: templ.Attributes{"title": pc.T("pagination.first"), "aria-label": pc.T("pagination.first")}}) {
+						@icon.ChevronsLeft(icon.Props{Size: 14})
+					}
+					<!-- Previous Page -->
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: p.PrevURL, Disabled: !p.HasPrev, Attributes: templ.Attributes{"title": pc.T("pagination.previous"), "aria-label": pc.T("pagination.previous")}}) {
+						@icon.ChevronLeft(icon.Props{Size: 14})
+					}
+					<!-- Page Numbers -->
+					<div class="flex items-center gap-1">
+						for _, page := range p.Pages {
+							if page.IsEllipsis {
+								<span class="px-2 text-muted-foreground">&hellip;</span>
+							} else if page.IsCurrent {
+								@button.Button(button.Props{Size: button.SizeSm, Disabled: true}) {
+									{ fmt.Sprintf("%d", page.Number) }
+								}
+							} else {
+								@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: page.URL}) {
+									{ fmt.Sprintf("%d", page.Number) }
+								}
 							}
 						}
+					</div>
+					<!-- Next Page -->
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: p.NextURL, Disabled: !p.HasNext, Attributes: templ.Attributes{"title": pc.T("pagination.next"), "aria-label": pc.T("pagination.next")}}) {
+						@icon.ChevronRight(icon.Props{Size: 14})
 					}
-				</div>
-				<!-- Next Page -->
-				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: p.NextURL, Disabled: !p.HasNext, Attributes: templ.Attributes{"title": pc.T("pagination.next"), "aria-label": pc.T("pagination.next")}}) {
-					@icon.ChevronRight(icon.Props{Size: 14})
-				}
-				<!-- Last Page -->
-				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: p.LastURL, Disabled: !p.HasLast, Attributes: templ.Attributes{"title": pc.T("pagination.last"), "aria-label": pc.T("pagination.last")}}) {
-					@icon.ChevronsRight(icon.Props{Size: 14})
+					<!-- Last Page -->
+					@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: p.LastURL, Disabled: !p.HasLast, Attributes: templ.Attributes{"title": pc.T("pagination.last"), "aria-label": pc.T("pagination.last")}}) {
+						@icon.ChevronsRight(icon.Props{Size: 14})
+					}
 				}
 			</div>
 		</div>

@@ -456,6 +456,17 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 					@table.Table() {
 						@table.Header() {
 							@table.Row() {
+								if data.Pagination.HasBulkAction() {
+									@table.Head(table.HeadProps{Class: "w-[44px]"}) {
+										<input
+											type="checkbox"
+											class="checkbox-input"
+											data-bulk-master="true"
+											data-bulk-scope={ data.Pagination.BulkScope() }
+											aria-label={ pc.T("btn.select_all") }
+										/>
+									}
+								}
 								@table.Head(table.HeadProps{Class: "w-[60px]"}) { { pc.T("label.image") } }
 								@table.Head() { { pc.T("label.title") } }
 								@table.Head() { { pc.T("label.tags") } }
@@ -468,12 +479,12 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 						}
 						@table.Body() {
 							for _, page := range data.Pages {
-								@pageListRow(pc, page, data.IsDemoMode)
+								@pageListRow(pc, page, data.IsDemoMode, data.Pagination.BulkScope())
 							}
 						}
 					}
 				</div>
-				if data.Pagination.ShouldShow() {
+				if data.Pagination.ShouldShow() || data.Pagination.HasBulkAction() {
 					@card.Footer() {
 						@Pagination(pc, data.Pagination)
 					}
@@ -502,8 +513,20 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 	}
 }
 
-templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool) {
+templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool, bulkScope string) {
 	@table.Row(table.RowProps{ID: fmt.Sprintf("page-row-%d", page.ID)}) {
+		if bulkScope != "" {
+			@table.Cell(table.CellProps{Class: "w-[44px]"}) {
+				<input
+					type="checkbox"
+					class="checkbox-input"
+					data-bulk-item="true"
+					data-bulk-id={ fmt.Sprintf("%d", page.ID) }
+					data-bulk-scope={ bulkScope }
+					aria-label={ pc.T("btn.select") }
+				/>
+			}
+		}
 		@table.Cell(table.CellProps{Class: "page-image-cell"}) {
 			if page.FeaturedImage != nil {
 				<img src={ page.FeaturedImage.Thumbnail } alt={ page.Title } class="page-thumbnail"/>

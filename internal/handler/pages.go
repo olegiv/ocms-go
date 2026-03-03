@@ -998,6 +998,60 @@ func (h *PagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	flashSuccess(w, r, h.renderer, redirectAdminPages, "Page deleted successfully")
 }
 
+// BulkDelete handles POST /admin/pages/bulk-delete - deletes multiple pages.
+func (h *PagesHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
+	if middleware.IsDemoMode() {
+		writeJSONError(w, http.StatusForbidden, middleware.DemoModeMessageDetailed(middleware.RestrictionDeletePage))
+		return
+	}
+
+	ids, err := parseBulkActionIDs(w, r, defaultBulkActionMaxBatch)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	failed := make([]bulkActionFailedItem, 0)
+	deleted := 0
+
+	for _, id := range ids {
+		if _, err := h.deletePageForBulk(r, id); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Page not found"})
+				continue
+			}
+			slog.Error("failed to bulk delete page", "error", err, "page_id", id)
+			failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Error deleting page"})
+			continue
+		}
+		deleted++
+	}
+
+	writeBulkActionSuccess(w, deleted, failed)
+}
+
+func (h *PagesHandler) deletePageForBulk(r *http.Request, id int64) (store.Page, error) {
+	page, err := h.queries.GetPageByID(r.Context(), id)
+	if err != nil {
+		return store.Page{}, err
+	}
+
+	if err = h.queries.DeletePage(r.Context(), id); err != nil {
+		return store.Page{}, err
+	}
+
+	slog.Info("page deleted", "page_id", id, "slug", page.Slug, "deleted_by", middleware.GetUserID(r))
+	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page deleted", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": id, "slug": page.Slug})
+
+	// Dispatch page.deleted webhook event
+	h.dispatchPageEvent(r.Context(), model.EventPageDeleted, page, middleware.GetUserEmail(r))
+
+	// Invalidate page cache
+	h.invalidatePageCache(id)
+
+	return page, nil
+}
+
 // TogglePublish handles POST /admin/pages/{id}/publish - toggles publish status.
 func (h *PagesHandler) TogglePublish(w http.ResponseWriter, r *http.Request) {
 	id, err := ParseIDParam(r)

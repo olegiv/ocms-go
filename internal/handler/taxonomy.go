@@ -96,10 +96,13 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	pagination := convertPagination(BuildAdminPagination(page, int(totalCount), TagsPerPage, redirectAdminTags, r.URL.Query()))
+	pagination.BulkAction = bulkPaginationAction(bulkScopeTags, redirectAdminTags+RouteSuffixBulkDelete)
+
 	viewData := adminviews.TagsListData{
 		Tags:       viewTags,
 		TotalCount: totalCount,
-		Pagination: convertPagination(BuildAdminPagination(page, int(totalCount), TagsPerPage, redirectAdminTags, r.URL.Query())),
+		Pagination: pagination,
 	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "nav.tags"), tagsBreadcrumbs(lang))
@@ -352,6 +355,45 @@ func (h *TaxonomyHandler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 	params.DeleteFn = h.queries.DeleteTag
 	params.GetSlug = func(t store.Tag) string { return t.Slug }
 	handleDeleteEntity(w, r, h.renderer, params)
+}
+
+// BulkDeleteTags handles POST /admin/tags/bulk-delete - deletes multiple tags.
+func (h *TaxonomyHandler) BulkDeleteTags(w http.ResponseWriter, r *http.Request) {
+	if middleware.IsDemoMode() {
+		writeJSONError(w, http.StatusForbidden, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteTag))
+		return
+	}
+
+	ids, err := parseBulkActionIDs(w, r, defaultBulkActionMaxBatch)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	failed := make([]bulkActionFailedItem, 0)
+	deleted := 0
+
+	for _, id := range ids {
+		if _, err := h.queries.GetTagByID(r.Context(), id); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Tag not found"})
+				continue
+			}
+			slog.Error("failed to load tag for bulk delete", "error", err, "tag_id", id)
+			failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Error loading tag"})
+			continue
+		}
+
+		if err := h.queries.DeleteTag(r.Context(), id); err != nil {
+			slog.Error("failed to bulk delete tag", "error", err, "tag_id", id)
+			failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Error deleting tag"})
+			continue
+		}
+
+		deleted++
+	}
+
+	writeBulkActionSuccess(w, deleted, failed)
 }
 
 // SearchTags handles GET /admin/tags/search - AJAX search for autocomplete.

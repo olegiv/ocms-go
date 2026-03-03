@@ -254,15 +254,29 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 							}
 						</form>
 					</div>
+					if data.Pagination.HasBulkAction() {
+						<div class="filter-group">
+							<label class="checkbox-label">
+								<input
+									type="checkbox"
+									class="checkbox-input"
+									data-bulk-master="true"
+									data-bulk-scope={ data.Pagination.BulkScope() }
+									aria-label={ pc.T("btn.select_all") }
+								/>
+								<span class="checkbox-text">{ pc.T("btn.select_all") }</span>
+							</label>
+						</div>
+					}
 				</div>
 				if len(data.Media) > 0 {
 					@card.Card(card.Props{}) {
 						<div class="media-grid">
 							for _, item := range data.Media {
-								@mediaGridItem(pc, item)
+								@mediaGridItem(pc, item, data.Pagination.BulkScope())
 							}
 						</div>
-						if data.Pagination.ShouldShow() {
+						if data.Pagination.ShouldShow() || data.Pagination.HasBulkAction() {
 							@card.Footer() {
 								@Pagination(pc, data.Pagination)
 							}
@@ -362,8 +376,20 @@ templ mediaFolderItem(pc *PageContext, data MediaLibraryViewData, folder MediaFo
 	</li>
 }
 
-templ mediaGridItem(pc *PageContext, item MediaItemView) {
-	<div class="media-item" id={ fmt.Sprintf("media-item-%d", item.ID) } x-data="{ showConfirm: false }">
+templ mediaGridItem(pc *PageContext, item MediaItemView, bulkScope string) {
+	<div class="media-item relative" id={ fmt.Sprintf("media-item-%d", item.ID) } x-data="{ showConfirm: false }">
+		if bulkScope != "" {
+			<div class="absolute top-2 left-2 z-10">
+				<input
+					type="checkbox"
+					class="checkbox-input"
+					data-bulk-item="true"
+					data-bulk-id={ fmt.Sprintf("%d", item.ID) }
+					data-bulk-scope={ bulkScope }
+					aria-label={ pc.T("btn.select") }
+				/>
+			</div>
+		}
 		<a href={ templ.SafeURL(fmt.Sprintf("/admin/media/%d", item.ID)) } class="media-preview">
 			if item.IsImage {
 				if item.ThumbnailURL != "" {

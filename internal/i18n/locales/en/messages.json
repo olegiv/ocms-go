@@ -4623,6 +4623,41 @@
             "translation": "items"
         },
         {
+            "id": "pagination.selected_count",
+            "message": "selected",
+            "translation": "selected"
+        },
+        {
+            "id": "pagination.delete_selected",
+            "message": "Delete selected",
+            "translation": "Delete selected"
+        },
+        {
+            "id": "pagination.bulk_delete_confirm",
+            "message": "Delete selected items?",
+            "translation": "Delete selected items?"
+        },
+        {
+            "id": "pagination.bulk_delete_none",
+            "message": "No items selected",
+            "translation": "No items selected"
+        },
+        {
+            "id": "pagination.bulk_delete_success",
+            "message": "Selected items deleted",
+            "translation": "Selected items deleted"
+        },
+        {
+            "id": "pagination.bulk_delete_partial",
+            "message": "Some selected items could not be deleted",
+            "translation": "Some selected items could not be deleted"
+        },
+        {
+            "id": "pagination.bulk_delete_error",
+            "message": "Failed to delete selected items",
+            "translation": "Failed to delete selected items"
+        },
+        {
             "id": "time.just_now",
             "message": "Just now",
             "translation": "Just now"

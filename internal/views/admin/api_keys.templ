@@ -92,6 +92,17 @@ templ APIKeysListPage(pc *PageContext, data APIKeysListData) {
 					@table.Table() {
 						@table.Header() {
 							@table.Row() {
+								if data.Pagination.HasBulkAction() {
+									@table.Head(table.HeadProps{Class: "w-[44px]"}) {
+										<input
+											type="checkbox"
+											class="checkbox-input"
+											data-bulk-master="true"
+											data-bulk-scope={ data.Pagination.BulkScope() }
+											aria-label={ pc.T("btn.select_all") }
+										/>
+									}
+								}
 								@table.Head() { { pc.T("label.name") } }
 								@table.Head() { { pc.T("api_keys.key_prefix") } }
 								@table.Head() { { pc.T("api_keys.permissions") } }
@@ -103,12 +114,12 @@ templ APIKeysListPage(pc *PageContext, data APIKeysListData) {
 						}
 						@table.Body() {
 							for _, key := range data.APIKeys {
-								@APIKeyRow(pc, key)
+								@APIKeyRow(pc, key, data.Pagination.BulkScope())
 							}
 						}
 					}
 				</div>
-				if data.Pagination.ShouldShow() {
+				if data.Pagination.ShouldShow() || data.Pagination.HasBulkAction() {
 					@card.Footer() {
 						@Pagination(pc, data.Pagination)
 					}
@@ -155,8 +166,20 @@ templ APIKeysListPage(pc *PageContext, data APIKeysListData) {
 }
 
 // APIKeyRow renders a single API key table row.
-templ APIKeyRow(pc *PageContext, key APIKeyListItem) {
+templ APIKeyRow(pc *PageContext, key APIKeyListItem, bulkScope string) {
 	@table.Row(table.RowProps{ID: fmt.Sprintf("api-key-row-%d", key.ID)}) {
+		if bulkScope != "" {
+			@table.Cell(table.CellProps{Class: "w-[44px]"}) {
+				<input
+					type="checkbox"
+					class="checkbox-input"
+					data-bulk-item="true"
+					data-bulk-id={ fmt.Sprintf("%d", key.ID) }
+					data-bulk-scope={ bulkScope }
+					aria-label={ pc.T("btn.select") }
+				/>
+			}
+		}
 		@table.Cell() {
 			<strong>{ key.Name }</strong>
 		}

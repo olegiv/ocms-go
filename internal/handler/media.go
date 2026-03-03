@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"log/slog"
@@ -657,6 +658,49 @@ func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	// For regular requests, redirect
 	flashSuccess(w, r, h.renderer, redirectAdminMedia, "Media deleted successfully")
+}
+
+// BulkDelete handles POST /admin/media/bulk-delete - deletes multiple media items.
+func (h *MediaHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
+	if middleware.IsDemoMode() {
+		writeJSONError(w, http.StatusForbidden, middleware.DemoModeMessageDetailed(middleware.RestrictionDeleteMedia))
+		return
+	}
+
+	ids, err := parseBulkActionIDs(w, r, defaultBulkActionMaxBatch)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	failed := make([]bulkActionFailedItem, 0)
+	deleted := 0
+
+	for _, id := range ids {
+		media, err := h.queries.GetMediaByID(r.Context(), id)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Media not found"})
+				continue
+			}
+			slog.Error("failed to load media for bulk delete", "error", err, "media_id", id)
+			failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Error loading media"})
+			continue
+		}
+
+		if err := h.mediaService.Delete(r.Context(), id); err != nil {
+			slog.Error("failed to bulk delete media", "error", err, "media_id", id)
+			failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Error deleting media"})
+			continue
+		}
+
+		slog.Info("media deleted", "media_id", id, "filename", media.Filename, "deleted_by", middleware.GetUserID(r))
+		_ = h.eventService.LogMediaEvent(r.Context(), model.EventLevelInfo, "Media deleted", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"media_id": id, "filename": media.Filename})
+		h.dispatchMediaEvent(r.Context(), model.EventMediaDeleted, media)
+		deleted++
+	}
+
+	writeBulkActionSuccess(w, deleted, failed)
 }
 
 // CreateFolder handles POST /admin/media/folders - creates a new folder.

@@ -884,6 +884,17 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 				@table.Table() {
 					@table.Header() {
 						@table.Row() {
+							if data.Pagination.HasBulkAction() {
+								@table.Head(table.HeadProps{Class: "w-[44px]"}) {
+									<input
+										type="checkbox"
+										class="checkbox-input"
+										data-bulk-master="true"
+										data-bulk-scope={ data.Pagination.BulkScope() }
+										aria-label={ pc.T("btn.select_all") }
+									/>
+								}
+							}
 							@table.Head(table.HeadProps{Class: "w-[60px]"}) { ID }
 							@table.Head() { { pc.T("forms.preview") } }
 							@table.Head(table.HeadProps{Class: "w-[160px]"}) { { pc.T("forms.submitted") } }
@@ -895,19 +906,19 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 					@table.Body() {
 						for _, sub := range data.Submissions {
 							if !sub.IsRead {
-								@table.Row(table.RowProps{Class: "unread"}) {
-									@submissionRowCells(pc, data, sub)
+								@table.Row(table.RowProps{ID: fmt.Sprintf("submission-row-%d", sub.ID), Class: "unread"}) {
+									@submissionRowCells(pc, data, sub, data.Pagination.BulkScope())
 								}
 							} else {
-								@table.Row() {
-									@submissionRowCells(pc, data, sub)
+								@table.Row(table.RowProps{ID: fmt.Sprintf("submission-row-%d", sub.ID)}) {
+									@submissionRowCells(pc, data, sub, data.Pagination.BulkScope())
 								}
 							}
 						}
 					}
 				}
 			</div>
-			if data.Pagination.ShouldShow() {
+			if data.Pagination.ShouldShow() || data.Pagination.HasBulkAction() {
 				@card.Card(card.Props{}) {
 					@card.Footer(card.FooterProps{}) {
 						@Pagination(pc, data.Pagination)
@@ -934,7 +945,19 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 }
 
 // submissionRowCells renders the cells for a submission row (extracted to avoid duplication)
-templ submissionRowCells(pc *PageContext, data SubmissionsListViewData, sub SubmissionItemView) {
+templ submissionRowCells(pc *PageContext, data SubmissionsListViewData, sub SubmissionItemView, bulkScope string) {
+	if bulkScope != "" {
+		@table.Cell(table.CellProps{Class: "w-[44px]"}) {
+			<input
+				type="checkbox"
+				class="checkbox-input"
+				data-bulk-item="true"
+				data-bulk-id={ fmt.Sprintf("%d", sub.ID) }
+				data-bulk-scope={ bulkScope }
+				aria-label={ pc.T("btn.select") }
+			/>
+		}
+	}
 	@table.Cell() {
 		<a href={ templ.SafeURL(fmt.Sprintf("/admin/forms/%d/submissions/%d", data.FormID, sub.ID)) } class="link-primary">
 			{ fmt.Sprintf("#%d", sub.ID) }
