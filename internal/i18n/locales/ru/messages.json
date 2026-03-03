@@ -883,6 +883,16 @@
             "translation": "Тип"
         },
         {
+            "id": "media.sort_by",
+            "message": "Sort by",
+            "translation": "Сортировать по"
+        },
+        {
+            "id": "media.sort_direction",
+            "message": "Direction",
+            "translation": "Направление"
+        },
+        {
             "id": "media.images",
             "message": "Images",
             "translation": "Изображения"
@@ -4111,6 +4121,21 @@
             "id": "pagination.items_per_page",
             "message": "Items per page",
             "translation": "Элементов на странице"
+        },
+        {
+            "id": "pagination.sort_none",
+            "message": "Not sorted",
+            "translation": "Без сортировки"
+        },
+        {
+            "id": "pagination.sort_asc",
+            "message": "Ascending",
+            "translation": "По возрастанию"
+        },
+        {
+            "id": "pagination.sort_desc",
+            "message": "Descending",
+            "translation": "По убыванию"
         },
         {
             "id": "pagination.selected_count",

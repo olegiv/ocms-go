@@ -34,6 +34,14 @@ const defaultAPIKeyLifetime = 90 * 24 * time.Hour
 const maxAPIKeyLifetime = 365 * 24 * time.Hour
 const maxAPIKeySourceCIDRs = 64
 
+var apiKeysSortableFields = map[string]SortConfig{
+	"name":         {DefaultDir: sortDirAsc},
+	"is_active":    {DefaultDir: sortDirDesc},
+	"last_used_at": {DefaultDir: sortDirDesc},
+	"expires_at":   {DefaultDir: sortDirAsc},
+	"created_at":   {DefaultDir: sortDirDesc},
+}
+
 // APIKeysHandler handles API key management routes.
 type APIKeysHandler struct {
 	queries            *store.Queries
@@ -83,6 +91,7 @@ func (h *APIKeysHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	page := ParsePageParam(r)
 	perPage := ParsePerPageParam(r, APIKeysPerPage, maxPerPageSelectionValue)
+	sortField, sortDir := parseSortParams(r, "created_at", sortDirDesc, apiKeysSortableFields)
 
 	// Get total count
 	totalKeys, err := h.queries.CountAPIKeys(r.Context())
@@ -96,16 +105,21 @@ func (h *APIKeysHandler) List(w http.ResponseWriter, r *http.Request) {
 	offset := int64((page - 1) * perPage)
 
 	// Fetch API keys for current page
-	apiKeys, err := h.queries.ListAPIKeys(r.Context(), store.ListAPIKeysParams{
-		Limit:  int64(perPage),
-		Offset: offset,
+	apiKeys, err := h.queries.ListAPIKeysSorted(r.Context(), store.ListAPIKeysSortedParams{
+		Limit:     int64(perPage),
+		Offset:    offset,
+		SortField: sortField,
+		SortDir:   sortDir,
 	})
 	if err != nil {
 		logAndInternalError(w, "failed to list API keys", "error", err)
 		return
 	}
 
-	pagination := convertPagination(BuildAdminPagination(page, int(totalKeys), perPage, redirectAdminAPIKeys, r.URL.Query()))
+	handlerPagination := BuildAdminPagination(page, int(totalKeys), perPage, redirectAdminAPIKeys, r.URL.Query())
+	handlerPagination.SortField = sortField
+	handlerPagination.SortDir = sortDir
+	pagination := convertPagination(handlerPagination)
 	pagination.BulkAction = bulkPaginationAction(bulkScopeAPIKeys, redirectAdminAPIKeys+RouteSuffixBulkDelete)
 	pagination.PerPageSelector = perPageSelector(perPage, perPageOptionsStandard)
 

@@ -103,12 +103,52 @@ templ APIKeysListPage(pc *PageContext, data APIKeysListData) {
 										/>
 									}
 								}
-								@table.Head() { { pc.T("label.name") } }
+								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("name"))}}) {
+									<a
+										href={ data.Pagination.SortURL("name", sortDirAsc) }
+										class={ sortLinkClass(data.Pagination.SortState("name")) }
+										data-sort-state={ sortStateValue(data.Pagination.SortState("name")) }
+									>
+										<span>{ pc.T("label.name") }</span>
+										@SortIndicator(data.Pagination.SortState("name"))
+										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("name"))) }</span>
+									</a>
+								}
 								@table.Head() { { pc.T("api_keys.key_prefix") } }
 								@table.Head() { { pc.T("api_keys.permissions") } }
-								@table.Head() { { pc.T("label.status") } }
-								@table.Head() { { pc.T("api_keys.last_used") } }
-								@table.Head() { { pc.T("api_keys.expires") } }
+								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("is_active"))}}) {
+									<a
+										href={ data.Pagination.SortURL("is_active", sortDirDesc) }
+										class={ sortLinkClass(data.Pagination.SortState("is_active")) }
+										data-sort-state={ sortStateValue(data.Pagination.SortState("is_active")) }
+									>
+										<span>{ pc.T("label.status") }</span>
+										@SortIndicator(data.Pagination.SortState("is_active"))
+										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("is_active"))) }</span>
+									</a>
+								}
+								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("last_used_at"))}}) {
+									<a
+										href={ data.Pagination.SortURL("last_used_at", sortDirDesc) }
+										class={ sortLinkClass(data.Pagination.SortState("last_used_at")) }
+										data-sort-state={ sortStateValue(data.Pagination.SortState("last_used_at")) }
+									>
+										<span>{ pc.T("api_keys.last_used") }</span>
+										@SortIndicator(data.Pagination.SortState("last_used_at"))
+										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("last_used_at"))) }</span>
+									</a>
+								}
+								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("expires_at"))}}) {
+									<a
+										href={ data.Pagination.SortURL("expires_at", sortDirAsc) }
+										class={ sortLinkClass(data.Pagination.SortState("expires_at")) }
+										data-sort-state={ sortStateValue(data.Pagination.SortState("expires_at")) }
+									>
+										<span>{ pc.T("api_keys.expires") }</span>
+										@SortIndicator(data.Pagination.SortState("expires_at"))
+										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("expires_at"))) }</span>
+									</a>
+								}
 								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
 							}
 						}

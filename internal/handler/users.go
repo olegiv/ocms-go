@@ -42,6 +42,14 @@ var ValidRoles = []string{RoleAdmin, RoleEditor, RolePublic}
 // UsersPerPage is the number of users to display per page.
 const UsersPerPage = 10
 
+var usersSortableFields = map[string]SortConfig{
+	"name":          {DefaultDir: sortDirAsc},
+	"email":         {DefaultDir: sortDirAsc},
+	"role":          {DefaultDir: sortDirAsc},
+	"created_at":    {DefaultDir: sortDirDesc},
+	"last_login_at": {DefaultDir: sortDirDesc},
+}
+
 // MinPasswordLength is the minimum required password length.
 const MinPasswordLength = 12
 
@@ -95,6 +103,7 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	lang := h.renderer.GetAdminLang(r)
 	page := ParsePageParam(r)
 	perPage := ParsePerPageParam(r, UsersPerPage, maxPerPageSelectionValue)
+	sortField, sortDir := parseSortParams(r, "created_at", sortDirDesc, usersSortableFields)
 	currentUserID := middleware.GetUserID(r)
 
 	// Get total user count
@@ -109,9 +118,11 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	offset := int64((page - 1) * perPage)
 
 	// Fetch users for current page
-	users, err := h.queries.ListUsers(r.Context(), store.ListUsersParams{
-		Limit:  int64(perPage),
-		Offset: offset,
+	users, err := h.queries.ListUsersSorted(r.Context(), store.ListUsersSortedParams{
+		Limit:     int64(perPage),
+		Offset:    offset,
+		SortField: sortField,
+		SortDir:   sortDir,
 	})
 	if err != nil {
 		logAndInternalError(w, "failed to list users", "error", err)
@@ -135,7 +146,10 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 		viewUsers = append(viewUsers, item)
 	}
 
-	pagination := convertPagination(BuildAdminPagination(page, int(totalUsers), perPage, redirectAdminUsers, r.URL.Query()))
+	handlerPagination := BuildAdminPagination(page, int(totalUsers), perPage, redirectAdminUsers, r.URL.Query())
+	handlerPagination.SortField = sortField
+	handlerPagination.SortDir = sortDir
+	pagination := convertPagination(handlerPagination)
 	pagination.BulkAction = bulkPaginationAction(bulkScopeUsers, redirectAdminUsers+RouteSuffixBulkDelete)
 	pagination.PerPageSelector = perPageSelector(perPage, perPageOptionsStandard)
 

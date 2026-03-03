@@ -5,8 +5,18 @@ package admin
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
+)
+
+const (
+	sortQueryParam    = "sort"
+	sortDirQueryParam = "dir"
+	sortDirAsc        = "asc"
+	sortDirDesc       = "desc"
+	sortStateNone     = "none"
 )
 
 // PaginationData holds pagination state for admin list views.
@@ -15,6 +25,10 @@ type PaginationData struct {
 	CurrentPage int
 	TotalPages  int
 	TotalItems  int64
+	BaseURL     string
+	QueryString string
+	SortField   string
+	SortDir     string
 	HasFirst    bool
 	HasPrev     bool
 	HasNext     bool
@@ -51,6 +65,14 @@ type PaginationPerPageSelector struct {
 	Options []int
 }
 
+// PageURL returns the URL for a specific page number.
+func (p PaginationData) PageURL(page int) string {
+	if p.QueryString != "" {
+		return fmt.Sprintf("%s?%s&page=%d", p.BaseURL, p.QueryString, page)
+	}
+	return fmt.Sprintf("%s?page=%d", p.BaseURL, page)
+}
+
 // ShouldShow returns true if pagination should be displayed.
 func (p PaginationData) ShouldShow() bool {
 	return p.TotalPages > 1
@@ -76,6 +98,139 @@ func (p PaginationData) BulkScope() string {
 		return ""
 	}
 	return p.BulkAction.Scope
+}
+
+// SortURL returns a URL for sorting by the given field.
+// Clicking the active field toggles direction; changing field uses defaultDir.
+// Sort changes always reset page=1.
+func (p PaginationData) SortURL(field, defaultDir string) string {
+	sortField := strings.TrimSpace(field)
+	if sortField == "" {
+		return p.PageURL(1)
+	}
+
+	nextDir := normalizeSortDir(defaultDir)
+	if nextDir == "" {
+		nextDir = sortDirAsc
+	}
+	if p.SortState(sortField) != sortStateNone {
+		nextDir = toggleSortDir(p.SortState(sortField))
+	}
+
+	params := make(url.Values)
+	if p.QueryString != "" {
+		if parsed, err := url.ParseQuery(p.QueryString); err == nil {
+			for k, values := range parsed {
+				if len(values) == 0 {
+					continue
+				}
+				params[k] = append([]string(nil), values...)
+			}
+		}
+	}
+
+	params.Set(sortQueryParam, sortField)
+	params.Set(sortDirQueryParam, nextDir)
+	params.Set("page", "1")
+
+	if encoded := params.Encode(); encoded != "" {
+		return p.BaseURL + "?" + encoded
+	}
+	return p.BaseURL
+}
+
+// SortState returns "asc", "desc", or "none" for the given sortable field.
+func (p PaginationData) SortState(field string) string {
+	if strings.TrimSpace(field) == "" {
+		return sortStateNone
+	}
+	if strings.TrimSpace(p.SortField) != strings.TrimSpace(field) {
+		return sortStateNone
+	}
+	dir := normalizeSortDir(p.SortDir)
+	if dir == "" {
+		return sortStateNone
+	}
+	return dir
+}
+
+func normalizeSortDir(dir string) string {
+	switch strings.ToLower(strings.TrimSpace(dir)) {
+	case sortDirAsc:
+		return sortDirAsc
+	case sortDirDesc:
+		return sortDirDesc
+	default:
+		return ""
+	}
+}
+
+func toggleSortDir(dir string) string {
+	if normalizeSortDir(dir) == sortDirAsc {
+		return sortDirDesc
+	}
+	return sortDirAsc
+}
+
+func sortAriaValue(state string) string {
+	switch normalizeSortDir(state) {
+	case sortDirAsc:
+		return "ascending"
+	case sortDirDesc:
+		return "descending"
+	default:
+		return "none"
+	}
+}
+
+func sortStateLabelKey(state string) string {
+	switch normalizeSortDir(state) {
+	case sortDirAsc:
+		return "pagination.sort_asc"
+	case sortDirDesc:
+		return "pagination.sort_desc"
+	default:
+		return "pagination.sort_none"
+	}
+}
+
+func sortStateValue(state string) string {
+	if dir := normalizeSortDir(state); dir != "" {
+		return dir
+	}
+	return sortStateNone
+}
+
+func sortLinkClass(state string) string {
+	classes := []string{"admin-sort-link", "inline-flex", "items-center", "gap-1"}
+	if normalizeSortDir(state) == "" {
+		classes = append(classes, "text-muted-foreground")
+	} else {
+		classes = append(classes, "font-semibold")
+	}
+	return strings.Join(classes, " ")
+}
+
+func sortIndicatorClass(state string) string {
+	classes := []string{"admin-sort-indicator"}
+	if normalizeSortDir(state) == "" {
+		classes = append(classes, "admin-sort-indicator-muted")
+	} else {
+		classes = append(classes, "admin-sort-indicator-active")
+	}
+	return strings.Join(classes, " ")
+}
+
+templ SortIndicator(state string) {
+	<span class={ sortIndicatorClass(state) } aria-hidden="true">
+		if normalizeSortDir(state) == sortDirAsc {
+			@icon.ChevronUp(icon.Props{Size: 14})
+		} else if normalizeSortDir(state) == sortDirDesc {
+			@icon.ChevronDown(icon.Props{Size: 14})
+		} else {
+			@icon.ChevronsUpDown(icon.Props{Size: 14})
+		}
+	</span>
 }
 
 // Pagination renders pagination controls for admin lists.

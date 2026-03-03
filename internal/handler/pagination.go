@@ -19,6 +19,8 @@ type AdminPagination struct {
 	TotalPages  int
 	TotalItems  int64
 	PerPage     int
+	SortField   string
+	SortDir     string
 	HasFirst    bool
 	HasPrev     bool
 	HasNext     bool
@@ -101,6 +103,60 @@ func (p AdminPagination) PageURL(page int) string {
 		return fmt.Sprintf("%s?%s&page=%d", p.BaseURL, p.QueryString, page)
 	}
 	return fmt.Sprintf("%s?page=%d", p.BaseURL, page)
+}
+
+// SortURL returns a URL for sorting by the given field.
+// Clicking the active field toggles direction; changing field uses defaultDir.
+// Sort changes always reset page=1.
+func (p AdminPagination) SortURL(field, defaultDir string) string {
+	sortField := strings.TrimSpace(field)
+	if sortField == "" {
+		return p.PageURL(1)
+	}
+
+	nextDir := normalizeSortDir(defaultDir)
+	if nextDir == "" {
+		nextDir = sortDirAsc
+	}
+	if p.SortState(sortField) != sortStateNone {
+		nextDir = toggleSortDir(p.SortState(sortField))
+	}
+
+	params := make(url.Values)
+	if p.QueryString != "" {
+		if parsed, err := url.ParseQuery(p.QueryString); err == nil {
+			for k, values := range parsed {
+				if len(values) == 0 {
+					continue
+				}
+				params[k] = append([]string(nil), values...)
+			}
+		}
+	}
+
+	params.Set(sortQueryParam, sortField)
+	params.Set(sortDirQueryParam, nextDir)
+	params.Set("page", "1")
+
+	if encoded := params.Encode(); encoded != "" {
+		return fmt.Sprintf("%s?%s", p.BaseURL, encoded)
+	}
+	return p.BaseURL
+}
+
+// SortState returns "asc", "desc", or "none" for the given sortable field.
+func (p AdminPagination) SortState(field string) string {
+	if strings.TrimSpace(field) == "" {
+		return sortStateNone
+	}
+	if strings.TrimSpace(p.SortField) != strings.TrimSpace(field) {
+		return sortStateNone
+	}
+	dir := normalizeSortDir(p.SortDir)
+	if dir == "" {
+		return sortStateNone
+	}
+	return dir
 }
 
 // FirstURL returns the URL for the first page.

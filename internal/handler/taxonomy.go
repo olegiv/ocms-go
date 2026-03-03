@@ -30,6 +30,12 @@ import (
 // TagsPerPage is the number of tags to display per page.
 const TagsPerPage = 20
 
+var tagsSortableFields = map[string]SortConfig{
+	"name":        {DefaultDir: sortDirAsc},
+	"usage_count": {DefaultDir: sortDirDesc},
+	"created_at":  {DefaultDir: sortDirDesc},
+}
+
 // TaxonomyHandler handles tag and category management routes.
 type TaxonomyHandler struct {
 	queries        *store.Queries
@@ -60,6 +66,7 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 	lang := middleware.GetAdminLang(r)
 	page := ParsePageParam(r)
 	perPage := ParsePerPageParam(r, TagsPerPage, maxPerPageSelectionValue)
+	sortField, sortDir := parseSortParams(r, "usage_count", sortDirDesc, tagsSortableFields)
 
 	// Get total count
 	totalCount, err := h.queries.CountTags(r.Context())
@@ -74,9 +81,11 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 	offset := int64((page - 1) * perPage)
 
 	// Fetch tags with usage counts
-	tags, err := h.queries.GetTagUsageCounts(r.Context(), store.GetTagUsageCountsParams{
-		Limit:  int64(perPage),
-		Offset: offset,
+	tags, err := h.queries.GetTagUsageCountsSorted(r.Context(), store.GetTagUsageCountsSortedParams{
+		Limit:     int64(perPage),
+		Offset:    offset,
+		SortField: sortField,
+		SortDir:   sortDir,
 	})
 	if err != nil {
 		slog.Error("failed to list tags", "error", err)
@@ -97,7 +106,10 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	pagination := convertPagination(BuildAdminPagination(page, int(totalCount), perPage, redirectAdminTags, r.URL.Query()))
+	handlerPagination := BuildAdminPagination(page, int(totalCount), perPage, redirectAdminTags, r.URL.Query())
+	handlerPagination.SortField = sortField
+	handlerPagination.SortDir = sortDir
+	pagination := convertPagination(handlerPagination)
 	pagination.BulkAction = bulkPaginationAction(bulkScopeTags, redirectAdminTags+RouteSuffixBulkDelete)
 	pagination.PerPageSelector = perPageSelector(perPage, perPageOptionsStandard)
 

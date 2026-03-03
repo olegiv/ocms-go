@@ -32,6 +32,13 @@ import (
 // MediaPerPage is the number of media items to display per page.
 const MediaPerPage = 24
 
+var mediaSortableFields = map[string]SortConfig{
+	"created_at": {DefaultDir: sortDirDesc},
+	"filename":   {DefaultDir: sortDirAsc},
+	"mime_type":  {DefaultDir: sortDirAsc},
+	"size":       {DefaultDir: sortDirDesc},
+}
+
 // maxMediaUploadRequestBytes is the maximum size for a multipart upload request body.
 const maxMediaUploadRequestBytes int64 = 100 << 20 // 100 MiB
 
@@ -117,6 +124,7 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 
 	page := ParsePageParam(r)
 	perPage := ParsePerPageParam(r, MediaPerPage, maxPerPageSelectionValue)
+	sortField, sortDir := parseSortParams(r, "created_at", sortDirDesc, mediaSortableFields)
 
 	// Get filter
 	filter := r.URL.Query().Get("filter")
@@ -150,13 +158,16 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch media
 	var mediaList []store.Medium
+	listParams := store.ListMediaSortedParams{
+		Limit:     int64(perPage),
+		Offset:    offset,
+		SortField: sortField,
+		SortDir:   sortDir,
+	}
 	switch {
 	case search != "":
-		mediaList, err = h.queries.SearchMedia(r.Context(), store.SearchMediaParams{
-			Filename: "%" + search + "%",
-			Alt:      util.NullStringFromValue("%" + search + "%"),
-			Limit:    int64(perPage),
-		})
+		pattern := "%" + search + "%"
+		listParams.SearchPattern = util.NullStringFromValue(pattern)
 	case filter != "all":
 		var mimePattern string
 		switch filter {
@@ -169,23 +180,11 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 		default:
 			mimePattern = "%"
 		}
-		mediaList, err = h.queries.ListMediaByType(r.Context(), store.ListMediaByTypeParams{
-			MimeType: mimePattern,
-			Limit:    int64(perPage),
-			Offset:   offset,
-		})
+		listParams.MimeType = util.NullStringFromValue(mimePattern)
 	case folderID != nil:
-		mediaList, err = h.queries.ListMediaInFolder(r.Context(), store.ListMediaInFolderParams{
-			FolderID: util.NullInt64FromPtr(folderID),
-			Limit:    int64(perPage),
-			Offset:   offset,
-		})
-	default:
-		mediaList, err = h.queries.ListMedia(r.Context(), store.ListMediaParams{
-			Limit:  int64(perPage),
-			Offset: offset,
-		})
+		listParams.FolderID = util.NullInt64FromPtr(folderID)
 	}
+	mediaList, err = h.queries.ListMediaSorted(r.Context(), listParams)
 	if err != nil {
 		logAndInternalError(w, "failed to list media", "error", err)
 		return
@@ -210,6 +209,10 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	pagination := BuildAdminPagination(page, int(totalCount), perPage, redirectAdminMedia, r.URL.Query())
+	pagination.SortField = sortField
+	pagination.SortDir = sortDir
+
 	data := MediaLibraryData{
 		Media:      mediaItems,
 		Folders:    folders,
@@ -217,7 +220,7 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 		Filter:     filter,
 		FolderID:   folderID,
 		Search:     search,
-		Pagination: BuildAdminPagination(page, int(totalCount), perPage, redirectAdminMedia, r.URL.Query()),
+		Pagination: pagination,
 	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "media.title"), mediaBreadcrumbs(lang))

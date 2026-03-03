@@ -4,6 +4,7 @@
 package admin
 
 import "fmt"
+import "net/url"
 import "github.com/olegiv/ocms-go/internal/views/components/button"
 import "github.com/olegiv/ocms-go/internal/views/components/card"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
@@ -100,27 +101,49 @@ type MediaEditViewData struct {
 // =============================================================================
 
 // mediaFilterURL builds a URL for the media library with filter/folder params.
-func mediaFilterURL(filter string, folderID *int64) string {
+func mediaFilterURL(p PaginationData, filter string, folderID *int64) string {
 	base := "/admin/media"
+	params := make(url.Values)
 	if filter != "" && filter != "all" {
-		base += "?filter=" + filter
-		if folderID != nil {
-			base += fmt.Sprintf("&folder=%d", *folderID)
-		}
-		return base
+		params.Set("filter", filter)
 	}
 	if folderID != nil {
-		return fmt.Sprintf("%s?folder=%d", base, *folderID)
+		params.Set("folder", fmt.Sprintf("%d", *folderID))
+	}
+	if p.SortField != "" {
+		params.Set("sort", p.SortField)
+		params.Set("dir", p.SortDir)
+	}
+	if p.HasPerPageSelector() {
+		params.Set("per_page", fmt.Sprintf("%d", p.PerPageSelector.Current))
+	}
+	if encoded := params.Encode(); encoded != "" {
+		return base + "?" + encoded
 	}
 	return base
 }
 
-// mediaClearSearchURL builds a clear search URL preserving the filter.
-func mediaClearSearchURL(filter string) string {
+// mediaClearSearchURL builds a clear search URL preserving filter/sort/per-page state.
+func mediaClearSearchURL(p PaginationData, filter string, folderID *int64) string {
+	base := "/admin/media"
+	params := make(url.Values)
 	if filter != "" && filter != "all" {
-		return "/admin/media?filter=" + filter
+		params.Set("filter", filter)
 	}
-	return "/admin/media"
+	if folderID != nil {
+		params.Set("folder", fmt.Sprintf("%d", *folderID))
+	}
+	if p.SortField != "" {
+		params.Set("sort", p.SortField)
+		params.Set("dir", p.SortDir)
+	}
+	if p.HasPerPageSelector() {
+		params.Set("per_page", fmt.Sprintf("%d", p.PerPageSelector.Current))
+	}
+	if encoded := params.Encode(); encoded != "" {
+		return base + "?" + encoded
+	}
+	return base
 }
 
 // mediaFormVal returns form value or fallback.
@@ -211,18 +234,18 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 					<div class="filter-group">
 						<label class="filter-label">{ pc.T("media.type") }:</label>
 						<div class="filter-buttons">
-							@button.Button(button.Props{Variant: mediaFilterVariant(data.Filter == "all"), Size: button.SizeSm, Href: mediaFilterURL("all", data.FolderID)}) {
+							@button.Button(button.Props{Variant: mediaFilterVariant(data.Filter == "all"), Size: button.SizeSm, Href: mediaFilterURL(data.Pagination, "all", data.FolderID)}) {
 								{ pc.T("label.all") }
 							}
-							@button.Button(button.Props{Variant: mediaFilterVariant(data.Filter == "images"), Size: button.SizeSm, Href: mediaFilterURL("images", data.FolderID)}) {
+							@button.Button(button.Props{Variant: mediaFilterVariant(data.Filter == "images"), Size: button.SizeSm, Href: mediaFilterURL(data.Pagination, "images", data.FolderID)}) {
 								@iconImage14()
 								{ pc.T("media.images") }
 							}
-							@button.Button(button.Props{Variant: mediaFilterVariant(data.Filter == "documents"), Size: button.SizeSm, Href: mediaFilterURL("documents", data.FolderID)}) {
+							@button.Button(button.Props{Variant: mediaFilterVariant(data.Filter == "documents"), Size: button.SizeSm, Href: mediaFilterURL(data.Pagination, "documents", data.FolderID)}) {
 								@iconFileText14()
 								{ pc.T("media.documents") }
 							}
-							@button.Button(button.Props{Variant: mediaFilterVariant(data.Filter == "videos"), Size: button.SizeSm, Href: mediaFilterURL("videos", data.FolderID)}) {
+							@button.Button(button.Props{Variant: mediaFilterVariant(data.Filter == "videos"), Size: button.SizeSm, Href: mediaFilterURL(data.Pagination, "videos", data.FolderID)}) {
 								@iconVideo14()
 								{ pc.T("media.videos") }
 							}
@@ -236,6 +259,13 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 							if data.FolderID != nil {
 								<input type="hidden" name="folder" value={ fmt.Sprintf("%d", *data.FolderID) }/>
 							}
+							if data.Pagination.SortField != "" {
+								<input type="hidden" name="sort" value={ data.Pagination.SortField }/>
+								<input type="hidden" name="dir" value={ data.Pagination.SortDir }/>
+							}
+							if data.Pagination.HasPerPageSelector() {
+								<input type="hidden" name="per_page" value={ fmt.Sprintf("%d", data.Pagination.PerPageSelector.Current) }/>
+							}
 							<div class="search-input-wrapper">
 								@iconSearch16()
 								@input.Input(input.Props{
@@ -246,12 +276,50 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 									Attributes:  templ.Attributes{"aria-label": pc.T("media.search_files"), "class": "search-input"},
 								})
 								if data.Search != "" {
-									<a href={ templ.SafeURL(mediaClearSearchURL(data.Filter)) } class="search-clear" title={ pc.T("btn.clear") }>&times;</a>
+									<a href={ templ.SafeURL(mediaClearSearchURL(data.Pagination, data.Filter, data.FolderID)) } class="search-clear" title={ pc.T("btn.clear") }>&times;</a>
 								}
 							</div>
 							@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit}) {
 								{ pc.T("btn.search") }
 							}
+						</form>
+					</div>
+					<div class="filter-group admin-media-sort-controls">
+						<form action="/admin/media" method="GET" class="filter-form admin-media-sort-form">
+							if data.Filter != "all" {
+								<input type="hidden" name="filter" value={ data.Filter }/>
+							}
+							if data.FolderID != nil {
+								<input type="hidden" name="folder" value={ fmt.Sprintf("%d", *data.FolderID) }/>
+							}
+							if data.Search != "" {
+								<input type="hidden" name="q" value={ data.Search }/>
+							}
+							if data.Pagination.HasPerPageSelector() {
+								<input type="hidden" name="per_page" value={ fmt.Sprintf("%d", data.Pagination.PerPageSelector.Current) }/>
+							}
+							<label class="filter-label admin-media-sort-label">{ pc.T("media.sort_by") }:</label>
+							<select
+								name="sort"
+								class="form-select form-select-sm admin-media-sort-select"
+								data-auto-submit="true"
+								data-sort-state={ sortStateValue(data.Pagination.SortDir) }
+							>
+								<option value="created_at" selected?={ data.Pagination.SortField == "" || data.Pagination.SortField == "created_at" }>{ pc.T("label.created_at") }</option>
+								<option value="filename" selected?={ data.Pagination.SortField == "filename" }>{ pc.T("media.filename") }</option>
+								<option value="mime_type" selected?={ data.Pagination.SortField == "mime_type" }>{ pc.T("label.type") }</option>
+								<option value="size" selected?={ data.Pagination.SortField == "size" }>{ pc.T("label.size") }</option>
+							</select>
+							<label class="filter-label admin-media-sort-label">{ pc.T("media.sort_direction") }:</label>
+							<select
+								name="dir"
+								class="form-select form-select-sm admin-media-sort-select"
+								data-auto-submit="true"
+								data-sort-state={ sortStateValue(data.Pagination.SortDir) }
+							>
+								<option value="asc" selected?={ data.Pagination.SortDir == sortDirAsc }>{ pc.T("pagination.sort_asc") }</option>
+								<option value="desc" selected?={ data.Pagination.SortDir == "" || data.Pagination.SortDir == sortDirDesc }>{ pc.T("pagination.sort_desc") }</option>
+							</select>
 						</form>
 					</div>
 					if data.Pagination.HasBulkAction() {

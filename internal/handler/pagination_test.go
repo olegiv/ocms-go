@@ -410,3 +410,59 @@ func TestAdminPaginationPageRange(t *testing.T) {
 		})
 	}
 }
+
+func TestAdminPaginationSortState(t *testing.T) {
+	p := BuildAdminPagination(2, 100, 10, "/admin/users", nil)
+	p.SortField = "name"
+	p.SortDir = "asc"
+
+	if got := p.SortState("name"); got != sortDirAsc {
+		t.Fatalf("SortState(name) = %q, want %q", got, sortDirAsc)
+	}
+	if got := p.SortState("email"); got != sortStateNone {
+		t.Fatalf("SortState(email) = %q, want %q", got, sortStateNone)
+	}
+}
+
+func TestAdminPaginationSortURL(t *testing.T) {
+	params := url.Values{
+		"status":   []string{"draft"},
+		"per_page": []string{"50"},
+		"sort":     []string{"name"},
+		"dir":      []string{"asc"},
+		"page":     []string{"3"},
+	}
+
+	p := BuildAdminPagination(3, 200, 50, "/admin/users", params)
+	p.SortField = "name"
+	p.SortDir = "asc"
+
+	t.Run("toggle active field", func(t *testing.T) {
+		got := p.SortURL("name", sortDirAsc)
+		if !strings.Contains(got, "sort=name") {
+			t.Fatalf("SortURL() = %q, expected sort=name", got)
+		}
+		if !strings.Contains(got, "dir=desc") {
+			t.Fatalf("SortURL() = %q, expected dir=desc", got)
+		}
+		if !strings.Contains(got, "status=draft") || !strings.Contains(got, "per_page=50") {
+			t.Fatalf("SortURL() = %q, expected preserved query params", got)
+		}
+		if !strings.Contains(got, "page=1") {
+			t.Fatalf("SortURL() = %q, expected page=1", got)
+		}
+	})
+
+	t.Run("new field uses provided default dir", func(t *testing.T) {
+		got := p.SortURL("created_at", sortDirDesc)
+		if !strings.Contains(got, "sort=created_at") {
+			t.Fatalf("SortURL() = %q, expected sort=created_at", got)
+		}
+		if !strings.Contains(got, "dir=desc") {
+			t.Fatalf("SortURL() = %q, expected dir=desc", got)
+		}
+		if !strings.Contains(got, "page=1") {
+			t.Fatalf("SortURL() = %q, expected page=1", got)
+		}
+	})
+}

@@ -62,6 +62,57 @@ func TestPagesListData(t *testing.T) {
 	}
 }
 
+func TestDefaultPagesSort(t *testing.T) {
+	tests := []struct {
+		name      string
+		status    string
+		search    string
+		wantField string
+		wantDir   string
+	}{
+		{
+			name:      "no filters",
+			status:    "",
+			search:    "",
+			wantField: "updated_at",
+			wantDir:   sortDirDesc,
+		},
+		{
+			name:      "scheduled filter still uses updated_at",
+			status:    "scheduled",
+			search:    "",
+			wantField: "updated_at",
+			wantDir:   sortDirDesc,
+		},
+		{
+			name:      "search filter still uses updated_at",
+			status:    "",
+			search:    "query",
+			wantField: "updated_at",
+			wantDir:   sortDirDesc,
+		},
+		{
+			name:      "scheduled and search still use updated_at",
+			status:    "scheduled",
+			search:    "query",
+			wantField: "updated_at",
+			wantDir:   sortDirDesc,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotField, gotDir := defaultPagesSort(tt.status, tt.search)
+			if gotField != tt.wantField {
+				t.Fatalf("defaultPagesSort() field = %q, want %q", gotField, tt.wantField)
+			}
+			if gotDir != tt.wantDir {
+				t.Fatalf("defaultPagesSort() dir = %q, want %q", gotDir, tt.wantDir)
+			}
+		})
+	}
+}
+
 // TestPagesValidateSlug tests slug validation for pages
 func TestPagesValidateSlug(t *testing.T) {
 	db, _ := testHandlerSetup(t)

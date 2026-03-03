@@ -461,11 +461,15 @@ func TestConvertPagination(t *testing.T) {
 		CurrentPage: 2,
 		TotalPages:  5,
 		TotalItems:  100,
+		PerPage:     20,
 		HasFirst:    true,
 		HasPrev:     true,
 		HasNext:     true,
 		HasLast:     true,
 		BaseURL:     "/admin/pages",
+		QueryString: "status=draft&per_page=20&sort=title&dir=asc",
+		SortField:   "title",
+		SortDir:     "asc",
 		Pages: []AdminPaginationPage{
 			{Number: 1, URL: "/admin/pages?page=1", IsCurrent: false},
 			{Number: 2, URL: "/admin/pages?page=2", IsCurrent: true},
@@ -478,6 +482,15 @@ func TestConvertPagination(t *testing.T) {
 	}
 	if !got.HasFirst || !got.HasPrev || !got.HasNext || !got.HasLast {
 		t.Error("navigation flags should all be true")
+	}
+	if got.BaseURL != "/admin/pages" {
+		t.Fatalf("BaseURL = %q, want /admin/pages", got.BaseURL)
+	}
+	if got.QueryString != "status=draft&per_page=20&sort=title&dir=asc" {
+		t.Fatalf("QueryString = %q", got.QueryString)
+	}
+	if got.SortField != "title" || got.SortDir != "asc" {
+		t.Fatalf("sort = %s %s, want title asc", got.SortField, got.SortDir)
 	}
 	if len(got.Pages) != 3 {
 		t.Fatalf("len(Pages) = %d; want 3", len(got.Pages))

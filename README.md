@@ -73,6 +73,7 @@ A lightweight content management system built with Go, featuring a modern admin 
 - **API Key Management**: Create and manage API keys
 - **Bulk List Actions**: Multi-select and bulk delete/revoke on paged admin lists (pages, tags, users, API keys, media, and form submissions)
 - **Per-Page Selector**: Choose items per page on delete-capable admin lists (URL query `per_page`, current-page state in URL only)
+- **List Sorting**: Sort delete-capable admin lists by safe whitelisted columns with clear active sort highlighting (URL queries `sort` + `dir`)
 - **SQLite Database**: Zero-configuration embedded database with migrations
 
 ### Multi-Language Support

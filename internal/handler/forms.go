@@ -1409,6 +1409,13 @@ type SubmissionsListData struct {
 	Pagination  AdminPagination
 }
 
+var formSubmissionsSortableFields = map[string]SortConfig{
+	"id":         {DefaultDir: sortDirDesc},
+	"created_at": {DefaultDir: sortDirDesc},
+	"is_read":    {DefaultDir: sortDirAsc},
+	"ip_address": {DefaultDir: sortDirAsc},
+}
+
 // Submissions handles GET /admin/forms/{id}/submissions - lists form submissions.
 func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 	lang := h.renderer.GetAdminLang(r)
@@ -1426,6 +1433,7 @@ func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 	// Pagination
 	page := ParsePageParam(r)
 	perPage := ParsePerPageParam(r, 20, maxPerPageSelectionValue)
+	sortField, sortDir := parseSortParams(r, "created_at", sortDirDesc, formSubmissionsSortableFields)
 	offset := (page - 1) * perPage
 
 	// Get fields for display
@@ -1436,10 +1444,12 @@ func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get submissions
-	submissions, err := h.queries.GetFormSubmissions(r.Context(), store.GetFormSubmissionsParams{
-		FormID: formID,
-		Limit:  int64(perPage),
-		Offset: int64(offset),
+	submissions, err := h.queries.GetFormSubmissionsSorted(r.Context(), store.GetFormSubmissionsSortedParams{
+		FormID:    formID,
+		Limit:     int64(perPage),
+		Offset:    int64(offset),
+		SortField: sortField,
+		SortDir:   sortDir,
 	})
 	if err != nil {
 		slog.Error("failed to get submissions", "error", err, "form_id", formID)
@@ -1483,13 +1493,17 @@ func (h *FormsHandler) Submissions(w http.ResponseWriter, r *http.Request) {
 	totalCount, _ := h.queries.CountFormSubmissions(r.Context(), formID)
 	unreadCount, _ := h.queries.CountUnreadSubmissions(r.Context(), formID)
 
+	pagination := BuildAdminPagination(page, int(totalCount), perPage, fmt.Sprintf(redirectAdminFormsIDSubmissions, formID), r.URL.Query())
+	pagination.SortField = sortField
+	pagination.SortDir = sortDir
+
 	data := SubmissionsListData{
 		Form:        *form,
 		Fields:      fields,
 		Submissions: submissionItems,
 		TotalCount:  totalCount,
 		UnreadCount: unreadCount,
-		Pagination:  BuildAdminPagination(page, int(totalCount), perPage, fmt.Sprintf(redirectAdminFormsIDSubmissions, formID), r.URL.Query()),
+		Pagination:  pagination,
 	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer,

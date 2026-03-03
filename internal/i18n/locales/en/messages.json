@@ -883,6 +883,16 @@
             "translation": "Type"
         },
         {
+            "id": "media.sort_by",
+            "message": "Sort by",
+            "translation": "Sort by"
+        },
+        {
+            "id": "media.sort_direction",
+            "message": "Direction",
+            "translation": "Direction"
+        },
+        {
             "id": "media.images",
             "message": "Images",
             "translation": "Images"
@@ -4626,6 +4636,21 @@
             "id": "pagination.items_per_page",
             "message": "Items per page",
             "translation": "Items per page"
+        },
+        {
+            "id": "pagination.sort_none",
+            "message": "Not sorted",
+            "translation": "Not sorted"
+        },
+        {
+            "id": "pagination.sort_asc",
+            "message": "Ascending",
+            "translation": "Ascending"
+        },
+        {
+            "id": "pagination.sort_desc",
+            "message": "Descending",
+            "translation": "Descending"
         },
         {
             "id": "pagination.selected_count",

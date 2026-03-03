@@ -30,6 +30,8 @@ Read-only/history pagers are unchanged:
 - Delete-capable views include an **items-per-page selector**.
 - Selector state is **URL-only** via `per_page`; changing it resets `page=1`.
 - Selector options are `10, 20, 50, 100` (media also includes `24` to preserve its legacy default).
+- Delete-capable views also support **URL-driven sorting** via `sort` + `dir`.
+- Pagination, per-page, and bulk actions preserve active sorting parameters.
 
 ## API Endpoints
 
