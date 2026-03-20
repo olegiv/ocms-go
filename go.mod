@@ -3,7 +3,7 @@ module github.com/olegiv/ocms-go
 go 1.26.0
 
 require (
-	github.com/a-h/templ v0.3.977
+	github.com/a-h/templ v0.3.1001
 	github.com/caarlos0/env/v11 v11.4.0
 	github.com/go-chi/chi/v5 v5.2.5
 )
@@ -17,7 +17,7 @@ require (
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
-	github.com/mattn/go-sqlite3 v1.14.34
+	github.com/mattn/go-sqlite3 v1.14.37
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/mileusna/useragent v1.3.5
 	github.com/mozillazg/go-unidecode v0.2.0
@@ -27,12 +27,12 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/rwcarlsen/goexif v0.0.0-20190401172101-9e8deecbddbd
 	github.com/stretchr/testify v1.11.1
-	github.com/yuin/goldmark v1.7.16
-	golang.org/x/crypto v0.48.0
-	golang.org/x/image v0.36.0
-	golang.org/x/text v0.34.0
-	golang.org/x/time v0.14.0
-	modernc.org/sqlite v1.46.1
+	github.com/yuin/goldmark v1.7.17
+	golang.org/x/crypto v0.49.0
+	golang.org/x/image v0.37.0
+	golang.org/x/text v0.35.0
+	golang.org/x/time v0.15.0
+	modernc.org/sqlite v1.47.0
 )
 
 require (
@@ -51,12 +51,11 @@ require (
 	github.com/sethvargo/go-retry v0.3.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/exp v0.0.0-20260218203240-3dfff04db8fa // indirect
-	golang.org/x/net v0.50.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/net v0.52.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	modernc.org/libc v1.68.0 // indirect
+	modernc.org/libc v1.70.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
