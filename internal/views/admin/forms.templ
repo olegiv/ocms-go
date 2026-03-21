@@ -519,7 +519,13 @@ func formPageTitle(pc *PageContext, isEdit bool) string {
 }
 
 templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
-	@card.Card(card.Props{Class: "mt-4", Attributes: templ.Attributes{"x-data": "formFieldBuilder()"}}) {
+	@card.Card(card.Props{Class: "mt-4", Attributes: templ.Attributes{
+		"x-data":               "formFieldBuilder()",
+		"data-form-id":         fmt.Sprintf("%d", data.FormID),
+		"data-fields":          data.FieldsJSON,
+		"data-field-types":     data.FieldTypesJSON,
+		"data-confirm-delete":  pc.T("label.confirm_delete"),
+	}}) {
 		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
 			<h3>{ pc.T("forms.form_fields") }</h3>
 			@button.Button(button.Props{Size: button.SizeSm, Attributes: templ.Attributes{"@click": "openAddModal()"}}) {
@@ -732,14 +738,17 @@ templ formsFieldBuilderScript(pc *PageContext, data FormFormViewData) {
 	<script nonce={ templ.GetNonce(ctx) }>
 	function formFieldBuilder() {
 		return {
-			formId: { fmt.Sprintf("%d", data.FormID) },
-			fields: JSON.parse({ fmt.Sprintf("'%s'", data.FieldsJSON) }),
+			formId: 0,
+			fields: [],
 			sortIteration: 0,
 			showModal: false,
 			editingField: null,
-			fieldTypes: JSON.parse({ fmt.Sprintf("'%s'", data.FieldTypesJSON) }),
+			fieldTypes: [],
+			confirmDeleteMsg: '',
 			init() {
-				this.fields = (this.fields || []).map(f => ({
+				const el = this.$el;
+				this.formId = parseInt(el.dataset.formId, 10);
+				this.fields = JSON.parse(el.dataset.fields || '[]').map(f => ({
 					id: f.id,
 					type: f.type,
 					name: f.name,
@@ -750,6 +759,8 @@ templ formsFieldBuilderScript(pc *PageContext, data FormFormViewData) {
 					validation: f.validation?.String || f.validation || '{}',
 					is_required: f.is_required ?? false
 				}));
+				this.fieldTypes = JSON.parse(el.dataset.fieldTypes || '[]');
+				this.confirmDeleteMsg = el.dataset.confirmDelete || 'Are you sure?';
 			},
 			handleSort(fieldId, newPosition) {
 				const oldIndex = this.fields.findIndex(f => f.id == fieldId);
@@ -859,7 +870,7 @@ templ formsFieldBuilderScript(pc *PageContext, data FormFormViewData) {
 				}
 			},
 			async deleteField(fieldId) {
-				if (!confirm({ fmt.Sprintf("'%s'", pc.T("label.confirm_delete")) })) return;
+				if (!confirm(this.confirmDeleteMsg)) return;
 				try {
 					const response = await fetch(`/admin/forms/${this.formId}/fields/${fieldId}`, {
 						method: 'DELETE'
