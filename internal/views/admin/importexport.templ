@@ -322,6 +322,7 @@ templ ImportPage(pc *PageContext, data ImportViewData) {
 		if data.ImportResult != nil {
 			@importResults(pc, data)
 		}
+		@checkbox.Script()
 	}
 }
 
@@ -502,12 +503,19 @@ templ importOptionsForm(pc *PageContext, data ImportViewData) {
 							@importCheckbox("import_media", pc.T("import.media"), pc.T("import.media_hint"), true)
 						}
 						if data.HasMediaFiles {
-							<div class="form-checkbox ml-8">
-								<input type="checkbox" id="import_media_files" name="import_media_files" value="on" checked class="checkbox-input"/>
-								<label for="import_media_files" class="checkbox-label">
-									<strong>{ pc.T("import.media_files") }</strong>
-									<span class="checkbox-hint">{ pc.T("import.media_files_hint") }</span>
-								</label>
+							<div class="flex items-start gap-3 ml-8">
+								@checkbox.Checkbox(checkbox.Props{
+									ID:      "import_media_files",
+									Name:    "import_media_files",
+									Value:   "on",
+									Checked: true,
+								})
+								<div class="grid gap-0.5">
+									@label.Label(label.Props{For: "import_media_files"}) {
+										{ pc.T("import.media_files") }
+									}
+									<p class="text-sm text-muted-foreground">{ pc.T("import.media_files_hint") }</p>
+								</div>
 							</div>
 						}
 						if data.UploadedData != nil && data.UploadedData.HasMenus {
@@ -562,17 +570,20 @@ templ importOptionsForm(pc *PageContext, data ImportViewData) {
 }
 
 // importCheckbox renders a checkbox with label and hint.
-templ importCheckbox(name string, label string, hint string, checked bool) {
-	<div class="form-checkbox">
-		if checked {
-			<input type="checkbox" id={ name } name={ name } value="on" checked class="checkbox-input"/>
-		} else {
-			<input type="checkbox" id={ name } name={ name } value="on" class="checkbox-input"/>
-		}
-		<label for={ name } class="checkbox-label">
-			<strong>{ label }</strong>
-			<span class="checkbox-hint">{ hint }</span>
-		</label>
+templ importCheckbox(name string, labelText string, hint string, checked bool) {
+	<div class="flex items-start gap-3">
+		@checkbox.Checkbox(checkbox.Props{
+			ID:      name,
+			Name:    name,
+			Value:   "on",
+			Checked: checked,
+		})
+		<div class="grid gap-0.5">
+			@label.Label(label.Props{For: name}) {
+				{ labelText }
+			}
+			<p class="text-sm text-muted-foreground">{ hint }</p>
+		</div>
 	</div>
 }
 

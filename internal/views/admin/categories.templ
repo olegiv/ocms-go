@@ -12,6 +12,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/input"
 	"github.com/olegiv/ocms-go/internal/views/components/label"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
+	"github.com/olegiv/ocms-go/internal/views/components/textarea"
 )
 
 // CategoryListItem holds data for a category in the list view.
@@ -274,13 +275,14 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 					@label.Label(label.Props{For: "description", Class: "block mb-1"}) {
 						{ pc.T("categories.description_label") }
 					}
-					<textarea
-						id="description"
-						name="description"
-						class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["description"] != "") }
-						rows="3"
-						placeholder={ pc.T("categories.description_placeholder") }
-					>{ categoryFormValue(data, "description") }</textarea>
+					@textarea.Textarea(textarea.Props{
+						ID:          "description",
+						Name:        "description",
+						Value:       categoryFormValue(data, "description"),
+						Placeholder: pc.T("categories.description_placeholder"),
+						Rows:        3,
+						HasError:    data.Errors["description"] != "",
+					})
 					if data.Errors["description"] != "" {
 						<span class="form-error">{ data.Errors["description"] }</span>
 					} else {
@@ -408,6 +410,7 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 			}
 		}
 		</script>
+		@textarea.Script()
 	}
 }
 

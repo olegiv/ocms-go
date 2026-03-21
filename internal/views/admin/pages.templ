@@ -15,6 +15,7 @@ import "github.com/olegiv/ocms-go/internal/views/components/icon"
 import "github.com/olegiv/ocms-go/internal/views/components/input"
 import "github.com/olegiv/ocms-go/internal/views/components/label"
 import "github.com/olegiv/ocms-go/internal/views/components/table"
+import "github.com/olegiv/ocms-go/internal/views/components/textarea"
 
 // =============================================================================
 // VIEW TYPES
@@ -1264,18 +1265,18 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 			<!-- Meta Description -->
 			<div class="form-group" x-data="{ charCount: 0 }" x-init="charCount = $refs.metaDescInput.value.length">
 				@label.Label(label.Props{For: "meta_description", Class: "block mb-1"}) { { pc.T("seo.meta_description") } }
-				<textarea
-					id="meta_description"
-					name="meta_description"
-					class="form-input form-textarea"
-					rows="3"
-					x-ref="metaDescInput"
-					placeholder={ pc.T("seo.meta_description_hint") }
-					maxlength="320"
-					@input="charCount = $event.target.value.length"
-				>
-					{ formVal(data.FormValues, "meta_description", data.MetaDescription) }
-				</textarea>
+				@textarea.Textarea(textarea.Props{
+					ID:          "meta_description",
+					Name:        "meta_description",
+					Rows:        3,
+					Placeholder: pc.T("seo.meta_description_hint"),
+					Value:       formVal(data.FormValues, "meta_description", data.MetaDescription),
+					Attributes: templ.Attributes{
+						"x-ref":    "metaDescInput",
+						"maxlength": "320",
+						"@input":   "charCount = $event.target.value.length",
+					},
+				})
 				<span class="form-hint">
 					<span x-text="charCount"></span>/160 { pc.T("seo.chars_recommended") }
 					<span x-show="charCount > 160" class="text-warning"> - { pc.T("seo.may_be_truncated") }</span>

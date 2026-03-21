@@ -9,6 +9,7 @@ import "time"
 import "encoding/json"
 import "github.com/olegiv/ocms-go/internal/views/components/button"
 import "github.com/olegiv/ocms-go/internal/views/components/card"
+import "github.com/olegiv/ocms-go/internal/views/components/checkbox"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
 import "github.com/olegiv/ocms-go/internal/views/components/input"
 import "github.com/olegiv/ocms-go/internal/views/components/label"
@@ -427,18 +428,19 @@ templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 								<h4 class="mb-2 text-xs font-semibold uppercase text-gray-500">Pages</h4>
 								for _, ev := range data.Events {
 									if isPageEvent(ev.Type) {
-										<label class="mb-1 flex items-start gap-2">
-											<input type="checkbox" name="events" value={ ev.Type }
-												if containsEvent(data.FormEvents, ev.Type) {
-													checked
-												}
-												class="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"/>
-											<span class="text-sm">
-												<strong class="text-gray-900 dark:text-white">{ ev.Type }</strong>
-												<br/>
-												<small class="text-gray-500">{ ev.Description }</small>
-											</span>
-										</label>
+										<div class="mb-1 flex items-start gap-3">
+						@checkbox.Checkbox(checkbox.Props{
+							Name:    "events",
+							Value:   ev.Type,
+							Checked: containsEvent(data.FormEvents, ev.Type),
+						})
+						<div class="grid gap-0.5">
+							@label.Label(label.Props{}) {
+								{ ev.Type }
+							}
+							<p class="text-sm text-muted-foreground">{ ev.Description }</p>
+						</div>
+					</div>
 									}
 								}
 							</div>
@@ -446,18 +448,19 @@ templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 								<h4 class="mb-2 text-xs font-semibold uppercase text-gray-500">Media</h4>
 								for _, ev := range data.Events {
 									if isMediaEvent(ev.Type) {
-										<label class="mb-1 flex items-start gap-2">
-											<input type="checkbox" name="events" value={ ev.Type }
-												if containsEvent(data.FormEvents, ev.Type) {
-													checked
-												}
-												class="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"/>
-											<span class="text-sm">
-												<strong class="text-gray-900 dark:text-white">{ ev.Type }</strong>
-												<br/>
-												<small class="text-gray-500">{ ev.Description }</small>
-											</span>
-										</label>
+										<div class="mb-1 flex items-start gap-3">
+						@checkbox.Checkbox(checkbox.Props{
+							Name:    "events",
+							Value:   ev.Type,
+							Checked: containsEvent(data.FormEvents, ev.Type),
+						})
+						<div class="grid gap-0.5">
+							@label.Label(label.Props{}) {
+								{ ev.Type }
+							}
+							<p class="text-sm text-muted-foreground">{ ev.Description }</p>
+						</div>
+					</div>
 									}
 								}
 							</div>
@@ -465,18 +468,19 @@ templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 								<h4 class="mb-2 text-xs font-semibold uppercase text-gray-500">Other</h4>
 								for _, ev := range data.Events {
 									if isOtherEvent(ev.Type) {
-										<label class="mb-1 flex items-start gap-2">
-											<input type="checkbox" name="events" value={ ev.Type }
-												if containsEvent(data.FormEvents, ev.Type) {
-													checked
-												}
-												class="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"/>
-											<span class="text-sm">
-												<strong class="text-gray-900 dark:text-white">{ ev.Type }</strong>
-												<br/>
-												<small class="text-gray-500">{ ev.Description }</small>
-											</span>
-										</label>
+										<div class="mb-1 flex items-start gap-3">
+						@checkbox.Checkbox(checkbox.Props{
+							Name:    "events",
+							Value:   ev.Type,
+							Checked: containsEvent(data.FormEvents, ev.Type),
+						})
+						<div class="grid gap-0.5">
+							@label.Label(label.Props{}) {
+								{ ev.Type }
+							}
+							<p class="text-sm text-muted-foreground">{ ev.Description }</p>
+						</div>
+					</div>
 									}
 								}
 							</div>
@@ -491,16 +495,44 @@ templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 						<div class="space-y-2">
 							<template x-for="(value, key) in headers" :key="key">
 								<div class="flex gap-2">
-									<input type="text" name="header_key" class="w-1/3 rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" :value="key" placeholder="Header name" readonly/>
-									<input type="text" name="header_value" class="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" :value="value" placeholder="Header value" readonly/>
+									<div class="w-1/3">
+										@input.Input(input.Props{
+											Name:        "header_key",
+											Type:        input.TypeText,
+											Placeholder: "Header name",
+											Readonly:    true,
+											Attributes:  templ.Attributes{":value": "key"},
+										})
+									</div>
+									<div class="flex-1">
+										@input.Input(input.Props{
+											Name:        "header_value",
+											Type:        input.TypeText,
+											Placeholder: "Header value",
+											Readonly:    true,
+											Attributes:  templ.Attributes{":value": "value"},
+										})
+									</div>
 									<button type="button" class="rounded-md border border-red-300 px-2 py-2 text-sm text-red-600 hover:bg-red-50 dark:border-red-700 dark:hover:bg-red-900" @click="delete headers[key]; headers = {...headers}">
 										@iconTrash()
 									</button>
 								</div>
 							</template>
 							<div class="flex gap-2" x-data="{ newKey: '', newValue: '' }">
-								<input type="text" class="w-1/3 rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" x-model="newKey" placeholder="Header name" maxlength="255"/>
-								<input type="text" class="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" x-model="newValue" placeholder="Header value" maxlength="255"/>
+								<div class="w-1/3">
+									@input.Input(input.Props{
+										Type:        input.TypeText,
+										Placeholder: "Header name",
+										Attributes:  templ.Attributes{"x-model": "newKey", "maxlength": "255"},
+									})
+								</div>
+								<div class="flex-1">
+									@input.Input(input.Props{
+										Type:        input.TypeText,
+										Placeholder: "Header value",
+										Attributes:  templ.Attributes{"x-model": "newValue", "maxlength": "255"},
+									})
+								</div>
 								<button type="button" class="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700" @click="if (newKey.trim()) { headers[newKey.trim()] = newValue; newKey = ''; newValue = ''; }">
 									@iconPlus()
 								</button>
@@ -515,19 +547,19 @@ templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 						</div>
 					</div>
 					<!-- Active -->
-					<div>
-						<label class="flex items-center gap-2">
-							<input type="checkbox" name="is_active" value="on"
-								if data.FormValues["is_active"] == "1" || (!data.IsEdit && data.FormValues["is_active"] == "") {
-									checked
-								}
-								class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"/>
-							<span class="text-sm">
-								<strong class="text-gray-900 dark:text-white">{ pc.T("webhooks.active") }</strong>
-								<br/>
-								<small class="text-gray-500">{ pc.T("webhooks.active_hint") }</small>
-							</span>
-						</label>
+					<div class="flex items-start gap-3">
+						@checkbox.Checkbox(checkbox.Props{
+							ID:      "is_active",
+							Name:    "is_active",
+							Value:   "on",
+							Checked: data.FormValues["is_active"] == "1" || (!data.IsEdit && data.FormValues["is_active"] == ""),
+						})
+						<div class="grid gap-0.5">
+							@label.Label(label.Props{For: "is_active"}) {
+								{ pc.T("webhooks.active") }
+							}
+							<p class="text-sm text-muted-foreground">{ pc.T("webhooks.active_hint") }</p>
+						</div>
 					</div>
 					<!-- Info (edit mode) -->
 					if data.IsEdit && data.CreatedAt != "" {
@@ -556,6 +588,7 @@ templ WebhookFormPage(pc *PageContext, data WebhookFormViewData) {
 				</form>
 			</div>
 		</div>
+		@checkbox.Script()
 	}
 }
 

@@ -13,6 +13,7 @@ import "github.com/olegiv/ocms-go/internal/views/components/card"
 import "github.com/olegiv/ocms-go/internal/views/components/table"
 import "github.com/olegiv/ocms-go/internal/views/components/input"
 import "github.com/olegiv/ocms-go/internal/views/components/label"
+import "github.com/olegiv/ocms-go/internal/views/components/checkbox"
 
 // =============================================================================
 // VIEW TYPES
@@ -404,14 +405,17 @@ templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 								<small class="form-text">{ pc.T("forms.notification_email_hint") }</small>
 							</div>
 							<div class="form-group">
-								<label class="form-checkbox">
-									<input type="checkbox"
-										name="is_active"
-										value="true"
-										checked?={ formFormChecked(data.FormValues, "is_active", data.IsActive, data.IsEdit) }
-									/>
-									<span>{ pc.T("forms.is_active") }</span>
-								</label>
+								<div class="flex items-start gap-3">
+									@checkbox.Checkbox(checkbox.Props{
+										ID:      "is_active",
+										Name:    "is_active",
+										Value:   "true",
+										Checked: formFormChecked(data.FormValues, "is_active", data.IsActive, data.IsEdit),
+									})
+									@label.Label(label.Props{For: "is_active"}) {
+										{ pc.T("forms.is_active") }
+									}
+								</div>
 							</div>
 							if data.HasMultipleLanguages {
 								<div class="form-group">
@@ -473,6 +477,7 @@ templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 		if data.IsEdit {
 			@formsFieldBuilderScript(pc, data)
 		}
+		@checkbox.Script()
 	}
 }
 
@@ -623,10 +628,16 @@ templ formsFieldBuilder(pc *PageContext, data FormFormViewData) {
 							}
 						</template>
 						<div class="form-group" x-show="editingField && editingField.type !== 'captcha'">
-							<label class="checkbox-label">
-								<input type="checkbox" x-model="editingField.is_required"/>
-								<span>{ pc.T("forms.field_required") }</span>
-							</label>
+							<div class="flex items-start gap-3">
+								@checkbox.Checkbox(checkbox.Props{
+									ID:         "field_is_required",
+									Name:       "field_is_required",
+									Attributes: templ.Attributes{"x-model": "editingField.is_required"},
+								})
+								@label.Label(label.Props{For: "field_is_required"}) {
+									{ pc.T("forms.field_required") }
+								}
+							</div>
 						</div>
 					</div>
 					<div class="modal-footer" style="padding:1rem;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:0.5rem;">
@@ -886,13 +897,13 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 						@table.Row() {
 							if data.Pagination.HasBulkAction() {
 								@table.Head(table.HeadProps{Class: "w-[44px]"}) {
-									<input
-										type="checkbox"
-										class="checkbox-input"
-										data-bulk-master="true"
-										data-bulk-scope={ data.Pagination.BulkScope() }
-										aria-label={ pc.T("btn.select_all") }
-									/>
+									@checkbox.Checkbox(checkbox.Props{
+										Attributes: templ.Attributes{
+											"data-bulk-master": "true",
+											"data-bulk-scope":  data.Pagination.BulkScope(),
+											"aria-label":      pc.T("btn.select_all"),
+										},
+									})
 								}
 							}
 							@table.Head(table.HeadProps{
@@ -993,6 +1004,7 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 				}
 			}
 		}
+		@checkbox.Script()
 	}
 }
 
@@ -1000,14 +1012,14 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 templ submissionRowCells(pc *PageContext, data SubmissionsListViewData, sub SubmissionItemView, bulkScope string) {
 	if bulkScope != "" {
 		@table.Cell(table.CellProps{Class: "w-[44px]"}) {
-			<input
-				type="checkbox"
-				class="checkbox-input"
-				data-bulk-item="true"
-				data-bulk-id={ fmt.Sprintf("%d", sub.ID) }
-				data-bulk-scope={ bulkScope }
-				aria-label={ pc.T("btn.select") }
-			/>
+			@checkbox.Checkbox(checkbox.Props{
+				Attributes: templ.Attributes{
+					"data-bulk-item":  "true",
+					"data-bulk-id":    fmt.Sprintf("%d", sub.ID),
+					"data-bulk-scope": bulkScope,
+					"aria-label":      pc.T("btn.select"),
+				},
+			})
 		}
 	}
 	@table.Cell() {

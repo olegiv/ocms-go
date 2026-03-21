@@ -10,6 +10,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/components/checkbox"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
 	"github.com/olegiv/ocms-go/internal/views/components/input"
 	"github.com/olegiv/ocms-go/internal/views/components/label"
@@ -348,32 +349,36 @@ templ RedirectFormPage(pc *PageContext, data RedirectFormData) {
 						</div>
 					</div>
 					<div class="form-group">
-						<label class="checkbox-label">
-							<input
-								type="checkbox"
-								name="is_wildcard"
-								value="true"
-								checked?={ redirectFormChecked(data, "is_wildcard") }
-							/>
-							<span class="checkbox-text">
-								<strong>{ pc.T("redirects.is_wildcard") }</strong>
-								<small>{ pc.T("redirects.is_wildcard_hint") }</small>
-							</span>
-						</label>
+						<div class="flex items-start gap-3">
+							@checkbox.Checkbox(checkbox.Props{
+								ID:      "is_wildcard",
+								Name:    "is_wildcard",
+								Value:   "true",
+								Checked: redirectFormChecked(data, "is_wildcard"),
+							})
+							<div class="grid gap-0.5">
+								@label.Label(label.Props{For: "is_wildcard"}) {
+									<strong>{ pc.T("redirects.is_wildcard") }</strong>
+								}
+								<p class="text-sm text-muted-foreground">{ pc.T("redirects.is_wildcard_hint") }</p>
+							</div>
+						</div>
 					</div>
 					<div class="form-group">
-						<label class="checkbox-label">
-							<input
-								type="checkbox"
-								name="enabled"
-								value="true"
-								checked?={ redirectFormChecked(data, "enabled") }
-							/>
-							<span class="checkbox-text">
-								<strong>{ pc.T("redirects.enabled") }</strong>
-								<small>{ pc.T("redirects.enabled_hint") }</small>
-							</span>
-						</label>
+						<div class="flex items-start gap-3">
+							@checkbox.Checkbox(checkbox.Props{
+								ID:      "enabled",
+								Name:    "enabled",
+								Value:   "true",
+								Checked: redirectFormChecked(data, "enabled"),
+							})
+							<div class="grid gap-0.5">
+								@label.Label(label.Props{For: "enabled"}) {
+									<strong>{ pc.T("redirects.enabled") }</strong>
+								}
+								<p class="text-sm text-muted-foreground">{ pc.T("redirects.enabled_hint") }</p>
+							</div>
+						</div>
 					</div>
 					if data.IsEdit && data.Redirect != nil {
 						<div class="form-group">
@@ -442,6 +447,7 @@ templ RedirectFormPage(pc *PageContext, data RedirectFormData) {
 				</div>
 			}
 		}
+		@checkbox.Script()
 	}
 }
 

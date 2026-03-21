@@ -10,6 +10,7 @@ import "github.com/olegiv/ocms-go/internal/views/components/card"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
 import "github.com/olegiv/ocms-go/internal/views/components/input"
 import "github.com/olegiv/ocms-go/internal/views/components/label"
+import "github.com/olegiv/ocms-go/internal/views/components/textarea"
 
 // =============================================================================
 // VIEW TYPES
@@ -780,13 +781,13 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 							@label.Label(label.Props{For: "caption", Class: "block mb-1"}) {
 								{ pc.T("media.caption") }
 							}
-							<textarea
-								id="caption"
-								name="caption"
-								class="form-input"
-								rows="3"
-								placeholder={ pc.T("media.caption_placeholder") }
-							>{ mediaFormVal(data.FormValues, "caption", "") }</textarea>
+							@textarea.Textarea(textarea.Props{
+								ID:          "caption",
+								Name:        "caption",
+								Value:       mediaFormVal(data.FormValues, "caption", ""),
+								Placeholder: pc.T("media.caption_placeholder"),
+								Rows:        3,
+							})
 						</div>
 						if len(data.Languages) > 0 {
 							<div class="translations-section">
@@ -878,6 +879,7 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 			});
 		}
 		</script>
+		@textarea.Script()
 	}
 }
 
@@ -901,13 +903,13 @@ templ mediaTranslationFields(pc *PageContext, lang MediaLanguageView, translatio
 			@label.Label(label.Props{For: "caption_" + lang.Code, Class: "block mb-1"}) {
 				{ pc.T("media.caption") }
 			}
-			<textarea
-				id={ "caption_" + lang.Code }
-				name={ "caption_" + lang.Code }
-				class="form-input"
-				rows="2"
-				placeholder={ pc.T("media.caption_placeholder") }
-			>{ translations[lang.Code].Caption }</textarea>
+			@textarea.Textarea(textarea.Props{
+				ID:          "caption_" + lang.Code,
+				Name:        "caption_" + lang.Code,
+				Value:       translations[lang.Code].Caption,
+				Placeholder: pc.T("media.caption_placeholder"),
+				Rows:        2,
+			})
 		</div>
 	</fieldset>
 }
