@@ -14,6 +14,7 @@ import "github.com/olegiv/ocms-go/internal/views/components/table"
 import "github.com/olegiv/ocms-go/internal/views/components/input"
 import "github.com/olegiv/ocms-go/internal/views/components/label"
 import "github.com/olegiv/ocms-go/internal/views/components/checkbox"
+import "github.com/olegiv/ocms-go/internal/views/components/selectbox"
 import "github.com/olegiv/ocms-go/internal/views/components/textarea"
 
 // =============================================================================
@@ -433,21 +434,25 @@ templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 									@label.Label(label.Props{For: "language_code", Class: "block mb-1"}) {
 										{ pc.T("label.language") }
 									}
-									<select
-										id="language_code"
-										name={ languageSelectName(data.IsEdit) }
-										class="form-select"
-										disabled?={ data.IsEdit }
-									>
-										for _, lang := range data.AllLanguages {
-											<option
-												value={ lang.Code }
-												selected?={ lang.Code == formCurrentLanguageCode(data.FormValues, data.Language, data.LanguageCode) }
-											>
-												{ lang.Name } ({ lang.Code })
-											</option>
+									@selectbox.SelectBox() {
+										@selectbox.Trigger(selectbox.TriggerProps{
+											Name:     languageSelectName(data.IsEdit),
+											Disabled: data.IsEdit,
+										})
+										@selectbox.Value(selectbox.ValueProps{
+											Placeholder: "Select language",
+										})
+										@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+											for _, lang := range data.AllLanguages {
+												@selectbox.Item(selectbox.ItemProps{
+													Value:    lang.Code,
+													Selected: lang.Code == formCurrentLanguageCode(data.FormValues, data.Language, data.LanguageCode),
+												}) {
+													{ lang.Name } ({ lang.Code })
+												}
+											}
 										}
-									</select>
+									}
 									if data.IsEdit {
 										if data.Language != nil {
 											<input type="hidden" name="language_code" value={ data.Language.Code }/>
@@ -489,6 +494,7 @@ templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 			@formsFieldBuilderScript(pc, data)
 		}
 		@checkbox.Script()
+		@selectbox.Script()
 		@textarea.Script()
 	}
 }

@@ -10,6 +10,7 @@ import "github.com/olegiv/ocms-go/internal/views/components/card"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
 import "github.com/olegiv/ocms-go/internal/views/components/input"
 import "github.com/olegiv/ocms-go/internal/views/components/label"
+import "github.com/olegiv/ocms-go/internal/views/components/selectbox"
 import "github.com/olegiv/ocms-go/internal/views/components/textarea"
 
 // =============================================================================
@@ -302,27 +303,49 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 								<input type="hidden" name="per_page" value={ fmt.Sprintf("%d", data.Pagination.PerPageSelector.Current) }/>
 							}
 							<label class="filter-label admin-media-sort-label">{ pc.T("media.sort_by") }:</label>
-							<select
-								name="sort"
-								class="form-select form-select-sm admin-media-sort-select"
-								data-auto-submit="true"
-								data-sort-state={ sortStateValue(data.Pagination.SortDir) }
-							>
-								<option value="created_at" selected?={ data.Pagination.SortField == "" || data.Pagination.SortField == "created_at" }>{ pc.T("label.created_at") }</option>
-								<option value="filename" selected?={ data.Pagination.SortField == "filename" }>{ pc.T("media.filename") }</option>
-								<option value="mime_type" selected?={ data.Pagination.SortField == "mime_type" }>{ pc.T("label.type") }</option>
-								<option value="size" selected?={ data.Pagination.SortField == "size" }>{ pc.T("label.size") }</option>
-							</select>
+							@selectbox.SelectBox(selectbox.Props{
+								Class: "admin-media-sort-select",
+								Attributes: templ.Attributes{
+									"data-auto-submit": "true",
+									"data-sort-state":  sortStateValue(data.Pagination.SortDir),
+								},
+							}) {
+								@selectbox.Trigger(selectbox.TriggerProps{Name: "sort"})
+								@selectbox.Value(selectbox.ValueProps{})
+								@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+									@selectbox.Item(selectbox.ItemProps{Value: "created_at", Selected: data.Pagination.SortField == "" || data.Pagination.SortField == "created_at"}) {
+										{ pc.T("label.created_at") }
+									}
+									@selectbox.Item(selectbox.ItemProps{Value: "filename", Selected: data.Pagination.SortField == "filename"}) {
+										{ pc.T("media.filename") }
+									}
+									@selectbox.Item(selectbox.ItemProps{Value: "mime_type", Selected: data.Pagination.SortField == "mime_type"}) {
+										{ pc.T("label.type") }
+									}
+									@selectbox.Item(selectbox.ItemProps{Value: "size", Selected: data.Pagination.SortField == "size"}) {
+										{ pc.T("label.size") }
+									}
+								}
+							}
 							<label class="filter-label admin-media-sort-label">{ pc.T("media.sort_direction") }:</label>
-							<select
-								name="dir"
-								class="form-select form-select-sm admin-media-sort-select"
-								data-auto-submit="true"
-								data-sort-state={ sortStateValue(data.Pagination.SortDir) }
-							>
-								<option value="asc" selected?={ data.Pagination.SortDir == sortDirAsc }>{ pc.T("pagination.sort_asc") }</option>
-								<option value="desc" selected?={ data.Pagination.SortDir == "" || data.Pagination.SortDir == sortDirDesc }>{ pc.T("pagination.sort_desc") }</option>
-							</select>
+							@selectbox.SelectBox(selectbox.Props{
+								Class: "admin-media-sort-select",
+								Attributes: templ.Attributes{
+									"data-auto-submit": "true",
+									"data-sort-state":  sortStateValue(data.Pagination.SortDir),
+								},
+							}) {
+								@selectbox.Trigger(selectbox.TriggerProps{Name: "dir"})
+								@selectbox.Value(selectbox.ValueProps{})
+								@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+									@selectbox.Item(selectbox.ItemProps{Value: "asc", Selected: data.Pagination.SortDir == sortDirAsc}) {
+										{ pc.T("pagination.sort_asc") }
+									}
+									@selectbox.Item(selectbox.ItemProps{Value: "desc", Selected: data.Pagination.SortDir == "" || data.Pagination.SortDir == sortDirDesc}) {
+										{ pc.T("pagination.sort_desc") }
+									}
+								}
+							}
 						</form>
 					</div>
 					if data.Pagination.HasBulkAction() {
@@ -403,6 +426,7 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 			};
 		}
 		</script>
+	@selectbox.Script()
 	}
 }
 

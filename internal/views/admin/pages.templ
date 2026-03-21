@@ -14,6 +14,7 @@ import "github.com/olegiv/ocms-go/internal/views/components/card"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
 import "github.com/olegiv/ocms-go/internal/views/components/input"
 import "github.com/olegiv/ocms-go/internal/views/components/label"
+import "github.com/olegiv/ocms-go/internal/views/components/selectbox"
 import "github.com/olegiv/ocms-go/internal/views/components/table"
 import "github.com/olegiv/ocms-go/internal/views/components/textarea"
 
@@ -413,20 +414,33 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 						if data.Pagination.HasPerPageSelector() {
 							<input type="hidden" name="per_page" value={ fmt.Sprintf("%d", data.Pagination.PerPageSelector.Current) }/>
 						}
-						<select name="category" class="form-select form-select-sm" data-auto-submit="true">
-							<option value="">{ pc.T("pages.all_categories") }</option>
-							for _, cat := range data.AllCategories {
-								<option
-									value={ fmt.Sprintf("%d", cat.ID) }
-									selected?={ data.CategoryFilter == cat.ID }
-								>
-									if cat.Depth > 0 {
-										{ repeatDash(cat.Depth) }
+						@selectbox.SelectBox(selectbox.Props{Attributes: templ.Attributes{"data-auto-submit": "true"}}) {
+							@selectbox.Trigger(selectbox.TriggerProps{
+								Name: "category",
+							})
+							@selectbox.Value(selectbox.ValueProps{
+								Placeholder: pc.T("pages.all_categories"),
+							})
+							@selectbox.Content(selectbox.ContentProps{}) {
+								@selectbox.Item(selectbox.ItemProps{
+									Value:    "",
+									Selected: data.CategoryFilter == 0,
+								}) {
+									{ pc.T("pages.all_categories") }
+								}
+								for _, cat := range data.AllCategories {
+									@selectbox.Item(selectbox.ItemProps{
+										Value:    fmt.Sprintf("%d", cat.ID),
+										Selected: data.CategoryFilter == cat.ID,
+									}) {
+										if cat.Depth > 0 {
+											{ repeatDash(cat.Depth) }
+										}
+										{ cat.Name }
 									}
-									{ cat.Name }
-								</option>
+								}
 							}
-						</select>
+						}
 					</form>
 				</div>
 			}
@@ -450,17 +464,30 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 						if data.Pagination.HasPerPageSelector() {
 							<input type="hidden" name="per_page" value={ fmt.Sprintf("%d", data.Pagination.PerPageSelector.Current) }/>
 						}
-						<select name="language" class="form-select form-select-sm" data-auto-submit="true">
-							<option value="">{ pc.T("pages.all_languages") }</option>
-							for _, lang := range data.AllLanguages {
-								<option
-									value={ lang.Code }
-									selected?={ data.LanguageFilter == lang.Code }
-								>
-									{ lang.Name } ({ lang.Code })
-								</option>
+						@selectbox.SelectBox(selectbox.Props{Attributes: templ.Attributes{"data-auto-submit": "true"}}) {
+							@selectbox.Trigger(selectbox.TriggerProps{
+								Name: "language",
+							})
+							@selectbox.Value(selectbox.ValueProps{
+								Placeholder: pc.T("pages.all_languages"),
+							})
+							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+								@selectbox.Item(selectbox.ItemProps{
+									Value:    "",
+									Selected: data.LanguageFilter == "",
+								}) {
+									{ pc.T("pages.all_languages") }
+								}
+								for _, lang := range data.AllLanguages {
+									@selectbox.Item(selectbox.ItemProps{
+										Value:    lang.Code,
+										Selected: data.LanguageFilter == lang.Code,
+									}) {
+										{ lang.Name } ({ lang.Code })
+									}
+								}
 							}
-						</select>
+						}
 					</form>
 				</div>
 			}
@@ -727,6 +754,7 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool, bulkS
 				</div>
 			</div>
 		}
+		@selectbox.Script()
 	}
 }
 

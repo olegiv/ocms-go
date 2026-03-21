@@ -13,6 +13,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 	"github.com/olegiv/ocms-go/internal/views/components/input"
 	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 )
 
 // UserListItem holds data for a user in the list view.
@@ -318,19 +319,29 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 						@label.Label(label.Props{For: "role", Class: "block mb-1"}) {
 							{ pc.T("label.role") } <span class="required">*</span>
 						}
-						<select
-							id="role"
-							name="role"
-							class={ templ.KV("form-input form-select", true), templ.KV("is-invalid", data.Errors["role"] != "") }
-							required
-						>
-							<option value="">{ pc.T("users.select_role") }</option>
-							for _, role := range data.Roles {
-								<option value={ role } selected?={ role == userFormValue(data, "role") }>
-									{ roleLabel(pc, role) }
-								</option>
+						@selectbox.SelectBox() {
+							@selectbox.Trigger(selectbox.TriggerProps{
+								Name:     "role",
+								HasError: data.Errors["role"] != "",
+								Attributes: templ.Attributes{
+									"required": true,
+								},
+							}) {
+								@selectbox.Value(selectbox.ValueProps{
+									Placeholder: pc.T("users.select_role"),
+								})
 							}
-						</select>
+							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+								for _, role := range data.Roles {
+									@selectbox.Item(selectbox.ItemProps{
+										Value:    role,
+										Selected: role == userFormValue(data, "role"),
+									}) {
+										{ roleLabel(pc, role) }
+									}
+								}
+							}
+						}
 						if data.Errors["role"] != "" {
 							<span class="form-error">{ data.Errors["role"] }</span>
 						}
@@ -424,6 +435,7 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 				</div>
 			</form>
 		}
+	@selectbox.Script()
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
 	"github.com/olegiv/ocms-go/internal/views/components/input"
 	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 )
 
 // ThemeViewItem holds data for a single theme in the list view.
@@ -194,6 +195,7 @@ templ ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) {
 		}
 		@themeSettingsScript(pc)
 		@themeSettingsStyle()
+		@selectbox.Script()
 	}
 }
 
@@ -219,18 +221,24 @@ templ themeSettingColor(pc *PageContext, data ThemeSettingsViewData, setting The
 
 // themeSettingSelect renders a select dropdown.
 templ themeSettingSelect(pc *PageContext, data ThemeSettingsViewData, setting ThemeSettingView) {
-	<select
-		id={ setting.Key }
-		name={ setting.Key }
-		class={ "form-select", templ.KV("is-invalid", setting.Error != "") }
-		disabled?={ data.IsDemoMode }
-	>
-		for _, opt := range setting.Options {
-			<option value={ opt } selected?={ opt == setting.Value }>
-				{ pc.TDefault(fmt.Sprintf("option.%s", opt), opt) }
-			</option>
+	@selectbox.SelectBox(selectbox.Props{ID: setting.Key}) {
+		@selectbox.Trigger(selectbox.TriggerProps{
+			Name:     setting.Key,
+			Disabled: data.IsDemoMode,
+			HasError: setting.Error != "",
+		})
+		@selectbox.Value(selectbox.ValueProps{})
+		@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+			for _, opt := range setting.Options {
+				@selectbox.Item(selectbox.ItemProps{
+					Value:    opt,
+					Selected: opt == setting.Value,
+				}) {
+					{ pc.TDefault(fmt.Sprintf("option.%s", opt), opt) }
+				}
+			}
 		}
-	</select>
+	}
 }
 
 // themeSettingImage renders an image URL input with preview and media picker.

@@ -13,6 +13,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
 	"github.com/olegiv/ocms-go/internal/views/components/input"
 	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
@@ -248,20 +249,23 @@ templ MenuFormPage(pc *PageContext, data MenuFormData) {
 						@label.Label(label.Props{For: "language_code", Class: "block mb-1"}) {
 							{ pc.T("label.language") }
 						}
-						<select
-							id="language_code"
-							name="language_code"
-							class={ templ.KV("form-select", true), templ.KV("is-invalid", data.Errors["language_code"] != "") }
-						>
-							for _, lang := range data.Languages {
-								<option
-									value={ lang.Code }
-									selected?={ lang.Code == menuCurrentLanguageCode(data) }
-								>
-									{ lang.NativeName } ({ lang.Code })
-								</option>
+						@selectbox.SelectBox() {
+							@selectbox.Trigger(selectbox.TriggerProps{
+								Name:     "language_code",
+								HasError: data.Errors["language_code"] != "",
+							})
+							@selectbox.Value(selectbox.ValueProps{})
+							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+								for _, lang := range data.Languages {
+									@selectbox.Item(selectbox.ItemProps{
+										Value:    lang.Code,
+										Selected: lang.Code == menuCurrentLanguageCode(data),
+									}) {
+										{ lang.NativeName } ({ lang.Code })
+									}
+								}
 							}
-						</select>
+						}
 						if data.Errors["language_code"] != "" {
 							<span class="form-error">{ data.Errors["language_code"] }</span>
 						} else {
@@ -284,6 +288,7 @@ templ MenuFormPage(pc *PageContext, data MenuFormData) {
 		if data.IsEdit && data.Menu != nil {
 			@menuBuilderSection(pc, data)
 		}
+		@selectbox.Script()
 	}
 }
 

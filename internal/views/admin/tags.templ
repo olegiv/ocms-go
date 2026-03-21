@@ -12,6 +12,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
 	"github.com/olegiv/ocms-go/internal/views/components/input"
 	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
@@ -314,21 +315,25 @@ templ TagFormPage(pc *PageContext, data TagFormData) {
 							@label.Label(label.Props{For: "language_code", Class: "block mb-1"}) {
 								{ pc.T("label.language") }
 							}
-							<select
-								id="language_code"
-								name={ languageFieldName(data.IsEdit) }
-								class="form-select"
-								disabled?={ data.IsEdit }
-							>
-								for _, lang := range data.AllLanguages {
-									<option
-										value={ lang.Code }
-										selected?={ lang.Code == currentLanguageCode(data) }
-									>
-										{ lang.Name } ({ lang.Code })
-									</option>
+							@selectbox.SelectBox() {
+								@selectbox.Trigger(selectbox.TriggerProps{
+									Name:     languageFieldName(data.IsEdit),
+									Disabled: data.IsEdit,
+								})
+								@selectbox.Value(selectbox.ValueProps{
+									Placeholder: "Select language",
+								})
+								@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+									for _, lang := range data.AllLanguages {
+										@selectbox.Item(selectbox.ItemProps{
+											Value:    lang.Code,
+											Selected: lang.Code == currentLanguageCode(data),
+										}) {
+											{ lang.Name } ({ lang.Code })
+										}
+									}
 								}
-							</select>
+							}
 							if data.IsEdit {
 								<input type="hidden" name="language_code" value={ languageHiddenValue(data) }/>
 								<span class="form-hint">{ pc.T("tags.language_readonly") }</span>
@@ -378,6 +383,7 @@ templ TagFormPage(pc *PageContext, data TagFormData) {
 			}
 		}
 		</script>
+		@selectbox.Script()
 	}
 }
 
