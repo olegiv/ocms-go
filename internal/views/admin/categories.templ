@@ -85,7 +85,7 @@ templ CategoriesListPage(pc *PageContext, data CategoriesListData) {
 								@table.Head() { { pc.T("label.language") } }
 								@table.Head() { { pc.T("label.description") } }
 								@table.Head() { { pc.T("nav.pages") } }
-								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+								@table.Head() { { pc.T("label.actions") } }
 							}
 						}
 						@table.Body() {
@@ -129,11 +129,9 @@ templ CategoriesListPage(pc *PageContext, data CategoriesListData) {
 											{ pc.T("categories.page_count", cat.UsageCount) }
 										}
 									}
-									@table.Cell(table.CellProps{Class: "text-right"}) {
+									@table.Cell() {
 										<div class="action-buttons">
-											@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/categories/%d", cat.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
-												@icon.Pencil(icon.Props{Size: 14})
-											}
+											@EditButton(fmt.Sprintf("/admin/categories/%d", cat.ID), pc.T("btn.edit"))
 											@deleteCategoryModal(pc, cat)
 										</div>
 									}

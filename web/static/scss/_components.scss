@@ -452,7 +452,7 @@ select.form-control {
 .action-buttons {
   display: flex;
   gap: $spacing-2;
-  justify-content: flex-end;
+  justify-content: flex-start;
   align-items: center;
 }
 

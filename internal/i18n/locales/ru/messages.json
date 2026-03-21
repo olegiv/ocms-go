@@ -1388,6 +1388,11 @@
             "translation": "Формы"
         },
         {
+            "id": "forms.description",
+            "message": "Manage your forms (%d total)",
+            "translation": "Управление формами (всего: %d)"
+        },
+        {
             "id": "forms.new",
             "message": "New Form",
             "translation": "Новая форма"
@@ -1651,6 +1656,11 @@
             "id": "forms.total_submissions",
             "message": "Total Submissions",
             "translation": "Всего заявок"
+        },
+        {
+            "id": "forms.submissions_description",
+            "message": "Viewing submissions for this form (%d total)",
+            "translation": "Просмотр заявок формы (всего: %d)"
         },
         {
             "id": "forms.unread",

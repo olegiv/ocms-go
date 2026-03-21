@@ -1388,6 +1388,11 @@
             "translation": "Forms"
         },
         {
+            "id": "forms.description",
+            "message": "Manage your forms (%d total)",
+            "translation": "Manage your forms (%d total)"
+        },
+        {
             "id": "forms.new",
             "message": "New Form",
             "translation": "New Form"
@@ -1651,6 +1656,11 @@
             "id": "forms.total_submissions",
             "message": "Total Submissions",
             "translation": "Total Submissions"
+        },
+        {
+            "id": "forms.submissions_description",
+            "message": "Viewing submissions for this form (%d total)",
+            "translation": "Viewing submissions for this form (%d total)"
         },
         {
             "id": "forms.unread",

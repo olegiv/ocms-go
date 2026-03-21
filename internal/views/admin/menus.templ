@@ -78,7 +78,7 @@ templ MenusListPage(pc *PageContext, data MenusListData) {
 								@table.Head() { { pc.T("label.slug") } }
 								@table.Head() { { pc.T("label.language") } }
 								@table.Head() { { pc.T("label.updated") } }
-								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+								@table.Head() { { pc.T("label.actions") } }
 							}
 						}
 						@table.Body() {
@@ -105,11 +105,9 @@ templ MenusListPage(pc *PageContext, data MenusListData) {
 										}
 									}
 									@table.Cell() { { menu.UpdatedAt.Format("Jan 02, 2006") } }
-									@table.Cell(table.CellProps{Class: "text-right"}) {
+									@table.Cell() {
 										<div class="action-buttons">
-											@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/menus/%d", menu.ID), Attributes: templ.Attributes{"title": pc.T("menus.edit")}}) {
-												@iconEdit()
-											}
+											@EditButton(fmt.Sprintf("/admin/menus/%d", menu.ID), pc.T("menus.edit"))
 											if !menu.IsProtected {
 												@deleteMenuModal(pc, menu)
 											} else {

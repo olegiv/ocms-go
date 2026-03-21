@@ -149,7 +149,7 @@ templ APIKeysListPage(pc *PageContext, data APIKeysListData) {
 										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("expires_at"))) }</span>
 									</a>
 								}
-								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+								@table.Head() { { pc.T("label.actions") } }
 							}
 						}
 						@table.Body() {
@@ -266,11 +266,9 @@ templ APIKeyRow(pc *PageContext, key APIKeyListItem, bulkScope string) {
 				<span class="text-muted">{ pc.T("label.never") }</span>
 			}
 		}
-		@table.Cell(table.CellProps{Class: "text-right"}) {
+		@table.Cell() {
 			<div class="action-buttons">
-				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/api-keys/%d", key.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
-					@icon.Pencil(icon.Props{Size: 14})
-				}
+				@EditButton(fmt.Sprintf("/admin/api-keys/%d", key.ID), pc.T("btn.edit"))
 				if key.IsActive {
 					@revokeAPIKeyModal(pc, key)
 				}

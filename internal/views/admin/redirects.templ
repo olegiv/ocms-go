@@ -84,7 +84,7 @@ templ RedirectsListPage(pc *PageContext, data RedirectsListData) {
 								@table.Head() { { pc.T("redirects.status_code") } }
 								@table.Head() { { pc.T("redirects.target_type") } }
 								@table.Head() { { pc.T("label.status") } }
-								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+								@table.Head() { { pc.T("label.actions") } }
 							}
 						}
 						@table.Body() {
@@ -178,11 +178,9 @@ templ RedirectRow(pc *PageContext, redirect RedirectListItem) {
 				}
 			</button>
 		}
-		@table.Cell(table.CellProps{Class: "text-right"}) {
+		@table.Cell() {
 			<div class="action-buttons">
-				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/redirects/%d", redirect.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
-					@icon.Pencil(icon.Props{Size: 14})
-				}
+				@EditButton(fmt.Sprintf("/admin/redirects/%d", redirect.ID), pc.T("btn.edit"))
 				@deleteRedirectModal(pc, redirect)
 			</div>
 		}

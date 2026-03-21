@@ -127,7 +127,7 @@ templ TagsListPage(pc *PageContext, data TagsListData) {
 										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("created_at"))) }</span>
 									</a>
 								}
-								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+								@table.Head() { { pc.T("label.actions") } }
 							}
 						}
 						@table.Body() {
@@ -166,11 +166,9 @@ templ TagsListPage(pc *PageContext, data TagsListData) {
 										}
 									}
 									@table.Cell() { { tag.CreatedAt.Format("Jan 02, 2006") } }
-									@table.Cell(table.CellProps{Class: "text-right"}) {
+									@table.Cell() {
 										<div class="action-buttons">
-											@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/tags/%d", tag.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
-												@icon.Pencil(icon.Props{Size: 14})
-											}
+											@EditButton(fmt.Sprintf("/admin/tags/%d", tag.ID), pc.T("btn.edit"))
 											@deleteTagModal(pc, tag)
 										</div>
 									}

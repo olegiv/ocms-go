@@ -143,7 +143,7 @@ templ WebhooksListPage(pc *PageContext, data WebhooksListViewData) {
 								@table.Head() { { pc.T("webhooks.events") } }
 								@table.Head() { { pc.T("webhooks.status") } }
 								@table.Head() { { pc.T("webhooks.stats") } }
-								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("webhooks.actions") } }
+								@table.Head() { { pc.T("webhooks.actions") } }
 							}
 						}
 						@table.Body() {
@@ -198,7 +198,7 @@ templ WebhooksListPage(pc *PageContext, data WebhooksListViewData) {
 											<div class="text-xs text-muted-foreground">{ wh.LastSuccessfulAt }</div>
 										}
 									}
-									@table.Cell(table.CellProps{Class: "text-right"}) {
+									@table.Cell() {
 										<div class="flex items-center justify-end gap-1">
 											<a href={ templ.SafeURL(fmt.Sprintf("/admin/webhooks/%d/deliveries", wh.ID)) } class="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" title={ pc.T("webhooks.view_deliveries") }>
 												@iconFile()
@@ -634,7 +634,7 @@ templ WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) {
 								@table.Head() { { pc.T("webhooks.attempts") } }
 								@table.Head() { { pc.T("webhooks.response") } }
 								@table.Head() { { pc.T("webhooks.created") } }
-								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("webhooks.actions") } }
+								@table.Head() { { pc.T("webhooks.actions") } }
 							}
 						}
 						for _, d := range data.Deliveries {
@@ -661,7 +661,7 @@ templ WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) {
 										}
 									}
 									@table.Cell(table.CellProps{Class: "text-xs text-muted-foreground"}) { { d.CreatedAt } }
-									@table.Cell(table.CellProps{Class: "text-right"}) {
+									@table.Cell() {
 										<div class="flex items-center justify-end gap-1">
 											<button type="button" class="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" @click="showPayload = !showPayload" title={ pc.T("webhooks.view_payload") }>
 												@iconEye()

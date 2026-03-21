@@ -91,7 +91,7 @@ templ LanguagesListPage(pc *PageContext, data LanguagesListData) {
 								@table.Head() { { pc.T("languages.direction") } }
 								@table.Head() { { pc.T("label.status") } }
 								@table.Head() { { pc.T("languages.position") } }
-								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+								@table.Head() { { pc.T("label.actions") } }
 							}
 						}
 						@table.Body() {
@@ -156,7 +156,7 @@ templ LanguageRow(pc *PageContext, lang LanguageListItem) {
 			}
 		}
 		@table.Cell() { { fmt.Sprintf("%d", lang.Position) } }
-		@table.Cell(table.CellProps{Class: "text-right"}) {
+		@table.Cell() {
 			<div class="action-buttons">
 				if !lang.IsDefault {
 					<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/languages/%d/default", lang.ID)) } class="d-inline">
@@ -165,9 +165,7 @@ templ LanguageRow(pc *PageContext, lang LanguageListItem) {
 						}
 					</form>
 				}
-				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/languages/%d", lang.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
-					@icon.Pencil(icon.Props{Size: 14})
-				}
+				@EditButton(fmt.Sprintf("/admin/languages/%d", lang.ID), pc.T("btn.edit"))
 				if !lang.IsDefault {
 					@deleteLanguageModal(pc, lang)
 				}

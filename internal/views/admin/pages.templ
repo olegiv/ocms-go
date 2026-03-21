@@ -591,7 +591,7 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("updated_at"))) }</span>
 									</a>
 								}
-								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+								@table.Head() { { pc.T("label.actions") } }
 							}
 						}
 						@table.Body() {
@@ -700,7 +700,7 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool, bulkS
 		}
 		}
 		@table.Cell() { { page.UpdatedAt } }
-		@table.Cell(table.CellProps{Class: "text-right"}) {
+		@table.Cell() {
 			<div class="action-buttons">
 				if !page.IsDemoPublished {
 					<form action={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/publish", page.ID)) } method="POST" class="inline-form">
@@ -1949,7 +1949,7 @@ templ PageVersionsPage(pc *PageContext, data PageVersionsViewData) {
 								@table.Head() { { pc.T("label.title") } }
 								@table.Head() { { pc.T("versions.changed_by") } }
 								@table.Head() { { pc.T("versions.date") } }
-								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+								@table.Head() { { pc.T("label.actions") } }
 							}
 						}
 						@table.Body() {
@@ -1987,7 +1987,7 @@ templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersion
 			<span class="user-name">{ version.ChangedByName }</span>
 		}
 		@table.Cell() { { version.CreatedAt } }
-		@table.Cell(table.CellProps{Class: "text-right"}) {
+		@table.Cell() {
 			<div class="action-buttons">
 				<div x-data="{ showPreview: false, showConfirm: false }" class="version-actions">
 					<!-- Preview Button -->

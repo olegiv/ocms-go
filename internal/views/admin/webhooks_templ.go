@@ -446,7 +446,7 @@ func WebhooksListPage(pc *PageContext, data WebhooksListViewData) templ.Componen
 									var templ_7745c5c3_Var21 string
 									templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.actions"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 146, Col: 86}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 146, Col: 50}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 									if templ_7745c5c3_Err != nil {
@@ -454,7 +454,7 @@ func WebhooksListPage(pc *PageContext, data WebhooksListViewData) templ.Componen
 									}
 									return nil
 								})
-								templ_7745c5c3_Err = table.Head(table.HeadProps{Class: "text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var20), templ_7745c5c3_Buffer)
+								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var20), templ_7745c5c3_Buffer)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -1046,7 +1046,7 @@ func WebhooksListPage(pc *PageContext, data WebhooksListViewData) templ.Componen
 										}
 										return nil
 									})
-									templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var47), templ_7745c5c3_Buffer)
+									templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var47), templ_7745c5c3_Buffer)
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
@@ -2942,7 +2942,7 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 									var templ_7745c5c3_Var156 string
 									templ_7745c5c3_Var156, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("webhooks.actions"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 637, Col: 86}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/webhooks.templ`, Line: 637, Col: 50}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var156))
 									if templ_7745c5c3_Err != nil {
@@ -2950,7 +2950,7 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 									}
 									return nil
 								})
-								templ_7745c5c3_Err = table.Head(table.HeadProps{Class: "text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var155), templ_7745c5c3_Buffer)
+								templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var155), templ_7745c5c3_Buffer)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -3343,7 +3343,7 @@ func WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) temp
 										}
 										return nil
 									})
-									templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var173), templ_7745c5c3_Buffer)
+									templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var173), templ_7745c5c3_Buffer)
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
