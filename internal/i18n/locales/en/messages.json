@@ -1043,6 +1043,11 @@
             "translation": "Thumbnail"
         },
         {
+            "id": "media.variant_grid",
+            "message": "Grid",
+            "translation": "Grid"
+        },
+        {
             "id": "media.variant_medium",
             "message": "Medium",
             "translation": "Medium"

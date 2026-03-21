@@ -1043,6 +1043,11 @@
             "translation": "Миниатюра"
         },
         {
+            "id": "media.variant_grid",
+            "message": "Grid",
+            "translation": "Сетка"
+        },
+        {
             "id": "media.variant_medium",
             "message": "Medium",
             "translation": "Средний"

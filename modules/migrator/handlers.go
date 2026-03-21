@@ -447,7 +447,7 @@ func (m *Module) deleteImportedItems(ctx context.Context, source string) (map[st
 // deleteMediaFiles removes media files from disk.
 func (m *Module) deleteMediaFiles(mediaUUID string) {
 	uploadDir := "./uploads"
-	variants := []string{"originals", "thumbnail", "medium", "large"}
+	variants := []string{"originals", "thumbnail", "grid", "small", "medium", "large"}
 
 	for _, variant := range variants {
 		dir := uploadDir + "/" + variant + "/" + mediaUUID

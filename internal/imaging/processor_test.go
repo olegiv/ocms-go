@@ -178,9 +178,9 @@ func TestCreateAllVariants(t *testing.T) {
 		t.Fatal("CreateAllVariants returned no variants")
 	}
 
-	// All 4 variants should be created for a 2400x1600 image
-	if len(variants) != 4 {
-		t.Errorf("variant count = %d, want 4", len(variants))
+	// All 5 variants should be created for a 2400x1600 image
+	if len(variants) != 5 {
+		t.Errorf("variant count = %d, want 5", len(variants))
 	}
 
 	// Verify each variant has valid dimensions
@@ -217,15 +217,15 @@ func TestCreateAllVariants_SmallSource(t *testing.T) {
 		t.Fatalf("ProcessImage: %v", err)
 	}
 
-	// Create all variants - should only create thumbnail (crop=true)
+	// Create all variants - should only create cropped variants (thumbnail + grid)
 	variants, err := p.CreateAllVariants(result.FilePath, uuid, "test-small.png")
 	if err != nil {
 		t.Fatalf("CreateAllVariants: %v", err)
 	}
 
-	// Only thumbnail should be created (it crops, so source size doesn't matter)
-	if len(variants) != 1 {
-		t.Errorf("variant count = %d, want 1 (only thumbnail for small source)", len(variants))
+	// Thumbnail and grid should be created (both crop=true, so source size doesn't matter)
+	if len(variants) != 2 {
+		t.Errorf("variant count = %d, want 2 (thumbnail and grid for small source)", len(variants))
 		for _, v := range variants {
 			t.Logf("  variant: %s (%dx%d)", v.Type, v.Width, v.Height)
 		}

@@ -1966,6 +1966,8 @@ func convertMediaEditViewData(data MediaEditData, lang string) adminviews.MediaE
 		switch v.Type {
 		case "thumbnail":
 			typeLabel = i18n.T(lang, "media.variant_thumbnail")
+		case "grid":
+			typeLabel = i18n.T(lang, "media.variant_grid")
 		case "medium":
 			typeLabel = i18n.T(lang, "media.variant_medium")
 		case "large":

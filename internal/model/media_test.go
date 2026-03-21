@@ -182,7 +182,7 @@ func TestIsSupportedMimeType(t *testing.T) {
 
 func TestImageVariants(t *testing.T) {
 	// Verify all expected variants exist
-	variants := []string{VariantThumbnail, VariantMedium, VariantLarge}
+	variants := []string{VariantThumbnail, VariantGrid, VariantMedium, VariantLarge}
 	for _, v := range variants {
 		config, ok := ImageVariants[v]
 		if !ok {
@@ -200,9 +200,12 @@ func TestImageVariants(t *testing.T) {
 		}
 	}
 
-	// Verify thumbnail is cropped
+	// Verify cropped variants
 	if !ImageVariants[VariantThumbnail].Crop {
 		t.Error("ImageVariants[thumbnail].Crop should be true")
+	}
+	if !ImageVariants[VariantGrid].Crop {
+		t.Error("ImageVariants[grid].Crop should be true")
 	}
 
 	// Verify medium and large are not cropped
