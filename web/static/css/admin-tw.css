@@ -213,8 +213,8 @@
   padding-top: 1rem;
 }
 
-/* Checkbox label */
-.admin-main .checkbox-label {
+/* Checkbox label (exclude .form-checkbox which has its own layout) */
+.admin-main .checkbox-label:not(.form-checkbox > .checkbox-label) {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
