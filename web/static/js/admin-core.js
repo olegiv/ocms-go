@@ -54,9 +54,10 @@ function normalizeBulkScope(scope) {
 
 // Declarative helpers for CSP-safe interactions
 document.addEventListener('change', function(e) {
-    const perPageSelector = closestMatch(e.target, 'select[data-per-page-selector="true"]');
+    const perPageSelector = closestMatch(e.target, '[data-per-page-selector="true"]');
     if (perPageSelector) {
-        const selectedValue = Number.parseInt(perPageSelector.value, 10);
+        const hiddenInput = perPageSelector.querySelector('input[type="hidden"]');
+        const selectedValue = Number.parseInt(hiddenInput ? hiddenInput.value : perPageSelector.value, 10);
         if (!Number.isInteger(selectedValue) || selectedValue <= 0) {
             return;
         }
