@@ -430,10 +430,10 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 											<span class="menu-item-type" x-text="item.page_id ? labels.itemPage : labels.itemCustom"></span>
 										</div>
 										<div class="menu-item-actions">
-											@button.Button(button.Props{Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "editItem(item)", ":title": pc.T("btn.edit")}}) {
+											@button.Button(button.Props{Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "editItem(item)", "title": pc.T("btn.edit")}}) {
 												@icon.Pencil(icon.Props{Size: 14})
 											}
-											@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "deleteItem(item, index)", ":title": pc.T("btn.delete")}}) {
+											@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "deleteItem(item, index)", "title": pc.T("btn.delete")}}) {
 												@icon.Trash2(icon.Props{Size: 14})
 											}
 										</div>
@@ -451,10 +451,10 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 														<span class="menu-item-type" x-text="child.page_id ? labels.itemPage : labels.itemCustom"></span>
 													</div>
 													<div class="menu-item-actions">
-														@button.Button(button.Props{Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "editItem(child)", ":title": pc.T("btn.edit")}}) {
+														@button.Button(button.Props{Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "editItem(child)", "title": pc.T("btn.edit")}}) {
 															@icon.Pencil(icon.Props{Size: 14})
 														}
-														@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "deleteChildItem(item, childIndex)", ":title": pc.T("btn.delete")}}) {
+														@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "deleteChildItem(item, childIndex)", "title": pc.T("btn.delete")}}) {
 															@icon.Trash2(icon.Props{Size: 14})
 														}
 													</div>
@@ -472,10 +472,10 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 																	<span class="menu-item-type" x-text="grandchild.page_id ? labels.itemPage : labels.itemCustom"></span>
 																</div>
 																<div class="menu-item-actions">
-																	@button.Button(button.Props{Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "editItem(grandchild)", ":title": pc.T("btn.edit")}}) {
+																	@button.Button(button.Props{Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "editItem(grandchild)", "title": pc.T("btn.edit")}}) {
 																		@icon.Pencil(icon.Props{Size: 14})
 																	}
-																	@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "deleteGrandchildItem(child, grandchildIndex)", ":title": pc.T("btn.delete")}}) {
+																	@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "deleteGrandchildItem(child, grandchildIndex)", "title": pc.T("btn.delete")}}) {
 																		@icon.Trash2(icon.Props{Size: 14})
 																	}
 																</div>

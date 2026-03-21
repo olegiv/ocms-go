@@ -2283,7 +2283,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = button.Button(button.Props{Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "editItem(item)", ":title": pc.T("btn.edit")}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var124), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = button.Button(button.Props{Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "editItem(item)", "title": pc.T("btn.edit")}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var124), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2305,7 +2305,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "deleteItem(item, index)", ":title": pc.T("btn.delete")}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var125), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "deleteItem(item, index)", "title": pc.T("btn.delete")}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var125), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2331,7 +2331,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = button.Button(button.Props{Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "editItem(child)", ":title": pc.T("btn.edit")}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var126), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = button.Button(button.Props{Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "editItem(child)", "title": pc.T("btn.edit")}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var126), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2353,7 +2353,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "deleteChildItem(item, childIndex)", ":title": pc.T("btn.delete")}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var127), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "deleteChildItem(item, childIndex)", "title": pc.T("btn.delete")}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var127), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2379,7 +2379,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = button.Button(button.Props{Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "editItem(grandchild)", ":title": pc.T("btn.edit")}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var128), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = button.Button(button.Props{Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "editItem(grandchild)", "title": pc.T("btn.edit")}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var128), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2401,7 +2401,7 @@ func menuBuilderSection(pc *PageContext, data MenuFormData) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "deleteGrandchildItem(child, grandchildIndex)", ":title": pc.T("btn.delete")}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var129), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeIcon, Attributes: templ.Attributes{"@click": "deleteGrandchildItem(child, grandchildIndex)", "title": pc.T("btn.delete")}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var129), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
