@@ -483,7 +483,14 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 						<input type="hidden" name="per_page" value={ fmt.Sprintf("%d", data.Pagination.PerPageSelector.Current) }/>
 					}
 					<div class="search-input-wrapper">
-						<input type="text" name="search" value={ data.SearchFilter } placeholder={ pc.T("pages.search_placeholder") } class="form-control form-control-sm" aria-label={ pc.T("btn.search") }/>
+						@input.Input(input.Props{
+							Name:        "search",
+							Type:        input.TypeSearch,
+							Value:       data.SearchFilter,
+							Placeholder: pc.T("pages.search_placeholder"),
+							Class:       "form-control-sm",
+							Attributes:  templ.Attributes{"aria-label": pc.T("btn.search")},
+						})
 						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Class: "search-btn", Attributes: templ.Attributes{"title": pc.T("btn.search")}}) {
 							@iconSearch14()
 						}
