@@ -5,6 +5,8 @@ package admin
 
 import "fmt"
 import "net/url"
+import "path/filepath"
+import "strings"
 import "github.com/olegiv/ocms-go/internal/views/components/button"
 import "github.com/olegiv/ocms-go/internal/views/components/card"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
@@ -164,6 +166,21 @@ func mediaFilterVariant(isActive bool) button.Variant {
 	return button.VariantOutline
 }
 
+// truncateFilename truncates a filename in the middle, preserving the extension.
+// E.g. "2014-09-iphone6-bender-edition.png" with maxLen=22 → "2014-09-iphone6-b...png".
+func truncateFilename(name string, maxLen int) string {
+	if len(name) <= maxLen {
+		return name
+	}
+	ext := filepath.Ext(name)
+	base := strings.TrimSuffix(name, ext)
+	keep := maxLen - len(ext) - 3 // 3 for "..."
+	if keep < 4 {
+		keep = 4
+	}
+	return base[:keep] + "..." + ext
+}
+
 // =============================================================================
 // LIBRARY PAGE
 // =============================================================================
@@ -253,7 +270,7 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 							}
 						</div>
 					</div>
-					<div class="filter-group search-group">
+					<div class="search-group">
 						<form action="/admin/media" method="GET" class="search-form">
 							if data.Filter != "all" {
 								<input type="hidden" name="filter" value={ data.Filter }/>
@@ -288,7 +305,8 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 							</div>
 						</form>
 					</div>
-					<div class="filter-group admin-media-sort-controls">
+					<div class="filter-group">
+						<label class="filter-label">{ pc.T("media.sort_by") }:</label>
 						<form action="/admin/media" method="GET" class="filter-form admin-media-sort-form">
 							if data.Filter != "all" {
 								<input type="hidden" name="filter" value={ data.Filter }/>
@@ -302,7 +320,6 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 							if data.Pagination.HasPerPageSelector() {
 								<input type="hidden" name="per_page" value={ fmt.Sprintf("%d", data.Pagination.PerPageSelector.Current) }/>
 							}
-							<label class="filter-label admin-media-sort-label">{ pc.T("media.sort_by") }:</label>
 							@selectbox.SelectBox(selectbox.Props{
 								Class: "admin-media-sort-select select-no-clear",
 								Attributes: templ.Attributes{
@@ -328,7 +345,26 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 									}
 								}
 							}
-							<label class="filter-label admin-media-sort-label">{ pc.T("media.sort_direction") }:</label>
+						</form>
+					</div>
+					<div class="filter-group">
+						<label class="filter-label">{ pc.T("media.sort_direction") }:</label>
+						<form action="/admin/media" method="GET" class="filter-form admin-media-sort-form">
+							if data.Filter != "all" {
+								<input type="hidden" name="filter" value={ data.Filter }/>
+							}
+							if data.FolderID != nil {
+								<input type="hidden" name="folder" value={ fmt.Sprintf("%d", *data.FolderID) }/>
+							}
+							if data.Search != "" {
+								<input type="hidden" name="q" value={ data.Search }/>
+							}
+							if data.Pagination.HasPerPageSelector() {
+								<input type="hidden" name="per_page" value={ fmt.Sprintf("%d", data.Pagination.PerPageSelector.Current) }/>
+							}
+							if data.Pagination.SortField != "" {
+								<input type="hidden" name="sort" value={ data.Pagination.SortField }/>
+							}
 							@selectbox.SelectBox(selectbox.Props{
 								Class: "admin-media-sort-select select-no-clear",
 								Attributes: templ.Attributes{
@@ -502,18 +538,14 @@ templ mediaGridItem(pc *PageContext, item MediaItemView, bulkScope string) {
 			}
 		</a>
 		<div class="media-info">
-			<span class="media-filename" title={ item.Filename }>{ item.Filename }</span>
+			<span class="media-filename" title={ item.Filename }>{ truncateFilename(item.Filename, 22) }</span>
 			<span class="media-meta">{ item.Size }</span>
 		</div>
 		<div class="media-actions">
-			@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/media/%d", item.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
-				@iconPencil14()
-			}
-			@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: item.OriginalURL, Attributes: templ.Attributes{"title": pc.T("btn.download"), "download": ""}}) {
-				@iconDownload14()
-			}
+			@EditButton(fmt.Sprintf("/admin/media/%d", item.ID), pc.T("btn.edit"))
+			@DownloadButton(item.OriginalURL, pc.T("btn.download"))
 			@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Type: button.TypeButton, Attributes: templ.Attributes{"title": pc.T("btn.delete"), "@click": "showConfirm = true"}}) {
-				@iconTrash14()
+				@icon.Trash2(icon.Props{Size: 14})
 			}
 		</div>
 		<!-- Delete Confirmation Modal -->
@@ -674,16 +706,9 @@ templ mediaDropzoneUpload(pc *PageContext, data MediaUploadViewData) {
 			@button.Button(button.Props{Variant: button.VariantOutline, Type: button.TypeButton, Attributes: templ.Attributes{"@click": "clearFiles()", "x-show": "files.length > 0 && !uploading"}}) {
 				{ pc.T("uploader.clear_all") }
 			}
-			@button.Button(button.Props{Type: button.TypeButton, Attributes: templ.Attributes{":disabled": "files.length === 0 || uploading || hasErrors", "@click": "upload()"}}) {
-				<template x-if="!uploading">
-					<span>
-						@iconUpload()
-						{ pc.T("btn.upload") } <span x-show="files.length > 0">(<span x-text="files.length"></span>)</span>
-					</span>
-				</template>
-				<template x-if="uploading">
-					<span>{ pc.T("uploader.uploading") }</span>
-				</template>
+			@button.Button(button.Props{Type: button.TypeSubmit, Attributes: templ.Attributes{"@click.prevent": "upload()", ":disabled": "files.length === 0 || uploading"}}) {
+				@icon.Upload(icon.Props{Size: 16})
+				{ pc.T("btn.upload") }
 			}
 		</div>
 	</div>

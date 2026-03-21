@@ -627,9 +627,10 @@ select.form-control {
 .filter-bar {
   display: flex;
   align-items: center;
-  gap: $spacing-4;
+  flex-wrap: wrap;
+  gap: $spacing-2 $spacing-3;
   margin-bottom: $spacing-4;
-  padding: $spacing-3 $spacing-4;
+  padding: $spacing-2 $spacing-3;
   background-color: $white;
   border-radius: $radius-lg;
   box-shadow: $shadow-sm;
@@ -638,13 +639,14 @@ select.form-control {
 .filter-group {
   display: flex;
   align-items: center;
-  gap: $spacing-3;
+  gap: $spacing-2;
 }
 
 .filter-label {
   font-size: $font-size-sm;
   font-weight: $font-weight-medium;
   color: $gray-600;
+  white-space: nowrap;
 }
 
 .admin-sort-link {
@@ -698,20 +700,19 @@ select.form-control {
   opacity: 1;
 }
 
-.admin-media-sort-controls {
-  padding: $spacing-2;
-  border: 1px solid $gray-200;
-  border-radius: $radius-md;
-  background: rgba($primary, 0.04);
-}
 
 .admin-media-sort-form {
+  display: flex;
+  flex-wrap: nowrap;
   align-items: center;
+  gap: $spacing-2;
 }
 
 .admin-media-sort-label {
   color: $gray-700;
   font-weight: $font-weight-semibold;
+  white-space: nowrap;
+  font-size: $font-size-sm;
 }
 
 .admin-media-sort-select {
@@ -736,7 +737,6 @@ select.form-control {
 
 // Search group in filter bar (media library)
 .search-group {
-  margin-left: auto;
 }
 
 .search-form {
@@ -1967,6 +1967,24 @@ select.form-control {
   }
 }
 
+// Thumbnail link in new-style media grid cards — no bottom border
+a.media-preview {
+  display: block;
+  border-bottom: none;
+  aspect-ratio: 1;
+  background-color: $gray-100;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
 .media-item-preview {
   position: relative;
   aspect-ratio: 1;
@@ -2815,6 +2833,33 @@ select.form-control {
 .variant-filesize {
   color: $gray-400;
   font-size: $font-size-xs;
+}
+
+// Media card info area (filename, size)
+.media-info {
+  padding: $spacing-3 $spacing-3 $spacing-2;
+  border-top: 1px solid $gray-100;
+}
+
+.media-filename {
+  display: block;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $gray-900;
+}
+
+.media-meta {
+  display: block;
+  font-size: $font-size-xs;
+  color: $gray-500;
+  margin-top: $spacing-1;
+}
+
+// Media card actions (edit, download, delete buttons)
+.media-actions {
+  display: flex;
+  gap: $spacing-2;
+  padding: $spacing-2 $spacing-3 $spacing-4;
 }
 
 // Media actions panel (in preview sidebar)

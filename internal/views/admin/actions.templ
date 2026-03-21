@@ -37,6 +37,18 @@ templ DeleteButton(deleteURL string, confirmMsg string, target string) {
 	}
 }
 
+// DownloadButton renders a small icon-only download link button.
+templ DownloadButton(href string, title string) {
+	@button.Button(button.Props{
+		Variant:    button.VariantOutline,
+		Size:       button.SizeSm,
+		Href:       href,
+		Attributes: templ.Attributes{"title": title, "download": ""},
+	}) {
+		@icon.Download(icon.Props{Size: 14})
+	}
+}
+
 // ViewButton renders a small icon-only view/preview link button (opens in new tab).
 templ ViewButton(href string, title string) {
 	@button.Button(button.Props{
