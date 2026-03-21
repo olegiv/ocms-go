@@ -232,3 +232,11 @@
 .select-no-clear [data-tui-selectbox-chevron] {
   display: inline-flex !important;
 }
+
+/* Readonly input styling */
+.admin-main input[readonly],
+.admin-main textarea[readonly] {
+  background-color: var(--color-muted);
+  cursor: not-allowed;
+  opacity: 0.7;
+}

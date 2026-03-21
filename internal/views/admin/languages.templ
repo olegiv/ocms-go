@@ -508,7 +508,12 @@ func languageCurrentDirection(data LanguageFormData) string {
 
 func languageFormAlpineData(data LanguageFormData) string {
 	if data.IsEdit {
-		return ""
+		return fmt.Sprintf(`{code:'%s',name:'%s',nativeName:'%s',direction:'%s'}`,
+			languageFormValue(data, "code"),
+			languageFormValue(data, "name"),
+			languageFormValue(data, "native_name"),
+			languageCurrentDirection(data),
+		)
 	}
 	return "languageForm()"
 }
