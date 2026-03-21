@@ -14,6 +14,7 @@ import "github.com/olegiv/ocms-go/internal/views/components/table"
 import "github.com/olegiv/ocms-go/internal/views/components/input"
 import "github.com/olegiv/ocms-go/internal/views/components/label"
 import "github.com/olegiv/ocms-go/internal/views/components/checkbox"
+import "github.com/olegiv/ocms-go/internal/views/components/textarea"
 
 // =============================================================================
 // VIEW TYPES
@@ -380,14 +381,24 @@ templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 								@label.Label(label.Props{For: "description", Class: "block mb-1"}) {
 									{ pc.T("label.description") }
 								}
-								<textarea id="description" name="description" class="form-input" rows="2">{ formFormVal(data.FormValues, "description", data.FormDescription, data.IsEdit) }</textarea>
+								@textarea.Textarea(textarea.Props{
+								ID:    "description",
+								Name:  "description",
+								Value: formFormVal(data.FormValues, "description", data.FormDescription, data.IsEdit),
+								Rows:  2,
+							})
 								<small class="form-text">{ pc.T("forms.description_hint") }</small>
 							</div>
 							<div class="form-group">
 								@label.Label(label.Props{For: "success_message", Class: "block mb-1"}) {
 									{ pc.T("forms.success_message") }
 								}
-								<textarea id="success_message" name="success_message" class="form-input" rows="2">{ formFormVal(data.FormValues, "success_message", data.SuccessMessage, data.IsEdit) }</textarea>
+								@textarea.Textarea(textarea.Props{
+								ID:    "success_message",
+								Name:  "success_message",
+								Value: formFormVal(data.FormValues, "success_message", data.SuccessMessage, data.IsEdit),
+								Rows:  2,
+							})
 								<small class="form-text">{ pc.T("forms.success_message_hint") }</small>
 							</div>
 							<div class="form-group">
@@ -478,6 +489,7 @@ templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 			@formsFieldBuilderScript(pc, data)
 		}
 		@checkbox.Script()
+		@textarea.Script()
 	}
 }
 

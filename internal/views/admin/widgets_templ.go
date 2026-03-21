@@ -14,6 +14,10 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import "fmt"
 import "encoding/json"
+import "github.com/olegiv/ocms-go/internal/views/components/checkbox"
+import "github.com/olegiv/ocms-go/internal/views/components/input"
+import "github.com/olegiv/ocms-go/internal/views/components/label"
+import "github.com/olegiv/ocms-go/internal/views/components/textarea"
 
 // WidgetTypeView represents a widget type option.
 type WidgetTypeView struct {
@@ -118,7 +122,7 @@ func WidgetsPage(pc *PageContext, data WidgetsViewData) templ.Component {
 					var templ_7745c5c3_Var4 string
 					templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(area.AreaName)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 54, Col: 87}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 58, Col: 87}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 					if templ_7745c5c3_Err != nil {
@@ -136,7 +140,7 @@ func WidgetsPage(pc *PageContext, data WidgetsViewData) templ.Component {
 						var templ_7745c5c3_Var5 string
 						templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(area.AreaDescription)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 56, Col: 88}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 60, Col: 88}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 						if templ_7745c5c3_Err != nil {
@@ -154,7 +158,7 @@ func WidgetsPage(pc *PageContext, data WidgetsViewData) templ.Component {
 					var templ_7745c5c3_Var6 string
 					templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(area.AreaID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 59, Col: 47}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 63, Col: 47}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 					if templ_7745c5c3_Err != nil {
@@ -177,7 +181,7 @@ func WidgetsPage(pc *PageContext, data WidgetsViewData) templ.Component {
 							var templ_7745c5c3_Var7 string
 							templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(widget.ID))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 63, Col: 189}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 67, Col: 189}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 							if templ_7745c5c3_Err != nil {
@@ -190,7 +194,7 @@ func WidgetsPage(pc *PageContext, data WidgetsViewData) templ.Component {
 							var templ_7745c5c3_Var8 string
 							templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("widget-%d", widget.ID))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 63, Col: 232}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 67, Col: 232}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 							if templ_7745c5c3_Err != nil {
@@ -211,7 +215,7 @@ func WidgetsPage(pc *PageContext, data WidgetsViewData) templ.Component {
 							var templ_7745c5c3_Var9 string
 							templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(widget.WidgetType)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 68, Col: 156}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 72, Col: 156}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 							if templ_7745c5c3_Err != nil {
@@ -229,7 +233,7 @@ func WidgetsPage(pc *PageContext, data WidgetsViewData) templ.Component {
 								var templ_7745c5c3_Var10 string
 								templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(widget.Title)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 70, Col: 83}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 74, Col: 83}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 								if templ_7745c5c3_Err != nil {
@@ -247,7 +251,7 @@ func WidgetsPage(pc *PageContext, data WidgetsViewData) templ.Component {
 							var templ_7745c5c3_Var11 string
 							templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("editWidget(%d)", widget.ID))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 74, Col: 204}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 78, Col: 204}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 							if templ_7745c5c3_Err != nil {
@@ -268,7 +272,7 @@ func WidgetsPage(pc *PageContext, data WidgetsViewData) templ.Component {
 							var templ_7745c5c3_Var12 string
 							templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("deleteWidget(%d)", widget.ID))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 77, Col: 202}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 81, Col: 202}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 							if templ_7745c5c3_Err != nil {
@@ -304,7 +308,7 @@ func WidgetsPage(pc *PageContext, data WidgetsViewData) templ.Component {
 					var templ_7745c5c3_Var13 string
 					templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("openAddWidget('%s')", area.AreaID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 87, Col: 367}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 91, Col: 367}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 					if templ_7745c5c3_Err != nil {
@@ -335,7 +339,7 @@ func WidgetsPage(pc *PageContext, data WidgetsViewData) templ.Component {
 					var templ_7745c5c3_Var14 string
 					templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(wt.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 108, Col: 31}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 112, Col: 31}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 					if templ_7745c5c3_Err != nil {
@@ -348,7 +352,7 @@ func WidgetsPage(pc *PageContext, data WidgetsViewData) templ.Component {
 					var templ_7745c5c3_Var15 string
 					templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(wt.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 108, Col: 43}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 112, Col: 43}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 					if templ_7745c5c3_Err != nil {
@@ -361,7 +365,7 @@ func WidgetsPage(pc *PageContext, data WidgetsViewData) templ.Component {
 					var templ_7745c5c3_Var16 string
 					templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(wt.Description)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 108, Col: 64}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 112, Col: 64}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 					if templ_7745c5c3_Err != nil {
@@ -372,61 +376,246 @@ func WidgetsPage(pc *PageContext, data WidgetsViewData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "</select></div><div><label for=\"widget-title\" class=\"mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300\">Title (optional)</label> <input type=\"text\" id=\"widget-title\" class=\"w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white\" x-model=\"newWidget.title\" placeholder=\"Widget title\" maxlength=\"255\"></div><div x-show=\"newWidget.widget_type === 'text'\"><label for=\"widget-content\" class=\"mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300\">Content</label> <textarea id=\"widget-content\" class=\"w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white\" rows=\"5\" x-model=\"newWidget.content\" placeholder=\"HTML content...\"></textarea></div></div><div class=\"mt-6 flex justify-end gap-2\"><button type=\"button\" class=\"rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700\" @click=\"showAddModal = false\">Cancel</button> <button type=\"button\" class=\"rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50\" @click=\"addWidget()\" :disabled=\"!newWidget.widget_type\">Add Widget</button></div></div></div><!-- Edit Widget Modal --><div class=\"fixed inset-0 z-50 flex items-center justify-center bg-black/50\" x-show=\"showEditModal\" x-cloak @click.self=\"showEditModal = false\"><div class=\"w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800\" @click.stop><div class=\"mb-4 flex items-center justify-between\"><h3 class=\"text-lg font-semibold text-gray-900 dark:text-white\">Edit Widget</h3><button type=\"button\" class=\"text-gray-400 hover:text-gray-600 dark:hover:text-gray-300\" @click=\"showEditModal = false\">&times;</button></div><div class=\"space-y-4\"><div><label for=\"edit-widget-type\" class=\"mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300\">Widget Type</label> <select id=\"edit-widget-type\" class=\"w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white\" x-model=\"editingWidget.widget_type\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "</select></div><div>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Var17 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+					if !templ_7745c5c3_IsBuffer {
+						defer func() {
+							templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+							if templ_7745c5c3_Err == nil {
+								templ_7745c5c3_Err = templ_7745c5c3_BufErr
+							}
+						}()
+					}
+					ctx = templ.InitializeContext(ctx)
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "Title (optional) ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					return nil
+				})
+				templ_7745c5c3_Err = label.Label(label.Props{For: "widget-title"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var17), templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = input.Input(input.Props{
+					ID:          "widget-title",
+					Type:        input.TypeText,
+					Placeholder: "Widget title",
+					Attributes:  templ.Attributes{"x-model": "newWidget.title", "maxlength": "255"},
+				}).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</div><div x-show=\"newWidget.widget_type === 'text'\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Var18 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+					if !templ_7745c5c3_IsBuffer {
+						defer func() {
+							templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+							if templ_7745c5c3_Err == nil {
+								templ_7745c5c3_Err = templ_7745c5c3_BufErr
+							}
+						}()
+					}
+					ctx = templ.InitializeContext(ctx)
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "Content ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					return nil
+				})
+				templ_7745c5c3_Err = label.Label(label.Props{For: "widget-content"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var18), templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = textarea.Textarea(textarea.Props{
+					ID:          "widget-content",
+					Rows:        5,
+					Placeholder: "HTML content...",
+					Attributes:  templ.Attributes{"x-model": "newWidget.content"},
+				}).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</div></div><div class=\"mt-6 flex justify-end gap-2\"><button type=\"button\" class=\"rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700\" @click=\"showAddModal = false\">Cancel</button> <button type=\"button\" class=\"rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50\" @click=\"addWidget()\" :disabled=\"!newWidget.widget_type\">Add Widget</button></div></div></div><!-- Edit Widget Modal --><div class=\"fixed inset-0 z-50 flex items-center justify-center bg-black/50\" x-show=\"showEditModal\" x-cloak @click.self=\"showEditModal = false\"><div class=\"w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800\" @click.stop><div class=\"mb-4 flex items-center justify-between\"><h3 class=\"text-lg font-semibold text-gray-900 dark:text-white\">Edit Widget</h3><button type=\"button\" class=\"text-gray-400 hover:text-gray-600 dark:hover:text-gray-300\" @click=\"showEditModal = false\">&times;</button></div><div class=\"space-y-4\"><div><label for=\"edit-widget-type\" class=\"mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300\">Widget Type</label> <select id=\"edit-widget-type\" class=\"w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white\" x-model=\"editingWidget.widget_type\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				for _, wt := range data.WidgetTypes {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<option value=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<option value=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var17 string
-					templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(wt.ID)
+					var templ_7745c5c3_Var19 string
+					templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(wt.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 139, Col: 31}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 153, Col: 31}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "\">")
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var18 string
-					templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(wt.Name)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 139, Col: 43}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</option>")
+					var templ_7745c5c3_Var20 string
+					templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(wt.Name)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 153, Col: 43}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "</option>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</select></div><div><label for=\"edit-widget-title\" class=\"mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300\">Title</label> <input type=\"text\" id=\"edit-widget-title\" class=\"w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white\" x-model=\"editingWidget.title\" placeholder=\"Widget title\" maxlength=\"255\"></div><div x-show=\"editingWidget.widget_type === 'text'\"><label for=\"edit-widget-content\" class=\"mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300\">Content</label> <textarea id=\"edit-widget-content\" class=\"w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white\" rows=\"5\" x-model=\"editingWidget.content\" placeholder=\"HTML content...\"></textarea></div><div><label class=\"flex items-center gap-2\"><input type=\"checkbox\" x-model=\"editingWidget.is_active\" class=\"rounded border-gray-300 text-indigo-600 focus:ring-indigo-500\"> <span class=\"text-sm text-gray-700 dark:text-gray-300\">Active</span></label></div></div><div class=\"mt-6 flex justify-end gap-2\"><button type=\"button\" class=\"rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700\" @click=\"showEditModal = false\">Cancel</button> <button type=\"button\" class=\"rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700\" @click=\"updateWidget()\">Save Changes</button></div></div></div><script nonce=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "</select></div><div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var19 string
-				templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(templ.GetNonce(ctx))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 164, Col: 39}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
+				templ_7745c5c3_Var21 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+					if !templ_7745c5c3_IsBuffer {
+						defer func() {
+							templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+							if templ_7745c5c3_Err == nil {
+								templ_7745c5c3_Err = templ_7745c5c3_BufErr
+							}
+						}()
+					}
+					ctx = templ.InitializeContext(ctx)
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "Title ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					return nil
+				})
+				templ_7745c5c3_Err = label.Label(label.Props{For: "edit-widget-title"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var21), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "\">\n\t\t\t\tfunction widgetsManager() {\n\t\t\t\t\treturn {\n\t\t\t\t\t\tshowAddModal: false,\n\t\t\t\t\t\tshowEditModal: false,\n\t\t\t\t\t\tselectedArea: '',\n\t\t\t\t\t\tnewWidget: { widget_type: '', title: '', content: '' },\n\t\t\t\t\t\teditingWidget: { id: 0, widget_type: '', title: '', content: '', is_active: true },\n\t\t\t\t\t\topenAddWidget(areaId) {\n\t\t\t\t\t\t\tthis.selectedArea = areaId;\n\t\t\t\t\t\t\tthis.newWidget = { widget_type: '', title: '', content: '' };\n\t\t\t\t\t\t\tthis.showAddModal = true;\n\t\t\t\t\t\t},\n\t\t\t\t\t\tasync addWidget() {\n\t\t\t\t\t\t\ttry {\n\t\t\t\t\t\t\t\tconst response = await fetch('/admin/widgets', {\n\t\t\t\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\t\t\t\theaders: { 'Content-Type': 'application/json' },\n\t\t\t\t\t\t\t\t\tbody: JSON.stringify({\n\t\t\t\t\t\t\t\t\t\ttheme: this.$root.dataset.theme,\n\t\t\t\t\t\t\t\t\t\tarea: this.selectedArea,\n\t\t\t\t\t\t\t\t\t\twidget_type: this.newWidget.widget_type,\n\t\t\t\t\t\t\t\t\t\ttitle: this.newWidget.title,\n\t\t\t\t\t\t\t\t\t\tcontent: this.newWidget.content\n\t\t\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t\t});\n\t\t\t\t\t\t\t\tif (response.ok) { location.reload(); } else { alert('Error adding widget'); }\n\t\t\t\t\t\t\t} catch (err) { console.error(err); alert('Error adding widget'); }\n\t\t\t\t\t\t},\n\t\t\t\t\t\tasync editWidget(id) {\n\t\t\t\t\t\t\ttry {\n\t\t\t\t\t\t\t\tconst response = await fetch(`/admin/widgets/${id}`);\n\t\t\t\t\t\t\t\tif (response.ok) {\n\t\t\t\t\t\t\t\t\tconst data = await response.json();\n\t\t\t\t\t\t\t\t\tconst widget = data.data?.widget || data.widget;\n\t\t\t\t\t\t\t\t\tthis.editingWidget = {\n\t\t\t\t\t\t\t\t\t\tid: widget.id,\n\t\t\t\t\t\t\t\t\t\twidget_type: widget.widget_type,\n\t\t\t\t\t\t\t\t\t\ttitle: widget.title?.String || '',\n\t\t\t\t\t\t\t\t\t\tcontent: widget.content?.String || '',\n\t\t\t\t\t\t\t\t\t\tis_active: widget.is_active === 1\n\t\t\t\t\t\t\t\t\t};\n\t\t\t\t\t\t\t\t\tthis.showEditModal = true;\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t} catch (err) { console.error(err); alert('Error loading widget'); }\n\t\t\t\t\t\t},\n\t\t\t\t\t\tasync updateWidget() {\n\t\t\t\t\t\t\ttry {\n\t\t\t\t\t\t\t\tconst response = await fetch(`/admin/widgets/${this.editingWidget.id}`, {\n\t\t\t\t\t\t\t\t\tmethod: 'PUT',\n\t\t\t\t\t\t\t\t\theaders: { 'Content-Type': 'application/json' },\n\t\t\t\t\t\t\t\t\tbody: JSON.stringify({\n\t\t\t\t\t\t\t\t\t\twidget_type: this.editingWidget.widget_type,\n\t\t\t\t\t\t\t\t\t\ttitle: this.editingWidget.title,\n\t\t\t\t\t\t\t\t\t\tcontent: this.editingWidget.content,\n\t\t\t\t\t\t\t\t\t\tis_active: this.editingWidget.is_active\n\t\t\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t\t});\n\t\t\t\t\t\t\t\tif (response.ok) { location.reload(); } else { alert('Error updating widget'); }\n\t\t\t\t\t\t\t} catch (err) { console.error(err); alert('Error updating widget'); }\n\t\t\t\t\t\t},\n\t\t\t\t\t\tasync deleteWidget(id) {\n\t\t\t\t\t\t\tif (!confirm('Are you sure you want to delete this widget?')) return;\n\t\t\t\t\t\t\ttry {\n\t\t\t\t\t\t\t\tconst response = await fetch(`/admin/widgets/${id}`, { method: 'DELETE' });\n\t\t\t\t\t\t\t\tif (response.ok) {\n\t\t\t\t\t\t\t\t\tdocument.getElementById(`widget-${id}`).remove();\n\t\t\t\t\t\t\t\t} else { alert('Error deleting widget'); }\n\t\t\t\t\t\t\t} catch (err) { console.error(err); alert('Error deleting widget'); }\n\t\t\t\t\t\t}\n\t\t\t\t\t};\n\t\t\t\t}\n\t\t\t\t</script></div>")
+				templ_7745c5c3_Err = input.Input(input.Props{
+					ID:          "edit-widget-title",
+					Type:        input.TypeText,
+					Placeholder: "Widget title",
+					Attributes:  templ.Attributes{"x-model": "editingWidget.title", "maxlength": "255"},
+				}).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</div><div x-show=\"editingWidget.widget_type === 'text'\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Var22 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+					if !templ_7745c5c3_IsBuffer {
+						defer func() {
+							templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+							if templ_7745c5c3_Err == nil {
+								templ_7745c5c3_Err = templ_7745c5c3_BufErr
+							}
+						}()
+					}
+					ctx = templ.InitializeContext(ctx)
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "Content ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					return nil
+				})
+				templ_7745c5c3_Err = label.Label(label.Props{For: "edit-widget-content"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var22), templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = textarea.Textarea(textarea.Props{
+					ID:          "edit-widget-content",
+					Rows:        5,
+					Placeholder: "HTML content...",
+					Attributes:  templ.Attributes{"x-model": "editingWidget.content"},
+				}).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</div><div class=\"flex items-center gap-2\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = checkbox.Checkbox(checkbox.Props{
+					ID:         "edit-widget-active",
+					Attributes: templ.Attributes{"x-model": "editingWidget.is_active"},
+				}).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Var23 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+					if !templ_7745c5c3_IsBuffer {
+						defer func() {
+							templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+							if templ_7745c5c3_Err == nil {
+								templ_7745c5c3_Err = templ_7745c5c3_BufErr
+							}
+						}()
+					}
+					ctx = templ.InitializeContext(ctx)
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "Active ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					return nil
+				})
+				templ_7745c5c3_Err = label.Label(label.Props{For: "edit-widget-active"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var23), templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</div></div><div class=\"mt-6 flex justify-end gap-2\"><button type=\"button\" class=\"rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700\" @click=\"showEditModal = false\">Cancel</button> <button type=\"button\" class=\"rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700\" @click=\"updateWidget()\">Save Changes</button></div></div></div><script nonce=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var24 string
+				templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(templ.GetNonce(ctx))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/widgets.templ`, Line: 189, Col: 39}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\">\n\t\t\t\tfunction widgetsManager() {\n\t\t\t\t\treturn {\n\t\t\t\t\t\tshowAddModal: false,\n\t\t\t\t\t\tshowEditModal: false,\n\t\t\t\t\t\tselectedArea: '',\n\t\t\t\t\t\tnewWidget: { widget_type: '', title: '', content: '' },\n\t\t\t\t\t\teditingWidget: { id: 0, widget_type: '', title: '', content: '', is_active: true },\n\t\t\t\t\t\topenAddWidget(areaId) {\n\t\t\t\t\t\t\tthis.selectedArea = areaId;\n\t\t\t\t\t\t\tthis.newWidget = { widget_type: '', title: '', content: '' };\n\t\t\t\t\t\t\tthis.showAddModal = true;\n\t\t\t\t\t\t},\n\t\t\t\t\t\tasync addWidget() {\n\t\t\t\t\t\t\ttry {\n\t\t\t\t\t\t\t\tconst response = await fetch('/admin/widgets', {\n\t\t\t\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\t\t\t\theaders: { 'Content-Type': 'application/json' },\n\t\t\t\t\t\t\t\t\tbody: JSON.stringify({\n\t\t\t\t\t\t\t\t\t\ttheme: this.$root.dataset.theme,\n\t\t\t\t\t\t\t\t\t\tarea: this.selectedArea,\n\t\t\t\t\t\t\t\t\t\twidget_type: this.newWidget.widget_type,\n\t\t\t\t\t\t\t\t\t\ttitle: this.newWidget.title,\n\t\t\t\t\t\t\t\t\t\tcontent: this.newWidget.content\n\t\t\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t\t});\n\t\t\t\t\t\t\t\tif (response.ok) { location.reload(); } else { alert('Error adding widget'); }\n\t\t\t\t\t\t\t} catch (err) { console.error(err); alert('Error adding widget'); }\n\t\t\t\t\t\t},\n\t\t\t\t\t\tasync editWidget(id) {\n\t\t\t\t\t\t\ttry {\n\t\t\t\t\t\t\t\tconst response = await fetch(`/admin/widgets/${id}`);\n\t\t\t\t\t\t\t\tif (response.ok) {\n\t\t\t\t\t\t\t\t\tconst data = await response.json();\n\t\t\t\t\t\t\t\t\tconst widget = data.data?.widget || data.widget;\n\t\t\t\t\t\t\t\t\tthis.editingWidget = {\n\t\t\t\t\t\t\t\t\t\tid: widget.id,\n\t\t\t\t\t\t\t\t\t\twidget_type: widget.widget_type,\n\t\t\t\t\t\t\t\t\t\ttitle: widget.title?.String || '',\n\t\t\t\t\t\t\t\t\t\tcontent: widget.content?.String || '',\n\t\t\t\t\t\t\t\t\t\tis_active: widget.is_active === 1\n\t\t\t\t\t\t\t\t\t};\n\t\t\t\t\t\t\t\t\tthis.showEditModal = true;\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t} catch (err) { console.error(err); alert('Error loading widget'); }\n\t\t\t\t\t\t},\n\t\t\t\t\t\tasync updateWidget() {\n\t\t\t\t\t\t\ttry {\n\t\t\t\t\t\t\t\tconst response = await fetch(`/admin/widgets/${this.editingWidget.id}`, {\n\t\t\t\t\t\t\t\t\tmethod: 'PUT',\n\t\t\t\t\t\t\t\t\theaders: { 'Content-Type': 'application/json' },\n\t\t\t\t\t\t\t\t\tbody: JSON.stringify({\n\t\t\t\t\t\t\t\t\t\twidget_type: this.editingWidget.widget_type,\n\t\t\t\t\t\t\t\t\t\ttitle: this.editingWidget.title,\n\t\t\t\t\t\t\t\t\t\tcontent: this.editingWidget.content,\n\t\t\t\t\t\t\t\t\t\tis_active: this.editingWidget.is_active\n\t\t\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t\t});\n\t\t\t\t\t\t\t\tif (response.ok) { location.reload(); } else { alert('Error updating widget'); }\n\t\t\t\t\t\t\t} catch (err) { console.error(err); alert('Error updating widget'); }\n\t\t\t\t\t\t},\n\t\t\t\t\t\tasync deleteWidget(id) {\n\t\t\t\t\t\t\tif (!confirm('Are you sure you want to delete this widget?')) return;\n\t\t\t\t\t\t\ttry {\n\t\t\t\t\t\t\t\tconst response = await fetch(`/admin/widgets/${id}`, { method: 'DELETE' });\n\t\t\t\t\t\t\t\tif (response.ok) {\n\t\t\t\t\t\t\t\t\tdocument.getElementById(`widget-${id}`).remove();\n\t\t\t\t\t\t\t\t} else { alert('Error deleting widget'); }\n\t\t\t\t\t\t\t} catch (err) { console.error(err); alert('Error deleting widget'); }\n\t\t\t\t\t\t}\n\t\t\t\t\t};\n\t\t\t\t}\n\t\t\t\t</script>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = checkbox.Script().Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = textarea.Script().Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<div class=\"rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800\"><p class=\"text-gray-500 dark:text-gray-400\">No widget areas defined for the current theme.</p><p class=\"mt-1 text-sm text-gray-400 dark:text-gray-500\">Widget areas are defined in the theme's <code class=\"rounded bg-gray-100 px-1 py-0.5 text-xs dark:bg-gray-700\">theme.json</code> file.</p></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<div class=\"rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800\"><p class=\"text-gray-500 dark:text-gray-400\">No widget areas defined for the current theme.</p><p class=\"mt-1 text-sm text-gray-400 dark:text-gray-500\">Widget areas are defined in the theme's <code class=\"rounded bg-gray-100 px-1 py-0.5 text-xs dark:bg-gray-700\">theme.json</code> file.</p></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
