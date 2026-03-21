@@ -304,14 +304,15 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 							}
 							<label class="filter-label admin-media-sort-label">{ pc.T("media.sort_by") }:</label>
 							@selectbox.SelectBox(selectbox.Props{
-								Class: "admin-media-sort-select",
+								Class: "admin-media-sort-select select-no-clear",
 								Attributes: templ.Attributes{
 									"data-auto-submit": "true",
 									"data-sort-state":  sortStateValue(data.Pagination.SortDir),
 								},
 							}) {
-								@selectbox.Trigger(selectbox.TriggerProps{Name: "sort"})
+								@selectbox.Trigger(selectbox.TriggerProps{Name: "sort"}) {
 								@selectbox.Value(selectbox.ValueProps{})
+								}
 								@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
 									@selectbox.Item(selectbox.ItemProps{Value: "created_at", Selected: data.Pagination.SortField == "" || data.Pagination.SortField == "created_at"}) {
 										{ pc.T("label.created_at") }
@@ -329,14 +330,15 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 							}
 							<label class="filter-label admin-media-sort-label">{ pc.T("media.sort_direction") }:</label>
 							@selectbox.SelectBox(selectbox.Props{
-								Class: "admin-media-sort-select",
+								Class: "admin-media-sort-select select-no-clear",
 								Attributes: templ.Attributes{
 									"data-auto-submit": "true",
 									"data-sort-state":  sortStateValue(data.Pagination.SortDir),
 								},
 							}) {
-								@selectbox.Trigger(selectbox.TriggerProps{Name: "dir"})
+								@selectbox.Trigger(selectbox.TriggerProps{Name: "dir"}) {
 								@selectbox.Value(selectbox.ValueProps{})
+								}
 								@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
 									@selectbox.Item(selectbox.ItemProps{Value: "asc", Selected: data.Pagination.SortDir == sortDirAsc}) {
 										{ pc.T("pagination.sort_asc") }
@@ -426,7 +428,6 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 			};
 		}
 		</script>
-	@selectbox.Script()
 	}
 }
 
@@ -571,12 +572,25 @@ templ MediaUploadPage(pc *PageContext, data MediaUploadViewData) {
 						@label.Label(label.Props{For: "folder_id", Class: "block mb-1"}) {
 							{ pc.T("media.folder_optional") }
 						}
-						<select id="folder_id" name="folder_id" class="form-select">
-							<option value="">{ pc.T("media.no_folder") }</option>
-							for _, folder := range data.Folders {
-								<option value={ fmt.Sprintf("%d", folder.ID) }>{ folder.Name }</option>
+						@selectbox.SelectBox() {
+							@selectbox.Trigger(selectbox.TriggerProps{
+								Name: "folder_id",
+							}) {
+								@selectbox.Value(selectbox.ValueProps{Placeholder: pc.T("media.no_folder")})
 							}
-						</select>
+							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+								@selectbox.Item(selectbox.ItemProps{Value: "", Selected: true}) {
+									{ pc.T("media.no_folder") }
+								}
+								for _, folder := range data.Folders {
+									@selectbox.Item(selectbox.ItemProps{
+										Value: fmt.Sprintf("%d", folder.ID),
+									}) {
+										{ folder.Name }
+									}
+								}
+							}
+						}
 					</div>
 				}
 				<!-- Media Dropzone Component (Upload Mode) -->
@@ -828,17 +842,26 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 								@label.Label(label.Props{For: "folder_id", Class: "block mb-1"}) {
 									{ pc.T("media.folder") }
 								}
-								<select id="folder_id" name="folder_id" class="form-select">
-									<option value="">{ pc.T("media.no_folder") }</option>
-									for _, folder := range data.Folders {
-										<option
-											value={ fmt.Sprintf("%d", folder.ID) }
-											selected?={ data.HasCurrentFolder && data.CurrentFolderID == folder.ID }
-										>
-											{ folder.Name }
-										</option>
+								@selectbox.SelectBox() {
+									@selectbox.Trigger(selectbox.TriggerProps{
+										Name: "folder_id",
+									}) {
+										@selectbox.Value(selectbox.ValueProps{Placeholder: pc.T("media.no_folder")})
 									}
-								</select>
+									@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+										@selectbox.Item(selectbox.ItemProps{Value: "", Selected: !data.HasCurrentFolder}) {
+											{ pc.T("media.no_folder") }
+										}
+										for _, folder := range data.Folders {
+											@selectbox.Item(selectbox.ItemProps{
+												Value:    fmt.Sprintf("%d", folder.ID),
+												Selected: data.HasCurrentFolder && data.CurrentFolderID == folder.ID,
+											}) {
+												{ folder.Name }
+											}
+										}
+									}
+								}
 							</div>
 						}
 						<div class="form-actions">
@@ -905,7 +928,6 @@ templ MediaEditPage(pc *PageContext, data MediaEditViewData) {
 			});
 		}
 		</script>
-		@textarea.Script()
 	}
 }
 

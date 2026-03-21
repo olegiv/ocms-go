@@ -13,6 +13,8 @@
   --color-foreground: oklch(0.145 0 0);
   --color-card: oklch(1 0 0);
   --color-card-foreground: oklch(0.145 0 0);
+  --color-popover: oklch(1 0 0);
+  --color-popover-foreground: oklch(0.145 0 0);
   --color-primary: oklch(0.205 0 0);
   --color-primary-foreground: oklch(0.985 0 0);
   --color-secondary: oklch(0.97 0 0);
@@ -221,4 +223,12 @@
   font-size: 0.875rem;
   color: var(--color-foreground);
   cursor: pointer;
+}
+
+/* Hide clear button on selectboxes that must always have a value */
+.select-no-clear [data-tui-selectbox-clear-trigger] {
+  display: none !important;
+}
+.select-no-clear [data-tui-selectbox-chevron] {
+  display: inline-flex !important;
 }

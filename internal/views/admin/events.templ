@@ -8,6 +8,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
@@ -91,22 +92,40 @@ templ eventsFilterBar(pc *PageContext, data EventsListData) {
 		<div class="filter-bar">
 			<form method="get" action="/admin/events" class="filter-form">
 				<div class="filter-group">
-					<label for="level" class="filter-label">{ pc.T("events.level") }</label>
-					<select name="level" id="level" class="form-select form-select-sm">
-						<option value="">{ pc.T("events.all_levels") }</option>
-						for _, lvl := range data.Levels {
-							<option value={ lvl } selected?={ lvl == data.Level }>{ lvl }</option>
+					<label class="filter-label">{ pc.T("events.level") }</label>
+					@selectbox.SelectBox(selectbox.Props{Attributes: templ.Attributes{"data-auto-submit": "true"}}) {
+						@selectbox.Trigger(selectbox.TriggerProps{Name: "level"}) {
+							@selectbox.Value(selectbox.ValueProps{Placeholder: pc.T("events.all_levels")})
 						}
-					</select>
+						@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+							@selectbox.Item(selectbox.ItemProps{Value: "", Selected: data.Level == ""}) {
+								{ pc.T("events.all_levels") }
+							}
+							for _, lvl := range data.Levels {
+								@selectbox.Item(selectbox.ItemProps{Value: lvl, Selected: lvl == data.Level}) {
+									{ lvl }
+								}
+							}
+						}
+					}
 				</div>
 				<div class="filter-group">
-					<label for="category" class="filter-label">{ pc.T("events.category") }</label>
-					<select name="category" id="category" class="form-select form-select-sm">
-						<option value="">{ pc.T("events.all_categories") }</option>
-						for _, cat := range data.Categories {
-							<option value={ cat } selected?={ cat == data.Category }>{ cat }</option>
+					<label class="filter-label">{ pc.T("events.category") }</label>
+					@selectbox.SelectBox(selectbox.Props{Attributes: templ.Attributes{"data-auto-submit": "true"}}) {
+						@selectbox.Trigger(selectbox.TriggerProps{Name: "category"}) {
+							@selectbox.Value(selectbox.ValueProps{Placeholder: pc.T("events.all_categories")})
 						}
-					</select>
+						@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+							@selectbox.Item(selectbox.ItemProps{Value: "", Selected: data.Category == ""}) {
+								{ pc.T("events.all_categories") }
+							}
+							for _, cat := range data.Categories {
+								@selectbox.Item(selectbox.ItemProps{Value: cat, Selected: cat == data.Category}) {
+									{ cat }
+								}
+							}
+						}
+					}
 				</div>
 				<div class="filter-actions">
 					@button.Button(button.Props{Size: button.SizeSm, Type: button.TypeSubmit}) {

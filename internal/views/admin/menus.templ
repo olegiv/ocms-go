@@ -249,12 +249,13 @@ templ MenuFormPage(pc *PageContext, data MenuFormData) {
 						@label.Label(label.Props{For: "language_code", Class: "block mb-1"}) {
 							{ pc.T("label.language") }
 						}
-						@selectbox.SelectBox() {
+						@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
 							@selectbox.Trigger(selectbox.TriggerProps{
 								Name:     "language_code",
 								HasError: data.Errors["language_code"] != "",
-							})
+							}) {
 							@selectbox.Value(selectbox.ValueProps{})
+							}
 							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
 								for _, lang := range data.Languages {
 									@selectbox.Item(selectbox.ItemProps{
@@ -288,7 +289,6 @@ templ MenuFormPage(pc *PageContext, data MenuFormData) {
 		if data.IsEdit && data.Menu != nil {
 			@menuBuilderSection(pc, data)
 		}
-		@selectbox.Script()
 	}
 }
 
@@ -579,7 +579,6 @@ templ menuBuilderSection(pc *PageContext, data MenuFormData) {
 			</div>
 		</template>
 	</div>
-	@checkbox.Script()
 	<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/menu-builder.js"></script>
 }
 

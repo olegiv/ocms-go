@@ -303,7 +303,7 @@ templ RedirectFormPage(pc *PageContext, data RedirectFormData) {
 							@label.Label(label.Props{For: "status_code", Class: "block mb-1"}) {
 								{ pc.T("redirects.status_code") } <span class="required">*</span>
 							}
-							@selectbox.SelectBox() {
+							@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
 								@selectbox.Trigger(selectbox.TriggerProps{
 									Name:     "status_code",
 									HasError: data.Errors["status_code"] != "",
@@ -334,7 +334,7 @@ templ RedirectFormPage(pc *PageContext, data RedirectFormData) {
 							@label.Label(label.Props{For: "target_type", Class: "block mb-1"}) {
 								{ pc.T("redirects.target_type") }
 							}
-							@selectbox.SelectBox() {
+							@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
 								@selectbox.Trigger(selectbox.TriggerProps{
 									Name:     "target_type",
 									HasError: data.Errors["target_type"] != "",
@@ -460,8 +460,6 @@ templ RedirectFormPage(pc *PageContext, data RedirectFormData) {
 				</div>
 			}
 		}
-		@checkbox.Script()
-		@selectbox.Script()
 	}
 }
 

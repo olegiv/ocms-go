@@ -300,10 +300,11 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 							@selectbox.Trigger(selectbox.TriggerProps{
 								Name:     "parent_id",
 								HasError: data.Errors["parent_id"] != "",
-							})
-							@selectbox.Value(selectbox.ValueProps{
-								Placeholder: pc.T("categories.no_parent"),
-							})
+							}) {
+								@selectbox.Value(selectbox.ValueProps{
+									Placeholder: pc.T("categories.no_parent"),
+								})
+							}
 							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
 								@selectbox.Item(selectbox.ItemProps{
 									Value:    "",
@@ -357,14 +358,15 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 							@label.Label(label.Props{For: "language_code", Class: "block mb-1"}) {
 								{ pc.T("label.language") }
 							}
-							@selectbox.SelectBox() {
+							@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
 								@selectbox.Trigger(selectbox.TriggerProps{
 									Name:     catLanguageFieldName(data.IsEdit),
 									Disabled: data.IsEdit,
-								})
-								@selectbox.Value(selectbox.ValueProps{
-									Placeholder: pc.T("label.language"),
-								})
+								}) {
+									@selectbox.Value(selectbox.ValueProps{
+										Placeholder: pc.T("label.language"),
+									})
+								}
 								@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
 									for _, lang := range data.AllLanguages {
 										@selectbox.Item(selectbox.ItemProps{
@@ -425,8 +427,6 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 			}
 		}
 		</script>
-		@textarea.Script()
-		@selectbox.Script()
 	}
 }
 

@@ -434,14 +434,15 @@ templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 									@label.Label(label.Props{For: "language_code", Class: "block mb-1"}) {
 										{ pc.T("label.language") }
 									}
-									@selectbox.SelectBox() {
+									@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
 										@selectbox.Trigger(selectbox.TriggerProps{
 											Name:     languageSelectName(data.IsEdit),
 											Disabled: data.IsEdit,
-										})
+										}) {
 										@selectbox.Value(selectbox.ValueProps{
 											Placeholder: "Select language",
 										})
+										}
 										@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
 											for _, lang := range data.AllLanguages {
 												@selectbox.Item(selectbox.ItemProps{
@@ -493,9 +494,6 @@ templ FormsFormPage(pc *PageContext, data FormFormViewData) {
 		if data.IsEdit {
 			@formsFieldBuilderScript(pc, data)
 		}
-		@checkbox.Script()
-		@selectbox.Script()
-		@textarea.Script()
 	}
 }
 
@@ -1022,7 +1020,6 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 				}
 			}
 		}
-		@checkbox.Script()
 	}
 }
 

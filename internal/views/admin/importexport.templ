@@ -9,6 +9,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/checkbox"
 	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 )
 
 // ExportViewData holds data for the export page.
@@ -118,11 +119,22 @@ templ ExportPage(pc *PageContext, data ExportViewData) {
 								@label.Label(label.Props{For: "page_status", Class: "block mb-1"}) {
 									{ pc.T("export.page_status") }
 								}
-								<select id="page_status" name="page_status" class="form-select">
-									<option value="all">{ pc.T("export.status_all") }</option>
-									<option value="published">{ pc.T("export.status_published") }</option>
-									<option value="draft">{ pc.T("export.status_draft") }</option>
-								</select>
+								@selectbox.SelectBox(selectbox.Props{}) {
+									@selectbox.Trigger(selectbox.TriggerProps{Name: "page_status"}) {
+										@selectbox.Value(selectbox.ValueProps{Placeholder: pc.T("export.status_all")})
+									}
+									@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+										@selectbox.Item(selectbox.ItemProps{Value: "all", Selected: true}) {
+											{ pc.T("export.status_all") }
+										}
+										@selectbox.Item(selectbox.ItemProps{Value: "published"}) {
+											{ pc.T("export.status_published") }
+										}
+										@selectbox.Item(selectbox.ItemProps{Value: "draft"}) {
+											{ pc.T("export.status_draft") }
+										}
+									}
+								}
 							</div>
 							<div class="flex items-start gap-3">
 								@checkbox.Checkbox(checkbox.Props{
@@ -298,7 +310,6 @@ templ ExportPage(pc *PageContext, data ExportViewData) {
 				</form>
 			}
 		}
-		@checkbox.Script()
 	}
 }
 
@@ -322,7 +333,6 @@ templ ImportPage(pc *PageContext, data ImportViewData) {
 		if data.ImportResult != nil {
 			@importResults(pc, data)
 		}
-		@checkbox.Script()
 	}
 }
 
@@ -479,11 +489,18 @@ templ importOptionsForm(pc *PageContext, data ImportViewData) {
 				<div class="import-section">
 					<h4 class="import-section-title">{ pc.T("import.conflict_strategy") }</h4>
 					<div class="form-group">
-						<select name="conflict_strategy" class="form-select">
-							for _, strategy := range data.ConflictStrategies {
-								<option value={ strategy.Value }>{ strategy.Label } - { strategy.Description }</option>
+						@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
+							@selectbox.Trigger(selectbox.TriggerProps{Name: "conflict_strategy"}) {
+								@selectbox.Value(selectbox.ValueProps{Placeholder: pc.T("import.conflict_strategy")})
 							}
-						</select>
+							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+								for _, strategy := range data.ConflictStrategies {
+									@selectbox.Item(selectbox.ItemProps{Value: strategy.Value}) {
+										{ strategy.Label } - { strategy.Description }
+									}
+								}
+							}
+						}
 					</div>
 				</div>
 				<!-- Content Section -->

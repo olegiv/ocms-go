@@ -12,8 +12,9 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
-	"github.com/olegiv/ocms-go/internal/views/components/label"
 	"github.com/olegiv/ocms-go/internal/views/components/input"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
@@ -324,16 +325,23 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 							@label.Label(label.Props{For: "direction", Class: "block mb-1"}) {
 								{ pc.T("languages.text_direction") } <span class="required">*</span>
 							}
-							<select
-								id="direction"
-								name="direction"
-								class={ templ.KV("form-input form-select", true), templ.KV("is-invalid", data.Errors["direction"] != "") }
-								x-model="direction"
-								required
-							>
-								<option value="ltr" selected?={ languageCurrentDirection(data) == "ltr" }>{ pc.T("languages.ltr") }</option>
-								<option value="rtl" selected?={ languageCurrentDirection(data) == "rtl" }>{ pc.T("languages.rtl") }</option>
-							</select>
+							@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
+								@selectbox.Trigger(selectbox.TriggerProps{
+									Name:     "direction",
+									HasError: data.Errors["direction"] != "",
+									Attributes: templ.Attributes{
+										"id":       "direction",
+										"x-model":  "direction",
+										"required": true,
+									},
+								}) {
+									@selectbox.Value(selectbox.ValueProps{})
+								}
+								@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+									@selectbox.Item(selectbox.ItemProps{Value: "ltr", Selected: languageCurrentDirection(data) == "ltr"}) { { pc.T("languages.ltr") } }
+									@selectbox.Item(selectbox.ItemProps{Value: "rtl", Selected: languageCurrentDirection(data) == "rtl"}) { { pc.T("languages.rtl") } }
+								}
+							}
 							if data.Errors["direction"] != "" {
 								<span class="form-error">{ data.Errors["direction"] }</span>
 							} else {

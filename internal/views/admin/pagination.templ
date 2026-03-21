@@ -9,6 +9,7 @@ import (
 	"strings"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 )
 
 const (
@@ -247,15 +248,18 @@ templ Pagination(pc *PageContext, p PaginationData) {
 				if p.HasPerPageSelector() {
 					<label class="flex items-center gap-2 text-sm text-muted-foreground">
 						<span>{ pc.T("pagination.items_per_page") }</span>
-						<select
-							class="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
-							data-per-page-selector="true"
-							data-per-page-param={ p.PerPageSelector.Param }
-						>
-							for _, option := range p.PerPageSelector.Options {
-								<option value={ fmt.Sprintf("%d", option) } selected?={ option == p.PerPageSelector.Current }>{ fmt.Sprintf("%d", option) }</option>
+						@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear", Attributes: templ.Attributes{"data-auto-submit": "true", "data-per-page-selector": "true", "data-per-page-param": p.PerPageSelector.Param}}) {
+							@selectbox.Trigger(selectbox.TriggerProps{Name: "per_page"}) {
+								@selectbox.Value(selectbox.ValueProps{})
 							}
-						</select>
+							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+								for _, option := range p.PerPageSelector.Options {
+									@selectbox.Item(selectbox.ItemProps{Value: fmt.Sprintf("%d", option), Selected: option == p.PerPageSelector.Current}) {
+										{ fmt.Sprintf("%d", option) }
+									}
+								}
+							}
+						}
 					</label>
 				}
 				if p.HasBulkAction() {

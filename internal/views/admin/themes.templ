@@ -195,7 +195,6 @@ templ ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) {
 		}
 		@themeSettingsScript(pc)
 		@themeSettingsStyle()
-		@selectbox.Script()
 	}
 }
 
@@ -221,13 +220,14 @@ templ themeSettingColor(pc *PageContext, data ThemeSettingsViewData, setting The
 
 // themeSettingSelect renders a select dropdown.
 templ themeSettingSelect(pc *PageContext, data ThemeSettingsViewData, setting ThemeSettingView) {
-	@selectbox.SelectBox(selectbox.Props{ID: setting.Key}) {
+	@selectbox.SelectBox(selectbox.Props{ID: setting.Key, Class: "select-no-clear"}) {
 		@selectbox.Trigger(selectbox.TriggerProps{
 			Name:     setting.Key,
 			Disabled: data.IsDemoMode,
 			HasError: setting.Error != "",
-		})
+		}) {
 		@selectbox.Value(selectbox.ValueProps{})
+		}
 		@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
 			for _, opt := range setting.Options {
 				@selectbox.Item(selectbox.ItemProps{
