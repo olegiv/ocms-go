@@ -274,7 +274,8 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 									Type:        input.TypeText,
 									Value:       data.Search,
 									Placeholder: pc.T("media.search_files"),
-									Attributes:  templ.Attributes{"aria-label": pc.T("media.search_files"), "class": "search-input"},
+									Class:       "search-input",
+								Attributes:  templ.Attributes{"aria-label": pc.T("media.search_files")},
 								})
 								if data.Search != "" {
 									<a href={ templ.SafeURL(mediaClearSearchURL(data.Pagination, data.Filter, data.FolderID)) } class="search-clear" title={ pc.T("btn.clear") }>&times;</a>
