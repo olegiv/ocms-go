@@ -268,22 +268,23 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 								<input type="hidden" name="per_page" value={ fmt.Sprintf("%d", data.Pagination.PerPageSelector.Current) }/>
 							}
 							<div class="search-input-wrapper">
-								@iconSearch16()
 								@input.Input(input.Props{
 									Name:        "q",
-									Type:        input.TypeText,
+									Type:        input.TypeSearch,
 									Value:       data.Search,
 									Placeholder: pc.T("media.search_files"),
-									Class:       "search-input",
-								Attributes:  templ.Attributes{"aria-label": pc.T("media.search_files")},
+									Class:       "form-control-sm",
+									Attributes:  templ.Attributes{"aria-label": pc.T("media.search_files")},
 								})
+								@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Class: "search-btn", Attributes: templ.Attributes{"title": pc.T("btn.search")}}) {
+									@mediaIconSearch14()
+								}
 								if data.Search != "" {
-									<a href={ templ.SafeURL(mediaClearSearchURL(data.Pagination, data.Filter, data.FolderID)) } class="search-clear" title={ pc.T("btn.clear") }>&times;</a>
+									@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: mediaClearSearchURL(data.Pagination, data.Filter, data.FolderID), Class: "clear-search-btn", Attributes: templ.Attributes{"title": pc.T("btn.clear")}}) {
+										@mediaIconX14()
+									}
 								}
 							</div>
-							@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit}) {
-								{ pc.T("btn.search") }
-							}
 						</form>
 					</div>
 					<div class="filter-group admin-media-sort-controls">
@@ -959,8 +960,12 @@ templ iconFolder16() {
 	<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
 }
 
-templ iconSearch16() {
-	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+templ mediaIconSearch14() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+}
+
+templ mediaIconX14() {
+	<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
 }
 
 templ iconPencil12() {
