@@ -56,11 +56,7 @@ templ EventsListPage(pc *PageContext, data EventsListData) {
 				<div class="table-responsive">
 					@eventsTable(pc, data)
 				</div>
-				if data.Pagination.ShouldShow() {
-					@card.Footer() {
-						@Pagination(pc, data.Pagination)
-					}
-				}
+				@Pagination(pc, data.Pagination)
 			}
 			@eventsScript()
 		} else {

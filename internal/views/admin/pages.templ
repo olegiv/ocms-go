@@ -601,11 +601,7 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 						}
 					}
 				</div>
-				if data.Pagination.ShouldShow() || data.Pagination.HasBulkAction() {
-					@card.Footer() {
-						@Pagination(pc, data.Pagination)
-					}
-				}
+				@Pagination(pc, data.Pagination)
 			}
 		} else {
 			@card.Card() {
@@ -1963,11 +1959,7 @@ templ PageVersionsPage(pc *PageContext, data PageVersionsViewData) {
 						}
 					}
 				</div>
-				if data.Pagination.ShouldShow() {
-					@card.Footer() {
-						@Pagination(pc, data.Pagination)
-					}
-				}
+				@Pagination(pc, data.Pagination)
 			}
 		} else {
 			@card.Card() {

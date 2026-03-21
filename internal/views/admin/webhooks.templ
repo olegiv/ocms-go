@@ -726,11 +726,7 @@ templ WebhookDeliveriesPage(pc *PageContext, data WebhookDeliveriesViewData) {
 						}
 					}
 				</div>
-				if data.Pagination.TotalPages > 1 {
-					@card.Footer() {
-						@Pagination(pc, data.Pagination)
-					}
-				}
+				@Pagination(pc, data.Pagination)
 			}
 		} else {
 			<div class="rounded-lg border border-gray-200 bg-white p-12 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800">

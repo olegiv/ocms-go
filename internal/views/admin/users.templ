@@ -192,11 +192,7 @@ templ UsersListPage(pc *PageContext, data UsersListData) {
 						}
 					</div>
 				}
-				if data.Pagination.ShouldShow() || data.Pagination.HasBulkAction() {
-					@card.Footer() {
-						@Pagination(pc, data.Pagination)
-					}
-				}
+				@Pagination(pc, data.Pagination)
 			}
 		} else {
 			@card.Card() {

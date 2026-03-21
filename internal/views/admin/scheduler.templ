@@ -614,11 +614,7 @@ templ SchedulerTaskRunsPage(pc *PageContext, data SchedulerTaskRunsViewData) {
 						}
 					}
 				</div>
-				if data.Pagination.TotalPages > 1 {
-					@card.Footer() {
-						@Pagination(pc, data.Pagination)
-					}
-				}
+				@Pagination(pc, data.Pagination)
 			}
 		} else {
 			@card.Card() {

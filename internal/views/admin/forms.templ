@@ -1008,13 +1008,7 @@ templ FormsSubmissionsPage(pc *PageContext, data SubmissionsListViewData) {
 					}
 				}
 			</div>
-			if data.Pagination.ShouldShow() || data.Pagination.HasBulkAction() {
-				@card.Card(card.Props{}) {
-					@card.Footer(card.FooterProps{}) {
-						@Pagination(pc, data.Pagination)
-					}
-				}
-			}
+				@Pagination(pc, data.Pagination)
 		} else {
 			@card.Card(card.Props{}) {
 				@card.Content(card.ContentProps{}) {

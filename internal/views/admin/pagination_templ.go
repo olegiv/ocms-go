@@ -321,7 +321,7 @@ func Pagination(pc *PageContext, p PaginationData) templ.Component {
 		}
 		ctx = templ.ClearChildren(ctx)
 		if p.ShouldShow() || p.HasBulkAction() || p.HasPerPageSelector() {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"flex items-center justify-between flex-wrap gap-4\"><div class=\"text-sm text-muted-foreground\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"flex items-center justify-between flex-wrap gap-x-6 gap-y-3 border-t border-border bg-muted/30 px-4 py-3\"><div class=\"text-sm text-muted-foreground\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -414,7 +414,7 @@ func Pagination(pc *PageContext, p PaginationData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if p.HasPerPageSelector() {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<label class=\"flex items-center gap-2 text-sm text-muted-foreground\"><span>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<label class=\"flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap\"><span>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

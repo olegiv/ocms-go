@@ -179,11 +179,7 @@ templ TagsListPage(pc *PageContext, data TagsListData) {
 						}
 					}
 				</div>
-				if data.Pagination.ShouldShow() || data.Pagination.HasBulkAction() {
-					@card.Footer() {
-						@Pagination(pc, data.Pagination)
-					}
-				}
+				@Pagination(pc, data.Pagination)
 			}
 		} else {
 			@card.Card(card.Props{}) {

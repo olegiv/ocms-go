@@ -372,11 +372,7 @@ templ MediaLibraryPage(pc *PageContext, data MediaLibraryViewData) {
 								@mediaGridItem(pc, item, data.Pagination.BulkScope())
 							}
 						</div>
-						if data.Pagination.ShouldShow() || data.Pagination.HasBulkAction() {
-							@card.Footer() {
-								@Pagination(pc, data.Pagination)
-							}
-						}
+						@Pagination(pc, data.Pagination)
 					}
 				} else {
 					@card.Card(card.Props{}) {
