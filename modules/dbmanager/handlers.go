@@ -12,6 +12,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 )
@@ -63,7 +64,7 @@ func (m *Module) renderDashboard(w http.ResponseWriter, r *http.Request, lang st
 // handleDashboard handles GET /admin/dbmanager - shows the database manager dashboard.
 func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
-	if user == nil || user.Role != middleware.RoleAdmin {
+	if user == nil || user.Role != model.RoleAdmin {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -84,7 +85,7 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 // handleExecute handles POST /admin/dbmanager/execute - executes a SQL query.
 func (m *Module) handleExecute(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
-	if user == nil || user.Role != middleware.RoleAdmin {
+	if user == nil || user.Role != model.RoleAdmin {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}

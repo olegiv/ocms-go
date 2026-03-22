@@ -43,16 +43,16 @@ type WebhookEventInfo struct {
 // AllWebhookEvents returns all available webhook event types with descriptions.
 func AllWebhookEvents() []WebhookEventInfo {
 	return []WebhookEventInfo{
-		{EventPageCreated, "When a new page is created"},
-		{EventPageUpdated, "When a page is updated"},
-		{EventPageDeleted, "When a page is deleted"},
-		{EventPagePublished, "When a page is published"},
-		{EventPageUnpublished, "When a page is unpublished"},
-		{EventMediaUploaded, "When media is uploaded"},
-		{EventMediaDeleted, "When media is deleted"},
-		{EventFormSubmitted, "When a form is submitted"},
-		{EventUserCreated, "When a user is created"},
-		{EventUserDeleted, "When a user is deleted"},
+		{Type: EventPageCreated, Description: "When a new page is created"},
+		{Type: EventPageUpdated, Description: "When a page is updated"},
+		{Type: EventPageDeleted, Description: "When a page is deleted"},
+		{Type: EventPagePublished, Description: "When a page is published"},
+		{Type: EventPageUnpublished, Description: "When a page is unpublished"},
+		{Type: EventMediaUploaded, Description: "When media is uploaded"},
+		{Type: EventMediaDeleted, Description: "When media is deleted"},
+		{Type: EventFormSubmitted, Description: "When a form is submitted"},
+		{Type: EventUserCreated, Description: "When a user is created"},
+		{Type: EventUserDeleted, Description: "When a user is deleted"},
 	}
 }
 

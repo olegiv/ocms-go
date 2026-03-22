@@ -47,14 +47,14 @@ type ConfigFieldDefinition struct {
 // even on a newly created site without seeding. These fields are displayed
 // in the admin config page and can be edited by administrators.
 var StandardConfigFields = []ConfigFieldDefinition{
-	{ConfigKeySiteName, "Opossum CMS", ConfigTypeString, "The name of your site"},
-	{ConfigKeySiteDescription, "", ConfigTypeString, "A short description of your site"},
-	{ConfigKeySiteURL, "", ConfigTypeString, "Full site URL for canonical links and OG tags (e.g., https://example.com)"},
-	{ConfigKeyDefaultOGImage, "", ConfigTypeString, "Default Open Graph image URL for social sharing (1200x630px recommended)"},
-	{ConfigKeyCopyright, "", ConfigTypeString, "Footer copyright text (leave empty for automatic)"},
-	{ConfigKeyPoweredBy, "Powered by oCMS", ConfigTypeString, "Footer powered by text"},
-	{ConfigKeyPostsPerPage, "10", ConfigTypeInt, "Number of posts to display per page"},
-	{ConfigKeyAdminEmail, "admin@example.com", ConfigTypeString, "Administrator email address"},
+	{Key: ConfigKeySiteName, DefaultValue: "Opossum CMS", Type: ConfigTypeString, Description: "The name of your site"},
+	{Key: ConfigKeySiteDescription, DefaultValue: "", Type: ConfigTypeString, Description: "A short description of your site"},
+	{Key: ConfigKeySiteURL, DefaultValue: "", Type: ConfigTypeString, Description: "Full site URL for canonical links and OG tags (e.g., https://example.com)"},
+	{Key: ConfigKeyDefaultOGImage, DefaultValue: "", Type: ConfigTypeString, Description: "Default Open Graph image URL for social sharing (1200x630px recommended)"},
+	{Key: ConfigKeyCopyright, DefaultValue: "", Type: ConfigTypeString, Description: "Footer copyright text (leave empty for automatic)"},
+	{Key: ConfigKeyPoweredBy, DefaultValue: "Powered by oCMS", Type: ConfigTypeString, Description: "Footer powered by text"},
+	{Key: ConfigKeyPostsPerPage, DefaultValue: "10", Type: ConfigTypeInt, Description: "Number of posts to display per page"},
+	{Key: ConfigKeyAdminEmail, DefaultValue: "admin@example.com", Type: ConfigTypeString, Description: "Administrator email address"},
 }
 
 // IsTranslatableConfigKey checks if a config key supports translations.

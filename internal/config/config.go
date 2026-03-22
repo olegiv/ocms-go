@@ -194,29 +194,29 @@ func applyProductionSecurityDefaults(cfg *Config) {
 	}
 
 	// Apply secure defaults only when the operator did not explicitly set a value.
-	setBoolIfUnset("OCMS_REQUIRE_FORM_CAPTCHA", &cfg.RequireFormCaptcha, true)
-	setBoolIfUnset("OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION", &cfg.RequireWebhookFormDataMinimization, true)
-	setBoolIfUnset("OCMS_REQUIRE_TRUSTED_PROXIES", &cfg.RequireTrustedProxies, true)
-	setBoolIfUnset("OCMS_REQUIRE_API_ALLOWED_CIDRS", &cfg.RequireAPIAllowedCIDRs, true)
-	setBoolIfUnset("OCMS_REQUIRE_API_KEY_EXPIRY", &cfg.RequireAPIKeyExpiry, true)
-	setBoolIfUnset("OCMS_REQUIRE_API_KEY_SOURCE_CIDRS", &cfg.RequireAPIKeySourceCIDRs, true)
-	setBoolIfUnset("OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE", &cfg.RevokeAPIKeyOnSourceIPChange, true)
-	setBoolIfUnset("OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS", &cfg.RequireEmbedAllowedOrigins, true)
-	setBoolIfUnset("OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS", &cfg.RequireEmbedAllowedUpstreamHosts, true)
-	setBoolIfUnset("OCMS_REQUIRE_HTTPS_OUTBOUND", &cfg.RequireHTTPSOutbound, true)
-	setBoolIfUnset("OCMS_SANITIZE_PAGE_HTML", &cfg.SanitizePageHTML, true)
-	setBoolIfUnset("OCMS_REQUIRE_SANITIZE_PAGE_HTML", &cfg.RequireSanitizePageHTML, true)
-	setBoolIfUnset("OCMS_BLOCK_SUSPICIOUS_PAGE_HTML", &cfg.BlockSuspiciousPageHTML, true)
-	setBoolIfUnset("OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML", &cfg.RequireBlockSuspiciousPageHTML, true)
-	setBoolIfUnset("OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS", &cfg.RequireWebhookAllowedHosts, true)
+	setBoolIfUnset("OCMS_REQUIRE_FORM_CAPTCHA", &cfg.RequireFormCaptcha)
+	setBoolIfUnset("OCMS_REQUIRE_WEBHOOK_FORM_DATA_MINIMIZATION", &cfg.RequireWebhookFormDataMinimization)
+	setBoolIfUnset("OCMS_REQUIRE_TRUSTED_PROXIES", &cfg.RequireTrustedProxies)
+	setBoolIfUnset("OCMS_REQUIRE_API_ALLOWED_CIDRS", &cfg.RequireAPIAllowedCIDRs)
+	setBoolIfUnset("OCMS_REQUIRE_API_KEY_EXPIRY", &cfg.RequireAPIKeyExpiry)
+	setBoolIfUnset("OCMS_REQUIRE_API_KEY_SOURCE_CIDRS", &cfg.RequireAPIKeySourceCIDRs)
+	setBoolIfUnset("OCMS_REVOKE_API_KEY_ON_SOURCE_IP_CHANGE", &cfg.RevokeAPIKeyOnSourceIPChange)
+	setBoolIfUnset("OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS", &cfg.RequireEmbedAllowedOrigins)
+	setBoolIfUnset("OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS", &cfg.RequireEmbedAllowedUpstreamHosts)
+	setBoolIfUnset("OCMS_REQUIRE_HTTPS_OUTBOUND", &cfg.RequireHTTPSOutbound)
+	setBoolIfUnset("OCMS_SANITIZE_PAGE_HTML", &cfg.SanitizePageHTML)
+	setBoolIfUnset("OCMS_REQUIRE_SANITIZE_PAGE_HTML", &cfg.RequireSanitizePageHTML)
+	setBoolIfUnset("OCMS_BLOCK_SUSPICIOUS_PAGE_HTML", &cfg.BlockSuspiciousPageHTML)
+	setBoolIfUnset("OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML", &cfg.RequireBlockSuspiciousPageHTML)
+	setBoolIfUnset("OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS", &cfg.RequireWebhookAllowedHosts)
 	setIntIfUnset("OCMS_API_KEY_MAX_TTL_DAYS", &cfg.APIKeyMaxTTLDays, DefaultProductionAPIKeyMaxTTLDays)
 }
 
-func setBoolIfUnset(key string, target *bool, value bool) {
+func setBoolIfUnset(key string, target *bool) {
 	if _, ok := os.LookupEnv(key); ok {
 		return
 	}
-	*target = value
+	*target = true
 }
 
 func setIntIfUnset(key string, target *int, value int) {

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/olegiv/ocms-go/internal/model"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 )
 
@@ -73,15 +74,15 @@ func TestIsValidRole(t *testing.T) {
 }
 
 func TestValidRoles(t *testing.T) {
-	expected := []string{RoleAdmin, RoleEditor, RolePublic}
+	expected := []string{model.RoleAdmin, model.RoleEditor, model.RolePublic}
 
-	if len(ValidRoles) != len(expected) {
-		t.Errorf("ValidRoles has %d elements; want %d", len(ValidRoles), len(expected))
+	if len(model.ValidRoles) != len(expected) {
+		t.Errorf("ValidRoles has %d elements; want %d", len(model.ValidRoles), len(expected))
 	}
 
 	for i, role := range expected {
-		if ValidRoles[i] != role {
-			t.Errorf("ValidRoles[%d] = %q; want %q", i, ValidRoles[i], role)
+		if model.ValidRoles[i] != role {
+			t.Errorf("ValidRoles[%d] = %q; want %q", i, model.ValidRoles[i], role)
 		}
 	}
 }
@@ -292,7 +293,7 @@ func TestUsersListData(t *testing.T) {
 func TestUserFormData(t *testing.T) {
 	data := adminviews.UserFormData{
 		User:       nil,
-		Roles:      ValidRoles,
+		Roles:      model.ValidRoles,
 		Errors:     map[string]string{"email": "Invalid"},
 		FormValues: map[string]string{"email": "test@example.com"},
 		IsEdit:     true,

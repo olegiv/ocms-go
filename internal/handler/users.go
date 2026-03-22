@@ -27,18 +27,6 @@ import (
 	"github.com/olegiv/ocms-go/internal/webhook"
 )
 
-const (
-	// RoleAdmin represents an administrator with full system access.
-	RoleAdmin = "admin"
-	// RoleEditor represents an editor who can manage content.
-	RoleEditor = "editor"
-	// RolePublic represents public users with no admin access.
-	RolePublic = "public"
-)
-
-// ValidRoles contains all valid user roles.
-var ValidRoles = []string{RoleAdmin, RoleEditor, RolePublic}
-
 // UsersPerPage is the number of users to display per page.
 const UsersPerPage = 10
 
@@ -172,7 +160,7 @@ func (h *UsersHandler) NewForm(w http.ResponseWriter, r *http.Request) {
 
 	lang := h.renderer.GetAdminLang(r)
 	data := adminviews.UserFormData{
-		Roles:      ValidRoles,
+		Roles:      model.ValidRoles,
 		Errors:     make(map[string]string),
 		FormValues: make(map[string]string),
 		IsEdit:     false,
@@ -254,7 +242,7 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if len(validationErrors) > 0 {
 		lang := h.renderer.GetAdminLang(r)
 		data := adminviews.UserFormData{
-			Roles:      ValidRoles,
+			Roles:      model.ValidRoles,
 			Errors:     validationErrors,
 			FormValues: formValues,
 			IsEdit:     false,
@@ -319,7 +307,7 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 			Email: editUser.Email,
 			Role:  editUser.Role,
 		},
-		Roles:  ValidRoles,
+		Roles:  model.ValidRoles,
 		Errors: make(map[string]string),
 		FormValues: map[string]string{
 			"email": editUser.Email,
@@ -419,8 +407,8 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Business rule: Cannot demote yourself from admin if you're the last admin
-	if currentUser.ID == id && editUser.Role == RoleAdmin && role != RoleAdmin {
-		adminCount, err := h.queries.CountUsersByRole(r.Context(), RoleAdmin)
+	if currentUser.ID == id && editUser.Role == model.RoleAdmin && role != model.RoleAdmin {
+		adminCount, err := h.queries.CountUsersByRole(r.Context(), model.RoleAdmin)
 		if err != nil {
 			slog.Error("failed to count admins", "error", err)
 			validationErrors["role"] = "Error checking admin count"
@@ -438,7 +426,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 				Email: editUser.Email,
 				Role:  editUser.Role,
 			},
-			Roles:      ValidRoles,
+			Roles:      model.ValidRoles,
 			Errors:     validationErrors,
 			FormValues: formValues,
 			IsEdit:     true,
@@ -530,8 +518,8 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Business rule: Cannot delete the last admin
-	if deleteUser.Role == RoleAdmin {
-		adminCount, err := h.queries.CountUsersByRole(r.Context(), RoleAdmin)
+	if deleteUser.Role == model.RoleAdmin {
+		adminCount, err := h.queries.CountUsersByRole(r.Context(), model.RoleAdmin)
 		if err != nil {
 			slog.Error("failed to count admins", "error", err)
 			h.sendDeleteError(w, "Error checking admin count")
@@ -608,8 +596,8 @@ func (h *UsersHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		if deleteUser.Role == RoleAdmin {
-			adminCount, err := h.queries.CountUsersByRole(r.Context(), RoleAdmin)
+		if deleteUser.Role == model.RoleAdmin {
+			adminCount, err := h.queries.CountUsersByRole(r.Context(), model.RoleAdmin)
 			if err != nil {
 				slog.Error("failed to count admins for bulk delete", "error", err, "user_id", id)
 				failed = append(failed, bulkActionFailedItem{ID: id, Reason: "Error checking admin count"})
@@ -645,7 +633,7 @@ func (h *UsersHandler) sendDeleteError(w http.ResponseWriter, message string) {
 
 // isValidRole checks if a role is valid.
 func isValidRole(role string) bool {
-	for _, r := range ValidRoles {
+	for _, r := range model.ValidRoles {
 		if r == role {
 			return true
 		}

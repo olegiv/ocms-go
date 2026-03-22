@@ -24,7 +24,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
-	"github.com/olegiv/ocms-go/internal/webhook"
+	webhookpkg "github.com/olegiv/ocms-go/internal/webhook"
 )
 
 // DeliveriesPerPage is the number of deliveries to display per page.
@@ -714,7 +714,7 @@ func validateWebhookForm(input webhookFormInput, validateEvents bool) map[string
 
 	if input.URL == "" {
 		validationErrors["url"] = "URL is required"
-	} else if err := webhook.ValidateDestinationURL(input.URL); err != nil {
+	} else if err := webhookpkg.ValidateDestinationURL(input.URL); err != nil {
 		validationErrors["url"] = err.Error()
 	}
 

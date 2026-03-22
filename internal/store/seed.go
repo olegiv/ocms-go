@@ -29,12 +29,12 @@ var DefaultConfig = []struct {
 	Type        string
 	Description string
 }{
-	{model.ConfigKeySiteName, "Opossum CMS", model.ConfigTypeString, "The name of your site"},
-	{model.ConfigKeySiteDescription, "", model.ConfigTypeString, "A short description of your site"},
-	{model.ConfigKeyAdminEmail, "admin@example.com", model.ConfigTypeString, "Administrator email address"},
-	{model.ConfigKeyPostsPerPage, "10", model.ConfigTypeInt, "Number of posts to display per page"},
-	{model.ConfigKeyPoweredBy, "Powered by oCMS", model.ConfigTypeString, "Footer powered by text"},
-	{model.ConfigKeyCopyright, "", model.ConfigTypeString, "Footer copyright text (leave empty for automatic)"},
+	{Key: model.ConfigKeySiteName, Value: "Opossum CMS", Type: model.ConfigTypeString, Description: "The name of your site"},
+	{Key: model.ConfigKeySiteDescription, Value: "", Type: model.ConfigTypeString, Description: "A short description of your site"},
+	{Key: model.ConfigKeyAdminEmail, Value: "admin@example.com", Type: model.ConfigTypeString, Description: "Administrator email address"},
+	{Key: model.ConfigKeyPostsPerPage, Value: "10", Type: model.ConfigTypeInt, Description: "Number of posts to display per page"},
+	{Key: model.ConfigKeyPoweredBy, Value: "Powered by oCMS", Type: model.ConfigTypeString, Description: "Footer powered by text"},
+	{Key: model.ConfigKeyCopyright, Value: "", Type: model.ConfigTypeString, Description: "Footer copyright text (leave empty for automatic)"},
 }
 
 // Seed creates initial data in the database if doSeed is true.
