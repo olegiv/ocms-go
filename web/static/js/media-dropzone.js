@@ -242,9 +242,9 @@ function mediaDropzone() {
                 formData.append('gorilla.csrf.Token', this.csrfToken);
             }
 
-            const folderSelect = document.getElementById('folder_id');
-            if (folderSelect && folderSelect.value) {
-                formData.append('folder_id', folderSelect.value);
+            const folderInput = document.querySelector('input[name="folder_id"]');
+            if (folderInput && folderInput.value) {
+                formData.append('folder_id', folderInput.value);
             }
 
             const validFiles = this.files.filter(f => !f.error);

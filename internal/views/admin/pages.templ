@@ -1628,7 +1628,7 @@ templ editorImageModal(pc *PageContext) {
 				<div class="form-group">
 					@label.Label(label.Props{For: "editor-image-size", Class: "block mb-1"}) { { pc.T("editor.image_size") } }
 					@selectbox.SelectBox(selectbox.Props{ID: "editor-image-size", Class: "select-no-clear"}) {
-						@selectbox.Trigger(selectbox.TriggerProps{}) {
+						@selectbox.Trigger(selectbox.TriggerProps{Name: "editor-image-size"}) {
 							@selectbox.Value(selectbox.ValueProps{})
 						}
 						@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
@@ -1675,7 +1675,7 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 			this.optionsPanel = document.getElementById('editor-image-options');
 			this.insertBtn = document.getElementById('editor-image-insert-btn');
 			this.altInput = document.getElementById('editor-image-alt');
-			this.sizeSelect = document.getElementById('editor-image-size');
+			this.sizeSelect = document.querySelector('#editor-image-size input[data-tui-selectbox-hidden-input]');
 			this.searchInput.addEventListener('input', () => {
 				clearTimeout(this.debounceTimer);
 				this.debounceTimer = setTimeout(() => { this.currentPage = 1; this.loadMedia(); }, 300);
