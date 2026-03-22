@@ -25,10 +25,17 @@ const (
 	bulkScopeFormsSub = "form-submissions-"
 )
 
+// MaxPerPageSelectionValue is the maximum allowed per-page value.
+// Exported for use by modules.
+const MaxPerPageSelectionValue = maxPerPageSelectionValue
+
 var (
 	perPageOptionsStandard = []int{10, 20, 50, 100}
 	perPageOptionsMedia    = []int{10, 20, 24, 50, 100}
 )
+
+// PerPageOptionsStandard exposes the standard per-page options for modules.
+var PerPageOptionsStandard = perPageOptionsStandard
 
 type bulkIDsPayload struct {
 	IDs []int64 `json:"ids"`
@@ -91,6 +98,12 @@ func bulkPaginationAction(scope string, deleteURL string) *adminviews.Pagination
 		Scope:     scope,
 		DeleteURL: deleteURL,
 	}
+}
+
+// PerPageSelector creates a per-page selector config for pagination.
+// Exported for use by modules.
+func PerPageSelector(current int, options []int) *adminviews.PaginationPerPageSelector {
+	return perPageSelector(current, options)
 }
 
 func perPageSelector(current int, options []int) *adminviews.PaginationPerPageSelector {

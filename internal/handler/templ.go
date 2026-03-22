@@ -102,6 +102,12 @@ func renderTempl(w http.ResponseWriter, r *http.Request, component templ.Compone
 	}
 }
 
+// ConvertPagination converts handler AdminPagination to view PaginationData.
+// Exported for use by modules that need pagination support.
+func ConvertPagination(p AdminPagination) adminviews.PaginationData {
+	return convertPagination(p)
+}
+
 // convertPagination converts handler AdminPagination to view PaginationData.
 func convertPagination(p AdminPagination) adminviews.PaginationData {
 	var pages []adminviews.PaginationPage
