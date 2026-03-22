@@ -119,7 +119,7 @@ templ ExportPage(pc *PageContext, data ExportViewData) {
 								@label.Label(label.Props{For: "page_status", Class: "block mb-1"}) {
 									{ pc.T("export.page_status") }
 								}
-								@selectbox.SelectBox(selectbox.Props{}) {
+								@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
 									@selectbox.Trigger(selectbox.TriggerProps{Name: "page_status"}) {
 										@selectbox.Value(selectbox.ValueProps{Placeholder: pc.T("export.status_all")})
 									}

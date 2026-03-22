@@ -234,18 +234,24 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 									{ pc.T("languages.quick_select") }
 								}
 								<p class="form-help">{ pc.T("languages.quick_select_hint") }</p>
-								<select
-									id="quick_select"
-									class="form-input form-select"
-									@change="selectLanguage($event.target.value)"
-								>
-									<option value="">{ pc.T("languages.select_language") }</option>
-									for _, cl := range data.CommonLanguages {
-										<option value={ fmt.Sprintf("%s|%s|%s|%s", cl.Code, cl.Name, cl.NativeName, cl.Direction) }>
-											{ cl.Name } ({ cl.Code })
-										</option>
+								<div @change="selectLanguage($event.target.value)">
+									@selectbox.SelectBox(selectbox.Props{}) {
+										@selectbox.Trigger(selectbox.TriggerProps{Name: "quick_select"}) {
+											@selectbox.Value(selectbox.ValueProps{
+												Placeholder: pc.T("languages.select_language"),
+											})
+										}
+										@selectbox.Content(selectbox.ContentProps{}) {
+											for _, cl := range data.CommonLanguages {
+												@selectbox.Item(selectbox.ItemProps{
+													Value: fmt.Sprintf("%s|%s|%s|%s", cl.Code, cl.Name, cl.NativeName, cl.Direction),
+												}) {
+													{ cl.Name } ({ cl.Code })
+												}
+											}
+										}
 									}
-								</select>
+								</div>
 							</div>
 							<div class="form-group form-group-full">
 								<hr class="form-divider"/>
