@@ -621,6 +621,7 @@ type imageVariant struct {
 // demoImageVariants matches the variants defined in internal/model/media.go
 var demoImageVariants = []imageVariant{
 	{name: "thumbnail", width: 150, height: 150, crop: true},
+	{name: "grid", width: 256, height: 256, crop: true},
 	{name: "small", width: 400, height: 300, crop: false},
 	{name: "medium", width: 800, height: 600, crop: false},
 	{name: "large", width: 1920, height: 1080, crop: false},

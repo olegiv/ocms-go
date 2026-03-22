@@ -488,6 +488,11 @@
             "translation": "Альтернативные URL-адреса, перенаправляющие на эту страницу (полезно при переименовании)"
         },
         {
+            "id": "pages.content",
+            "message": "Content",
+            "translation": "Содержимое"
+        },
+        {
             "id": "categories.title",
             "message": "Categories",
             "translation": "Категории"
@@ -696,6 +701,16 @@
             "id": "tags.create_first_hint",
             "message": "Create your first tag to help organize your content.",
             "translation": "Создайте первый тег для организации контента."
+        },
+        {
+            "id": "tags.no_results",
+            "message": "No tags match the current filters.",
+            "translation": "Нет тегов, соответствующих текущим фильтрам."
+        },
+        {
+            "id": "tags.search_results",
+            "message": "Found %d tags matching \"%s\"",
+            "translation": "Найдено %d тегов по запросу \"%s\""
         },
         {
             "id": "tags.delete_tag",
@@ -1036,6 +1051,11 @@
             "id": "media.variant_thumbnail",
             "message": "Thumbnail",
             "translation": "Миниатюра"
+        },
+        {
+            "id": "media.variant_grid",
+            "message": "Grid",
+            "translation": "Сетка"
         },
         {
             "id": "media.variant_medium",
@@ -1383,6 +1403,11 @@
             "translation": "Формы"
         },
         {
+            "id": "forms.description",
+            "message": "Manage your forms (%d total)",
+            "translation": "Управление формами (всего: %d)"
+        },
+        {
             "id": "forms.new",
             "message": "New Form",
             "translation": "Новая форма"
@@ -1646,6 +1671,11 @@
             "id": "forms.total_submissions",
             "message": "Total Submissions",
             "translation": "Всего заявок"
+        },
+        {
+            "id": "forms.submissions_description",
+            "message": "Viewing submissions for this form (%d total)",
+            "translation": "Просмотр заявок формы (всего: %d)"
         },
         {
             "id": "forms.unread",
@@ -3248,6 +3278,11 @@
             "translation": "Неактивен"
         },
         {
+            "id": "languages.total_count",
+            "message": "Total: %d language(s)",
+            "translation": "Всего: %d язык(ов)"
+        },
+        {
             "id": "settings.title",
             "message": "Settings",
             "translation": "Настройки"
@@ -3418,6 +3453,11 @@
             "translation": "Ошибка загрузки настроек"
         },
         {
+            "id": "error.loading_failed",
+            "message": "Failed to load content",
+            "translation": "Не удалось загрузить содержимое"
+        },
+        {
             "id": "error.invalid_number",
             "message": "Must be a valid number",
             "translation": "Должно быть числом"
@@ -3513,6 +3553,11 @@
             "translation": "Очистить"
         },
         {
+            "id": "btn.clear_filters",
+            "message": "Clear Filters",
+            "translation": "Сбросить фильтры"
+        },
+        {
             "id": "btn.publish",
             "message": "Publish",
             "translation": "Опубликовать"
@@ -3586,6 +3631,31 @@
             "id": "btn.save_changes",
             "message": "Save Changes",
             "translation": "Сохранить изменения"
+        },
+        {
+            "id": "btn.copied",
+            "message": "Copied!",
+            "translation": "Скопировано!"
+        },
+        {
+            "id": "btn.copy",
+            "message": "Copy",
+            "translation": "Копировать"
+        },
+        {
+            "id": "btn.disable",
+            "message": "Disable",
+            "translation": "Отключить"
+        },
+        {
+            "id": "btn.done",
+            "message": "Done",
+            "translation": "Готово"
+        },
+        {
+            "id": "btn.enable",
+            "message": "Enable",
+            "translation": "Включить"
         },
         {
             "id": "msg.saved",
@@ -4031,6 +4101,31 @@
             "id": "label.meta_description",
             "message": "Meta Description",
             "translation": "Meta описание"
+        },
+        {
+            "id": "label.action_cannot_undone",
+            "message": "This action cannot be undone.",
+            "translation": "Это действие нельзя отменить."
+        },
+        {
+            "id": "label.confirm_delete",
+            "message": "Are you sure you want to delete this?",
+            "translation": "Вы уверены, что хотите удалить?"
+        },
+        {
+            "id": "label.created",
+            "message": "Created",
+            "translation": "Создано"
+        },
+        {
+            "id": "label.info",
+            "message": "Information",
+            "translation": "Информация"
+        },
+        {
+            "id": "label.never",
+            "message": "Never",
+            "translation": "Никогда"
         },
         {
             "id": "status.draft",

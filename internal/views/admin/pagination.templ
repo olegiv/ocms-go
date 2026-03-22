@@ -9,6 +9,7 @@ import (
 	"strings"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
+	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 )
 
 const (
@@ -236,7 +237,7 @@ templ SortIndicator(state string) {
 // Pagination renders pagination controls for admin lists.
 templ Pagination(pc *PageContext, p PaginationData) {
 	if p.ShouldShow() || p.HasBulkAction() || p.HasPerPageSelector() {
-		<div class="flex items-center justify-between flex-wrap gap-4">
+		<div class="flex items-center justify-between flex-wrap gap-x-6 gap-y-3 border-t border-border bg-muted/30 px-4 py-3">
 			<div class="text-sm text-muted-foreground">
 				{ pc.T("pagination.page") } { fmt.Sprintf("%d", p.CurrentPage) } { pc.T("pagination.of") } { fmt.Sprintf("%d", p.TotalPages) }
 				if p.TotalItems > 0 {
@@ -245,17 +246,20 @@ templ Pagination(pc *PageContext, p PaginationData) {
 			</div>
 			<div class="flex items-center gap-2">
 				if p.HasPerPageSelector() {
-					<label class="flex items-center gap-2 text-sm text-muted-foreground">
+					<label class="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
 						<span>{ pc.T("pagination.items_per_page") }</span>
-						<select
-							class="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
-							data-per-page-selector="true"
-							data-per-page-param={ p.PerPageSelector.Param }
-						>
-							for _, option := range p.PerPageSelector.Options {
-								<option value={ fmt.Sprintf("%d", option) } selected?={ option == p.PerPageSelector.Current }>{ fmt.Sprintf("%d", option) }</option>
+						@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear", Attributes: templ.Attributes{"data-auto-submit": "true", "data-per-page-selector": "true", "data-per-page-param": p.PerPageSelector.Param}}) {
+							@selectbox.Trigger(selectbox.TriggerProps{Name: "per_page"}) {
+								@selectbox.Value(selectbox.ValueProps{})
 							}
-						</select>
+							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+								for _, option := range p.PerPageSelector.Options {
+									@selectbox.Item(selectbox.ItemProps{Value: fmt.Sprintf("%d", option), Selected: option == p.PerPageSelector.Current}) {
+										{ fmt.Sprintf("%d", option) }
+									}
+								}
+							}
+						}
 					</label>
 				}
 				if p.HasBulkAction() {

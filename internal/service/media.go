@@ -255,6 +255,36 @@ func (s *MediaService) GetThumbnailURL(media store.Medium) string {
 	return s.GetURL(media, model.VariantThumbnail)
 }
 
+// GetAdminGridPreviewURL returns the best available preview URL for admin media grid cards.
+// Fallback order: grid (256x256) -> thumbnail (150x150) -> original.
+func (s *MediaService) GetAdminGridPreviewURL(media store.Medium) string {
+	if !isImageMimeType(media.MimeType) {
+		return ""
+	}
+
+	for _, variant := range []string{model.VariantGrid, model.VariantThumbnail, "original"} {
+		if s.fileExistsForVariant(media, variant) {
+			return s.GetURL(media, variant)
+		}
+	}
+
+	// Keep a stable URL even if files are missing.
+	return s.GetURL(media, "original")
+}
+
+func (s *MediaService) fileExistsForVariant(media store.Medium, variant string) bool {
+	path := s.pathForVariant(media, variant)
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func (s *MediaService) pathForVariant(media store.Medium, variant string) string {
+	if variant == "" || variant == "original" {
+		return filepath.Join(s.uploadDir, "originals", media.Uuid, media.Filename)
+	}
+	return filepath.Join(s.uploadDir, variant, media.Uuid, media.Filename)
+}
+
 // RegenerateVariants regenerates all image variants for a media item.
 // It deletes existing variants and creates new ones from the original image.
 func (s *MediaService) RegenerateVariants(ctx context.Context, mediaID int64) ([]store.MediaVariant, error) {

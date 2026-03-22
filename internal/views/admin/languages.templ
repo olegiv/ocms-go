@@ -12,8 +12,9 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
-	"github.com/olegiv/ocms-go/internal/views/components/label"
 	"github.com/olegiv/ocms-go/internal/views/components/input"
+	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
@@ -90,7 +91,7 @@ templ LanguagesListPage(pc *PageContext, data LanguagesListData) {
 								@table.Head() { { pc.T("languages.direction") } }
 								@table.Head() { { pc.T("label.status") } }
 								@table.Head() { { pc.T("languages.position") } }
-								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+								@table.Head() { { pc.T("label.actions") } }
 							}
 						}
 						@table.Body() {
@@ -155,7 +156,7 @@ templ LanguageRow(pc *PageContext, lang LanguageListItem) {
 			}
 		}
 		@table.Cell() { { fmt.Sprintf("%d", lang.Position) } }
-		@table.Cell(table.CellProps{Class: "text-right"}) {
+		@table.Cell() {
 			<div class="action-buttons">
 				if !lang.IsDefault {
 					<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/admin/languages/%d/default", lang.ID)) } class="d-inline">
@@ -164,9 +165,7 @@ templ LanguageRow(pc *PageContext, lang LanguageListItem) {
 						}
 					</form>
 				}
-				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/languages/%d", lang.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
-					@icon.Pencil(icon.Props{Size: 14})
-				}
+				@EditButton(fmt.Sprintf("/admin/languages/%d", lang.ID), pc.T("btn.edit"))
 				if !lang.IsDefault {
 					@deleteLanguageModal(pc, lang)
 				}
@@ -235,18 +234,24 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 									{ pc.T("languages.quick_select") }
 								}
 								<p class="form-help">{ pc.T("languages.quick_select_hint") }</p>
-								<select
-									id="quick_select"
-									class="form-input form-select"
-									@change="selectLanguage($event.target.value)"
-								>
-									<option value="">{ pc.T("languages.select_language") }</option>
-									for _, cl := range data.CommonLanguages {
-										<option value={ fmt.Sprintf("%s|%s|%s|%s", cl.Code, cl.Name, cl.NativeName, cl.Direction) }>
-											{ cl.Name } ({ cl.Code })
-										</option>
+								<div @change="selectLanguage($event.target.value)">
+									@selectbox.SelectBox(selectbox.Props{}) {
+										@selectbox.Trigger(selectbox.TriggerProps{Name: "quick_select"}) {
+											@selectbox.Value(selectbox.ValueProps{
+												Placeholder: pc.T("languages.select_language"),
+											})
+										}
+										@selectbox.Content(selectbox.ContentProps{}) {
+											for _, cl := range data.CommonLanguages {
+												@selectbox.Item(selectbox.ItemProps{
+													Value: fmt.Sprintf("%s|%s|%s|%s", cl.Code, cl.Name, cl.NativeName, cl.Direction),
+												}) {
+													{ cl.Name } ({ cl.Code })
+												}
+											}
+										}
 									}
-								</select>
+								</div>
 							</div>
 							<div class="form-group form-group-full">
 								<hr class="form-divider"/>
@@ -324,16 +329,23 @@ templ LanguageFormPage(pc *PageContext, data LanguageFormData) {
 							@label.Label(label.Props{For: "direction", Class: "block mb-1"}) {
 								{ pc.T("languages.text_direction") } <span class="required">*</span>
 							}
-							<select
-								id="direction"
-								name="direction"
-								class={ templ.KV("form-input form-select", true), templ.KV("is-invalid", data.Errors["direction"] != "") }
-								x-model="direction"
-								required
-							>
-								<option value="ltr" selected?={ languageCurrentDirection(data) == "ltr" }>{ pc.T("languages.ltr") }</option>
-								<option value="rtl" selected?={ languageCurrentDirection(data) == "rtl" }>{ pc.T("languages.rtl") }</option>
-							</select>
+							@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
+								@selectbox.Trigger(selectbox.TriggerProps{
+									Name:     "direction",
+									HasError: data.Errors["direction"] != "",
+									Attributes: templ.Attributes{
+										"id":       "direction",
+										"x-model":  "direction",
+										"required": true,
+									},
+								}) {
+									@selectbox.Value(selectbox.ValueProps{})
+								}
+								@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+									@selectbox.Item(selectbox.ItemProps{Value: "ltr", Selected: languageCurrentDirection(data) == "ltr"}) { { pc.T("languages.ltr") } }
+									@selectbox.Item(selectbox.ItemProps{Value: "rtl", Selected: languageCurrentDirection(data) == "rtl"}) { { pc.T("languages.rtl") } }
+								}
+							}
 							if data.Errors["direction"] != "" {
 								<span class="form-error">{ data.Errors["direction"] }</span>
 							} else {
@@ -500,7 +512,12 @@ func languageCurrentDirection(data LanguageFormData) string {
 
 func languageFormAlpineData(data LanguageFormData) string {
 	if data.IsEdit {
-		return ""
+		return fmt.Sprintf(`{code:'%s',name:'%s',nativeName:'%s',direction:'%s'}`,
+			languageFormValue(data, "code"),
+			languageFormValue(data, "name"),
+			languageFormValue(data, "native_name"),
+			languageCurrentDirection(data),
+		)
 	}
 	return "languageForm()"
 }

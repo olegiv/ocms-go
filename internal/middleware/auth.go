@@ -15,6 +15,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/i18n"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 )
@@ -207,19 +208,15 @@ func GetRequestPath(ctx context.Context) string {
 	return path
 }
 
-// User roles - must match handler.Role* constants.
-const (
-	RoleAdmin  = "admin"
-	RoleEditor = "editor"
-)
+// User roles - canonical definitions in model package.
 
 // roleLevel returns a numeric level for role hierarchy.
 // Higher level = more permissions. Public users have level 0 (no admin access).
 func roleLevel(role string) int {
 	switch role {
-	case RoleAdmin:
+	case model.RoleAdmin:
 		return 2
-	case RoleEditor:
+	case model.RoleEditor:
 		return 1
 	default:
 		// Public and unknown roles have no admin access
@@ -286,25 +283,25 @@ func RequireRoleWithEventLog(minRole string, eventService *service.EventService)
 }
 
 // RequireAdmin creates middleware that requires admin role.
-// Shorthand for RequireRole(RoleAdmin).
+// Shorthand for RequireRole(model.RoleAdmin).
 func RequireAdmin() func(http.Handler) http.Handler {
-	return RequireRole(RoleAdmin)
+	return RequireRole(model.RoleAdmin)
 }
 
 // RequireAdminWithEventLog creates middleware that requires admin role with event logging.
 func RequireAdminWithEventLog(eventService *service.EventService) func(http.Handler) http.Handler {
-	return RequireRoleWithEventLog(RoleAdmin, eventService)
+	return RequireRoleWithEventLog(model.RoleAdmin, eventService)
 }
 
 // RequireEditor creates middleware that requires at least editor role.
 // Allows both admin and editor users.
 func RequireEditor() func(http.Handler) http.Handler {
-	return RequireRole(RoleEditor)
+	return RequireRole(model.RoleEditor)
 }
 
 // RequireEditorWithEventLog creates middleware that requires at least editor role with event logging.
 func RequireEditorWithEventLog(eventService *service.EventService) func(http.Handler) http.Handler {
-	return RequireRoleWithEventLog(RoleEditor, eventService)
+	return RequireRoleWithEventLog(model.RoleEditor, eventService)
 }
 
 // globalSessionManager is set by SetSessionManager and used by GetAdminLang.

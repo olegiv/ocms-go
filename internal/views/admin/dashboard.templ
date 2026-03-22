@@ -97,27 +97,43 @@ templ DashboardPage(pc *PageContext, data DashboardData) {
 			</div>
 		</div>
 		<!-- Primary stats -->
-		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-			@dashStatCard("/admin/pages", pc.T("dashboard.total_pages"), fmt.Sprintf("%d", data.Stats.TotalPages), "bg-blue-500/10 text-blue-500", icon.FileText)
-			@dashStatCard("/admin/pages?status=published", pc.T("dashboard.published_pages"), fmt.Sprintf("%d", data.Stats.PublishedPages), "bg-green-500/10 text-green-500", icon.CircleCheck)
-			@dashStatCard("/admin/pages?status=draft", pc.T("dashboard.draft_pages"), fmt.Sprintf("%d", data.Stats.DraftPages), "bg-yellow-500/10 text-yellow-500", icon.PenLine)
-			@dashStatCard("/admin/users", pc.T("dashboard.total_users"), fmt.Sprintf("%d", data.Stats.TotalUsers), "bg-purple-500/10 text-purple-500", icon.Users)
-		</div>
+		@StatGrid() {
+			@StatCard(StatCardProps{Href: "/admin/pages", Label: pc.T("dashboard.total_pages"), Value: fmt.Sprintf("%d", data.Stats.TotalPages), IconClass: "bg-blue-500/10 text-blue-500"}) {
+				@icon.FileText(icon.Props{Size: 24})
+			}
+			@StatCard(StatCardProps{Href: "/admin/pages?status=published", Label: pc.T("dashboard.published_pages"), Value: fmt.Sprintf("%d", data.Stats.PublishedPages), IconClass: "bg-green-500/10 text-green-500"}) {
+				@icon.CircleCheck(icon.Props{Size: 24})
+			}
+			@StatCard(StatCardProps{Href: "/admin/pages?status=draft", Label: pc.T("dashboard.draft_pages"), Value: fmt.Sprintf("%d", data.Stats.DraftPages), IconClass: "bg-yellow-500/10 text-yellow-500"}) {
+				@icon.PenLine(icon.Props{Size: 24})
+			}
+			@StatCard(StatCardProps{Href: "/admin/users", Label: pc.T("dashboard.total_users"), Value: fmt.Sprintf("%d", data.Stats.TotalUsers), IconClass: "bg-purple-500/10 text-purple-500"}) {
+				@icon.Users(icon.Props{Size: 24})
+			}
+		}
 		<!-- Secondary stats -->
 		<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-			@dashStatCard("/admin/media", pc.T("dashboard.media_files"), fmt.Sprintf("%d", data.Stats.TotalMedia), "bg-cyan-500/10 text-cyan-500", icon.Image)
-			@dashStatCard("/admin/forms", pc.T("dashboard.total_forms"), fmt.Sprintf("%d", data.Stats.TotalForms), "bg-indigo-500/10 text-indigo-500", icon.SquareCheck)
-			if data.Stats.UnreadSubmissions > 0 {
-				@dashStatCardHighlight("/admin/forms", pc.T("dashboard.unread_submissions"), fmt.Sprintf("%d", data.Stats.UnreadSubmissions), "bg-orange-500/10 text-orange-500", icon.Mail)
-			} else {
-				@dashStatCard("/admin/forms", pc.T("dashboard.unread_submissions"), fmt.Sprintf("%d", data.Stats.UnreadSubmissions), "bg-orange-500/10 text-orange-500", icon.Mail)
+			@StatCard(StatCardProps{Href: "/admin/media", Label: pc.T("dashboard.media_files"), Value: fmt.Sprintf("%d", data.Stats.TotalMedia), IconClass: "bg-cyan-500/10 text-cyan-500"}) {
+				@icon.Image(icon.Props{Size: 24})
+			}
+			@StatCard(StatCardProps{Href: "/admin/forms", Label: pc.T("dashboard.total_forms"), Value: fmt.Sprintf("%d", data.Stats.TotalForms), IconClass: "bg-indigo-500/10 text-indigo-500"}) {
+				@icon.SquareCheck(icon.Props{Size: 24})
+			}
+			@StatCard(StatCardProps{Href: "/admin/forms", Label: pc.T("dashboard.unread_submissions"), Value: fmt.Sprintf("%d", data.Stats.UnreadSubmissions), IconClass: "bg-orange-500/10 text-orange-500", Highlight: data.Stats.UnreadSubmissions > 0}) {
+				@icon.Mail(icon.Props{Size: 24})
 			}
 		</div>
 		<!-- Tertiary stats -->
 		<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-			@dashStatCard("/admin/languages", pc.T("dashboard.languages"), fmt.Sprintf("%d", data.Stats.ActiveLanguages), "bg-teal-500/10 text-teal-500", icon.Languages)
-			@dashStatCard("/admin/cache", pc.T("dashboard.cache_hit_rate"), fmt.Sprintf("%.0f%%", data.Stats.CacheHitRate), "bg-emerald-500/10 text-emerald-500", icon.Gauge)
-			@dashStatCard("/admin/cache", pc.T("dashboard.cache_items"), fmt.Sprintf("%d", data.Stats.CacheItems), "bg-rose-500/10 text-rose-500", icon.Database)
+			@StatCard(StatCardProps{Href: "/admin/languages", Label: pc.T("dashboard.languages"), Value: fmt.Sprintf("%d", data.Stats.ActiveLanguages), IconClass: "bg-teal-500/10 text-teal-500"}) {
+				@icon.Languages(icon.Props{Size: 24})
+			}
+			@StatCard(StatCardProps{Href: "/admin/cache", Label: pc.T("dashboard.cache_hit_rate"), Value: fmt.Sprintf("%.0f%%", data.Stats.CacheHitRate), IconClass: "bg-emerald-500/10 text-emerald-500"}) {
+				@icon.Gauge(icon.Props{Size: 24})
+			}
+			@StatCard(StatCardProps{Href: "/admin/cache", Label: pc.T("dashboard.cache_items"), Value: fmt.Sprintf("%d", data.Stats.CacheItems), IconClass: "bg-rose-500/10 text-rose-500"}) {
+				@icon.Database(icon.Props{Size: 24})
+			}
 		</div>
 		<!-- Dashboard grid: activity + submissions + webhooks + quick actions -->
 		<div class="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
@@ -137,43 +153,10 @@ templ DashboardPage(pc *PageContext, data DashboardData) {
 	}
 }
 
-// dashStatCard renders a dashboard stat card with link.
-templ dashStatCard(href string, label string, value string, iconClass string, ic func(...icon.Props) templ.Component) {
-	<a href={ templ.SafeURL(href) } class="no-underline text-inherit">
-		@card.Card(card.Props{Class: "transition-all hover:shadow-md hover:-translate-y-0.5"}) {
-			@card.Content(card.ContentProps{Class: "flex items-center gap-4 p-5"}) {
-				<div class={ "flex items-center justify-center w-12 h-12 rounded-lg shrink-0 " + iconClass }>
-					@ic(icon.Props{Size: 24})
-				</div>
-				<div class="min-w-0">
-					<div class="text-sm font-medium text-muted-foreground">{ label }</div>
-					<div class="text-2xl font-bold text-foreground mt-1">{ value }</div>
-				</div>
-			}
-		}
-	</a>
-}
-
-// dashStatCardHighlight renders a highlighted stat card.
-templ dashStatCardHighlight(href string, label string, value string, iconClass string, ic func(...icon.Props) templ.Component) {
-	<a href={ templ.SafeURL(href) } class="no-underline text-inherit">
-		@card.Card(card.Props{Class: "transition-all hover:shadow-md hover:-translate-y-0.5 border-warning shadow-[0_0_0_1px_rgba(234,179,8,0.2)]"}) {
-			@card.Content(card.ContentProps{Class: "flex items-center gap-4 p-5"}) {
-				<div class={ "flex items-center justify-center w-12 h-12 rounded-lg shrink-0 " + iconClass }>
-					@ic(icon.Props{Size: 24})
-				</div>
-				<div class="min-w-0">
-					<div class="text-sm font-medium text-muted-foreground">{ label }</div>
-					<div class="text-2xl font-bold text-foreground mt-1">{ value }</div>
-				</div>
-			}
-		}
-	</a>
-}
 
 templ recentActivityCard(pc *PageContext, data DashboardData) {
 	@card.Card() {
-		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4 card-header-fixed"}) {
 			@card.Title() {
 				{ pc.T("dashboard.recent_activity") }
 			}
@@ -219,7 +202,7 @@ templ recentActivityCard(pc *PageContext, data DashboardData) {
 
 templ recentSubmissionsCard(pc *PageContext, data DashboardData) {
 	@card.Card() {
-		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4 card-header-fixed"}) {
 			@card.Title() {
 				{ pc.T("dashboard.recent_submissions") }
 			}
@@ -263,7 +246,7 @@ templ recentSubmissionsCard(pc *PageContext, data DashboardData) {
 
 templ webhookHealthCard(pc *PageContext, data DashboardData) {
 	@card.Card() {
-		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4 card-header-fixed"}) {
 			@card.Title() {
 				{ pc.T("dashboard.webhook_health") }
 			}
@@ -308,7 +291,7 @@ templ webhookHealthCard(pc *PageContext, data DashboardData) {
 
 templ quickActionsCard(pc *PageContext) {
 	@card.Card() {
-		@card.Header(card.HeaderProps{Class: "border-b pb-4"}) {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4 card-header-fixed"}) {
 			@card.Title() {
 				{ pc.T("dashboard.quick_actions") }
 			}
@@ -330,7 +313,7 @@ templ quickActionsCard(pc *PageContext) {
 
 templ translationCoverageCard(pc *PageContext, data DashboardData) {
 	@card.Card() {
-		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4 card-header-fixed"}) {
 			@card.Title() {
 				{ pc.T("dashboard.translation_coverage") }
 			}
@@ -361,7 +344,7 @@ templ translationCoverageCard(pc *PageContext, data DashboardData) {
 
 templ failedDeliveriesCard(pc *PageContext, data DashboardData) {
 	@card.Card() {
-		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4 card-header-fixed"}) {
 			@card.Title() {
 				{ pc.T("dashboard.recent_failed_deliveries") }
 			}

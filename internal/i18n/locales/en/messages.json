@@ -488,6 +488,11 @@
             "translation": "Alternative URLs that redirect to this page (useful for preserving old URLs after renaming)"
         },
         {
+            "id": "pages.content",
+            "message": "Content",
+            "translation": "Content"
+        },
+        {
             "id": "categories.title",
             "message": "Categories",
             "translation": "Categories"
@@ -696,6 +701,16 @@
             "id": "tags.create_first_hint",
             "message": "Create your first tag to help organize your content.",
             "translation": "Create your first tag to help organize your content."
+        },
+        {
+            "id": "tags.no_results",
+            "message": "No tags match the current filters.",
+            "translation": "No tags match the current filters."
+        },
+        {
+            "id": "tags.search_results",
+            "message": "Found %d tags matching \"%s\"",
+            "translation": "Found %d tags matching \"%s\""
         },
         {
             "id": "tags.delete_tag",
@@ -1036,6 +1051,11 @@
             "id": "media.variant_thumbnail",
             "message": "Thumbnail",
             "translation": "Thumbnail"
+        },
+        {
+            "id": "media.variant_grid",
+            "message": "Grid",
+            "translation": "Grid"
         },
         {
             "id": "media.variant_medium",
@@ -1383,6 +1403,11 @@
             "translation": "Forms"
         },
         {
+            "id": "forms.description",
+            "message": "Manage your forms (%d total)",
+            "translation": "Manage your forms (%d total)"
+        },
+        {
             "id": "forms.new",
             "message": "New Form",
             "translation": "New Form"
@@ -1646,6 +1671,11 @@
             "id": "forms.total_submissions",
             "message": "Total Submissions",
             "translation": "Total Submissions"
+        },
+        {
+            "id": "forms.submissions_description",
+            "message": "Viewing submissions for this form (%d total)",
+            "translation": "Viewing submissions for this form (%d total)"
         },
         {
             "id": "forms.unread",
@@ -3248,6 +3278,11 @@
             "translation": "Inactive"
         },
         {
+            "id": "languages.total_count",
+            "message": "Total: %d language(s)",
+            "translation": "Total: %d language(s)"
+        },
+        {
             "id": "webhooks.title",
             "message": "Webhooks",
             "translation": "Webhooks"
@@ -3933,6 +3968,11 @@
             "translation": "Error loading configuration"
         },
         {
+            "id": "error.loading_failed",
+            "message": "Failed to load content",
+            "translation": "Failed to load content"
+        },
+        {
             "id": "error.invalid_number",
             "message": "Must be a valid number",
             "translation": "Must be a valid number"
@@ -4028,6 +4068,11 @@
             "translation": "Clear"
         },
         {
+            "id": "btn.clear_filters",
+            "message": "Clear Filters",
+            "translation": "Clear Filters"
+        },
+        {
             "id": "btn.publish",
             "message": "Publish",
             "translation": "Publish"
@@ -4101,6 +4146,31 @@
             "id": "btn.save_changes",
             "message": "Save Changes",
             "translation": "Save Changes"
+        },
+        {
+            "id": "btn.copied",
+            "message": "Copied!",
+            "translation": "Copied!"
+        },
+        {
+            "id": "btn.copy",
+            "message": "Copy",
+            "translation": "Copy"
+        },
+        {
+            "id": "btn.disable",
+            "message": "Disable",
+            "translation": "Disable"
+        },
+        {
+            "id": "btn.done",
+            "message": "Done",
+            "translation": "Done"
+        },
+        {
+            "id": "btn.enable",
+            "message": "Enable",
+            "translation": "Enable"
         },
         {
             "id": "msg.saved",
@@ -4546,6 +4616,31 @@
             "id": "label.meta_description",
             "message": "Meta Description",
             "translation": "Meta Description"
+        },
+        {
+            "id": "label.action_cannot_undone",
+            "message": "This action cannot be undone.",
+            "translation": "This action cannot be undone."
+        },
+        {
+            "id": "label.confirm_delete",
+            "message": "Are you sure you want to delete this?",
+            "translation": "Are you sure you want to delete this?"
+        },
+        {
+            "id": "label.created",
+            "message": "Created",
+            "translation": "Created"
+        },
+        {
+            "id": "label.info",
+            "message": "Information",
+            "translation": "Information"
+        },
+        {
+            "id": "label.never",
+            "message": "Never",
+            "translation": "Never"
         },
         {
             "id": "status.draft",

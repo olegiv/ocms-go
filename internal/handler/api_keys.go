@@ -529,24 +529,24 @@ func validateAPIKeyExpiryPolicy(expiresAt sql.NullTime, requireExpiry bool) stri
 // validateAPIKeyForm validates the API key form and returns validation errors.
 // requireFutureExpiry controls whether expiration date must be in the future.
 func validateAPIKeyForm(name string, permissions []string, expiresAtStr, sourceCIDRsRaw string, requireFutureExpiry, requireSourceCIDRs bool) (apiKeyFormInput, map[string]string) {
-	errors := make(map[string]string)
+	fieldErrors := make(map[string]string)
 
 	if err := validateAPIKeyName(name); err != "" {
-		errors["name"] = err
+		fieldErrors["name"] = err
 	}
 	if err := validateAPIKeyPermissions(permissions); err != "" {
-		errors["permissions"] = err
+		fieldErrors["permissions"] = err
 	}
 	expiresAt, expiresErr := parseAPIKeyExpiration(expiresAtStr, requireFutureExpiry)
 	if expiresErr != "" {
-		errors["expires_at"] = expiresErr
+		fieldErrors["expires_at"] = expiresErr
 	}
 	sourceCIDRs, sourceCIDRsErr := parseAPIKeySourceCIDRs(sourceCIDRsRaw)
 	if sourceCIDRsErr != "" {
-		errors["source_cidrs"] = sourceCIDRsErr
+		fieldErrors["source_cidrs"] = sourceCIDRsErr
 	}
 	if requireSourceCIDRs && len(sourceCIDRs) == 0 {
-		errors["source_cidrs"] = "At least one source CIDR/IP is required"
+		fieldErrors["source_cidrs"] = "At least one source CIDR/IP is required"
 	}
 
 	return apiKeyFormInput{
@@ -554,7 +554,7 @@ func validateAPIKeyForm(name string, permissions []string, expiresAtStr, sourceC
 		Permissions: permissions,
 		ExpiresAt:   expiresAt,
 		SourceCIDRs: sourceCIDRs,
-	}, errors
+	}, fieldErrors
 }
 
 // validateAPIKeyName validates the name field and returns an error message if invalid.

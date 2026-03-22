@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/components/checkbox"
 	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 )
 
 // ExportViewData holds data for the export page.
@@ -99,72 +101,111 @@ templ ExportPage(pc *PageContext, data ExportViewData) {
 					<div class="export-section">
 						<h3 class="export-section-title">{ pc.T("export.content_section") }</h3>
 						<div class="export-options">
-							<div class="form-checkbox">
-								<input type="checkbox" id="include_pages" name="include_pages" value="on" checked class="checkbox-input"/>
-								<label for="include_pages" class="checkbox-label">
-									<strong>{ pc.T("export.pages") }</strong>
-									<span class="checkbox-hint">{ pc.T("export.pages_hint") }</span>
-								</label>
+							<div class="flex items-start gap-3">
+								@checkbox.Checkbox(checkbox.Props{
+									ID:      "include_pages",
+									Name:    "include_pages",
+									Value:   "on",
+									Checked: true,
+								})
+								<div class="grid gap-0.5">
+									@label.Label(label.Props{For: "include_pages"}) {
+										{ pc.T("export.pages") }
+									}
+									<p class="text-sm text-muted-foreground">{ pc.T("export.pages_hint") }</p>
+								</div>
 							</div>
 							<div class="form-group export-sub-option nested-options">
 								@label.Label(label.Props{For: "page_status", Class: "block mb-1"}) {
-								{ pc.T("export.page_status") }
-							}
-								<select id="page_status" name="page_status" class="form-select">
-									<option value="all">{ pc.T("export.status_all") }</option>
-									<option value="published">{ pc.T("export.status_published") }</option>
-									<option value="draft">{ pc.T("export.status_draft") }</option>
-								</select>
+									{ pc.T("export.page_status") }
+								}
+								@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
+									@selectbox.Trigger(selectbox.TriggerProps{Name: "page_status"}) {
+										@selectbox.Value(selectbox.ValueProps{Placeholder: pc.T("export.status_all")})
+									}
+									@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+										@selectbox.Item(selectbox.ItemProps{Value: "all", Selected: true}) {
+											{ pc.T("export.status_all") }
+										}
+										@selectbox.Item(selectbox.ItemProps{Value: "published"}) {
+											{ pc.T("export.status_published") }
+										}
+										@selectbox.Item(selectbox.ItemProps{Value: "draft"}) {
+											{ pc.T("export.status_draft") }
+										}
+									}
+								}
 							</div>
-							<div class="form-checkbox">
-								<input type="checkbox" id="include_categories" name="include_categories" value="on" checked class="checkbox-input"/>
-								<label for="include_categories" class="checkbox-label">
-									<strong>{ pc.T("export.categories") }</strong>
-									<span class="checkbox-hint">{ pc.T("export.categories_hint") }</span>
-								</label>
+							<div class="flex items-start gap-3">
+								@checkbox.Checkbox(checkbox.Props{
+									ID:      "include_categories",
+									Name:    "include_categories",
+									Value:   "on",
+									Checked: true,
+								})
+								<div class="grid gap-0.5">
+									@label.Label(label.Props{For: "include_categories"}) {
+										{ pc.T("export.categories") }
+									}
+									<p class="text-sm text-muted-foreground">{ pc.T("export.categories_hint") }</p>
+								</div>
 							</div>
-							<div class="form-checkbox">
-								<input type="checkbox" id="include_tags" name="include_tags" value="on" checked class="checkbox-input"/>
-								<label for="include_tags" class="checkbox-label">
-									<strong>{ pc.T("export.tags") }</strong>
-									<span class="checkbox-hint">{ pc.T("export.tags_hint") }</span>
-								</label>
+							<div class="flex items-start gap-3">
+								@checkbox.Checkbox(checkbox.Props{
+									ID:      "include_tags",
+									Name:    "include_tags",
+									Value:   "on",
+									Checked: true,
+								})
+								<div class="grid gap-0.5">
+									@label.Label(label.Props{For: "include_tags"}) {
+										{ pc.T("export.tags") }
+									}
+									<p class="text-sm text-muted-foreground">{ pc.T("export.tags_hint") }</p>
+								</div>
 							</div>
-							<div class="form-checkbox">
-								<input
-									type="checkbox"
-									id="include_media"
-									name="include_media"
-									value="on"
-									checked
-									class="checkbox-input"
-									x-model="includeMedia"
-								/>
-								<label for="include_media" class="checkbox-label">
-									<strong>{ pc.T("export.media") }</strong>
-									<span class="checkbox-hint">{ pc.T("export.media_hint") }</span>
-								</label>
+							<div class="flex items-start gap-3">
+								@checkbox.Checkbox(checkbox.Props{
+									ID:      "include_media",
+									Name:    "include_media",
+									Value:   "on",
+									Checked: true,
+									Attributes: templ.Attributes{"x-model": "includeMedia"},
+								})
+								<div class="grid gap-0.5">
+									@label.Label(label.Props{For: "include_media"}) {
+										{ pc.T("export.media") }
+									}
+									<p class="text-sm text-muted-foreground">{ pc.T("export.media_hint") }</p>
+								</div>
 							</div>
-							<div class="form-checkbox ml-8" x-show="includeMedia" x-cloak>
-								<input
-									type="checkbox"
-									id="include_media_files"
-									name="include_media_files"
-									value="on"
-									class="checkbox-input"
-									x-model="includeMediaFiles"
-								/>
-								<label for="include_media_files" class="checkbox-label">
-									<strong>{ pc.T("export.media_files") }</strong>
-									<span class="checkbox-hint">{ pc.T("export.media_files_hint") }</span>
-								</label>
+							<div class="flex items-start gap-3 ml-8" x-show="includeMedia" x-cloak>
+								@checkbox.Checkbox(checkbox.Props{
+									ID:      "include_media_files",
+									Name:    "include_media_files",
+									Value:   "on",
+									Attributes: templ.Attributes{"x-model": "includeMediaFiles"},
+								})
+								<div class="grid gap-0.5">
+									@label.Label(label.Props{For: "include_media_files"}) {
+										{ pc.T("export.media_files") }
+									}
+									<p class="text-sm text-muted-foreground">{ pc.T("export.media_files_hint") }</p>
+								</div>
 							</div>
-							<div class="form-checkbox">
-								<input type="checkbox" id="include_menus" name="include_menus" value="on" checked class="checkbox-input"/>
-								<label for="include_menus" class="checkbox-label">
-									<strong>{ pc.T("export.menus") }</strong>
-									<span class="checkbox-hint">{ pc.T("export.menus_hint") }</span>
-								</label>
+							<div class="flex items-start gap-3">
+								@checkbox.Checkbox(checkbox.Props{
+									ID:      "include_menus",
+									Name:    "include_menus",
+									Value:   "on",
+									Checked: true,
+								})
+								<div class="grid gap-0.5">
+									@label.Label(label.Props{For: "include_menus"}) {
+										{ pc.T("export.menus") }
+									}
+									<p class="text-sm text-muted-foreground">{ pc.T("export.menus_hint") }</p>
+								</div>
 							</div>
 						</div>
 					</div>
@@ -172,19 +213,32 @@ templ ExportPage(pc *PageContext, data ExportViewData) {
 					<div class="export-section">
 						<h3 class="export-section-title">{ pc.T("export.forms_section") }</h3>
 						<div class="export-options">
-							<div class="form-checkbox">
-								<input type="checkbox" id="include_forms" name="include_forms" value="on" checked class="checkbox-input"/>
-								<label for="include_forms" class="checkbox-label">
-									<strong>{ pc.T("export.forms") }</strong>
-									<span class="checkbox-hint">{ pc.T("export.forms_hint") }</span>
-								</label>
+							<div class="flex items-start gap-3">
+								@checkbox.Checkbox(checkbox.Props{
+									ID:      "include_forms",
+									Name:    "include_forms",
+									Value:   "on",
+									Checked: true,
+								})
+								<div class="grid gap-0.5">
+									@label.Label(label.Props{For: "include_forms"}) {
+										{ pc.T("export.forms") }
+									}
+									<p class="text-sm text-muted-foreground">{ pc.T("export.forms_hint") }</p>
+								</div>
 							</div>
-							<div class="form-checkbox ml-8">
-								<input type="checkbox" id="include_submissions" name="include_submissions" value="on" class="checkbox-input"/>
-								<label for="include_submissions" class="checkbox-label">
-									<strong>{ pc.T("export.submissions") }</strong>
-									<span class="checkbox-hint">{ pc.T("export.submissions_hint") }</span>
-								</label>
+							<div class="flex items-start gap-3 ml-8">
+								@checkbox.Checkbox(checkbox.Props{
+									ID:   "include_submissions",
+									Name: "include_submissions",
+									Value: "on",
+								})
+								<div class="grid gap-0.5">
+									@label.Label(label.Props{For: "include_submissions"}) {
+										{ pc.T("export.submissions") }
+									}
+									<p class="text-sm text-muted-foreground">{ pc.T("export.submissions_hint") }</p>
+								</div>
 							</div>
 						</div>
 					</div>
@@ -192,26 +246,47 @@ templ ExportPage(pc *PageContext, data ExportViewData) {
 					<div class="export-section">
 						<h3 class="export-section-title">{ pc.T("export.system_section") }</h3>
 						<div class="export-options">
-							<div class="form-checkbox">
-								<input type="checkbox" id="include_users" name="include_users" value="on" checked class="checkbox-input"/>
-								<label for="include_users" class="checkbox-label">
-									<strong>{ pc.T("export.users") }</strong>
-									<span class="checkbox-hint">{ pc.T("export.users_hint") }</span>
-								</label>
+							<div class="flex items-start gap-3">
+								@checkbox.Checkbox(checkbox.Props{
+									ID:      "include_users",
+									Name:    "include_users",
+									Value:   "on",
+									Checked: true,
+								})
+								<div class="grid gap-0.5">
+									@label.Label(label.Props{For: "include_users"}) {
+										{ pc.T("export.users") }
+									}
+									<p class="text-sm text-muted-foreground">{ pc.T("export.users_hint") }</p>
+								</div>
 							</div>
-							<div class="form-checkbox">
-								<input type="checkbox" id="include_languages" name="include_languages" value="on" checked class="checkbox-input"/>
-								<label for="include_languages" class="checkbox-label">
-									<strong>{ pc.T("export.languages") }</strong>
-									<span class="checkbox-hint">{ pc.T("export.languages_hint") }</span>
-								</label>
+							<div class="flex items-start gap-3">
+								@checkbox.Checkbox(checkbox.Props{
+									ID:      "include_languages",
+									Name:    "include_languages",
+									Value:   "on",
+									Checked: true,
+								})
+								<div class="grid gap-0.5">
+									@label.Label(label.Props{For: "include_languages"}) {
+										{ pc.T("export.languages") }
+									}
+									<p class="text-sm text-muted-foreground">{ pc.T("export.languages_hint") }</p>
+								</div>
 							</div>
-							<div class="form-checkbox">
-								<input type="checkbox" id="include_config" name="include_config" value="on" checked class="checkbox-input"/>
-								<label for="include_config" class="checkbox-label">
-									<strong>{ pc.T("export.config") }</strong>
-									<span class="checkbox-hint">{ pc.T("export.config_hint") }</span>
-								</label>
+							<div class="flex items-start gap-3">
+								@checkbox.Checkbox(checkbox.Props{
+									ID:      "include_config",
+									Name:    "include_config",
+									Value:   "on",
+									Checked: true,
+								})
+								<div class="grid gap-0.5">
+									@label.Label(label.Props{For: "include_config"}) {
+										{ pc.T("export.config") }
+									}
+									<p class="text-sm text-muted-foreground">{ pc.T("export.config_hint") }</p>
+								</div>
 							</div>
 						</div>
 					</div>
@@ -414,11 +489,18 @@ templ importOptionsForm(pc *PageContext, data ImportViewData) {
 				<div class="import-section">
 					<h4 class="import-section-title">{ pc.T("import.conflict_strategy") }</h4>
 					<div class="form-group">
-						<select name="conflict_strategy" class="form-select">
-							for _, strategy := range data.ConflictStrategies {
-								<option value={ strategy.Value }>{ strategy.Label } - { strategy.Description }</option>
+						@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
+							@selectbox.Trigger(selectbox.TriggerProps{Name: "conflict_strategy"}) {
+								@selectbox.Value(selectbox.ValueProps{Placeholder: pc.T("import.conflict_strategy")})
 							}
-						</select>
+							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+								for _, strategy := range data.ConflictStrategies {
+									@selectbox.Item(selectbox.ItemProps{Value: strategy.Value}) {
+										{ strategy.Label } - { strategy.Description }
+									}
+								}
+							}
+						}
 					</div>
 				</div>
 				<!-- Content Section -->
@@ -438,12 +520,19 @@ templ importOptionsForm(pc *PageContext, data ImportViewData) {
 							@importCheckbox("import_media", pc.T("import.media"), pc.T("import.media_hint"), true)
 						}
 						if data.HasMediaFiles {
-							<div class="form-checkbox ml-8">
-								<input type="checkbox" id="import_media_files" name="import_media_files" value="on" checked class="checkbox-input"/>
-								<label for="import_media_files" class="checkbox-label">
-									<strong>{ pc.T("import.media_files") }</strong>
-									<span class="checkbox-hint">{ pc.T("import.media_files_hint") }</span>
-								</label>
+							<div class="flex items-start gap-3 ml-8">
+								@checkbox.Checkbox(checkbox.Props{
+									ID:      "import_media_files",
+									Name:    "import_media_files",
+									Value:   "on",
+									Checked: true,
+								})
+								<div class="grid gap-0.5">
+									@label.Label(label.Props{For: "import_media_files"}) {
+										{ pc.T("import.media_files") }
+									}
+									<p class="text-sm text-muted-foreground">{ pc.T("import.media_files_hint") }</p>
+								</div>
 							</div>
 						}
 						if data.UploadedData != nil && data.UploadedData.HasMenus {
@@ -498,17 +587,20 @@ templ importOptionsForm(pc *PageContext, data ImportViewData) {
 }
 
 // importCheckbox renders a checkbox with label and hint.
-templ importCheckbox(name string, label string, hint string, checked bool) {
-	<div class="form-checkbox">
-		if checked {
-			<input type="checkbox" id={ name } name={ name } value="on" checked class="checkbox-input"/>
-		} else {
-			<input type="checkbox" id={ name } name={ name } value="on" class="checkbox-input"/>
-		}
-		<label for={ name } class="checkbox-label">
-			<strong>{ label }</strong>
-			<span class="checkbox-hint">{ hint }</span>
-		</label>
+templ importCheckbox(name string, labelText string, hint string, checked bool) {
+	<div class="flex items-start gap-3">
+		@checkbox.Checkbox(checkbox.Props{
+			ID:      name,
+			Name:    name,
+			Value:   "on",
+			Checked: checked,
+		})
+		<div class="grid gap-0.5">
+			@label.Label(label.Props{For: name}) {
+				{ labelText }
+			}
+			<p class="text-sm text-muted-foreground">{ hint }</p>
+		</div>
 	</div>
 }
 

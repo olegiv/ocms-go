@@ -14,7 +14,12 @@ import (
 const (
 	RoleAnonymous = "anonymous" // Not logged in (used for cache context)
 	RoleAdmin     = "admin"     // Full system access
+	RoleEditor    = "editor"    // Content management access
+	RolePublic    = "public"    // No admin access
 )
+
+// ValidRoles contains all valid user roles for form validation.
+var ValidRoles = []string{RoleAdmin, RoleEditor, RolePublic}
 
 // User represents a CMS user.
 type User struct {

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 func TestSanitizeFilename(t *testing.T) {
@@ -230,4 +231,86 @@ func tempMultipartFile(t *testing.T, content []byte) *os.File {
 	}
 
 	return file
+}
+
+func TestGetAdminGridPreviewURL(t *testing.T) {
+	makeVariantFile := func(t *testing.T, rootDir, variantDir, uuid, filename string) {
+		t.Helper()
+		dirPath := filepath.Join(rootDir, variantDir, uuid)
+		if err := os.MkdirAll(dirPath, 0755); err != nil {
+			t.Fatalf("MkdirAll(%q): %v", dirPath, err)
+		}
+		filePath := filepath.Join(dirPath, filename)
+		if err := os.WriteFile(filePath, []byte("x"), 0644); err != nil {
+			t.Fatalf("WriteFile(%q): %v", filePath, err)
+		}
+	}
+
+	testMedia := store.Medium{
+		Uuid:     "media-uuid",
+		Filename: "image.jpg",
+		MimeType: model.MimeTypeJPEG,
+	}
+
+	t.Run("uses grid when available", func(t *testing.T) {
+		uploadsDir := t.TempDir()
+		makeVariantFile(t, uploadsDir, model.VariantGrid, testMedia.Uuid, testMedia.Filename)
+		makeVariantFile(t, uploadsDir, model.VariantThumbnail, testMedia.Uuid, testMedia.Filename)
+		makeVariantFile(t, uploadsDir, "originals", testMedia.Uuid, testMedia.Filename)
+
+		svc := NewMediaService(nil, uploadsDir)
+		got := svc.GetAdminGridPreviewURL(testMedia)
+		want := "/uploads/grid/media-uuid/image.jpg"
+		if got != want {
+			t.Errorf("GetAdminGridPreviewURL() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("falls back to thumbnail when grid missing", func(t *testing.T) {
+		uploadsDir := t.TempDir()
+		makeVariantFile(t, uploadsDir, model.VariantThumbnail, testMedia.Uuid, testMedia.Filename)
+		makeVariantFile(t, uploadsDir, "originals", testMedia.Uuid, testMedia.Filename)
+
+		svc := NewMediaService(nil, uploadsDir)
+		got := svc.GetAdminGridPreviewURL(testMedia)
+		want := "/uploads/thumbnail/media-uuid/image.jpg"
+		if got != want {
+			t.Errorf("GetAdminGridPreviewURL() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("falls back to original when variants missing", func(t *testing.T) {
+		uploadsDir := t.TempDir()
+		makeVariantFile(t, uploadsDir, "originals", testMedia.Uuid, testMedia.Filename)
+
+		svc := NewMediaService(nil, uploadsDir)
+		got := svc.GetAdminGridPreviewURL(testMedia)
+		want := "/uploads/originals/media-uuid/image.jpg"
+		if got != want {
+			t.Errorf("GetAdminGridPreviewURL() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("returns stable original URL even when files missing", func(t *testing.T) {
+		uploadsDir := t.TempDir()
+		svc := NewMediaService(nil, uploadsDir)
+
+		got := svc.GetAdminGridPreviewURL(testMedia)
+		want := "/uploads/originals/media-uuid/image.jpg"
+		if got != want {
+			t.Errorf("GetAdminGridPreviewURL() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("returns empty for non-image media", func(t *testing.T) {
+		uploadsDir := t.TempDir()
+		svc := NewMediaService(nil, uploadsDir)
+
+		nonImage := testMedia
+		nonImage.MimeType = model.MimeTypePDF
+		got := svc.GetAdminGridPreviewURL(nonImage)
+		if got != "" {
+			t.Errorf("GetAdminGridPreviewURL() = %q, want empty string", got)
+		}
+	})
 }

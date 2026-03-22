@@ -5,6 +5,10 @@ package admin
 
 import "fmt"
 import "encoding/json"
+import "github.com/olegiv/ocms-go/internal/views/components/checkbox"
+import "github.com/olegiv/ocms-go/internal/views/components/input"
+import "github.com/olegiv/ocms-go/internal/views/components/label"
+import "github.com/olegiv/ocms-go/internal/views/components/textarea"
 
 // WidgetTypeView represents a widget type option.
 type WidgetTypeView struct {
@@ -110,12 +114,22 @@ templ WidgetsPage(pc *PageContext, data WidgetsViewData) {
 								</select>
 							</div>
 							<div>
-								<label for="widget-title" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Title (optional)</label>
-								<input type="text" id="widget-title" class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" x-model="newWidget.title" placeholder="Widget title" maxlength="255"/>
+								@label.Label(label.Props{For: "widget-title"}) { Title (optional) }
+								@input.Input(input.Props{
+									ID:          "widget-title",
+									Type:        input.TypeText,
+									Placeholder: "Widget title",
+									Attributes:  templ.Attributes{"x-model": "newWidget.title", "maxlength": "255"},
+								})
 							</div>
 							<div x-show="newWidget.widget_type === 'text'">
-								<label for="widget-content" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Content</label>
-								<textarea id="widget-content" class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" rows="5" x-model="newWidget.content" placeholder="HTML content..."></textarea>
+								@label.Label(label.Props{For: "widget-content"}) { Content }
+								@textarea.Textarea(textarea.Props{
+									ID:          "widget-content",
+									Rows:        5,
+									Placeholder: "HTML content...",
+									Attributes:  templ.Attributes{"x-model": "newWidget.content"},
+								})
 							</div>
 						</div>
 						<div class="mt-6 flex justify-end gap-2">
@@ -141,18 +155,29 @@ templ WidgetsPage(pc *PageContext, data WidgetsViewData) {
 								</select>
 							</div>
 							<div>
-								<label for="edit-widget-title" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Title</label>
-								<input type="text" id="edit-widget-title" class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" x-model="editingWidget.title" placeholder="Widget title" maxlength="255"/>
+								@label.Label(label.Props{For: "edit-widget-title"}) { Title }
+								@input.Input(input.Props{
+									ID:          "edit-widget-title",
+									Type:        input.TypeText,
+									Placeholder: "Widget title",
+									Attributes:  templ.Attributes{"x-model": "editingWidget.title", "maxlength": "255"},
+								})
 							</div>
 							<div x-show="editingWidget.widget_type === 'text'">
-								<label for="edit-widget-content" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Content</label>
-								<textarea id="edit-widget-content" class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" rows="5" x-model="editingWidget.content" placeholder="HTML content..."></textarea>
+								@label.Label(label.Props{For: "edit-widget-content"}) { Content }
+								@textarea.Textarea(textarea.Props{
+									ID:          "edit-widget-content",
+									Rows:        5,
+									Placeholder: "HTML content...",
+									Attributes:  templ.Attributes{"x-model": "editingWidget.content"},
+								})
 							</div>
-							<div>
-								<label class="flex items-center gap-2">
-									<input type="checkbox" x-model="editingWidget.is_active" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"/>
-									<span class="text-sm text-gray-700 dark:text-gray-300">Active</span>
-								</label>
+							<div class="flex items-center gap-2">
+								@checkbox.Checkbox(checkbox.Props{
+									ID:         "edit-widget-active",
+									Attributes: templ.Attributes{"x-model": "editingWidget.is_active"},
+								})
+								@label.Label(label.Props{For: "edit-widget-active"}) { Active }
 							</div>
 						</div>
 						<div class="mt-6 flex justify-end gap-2">

@@ -14,7 +14,9 @@ import "github.com/olegiv/ocms-go/internal/views/components/card"
 import "github.com/olegiv/ocms-go/internal/views/components/icon"
 import "github.com/olegiv/ocms-go/internal/views/components/input"
 import "github.com/olegiv/ocms-go/internal/views/components/label"
+import "github.com/olegiv/ocms-go/internal/views/components/selectbox"
 import "github.com/olegiv/ocms-go/internal/views/components/table"
+import "github.com/olegiv/ocms-go/internal/views/components/textarea"
 
 // =============================================================================
 // VIEW TYPES
@@ -412,20 +414,34 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 						if data.Pagination.HasPerPageSelector() {
 							<input type="hidden" name="per_page" value={ fmt.Sprintf("%d", data.Pagination.PerPageSelector.Current) }/>
 						}
-						<select name="category" class="form-select form-select-sm" data-auto-submit="true">
-							<option value="">{ pc.T("pages.all_categories") }</option>
-							for _, cat := range data.AllCategories {
-								<option
-									value={ fmt.Sprintf("%d", cat.ID) }
-									selected?={ data.CategoryFilter == cat.ID }
-								>
-									if cat.Depth > 0 {
-										{ repeatDash(cat.Depth) }
-									}
-									{ cat.Name }
-								</option>
+						@selectbox.SelectBox(selectbox.Props{Attributes: templ.Attributes{"data-auto-submit": "true"}}) {
+							@selectbox.Trigger(selectbox.TriggerProps{
+								Name: "category",
+							}) {
+							@selectbox.Value(selectbox.ValueProps{
+								Placeholder: pc.T("pages.all_categories"),
+							})
 							}
-						</select>
+							@selectbox.Content(selectbox.ContentProps{}) {
+								@selectbox.Item(selectbox.ItemProps{
+									Value:    "",
+									Selected: data.CategoryFilter == 0,
+								}) {
+									{ pc.T("pages.all_categories") }
+								}
+								for _, cat := range data.AllCategories {
+									@selectbox.Item(selectbox.ItemProps{
+										Value:    fmt.Sprintf("%d", cat.ID),
+										Selected: data.CategoryFilter == cat.ID,
+									}) {
+										if cat.Depth > 0 {
+											{ repeatDash(cat.Depth) }
+										}
+										{ cat.Name }
+									}
+								}
+							}
+						}
 					</form>
 				</div>
 			}
@@ -449,17 +465,31 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 						if data.Pagination.HasPerPageSelector() {
 							<input type="hidden" name="per_page" value={ fmt.Sprintf("%d", data.Pagination.PerPageSelector.Current) }/>
 						}
-						<select name="language" class="form-select form-select-sm" data-auto-submit="true">
-							<option value="">{ pc.T("pages.all_languages") }</option>
-							for _, lang := range data.AllLanguages {
-								<option
-									value={ lang.Code }
-									selected?={ data.LanguageFilter == lang.Code }
-								>
-									{ lang.Name } ({ lang.Code })
-								</option>
+						@selectbox.SelectBox(selectbox.Props{Attributes: templ.Attributes{"data-auto-submit": "true"}}) {
+							@selectbox.Trigger(selectbox.TriggerProps{
+								Name: "language",
+							}) {
+							@selectbox.Value(selectbox.ValueProps{
+								Placeholder: pc.T("pages.all_languages"),
+							})
 							}
-						</select>
+							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+								@selectbox.Item(selectbox.ItemProps{
+									Value:    "",
+									Selected: data.LanguageFilter == "",
+								}) {
+									{ pc.T("pages.all_languages") }
+								}
+								for _, lang := range data.AllLanguages {
+									@selectbox.Item(selectbox.ItemProps{
+										Value:    lang.Code,
+										Selected: data.LanguageFilter == lang.Code,
+									}) {
+										{ lang.Name } ({ lang.Code })
+									}
+								}
+							}
+						}
 					</form>
 				</div>
 			}
@@ -482,7 +512,14 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 						<input type="hidden" name="per_page" value={ fmt.Sprintf("%d", data.Pagination.PerPageSelector.Current) }/>
 					}
 					<div class="search-input-wrapper">
-						<input type="text" name="search" value={ data.SearchFilter } placeholder={ pc.T("pages.search_placeholder") } class="form-control form-control-sm" aria-label={ pc.T("btn.search") }/>
+						@input.Input(input.Props{
+							Name:        "search",
+							Type:        input.TypeSearch,
+							Value:       data.SearchFilter,
+							Placeholder: pc.T("pages.search_placeholder"),
+							Class:       "form-control-sm",
+							Attributes:  templ.Attributes{"aria-label": pc.T("btn.search")},
+						})
 						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Class: "search-btn", Attributes: templ.Attributes{"title": pc.T("btn.search")}}) {
 							@iconSearch14()
 						}
@@ -554,7 +591,7 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("updated_at"))) }</span>
 									</a>
 								}
-								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+								@table.Head() { { pc.T("label.actions") } }
 							}
 						}
 						@table.Body() {
@@ -564,11 +601,7 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 						}
 					}
 				</div>
-				if data.Pagination.ShouldShow() || data.Pagination.HasBulkAction() {
-					@card.Footer() {
-						@Pagination(pc, data.Pagination)
-					}
-				}
+				@Pagination(pc, data.Pagination)
 			}
 		} else {
 			@card.Card() {
@@ -667,7 +700,7 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool, bulkS
 		}
 		}
 		@table.Cell() { { page.UpdatedAt } }
-		@table.Cell(table.CellProps{Class: "text-right"}) {
+		@table.Cell() {
 			<div class="action-buttons">
 				if !page.IsDemoPublished {
 					<form action={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/publish", page.ID)) } method="POST" class="inline-form">
@@ -814,26 +847,30 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 							<input type="hidden" name="status" value="published"/>
 							@badge.Badge(badge.Props{Class: "badge-success"}) { { pc.T("status.published") } }
 						} else {
-							<select
-								id="status"
-								name="status"
-								class={ "form-select", templ.KV("is-invalid", data.Errors["status"] != "") }
-							>
-								for _, s := range data.Statuses {
-									<option
-										value={ s }
-										selected?={ s == currentStatus(data.FormValues, data.PageStatus) }
-									>
-										if s == "draft" {
-											{ pc.T("status.draft") }
-										} else if s == "published" {
-											{ pc.T("status.published") }
-										} else {
-											{ s }
-										}
-									</option>
+							@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
+								@selectbox.Trigger(selectbox.TriggerProps{
+									Name:     "status",
+									HasError: data.Errors["status"] != "",
+								}) {
+									@selectbox.Value(selectbox.ValueProps{Placeholder: pc.T("label.status")})
 								}
-							</select>
+								@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+									for _, s := range data.Statuses {
+										@selectbox.Item(selectbox.ItemProps{
+											Value:    s,
+											Selected: s == currentStatus(data.FormValues, data.PageStatus),
+										}) {
+											if s == "draft" {
+												{ pc.T("status.draft") }
+											} else if s == "published" {
+												{ pc.T("status.published") }
+											} else {
+												{ s }
+											}
+										}
+									}
+								}
+							}
 						}
 						if data.Errors["status"] != "" {
 							<span class="form-error">{ data.Errors["status"] }</span>
@@ -842,26 +879,30 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 					<!-- Page Type -->
 					<div class="form-group">
 						@label.Label(label.Props{For: "page_type", Class: "block mb-1"}) { { pc.T("pages.page_type") } }
-						<select
-							id="page_type"
-							name="page_type"
-							class={ "form-select", templ.KV("is-invalid", data.Errors["page_type"] != "") }
-						>
-							for _, pt := range data.PageTypes {
-								<option
-									value={ pt }
-									selected?={ pt == currentPageType(data.FormValues, data.PageType) }
-								>
-									if pt == "post" {
-										{ pc.T("pages.type_post") }
-									} else if pt == "page" {
-										{ pc.T("pages.type_page") }
-									} else {
-										{ pt }
-									}
-								</option>
+						@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
+							@selectbox.Trigger(selectbox.TriggerProps{
+								Name:     "page_type",
+								HasError: data.Errors["page_type"] != "",
+							}) {
+								@selectbox.Value(selectbox.ValueProps{Placeholder: pc.T("pages.page_type")})
 							}
-						</select>
+							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+								for _, pt := range data.PageTypes {
+									@selectbox.Item(selectbox.ItemProps{
+										Value:    pt,
+										Selected: pt == currentPageType(data.FormValues, data.PageType),
+									}) {
+										if pt == "post" {
+											{ pc.T("pages.type_post") }
+										} else if pt == "page" {
+											{ pc.T("pages.type_page") }
+										} else {
+											{ pt }
+										}
+									}
+								}
+							}
+						}
 						if data.Errors["page_type"] != "" {
 							<span class="form-error">{ data.Errors["page_type"] }</span>
 						} else {
@@ -872,21 +913,24 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 					if data.HasMultipleLanguages {
 						<div class="form-group">
 							@label.Label(label.Props{For: "language_code", Class: "block mb-1"}) { { pc.T("label.language") } }
-							<select
-								id="language_code"
-								name={ langSelectName(data.IsEdit) }
-								class="form-select"
-								disabled?={ data.IsEdit }
-							>
-								for _, lang := range data.AllLanguages {
-									<option
-										value={ lang.Code }
-										selected?={ lang.Code == pageCurrentLanguageCode(data.FormValues, data.Language, "") }
-									>
-										{ lang.Name } ({ lang.Code })
-									</option>
+							@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
+								@selectbox.Trigger(selectbox.TriggerProps{
+									Name:     langSelectName(data.IsEdit),
+									Disabled: data.IsEdit,
+								}) {
+									@selectbox.Value(selectbox.ValueProps{Placeholder: pc.T("label.language")})
 								}
-							</select>
+								@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+									for _, lang := range data.AllLanguages {
+										@selectbox.Item(selectbox.ItemProps{
+											Value:    lang.Code,
+											Selected: lang.Code == pageCurrentLanguageCode(data.FormValues, data.Language, ""),
+										}) {
+											{ lang.Name } ({ lang.Code })
+										}
+									}
+								}
+							}
 							if data.IsEdit {
 								if data.Language != nil {
 									<input type="hidden" name="language_code" value={ data.Language.Code }/>
@@ -1264,18 +1308,18 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 			<!-- Meta Description -->
 			<div class="form-group" x-data="{ charCount: 0 }" x-init="charCount = $refs.metaDescInput.value.length">
 				@label.Label(label.Props{For: "meta_description", Class: "block mb-1"}) { { pc.T("seo.meta_description") } }
-				<textarea
-					id="meta_description"
-					name="meta_description"
-					class="form-input form-textarea"
-					rows="3"
-					x-ref="metaDescInput"
-					placeholder={ pc.T("seo.meta_description_hint") }
-					maxlength="320"
-					@input="charCount = $event.target.value.length"
-				>
-					{ formVal(data.FormValues, "meta_description", data.MetaDescription) }
-				</textarea>
+				@textarea.Textarea(textarea.Props{
+					ID:          "meta_description",
+					Name:        "meta_description",
+					Rows:        3,
+					Placeholder: pc.T("seo.meta_description_hint"),
+					Value:       formVal(data.FormValues, "meta_description", data.MetaDescription),
+					Attributes: templ.Attributes{
+						"x-ref":    "metaDescInput",
+						"maxlength": "320",
+						"@input":   "charCount = $event.target.value.length",
+					},
+				})
 				<span class="form-hint">
 					<span x-text="charCount"></span>/160 { pc.T("seo.chars_recommended") }
 					<span x-show="charCount > 160" class="text-warning"> - { pc.T("seo.may_be_truncated") }</span>
@@ -1583,11 +1627,16 @@ templ editorImageModal(pc *PageContext) {
 				</div>
 				<div class="form-group">
 					@label.Label(label.Props{For: "editor-image-size", Class: "block mb-1"}) { { pc.T("editor.image_size") } }
-					<select id="editor-image-size" class="form-select">
-						<option value="full">{ pc.T("editor.size_full") }</option>
-						<option value="medium" selected>{ pc.T("editor.size_medium") }</option>
-						<option value="small">{ pc.T("editor.size_small") }</option>
-					</select>
+					@selectbox.SelectBox(selectbox.Props{ID: "editor-image-size", Class: "select-no-clear"}) {
+						@selectbox.Trigger(selectbox.TriggerProps{}) {
+							@selectbox.Value(selectbox.ValueProps{})
+						}
+						@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+							@selectbox.Item(selectbox.ItemProps{Value: "full"}) { { pc.T("editor.size_full") } }
+							@selectbox.Item(selectbox.ItemProps{Value: "medium", Selected: true}) { { pc.T("editor.size_medium") } }
+							@selectbox.Item(selectbox.ItemProps{Value: "small"}) { { pc.T("editor.size_small") } }
+						}
+					}
 				</div>
 			</div>
 			<div class="editor-image-modal-footer">
@@ -1900,7 +1949,7 @@ templ PageVersionsPage(pc *PageContext, data PageVersionsViewData) {
 								@table.Head() { { pc.T("label.title") } }
 								@table.Head() { { pc.T("versions.changed_by") } }
 								@table.Head() { { pc.T("versions.date") } }
-								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+								@table.Head() { { pc.T("label.actions") } }
 							}
 						}
 						@table.Body() {
@@ -1910,11 +1959,7 @@ templ PageVersionsPage(pc *PageContext, data PageVersionsViewData) {
 						}
 					}
 				</div>
-				if data.Pagination.ShouldShow() {
-					@card.Footer() {
-						@Pagination(pc, data.Pagination)
-					}
-				}
+				@Pagination(pc, data.Pagination)
 			}
 		} else {
 			@card.Card() {
@@ -1942,7 +1987,7 @@ templ versionRow(pc *PageContext, data PageVersionsViewData, version PageVersion
 			<span class="user-name">{ version.ChangedByName }</span>
 		}
 		@table.Cell() { { version.CreatedAt } }
-		@table.Cell(table.CellProps{Class: "text-right"}) {
+		@table.Cell() {
 			<div class="action-buttons">
 				<div x-data="{ showPreview: false, showConfirm: false }" class="version-actions">
 					<!-- Preview Button -->

@@ -1,0 +1,58 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import (
+	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/utils"
+)
+
+// StatCardProps configures a stat card with icon, value, and label.
+type StatCardProps struct {
+	Href      string // optional link wrapper
+	Label     string
+	Value     string
+	IconClass string // icon container bg/text color classes
+	Highlight bool   // warning border variant
+}
+
+// StatCard renders a metric card with an icon, value, and label.
+// Pass the icon as children.
+templ StatCard(props StatCardProps) {
+	if props.Href != "" {
+		<a href={ templ.SafeURL(props.Href) } class="no-underline text-inherit">
+			@statCardInner(props) {
+				{ children... }
+			}
+		</a>
+	} else {
+		@statCardInner(props) {
+			{ children... }
+		}
+	}
+}
+
+templ statCardInner(props StatCardProps) {
+	@card.Card(card.Props{Class: utils.TwMerge(
+		"transition-all hover:shadow-md hover:-translate-y-0.5",
+		utils.If(props.Highlight, "border-warning shadow-[0_0_0_1px_rgba(234,179,8,0.2)]"),
+	)}) {
+		@card.Content(card.ContentProps{Class: "flex items-center gap-4 p-5"}) {
+			<div class={ "flex items-center justify-center w-12 h-12 rounded-lg shrink-0 " + props.IconClass }>
+				{ children... }
+			</div>
+			<div class="min-w-0">
+				<div class="text-sm font-medium text-muted-foreground">{ props.Label }</div>
+				<div class="text-2xl font-bold text-foreground mt-1">{ props.Value }</div>
+			</div>
+		}
+	}
+}
+
+// StatGrid renders a responsive 4-column grid for stat cards.
+templ StatGrid() {
+	<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+		{ children... }
+	</div>
+}

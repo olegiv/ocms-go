@@ -11,7 +11,9 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
 	"github.com/olegiv/ocms-go/internal/views/components/input"
 	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
+	"github.com/olegiv/ocms-go/internal/views/components/textarea"
 )
 
 // CategoryListItem holds data for a category in the list view.
@@ -83,7 +85,7 @@ templ CategoriesListPage(pc *PageContext, data CategoriesListData) {
 								@table.Head() { { pc.T("label.language") } }
 								@table.Head() { { pc.T("label.description") } }
 								@table.Head() { { pc.T("nav.pages") } }
-								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+								@table.Head() { { pc.T("label.actions") } }
 							}
 						}
 						@table.Body() {
@@ -127,11 +129,9 @@ templ CategoriesListPage(pc *PageContext, data CategoriesListData) {
 											{ pc.T("categories.page_count", cat.UsageCount) }
 										}
 									}
-									@table.Cell(table.CellProps{Class: "text-right"}) {
+									@table.Cell() {
 										<div class="action-buttons">
-											@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/categories/%d", cat.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
-												@icon.Pencil(icon.Props{Size: 14})
-											}
+											@EditButton(fmt.Sprintf("/admin/categories/%d", cat.ID), pc.T("btn.edit"))
 											@deleteCategoryModal(pc, cat)
 										</div>
 									}
@@ -274,13 +274,14 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 					@label.Label(label.Props{For: "description", Class: "block mb-1"}) {
 						{ pc.T("categories.description_label") }
 					}
-					<textarea
-						id="description"
-						name="description"
-						class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["description"] != "") }
-						rows="3"
-						placeholder={ pc.T("categories.description_placeholder") }
-					>{ categoryFormValue(data, "description") }</textarea>
+					@textarea.Textarea(textarea.Props{
+						ID:          "description",
+						Name:        "description",
+						Value:       categoryFormValue(data, "description"),
+						Placeholder: pc.T("categories.description_placeholder"),
+						Rows:        3,
+						HasError:    data.Errors["description"] != "",
+					})
 					if data.Errors["description"] != "" {
 						<span class="form-error">{ data.Errors["description"] }</span>
 					} else {
@@ -293,23 +294,34 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 						@label.Label(label.Props{For: "parent_id", Class: "block mb-1"}) {
 							{ pc.T("categories.parent_category") }
 						}
-						<select
-							id="parent_id"
-							name="parent_id"
-							class={ templ.KV("form-input", true), templ.KV("is-invalid", data.Errors["parent_id"] != "") }
-						>
-							<option value="">{ pc.T("categories.no_parent") }</option>
-							for _, cat := range data.AllCategories {
-								if data.Category == nil || cat.ID != data.Category.ID {
-									<option
-										value={ fmt.Sprintf("%d", cat.ID) }
-										selected?={ isCurrentParent(data, cat.ID) }
-									>
-										{ categoryIndent(cat.Depth) }{ cat.Name }
-									</option>
+						@selectbox.SelectBox() {
+							@selectbox.Trigger(selectbox.TriggerProps{
+								Name:     "parent_id",
+								HasError: data.Errors["parent_id"] != "",
+							}) {
+								@selectbox.Value(selectbox.ValueProps{
+									Placeholder: pc.T("categories.no_parent"),
+								})
+							}
+							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+								@selectbox.Item(selectbox.ItemProps{
+									Value:    "",
+									Selected: !isAnyParentSelected(data),
+								}) {
+									{ pc.T("categories.no_parent") }
+								}
+								for _, cat := range data.AllCategories {
+									if data.Category == nil || cat.ID != data.Category.ID {
+										@selectbox.Item(selectbox.ItemProps{
+											Value:    fmt.Sprintf("%d", cat.ID),
+											Selected: isCurrentParent(data, cat.ID),
+										}) {
+											{ categoryIndent(cat.Depth) }{ cat.Name }
+										}
+									}
 								}
 							}
-						</select>
+						}
 						if data.Errors["parent_id"] != "" {
 							<span class="form-error">{ data.Errors["parent_id"] }</span>
 						} else {
@@ -344,21 +356,26 @@ templ CategoryFormPage(pc *PageContext, data CategoryFormData) {
 							@label.Label(label.Props{For: "language_code", Class: "block mb-1"}) {
 								{ pc.T("label.language") }
 							}
-							<select
-								id="language_code"
-								name={ catLanguageFieldName(data.IsEdit) }
-								class="form-select"
-								disabled?={ data.IsEdit }
-							>
-								for _, lang := range data.AllLanguages {
-									<option
-										value={ lang.Code }
-										selected?={ lang.Code == catCurrentLanguageCode(data) }
-									>
-										{ lang.Name } ({ lang.Code })
-									</option>
+							@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
+								@selectbox.Trigger(selectbox.TriggerProps{
+									Name:     catLanguageFieldName(data.IsEdit),
+									Disabled: data.IsEdit,
+								}) {
+									@selectbox.Value(selectbox.ValueProps{
+										Placeholder: pc.T("label.language"),
+									})
 								}
-							</select>
+								@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+									for _, lang := range data.AllLanguages {
+										@selectbox.Item(selectbox.ItemProps{
+											Value:    lang.Code,
+											Selected: lang.Code == catCurrentLanguageCode(data),
+										}) {
+											{ lang.Name } ({ lang.Code })
+										}
+									}
+								}
+							}
 							if data.IsEdit {
 								<input type="hidden" name="language_code" value={ catLanguageHiddenValue(data) }/>
 								<span class="form-hint">{ pc.T("categories.language_readonly") }</span>
@@ -532,6 +549,18 @@ func isCurrentParent(data CategoryFormData, catID int64) bool {
 	}
 	if data.Category != nil && data.Category.HasParent {
 		return data.Category.ParentID == catID
+	}
+	return false
+}
+
+// isAnyParentSelected returns true when no parent category is currently selected,
+// used to pre-select the "No parent" option in the selectbox.
+func isAnyParentSelected(data CategoryFormData) bool {
+	if v, ok := data.FormValues["parent_id"]; ok && v != "" {
+		return true
+	}
+	if data.Category != nil && data.Category.HasParent {
+		return true
 	}
 	return false
 }

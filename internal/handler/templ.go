@@ -102,6 +102,12 @@ func renderTempl(w http.ResponseWriter, r *http.Request, component templ.Compone
 	}
 }
 
+// ConvertPagination converts handler AdminPagination to view PaginationData.
+// Exported for use by modules that need pagination support.
+func ConvertPagination(p AdminPagination) adminviews.PaginationData {
+	return convertPagination(p)
+}
+
 // convertPagination converts handler AdminPagination to view PaginationData.
 func convertPagination(p AdminPagination) adminviews.PaginationData {
 	var pages []adminviews.PaginationPage
@@ -1966,6 +1972,8 @@ func convertMediaEditViewData(data MediaEditData, lang string) adminviews.MediaE
 		switch v.Type {
 		case "thumbnail":
 			typeLabel = i18n.T(lang, "media.variant_thumbnail")
+		case "grid":
+			typeLabel = i18n.T(lang, "media.variant_grid")
 		case "medium":
 			typeLabel = i18n.T(lang, "media.variant_medium")
 		case "large":

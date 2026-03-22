@@ -17,6 +17,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/store"
 )
@@ -290,10 +291,10 @@ func (h *HealthHandler) checkSessionAuth(r *http.Request) (authenticated bool) {
 		}
 	}()
 
-	userID := h.sm.GetInt64(r.Context(), SessionKeyUserID)
+	userID := h.sm.GetInt64(r.Context(), middleware.SessionKeyUserID)
 	if userID > 0 {
 		user, err := h.queries.GetUserByID(r.Context(), userID)
-		if err == nil && (user.Role == RoleAdmin || user.Role == RoleEditor) {
+		if err == nil && (user.Role == model.RoleAdmin || user.Role == model.RoleEditor) {
 			return true
 		}
 	}
@@ -306,7 +307,7 @@ func (h *HealthHandler) isAdmin(r *http.Request) bool {
 	if h.sm == nil {
 		return false
 	}
-	return h.checkSessionRole(r, RoleAdmin)
+	return h.checkSessionRole(r, model.RoleAdmin)
 }
 
 // checkSessionRole checks if the request has a valid session with the given role.
@@ -318,7 +319,7 @@ func (h *HealthHandler) checkSessionRole(r *http.Request, role string) (hasRole 
 		}
 	}()
 
-	userID := h.sm.GetInt64(r.Context(), SessionKeyUserID)
+	userID := h.sm.GetInt64(r.Context(), middleware.SessionKeyUserID)
 	if userID > 0 {
 		user, err := h.queries.GetUserByID(r.Context(), userID)
 		if err == nil && user.Role == role {

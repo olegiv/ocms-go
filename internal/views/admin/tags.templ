@@ -5,6 +5,7 @@ package admin
 
 import (
 	"fmt"
+	"net/url"
 	"time"
 	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
@@ -12,6 +13,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
 	"github.com/olegiv/ocms-go/internal/views/components/input"
 	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
@@ -27,9 +29,48 @@ type TagListItem struct {
 
 // TagsListData holds all data for the tags list page.
 type TagsListData struct {
-	Tags       []TagListItem
-	TotalCount int64
-	Pagination PaginationData
+	Tags           []TagListItem
+	TotalCount     int64
+	Pagination     PaginationData
+	LanguageFilter string
+	SearchFilter   string
+	AllLanguages   []LanguageOption
+}
+
+// tagsListURL builds the tags list URL preserving active filters.
+func tagsListURL(p PaginationData, languageFilter string, searchFilter string) string {
+	params := make(url.Values)
+	if p.QueryString != "" {
+		if parsed, err := url.ParseQuery(p.QueryString); err == nil {
+			for k, values := range parsed {
+				if len(values) == 0 {
+					continue
+				}
+				params[k] = append([]string(nil), values...)
+			}
+		}
+	}
+
+	params.Del("page")
+	if languageFilter != "" {
+		params.Set("language", languageFilter)
+	} else {
+		params.Del("language")
+	}
+	if searchFilter != "" {
+		params.Set("search", searchFilter)
+	} else {
+		params.Del("search")
+	}
+
+	baseURL := p.BaseURL
+	if baseURL == "" {
+		baseURL = "/admin/tags"
+	}
+	if encoded := params.Encode(); encoded != "" {
+		return baseURL + "?" + encoded
+	}
+	return baseURL
 }
 
 // TagFormData holds all data for the tag create/edit form.
@@ -73,6 +114,88 @@ templ TagsListPage(pc *PageContext, data TagsListData) {
 				@icon.Tag(icon.Props{Size: 16})
 				{ pc.T("tags.new") }
 			}
+		}
+		<!-- Filters -->
+		<div class="filter-bar">
+			if len(data.AllLanguages) > 0 {
+				<div class="filter-group">
+					<label class="filter-label">{ pc.T("label.language") }:</label>
+					<form action="/admin/tags" method="get" class="filter-form">
+						if data.SearchFilter != "" {
+							<input type="hidden" name="search" value={ data.SearchFilter }/>
+						}
+						if data.Pagination.SortField != "" {
+							<input type="hidden" name="sort" value={ data.Pagination.SortField }/>
+							<input type="hidden" name="dir" value={ data.Pagination.SortDir }/>
+						}
+						if data.Pagination.HasPerPageSelector() {
+							<input type="hidden" name="per_page" value={ fmt.Sprintf("%d", data.Pagination.PerPageSelector.Current) }/>
+						}
+						@selectbox.SelectBox(selectbox.Props{Attributes: templ.Attributes{"data-auto-submit": "true"}}) {
+							@selectbox.Trigger(selectbox.TriggerProps{
+								Name: "language",
+							}) {
+								@selectbox.Value(selectbox.ValueProps{
+									Placeholder: pc.T("pages.all_languages"),
+								})
+							}
+							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+								@selectbox.Item(selectbox.ItemProps{
+									Value:    "",
+									Selected: data.LanguageFilter == "",
+								}) {
+									{ pc.T("pages.all_languages") }
+								}
+								for _, lang := range data.AllLanguages {
+									@selectbox.Item(selectbox.ItemProps{
+										Value:    lang.Code,
+										Selected: data.LanguageFilter == lang.Code,
+									}) {
+										{ lang.Name } ({ lang.Code })
+									}
+								}
+							}
+						}
+					</form>
+				</div>
+			}
+			<div class="filter-group filter-group-search">
+				<form action="/admin/tags" method="get" class="search-form">
+					if data.LanguageFilter != "" {
+						<input type="hidden" name="language" value={ data.LanguageFilter }/>
+					}
+					if data.Pagination.SortField != "" {
+						<input type="hidden" name="sort" value={ data.Pagination.SortField }/>
+						<input type="hidden" name="dir" value={ data.Pagination.SortDir }/>
+					}
+					if data.Pagination.HasPerPageSelector() {
+						<input type="hidden" name="per_page" value={ fmt.Sprintf("%d", data.Pagination.PerPageSelector.Current) }/>
+					}
+					<div class="search-input-wrapper">
+						@input.Input(input.Props{
+							Name:        "search",
+							Type:        input.TypeSearch,
+							Value:       data.SearchFilter,
+							Placeholder: pc.T("tags.search_placeholder"),
+							Class:       "form-control-sm",
+							Attributes:  templ.Attributes{"aria-label": pc.T("btn.search")},
+						})
+						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeSubmit, Class: "search-btn", Attributes: templ.Attributes{"title": pc.T("btn.search")}}) {
+							@iconSearch14()
+						}
+						if data.SearchFilter != "" {
+							@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: tagsListURL(data.Pagination, data.LanguageFilter, ""), Class: "clear-search-btn", Attributes: templ.Attributes{"title": pc.T("btn.clear")}}) {
+								@iconX14()
+							}
+						}
+					</div>
+				</form>
+			</div>
+		</div>
+		if data.SearchFilter != "" {
+			<div class="search-results-info">
+				<p>{ pc.T("tags.search_results", data.TotalCount, data.SearchFilter) }</p>
+			</div>
 		}
 		if len(data.Tags) > 0 {
 			@card.Card(card.Props{ID: "tags-table"}) {
@@ -126,7 +249,7 @@ templ TagsListPage(pc *PageContext, data TagsListData) {
 										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("created_at"))) }</span>
 									</a>
 								}
-								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+								@table.Head() { { pc.T("label.actions") } }
 							}
 						}
 						@table.Body() {
@@ -165,11 +288,9 @@ templ TagsListPage(pc *PageContext, data TagsListData) {
 										}
 									}
 									@table.Cell() { { tag.CreatedAt.Format("Jan 02, 2006") } }
-									@table.Cell(table.CellProps{Class: "text-right"}) {
+									@table.Cell() {
 										<div class="action-buttons">
-											@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/tags/%d", tag.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
-												@icon.Pencil(icon.Props{Size: 14})
-											}
+											@EditButton(fmt.Sprintf("/admin/tags/%d", tag.ID), pc.T("btn.edit"))
 											@deleteTagModal(pc, tag)
 										</div>
 									}
@@ -178,10 +299,20 @@ templ TagsListPage(pc *PageContext, data TagsListData) {
 						}
 					}
 				</div>
-				if data.Pagination.ShouldShow() || data.Pagination.HasBulkAction() {
-					@card.Footer() {
-						@Pagination(pc, data.Pagination)
-					}
+				@Pagination(pc, data.Pagination)
+			}
+		} else if data.SearchFilter != "" || data.LanguageFilter != "" {
+			@card.Card(card.Props{}) {
+				@card.Content() {
+					<div class="empty-state">
+						<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"></path><path d="M7 7h.01"></path></svg>
+						<p>{ pc.T("tags.no_results") }</p>
+						<div class="empty-state-action">
+							@button.Button(button.Props{Href: "/admin/tags"}) {
+								{ pc.T("btn.clear_filters") }
+							}
+						</div>
+					</div>
 				}
 			}
 		} else {
@@ -314,21 +445,26 @@ templ TagFormPage(pc *PageContext, data TagFormData) {
 							@label.Label(label.Props{For: "language_code", Class: "block mb-1"}) {
 								{ pc.T("label.language") }
 							}
-							<select
-								id="language_code"
-								name={ languageFieldName(data.IsEdit) }
-								class="form-select"
-								disabled?={ data.IsEdit }
-							>
-								for _, lang := range data.AllLanguages {
-									<option
-										value={ lang.Code }
-										selected?={ lang.Code == currentLanguageCode(data) }
-									>
-										{ lang.Name } ({ lang.Code })
-									</option>
+							@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
+								@selectbox.Trigger(selectbox.TriggerProps{
+									Name:     languageFieldName(data.IsEdit),
+									Disabled: data.IsEdit,
+								}) {
+								@selectbox.Value(selectbox.ValueProps{
+									Placeholder: "Select language",
+								})
 								}
-							</select>
+								@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+									for _, lang := range data.AllLanguages {
+										@selectbox.Item(selectbox.ItemProps{
+											Value:    lang.Code,
+											Selected: lang.Code == currentLanguageCode(data),
+										}) {
+											{ lang.Name } ({ lang.Code })
+										}
+									}
+								}
+							}
 							if data.IsEdit {
 								<input type="hidden" name="language_code" value={ languageHiddenValue(data) }/>
 								<span class="form-hint">{ pc.T("tags.language_readonly") }</span>

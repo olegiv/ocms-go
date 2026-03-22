@@ -1,0 +1,63 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import (
+	"github.com/olegiv/ocms-go/internal/views/components/button"
+	"github.com/olegiv/ocms-go/internal/views/components/icon"
+)
+
+// EditButton renders a small icon-only edit link button.
+templ EditButton(href string, title string) {
+	@button.Button(button.Props{
+		Variant:    button.VariantOutline,
+		Size:       button.SizeSm,
+		Href:       href,
+		Attributes: templ.Attributes{"title": title},
+	}) {
+		@icon.Pencil(icon.Props{Size: 14})
+	}
+}
+
+// DeleteButton renders a small icon-only destructive delete button with htmx.
+templ DeleteButton(deleteURL string, confirmMsg string, target string) {
+	@button.Button(button.Props{
+		Variant: button.VariantDestructive,
+		Size:    button.SizeSm,
+		Attributes: templ.Attributes{
+			"title":      "Delete",
+			"hx-delete":  deleteURL,
+			"hx-confirm": confirmMsg,
+			"hx-target":  target,
+			"hx-swap":    "outerHTML",
+		},
+	}) {
+		@icon.Trash2(icon.Props{Size: 14})
+	}
+}
+
+// DownloadButton renders a small icon-only download link button.
+templ DownloadButton(href string, title string) {
+	@button.Button(button.Props{
+		Variant:    button.VariantOutline,
+		Size:       button.SizeSm,
+		Href:       href,
+		Attributes: templ.Attributes{"title": title, "download": ""},
+	}) {
+		@icon.Download(icon.Props{Size: 14})
+	}
+}
+
+// ViewButton renders a small icon-only view/preview link button (opens in new tab).
+templ ViewButton(href string, title string) {
+	@button.Button(button.Props{
+		Variant:    button.VariantOutline,
+		Size:       button.SizeSm,
+		Href:       href,
+		Target:     "_blank",
+		Attributes: templ.Attributes{"title": title},
+	}) {
+		@icon.Eye(icon.Props{Size: 14})
+	}
+}

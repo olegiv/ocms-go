@@ -5,6 +5,11 @@ package admin
 
 import (
 	"fmt"
+	"github.com/olegiv/ocms-go/internal/views/components/checkbox"
+	"github.com/olegiv/ocms-go/internal/views/components/input"
+	"github.com/olegiv/ocms-go/internal/views/components/popover"
+	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
+	"github.com/olegiv/ocms-go/internal/views/components/textarea"
 	"github.com/olegiv/ocms-go/internal/views/utils"
 )
 
@@ -50,6 +55,12 @@ templ AdminLayout(pc *PageContext) {
 		<!-- Admin core utilities -->
 		<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/admin-core.js") }></script>
 		<script nonce={ templ.GetNonce(ctx) } src={ utils.ScriptURL("/static/dist/js/media-dropzone.js") }></script>
+		<!-- templUI component scripts (loaded once globally) -->
+		@checkbox.Script()
+		@input.Script()
+		@textarea.Script()
+		@popover.Script()
+		@selectbox.Script()
 	</body>
 	</html>
 }

@@ -25,9 +25,6 @@ import (
 	"github.com/olegiv/ocms-go/modules/hcaptcha"
 )
 
-// SessionKeyUserID is the session key for storing the authenticated user ID.
-const SessionKeyUserID = "user_id"
-
 // AuthHandler handles authentication routes.
 type AuthHandler struct {
 	queries         *store.Queries
@@ -54,10 +51,10 @@ func NewAuthHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManage
 // Redirects already-authenticated users: admin/editor → dashboard, others → homepage.
 func (h *AuthHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
 	// Redirect already-authenticated users
-	if userID := h.sessionManager.GetInt64(r.Context(), SessionKeyUserID); userID > 0 {
+	if userID := h.sessionManager.GetInt64(r.Context(), middleware.SessionKeyUserID); userID > 0 {
 		user, err := h.queries.GetUserByID(r.Context(), userID)
 		if err == nil {
-			if user.Role == RoleAdmin || user.Role == RoleEditor {
+			if user.Role == model.RoleAdmin || user.Role == model.RoleEditor {
 				http.Redirect(w, r, redirectAdmin, http.StatusSeeOther)
 				return
 			}
@@ -243,7 +240,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Store user ID in session
-	h.sessionManager.Put(r.Context(), SessionKeyUserID, user.ID)
+	h.sessionManager.Put(r.Context(), middleware.SessionKeyUserID, user.ID)
 
 	slog.Info("user logged in", "user_id", user.ID, "email", user.Email)
 	_ = h.eventService.LogAuthEvent(r.Context(), model.EventLevelInfo, "User logged in", &user.ID, clientIP, middleware.GetRequestURL(r), map[string]any{"email": user.Email})
@@ -266,7 +263,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get user ID for logging before destroying session
-	userID := h.sessionManager.GetInt64(r.Context(), SessionKeyUserID)
+	userID := h.sessionManager.GetInt64(r.Context(), middleware.SessionKeyUserID)
 
 	// Log the event before destroying session
 	if userID > 0 {

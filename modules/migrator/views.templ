@@ -250,20 +250,20 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 						if data.ImportedCounts["page"] > 0 || data.ImportedCounts["tag"] > 0 || data.ImportedCounts["media"] > 0 || data.ImportedCounts["user"] > 0 {
 							<div class="imported-stats">
 								<div class="stat-item">
-									<span class="stat-label">{ pc.T("migrator.imported_pages") }:</span>
-									<span class="stat-value">{ fmt.Sprintf("%d", data.ImportedCounts["page"]) }</span>
+									<span class="migrator-stat-label">{ pc.T("migrator.imported_pages") }:</span>
+									<span class="migrator-stat-value">{ fmt.Sprintf("%d", data.ImportedCounts["page"]) }</span>
 								</div>
 								<div class="stat-item">
-									<span class="stat-label">{ pc.T("migrator.imported_tags") }:</span>
-									<span class="stat-value">{ fmt.Sprintf("%d", data.ImportedCounts["tag"]) }</span>
+									<span class="migrator-stat-label">{ pc.T("migrator.imported_tags") }:</span>
+									<span class="migrator-stat-value">{ fmt.Sprintf("%d", data.ImportedCounts["tag"]) }</span>
 								</div>
 								<div class="stat-item">
-									<span class="stat-label">{ pc.T("migrator.imported_media") }:</span>
-									<span class="stat-value">{ fmt.Sprintf("%d", data.ImportedCounts["media"]) }</span>
+									<span class="migrator-stat-label">{ pc.T("migrator.imported_media") }:</span>
+									<span class="migrator-stat-value">{ fmt.Sprintf("%d", data.ImportedCounts["media"]) }</span>
 								</div>
 								<div class="stat-item">
-									<span class="stat-label">{ pc.T("migrator.imported_users") }:</span>
-									<span class="stat-value">{ fmt.Sprintf("%d", data.ImportedCounts["user"]) }</span>
+									<span class="migrator-stat-label">{ pc.T("migrator.imported_users") }:</span>
+									<span class="migrator-stat-value">{ fmt.Sprintf("%d", data.ImportedCounts["user"]) }</span>
 								</div>
 							</div>
 							<form method="POST" action={ templ.URL("/admin/migrator/" + data.SourceName + "/delete") } id="delete-imported-form" data-confirm={ pc.T("migrator.confirm_delete") }>
@@ -401,11 +401,11 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 				gap: 0.5rem;
 			}
 
-			.stat-label {
+			.migrator-stat-label {
 				font-weight: 500;
 			}
 
-			.stat-value {
+			.migrator-stat-value {
 				font-weight: 600;
 				color: var(--primary-color, #3b82f6);
 			}

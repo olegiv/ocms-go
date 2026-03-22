@@ -13,6 +13,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 	"github.com/olegiv/ocms-go/internal/views/components/input"
 	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 )
 
 // UserListItem holds data for a user in the list view.
@@ -132,7 +133,7 @@ templ UsersListPage(pc *PageContext, data UsersListData) {
 											<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("last_login_at"))) }</span>
 										</a>
 									}
-									@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+									@table.Head() { { pc.T("label.actions") } }
 								}
 							}
 							@table.Body() {
@@ -175,11 +176,9 @@ templ UsersListPage(pc *PageContext, data UsersListData) {
 												<span class="text-muted">{ pc.T("users.never") }</span>
 											}
 										}
-										@table.Cell(table.CellProps{Class: "text-right"}) {
+										@table.Cell() {
 											<div class="action-buttons">
-												@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/users/%d", user.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
-													@icon.Pencil(icon.Props{Size: 14})
-												}
+												@EditButton(fmt.Sprintf("/admin/users/%d", user.ID), pc.T("btn.edit"))
 												if !user.IsCurrentUser {
 													@deleteUserModal(pc, user)
 												}
@@ -191,11 +190,7 @@ templ UsersListPage(pc *PageContext, data UsersListData) {
 						}
 					</div>
 				}
-				if data.Pagination.ShouldShow() || data.Pagination.HasBulkAction() {
-					@card.Footer() {
-						@Pagination(pc, data.Pagination)
-					}
-				}
+				@Pagination(pc, data.Pagination)
 			}
 		} else {
 			@card.Card() {
@@ -318,19 +313,29 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 						@label.Label(label.Props{For: "role", Class: "block mb-1"}) {
 							{ pc.T("label.role") } <span class="required">*</span>
 						}
-						<select
-							id="role"
-							name="role"
-							class={ templ.KV("form-input form-select", true), templ.KV("is-invalid", data.Errors["role"] != "") }
-							required
-						>
-							<option value="">{ pc.T("users.select_role") }</option>
-							for _, role := range data.Roles {
-								<option value={ role } selected?={ role == userFormValue(data, "role") }>
-									{ roleLabel(pc, role) }
-								</option>
+						@selectbox.SelectBox() {
+							@selectbox.Trigger(selectbox.TriggerProps{
+								Name:     "role",
+								HasError: data.Errors["role"] != "",
+								Attributes: templ.Attributes{
+									"required": true,
+								},
+							}) {
+								@selectbox.Value(selectbox.ValueProps{
+									Placeholder: pc.T("users.select_role"),
+								})
 							}
-						</select>
+							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+								for _, role := range data.Roles {
+									@selectbox.Item(selectbox.ItemProps{
+										Value:    role,
+										Selected: role == userFormValue(data, "role"),
+									}) {
+										{ roleLabel(pc, role) }
+									}
+								}
+							}
+						}
 						if data.Errors["role"] != "" {
 							<span class="form-error">{ data.Errors["role"] }</span>
 						}

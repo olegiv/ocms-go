@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"log/slog"
 	"net/http"
 	"strings"
 )
@@ -238,7 +239,8 @@ func applyCSPNonce(policy, nonce string) string {
 func generateCSPNonce() string {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
-		return "ocmsnoncefallback"
+		slog.Error("failed to generate CSP nonce", "error", err)
+		return ""
 	}
 	return base64.RawStdEncoding.EncodeToString(b[:])
 }

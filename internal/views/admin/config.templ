@@ -7,6 +7,7 @@ import "fmt"
 import "strings"
 import "github.com/olegiv/ocms-go/internal/views/components/button"
 import "github.com/olegiv/ocms-go/internal/views/components/card"
+import "github.com/olegiv/ocms-go/internal/views/components/checkbox"
 import "github.com/olegiv/ocms-go/internal/views/components/input"
 import "github.com/olegiv/ocms-go/internal/views/components/label"
 
@@ -132,19 +133,22 @@ templ ConfigPage(pc *PageContext, data ConfigViewData) {
 						for _, item := range data.Items {
 							<div>
 								if item.Type == "bool" {
-									<label class="checkbox-label">
-										<input
-											type="checkbox"
-											id={ item.Key }
-											name={ item.Key }
-											value="true"
-											checked?={ item.Value == "true" }
-										/>
-										<span>{ item.Label }</span>
-									</label>
-									if item.Description != "" {
-										<p class="mt-1 text-xs text-muted-foreground">{ item.Description }</p>
-									}
+									<div class="flex items-start gap-3">
+										@checkbox.Checkbox(checkbox.Props{
+											ID:      item.Key,
+											Name:    item.Key,
+											Value:   "true",
+											Checked: item.Value == "true",
+										})
+										<div class="grid gap-0.5">
+											@label.Label(label.Props{For: item.Key}) {
+												{ item.Label }
+											}
+											if item.Description != "" {
+												<p class="text-sm text-muted-foreground">{ item.Description }</p>
+											}
+										</div>
+									</div>
 								} else if item.Type == "int" {
 									@label.Label(label.Props{For: item.Key, Class: "block mb-1"}) {
 										{ item.Label }

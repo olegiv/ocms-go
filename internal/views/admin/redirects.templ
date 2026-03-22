@@ -10,9 +10,11 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/badge"
 	"github.com/olegiv/ocms-go/internal/views/components/button"
 	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/components/checkbox"
 	"github.com/olegiv/ocms-go/internal/views/components/icon"
 	"github.com/olegiv/ocms-go/internal/views/components/input"
 	"github.com/olegiv/ocms-go/internal/views/components/label"
+	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
 	"github.com/olegiv/ocms-go/internal/views/components/table"
 )
 
@@ -82,7 +84,7 @@ templ RedirectsListPage(pc *PageContext, data RedirectsListData) {
 								@table.Head() { { pc.T("redirects.status_code") } }
 								@table.Head() { { pc.T("redirects.target_type") } }
 								@table.Head() { { pc.T("label.status") } }
-								@table.Head(table.HeadProps{Class: "text-right"}) { { pc.T("label.actions") } }
+								@table.Head() { { pc.T("label.actions") } }
 							}
 						}
 						@table.Body() {
@@ -176,11 +178,9 @@ templ RedirectRow(pc *PageContext, redirect RedirectListItem) {
 				}
 			</button>
 		}
-		@table.Cell(table.CellProps{Class: "text-right"}) {
+		@table.Cell() {
 			<div class="action-buttons">
-				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/redirects/%d", redirect.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
-					@icon.Pencil(icon.Props{Size: 14})
-				}
+				@EditButton(fmt.Sprintf("/admin/redirects/%d", redirect.ID), pc.T("btn.edit"))
 				@deleteRedirectModal(pc, redirect)
 			</div>
 		}
@@ -301,21 +301,27 @@ templ RedirectFormPage(pc *PageContext, data RedirectFormData) {
 							@label.Label(label.Props{For: "status_code", Class: "block mb-1"}) {
 								{ pc.T("redirects.status_code") } <span class="required">*</span>
 							}
-							<select
-								id="status_code"
-								name="status_code"
-								class={ templ.KV("form-select", true), templ.KV("is-invalid", data.Errors["status_code"] != "") }
-								required
-							>
-								for _, sc := range data.StatusCodes {
-									<option
-										value={ fmt.Sprintf("%d", sc.Code) }
-										selected?={ fmt.Sprintf("%d", sc.Code) == redirectCurrentStatusCode(data) }
-									>
-										{ sc.Label }
-									</option>
+							@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
+								@selectbox.Trigger(selectbox.TriggerProps{
+									Name:     "status_code",
+									HasError: data.Errors["status_code"] != "",
+									Attributes: templ.Attributes{"required": "true"},
+								}) {
+									@selectbox.Value(selectbox.ValueProps{
+										Placeholder: "Select status code",
+									})
 								}
-							</select>
+								@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+									for _, sc := range data.StatusCodes {
+										@selectbox.Item(selectbox.ItemProps{
+											Value:    fmt.Sprintf("%d", sc.Code),
+											Selected: fmt.Sprintf("%d", sc.Code) == redirectCurrentStatusCode(data),
+										}) {
+											{ sc.Label }
+										}
+									}
+								}
+							}
 							if data.Errors["status_code"] != "" {
 								<span class="form-error">{ data.Errors["status_code"] }</span>
 							} else {
@@ -326,20 +332,26 @@ templ RedirectFormPage(pc *PageContext, data RedirectFormData) {
 							@label.Label(label.Props{For: "target_type", Class: "block mb-1"}) {
 								{ pc.T("redirects.target_type") }
 							}
-							<select
-								id="target_type"
-								name="target_type"
-								class={ templ.KV("form-select", true), templ.KV("is-invalid", data.Errors["target_type"] != "") }
-							>
-								for _, tt := range data.TargetTypes {
-									<option
-										value={ tt }
-										selected?={ tt == redirectCurrentTargetType(data) }
-									>
-										{ tt }
-									</option>
+							@selectbox.SelectBox(selectbox.Props{Class: "select-no-clear"}) {
+								@selectbox.Trigger(selectbox.TriggerProps{
+									Name:     "target_type",
+									HasError: data.Errors["target_type"] != "",
+								}) {
+									@selectbox.Value(selectbox.ValueProps{
+										Placeholder: "Select target type",
+									})
 								}
-							</select>
+								@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+									for _, tt := range data.TargetTypes {
+										@selectbox.Item(selectbox.ItemProps{
+											Value:    tt,
+											Selected: tt == redirectCurrentTargetType(data),
+										}) {
+											{ tt }
+										}
+									}
+								}
+							}
 							if data.Errors["target_type"] != "" {
 								<span class="form-error">{ data.Errors["target_type"] }</span>
 							} else {
@@ -348,32 +360,36 @@ templ RedirectFormPage(pc *PageContext, data RedirectFormData) {
 						</div>
 					</div>
 					<div class="form-group">
-						<label class="checkbox-label">
-							<input
-								type="checkbox"
-								name="is_wildcard"
-								value="true"
-								checked?={ redirectFormChecked(data, "is_wildcard") }
-							/>
-							<span class="checkbox-text">
-								<strong>{ pc.T("redirects.is_wildcard") }</strong>
-								<small>{ pc.T("redirects.is_wildcard_hint") }</small>
-							</span>
-						</label>
+						<div class="flex items-start gap-3">
+							@checkbox.Checkbox(checkbox.Props{
+								ID:      "is_wildcard",
+								Name:    "is_wildcard",
+								Value:   "true",
+								Checked: redirectFormChecked(data, "is_wildcard"),
+							})
+							<div class="grid gap-0.5">
+								@label.Label(label.Props{For: "is_wildcard"}) {
+									<strong>{ pc.T("redirects.is_wildcard") }</strong>
+								}
+								<p class="text-sm text-muted-foreground">{ pc.T("redirects.is_wildcard_hint") }</p>
+							</div>
+						</div>
 					</div>
 					<div class="form-group">
-						<label class="checkbox-label">
-							<input
-								type="checkbox"
-								name="enabled"
-								value="true"
-								checked?={ redirectFormChecked(data, "enabled") }
-							/>
-							<span class="checkbox-text">
-								<strong>{ pc.T("redirects.enabled") }</strong>
-								<small>{ pc.T("redirects.enabled_hint") }</small>
-							</span>
-						</label>
+						<div class="flex items-start gap-3">
+							@checkbox.Checkbox(checkbox.Props{
+								ID:      "enabled",
+								Name:    "enabled",
+								Value:   "true",
+								Checked: redirectFormChecked(data, "enabled"),
+							})
+							<div class="grid gap-0.5">
+								@label.Label(label.Props{For: "enabled"}) {
+									<strong>{ pc.T("redirects.enabled") }</strong>
+								}
+								<p class="text-sm text-muted-foreground">{ pc.T("redirects.enabled_hint") }</p>
+							</div>
+						</div>
 					</div>
 					if data.IsEdit && data.Redirect != nil {
 						<div class="form-group">

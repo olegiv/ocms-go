@@ -15,13 +15,17 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/olegiv/ocms-go/internal/handler"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
-const maxSentinelJSONBodyBytes int64 = 8 << 10 // 8 KiB
+const (
+	maxSentinelJSONBodyBytes int64 = 8 << 10 // 8 KiB
+	bansPerPage                    = 20
+)
 
 // requireUser returns the authenticated user or writes a 401 response.
 // Returns nil if the user is not authenticated (caller should return immediately).
@@ -42,7 +46,21 @@ func (m *Module) handleAdminList(w http.ResponseWriter, r *http.Request) {
 	}
 	lang := m.ctx.Render.GetAdminLang(r)
 
-	bans, err := m.listBannedIPs()
+	// Pagination for banned IPs
+	page := handler.ParsePageParam(r)
+	perPage := handler.ParsePerPageParam(r, bansPerPage, handler.MaxPerPageSelectionValue)
+
+	totalBans, err := m.countBannedIPs()
+	if err != nil {
+		m.ctx.Logger.Error("failed to count banned IPs", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	page, _ = handler.NormalizePagination(page, int(totalBans), perPage)
+	offset := int64((page - 1) * perPage)
+
+	bans, err := m.listBannedIPs(int64(perPage), offset)
 	if err != nil {
 		m.ctx.Logger.Error("failed to list banned IPs", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -96,6 +114,10 @@ func (m *Module) handleAdminList(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	handlerPagination := handler.BuildAdminPagination(page, int(totalBans), perPage, "/admin/sentinel", r.URL.Query())
+	pagination := handler.ConvertPagination(handlerPagination)
+	pagination.PerPageSelector = handler.PerPageSelector(perPage, handler.PerPageOptionsStandard)
+
 	viewData := SentinelViewData{
 		Version:         m.Version(),
 		BanCheckEnabled: m.IsBanCheckEnabled(),
@@ -103,6 +125,7 @@ func (m *Module) handleAdminList(w http.ResponseWriter, r *http.Request) {
 		Bans:            viewBans,
 		Paths:           viewPaths,
 		Whitelist:       viewWhitelist,
+		Pagination:      pagination,
 	}
 
 	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "sentinel.title"), []render.Breadcrumb{
@@ -442,12 +465,19 @@ func (m *Module) handleDeleteWhitelist(w http.ResponseWriter, r *http.Request) {
 // Database operations - Banned IPs
 // ============================================================================
 
-func (m *Module) listBannedIPs() ([]BannedIP, error) {
+func (m *Module) countBannedIPs() (int64, error) {
+	var count int64
+	err := m.ctx.DB.QueryRow("SELECT COUNT(*) FROM sentinel_banned_ips").Scan(&count)
+	return count, err
+}
+
+func (m *Module) listBannedIPs(limit, offset int64) ([]BannedIP, error) {
 	rows, err := m.ctx.DB.Query(`
 		SELECT id, ip_pattern, country_code, notes, url, banned_at, created_by
 		FROM sentinel_banned_ips
 		ORDER BY banned_at DESC
-	`)
+		LIMIT ? OFFSET ?
+	`, limit, offset)
 	if err != nil {
 		return nil, err
 	}

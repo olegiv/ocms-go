@@ -202,7 +202,7 @@ func (h *MediaHandler) Library(w http.ResponseWriter, r *http.Request) {
 	for i, m := range mediaList {
 		mediaItems[i] = MediaItem{
 			Medium:       m,
-			ThumbnailURL: h.mediaService.GetThumbnailURL(m),
+			ThumbnailURL: h.mediaService.GetAdminGridPreviewURL(m),
 			OriginalURL:  h.mediaService.GetURL(m, "original"),
 			IsImage:      IsImageMime(m.MimeType),
 			TypeIcon:     getTypeIcon(m.MimeType),

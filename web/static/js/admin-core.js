@@ -54,9 +54,10 @@ function normalizeBulkScope(scope) {
 
 // Declarative helpers for CSP-safe interactions
 document.addEventListener('change', function(e) {
-    const perPageSelector = closestMatch(e.target, 'select[data-per-page-selector="true"]');
+    const perPageSelector = closestMatch(e.target, '[data-per-page-selector="true"]');
     if (perPageSelector) {
-        const selectedValue = Number.parseInt(perPageSelector.value, 10);
+        const hiddenInput = perPageSelector.querySelector('input[type="hidden"]');
+        const selectedValue = Number.parseInt(hiddenInput ? hiddenInput.value : perPageSelector.value, 10);
         if (!Number.isInteger(selectedValue) || selectedValue <= 0) {
             return;
         }
@@ -415,42 +416,6 @@ if (!document.getElementById('toast-styles')) {
     style.id = 'toast-styles';
     style.textContent = '@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}@keyframes slideOut{from{transform:translateX(0);opacity:1}to{transform:translateX(100%);opacity:0}}';
     document.head.appendChild(style);
-}
-
-// Form validation helpers
-function showFieldError(input, message) {
-    const group = input.closest('.form-group');
-    if (group) {
-        group.classList.add('has-error');
-        group.classList.remove('has-success');
-
-        // Remove existing error
-        const existing = group.querySelector('.form-error');
-        if (existing) existing.remove();
-
-        // Add error message
-        const error = document.createElement('div');
-        error.className = 'form-error';
-        error.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>' + message;
-        input.parentNode.insertBefore(error, input.nextSibling);
-    }
-}
-
-function clearFieldError(input) {
-    const group = input.closest('.form-group');
-    if (group) {
-        group.classList.remove('has-error');
-        const error = group.querySelector('.form-error');
-        if (error) error.remove();
-    }
-}
-
-function showFieldSuccess(input) {
-    const group = input.closest('.form-group');
-    if (group) {
-        group.classList.remove('has-error');
-        group.classList.add('has-success');
-    }
 }
 
 // Password strength checker for Alpine.js

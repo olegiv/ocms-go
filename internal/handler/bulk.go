@@ -25,10 +25,17 @@ const (
 	bulkScopeFormsSub = "form-submissions-"
 )
 
+// MaxPerPageSelectionValue is the maximum allowed per-page value.
+// Exported for use by modules.
+const MaxPerPageSelectionValue = maxPerPageSelectionValue
+
 var (
 	perPageOptionsStandard = []int{10, 20, 50, 100}
 	perPageOptionsMedia    = []int{10, 20, 24, 50, 100}
 )
+
+// PerPageOptionsStandard exposes the standard per-page options for modules.
+var PerPageOptionsStandard = perPageOptionsStandard
 
 type bulkIDsPayload struct {
 	IDs []int64 `json:"ids"`
@@ -46,10 +53,10 @@ func parseBulkActionIDs(w http.ResponseWriter, r *http.Request, maxBatch int) ([
 
 	var payload bulkIDsPayload
 	if err := decodeJSONWithLimit(w, r, &payload, MaxJSONBodyBytes); err != nil {
-		return nil, errors.New("Invalid request body")
+		return nil, errors.New("invalid request body")
 	}
 	if len(payload.IDs) == 0 {
-		return nil, errors.New("At least one ID is required")
+		return nil, errors.New("at least one ID is required")
 	}
 
 	seen := make(map[int64]struct{}, len(payload.IDs))
@@ -66,10 +73,10 @@ func parseBulkActionIDs(w http.ResponseWriter, r *http.Request, maxBatch int) ([
 	}
 
 	if len(normalized) == 0 {
-		return nil, errors.New("At least one ID is required")
+		return nil, errors.New("at least one ID is required")
 	}
 	if len(normalized) > maxBatch {
-		return nil, fmt.Errorf("Maximum %d IDs allowed", maxBatch)
+		return nil, fmt.Errorf("maximum %d IDs allowed", maxBatch)
 	}
 
 	return normalized, nil
@@ -91,6 +98,12 @@ func bulkPaginationAction(scope string, deleteURL string) *adminviews.Pagination
 		Scope:     scope,
 		DeleteURL: deleteURL,
 	}
+}
+
+// PerPageSelector creates a per-page selector config for pagination.
+// Exported for use by modules.
+func PerPageSelector(current int, options []int) *adminviews.PaginationPerPageSelector {
+	return perPageSelector(current, options)
 }
 
 func perPageSelector(current int, options []int) *adminviews.PaginationPerPageSelector {
