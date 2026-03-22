@@ -218,7 +218,7 @@
 /* Checkbox label (exclude .form-checkbox which has its own layout) */
 .admin-main .checkbox-label:not(.form-checkbox > .checkbox-label) {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
   font-size: 0.875rem;
   color: var(--color-foreground);
