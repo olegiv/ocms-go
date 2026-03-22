@@ -554,6 +554,10 @@
   border-bottom: 1px solid $gray-100;
 }
 
+.card-header-fixed {
+  min-height: 73px;
+}
+
 .card-title {
   font-size: $font-size-base;
   font-weight: $font-weight-semibold;

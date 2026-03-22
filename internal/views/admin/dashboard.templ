@@ -156,7 +156,7 @@ templ DashboardPage(pc *PageContext, data DashboardData) {
 
 templ recentActivityCard(pc *PageContext, data DashboardData) {
 	@card.Card() {
-		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4 card-header-fixed"}) {
 			@card.Title() {
 				{ pc.T("dashboard.recent_activity") }
 			}
@@ -202,7 +202,7 @@ templ recentActivityCard(pc *PageContext, data DashboardData) {
 
 templ recentSubmissionsCard(pc *PageContext, data DashboardData) {
 	@card.Card() {
-		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4 card-header-fixed"}) {
 			@card.Title() {
 				{ pc.T("dashboard.recent_submissions") }
 			}
@@ -246,7 +246,7 @@ templ recentSubmissionsCard(pc *PageContext, data DashboardData) {
 
 templ webhookHealthCard(pc *PageContext, data DashboardData) {
 	@card.Card() {
-		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4 card-header-fixed"}) {
 			@card.Title() {
 				{ pc.T("dashboard.webhook_health") }
 			}
@@ -291,7 +291,7 @@ templ webhookHealthCard(pc *PageContext, data DashboardData) {
 
 templ quickActionsCard(pc *PageContext) {
 	@card.Card() {
-		@card.Header(card.HeaderProps{Class: "border-b pb-4"}) {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4 card-header-fixed"}) {
 			@card.Title() {
 				{ pc.T("dashboard.quick_actions") }
 			}
@@ -313,7 +313,7 @@ templ quickActionsCard(pc *PageContext) {
 
 templ translationCoverageCard(pc *PageContext, data DashboardData) {
 	@card.Card() {
-		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4 card-header-fixed"}) {
 			@card.Title() {
 				{ pc.T("dashboard.translation_coverage") }
 			}
@@ -344,7 +344,7 @@ templ translationCoverageCard(pc *PageContext, data DashboardData) {
 
 templ failedDeliveriesCard(pc *PageContext, data DashboardData) {
 	@card.Card() {
-		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4"}) {
+		@card.Header(card.HeaderProps{Class: "flex-row items-center justify-between border-b pb-4 card-header-fixed"}) {
 			@card.Title() {
 				{ pc.T("dashboard.recent_failed_deliveries") }
 			}
