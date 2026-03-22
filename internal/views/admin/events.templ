@@ -208,7 +208,7 @@ templ eventIPCell(pc *PageContext, event EventItem, sentinelActive bool) {
 					{ pc.T("sentinel.banned") }
 				}
 			} else if !event.IsOwnIP && !event.IsWhitelisted {
-				@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Class: "ban-btn", Attributes: templ.Attributes{"data-ip": event.RawIPAddress, "data-url": event.RequestURL, "onclick": "banIP(this)"}}) {
+				@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Class: "ban-btn", Attributes: templ.Attributes{"data-ip": event.RawIPAddress, "data-url": event.RequestURL}}) {
 					{ pc.T("sentinel.ban_action") }
 				}
 			}
@@ -230,6 +230,11 @@ templ eventsScript() {
 				});
 			}
 		});
+	});
+
+	document.addEventListener('click', function(e) {
+		var btn = e.target.closest('.ban-btn');
+		if (btn) { banIP(btn); }
 	});
 
 	function banIP(btn) {
