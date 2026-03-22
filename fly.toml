@@ -24,6 +24,14 @@ primary_region = 'fra'
   OCMS_SERVER_HOST = '0.0.0.0'
   OCMS_SERVER_PORT = '8080'
   OCMS_UPLOADS_DIR = '/app/data/uploads'
+  # Disable production security enforcement checks for demo instance
+  OCMS_REQUIRE_API_ALLOWED_CIDRS = 'false'
+  OCMS_REQUIRE_TRUSTED_PROXIES = 'false'
+  OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML = 'false'
+  OCMS_REQUIRE_API_KEY_SOURCE_CIDRS = 'false'
+  OCMS_REQUIRE_API_KEY_EXPIRY = 'false'
+  OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS = 'false'
+  OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS = 'false'
 
 [processes]
   app = '/app/ocms'
