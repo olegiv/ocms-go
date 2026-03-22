@@ -98,6 +98,17 @@ OCMS_REQUIRE_EMBED_ALLOWED_ORIGINS=true
 OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS=true
 OCMS_EMBED_PROXY_TOKEN=replace-with-embed-proxy-token
 
+# Production security enforcement overrides.
+# These flags auto-enable in production and block startup if requirements
+# aren't met. Set to false to disable checks you don't need yet.
+# OCMS_REQUIRE_API_ALLOWED_CIDRS=false
+# OCMS_REQUIRE_TRUSTED_PROXIES=false
+# OCMS_REQUIRE_BLOCK_SUSPICIOUS_PAGE_HTML=false
+# OCMS_REQUIRE_API_KEY_SOURCE_CIDRS=false
+# OCMS_REQUIRE_API_KEY_EXPIRY=false
+# OCMS_REQUIRE_WEBHOOK_ALLOWED_HOSTS=false
+# OCMS_REQUIRE_EMBED_ALLOWED_UPSTREAM_HOSTS=false
+
 # Optional: Redis for distributed caching
 # OCMS_REDIS_URL=redis://localhost:6379/0
 
