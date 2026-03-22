@@ -215,20 +215,29 @@ func New() module.Module {
 }
 ```
 
-### Step 4: Register Module
+### Step 4: Self-Registration
 
-In `cmd/ocms/main.go` (or module registry):
+Create `register.go` in the module package:
 
 ```go
-import "ocms-go/modules/mymodule"
+package mymodule
 
-// Register module
-module.Register(mymodule.New())
+import "github.com/olegiv/ocms-go/internal/module"
+
+func init() {
+    module.RegisterCustomModule(New())
+}
 ```
 
-### Step 5: Create Database Entry
+Then add a blank import to `custom/modules/imports.go`:
 
-Modules are registered in the `modules` table. Add via admin UI or migration:
+```go
+_ "github.com/olegiv/ocms-go/custom/modules/mymodule"
+```
+
+### Step 5: Database Entry
+
+Modules are auto-registered on first startup. Toggle active status via **Admin > Modules**, or via migration:
 
 ```sql
 INSERT INTO modules (id, name, description, version, active)
@@ -503,7 +512,7 @@ func (m *Module) handleAdminPage(w http.ResponseWriter, r *http.Request) {
 
 ## Module Lifecycle
 
-1. **Registration** - Module registered in `cmd/ocms/main.go`
+1. **Registration** - Module self-registers via `init()` in `register.go`
 2. **Database Check** - System checks if module exists in `modules` table
 3. **Activation** - If `active = 1`, module is initialized
 4. **Init** - `Init()` method called with dependencies

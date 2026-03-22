@@ -156,7 +156,7 @@ The hook source is in `.claude/shared/global/hooks/`.
 
 7. **Theme System** (`internal/theme/`): Core themes (default, developer) are embedded in the binary (`internal/themes/`). Custom themes can be placed in `custom/themes/` to override or extend core themes. Each theme has templates, static assets, and optional locale overrides. Use `TTheme` in theme templates for translations with theme→global fallback.
 
-8. **Module System** (`internal/module/`): Extensible plugin architecture with lifecycle management, migrations, active status toggle, and embedded i18n translations.
+8. **Module System** (`internal/module/`): Extensible plugin architecture with lifecycle management, migrations, active status toggle, and embedded i18n translations. Custom modules live in `custom/modules/` and self-register via `init()` + blank imports in `custom/modules/imports.go`. See `custom/modules/bookmarks/` for reference implementation.
 
 9. **Caching** (`internal/cache/`): Supports both in-memory and Redis caching with automatic fallback. Caches site config, menus, languages, and sitemaps. Set `OCMS_REDIS_URL` for distributed caching across multiple instances.
 

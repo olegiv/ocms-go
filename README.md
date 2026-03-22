@@ -530,7 +530,7 @@ import (
     "database/sql"
     "embed"
 
-    "ocms-go/internal/module"
+    "github.com/olegiv/ocms-go/internal/module"
     "github.com/go-chi/chi/v5"
 )
 
@@ -570,11 +570,25 @@ func (m *MyModule) TranslationsFS() embed.FS {
 }
 ```
 
-Register the module in `main.go`:
+Add self-registration in `register.go`:
 
 ```go
-moduleRegistry.Register(mymodule.New())
+package mymodule
+
+import "github.com/olegiv/ocms-go/internal/module"
+
+func init() {
+    module.RegisterCustomModule(New())
+}
 ```
+
+Then add a blank import to `custom/modules/imports.go`:
+
+```go
+_ "github.com/olegiv/ocms-go/custom/modules/mymodule"
+```
+
+See `docs/custom-modules.md` for the full guide and `custom/modules/bookmarks/` for a working example.
 
 ### Module Translations
 

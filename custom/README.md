@@ -7,7 +7,7 @@ This directory contains user-created content that extends or customizes oCMS.
 ```
 custom/
 ├── themes/     # Custom themes (override or extend core themes)
-├── modules/    # Custom modules (future use)
+├── modules/    # Custom modules (extend oCMS with plugins)
 └── README.md   # This file
 ```
 
@@ -65,6 +65,23 @@ custom/themes/default/    # Overrides the embedded 'default' theme
 
 Custom themes with the same name as core themes take priority.
 
+## Modules
+
+Place custom modules in `custom/modules/`. Each module is a self-contained Go package.
+
+A reference implementation is included at `custom/modules/bookmarks/`.
+
+To add a custom module:
+
+1. Create your module package in `custom/modules/mymodule/`
+2. Add a blank import to `custom/modules/imports.go`:
+   ```go
+   _ "github.com/olegiv/ocms-go/custom/modules/mymodule"
+   ```
+3. Build and run — the module appears at **Admin > Modules**
+
+See `docs/custom-modules.md` for the full guide.
+
 ## Configuration
 
 Set the custom directory path via environment variable:
@@ -75,5 +92,13 @@ OCMS_CUSTOM_DIR=./custom    # Default value
 
 ## Git
 
-The content of this directory (except .gitkeep files) is gitignored by default.
-To version control your custom themes, remove the relevant patterns from `.gitignore`.
+Most content in this directory is gitignored. The following are tracked:
+
+- `themes/starter/` — sample custom theme (reference implementation)
+- `modules/bookmarks/` — sample custom module (reference implementation)
+- `modules/imports.go` — blank imports that register custom modules
+
+User-created themes and modules are automatically ignored by git.
+When you modify `imports.go` to add your own modules, your local
+changes are preserved on `git pull` unless upstream also changed
+the file (standard merge conflict).
