@@ -42,6 +42,16 @@ if [ -d "$JS_SRC_DIR" ] && [ "$(ls -A "$JS_SRC_DIR" 2>/dev/null)" ]; then
     done
 fi
 
+# Copy templUI component JS files to dist
+echo "Copying templUI JS files..."
+TEMPLUI_JS_SRC="$PROJECT_DIR/web/static/js/templui"
+if [ -d "$TEMPLUI_JS_SRC" ] && [ "$(ls -A "$TEMPLUI_JS_SRC" 2>/dev/null)" ]; then
+    cp "$TEMPLUI_JS_SRC"/*.js "$JS_DIR/" 2>/dev/null || true
+    for f in "$TEMPLUI_JS_SRC"/*.js; do
+        [ -f "$f" ] && echo "  -> $JS_DIR/$(basename "$f")"
+    done
+fi
+
 # Check for outdated packages
 OUTDATED=$(npm outdated --json 2>/dev/null || true)
 if [ -n "$OUTDATED" ] && [ "$OUTDATED" != "{}" ]; then

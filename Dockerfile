@@ -53,6 +53,11 @@ RUN if [ -d "web/static/js" ] && [ "$(ls -A web/static/js 2>/dev/null)" ]; then 
         cp web/static/js/*.js web/static/dist/js/ 2>/dev/null || true; \
     fi
 
+# Copy templUI component JS files
+RUN if [ -d "web/static/js/templui" ] && [ "$(ls -A web/static/js/templui 2>/dev/null)" ]; then \
+        cp web/static/js/templui/*.js web/static/dist/js/ 2>/dev/null || true; \
+    fi
+
 # Build the Go binary with version info
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w -X main.appVersion=${VERSION} -X main.appGitCommit=${GIT_COMMIT} -X main.appBuildTime=${BUILD_TIME}" \

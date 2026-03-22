@@ -13,16 +13,16 @@ Steps:
 2. Check if `.templui.json` exists in project root. If not, create it with this oCMS-specific config:
    ```json
    {
-     "componentsDir": "internal/ui",
-     "utilsDir": "internal/ui/utils",
+     "componentsDir": "internal/views/components",
+     "utilsDir": "internal/views/utils",
      "moduleName": "github.com/olegiv/ocms-go",
      "jsDir": "web/static/js/templui",
-     "jsPublicPath": "/static/dist/js/templui"
+     "jsPublicPath": "/static/dist/js"
    }
    ```
    Also create required directories:
    ```bash
-   mkdir -p internal/ui internal/ui/utils web/static/js/templui
+   mkdir -p internal/views/components internal/views/utils web/static/js/templui
    ```
 
 3. Check if `web/static/css/admin-tw.css` has a `@source` directive for `internal/ui/`. If the line `@source "../../../internal/ui/**/*.templ";` is missing, add it after the existing `@source` lines.

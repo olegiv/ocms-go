@@ -99,17 +99,17 @@ If `.templui.json` does not exist, create it:
 
 ```json
 {
-  "componentsDir": "internal/ui",
-  "utilsDir": "internal/ui/utils",
+  "componentsDir": "internal/views/components",
+  "utilsDir": "internal/views/utils",
   "moduleName": "github.com/olegiv/ocms-go",
   "jsDir": "web/static/js/templui",
-  "jsPublicPath": "/static/dist/js/templui"
+  "jsPublicPath": "/static/dist/js"
 }
 ```
 
 Create required directories:
 ```bash
-mkdir -p internal/ui internal/ui/utils web/static/js/templui
+mkdir -p internal/views/components internal/views/utils web/static/js/templui
 ```
 
 Ensure `web/static/css/admin-tw.css` includes this `@source` directive (after existing ones):
