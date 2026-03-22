@@ -10,11 +10,11 @@
     "@alpinejs/sort": "^3.15.8",
     "alpinejs": "^3.15.8",
     "htmx.org": "^2.0.8",
-    "klaro": "^0.7.22",
+    "klaro": "^0.7.21",
     "tinymce": "^8.3.2"
   },
   "devDependencies": {
-    "@tailwindcss/cli": "^4.1.18",
-    "tailwindcss": "^4.1.18"
+    "@tailwindcss/cli": "^4.2.2",
+    "tailwindcss": "^4.2.2"
   }
 }
