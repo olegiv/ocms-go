@@ -146,30 +146,51 @@ func pagesOrderExpr(field, dir string) string {
 }
 
 type GetTagUsageCountsSortedParams struct {
-	Limit     int64  `json:"limit"`
-	Offset    int64  `json:"offset"`
-	SortField string `json:"sort_field"`
-	SortDir   string `json:"sort_dir"`
+	Limit         int64          `json:"limit"`
+	Offset        int64          `json:"offset"`
+	SortField     string         `json:"sort_field"`
+	SortDir       string         `json:"sort_dir"`
+	SearchPattern sql.NullString `json:"search_pattern"`
+	LanguageCode  sql.NullString `json:"language_code"`
 }
 
-// GetTagUsageCountsSorted lists tags with usage counts and safe whitelist sorting.
+// GetTagUsageCountsSorted lists tags with usage counts, optional filters, and safe whitelist sorting.
 func (q *Queries) GetTagUsageCountsSorted(ctx context.Context, arg GetTagUsageCountsSortedParams) ([]GetTagUsageCountsRow, error) {
+	var whereClauses []string
+	var args []any
+
+	if arg.SearchPattern.Valid {
+		whereClauses = append(whereClauses, "(t.name LIKE ? OR t.slug LIKE ?)")
+		args = append(args, arg.SearchPattern.String, arg.SearchPattern.String)
+	}
+	if arg.LanguageCode.Valid {
+		whereClauses = append(whereClauses, "t.language_code = ?")
+		args = append(args, arg.LanguageCode.String)
+	}
+
+	whereSQL := ""
+	if len(whereClauses) > 0 {
+		whereSQL = "WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
 	query := `
 SELECT
 	t.id, t.name, t.slug, t.language_code, t.created_at, t.updated_at, COUNT(pt.page_id) AS usage_count
 FROM tags t
 LEFT JOIN page_tags pt ON pt.tag_id = t.id
+` + whereSQL + `
 GROUP BY t.id, t.name, t.slug, t.language_code, t.created_at, t.updated_at
 ORDER BY ` + tagsOrderExpr(arg.SortField, arg.SortDir) + `
 LIMIT ? OFFSET ?`
 
-	rows, err := q.db.QueryContext(ctx, query, arg.Limit, arg.Offset)
+	args = append(args, arg.Limit, arg.Offset)
+	rows, err := q.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	items := []GetTagUsageCountsRow{}
+	var items []GetTagUsageCountsRow
 	for rows.Next() {
 		var i GetTagUsageCountsRow
 		if err := rows.Scan(
@@ -192,6 +213,30 @@ LIMIT ? OFFSET ?`
 		return nil, err
 	}
 	return items, nil
+}
+
+// CountTagsFiltered counts tags with optional search and language filters.
+func (q *Queries) CountTagsFiltered(ctx context.Context, searchPattern, languageCode sql.NullString) (int64, error) {
+	var whereClauses []string
+	var args []any
+
+	if searchPattern.Valid {
+		whereClauses = append(whereClauses, "(name LIKE ? OR slug LIKE ?)")
+		args = append(args, searchPattern.String, searchPattern.String)
+	}
+	if languageCode.Valid {
+		whereClauses = append(whereClauses, "language_code = ?")
+		args = append(args, languageCode.String)
+	}
+
+	query := "SELECT COUNT(*) FROM tags"
+	if len(whereClauses) > 0 {
+		query += " WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
+	var count int64
+	err := q.db.QueryRowContext(ctx, query, args...).Scan(&count)
+	return count, err
 }
 
 func tagsOrderExpr(field, dir string) string {

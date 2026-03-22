@@ -68,8 +68,21 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 	perPage := ParsePerPageParam(r, TagsPerPage, maxPerPageSelectionValue)
 	sortField, sortDir := parseSortParams(r, "usage_count", sortDirDesc, tagsSortableFields)
 
-	// Get total count
-	totalCount, err := h.queries.CountTags(r.Context())
+	// Parse filters
+	searchFilter := strings.TrimSpace(r.URL.Query().Get("search"))
+	languageFilter := strings.TrimSpace(r.URL.Query().Get("language"))
+
+	searchPattern := util.NullStringFromValue("")
+	if searchFilter != "" {
+		searchPattern = util.NullStringFromValue("%" + searchFilter + "%")
+	}
+	langParam := util.NullStringFromValue("")
+	if languageFilter != "" {
+		langParam = util.NullStringFromValue(languageFilter)
+	}
+
+	// Get total count with filters
+	totalCount, err := h.queries.CountTagsFiltered(r.Context(), searchPattern, langParam)
 	if err != nil {
 		slog.Error("failed to count tags", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -82,10 +95,12 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch tags with usage counts
 	tags, err := h.queries.GetTagUsageCountsSorted(r.Context(), store.GetTagUsageCountsSortedParams{
-		Limit:     int64(perPage),
-		Offset:    offset,
-		SortField: sortField,
-		SortDir:   sortDir,
+		Limit:         int64(perPage),
+		Offset:        offset,
+		SortField:     sortField,
+		SortDir:       sortDir,
+		SearchPattern: searchPattern,
+		LanguageCode:  langParam,
 	})
 	if err != nil {
 		slog.Error("failed to list tags", "error", err)
@@ -106,6 +121,9 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// Load all active languages for filter dropdown
+	allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
+
 	handlerPagination := BuildAdminPagination(page, int(totalCount), perPage, redirectAdminTags, r.URL.Query())
 	handlerPagination.SortField = sortField
 	handlerPagination.SortDir = sortDir
@@ -114,9 +132,12 @@ func (h *TaxonomyHandler) ListTags(w http.ResponseWriter, r *http.Request) {
 	pagination.PerPageSelector = perPageSelector(perPage, perPageOptionsStandard)
 
 	viewData := adminviews.TagsListData{
-		Tags:       viewTags,
-		TotalCount: totalCount,
-		Pagination: pagination,
+		Tags:           viewTags,
+		TotalCount:     totalCount,
+		Pagination:     pagination,
+		LanguageFilter: languageFilter,
+		SearchFilter:   searchFilter,
+		AllLanguages:   convertLanguageOptions(allLanguages),
 	}
 
 	pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "nav.tags"), tagsBreadcrumbs(lang))

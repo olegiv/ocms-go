@@ -703,6 +703,16 @@
             "translation": "Create your first tag to help organize your content."
         },
         {
+            "id": "tags.no_results",
+            "message": "No tags match the current filters.",
+            "translation": "No tags match the current filters."
+        },
+        {
+            "id": "tags.search_results",
+            "message": "Found %d tags matching \"%s\"",
+            "translation": "Found %d tags matching \"%s\""
+        },
+        {
             "id": "tags.delete_tag",
             "message": "Delete Tag",
             "translation": "Delete Tag"
@@ -4056,6 +4066,11 @@
             "id": "btn.clear",
             "message": "Clear",
             "translation": "Clear"
+        },
+        {
+            "id": "btn.clear_filters",
+            "message": "Clear Filters",
+            "translation": "Clear Filters"
         },
         {
             "id": "btn.publish",

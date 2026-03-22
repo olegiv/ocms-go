@@ -703,6 +703,16 @@
             "translation": "Создайте первый тег для организации контента."
         },
         {
+            "id": "tags.no_results",
+            "message": "No tags match the current filters.",
+            "translation": "Нет тегов, соответствующих текущим фильтрам."
+        },
+        {
+            "id": "tags.search_results",
+            "message": "Found %d tags matching \"%s\"",
+            "translation": "Найдено %d тегов по запросу \"%s\""
+        },
+        {
             "id": "tags.delete_tag",
             "message": "Delete Tag",
             "translation": "Удалить тег"
@@ -3541,6 +3551,11 @@
             "id": "btn.clear",
             "message": "Clear",
             "translation": "Очистить"
+        },
+        {
+            "id": "btn.clear_filters",
+            "message": "Clear Filters",
+            "translation": "Сбросить фильтры"
         },
         {
             "id": "btn.publish",
