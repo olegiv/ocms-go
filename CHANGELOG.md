@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-03-22
+
+### Added
+
+#### templUI Component Migration
+- Convert admin forms to templUI components (input, textarea, selectbox, checkbox, dialog, dropdown)
+- Add StatCard and StatusBanner reusable components
+- Convert pages, media, and remaining admin search inputs to templUI
+- Add grid image variant for admin media cards
+
+#### Admin UI Improvements
+- Add pagination to Sentinel banned IPs list
+- Add search and language filters to tags list
+- Add per-page selector to admin pagers
+- Add bulk pager actions for admin lists
+- Add 13 missing admin translation keys
+- Style pagination footer with muted background
+- Add reusable action buttons with left-aligned layout
+
+#### Build Pipeline
+- Add templUI JS files to build pipeline for reliable deployment
+- Track templUI JS in source directory for fresh clone support
+
+#### Documentation
+- Document production security override flags in example configs
+- Update module docs to use self-registration pattern
+- Add Modules section and git tracking info to custom/README
+
+### Changed
+- Pin klaro to 0.7.21 stable release (0.7.22 not tagged as latest)
+- Disable production security enforcement for Fly demo instance
+- Reduce templUI input focus ring from 3px to 1px
+- Polish card styling and dashboard header heights
+
+### Fixed
+- Fix form hint inline layout (add display:block globally)
+- Fix checkbox alignment in SEO section (flex-start instead of center)
+- Fix selectbox value reads for media and editor
+- Fix selectbox and class collision issues
+- Fix per-page selector for templUI selectbox
+- Fix open redirect and CSP nonce fallback
+- Fix CSP violation on events ban button
+- Fix analytics date range off-by-one
+- Fix menu builder Alpine.js title binding errors
+- Fix language edit form and style readonly inputs
+- Fix forms field builder JS error
+- Fix media search input placeholder overlap
+
+### Security
+- Harden production defaults and webhook policy
+- Allow IPv6 webhook host allowlist entries
+
 ## [0.9.0] - 2026-02-18
 
 ### Added
@@ -415,7 +467,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/olegiv/ocms-go/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/olegiv/ocms-go/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/olegiv/ocms-go/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/olegiv/ocms-go/compare/v0.6.0...v0.7.0
