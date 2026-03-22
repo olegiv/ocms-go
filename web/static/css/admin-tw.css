@@ -233,6 +233,14 @@
   display: inline-flex !important;
 }
 
+/* Reduce templUI default focus ring from 3px to 1px */
+.admin-main input:focus-visible,
+.admin-main textarea:focus-visible,
+.admin-main [data-tui-selectbox-trigger]:focus-visible,
+.admin-main button:focus-visible {
+  --tw-ring-shadow: 0 0 0 1px var(--tw-ring-color);
+}
+
 /* Readonly input styling */
 .admin-main input[readonly],
 .admin-main textarea[readonly] {
