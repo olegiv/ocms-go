@@ -9,6 +9,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
@@ -240,11 +241,14 @@ func setLanguagePreference(w http.ResponseWriter, r *http.Request, renderer *ren
 	// Set the language preference in session
 	renderer.SetAdminLang(r, lang)
 
-	// Redirect back to the referring page, or fallback URL if not available
-	referer := r.Header.Get("Referer")
-	if referer == "" {
-		referer = fallbackURL
+	// Redirect back to the referring page, or fallback URL if not available.
+	// Validate that the Referer is same-origin to prevent open redirect.
+	redirect := fallbackURL
+	if ref := r.Header.Get("Referer"); ref != "" {
+		if parsed, err := url.Parse(ref); err == nil && parsed.Host == r.Host {
+			redirect = parsed.RequestURI()
+		}
 	}
 
-	http.Redirect(w, r, referer, http.StatusSeeOther)
+	http.Redirect(w, r, redirect, http.StatusSeeOther)
 }
