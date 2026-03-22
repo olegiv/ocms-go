@@ -311,15 +311,15 @@ func parseDateRange(rangeStr string) (time.Time, time.Time) {
 	var startDate time.Time
 	switch rangeStr {
 	case "7d":
-		startDate = now.AddDate(0, 0, -7)
+		startDate = now.AddDate(0, 0, -6)
 	case "30d":
-		startDate = now.AddDate(0, 0, -30)
+		startDate = now.AddDate(0, 0, -29)
 	case "90d":
-		startDate = now.AddDate(0, 0, -90)
+		startDate = now.AddDate(0, 0, -89)
 	case "1y":
 		startDate = now.AddDate(-1, 0, 0)
 	default:
-		startDate = now.AddDate(0, 0, -30)
+		startDate = now.AddDate(0, 0, -29)
 	}
 
 	return startDate, endDate
