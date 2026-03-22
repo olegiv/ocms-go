@@ -56,88 +56,39 @@ templ CacheStatsPage(pc *PageContext, data CacheStatsViewData) {
 			</form>
 		}
 		<!-- Cache Backend Info -->
-		<div class="cache-backend-info mb-6">
-			<div class={ "backend-card", templ.KV("backend-redis", data.IsRedis), templ.KV("backend-memory", !data.IsRedis) }>
-				<div class="backend-icon">
-					if data.IsRedis {
-						@iconRedis()
-					} else {
-						@iconMemory()
-					}
-				</div>
-				<div class="backend-content">
-					<span class="backend-type">
-						if data.IsRedis {
-							{ pc.T("cache.redis_cache") }
-						} else {
-							{ pc.T("cache.memory_cache") }
-						}
-						if data.IsFallback {
-							@badge.Badge(badge.Props{Class: "badge-warning ml-2"}) {
-								{ pc.T("cache.fallback") }
-							}
-						}
-					</span>
-					<span class="backend-status">
-						if data.HealthError != "" {
-							<span class="status-indicator status-error"></span>
-							{ pc.T("cache.unhealthy") }: { data.HealthError }
-						} else {
-							<span class="status-indicator status-healthy"></span>
-							{ pc.T("cache.healthy") }
-						}
-					</span>
-					if data.IsRedis && data.RedisURL != "" {
-						<span class="backend-url">{ data.RedisURL }</span>
-					}
-				</div>
-			</div>
-			if data.IsFallback {
-				@alert.Alert(alert.Props{Class: "alert-warning mt-3"}) {
-					@icon.TriangleAlert(icon.Props{Size: 16})
-					<span>{ pc.T("cache.redis_failed") }</span>
-				}
+		@StatusBanner(StatusBannerProps{
+			Title:      cacheBackendTitle(pc, data),
+			Healthy:    data.HealthError == "",
+			StatusText: cacheStatusText(pc, data),
+			Detail:     cacheDetail(data),
+		}) {
+			if data.IsRedis {
+				@iconRedis()
+			} else {
+				@iconMemory()
 			}
-		</div>
+		}
+		if data.IsFallback {
+			@alert.Alert(alert.Props{Class: "alert-warning mb-6 -mt-4"}) {
+				@icon.TriangleAlert(icon.Props{Size: 16})
+				<span>{ pc.T("cache.redis_failed") }</span>
+			}
+		}
 		<!-- Total Stats Summary -->
-		<div class="stats-grid mb-6">
-			<div class="stat-card">
-				<div class="stat-icon stat-badge-success">
-					@iconCheck()
-				</div>
-				<div class="stat-content">
-					<span class="stat-value">{ fmt.Sprintf("%d", data.TotalStats.Hits) }</span>
-					<span class="stat-label">{ pc.T("cache.hits") }</span>
-				</div>
-			</div>
-			<div class="stat-card">
-				<div class="stat-icon stat-badge-warning">
-					@iconX()
-				</div>
-				<div class="stat-content">
-					<span class="stat-value">{ fmt.Sprintf("%d", data.TotalStats.Misses) }</span>
-					<span class="stat-label">{ pc.T("cache.misses") }</span>
-				</div>
-			</div>
-			<div class="stat-card">
-				<div class="stat-icon stat-badge-primary">
-					@iconClock()
-				</div>
-				<div class="stat-content">
-					<span class="stat-value">{ fmt.Sprintf("%.1f%%", data.TotalStats.HitRate) }</span>
-					<span class="stat-label">{ pc.T("cache.hit_rate") }</span>
-				</div>
-			</div>
-			<div class="stat-card">
-				<div class="stat-icon stat-badge-info">
-					@iconPackage()
-				</div>
-				<div class="stat-content">
-					<span class="stat-value">{ fmt.Sprintf("%d", data.TotalStats.Items) }</span>
-					<span class="stat-label">{ pc.T("cache.cached_items") }</span>
-				</div>
-			</div>
-		</div>
+		@StatGrid() {
+			@StatCard(StatCardProps{Label: pc.T("cache.hits"), Value: fmt.Sprintf("%d", data.TotalStats.Hits), IconClass: "bg-green-500/10 text-green-500"}) {
+				@icon.CircleCheck(icon.Props{Size: 24})
+			}
+			@StatCard(StatCardProps{Label: pc.T("cache.misses"), Value: fmt.Sprintf("%d", data.TotalStats.Misses), IconClass: "bg-yellow-500/10 text-yellow-500"}) {
+				@icon.X(icon.Props{Size: 24})
+			}
+			@StatCard(StatCardProps{Label: pc.T("cache.hit_rate"), Value: fmt.Sprintf("%.1f%%", data.TotalStats.HitRate), IconClass: "bg-blue-500/10 text-blue-500"}) {
+				@icon.Clock(icon.Props{Size: 24})
+			}
+			@StatCard(StatCardProps{Label: pc.T("cache.cached_items"), Value: fmt.Sprintf("%d", data.TotalStats.Items), IconClass: "bg-cyan-500/10 text-cyan-500"}) {
+				@icon.Package(icon.Props{Size: 24})
+			}
+		}
 		<!-- Individual Cache Details -->
 		@card.Card(card.Props{}) {
 			@card.Header(card.HeaderProps{Class: "border-b pb-4"}) {
@@ -314,6 +265,31 @@ templ cacheClearButton(pc *PageContext, c CacheItemView) {
 				</form>
 			}
 	}
+}
+
+func cacheBackendTitle(pc *PageContext, data CacheStatsViewData) string {
+	title := pc.T("cache.memory_cache")
+	if data.IsRedis {
+		title = pc.T("cache.redis_cache")
+	}
+	if data.IsFallback {
+		title += " (" + pc.T("cache.fallback") + ")"
+	}
+	return title
+}
+
+func cacheStatusText(pc *PageContext, data CacheStatsViewData) string {
+	if data.HealthError != "" {
+		return pc.T("cache.unhealthy") + ": " + data.HealthError
+	}
+	return pc.T("cache.healthy")
+}
+
+func cacheDetail(data CacheStatsViewData) string {
+	if data.IsRedis && data.RedisURL != "" {
+		return data.RedisURL
+	}
+	return ""
 }
 
 // cacheKindName returns the translated name for a cache kind.

@@ -1,0 +1,46 @@
+// Copyright (c) 2025-2026 Oleg Ivanchenko
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package admin
+
+import (
+	"github.com/olegiv/ocms-go/internal/views/components/card"
+	"github.com/olegiv/ocms-go/internal/views/utils"
+)
+
+// StatusBannerProps configures a service/backend status banner.
+type StatusBannerProps struct {
+	Title      string // e.g. "In-Memory Cache", "Redis Cache"
+	Healthy    bool   // green or red status dot
+	StatusText string // e.g. "Healthy" or error message
+	Detail     string // optional detail line (e.g. Redis URL)
+	Class      string // optional wrapper class
+}
+
+// StatusBanner renders a status banner with icon, title, and health indicator.
+// Pass the icon as children.
+templ StatusBanner(props StatusBannerProps) {
+	<div class={ utils.TwMerge("mb-6", props.Class) }>
+		@card.Card(card.Props{}) {
+			@card.Content(card.ContentProps{Class: "flex items-center gap-4 p-5"}) {
+				<div class="flex items-center justify-center w-12 h-12 rounded-lg shrink-0 bg-muted">
+					{ children... }
+				</div>
+				<div class="flex flex-col gap-0.5 min-w-0">
+					<span class="font-semibold text-base text-foreground">{ props.Title }</span>
+					<span class="flex items-center gap-2 text-sm text-muted-foreground">
+						if props.Healthy {
+							<span class="inline-block w-2 h-2 rounded-full bg-green-500"></span>
+						} else {
+							<span class="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+						}
+						{ props.StatusText }
+					</span>
+					if props.Detail != "" {
+						<span class="text-xs text-muted-foreground font-mono">{ props.Detail }</span>
+					}
+				</div>
+			}
+		}
+	</div>
+}
