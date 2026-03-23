@@ -147,7 +147,7 @@ has_custom_content() {
     if [[ -d "$LOCAL_CUSTOM_DIR" ]]; then
         # Check for any non-empty subdirectories (themes, modules, etc.)
         local content_count
-        content_count=$(find "$LOCAL_CUSTOM_DIR" -mindepth 2 -maxdepth 2 -type f 2>/dev/null | head -1 | wc -l)
+        content_count=$(find "$LOCAL_CUSTOM_DIR" -mindepth 1 -type f 2>/dev/null | head -1 | wc -l)
         [[ "$content_count" -gt 0 ]]
     else
         return 1
@@ -167,7 +167,7 @@ should_sync_custom() {
 
 # Construct remote custom directory from vhost
 if [[ -n "$VHOST" ]]; then
-    REMOTE_CUSTOM_DIR="${VHOST}/ocms/custom"
+    REMOTE_CUSTOM_DIR="${VHOST}/custom"
 fi
 
 # Helper for running or printing commands
