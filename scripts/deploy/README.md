@@ -154,6 +154,10 @@ Use `deploy.sh` to build, transfer, and restart a single instance:
 ./scripts/deploy/deploy.sh server.example.com my_site \
   -v /var/www/vhosts/example.com -o hosting
 
+# Deploy custom content only (skip binary)
+./scripts/deploy/deploy.sh server.example.com my_site \
+  --skip-binary -v /var/www/vhosts/example.com -o hosting
+
 # Skip build, dry run
 ./scripts/deploy/deploy.sh server.example.com my_site --skip-build --dry-run
 ```
@@ -165,6 +169,7 @@ Options:
 - `-u, --user USER` — SSH user (default: `root`)
 - `--sync-custom` — force sync custom/ directory even if empty
 - `--skip-build` — skip `make build-linux-amd64`, use existing binary
+- `--skip-binary` — skip binary build, backup, and transfer (deploy custom content only)
 - `--dry-run` — print commands without executing
 
 The script:

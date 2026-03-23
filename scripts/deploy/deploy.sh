@@ -23,6 +23,7 @@ VHOST=""
 VHOST_USER=""
 VHOST_GROUP="psaserv"
 SKIP_BUILD=false
+SKIP_BINARY=false
 DRY_RUN=false
 SYNC_CUSTOM=false
 
@@ -46,6 +47,7 @@ Options:
   -u, --user USER      SSH user (default: root)
   --sync-custom        Force sync custom/ directory even if empty
   --skip-build         Skip 'make build-linux-amd64', use existing binary
+  --skip-binary        Skip binary build, backup, and transfer (custom content only)
   --dry-run            Print commands without executing
   -h, --help           Show this help message
 
@@ -55,6 +57,9 @@ Examples:
 
   # Deploy binary and sync custom themes
   $(basename "$0") server.example.com my_site -v /var/www/vhosts/example.com -o hosting
+
+  # Deploy custom content only (skip binary)
+  $(basename "$0") server.example.com my_site --skip-binary -v /var/www/vhosts/example.com -o hosting
 
   # Skip build, dry run
   $(basename "$0") server.example.com my_site --skip-build --dry-run
@@ -92,6 +97,11 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --skip-build)
+            SKIP_BUILD=true
+            shift
+            ;;
+        --skip-binary)
+            SKIP_BINARY=true
             SKIP_BUILD=true
             shift
             ;;
@@ -209,25 +219,31 @@ else
 fi
 
 # Verify binary exists
-if [[ "$DRY_RUN" == false ]] && [[ ! -f "$LOCAL_BINARY" ]]; then
+if [[ "$SKIP_BINARY" != true ]] && [[ "$DRY_RUN" == false ]] && [[ ! -f "$LOCAL_BINARY" ]]; then
     echo_error "Binary not found: ${LOCAL_BINARY}"
     exit 1
 fi
 
-# Step 2: Backup current binary on server
-echo_step "Backing up current binary on server..."
-ssh_cmd "cp ${REMOTE_BIN_DIR}/${REMOTE_BINARY} ${REMOTE_BIN_DIR}/${REMOTE_BINARY}.backup 2>/dev/null || true"
-echo_ok "Backup complete"
+if [[ "$SKIP_BINARY" == true ]]; then
+    echo_warn "Skipping binary backup and transfer (--skip-binary)"
+else
+    # Step 2: Backup current binary on server
+    echo_step "Backing up current binary on server..."
+    ssh_cmd "cp ${REMOTE_BIN_DIR}/${REMOTE_BINARY} ${REMOTE_BIN_DIR}/${REMOTE_BINARY}.backup 2>/dev/null || true"
+    echo_ok "Backup complete"
+fi
 
 # Step 3: Stop instance
 echo_step "Stopping instance '${INSTANCE}'..."
 ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl stop ${INSTANCE}"
 echo_ok "Instance stopped"
 
-# Step 4: Transfer binary
-echo_step "Transferring binary to server..."
-scp_cmd "${LOCAL_BINARY}" "${SSH_USER}@${SERVER}:${REMOTE_BIN_DIR}/"
-echo_ok "Binary transferred"
+if [[ "$SKIP_BINARY" != true ]]; then
+    # Step 4: Transfer binary
+    echo_step "Transferring binary to server..."
+    scp_cmd "${LOCAL_BINARY}" "${SSH_USER}@${SERVER}:${REMOTE_BIN_DIR}/"
+    echo_ok "Binary transferred"
+fi
 
 # Step 5: Sync custom content (if configured and has content)
 if should_sync_custom && [[ -n "$VHOST" ]]; then
