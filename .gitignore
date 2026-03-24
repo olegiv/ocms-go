@@ -3,8 +3,7 @@
 /uploads/
 .env
 /bin/
-/logs/*
-!/logs/.gitkeep
+/logs/
 .audit
 node_modules/
 
