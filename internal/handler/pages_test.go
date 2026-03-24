@@ -258,6 +258,42 @@ func TestDetectSuspiciousPageHTMLTokens(t *testing.T) {
 			t.Fatal("expected suspicious tokens to be detected")
 		}
 	})
+
+	t.Run("plain text JavaScript colon is not flagged", func(t *testing.T) {
+		body := `<strong>JavaScript:</strong> Progressive enhancement (site works without JavaScript)`
+		tokens := detectSuspiciousPageHTMLTokens(body)
+		if len(tokens) != 0 {
+			t.Fatalf("expected no suspicious tokens for plain text JavaScript:, got %v", tokens)
+		}
+	})
+
+	t.Run("javascript URI in href is still flagged", func(t *testing.T) {
+		body := `<a href="javascript:alert(1)">click</a>`
+		tokens := detectSuspiciousPageHTMLTokens(body)
+		found := false
+		for _, tok := range tokens {
+			if tok == "javascript:" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("expected javascript: token to be detected, got %v", tokens)
+		}
+	})
+
+	t.Run("javascript URI without quotes is flagged", func(t *testing.T) {
+		body := `<a href=javascript:alert(1)>click</a>`
+		tokens := detectSuspiciousPageHTMLTokens(body)
+		found := false
+		for _, tok := range tokens {
+			if tok == "javascript:" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("expected javascript: token to be detected, got %v", tokens)
+		}
+	})
 }
 
 func TestValidatePageBodySecurityPolicy(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -151,11 +152,14 @@ const (
 
 var suspiciousPageMarkupTokens = []string{
 	"<script",
-	"javascript:",
 	"onerror=",
 	"onload=",
 	"<iframe",
 }
+
+// javascriptURIPattern matches javascript: in attribute contexts only,
+// avoiding false positives on plain text like "JavaScript: a language".
+var javascriptURIPattern = regexp.MustCompile(`(?i)=\s*["']?\s*javascript:`)
 
 // listPagesByFilter returns pages filtered by category or tag with published-only option.
 func (h *Handler) listPagesByFilter(ctx context.Context, publishedOnly bool, filterType pageFilterType, filterID, limit, offset int64) ([]store.Page, int64, error) {
@@ -893,6 +897,9 @@ func validatePageBodyMarkupPolicy(body string, blockSuspicious bool) string {
 		if strings.Contains(lowerBody, token) {
 			return "Body contains suspicious HTML markup that is blocked by policy"
 		}
+	}
+	if javascriptURIPattern.MatchString(body) {
+		return "Body contains suspicious HTML markup that is blocked by policy"
 	}
 
 	return ""

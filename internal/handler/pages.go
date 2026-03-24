@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -53,11 +54,14 @@ const PagesPerPage = 10
 
 var suspiciousPageHTMLTokens = []string{
 	"<script",
-	"javascript:",
 	"onerror=",
 	"onload=",
 	"<iframe",
 }
+
+// javascriptURIPattern matches javascript: in attribute contexts only,
+// avoiding false positives on plain text like "JavaScript: a language".
+var javascriptURIPattern = regexp.MustCompile(`(?i)=\s*["']?\s*javascript:`)
 
 var pagesSortableFields = map[string]SortConfig{
 	"title":        {DefaultDir: sortDirAsc},
@@ -1601,11 +1605,14 @@ func detectSuspiciousPageHTMLTokens(body string) []string {
 	}
 
 	lowerBody := strings.ToLower(body)
-	matches := make([]string, 0, len(suspiciousPageHTMLTokens))
+	matches := make([]string, 0, len(suspiciousPageHTMLTokens)+1)
 	for _, token := range suspiciousPageHTMLTokens {
 		if strings.Contains(lowerBody, token) {
 			matches = append(matches, token)
 		}
+	}
+	if javascriptURIPattern.MatchString(body) {
+		matches = append(matches, "javascript:")
 	}
 	return matches
 }
