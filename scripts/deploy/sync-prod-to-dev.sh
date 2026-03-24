@@ -26,7 +26,13 @@ SYNC_DB=true
 SYNC_UPLOADS=true
 SYNC_LOGS=true
 SYNC_CUSTOM=false
-LOCAL_PORT=8080
+
+# Load local port from .env if available
+LOCAL_PORT=""
+if [[ -f .env ]]; then
+    LOCAL_PORT=$(grep -E '^OCMS_SERVER_PORT=' .env | cut -d= -f2 | tr -d '[:space:]')
+fi
+LOCAL_PORT="${LOCAL_PORT:-8080}"
 
 usage() {
     cat <<EOF
@@ -40,7 +46,7 @@ Arguments:
   instance    Instance name for ocmsctl (e.g., my_site)
 
 Required Options:
-  -v, --vhost PATH       Vhost path on server (e.g., /var/www/vhosts/example.com)
+  -v, --vhost PATH       Instance directory on server (e.g., /var/www/vhosts/example.com/ocms)
 
 Options:
   -u, --user USER        SSH user (default: root)
@@ -53,10 +59,10 @@ Options:
   -h, --help             Show this help message
 
 Examples:
-  $(basename "$0") server.example.com my_site -v /var/www/vhosts/example.com
-  $(basename "$0") server.example.com my_site -v /var/www/vhosts/example.com --no-logs
-  $(basename "$0") server.example.com my_site -v /var/www/vhosts/example.com --sync-custom
-  $(basename "$0") server.example.com my_site -v /var/www/vhosts/example.com --dry-run
+  $(basename "$0") server.example.com my_site -v /var/www/vhosts/example.com/ocms
+  $(basename "$0") server.example.com my_site -v /var/www/vhosts/example.com/ocms --no-logs
+  $(basename "$0") server.example.com my_site -v /var/www/vhosts/example.com/ocms --sync-custom
+  $(basename "$0") server.example.com my_site -v /var/www/vhosts/example.com/ocms --dry-run
 
 WARNING: This will OVERWRITE your local data with production data!
 EOF
@@ -136,8 +142,8 @@ if [[ -z "$VHOST" ]]; then
     exit 1
 fi
 
-# Construct remote paths from vhost
-REMOTE_INSTANCE_DIR="${VHOST}/ocms"
+# Construct remote paths from instance directory
+REMOTE_INSTANCE_DIR="${VHOST}"
 REMOTE_DATA_DIR="${REMOTE_INSTANCE_DIR}/data"
 REMOTE_UPLOADS_DIR="${REMOTE_INSTANCE_DIR}/uploads"
 REMOTE_LOGS_DIR="${REMOTE_INSTANCE_DIR}/logs"
@@ -163,9 +169,13 @@ rsync_cmd() {
 stop_local_server() {
     echo_step "Stopping local development server (port ${LOCAL_PORT})..."
     if [[ "$DRY_RUN" == true ]]; then
-        echo_dry_run "lsof -ti:${LOCAL_PORT} -sTCP:LISTEN | xargs -r kill -9"
+        echo_dry_run "kill processes on port ${LOCAL_PORT}"
     else
-        lsof -ti:"${LOCAL_PORT}" -sTCP:LISTEN | xargs -r kill -9 2>/dev/null || true
+        local pids
+        pids=$(lsof -ti:"${LOCAL_PORT}" -sTCP:LISTEN 2>/dev/null) || true
+        if [[ -n "$pids" ]]; then
+            echo "$pids" | xargs kill -9 2>/dev/null || true
+        fi
     fi
     echo_ok "Local server stopped"
 }
