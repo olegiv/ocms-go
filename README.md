@@ -240,14 +240,23 @@ make run
 | `make dev` | Build assets and run development server |
 | `make run` | Run development server (no asset build) |
 | `make stop` | Stop development server on port 8080 |
-| `make build` | Build production binary to `bin/ocms` |
+| `make restart` | Stop and restart development server |
+| `make build` | Build binary to `bin/ocms` |
+| `make build-prod` | Build optimized binary (stripped, trimmed) |
+| `make build-linux-amd64` | Cross-compile for Linux AMD64 |
+| `make build-darwin-arm64` | Cross-compile for macOS ARM64 |
+| `make build-all-platforms` | Build for Linux AMD64 and macOS ARM64 |
 | `make test` | Run all tests |
-| `make clean` | Remove build artifacts and database |
+| `make clean` | Remove build artifacts |
+| `make clean-db` | Remove database files |
 | `make migrate-up` | Apply pending migrations |
 | `make migrate-down` | Rollback last migration |
 | `make migrate-status` | Show migration status |
 | `make migrate-create` | Create new migration file |
 | `make assets` | Install npm deps and compile SCSS |
+| `make sqlc` | Regenerate sqlc code from SQL queries |
+| `make templ` | Regenerate templ Go code from `.templ` files |
+| `make deploy-binary` | Deploy binary to remote server (no custom content) |
 | `make commit-prepare` | Proxy to Claude slash command `/commit-prepare` |
 | `make commit-do` | Proxy to Claude slash command `/commit-do` |
 | `make code-quality` | Proxy to Claude slash command `/code-quality` |

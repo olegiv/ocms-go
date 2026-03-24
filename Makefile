@@ -114,9 +114,9 @@ templ:
 	@echo "Templ files generated"
 
 # Deploy binary only to remote server
-# Usage: make deploy-binary SERVER=server.example.com INSTANCE=my_site
+# Usage: make deploy-binary SERVER=server.example.com INSTANCES="site1 site2"
 deploy-binary:
-	./scripts/deploy/deploy-binary.sh $(SERVER) $(INSTANCE) $(DEPLOY_OPTS)
+	./scripts/deploy/deploy-binary.sh $(SERVER) $(INSTANCES) $(DEPLOY_OPTS)
 
 # Prepare and execute commit workflow (Codex/Claude-compatible)
 commit-prepare:

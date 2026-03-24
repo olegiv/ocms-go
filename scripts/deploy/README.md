@@ -140,21 +140,21 @@ Commands:
 
 ## Deploying Updates
 
-### Single Instance — Binary Only (from local machine)
+### Binary Only (from local machine)
 
-Use `deploy-binary.sh` for sites that use only embedded themes (no custom content):
+Use `deploy-binary.sh` for sites that use only embedded themes (no custom content). Supports multiple instances sharing the same binary:
 
 ```bash
-./scripts/deploy/deploy-binary.sh <server> <instance> [options]
+./scripts/deploy/deploy-binary.sh <server> <instance...> [options]
 
-# Build and deploy
+# Single instance
 ./scripts/deploy/deploy-binary.sh server.example.com my_site
 
-# Use existing binary
-./scripts/deploy/deploy-binary.sh server.example.com my_site --skip-build
+# Multiple instances sharing the same binary
+./scripts/deploy/deploy-binary.sh server.example.com site_a site_b site_c
 
-# Dry run
-./scripts/deploy/deploy-binary.sh server.example.com my_site --dry-run
+# Skip build, dry run
+./scripts/deploy/deploy-binary.sh server.example.com site_a site_b --skip-build --dry-run
 ```
 
 Options:
@@ -165,10 +165,10 @@ Options:
 The script:
 1. Builds `bin/ocms-linux-amd64`
 2. Backs up current binary on server
-3. Stops the instance via `ocmsctl`
+3. Stops all listed instances via `ocmsctl`
 4. Transfers binary via `scp`
-5. Starts the instance
-6. Checks instance status
+5. Starts all instances
+6. Checks each instance status
 
 ### Single Instance — With Custom Content (from local machine)
 

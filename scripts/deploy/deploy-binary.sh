@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Deploy oCMS binary to a remote server (binary only, no custom content)
-# Usage: ./scripts/deploy/deploy-binary.sh <server> <instance> [options]
+# Usage: ./scripts/deploy/deploy-binary.sh <server> <instance...> [options]
 
 set -euo pipefail
 
@@ -23,16 +23,17 @@ DRY_RUN=false
 
 usage() {
     cat <<EOF
-Usage: $(basename "$0") <server> <instance> [options]
+Usage: $(basename "$0") <server> <instance...> [options]
 
 Deploy oCMS binary to a remote server (binary only, no custom content).
+Supports multiple instances sharing the same binary.
 
 Core themes (default, developer) are embedded in the binary.
 For deploying custom themes, use deploy.sh instead.
 
 Arguments:
   server      Remote server hostname (e.g., server.example.com)
-  instance    Instance name for ocmsctl (e.g., my_site)
+  instance    One or more instance names for ocmsctl (e.g., my_site)
 
 Options:
   -u, --user USER      SSH user (default: root)
@@ -41,16 +42,21 @@ Options:
   -h, --help           Show this help message
 
 Examples:
+  # Single instance
   $(basename "$0") server.example.com my_site
-  $(basename "$0") server.example.com my_site --skip-build
-  $(basename "$0") server.example.com my_site -u deploy --dry-run
+
+  # Multiple instances sharing the same binary
+  $(basename "$0") server.example.com site_a site_b site_c
+
+  # Skip build, dry run
+  $(basename "$0") server.example.com site_a site_b --skip-build --dry-run
 EOF
     exit 0
 }
 
 # Parse arguments
 SERVER=""
-INSTANCE=""
+INSTANCES=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -77,11 +83,8 @@ while [[ $# -gt 0 ]]; do
         *)
             if [[ -z "$SERVER" ]]; then
                 SERVER="$1"
-            elif [[ -z "$INSTANCE" ]]; then
-                INSTANCE="$1"
             else
-                echo_error "Too many arguments: $1"
-                exit 1
+                INSTANCES+=("$1")
             fi
             shift
             ;;
@@ -89,8 +92,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate required arguments
-if [[ -z "$SERVER" ]] || [[ -z "$INSTANCE" ]]; then
-    echo_error "Missing required arguments: server and instance"
+if [[ -z "$SERVER" ]] || [[ ${#INSTANCES[@]} -eq 0 ]]; then
+    echo_error "Missing required arguments: server and at least one instance"
     echo "Use --help for usage information."
     exit 1
 fi
@@ -115,9 +118,9 @@ scp_cmd() {
 # Display configuration
 echo ""
 echo_info "Deployment Configuration:"
-echo "  Server:   ${SSH_USER}@${SERVER}"
-echo "  Instance: ${INSTANCE}"
-echo "  Binary:   ${LOCAL_BINARY}"
+echo "  Server:    ${SSH_USER}@${SERVER}"
+echo "  Instances: ${INSTANCES[*]}"
+echo "  Binary:    ${LOCAL_BINARY}"
 echo ""
 
 # Step 1: Build binary
@@ -140,25 +143,31 @@ echo_step "Backing up current binary on server..."
 ssh_cmd "cp ${REMOTE_BIN_DIR}/${REMOTE_BINARY} ${REMOTE_BIN_DIR}/${REMOTE_BINARY}.backup 2>/dev/null || true"
 echo_ok "Backup complete"
 
-# Step 3: Stop instance
-echo_step "Stopping instance '${INSTANCE}'..."
-ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl stop ${INSTANCE}"
-echo_ok "Instance stopped"
+# Step 3: Stop all instances
+for instance in "${INSTANCES[@]}"; do
+    echo_step "Stopping instance '${instance}'..."
+    ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl stop ${instance}"
+    echo_ok "Instance '${instance}' stopped"
+done
 
 # Step 4: Transfer binary
 echo_step "Transferring binary to server..."
 scp_cmd "${LOCAL_BINARY}" "${SSH_USER}@${SERVER}:${REMOTE_BIN_DIR}/"
 echo_ok "Binary transferred"
 
-# Step 5: Start instance
-echo_step "Starting instance '${INSTANCE}'..."
-ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl start ${INSTANCE}"
-echo_ok "Instance started"
+# Step 5: Start all instances
+for instance in "${INSTANCES[@]}"; do
+    echo_step "Starting instance '${instance}'..."
+    ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl start ${instance}"
+    echo_ok "Instance '${instance}' started"
+done
 
 # Step 6: Health check
 echo_step "Checking instance status..."
 sleep 2
-ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl status ${INSTANCE}"
+for instance in "${INSTANCES[@]}"; do
+    ssh_cmd "${REMOTE_BIN_DIR}/ocmsctl status ${instance}"
+done
 
 echo ""
 echo_ok "Deployment complete!"
