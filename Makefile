@@ -1,4 +1,4 @@
-make.PHONY: run stop restart build build-prod build-linux-amd64 build-darwin-arm64 build-all-platforms test clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ commit-prepare commit-do code-quality security-audit commit-prepare-local commit-do-local code-quality-local security-audit-local install-hooks check-no-absolute-paths
+make.PHONY: run stop restart build build-prod build-linux-amd64 build-darwin-arm64 build-all-platforms test clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ deploy-binary commit-prepare commit-do code-quality security-audit commit-prepare-local commit-do-local code-quality-local security-audit-local install-hooks check-no-absolute-paths
 
 # Build variables
 BINARY_NAME=ocms
@@ -112,6 +112,11 @@ sqlc:
 templ:
 	templ generate
 	@echo "Templ files generated"
+
+# Deploy binary only to remote server
+# Usage: make deploy-binary SERVER=server.example.com INSTANCE=my_site
+deploy-binary:
+	./scripts/deploy/deploy-binary.sh $(SERVER) $(INSTANCE) $(DEPLOY_OPTS)
 
 # Prepare and execute commit workflow (Codex/Claude-compatible)
 commit-prepare:

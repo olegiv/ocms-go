@@ -140,15 +140,42 @@ Commands:
 
 ## Deploying Updates
 
-### Single Instance (from local machine)
+### Single Instance — Binary Only (from local machine)
 
-Use `deploy.sh` to build, transfer, and restart a single instance:
+Use `deploy-binary.sh` for sites that use only embedded themes (no custom content):
+
+```bash
+./scripts/deploy/deploy-binary.sh <server> <instance> [options]
+
+# Build and deploy
+./scripts/deploy/deploy-binary.sh server.example.com my_site
+
+# Use existing binary
+./scripts/deploy/deploy-binary.sh server.example.com my_site --skip-build
+
+# Dry run
+./scripts/deploy/deploy-binary.sh server.example.com my_site --dry-run
+```
+
+Options:
+- `-u, --user USER` — SSH user (default: `root`)
+- `--skip-build` — skip `make build-linux-amd64`, use existing binary
+- `--dry-run` — print commands without executing
+
+The script:
+1. Builds `bin/ocms-linux-amd64`
+2. Backs up current binary on server
+3. Stops the instance via `ocmsctl`
+4. Transfers binary via `scp`
+5. Starts the instance
+6. Checks instance status
+
+### Single Instance — With Custom Content (from local machine)
+
+Use `deploy.sh` when you also need to sync custom themes or modules:
 
 ```bash
 ./scripts/deploy/deploy.sh <server> <instance> [options]
-
-# Deploy binary only (embedded themes, no custom content)
-./scripts/deploy/deploy.sh server.example.com my_site
 
 # Deploy binary and sync custom themes
 ./scripts/deploy/deploy.sh server.example.com my_site \
