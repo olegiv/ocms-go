@@ -36,6 +36,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/logging"
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/render"
 	"github.com/olegiv/ocms-go/internal/scheduler"
@@ -1886,6 +1887,13 @@ func run() error {
 		}
 	}()
 
+	_ = eventService.LogSystemEvent(context.Background(), model.EventLevelInfo,
+		"Server started", nil, "", "", map[string]any{
+			"addr":    cfg.ServerAddr(),
+			"env":     cfg.Env,
+			"version": appVersion,
+		})
+
 	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -1900,6 +1908,9 @@ func run() error {
 	if err := srv.Shutdown(ctx); err != nil {
 		return fmt.Errorf("server shutdown: %w", err)
 	}
+
+	_ = eventService.LogSystemEvent(context.Background(), model.EventLevelInfo,
+		"Server stopped", nil, "", "", nil)
 
 	slog.Info("server stopped")
 	return nil
