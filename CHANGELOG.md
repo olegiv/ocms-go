@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-03-25
+
+### Added
+
+#### Deployment
+- Add binary-only deploy script (`deploy-binary.sh`) for sites using embedded themes
+- Support multiple instances in `deploy-binary.sh` to avoid version skew
+- Add `deploy-binary` Makefile target
+- Add `--skip-binary` flag to deploy script
+
+#### Observability
+- Log server start/stop events to admin event log (`/admin/events`)
+- Add module no-op template placeholders (privacy, analytics-ext, embed)
+
+#### Documentation
+- Add missing make targets to README (build variants, sqlc, templ, deploy-binary)
+
+### Changed
+- Update goldmark 1.7.17 → 1.8.1
+- Update golang.org/x/image 0.37.0 → 0.38.0
+- Simplify logs gitignore (ignore entire directory)
+- Disable form captcha requirement for demo
+
+### Fixed
+- Fix false positive in `javascript:` suspicious markup detection
+- Fix sync-prod-to-dev.sh for macOS and path handling
+- Fix custom content detection and remote path in deploy script
+- Fix informerBar template error when module is inactive
+
 ## [0.10.0] - 2026-03-22
 
 ### Added
