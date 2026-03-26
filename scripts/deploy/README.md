@@ -93,11 +93,21 @@ OCMS_EMBED_PROXY_TOKEN=replace-with-embed-proxy-token
 
 If you use self-hosted Dify, replace `api.dify.ai` with your API hostname.
 
-### 3. Configure Nginx in Plesk
+### 3. Configure SSL in Plesk
+
+1. Go to **Websites & Domains** → your domain
+2. Click **SSL/TLS Certificates**
+3. Click **Install** under "Let's Encrypt"
+4. Check your domain name(s)
+5. Click **Get it free**
+6. After installation, go back to **Hosting Settings**
+7. Enable **Permanent SEO-safe 301 redirect from HTTP to HTTPS**
+
+### 4. Configure Nginx in Plesk
 
 Go to **Websites & Domains → example.com → Apache & nginx Settings → Additional nginx directives** and paste the snippet printed by `setup-site.sh`.
 
-### 4. Start the site
+### 5. Start the site
 
 **For testing** (manual start/stop via terminal):
 ```bash
@@ -113,7 +123,19 @@ sudo systemctl enable --now ocms@example_com
 sudo journalctl -u ocms@example_com -f
 ```
 
-### 5. Login
+**Running without systemd** (not recommended for production):
+```bash
+# nohup (persists after logout)
+cd /var/lib/ocms && nohup /opt/ocms/bin/ocms > /var/log/ocms.log 2>&1 &
+
+# screen (can reattach with: screen -r ocms)
+screen -dmS ocms /opt/ocms/bin/ocms
+
+# tmux (can reattach with: tmux attach -t ocms)
+tmux new-session -d -s ocms '/opt/ocms/bin/ocms'
+```
+
+### 6. Login
 
 Navigate to `https://example.com/admin/` and login with:
 - Email: `admin@example.com`
@@ -415,6 +437,88 @@ sudo rm -rf /var/www/vhosts/example.com/ocms
 # Remove from sites.conf (manually edit the file)
 sudo nano /etc/ocms/sites.conf
 ```
+
+## Troubleshooting
+
+### Service Won't Start
+
+```bash
+sudo systemctl status ocms@example_com
+sudo journalctl -u ocms@example_com -n 50
+
+# Common issues:
+# - Missing OCMS_SESSION_SECRET in .env
+# - Permission denied on data/ or uploads/
+# - Port already in use
+```
+
+### 502 Bad Gateway
+
+```bash
+# Check if oCMS is running
+curl http://127.0.0.1:8081/health
+
+# Check nginx config
+sudo nginx -t
+
+# Check nginx logs
+tail -f /var/log/nginx/error.log
+```
+
+### Duplicate Location "/" Error
+
+Plesk generates its own `location /` block. Use a regex pattern instead:
+
+```nginx
+# WRONG - causes duplicate location error
+location / {
+    proxy_pass http://127.0.0.1:8081;
+}
+
+# CORRECT - regex pattern avoids conflict
+location ~ ^/(.*)$ {
+    proxy_pass http://127.0.0.1:8081/$1$is_args$args;
+}
+```
+
+Also ensure **Proxy mode** is unchecked in Apache & nginx Settings.
+
+### Permission Errors
+
+```bash
+sudo chown -R {user}:psaserv {vhost}/ocms/data {vhost}/ocms/uploads
+sudo chmod 600 {vhost}/ocms/.env
+```
+
+### Database Corruption
+
+```bash
+# Check integrity
+sqlite3 {vhost}/ocms/data/ocms.db "PRAGMA integrity_check;"
+
+# Restore from backup
+sudo ocmsctl stop example_com
+gunzip {vhost}/ocms/backups/ocms_TIMESTAMP.db.gz -k
+mv {vhost}/ocms/data/ocms.db {vhost}/ocms/data/ocms.db.corrupted
+mv {vhost}/ocms/backups/ocms_TIMESTAMP.db {vhost}/ocms/data/ocms.db
+chown {user}:psaserv {vhost}/ocms/data/ocms.db
+sudo ocmsctl start example_com
+```
+
+## Security Checklist
+
+- [ ] Changed default admin password
+- [ ] Set strong `OCMS_SESSION_SECRET` (32+ bytes)
+- [ ] Set `OCMS_ENV=production`
+- [ ] Configure `OCMS_EMBED_PROXY_TOKEN` when embed proxy is enabled
+- [ ] Configure `OCMS_EMBED_ALLOWED_ORIGINS` for all public hostnames
+- [ ] Set `OCMS_EMBED_ALLOWED_UPSTREAM_HOSTS` for your API host
+- [ ] SSL/TLS enabled with valid certificate
+- [ ] HTTP redirects to HTTPS
+- [ ] `.env` permissions set to 600
+- [ ] Firewall configured (only 80/443 open)
+- [ ] Backups scheduled (see Cron Jobs section)
+- [ ] Health monitoring enabled (see Health Checks section)
 
 ## Migration from Separate Theme Directory
 
