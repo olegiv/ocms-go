@@ -6,6 +6,7 @@ package module
 import (
 	"database/sql"
 	"embed"
+	"fmt"
 	"html/template"
 	"testing"
 
@@ -23,6 +24,7 @@ type mockModule struct {
 	dependencies []string
 	migrations   []Migration
 	initCalled   bool
+	initErr      error
 	shutdownErr  error
 	routesCalled bool
 	adminCalled  bool
@@ -42,7 +44,7 @@ func (m *mockModule) Version() string                  { return m.version }
 func (m *mockModule) Description() string              { return m.description }
 func (m *mockModule) Dependencies() []string           { return m.dependencies }
 func (m *mockModule) Migrations() []Migration          { return m.migrations }
-func (m *mockModule) Init(_ *Context) error            { m.initCalled = true; return nil }
+func (m *mockModule) Init(_ *Context) error            { m.initCalled = true; return m.initErr }
 func (m *mockModule) Shutdown() error                  { return m.shutdownErr }
 func (m *mockModule) RegisterRoutes(_ chi.Router)      { m.routesCalled = true }
 func (m *mockModule) RegisterAdminRoutes(_ chi.Router) { m.adminCalled = true }
@@ -870,6 +872,142 @@ func TestListInfoShowsActiveStatus(t *testing.T) {
 		case "status-inactive":
 			if info.Active {
 				t.Error("expected status-inactive to be inactive")
+			}
+		}
+	}
+}
+
+func TestSetActiveInitializesInactiveModule(t *testing.T) {
+	logger := testutil.TestLoggerSilent()
+
+	db := createTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	// First registry: register and init, then deactivate
+	r1 := NewRegistry(logger)
+	m1 := newMockModule("lazy", "1.0.0")
+	_ = r1.Register(m1)
+	ctx := &Context{DB: db, Logger: logger}
+	_ = r1.InitAll(ctx)
+	_ = r1.SetActive("lazy", false)
+
+	// Second registry: module starts as inactive, Init should be skipped
+	r2 := NewRegistry(logger)
+	m2 := newMockModule("lazy", "1.0.0")
+	_ = r2.Register(m2)
+	_ = r2.InitAll(ctx)
+
+	if m2.initCalled {
+		t.Fatal("expected Init NOT to be called for inactive module at startup")
+	}
+
+	// Now activate — SetActive should call Init
+	err := r2.SetActive("lazy", true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !m2.initCalled {
+		t.Error("expected Init to be called when activating an uninitialized module")
+	}
+	if !r2.IsActive("lazy") {
+		t.Error("expected module to be active after SetActive(true)")
+	}
+}
+
+func TestSetActiveAlreadyInitializedModule(t *testing.T) {
+	logger := testutil.TestLoggerSilent()
+	r := NewRegistry(logger)
+
+	m := newMockModule("already", "1.0.0")
+	_ = r.Register(m)
+
+	db := createTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	ctx := &Context{DB: db, Logger: logger}
+	_ = r.InitAll(ctx)
+
+	if !m.initCalled {
+		t.Fatal("expected Init to be called during InitAll")
+	}
+
+	// Reset flag
+	m.initCalled = false
+
+	// Deactivate and reactivate — should NOT call Init again
+	_ = r.SetActive("already", false)
+	err := r.SetActive("already", true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if m.initCalled {
+		t.Error("expected Init NOT to be called again for already-initialized module")
+	}
+}
+
+func TestSetActiveInitErrorPreventsActivation(t *testing.T) {
+	logger := testutil.TestLoggerSilent()
+
+	db := createTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	// First registry: register and deactivate
+	r1 := NewRegistry(logger)
+	m1 := newMockModule("failing", "1.0.0")
+	_ = r1.Register(m1)
+	ctx := &Context{DB: db, Logger: logger}
+	_ = r1.InitAll(ctx)
+	_ = r1.SetActive("failing", false)
+
+	// Second registry: module inactive, Init will fail
+	r2 := NewRegistry(logger)
+	m2 := newMockModule("failing", "1.0.0")
+	m2.initErr = fmt.Errorf("init failed")
+	_ = r2.Register(m2)
+	_ = r2.InitAll(ctx)
+
+	err := r2.SetActive("failing", true)
+	if err == nil {
+		t.Fatal("expected error when Init fails during activation")
+	}
+
+	if r2.IsActive("failing") {
+		t.Error("expected module to remain inactive when Init fails")
+	}
+}
+
+func TestListInfoShowsInitializedStatus(t *testing.T) {
+	logger := testutil.TestLoggerSilent()
+
+	db := createTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	// First registry: set up one module as inactive
+	r1 := NewRegistry(logger)
+	_ = r1.Register(newMockModule("mod-a", "1.0.0"))
+	_ = r1.Register(newMockModule("mod-b", "1.0.0"))
+	ctx := &Context{DB: db, Logger: logger}
+	_ = r1.InitAll(ctx)
+	_ = r1.SetActive("mod-b", false)
+
+	// Second registry: mod-a active (initialized), mod-b inactive (not initialized)
+	r2 := NewRegistry(logger)
+	_ = r2.Register(newMockModule("mod-a", "1.0.0"))
+	_ = r2.Register(newMockModule("mod-b", "1.0.0"))
+	_ = r2.InitAll(ctx)
+
+	infos := r2.ListInfo()
+	for _, info := range infos {
+		switch info.Name {
+		case "mod-a":
+			if !info.Initialized {
+				t.Error("expected mod-a to show as initialized")
+			}
+		case "mod-b":
+			if info.Initialized {
+				t.Error("expected mod-b to show as NOT initialized")
 			}
 		}
 	}

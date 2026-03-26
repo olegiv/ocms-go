@@ -31,6 +31,7 @@ type Registry struct {
 	order         []string // initialization order
 	activeStatus  map[string]bool
 	sidebarStatus map[string]bool // show in sidebar status
+	initStatus    map[string]bool // tracks which modules have been initialized
 	ctx           *Context
 	logger        *slog.Logger
 	mu            sync.RWMutex
@@ -43,6 +44,7 @@ func NewRegistry(logger *slog.Logger) *Registry {
 		order:         make([]string, 0),
 		activeStatus:  make(map[string]bool),
 		sidebarStatus: make(map[string]bool),
+		initStatus:    make(map[string]bool),
 		logger:        logger,
 	}
 }
@@ -134,6 +136,10 @@ func (r *Registry) InitAll(ctx *Context) error {
 		if err := r.loadModuleTranslations(m); err != nil {
 			r.logger.Warn("failed to load module translations", "module", name, "error", err)
 		}
+
+		r.mu.Lock()
+		r.initStatus[name] = true
+		r.mu.Unlock()
 
 		r.logger.Info("module initialized", "name", name)
 	}
@@ -318,17 +324,41 @@ func (r *Registry) IsActive(name string) bool {
 }
 
 // SetActive sets a module's active status and persists it to the database.
+// When activating a module that was never initialized (e.g., it was inactive
+// at server startup), Init() and translation loading are performed first.
 func (r *Registry) SetActive(name string, active bool) error {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 
-	if _, exists := r.modules[name]; !exists {
+	m, exists := r.modules[name]
+	if !exists {
+		r.mu.Unlock()
 		return fmt.Errorf("module %q not registered", name)
 	}
 
 	if r.ctx == nil || r.ctx.DB == nil {
+		r.mu.Unlock()
 		return fmt.Errorf("registry not initialized")
 	}
+
+	needsInit := active && !r.initStatus[name]
+	ctx := r.ctx
+	r.mu.Unlock()
+
+	// Initialize the module if needed (outside lock, matching InitAll pattern)
+	if needsInit {
+		r.logger.Info("initializing module on activation", "name", name)
+
+		if err := m.Init(ctx); err != nil {
+			return fmt.Errorf("initializing module %q on activation: %w", name, err)
+		}
+
+		if err := r.loadModuleTranslations(m); err != nil {
+			r.logger.Warn("failed to load module translations", "module", name, "error", err)
+		}
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	_, err := r.ctx.DB.Exec(
 		"UPDATE modules SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?",
@@ -339,6 +369,9 @@ func (r *Registry) SetActive(name string, active bool) error {
 	}
 
 	r.activeStatus[name] = active
+	if needsInit {
+		r.initStatus[name] = true
+	}
 	r.logger.Info("module status changed", "module", name, "active", active)
 	return nil
 }
@@ -597,7 +630,7 @@ func (r *Registry) ListInfo() []Info {
 			Name:              m.Name(),
 			Version:           m.Version(),
 			Description:       m.Description(),
-			Initialized:       r.ctx != nil,
+			Initialized:       r.initStatus[name],
 			Active:            active,
 			ShowInSidebar:     showInSidebar,
 			MigrationCount:    migrationCount,
