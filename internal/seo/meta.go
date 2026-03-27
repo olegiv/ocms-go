@@ -26,6 +26,13 @@ type Meta struct {
 	Robots        string // Robots directive (index,follow / noindex,nofollow)
 	TwitterCard   string // Twitter card type
 	TwitterSite   string // Twitter @username
+
+	// Article-specific OG tags (only set when OGType == "article")
+	ArticlePublishedTime string   // article:published_time (ISO 8601)
+	ArticleModifiedTime  string   // article:modified_time (ISO 8601)
+	ArticleAuthor        string   // article:author
+	ArticleSection       string   // article:section (primary category)
+	ArticleTags          []string // article:tag
 }
 
 // PageData contains page information for building meta tags.
@@ -42,7 +49,10 @@ type PageData struct {
 	NoFollow        bool
 	CanonicalURL    string
 	PublishedAt     *time.Time
+	ModifiedAt      *time.Time
 	AuthorName      string
+	CategoryName    string   // Primary category name
+	Tags            []string // Tag names
 }
 
 // SiteConfig contains site-wide settings for SEO.
@@ -104,6 +114,21 @@ func BuildMeta(page *PageData, site *SiteConfig) *Meta {
 			meta.Canonical = site.SiteURL + "/" + page.Slug
 		}
 		meta.OGURL = meta.Canonical
+
+		// Article-specific OG tags
+		if page.PublishedAt != nil {
+			meta.ArticlePublishedTime = page.PublishedAt.Format(time.RFC3339)
+		}
+		if page.ModifiedAt != nil {
+			meta.ArticleModifiedTime = page.ModifiedAt.Format(time.RFC3339)
+		}
+		if page.AuthorName != "" {
+			meta.ArticleAuthor = page.AuthorName
+		}
+		if page.CategoryName != "" {
+			meta.ArticleSection = page.CategoryName
+		}
+		meta.ArticleTags = page.Tags
 
 		// Robots directive
 		meta.Robots = buildRobotsDirective(page.NoIndex, page.NoFollow)
