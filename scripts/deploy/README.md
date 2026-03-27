@@ -371,6 +371,7 @@ Auto-restarts failed systemd-managed instances (max 3 attempts, 5-min cooldown).
 
 ```bash
 # /etc/cron.d/ocms-multi
+SHELL=/bin/bash
 0 3 * * * root /opt/ocms/backup-multi.sh >> /var/log/ocms-backup.log 2>&1
 */5 * * * * root /opt/ocms/healthcheck-multi.sh 2>&1 | grep -v "^$"
 ```

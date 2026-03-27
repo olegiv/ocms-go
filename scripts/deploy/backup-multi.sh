@@ -149,4 +149,8 @@ fi
 
 echo ""
 echo_info "Backup complete: $SUCCESS/$TOTAL succeeded"
-[ "$FAILED" -gt 0 ] && echo_warn "$FAILED site(s) failed"
+if [ "$FAILED" -gt 0 ]; then
+    echo_warn "$FAILED site(s) failed"
+    exit 1
+fi
+exit 0
