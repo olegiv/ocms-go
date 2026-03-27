@@ -425,6 +425,7 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 	// Get base template data
 	base := h.getBaseTemplateData(r, "", "")
 	base.MetaDescription = base.Site.Description
+	base.Canonical = h.getSiteURL(ctx, r)
 	base.BodyClass = "home"
 
 	// Get recent published posts (not pages) filtered by language
