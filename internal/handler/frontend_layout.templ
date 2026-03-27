@@ -51,6 +51,21 @@ templ frontendBaseLayout(base BaseTemplateData) {
 			if base.OGImage != "" {
 				<meta property="og:image" content={ absoluteURL(base.SiteURL, base.OGImage) }/>
 			}
+			if base.ArticlePublishedTime != "" {
+				<meta property="article:published_time" content={ base.ArticlePublishedTime }/>
+			}
+			if base.ArticleModifiedTime != "" {
+				<meta property="article:modified_time" content={ base.ArticleModifiedTime }/>
+			}
+			if base.ArticleAuthor != "" {
+				<meta property="article:author" content={ base.ArticleAuthor }/>
+			}
+			if base.ArticleSection != "" {
+				<meta property="article:section" content={ base.ArticleSection }/>
+			}
+			for _, tag := range base.ArticleTags {
+				<meta property="article:tag" content={ tag }/>
+			}
 			<!-- hreflang -->
 			for _, hl := range base.HrefLangs {
 				<link rel="alternate" hreflang={ hl.Lang } href={ hl.Href }/>

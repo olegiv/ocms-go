@@ -422,6 +422,17 @@ example_com /var/www/vhosts/example.com example_com 8081
 blog_example_com /var/www/vhosts/blog.example.com bloguser 8082
 ```
 
+## Disabling a Site
+
+To temporarily disable a site without removing its data, comment out its line in `sites.conf`:
+
+```bash
+sudo sed -i 's/^example_com/#example_com/' /etc/ocms/sites.conf
+sudo ocmsctl stop example_com
+```
+
+All multi-instance scripts (`backup-multi.sh`, `healthcheck-multi.sh`, `deploy-multi.sh`) skip commented lines. To re-enable, uncomment the line and start the instance.
+
 ## Removing a Site
 
 ```bash

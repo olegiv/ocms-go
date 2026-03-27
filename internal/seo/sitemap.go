@@ -6,6 +6,7 @@ package seo
 
 import (
 	"encoding/xml"
+	"strings"
 	"time"
 )
 
@@ -63,7 +64,7 @@ type SitemapBuilder struct {
 // NewSitemapBuilder creates a new sitemap builder.
 func NewSitemapBuilder(siteURL string) *SitemapBuilder {
 	return &SitemapBuilder{
-		siteURL: siteURL,
+		siteURL: strings.TrimRight(siteURL, "/"),
 		urls:    make([]SitemapURL, 0),
 	}
 }

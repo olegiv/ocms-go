@@ -148,9 +148,14 @@ type BaseTemplateData struct {
 	Canonical       string
 	FeaturedImage   string
 	Robots          string      // Robots directive (index,follow / noindex,nofollow)
-	OGImage         string      // Open Graph image (absolute URL)
-	OGType          string      // Open Graph type (website, article)
-	JSONLD          template.JS // JSON-LD structured data
+	OGImage              string      // Open Graph image (absolute URL)
+	OGType               string      // Open Graph type (website, article)
+	ArticlePublishedTime string      // article:published_time (ISO 8601)
+	ArticleModifiedTime  string      // article:modified_time (ISO 8601)
+	ArticleAuthor        string      // article:author
+	ArticleSection       string      // article:section (primary category)
+	ArticleTags          []string    // article:tag
+	JSONLD               template.JS // JSON-LD structured data
 
 	// Site info
 	SiteName    string
@@ -425,6 +430,7 @@ func (h *FrontendHandler) Home(w http.ResponseWriter, r *http.Request) {
 	// Get base template data
 	base := h.getBaseTemplateData(r, "", "")
 	base.MetaDescription = base.Site.Description
+	base.Canonical = h.getSiteURL(ctx, r)
 	base.BodyClass = "home"
 
 	// Get recent published posts (not pages) filtered by language
@@ -692,6 +698,16 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 		authorName = pageView.Author.Name
 	}
 
+	var categoryName string
+	if pageView.Category != nil {
+		categoryName = pageView.Category.Name
+	}
+	var tagNames []string
+	for _, t := range pageView.Tags {
+		tagNames = append(tagNames, t.Name)
+	}
+	modifiedAt := pageView.UpdatedAt
+
 	pageData := &seo.PageData{
 		Title:           pageView.Title,
 		Body:            string(pageView.Body),
@@ -705,7 +721,10 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 		NoFollow:        pageView.NoFollow,
 		CanonicalURL:    pageView.CanonicalURL,
 		PublishedAt:     pageView.PublishedAt,
+		ModifiedAt:      &modifiedAt,
 		AuthorName:      authorName,
+		CategoryName:    categoryName,
+		Tags:            tagNames,
 	}
 
 	meta := seo.BuildMeta(pageData, siteConfig)
@@ -719,6 +738,11 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	base.Robots = meta.Robots
 	base.OGImage = meta.OGImage
 	base.OGType = meta.OGType
+	base.ArticlePublishedTime = meta.ArticlePublishedTime
+	base.ArticleModifiedTime = meta.ArticleModifiedTime
+	base.ArticleAuthor = meta.ArticleAuthor
+	base.ArticleSection = meta.ArticleSection
+	base.ArticleTags = meta.ArticleTags
 	base.BodyClass = "single-page"
 
 	// Build JSON-LD structured data
