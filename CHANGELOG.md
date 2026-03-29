@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-03-27
+
+### Added
+
+#### SEO
+- Add OG article meta tags: `article:published_time`, `article:modified_time`, `article:author`, `article:section`, `article:tag`
+- Add `<link rel="canonical">` to homepage
+
+#### Deployment
+- Add "Disabling a Site" section to deploy docs
+- Add timestamps to deploy script log output
+- Strip ANSI colors when logging to file
+
+### Fixed
+
+#### SEO
+- Fix double slashes in sitemap.xml URLs when site URL has trailing slash
+
+#### Modules
+- Fix crash when enabling a module that was inactive at server startup
+
+#### Deployment
+- Fix backup script reporting false error exit code in Plesk scheduler
+- Fix logrotate creating log files with wrong ownership (use copytruncate)
+- Fix logrotate not matching nested vhost paths
+- Add `su` directive for backup log rotation
+
+### Security
+- Fix brace-expansion DoS vulnerability CVE-2026-33750 (npm override to 5.0.5)
+- Bump picomatch 4.0.3 → 4.0.4
+
+### Changed
+- Merge deployment docs into single `scripts/deploy/README.md`
+
 ## [0.10.1] - 2026-03-25
 
 ### Added
@@ -496,7 +530,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.10.2...HEAD
+[0.10.2]: https://github.com/olegiv/ocms-go/compare/v0.10.1...v0.10.2
+[0.10.1]: https://github.com/olegiv/ocms-go/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/olegiv/ocms-go/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/olegiv/ocms-go/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/olegiv/ocms-go/compare/v0.7.0...v0.8.0
