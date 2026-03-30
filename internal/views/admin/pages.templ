@@ -1881,8 +1881,8 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 			async createAndAddTag() {
 				const name = this.searchQuery.trim(); if (name.length < 2) return;
 				try {
-					const formData = new FormData(); formData.append('name', name); formData.append('slug', this.slugify(name));
-					await fetch('/admin/tags', { method: 'POST', body: formData, headers: { 'Accept': 'application/json' } });
+					const body = new URLSearchParams({ name: name, slug: this.slugify(name) });
+					await fetch('/admin/tags', { method: 'POST', body: body });
 					const searchR = await fetch(`/admin/tags/search?q=${encodeURIComponent(name)}`);
 					if (searchR.ok) { const tags = await searchR.json(); const newTag = tags.find(t => t.name.toLowerCase() === name.toLowerCase()); if (newTag) { this.addTag(newTag); this.allTags.push(newTag); } }
 				} catch(e) { console.error('Failed to create tag:', e); }
