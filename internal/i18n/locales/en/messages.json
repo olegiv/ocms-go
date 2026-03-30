@@ -984,8 +984,8 @@
         },
         {
             "id": "media.featured_image_requirements",
-            "message": "JPEG, PNG, GIF, or WebP. Minimum size: 1200×800 pixels.",
-            "translation": "JPEG, PNG, GIF, or WebP. Minimum size: 1200×800 pixels."
+            "message": "JPEG, PNG, GIF, or WebP. Minimum size: 1200×800 pixels. Recommended: JPEG 1920×1080 for best quality.",
+            "translation": "JPEG, PNG, GIF, or WebP. Minimum size: 1200×800 pixels. Recommended: JPEG 1920×1080 for best quality."
         },
         {
             "id": "media.select_media",
@@ -4404,8 +4404,8 @@
         },
         {
             "id": "seo.og_image_hint",
-            "message": "Recommended size: 1200x630 pixels for social media sharing",
-            "translation": "Recommended size: 1200x630 pixels for social media sharing"
+            "message": "JPEG, PNG, or WebP. Recommended: JPEG 1200×630 for social media sharing.",
+            "translation": "JPEG, PNG, or WebP. Recommended: JPEG 1200×630 for social media sharing."
         },
         {
             "id": "seo.select_og_image",

@@ -5,7 +5,7 @@
         {{/* Hero banner with title overlay */}}
         <div class="dev-page-hero">
             <img src="{{.Page.FeaturedImage}}"
-                 srcset="{{.Page.FeaturedImageMedium}} 800w, {{.Page.FeaturedImageLarge}} 1600w"
+                 srcset="{{if .Page.FeaturedImageMedium}}{{.Page.FeaturedImageMedium}} 800w{{end}}{{if .Page.FeaturedImageLarge}}, {{.Page.FeaturedImageLarge}} 1600w{{end}}"
                  sizes="100vw"
                  alt="{{mediaAlt .Page.FeaturedImageID $.LangCode .Page.FeaturedImageAlt}}">
             <div class="dev-page-hero-overlay">

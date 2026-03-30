@@ -95,6 +95,7 @@ type PageFormViewData struct {
 	MetaTitle       string
 	MetaDescription string
 	MetaKeywords    string
+	OgImage         *PageFormFeaturedImageView
 	OgImageID       string
 	CanonicalURL    string
 	NoIndex         bool
@@ -1343,21 +1344,19 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 				<span class="form-hint">{ pc.T("seo.meta_keywords_hint") }</span>
 			</div>
 			<!-- OG Image -->
-			<div class="form-group">
-				@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("seo.og_image") } }
-				<div class="media-picker" x-data={ ogImagePickerXData(data) }>
-					<input type="hidden" name="og_image_id" :value="selectedId"/>
-					<div class="media-picker-preview" x-show="selectedId">
-						<img :src="selectedPath" alt="OG Image Preview" class="media-preview-img"/>
-						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Class: "media-remove-btn", Attributes: templ.Attributes{"@click": "clearSelection()"}}) {
-							{ pc.T("btn.remove") }
-						}
-					</div>
-					@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "openMediaModal()", "x-show": "!selectedId"}}) {
-						@iconImage16()
-						{ pc.T("seo.select_og_image") }
-					}
+			<div class="form-group form-group-full">
+				<div
+					class="media-dropzone"
+					x-data="mediaDropzone()"
+					x-init="init()"
+					data-mode="select"
+					data-initial-image={ featuredImageJSON(data.OgImage) }
+				>
+					@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("seo.og_image") } }
+					@mediaDropzoneSelectArea(pc)
 					<span class="form-hint">{ pc.T("seo.og_image_hint") }</span>
+					<input type="hidden" name="og_image_id" x-bind:value="selectedImage ? selectedImage.id : ''"/>
+					@mediaDropzoneSelectModal(pc)
 				</div>
 			</div>
 			<!-- Canonical URL -->
@@ -1405,11 +1404,6 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 			</div>
 		</div>
 	</details>
-}
-
-func ogImagePickerXData(data PageFormViewData) string {
-	ogID := formVal(data.FormValues, "og_image_id", data.OgImageID)
-	return fmt.Sprintf("ogImagePicker('%s')", ogID)
 }
 
 templ schedulingSection(pc *PageContext, data PageFormViewData) {
@@ -1846,32 +1840,6 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 				segments = segments.filter(segment => segment !== '');
 				this.aliases[index].value = segments.join('/');
 			}
-		};
-	}
-
-	function ogImagePicker(initialId) {
-		return {
-			selectedId: initialId || '',
-			selectedPath: '',
-			init() {
-				if (this.selectedId) this.fetchImagePath(this.selectedId);
-			},
-			async fetchImagePath(id) {
-				try {
-					const response = await fetch(`/admin/media/api?limit=1`);
-					const data = await response.json();
-					this.selectedPath = '/uploads/originals/' + id + '/image.jpg';
-				} catch (error) { console.error('Failed to fetch OG image:', error); }
-			},
-			openMediaModal() {
-				if (typeof window.openMediaPickerForOG === 'function') window.openMediaPickerForOG(this);
-				else {
-					const mediaId = prompt('Enter media ID for OG image:');
-					if (mediaId) { this.selectedId = mediaId; this.selectedPath = '/uploads/originals/' + mediaId + '/image.jpg'; }
-				}
-			},
-			selectMedia(id, path, filename) { this.selectedId = id; this.selectedPath = path; },
-			clearSelection() { this.selectedId = ''; this.selectedPath = ''; }
 		};
 	}
 

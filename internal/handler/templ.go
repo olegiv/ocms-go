@@ -1457,6 +1457,17 @@ func convertPageFormViewData(data PageFormData, renderer *render.Renderer, lang 
 		}
 	}
 
+	// OG image
+	if data.OgImage != nil {
+		viewData.OgImage = &adminviews.PageFormFeaturedImageView{
+			ID:        data.OgImage.ID,
+			Filename:  data.OgImage.Filename,
+			Filepath:  data.OgImage.Filepath,
+			Thumbnail: data.OgImage.Thumbnail,
+			Mimetype:  data.OgImage.Mimetype,
+		}
+	}
+
 	// Tags
 	for _, t := range data.Tags {
 		viewData.Tags = append(viewData.Tags, adminviews.PageFormTagView{

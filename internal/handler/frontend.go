@@ -672,9 +672,12 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	base.Title = pageView.Title
 	base.MetaDescription = pageView.Excerpt
 
-	// Use large variant for single page featured image
-	if pageView.FeaturedImageLarge != "" {
+	// Use the best available variant for single page featured image
+	switch {
+	case pageView.FeaturedImageLarge != "":
 		pageView.FeaturedImage = pageView.FeaturedImageLarge
+	case pageView.FeaturedImageMedium != "":
+		pageView.FeaturedImage = pageView.FeaturedImageMedium
 	}
 
 	// Get related pages (same category)
@@ -1388,11 +1391,23 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 		media, err := h.queries.GetMediaByID(ctx, p.FeaturedImageID.Int64)
 		if err == nil {
 			pv.FeaturedImage = fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename)
-			pv.FeaturedImageSmall = fmt.Sprintf("/uploads/small/%s/%s", media.Uuid, media.Filename)
-			pv.FeaturedImageMedium = fmt.Sprintf("/uploads/medium/%s/%s", media.Uuid, media.Filename)
-			pv.FeaturedImageLarge = fmt.Sprintf("/uploads/large/%s/%s", media.Uuid, media.Filename)
 			pv.FeaturedImageID = media.ID
 			pv.FeaturedImageAlt = media.Alt.String
+
+			// Only set variant URLs for variants that were actually generated
+			variants, varErr := h.queries.GetMediaVariants(ctx, media.ID)
+			if varErr == nil {
+				for _, v := range variants {
+					switch v.Type {
+					case "small":
+						pv.FeaturedImageSmall = fmt.Sprintf("/uploads/small/%s/%s", media.Uuid, media.Filename)
+					case "medium":
+						pv.FeaturedImageMedium = fmt.Sprintf("/uploads/medium/%s/%s", media.Uuid, media.Filename)
+					case "large":
+						pv.FeaturedImageLarge = fmt.Sprintf("/uploads/large/%s/%s", media.Uuid, media.Filename)
+					}
+				}
+			}
 		}
 	}
 

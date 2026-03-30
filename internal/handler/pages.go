@@ -410,6 +410,7 @@ type PageFormData struct {
 	Categories    []store.Category   // Selected categories for the page
 	AllCategories []PageCategoryNode // All categories for selection (with tree structure)
 	FeaturedImage *FeaturedImageData
+	OgImage       *FeaturedImageData
 	Aliases       []store.PageAlias // URL aliases for the page
 	Statuses      []string
 	PageTypes     []string
@@ -732,6 +733,25 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Load OG image if set
+	var ogImage *FeaturedImageData
+	if page.OgImageID.Valid {
+		media, err := h.queries.GetMediaByID(r.Context(), page.OgImageID.Int64)
+		if err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				slog.Error("failed to get OG image", "error", err, "media_id", page.OgImageID.Int64)
+			}
+		} else {
+			ogImage = &FeaturedImageData{
+				ID:        media.ID,
+				Filename:  media.Filename,
+				Filepath:  fmt.Sprintf("/uploads/originals/%s/%s", media.Uuid, media.Filename),
+				Thumbnail: fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename),
+				Mimetype:  media.MimeType,
+			}
+		}
+	}
+
 	// Load aliases for this page
 	aliases, err := h.queries.GetAliasesForPage(r.Context(), id)
 	if err != nil {
@@ -748,6 +768,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		Categories:       categories,
 		AllCategories:    categoryTree,
 		FeaturedImage:    featuredImage,
+		OgImage:          ogImage,
 		Aliases:          aliases,
 		AllLanguages:     langInfo.AllLanguages,
 		Language:         langInfo.EntityLanguage,

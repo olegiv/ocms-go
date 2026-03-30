@@ -3,7 +3,7 @@
     <div class="dev-post-image">
         <a href="{{.URL}}">
             <img src="{{.FeaturedImage}}"
-                 srcset="{{.FeaturedImage}} 150w, {{.FeaturedImageSmall}} 400w, {{.FeaturedImageMedium}} 800w"
+                 srcset="{{.FeaturedImage}} 150w{{if .FeaturedImageSmall}}, {{.FeaturedImageSmall}} 400w{{end}}{{if .FeaturedImageMedium}}, {{.FeaturedImageMedium}} 800w{{end}}"
                  sizes="(max-width: 768px) 100vw, 200px"
                  alt="{{mediaAlt .FeaturedImageID $.LangCode .FeaturedImageAlt}}"
                  loading="lazy">
