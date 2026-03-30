@@ -572,12 +572,14 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 
 		data := PageFormData{
-			AllLanguages: allLanguages,
-			Statuses:     ValidPageStatuses,
-			PageTypes:    ValidPageTypes,
-			Errors:       validationErrors,
-			FormValues:   input.FormValues,
-			IsEdit:       false,
+			AllLanguages:  allLanguages,
+			FeaturedImage: h.loadImageData(r.Context(), input.FeaturedImageID),
+			OgImage:       h.loadImageData(r.Context(), input.OgImageID),
+			Statuses:      ValidPageStatuses,
+			PageTypes:     ValidPageTypes,
+			Errors:        validationErrors,
+			FormValues:    input.FormValues,
+			IsEdit:        false,
 		}
 
 		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.new"), pagesNewBreadcrumbs(lang))
@@ -715,43 +717,9 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	}
 	categoryTree := buildPageCategoryTree(allCategories, nil, 0)
 
-	// Load featured image if set
-	var featuredImage *FeaturedImageData
-	if page.FeaturedImageID.Valid {
-		media, err := h.queries.GetMediaByID(r.Context(), page.FeaturedImageID.Int64)
-		if err != nil {
-			if !errors.Is(err, sql.ErrNoRows) {
-				slog.Error("failed to get featured image", "error", err, "media_id", page.FeaturedImageID.Int64)
-			}
-		} else {
-			featuredImage = &FeaturedImageData{
-				ID:        media.ID,
-				Filename:  media.Filename,
-				Filepath:  fmt.Sprintf("/uploads/originals/%s/%s", media.Uuid, media.Filename),
-				Thumbnail: fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename),
-				Mimetype:  media.MimeType,
-			}
-		}
-	}
-
-	// Load OG image if set
-	var ogImage *FeaturedImageData
-	if page.OgImageID.Valid {
-		media, err := h.queries.GetMediaByID(r.Context(), page.OgImageID.Int64)
-		if err != nil {
-			if !errors.Is(err, sql.ErrNoRows) {
-				slog.Error("failed to get OG image", "error", err, "media_id", page.OgImageID.Int64)
-			}
-		} else {
-			ogImage = &FeaturedImageData{
-				ID:        media.ID,
-				Filename:  media.Filename,
-				Filepath:  fmt.Sprintf("/uploads/originals/%s/%s", media.Uuid, media.Filename),
-				Thumbnail: fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename),
-				Mimetype:  media.MimeType,
-			}
-		}
-	}
+	// Load featured image and OG image if set
+	featuredImage := h.loadImageData(r.Context(), page.FeaturedImageID)
+	ogImage := h.loadImageData(r.Context(), page.OgImageID)
 
 	// Load aliases for this page
 	aliases, err := h.queries.GetAliasesForPage(r.Context(), id)
@@ -856,12 +824,14 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
 		data := PageFormData{
-			Page:       &existingPage,
-			Statuses:   ValidPageStatuses,
-			PageTypes:  ValidPageTypes,
-			Errors:     validationErrors,
-			FormValues: input.FormValues,
-			IsEdit:     true,
+			Page:          &existingPage,
+			FeaturedImage: h.loadImageData(r.Context(), input.FeaturedImageID),
+			OgImage:       h.loadImageData(r.Context(), input.OgImageID),
+			Statuses:      ValidPageStatuses,
+			PageTypes:     ValidPageTypes,
+			Errors:        validationErrors,
+			FormValues:    input.FormValues,
+			IsEdit:        true,
 		}
 
 		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.edit"), pagesEditBreadcrumbs(lang, existingPage.Title, id))
@@ -1568,6 +1538,25 @@ func (h *PagesHandler) validatePageSlugUpdate(ctx context.Context, slug string, 
 			PageID: pageID,
 		})
 	})
+}
+
+// loadImageData loads FeaturedImageData for a media ID. Returns nil if the ID is
+// not valid or the media record cannot be found.
+func (h *PagesHandler) loadImageData(ctx context.Context, id sql.NullInt64) *FeaturedImageData {
+	if !id.Valid {
+		return nil
+	}
+	media, err := h.queries.GetMediaByID(ctx, id.Int64)
+	if err != nil {
+		return nil
+	}
+	return &FeaturedImageData{
+		ID:        media.ID,
+		Filename:  media.Filename,
+		Filepath:  fmt.Sprintf("/uploads/originals/%s/%s", media.Uuid, media.Filename),
+		Thumbnail: fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename),
+		Mimetype:  media.MimeType,
+	}
 }
 
 // validateFeaturedImageSize checks if a featured image meets minimum size requirements.
