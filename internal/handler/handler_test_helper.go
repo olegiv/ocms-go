@@ -55,6 +55,7 @@ func testDB(t *testing.T) *sql.DB {
 			title TEXT NOT NULL,
 			slug TEXT NOT NULL UNIQUE,
 			body TEXT NOT NULL DEFAULT '',
+			summary TEXT NOT NULL DEFAULT '',
 			status TEXT NOT NULL DEFAULT 'draft',
 			author_id INTEGER NOT NULL,
 			featured_image_id INTEGER,

@@ -373,6 +373,21 @@
             "translation": "Создание новой страницы для вашего сайта"
         },
         {
+            "id": "pages.summary",
+            "message": "Summary",
+            "translation": "Краткое описание"
+        },
+        {
+            "id": "pages.summary_placeholder",
+            "message": "Brief description of the page content",
+            "translation": "Краткое описание содержимого страницы"
+        },
+        {
+            "id": "pages.summary_hint",
+            "message": "Optional. Replaces the auto-generated excerpt on the frontend.",
+            "translation": "Необязательно. Заменяет автоматически сгенерированный отрывок на сайте."
+        },
+        {
             "id": "pages.version_history",
             "message": "Version History",
             "translation": "История версий"

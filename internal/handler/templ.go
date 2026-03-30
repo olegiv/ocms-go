@@ -1424,6 +1424,7 @@ func convertPageFormViewData(data PageFormData, renderer *render.Renderer, lang 
 		viewData.PageTitle = data.Page.Title
 		viewData.PageSlug = data.Page.Slug
 		viewData.PageBody = data.Page.Body
+		viewData.PageSummary = data.Page.Summary
 		viewData.PageStatus = data.Page.Status
 		viewData.PageType = data.Page.PageType
 		viewData.MetaTitle = data.Page.MetaTitle

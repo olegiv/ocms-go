@@ -1376,8 +1376,12 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 		pv.PublishedAtFormatted = t.Format("Jan 2, 2006")
 	}
 
-	// Generate excerpt from body (first 200 chars, strip HTML)
-	pv.Excerpt = h.generateExcerpt(p.Body, 200)
+	// Use custom summary if set, otherwise auto-generate from body
+	if p.Summary != "" {
+		pv.Excerpt = p.Summary
+	} else {
+		pv.Excerpt = h.generateExcerpt(p.Body, 200)
+	}
 
 	// Calculate reading time (approximately 200 words per minute)
 	wordCount := len(strings.Fields(h.generateExcerpt(p.Body, len(p.Body))))

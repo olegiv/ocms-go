@@ -373,6 +373,21 @@
             "translation": "Create a new page for your site"
         },
         {
+            "id": "pages.summary",
+            "message": "Summary",
+            "translation": "Summary"
+        },
+        {
+            "id": "pages.summary_placeholder",
+            "message": "Brief description of the page content",
+            "translation": "Brief description of the page content"
+        },
+        {
+            "id": "pages.summary_hint",
+            "message": "Optional. Replaces the auto-generated excerpt on the frontend.",
+            "translation": "Optional. Replaces the auto-generated excerpt on the frontend."
+        },
+        {
             "id": "pages.version_history",
             "message": "Version History",
             "translation": "Version History"

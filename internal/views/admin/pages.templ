@@ -74,6 +74,7 @@ type PageFormViewData struct {
 	PageTitle     string
 	PageSlug      string
 	PageBody      string
+	PageSummary   string
 	PageStatus    string
 	PageType      string
 	Statuses      []string
@@ -966,6 +967,18 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 						if data.Errors["body"] != "" {
 							<span class="form-error">{ data.Errors["body"] }</span>
 						}
+					</div>
+					<!-- Summary -->
+					<div class="form-group form-group-full">
+						@label.Label(label.Props{For: "summary", Class: "block mb-1"}) { { pc.T("pages.summary") } }
+						@textarea.Textarea(textarea.Props{
+							ID:          "summary",
+							Name:        "summary",
+							Placeholder: pc.T("pages.summary_placeholder"),
+							Value:       formVal(data.FormValues, "summary", data.PageSummary),
+							Attributes:  templ.Attributes{"rows": "3", "maxlength": "500"},
+						})
+						<span class="form-hint">{ pc.T("pages.summary_hint") }</span>
 					</div>
 					<!-- Featured Image -->
 					<div class="form-group form-group-full">

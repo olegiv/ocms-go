@@ -601,6 +601,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Title:             input.Title,
 		Slug:              input.Slug,
 		Body:              normalizedBody,
+		Summary:           input.Summary,
 		Status:            input.Status,
 		AuthorID:          userID,
 		FeaturedImageID:   input.FeaturedImageID,
@@ -888,6 +889,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Title:             input.Title,
 		Slug:              input.Slug,
 		Body:              normalizedBody,
+		Summary:           input.Summary,
 		Status:            status,
 		FeaturedImageID:   input.FeaturedImageID,
 		MetaTitle:         input.MetaTitle,
@@ -1243,7 +1245,8 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		Title:             version.Title,
 		Slug:              page.Slug, // Keep the current slug
 		Body:              normalizedBody,
-		Status:            page.Status, // Keep the current status
+		Summary:           page.Summary, // Keep the current summary
+		Status:            page.Status,  // Keep the current status
 		FeaturedImageID:   page.FeaturedImageID,
 		MetaTitle:         page.MetaTitle,
 		MetaDescription:   page.MetaDescription,
@@ -1329,6 +1332,7 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		Title:             sourcePage.Title, // Keep same title (user will translate)
 		Slug:              translatedSlug,
 		Body:              "",              // Empty body for translation
+		Summary:           "",              // Empty summary for translation
 		Status:            PageStatusDraft, // Always start as draft
 		AuthorID:          userID,
 		FeaturedImageID:   sourcePage.FeaturedImageID,
@@ -1409,6 +1413,7 @@ type pageFormInput struct {
 	Title             string
 	Slug              string
 	Body              string
+	Summary           string
 	Status            string
 	FeaturedImageID   sql.NullInt64
 	MetaTitle         string
@@ -1431,6 +1436,7 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 	title := strings.TrimSpace(r.FormValue("title"))
 	slug := strings.TrimSpace(r.FormValue("slug"))
 	body := r.FormValue("body")
+	summary := strings.TrimSpace(r.FormValue("summary"))
 	status := r.FormValue("status")
 	featuredImageIDStr := r.FormValue("featured_image_id")
 
@@ -1489,6 +1495,7 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 		"title":               title,
 		"slug":                slug,
 		"body":                body,
+		"summary":             summary,
 		"status":              status,
 		"featured_image_id":   featuredImageIDStr,
 		"meta_title":          metaTitle,
@@ -1509,6 +1516,7 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 		Title:             title,
 		Slug:              slug,
 		Body:              body,
+		Summary:           summary,
 		Status:            status,
 		FeaturedImageID:   featuredImageID,
 		MetaTitle:         metaTitle,
