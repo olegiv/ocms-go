@@ -24,6 +24,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/seo"
 	"github.com/olegiv/ocms-go/internal/service"
@@ -617,13 +618,25 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 				http.Redirect(w, r, "/"+aliasPage.Slug, http.StatusMovedPermanently)
 				return
 			}
-			// Not a slug, not an alias - render 404
-			h.renderNotFound(w, r)
+
+			// Draft preview for admin/editor users
+			if user := middleware.GetUser(r); user != nil && (user.Role == model.RoleAdmin || user.Role == model.RoleEditor) {
+				draftPage, draftErr := h.queries.GetPageBySlug(ctx, slug)
+				if draftErr == nil && draftPage.Status != PageStatusPublished {
+					page = draftPage
+					err = nil
+				}
+			}
+
+			if err != nil {
+				h.renderNotFound(w, r)
+				return
+			}
+		} else {
+			h.logger.Error("failed to get page", "slug", slug, "error", err)
+			h.renderInternalError(w)
 			return
 		}
-		h.logger.Error("failed to get page", "slug", slug, "error", err)
-		h.renderInternalError(w)
-		return
 	}
 
 	// Update language context based on page's language (fixes translated pages like /slug-ru)
@@ -659,9 +672,12 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	base.Title = pageView.Title
 	base.MetaDescription = pageView.Excerpt
 
-	// Use large variant for single page featured image
-	if pageView.FeaturedImageLarge != "" {
+	// Use the best available variant for single page featured image
+	switch {
+	case pageView.FeaturedImageLarge != "":
 		pageView.FeaturedImage = pageView.FeaturedImageLarge
+	case pageView.FeaturedImageMedium != "":
+		pageView.FeaturedImage = pageView.FeaturedImageMedium
 	}
 
 	// Get related pages (same category)
@@ -744,6 +760,11 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	base.ArticleSection = meta.ArticleSection
 	base.ArticleTags = meta.ArticleTags
 	base.BodyClass = "single-page"
+
+	// Force noindex for draft/unpublished pages (preview mode)
+	if page.Status != PageStatusPublished {
+		base.Robots = "noindex, nofollow"
+	}
 
 	// Build JSON-LD structured data
 	base.JSONLD = seo.BuildArticleSchema(pageData, siteConfig, page.UpdatedAt)
@@ -1355,8 +1376,12 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 		pv.PublishedAtFormatted = t.Format("Jan 2, 2006")
 	}
 
-	// Generate excerpt from body (first 200 chars, strip HTML)
-	pv.Excerpt = h.generateExcerpt(p.Body, 200)
+	// Use custom summary if set, otherwise auto-generate from body
+	if p.Summary != "" {
+		pv.Excerpt = p.Summary
+	} else {
+		pv.Excerpt = h.generateExcerpt(p.Body, 200)
+	}
 
 	// Calculate reading time (approximately 200 words per minute)
 	wordCount := len(strings.Fields(h.generateExcerpt(p.Body, len(p.Body))))
@@ -1370,11 +1395,23 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 		media, err := h.queries.GetMediaByID(ctx, p.FeaturedImageID.Int64)
 		if err == nil {
 			pv.FeaturedImage = fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename)
-			pv.FeaturedImageSmall = fmt.Sprintf("/uploads/small/%s/%s", media.Uuid, media.Filename)
-			pv.FeaturedImageMedium = fmt.Sprintf("/uploads/medium/%s/%s", media.Uuid, media.Filename)
-			pv.FeaturedImageLarge = fmt.Sprintf("/uploads/large/%s/%s", media.Uuid, media.Filename)
 			pv.FeaturedImageID = media.ID
 			pv.FeaturedImageAlt = media.Alt.String
+
+			// Only set variant URLs for variants that were actually generated
+			variants, varErr := h.queries.GetMediaVariants(ctx, media.ID)
+			if varErr == nil {
+				for _, v := range variants {
+					switch v.Type {
+					case "small":
+						pv.FeaturedImageSmall = fmt.Sprintf("/uploads/small/%s/%s", media.Uuid, media.Filename)
+					case "medium":
+						pv.FeaturedImageMedium = fmt.Sprintf("/uploads/medium/%s/%s", media.Uuid, media.Filename)
+					case "large":
+						pv.FeaturedImageLarge = fmt.Sprintf("/uploads/large/%s/%s", media.Uuid, media.Filename)
+					}
+				}
+			}
 		}
 	}
 
@@ -1430,14 +1467,36 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 	pv.NoFollow = p.NoFollow != 0
 	pv.CanonicalURL = p.CanonicalUrl
 
-	// Get OG image (from og_image_id or fall back to featured_image large variant)
+	// Get OG image (from og_image_id or fall back to best featured image variant)
 	if p.OgImageID.Valid {
 		ogMedia, err := h.queries.GetMediaByID(ctx, p.OgImageID.Int64)
 		if err == nil {
-			pv.OGImage = fmt.Sprintf("/uploads/large/%s/%s", ogMedia.Uuid, ogMedia.Filename)
+			// Use the best available variant for OG image
+			ogBase := fmt.Sprintf("/uploads/%%s/%s/%s", ogMedia.Uuid, ogMedia.Filename)
+			pv.OGImage = fmt.Sprintf(ogBase, "originals") // default to original
+			variants, varErr := h.queries.GetMediaVariants(ctx, ogMedia.ID)
+			if varErr == nil {
+				for _, v := range variants {
+					if v.Type == "large" {
+						pv.OGImage = fmt.Sprintf(ogBase, "large")
+						break
+					}
+					if v.Type == "medium" {
+						pv.OGImage = fmt.Sprintf(ogBase, "medium")
+					}
+				}
+			}
 		}
-	} else if pv.FeaturedImageLarge != "" {
-		pv.OGImage = pv.FeaturedImageLarge
+	} else {
+		// Fall back to best available featured image variant
+		switch {
+		case pv.FeaturedImageLarge != "":
+			pv.OGImage = pv.FeaturedImageLarge
+		case pv.FeaturedImageMedium != "":
+			pv.OGImage = pv.FeaturedImageMedium
+		case pv.FeaturedImage != "":
+			pv.OGImage = pv.FeaturedImage
+		}
 	}
 
 	return pv

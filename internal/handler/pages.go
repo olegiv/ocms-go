@@ -410,6 +410,7 @@ type PageFormData struct {
 	Categories    []store.Category   // Selected categories for the page
 	AllCategories []PageCategoryNode // All categories for selection (with tree structure)
 	FeaturedImage *FeaturedImageData
+	OgImage       *FeaturedImageData
 	Aliases       []store.PageAlias // URL aliases for the page
 	Statuses      []string
 	PageTypes     []string
@@ -571,12 +572,14 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		allLanguages := ListActiveLanguagesWithFallback(r.Context(), h.queries)
 
 		data := PageFormData{
-			AllLanguages: allLanguages,
-			Statuses:     ValidPageStatuses,
-			PageTypes:    ValidPageTypes,
-			Errors:       validationErrors,
-			FormValues:   input.FormValues,
-			IsEdit:       false,
+			AllLanguages:  allLanguages,
+			FeaturedImage: h.loadImageData(r.Context(), input.FeaturedImageID),
+			OgImage:       h.loadImageData(r.Context(), input.OgImageID),
+			Statuses:      ValidPageStatuses,
+			PageTypes:     ValidPageTypes,
+			Errors:        validationErrors,
+			FormValues:    input.FormValues,
+			IsEdit:        false,
 		}
 
 		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.new"), pagesNewBreadcrumbs(lang))
@@ -600,6 +603,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Title:             input.Title,
 		Slug:              input.Slug,
 		Body:              normalizedBody,
+		Summary:           input.Summary,
 		Status:            input.Status,
 		AuthorID:          userID,
 		FeaturedImageID:   input.FeaturedImageID,
@@ -713,24 +717,9 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 	}
 	categoryTree := buildPageCategoryTree(allCategories, nil, 0)
 
-	// Load featured image if set
-	var featuredImage *FeaturedImageData
-	if page.FeaturedImageID.Valid {
-		media, err := h.queries.GetMediaByID(r.Context(), page.FeaturedImageID.Int64)
-		if err != nil {
-			if !errors.Is(err, sql.ErrNoRows) {
-				slog.Error("failed to get featured image", "error", err, "media_id", page.FeaturedImageID.Int64)
-			}
-		} else {
-			featuredImage = &FeaturedImageData{
-				ID:        media.ID,
-				Filename:  media.Filename,
-				Filepath:  fmt.Sprintf("/uploads/originals/%s/%s", media.Uuid, media.Filename),
-				Thumbnail: fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename),
-				Mimetype:  media.MimeType,
-			}
-		}
-	}
+	// Load featured image and OG image if set
+	featuredImage := h.loadImageData(r.Context(), page.FeaturedImageID)
+	ogImage := h.loadImageData(r.Context(), page.OgImageID)
 
 	// Load aliases for this page
 	aliases, err := h.queries.GetAliasesForPage(r.Context(), id)
@@ -748,6 +737,7 @@ func (h *PagesHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 		Categories:       categories,
 		AllCategories:    categoryTree,
 		FeaturedImage:    featuredImage,
+		OgImage:          ogImage,
 		Aliases:          aliases,
 		AllLanguages:     langInfo.AllLanguages,
 		Language:         langInfo.EntityLanguage,
@@ -834,12 +824,14 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
 		data := PageFormData{
-			Page:       &existingPage,
-			Statuses:   ValidPageStatuses,
-			PageTypes:  ValidPageTypes,
-			Errors:     validationErrors,
-			FormValues: input.FormValues,
-			IsEdit:     true,
+			Page:          &existingPage,
+			FeaturedImage: h.loadImageData(r.Context(), input.FeaturedImageID),
+			OgImage:       h.loadImageData(r.Context(), input.OgImageID),
+			Statuses:      ValidPageStatuses,
+			PageTypes:     ValidPageTypes,
+			Errors:        validationErrors,
+			FormValues:    input.FormValues,
+			IsEdit:        true,
 		}
 
 		pc := buildPageContext(r, h.sessionManager, h.renderer, i18n.T(lang, "pages.edit"), pagesEditBreadcrumbs(lang, existingPage.Title, id))
@@ -867,6 +859,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Title:             input.Title,
 		Slug:              input.Slug,
 		Body:              normalizedBody,
+		Summary:           input.Summary,
 		Status:            status,
 		FeaturedImageID:   input.FeaturedImageID,
 		MetaTitle:         input.MetaTitle,
@@ -1222,7 +1215,8 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		Title:             version.Title,
 		Slug:              page.Slug, // Keep the current slug
 		Body:              normalizedBody,
-		Status:            page.Status, // Keep the current status
+		Summary:           page.Summary, // Keep the current summary
+		Status:            page.Status,  // Keep the current status
 		FeaturedImageID:   page.FeaturedImageID,
 		MetaTitle:         page.MetaTitle,
 		MetaDescription:   page.MetaDescription,
@@ -1308,6 +1302,7 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		Title:             sourcePage.Title, // Keep same title (user will translate)
 		Slug:              translatedSlug,
 		Body:              "",              // Empty body for translation
+		Summary:           "",              // Empty summary for translation
 		Status:            PageStatusDraft, // Always start as draft
 		AuthorID:          userID,
 		FeaturedImageID:   sourcePage.FeaturedImageID,
@@ -1388,6 +1383,7 @@ type pageFormInput struct {
 	Title             string
 	Slug              string
 	Body              string
+	Summary           string
 	Status            string
 	FeaturedImageID   sql.NullInt64
 	MetaTitle         string
@@ -1410,6 +1406,7 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 	title := strings.TrimSpace(r.FormValue("title"))
 	slug := strings.TrimSpace(r.FormValue("slug"))
 	body := r.FormValue("body")
+	summary := strings.TrimSpace(r.FormValue("summary"))
 	status := r.FormValue("status")
 	featuredImageIDStr := r.FormValue("featured_image_id")
 
@@ -1468,6 +1465,7 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 		"title":               title,
 		"slug":                slug,
 		"body":                body,
+		"summary":             summary,
 		"status":              status,
 		"featured_image_id":   featuredImageIDStr,
 		"meta_title":          metaTitle,
@@ -1488,6 +1486,7 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 		Title:             title,
 		Slug:              slug,
 		Body:              body,
+		Summary:           summary,
 		Status:            status,
 		FeaturedImageID:   featuredImageID,
 		MetaTitle:         metaTitle,
@@ -1539,6 +1538,25 @@ func (h *PagesHandler) validatePageSlugUpdate(ctx context.Context, slug string, 
 			PageID: pageID,
 		})
 	})
+}
+
+// loadImageData loads FeaturedImageData for a media ID. Returns nil if the ID is
+// not valid or the media record cannot be found.
+func (h *PagesHandler) loadImageData(ctx context.Context, id sql.NullInt64) *FeaturedImageData {
+	if !id.Valid {
+		return nil
+	}
+	media, err := h.queries.GetMediaByID(ctx, id.Int64)
+	if err != nil {
+		return nil
+	}
+	return &FeaturedImageData{
+		ID:        media.ID,
+		Filename:  media.Filename,
+		Filepath:  fmt.Sprintf("/uploads/originals/%s/%s", media.Uuid, media.Filename),
+		Thumbnail: fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename),
+		Mimetype:  media.MimeType,
+	}
 }
 
 // validateFeaturedImageSize checks if a featured image meets minimum size requirements.

@@ -4,11 +4,20 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
+	"embed"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/theme"
 )
 
 // faviconTestCase defines a test case for favicon handler tests.
@@ -238,5 +247,138 @@ func TestFrontendHandler_TrustedPageBody_SanitizesWhenEnabled(t *testing.T) {
 	}
 	if !strings.Contains(got, "<p>Hello</p>") {
 		t.Fatalf("trustedPageBody() should keep safe content, got %q", got)
+	}
+}
+
+// createDraftPage inserts a draft page into the test database.
+func createDraftPage(t *testing.T, db *sql.DB, slug string, authorID int64) {
+	t.Helper()
+	_, err := db.Exec(
+		`INSERT INTO pages (title, slug, body, status, author_id, page_type) VALUES (?, ?, ?, ?, ?, ?)`,
+		"Draft Page", slug, "<p>Draft content</p>", "draft", authorID, "post",
+	)
+	if err != nil {
+		t.Fatalf("failed to create draft page: %v", err)
+	}
+}
+
+// createPublishedPage inserts a published page into the test database.
+func createPublishedPage(t *testing.T, db *sql.DB, slug string, authorID int64) {
+	t.Helper()
+	_, err := db.Exec(
+		`INSERT INTO pages (title, slug, body, status, author_id, page_type, published_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+		"Published Page", slug, "<p>Published content</p>", "published", authorID, "post",
+	)
+	if err != nil {
+		t.Fatalf("failed to create published page: %v", err)
+	}
+}
+
+// newFrontendPageRequest creates a GET request for /{slug} with chi URL params.
+func newFrontendPageRequest(slug string) *http.Request {
+	req := httptest.NewRequest(http.MethodGet, "/"+slug, nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("slug", slug)
+	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+}
+
+// withUser adds a user to the request context (simulates OptionalLoadUser middleware).
+func withUser(r *http.Request, user store.User) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), middleware.ContextKeyUser, user))
+}
+
+// testThemeManager creates a minimal theme manager for frontend handler tests.
+func testThemeManager() *theme.Manager {
+	var emptyFS embed.FS
+	return theme.NewManager(emptyFS, "", slog.Default())
+}
+
+func TestFrontendHandler_Page_DraftPreview_AnonymousGets404(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	admin := createTestAdminUser(t, db)
+	createDraftPage(t, db, "draft-page", admin.ID)
+
+	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil)
+	req := newFrontendPageRequest("draft-page")
+	w := httptest.NewRecorder()
+
+	h.Page(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("anonymous user: status = %d; want %d", w.Code, http.StatusNotFound)
+	}
+}
+
+func TestFrontendHandler_Page_DraftPreview_PublicUserGets404(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	admin := createTestAdminUser(t, db)
+	createDraftPage(t, db, "draft-page", admin.ID)
+	publicUser := createTestUser(t, db, testUser{
+		Email: "public@example.com",
+		Name:  "Public",
+		Role:  "public",
+	})
+
+	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil)
+	req := withUser(newFrontendPageRequest("draft-page"), publicUser)
+	w := httptest.NewRecorder()
+
+	h.Page(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("public user: status = %d; want %d", w.Code, http.StatusNotFound)
+	}
+}
+
+func TestFrontendHandler_Page_DraftPreview_EditorSeesPage(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	admin := createTestAdminUser(t, db)
+	createDraftPage(t, db, "draft-page", admin.ID)
+	editor := createTestUser(t, db, testUser{
+		Email: "editor@example.com",
+		Name:  "Editor",
+		Role:  "editor",
+	})
+
+	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil)
+	req := withUser(newFrontendPageRequest("draft-page"), editor)
+	w := httptest.NewRecorder()
+
+	h.Page(w, req)
+
+	if w.Code == http.StatusNotFound {
+		t.Errorf("editor user: got 404; want page to be served (draft preview)")
+	}
+}
+
+func TestFrontendHandler_Page_DraftPreview_AdminSeesPage(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	admin := createTestAdminUser(t, db)
+	createDraftPage(t, db, "draft-page", admin.ID)
+
+	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil)
+	req := withUser(newFrontendPageRequest("draft-page"), admin)
+	w := httptest.NewRecorder()
+
+	h.Page(w, req)
+
+	if w.Code == http.StatusNotFound {
+		t.Errorf("admin user: got 404; want page to be served (draft preview)")
+	}
+}
+
+func TestFrontendHandler_Page_PublishedPageWorksForAnonymous(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	admin := createTestAdminUser(t, db)
+	createPublishedPage(t, db, "published-page", admin.ID)
+
+	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil)
+	req := newFrontendPageRequest("published-page")
+	w := httptest.NewRecorder()
+
+	h.Page(w, req)
+
+	if w.Code == http.StatusNotFound {
+		t.Errorf("anonymous user on published page: got 404; want page to be served")
 	}
 }

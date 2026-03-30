@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Update Alpine.js packages 3.15.8 → 3.15.9
+- Update goldmark 1.8.1 → 1.8.2
+- Update modernc.org/sqlite 1.47.0 → 1.48.0
+
 ## [0.10.2] - 2026-03-27
 
 ### Added

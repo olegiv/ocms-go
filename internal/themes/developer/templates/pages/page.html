@@ -2,38 +2,38 @@
 <div class="dev-page-layout">
     <article class="dev-article">
         {{if and .Page.FeaturedImage (not .Page.HideFeaturedImage)}}
-        {{/* Hero banner with title overlay */}}
+        {{/* File path + hero image + title below */}}
+        <div class="dev-file-path dev-file-path-above">
+            <span class="dev-comment">// </span>
+            <span class="dev-path">{{if .Page.Category}}/{{.Page.Category.Slug}}{{end}}/{{.Page.Slug}}</span>
+        </div>
         <div class="dev-page-hero">
             <img src="{{.Page.FeaturedImage}}"
-                 srcset="{{.Page.FeaturedImageMedium}} 800w, {{.Page.FeaturedImageLarge}} 1600w"
+                 srcset="{{if .Page.FeaturedImageMedium}}{{.Page.FeaturedImageMedium}} 800w{{end}}{{if .Page.FeaturedImageLarge}}, {{.Page.FeaturedImageLarge}} 1600w{{end}}"
                  sizes="100vw"
                  alt="{{mediaAlt .Page.FeaturedImageID $.LangCode .Page.FeaturedImageAlt}}">
-            <div class="dev-page-hero-overlay">
-                <div class="dev-file-path">
-                    <span class="dev-comment">// </span>
-                    <span class="dev-path">{{if .Page.Category}}/{{.Page.Category.Slug}}{{end}}/{{.Page.Slug}}</span>
-                </div>
-                <h1 class="dev-article-title">{{.Page.Title}}</h1>
-                {{if .Page.Excerpt}}
-                <p class="dev-article-excerpt">{{.Page.Excerpt}}</p>
+        </div>
+        <header class="dev-page-hero-info">
+            <h1 class="dev-article-title">{{.Page.Title}}</h1>
+            {{if .Page.Excerpt}}
+            <p class="dev-article-excerpt">{{.Page.Excerpt}}</p>
+            {{end}}
+            {{if eq .Page.Type "post"}}
+            <div class="dev-article-meta">
+                {{if .Page.PublishedAt}}
+                <span class="dev-meta-item">
+                    <span class="dev-comment">/*</span> {{formatDate .Page.PublishedAt}} <span class="dev-comment">*/</span>
+                </span>
                 {{end}}
-                {{if eq .Page.Type "post"}}
-                <div class="dev-article-meta">
-                    {{if .Page.PublishedAt}}
-                    <span class="dev-meta-item">
-                        <span class="dev-comment">/*</span> {{formatDate .Page.PublishedAt}} <span class="dev-comment">*/</span>
-                    </span>
-                    {{end}}
-                    {{if .Page.Author}}
-                    <span class="dev-meta-item">@{{.Page.Author.Name}}</span>
-                    {{end}}
-                    {{if .Page.ReadingTime}}
-                    <span class="dev-meta-item">~{{.Page.ReadingTime}} {{TTheme $.LangCode "frontend.min_read"}}</span>
-                    {{end}}
-                </div>
+                {{if .Page.Author}}
+                <span class="dev-meta-item">@{{.Page.Author.Name}}</span>
+                {{end}}
+                {{if .Page.ReadingTime}}
+                <span class="dev-meta-item">~{{.Page.ReadingTime}} {{TTheme $.LangCode "frontend.min_read"}}</span>
                 {{end}}
             </div>
-        </div>
+            {{end}}
+        </header>
         {{else}}
         {{/* Standard header (no image or image hidden) */}}
         <header class="dev-article-header">

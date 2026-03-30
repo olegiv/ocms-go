@@ -613,6 +613,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		Title:             existing.Title,
 		Slug:              existing.Slug,
 		Body:              existing.Body,
+		Summary:           existing.Summary,
 		Status:            existing.Status,
 		PageType:          existing.PageType,
 		FeaturedImageID:   existing.FeaturedImageID,

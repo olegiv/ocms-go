@@ -373,6 +373,21 @@
             "translation": "Создание новой страницы для вашего сайта"
         },
         {
+            "id": "pages.summary",
+            "message": "Summary",
+            "translation": "Краткое описание"
+        },
+        {
+            "id": "pages.summary_placeholder",
+            "message": "Brief description of the page content",
+            "translation": "Краткое описание содержимого страницы"
+        },
+        {
+            "id": "pages.summary_hint",
+            "message": "Optional. Replaces the auto-generated excerpt on the frontend.",
+            "translation": "Необязательно. Заменяет автоматически сгенерированный отрывок на сайте."
+        },
+        {
             "id": "pages.version_history",
             "message": "Version History",
             "translation": "История версий"
@@ -984,8 +999,8 @@
         },
         {
             "id": "media.featured_image_requirements",
-            "message": "JPEG, PNG, GIF, or WebP. Minimum size: 1200×800 pixels.",
-            "translation": "JPEG, PNG, GIF или WebP. Минимальный размер: 1200×800 пикселей."
+            "message": "JPEG, PNG, GIF, or WebP. Minimum size: 1200×800 pixels. Recommended: JPEG 1920×1080 for best quality.",
+            "translation": "JPEG, PNG, GIF или WebP. Минимальный размер: 1200×800 пикселей. Рекомендуется: JPEG 1920×1080 для лучшего качества."
         },
         {
             "id": "media.select_media",
@@ -3894,8 +3909,8 @@
         },
         {
             "id": "seo.og_image_hint",
-            "message": "Recommended size: 1200x630 pixels for social media sharing",
-            "translation": "Рекомендуемый размер: 1200x630 пикселей для публикации в соцсетях"
+            "message": "JPEG, PNG, or WebP. Recommended: JPEG 1200×630 for social media sharing.",
+            "translation": "JPEG, PNG или WebP. Рекомендуется: JPEG 1200×630 для публикации в соцсетях."
         },
         {
             "id": "seo.select_og_image",

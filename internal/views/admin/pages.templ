@@ -74,6 +74,7 @@ type PageFormViewData struct {
 	PageTitle     string
 	PageSlug      string
 	PageBody      string
+	PageSummary   string
 	PageStatus    string
 	PageType      string
 	Statuses      []string
@@ -95,6 +96,7 @@ type PageFormViewData struct {
 	MetaTitle       string
 	MetaDescription string
 	MetaKeywords    string
+	OgImage         *PageFormFeaturedImageView
 	OgImageID       string
 	CanonicalURL    string
 	NoIndex         bool
@@ -770,6 +772,10 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 	@AdminLayout(pc) {
 		if data.IsEdit {
 			@PageHeader(pc.T("pages.edit"), pc.T("pages.edit_description")) {
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/" + data.PageSlug, Target: "_blank"}) {
+					@icon.Eye(icon.Props{Size: 16})
+					{ pc.T("btn.preview") }
+				}
 				@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/admin/pages/%d/versions", data.PageID)}) {
 					@iconClockHistory()
 					{ pc.T("pages.version_history") }
@@ -961,6 +967,18 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 						if data.Errors["body"] != "" {
 							<span class="form-error">{ data.Errors["body"] }</span>
 						}
+					</div>
+					<!-- Summary -->
+					<div class="form-group form-group-full">
+						@label.Label(label.Props{For: "summary", Class: "block mb-1"}) { { pc.T("pages.summary") } }
+						@textarea.Textarea(textarea.Props{
+							ID:          "summary",
+							Name:        "summary",
+							Placeholder: pc.T("pages.summary_placeholder"),
+							Value:       formVal(data.FormValues, "summary", data.PageSummary),
+							Attributes:  templ.Attributes{"rows": "3", "maxlength": "500"},
+						})
+						<span class="form-hint">{ pc.T("pages.summary_hint") }</span>
 					</div>
 					<!-- Featured Image -->
 					<div class="form-group form-group-full">
@@ -1339,21 +1357,19 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 				<span class="form-hint">{ pc.T("seo.meta_keywords_hint") }</span>
 			</div>
 			<!-- OG Image -->
-			<div class="form-group">
-				@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("seo.og_image") } }
-				<div class="media-picker" x-data={ ogImagePickerXData(data) }>
-					<input type="hidden" name="og_image_id" :value="selectedId"/>
-					<div class="media-picker-preview" x-show="selectedId">
-						<img :src="selectedPath" alt="OG Image Preview" class="media-preview-img"/>
-						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Class: "media-remove-btn", Attributes: templ.Attributes{"@click": "clearSelection()"}}) {
-							{ pc.T("btn.remove") }
-						}
-					</div>
-					@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"@click": "openMediaModal()", "x-show": "!selectedId"}}) {
-						@iconImage16()
-						{ pc.T("seo.select_og_image") }
-					}
+			<div class="form-group form-group-full">
+				<div
+					class="media-dropzone"
+					x-data="mediaDropzone()"
+					x-init="init()"
+					data-mode="select"
+					data-initial-image={ featuredImageJSON(data.OgImage) }
+				>
+					@label.Label(label.Props{Class: "block mb-1"}) { { pc.T("seo.og_image") } }
+					@mediaDropzoneSelectArea(pc)
 					<span class="form-hint">{ pc.T("seo.og_image_hint") }</span>
+					<input type="hidden" name="og_image_id" x-bind:value="selectedImage ? selectedImage.id : ''"/>
+					@mediaDropzoneSelectModal(pc)
 				</div>
 			</div>
 			<!-- Canonical URL -->
@@ -1401,11 +1417,6 @@ templ seoSection(pc *PageContext, data PageFormViewData) {
 			</div>
 		</div>
 	</details>
-}
-
-func ogImagePickerXData(data PageFormViewData) string {
-	ogID := formVal(data.FormValues, "og_image_id", data.OgImageID)
-	return fmt.Sprintf("ogImagePicker('%s')", ogID)
 }
 
 templ schedulingSection(pc *PageContext, data PageFormViewData) {
@@ -1845,32 +1856,6 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 		};
 	}
 
-	function ogImagePicker(initialId) {
-		return {
-			selectedId: initialId || '',
-			selectedPath: '',
-			init() {
-				if (this.selectedId) this.fetchImagePath(this.selectedId);
-			},
-			async fetchImagePath(id) {
-				try {
-					const response = await fetch(`/admin/media/api?limit=1`);
-					const data = await response.json();
-					this.selectedPath = '/uploads/originals/' + id + '/image.jpg';
-				} catch (error) { console.error('Failed to fetch OG image:', error); }
-			},
-			openMediaModal() {
-				if (typeof window.openMediaPickerForOG === 'function') window.openMediaPickerForOG(this);
-				else {
-					const mediaId = prompt('Enter media ID for OG image:');
-					if (mediaId) { this.selectedId = mediaId; this.selectedPath = '/uploads/originals/' + mediaId + '/image.jpg'; }
-				}
-			},
-			selectMedia(id, path, filename) { this.selectedId = id; this.selectedPath = path; },
-			clearSelection() { this.selectedId = ''; this.selectedPath = ''; }
-		};
-	}
-
 	// Tag selector and category selector are defined in tag_selector.html and category_selector.html partials
 	// These JS functions are included via the global admin scripts for legacy templates.
 	// For templ pages, we inline them here.
@@ -1885,8 +1870,9 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 			},
 			async loadAllTags() { try { const r = await fetch('/admin/tags/search'); if (r.ok) this.allTags = await r.json(); } catch(e) { console.error('Failed to load tags:', e); } },
 			async searchTags() {
-				if (this.searchQuery.length === 0) { this.searchResults = this.allTags.slice(0, 10); return; }
+				if (this.searchQuery.length === 0) { this.searchResults = this.allTags.slice(0, 10); this.showDropdown = true; return; }
 				try { const r = await fetch(`/admin/tags/search?q=${encodeURIComponent(this.searchQuery)}`); if (r.ok) this.searchResults = await r.json(); } catch(e) { console.error('Failed to search tags:', e); this.searchResults = []; }
+				this.showDropdown = true;
 			},
 			addTag(tag) { if (!this.isSelected(tag.id)) this.selectedTags.push(tag); this.searchQuery = ''; this.searchResults = this.allTags.slice(0, 10); },
 			removeTag(tagId) { this.selectedTags = this.selectedTags.filter(t => t.id !== tagId); },
@@ -1895,8 +1881,8 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 			async createAndAddTag() {
 				const name = this.searchQuery.trim(); if (name.length < 2) return;
 				try {
-					const formData = new FormData(); formData.append('name', name); formData.append('slug', this.slugify(name));
-					await fetch('/admin/tags', { method: 'POST', body: formData, headers: { 'Accept': 'application/json' } });
+					const body = new URLSearchParams({ name: name, slug: this.slugify(name) });
+					await fetch('/admin/tags', { method: 'POST', body: body });
 					const searchR = await fetch(`/admin/tags/search?q=${encodeURIComponent(name)}`);
 					if (searchR.ok) { const tags = await searchR.json(); const newTag = tags.find(t => t.name.toLowerCase() === name.toLowerCase()); if (newTag) { this.addTag(newTag); this.allTags.push(newTag); } }
 				} catch(e) { console.error('Failed to create tag:', e); }

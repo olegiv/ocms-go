@@ -574,3 +574,58 @@ func TestConvertSubmissionsListViewData_PerPageSelector(t *testing.T) {
 		t.Fatalf("selector.Options = %v, want %v", selector.Options, []int{10, 20, 50, 100})
 	}
 }
+
+func TestConvertPageFormViewData_OgImage(t *testing.T) {
+	data := PageFormData{
+		Page: &store.Page{
+			ID:        1,
+			Title:     "Test",
+			Slug:      "test",
+			OgImageID: sql.NullInt64{Int64: 42, Valid: true},
+		},
+		OgImage: &FeaturedImageData{
+			ID:        42,
+			Filename:  "og.jpg",
+			Filepath:  "/uploads/originals/abc-123/og.jpg",
+			Thumbnail: "/uploads/thumbnail/abc-123/og.jpg",
+			Mimetype:  "image/jpeg",
+		},
+		Statuses:  []string{"draft", "published"},
+		PageTypes: []string{"post", "page"},
+		Errors:    make(map[string]string),
+	}
+
+	got := convertPageFormViewData(data, &render.Renderer{}, "en")
+
+	if got.OgImage == nil {
+		t.Fatal("OgImage is nil; want non-nil")
+	}
+	if got.OgImage.ID != 42 {
+		t.Errorf("OgImage.ID = %d; want 42", got.OgImage.ID)
+	}
+	if got.OgImage.Filename != "og.jpg" {
+		t.Errorf("OgImage.Filename = %q; want \"og.jpg\"", got.OgImage.Filename)
+	}
+	if got.OgImage.Thumbnail != "/uploads/thumbnail/abc-123/og.jpg" {
+		t.Errorf("OgImage.Thumbnail = %q; want \"/uploads/thumbnail/abc-123/og.jpg\"", got.OgImage.Thumbnail)
+	}
+}
+
+func TestConvertPageFormViewData_OgImageNil(t *testing.T) {
+	data := PageFormData{
+		Page: &store.Page{
+			ID:    1,
+			Title: "Test",
+			Slug:  "test",
+		},
+		Statuses:  []string{"draft", "published"},
+		PageTypes: []string{"post", "page"},
+		Errors:    make(map[string]string),
+	}
+
+	got := convertPageFormViewData(data, &render.Renderer{}, "en")
+
+	if got.OgImage != nil {
+		t.Errorf("OgImage = %v; want nil", got.OgImage)
+	}
+}

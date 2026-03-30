@@ -23,6 +23,20 @@ type ApiKey struct {
 	UpdatedAt   time.Time    `json:"updated_at"`
 }
 
+type ApiKeySourceCidr struct {
+	ID        int64     `json:"id"`
+	ApiKeyID  int64     `json:"api_key_id"`
+	Cidr      string    `json:"cidr"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type ApiKeySourceState struct {
+	ApiKeyID   int64     `json:"api_key_id"`
+	LastIp     string    `json:"last_ip"`
+	LastSeenAt time.Time `json:"last_seen_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
 type Category struct {
 	ID           int64          `json:"id"`
 	Name         string         `json:"name"`
@@ -226,6 +240,7 @@ type Page struct {
 	HideFeaturedImage int64         `json:"hide_featured_image"`
 	PageType          string        `json:"page_type"`
 	ExcludeFromLists  int64         `json:"exclude_from_lists"`
+	Summary           string        `json:"summary"`
 }
 
 type PageAlias struct {

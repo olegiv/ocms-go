@@ -1424,6 +1424,7 @@ func convertPageFormViewData(data PageFormData, renderer *render.Renderer, lang 
 		viewData.PageTitle = data.Page.Title
 		viewData.PageSlug = data.Page.Slug
 		viewData.PageBody = data.Page.Body
+		viewData.PageSummary = data.Page.Summary
 		viewData.PageStatus = data.Page.Status
 		viewData.PageType = data.Page.PageType
 		viewData.MetaTitle = data.Page.MetaTitle
@@ -1454,6 +1455,17 @@ func convertPageFormViewData(data PageFormData, renderer *render.Renderer, lang 
 			Filepath:  data.FeaturedImage.Filepath,
 			Thumbnail: data.FeaturedImage.Thumbnail,
 			Mimetype:  data.FeaturedImage.Mimetype,
+		}
+	}
+
+	// OG image
+	if data.OgImage != nil {
+		viewData.OgImage = &adminviews.PageFormFeaturedImageView{
+			ID:        data.OgImage.ID,
+			Filename:  data.OgImage.Filename,
+			Filepath:  data.OgImage.Filepath,
+			Thumbnail: data.OgImage.Thumbnail,
+			Mimetype:  data.OgImage.Mimetype,
 		}
 	}
 
