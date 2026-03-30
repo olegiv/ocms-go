@@ -770,6 +770,10 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 	@AdminLayout(pc) {
 		if data.IsEdit {
 			@PageHeader(pc.T("pages.edit"), pc.T("pages.edit_description")) {
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/" + data.PageSlug, Target: "_blank"}) {
+					@icon.Eye(icon.Props{Size: 16})
+					{ pc.T("btn.preview") }
+				}
 				@button.Button(button.Props{Variant: button.VariantOutline, Href: fmt.Sprintf("/admin/pages/%d/versions", data.PageID)}) {
 					@iconClockHistory()
 					{ pc.T("pages.version_history") }

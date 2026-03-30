@@ -24,6 +24,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/seo"
 	"github.com/olegiv/ocms-go/internal/service"
@@ -617,13 +618,25 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 				http.Redirect(w, r, "/"+aliasPage.Slug, http.StatusMovedPermanently)
 				return
 			}
-			// Not a slug, not an alias - render 404
-			h.renderNotFound(w, r)
+
+			// Draft preview for admin/editor users
+			if user := middleware.GetUser(r); user != nil && (user.Role == model.RoleAdmin || user.Role == model.RoleEditor) {
+				draftPage, draftErr := h.queries.GetPageBySlug(ctx, slug)
+				if draftErr == nil && draftPage.Status != PageStatusPublished {
+					page = draftPage
+					err = nil
+				}
+			}
+
+			if err != nil {
+				h.renderNotFound(w, r)
+				return
+			}
+		} else {
+			h.logger.Error("failed to get page", "slug", slug, "error", err)
+			h.renderInternalError(w)
 			return
 		}
-		h.logger.Error("failed to get page", "slug", slug, "error", err)
-		h.renderInternalError(w)
-		return
 	}
 
 	// Update language context based on page's language (fixes translated pages like /slug-ru)
@@ -744,6 +757,11 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	base.ArticleSection = meta.ArticleSection
 	base.ArticleTags = meta.ArticleTags
 	base.BodyClass = "single-page"
+
+	// Force noindex for draft/unpublished pages (preview mode)
+	if page.Status != PageStatusPublished {
+		base.Robots = "noindex, nofollow"
+	}
 
 	// Build JSON-LD structured data
 	base.JSONLD = seo.BuildArticleSchema(pageData, siteConfig, page.UpdatedAt)
