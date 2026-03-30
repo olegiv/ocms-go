@@ -1467,14 +1467,36 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 	pv.NoFollow = p.NoFollow != 0
 	pv.CanonicalURL = p.CanonicalUrl
 
-	// Get OG image (from og_image_id or fall back to featured_image large variant)
+	// Get OG image (from og_image_id or fall back to best featured image variant)
 	if p.OgImageID.Valid {
 		ogMedia, err := h.queries.GetMediaByID(ctx, p.OgImageID.Int64)
 		if err == nil {
-			pv.OGImage = fmt.Sprintf("/uploads/large/%s/%s", ogMedia.Uuid, ogMedia.Filename)
+			// Use the best available variant for OG image
+			ogBase := fmt.Sprintf("/uploads/%%s/%s/%s", ogMedia.Uuid, ogMedia.Filename)
+			pv.OGImage = fmt.Sprintf(ogBase, "originals") // default to original
+			variants, varErr := h.queries.GetMediaVariants(ctx, ogMedia.ID)
+			if varErr == nil {
+				for _, v := range variants {
+					if v.Type == "large" {
+						pv.OGImage = fmt.Sprintf(ogBase, "large")
+						break
+					}
+					if v.Type == "medium" {
+						pv.OGImage = fmt.Sprintf(ogBase, "medium")
+					}
+				}
+			}
 		}
-	} else if pv.FeaturedImageLarge != "" {
-		pv.OGImage = pv.FeaturedImageLarge
+	} else {
+		// Fall back to best available featured image variant
+		switch {
+		case pv.FeaturedImageLarge != "":
+			pv.OGImage = pv.FeaturedImageLarge
+		case pv.FeaturedImageMedium != "":
+			pv.OGImage = pv.FeaturedImageMedium
+		case pv.FeaturedImage != "":
+			pv.OGImage = pv.FeaturedImage
+		}
 	}
 
 	return pv
