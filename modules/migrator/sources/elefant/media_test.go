@@ -389,7 +389,8 @@ func TestMakeUniqueSlug(t *testing.T) {
 			language_code TEXT NOT NULL DEFAULT '',
 			hide_featured_image INTEGER NOT NULL DEFAULT 0,
 			page_type TEXT NOT NULL DEFAULT 'page',
-			exclude_from_lists INTEGER NOT NULL DEFAULT 0
+			exclude_from_lists INTEGER NOT NULL DEFAULT 0,
+			summary TEXT NOT NULL DEFAULT ''
 		)
 	`)
 	if err != nil {
