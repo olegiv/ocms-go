@@ -118,9 +118,13 @@ func (p *Processor) CreateVariant(sourcePath, uuid, filename string, config mode
 	srcWidth := bounds.Dx()
 	srcHeight := bounds.Dy()
 
-	// Skip if the source is smaller than the target (and not cropping)
-	if srcWidth <= config.Width && srcHeight <= config.Height && !config.Crop {
-		return nil, nil // No need to create this variant
+	// For non-crop variants, skip only if the source is smaller than the
+	// target AND would not be useful as a higher-tier variant. We compare
+	// against half the target to avoid skipping legitimate images (e.g.,
+	// a 1536x1024 source should still get a large variant even though
+	// it's under 1920x1080). imaging.Fit won't upscale.
+	if !config.Crop && srcWidth < config.Width/2 && srcHeight < config.Height/2 {
+		return nil, nil
 	}
 
 	// Process based on mode
