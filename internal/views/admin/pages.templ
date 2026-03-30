@@ -1889,8 +1889,9 @@ templ pageFormScripts(pc *PageContext, data PageFormViewData) {
 			},
 			async loadAllTags() { try { const r = await fetch('/admin/tags/search'); if (r.ok) this.allTags = await r.json(); } catch(e) { console.error('Failed to load tags:', e); } },
 			async searchTags() {
-				if (this.searchQuery.length === 0) { this.searchResults = this.allTags.slice(0, 10); return; }
+				if (this.searchQuery.length === 0) { this.searchResults = this.allTags.slice(0, 10); this.showDropdown = true; return; }
 				try { const r = await fetch(`/admin/tags/search?q=${encodeURIComponent(this.searchQuery)}`); if (r.ok) this.searchResults = await r.json(); } catch(e) { console.error('Failed to search tags:', e); this.searchResults = []; }
+				this.showDropdown = true;
 			},
 			addTag(tag) { if (!this.isSelected(tag.id)) this.selectedTags.push(tag); this.searchQuery = ''; this.searchResults = this.allTags.slice(0, 10); },
 			removeTag(tagId) { this.selectedTags = this.selectedTags.filter(t => t.id !== tagId); },
