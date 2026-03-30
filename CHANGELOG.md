@@ -7,10 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-03-31
+
+### Added
+
+#### Pages
+- Add summary field: optional textarea (max 500 chars) replaces auto-generated excerpt on frontend listings
+- Add draft page preview for admin and editor users with noindex/nofollow protection
+
 ### Changed
+
+#### Theme
+- Move page hero text below featured image in developer theme
+
+#### Media
+- Relax variant skip threshold so medium-sized images get all variants
+
+#### Dependencies
 - Update Alpine.js packages 3.15.8 → 3.15.9
 - Update goldmark 1.8.1 → 1.8.2
 - Update modernc.org/sqlite 1.47.0 → 1.48.0
+
+### Fixed
+
+#### Media
+- Fix OG image picker and featured image variant selection in admin
+- Fix OG image falling back to missing variant
+- Keep OG and featured image on form validation errors
+
+#### Admin UI
+- Fix Alpine.js SRI hash after dependency update
+- Fix tag selector dropdown in Alpine.js 3.15
+- Fix tag creation from page editor
 
 ## [0.10.2] - 2026-03-27
 
@@ -535,7 +563,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.10.2...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/olegiv/ocms-go/compare/v0.10.2...v0.11.0
 [0.10.2]: https://github.com/olegiv/ocms-go/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/olegiv/ocms-go/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/olegiv/ocms-go/compare/v0.9.0...v0.10.0
