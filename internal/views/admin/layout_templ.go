@@ -139,7 +139,7 @@ func AdminLayout(pc *PageContext) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" src=\"/static/dist/js/alpine.min.js\" integrity=\"sha384-MEh8ZMZhsmD6/1Bd3kfTiGZoYIKR9u+BilQQWl5DOonh+pvKg6fP2AejtOozsZK8\" crossorigin=\"anonymous\"></script><!-- Admin core utilities --><script nonce=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" src=\"/static/dist/js/alpine.min.js\" integrity=\"sha384-pXgjkU7QlKwaHjnLVtvi9fybqupEWCH+xYPT0An81X4x/Ygk2Rkum1lbE/HqoTrI\" crossorigin=\"anonymous\"></script><!-- Admin core utilities --><script nonce=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
