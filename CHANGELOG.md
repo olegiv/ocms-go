@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-04-02
+
+### Added
+
+#### Users
+- Add author profile fields: avatar, bio, website URL, LinkedIn, GitHub
+- Render author info (avatar, bio, social links) on public page templates
+- Add author profile section to admin user form with i18n (EN, RU)
+
+### Changed
+
+#### Dependencies
+- Update Alpine.js packages 3.15.9 → 3.15.10
+- Update TinyMCE 8.3.2 → 8.4.0
+- Update go-sqlite3 1.14.37 → 1.14.38
+
+### Fixed
+
+#### Admin UI
+- Fix preformatted text invisible in editor
+- Fix Alpine.js SRI hash after dependency update
+
+### Security
+- Add URL scheme validation for profile URLs (reject javascript:, data:)
+- Add domain validation for LinkedIn and GitHub profile URLs
+- Add path traversal protection for relative avatar paths
+- Add max-length enforcement for profile fields (bio: 500, URLs: 255)
+
 ## [0.11.0] - 2026-03-31
 
 ### Added
@@ -563,7 +591,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/olegiv/ocms-go/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/olegiv/ocms-go/compare/v0.10.2...v0.11.0
 [0.10.2]: https://github.com/olegiv/ocms-go/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/olegiv/ocms-go/compare/v0.10.0...v0.10.1
