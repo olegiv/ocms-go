@@ -1499,6 +1499,26 @@ img {
     margin: 0;
 }
 
+.dev-author-links {
+    display: flex;
+    gap: var(--dev-space-sm);
+    margin-top: var(--dev-space-sm);
+}
+
+.dev-author-link {
+    color: var(--dev-text-muted);
+    transition: color 0.2s;
+}
+
+.dev-author-link:hover {
+    color: var(--dev-accent);
+}
+
+.dev-author-link svg {
+    width: 18px;
+    height: 18px;
+}
+
 /* Prose content */
 .dev-prose {
     font-size: 1rem;

@@ -50,7 +50,12 @@ func setupTestDB(t *testing.T) *sql.DB {
 			name TEXT NOT NULL DEFAULT '',
 			created_at DATETIME NOT NULL,
 			updated_at DATETIME NOT NULL,
-			last_login_at DATETIME
+			last_login_at DATETIME,
+			avatar TEXT NOT NULL DEFAULT '',
+			bio TEXT NOT NULL DEFAULT '',
+			website_url TEXT NOT NULL DEFAULT '',
+			linkedin_url TEXT NOT NULL DEFAULT '',
+			github_url TEXT NOT NULL DEFAULT ''
 		)
 	`)
 	if err != nil {
