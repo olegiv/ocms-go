@@ -309,3 +309,158 @@ func TestUserFormData(t *testing.T) {
 		t.Error("Errors not set correctly")
 	}
 }
+
+func TestUserItem_ProfileFields(t *testing.T) {
+	item := adminviews.UserItem{
+		ID:          1,
+		Name:        "Test User",
+		Email:       "test@example.com",
+		Role:        "editor",
+		Avatar:      "/uploads/avatar.jpg",
+		Bio:         "Software engineer",
+		WebsiteURL:  "https://example.com",
+		LinkedInURL: "https://linkedin.com/in/test",
+		GitHubURL:   "https://github.com/test",
+	}
+
+	if item.Avatar != "/uploads/avatar.jpg" {
+		t.Errorf("Avatar = %q; want /uploads/avatar.jpg", item.Avatar)
+	}
+	if item.Bio != "Software engineer" {
+		t.Errorf("Bio = %q; want Software engineer", item.Bio)
+	}
+	if item.WebsiteURL != "https://example.com" {
+		t.Errorf("WebsiteURL = %q; want https://example.com", item.WebsiteURL)
+	}
+	if item.LinkedInURL != "https://linkedin.com/in/test" {
+		t.Errorf("LinkedInURL = %q; want https://linkedin.com/in/test", item.LinkedInURL)
+	}
+	if item.GitHubURL != "https://github.com/test" {
+		t.Errorf("GitHubURL = %q; want https://github.com/test", item.GitHubURL)
+	}
+}
+
+func TestUserProfileFields_CreateAndRetrieve(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+
+	// Insert user with profile fields
+	_, err := db.Exec(
+		`INSERT INTO users (email, password_hash, role, name, avatar, bio, website_url, linkedin_url, github_url, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		"profile@example.com", "$argon2id$v=19$m=65536,t=1,p=4$c29tZXNhbHQ$RdescudvJCsgt3ub+b+dWRWJTmaaJObG",
+		"editor", "Profile User",
+		"/uploads/avatar.jpg", "A short bio",
+		"https://example.com", "https://linkedin.com/in/user", "https://github.com/user",
+	)
+	if err != nil {
+		t.Fatalf("failed to insert user with profile fields: %v", err)
+	}
+
+	// Read back and verify
+	var avatar, bio, websiteURL, linkedinURL, githubURL string
+	err = db.QueryRow(
+		"SELECT avatar, bio, website_url, linkedin_url, github_url FROM users WHERE email = ?",
+		"profile@example.com",
+	).Scan(&avatar, &bio, &websiteURL, &linkedinURL, &githubURL)
+	if err != nil {
+		t.Fatalf("failed to read user profile fields: %v", err)
+	}
+
+	if avatar != "/uploads/avatar.jpg" {
+		t.Errorf("avatar = %q; want /uploads/avatar.jpg", avatar)
+	}
+	if bio != "A short bio" {
+		t.Errorf("bio = %q; want 'A short bio'", bio)
+	}
+	if websiteURL != "https://example.com" {
+		t.Errorf("website_url = %q; want https://example.com", websiteURL)
+	}
+	if linkedinURL != "https://linkedin.com/in/user" {
+		t.Errorf("linkedin_url = %q; want https://linkedin.com/in/user", linkedinURL)
+	}
+	if githubURL != "https://github.com/user" {
+		t.Errorf("github_url = %q; want https://github.com/user", githubURL)
+	}
+}
+
+func TestUserProfileFields_DefaultEmpty(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+
+	// Create user without profile fields — defaults should be empty strings
+	user := createTestUser(t, db, testUser{
+		Email: "nofields@example.com",
+		Name:  "No Fields",
+		Role:  "editor",
+	})
+
+	var avatar, bio, websiteURL, linkedinURL, githubURL string
+	err := db.QueryRow(
+		"SELECT avatar, bio, website_url, linkedin_url, github_url FROM users WHERE id = ?",
+		user.ID,
+	).Scan(&avatar, &bio, &websiteURL, &linkedinURL, &githubURL)
+	if err != nil {
+		t.Fatalf("failed to read user: %v", err)
+	}
+
+	if avatar != "" {
+		t.Errorf("avatar should default to empty, got %q", avatar)
+	}
+	if bio != "" {
+		t.Errorf("bio should default to empty, got %q", bio)
+	}
+	if websiteURL != "" {
+		t.Errorf("website_url should default to empty, got %q", websiteURL)
+	}
+	if linkedinURL != "" {
+		t.Errorf("linkedin_url should default to empty, got %q", linkedinURL)
+	}
+	if githubURL != "" {
+		t.Errorf("github_url should default to empty, got %q", githubURL)
+	}
+}
+
+func TestUserProfileFields_UpdateViaSQL(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+
+	user := createTestUser(t, db, testUser{
+		Email: "update@example.com",
+		Name:  "Update User",
+		Role:  "editor",
+	})
+
+	// Update profile fields
+	_, err := db.Exec(
+		`UPDATE users SET avatar = ?, bio = ?, website_url = ?, linkedin_url = ?, github_url = ? WHERE id = ?`,
+		"/uploads/new-avatar.png", "Updated bio",
+		"https://mysite.com", "https://linkedin.com/in/updated", "https://github.com/updated",
+		user.ID,
+	)
+	if err != nil {
+		t.Fatalf("failed to update profile fields: %v", err)
+	}
+
+	var avatar, bio, websiteURL, linkedinURL, githubURL string
+	err = db.QueryRow(
+		"SELECT avatar, bio, website_url, linkedin_url, github_url FROM users WHERE id = ?",
+		user.ID,
+	).Scan(&avatar, &bio, &websiteURL, &linkedinURL, &githubURL)
+	if err != nil {
+		t.Fatalf("failed to read updated user: %v", err)
+	}
+
+	if avatar != "/uploads/new-avatar.png" {
+		t.Errorf("avatar = %q; want /uploads/new-avatar.png", avatar)
+	}
+	if bio != "Updated bio" {
+		t.Errorf("bio = %q; want 'Updated bio'", bio)
+	}
+	if websiteURL != "https://mysite.com" {
+		t.Errorf("website_url = %q; want https://mysite.com", websiteURL)
+	}
+	if linkedinURL != "https://linkedin.com/in/updated" {
+		t.Errorf("linkedin_url = %q; want https://linkedin.com/in/updated", linkedinURL)
+	}
+	if githubURL != "https://github.com/updated" {
+		t.Errorf("github_url = %q; want https://github.com/updated", githubURL)
+	}
+}

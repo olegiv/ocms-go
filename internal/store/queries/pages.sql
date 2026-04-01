@@ -177,7 +177,7 @@ INNER JOIN page_tags pt ON pt.page_id = p.id
 WHERE pt.tag_id = ? AND p.status = 'published';
 
 -- name: GetPageAuthor :one
-SELECT u.id, u.name, u.email FROM users u
+SELECT u.id, u.name, u.email, u.avatar, u.bio, u.website_url, u.linkedin_url, u.github_url FROM users u
 INNER JOIN pages p ON p.author_id = u.id
 WHERE p.id = ?;
 

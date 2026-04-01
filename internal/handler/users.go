@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/mail"
+	"net/url"
 	"strings"
 	"time"
 
@@ -187,12 +188,22 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	password := r.FormValue("password")
 	passwordConfirm := r.FormValue("password_confirm")
 	role := r.FormValue("role")
+	avatar := strings.TrimSpace(r.FormValue("avatar"))
+	bio := strings.TrimSpace(r.FormValue("bio"))
+	websiteURL := strings.TrimSpace(r.FormValue("website_url"))
+	linkedinURL := strings.TrimSpace(r.FormValue("linkedin_url"))
+	githubURL := strings.TrimSpace(r.FormValue("github_url"))
 
 	// Store form values for re-rendering on error
 	formValues := map[string]string{
-		"email": email,
-		"name":  name,
-		"role":  role,
+		"email":        email,
+		"name":         name,
+		"role":         role,
+		"avatar":       avatar,
+		"bio":          bio,
+		"website_url":  websiteURL,
+		"linkedin_url": linkedinURL,
+		"github_url":   githubURL,
 	}
 
 	// Validate
@@ -238,6 +249,9 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 		validationErrors["role"] = "Invalid role"
 	}
 
+	// Profile field validation
+	validateProfileFields(avatar, bio, websiteURL, linkedinURL, githubURL, validationErrors)
+
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
 		lang := h.renderer.GetAdminLang(r)
@@ -267,6 +281,11 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 		PasswordHash: passwordHash,
 		Role:         role,
 		Name:         name,
+		Avatar:       avatar,
+		Bio:          bio,
+		WebsiteUrl:   websiteURL,
+		LinkedinUrl:  linkedinURL,
+		GithubUrl:    githubURL,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	})
@@ -302,17 +321,27 @@ func (h *UsersHandler) EditForm(w http.ResponseWriter, r *http.Request) {
 
 	data := adminviews.UserFormData{
 		User: &adminviews.UserItem{
-			ID:    editUser.ID,
-			Name:  editUser.Name,
-			Email: editUser.Email,
-			Role:  editUser.Role,
+			ID:          editUser.ID,
+			Name:        editUser.Name,
+			Email:       editUser.Email,
+			Role:        editUser.Role,
+			Avatar:      editUser.Avatar,
+			Bio:         editUser.Bio,
+			WebsiteURL:  editUser.WebsiteUrl,
+			LinkedInURL: editUser.LinkedinUrl,
+			GitHubURL:   editUser.GithubUrl,
 		},
 		Roles:  model.ValidRoles,
 		Errors: make(map[string]string),
 		FormValues: map[string]string{
-			"email": editUser.Email,
-			"name":  editUser.Name,
-			"role":  editUser.Role,
+			"email":        editUser.Email,
+			"name":         editUser.Name,
+			"role":         editUser.Role,
+			"avatar":       editUser.Avatar,
+			"bio":          editUser.Bio,
+			"website_url":  editUser.WebsiteUrl,
+			"linkedin_url": editUser.LinkedinUrl,
+			"github_url":   editUser.GithubUrl,
 		},
 		IsEdit: true,
 	}
@@ -356,12 +385,22 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	password := r.FormValue("password")
 	passwordConfirm := r.FormValue("password_confirm")
 	role := r.FormValue("role")
+	avatar := strings.TrimSpace(r.FormValue("avatar"))
+	bio := strings.TrimSpace(r.FormValue("bio"))
+	websiteURL := strings.TrimSpace(r.FormValue("website_url"))
+	linkedinURL := strings.TrimSpace(r.FormValue("linkedin_url"))
+	githubURL := strings.TrimSpace(r.FormValue("github_url"))
 
 	// Store form values for re-rendering on error
 	formValues := map[string]string{
-		"email": email,
-		"name":  name,
-		"role":  role,
+		"email":        email,
+		"name":         name,
+		"role":         role,
+		"avatar":       avatar,
+		"bio":          bio,
+		"website_url":  websiteURL,
+		"linkedin_url": linkedinURL,
+		"github_url":   githubURL,
 	}
 
 	// Validate
@@ -406,6 +445,9 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		validationErrors["role"] = "Invalid role"
 	}
 
+	// Profile field validation
+	validateProfileFields(avatar, bio, websiteURL, linkedinURL, githubURL, validationErrors)
+
 	// Business rule: Cannot demote yourself from admin if you're the last admin
 	if currentUser.ID == id && editUser.Role == model.RoleAdmin && role != model.RoleAdmin {
 		adminCount, err := h.queries.CountUsersByRole(r.Context(), model.RoleAdmin)
@@ -421,10 +463,15 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if len(validationErrors) > 0 {
 		data := adminviews.UserFormData{
 			User: &adminviews.UserItem{
-				ID:    editUser.ID,
-				Name:  editUser.Name,
-				Email: editUser.Email,
-				Role:  editUser.Role,
+				ID:          editUser.ID,
+				Name:        editUser.Name,
+				Email:       editUser.Email,
+				Role:        editUser.Role,
+				Avatar:      editUser.Avatar,
+				Bio:         editUser.Bio,
+				WebsiteURL:  editUser.WebsiteUrl,
+				LinkedInURL: editUser.LinkedinUrl,
+				GitHubURL:   editUser.GithubUrl,
 			},
 			Roles:      model.ValidRoles,
 			Errors:     validationErrors,
@@ -440,11 +487,16 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Update user
 	now := time.Now()
 	_, err = h.queries.UpdateUser(r.Context(), store.UpdateUserParams{
-		Email:     email,
-		Role:      role,
-		Name:      name,
-		UpdatedAt: now,
-		ID:        id,
+		Email:       email,
+		Role:        role,
+		Name:        name,
+		Avatar:      avatar,
+		Bio:         bio,
+		WebsiteUrl:  websiteURL,
+		LinkedinUrl: linkedinURL,
+		GithubUrl:   githubURL,
+		UpdatedAt:   now,
+		ID:          id,
 	})
 	if err != nil {
 		slog.Error("failed to update user", "error", err)
@@ -629,6 +681,90 @@ func (h *UsersHandler) sendDeleteError(w http.ResponseWriter, message string) {
 	w.Header().Set("HX-Reswap", "none")
 	w.Header().Set("HX-Trigger", `{"showToast": "`+message+`", "toastType": "error"}`)
 	w.WriteHeader(http.StatusBadRequest)
+}
+
+// MaxBioLength is the maximum allowed length for a user bio.
+const MaxBioLength = 500
+
+// MaxProfileURLLength is the maximum allowed length for profile URL fields.
+const MaxProfileURLLength = 255
+
+// validateProfileURL checks that a URL is empty or has an http/https scheme.
+// Returns an error message string, or empty string if valid.
+func validateProfileURL(rawURL string) string {
+	if rawURL == "" {
+		return ""
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "Invalid URL format"
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "URL must start with http:// or https://"
+	}
+	return ""
+}
+
+// validateDomainURL checks that a URL is empty or uses http/https and matches
+// one of the allowed hosts. Returns an error message or empty string if valid.
+func validateDomainURL(rawURL string, allowedHosts []string) string {
+	if rawURL == "" {
+		return ""
+	}
+	if msg := validateProfileURL(rawURL); msg != "" {
+		return msg
+	}
+	u, _ := url.Parse(rawURL) // already validated above
+	host := strings.ToLower(u.Hostname())
+	for _, h := range allowedHosts {
+		if host == h {
+			return ""
+		}
+	}
+	return fmt.Sprintf("URL must be on %s", allowedHosts[0])
+}
+
+// validateProfileFields validates avatar, bio, and social URL fields.
+// It writes any errors into the provided validationErrors map.
+func validateProfileFields(avatar, bio, websiteURL, linkedinURL, githubURL string, validationErrors map[string]string) {
+	// Length checks
+	if len(avatar) > MaxProfileURLLength {
+		validationErrors["avatar"] = fmt.Sprintf("Avatar URL must be at most %d characters", MaxProfileURLLength)
+	}
+	if len(bio) > MaxBioLength {
+		validationErrors["bio"] = fmt.Sprintf("Bio must be at most %d characters", MaxBioLength)
+	}
+	if len(websiteURL) > MaxProfileURLLength {
+		validationErrors["website_url"] = fmt.Sprintf("Website URL must be at most %d characters", MaxProfileURLLength)
+	}
+	if len(linkedinURL) > MaxProfileURLLength {
+		validationErrors["linkedin_url"] = fmt.Sprintf("LinkedIn URL must be at most %d characters", MaxProfileURLLength)
+	}
+	if len(githubURL) > MaxProfileURLLength {
+		validationErrors["github_url"] = fmt.Sprintf("GitHub URL must be at most %d characters", MaxProfileURLLength)
+	}
+
+	// URL scheme validation (only if no length error already set)
+	if validationErrors["avatar"] == "" {
+		if msg := validateProfileURL(avatar); msg != "" {
+			validationErrors["avatar"] = msg
+		}
+	}
+	if validationErrors["website_url"] == "" {
+		if msg := validateProfileURL(websiteURL); msg != "" {
+			validationErrors["website_url"] = msg
+		}
+	}
+	if validationErrors["linkedin_url"] == "" {
+		if msg := validateDomainURL(linkedinURL, []string{"linkedin.com", "www.linkedin.com"}); msg != "" {
+			validationErrors["linkedin_url"] = msg
+		}
+	}
+	if validationErrors["github_url"] == "" {
+		if msg := validateDomainURL(githubURL, []string{"github.com", "www.github.com"}); msg != "" {
+			validationErrors["github_url"] = msg
+		}
+	}
 }
 
 // isValidRole checks if a role is valid.

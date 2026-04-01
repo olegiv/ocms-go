@@ -14,6 +14,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/views/components/input"
 	"github.com/olegiv/ocms-go/internal/views/components/label"
 	"github.com/olegiv/ocms-go/internal/views/components/selectbox"
+	"github.com/olegiv/ocms-go/internal/views/components/textarea"
 )
 
 // UserListItem holds data for a user in the list view.
@@ -45,10 +46,15 @@ type UserFormData struct {
 
 // UserItem holds individual user data.
 type UserItem struct {
-	ID    int64
-	Name  string
-	Email string
-	Role  string
+	ID          int64
+	Name        string
+	Email       string
+	Role        string
+	Avatar      string
+	Bio         string
+	WebsiteURL  string
+	LinkedInURL string
+	GitHubURL   string
 }
 
 // UsersListPage renders the users list page.
@@ -340,6 +346,101 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 							<span class="form-error">{ data.Errors["role"] }</span>
 						}
 					</div>
+					<!-- Author Profile Section -->
+					<div class="form-group form-group-full">
+						<hr class="form-divider"/>
+						<h3 class="form-section-title">{ pc.T("users.profile_section") }</h3>
+					</div>
+					<!-- Avatar -->
+					<div class="form-group">
+						@label.Label(label.Props{For: "avatar", Class: "block mb-1"}) {
+							{ pc.T("label.avatar") }
+						}
+						@input.Input(input.Props{
+							Type:        input.TypeURL,
+							Name:        "avatar",
+							ID:          "avatar",
+							Value:       userFormValue(data, "avatar"),
+							Placeholder: pc.T("users.avatar_placeholder"),
+							HasError:    data.Errors["avatar"] != "",
+							Attributes:  templ.Attributes{"maxlength": "255"},
+						})
+						if data.Errors["avatar"] != "" {
+							<span class="form-error">{ data.Errors["avatar"] }</span>
+						}
+					</div>
+					<!-- Website URL -->
+					<div class="form-group">
+						@label.Label(label.Props{For: "website_url", Class: "block mb-1"}) {
+							{ pc.T("label.website_url") }
+						}
+						@input.Input(input.Props{
+							Type:        input.TypeURL,
+							Name:        "website_url",
+							ID:          "website_url",
+							Value:       userFormValue(data, "website_url"),
+							Placeholder: pc.T("users.website_url_placeholder"),
+							HasError:    data.Errors["website_url"] != "",
+							Attributes:  templ.Attributes{"maxlength": "255"},
+						})
+						if data.Errors["website_url"] != "" {
+							<span class="form-error">{ data.Errors["website_url"] }</span>
+						}
+					</div>
+					<!-- LinkedIn URL -->
+					<div class="form-group">
+						@label.Label(label.Props{For: "linkedin_url", Class: "block mb-1"}) {
+							{ pc.T("label.linkedin_url") }
+						}
+						@input.Input(input.Props{
+							Type:        input.TypeURL,
+							Name:        "linkedin_url",
+							ID:          "linkedin_url",
+							Value:       userFormValue(data, "linkedin_url"),
+							Placeholder: pc.T("users.linkedin_url_placeholder"),
+							HasError:    data.Errors["linkedin_url"] != "",
+							Attributes:  templ.Attributes{"maxlength": "255"},
+						})
+						if data.Errors["linkedin_url"] != "" {
+							<span class="form-error">{ data.Errors["linkedin_url"] }</span>
+						}
+					</div>
+					<!-- GitHub URL -->
+					<div class="form-group">
+						@label.Label(label.Props{For: "github_url", Class: "block mb-1"}) {
+							{ pc.T("label.github_url") }
+						}
+						@input.Input(input.Props{
+							Type:        input.TypeURL,
+							Name:        "github_url",
+							ID:          "github_url",
+							Value:       userFormValue(data, "github_url"),
+							Placeholder: pc.T("users.github_url_placeholder"),
+							HasError:    data.Errors["github_url"] != "",
+							Attributes:  templ.Attributes{"maxlength": "255"},
+						})
+						if data.Errors["github_url"] != "" {
+							<span class="form-error">{ data.Errors["github_url"] }</span>
+						}
+					</div>
+					<!-- Bio -->
+					<div class="form-group form-group-full">
+						@label.Label(label.Props{For: "bio", Class: "block mb-1"}) {
+							{ pc.T("label.bio") }
+						}
+						@textarea.Textarea(textarea.Props{
+							Name:        "bio",
+							ID:          "bio",
+							Rows:        3,
+							Placeholder: pc.T("users.bio_placeholder"),
+							Value:       userFormValue(data, "bio"),
+							HasError:    data.Errors["bio"] != "",
+							Attributes:  templ.Attributes{"maxlength": "500"},
+						})
+						if data.Errors["bio"] != "" {
+							<span class="form-error">{ data.Errors["bio"] }</span>
+						}
+					</div>
 					<!-- Password Section -->
 					<div class="form-group form-group-full">
 						<hr class="form-divider"/>
@@ -453,6 +554,16 @@ func userFormValue(data UserFormData, field string) string {
 			return data.User.Email
 		case "role":
 			return data.User.Role
+		case "avatar":
+			return data.User.Avatar
+		case "bio":
+			return data.User.Bio
+		case "website_url":
+			return data.User.WebsiteURL
+		case "linkedin_url":
+			return data.User.LinkedInURL
+		case "github_url":
+			return data.User.GitHubURL
 		}
 	}
 	return ""

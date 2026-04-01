@@ -353,6 +353,11 @@ type User struct {
 	CreatedAt    time.Time    `json:"created_at"`
 	UpdatedAt    time.Time    `json:"updated_at"`
 	LastLoginAt  sql.NullTime `json:"last_login_at"`
+	Avatar       string       `json:"avatar"`
+	Bio          string       `json:"bio"`
+	WebsiteUrl   string       `json:"website_url"`
+	LinkedinUrl  string       `json:"linkedin_url"`
+	GithubUrl    string       `json:"github_url"`
 }
 
 type Webhook struct {

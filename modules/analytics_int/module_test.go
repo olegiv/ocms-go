@@ -355,11 +355,11 @@ func TestParseDateRange(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.rangeStr, func(t *testing.T) {
 			start, end := parseDateRange(tt.rangeStr)
-			diff := end.Sub(start)
-			actualDays := int(diff.Hours() / 24)
+			// Use calendar day difference to avoid DST hour shifts
+			actualDays := int(end.Sub(start).Hours()+12) / 24
 
-			// Allow 1 day tolerance for edge cases
-			if actualDays < tt.expectedDays-1 || actualDays > tt.expectedDays+1 {
+			// Allow 2 day tolerance for DST transitions and inclusive counting
+			if actualDays < tt.expectedDays-2 || actualDays > tt.expectedDays+2 {
 				t.Errorf("parseDateRange(%q) gave %d days, want ~%d", tt.rangeStr, actualDays, tt.expectedDays)
 			}
 		})

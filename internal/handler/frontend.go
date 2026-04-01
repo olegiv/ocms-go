@@ -77,11 +77,14 @@ type PageView struct {
 
 // AuthorView represents an author for template rendering.
 type AuthorView struct {
-	ID     int64
-	Name   string
-	Email  string
-	Avatar string
-	Bio    string
+	ID          int64
+	Name        string
+	Email       string
+	Avatar      string
+	Bio         string
+	WebsiteURL  string
+	LinkedInURL string
+	GitHubURL   string
 }
 
 // CategoryView represents a category for template rendering.
@@ -1422,9 +1425,14 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 	author, err := h.queries.GetPageAuthor(ctx, p.ID)
 	if err == nil {
 		pv.Author = &AuthorView{
-			ID:    author.ID,
-			Name:  author.Name,
-			Email: author.Email,
+			ID:          author.ID,
+			Name:        author.Name,
+			Email:       author.Email,
+			Avatar:      author.Avatar,
+			Bio:         author.Bio,
+			WebsiteURL:  author.WebsiteUrl,
+			LinkedInURL: author.LinkedinUrl,
+			GitHubURL:   author.GithubUrl,
 		}
 	}
 

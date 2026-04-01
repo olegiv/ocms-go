@@ -2758,6 +2758,36 @@
             "translation": "Публичный - Нет доступа к админке"
         },
         {
+            "id": "users.profile_section",
+            "message": "Author Profile",
+            "translation": "Профиль автора"
+        },
+        {
+            "id": "users.avatar_placeholder",
+            "message": "URL or path to avatar image",
+            "translation": "URL или путь к изображению аватара"
+        },
+        {
+            "id": "users.bio_placeholder",
+            "message": "A short biography or quote",
+            "translation": "Краткая биография или цитата"
+        },
+        {
+            "id": "users.website_url_placeholder",
+            "message": "https://example.com",
+            "translation": "https://example.com"
+        },
+        {
+            "id": "users.linkedin_url_placeholder",
+            "message": "https://linkedin.com/in/username",
+            "translation": "https://linkedin.com/in/username"
+        },
+        {
+            "id": "users.github_url_placeholder",
+            "message": "https://github.com/username",
+            "translation": "https://github.com/username"
+        },
+        {
             "id": "users.password_section",
             "message": "Password",
             "translation": "Пароль"
@@ -3811,6 +3841,31 @@
             "id": "label.email",
             "message": "Email",
             "translation": "Email"
+        },
+        {
+            "id": "label.avatar",
+            "message": "Avatar",
+            "translation": "Аватар"
+        },
+        {
+            "id": "label.bio",
+            "message": "Bio",
+            "translation": "Биография"
+        },
+        {
+            "id": "label.website_url",
+            "message": "Website",
+            "translation": "Веб-сайт"
+        },
+        {
+            "id": "label.linkedin_url",
+            "message": "LinkedIn",
+            "translation": "LinkedIn"
+        },
+        {
+            "id": "label.github_url",
+            "message": "GitHub",
+            "translation": "GitHub"
         },
         {
             "id": "label.password",

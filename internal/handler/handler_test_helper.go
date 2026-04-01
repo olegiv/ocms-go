@@ -38,7 +38,12 @@ func testDB(t *testing.T) *sql.DB {
 			name TEXT NOT NULL,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			last_login_at DATETIME
+			last_login_at DATETIME,
+			avatar TEXT NOT NULL DEFAULT '',
+			bio TEXT NOT NULL DEFAULT '',
+			website_url TEXT NOT NULL DEFAULT '',
+			linkedin_url TEXT NOT NULL DEFAULT '',
+			github_url TEXT NOT NULL DEFAULT ''
 		);
 		CREATE INDEX idx_users_email ON users(email);
 		CREATE INDEX idx_users_role ON users(role);
