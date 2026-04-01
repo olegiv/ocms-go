@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/mail"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -711,8 +712,12 @@ func validateAvatarURL(rawURL string) string {
 	if rawURL == "" {
 		return ""
 	}
-	// Allow site-relative paths
+	// Allow site-relative paths, but sanitize against traversal
 	if strings.HasPrefix(rawURL, "/") {
+		cleaned := path.Clean(rawURL)
+		if strings.Contains(cleaned, "..") {
+			return "Invalid path"
+		}
 		return ""
 	}
 	return validateProfileURL(rawURL)
