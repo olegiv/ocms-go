@@ -705,6 +705,19 @@ func validateProfileURL(rawURL string) string {
 	return ""
 }
 
+// validateAvatarURL checks that an avatar value is empty, a relative path,
+// or an http/https URL. Relative paths like /uploads/avatar.jpg are allowed.
+func validateAvatarURL(rawURL string) string {
+	if rawURL == "" {
+		return ""
+	}
+	// Allow site-relative paths
+	if strings.HasPrefix(rawURL, "/") {
+		return ""
+	}
+	return validateProfileURL(rawURL)
+}
+
 // validateDomainURL checks that a URL is empty or uses http/https and matches
 // one of the allowed hosts. Returns an error message or empty string if valid.
 func validateDomainURL(rawURL string, allowedHosts []string) string {
@@ -746,7 +759,7 @@ func validateProfileFields(avatar, bio, websiteURL, linkedinURL, githubURL strin
 
 	// URL scheme validation (only if no length error already set)
 	if validationErrors["avatar"] == "" {
-		if msg := validateProfileURL(avatar); msg != "" {
+		if msg := validateAvatarURL(avatar); msg != "" {
 			validationErrors["avatar"] = msg
 		}
 	}

@@ -1996,7 +1996,7 @@ func UserFormPage(pc *PageContext, data UserFormData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				templ_7745c5c3_Err = input.Input(input.Props{
-					Type:        input.TypeURL,
+					Type:        input.TypeText,
 					Name:        "avatar",
 					ID:          "avatar",
 					Value:       userFormValue(data, "avatar"),

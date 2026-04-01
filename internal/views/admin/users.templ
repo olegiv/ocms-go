@@ -357,7 +357,7 @@ templ UserFormPage(pc *PageContext, data UserFormData) {
 							{ pc.T("label.avatar") }
 						}
 						@input.Input(input.Props{
-							Type:        input.TypeURL,
+							Type:        input.TypeText,
 							Name:        "avatar",
 							ID:          "avatar",
 							Value:       userFormValue(data, "avatar"),
