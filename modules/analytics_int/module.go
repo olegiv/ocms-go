@@ -31,10 +31,6 @@ type Module struct {
 	geoIP    *geoip.Lookup
 	cron     *cron.Cron
 	saltMu   sync.RWMutex
-	cacheMu  sync.RWMutex // protects siteDomain, excludedIPs, excludedIPsReady
-	siteDomain       string // cached site domain extracted from site_url config
-	excludedIPs      []string
-	excludedIPsReady bool
 }
 
 // New creates a new internal analytics module.
@@ -434,41 +430,20 @@ func (m *Module) IsEnabled() bool {
 	return m.settings.Enabled
 }
 
-// getSiteDomain returns the site domain extracted from the site_url config.
-// The result is cached; use refreshSiteDomain to force a reload.
+// getSiteDomain reads the site domain from the config table on each call.
+// This ensures config changes take effect immediately without restart.
 func (m *Module) getSiteDomain() string {
-	m.cacheMu.RLock()
-	if m.siteDomain != "" {
-		domain := m.siteDomain
-		m.cacheMu.RUnlock()
-		return domain
-	}
-	m.cacheMu.RUnlock()
-
-	m.cacheMu.Lock()
-	defer m.cacheMu.Unlock()
-	// Double-check after acquiring write lock
-	if m.siteDomain != "" {
-		return m.siteDomain
-	}
-	m.refreshSiteDomainLocked()
-	return m.siteDomain
-}
-
-// refreshSiteDomainLocked reads site_url from the config table and extracts the host.
-// Caller must hold cacheMu write lock.
-func (m *Module) refreshSiteDomainLocked() {
 	if m.ctx == nil || m.ctx.DB == nil {
-		return
+		return ""
 	}
 
 	var siteURL string
 	err := m.ctx.DB.QueryRow(`SELECT value FROM config WHERE key = 'site_url'`).Scan(&siteURL)
 	if err != nil || siteURL == "" {
-		return
+		return ""
 	}
 
-	m.siteDomain = extractDomainFromURL(siteURL)
+	return extractDomainFromURL(siteURL)
 }
 
 // extractDomainFromURL extracts the hostname from a URL string,
@@ -493,39 +468,17 @@ func extractDomainFromURL(rawURL string) string {
 	return strings.TrimSpace(host)
 }
 
-// getExcludedIPs returns the excluded IPs list from global config.
+// getExcludedIPs reads the excluded IPs list from the global config table.
+// This ensures config changes take effect immediately without restart.
 func (m *Module) getExcludedIPs() []string {
-	m.cacheMu.RLock()
-	if m.excludedIPsReady {
-		ips := m.excludedIPs
-		m.cacheMu.RUnlock()
-		return ips
-	}
-	m.cacheMu.RUnlock()
-
-	m.cacheMu.Lock()
-	defer m.cacheMu.Unlock()
-	// Double-check after acquiring write lock
-	if m.excludedIPsReady {
-		return m.excludedIPs
-	}
-	m.refreshExcludedIPsLocked()
-	return m.excludedIPs
-}
-
-// refreshExcludedIPsLocked reads excluded_ips from the config table.
-// Caller must hold cacheMu write lock.
-func (m *Module) refreshExcludedIPsLocked() {
 	if m.ctx == nil || m.ctx.DB == nil {
-		return
+		return nil
 	}
 
 	var value string
 	err := m.ctx.DB.QueryRow(`SELECT value FROM config WHERE key = 'excluded_ips'`).Scan(&value)
 	if err != nil || value == "" {
-		m.excludedIPs = nil
-		m.excludedIPsReady = true
-		return
+		return nil
 	}
 
 	var ips []string
@@ -535,6 +488,5 @@ func (m *Module) refreshExcludedIPsLocked() {
 			ips = append(ips, ip)
 		}
 	}
-	m.excludedIPs = ips
-	m.excludedIPsReady = true
+	return ips
 }

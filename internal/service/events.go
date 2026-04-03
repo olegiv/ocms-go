@@ -18,10 +18,19 @@ import (
 	"github.com/olegiv/ocms-go/internal/util"
 )
 
+// globalConfigGetter is a package-level config getter shared by all EventService instances.
+// Set once at startup via SetGlobalConfigGetter before serving requests.
+var globalConfigGetter func(ctx context.Context, key string) (string, error)
+
+// SetGlobalConfigGetter sets the config getter used by all EventService instances
+// for IP exclusion lookups. Must be called before the HTTP server starts.
+func SetGlobalConfigGetter(fn func(ctx context.Context, key string) (string, error)) {
+	globalConfigGetter = fn
+}
+
 // EventService provides event logging functionality.
 type EventService struct {
-	queries   *store.Queries
-	getConfig func(ctx context.Context, key string) (string, error)
+	queries *store.Queries
 }
 
 // NewEventService creates a new EventService.
@@ -31,17 +40,12 @@ func NewEventService(db *sql.DB) *EventService {
 	}
 }
 
-// SetConfigGetter sets the function used to retrieve config values.
-func (s *EventService) SetConfigGetter(fn func(ctx context.Context, key string) (string, error)) {
-	s.getConfig = fn
-}
-
 // getExcludedIPs retrieves the excluded IPs list from global config.
 func (s *EventService) getExcludedIPs(ctx context.Context) []string {
-	if s.getConfig == nil {
+	if globalConfigGetter == nil {
 		return nil
 	}
-	value, err := s.getConfig(ctx, model.ConfigKeyExcludedIPs)
+	value, err := globalConfigGetter(ctx, model.ConfigKeyExcludedIPs)
 	if err != nil || value == "" {
 		return nil
 	}
