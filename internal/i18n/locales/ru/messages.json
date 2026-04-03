@@ -3518,6 +3518,16 @@
             "translation": "Должно быть числом"
         },
         {
+            "id": "error.text_too_long",
+            "message": "Text value is too long (max 64 KB)",
+            "translation": "Текст слишком длинный (макс. 64 КБ)"
+        },
+        {
+            "id": "error.invalid_ip_entry",
+            "message": "Line %d: invalid IP or CIDR \"%s\"",
+            "translation": "Строка %d: некорректный IP или CIDR \"%s\""
+        },
+        {
             "id": "error.saving_value",
             "message": "Error saving value",
             "translation": "Ошибка сохранения значения"

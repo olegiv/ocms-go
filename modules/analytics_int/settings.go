@@ -101,6 +101,8 @@ func (m *Module) ReloadSettings() error {
 		return err
 	}
 	m.settings = settings
+	m.cacheMu.Lock()
 	m.excludedIPsReady = false // force re-read from global config on next check
+	m.cacheMu.Unlock()
 	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"embed"
 	"html/template"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -25,11 +26,12 @@ var localesFS embed.FS
 // Module implements the internal analytics module.
 type Module struct {
 	module.BaseModule
-	ctx        *module.Context
-	settings   *Settings
-	geoIP      *geoip.Lookup
-	cron       *cron.Cron
-	saltMu           sync.RWMutex
+	ctx      *module.Context
+	settings *Settings
+	geoIP    *geoip.Lookup
+	cron     *cron.Cron
+	saltMu   sync.RWMutex
+	cacheMu  sync.RWMutex // protects siteDomain, excludedIPs, excludedIPsReady
 	siteDomain       string // cached site domain extracted from site_url config
 	excludedIPs      []string
 	excludedIPsReady bool
@@ -403,8 +405,12 @@ func (m *Module) Migrations() []module.Migration {
 				domain := strings.TrimPrefix(strings.ToLower(host), "www.")
 				wwwDomain := "www." + domain
 
-				db.Exec(`UPDATE page_analytics_views SET referrer_domain = '' WHERE LOWER(referrer_domain) IN (?, ?)`, domain, wwwDomain)
-				db.Exec(`DELETE FROM page_analytics_referrers WHERE LOWER(referrer_domain) IN (?, ?)`, domain, wwwDomain)
+				if _, err := db.Exec(`UPDATE page_analytics_views SET referrer_domain = '' WHERE LOWER(referrer_domain) IN (?, ?)`, domain, wwwDomain); err != nil {
+					slog.Error("migration 9: failed to purge self-referral views", "error", err, "domain", domain)
+				}
+				if _, err := db.Exec(`DELETE FROM page_analytics_referrers WHERE LOWER(referrer_domain) IN (?, ?)`, domain, wwwDomain); err != nil {
+					slog.Error("migration 9: failed to purge self-referral referrers", "error", err, "domain", domain)
+				}
 				return nil
 			},
 			Down: func(db *sql.DB) error {
@@ -431,15 +437,27 @@ func (m *Module) IsEnabled() bool {
 // getSiteDomain returns the site domain extracted from the site_url config.
 // The result is cached; use refreshSiteDomain to force a reload.
 func (m *Module) getSiteDomain() string {
+	m.cacheMu.RLock()
+	if m.siteDomain != "" {
+		domain := m.siteDomain
+		m.cacheMu.RUnlock()
+		return domain
+	}
+	m.cacheMu.RUnlock()
+
+	m.cacheMu.Lock()
+	defer m.cacheMu.Unlock()
+	// Double-check after acquiring write lock
 	if m.siteDomain != "" {
 		return m.siteDomain
 	}
-	m.refreshSiteDomain()
+	m.refreshSiteDomainLocked()
 	return m.siteDomain
 }
 
-// refreshSiteDomain reads site_url from the config table and extracts the host.
-func (m *Module) refreshSiteDomain() {
+// refreshSiteDomainLocked reads site_url from the config table and extracts the host.
+// Caller must hold cacheMu write lock.
+func (m *Module) refreshSiteDomainLocked() {
 	if m.ctx == nil || m.ctx.DB == nil {
 		return
 	}
@@ -477,15 +495,27 @@ func extractDomainFromURL(rawURL string) string {
 
 // getExcludedIPs returns the excluded IPs list from global config.
 func (m *Module) getExcludedIPs() []string {
+	m.cacheMu.RLock()
+	if m.excludedIPsReady {
+		ips := m.excludedIPs
+		m.cacheMu.RUnlock()
+		return ips
+	}
+	m.cacheMu.RUnlock()
+
+	m.cacheMu.Lock()
+	defer m.cacheMu.Unlock()
+	// Double-check after acquiring write lock
 	if m.excludedIPsReady {
 		return m.excludedIPs
 	}
-	m.refreshExcludedIPs()
+	m.refreshExcludedIPsLocked()
 	return m.excludedIPs
 }
 
-// refreshExcludedIPs reads excluded_ips from the config table.
-func (m *Module) refreshExcludedIPs() {
+// refreshExcludedIPsLocked reads excluded_ips from the config table.
+// Caller must hold cacheMu write lock.
+func (m *Module) refreshExcludedIPsLocked() {
 	if m.ctx == nil || m.ctx.DB == nil {
 		return
 	}

@@ -4033,6 +4033,16 @@
             "translation": "Must be a valid number"
         },
         {
+            "id": "error.text_too_long",
+            "message": "Text value is too long (max 64 KB)",
+            "translation": "Text value is too long (max 64 KB)"
+        },
+        {
+            "id": "error.invalid_ip_entry",
+            "message": "Line %d: invalid IP or CIDR \"%s\"",
+            "translation": "Line %d: invalid IP or CIDR \"%s\""
+        },
+        {
             "id": "error.saving_value",
             "message": "Error saving value",
             "translation": "Error saving value"

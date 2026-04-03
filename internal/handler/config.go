@@ -6,6 +6,7 @@ package handler
 import (
 	"database/sql"
 	"log/slog"
+	"net"
 	"net/http"
 	"sort"
 	"strconv"
@@ -323,6 +324,19 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 			} else {
 				value = "true"
 			}
+		} else if cfg.Type == model.ConfigTypeText {
+			const maxTextSize = 64 * 1024 // 64 KB
+			if len(value) > maxTextSize {
+				validationErrors[cfg.Key] = i18n.T(lang, "error.text_too_long")
+				continue
+			}
+			// Validate IP entries for excluded_ips
+			if cfg.Key == model.ConfigKeyExcludedIPs {
+				if errMsg := validateExcludedIPs(value, lang); errMsg != "" {
+					validationErrors[cfg.Key] = errMsg
+					continue
+				}
+			}
 		}
 
 		// Upsert the config value (creates if not exists, updates if exists)
@@ -418,6 +432,24 @@ func configKeyToDescription(key string, dbDescription string, lang string) strin
 
 	// Fallback to database description
 	return dbDescription
+}
+
+// validateExcludedIPs validates that each non-empty line is a valid IP or CIDR.
+func validateExcludedIPs(value string, lang string) string {
+	for i, line := range strings.Split(value, "\n") {
+		entry := strings.TrimSpace(line)
+		if entry == "" {
+			continue
+		}
+		if strings.Contains(entry, "/") {
+			if _, _, err := net.ParseCIDR(entry); err != nil {
+				return i18n.T(lang, "error.invalid_ip_entry", i+1, entry)
+			}
+		} else if net.ParseIP(entry) == nil {
+			return i18n.T(lang, "error.invalid_ip_entry", i+1, entry)
+		}
+	}
+	return ""
 }
 
 // configBreadcrumbs returns the standard breadcrumbs for config pages.
