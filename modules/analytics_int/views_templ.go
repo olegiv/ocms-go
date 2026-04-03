@@ -26,7 +26,6 @@ type AnalyticsIntViewData struct {
 	TimeSeries   []TimeSeriesPoint
 	DateRange    string
 	Settings     Settings
-	SiteDomain   string // Site domain from config (for self-referral info)
 }
 
 // Helper functions
@@ -134,7 +133,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.title"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 93, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 92, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -147,7 +146,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.description"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 94, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 93, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
@@ -248,7 +247,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", data.Overview.TotalViews))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 116, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 115, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 			if templ_7745c5c3_Err != nil {
@@ -261,7 +260,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.total_views"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 117, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 116, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 			if templ_7745c5c3_Err != nil {
@@ -274,7 +273,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var15 string
 			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", data.Overview.UniqueVisitors))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 130, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 129, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 			if templ_7745c5c3_Err != nil {
@@ -287,7 +286,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var16 string
 			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.unique_visitors"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 131, Col: 70}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 130, Col: 70}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 			if templ_7745c5c3_Err != nil {
@@ -300,7 +299,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var17 string
 			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%.1f", data.Overview.BounceRate))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 142, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 141, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 			if templ_7745c5c3_Err != nil {
@@ -313,7 +312,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var18 string
 			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.bounce_rate"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 143, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 142, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 			if templ_7745c5c3_Err != nil {
@@ -326,7 +325,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var19 string
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", data.Overview.RealTimeVisitors))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 154, Col: 102}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 153, Col: 102}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 			if templ_7745c5c3_Err != nil {
@@ -339,7 +338,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var20 string
 			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.realtime"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 155, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 154, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 			if templ_7745c5c3_Err != nil {
@@ -352,7 +351,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var21 string
 			templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.today"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 164, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 163, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 			if templ_7745c5c3_Err != nil {
@@ -365,7 +364,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var22 string
 			templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", data.Overview.ViewsToday))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 165, Col: 75}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 164, Col: 75}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 			if templ_7745c5c3_Err != nil {
@@ -406,7 +405,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var25 string
 					templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%.1f", data.Overview.TrendPercent))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 169, Col: 57}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 168, Col: 57}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 					if templ_7745c5c3_Err != nil {
@@ -420,7 +419,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var26 string
 					templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%.1f", data.Overview.TrendPercent))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 171, Col: 56}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 170, Col: 56}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 					if templ_7745c5c3_Err != nil {
@@ -443,7 +442,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var27 string
 			templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.views_over_time"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 182, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 181, Col: 48}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 			if templ_7745c5c3_Err != nil {
@@ -466,7 +465,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var28 string
 					templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", ts.Views))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 189, Col: 72}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 188, Col: 72}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 					if templ_7745c5c3_Err != nil {
@@ -479,7 +478,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var29 string
 					templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%s: %d views", ts.Date, ts.Views))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 189, Col: 129}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 188, Col: 129}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 					if templ_7745c5c3_Err != nil {
@@ -492,7 +491,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var30 string
 					templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(ts.Date[5:10])
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 191, Col: 49}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 190, Col: 49}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 					if templ_7745c5c3_Err != nil {
@@ -510,7 +509,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 				var templ_7745c5c3_Var31 string
 				templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(templ.GetNonce(ctx))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 196, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 195, Col: 41}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 				if templ_7745c5c3_Err != nil {
@@ -528,7 +527,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 				var templ_7745c5c3_Var32 string
 				templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.no_data"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 216, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 215, Col: 41}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 				if templ_7745c5c3_Err != nil {
@@ -546,7 +545,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var33 string
 			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.top_pages"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 224, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 223, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 			if templ_7745c5c3_Err != nil {
@@ -564,7 +563,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 				var templ_7745c5c3_Var34 string
 				templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.page"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 231, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 230, Col: 41}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 				if templ_7745c5c3_Err != nil {
@@ -577,7 +576,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 				var templ_7745c5c3_Var35 string
 				templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.views"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 232, Col: 61}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 231, Col: 61}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 				if templ_7745c5c3_Err != nil {
@@ -590,7 +589,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 				var templ_7745c5c3_Var36 string
 				templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.visitors"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 233, Col: 64}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 232, Col: 64}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 				if templ_7745c5c3_Err != nil {
@@ -608,7 +607,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var37 string
 					templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(page.Path)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 239, Col: 49}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 238, Col: 49}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 					if templ_7745c5c3_Err != nil {
@@ -621,7 +620,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var38 string
 					templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(page.PageTitle)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 239, Col: 68}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 238, Col: 68}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 					if templ_7745c5c3_Err != nil {
@@ -634,7 +633,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var39 string
 					templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", page.Views))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 240, Col: 64}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 239, Col: 64}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 					if templ_7745c5c3_Err != nil {
@@ -647,7 +646,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var40 string
 					templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", page.UniqueVisitors))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 241, Col: 73}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 240, Col: 73}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 					if templ_7745c5c3_Err != nil {
@@ -670,7 +669,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 				var templ_7745c5c3_Var41 string
 				templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.no_data"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 248, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 247, Col: 41}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 				if templ_7745c5c3_Err != nil {
@@ -688,7 +687,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var42 string
 			templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.top_referrers"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 256, Col: 46}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 255, Col: 46}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 			if templ_7745c5c3_Err != nil {
@@ -706,7 +705,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 				var templ_7745c5c3_Var43 string
 				templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.source"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 263, Col: 43}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 262, Col: 43}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 				if templ_7745c5c3_Err != nil {
@@ -719,7 +718,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 				var templ_7745c5c3_Var44 string
 				templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.views"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 264, Col: 61}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 263, Col: 61}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 				if templ_7745c5c3_Err != nil {
@@ -738,7 +737,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 						var templ_7745c5c3_Var45 string
 						templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(ref.Domain)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 272, Col: 24}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 271, Col: 24}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 						if templ_7745c5c3_Err != nil {
@@ -757,7 +756,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var46 string
 					templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", ref.Views))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 277, Col: 63}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 276, Col: 63}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 					if templ_7745c5c3_Err != nil {
@@ -780,7 +779,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 				var templ_7745c5c3_Var47 string
 				templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.no_referrer_data"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 284, Col: 50}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 283, Col: 50}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 				if templ_7745c5c3_Err != nil {
@@ -798,7 +797,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var48 string
 			templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.browsers"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 292, Col: 41}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 291, Col: 41}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 			if templ_7745c5c3_Err != nil {
@@ -821,7 +820,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var49 string
 					templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(browser.Browser)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 300, Col: 56}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 299, Col: 56}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 					if templ_7745c5c3_Err != nil {
@@ -834,7 +833,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var50 string
 					templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(formatNumber(browser.Views))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 301, Col: 69}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 300, Col: 69}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 					if templ_7745c5c3_Err != nil {
@@ -847,7 +846,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var51 string
 					templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%.1f", browser.Percent))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 301, Col: 111}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 300, Col: 111}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 					if templ_7745c5c3_Err != nil {
@@ -860,7 +859,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var52 string
 					templ_7745c5c3_Var52, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(fmt.Sprintf("width: %.0f%%", browser.Percent))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 304, Col: 91}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 303, Col: 91}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 					if templ_7745c5c3_Err != nil {
@@ -883,7 +882,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 				var templ_7745c5c3_Var53 string
 				templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.no_data"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 311, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 310, Col: 41}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 				if templ_7745c5c3_Err != nil {
@@ -901,7 +900,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var54 string
 			templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.devices"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 319, Col: 40}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 318, Col: 40}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 			if templ_7745c5c3_Err != nil {
@@ -954,7 +953,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var57 string
 					templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinStringErrs(d.DeviceType)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 330, Col: 50}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 329, Col: 50}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var57))
 					if templ_7745c5c3_Err != nil {
@@ -967,7 +966,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var58 string
 					templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%.1f", d.Percent))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 331, Col: 71}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 330, Col: 71}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 					if templ_7745c5c3_Err != nil {
@@ -990,7 +989,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 				var templ_7745c5c3_Var59 string
 				templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.no_data"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 338, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 337, Col: 41}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var59))
 				if templ_7745c5c3_Err != nil {
@@ -1008,7 +1007,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var60 string
 			templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.countries"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 346, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 345, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var60))
 			if templ_7745c5c3_Err != nil {
@@ -1031,7 +1030,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var61 string
 					templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinStringErrs(country.CountryName)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 354, Col: 60}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 353, Col: 60}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 					if templ_7745c5c3_Err != nil {
@@ -1044,7 +1043,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var62 string
 					templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.JoinStringErrs(formatNumber(country.Views))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 355, Col: 69}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 354, Col: 69}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var62))
 					if templ_7745c5c3_Err != nil {
@@ -1057,7 +1056,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var63 string
 					templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%.1f", country.Percent))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 355, Col: 111}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 354, Col: 111}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var63))
 					if templ_7745c5c3_Err != nil {
@@ -1070,7 +1069,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var64 string
 					templ_7745c5c3_Var64, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(fmt.Sprintf("width: %.0f%%", country.Percent))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 358, Col: 110}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 357, Col: 110}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var64))
 					if templ_7745c5c3_Err != nil {
@@ -1093,7 +1092,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 				var templ_7745c5c3_Var65 string
 				templ_7745c5c3_Var65, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.no_geo_data"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 365, Col: 45}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 364, Col: 45}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var65))
 				if templ_7745c5c3_Err != nil {
@@ -1111,7 +1110,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var66 string
 			templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.settings"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 375, Col: 41}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 374, Col: 41}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var66))
 			if templ_7745c5c3_Err != nil {
@@ -1134,7 +1133,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var67 string
 			templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.enabled"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 382, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 381, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var67))
 			if templ_7745c5c3_Err != nil {
@@ -1147,7 +1146,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var68 string
 			templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.enabled_hint"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 384, Col: 64}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 383, Col: 64}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var68))
 			if templ_7745c5c3_Err != nil {
@@ -1160,7 +1159,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var69 string
 			templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.retention_days"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 387, Col: 52}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 386, Col: 52}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var69))
 			if templ_7745c5c3_Err != nil {
@@ -1173,7 +1172,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var70 string
 			templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(data.Settings.RetentionDays))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 388, Col: 99}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 387, Col: 99}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var70))
 			if templ_7745c5c3_Err != nil {
@@ -1186,7 +1185,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var71 string
 			templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.retention_hint"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 389, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 388, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var71))
 			if templ_7745c5c3_Err != nil {
@@ -1199,7 +1198,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var72 string
 			templ_7745c5c3_Var72, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.exclude_paths"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 392, Col: 51}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 391, Col: 51}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var72))
 			if templ_7745c5c3_Err != nil {
@@ -1213,7 +1212,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 				var templ_7745c5c3_Var73 string
 				templ_7745c5c3_Var73, templ_7745c5c3_Err = templ.JoinStringErrs(path)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 395, Col: 15}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 394, Col: 15}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var73))
 				if templ_7745c5c3_Err != nil {
@@ -1227,7 +1226,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var74 string
 					templ_7745c5c3_Var74, templ_7745c5c3_Err = templ.JoinStringErrs("\n")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 397, Col: 16}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 396, Col: 16}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var74))
 					if templ_7745c5c3_Err != nil {
@@ -1242,7 +1241,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var75 string
 			templ_7745c5c3_Var75, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.exclude_hint"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 401, Col: 64}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 400, Col: 64}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var75))
 			if templ_7745c5c3_Err != nil {
@@ -1255,7 +1254,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var76 string
 			templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.exclude_ips"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 404, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 403, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var76))
 			if templ_7745c5c3_Err != nil {
@@ -1269,7 +1268,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 				var templ_7745c5c3_Var77 string
 				templ_7745c5c3_Var77, templ_7745c5c3_Err = templ.JoinStringErrs(ip)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 407, Col: 13}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 406, Col: 13}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var77))
 				if templ_7745c5c3_Err != nil {
@@ -1283,7 +1282,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 					var templ_7745c5c3_Var78 string
 					templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.JoinStringErrs("\n")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 409, Col: 16}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 408, Col: 16}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var78))
 					if templ_7745c5c3_Err != nil {
@@ -1298,7 +1297,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var79 string
 			templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.exclude_ips_hint"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 413, Col: 68}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 412, Col: 68}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var79))
 			if templ_7745c5c3_Err != nil {
@@ -1311,7 +1310,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var80 string
 			templ_7745c5c3_Var80, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.save_settings"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 415, Col: 89}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 414, Col: 89}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var80))
 			if templ_7745c5c3_Err != nil {
@@ -1324,7 +1323,7 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var81 string
 			templ_7745c5c3_Var81, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.run_aggregation_hint"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 420, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 419, Col: 77}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var81))
 			if templ_7745c5c3_Err != nil {
@@ -1337,116 +1336,26 @@ func AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) tem
 			var templ_7745c5c3_Var82 string
 			templ_7745c5c3_Var82, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.run_aggregation"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 421, Col: 92}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 420, Col: 92}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var82))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 118, "</button></div></form><hr class=\"mt-4 mb-4\"><div class=\"form-group\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 118, "</button></div></form></div></div></div><script nonce=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if data.SiteDomain != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 119, "<p class=\"form-hint mb-2\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var83 string
-				templ_7745c5c3_Var83, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.purge_self_referrals_hint"))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 428, Col: 57}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var83))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 120, " <strong>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var84 string
-				templ_7745c5c3_Var84, templ_7745c5c3_Err = templ.JoinStringErrs(data.SiteDomain)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 429, Col: 33}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var84))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 121, "</strong></p>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 122, "<p class=\"form-hint mb-2\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var85 string
-				templ_7745c5c3_Var85, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.purge_self_referrals_no_domain"))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 432, Col: 87}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var85))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 123, "</p>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
+			var templ_7745c5c3_Var83 string
+			templ_7745c5c3_Var83, templ_7745c5c3_Err = templ.JoinStringErrs(templ.GetNonce(ctx))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 426, Col: 37}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 124, "<form method=\"POST\" action=\"/admin/internal-analytics/purge-self-referrals\"><button type=\"submit\" class=\"btn btn-outline btn-danger\"")
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var83))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if data.SiteDomain == "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 125, " disabled")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 126, " onclick=\"return confirm(this.dataset.confirm)\" data-confirm=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var86 string
-			templ_7745c5c3_Var86, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.purge_self_referrals_confirm"))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 440, Col: 73}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var86))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 127, "\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var87 string
-			templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("analytics_int.purge_self_referrals"))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 442, Col: 52}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var87))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 128, "</button></form></div></div></div></div><script nonce=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var88 string
-			templ_7745c5c3_Var88, templ_7745c5c3_Err = templ.JoinStringErrs(templ.GetNonce(ctx))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `modules/analytics_int/views.templ`, Line: 449, Col: 37}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var88))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 129, "\">\n\t\t// Update real-time count every 30 seconds\n\t\tsetInterval(function() {\n\t\t\tfetch('/admin/internal-analytics/api/realtime')\n\t\t\t\t.then(response => response.json())\n\t\t\t\t.then(data => {\n\t\t\t\t\tconst el = document.getElementById('realtime-count');\n\t\t\t\t\tif (el) {\n\t\t\t\t\t\tel.textContent = data.visitors;\n\t\t\t\t\t}\n\t\t\t\t})\n\t\t\t\t.catch(err => console.error('Failed to fetch realtime stats:', err));\n\t\t}, 30000);\n\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 119, "\">\n\t\t// Update real-time count every 30 seconds\n\t\tsetInterval(function() {\n\t\t\tfetch('/admin/internal-analytics/api/realtime')\n\t\t\t\t.then(response => response.json())\n\t\t\t\t.then(data => {\n\t\t\t\t\tconst el = document.getElementById('realtime-count');\n\t\t\t\t\tif (el) {\n\t\t\t\t\t\tel.textContent = data.visitors;\n\t\t\t\t\t}\n\t\t\t\t})\n\t\t\t\t.catch(err => console.error('Failed to fetch realtime stats:', err));\n\t\t}, 30000);\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

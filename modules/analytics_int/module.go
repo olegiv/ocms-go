@@ -165,7 +165,6 @@ func (m *Module) RegisterAdminRoutes(r chi.Router) {
 	r.Get("/internal-analytics/api/realtime", m.handleRealtime)
 	r.Post("/internal-analytics/settings", m.handleSaveSettings)
 	r.Post("/internal-analytics/aggregate", m.handleRunAggregation)
-	r.Post("/internal-analytics/purge-self-referrals", m.handlePurgeSelfReferrals)
 }
 
 // TemplateFuncs returns template functions provided by the module.
@@ -371,6 +370,43 @@ func (m *Module) Migrations() []module.Migration {
 				// SQLite doesn't support DROP COLUMN before 3.35.0; recreate is complex.
 				// Since this is just a column addition, the down migration is a no-op.
 				return nil
+			},
+		},
+		{
+			Version:     9,
+			Description: "Purge self-referral data matching site domain",
+			Up: func(db *sql.DB) error {
+				var siteURL string
+				err := db.QueryRow(`SELECT value FROM config WHERE key = 'site_url'`).Scan(&siteURL)
+				if err != nil || siteURL == "" {
+					return nil // site_url not configured, nothing to purge
+				}
+
+				parsed, _ := url.Parse(siteURL)
+				host := ""
+				if parsed != nil {
+					host = parsed.Host
+				}
+				if host == "" {
+					host = siteURL
+				}
+				if idx := strings.LastIndex(host, ":"); idx > 0 {
+					host = host[:idx]
+				}
+				host = strings.TrimSpace(host)
+				if host == "" {
+					return nil
+				}
+
+				domain := strings.TrimPrefix(strings.ToLower(host), "www.")
+				wwwDomain := "www." + domain
+
+				db.Exec(`UPDATE page_analytics_views SET referrer_domain = '' WHERE LOWER(referrer_domain) IN (?, ?)`, domain, wwwDomain)
+				db.Exec(`DELETE FROM page_analytics_referrers WHERE LOWER(referrer_domain) IN (?, ?)`, domain, wwwDomain)
+				return nil
+			},
+			Down: func(db *sql.DB) error {
+				return nil // data purge is not reversible
 			},
 		},
 	}

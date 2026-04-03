@@ -37,12 +37,6 @@
         {"id": "analytics_int.success_aggregation", "message": "Aggregation complete. Processed %d date(s).", "translation": "Aggregation complete. Processed %d date(s)."},
         {"id": "analytics_int.error_aggregation", "message": "Failed to run aggregation", "translation": "Failed to run aggregation"},
         {"id": "analytics_int.exclude_ips", "message": "Excluded IPs", "translation": "Excluded IPs"},
-        {"id": "analytics_int.exclude_ips_hint", "message": "One IP or CIDR per line (e.g., 192.168.1.100, 10.0.0.0/8). Traffic from these addresses will not be tracked.", "translation": "One IP or CIDR per line (e.g., 192.168.1.100, 10.0.0.0/8). Traffic from these addresses will not be tracked."},
-        {"id": "analytics_int.purge_self_referrals", "message": "Purge Self-Referral Data", "translation": "Purge Self-Referral Data"},
-        {"id": "analytics_int.purge_self_referrals_hint", "message": "Remove all referrer data matching your site domain: ", "translation": "Remove all referrer data matching your site domain: "},
-        {"id": "analytics_int.purge_self_referrals_confirm", "message": "This will permanently remove all self-referral data matching your site domain. Continue?", "translation": "This will permanently remove all self-referral data matching your site domain. Continue?"},
-        {"id": "analytics_int.purge_self_referrals_success", "message": "Purged %d self-referral record(s)", "translation": "Purged %d self-referral record(s)"},
-        {"id": "analytics_int.purge_self_referrals_no_domain", "message": "Site URL is not configured. Set it in Site Configuration first.", "translation": "Site URL is not configured. Set it in Site Configuration first."},
-        {"id": "analytics_int.error_purge", "message": "Failed to purge self-referral data", "translation": "Failed to purge self-referral data"}
+        {"id": "analytics_int.exclude_ips_hint", "message": "One IP or CIDR per line (e.g., 192.168.1.100, 10.0.0.0/8). Traffic from these addresses will not be tracked.", "translation": "One IP or CIDR per line (e.g., 192.168.1.100, 10.0.0.0/8). Traffic from these addresses will not be tracked."}
     ]
 }

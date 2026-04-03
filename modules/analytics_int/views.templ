@@ -18,7 +18,6 @@ type AnalyticsIntViewData struct {
 	TimeSeries   []TimeSeriesPoint
 	DateRange    string
 	Settings     Settings
-	SiteDomain   string // Site domain from config (for self-referral info)
 }
 
 // Helper functions
@@ -421,28 +420,6 @@ templ AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) {
 							<button type="submit" class="btn btn-outline">{ pc.T("analytics_int.run_aggregation") }</button>
 						</div>
 					</form>
-					<hr class="mt-4 mb-4"/>
-					<div class="form-group">
-						if data.SiteDomain != "" {
-							<p class="form-hint mb-2">
-								{ pc.T("analytics_int.purge_self_referrals_hint") }
-								<strong>{ data.SiteDomain }</strong>
-							</p>
-						} else {
-							<p class="form-hint mb-2">{ pc.T("analytics_int.purge_self_referrals_no_domain") }</p>
-						}
-						<form method="POST" action="/admin/internal-analytics/purge-self-referrals">
-							<button
-								type="submit"
-								class="btn btn-outline btn-danger"
-								disabled?={ data.SiteDomain == "" }
-								onclick="return confirm(this.dataset.confirm)"
-								data-confirm={ pc.T("analytics_int.purge_self_referrals_confirm") }
-							>
-								{ pc.T("analytics_int.purge_self_referrals") }
-							</button>
-						</form>
-					</div>
 				</div>
 			</div>
 		</div>

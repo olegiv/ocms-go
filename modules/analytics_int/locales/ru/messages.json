@@ -37,12 +37,6 @@
         {"id": "analytics_int.success_aggregation", "message": "Aggregation complete. Processed %d date(s).", "translation": "Агрегация завершена. Обработано дат: %d."},
         {"id": "analytics_int.error_aggregation", "message": "Failed to run aggregation", "translation": "Не удалось выполнить агрегацию"},
         {"id": "analytics_int.exclude_ips", "message": "Excluded IPs", "translation": "Исключенные IP-адреса"},
-        {"id": "analytics_int.exclude_ips_hint", "message": "One IP or CIDR per line (e.g., 192.168.1.100, 10.0.0.0/8). Traffic from these addresses will not be tracked.", "translation": "По одному IP или CIDR в строке (например, 192.168.1.100, 10.0.0.0/8). Трафик с этих адресов не будет отслеживаться."},
-        {"id": "analytics_int.purge_self_referrals", "message": "Purge Self-Referral Data", "translation": "Удалить данные о самопереходах"},
-        {"id": "analytics_int.purge_self_referrals_hint", "message": "Remove all referrer data matching your site domain: ", "translation": "Удалить все данные об источниках переходов, совпадающие с доменом сайта: "},
-        {"id": "analytics_int.purge_self_referrals_confirm", "message": "This will permanently remove all self-referral data matching your site domain. Continue?", "translation": "Все данные о самопереходах, совпадающие с доменом вашего сайта, будут безвозвратно удалены. Продолжить?"},
-        {"id": "analytics_int.purge_self_referrals_success", "message": "Purged %d self-referral record(s)", "translation": "Удалено записей о самопереходах: %d"},
-        {"id": "analytics_int.purge_self_referrals_no_domain", "message": "Site URL is not configured. Set it in Site Configuration first.", "translation": "URL сайта не настроен. Сначала укажите его в настройках сайта."},
-        {"id": "analytics_int.error_purge", "message": "Failed to purge self-referral data", "translation": "Не удалось удалить данные о самопереходах"}
+        {"id": "analytics_int.exclude_ips_hint", "message": "One IP or CIDR per line (e.g., 192.168.1.100, 10.0.0.0/8). Traffic from these addresses will not be tracked.", "translation": "По одному IP или CIDR в строке (например, 192.168.1.100, 10.0.0.0/8). Трафик с этих адресов не будет отслеживаться."}
     ]
 }

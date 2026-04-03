@@ -50,7 +50,6 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	dateRange, startDate, endDate := parseDateRangeParam(r)
 
 	// Fetch all dashboard data
-	m.refreshSiteDomain()
 	viewData := AnalyticsIntViewData{
 		Overview:     m.getOverviewStats(r.Context(), startDate, endDate),
 		TopPages:     m.getTopPages(r.Context(), startDate, endDate, 10),
@@ -61,7 +60,6 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		TimeSeries:   m.getTimeSeries(r.Context(), startDate, endDate),
 		DateRange:    dateRange,
 		Settings:     *m.settings,
-		SiteDomain:   m.getSiteDomain(),
 	}
 
 	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "analytics_int.title"), []render.Breadcrumb{
@@ -188,75 +186,5 @@ func (m *Module) handleRunAggregation(w http.ResponseWriter, r *http.Request) {
 		m.ctx.Render.SetFlash(r, msg, "success")
 	}
 
-	http.Redirect(w, r, "/admin/internal-analytics", http.StatusSeeOther)
-}
-
-// handlePurgeSelfReferrals removes self-referral data matching the site domain.
-func (m *Module) handlePurgeSelfReferrals(w http.ResponseWriter, r *http.Request) {
-	// Block in demo mode
-	if middleware.IsDemoMode() {
-		m.ctx.Render.SetFlash(r, middleware.DemoModeMessageDetailed(middleware.RestrictionModuleSettings), "error")
-		http.Redirect(w, r, "/admin/internal-analytics", http.StatusSeeOther)
-		return
-	}
-
-	user := m.requireAPIAuth(w, r)
-	if user == nil {
-		return
-	}
-
-	lang := m.ctx.Render.GetAdminLang(r)
-
-	// Refresh and get the site domain
-	m.refreshSiteDomain()
-	siteDomain := m.getSiteDomain()
-	if siteDomain == "" {
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "analytics_int.purge_self_referrals_no_domain"), "error")
-		http.Redirect(w, r, "/admin/internal-analytics", http.StatusSeeOther)
-		return
-	}
-
-	// Normalize domain variants: bare domain and www. prefixed, both lowercase
-	domain := strings.TrimPrefix(strings.ToLower(siteDomain), "www.")
-	wwwDomain := "www." + domain
-
-	// Clean raw views: clear referrer_domain where it matches
-	result1, err := m.ctx.DB.Exec(`
-		UPDATE page_analytics_views
-		SET referrer_domain = ''
-		WHERE LOWER(referrer_domain) IN (?, ?)
-	`, domain, wwwDomain)
-	if err != nil {
-		m.ctx.Logger.Error("failed to purge self-referral views", "error", err)
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "analytics_int.error_purge"), "error")
-		http.Redirect(w, r, "/admin/internal-analytics", http.StatusSeeOther)
-		return
-	}
-
-	// Clean aggregated referrer stats: delete matching rows
-	result2, err := m.ctx.DB.Exec(`
-		DELETE FROM page_analytics_referrers
-		WHERE LOWER(referrer_domain) IN (?, ?)
-	`, domain, wwwDomain)
-	if err != nil {
-		m.ctx.Logger.Error("failed to purge self-referral aggregates", "error", err)
-		m.ctx.Render.SetFlash(r, i18n.T(lang, "analytics_int.error_purge"), "error")
-		http.Redirect(w, r, "/admin/internal-analytics", http.StatusSeeOther)
-		return
-	}
-
-	viewsAffected, _ := result1.RowsAffected()
-	referrersDeleted, _ := result2.RowsAffected()
-	total := viewsAffected + referrersDeleted
-
-	m.ctx.Logger.Info("self-referral data purged",
-		"domain", siteDomain,
-		"views_cleared", viewsAffected,
-		"referrers_deleted", referrersDeleted,
-		"user", user.Email,
-	)
-
-	msg := fmt.Sprintf(i18n.T(lang, "analytics_int.purge_self_referrals_success"), total)
-	m.ctx.Render.SetFlash(r, msg, "success")
 	http.Redirect(w, r, "/admin/internal-analytics", http.StatusSeeOther)
 }

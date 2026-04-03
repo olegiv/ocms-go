@@ -45,8 +45,8 @@ func TestModuleMigrations(t *testing.T) {
 	m := New()
 	migrations := m.Migrations()
 
-	if len(migrations) != 8 {
-		t.Errorf("expected 8 migrations, got %d", len(migrations))
+	if len(migrations) != 9 {
+		t.Errorf("expected 9 migrations, got %d", len(migrations))
 	}
 
 	// Verify migration versions are sequential
