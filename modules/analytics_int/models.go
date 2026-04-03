@@ -76,6 +76,7 @@ type Settings struct {
 	Enabled           bool
 	RetentionDays     int
 	ExcludePaths      []string
+	ExcludeIPs        []string // IPs or CIDRs to exclude from tracking
 	CurrentSalt       string
 	SaltCreatedAt     time.Time
 	SaltRotationHours int

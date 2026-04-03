@@ -8,6 +8,8 @@ import (
 	"embed"
 	"html/template"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 
 	"github.com/go-chi/chi/v5"
@@ -23,11 +25,12 @@ var localesFS embed.FS
 // Module implements the internal analytics module.
 type Module struct {
 	module.BaseModule
-	ctx      *module.Context
-	settings *Settings
-	geoIP    *geoip.Lookup
-	cron     *cron.Cron
-	saltMu   sync.RWMutex
+	ctx        *module.Context
+	settings   *Settings
+	geoIP      *geoip.Lookup
+	cron       *cron.Cron
+	saltMu     sync.RWMutex
+	siteDomain string // cached site domain extracted from site_url config
 }
 
 // New creates a new internal analytics module.
@@ -162,6 +165,7 @@ func (m *Module) RegisterAdminRoutes(r chi.Router) {
 	r.Get("/internal-analytics/api/realtime", m.handleRealtime)
 	r.Post("/internal-analytics/settings", m.handleSaveSettings)
 	r.Post("/internal-analytics/aggregate", m.handleRunAggregation)
+	r.Post("/internal-analytics/purge-self-referrals", m.handlePurgeSelfReferrals)
 }
 
 // TemplateFuncs returns template functions provided by the module.
@@ -356,6 +360,19 @@ func (m *Module) Migrations() []module.Migration {
 				return err
 			},
 		},
+		{
+			Version:     8,
+			Description: "Add exclude_ips column to page_analytics_settings",
+			Up: func(db *sql.DB) error {
+				_, err := db.Exec(`ALTER TABLE page_analytics_settings ADD COLUMN exclude_ips TEXT NOT NULL DEFAULT '[]'`)
+				return err
+			},
+			Down: func(db *sql.DB) error {
+				// SQLite doesn't support DROP COLUMN before 3.35.0; recreate is complex.
+				// Since this is just a column addition, the down migration is a no-op.
+				return nil
+			},
+		},
 	}
 }
 
@@ -371,4 +388,51 @@ func (m *Module) IsEnabled() bool {
 		return false
 	}
 	return m.settings.Enabled
+}
+
+// getSiteDomain returns the site domain extracted from the site_url config.
+// The result is cached; use refreshSiteDomain to force a reload.
+func (m *Module) getSiteDomain() string {
+	if m.siteDomain != "" {
+		return m.siteDomain
+	}
+	m.refreshSiteDomain()
+	return m.siteDomain
+}
+
+// refreshSiteDomain reads site_url from the config table and extracts the host.
+func (m *Module) refreshSiteDomain() {
+	if m.ctx == nil || m.ctx.DB == nil {
+		return
+	}
+
+	var siteURL string
+	err := m.ctx.DB.QueryRow(`SELECT value FROM config WHERE key = 'site_url'`).Scan(&siteURL)
+	if err != nil || siteURL == "" {
+		return
+	}
+
+	m.siteDomain = extractDomainFromURL(siteURL)
+}
+
+// extractDomainFromURL extracts the hostname from a URL string,
+// stripping the scheme, port, and path.
+func extractDomainFromURL(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+
+	host := parsed.Host
+	if host == "" {
+		// Might be a plain domain without scheme
+		host = rawURL
+	}
+
+	// Remove port if present
+	if idx := strings.LastIndex(host, ":"); idx > 0 {
+		host = host[:idx]
+	}
+
+	return strings.TrimSpace(host)
 }

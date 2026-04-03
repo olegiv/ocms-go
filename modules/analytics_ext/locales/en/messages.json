@@ -26,6 +26,7 @@
         {"id": "analytics_ext.error_ga4_id_required", "message": "GA4 Measurement ID is required when GA4 is enabled", "translation": "GA4 Measurement ID is required when GA4 is enabled"},
         {"id": "analytics_ext.error_gtm_id_required", "message": "GTM Container ID is required when GTM is enabled", "translation": "GTM Container ID is required when GTM is enabled"},
         {"id": "analytics_ext.error_matomo_url_required", "message": "Matomo URL is required when Matomo is enabled", "translation": "Matomo URL is required when Matomo is enabled"},
-        {"id": "analytics_ext.error_matomo_site_id_required", "message": "Matomo Site ID is required when Matomo is enabled", "translation": "Matomo Site ID is required when Matomo is enabled"}
+        {"id": "analytics_ext.error_matomo_site_id_required", "message": "Matomo Site ID is required when Matomo is enabled", "translation": "Matomo Site ID is required when Matomo is enabled"},
+        {"id": "analytics_ext.ip_filter_hint", "message": "To exclude IPs from external analytics, configure IP filters in your analytics platform (GA4: Admin > Data Streams > Configure Tag Settings; Matomo: Administration > Websites > Excluded IPs).", "translation": "To exclude IPs from external analytics, configure IP filters in your analytics platform (GA4: Admin > Data Streams > Configure Tag Settings; Matomo: Administration > Websites > Excluded IPs)."}
     ]
 }

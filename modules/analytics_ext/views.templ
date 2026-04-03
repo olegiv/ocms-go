@@ -153,6 +153,19 @@ templ AnalyticsExtPage(pc *adminviews.PageContext, data AnalyticsExtViewData) {
 					</div>
 				</div>
 			</div>
+			<!-- IP Exclusion Hint -->
+			<div class="card analytics-card">
+				<div class="card-body">
+					<div class="info-box info-box-info">
+						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<circle cx="12" cy="12" r="10"></circle>
+							<path d="M12 16v-4"></path>
+							<path d="M12 8h.01"></path>
+						</svg>
+						<span>{ pc.T("analytics_ext.ip_filter_hint") }</span>
+					</div>
+				</div>
+			</div>
 			<div class="form-actions">
 				<button type="submit" class="btn btn-primary">
 					<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

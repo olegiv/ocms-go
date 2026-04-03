@@ -58,6 +58,62 @@ func TestParseAcceptLanguage(t *testing.T) {
 	})
 }
 
+func TestMatchesSiteDomain(t *testing.T) {
+	tests := []struct {
+		name           string
+		referrerDomain string
+		siteDomain     string
+		expected       bool
+	}{
+		{"exact match", "it-digest.info", "it-digest.info", true},
+		{"www prefix on referrer", "www.it-digest.info", "it-digest.info", true},
+		{"www prefix on site", "it-digest.info", "www.it-digest.info", true},
+		{"both www", "www.it-digest.info", "www.it-digest.info", true},
+		{"uppercase referrer", "IT-DIGEST.INFO", "it-digest.info", true},
+		{"uppercase site", "it-digest.info", "IT-DIGEST.INFO", true},
+		{"mixed case www", "WWW.It-Digest.Info", "it-digest.info", true},
+		{"different domain", "other-site.com", "it-digest.info", false},
+		{"empty referrer", "", "it-digest.info", false},
+		{"empty site", "it-digest.info", "", false},
+		{"both empty", "", "", false},
+		{"subdomain does not match", "blog.it-digest.info", "it-digest.info", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := matchesSiteDomain(tt.referrerDomain, tt.siteDomain)
+			if result != tt.expected {
+				t.Errorf("matchesSiteDomain(%q, %q) = %v, want %v",
+					tt.referrerDomain, tt.siteDomain, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestExtractDomainFromURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"full https URL", "https://www.it-digest.info", "www.it-digest.info"},
+		{"https with path", "https://it-digest.info/about", "it-digest.info"},
+		{"http with port", "http://example.com:8080/test", "example.com"},
+		{"just domain", "example.com", "example.com"},
+		{"empty string", "", ""},
+		{"https no path", "https://example.com", "example.com"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractDomainFromURL(tt.input)
+			if result != tt.expected {
+				t.Errorf("extractDomainFromURL(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestGetRealIP(t *testing.T) {
 	tests := []struct {
 		name       string

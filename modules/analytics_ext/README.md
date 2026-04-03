@@ -196,6 +196,16 @@ The module can be enabled/disabled from **Admin > Modules**:
 - **Active**: Routes accessible, template functions inject scripts
 - **Inactive**: Routes return 404/redirect, no scripts injected
 
+## IP Exclusion
+
+External analytics scripts (GA4, GTM, Matomo) are always injected on public pages to ensure accurate pen testing and security audits. To exclude specific IPs from being counted, configure IP filters directly in your analytics platform:
+
+- **Google Analytics 4**: Admin > Data Streams > Configure Tag Settings > Define Internal Traffic
+- **Google Tag Manager**: Use built-in variables to filter by IP in tag triggers
+- **Matomo**: Administration > Websites > Excluded IPs
+
+For server-side IP exclusion (internal analytics only), use the Internal Analytics module's "Excluded IPs" setting.
+
 ## Security
 
 - All IDs are HTML-escaped before injection
