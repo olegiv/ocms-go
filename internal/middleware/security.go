@@ -75,6 +75,7 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 			"object-src":  "'none'",
 			"base-uri":    "'self'",
 			"form-action": "'self'",
+			"frame-ancestors":  "'self'",
 		})
 	} else {
 		// Strict CSP for production
@@ -89,6 +90,7 @@ func DefaultSecurityHeadersConfig(isDev bool) SecurityHeadersConfig {
 			"object-src":  "'none'",
 			"base-uri":    "'self'",
 			"form-action": "'self'",
+			"frame-ancestors":  "'self'",
 		})
 		cfg.HSTSIncludeSubDomains = true
 	}
