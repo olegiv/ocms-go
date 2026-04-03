@@ -46,6 +46,9 @@
     {{/* Theme Styles */}}
     <link rel="stylesheet" href="/themes/default/static/css/theme.css">
 
+    {{/* Prism.js syntax highlighting */}}
+    <link rel="stylesheet" href="/static/dist/css/prism.css">
+
     {{/* Theme Settings CSS Variables */}}
     {{if index .ThemeSettings "primary_color"}}
     <style>
@@ -107,6 +110,8 @@
 
     {{/* Theme Scripts */}}
     <script nonce="{{.CSPNonce}}" src="/themes/default/static/js/theme.js"></script>
+    {{/* Prism.js syntax highlighting */}}
+    <script nonce="{{.CSPNonce}}" src="/static/dist/js/prism-bundle.min.js"></script>
 
     {{/* Additional scripts */}}
     {{block "scripts" .}}{{end}}
