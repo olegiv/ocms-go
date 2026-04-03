@@ -3453,6 +3453,16 @@
             "translation": "Адрес электронной почты администратора"
         },
         {
+            "id": "config.excluded_ips",
+            "message": "Excluded IPs",
+            "translation": "Исключенные IP-адреса"
+        },
+        {
+            "id": "config.excluded_ips_hint",
+            "message": "IPs or CIDRs to exclude from analytics and event logging (one per line). Auth and security events are always logged.",
+            "translation": "IP-адреса или CIDR для исключения из аналитики и журнала событий (по одному в строке). События авторизации и безопасности записываются всегда."
+        },
+        {
             "id": "config.site_logo",
             "message": "Site Logo",
             "translation": "Логотип сайта"
@@ -3506,6 +3516,16 @@
             "id": "error.invalid_number",
             "message": "Must be a valid number",
             "translation": "Должно быть числом"
+        },
+        {
+            "id": "error.text_too_long",
+            "message": "Text value is too long (max 64 KB)",
+            "translation": "Текст слишком длинный (макс. 64 КБ)"
+        },
+        {
+            "id": "error.invalid_ip_entry",
+            "message": "Line %d: invalid IP or CIDR \"%s\"",
+            "translation": "Строка %d: некорректный IP или CIDR \"%s\""
         },
         {
             "id": "error.saving_value",

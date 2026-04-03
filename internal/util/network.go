@@ -135,6 +135,43 @@ func ValidateWebhookURL(rawURL string) error {
 	return nil
 }
 
+// MatchesIPList checks if clientIP matches any entry in a list of IPs or CIDRs.
+// Entries can be exact IPs (e.g., "192.168.1.100") or CIDR ranges (e.g., "10.0.0.0/8").
+// Invalid entries are silently skipped.
+func MatchesIPList(clientIP string, list []string) bool {
+	if len(list) == 0 {
+		return false
+	}
+
+	ip := net.ParseIP(clientIP)
+	if ip == nil {
+		return false
+	}
+
+	for _, entry := range list {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+
+		// Try as CIDR
+		if strings.Contains(entry, "/") {
+			_, network, err := net.ParseCIDR(entry)
+			if err == nil && network.Contains(ip) {
+				return true
+			}
+			continue
+		}
+
+		// Try as exact IP
+		if entryIP := net.ParseIP(entry); entryIP != nil && entryIP.Equal(ip) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // SSRFSafeDialContext returns a DialContext function that prevents connections
 // to private/reserved IP addresses. Use this in http.Transport to protect
 // against DNS rebinding and redirect-based SSRF at connection time.

@@ -7,7 +7,10 @@ import (
 	"database/sql"
 	"embed"
 	"html/template"
+	"log/slog"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 
 	"github.com/go-chi/chi/v5"
@@ -356,6 +359,60 @@ func (m *Module) Migrations() []module.Migration {
 				return err
 			},
 		},
+		{
+			Version:     8,
+			Description: "Add exclude_ips column to page_analytics_settings",
+			Up: func(db *sql.DB) error {
+				_, err := db.Exec(`ALTER TABLE page_analytics_settings ADD COLUMN exclude_ips TEXT NOT NULL DEFAULT '[]'`)
+				return err
+			},
+			Down: func(db *sql.DB) error {
+				// SQLite doesn't support DROP COLUMN before 3.35.0; recreate is complex.
+				// Since this is just a column addition, the down migration is a no-op.
+				return nil
+			},
+		},
+		{
+			Version:     9,
+			Description: "Purge self-referral data matching site domain",
+			Up: func(db *sql.DB) error {
+				var siteURL string
+				err := db.QueryRow(`SELECT value FROM config WHERE key = 'site_url'`).Scan(&siteURL)
+				if err != nil || siteURL == "" {
+					return nil // site_url not configured, nothing to purge
+				}
+
+				parsed, _ := url.Parse(siteURL)
+				host := ""
+				if parsed != nil {
+					host = parsed.Host
+				}
+				if host == "" {
+					host = siteURL
+				}
+				if idx := strings.LastIndex(host, ":"); idx > 0 {
+					host = host[:idx]
+				}
+				host = strings.TrimSpace(host)
+				if host == "" {
+					return nil
+				}
+
+				domain := strings.TrimPrefix(strings.ToLower(host), "www.")
+				wwwDomain := "www." + domain
+
+				if _, err := db.Exec(`UPDATE page_analytics_views SET referrer_domain = '' WHERE LOWER(referrer_domain) IN (?, ?)`, domain, wwwDomain); err != nil {
+					slog.Error("migration 9: failed to purge self-referral views", "error", err, "domain", domain)
+				}
+				if _, err := db.Exec(`DELETE FROM page_analytics_referrers WHERE LOWER(referrer_domain) IN (?, ?)`, domain, wwwDomain); err != nil {
+					slog.Error("migration 9: failed to purge self-referral referrers", "error", err, "domain", domain)
+				}
+				return nil
+			},
+			Down: func(db *sql.DB) error {
+				return nil // data purge is not reversible
+			},
+		},
 	}
 }
 
@@ -371,4 +428,65 @@ func (m *Module) IsEnabled() bool {
 		return false
 	}
 	return m.settings.Enabled
+}
+
+// getSiteDomain reads the site domain from the config table on each call.
+// This ensures config changes take effect immediately without restart.
+func (m *Module) getSiteDomain() string {
+	if m.ctx == nil || m.ctx.DB == nil {
+		return ""
+	}
+
+	var siteURL string
+	err := m.ctx.DB.QueryRow(`SELECT value FROM config WHERE key = 'site_url'`).Scan(&siteURL)
+	if err != nil || siteURL == "" {
+		return ""
+	}
+
+	return extractDomainFromURL(siteURL)
+}
+
+// extractDomainFromURL extracts the hostname from a URL string,
+// stripping the scheme, port, and path.
+func extractDomainFromURL(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+
+	host := parsed.Host
+	if host == "" {
+		// Might be a plain domain without scheme
+		host = rawURL
+	}
+
+	// Remove port if present
+	if idx := strings.LastIndex(host, ":"); idx > 0 {
+		host = host[:idx]
+	}
+
+	return strings.TrimSpace(host)
+}
+
+// getExcludedIPs reads the excluded IPs list from the global config table.
+// This ensures config changes take effect immediately without restart.
+func (m *Module) getExcludedIPs() []string {
+	if m.ctx == nil || m.ctx.DB == nil {
+		return nil
+	}
+
+	var value string
+	err := m.ctx.DB.QueryRow(`SELECT value FROM config WHERE key = 'excluded_ips'`).Scan(&value)
+	if err != nil || value == "" {
+		return nil
+	}
+
+	var ips []string
+	for _, line := range strings.Split(value, "\n") {
+		ip := strings.TrimSpace(line)
+		if ip != "" {
+			ips = append(ips, ip)
+		}
+	}
+	return ips
 }

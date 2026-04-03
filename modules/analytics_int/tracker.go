@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // responseWriter wraps http.ResponseWriter to capture the status code.
@@ -146,6 +147,12 @@ func (m *Module) shouldTrack(r *http.Request) bool {
 func (m *Module) trackPageView(r *http.Request) {
 	// Get client IP using shared trusted-proxy policy.
 	ip := getRealIP(r)
+
+	// Skip excluded IPs (from global config)
+	if excludedIPs := m.getExcludedIPs(); len(excludedIPs) > 0 && util.MatchesIPList(ip, excludedIPs) {
+		return
+	}
+
 	userAgent := r.UserAgent()
 
 	// Skip bots (basic detection)
@@ -163,6 +170,11 @@ func (m *Module) trackPageView(r *http.Request) {
 
 	// Extract referrer domain
 	referrerDomain := extractReferrerDomain(r.Referer())
+
+	// Filter self-referrals using site domain from config
+	if siteDomain := m.getSiteDomain(); siteDomain != "" && matchesSiteDomain(referrerDomain, siteDomain) {
+		referrerDomain = ""
+	}
 
 	// Get primary language from Accept-Language
 	language := parseAcceptLanguage(r.Header.Get("Accept-Language"))
@@ -205,6 +217,21 @@ func (m *Module) insertPageView(view *PageView) error {
 // getRealIP extracts the client IP using shared trusted-proxy-aware logic.
 func getRealIP(r *http.Request) string {
 	return middleware.GetClientIP(r)
+}
+
+// matchesSiteDomain checks if a referrer domain matches the site domain.
+// Handles www. prefix and case-insensitive comparison.
+// e.g., "www.it-digest.info" matches "it-digest.info" and vice versa.
+func matchesSiteDomain(referrerDomain, siteDomain string) bool {
+	if referrerDomain == "" || siteDomain == "" {
+		return false
+	}
+
+	// Normalize: lowercase and strip www. prefix
+	ref := strings.TrimPrefix(strings.ToLower(referrerDomain), "www.")
+	site := strings.TrimPrefix(strings.ToLower(siteDomain), "www.")
+
+	return ref == site
 }
 
 // extractReferrerDomain extracts the domain from a referrer URL.

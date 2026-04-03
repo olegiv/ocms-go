@@ -267,6 +267,51 @@ func TestValidateWebhookURL_RequireHTTPSOutbound(t *testing.T) {
 	}
 }
 
+func TestMatchesIPList(t *testing.T) {
+	tests := []struct {
+		name     string
+		clientIP string
+		list     []string
+		want     bool
+	}{
+		// Exact IP matches
+		{"exact IPv4 match", "192.168.1.100", []string{"192.168.1.100"}, true},
+		{"exact IPv4 no match", "192.168.1.101", []string{"192.168.1.100"}, false},
+		{"exact IPv6 match", "::1", []string{"::1"}, true},
+		{"exact IPv6 no match", "::2", []string{"::1"}, false},
+
+		// CIDR matches
+		{"CIDR match /24", "192.168.1.50", []string{"192.168.1.0/24"}, true},
+		{"CIDR no match /24", "192.168.2.50", []string{"192.168.1.0/24"}, false},
+		{"CIDR match /8", "10.255.0.1", []string{"10.0.0.0/8"}, true},
+		{"CIDR match /16", "172.16.5.10", []string{"172.16.0.0/16"}, true},
+		{"IPv6 CIDR match", "fd00::5", []string{"fd00::/8"}, true},
+
+		// Multiple entries
+		{"match second entry", "10.0.0.5", []string{"192.168.1.100", "10.0.0.0/8"}, true},
+		{"match first entry", "192.168.1.100", []string{"192.168.1.100", "10.0.0.0/8"}, true},
+		{"no match in multiple", "8.8.8.8", []string{"192.168.1.100", "10.0.0.0/8"}, false},
+
+		// Edge cases
+		{"empty list", "192.168.1.1", []string{}, false},
+		{"nil list", "192.168.1.1", nil, false},
+		{"invalid client IP", "not-an-ip", []string{"192.168.1.0/24"}, false},
+		{"invalid entry skipped", "8.8.8.8", []string{"invalid", "8.8.8.8"}, true},
+		{"invalid CIDR skipped", "8.8.8.8", []string{"999.999.999.0/24", "8.8.8.8"}, true},
+		{"whitespace trimmed", "10.0.0.1", []string{"  10.0.0.1  "}, true},
+		{"empty entry skipped", "10.0.0.1", []string{"", "10.0.0.1"}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := MatchesIPList(tt.clientIP, tt.list)
+			if got != tt.want {
+				t.Errorf("MatchesIPList(%q, %v) = %v, want %v", tt.clientIP, tt.list, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSSRFSafeDialContext(t *testing.T) {
 	dialer := &net.Dialer{}
 	dialFn := SSRFSafeDialContext(dialer)

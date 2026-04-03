@@ -3968,6 +3968,16 @@
             "translation": "Administrator email address"
         },
         {
+            "id": "config.excluded_ips",
+            "message": "Excluded IPs",
+            "translation": "Excluded IPs"
+        },
+        {
+            "id": "config.excluded_ips_hint",
+            "message": "IPs or CIDRs to exclude from analytics and event logging (one per line). Auth and security events are always logged.",
+            "translation": "IPs or CIDRs to exclude from analytics and event logging (one per line). Auth and security events are always logged."
+        },
+        {
             "id": "config.site_logo",
             "message": "Site Logo",
             "translation": "Site Logo"
@@ -4021,6 +4031,16 @@
             "id": "error.invalid_number",
             "message": "Must be a valid number",
             "translation": "Must be a valid number"
+        },
+        {
+            "id": "error.text_too_long",
+            "message": "Text value is too long (max 64 KB)",
+            "translation": "Text value is too long (max 64 KB)"
+        },
+        {
+            "id": "error.invalid_ip_entry",
+            "message": "Line %d: invalid IP or CIDR \"%s\"",
+            "translation": "Line %d: invalid IP or CIDR \"%s\""
         },
         {
             "id": "error.saving_value",
