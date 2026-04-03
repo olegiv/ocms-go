@@ -148,8 +148,8 @@ func (m *Module) trackPageView(r *http.Request) {
 	// Get client IP using shared trusted-proxy policy.
 	ip := getRealIP(r)
 
-	// Skip excluded IPs
-	if len(m.settings.ExcludeIPs) > 0 && util.MatchesIPList(ip, m.settings.ExcludeIPs) {
+	// Skip excluded IPs (from global config)
+	if excludedIPs := m.getExcludedIPs(); len(excludedIPs) > 0 && util.MatchesIPList(ip, excludedIPs) {
 		return
 	}
 

@@ -10,15 +10,18 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/store"
+	"github.com/olegiv/ocms-go/internal/util"
 )
 
 // EventService provides event logging functionality.
 type EventService struct {
-	queries *store.Queries
+	queries   *store.Queries
+	getConfig func(ctx context.Context, key string) (string, error)
 }
 
 // NewEventService creates a new EventService.
@@ -28,8 +31,41 @@ func NewEventService(db *sql.DB) *EventService {
 	}
 }
 
+// SetConfigGetter sets the function used to retrieve config values.
+func (s *EventService) SetConfigGetter(fn func(ctx context.Context, key string) (string, error)) {
+	s.getConfig = fn
+}
+
+// getExcludedIPs retrieves the excluded IPs list from global config.
+func (s *EventService) getExcludedIPs(ctx context.Context) []string {
+	if s.getConfig == nil {
+		return nil
+	}
+	value, err := s.getConfig(ctx, model.ConfigKeyExcludedIPs)
+	if err != nil || value == "" {
+		return nil
+	}
+	var ips []string
+	for _, line := range strings.Split(value, "\n") {
+		ip := strings.TrimSpace(line)
+		if ip != "" {
+			ips = append(ips, ip)
+		}
+	}
+	return ips
+}
+
 // LogEvent creates a new event log entry.
 func (s *EventService) LogEvent(ctx context.Context, level, category, message string, userID *int64, ipAddress, requestURL string, metadata map[string]any) error {
+	// Skip events from excluded IPs, but always log auth and security events
+	if category != model.EventCategoryAuth && category != model.EventCategorySecurity {
+		if excludedIPs := s.getExcludedIPs(ctx); len(excludedIPs) > 0 {
+			if util.MatchesIPList(ipAddress, excludedIPs) {
+				return nil
+			}
+		}
+	}
+
 	var nullUserID sql.NullInt64
 	if userID != nil {
 		nullUserID = sql.NullInt64{Int64: *userID, Valid: true}

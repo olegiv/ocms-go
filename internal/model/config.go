@@ -13,6 +13,7 @@ const (
 	ConfigTypeString = "string"
 	ConfigTypeInt    = "int"
 	ConfigTypeBool   = "bool"
+	ConfigTypeText   = "text" // multi-line text, renders as textarea
 )
 
 // Config keys
@@ -25,6 +26,7 @@ const (
 	ConfigKeyPostsPerPage    = "posts_per_page"
 	ConfigKeyPoweredBy       = "powered_by"
 	ConfigKeyCopyright       = "copyright"
+	ConfigKeyExcludedIPs     = "excluded_ips"
 )
 
 // TranslatableConfigKeys is the list of config keys that support per-language translations.
@@ -55,6 +57,7 @@ var StandardConfigFields = []ConfigFieldDefinition{
 	{Key: ConfigKeyPoweredBy, DefaultValue: "Powered by oCMS", Type: ConfigTypeString, Description: "Footer powered by text"},
 	{Key: ConfigKeyPostsPerPage, DefaultValue: "10", Type: ConfigTypeInt, Description: "Number of posts to display per page"},
 	{Key: ConfigKeyAdminEmail, DefaultValue: "admin@example.com", Type: ConfigTypeString, Description: "Administrator email address"},
+	{Key: ConfigKeyExcludedIPs, DefaultValue: "", Type: ConfigTypeText, Description: "IPs or CIDRs to exclude from analytics and event logging (one per line)"},
 }
 
 // IsTranslatableConfigKey checks if a config key supports translations.

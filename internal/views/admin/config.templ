@@ -10,6 +10,7 @@ import "github.com/olegiv/ocms-go/internal/views/components/card"
 import "github.com/olegiv/ocms-go/internal/views/components/checkbox"
 import "github.com/olegiv/ocms-go/internal/views/components/input"
 import "github.com/olegiv/ocms-go/internal/views/components/label"
+import "github.com/olegiv/ocms-go/internal/views/components/textarea"
 
 // ConfigItemView represents a non-translatable config item.
 type ConfigItemView struct {
@@ -159,6 +160,21 @@ templ ConfigPage(pc *PageContext, data ConfigViewData) {
 										Type:     input.TypeNumber,
 										Value:    item.Value,
 										HasError: data.Errors[item.Key] != "",
+									})
+									if item.Description != "" {
+										<p class="mt-1 text-xs text-muted-foreground">{ item.Description }</p>
+									}
+								} else if item.Type == "text" {
+									@label.Label(label.Props{For: item.Key, Class: "block mb-1"}) {
+										{ item.Label }
+									}
+									@textarea.Textarea(textarea.Props{
+										ID:          item.Key,
+										Name:        item.Key,
+										Value:       item.Value,
+										Rows:        4,
+										Placeholder: "192.168.1.100\n10.0.0.0/8",
+										HasError:    data.Errors[item.Key] != "",
 									})
 									if item.Description != "" {
 										<p class="mt-1 text-xs text-muted-foreground">{ item.Description }</p>

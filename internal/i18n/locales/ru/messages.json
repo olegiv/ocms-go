@@ -3453,6 +3453,16 @@
             "translation": "Адрес электронной почты администратора"
         },
         {
+            "id": "config.excluded_ips",
+            "message": "Excluded IPs",
+            "translation": "Исключенные IP-адреса"
+        },
+        {
+            "id": "config.excluded_ips_hint",
+            "message": "IPs or CIDRs to exclude from analytics and event logging (one per line). Auth and security events are always logged.",
+            "translation": "IP-адреса или CIDR для исключения из аналитики и журнала событий (по одному в строке). События авторизации и безопасности записываются всегда."
+        },
+        {
             "id": "config.site_logo",
             "message": "Site Logo",
             "translation": "Логотип сайта"

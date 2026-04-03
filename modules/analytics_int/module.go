@@ -29,8 +29,10 @@ type Module struct {
 	settings   *Settings
 	geoIP      *geoip.Lookup
 	cron       *cron.Cron
-	saltMu     sync.RWMutex
-	siteDomain string // cached site domain extracted from site_url config
+	saltMu           sync.RWMutex
+	siteDomain       string // cached site domain extracted from site_url config
+	excludedIPs      []string
+	excludedIPsReady bool
 }
 
 // New creates a new internal analytics module.
@@ -471,4 +473,38 @@ func extractDomainFromURL(rawURL string) string {
 	}
 
 	return strings.TrimSpace(host)
+}
+
+// getExcludedIPs returns the excluded IPs list from global config.
+func (m *Module) getExcludedIPs() []string {
+	if m.excludedIPsReady {
+		return m.excludedIPs
+	}
+	m.refreshExcludedIPs()
+	return m.excludedIPs
+}
+
+// refreshExcludedIPs reads excluded_ips from the config table.
+func (m *Module) refreshExcludedIPs() {
+	if m.ctx == nil || m.ctx.DB == nil {
+		return
+	}
+
+	var value string
+	err := m.ctx.DB.QueryRow(`SELECT value FROM config WHERE key = 'excluded_ips'`).Scan(&value)
+	if err != nil || value == "" {
+		m.excludedIPs = nil
+		m.excludedIPsReady = true
+		return
+	}
+
+	var ips []string
+	for _, line := range strings.Split(value, "\n") {
+		ip := strings.TrimSpace(line)
+		if ip != "" {
+			ips = append(ips, ip)
+		}
+	}
+	m.excludedIPs = ips
+	m.excludedIPsReady = true
 }

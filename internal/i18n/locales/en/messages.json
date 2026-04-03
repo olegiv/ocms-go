@@ -3968,6 +3968,16 @@
             "translation": "Administrator email address"
         },
         {
+            "id": "config.excluded_ips",
+            "message": "Excluded IPs",
+            "translation": "Excluded IPs"
+        },
+        {
+            "id": "config.excluded_ips_hint",
+            "message": "IPs or CIDRs to exclude from analytics and event logging (one per line). Auth and security events are always logged.",
+            "translation": "IPs or CIDRs to exclude from analytics and event logging (one per line). Auth and security events are always logged."
+        },
+        {
             "id": "config.site_logo",
             "message": "Site Logo",
             "translation": "Site Logo"

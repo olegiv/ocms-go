@@ -13,7 +13,7 @@ import (
 // loadSettings loads settings from the database.
 func (m *Module) loadSettings() (*Settings, error) {
 	row := m.ctx.DB.QueryRow(`
-		SELECT enabled, retention_days, exclude_paths, exclude_ips, current_salt,
+		SELECT enabled, retention_days, exclude_paths, current_salt,
 		       salt_created_at, salt_rotation_hours
 		FROM page_analytics_settings
 		WHERE id = 1
@@ -23,13 +23,12 @@ func (m *Module) loadSettings() (*Settings, error) {
 		enabled           int
 		retentionDays     int
 		excludePathsJSON  string
-		excludeIPsJSON    string
 		currentSalt       string
 		saltCreatedAt     time.Time
 		saltRotationHours int
 	)
 
-	err := row.Scan(&enabled, &retentionDays, &excludePathsJSON, &excludeIPsJSON,
+	err := row.Scan(&enabled, &retentionDays, &excludePathsJSON,
 		&currentSalt, &saltCreatedAt, &saltRotationHours)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -38,7 +37,6 @@ func (m *Module) loadSettings() (*Settings, error) {
 				Enabled:           true,
 				RetentionDays:     365,
 				ExcludePaths:      []string{},
-				ExcludeIPs:        []string{},
 				SaltRotationHours: 24,
 			}, nil
 		}
@@ -52,18 +50,10 @@ func (m *Module) loadSettings() (*Settings, error) {
 		}
 	}
 
-	var excludeIPs []string
-	if excludeIPsJSON != "" {
-		if err := json.Unmarshal([]byte(excludeIPsJSON), &excludeIPs); err != nil {
-			excludeIPs = []string{}
-		}
-	}
-
 	return &Settings{
 		Enabled:           enabled == 1,
 		RetentionDays:     retentionDays,
 		ExcludePaths:      excludePaths,
-		ExcludeIPs:        excludeIPs,
 		CurrentSalt:       currentSalt,
 		SaltCreatedAt:     saltCreatedAt,
 		SaltRotationHours: saltRotationHours,
@@ -77,11 +67,6 @@ func (m *Module) saveSettings() error {
 		excludePathsJSON = []byte("[]")
 	}
 
-	excludeIPsJSON, err := json.Marshal(m.settings.ExcludeIPs)
-	if err != nil {
-		excludeIPsJSON = []byte("[]")
-	}
-
 	enabled := 0
 	if m.settings.Enabled {
 		enabled = 1
@@ -89,11 +74,11 @@ func (m *Module) saveSettings() error {
 
 	_, err = m.ctx.DB.Exec(`
 		UPDATE page_analytics_settings
-		SET enabled = ?, retention_days = ?, exclude_paths = ?, exclude_ips = ?,
+		SET enabled = ?, retention_days = ?, exclude_paths = ?,
 		    current_salt = ?, salt_created_at = ?, salt_rotation_hours = ?,
 		    updated_at = CURRENT_TIMESTAMP
 		WHERE id = 1
-	`, enabled, m.settings.RetentionDays, string(excludePathsJSON), string(excludeIPsJSON),
+	`, enabled, m.settings.RetentionDays, string(excludePathsJSON),
 		m.settings.CurrentSalt, m.settings.SaltCreatedAt, m.settings.SaltRotationHours)
 
 	return err
@@ -116,5 +101,6 @@ func (m *Module) ReloadSettings() error {
 		return err
 	}
 	m.settings = settings
+	m.excludedIPsReady = false // force re-read from global config on next check
 	return nil
 }

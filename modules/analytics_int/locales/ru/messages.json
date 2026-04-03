@@ -35,8 +35,6 @@
         {"id": "analytics_int.run_aggregation", "message": "Run Aggregation", "translation": "Запустить агрегацию"},
         {"id": "analytics_int.run_aggregation_hint", "message": "Manually aggregate all historical raw data into daily statistics", "translation": "Вручную агрегировать все исторические данные в дневную статистику"},
         {"id": "analytics_int.success_aggregation", "message": "Aggregation complete. Processed %d date(s).", "translation": "Агрегация завершена. Обработано дат: %d."},
-        {"id": "analytics_int.error_aggregation", "message": "Failed to run aggregation", "translation": "Не удалось выполнить агрегацию"},
-        {"id": "analytics_int.exclude_ips", "message": "Excluded IPs", "translation": "Исключенные IP-адреса"},
-        {"id": "analytics_int.exclude_ips_hint", "message": "One IP or CIDR per line (e.g., 192.168.1.100, 10.0.0.0/8). Traffic from these addresses will not be tracked.", "translation": "По одному IP или CIDR в строке (например, 192.168.1.100, 10.0.0.0/8). Трафик с этих адресов не будет отслеживаться."}
+        {"id": "analytics_int.error_aggregation", "message": "Failed to run aggregation", "translation": "Не удалось выполнить агрегацию"}
     ]
 }

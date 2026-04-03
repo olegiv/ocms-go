@@ -35,6 +35,7 @@ var configKeyOrder = map[string]int{
 	model.ConfigKeyPoweredBy:       6,
 	model.ConfigKeyPostsPerPage:    7,
 	model.ConfigKeyAdminEmail:      8,
+	model.ConfigKeyExcludedIPs:     9,
 }
 
 // sortConfigs sorts config items according to configKeyOrder.

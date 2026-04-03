@@ -144,17 +144,6 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	m.settings.ExcludePaths = excludePaths
 
-	// Parse excluded IPs (newline-separated)
-	excludeIPsStr := r.FormValue("exclude_ips")
-	var excludeIPs []string
-	for _, ip := range strings.Split(excludeIPsStr, "\n") {
-		ip = strings.TrimSpace(ip)
-		if ip != "" {
-			excludeIPs = append(excludeIPs, ip)
-		}
-	}
-	m.settings.ExcludeIPs = excludeIPs
-
 	// Save to database
 	if err := m.saveSettings(); err != nil {
 		m.ctx.Logger.Error("failed to save settings", "error", err)

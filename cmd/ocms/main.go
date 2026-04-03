@@ -1225,6 +1225,9 @@ func run() error {
 	cacheManager := initCacheManager(ctx, db, cfg)
 	defer cacheManager.Stop()
 
+	// Wire excluded IPs config into event service for IP filtering
+	eventService.SetConfigGetter(cacheManager.GetConfig)
+
 	// Create shared MenuService using cache manager's MenuCache
 	menuService := service.NewMenuService(db, cacheManager.Menus)
 
