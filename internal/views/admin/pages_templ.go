@@ -6888,14 +6888,14 @@ func pageFormScripts(pc *PageContext, data PageFormViewData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 362, "\">\n\t// Store TinyMCE editor instance\n\tlet tinymceEditor = null;\n\n\t// Editor Image Picker for TinyMCE\n\tconst editorImagePicker = {\n\t\tmodal: null, grid: null, searchInput: null, optionsPanel: null,\n\t\tinsertBtn: null, altInput: null, sizeSelect: null, selectedImage: null,\n\t\tcurrentPage: 1, debounceTimer: null, insertCallback: null, currentItems: [],\n\n\t\tinit() {\n\t\t\tthis.modal = document.getElementById('editor-image-modal');\n\t\t\tthis.grid = document.getElementById('editor-image-grid');\n\t\t\tthis.searchInput = document.getElementById('editor-image-search');\n\t\t\tthis.optionsPanel = document.getElementById('editor-image-options');\n\t\t\tthis.insertBtn = document.getElementById('editor-image-insert-btn');\n\t\t\tthis.altInput = document.getElementById('editor-image-alt');\n\t\t\tthis.sizeSelect = document.querySelector('#editor-image-size input[data-tui-selectbox-hidden-input]');\n\t\t\tthis.searchInput.addEventListener('input', () => {\n\t\t\t\tclearTimeout(this.debounceTimer);\n\t\t\t\tthis.debounceTimer = setTimeout(() => { this.currentPage = 1; this.loadMedia(); }, 300);\n\t\t\t});\n\t\t\tdocument.getElementById('editor-image-close-btn').addEventListener('click', () => this.close());\n\t\t\tdocument.getElementById('editor-image-cancel-btn').addEventListener('click', () => this.close());\n\t\t\tthis.modal.querySelector('.editor-image-modal-overlay').addEventListener('click', () => this.close());\n\t\t\tthis.insertBtn.addEventListener('click', () => this.insert());\n\t\t\tdocument.addEventListener('keydown', (e) => {\n\t\t\t\tif (e.key === 'Escape' && this.modal.style.display !== 'none') this.close();\n\t\t\t});\n\t\t},\n\t\topen(callback) {\n\t\t\tthis.insertCallback = callback || null;\n\t\t\tthis.selectedImage = null;\n\t\t\tthis.optionsPanel.style.display = 'none';\n\t\t\tthis.insertBtn.disabled = true;\n\t\t\tthis.altInput.value = '';\n\t\t\tthis.searchInput.value = '';\n\t\t\tthis.currentPage = 1;\n\t\t\tthis.modal.style.display = 'flex';\n\t\t\tthis.loadMedia();\n\t\t\tthis.searchInput.focus();\n\t\t},\n\t\tclose() { this.modal.style.display = 'none'; this.selectedImage = null; this.insertCallback = null; },\n\t\tasync loadMedia() {\n\t\t\tconst search = this.searchInput.value.trim();\n\t\t\tlet url = `/admin/media/api?page=${this.currentPage}&limit=12&type=image`;\n\t\t\tif (search) url += `&q=${encodeURIComponent(search)}`;\n\t\t\ttry {\n\t\t\t\tthis.grid.innerHTML = '<div class=\"editor-image-loading\"><div class=\"spinner\"></div><span>Loading...</span></div>';\n\t\t\t\tconst response = await fetch(url);\n\t\t\t\tif (!response.ok) throw new Error('Failed to load media');\n\t\t\t\tconst data = await response.json();\n\t\t\t\tthis.renderGrid(data.items || []);\n\t\t\t} catch (error) {\n\t\t\t\tconsole.error('Failed to load media:', error);\n\t\t\t\tthis.grid.innerHTML = '<div class=\"editor-image-empty\"><p>Error loading media</p></div>';\n\t\t\t}\n\t\t},\n\t\trenderGrid(items) {\n\t\t\tif (!items || items.length === 0) {\n\t\t\t\tthis.grid.innerHTML = '<div class=\"editor-image-empty\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"48\" height=\"48\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" ry=\"2\"/><circle cx=\"9\" cy=\"9\" r=\"2\"/><path d=\"m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21\"/></svg><p>No images found</p><a href=\"/admin/media/upload\" class=\"btn btn-primary btn-sm\" target=\"_blank\">Upload Images</a></div>';\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tthis.currentItems = items;\n\t\t\tconst gridHTML = items.map(item => {\n\t\t\t\tconst isSelected = this.selectedImage?.id === item.id;\n\t\t\t\tconst thumbnailUrl = item.thumbnail || item.filepath;\n\t\t\t\treturn `<div class=\"editor-image-item ${isSelected ? 'is-selected' : ''}\" data-id=\"${item.id}\"><div class=\"editor-image-item-preview\"><img src=\"${thumbnailUrl}\" alt=\"${item.filename || ''}\"></div><div class=\"editor-image-item-info\"><span class=\"editor-image-item-name\">${item.filename || 'Untitled'}</span></div>${isSelected ? '<div class=\"editor-image-item-check\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"><polyline points=\"20 6 9 17 4 12\"/></svg></div>' : ''}</div>`;\n\t\t\t}).join('');\n\t\t\tthis.grid.innerHTML = `<div class=\"editor-image-grid\">${gridHTML}</div>`;\n\t\t\tthis.grid.querySelectorAll('.editor-image-item').forEach(item => {\n\t\t\t\titem.addEventListener('click', () => {\n\t\t\t\t\tconst id = parseInt(item.dataset.id, 10);\n\t\t\t\t\tconst selectedItem = this.currentItems.find(i => i.id === id);\n\t\t\t\t\tif (selectedItem) this.selectImage(selectedItem);\n\t\t\t\t});\n\t\t\t});\n\t\t},\n\t\tselectImage(item) {\n\t\t\tthis.selectedImage = item;\n\t\t\tthis.optionsPanel.style.display = 'block';\n\t\t\tthis.insertBtn.disabled = false;\n\t\t\tconst filenameWithoutExt = (item.filename || 'image').replace(/\\.[^/.]+$/, '');\n\t\t\tthis.altInput.value = item.alt || filenameWithoutExt;\n\t\t\tthis.loadMedia();\n\t\t},\n\t\tinsert() {\n\t\t\tif (!this.selectedImage) return;\n\t\t\tconst alt = this.altInput.value.trim() || this.selectedImage.filename || 'Image';\n\t\t\tconst size = this.sizeSelect.value;\n\t\t\tlet imageUrl = this.selectedImage.filepath;\n\t\t\tif (size === 'medium' && this.selectedImage.filepath) imageUrl = this.selectedImage.filepath.replace('/originals/', '/medium/');\n\t\t\telse if (size === 'small' && this.selectedImage.thumbnail) imageUrl = this.selectedImage.thumbnail;\n\t\t\tif (this.insertCallback) this.insertCallback(imageUrl, { alt: alt, title: alt });\n\t\t\telse if (tinymceEditor) tinymceEditor.insertContent(`<img src=\"${imageUrl}\" alt=\"${alt}\" title=\"${alt}\" />`);\n\t\t\tthis.close();\n\t\t}\n\t};\n\n\t// Initialize TinyMCE\n\tdocument.addEventListener('DOMContentLoaded', function() {\n\t\teditorImagePicker.init();\n\t\ttinymce.init({\n\t\t\tselector: '#editor',\n\t\t\tlicense_key: 'gpl',\n\t\t\theight: 400,\n\t\t\tmenubar: true,\n\t\t\tpromotion: false,\n\t\t\tbranding: false,\n\t\t\tbase_url: '/static/dist/js/tinymce',\n\t\t\tconvert_urls: false,\n\t\t\tplugins: ['advlist','autolink','lists','link','image','charmap','preview','anchor','searchreplace','visualblocks','code','fullscreen','insertdatetime','media','table','help','wordcount','codesample'],\n\t\t\ttoolbar: 'undo redo | blocks | bold italic forecolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | link customimage media codesample | code | removeformat | help',\n\t\t\tcontent_style: 'body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Oxygen,Ubuntu,Cantarell,\"Open Sans\",\"Helvetica Neue\",sans-serif;font-size:16px;line-height:1.6;padding:1rem;}img{max-width:100%;height:auto;border-radius:8px;}pre{background-color:#1e1e1e;color:#d4d4d4;padding:1rem;border-radius:8px;overflow-x:auto;}pre code{background:none;color:inherit;padding:0;}pre code[data-mce-selected=inline-boundary]{background-color:#2d2d2d !important;color:#d4d4d4 !important;}blockquote{border-left:3px solid #ccc;padding-left:1rem;margin:1rem 0;color:#666;font-style:italic;}',\n\t\t\tlink_default_target: '_blank',\n\t\t\tlink_assume_external_targets: true,\n\t\t\tlink_attributes_postprocess: (attrs) => {\n\t\t\t\tif (attrs.target === '_blank') {\n\t\t\t\t\tif (attrs.rel) {\n\t\t\t\t\t\tconst relValues = attrs.rel.split(' ');\n\t\t\t\t\t\tif (!relValues.includes('noopener')) relValues.push('noopener');\n\t\t\t\t\t\tif (!relValues.includes('noreferrer')) relValues.push('noreferrer');\n\t\t\t\t\t\tattrs.rel = relValues.join(' ');\n\t\t\t\t\t} else { attrs.rel = 'noopener noreferrer'; }\n\t\t\t\t}\n\t\t\t\treturn attrs;\n\t\t\t},\n\t\t\timage_advtab: true,\n\t\t\timage_title: true,\n\t\t\tautomatic_uploads: false,\n\t\t\tsetup: function(editor) {\n\t\t\t\ttinymceEditor = editor;\n\t\t\t\teditor.ui.registry.addButton('customimage', {\n\t\t\t\t\ticon: 'image',\n\t\t\t\t\ttooltip: 'Insert Image',\n\t\t\t\t\tonAction: function() { editorImagePicker.open(); }\n\t\t\t\t});\n\t\t\t},\n\t\t\tfile_picker_types: 'image',\n\t\t\tfile_picker_callback: function(callback, value, meta) {\n\t\t\t\tif (meta.filetype === 'image') editorImagePicker.open(callback);\n\t\t\t},\n\t\t\tinit_instance_callback: function(editor) {\n\t\t\t\tconst form = editor.getElement().closest('form');\n\t\t\t\tif (form) form.addEventListener('submit', function() { editor.save(); });\n\t\t\t}\n\t\t});\n\t});\n\t</script><script nonce=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 362, "\">\n\t// Store TinyMCE editor instance\n\tlet tinymceEditor = null;\n\n\t// Editor Image Picker for TinyMCE\n\tconst editorImagePicker = {\n\t\tmodal: null, grid: null, searchInput: null, optionsPanel: null,\n\t\tinsertBtn: null, altInput: null, sizeSelect: null, selectedImage: null,\n\t\tcurrentPage: 1, debounceTimer: null, insertCallback: null, currentItems: [],\n\n\t\tinit() {\n\t\t\tthis.modal = document.getElementById('editor-image-modal');\n\t\t\tthis.grid = document.getElementById('editor-image-grid');\n\t\t\tthis.searchInput = document.getElementById('editor-image-search');\n\t\t\tthis.optionsPanel = document.getElementById('editor-image-options');\n\t\t\tthis.insertBtn = document.getElementById('editor-image-insert-btn');\n\t\t\tthis.altInput = document.getElementById('editor-image-alt');\n\t\t\tthis.sizeSelect = document.querySelector('#editor-image-size input[data-tui-selectbox-hidden-input]');\n\t\t\tthis.searchInput.addEventListener('input', () => {\n\t\t\t\tclearTimeout(this.debounceTimer);\n\t\t\t\tthis.debounceTimer = setTimeout(() => { this.currentPage = 1; this.loadMedia(); }, 300);\n\t\t\t});\n\t\t\tdocument.getElementById('editor-image-close-btn').addEventListener('click', () => this.close());\n\t\t\tdocument.getElementById('editor-image-cancel-btn').addEventListener('click', () => this.close());\n\t\t\tthis.modal.querySelector('.editor-image-modal-overlay').addEventListener('click', () => this.close());\n\t\t\tthis.insertBtn.addEventListener('click', () => this.insert());\n\t\t\tdocument.addEventListener('keydown', (e) => {\n\t\t\t\tif (e.key === 'Escape' && this.modal.style.display !== 'none') this.close();\n\t\t\t});\n\t\t},\n\t\topen(callback) {\n\t\t\tthis.insertCallback = callback || null;\n\t\t\tthis.selectedImage = null;\n\t\t\tthis.optionsPanel.style.display = 'none';\n\t\t\tthis.insertBtn.disabled = true;\n\t\t\tthis.altInput.value = '';\n\t\t\tthis.searchInput.value = '';\n\t\t\tthis.currentPage = 1;\n\t\t\tthis.modal.style.display = 'flex';\n\t\t\tthis.loadMedia();\n\t\t\tthis.searchInput.focus();\n\t\t},\n\t\tclose() { this.modal.style.display = 'none'; this.selectedImage = null; this.insertCallback = null; },\n\t\tasync loadMedia() {\n\t\t\tconst search = this.searchInput.value.trim();\n\t\t\tlet url = `/admin/media/api?page=${this.currentPage}&limit=12&type=image`;\n\t\t\tif (search) url += `&q=${encodeURIComponent(search)}`;\n\t\t\ttry {\n\t\t\t\tthis.grid.innerHTML = '<div class=\"editor-image-loading\"><div class=\"spinner\"></div><span>Loading...</span></div>';\n\t\t\t\tconst response = await fetch(url);\n\t\t\t\tif (!response.ok) throw new Error('Failed to load media');\n\t\t\t\tconst data = await response.json();\n\t\t\t\tthis.renderGrid(data.items || []);\n\t\t\t} catch (error) {\n\t\t\t\tconsole.error('Failed to load media:', error);\n\t\t\t\tthis.grid.innerHTML = '<div class=\"editor-image-empty\"><p>Error loading media</p></div>';\n\t\t\t}\n\t\t},\n\t\trenderGrid(items) {\n\t\t\tif (!items || items.length === 0) {\n\t\t\t\tthis.grid.innerHTML = '<div class=\"editor-image-empty\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"48\" height=\"48\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" ry=\"2\"/><circle cx=\"9\" cy=\"9\" r=\"2\"/><path d=\"m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21\"/></svg><p>No images found</p><a href=\"/admin/media/upload\" class=\"btn btn-primary btn-sm\" target=\"_blank\">Upload Images</a></div>';\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tthis.currentItems = items;\n\t\t\tconst gridHTML = items.map(item => {\n\t\t\t\tconst isSelected = this.selectedImage?.id === item.id;\n\t\t\t\tconst thumbnailUrl = item.thumbnail || item.filepath;\n\t\t\t\treturn `<div class=\"editor-image-item ${isSelected ? 'is-selected' : ''}\" data-id=\"${item.id}\"><div class=\"editor-image-item-preview\"><img src=\"${thumbnailUrl}\" alt=\"${item.filename || ''}\"></div><div class=\"editor-image-item-info\"><span class=\"editor-image-item-name\">${item.filename || 'Untitled'}</span></div>${isSelected ? '<div class=\"editor-image-item-check\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"><polyline points=\"20 6 9 17 4 12\"/></svg></div>' : ''}</div>`;\n\t\t\t}).join('');\n\t\t\tthis.grid.innerHTML = `<div class=\"editor-image-grid\">${gridHTML}</div>`;\n\t\t\tthis.grid.querySelectorAll('.editor-image-item').forEach(item => {\n\t\t\t\titem.addEventListener('click', () => {\n\t\t\t\t\tconst id = parseInt(item.dataset.id, 10);\n\t\t\t\t\tconst selectedItem = this.currentItems.find(i => i.id === id);\n\t\t\t\t\tif (selectedItem) this.selectImage(selectedItem);\n\t\t\t\t});\n\t\t\t});\n\t\t},\n\t\tselectImage(item) {\n\t\t\tthis.selectedImage = item;\n\t\t\tthis.optionsPanel.style.display = 'block';\n\t\t\tthis.insertBtn.disabled = false;\n\t\t\tconst filenameWithoutExt = (item.filename || 'image').replace(/\\.[^/.]+$/, '');\n\t\t\tthis.altInput.value = item.alt || filenameWithoutExt;\n\t\t\tthis.loadMedia();\n\t\t},\n\t\tinsert() {\n\t\t\tif (!this.selectedImage) return;\n\t\t\tconst alt = this.altInput.value.trim() || this.selectedImage.filename || 'Image';\n\t\t\tconst size = this.sizeSelect.value;\n\t\t\tlet imageUrl = this.selectedImage.filepath;\n\t\t\tif (size === 'medium' && this.selectedImage.filepath) imageUrl = this.selectedImage.filepath.replace('/originals/', '/medium/');\n\t\t\telse if (size === 'small' && this.selectedImage.thumbnail) imageUrl = this.selectedImage.thumbnail;\n\t\t\tif (this.insertCallback) this.insertCallback(imageUrl, { alt: alt, title: alt });\n\t\t\telse if (tinymceEditor) tinymceEditor.insertContent(`<img src=\"${imageUrl}\" alt=\"${alt}\" title=\"${alt}\" />`);\n\t\t\tthis.close();\n\t\t}\n\t};\n\n\t// Initialize TinyMCE\n\tdocument.addEventListener('DOMContentLoaded', function() {\n\t\teditorImagePicker.init();\n\t\ttinymce.init({\n\t\t\tselector: '#editor',\n\t\t\tlicense_key: 'gpl',\n\t\t\theight: 400,\n\t\t\tmenubar: true,\n\t\t\tpromotion: false,\n\t\t\tbranding: false,\n\t\t\tbase_url: '/static/dist/js/tinymce',\n\t\t\tconvert_urls: false,\n\t\t\tcodesample_languages: [\n\t\t\t\t{ text: 'C', value: 'c' },\n\t\t\t\t{ text: 'C#', value: 'csharp' },\n\t\t\t\t{ text: 'C++', value: 'cpp' },\n\t\t\t\t{ text: 'CSS', value: 'css' },\n\t\t\t\t{ text: 'Docker', value: 'docker' },\n\t\t\t\t{ text: 'Go', value: 'go' },\n\t\t\t\t{ text: 'HTML/XML', value: 'markup' },\n\t\t\t\t{ text: 'Java', value: 'java' },\n\t\t\t\t{ text: 'JavaScript', value: 'javascript' },\n\t\t\t\t{ text: 'JSON', value: 'json' },\n\t\t\t\t{ text: 'Markdown', value: 'markdown' },\n\t\t\t\t{ text: 'Nginx', value: 'nginx' },\n\t\t\t\t{ text: 'PHP', value: 'php' },\n\t\t\t\t{ text: 'Plain Text', value: 'plaintext' },\n\t\t\t\t{ text: 'Python', value: 'python' },\n\t\t\t\t{ text: 'Ruby', value: 'ruby' },\n\t\t\t\t{ text: 'Rust', value: 'rust' },\n\t\t\t\t{ text: 'Shell/Bash', value: 'bash' },\n\t\t\t\t{ text: 'SQL', value: 'sql' },\n\t\t\t\t{ text: 'TypeScript', value: 'typescript' },\n\t\t\t\t{ text: 'YAML', value: 'yaml' },\n\t\t\t],\n\t\t\tplugins: ['advlist','autolink','lists','link','image','charmap','preview','anchor','searchreplace','visualblocks','code','fullscreen','insertdatetime','media','table','help','wordcount','codesample'],\n\t\t\ttoolbar: 'undo redo | blocks | bold italic forecolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | link customimage media codesample | code | removeformat | help',\n\t\t\tcontent_style: 'body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Oxygen,Ubuntu,Cantarell,\"Open Sans\",\"Helvetica Neue\",sans-serif;font-size:16px;line-height:1.6;padding:1rem;}img{max-width:100%;height:auto;border-radius:8px;}pre{background-color:#1e1e1e;color:#d4d4d4;padding:1rem;border-radius:8px;overflow-x:auto;}pre code{background:none;color:inherit;padding:0;}pre code[data-mce-selected=inline-boundary]{background-color:#2d2d2d !important;color:#d4d4d4 !important;}blockquote{border-left:3px solid #ccc;padding-left:1rem;margin:1rem 0;color:#666;font-style:italic;}',\n\t\t\tlink_default_target: '_blank',\n\t\t\tlink_assume_external_targets: true,\n\t\t\tlink_attributes_postprocess: (attrs) => {\n\t\t\t\tif (attrs.target === '_blank') {\n\t\t\t\t\tif (attrs.rel) {\n\t\t\t\t\t\tconst relValues = attrs.rel.split(' ');\n\t\t\t\t\t\tif (!relValues.includes('noopener')) relValues.push('noopener');\n\t\t\t\t\t\tif (!relValues.includes('noreferrer')) relValues.push('noreferrer');\n\t\t\t\t\t\tattrs.rel = relValues.join(' ');\n\t\t\t\t\t} else { attrs.rel = 'noopener noreferrer'; }\n\t\t\t\t}\n\t\t\t\treturn attrs;\n\t\t\t},\n\t\t\timage_advtab: true,\n\t\t\timage_title: true,\n\t\t\tautomatic_uploads: false,\n\t\t\tsetup: function(editor) {\n\t\t\t\ttinymceEditor = editor;\n\t\t\t\teditor.ui.registry.addButton('customimage', {\n\t\t\t\t\ticon: 'image',\n\t\t\t\t\ttooltip: 'Insert Image',\n\t\t\t\t\tonAction: function() { editorImagePicker.open(); }\n\t\t\t\t});\n\t\t\t},\n\t\t\tfile_picker_types: 'image',\n\t\t\tfile_picker_callback: function(callback, value, meta) {\n\t\t\t\tif (meta.filetype === 'image') editorImagePicker.open(callback);\n\t\t\t},\n\t\t\tinit_instance_callback: function(editor) {\n\t\t\t\tconst form = editor.getElement().closest('form');\n\t\t\t\tif (form) form.addEventListener('submit', function() { editor.save(); });\n\t\t\t}\n\t\t});\n\t});\n\t</script><script nonce=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var358 string
 		templ_7745c5c3_Var358, templ_7745c5c3_Err = templ.JoinStringErrs(templ.GetNonce(ctx))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1821, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1844, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var358))
 		if templ_7745c5c3_Err != nil {
@@ -6980,7 +6980,7 @@ func PageVersionsPage(pc *PageContext, data PageVersionsViewData) templ.Componen
 					var templ_7745c5c3_Var363 string
 					templ_7745c5c3_Var363, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.back_to_page"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1925, Col: 35}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1948, Col: 35}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var363))
 					if templ_7745c5c3_Err != nil {
@@ -7070,7 +7070,7 @@ func PageVersionsPage(pc *PageContext, data PageVersionsViewData) templ.Componen
 									var templ_7745c5c3_Var369 string
 									templ_7745c5c3_Var369, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.version"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1934, Col: 50}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1957, Col: 50}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var369))
 									if templ_7745c5c3_Err != nil {
@@ -7101,7 +7101,7 @@ func PageVersionsPage(pc *PageContext, data PageVersionsViewData) templ.Componen
 									var templ_7745c5c3_Var371 string
 									templ_7745c5c3_Var371, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.title"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1935, Col: 45}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1958, Col: 45}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var371))
 									if templ_7745c5c3_Err != nil {
@@ -7132,7 +7132,7 @@ func PageVersionsPage(pc *PageContext, data PageVersionsViewData) templ.Componen
 									var templ_7745c5c3_Var373 string
 									templ_7745c5c3_Var373, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.changed_by"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1936, Col: 53}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1959, Col: 53}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var373))
 									if templ_7745c5c3_Err != nil {
@@ -7163,7 +7163,7 @@ func PageVersionsPage(pc *PageContext, data PageVersionsViewData) templ.Componen
 									var templ_7745c5c3_Var375 string
 									templ_7745c5c3_Var375, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.date"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1937, Col: 47}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1960, Col: 47}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var375))
 									if templ_7745c5c3_Err != nil {
@@ -7194,7 +7194,7 @@ func PageVersionsPage(pc *PageContext, data PageVersionsViewData) templ.Componen
 									var templ_7745c5c3_Var377 string
 									templ_7745c5c3_Var377, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.actions"))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1938, Col: 47}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1961, Col: 47}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var377))
 									if templ_7745c5c3_Err != nil {
@@ -7306,7 +7306,7 @@ func PageVersionsPage(pc *PageContext, data PageVersionsViewData) templ.Componen
 						var templ_7745c5c3_Var381 string
 						templ_7745c5c3_Var381, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.no_versions"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1955, Col: 39}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1978, Col: 39}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var381))
 						if templ_7745c5c3_Err != nil {
@@ -7319,7 +7319,7 @@ func PageVersionsPage(pc *PageContext, data PageVersionsViewData) templ.Componen
 						var templ_7745c5c3_Var382 string
 						templ_7745c5c3_Var382, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.no_versions_hint"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1956, Col: 66}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1979, Col: 66}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var382))
 						if templ_7745c5c3_Err != nil {
@@ -7416,7 +7416,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 					var templ_7745c5c3_Var387 string
 					templ_7745c5c3_Var387, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", version.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1967, Col: 84}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1990, Col: 84}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var387))
 					if templ_7745c5c3_Err != nil {
@@ -7457,7 +7457,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var389 string
 				templ_7745c5c3_Var389, templ_7745c5c3_Err = templ.JoinStringErrs(version.Title)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1970, Col: 46}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1993, Col: 46}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var389))
 				if templ_7745c5c3_Err != nil {
@@ -7496,7 +7496,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var391 string
 				templ_7745c5c3_Var391, templ_7745c5c3_Err = templ.JoinStringErrs(version.ChangedByName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1973, Col: 50}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1996, Col: 50}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var391))
 				if templ_7745c5c3_Err != nil {
@@ -7531,7 +7531,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var393 string
 				templ_7745c5c3_Var393, templ_7745c5c3_Err = templ.JoinStringErrs(version.CreatedAt)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1975, Col: 37}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1998, Col: 37}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var393))
 				if templ_7745c5c3_Err != nil {
@@ -7618,7 +7618,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var397 string
 				templ_7745c5c3_Var397, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.preview_title"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1998, Col: 64}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2021, Col: 64}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var397))
 				if templ_7745c5c3_Err != nil {
@@ -7631,7 +7631,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var398 string
 				templ_7745c5c3_Var398, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", version.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1998, Col: 99}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2021, Col: 99}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var398))
 				if templ_7745c5c3_Err != nil {
@@ -7644,7 +7644,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var399 string
 				templ_7745c5c3_Var399, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.close"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 1999, Col: 109}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2022, Col: 109}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var399))
 				if templ_7745c5c3_Err != nil {
@@ -7657,7 +7657,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var400 string
 				templ_7745c5c3_Var400, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("label.title"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2004, Col: 39}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2027, Col: 39}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var400))
 				if templ_7745c5c3_Err != nil {
@@ -7670,7 +7670,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var401 string
 				templ_7745c5c3_Var401, templ_7745c5c3_Err = templ.JoinStringErrs(version.Title)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2004, Col: 67}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2027, Col: 67}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var401))
 				if templ_7745c5c3_Err != nil {
@@ -7683,7 +7683,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var402 string
 				templ_7745c5c3_Var402, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.changed_by"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2005, Col: 47}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2028, Col: 47}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var402))
 				if templ_7745c5c3_Err != nil {
@@ -7696,7 +7696,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var403 string
 				templ_7745c5c3_Var403, templ_7745c5c3_Err = templ.JoinStringErrs(version.ChangedByName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2005, Col: 83}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2028, Col: 83}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var403))
 				if templ_7745c5c3_Err != nil {
@@ -7709,7 +7709,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var404 string
 				templ_7745c5c3_Var404, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.date"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2006, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2029, Col: 41}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var404))
 				if templ_7745c5c3_Err != nil {
@@ -7722,7 +7722,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var405 string
 				templ_7745c5c3_Var405, templ_7745c5c3_Err = templ.JoinStringErrs(version.CreatedAt)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2006, Col: 73}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2029, Col: 73}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var405))
 				if templ_7745c5c3_Err != nil {
@@ -7735,7 +7735,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var406 string
 				templ_7745c5c3_Var406, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("pages.content"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2009, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2032, Col: 41}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var406))
 				if templ_7745c5c3_Err != nil {
@@ -7758,7 +7758,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 					var templ_7745c5c3_Var407 string
 					templ_7745c5c3_Var407, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("forms.no_content"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2014, Col: 61}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2037, Col: 61}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var407))
 					if templ_7745c5c3_Err != nil {
@@ -7788,7 +7788,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 					var templ_7745c5c3_Var409 string
 					templ_7745c5c3_Var409, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.close"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2022, Col: 28}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2045, Col: 28}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var409))
 					if templ_7745c5c3_Err != nil {
@@ -7807,7 +7807,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var410 templ.SafeURL
 				templ_7745c5c3_Var410, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/pages/%d/versions/%d/restore", data.PageID, version.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2024, Col: 113}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2047, Col: 113}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var410))
 				if templ_7745c5c3_Err != nil {
@@ -7836,7 +7836,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 					var templ_7745c5c3_Var412 string
 					templ_7745c5c3_Var412, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.restore_this"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2027, Col: 41}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2050, Col: 41}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var412))
 					if templ_7745c5c3_Err != nil {
@@ -7855,7 +7855,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var413 string
 				templ_7745c5c3_Var413, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.restore_title"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2044, Col: 64}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2067, Col: 64}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var413))
 				if templ_7745c5c3_Err != nil {
@@ -7868,7 +7868,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var414 string
 				templ_7745c5c3_Var414, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.close"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2045, Col: 109}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2068, Col: 109}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var414))
 				if templ_7745c5c3_Err != nil {
@@ -7881,7 +7881,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var415 string
 				templ_7745c5c3_Var415, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.restore_confirm"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2048, Col: 45}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2071, Col: 45}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var415))
 				if templ_7745c5c3_Err != nil {
@@ -7894,7 +7894,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var416 string
 				templ_7745c5c3_Var416, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", version.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2048, Col: 88}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2071, Col: 88}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var416))
 				if templ_7745c5c3_Err != nil {
@@ -7907,7 +7907,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var417 string
 				templ_7745c5c3_Var417, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.restore_note"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2049, Col: 61}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2072, Col: 61}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var417))
 				if templ_7745c5c3_Err != nil {
@@ -7932,7 +7932,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 					var templ_7745c5c3_Var419 string
 					templ_7745c5c3_Var419, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("btn.cancel"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2053, Col: 29}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2076, Col: 29}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var419))
 					if templ_7745c5c3_Err != nil {
@@ -7951,7 +7951,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 				var templ_7745c5c3_Var420 templ.SafeURL
 				templ_7745c5c3_Var420, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/admin/pages/%d/versions/%d/restore", data.PageID, version.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2055, Col: 113}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2078, Col: 113}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var420))
 				if templ_7745c5c3_Err != nil {
@@ -7980,7 +7980,7 @@ func versionRow(pc *PageContext, data PageVersionsViewData, version PageVersionV
 					var templ_7745c5c3_Var422 string
 					templ_7745c5c3_Var422, templ_7745c5c3_Err = templ.JoinStringErrs(pc.T("versions.restore_version"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2058, Col: 44}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/admin/pages.templ`, Line: 2081, Col: 44}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var422))
 					if templ_7745c5c3_Err != nil {

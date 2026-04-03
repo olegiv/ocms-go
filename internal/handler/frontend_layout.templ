@@ -79,6 +79,7 @@ templ frontendBaseLayout(base BaseTemplateData) {
 			<link rel="icon" type="image/x-icon" href="/favicon.ico"/>
 			<link rel="stylesheet" href="/static/dist/main.css"/>
 			<link rel="stylesheet" href="/static/dist/admin-tw.css"/>
+			<link rel="stylesheet" href="/static/dist/css/prism.css"/>
 			if base.CustomCSS != "" {
 				<style>
 					{ base.CustomCSS }
@@ -91,6 +92,8 @@ templ frontendBaseLayout(base BaseTemplateData) {
 			<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/htmx.min.js"></script>
 			<!-- Alpine.js -->
 			<script nonce={ templ.GetNonce(ctx) } defer src="/static/dist/js/alpine.min.js"></script>
+			<!-- Prism.js syntax highlighting -->
+			<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/prism-bundle.min.js"></script>
 		</body>
 	</html>
 }
