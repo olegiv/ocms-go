@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-04-04
+
+### Added
+
+#### Analytics
+- Add global IP/CIDR exclusion list in Site Configuration for filtering internal traffic
+- Add self-referral filtering using site_url config (www-aware, case-insensitive)
+- Add one-time migration to purge historical self-referral data
+- Add IP exclusion hint to external analytics settings page
+
+#### Admin UI
+- Add multi-line text config type with textarea rendering
+- Add per-line IP/CIDR validation with localized error messages (EN, RU)
+
+#### Editor
+- Add code block language selector and Prism.js syntax highlighting
+- Add Prism.js assets to default and starter theme layouts
+
+### Changed
+
+#### Dependencies
+- Update Alpine.js 3.15.10 → 3.15.11
+- Update go-sqlite3 1.14.38 → 1.14.40
+- Update modernc.org/sqlite 1.48.0 → 1.48.1
+
+### Fixed
+
+#### Analytics
+- Fix data race on cached analytics module fields (siteDomain, excludedIPs)
+- Fix unhandled errors in analytics self-referral purge migration
+- Fix stale config caches not refreshing after admin changes
+- Fix EventService IP exclusion only working for shared instance
+
+### Security
+- Add frame-ancestors CSP directive
+- Add 64 KB size limit for multi-line text config fields
+- Add server-side IP/CIDR validation for excluded IPs config
+
 ## [0.12.0] - 2026-04-02
 
 ### Added
@@ -591,7 +629,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/olegiv/ocms-go/compare/v0.12.0...v0.14.0
 [0.12.0]: https://github.com/olegiv/ocms-go/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/olegiv/ocms-go/compare/v0.10.2...v0.11.0
 [0.10.2]: https://github.com/olegiv/ocms-go/compare/v0.10.1...v0.10.2
