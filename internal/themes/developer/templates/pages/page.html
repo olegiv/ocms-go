@@ -151,7 +151,10 @@
                     {{if .FeaturedImage}}
                     <div class="dev-card-image">
                         <a href="{{.URL}}">
-                            <img src="{{.FeaturedImage}}" alt="{{mediaAlt .FeaturedImageID $.LangCode .FeaturedImageAlt}}" loading="lazy">
+                            <img src="{{if .FeaturedImageSmall}}{{.FeaturedImageSmall}}{{else}}{{.FeaturedImage}}{{end}}"
+                                 srcset="{{.FeaturedImage}} 150w{{if .FeaturedImageSmall}}, {{.FeaturedImageSmall}} 400w{{end}}{{if .FeaturedImageMedium}}, {{.FeaturedImageMedium}} 800w{{end}}"
+                                 sizes="(max-width: 768px) 100vw, 300px"
+                                 alt="{{mediaAlt .FeaturedImageID $.LangCode .FeaturedImageAlt}}" loading="lazy">
                         </a>
                     </div>
                     {{end}}
