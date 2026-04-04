@@ -1227,20 +1227,8 @@ img {
     min-width: 0;
 }
 
-/* Two-column layout only when post has a featured image */
-.dev-post-item:has(.dev-post-image) {
-    grid-template-columns: 200px 1fr;
-    align-items: center;
-}
-
 .dev-post-item:hover {
     border-color: var(--dev-accent);
-}
-
-@media (max-width: 600px) {
-    .dev-post-item {
-        grid-template-columns: 1fr;
-    }
 }
 
 .dev-post-image {
