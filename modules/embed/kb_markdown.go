@@ -46,10 +46,9 @@ func GenerateSiteContentMarkdown(ctx context.Context, q *store.Queries) (string,
 		if _, ok := authorCache[p.AuthorID]; !ok {
 			user, err := q.GetUserByID(ctx, p.AuthorID)
 			if err == nil {
+				// Only use display name — never derive author label from email,
+				// as the domain is easily guessable from the site URL in the same file.
 				authorCache[p.AuthorID] = user.Name
-				if authorCache[p.AuthorID] == "" {
-					authorCache[p.AuthorID] = user.Email
-				}
 			}
 		}
 	}
@@ -149,6 +148,8 @@ func GenerateSiteContentMarkdown(ctx context.Context, q *store.Queries) (string,
 func GenerateUserGuideMarkdown(ctx context.Context, q *store.Queries) (string, error) {
 	siteURL, siteName, _ := loadSiteInfo(ctx, q)
 
+	// Do not include admin_email in the generated guide — it would be indexed
+	// by the third-party AI service (Dify) and returned in chatbot responses.
 	adminEmail := configValue(ctx, q, "admin_email")
 	postsPerPage := configValue(ctx, q, "posts_per_page")
 	if postsPerPage == "" {
@@ -240,8 +241,8 @@ func GenerateUserGuideMarkdown(ctx context.Context, q *store.Queries) (string, e
 	b.WriteString("User accounts are managed by site administrators. There is no public registration.")
 	if adminEmail != "" {
 		b.WriteString(" If you need an account, contact the site administrator at ")
-		b.WriteString(adminEmail)
-		b.WriteString(".")
+		b.WriteString(siteURL)
+		b.WriteString("/forms/contact-us.")
 	}
 	b.WriteString("\n\n")
 
@@ -447,8 +448,8 @@ func writeFormsSection(b *strings.Builder, ctx context.Context, q *store.Queries
 		if adminEmail != "" {
 			b.WriteString("## Contact\n\n")
 			b.WriteString("Contact the site administrator at ")
-			b.WriteString(adminEmail)
-			b.WriteString(".\n\n")
+			b.WriteString(siteURL)
+			b.WriteString("/forms/contact-us.\n\n")
 		}
 		return
 	}
@@ -464,8 +465,8 @@ func writeFormsSection(b *strings.Builder, ctx context.Context, q *store.Queries
 		if adminEmail != "" {
 			b.WriteString("## Contact\n\n")
 			b.WriteString("Contact the site administrator at ")
-			b.WriteString(adminEmail)
-			b.WriteString(".\n\n")
+			b.WriteString(siteURL)
+			b.WriteString("/forms/contact-us.\n\n")
 		}
 		return
 	}
