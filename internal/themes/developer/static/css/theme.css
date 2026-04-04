@@ -1251,6 +1251,9 @@ img {
 }
 
 .dev-post-category {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--dev-space-xs);
     font-family: var(--dev-font-mono), monospace;
     font-size: 0.75rem;
     margin-bottom: var(--dev-space-sm);
@@ -1258,6 +1261,13 @@ img {
 
 .dev-post-category a {
     color: var(--dev-accent);
+    border: 1px solid var(--dev-border);
+    padding: 0.125rem var(--dev-space-sm);
+    border-radius: var(--dev-radius-sm);
+}
+
+.dev-post-category a:hover {
+    border-color: var(--dev-accent);
 }
 
 .dev-post-title {
