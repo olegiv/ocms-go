@@ -164,6 +164,8 @@ func (m *Module) RegisterAdminRoutes(r chi.Router) {
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.RequireAdmin())
 		r.Get("/embed", m.handleList)
+		r.Get("/embed/dify/kb/site-content.md", m.handleDownloadSiteContent)
+		r.Get("/embed/dify/kb/user-guide.md", m.handleDownloadUserGuide)
 		r.Get("/embed/{provider}", m.handleProviderSettings)
 		r.Post("/embed/{provider}", m.handleSaveProviderSettings)
 		r.Post("/embed/{provider}/toggle", m.handleToggleProvider)

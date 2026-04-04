@@ -63,6 +63,30 @@ Note: Environment variables take precedence over database settings for the keys.
 | Theme | `light` / `dark` | Widget color theme |
 | Size | `normal` / `compact` | Widget size |
 
+## Disabling hCaptcha
+
+### Option A: Admin Interface
+
+Go to **Admin > Modules > hCaptcha** and toggle it off, or uncheck "Enabled" in the settings.
+
+### Option B: Database (setting level)
+
+Disables captcha but keeps the module loaded:
+
+```bash
+sqlite3 ./data/ocms.db "UPDATE hcaptcha_settings SET enabled = 0"
+```
+
+### Option C: Database (module level)
+
+Prevents the module from loading entirely:
+
+```bash
+sqlite3 ./data/ocms.db "UPDATE modules SET is_active = 0 WHERE name = 'hcaptcha'"
+```
+
+Restart the application after any database change.
+
 ## How It Works
 
 1. When enabled, the hCaptcha widget appears on the login form
