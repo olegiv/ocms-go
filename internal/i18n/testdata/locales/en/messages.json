@@ -1,0 +1,6 @@
+{
+    "language": "en",
+    "messages": [
+        {"id": "noprefix.key", "message": "NP", "translation": "No Prefix Value"}
+    ]
+}

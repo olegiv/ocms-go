@@ -221,6 +221,8 @@ func GetDefaultLanguage() string {
 	if catalog == nil {
 		return "en"
 	}
+	catalog.mu.RLock()
+	defer catalog.mu.RUnlock()
 	return catalog.defaultLang
 }
 

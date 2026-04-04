@@ -612,3 +612,144 @@ func TestResetScheduleNotFound(t *testing.T) {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
+
+func TestResetSchedule_NilCronInstance(t *testing.T) {
+	db := testDB(t)
+	logger := testutil.TestLoggerSilent()
+	registry := NewRegistry(db, logger)
+
+	// Register a job with nil cron instance and an override so schedule != defaultSchedule
+	key := "core:no-cron-job"
+	registry.mu.Lock()
+	registry.jobs[key] = &registeredJob{
+		source:          "core",
+		name:            "no-cron-job",
+		description:     "job with nil cron",
+		defaultSchedule: "@every 1h",
+		schedule:        "@every 30m", // differs from default to trigger reset path
+		cronInstance:    nil,
+		jobFunc:         func() {},
+	}
+	registry.mu.Unlock()
+
+	err := registry.ResetSchedule("core", "no-cron-job")
+	if err == nil {
+		t.Fatal("expected error when cronInstance is nil")
+	}
+}
+
+func TestUpdateSchedule_NilCronInstance(t *testing.T) {
+	db := testDB(t)
+	logger := testutil.TestLoggerSilent()
+	registry := NewRegistry(db, logger)
+
+	// Register a job with nil cron instance
+	key := "core:no-cron-job"
+	registry.mu.Lock()
+	registry.jobs[key] = &registeredJob{
+		source:          "core",
+		name:            "no-cron-job",
+		description:     "job with nil cron",
+		defaultSchedule: "@every 1h",
+		schedule:        "@every 1h",
+		cronInstance:    nil,
+		jobFunc:         nil, // both nil
+	}
+	registry.mu.Unlock()
+
+	err := registry.UpdateSchedule("core", "no-cron-job", "@every 30m")
+	if err == nil {
+		t.Fatal("expected error when cronInstance and jobFunc are nil")
+	}
+}
+
+func TestRegisterWithTrigger_CanTrigger(t *testing.T) {
+	db := testDB(t)
+	logger := testutil.TestLoggerSilent()
+	registry := NewRegistry(db, logger)
+
+	cronInst := cron.New()
+	defer cronInst.Stop()
+
+	jobFunc := func() {}
+	triggerCalled := false
+	triggerFunc := func() error {
+		triggerCalled = true
+		return nil
+	}
+
+	entryID, err := cronInst.AddFunc("@every 1h", jobFunc)
+	if err != nil {
+		t.Fatalf("failed to add cron job: %v", err)
+	}
+
+	registry.Register("module", "my-job", "A triggerable job", "@every 1h", cronInst, entryID, jobFunc, triggerFunc)
+
+	jobs := registry.List()
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(jobs))
+	}
+	if !jobs[0].CanTrigger {
+		t.Error("job.CanTrigger should be true when triggerFunc is non-nil")
+	}
+
+	// Trigger it and verify
+	err = registry.TriggerNow("module", "my-job")
+	if err != nil {
+		t.Fatalf("TriggerNow failed: %v", err)
+	}
+	if !triggerCalled {
+		t.Error("trigger function was not called")
+	}
+}
+
+func TestRegister_OverrideFromDB(t *testing.T) {
+	db := testDB(t)
+	logger := testutil.TestLoggerSilent()
+	registry := NewRegistry(db, logger)
+
+	// Pre-insert a schedule override
+	_, err := db.Exec("INSERT INTO scheduler_overrides (source, name, override_schedule) VALUES (?, ?, ?)",
+		"core", "overridden-job", "@every 15m")
+	if err != nil {
+		t.Fatalf("failed to insert override: %v", err)
+	}
+
+	cronInst := cron.New()
+	defer cronInst.Stop()
+
+	jobFunc := func() {}
+	entryID, err := cronInst.AddFunc("@every 1h", jobFunc)
+	if err != nil {
+		t.Fatalf("failed to add cron job: %v", err)
+	}
+
+	registry.Register("core", "overridden-job", "A job with a DB override", "@every 1h", cronInst, entryID, jobFunc, nil)
+
+	jobs := registry.List()
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(jobs))
+	}
+
+	job := jobs[0]
+	if job.Schedule != "@every 15m" {
+		t.Errorf("job.Schedule = %q, want %q (override from DB)", job.Schedule, "@every 15m")
+	}
+	if !job.IsOverridden {
+		t.Error("job.IsOverridden should be true when DB override exists at Register time")
+	}
+}
+
+func TestList_Empty(t *testing.T) {
+	db := testDB(t)
+	logger := testutil.TestLoggerSilent()
+	registry := NewRegistry(db, logger)
+
+	jobs := registry.List()
+	if jobs == nil {
+		t.Error("List() should return an empty slice, not nil")
+	}
+	if len(jobs) != 0 {
+		t.Errorf("expected 0 jobs, got %d", len(jobs))
+	}
+}
