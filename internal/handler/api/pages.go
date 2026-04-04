@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -77,47 +78,49 @@ type TagResponse struct {
 
 // CreatePageRequest represents the request body for creating a page.
 type CreatePageRequest struct {
-	Title             string  `json:"title"`
-	Slug              string  `json:"slug"`
-	Body              string  `json:"body"`
-	Status            string  `json:"status"`
-	PageType          string  `json:"page_type,omitempty"`
-	LanguageCode      *string `json:"language_code,omitempty"`
-	FeaturedImageID   *int64  `json:"featured_image_id,omitempty"`
-	HideFeaturedImage bool    `json:"hide_featured_image"`
-	ExcludeFromLists  bool    `json:"exclude_from_lists"`
-	MetaTitle         string  `json:"meta_title,omitempty"`
-	MetaDescription   string  `json:"meta_description,omitempty"`
-	MetaKeywords      string  `json:"meta_keywords,omitempty"`
-	OGImageID         *int64  `json:"og_image_id,omitempty"`
-	NoIndex           bool    `json:"no_index"`
-	NoFollow          bool    `json:"no_follow"`
-	CanonicalURL      string  `json:"canonical_url,omitempty"`
-	ScheduledAt       *string `json:"scheduled_at,omitempty"`
-	CategoryIDs       []int64 `json:"category_ids,omitempty"`
-	TagIDs            []int64 `json:"tag_ids,omitempty"`
+	Title             string   `json:"title"`
+	Slug              string   `json:"slug"`
+	Body              string   `json:"body"`
+	Status            string   `json:"status"`
+	PageType          string   `json:"page_type,omitempty"`
+	LanguageCode      *string  `json:"language_code,omitempty"`
+	FeaturedImageID   *int64   `json:"featured_image_id,omitempty"`
+	HideFeaturedImage bool     `json:"hide_featured_image"`
+	ExcludeFromLists  bool     `json:"exclude_from_lists"`
+	MetaTitle         string   `json:"meta_title,omitempty"`
+	MetaDescription   string   `json:"meta_description,omitempty"`
+	MetaKeywords      string   `json:"meta_keywords,omitempty"`
+	OGImageID         *int64   `json:"og_image_id,omitempty"`
+	NoIndex           bool     `json:"no_index"`
+	NoFollow          bool     `json:"no_follow"`
+	CanonicalURL      string   `json:"canonical_url,omitempty"`
+	ScheduledAt       *string  `json:"scheduled_at,omitempty"`
+	CategoryIDs       []int64  `json:"category_ids,omitempty"`
+	TagIDs            []int64  `json:"tag_ids,omitempty"`
+	Tags              []string `json:"tags,omitempty"`
 }
 
 // UpdatePageRequest represents the request body for updating a page.
 type UpdatePageRequest struct {
-	Title             *string  `json:"title,omitempty"`
-	Slug              *string  `json:"slug,omitempty"`
-	Body              *string  `json:"body,omitempty"`
-	Status            *string  `json:"status,omitempty"`
-	PageType          *string  `json:"page_type,omitempty"`
-	FeaturedImageID   *int64   `json:"featured_image_id,omitempty"`
-	HideFeaturedImage *bool    `json:"hide_featured_image,omitempty"`
-	ExcludeFromLists  *bool    `json:"exclude_from_lists,omitempty"`
-	MetaTitle         *string  `json:"meta_title,omitempty"`
-	MetaDescription   *string  `json:"meta_description,omitempty"`
-	MetaKeywords      *string  `json:"meta_keywords,omitempty"`
-	OGImageID         *int64   `json:"og_image_id,omitempty"`
-	NoIndex           *bool    `json:"no_index,omitempty"`
-	NoFollow          *bool    `json:"no_follow,omitempty"`
-	CanonicalURL      *string  `json:"canonical_url,omitempty"`
-	ScheduledAt       *string  `json:"scheduled_at,omitempty"`
-	CategoryIDs       *[]int64 `json:"category_ids,omitempty"`
-	TagIDs            *[]int64 `json:"tag_ids,omitempty"`
+	Title             *string   `json:"title,omitempty"`
+	Slug              *string   `json:"slug,omitempty"`
+	Body              *string   `json:"body,omitempty"`
+	Status            *string   `json:"status,omitempty"`
+	PageType          *string   `json:"page_type,omitempty"`
+	FeaturedImageID   *int64    `json:"featured_image_id,omitempty"`
+	HideFeaturedImage *bool     `json:"hide_featured_image,omitempty"`
+	ExcludeFromLists  *bool     `json:"exclude_from_lists,omitempty"`
+	MetaTitle         *string   `json:"meta_title,omitempty"`
+	MetaDescription   *string   `json:"meta_description,omitempty"`
+	MetaKeywords      *string   `json:"meta_keywords,omitempty"`
+	OGImageID         *int64    `json:"og_image_id,omitempty"`
+	NoIndex           *bool     `json:"no_index,omitempty"`
+	NoFollow          *bool     `json:"no_follow,omitempty"`
+	CanonicalURL      *string   `json:"canonical_url,omitempty"`
+	ScheduledAt       *string   `json:"scheduled_at,omitempty"`
+	CategoryIDs       *[]int64  `json:"category_ids,omitempty"`
+	TagIDs            *[]int64  `json:"tag_ids,omitempty"`
+	Tags              *[]string `json:"tags,omitempty"`
 }
 
 // storeCategoryToResponse converts a store.Category to CategoryResponse.
@@ -317,7 +320,7 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		WriteInternalError(w, "Failed to list pages")
+		LogAndWriteInternalError(w, "Failed to list pages", "error", err)
 		return
 	}
 
@@ -422,7 +425,7 @@ func (h *Handler) GetPageBySlug(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, sql.ErrNoRows) {
 			WriteNotFound(w, "Page not found")
 		} else {
-			WriteInternalError(w, "Failed to retrieve page")
+			LogAndWriteInternalError(w, "Failed to retrieve page", "error", err)
 		}
 		return
 	}
@@ -488,7 +491,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	// Resolve language code (default to system default language if not provided)
 	langCode, langErr := h.resolveLanguageCode(ctx, req.LanguageCode)
 	if langErr != nil {
-		WriteInternalError(w, "Failed to resolve default language")
+		LogAndWriteInternalError(w, "Failed to resolve default language", "error", langErr)
 		return
 	}
 
@@ -548,31 +551,69 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 		params.PublishedAt = sql.NullTime{Time: now, Valid: true}
 	}
 
-	// Create page
-	page, err := h.queries.CreatePage(ctx, params)
+	// Pre-validate category IDs
+	for _, catID := range req.CategoryIDs {
+		if _, err := h.queries.GetCategoryByID(ctx, catID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				WriteValidationError(w, map[string]string{"category_ids": fmt.Sprintf("Category %d not found", catID)})
+			} else {
+				LogAndWriteInternalError(w, "Failed to validate category", "error", err, "category_id", catID)
+			}
+			return
+		}
+	}
+
+	// All writes (page, categories, tags, new tag creation) in one transaction
+	tx, err := h.db.BeginTx(ctx, nil)
 	if err != nil {
-		WriteInternalError(w, "Failed to create page")
+		LogAndWriteInternalError(w, "Failed to start transaction", "error", err)
+		return
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	txq := h.queries.WithTx(tx)
+
+	// Resolve tag names to IDs inside transaction (new tags roll back on failure)
+	if len(req.Tags) > 0 {
+		resolvedIDs, err := resolveTagNames(ctx, txq, req.Tags, langCode)
+		if err != nil {
+			LogAndWriteInternalError(w, "Failed to resolve tag names", "error", err)
+			return
+		}
+		req.TagIDs = append(req.TagIDs, resolvedIDs...)
+	}
+
+	tagIDs := deduplicateInt64(req.TagIDs)
+
+	page, err := txq.CreatePage(ctx, params)
+	if err != nil {
+		LogAndWriteInternalError(w, "Failed to create page", "error", err)
 		return
 	}
 
-	// Add categories
-	if len(req.CategoryIDs) > 0 {
-		for _, catID := range req.CategoryIDs {
-			_ = h.queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{
-				PageID:     page.ID,
-				CategoryID: catID,
-			})
+	for _, catID := range req.CategoryIDs {
+		if err := txq.AddCategoryToPage(ctx, store.AddCategoryToPageParams{
+			PageID:     page.ID,
+			CategoryID: catID,
+		}); err != nil {
+			LogAndWriteInternalError(w, "Failed to add category to page", "error", err, "page_id", page.ID, "category_id", catID)
+			return
 		}
 	}
 
-	// Add tags
-	if len(req.TagIDs) > 0 {
-		for _, tagID := range req.TagIDs {
-			_ = h.queries.AddTagToPage(ctx, store.AddTagToPageParams{
-				PageID: page.ID,
-				TagID:  tagID,
-			})
+	for _, tagID := range tagIDs {
+		if err := txq.AddTagToPage(ctx, store.AddTagToPageParams{
+			PageID: page.ID,
+			TagID:  tagID,
+		}); err != nil {
+			LogAndWriteInternalError(w, "Failed to add tag to page", "error", err, "page_id", page.ID, "tag_id", tagID)
+			return
 		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		LogAndWriteInternalError(w, "Failed to commit page creation", "error", err)
+		return
 	}
 
 	// Invalidate page cache (for sitemap regeneration on next request)
@@ -581,12 +622,8 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	resp := storePageToResponse(page)
 
 	// Include categories and tags in response
-	if len(req.CategoryIDs) > 0 {
-		h.populatePageCategories(ctx, &resp, page.ID)
-	}
-	if len(req.TagIDs) > 0 {
-		h.populatePageTags(ctx, &resp, page.ID)
-	}
+	h.populatePageCategories(ctx, &resp, page.ID)
+	h.populatePageTags(ctx, &resp, page.ID)
 
 	WriteCreated(w, resp)
 }
@@ -734,33 +771,90 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Update page
-	page, err := h.queries.UpdatePage(ctx, params)
+	// Pre-validate category IDs if provided
+	if req.CategoryIDs != nil {
+		for _, catID := range *req.CategoryIDs {
+			if _, err := h.queries.GetCategoryByID(ctx, catID); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					WriteValidationError(w, map[string]string{"category_ids": fmt.Sprintf("Category %d not found", catID)})
+				} else {
+					LogAndWriteInternalError(w, "Failed to validate category", "error", err, "category_id", catID)
+				}
+				return
+			}
+		}
+	}
+
+	// All writes in one transaction
+	hasTags := req.TagIDs != nil || req.Tags != nil
+
+	tx, err := h.db.BeginTx(ctx, nil)
 	if err != nil {
-		WriteInternalError(w, "Failed to update page")
+		LogAndWriteInternalError(w, "Failed to start transaction", "error", err)
+		return
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	txq := h.queries.WithTx(tx)
+
+	// Resolve tag names inside transaction (new tags roll back on failure)
+	var tagIDs []int64
+	if hasTags {
+		if req.TagIDs != nil {
+			tagIDs = append(tagIDs, *req.TagIDs...)
+		}
+		if req.Tags != nil {
+			resolvedIDs, err := resolveTagNames(ctx, txq, *req.Tags, existing.LanguageCode)
+			if err != nil {
+				LogAndWriteInternalError(w, "Failed to resolve tag names", "error", err)
+				return
+			}
+			tagIDs = append(tagIDs, resolvedIDs...)
+		}
+		tagIDs = deduplicateInt64(tagIDs)
+	}
+
+	page, err := txq.UpdatePage(ctx, params)
+	if err != nil {
+		LogAndWriteInternalError(w, "Failed to update page", "error", err, "page_id", existing.ID)
 		return
 	}
 
-	// Update categories if provided
 	if req.CategoryIDs != nil {
-		_ = h.queries.ClearPageCategories(ctx, existing.ID)
+		if err := txq.ClearPageCategories(ctx, existing.ID); err != nil {
+			LogAndWriteInternalError(w, "Failed to clear page categories", "error", err, "page_id", existing.ID)
+			return
+		}
 		for _, catID := range *req.CategoryIDs {
-			_ = h.queries.AddCategoryToPage(ctx, store.AddCategoryToPageParams{
+			if err := txq.AddCategoryToPage(ctx, store.AddCategoryToPageParams{
 				PageID:     existing.ID,
 				CategoryID: catID,
-			})
+			}); err != nil {
+				LogAndWriteInternalError(w, "Failed to add category to page", "error", err, "page_id", existing.ID, "category_id", catID)
+				return
+			}
 		}
 	}
 
-	// Update tags if provided
-	if req.TagIDs != nil {
-		_ = h.queries.ClearPageTags(ctx, existing.ID)
-		for _, tagID := range *req.TagIDs {
-			_ = h.queries.AddTagToPage(ctx, store.AddTagToPageParams{
+	if hasTags {
+		if err := txq.ClearPageTags(ctx, existing.ID); err != nil {
+			LogAndWriteInternalError(w, "Failed to clear page tags", "error", err, "page_id", existing.ID)
+			return
+		}
+		for _, tagID := range tagIDs {
+			if err := txq.AddTagToPage(ctx, store.AddTagToPageParams{
 				PageID: existing.ID,
 				TagID:  tagID,
-			})
+			}); err != nil {
+				LogAndWriteInternalError(w, "Failed to add tag to page", "error", err, "page_id", existing.ID, "tag_id", tagID)
+				return
+			}
 		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		LogAndWriteInternalError(w, "Failed to commit page update", "error", err, "page_id", existing.ID)
+		return
 	}
 
 	// Invalidate page cache
@@ -785,14 +879,35 @@ func (h *Handler) DeletePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete associated data
-	_ = h.queries.ClearPageCategories(ctx, page.ID)
-	_ = h.queries.ClearPageTags(ctx, page.ID)
-	_ = h.queries.DeletePageVersions(ctx, page.ID)
+	// Delete page and associated data in a transaction
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		LogAndWriteInternalError(w, "Failed to start transaction", "error", err)
+		return
+	}
+	defer tx.Rollback() //nolint:errcheck
 
-	// Delete page
-	if err := h.queries.DeletePage(ctx, page.ID); err != nil {
-		WriteInternalError(w, "Failed to delete page")
+	txq := h.queries.WithTx(tx)
+
+	if err := txq.ClearPageCategories(ctx, page.ID); err != nil {
+		LogAndWriteInternalError(w, "Failed to clear page categories", "error", err, "page_id", page.ID)
+		return
+	}
+	if err := txq.ClearPageTags(ctx, page.ID); err != nil {
+		LogAndWriteInternalError(w, "Failed to clear page tags", "error", err, "page_id", page.ID)
+		return
+	}
+	if err := txq.DeletePageVersions(ctx, page.ID); err != nil {
+		LogAndWriteInternalError(w, "Failed to delete page versions", "error", err, "page_id", page.ID)
+		return
+	}
+	if err := txq.DeletePage(ctx, page.ID); err != nil {
+		LogAndWriteInternalError(w, "Failed to delete page", "error", err, "page_id", page.ID)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		LogAndWriteInternalError(w, "Failed to commit page deletion", "error", err, "page_id", page.ID)
 		return
 	}
 
@@ -800,6 +915,70 @@ func (h *Handler) DeletePage(w http.ResponseWriter, r *http.Request) {
 	h.invalidatePageCache(page.ID)
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+const (
+	maxTagsPerRequest = 50
+	maxTagNameLength  = 100
+)
+
+// deduplicateInt64 returns a slice with duplicate values removed, preserving order.
+func deduplicateInt64(ids []int64) []int64 {
+	seen := make(map[int64]struct{}, len(ids))
+	result := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if _, ok := seen[id]; !ok {
+			seen[id] = struct{}{}
+			result = append(result, id)
+		}
+	}
+	return result
+}
+
+// resolveTagNames resolves tag names to IDs using the given queries handle,
+// creating any tags that don't exist. Pass a transactional queries to ensure
+// newly created tags are rolled back if the outer transaction fails.
+func resolveTagNames(ctx context.Context, q *store.Queries, names []string, langCode string) ([]int64, error) {
+	if len(names) > maxTagsPerRequest {
+		return nil, fmt.Errorf("too many tags: %d exceeds maximum of %d", len(names), maxTagsPerRequest)
+	}
+	ids := make([]int64, 0, len(names))
+	now := time.Now()
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if len(name) > maxTagNameLength {
+			return nil, fmt.Errorf("tag name too long: %d chars exceeds maximum of %d", len(name), maxTagNameLength)
+		}
+		slug := util.Slugify(name)
+		if slug == "" {
+			continue
+		}
+		// Try to find existing tag by slug
+		tag, err := q.GetTagBySlug(ctx, slug)
+		if err == nil {
+			ids = append(ids, tag.ID)
+			continue
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+		// Tag doesn't exist — create it
+		tag, err = q.CreateTag(ctx, store.CreateTagParams{
+			Name:         name,
+			Slug:         slug,
+			LanguageCode: langCode,
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		})
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, tag.ID)
+	}
+	return ids, nil
 }
 
 // populatePageAuthor fetches and populates author for a page response.

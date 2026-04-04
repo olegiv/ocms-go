@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -150,6 +151,14 @@ func WriteInternalError(w http.ResponseWriter, message string) {
 	WriteError(w, http.StatusInternalServerError, "internal_error", message, nil)
 }
 
+// LogAndWriteInternalError logs the error via slog.Error and writes a 500 JSON response.
+// This ensures the error reaches the EventLogHandler for database event logging.
+// IMPORTANT: message is sent to the HTTP client verbatim — use only static string literals.
+func LogAndWriteInternalError(w http.ResponseWriter, message string, args ...any) {
+	slog.Error(message, args...)
+	WriteInternalError(w, message)
+}
+
 // decodeJSON decodes a JSON body with strict validation.
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any, maxBytes int64) error {
 	if maxBytes <= 0 {
@@ -219,7 +228,7 @@ type SlugExistsChecker func() (int64, error)
 func checkSlugUnique(w http.ResponseWriter, slugExists SlugExistsChecker) bool {
 	exists, err := slugExists()
 	if err != nil {
-		WriteInternalError(w, "Failed to check slug")
+		LogAndWriteInternalError(w, "Failed to check slug", "error", err)
 		return false
 	}
 	if exists != 0 {
@@ -249,7 +258,7 @@ func requireEntityByID[T any](w http.ResponseWriter, r *http.Request, entityName
 		if errors.Is(err, sql.ErrNoRows) {
 			WriteNotFound(w, capitalizeFirst(entityName)+" not found")
 		} else {
-			WriteInternalError(w, "Failed to retrieve "+entityName)
+			LogAndWriteInternalError(w, "Failed to retrieve "+entityName, "error", err)
 		}
 		return zero, false
 	}

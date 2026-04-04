@@ -6,6 +6,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -137,6 +138,18 @@ func TestWriteInternalError(t *testing.T) {
 	w := httptest.NewRecorder()
 	WriteInternalError(w, "Something went wrong")
 	assertStatusCode(t, w, http.StatusInternalServerError)
+}
+
+func TestLogAndWriteInternalError(t *testing.T) {
+	w := httptest.NewRecorder()
+	testErr := errors.New("database connection failed")
+	LogAndWriteInternalError(w, "Failed to create page", "error", testErr)
+
+	assertStatusCode(t, w, http.StatusInternalServerError)
+	resp := assertErrorResponse(t, w, "internal_error")
+	if resp.Error.Message != "Failed to create page" {
+		t.Errorf("expected message 'Failed to create page', got %q", resp.Error.Message)
+	}
 }
 
 func TestWriteValidationError(t *testing.T) {

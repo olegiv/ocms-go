@@ -4,6 +4,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"strings"
 	"testing"
@@ -175,4 +176,148 @@ func TestSanitizePageBodyForStorage(t *testing.T) {
 			t.Fatalf("sanitizePageBodyForStorage() should keep safe markup, got %q", got)
 		}
 	})
+}
+
+func TestResolveTagNames(t *testing.T) {
+	db, _ := testSetup(t)
+	ctx := context.Background()
+	q := store.New(db)
+
+	// Pre-create an existing tag
+	createTestTag(t, db, "Existing Tag", "existing-tag")
+
+	t.Run("creates new tag", func(t *testing.T) {
+		ids, err := resolveTagNames(ctx, q, []string{"Brand New"}, "en")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(ids) != 1 {
+			t.Fatalf("expected 1 ID, got %d", len(ids))
+		}
+
+		// Verify tag was created in DB
+		tag, err := q.GetTagBySlug(ctx, "brand-new")
+		if err != nil {
+			t.Fatalf("tag not found in database: %v", err)
+		}
+		if tag.Name != "Brand New" {
+			t.Errorf("expected name 'Brand New', got %q", tag.Name)
+		}
+		if ids[0] != tag.ID {
+			t.Errorf("returned ID %d doesn't match DB ID %d", ids[0], tag.ID)
+		}
+	})
+
+	t.Run("finds existing tag by slug", func(t *testing.T) {
+		ids, err := resolveTagNames(ctx, q, []string{"Existing Tag"}, "en")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(ids) != 1 {
+			t.Fatalf("expected 1 ID, got %d", len(ids))
+		}
+
+		existing, _ := q.GetTagBySlug(ctx, "existing-tag")
+		if ids[0] != existing.ID {
+			t.Errorf("expected existing tag ID %d, got %d", existing.ID, ids[0])
+		}
+	})
+
+	t.Run("mixed existing and new", func(t *testing.T) {
+		ids, err := resolveTagNames(ctx, q, []string{"Existing Tag", "Another New Tag"}, "en")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(ids) != 2 {
+			t.Fatalf("expected 2 IDs, got %d", len(ids))
+		}
+	})
+
+	t.Run("skips empty and whitespace-only names", func(t *testing.T) {
+		ids, err := resolveTagNames(ctx, q, []string{"", "  ", "Valid Tag"}, "en")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(ids) != 1 {
+			t.Fatalf("expected 1 ID (empty names skipped), got %d", len(ids))
+		}
+	})
+
+	t.Run("empty input returns empty slice", func(t *testing.T) {
+		ids, err := resolveTagNames(ctx, q, []string{}, "en")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(ids) != 0 {
+			t.Fatalf("expected 0 IDs, got %d", len(ids))
+		}
+	})
+
+	t.Run("rejects too many tags", func(t *testing.T) {
+		names := make([]string, maxTagsPerRequest+1)
+		for i := range names {
+			names[i] = "tag"
+		}
+		_, err := resolveTagNames(ctx, q, names, "en")
+		if err == nil {
+			t.Fatal("expected error for too many tags, got nil")
+		}
+		if !strings.Contains(err.Error(), "too many tags") {
+			t.Errorf("expected 'too many tags' error, got: %v", err)
+		}
+	})
+
+	t.Run("rejects tag name too long", func(t *testing.T) {
+		longName := strings.Repeat("a", maxTagNameLength+1)
+		_, err := resolveTagNames(ctx, q, []string{longName}, "en")
+		if err == nil {
+			t.Fatal("expected error for long tag name, got nil")
+		}
+		if !strings.Contains(err.Error(), "tag name too long") {
+			t.Errorf("expected 'tag name too long' error, got: %v", err)
+		}
+	})
+
+	t.Run("database error propagates", func(t *testing.T) {
+		closedDB, err := sql.Open("sqlite3", ":memory:")
+		if err != nil {
+			t.Fatalf("failed to open db: %v", err)
+		}
+		_, _ = closedDB.Exec(`CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT, slug TEXT UNIQUE, language_code TEXT NOT NULL DEFAULT 'en', created_at DATETIME, updated_at DATETIME)`)
+		closedQ := store.New(closedDB)
+		_ = closedDB.Close()
+
+		_, err = resolveTagNames(ctx, closedQ, []string{"Will Fail"}, "en")
+		if err == nil {
+			t.Fatal("expected error from closed database, got nil")
+		}
+	})
+}
+
+func TestDeduplicateInt64(t *testing.T) {
+	tests := []struct {
+		name  string
+		input []int64
+		want  []int64
+	}{
+		{"no duplicates", []int64{1, 2, 3}, []int64{1, 2, 3}},
+		{"with duplicates", []int64{1, 2, 1, 3, 2}, []int64{1, 2, 3}},
+		{"all same", []int64{5, 5, 5}, []int64{5}},
+		{"empty", []int64{}, []int64{}},
+		{"single", []int64{42}, []int64{42}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := deduplicateInt64(tt.input)
+			if len(got) != len(tt.want) {
+				t.Fatalf("len = %d, want %d", len(got), len(tt.want))
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("[%d] = %d, want %d", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
 }

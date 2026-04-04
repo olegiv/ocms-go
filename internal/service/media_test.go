@@ -4,6 +4,7 @@
 package service
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,6 +12,58 @@ import (
 	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/store"
 )
+
+func TestClientError(t *testing.T) {
+	t.Run("implements error interface", func(t *testing.T) {
+		var err error = &ClientError{Message: "file too large"}
+		if err.Error() != "file too large" {
+			t.Errorf("Error() = %q, want %q", err.Error(), "file too large")
+		}
+	})
+
+	t.Run("detectable with errors.As", func(t *testing.T) {
+		err := &ClientError{Message: "invalid file"}
+		var target *ClientError
+		if !errors.As(err, &target) {
+			t.Fatal("errors.As should match ClientError")
+		}
+		if target.Message != "invalid file" {
+			t.Errorf("Message = %q, want %q", target.Message, "invalid file")
+		}
+	})
+
+	t.Run("validation errors are ClientError", func(t *testing.T) {
+		// Test that validation functions return ClientError
+		validationCases := []struct {
+			name string
+			fn   func() error
+		}{
+			{"empty file", func() error {
+				f := tempMultipartFile(t, []byte{})
+				defer f.Close()
+				_, err := detectAndValidateUploadMime(f, "test.png")
+				return err
+			}},
+			{"unsupported mime", func() error {
+				_, err := canonicalizeUploadFilename("file.txt", "text/plain")
+				return err
+			}},
+		}
+
+		for _, tc := range validationCases {
+			t.Run(tc.name, func(t *testing.T) {
+				err := tc.fn()
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				var clientErr *ClientError
+				if !errors.As(err, &clientErr) {
+					t.Errorf("expected ClientError, got %T: %v", err, err)
+				}
+			})
+		}
+	})
+}
 
 func TestSanitizeFilename(t *testing.T) {
 	tests := []struct {
@@ -165,11 +218,12 @@ func TestDetectAndValidateUploadMime(t *testing.T) {
 
 func TestCanonicalizeUploadFilename(t *testing.T) {
 	tests := []struct {
-		name     string
-		filename string
-		mimeType string
-		want     string
-		wantErr  bool
+		name            string
+		filename        string
+		mimeType        string
+		want            string
+		wantErr         bool
+		wantClientError bool
 	}{
 		{
 			name:     "normalizes jpeg extension",
@@ -190,10 +244,11 @@ func TestCanonicalizeUploadFilename(t *testing.T) {
 			want:     "file.jpg",
 		},
 		{
-			name:     "unsupported mime",
-			filename: "note.txt",
-			mimeType: "text/plain",
-			wantErr:  true,
+			name:            "unsupported mime",
+			filename:        "note.txt",
+			mimeType:        "text/plain",
+			wantErr:         true,
+			wantClientError: true,
 		},
 	}
 
@@ -203,6 +258,12 @@ func TestCanonicalizeUploadFilename(t *testing.T) {
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
+				}
+				if tt.wantClientError {
+					var clientErr *ClientError
+					if !errors.As(err, &clientErr) {
+						t.Errorf("expected ClientError, got %T: %v", err, err)
+					}
 				}
 				return
 			}

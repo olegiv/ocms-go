@@ -7,6 +7,8 @@ package api
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -264,7 +266,7 @@ func (h *Handler) ListMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		WriteInternalError(w, "Failed to list media")
+		LogAndWriteInternalError(w, "Failed to list media", "error", err)
 		return
 	}
 
@@ -343,7 +345,7 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 	queries := store.New(h.db)
 	defaultLang, err := queries.GetDefaultLanguage(ctx)
 	if err != nil {
-		WriteInternalError(w, "Failed to get default language")
+		LogAndWriteInternalError(w, "Failed to get default language", "error", err)
 		return
 	}
 
@@ -379,9 +381,16 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		_ = file.Close()
 
 		if err != nil {
+			errMsg := "Upload failed"
+			var clientErr *service.ClientError
+			if errors.As(err, &clientErr) {
+				errMsg = clientErr.Message
+			} else {
+				slog.Error("media upload failed", "error", err, "filename", fileHeader.Filename)
+			}
 			uploadErrors = append(uploadErrors, map[string]string{
 				"filename": fileHeader.Filename,
-				"error":    err.Error(),
+				"error":    errMsg,
 			})
 			continue
 		}
@@ -472,7 +481,7 @@ func (h *Handler) UpdateMedia(w http.ResponseWriter, r *http.Request) {
 	// Update media
 	media, err := h.queries.UpdateMedia(ctx, params)
 	if err != nil {
-		WriteInternalError(w, "Failed to update media")
+		LogAndWriteInternalError(w, "Failed to update media", "error", err, "media_id", existing.ID)
 		return
 	}
 
@@ -498,7 +507,7 @@ func (h *Handler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
 	// Create media service and delete
 	mediaService := service.NewMediaService(h.db, "./uploads")
 	if err := mediaService.Delete(ctx, media.ID); err != nil {
-		WriteInternalError(w, "Failed to delete media")
+		LogAndWriteInternalError(w, "Failed to delete media", "error", err, "media_id", media.ID)
 		return
 	}
 

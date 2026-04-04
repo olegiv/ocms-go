@@ -139,6 +139,12 @@ func (h *EventLogHandler) extractCategory(r slog.Record) string {
 		return model.EventCategoryUser
 	case strings.Contains(msg, "config") || strings.Contains(msg, "setting"):
 		return model.EventCategoryConfig
+	case strings.Contains(msg, "tag"):
+		return model.EventCategoryTag
+	case strings.Contains(msg, "category"):
+		return model.EventCategoryCategory
+	case strings.Contains(msg, "media"):
+		return model.EventCategoryMedia
 	case strings.Contains(msg, "cache"):
 		return model.EventCategoryCache
 	default:
