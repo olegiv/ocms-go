@@ -45,13 +45,15 @@
         {{.Page.Body}}
     </div>
 
-    {{/* Category and Tags */}}
-    {{if or .Page.Category .Page.Tags}}
+    {{/* Categories and Tags */}}
+    {{if or .Page.Categories .Page.Tags}}
     <footer class="st-article__footer">
-        {{if .Page.Category}}
+        {{if .Page.Categories}}
         <div class="st-article__category">
-            <span class="st-label">{{TTheme $.LangCode "frontend.category_label"}}</span>
-            <a href="{{$.LangPrefix}}/category/{{.Page.Category.Slug}}">{{.Page.Category.Name}}</a>
+            <span class="st-label">{{if gt (len .Page.Categories) 1}}{{TTheme $.LangCode "frontend.categories_label"}}{{else}}{{TTheme $.LangCode "frontend.category_label"}}{{end}}</span>
+            {{range .Page.Categories}}
+            <a href="{{$.LangPrefix}}/category/{{.Slug}}">{{.Name}}</a>
+            {{end}}
         </div>
         {{end}}
         {{if .Page.Tags}}

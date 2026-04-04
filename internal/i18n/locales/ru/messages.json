@@ -5818,6 +5818,11 @@
             "translation": "Категория:"
         },
         {
+            "id": "frontend.categories_label",
+            "message": "Categories:",
+            "translation": "Категории:"
+        },
+        {
             "id": "frontend.tags_label",
             "message": "Tags:",
             "translation": "Теги:"

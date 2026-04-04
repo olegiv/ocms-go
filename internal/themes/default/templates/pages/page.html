@@ -31,12 +31,14 @@
     </div>
 
     {{/* Page Meta */}}
-    {{if or .Page.Category .Page.Tags}}
+    {{if or .Page.Categories .Page.Tags}}
     <footer class="page-footer">
-        {{if .Page.Category}}
+        {{if .Page.Categories}}
         <div class="page-category">
-            <span class="label">{{TTheme $.LangCode "frontend.category_label"}}</span>
-            <a href="{{$.LangPrefix}}/category/{{.Page.Category.Slug}}">{{.Page.Category.Name}}</a>
+            <span class="label">{{if gt (len .Page.Categories) 1}}{{TTheme $.LangCode "frontend.categories_label"}}{{else}}{{TTheme $.LangCode "frontend.category_label"}}{{end}}</span>
+            {{range .Page.Categories}}
+            <a href="{{$.LangPrefix}}/category/{{.Slug}}">{{.Name}}</a>
+            {{end}}
         </div>
         {{end}}
 
