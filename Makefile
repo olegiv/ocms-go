@@ -1,4 +1,4 @@
-make.PHONY: run stop restart build build-prod build-linux-amd64 build-darwin-arm64 build-all-platforms test clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ deploy-binary commit-prepare commit-do code-quality security-audit commit-prepare-local commit-do-local code-quality-local security-audit-local install-hooks check-no-absolute-paths
+make.PHONY: run stop restart build build-prod build-linux-amd64 build-darwin-arm64 build-all-platforms test coverage coverage-html clean clean-db migrate-up migrate-down migrate-status migrate-create assets dev sqlc templ deploy-binary commit-prepare commit-do code-quality security-audit commit-prepare-local commit-do-local code-quality-local security-audit-local install-hooks check-no-absolute-paths
 
 # Build variables
 BINARY_NAME=ocms
@@ -81,9 +81,20 @@ build-all-platforms: build-linux-amd64 build-darwin-arm64
 test:
 	go test -v ./...
 
+# Test coverage summary
+coverage:
+	go test -cover ./...
+
+# Test coverage HTML report
+coverage-html:
+	go test -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report: coverage.html"
+	@open coverage.html
+
 # Clean build artifacts
 clean:
-	rm -rf bin/
+	rm -rf bin/ coverage.out coverage.html
 
 # Clean DB
 clean-db:

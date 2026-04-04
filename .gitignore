@@ -33,6 +33,10 @@ custom/modules/*
 !custom/modules/imports.go
 !custom/modules/bookmarks/
 
+# Test coverage artifacts
+coverage.out
+coverage.html
+
 # Root-level ad-hoc security report artifacts (canonical location: docs/security/)
 /ocms-go-threat-model.md
 /security_best_practices_report.md
