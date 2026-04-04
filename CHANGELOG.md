@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-04-04
+
+### Added
+
+#### Dify Knowledge Base
+- Add Dify knowledge base file downloads (site-content.md, user-guide.md) for AI chatbot training
+- Add batch SQLC queries for page categories and tags to optimize KB generation
+
+#### Wiki
+- Add GitHub Wiki as git submodule at `wiki/` with `/update-wiki` command
+- Add wiki sync requirement to CLAUDE.md
+
+#### Theme
+- Add shared image lightbox for all themes
+- Show all page categories in post cards as pills
+- Add module HTML injection support for templ-based frontend layouts
+
+#### API
+- Add API error logging for failed requests
+- Add tag auto-creation on page save via API
+- Return 422 for tag validation errors and pre-validate tag IDs
+
+#### Testing
+- Raise test coverage across all packages (~15,600 new test lines)
+- Add make coverage and coverage-html targets
+
+### Changed
+
+#### Theme
+- Use larger images in post and related cards
+- Stack post card image above content on mobile
+
+#### Build
+- Move security reports to `.audit/` directory (gitignored)
+- Update SECURITY.md with current versions
+- Update shared Claude Code submodule
+
+### Fixed
+
+#### Security
+- Fix email disclosure in Dify KB exports: author fallback no longer uses email, admin email replaced with contact-us link (KB-001, KB-002)
+- Fix stale module template functions after toggle: funcs now fetched per-request via provider interface (INJ-001)
+
+#### Performance
+- Fix N+1 queries in KB generation with batch SQLC queries, reducing from O(2N+1) to 3 queries (KB-003)
+
+#### Theme
+- Fix mobile horizontal scrollbar on blog page
+
+#### Build
+- Fix wiki submodule URL from SSH to HTTPS for portability
+- Fix macOS-only `open` command in coverage-html Makefile target
+
+### Security
+- Remove email address disclosure from Dify knowledge base exports (KB-001, KB-002)
+- Fix deactivated modules continuing to inject HTML until server restart (INJ-001)
+
 ## [0.14.0] - 2026-04-04
 
 ### Added
@@ -629,7 +686,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/olegiv/ocms-go/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/olegiv/ocms-go/compare/v0.12.0...v0.14.0
 [0.12.0]: https://github.com/olegiv/ocms-go/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/olegiv/ocms-go/compare/v0.10.2...v0.11.0
