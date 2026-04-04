@@ -1,0 +1,7 @@
+{
+    "language": "en",
+    "messages": [
+        {"id": "module.hello", "message": "Hello", "translation": "Hello from module"},
+        {"id": "module.bye",   "message": "Bye",   "translation": "Bye from module"}
+    ]
+}

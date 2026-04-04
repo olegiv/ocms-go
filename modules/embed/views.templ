@@ -245,5 +245,28 @@ templ EmbedProviderPage(pc *adminviews.PageContext, data EmbedProviderViewData) 
 				}
 			</div>
 		</form>
+		if data.ProviderID == "dify" {
+			@card.Card(card.Props{Class: "mt-4"}) {
+				@card.Header(card.HeaderProps{Class: "border-b pb-4"}) {
+					@card.Title(card.TitleProps{Class: "text-base"}) {
+						{ pc.T("embed.kb_title") }
+					}
+					@card.Description() {
+						{ pc.T("embed.kb_description") }
+					}
+				}
+				@card.Content(card.ContentProps{Class: "pt-4"}) {
+					<div class="flex flex-wrap items-center gap-2">
+						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: "/admin/embed/dify/kb/site-content.md"}) {
+							{ pc.T("embed.kb_download_content") }
+						}
+						@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: "/admin/embed/dify/kb/user-guide.md"}) {
+							{ pc.T("embed.kb_download_guide") }
+						}
+					</div>
+					<p class="mt-3 text-xs text-muted-foreground">{ pc.T("embed.kb_tip") }</p>
+				}
+			}
+		}
 	}
 }

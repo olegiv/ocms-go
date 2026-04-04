@@ -401,6 +401,38 @@ func buildEmbedSettingsAuditMetadata(
 	return metadata
 }
 
+// handleDownloadSiteContent handles GET /admin/embed/dify/kb/site-content.md.
+func (m *Module) handleDownloadSiteContent(w http.ResponseWriter, r *http.Request) {
+	content, err := GenerateSiteContentMarkdown(r.Context(), store.New(m.ctx.DB))
+	if err != nil {
+		m.ctx.Logger.Error("failed to generate site content markdown", "error", err)
+		lang := m.ctx.Render.GetAdminLang(r)
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "embed.kb_error_generate"), "error")
+		http.Redirect(w, r, "/admin/embed/dify", http.StatusSeeOther)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.Header().Set("Content-Disposition", "attachment; filename=\"site-content.md\"")
+	fmt.Fprint(w, content)
+}
+
+// handleDownloadUserGuide handles GET /admin/embed/dify/kb/user-guide.md.
+func (m *Module) handleDownloadUserGuide(w http.ResponseWriter, r *http.Request) {
+	content, err := GenerateUserGuideMarkdown(r.Context(), store.New(m.ctx.DB))
+	if err != nil {
+		m.ctx.Logger.Error("failed to generate user guide markdown", "error", err)
+		lang := m.ctx.Render.GetAdminLang(r)
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "embed.kb_error_generate"), "error")
+		http.Redirect(w, r, "/admin/embed/dify", http.StatusSeeOther)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.Header().Set("Content-Disposition", "attachment; filename=\"user-guide.md\"")
+	fmt.Fprint(w, content)
+}
+
 func embedEndpointMetadata(rawEndpoint string) (scheme string, host string) {
 	parsed, err := url.Parse(strings.TrimSpace(rawEndpoint))
 	if err != nil || parsed == nil {

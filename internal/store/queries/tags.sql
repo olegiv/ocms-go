@@ -134,3 +134,9 @@ INNER JOIN pages p ON p.id = pt.page_id AND p.status = 'published' AND p.languag
 GROUP BY t.id, t.name, t.slug, t.created_at, t.updated_at
 ORDER BY usage_count DESC, t.name
 LIMIT ? OFFSET ?;
+
+-- name: GetTagNamesForAllPages :many
+SELECT pt.page_id, t.name
+FROM page_tags pt
+INNER JOIN tags t ON t.id = pt.tag_id
+ORDER BY pt.page_id, t.name;

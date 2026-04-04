@@ -213,6 +213,12 @@ type BaseTemplateData struct {
 	LangPrefix         string            // URL prefix for current language (e.g., "/ru" or "" for default)
 	ShowLanguagePicker bool              // Whether to show language picker
 	CSPNonce           string            // CSP nonce for inline scripts
+
+	// Module-rendered HTML for templ-based layouts (aggregated from all active modules).
+	// HTML themes use template funcs directly; templ layouts use these fields.
+	ModuleHeadHTML    template.HTML // Before </head>: privacy consent, analytics, embeds
+	ModuleBodyTopHTML template.HTML // After <body>: informer bar, analytics noscript
+	ModuleBodyEndHTML template.HTML // Before </body>: embed widgets (chat, etc.)
 }
 
 // FooterWidget represents a widget in the footer area.
@@ -370,17 +376,24 @@ type NotFoundData struct {
 }
 
 // FrontendHandler handles public frontend routes.
+// ModuleTemplateFuncsProvider returns template functions from active modules.
+// Calling this per-request ensures toggled modules are reflected immediately.
+type ModuleTemplateFuncsProvider interface {
+	AllTemplateFuncs() template.FuncMap
+}
+
 type FrontendHandler struct {
-	db            *sql.DB
-	queries       *store.Queries
-	themeManager  *theme.Manager
-	menuService   *service.MenuService
-	widgetService *service.WidgetService
-	searchService *service.SearchService
-	cacheManager  *cache.Manager
-	eventService  *service.EventService
-	logger        *slog.Logger
-	sanitizePages bool
+	db              *sql.DB
+	queries         *store.Queries
+	themeManager    *theme.Manager
+	menuService     *service.MenuService
+	widgetService   *service.WidgetService
+	searchService   *service.SearchService
+	cacheManager    *cache.Manager
+	eventService    *service.EventService
+	logger          *slog.Logger
+	sanitizePages   bool
+	moduleFuncsProvider ModuleTemplateFuncsProvider
 }
 
 // NewFrontendHandler creates a new FrontendHandler.
@@ -410,6 +423,29 @@ func NewFrontendHandler(db *sql.DB, themeManager *theme.Manager, cacheManager *c
 // SetSanitizePageHTML configures optional frontend sanitization of page HTML.
 func (h *FrontendHandler) SetSanitizePageHTML(enabled bool) {
 	h.sanitizePages = enabled
+}
+
+// SetModuleTemplateFuncsProvider sets the provider used to fetch module template functions
+// per-request. This ensures toggled modules take effect immediately without server restart.
+func (h *FrontendHandler) SetModuleTemplateFuncsProvider(p ModuleTemplateFuncsProvider) {
+	h.moduleFuncsProvider = p
+}
+
+// callModuleHTMLFuncs calls named template functions and concatenates their HTML output.
+func (h *FrontendHandler) callModuleHTMLFuncs(funcs template.FuncMap, nonce string, names ...string) template.HTML {
+	var sb strings.Builder
+	for _, name := range names {
+		fn, ok := funcs[name]
+		if !ok {
+			continue
+		}
+		if f, ok := fn.(func(...any) template.HTML); ok {
+			if result := f(nonce); result != "" {
+				sb.WriteString(string(result))
+			}
+		}
+	}
+	return template.HTML(sb.String())
 }
 
 // trustedPageBody returns page HTML for rendering, optionally sanitizing to
@@ -1810,6 +1846,16 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		ShowSearch:      true,
 		SearchQuery:     r.URL.Query().Get("q"),
 		CSPNonce:        middleware.GetCSPNonce(r),
+	}
+
+	// Populate module HTML for templ-based layouts by calling known template funcs.
+	// HTML themes call these directly; templ layouts need the aggregated output.
+	// Fetched per-request so module toggle takes effect without restart.
+	if h.moduleFuncsProvider != nil {
+		funcs := h.moduleFuncsProvider.AllTemplateFuncs()
+		data.ModuleHeadHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, "privacyHead", "analyticsExtHead", "embedHead")
+		data.ModuleBodyTopHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, "informerBar", "analyticsExtBody")
+		data.ModuleBodyEndHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, "embedBody")
 	}
 
 	// Get site logo and custom CSS from cache

@@ -183,6 +183,7 @@ cmd/ocms/main.go
     ├── internal/themes      (embedded core themes)
     ├── modules/             (built-in modules)
     ├── custom/              (user content: themes, modules)
+    ├── wiki/                (GitHub Wiki submodule)
     └── web                  (embedded admin templates/static)
 ```
 
@@ -561,6 +562,19 @@ Additional documentation is available in the `docs/` directory:
 
 Security audit documents are available in the `.audit/` directory (gitignored).
 
+### Wiki Sync Requirement
+
+**CRITICAL**: The GitHub Wiki is a git submodule at `wiki/` (published at https://github.com/olegiv/ocms-go/wiki). When updating any documentation file, you **MUST** also update the corresponding wiki page(s):
+
+| Source File | Wiki Page |
+|-------------|-----------|
+| `SECURITY.md` | `wiki/Security.md` |
+| `CONTRIBUTING.md` | `wiki/Contributing.md` |
+| `README.md` (features, API, config) | Corresponding `wiki/*.md` pages |
+| `docs/*.md` | Corresponding `wiki/*.md` pages |
+
+After editing wiki files, use `/update-wiki` to publish changes.
+
 ## Claude Code Agents
 
 Specialized AI agents are available in `.claude/agents/` for focused development tasks:
@@ -679,6 +693,9 @@ Add templUI components to the project. Handles CLI installation, `.templui.json`
 
 ### /templui-list
 List available templUI components or fetch documentation for a specific component. Shows installed vs available status.
+
+### /update-wiki
+Publish local wiki changes to GitHub. The wiki is a git submodule at `wiki/` pointing to `github.com/olegiv/ocms-go.wiki.git`. Stages, commits, and pushes wiki changes, then updates the submodule pointer in the main repo.
 
 ### /clean
 Clean build artifacts, compiled binaries, and development databases.

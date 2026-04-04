@@ -291,6 +291,41 @@ func (q *Queries) GetTagBySlug(ctx context.Context, slug string) (Tag, error) {
 	return i, err
 }
 
+const getTagNamesForAllPages = `-- name: GetTagNamesForAllPages :many
+SELECT pt.page_id, t.name
+FROM page_tags pt
+INNER JOIN tags t ON t.id = pt.tag_id
+ORDER BY pt.page_id, t.name
+`
+
+type GetTagNamesForAllPagesRow struct {
+	PageID int64  `json:"page_id"`
+	Name   string `json:"name"`
+}
+
+func (q *Queries) GetTagNamesForAllPages(ctx context.Context) ([]GetTagNamesForAllPagesRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTagNamesForAllPages)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetTagNamesForAllPagesRow{}
+	for rows.Next() {
+		var i GetTagNamesForAllPagesRow
+		if err := rows.Scan(&i.PageID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTagUsageCounts = `-- name: GetTagUsageCounts :many
 SELECT t.id, t.name, t.slug, t.language_code, t.created_at, t.updated_at, COUNT(pt.page_id) as usage_count
 FROM tags t

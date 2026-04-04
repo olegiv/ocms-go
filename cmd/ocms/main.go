@@ -1449,6 +1449,7 @@ func run() error {
 	if cfg.SanitizePageHTML {
 		slog.Info("frontend page HTML sanitization enabled")
 	}
+	frontendHandler.SetModuleTemplateFuncsProvider(moduleRegistry)
 	formsHandler := handler.NewFormsHandler(db, renderer, sessionManager, hookRegistry, themeManager, cacheManager, renderer.GetMenuService(), frontendHandler)
 	formsHandler.SetRequireCaptcha(cfg.RequireFormCaptcha)
 	if cfg.RequireFormCaptcha {
