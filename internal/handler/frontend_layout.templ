@@ -94,6 +94,8 @@ templ frontendBaseLayout(base BaseTemplateData) {
 			<script nonce={ templ.GetNonce(ctx) } defer src="/static/dist/js/alpine.min.js"></script>
 			<!-- Prism.js syntax highlighting -->
 			<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/prism-bundle.min.js"></script>
+			<!-- Image lightbox -->
+			<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/lightbox.js"></script>
 		</body>
 	</html>
 }

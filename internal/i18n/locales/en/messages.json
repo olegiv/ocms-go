@@ -5788,6 +5788,11 @@
             "translation": "Category:"
         },
         {
+            "id": "frontend.categories_label",
+            "message": "Categories:",
+            "translation": "Categories:"
+        },
+        {
             "id": "frontend.tags_label",
             "message": "Tags:",
             "translation": "Tags:"

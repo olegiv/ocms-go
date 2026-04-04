@@ -452,6 +452,7 @@
                                 <tr><td class="param-name">scheduled_at</td><td class="param-type">string</td><td>ISO 8601 datetime for scheduled publishing</td></tr>
                                 <tr><td class="param-name">category_ids</td><td class="param-type">array</td><td>Array of category IDs</td></tr>
                                 <tr><td class="param-name">tag_ids</td><td class="param-type">array</td><td>Array of tag IDs</td></tr>
+                                <tr><td class="param-name">tags</td><td class="param-type">array</td><td>Array of tag names (creates missing tags automatically, can be combined with <code>tag_ids</code>)</td></tr>
                             </tbody>
                         </table>
 
@@ -465,7 +466,8 @@
     "meta_title": "New Blog Post | My Site",
     "meta_description": "A great new blog post about...",
     "category_ids": [1, 2],
-    "tag_ids": [5, 8, 12]
+    "tag_ids": [5],
+    "tags": ["golang", "tutorial", "New Tag"]
 }</code></pre>
                         </div>
                     </div>
@@ -486,6 +488,17 @@
                             <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
                             <tbody>
                                 <tr><td class="param-name">id <span class="param-required">required</span></td><td class="param-type">integer</td><td>Page ID</td></tr>
+                            </tbody>
+                        </table>
+
+                        <h4>Request Body</h4>
+                        <p class="endpoint-description">Same fields as Create Page, all optional. Additionally supports:</p>
+                        <table class="params-table">
+                            <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td class="param-name">tag_ids</td><td class="param-type">array</td><td>Replace all tags with these tag IDs</td></tr>
+                                <tr><td class="param-name">tags</td><td class="param-type">array</td><td>Replace all tags with these tag names (creates missing tags, can be combined with <code>tag_ids</code>)</td></tr>
+                                <tr><td class="param-name">category_ids</td><td class="param-type">array</td><td>Replace all categories with these category IDs</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -637,13 +650,15 @@
         "uploaded": [
             { "id": 1, "filename": "image1.jpg", ... }
         ],
-        "failed": [
-            { "filename": "invalid.exe", "error": "File type not allowed" }
-        ],
-        "total_uploaded": 1,
-        "total_failed": 1
+        "errors": [
+            { "filename": "invalid.exe", "error": "file type application/x-dosexec is not allowed" }
+        ]
     }
 }</code></pre>
+                        </div>
+
+                        <div class="info-box info">
+                            <p><strong>Error messages:</strong> Validation errors (file too large, invalid type, extension mismatch) return specific messages. Internal server errors return a generic <code>"Upload failed"</code> message — details are logged server-side only.</p>
                         </div>
                     </div>
                 </div>

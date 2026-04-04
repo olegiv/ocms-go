@@ -58,6 +58,11 @@
             "translation": "Рубрика"
         },
         {
+            "id": "frontend.categories_label",
+            "message": "Categories",
+            "translation": "Рубрики"
+        },
+        {
             "id": "frontend.tags_label",
             "message": "Tags",
             "translation": "Метки"

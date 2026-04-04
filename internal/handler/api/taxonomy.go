@@ -106,14 +106,14 @@ func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
 		Offset: int64(offset),
 	})
 	if err != nil {
-		WriteInternalError(w, "Failed to list tags")
+		LogAndWriteInternalError(w, "Failed to list tags", "error", err)
 		return
 	}
 
 	// Get total count
 	total, err := h.queries.CountTags(ctx)
 	if err != nil {
-		WriteInternalError(w, "Failed to count tags")
+		LogAndWriteInternalError(w, "Failed to count tags", "error", err)
 		return
 	}
 
@@ -186,7 +186,7 @@ func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	// Resolve language code
 	langCode, langErr := h.resolveLanguageCode(ctx, req.LanguageCode)
 	if langErr != nil {
-		WriteInternalError(w, "Failed to resolve default language")
+		LogAndWriteInternalError(w, "Failed to resolve default language", "error", langErr)
 		return
 	}
 
@@ -199,7 +199,7 @@ func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:    now,
 	})
 	if err != nil {
-		WriteInternalError(w, "Failed to create tag")
+		LogAndWriteInternalError(w, "Failed to create tag", "error", err)
 		return
 	}
 
@@ -250,7 +250,7 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 
 	tag, err := h.queries.UpdateTag(ctx, params)
 	if err != nil {
-		WriteInternalError(w, "Failed to update tag")
+		LogAndWriteInternalError(w, "Failed to update tag", "error", err, "tag_id", existing.ID)
 		return
 	}
 
@@ -285,7 +285,7 @@ func (h *Handler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 
 	// Delete tag (page_tags associations are handled by CASCADE or manually)
 	if err := h.queries.DeleteTag(ctx, tag.ID); err != nil {
-		WriteInternalError(w, "Failed to delete tag")
+		LogAndWriteInternalError(w, "Failed to delete tag", "error", err, "tag_id", tag.ID)
 		return
 	}
 
@@ -307,7 +307,7 @@ func (h *Handler) ListCategories(w http.ResponseWriter, r *http.Request) {
 	// Get all categories with usage counts
 	categories, err := h.queries.GetCategoryUsageCounts(ctx)
 	if err != nil {
-		WriteInternalError(w, "Failed to list categories")
+		LogAndWriteInternalError(w, "Failed to list categories", "error", err)
 		return
 	}
 
@@ -392,7 +392,7 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(err, sql.ErrNoRows) {
 				WriteValidationError(w, map[string]string{"parent_id": "Parent category not found"})
 			} else {
-				WriteInternalError(w, "Failed to validate parent category")
+				LogAndWriteInternalError(w, "Failed to validate parent category", "error", err)
 			}
 			return
 		}
@@ -401,7 +401,7 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	// Resolve language code
 	langCode, langErr := h.resolveLanguageCode(ctx, req.LanguageCode)
 	if langErr != nil {
-		WriteInternalError(w, "Failed to resolve default language")
+		LogAndWriteInternalError(w, "Failed to resolve default language", "error", langErr)
 		return
 	}
 
@@ -426,7 +426,7 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 
 	category, err := h.queries.CreateCategory(ctx, params)
 	if err != nil {
-		WriteInternalError(w, "Failed to create category")
+		LogAndWriteInternalError(w, "Failed to create category", "error", err)
 		return
 	}
 
@@ -486,7 +486,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 				if errors.Is(err, sql.ErrNoRows) {
 					WriteValidationError(w, map[string]string{"parent_id": "Parent category not found"})
 				} else {
-					WriteInternalError(w, "Failed to validate parent category")
+					LogAndWriteInternalError(w, "Failed to validate parent category", "error", err)
 				}
 				return
 			}
@@ -509,7 +509,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 
 	category, err := h.queries.UpdateCategory(ctx, params)
 	if err != nil {
-		WriteInternalError(w, "Failed to update category")
+		LogAndWriteInternalError(w, "Failed to update category", "error", err, "category_id", existing.ID)
 		return
 	}
 
@@ -541,7 +541,7 @@ func (h *Handler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 
 	// Delete category (page_categories associations are handled by CASCADE or manually)
 	if err := h.queries.DeleteCategory(ctx, category.ID); err != nil {
-		WriteInternalError(w, "Failed to delete category")
+		LogAndWriteInternalError(w, "Failed to delete category", "error", err, "category_id", category.ID)
 		return
 	}
 

@@ -2,18 +2,18 @@
     {{if .FeaturedImage}}
     <div class="dev-post-image">
         <a href="{{.URL}}">
-            <img src="{{.FeaturedImage}}"
+            <img src="{{if .FeaturedImageMedium}}{{.FeaturedImageMedium}}{{else if .FeaturedImageSmall}}{{.FeaturedImageSmall}}{{else}}{{.FeaturedImage}}{{end}}"
                  srcset="{{.FeaturedImage}} 150w{{if .FeaturedImageSmall}}, {{.FeaturedImageSmall}} 400w{{end}}{{if .FeaturedImageMedium}}, {{.FeaturedImageMedium}} 800w{{end}}"
-                 sizes="(max-width: 768px) 100vw, 200px"
+                 sizes="(max-width: 768px) 100vw, 800px"
                  alt="{{mediaAlt .FeaturedImageID $.LangCode .FeaturedImageAlt}}"
                  loading="lazy">
         </a>
     </div>
     {{end}}
     <div class="dev-post-content">
-        {{if .Category}}
+        {{if .Categories}}
         <span class="dev-post-category">
-            <a href="{{$.LangPrefix}}/category/{{.Category.Slug}}">{{.Category.Name}}</a>
+            {{range .Categories}}<a href="{{$.LangPrefix}}/category/{{.Slug}}">{{.Name}}</a> {{end}}
         </span>
         {{end}}
         <h3 class="dev-post-title">

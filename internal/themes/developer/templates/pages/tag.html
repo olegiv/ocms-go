@@ -34,9 +34,9 @@
                 </div>
                 {{end}}
                 <div class="dev-post-content">
-                    {{if .Category}}
+                    {{if .Categories}}
                     <span class="dev-post-category">
-                        <a href="{{$.LangPrefix}}/category/{{.Category.Slug}}">{{.Category.Name}}</a>
+                        {{range .Categories}}<a href="{{$.LangPrefix}}/category/{{.Slug}}">{{.Name}}</a> {{end}}
                     </span>
                     {{end}}
                     <h2 class="dev-post-title">

@@ -24,6 +24,14 @@ import (
 	"github.com/olegiv/ocms-go/internal/util"
 )
 
+// ClientError wraps an error message that is safe to show to API clients.
+// Internal errors (filesystem, DB) must NOT use this type.
+type ClientError struct {
+	Message string
+}
+
+func (e *ClientError) Error() string { return e.Message }
+
 // Upload limits
 const (
 	MaxUploadSize    = 20 * 1024 * 1024 // 20MB
@@ -94,7 +102,7 @@ func NewMediaService(db *sql.DB, uploadDir string) *MediaService {
 func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *multipart.FileHeader, userID int64, folderID *int64, languageCode string) (*UploadResult, error) {
 	// Validate file size
 	if header.Size > MaxUploadSize {
-		return nil, fmt.Errorf("file size exceeds maximum allowed (%d bytes)", MaxUploadSize)
+		return nil, &ClientError{Message: fmt.Sprintf("file size exceeds maximum allowed (%d bytes)", MaxUploadSize)}
 	}
 
 	// Generate UUID for the file
@@ -103,7 +111,7 @@ func (s *MediaService) Upload(ctx context.Context, file multipart.File, header *
 	// Sanitize filename
 	filename := sanitizeFilename(header.Filename)
 	if filename == "" {
-		return nil, fmt.Errorf("invalid filename")
+		return nil, &ClientError{Message: "invalid filename"}
 	}
 
 	// Detect and validate MIME type from actual content (not client headers).
@@ -383,18 +391,18 @@ func detectAndValidateUploadMime(file multipart.File, filename string) (string, 
 		return "", fmt.Errorf("failed to inspect uploaded file: %w", err)
 	}
 	if n == 0 {
-		return "", fmt.Errorf("uploaded file is empty")
+		return "", &ClientError{Message: "uploaded file is empty"}
 	}
 
 	detected := normalizeDetectedMIME(http.DetectContentType(sniff[:n]))
 	if !AllowedMimeTypes[detected] {
-		return "", fmt.Errorf("file type %s is not allowed", detected)
+		return "", &ClientError{Message: fmt.Sprintf("file type %s is not allowed", detected)}
 	}
 
 	ext := strings.ToLower(filepath.Ext(filename))
 	allowedExts, ok := allowedExtensionsByMimeType[detected]
 	if !ok || ext == "" || !allowedExts[ext] {
-		return "", fmt.Errorf("file extension %q does not match detected type %s", ext, detected)
+		return "", &ClientError{Message: fmt.Sprintf("file extension %q does not match detected type %s", ext, detected)}
 	}
 
 	seeker, ok := file.(io.Seeker)
@@ -425,7 +433,7 @@ func normalizeDetectedMIME(contentType string) string {
 func canonicalizeUploadFilename(filename, mimeType string) (string, error) {
 	canonicalExt, ok := canonicalExtensionByMimeType[mimeType]
 	if !ok {
-		return "", fmt.Errorf("unsupported mime type %s", mimeType)
+		return "", &ClientError{Message: fmt.Sprintf("unsupported mime type %s", mimeType)}
 	}
 
 	base := strings.TrimSuffix(filename, filepath.Ext(filename))

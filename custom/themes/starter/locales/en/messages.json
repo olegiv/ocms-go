@@ -58,6 +58,11 @@
             "translation": "Filed under"
         },
         {
+            "id": "frontend.categories_label",
+            "message": "Categories",
+            "translation": "Filed under"
+        },
+        {
             "id": "frontend.tags_label",
             "message": "Tags",
             "translation": "Tagged with"

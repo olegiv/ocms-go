@@ -67,15 +67,17 @@
             {{.Page.Body}}
         </div>
 
-        {{/* Tags and Category */}}
-        {{if or .Page.Category .Page.Tags}}
+        {{/* Tags and Categories */}}
+        {{if or .Page.Categories .Page.Tags}}
         <footer class="dev-article-footer">
-            {{if .Page.Category}}
+            {{if .Page.Categories}}
             <div class="dev-article-category">
-                <span class="dev-label">{{TTheme $.LangCode "frontend.category_label"}}</span>
-                <a href="{{$.LangPrefix}}/category/{{.Page.Category.Slug}}" class="dev-category-link">
-                    {{.Page.Category.Name}}
+                <span class="dev-label">{{if gt (len .Page.Categories) 1}}{{TTheme $.LangCode "frontend.categories_label"}}{{else}}{{TTheme $.LangCode "frontend.category_label"}}{{end}}</span>
+                {{range .Page.Categories}}
+                <a href="{{$.LangPrefix}}/category/{{.Slug}}" class="dev-category-link">
+                    {{.Name}}
                 </a>
+                {{end}}
             </div>
             {{end}}
 
@@ -149,7 +151,10 @@
                     {{if .FeaturedImage}}
                     <div class="dev-card-image">
                         <a href="{{.URL}}">
-                            <img src="{{.FeaturedImage}}" alt="{{mediaAlt .FeaturedImageID $.LangCode .FeaturedImageAlt}}" loading="lazy">
+                            <img src="{{if .FeaturedImageSmall}}{{.FeaturedImageSmall}}{{else}}{{.FeaturedImage}}{{end}}"
+                                 srcset="{{.FeaturedImage}} 150w{{if .FeaturedImageSmall}}, {{.FeaturedImageSmall}} 400w{{end}}{{if .FeaturedImageMedium}}, {{.FeaturedImageMedium}} 800w{{end}}"
+                                 sizes="(max-width: 768px) 100vw, 300px"
+                                 alt="{{mediaAlt .FeaturedImageID $.LangCode .FeaturedImageAlt}}" loading="lazy">
                         </a>
                     </div>
                     {{end}}
