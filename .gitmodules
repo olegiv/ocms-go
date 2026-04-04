@@ -3,4 +3,4 @@
 	url = https://github.com/olegiv/claude-code-support-tools.git
 [submodule "wiki"]
 	path = wiki
-	url = git@github.com:olegiv/ocms-go.wiki.git
+	url = https://github.com/olegiv/ocms-go.wiki.git
