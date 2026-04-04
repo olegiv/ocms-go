@@ -346,6 +346,41 @@ func (q *Queries) GetCategoryBySlug(ctx context.Context, slug string) (Category,
 	return i, err
 }
 
+const getCategoryNamesForAllPages = `-- name: GetCategoryNamesForAllPages :many
+SELECT pc.page_id, c.name
+FROM page_categories pc
+INNER JOIN categories c ON c.id = pc.category_id
+ORDER BY pc.page_id, c.name
+`
+
+type GetCategoryNamesForAllPagesRow struct {
+	PageID int64  `json:"page_id"`
+	Name   string `json:"name"`
+}
+
+func (q *Queries) GetCategoryNamesForAllPages(ctx context.Context) ([]GetCategoryNamesForAllPagesRow, error) {
+	rows, err := q.db.QueryContext(ctx, getCategoryNamesForAllPages)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetCategoryNamesForAllPagesRow{}
+	for rows.Next() {
+		var i GetCategoryNamesForAllPagesRow
+		if err := rows.Scan(&i.PageID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCategoryPath = `-- name: GetCategoryPath :many
 WITH RECURSIVE category_path AS (
     SELECT cat.id, cat.name, cat.slug, cat.parent_id, 0 as depth

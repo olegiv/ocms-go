@@ -376,6 +376,12 @@ type NotFoundData struct {
 }
 
 // FrontendHandler handles public frontend routes.
+// ModuleTemplateFuncsProvider returns template functions from active modules.
+// Calling this per-request ensures toggled modules are reflected immediately.
+type ModuleTemplateFuncsProvider interface {
+	AllTemplateFuncs() template.FuncMap
+}
+
 type FrontendHandler struct {
 	db              *sql.DB
 	queries         *store.Queries
@@ -387,7 +393,7 @@ type FrontendHandler struct {
 	eventService    *service.EventService
 	logger          *slog.Logger
 	sanitizePages   bool
-	moduleTemplateFuncs template.FuncMap
+	moduleFuncsProvider ModuleTemplateFuncsProvider
 }
 
 // NewFrontendHandler creates a new FrontendHandler.
@@ -419,17 +425,17 @@ func (h *FrontendHandler) SetSanitizePageHTML(enabled bool) {
 	h.sanitizePages = enabled
 }
 
-// SetModuleTemplateFuncs sets the collected module template functions for templ-based layouts.
-// The handler calls known head/body functions by convention name to populate ModuleHeadHTML/ModuleBodyHTML.
-func (h *FrontendHandler) SetModuleTemplateFuncs(funcs template.FuncMap) {
-	h.moduleTemplateFuncs = funcs
+// SetModuleTemplateFuncsProvider sets the provider used to fetch module template functions
+// per-request. This ensures toggled modules take effect immediately without server restart.
+func (h *FrontendHandler) SetModuleTemplateFuncsProvider(p ModuleTemplateFuncsProvider) {
+	h.moduleFuncsProvider = p
 }
 
 // callModuleHTMLFuncs calls named template functions and concatenates their HTML output.
-func (h *FrontendHandler) callModuleHTMLFuncs(nonce string, names ...string) template.HTML {
+func (h *FrontendHandler) callModuleHTMLFuncs(funcs template.FuncMap, nonce string, names ...string) template.HTML {
 	var sb strings.Builder
 	for _, name := range names {
-		fn, ok := h.moduleTemplateFuncs[name]
+		fn, ok := funcs[name]
 		if !ok {
 			continue
 		}
@@ -1844,10 +1850,12 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 
 	// Populate module HTML for templ-based layouts by calling known template funcs.
 	// HTML themes call these directly; templ layouts need the aggregated output.
-	if h.moduleTemplateFuncs != nil {
-		data.ModuleHeadHTML = h.callModuleHTMLFuncs(data.CSPNonce, "privacyHead", "analyticsExtHead", "embedHead")
-		data.ModuleBodyTopHTML = h.callModuleHTMLFuncs(data.CSPNonce, "informerBar", "analyticsExtBody")
-		data.ModuleBodyEndHTML = h.callModuleHTMLFuncs(data.CSPNonce, "embedBody")
+	// Fetched per-request so module toggle takes effect without restart.
+	if h.moduleFuncsProvider != nil {
+		funcs := h.moduleFuncsProvider.AllTemplateFuncs()
+		data.ModuleHeadHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, "privacyHead", "analyticsExtHead", "embedHead")
+		data.ModuleBodyTopHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, "informerBar", "analyticsExtBody")
+		data.ModuleBodyEndHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, "embedBody")
 	}
 
 	// Get site logo and custom CSS from cache

@@ -53,6 +53,20 @@ func GenerateSiteContentMarkdown(ctx context.Context, q *store.Queries) (string,
 		}
 	}
 
+	// Pre-fetch all category and tag names per page in two queries (avoids N+1).
+	pageCats := make(map[int64][]string)
+	if catRows, err := q.GetCategoryNamesForAllPages(ctx); err == nil {
+		for _, r := range catRows {
+			pageCats[r.PageID] = append(pageCats[r.PageID], r.Name)
+		}
+	}
+	pageTags := make(map[int64][]string)
+	if tagRows, err := q.GetTagNamesForAllPages(ctx); err == nil {
+		for _, r := range tagRows {
+			pageTags[r.PageID] = append(pageTags[r.PageID], r.Name)
+		}
+	}
+
 	var b strings.Builder
 
 	b.WriteString("# ")
@@ -72,7 +86,7 @@ func GenerateSiteContentMarkdown(ctx context.Context, q *store.Queries) (string,
 	if len(pages) > 0 {
 		b.WriteString("## Pages\n\n")
 		for _, p := range pages {
-			writePageEntry(&b, p, siteURL, authorCache, q, ctx)
+			writePageEntry(&b, p, siteURL, authorCache, pageCats, pageTags)
 		}
 	}
 
@@ -80,7 +94,7 @@ func GenerateSiteContentMarkdown(ctx context.Context, q *store.Queries) (string,
 	if len(posts) > 0 {
 		b.WriteString("## Blog Posts\n\n")
 		for _, p := range posts {
-			writePageEntry(&b, p, siteURL, authorCache, q, ctx)
+			writePageEntry(&b, p, siteURL, authorCache, pageCats, pageTags)
 		}
 	}
 
@@ -275,7 +289,7 @@ func GenerateUserGuideMarkdown(ctx context.Context, q *store.Queries) (string, e
 	return b.String(), nil
 }
 
-func writePageEntry(b *strings.Builder, p store.Page, siteURL string, authorCache map[int64]string, q *store.Queries, ctx context.Context) {
+func writePageEntry(b *strings.Builder, p store.Page, siteURL string, authorCache map[int64]string, pageCats, pageTagNames map[int64][]string) {
 	b.WriteString("### ")
 	b.WriteString(p.Title)
 	b.WriteString("\n\n")
@@ -291,35 +305,21 @@ func writePageEntry(b *strings.Builder, p store.Page, siteURL string, authorCach
 		b.WriteString("\n")
 	}
 
-	if author, ok := authorCache[p.AuthorID]; ok {
+	if author, ok := authorCache[p.AuthorID]; ok && author != "" {
 		b.WriteString("- Author: ")
 		b.WriteString(author)
 		b.WriteString("\n")
 	}
 
-	// Categories
-	cats, err := q.GetCategoriesForPage(ctx, p.ID)
-	if err == nil && len(cats) > 0 {
+	if cats := pageCats[p.ID]; len(cats) > 0 {
 		b.WriteString("- Categories: ")
-		for i, c := range cats {
-			if i > 0 {
-				b.WriteString(", ")
-			}
-			b.WriteString(c.Name)
-		}
+		b.WriteString(strings.Join(cats, ", "))
 		b.WriteString("\n")
 	}
 
-	// Tags
-	pageTags, err := q.GetTagsForPage(ctx, p.ID)
-	if err == nil && len(pageTags) > 0 {
+	if tags := pageTagNames[p.ID]; len(tags) > 0 {
 		b.WriteString("- Tags: ")
-		for i, t := range pageTags {
-			if i > 0 {
-				b.WriteString(", ")
-			}
-			b.WriteString(t.Name)
-		}
+		b.WriteString(strings.Join(tags, ", "))
 		b.WriteString("\n")
 	}
 

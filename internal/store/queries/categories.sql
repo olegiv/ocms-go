@@ -160,3 +160,9 @@ INNER JOIN page_categories pc ON pc.category_id = c.id
 INNER JOIN pages p ON p.id = pc.page_id AND p.status = 'published' AND p.language_code = ?
 GROUP BY c.id, c.name, c.slug, c.description, c.parent_id, c.position, c.language_code, c.created_at, c.updated_at
 ORDER BY c.position, c.name;
+
+-- name: GetCategoryNamesForAllPages :many
+SELECT pc.page_id, c.name
+FROM page_categories pc
+INNER JOIN categories c ON c.id = pc.category_id
+ORDER BY pc.page_id, c.name;

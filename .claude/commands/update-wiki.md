@@ -22,7 +22,7 @@ Execute the following steps:
 
 4. Update the submodule pointer in the main repo:
    ```bash
-   cd /Users/olegiv/Desktop/Projects/Go/ocms-go.core
+   cd "$(git -C wiki rev-parse --show-superproject-working-tree)"
    git add wiki
    ```
 
