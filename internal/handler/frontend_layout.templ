@@ -85,8 +85,14 @@ templ frontendBaseLayout(base BaseTemplateData) {
 					{ base.CustomCSS }
 				</style>
 			}
+			if base.ModuleHeadHTML != "" {
+				@templ.Raw(string(base.ModuleHeadHTML))
+			}
 		</head>
 		<body class={ bodyClasses(base.BodyClass) }>
+			if base.ModuleBodyTopHTML != "" {
+				@templ.Raw(string(base.ModuleBodyTopHTML))
+			}
 			{ children... }
 			<!-- HTMX -->
 			<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/htmx.min.js"></script>
@@ -96,6 +102,9 @@ templ frontendBaseLayout(base BaseTemplateData) {
 			<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/prism-bundle.min.js"></script>
 			<!-- Image lightbox -->
 			<script nonce={ templ.GetNonce(ctx) } src="/static/dist/js/lightbox.js"></script>
+			if base.ModuleBodyEndHTML != "" {
+				@templ.Raw(string(base.ModuleBodyEndHTML))
+			}
 		</body>
 	</html>
 }

@@ -227,6 +227,38 @@ Usage in theme templates:
 <p>Total items: {{ myItemCount }}</p>
 ```
 
+### Templ Layout Injection
+
+Modules can inject HTML into the templ-based frontend layout by providing template functions with specific convention names. The frontend handler calls these functions automatically and renders their output in the corresponding `<head>`, `<body>` top, or `<body>` end positions.
+
+Convention names by injection point:
+
+| Position | Function Names | Typical Use |
+|----------|---------------|-------------|
+| Before `</head>` | `privacyHead`, `analyticsExtHead`, `embedHead` | Consent banners, analytics scripts, embed styles |
+| After `<body>` | `informerBar`, `analyticsExtBody` | Info bars, analytics noscript fallbacks |
+| Before `</body>` | `embedBody` | Chat widgets, embed scripts |
+
+Functions must use the variadic signature `func(...any) template.HTML`. The first argument is the CSP nonce:
+
+```go
+func (m *Module) TemplateFuncs() template.FuncMap {
+    return template.FuncMap{
+        "embedBody": func(args ...any) template.HTML {
+            nonce := ""
+            if len(args) > 0 {
+                nonce, _ = args[0].(string)
+            }
+            return template.HTML(fmt.Sprintf(
+                `<script nonce="%s" src="/static/chat-widget.js"></script>`, nonce,
+            ))
+        },
+    }
+}
+```
+
+HTML themes call these functions directly in Go templates. Templ-based themes receive the aggregated output via `BaseTemplateData` fields (`ModuleHeadHTML`, `ModuleBodyTopHTML`, `ModuleBodyEndHTML`).
+
 ## Embedded Admin Templates
 
 Custom modules render their own admin pages using Go's `html/template` and `//go:embed`:
