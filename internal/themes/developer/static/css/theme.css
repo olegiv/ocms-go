@@ -109,7 +109,7 @@ img {
     grid-template-columns: 1fr;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 768px) {
     .dev-page-layout {
         grid-template-columns: 1fr;
     }
@@ -1898,6 +1898,7 @@ img {
 
 .dev-pagination-list {
     display: flex;
+    flex-wrap: wrap;
     justify-content: center;
     align-items: center;
     gap: var(--dev-space-sm);
