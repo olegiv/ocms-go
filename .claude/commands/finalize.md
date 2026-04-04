@@ -1,0 +1,1 @@
+../shared/global/commands/finalize.md
