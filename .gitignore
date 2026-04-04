@@ -33,9 +33,6 @@ custom/modules/*
 !custom/modules/imports.go
 !custom/modules/bookmarks/
 
-# Wiki source files (published via github.com/olegiv/ocms-go.wiki.git)
-/wiki/
-
 # Test coverage artifacts
 coverage.out
 coverage.html

@@ -183,6 +183,7 @@ cmd/ocms/main.go
     ├── internal/themes      (embedded core themes)
     ├── modules/             (built-in modules)
     ├── custom/              (user content: themes, modules)
+    ├── wiki/                (GitHub Wiki submodule)
     └── web                  (embedded admin templates/static)
 ```
 
@@ -679,6 +680,9 @@ Add templUI components to the project. Handles CLI installation, `.templui.json`
 
 ### /templui-list
 List available templUI components or fetch documentation for a specific component. Shows installed vs available status.
+
+### /update-wiki
+Publish local wiki changes to GitHub. The wiki is a git submodule at `wiki/` pointing to `github.com/olegiv/ocms-go.wiki.git`. Stages, commits, and pushes wiki changes, then updates the submodule pointer in the main repo.
 
 ### /clean
 Clean build artifacts, compiled binaries, and development databases.

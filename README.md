@@ -646,6 +646,33 @@ Check for vulnerabilities:
 govulncheck ./...
 ```
 
+## Wiki
+
+Project documentation is published at the [GitHub Wiki](https://github.com/olegiv/ocms-go/wiki) and managed as a git submodule at `wiki/`.
+
+### Editing Wiki Pages
+
+```bash
+# Edit a page
+vim wiki/Getting-Started.md
+
+# Publish changes
+/update-wiki
+
+# Or manually:
+cd wiki
+git add -A && git commit -m "Update page" && git push
+cd ..
+git add wiki
+git commit -m "Update wiki submodule"
+```
+
+### Cloning with Wiki
+
+```bash
+git clone --recurse-submodules https://github.com/olegiv/ocms-go.git
+```
+
 ## Claude Code Support Tools
 
 This project uses a shared submodule at `.claude/shared` containing reusable Claude Code extensions:
