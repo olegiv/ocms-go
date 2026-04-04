@@ -577,13 +577,25 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	if len(req.Tags) > 0 {
 		resolvedIDs, err := resolveTagNames(ctx, txq, req.Tags, langCode)
 		if err != nil {
-			LogAndWriteInternalError(w, "Failed to resolve tag names", "error", err)
+			writeResolveTagError(w, err)
 			return
 		}
 		req.TagIDs = append(req.TagIDs, resolvedIDs...)
 	}
 
 	tagIDs := deduplicateInt64(req.TagIDs)
+
+	// Pre-validate tag IDs
+	for _, tagID := range tagIDs {
+		if _, err := txq.GetTagByID(ctx, tagID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				WriteValidationError(w, map[string]string{"tag_ids": fmt.Sprintf("Tag %d not found", tagID)})
+			} else {
+				LogAndWriteInternalError(w, "Failed to validate tag", "error", err, "tag_id", tagID)
+			}
+			return
+		}
+	}
 
 	page, err := txq.CreatePage(ctx, params)
 	if err != nil {
@@ -806,12 +818,24 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		if req.Tags != nil {
 			resolvedIDs, err := resolveTagNames(ctx, txq, *req.Tags, existing.LanguageCode)
 			if err != nil {
-				LogAndWriteInternalError(w, "Failed to resolve tag names", "error", err)
+				writeResolveTagError(w, err)
 				return
 			}
 			tagIDs = append(tagIDs, resolvedIDs...)
 		}
 		tagIDs = deduplicateInt64(tagIDs)
+
+		// Pre-validate tag IDs
+		for _, tagID := range tagIDs {
+			if _, err := txq.GetTagByID(ctx, tagID); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					WriteValidationError(w, map[string]string{"tag_ids": fmt.Sprintf("Tag %d not found", tagID)})
+				} else {
+					LogAndWriteInternalError(w, "Failed to validate tag", "error", err, "tag_id", tagID)
+				}
+				return
+			}
+		}
 	}
 
 	page, err := txq.UpdatePage(ctx, params)
@@ -922,6 +946,24 @@ const (
 	maxTagNameLength  = 100
 )
 
+// tagValidationError is returned by resolveTagNames for client input errors.
+type tagValidationError struct {
+	Field   string
+	Message string
+}
+
+func (e *tagValidationError) Error() string { return e.Message }
+
+// writeResolveTagError writes 422 for validation errors, 500 for internal errors.
+func writeResolveTagError(w http.ResponseWriter, err error) {
+	var ve *tagValidationError
+	if errors.As(err, &ve) {
+		WriteValidationError(w, map[string]string{ve.Field: ve.Message})
+	} else {
+		LogAndWriteInternalError(w, "Failed to resolve tag names", "error", err)
+	}
+}
+
 // deduplicateInt64 returns a slice with duplicate values removed, preserving order.
 func deduplicateInt64(ids []int64) []int64 {
 	seen := make(map[int64]struct{}, len(ids))
@@ -940,7 +982,7 @@ func deduplicateInt64(ids []int64) []int64 {
 // newly created tags are rolled back if the outer transaction fails.
 func resolveTagNames(ctx context.Context, q *store.Queries, names []string, langCode string) ([]int64, error) {
 	if len(names) > maxTagsPerRequest {
-		return nil, fmt.Errorf("too many tags: %d exceeds maximum of %d", len(names), maxTagsPerRequest)
+		return nil, &tagValidationError{Field: "tags", Message: fmt.Sprintf("Too many tags: %d exceeds maximum of %d", len(names), maxTagsPerRequest)}
 	}
 	ids := make([]int64, 0, len(names))
 	now := time.Now()
@@ -950,7 +992,7 @@ func resolveTagNames(ctx context.Context, q *store.Queries, names []string, lang
 			continue
 		}
 		if len(name) > maxTagNameLength {
-			return nil, fmt.Errorf("tag name too long: %d chars exceeds maximum of %d", len(name), maxTagNameLength)
+			return nil, &tagValidationError{Field: "tags", Message: fmt.Sprintf("Tag name too long: %d chars exceeds maximum of %d", len(name), maxTagNameLength)}
 		}
 		slug := util.Slugify(name)
 		if slug == "" {

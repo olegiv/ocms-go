@@ -262,7 +262,7 @@ func TestResolveTagNames(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for too many tags, got nil")
 		}
-		if !strings.Contains(err.Error(), "too many tags") {
+		if !strings.Contains(strings.ToLower(err.Error()), "too many tags") {
 			t.Errorf("expected 'too many tags' error, got: %v", err)
 		}
 	})
@@ -273,7 +273,7 @@ func TestResolveTagNames(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for long tag name, got nil")
 		}
-		if !strings.Contains(err.Error(), "tag name too long") {
+		if !strings.Contains(strings.ToLower(err.Error()), "tag name too long") {
 			t.Errorf("expected 'tag name too long' error, got: %v", err)
 		}
 	})
