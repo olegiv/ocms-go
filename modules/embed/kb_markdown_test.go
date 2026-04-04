@@ -387,8 +387,11 @@ func TestGenerateUserGuideMarkdown_WithConfig(t *testing.T) {
 	if !strings.Contains(out, "Demo Site") {
 		t.Errorf("expected site name")
 	}
-	if !strings.Contains(out, "webmaster@demo.example") {
-		t.Errorf("expected admin email")
+	if strings.Contains(out, "webmaster@demo.example") {
+		t.Errorf("admin email must not appear in guide (privacy fix KB-002)")
+	}
+	if !strings.Contains(out, "https://demo.example/forms/contact-us") {
+		t.Errorf("expected contact-us link instead of admin email")
 	}
 	if !strings.Contains(out, "5 items per page") {
 		t.Errorf("expected posts_per_page value")
@@ -475,8 +478,14 @@ func TestGenerateUserGuideMarkdown_ContactFallback(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if !strings.Contains(out, "help@site.example") {
-		t.Errorf("expected admin email in contact fallback")
+	if strings.Contains(out, "help@site.example") {
+		t.Errorf("admin email must not appear in contact fallback (privacy fix KB-002)")
+	}
+	if !strings.Contains(out, "## Contact") {
+		t.Errorf("expected Contact section in fallback")
+	}
+	if !strings.Contains(out, "/forms/contact-us") {
+		t.Errorf("expected contact-us link in fallback")
 	}
 }
 
@@ -666,8 +675,11 @@ func TestHandleDownloadUserGuide_WithSeededData(t *testing.T) {
 	if !strings.Contains(body, "Guide Site") {
 		t.Errorf("expected site name in guide body")
 	}
-	if !strings.Contains(body, "admin@guide.example") {
-		t.Errorf("expected admin email in guide body")
+	if strings.Contains(body, "admin@guide.example") {
+		t.Errorf("admin email must not appear in guide body (privacy fix KB-002)")
+	}
+	if !strings.Contains(body, "https://guide.example/forms/contact-us") {
+		t.Errorf("expected contact-us link in guide body")
 	}
 	if !strings.Contains(body, "https://guide.example/login") {
 		t.Errorf("expected login URL in guide body")
