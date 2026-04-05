@@ -1326,6 +1326,7 @@ func convertPagesListViewData(data PagesListData, renderer *render.Renderer, lan
 			Title:     p.Title,
 			Slug:      p.Slug,
 			Status:    p.Status,
+			PageType:  p.PageType,
 			UpdatedAt: renderer.FormatDateTimeLocale(p.UpdatedAt, lang),
 		}
 
@@ -1375,12 +1376,14 @@ func convertPagesListViewData(data PagesListData, renderer *render.Renderer, lan
 		Pages:          pages,
 		TotalCount:     data.TotalCount,
 		StatusFilter:   data.StatusFilter,
+		PageTypeFilter: data.PageTypeFilter,
 		CategoryFilter: data.CategoryFilter,
 		LanguageFilter: data.LanguageFilter,
 		SearchFilter:   data.SearchFilter,
 		AllCategories:  convertPageCategoryNodes(data.AllCategories),
 		AllLanguages:   convertLanguageOptions(data.AllLanguages),
 		Statuses:       data.Statuses,
+		PageTypes:      data.PageTypes,
 		Pagination:     pagination,
 		IsDemoMode:     middleware.IsDemoMode(),
 	}

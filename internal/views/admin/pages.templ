@@ -28,6 +28,7 @@ type PageListItemView struct {
 	Title            string
 	Slug             string
 	Status           string
+	PageType         string
 	IsScheduled      bool
 	ScheduledAtTitle string
 	UpdatedAt        string
@@ -154,12 +155,14 @@ type PagesListViewData struct {
 	Pages          []PageListItemView
 	TotalCount     int64
 	StatusFilter   string
+	PageTypeFilter string
 	CategoryFilter int64
 	LanguageFilter string
 	SearchFilter   string
 	AllCategories  []PageCategoryNodeView
 	AllLanguages   []LanguageOption
 	Statuses       []string
+	PageTypes      []string
 	Pagination     PaginationData
 	IsDemoMode     bool
 }
@@ -223,7 +226,7 @@ func featuredImageJSON(img *PageFormFeaturedImageView) string {
 }
 
 // pagesListURL builds a filter URL for the pages list while preserving query state.
-func pagesListURL(p PaginationData, status string, categoryFilter int64, languageFilter string, searchFilter string) string {
+func pagesListURL(p PaginationData, status string, pageTypeFilter string, categoryFilter int64, languageFilter string, searchFilter string) string {
 	params := make(url.Values)
 	if p.QueryString != "" {
 		if parsed, err := url.ParseQuery(p.QueryString); err == nil {
@@ -241,6 +244,11 @@ func pagesListURL(p PaginationData, status string, categoryFilter int64, languag
 		params.Set("status", status)
 	} else {
 		params.Del("status")
+	}
+	if pageTypeFilter != "" {
+		params.Set("page_type", pageTypeFilter)
+	} else {
+		params.Del("page_type")
 	}
 	if categoryFilter > 0 {
 		params.Set("category", fmt.Sprintf("%d", categoryFilter))
@@ -266,6 +274,11 @@ func pagesListURL(p PaginationData, status string, categoryFilter int64, languag
 		return baseURL + "?" + encoded
 	}
 	return baseURL
+}
+
+// pagesTypeFilterURL builds a URL that changes the page_type filter while preserving other filters.
+func pagesTypeFilterURL(p PaginationData, pageType string, statusFilter string, categoryFilter int64, languageFilter string, searchFilter string) string {
+	return pagesListURL(p, statusFilter, pageType, categoryFilter, languageFilter, searchFilter)
 }
 
 // depthPadding returns CSS padding-left for tree depth.
@@ -379,11 +392,11 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 			<div class="filter-group">
 				<label class="filter-label">{ pc.T("label.status") }:</label>
 				<div class="filter-buttons">
-					@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == ""), Size: button.SizeSm, Href: pagesListURL(data.Pagination, "", data.CategoryFilter, data.LanguageFilter, data.SearchFilter)}) {
+					@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == ""), Size: button.SizeSm, Href: pagesListURL(data.Pagination, "", data.PageTypeFilter, data.CategoryFilter, data.LanguageFilter, data.SearchFilter)}) {
 						{ pc.T("label.all") }
 					}
 					for _, s := range data.Statuses {
-						@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == s), Size: button.SizeSm, Href: pagesListURL(data.Pagination, s, data.CategoryFilter, data.LanguageFilter, data.SearchFilter)}) {
+						@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == s), Size: button.SizeSm, Href: pagesListURL(data.Pagination, s, data.PageTypeFilter, data.CategoryFilter, data.LanguageFilter, data.SearchFilter)}) {
 							if s == "draft" {
 								{ pc.T("status.draft") }
 							} else if s == "published" {
@@ -393,18 +406,42 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 							}
 						}
 					}
-					@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == "scheduled"), Size: button.SizeSm, Href: pagesListURL(data.Pagination, "scheduled", data.CategoryFilter, data.LanguageFilter, data.SearchFilter)}) {
+					@button.Button(button.Props{Variant: pagesFilterVariant(data.StatusFilter == "scheduled"), Size: button.SizeSm, Href: pagesListURL(data.Pagination, "scheduled", data.PageTypeFilter, data.CategoryFilter, data.LanguageFilter, data.SearchFilter)}) {
 						@iconClock12()
 						{ pc.T("status.scheduled") }
 					}
 				</div>
 			</div>
+			if len(data.PageTypes) > 0 {
+				<div class="filter-group">
+					<label class="filter-label">{ pc.T("pages.page_type") }:</label>
+					<div class="filter-buttons">
+						@button.Button(button.Props{Variant: pagesFilterVariant(data.PageTypeFilter == ""), Size: button.SizeSm, Href: pagesTypeFilterURL(data.Pagination, "", data.StatusFilter, data.CategoryFilter, data.LanguageFilter, data.SearchFilter)}) {
+							{ pc.T("label.all") }
+						}
+						for _, pt := range data.PageTypes {
+							@button.Button(button.Props{Variant: pagesFilterVariant(data.PageTypeFilter == pt), Size: button.SizeSm, Href: pagesTypeFilterURL(data.Pagination, pt, data.StatusFilter, data.CategoryFilter, data.LanguageFilter, data.SearchFilter)}) {
+								if pt == "post" {
+									{ pc.T("pages.type_post") }
+								} else if pt == "page" {
+									{ pc.T("pages.type_page") }
+								} else {
+									{ pt }
+								}
+							}
+						}
+					</div>
+				</div>
+			}
 			if len(data.AllCategories) > 0 {
 				<div class="filter-group">
 					<label class="filter-label">{ pc.T("label.category") }:</label>
 					<form action="/admin/pages" method="get" class="filter-form">
 						if data.StatusFilter != "" {
 							<input type="hidden" name="status" value={ data.StatusFilter }/>
+						}
+						if data.PageTypeFilter != "" {
+							<input type="hidden" name="page_type" value={ data.PageTypeFilter }/>
 						}
 						if data.SearchFilter != "" {
 							<input type="hidden" name="search" value={ data.SearchFilter }/>
@@ -457,6 +494,9 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 						if data.StatusFilter != "" {
 							<input type="hidden" name="status" value={ data.StatusFilter }/>
 						}
+						if data.PageTypeFilter != "" {
+							<input type="hidden" name="page_type" value={ data.PageTypeFilter }/>
+						}
 						if data.CategoryFilter > 0 {
 							<input type="hidden" name="category" value={ fmt.Sprintf("%d", data.CategoryFilter) }/>
 						}
@@ -503,6 +543,9 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 					if data.StatusFilter != "" {
 						<input type="hidden" name="status" value={ data.StatusFilter }/>
 					}
+					if data.PageTypeFilter != "" {
+						<input type="hidden" name="page_type" value={ data.PageTypeFilter }/>
+					}
 					if data.CategoryFilter > 0 {
 						<input type="hidden" name="category" value={ fmt.Sprintf("%d", data.CategoryFilter) }/>
 					}
@@ -529,7 +572,7 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 							@iconSearch14()
 						}
 						if data.SearchFilter != "" {
-							@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: pagesListURL(data.Pagination, data.StatusFilter, data.CategoryFilter, data.LanguageFilter, ""), Class: "clear-search-btn", Attributes: templ.Attributes{"title": pc.T("btn.clear")}}) {
+							@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: pagesListURL(data.Pagination, data.StatusFilter, data.PageTypeFilter, data.CategoryFilter, data.LanguageFilter, ""), Class: "clear-search-btn", Attributes: templ.Attributes{"title": pc.T("btn.clear")}}) {
 								@iconX14()
 							}
 						}
@@ -573,7 +616,28 @@ templ PagesListPage(pc *PageContext, data PagesListViewData) {
 								}
 								@table.Head() { { pc.T("label.tags") } }
 								@table.Head() { { pc.T("label.categories") } }
-								@table.Head() { { pc.T("label.language") } }
+								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("language_code"))}}) {
+									<a
+										href={ data.Pagination.SortURL("language_code", sortDirAsc) }
+										class={ sortLinkClass(data.Pagination.SortState("language_code")) }
+										data-sort-state={ sortStateValue(data.Pagination.SortState("language_code")) }
+									>
+										<span>{ pc.T("label.language") }</span>
+										@SortIndicator(data.Pagination.SortState("language_code"))
+										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("language_code"))) }</span>
+									</a>
+								}
+								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("page_type"))}}) {
+									<a
+										href={ data.Pagination.SortURL("page_type", sortDirAsc) }
+										class={ sortLinkClass(data.Pagination.SortState("page_type")) }
+										data-sort-state={ sortStateValue(data.Pagination.SortState("page_type")) }
+									>
+										<span>{ pc.T("pages.page_type") }</span>
+										@SortIndicator(data.Pagination.SortState("page_type"))
+										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("page_type"))) }</span>
+									</a>
+								}
 								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("status"))}}) {
 									<a
 										href={ data.Pagination.SortURL("status", sortDirAsc) }
@@ -687,6 +751,15 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool, bulkS
 			}
 		}
 		@table.Cell() {
+			if page.PageType == "post" {
+				@badge.Badge(badge.Props{Class: "badge-info"}) { { pc.T("pages.type_post") } }
+			} else if page.PageType == "page" {
+				@badge.Badge(badge.Props{}) { { pc.T("pages.type_page") } }
+			} else {
+				<span class="text-muted">{ page.PageType }</span>
+			}
+		}
+		@table.Cell() {
 		if page.IsScheduled {
 			@badge.Badge(badge.Props{Class: "badge-info", Attributes: templ.Attributes{"title": page.ScheduledAtTitle}}) {
 				@iconClock12()
@@ -707,18 +780,6 @@ templ pageListRow(pc *PageContext, page PageListItemView, isDemoMode bool, bulkS
 		@table.Cell() { { page.UpdatedAt } }
 		@table.Cell() {
 			<div class="action-buttons">
-				if !page.IsDemoPublished {
-					<form action={ templ.SafeURL(fmt.Sprintf("/admin/pages/%d/publish", page.ID)) } method="POST" class="inline-form">
-						@csrfField()
-						@button.Button(button.Props{Size: button.SizeSm, Type: button.TypeSubmit, Class: publishButtonClass(page.Status), Attributes: templ.Attributes{"title": publishTitle(pc, page.Status)}}) {
-							if page.Status == "published" {
-								@iconEyeOff()
-							} else {
-								@iconEye()
-							}
-						}
-					</form>
-				}
 				@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Href: fmt.Sprintf("/admin/pages/%d", page.ID), Attributes: templ.Attributes{"title": pc.T("btn.edit")}}) {
 					@iconEdit()
 				}

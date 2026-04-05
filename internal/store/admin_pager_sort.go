@@ -27,6 +27,7 @@ func normalizeSortDirection(dir string) string {
 
 type ListPagesSortedParams struct {
 	Status        sql.NullString `json:"status"`
+	PageType      sql.NullString `json:"page_type"`
 	LanguageCode  sql.NullString `json:"language_code"`
 	CategoryID    sql.NullInt64  `json:"category_id"`
 	SearchPattern sql.NullString `json:"search_pattern"`
@@ -68,6 +69,10 @@ FROM pages p
 	if arg.LanguageCode.Valid {
 		clauses = append(clauses, "p.language_code = ?")
 		args = append(args, arg.LanguageCode.String)
+	}
+	if arg.PageType.Valid {
+		clauses = append(clauses, "p.page_type = ?")
+		args = append(args, arg.PageType.String)
 	}
 	if arg.SearchPattern.Valid {
 		clauses = append(clauses, "(p.title LIKE ? OR p.body LIKE ? OR p.slug LIKE ?)")
@@ -127,6 +132,48 @@ FROM pages p
 	return items, nil
 }
 
+// CountPagesSorted counts pages with the same filter logic as ListPagesSorted.
+func (q *Queries) CountPagesSorted(ctx context.Context, arg ListPagesSortedParams) (int64, error) {
+	var (
+		clauses []string
+		args    []any
+	)
+
+	query := "SELECT COUNT(*) FROM pages p\n"
+
+	if arg.CategoryID.Valid {
+		query += "INNER JOIN page_categories pc ON pc.page_id = p.id\n"
+		clauses = append(clauses, "pc.category_id = ?")
+		args = append(args, arg.CategoryID.Int64)
+	}
+	if arg.ScheduledOnly {
+		clauses = append(clauses, "p.scheduled_at IS NOT NULL", "p.status = 'draft'")
+	}
+	if arg.Status.Valid {
+		clauses = append(clauses, "p.status = ?")
+		args = append(args, arg.Status.String)
+	}
+	if arg.LanguageCode.Valid {
+		clauses = append(clauses, "p.language_code = ?")
+		args = append(args, arg.LanguageCode.String)
+	}
+	if arg.PageType.Valid {
+		clauses = append(clauses, "p.page_type = ?")
+		args = append(args, arg.PageType.String)
+	}
+	if arg.SearchPattern.Valid {
+		clauses = append(clauses, "(p.title LIKE ? OR p.body LIKE ? OR p.slug LIKE ?)")
+		args = append(args, arg.SearchPattern.String, arg.SearchPattern.String, arg.SearchPattern.String)
+	}
+	if len(clauses) > 0 {
+		query += "WHERE " + strings.Join(clauses, " AND ")
+	}
+
+	var count int64
+	err := q.db.QueryRowContext(ctx, query, args...).Scan(&count)
+	return count, err
+}
+
 func pagesOrderExpr(field, dir string) string {
 	direction := normalizeSortDirection(dir)
 	switch field {
@@ -134,6 +181,10 @@ func pagesOrderExpr(field, dir string) string {
 		return "p.title " + direction + ", p.id DESC"
 	case "status":
 		return "p.status " + direction + ", p.updated_at DESC, p.id DESC"
+	case "page_type":
+		return "p.page_type " + direction + ", p.updated_at DESC, p.id DESC"
+	case "language_code":
+		return "p.language_code " + direction + ", p.updated_at DESC, p.id DESC"
 	case "updated_at":
 		return "p.updated_at " + direction + ", p.id DESC"
 	case "scheduled_at":
@@ -244,6 +295,8 @@ func tagsOrderExpr(field, dir string) string {
 	switch field {
 	case "name":
 		return "t.name " + direction + ", t.id DESC"
+	case "language_code":
+		return "t.language_code " + direction + ", t.name ASC, t.id DESC"
 	case "created_at":
 		return "t.created_at " + direction + ", t.id DESC"
 	case "usage_count":

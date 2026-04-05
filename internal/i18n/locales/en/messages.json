@@ -859,8 +859,8 @@
         },
         {
             "id": "tags.search_placeholder",
-            "message": "Search or create tags...",
-            "translation": "Search or create tags..."
+            "message": "Search tags...",
+            "translation": "Search tags..."
         },
         {
             "id": "tags.create_new",

@@ -66,7 +66,9 @@ var javascriptURIPattern = regexp.MustCompile(`(?i)=\s*["']?\s*javascript:`)
 
 var pagesSortableFields = map[string]SortConfig{
 	"title":        {DefaultDir: sortDirAsc},
-	"status":       {DefaultDir: sortDirAsc},
+	"page_type":      {DefaultDir: sortDirAsc},
+	"language_code":  {DefaultDir: sortDirAsc},
+	"status":         {DefaultDir: sortDirAsc},
 	"updated_at":   {DefaultDir: sortDirDesc},
 	"created_at":   {DefaultDir: sortDirDesc},
 	"scheduled_at": {DefaultDir: sortDirAsc},
@@ -172,12 +174,14 @@ type PagesListData struct {
 	PageLanguages      map[int64]*store.Language    // Map of page ID to language
 	TotalCount         int64
 	StatusFilter       string
+	PageTypeFilter     string
 	CategoryFilter     int64
 	LanguageFilter     string             // Language code filter
 	SearchFilter       string             // Search query filter
 	AllCategories      []PageCategoryNode // For category filter dropdown
 	AllLanguages       []store.Language   // All active languages for filter dropdown
 	Statuses           []string
+	PageTypes          []string
 	Pagination         AdminPagination
 }
 
@@ -195,6 +199,12 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		statusFilter = ""
 	}
 
+	// Get page type filter from query string
+	pageTypeFilter := r.URL.Query().Get("page_type")
+	if pageTypeFilter != "" && !isValidPageType(pageTypeFilter) {
+		pageTypeFilter = ""
+	}
+
 	// Get category filter from query string
 	categoryFilter := ParseQueryInt64(r, "category")
 
@@ -206,82 +216,23 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	defaultSortField, defaultSortDir := defaultPagesSort(statusFilter, searchFilter)
 	sortField, sortDir := parseSortParams(r, defaultSortField, defaultSortDir, pagesSortableFields)
 
-	var totalCount int64
-	var pages []store.Page
-	var err error
-
-	// Create search pattern for LIKE queries
-	searchPattern := "%" + searchFilter + "%"
-
-	// Get total count based on filters
-	// Priority: search > language > category > status > all
-	switch {
-	case searchFilter != "":
-		switch {
-		case languageFilter != "":
-			totalCount, err = h.queries.CountSearchPagesByLanguage(r.Context(), store.CountSearchPagesByLanguageParams{
-				LanguageCode: languageFilter,
-				Title:        searchPattern,
-				Body:         searchPattern,
-				Slug:         searchPattern,
-			})
-		case statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled":
-			totalCount, err = h.queries.CountSearchPagesByStatus(r.Context(), store.CountSearchPagesByStatusParams{
-				Status: statusFilter,
-				Title:  searchPattern,
-				Body:   searchPattern,
-				Slug:   searchPattern,
-			})
-		default:
-			totalCount, err = h.queries.CountSearchPages(r.Context(), store.CountSearchPagesParams{
-				Title: searchPattern,
-				Body:  searchPattern,
-				Slug:  searchPattern,
-			})
-		}
-	case languageFilter != "":
-		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
-			totalCount, err = h.queries.CountPagesByLanguageAndStatus(r.Context(), store.CountPagesByLanguageAndStatusParams{
-				LanguageCode: languageFilter,
-				Status:       statusFilter,
-			})
-		} else {
-			totalCount, err = h.queries.CountPagesByLanguage(r.Context(), languageFilter)
-		}
-	case categoryFilter > 0:
-		totalCount, err = h.queries.CountPagesByCategory(r.Context(), categoryFilter)
-	case statusFilter == "scheduled":
-		totalCount, err = h.queries.CountScheduledPages(r.Context())
-	case statusFilter != "" && statusFilter != "all":
-		totalCount, err = h.queries.CountPagesByStatus(r.Context(), statusFilter)
-	default:
-		totalCount, err = h.queries.CountPages(r.Context())
-	}
-	if err != nil {
-		slog.Error("failed to count pages", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	// Normalize page to valid range
-	page, _ = NormalizePagination(page, int(totalCount), perPage)
-	offset := int64((page - 1) * perPage)
-
-	// Fetch pages for current page (priority: search > language > category > status > all)
+	// Build filter params used for both count and list
 	listParams := store.ListPagesSortedParams{
-		Limit:     int64(perPage),
-		Offset:    offset,
 		SortField: sortField,
 		SortDir:   sortDir,
 	}
 
+	if pageTypeFilter != "" {
+		listParams.PageType = util.NullStringFromValue(pageTypeFilter)
+	}
+
 	switch {
 	case searchFilter != "":
-		listParams.SearchPattern = util.NullStringFromValue(searchPattern)
-		switch {
-		case languageFilter != "":
+		listParams.SearchPattern = util.NullStringFromValue("%" + searchFilter + "%")
+		if languageFilter != "" {
 			listParams.LanguageCode = util.NullStringFromValue(languageFilter)
-		case statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled":
+		}
+		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
 			listParams.Status = util.NullStringFromValue(statusFilter)
 		}
 	case languageFilter != "":
@@ -297,6 +248,21 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		listParams.Status = util.NullStringFromValue(statusFilter)
 	}
 
+	totalCount, err := h.queries.CountPagesSorted(r.Context(), listParams)
+	if err != nil {
+		slog.Error("failed to count pages", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Normalize page to valid range
+	page, _ = NormalizePagination(page, int(totalCount), perPage)
+	offset := int64((page - 1) * perPage)
+
+	listParams.Limit = int64(perPage)
+	listParams.Offset = offset
+
+	var pages []store.Page
 	pages, err = h.queries.ListPagesSorted(r.Context(), listParams)
 	if err != nil {
 		slog.Error("failed to list pages", "error", err)
@@ -377,12 +343,14 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		PageLanguages:      pageLanguages,
 		TotalCount:         totalCount,
 		StatusFilter:       statusFilter,
+		PageTypeFilter:     pageTypeFilter,
 		CategoryFilter:     categoryFilter,
 		LanguageFilter:     languageFilter,
 		SearchFilter:       searchFilter,
 		AllCategories:      categoryTree,
 		AllLanguages:       allLanguages,
 		Statuses:           ValidPageStatuses,
+		PageTypes:          ValidPageTypes,
 		Pagination:         pagination,
 	}
 
