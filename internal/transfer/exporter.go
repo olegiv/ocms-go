@@ -540,6 +540,9 @@ func (e *Exporter) exportPages(
 			exportPage.ScheduledAt = new(page.ScheduledAt.Time)
 		}
 
+		// Handle video URL
+		exportPage.VideoURL = page.VideoUrl
+
 		// Handle language
 		exportPage.LanguageCode = page.LanguageCode
 

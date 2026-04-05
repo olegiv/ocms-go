@@ -1435,6 +1435,7 @@ func convertPageFormViewData(data PageFormData, renderer *render.Renderer, lang 
 		viewData.NoFollow = data.Page.NoFollow == 1
 		viewData.HideFeaturedImage = data.Page.HideFeaturedImage == 1
 		viewData.ExcludeFromLists = data.Page.ExcludeFromLists == 1
+		viewData.VideoURL = data.Page.VideoUrl
 
 		if data.Page.OgImageID.Valid {
 			viewData.OgImageID = fmt.Sprintf("%d", data.Page.OgImageID.Int64)
@@ -1506,6 +1507,11 @@ func convertPageFormViewData(data PageFormData, renderer *render.Renderer, lang 
 	// Missing languages
 	for _, l := range data.MissingLanguages {
 		viewData.MissingLanguages = append(viewData.MissingLanguages, convertLanguageOption(l))
+	}
+
+	// Override from form values (when re-rendering after validation error)
+	if v, ok := data.FormValues["video_url"]; ok && v != "" {
+		viewData.VideoURL = v
 	}
 
 	return viewData

@@ -261,9 +261,9 @@ func (q *Queries) CountSearchPagesByStatus(ctx context.Context, arg CountSearchP
 }
 
 const createPage = `-- name: CreatePage :one
-INSERT INTO pages (title, slug, body, summary, status, author_id, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, published_at, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary
+INSERT INTO pages (title, slug, body, summary, status, author_id, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, published_at, created_at, updated_at, video_url)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url
 `
 
 type CreatePageParams struct {
@@ -289,6 +289,7 @@ type CreatePageParams struct {
 	PublishedAt       sql.NullTime  `json:"published_at"`
 	CreatedAt         time.Time     `json:"created_at"`
 	UpdatedAt         time.Time     `json:"updated_at"`
+	VideoUrl          string        `json:"video_url"`
 }
 
 func (q *Queries) CreatePage(ctx context.Context, arg CreatePageParams) (Page, error) {
@@ -315,6 +316,7 @@ func (q *Queries) CreatePage(ctx context.Context, arg CreatePageParams) (Page, e
 		arg.PublishedAt,
 		arg.CreatedAt,
 		arg.UpdatedAt,
+		arg.VideoUrl,
 	)
 	var i Page
 	err := row.Scan(
@@ -341,6 +343,7 @@ func (q *Queries) CreatePage(ctx context.Context, arg CreatePageParams) (Page, e
 		&i.PageType,
 		&i.ExcludeFromLists,
 		&i.Summary,
+		&i.VideoUrl,
 	)
 	return i, err
 }
@@ -511,7 +514,7 @@ func (q *Queries) GetPageAuthor(ctx context.Context, id int64) (GetPageAuthorRow
 }
 
 const getPageByID = `-- name: GetPageByID :one
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary FROM pages WHERE id = ?
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url FROM pages WHERE id = ?
 `
 
 func (q *Queries) GetPageByID(ctx context.Context, id int64) (Page, error) {
@@ -541,12 +544,13 @@ func (q *Queries) GetPageByID(ctx context.Context, id int64) (Page, error) {
 		&i.PageType,
 		&i.ExcludeFromLists,
 		&i.Summary,
+		&i.VideoUrl,
 	)
 	return i, err
 }
 
 const getPageBySlug = `-- name: GetPageBySlug :one
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary FROM pages WHERE slug = ?
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url FROM pages WHERE slug = ?
 `
 
 func (q *Queries) GetPageBySlug(ctx context.Context, slug string) (Page, error) {
@@ -576,6 +580,7 @@ func (q *Queries) GetPageBySlug(ctx context.Context, slug string) (Page, error) 
 		&i.PageType,
 		&i.ExcludeFromLists,
 		&i.Summary,
+		&i.VideoUrl,
 	)
 	return i, err
 }
@@ -641,7 +646,7 @@ func (q *Queries) GetPageVersionWithUser(ctx context.Context, id int64) (GetPage
 }
 
 const getPublishedPageByID = `-- name: GetPublishedPageByID :one
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary FROM pages WHERE id = ? AND status = 'published'
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url FROM pages WHERE id = ? AND status = 'published'
 `
 
 func (q *Queries) GetPublishedPageByID(ctx context.Context, id int64) (Page, error) {
@@ -671,12 +676,13 @@ func (q *Queries) GetPublishedPageByID(ctx context.Context, id int64) (Page, err
 		&i.PageType,
 		&i.ExcludeFromLists,
 		&i.Summary,
+		&i.VideoUrl,
 	)
 	return i, err
 }
 
 const getPublishedPageBySlug = `-- name: GetPublishedPageBySlug :one
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary FROM pages WHERE slug = ? AND status = 'published'
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url FROM pages WHERE slug = ? AND status = 'published'
 `
 
 func (q *Queries) GetPublishedPageBySlug(ctx context.Context, slug string) (Page, error) {
@@ -706,12 +712,13 @@ func (q *Queries) GetPublishedPageBySlug(ctx context.Context, slug string) (Page
 		&i.PageType,
 		&i.ExcludeFromLists,
 		&i.Summary,
+		&i.VideoUrl,
 	)
 	return i, err
 }
 
 const getPublishedPageBySlugAndLanguage = `-- name: GetPublishedPageBySlugAndLanguage :one
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary FROM pages
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url FROM pages
 WHERE slug = ? AND language_code = ? AND status = 'published'
 `
 
@@ -747,13 +754,14 @@ func (q *Queries) GetPublishedPageBySlugAndLanguage(ctx context.Context, arg Get
 		&i.PageType,
 		&i.ExcludeFromLists,
 		&i.Summary,
+		&i.VideoUrl,
 	)
 	return i, err
 }
 
 const getScheduledPagesForPublishing = `-- name: GetScheduledPagesForPublishing :many
 
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary FROM pages
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url FROM pages
 WHERE scheduled_at IS NOT NULL AND scheduled_at <= ? AND status = 'draft'
 ORDER BY scheduled_at
 `
@@ -792,6 +800,7 @@ func (q *Queries) GetScheduledPagesForPublishing(ctx context.Context, scheduledA
 			&i.PageType,
 			&i.ExcludeFromLists,
 			&i.Summary,
+			&i.VideoUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -913,7 +922,7 @@ func (q *Queries) ListPageVersionsWithUser(ctx context.Context, arg ListPageVers
 }
 
 const listPages = `-- name: ListPages :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary FROM pages ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url FROM pages ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type ListPagesParams struct {
@@ -954,6 +963,7 @@ func (q *Queries) ListPages(ctx context.Context, arg ListPagesParams) ([]Page, e
 			&i.PageType,
 			&i.ExcludeFromLists,
 			&i.Summary,
+			&i.VideoUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -970,7 +980,7 @@ func (q *Queries) ListPages(ctx context.Context, arg ListPagesParams) ([]Page, e
 
 const listPagesByLanguageAndStatus = `-- name: ListPagesByLanguageAndStatus :many
 
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary FROM pages
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url FROM pages
 WHERE language_code = ? AND status = ?
 ORDER BY created_at DESC
 LIMIT ? OFFSET ?
@@ -1022,6 +1032,7 @@ func (q *Queries) ListPagesByLanguageAndStatus(ctx context.Context, arg ListPage
 			&i.PageType,
 			&i.ExcludeFromLists,
 			&i.Summary,
+			&i.VideoUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -1037,7 +1048,7 @@ func (q *Queries) ListPagesByLanguageAndStatus(ctx context.Context, arg ListPage
 }
 
 const listPagesByStatus = `-- name: ListPagesByStatus :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary FROM pages WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url FROM pages WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type ListPagesByStatusParams struct {
@@ -1079,6 +1090,7 @@ func (q *Queries) ListPagesByStatus(ctx context.Context, arg ListPagesByStatusPa
 			&i.PageType,
 			&i.ExcludeFromLists,
 			&i.Summary,
+			&i.VideoUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -1095,7 +1107,7 @@ func (q *Queries) ListPagesByStatus(ctx context.Context, arg ListPagesByStatusPa
 
 const listPublishedPages = `-- name: ListPublishedPages :many
 
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary FROM pages WHERE status = 'published' ORDER BY published_at DESC LIMIT ? OFFSET ?
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url FROM pages WHERE status = 'published' ORDER BY published_at DESC LIMIT ? OFFSET ?
 `
 
 type ListPublishedPagesParams struct {
@@ -1137,6 +1149,7 @@ func (q *Queries) ListPublishedPages(ctx context.Context, arg ListPublishedPages
 			&i.PageType,
 			&i.ExcludeFromLists,
 			&i.Summary,
+			&i.VideoUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -1198,6 +1211,7 @@ func (q *Queries) ListPublishedPagesByCategory(ctx context.Context, arg ListPubl
 			&i.PageType,
 			&i.ExcludeFromLists,
 			&i.Summary,
+			&i.VideoUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -1267,6 +1281,7 @@ func (q *Queries) ListPublishedPagesByCategoryAndLanguage(ctx context.Context, a
 			&i.PageType,
 			&i.ExcludeFromLists,
 			&i.Summary,
+			&i.VideoUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -1369,6 +1384,7 @@ func (q *Queries) ListPublishedPagesForTag(ctx context.Context, arg ListPublishe
 			&i.PageType,
 			&i.ExcludeFromLists,
 			&i.Summary,
+			&i.VideoUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -1436,6 +1452,7 @@ func (q *Queries) ListPublishedPagesForTagAndLanguage(ctx context.Context, arg L
 			&i.PageType,
 			&i.ExcludeFromLists,
 			&i.Summary,
+			&i.VideoUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -1451,7 +1468,7 @@ func (q *Queries) ListPublishedPagesForTagAndLanguage(ctx context.Context, arg L
 }
 
 const listPublishedPosts = `-- name: ListPublishedPosts :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary FROM pages
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url FROM pages
 WHERE status = 'published' AND page_type = 'post' AND exclude_from_lists = 0
 ORDER BY published_at DESC LIMIT ? OFFSET ?
 `
@@ -1495,6 +1512,7 @@ func (q *Queries) ListPublishedPosts(ctx context.Context, arg ListPublishedPosts
 			&i.PageType,
 			&i.ExcludeFromLists,
 			&i.Summary,
+			&i.VideoUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -1510,7 +1528,7 @@ func (q *Queries) ListPublishedPosts(ctx context.Context, arg ListPublishedPosts
 }
 
 const listScheduledPages = `-- name: ListScheduledPages :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary FROM pages WHERE scheduled_at IS NOT NULL AND status = 'draft' ORDER BY scheduled_at LIMIT ? OFFSET ?
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url FROM pages WHERE scheduled_at IS NOT NULL AND status = 'draft' ORDER BY scheduled_at LIMIT ? OFFSET ?
 `
 
 type ListScheduledPagesParams struct {
@@ -1551,6 +1569,7 @@ func (q *Queries) ListScheduledPages(ctx context.Context, arg ListScheduledPages
 			&i.PageType,
 			&i.ExcludeFromLists,
 			&i.Summary,
+			&i.VideoUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -1569,7 +1588,7 @@ const publishPage = `-- name: PublishPage :one
 UPDATE pages
 SET status = 'published', published_at = ?, updated_at = ?
 WHERE id = ?
-RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary
+RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url
 `
 
 type PublishPageParams struct {
@@ -1605,6 +1624,7 @@ func (q *Queries) PublishPage(ctx context.Context, arg PublishPageParams) (Page,
 		&i.PageType,
 		&i.ExcludeFromLists,
 		&i.Summary,
+		&i.VideoUrl,
 	)
 	return i, err
 }
@@ -1613,7 +1633,7 @@ const publishScheduledPage = `-- name: PublishScheduledPage :one
 UPDATE pages
 SET status = 'published', published_at = ?, scheduled_at = NULL, updated_at = ?
 WHERE id = ?
-RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary
+RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url
 `
 
 type PublishScheduledPageParams struct {
@@ -1649,13 +1669,14 @@ func (q *Queries) PublishScheduledPage(ctx context.Context, arg PublishScheduled
 		&i.PageType,
 		&i.ExcludeFromLists,
 		&i.Summary,
+		&i.VideoUrl,
 	)
 	return i, err
 }
 
 const searchPages = `-- name: SearchPages :many
 
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary FROM pages
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url FROM pages
 WHERE title LIKE ? OR body LIKE ? OR slug LIKE ?
 ORDER BY updated_at DESC
 LIMIT ? OFFSET ?
@@ -1709,6 +1730,7 @@ func (q *Queries) SearchPages(ctx context.Context, arg SearchPagesParams) ([]Pag
 			&i.PageType,
 			&i.ExcludeFromLists,
 			&i.Summary,
+			&i.VideoUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -1724,7 +1746,7 @@ func (q *Queries) SearchPages(ctx context.Context, arg SearchPagesParams) ([]Pag
 }
 
 const searchPagesByLanguage = `-- name: SearchPagesByLanguage :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary FROM pages
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url FROM pages
 WHERE language_code = ? AND (title LIKE ? OR body LIKE ? OR slug LIKE ?)
 ORDER BY updated_at DESC
 LIMIT ? OFFSET ?
@@ -1779,6 +1801,7 @@ func (q *Queries) SearchPagesByLanguage(ctx context.Context, arg SearchPagesByLa
 			&i.PageType,
 			&i.ExcludeFromLists,
 			&i.Summary,
+			&i.VideoUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -1794,7 +1817,7 @@ func (q *Queries) SearchPagesByLanguage(ctx context.Context, arg SearchPagesByLa
 }
 
 const searchPagesByStatus = `-- name: SearchPagesByStatus :many
-SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary FROM pages
+SELECT id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url FROM pages
 WHERE status = ? AND (title LIKE ? OR body LIKE ? OR slug LIKE ?)
 ORDER BY updated_at DESC
 LIMIT ? OFFSET ?
@@ -1849,6 +1872,7 @@ func (q *Queries) SearchPagesByStatus(ctx context.Context, arg SearchPagesByStat
 			&i.PageType,
 			&i.ExcludeFromLists,
 			&i.Summary,
+			&i.VideoUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -1943,7 +1967,7 @@ const unpublishPage = `-- name: UnpublishPage :one
 UPDATE pages
 SET status = 'draft', published_at = NULL, updated_at = ?
 WHERE id = ?
-RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary
+RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url
 `
 
 type UnpublishPageParams struct {
@@ -1978,15 +2002,16 @@ func (q *Queries) UnpublishPage(ctx context.Context, arg UnpublishPageParams) (P
 		&i.PageType,
 		&i.ExcludeFromLists,
 		&i.Summary,
+		&i.VideoUrl,
 	)
 	return i, err
 }
 
 const updatePage = `-- name: UpdatePage :one
 UPDATE pages
-SET title = ?, slug = ?, body = ?, summary = ?, status = ?, featured_image_id = ?, meta_title = ?, meta_description = ?, meta_keywords = ?, og_image_id = ?, no_index = ?, no_follow = ?, canonical_url = ?, scheduled_at = ?, language_code = ?, hide_featured_image = ?, page_type = ?, exclude_from_lists = ?, published_at = ?, updated_at = ?
+SET title = ?, slug = ?, body = ?, summary = ?, status = ?, featured_image_id = ?, meta_title = ?, meta_description = ?, meta_keywords = ?, og_image_id = ?, no_index = ?, no_follow = ?, canonical_url = ?, scheduled_at = ?, language_code = ?, hide_featured_image = ?, page_type = ?, exclude_from_lists = ?, published_at = ?, updated_at = ?, video_url = ?
 WHERE id = ?
-RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary
+RETURNING id, title, slug, body, status, author_id, created_at, updated_at, published_at, featured_image_id, meta_title, meta_description, meta_keywords, og_image_id, no_index, no_follow, canonical_url, scheduled_at, language_code, hide_featured_image, page_type, exclude_from_lists, summary, video_url
 `
 
 type UpdatePageParams struct {
@@ -2010,6 +2035,7 @@ type UpdatePageParams struct {
 	ExcludeFromLists  int64         `json:"exclude_from_lists"`
 	PublishedAt       sql.NullTime  `json:"published_at"`
 	UpdatedAt         time.Time     `json:"updated_at"`
+	VideoUrl          string        `json:"video_url"`
 	ID                int64         `json:"id"`
 }
 
@@ -2035,6 +2061,7 @@ func (q *Queries) UpdatePage(ctx context.Context, arg UpdatePageParams) (Page, e
 		arg.ExcludeFromLists,
 		arg.PublishedAt,
 		arg.UpdatedAt,
+		arg.VideoUrl,
 		arg.ID,
 	)
 	var i Page
@@ -2062,6 +2089,7 @@ func (q *Queries) UpdatePage(ctx context.Context, arg UpdatePageParams) (Page, e
 		&i.PageType,
 		&i.ExcludeFromLists,
 		&i.Summary,
+		&i.VideoUrl,
 	)
 	return i, err
 }

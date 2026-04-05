@@ -26,6 +26,12 @@
     </header>
     {{end}}
 
+    {{if .Page.VideoEmbedHTML}}
+    <div class="page-video">
+        {{.Page.VideoEmbedHTML}}
+    </div>
+    {{end}}
+
     <div class="page-content prose">
         {{.Page.Body}}
     </div>

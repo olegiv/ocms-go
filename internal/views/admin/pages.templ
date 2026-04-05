@@ -105,6 +105,8 @@ type PageFormViewData struct {
 	ScheduledAt    string
 	HasScheduledAt bool
 	ScheduledAtFmt string
+	// Video
+	VideoURL string
 	// Checkboxes
 	HideFeaturedImage bool
 	ExcludeFromLists  bool
@@ -1033,6 +1035,10 @@ templ PageFormPage(pc *PageContext, data PageFormViewData) {
 					<div class="form-group form-group-full">
 						@aliasesSection(pc, data)
 					</div>
+					<!-- Video -->
+					<div class="form-group form-group-full">
+						@videoSection(pc, data)
+					</div>
 					<!-- SEO Settings -->
 					<div class="form-group form-group-full">
 						@seoSection(pc, data)
@@ -1298,6 +1304,33 @@ func aliasManagerXData(aliases []PageFormAliasView) string {
 		parts = append(parts, fmt.Sprintf(`{value:'%s',id:%d}`, a.Alias, a.ID))
 	}
 	return fmt.Sprintf("aliasManager([%s])", strings.Join(parts, ","))
+}
+
+templ videoSection(pc *PageContext, data PageFormViewData) {
+	<details class="collapsible-section" x-data={ fmt.Sprintf("{ open: %t }", data.VideoURL != "") } :open="open">
+		<summary class="collapsible-header" @click.prevent="open = !open">
+			@iconChevronRight()
+			<span>{ pc.T("pages.video_section") }</span>
+		</summary>
+		<div class="collapsible-content">
+			<div class="form-group">
+				@label.Label(label.Props{For: "video_url", Class: "block mb-1"}) { { pc.T("pages.video_url") } }
+				@input.Input(input.Props{
+					ID:          "video_url",
+					Name:        "video_url",
+					Type:        input.TypeURL,
+					Value:       formVal(data.FormValues, "video_url", data.VideoURL),
+					Placeholder: "https://www.youtube.com/watch?v=...",
+					HasError:    data.Errors["video_url"] != "",
+					Attributes:  templ.Attributes{"maxlength": "2048"},
+				})
+				if data.Errors["video_url"] != "" {
+					<span class="form-error">{ data.Errors["video_url"] }</span>
+				}
+				<span class="form-hint">{ pc.T("pages.video_url_hint") }</span>
+			</div>
+		</div>
+	</details>
 }
 
 templ seoSection(pc *PageContext, data PageFormViewData) {

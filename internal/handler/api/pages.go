@@ -49,6 +49,7 @@ type PageResponse struct {
 	NoFollow          bool               `json:"no_follow"`
 	CanonicalURL      string             `json:"canonical_url,omitempty"`
 	ScheduledAt       *time.Time         `json:"scheduled_at,omitempty"`
+	VideoURL          string             `json:"video_url,omitempty"`
 	Author            *AuthorResponse    `json:"author,omitempty"`
 	Categories        []CategoryResponse `json:"categories,omitempty"`
 	Tags              []TagResponse      `json:"tags,omitempty"`
@@ -98,6 +99,7 @@ type CreatePageRequest struct {
 	CategoryIDs       []int64  `json:"category_ids,omitempty"`
 	TagIDs            []int64  `json:"tag_ids,omitempty"`
 	Tags              []string `json:"tags,omitempty"`
+	VideoURL          string   `json:"video_url,omitempty"`
 }
 
 // UpdatePageRequest represents the request body for updating a page.
@@ -121,6 +123,7 @@ type UpdatePageRequest struct {
 	CategoryIDs       *[]int64  `json:"category_ids,omitempty"`
 	TagIDs            *[]int64  `json:"tag_ids,omitempty"`
 	Tags              *[]string `json:"tags,omitempty"`
+	VideoURL          *string   `json:"video_url,omitempty"`
 }
 
 // storeCategoryToResponse converts a store.Category to CategoryResponse.
@@ -221,6 +224,7 @@ func storePageToResponse(p store.Page) PageResponse {
 		NoIndex:           p.NoIndex != 0,
 		NoFollow:          p.NoFollow != 0,
 		CanonicalURL:      p.CanonicalUrl,
+		VideoURL:          p.VideoUrl,
 	}
 
 	if p.PublishedAt.Valid {
@@ -546,6 +550,8 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 		params.PageType = "post"
 	}
 
+	params.VideoUrl = req.VideoURL
+
 	// Set published_at if status is published
 	if req.Status == model.PageStatusPublished {
 		params.PublishedAt = sql.NullTime{Time: now, Valid: true}
@@ -678,6 +684,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		HideFeaturedImage: existing.HideFeaturedImage,
 		ExcludeFromLists:  existing.ExcludeFromLists,
 		PublishedAt:       existing.PublishedAt,
+		VideoUrl:          existing.VideoUrl,
 		UpdatedAt:         time.Now(),
 	}
 
@@ -763,6 +770,9 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		params.PageType = *req.PageType
+	}
+	if req.VideoURL != nil {
+		params.VideoUrl = *req.VideoURL
 	}
 	// Handle published_at when status changes to published
 	if req.Status != nil && *req.Status == model.PageStatusPublished && existing.Status != model.PageStatusPublished {

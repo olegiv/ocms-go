@@ -30,6 +30,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/theme"
+	"github.com/olegiv/ocms-go/internal/video"
 )
 
 // PageView represents a page with computed fields for template rendering.
@@ -55,8 +56,10 @@ type PageView struct {
 	FeaturedImageLarge   string // Large variant for single page views
 	FeaturedImageID      int64  // Media ID for translation lookup
 	FeaturedImageAlt     string // Alt text (default language)
-	HideFeaturedImage    bool   // Show image below title instead of hero banner
-	ReadingTime          int    // Estimated reading time in minutes
+	HideFeaturedImage    bool          // Show image below title instead of hero banner
+	VideoURL             string        // Original video URL
+	VideoEmbedHTML       template.HTML // Server-generated safe iframe embed
+	ReadingTime          int           // Estimated reading time in minutes
 	Highlight            string // Search result highlight
 	Author               *AuthorView
 	Category             *CategoryView
@@ -392,7 +395,8 @@ type FrontendHandler struct {
 	cacheManager    *cache.Manager
 	eventService    *service.EventService
 	logger          *slog.Logger
-	sanitizePages   bool
+	sanitizePages       bool
+	videoRegistry       *video.Registry
 	moduleFuncsProvider ModuleTemplateFuncsProvider
 }
 
@@ -417,6 +421,7 @@ func NewFrontendHandler(db *sql.DB, themeManager *theme.Manager, cacheManager *c
 		cacheManager:  cacheManager,
 		eventService:  eventService,
 		logger:        logger,
+		videoRegistry: video.NewRegistry(),
 	}
 }
 
@@ -1456,6 +1461,14 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 
 	// Set hide featured image option
 	pv.HideFeaturedImage = p.HideFeaturedImage == 1
+
+	// Set video embed if URL is present
+	if p.VideoUrl != "" {
+		pv.VideoURL = p.VideoUrl
+		if embedHTML, err := h.videoRegistry.EmbedHTML(p.VideoUrl); err == nil {
+			pv.VideoEmbedHTML = embedHTML
+		}
+	}
 
 	// Get author
 	author, err := h.queries.GetPageAuthor(ctx, p.ID)

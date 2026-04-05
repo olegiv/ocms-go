@@ -483,6 +483,26 @@
             "translation": "Скрыть из списка последних записей и блога, оставив опубликованной"
         },
         {
+            "id": "pages.video_section",
+            "message": "Video",
+            "translation": "Видео"
+        },
+        {
+            "id": "pages.video_url",
+            "message": "Video URL",
+            "translation": "URL видео"
+        },
+        {
+            "id": "pages.video_url_hint",
+            "message": "Paste a YouTube video URL. More providers coming soon.",
+            "translation": "Вставьте ссылку на видео YouTube. Поддержка других сервисов появится позже."
+        },
+        {
+            "id": "pages.video_url_invalid",
+            "message": "Invalid or unsupported video URL",
+            "translation": "Недопустимый или неподдерживаемый URL видео"
+        },
+        {
             "id": "pages.aliases",
             "message": "URL Aliases",
             "translation": "Псевдонимы URL"

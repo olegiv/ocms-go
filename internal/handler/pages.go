@@ -27,6 +27,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
+	"github.com/olegiv/ocms-go/internal/video"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 	"github.com/olegiv/ocms-go/internal/webhook"
 )
@@ -85,6 +86,7 @@ type PagesHandler struct {
 	cacheManager          *cache.Manager
 	blockSuspiciousMarkup bool
 	sanitizePageHTML      bool
+	videoRegistry         *video.Registry
 }
 
 // NewPagesHandler creates a new PagesHandler.
@@ -94,6 +96,7 @@ func NewPagesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 		renderer:       renderer,
 		sessionManager: sm,
 		eventService:   service.NewEventService(db),
+		videoRegistry:  video.NewRegistry(),
 	}
 }
 
@@ -565,6 +568,9 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if bodyErr := validatePageBodySecurityPolicy(rawBody, h.blockSuspiciousMarkup); bodyErr != "" {
 		validationErrors["body"] = bodyErr
 	}
+	if errMsg := h.videoRegistry.ValidateURL(input.VideoURL); errMsg != "" {
+		validationErrors["video_url"] = errMsg
+	}
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
@@ -622,6 +628,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		PublishedAt:       publishedAt,
 		CreatedAt:         now,
 		UpdatedAt:         now,
+		VideoUrl:          input.VideoURL,
 	})
 	if err != nil {
 		slog.Error("failed to create page", "error", err)
@@ -820,6 +827,9 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if bodyErr := validatePageBodySecurityPolicy(rawBody, h.blockSuspiciousMarkup); bodyErr != "" {
 		validationErrors["body"] = bodyErr
 	}
+	if errMsg := h.videoRegistry.ValidateURL(input.VideoURL); errMsg != "" {
+		validationErrors["video_url"] = errMsg
+	}
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
@@ -876,6 +886,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		ExcludeFromLists:  input.ExcludeFromLists,
 		PublishedAt:       publishedAt,
 		UpdatedAt:         now,
+		VideoUrl:          input.VideoURL,
 	})
 	if err != nil {
 		slog.Error("failed to update page", "error", err, "page_id", id)
@@ -1228,6 +1239,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		ScheduledAt:       page.ScheduledAt,       // Keep scheduling intact
 		LanguageCode:      page.LanguageCode,      // Keep language intact
 		HideFeaturedImage: page.HideFeaturedImage, // Keep setting intact
+		VideoUrl:          page.VideoUrl,          // Keep video intact
 		UpdatedAt:         now,
 	})
 	if err != nil {
@@ -1321,6 +1333,7 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		PublishedAt:       sql.NullTime{},              // Not published yet
 		CreatedAt:         now,
 		UpdatedAt:         now,
+		VideoUrl:          sourcePage.VideoUrl, // Inherit video from source
 	})
 	if err != nil {
 		slog.Error("failed to create translated page", "error", err)
@@ -1398,6 +1411,7 @@ type pageFormInput struct {
 	HideFeaturedImage int64
 	PageType          string
 	ExcludeFromLists  int64
+	VideoURL          string
 	FormValues        map[string]string
 }
 
@@ -1423,6 +1437,7 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 	hideFeaturedImageStr := r.FormValue("hide_featured_image")
 	pageType := strings.TrimSpace(r.FormValue("page_type"))
 	excludeFromListsStr := r.FormValue("exclude_from_lists")
+	videoURL := strings.TrimSpace(r.FormValue("video_url"))
 
 	// Default page_type to "post" if empty
 	if pageType == "" {
@@ -1480,6 +1495,7 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 		"hide_featured_image": hideFeaturedImageStr,
 		"page_type":           pageType,
 		"exclude_from_lists":  excludeFromListsStr,
+		"video_url":           videoURL,
 	}
 
 	return pageFormInput{
@@ -1501,6 +1517,7 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 		HideFeaturedImage: hideFeaturedImage,
 		PageType:          pageType,
 		ExcludeFromLists:  excludeFromLists,
+		VideoURL:          videoURL,
 		FormValues:        formValues,
 	}
 }

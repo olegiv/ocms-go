@@ -41,6 +41,12 @@
     </div>
     {{end}}
 
+    {{if .Page.VideoEmbedHTML}}
+    <div class="st-article__video">
+        {{.Page.VideoEmbedHTML}}
+    </div>
+    {{end}}
+
     <div class="st-article__body st-prose">
         {{.Page.Body}}
     </div>

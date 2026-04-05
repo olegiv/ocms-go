@@ -483,6 +483,26 @@
             "translation": "Hide this page from recent posts and blog listings while keeping it published"
         },
         {
+            "id": "pages.video_section",
+            "message": "Video",
+            "translation": "Video"
+        },
+        {
+            "id": "pages.video_url",
+            "message": "Video URL",
+            "translation": "Video URL"
+        },
+        {
+            "id": "pages.video_url_hint",
+            "message": "Paste a YouTube video URL. More providers coming soon.",
+            "translation": "Paste a YouTube video URL. More providers coming soon."
+        },
+        {
+            "id": "pages.video_url_invalid",
+            "message": "Invalid or unsupported video URL",
+            "translation": "Invalid or unsupported video URL"
+        },
+        {
             "id": "pages.aliases",
             "message": "URL Aliases",
             "translation": "URL Aliases"

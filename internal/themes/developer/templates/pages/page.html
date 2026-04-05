@@ -63,6 +63,12 @@
         </header>
         {{end}}
 
+        {{if .Page.VideoEmbedHTML}}
+        <div class="dev-page-video">
+            {{.Page.VideoEmbedHTML}}
+        </div>
+        {{end}}
+
         <div class="dev-article-body dev-prose">
             {{.Page.Body}}
         </div>
