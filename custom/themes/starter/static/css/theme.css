@@ -514,7 +514,7 @@ h1, h2, h3, h4, h5, h6 {
 .st-hero {
     position: relative;
     background: linear-gradient(135deg, var(--st-accent) 0%, #1b4332 100%);
-    color: #fff;
+    color: var(--st-hero-text, #fff);
     border-radius: var(--st-radius-lg);
     overflow: hidden;
     margin-bottom: 2.5rem;
@@ -544,16 +544,34 @@ h1, h2, h3, h4, h5, h6 {
 .st-hero__title {
     font-size: 2.5rem;
     font-weight: 700;
-    color: #fff;
+    color: var(--st-hero-text, #fff);
     margin-bottom: 0.75rem;
     line-height: 1.2;
 }
 
 .st-hero__subtitle {
-    font-size: 1.15rem;
-    opacity: 0.9;
+    font-weight: 700;
     margin-bottom: 1.5rem;
     line-height: 1.6;
+}
+
+/* Minimal hero variant */
+.st-hero--minimal {
+    background: var(--st-bg-alt);
+    color: var(--st-hero-text, var(--st-text));
+    min-height: 200px;
+}
+
+.st-hero--minimal .st-hero__bg img {
+    opacity: 1;
+}
+
+.st-hero--minimal .st-hero__title {
+    color: var(--st-hero-text, var(--st-text));
+}
+
+.st-hero--minimal .st-hero__subtitle {
+    color: var(--st-hero-text, var(--st-text));
 }
 
 /* --------------------------------------------------------------------------

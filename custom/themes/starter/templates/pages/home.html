@@ -1,9 +1,13 @@
 {{define "content"}}
 <div class="st-home">
     {{/* Hero Section */}}
-    {{if .HeroEnabled}}
-    <section class="st-hero">
-        {{if .HeroImage}}
+    {{if and .HeroEnabled (ne (index .ThemeSettings "hero_style") "none")}}
+    <section class="st-hero{{if eq (index .ThemeSettings "hero_style") "minimal"}} st-hero--minimal{{end}}"{{if index .ThemeSettings "hero_text_color"}} style="--st-hero-text: {{index .ThemeSettings "hero_text_color"}}"{{end}}>
+        {{if index .ThemeSettings "hero_image"}}
+        <div class="st-hero__bg">
+            <img src="{{index .ThemeSettings "hero_image"}}" alt="{{if index .ThemeSettings "hero_image_alt"}}{{index .ThemeSettings "hero_image_alt"}}{{else}}{{.SiteName}}{{end}}">
+        </div>
+        {{else if .HeroImage}}
         <div class="st-hero__bg">
             <img src="{{.HeroImage}}" alt="{{if .HeroTitle}}{{.HeroTitle}}{{else}}{{.SiteName}}{{end}}">
         </div>
