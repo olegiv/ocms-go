@@ -103,6 +103,11 @@
             "translation": "Выход"
         },
         {
+            "id": "nav.collapse_sidebar",
+            "message": "Collapse sidebar",
+            "translation": "Свернуть меню"
+        },
+        {
             "id": "nav.profile",
             "message": "Profile",
             "translation": "Профиль"

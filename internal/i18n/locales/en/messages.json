@@ -103,6 +103,11 @@
             "translation": "Logout"
         },
         {
+            "id": "nav.collapse_sidebar",
+            "message": "Collapse sidebar",
+            "translation": "Collapse sidebar"
+        },
+        {
             "id": "nav.profile",
             "message": "Profile",
             "translation": "Profile"
