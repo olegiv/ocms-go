@@ -113,8 +113,13 @@ func (s *Source) TestConnection(cfg map[string]string) error {
 	return nil
 }
 
-// defaultUploadDir is the default oCMS uploads directory.
-const defaultUploadDir = "./uploads"
+// getUploadDir returns the oCMS uploads directory from env or default.
+func getUploadDir() string {
+	if dir := os.Getenv("OCMS_UPLOADS_DIR"); dir != "" {
+		return dir
+	}
+	return "./uploads"
+}
 
 // Import imports content from Elefant CMS into oCMS.
 func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, opts types.ImportOptions, tracker types.ImportTracker) (*types.ImportResult, error) {
@@ -168,10 +173,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	if opts.ImportMedia {
 		filesPath := cfg["files_path"]
 		if filesPath != "" {
-			uploadDir := cfg["upload_dir"]
-			if uploadDir == "" {
-				uploadDir = defaultUploadDir
-			}
+			uploadDir := getUploadDir()
 			mediaMap, err = s.importMedia(ctx, queries, filesPath, uploadDir, authorID, result, tracker)
 			if err != nil {
 				result.Errors = append(result.Errors, fmt.Sprintf("Media import error: %v", err))
