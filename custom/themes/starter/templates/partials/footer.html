@@ -64,7 +64,7 @@
                 {{if .FooterText}}
                 <p>{{safeHTML .FooterText}}</p>
                 {{end}}
-                {{with privacyFooterLink}}<p class="st-footer__privacy">{{.}}</p>{{end}}
+                {{with privacyFooterLink $.LangCode}}<p class="st-footer__privacy">{{.}}</p>{{end}}
             </div>
 
             {{if .SocialLinks}}

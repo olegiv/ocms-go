@@ -84,9 +84,10 @@ func (m *Module) TemplateFuncs() template.FuncMap {
 			return m.renderHeadScripts(firstStringArg(args...))
 		},
 		// privacyFooterLink returns a link to open the consent modal
+		// Accepts optional language code argument for translation
 		// Returns empty string if privacy is disabled
-		"privacyFooterLink": func() template.HTML {
-			return m.renderFooterLink()
+		"privacyFooterLink": func(args ...any) template.HTML {
+			return m.renderFooterLink(firstStringArg(args...))
 		},
 	}
 }

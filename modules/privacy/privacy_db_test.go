@@ -684,17 +684,14 @@ func TestTemplateFuncPrivacyHeadInvoke(t *testing.T) {
 func TestTemplateFuncPrivacyFooterLinkInvoke(t *testing.T) {
 	m := &Module{settings: &Settings{Enabled: true}}
 	funcs := m.TemplateFuncs()
-	fn, ok := funcs["privacyFooterLink"].(func() interface{ String() string })
+	_, ok := funcs["privacyFooterLink"]
 	if !ok {
-		out := m.renderFooterLink()
-		if string(out) == "" {
-			t.Error("renderFooterLink should return non-empty HTML when enabled")
-		}
+		t.Error("privacyFooterLink not found in TemplateFuncs")
 		return
 	}
-	result := fn()
-	if result.String() == "" {
-		t.Error("privacyFooterLink should return non-empty HTML when enabled")
+	out := m.renderFooterLink("en")
+	if string(out) == "" {
+		t.Error("renderFooterLink should return non-empty HTML when enabled")
 	}
 }
 

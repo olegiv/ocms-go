@@ -1715,6 +1715,11 @@ func (h *FrontendHandler) getSidebarData(ctx context.Context, languageCode, lang
 // Block-level elements (h1-h6, p, div, br, li) produce newlines when stripped.
 // This is used for search result highlights where we want plain text with highlighted terms.
 func (h *FrontendHandler) stripHTMLPreserveMark(s string) string {
+	// Strip leading broken tag fragment (snippet may start mid-tag)
+	if idx := strings.Index(s, ">"); idx != -1 && !strings.Contains(s[:idx], "<") {
+		s = s[idx+1:]
+	}
+
 	// Block-level tags that should produce newlines
 	blockTags := []string{"</h1>", "</h2>", "</h3>", "</h4>", "</h5>", "</h6>", "</p>", "</div>", "</li>", "</tr>", "<br>", "<br/>", "<br />"}
 

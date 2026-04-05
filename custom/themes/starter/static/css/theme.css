@@ -1205,6 +1205,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .st-search__suggestions ul {
+    display: inline-block;
+    text-align: left;
     list-style: disc;
     padding-left: 1.5rem;
     color: var(--st-text-light);

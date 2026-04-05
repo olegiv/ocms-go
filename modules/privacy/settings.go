@@ -11,6 +11,8 @@ import (
 	"html/template"
 	"strings"
 
+	"github.com/olegiv/ocms-go/internal/i18n"
+
 	"github.com/olegiv/ocms-go/internal/util"
 )
 
@@ -386,12 +388,13 @@ func (m *Module) renderDebugScript() string {
 }
 
 // renderFooterLink returns an HTML link to open the Klaro consent modal.
-func (m *Module) renderFooterLink() template.HTML {
+func (m *Module) renderFooterLink(langCode string) template.HTML {
 	if m.settings == nil || !m.settings.Enabled {
 		return ""
 	}
 
-	return `<a href="#" class="privacy-settings-link" data-privacy-open="true">Cookie Settings</a>`
+	label := i18n.T(langCode, "privacy.cookie_settings")
+	return template.HTML(fmt.Sprintf(`<a href="#" class="privacy-settings-link" data-privacy-open="true">%s</a>`, template.HTMLEscapeString(label)))
 }
 
 // renderGCMDefaults generates the Google Consent Mode v2 default consent state.
