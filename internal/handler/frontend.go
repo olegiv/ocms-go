@@ -1057,7 +1057,7 @@ func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
 	offset := (page - 1) * defaultPerPage
 
 	// Get base template data first to access LangPrefix
-	base := h.getBaseTemplateData(r, "Blog", "")
+	base := h.getBaseTemplateData(r, "", "")
 
 	// Get published posts (not pages) filtered by language
 	var pages []store.Page
