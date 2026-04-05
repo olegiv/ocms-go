@@ -17,6 +17,7 @@
         {"id": "migrator.option_import_tags", "message": "Import tags", "translation": "Import tags"},
         {"id": "migrator.option_import_media", "message": "Import media files", "translation": "Import media files"},
         {"id": "migrator.option_import_posts", "message": "Import blog posts", "translation": "Import blog posts"},
+        {"id": "migrator.option_import_pages", "message": "Import pages", "translation": "Import pages"},
         {"id": "migrator.option_import_users", "message": "Import users (as public users)", "translation": "Import users (as public users)"},
         {"id": "migrator.option_skip_existing", "message": "Skip existing items (by slug/email)", "translation": "Skip existing items (by slug/email)"},
         {"id": "migrator.start_import", "message": "Start Import", "translation": "Start Import"},
@@ -28,11 +29,12 @@
         {"id": "migrator.error_import", "message": "Import failed", "translation": "Import failed"},
 
         {"id": "migrator.success_connection", "message": "Connection successful! You can now start the import.", "translation": "Connection successful! You can now start the import."},
-        {"id": "migrator.success_import", "message": "Import completed: %d posts, %d tags, %d media files imported", "translation": "Import completed: %d posts, %d tags, %d media files imported"},
+        {"id": "migrator.success_import", "message": "Import completed: %d posts, %d pages, %d tags, %d media files imported", "translation": "Import completed: %d posts, %d pages, %d tags, %d media files imported"},
         {"id": "migrator.skipped_count", "message": "(%d items skipped)", "translation": "(%d items skipped)"},
         {"id": "migrator.errors_count", "message": "(%d errors)", "translation": "(%d errors)"},
 
         {"id": "migrator.imported_content", "message": "Imported Content", "translation": "Imported Content"},
+        {"id": "migrator.imported_posts", "message": "Posts", "translation": "Posts"},
         {"id": "migrator.imported_pages", "message": "Pages", "translation": "Pages"},
         {"id": "migrator.imported_tags", "message": "Tags", "translation": "Tags"},
         {"id": "migrator.imported_media", "message": "Media", "translation": "Media"},
@@ -41,6 +43,17 @@
         {"id": "migrator.delete_imported", "message": "Delete All Imported Content", "translation": "Delete All Imported Content"},
         {"id": "migrator.confirm_delete", "message": "Are you sure you want to delete ALL content imported from this source? This action cannot be undone.", "translation": "Are you sure you want to delete ALL content imported from this source? This action cannot be undone."},
         {"id": "migrator.error_delete", "message": "Failed to delete imported content", "translation": "Failed to delete imported content"},
-        {"id": "migrator.success_delete", "message": "Deleted %d pages, %d tags, %d media, and %d users", "translation": "Deleted %d pages, %d tags, %d media, and %d users"}
+        {"id": "migrator.success_delete", "message": "Deleted %d posts, %d pages, %d tags, %d media, and %d users", "translation": "Deleted %d posts, %d pages, %d tags, %d media, and %d users"},
+
+        {"id": "elefant.description", "message": "Import blog posts, pages, and tags from Elefant CMS MySQL database", "translation": "Import blog posts, pages, and tags from Elefant CMS MySQL database"},
+        {"id": "elefant.field_mysql_host", "message": "MySQL Host", "translation": "MySQL Host"},
+        {"id": "elefant.field_mysql_port", "message": "MySQL Port", "translation": "MySQL Port"},
+        {"id": "elefant.field_mysql_user", "message": "MySQL User", "translation": "MySQL User"},
+        {"id": "elefant.field_mysql_password", "message": "MySQL Password", "translation": "MySQL Password"},
+        {"id": "elefant.field_mysql_database", "message": "Database Name", "translation": "Database Name"},
+        {"id": "elefant.field_table_prefix", "message": "Table Prefix", "translation": "Table Prefix"},
+        {"id": "elefant.field_files_path", "message": "Elefant Files Path", "translation": "Elefant Files Path"},
+        {"id": "elefant.placeholder_table_prefix", "message": "e.g. elefant_", "translation": "e.g. elefant_"},
+        {"id": "elefant.placeholder_files_path", "message": "/path/to/elefant/files", "translation": "/path/to/elefant/files"}
     ]
 }

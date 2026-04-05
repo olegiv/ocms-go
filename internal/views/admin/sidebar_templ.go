@@ -324,7 +324,7 @@ func Sidebar(pc *PageContext) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			for _, mod := range pc.SidebarModules {
-				templ_7745c5c3_Err = navLinkPrefix(pc, mod.AdminURL, mod.Label, pc.HasPrefix(mod.AdminURL), iconModule()).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = navLinkPrefix(pc, mod.AdminURL, pc.T(mod.Label), pc.HasPrefix(mod.AdminURL), iconModule()).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

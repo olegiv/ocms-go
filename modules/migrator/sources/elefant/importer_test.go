@@ -317,6 +317,7 @@ func TestImportOptions_ImportUsers(t *testing.T) {
 	optsWithUsers := types.ImportOptions{
 		ImportTags:   true,
 		ImportPosts:  true,
+		ImportPages:  true,
 		ImportUsers:  true,
 		SkipExisting: false,
 	}
@@ -324,10 +325,14 @@ func TestImportOptions_ImportUsers(t *testing.T) {
 	if !optsWithUsers.ImportUsers {
 		t.Error("ImportUsers should be true")
 	}
+	if !optsWithUsers.ImportPages {
+		t.Error("ImportPages should be true")
+	}
 
 	optsWithoutUsers := types.ImportOptions{
 		ImportTags:   true,
 		ImportPosts:  true,
+		ImportPages:  false,
 		ImportUsers:  false,
 		SkipExisting: false,
 	}
@@ -452,5 +457,117 @@ func TestBlogPostModel(t *testing.T) {
 
 	if queuedPost.IsPublished() {
 		t.Error("expected post with Published='que' to not be published")
+	}
+}
+
+func TestWebpageModel(t *testing.T) {
+	publicPage := Webpage{
+		ID:     "about",
+		Title:  "About Us",
+		Access: "public",
+		Layout: "default",
+	}
+	if !publicPage.IsPublic() {
+		t.Error("expected page with Access='public' to be public")
+	}
+
+	memberPage := Webpage{
+		ID:     "members-only",
+		Title:  "Members Area",
+		Access: "member",
+	}
+	if memberPage.IsPublic() {
+		t.Error("expected page with Access='member' to not be public")
+	}
+
+	privatePage := Webpage{
+		ID:     "private",
+		Title:  "Private Page",
+		Access: "private",
+	}
+	if privatePage.IsPublic() {
+		t.Error("expected page with Access='private' to not be public")
+	}
+
+	emptyPage := Webpage{
+		ID:     "no-access",
+		Title:  "No Access Set",
+		Access: "",
+	}
+	if emptyPage.IsPublic() {
+		t.Error("expected page with Access='' to not be public")
+	}
+}
+
+func TestWebpageAliasFormat(t *testing.T) {
+	tests := []struct {
+		pageID    string
+		slug      string
+		wantAlias bool
+	}{
+		{"about", "about", false},
+		{"about/team", "about-team", true},
+		{"contact-us", "contact-us", false},
+		{"products/widgets", "products-widgets", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.pageID, func(t *testing.T) {
+			shouldCreateAlias := tt.pageID != tt.slug
+			if shouldCreateAlias != tt.wantAlias {
+				t.Errorf("alias for %q -> slug %q: got %v, want %v",
+					tt.pageID, tt.slug, shouldCreateAlias, tt.wantAlias)
+			}
+		})
+	}
+}
+
+func TestNullStringToString(t *testing.T) {
+	tests := []struct {
+		name  string
+		input sql.NullString
+		want  string
+	}{
+		{"valid string", sql.NullString{String: "hello", Valid: true}, "hello"},
+		{"empty valid string", sql.NullString{String: "", Valid: true}, ""},
+		{"null string", sql.NullString{String: "", Valid: false}, ""},
+		{"null with value", sql.NullString{String: "ignored", Valid: false}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := nullStringToString(tt.input)
+			if got != tt.want {
+				t.Errorf("nullStringToString() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMockTracker_PostAndPageEntityTypes(t *testing.T) {
+	tracker := &mockTracker{}
+	ctx := context.Background()
+
+	// Simulate importPosts tracking (entity type "post")
+	_ = tracker.TrackImportedItem(ctx, "elefant", "post", 1)
+	_ = tracker.TrackImportedItem(ctx, "elefant", "post", 2)
+	// Simulate importPages tracking (entity type "page")
+	_ = tracker.TrackImportedItem(ctx, "elefant", "page", 100)
+
+	postCount := 0
+	pageCount := 0
+	for _, item := range tracker.items {
+		switch item.entityType {
+		case "post":
+			postCount++
+		case "page":
+			pageCount++
+		}
+	}
+
+	if postCount != 2 {
+		t.Errorf("tracked posts = %d, want 2", postCount)
+	}
+	if pageCount != 1 {
+		t.Errorf("tracked pages = %d, want 1", pageCount)
 	}
 }

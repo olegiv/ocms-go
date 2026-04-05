@@ -79,9 +79,9 @@ func (m *Module) AdminURL() string {
 	return "/admin/migrator"
 }
 
-// SidebarLabel returns the display label for the admin sidebar.
+// SidebarLabel returns the i18n key for the admin sidebar label.
 func (m *Module) SidebarLabel() string {
-	return "Content Migrator"
+	return "nav.migrator"
 }
 
 // TranslationsFS returns the embedded filesystem containing module translations.

@@ -71,7 +71,7 @@ templ Sidebar(pc *PageContext) {
 					<div class="nav-section-title">{ pc.T("nav.modules") }</div>
 					@navLink(pc, "/admin/modules", pc.T("nav.all_modules"), pc.IsActive("/admin/modules"), iconModules())
 					for _, mod := range pc.SidebarModules {
-						@navLinkPrefix(pc, mod.AdminURL, mod.Label, pc.HasPrefix(mod.AdminURL), iconModule())
+						@navLinkPrefix(pc, mod.AdminURL, pc.T(mod.Label), pc.HasPrefix(mod.AdminURL), iconModule())
 					}
 				</div>
 			}

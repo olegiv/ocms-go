@@ -53,6 +53,7 @@ type ImportOptions struct {
 	ImportTags   bool
 	ImportMedia  bool
 	ImportPosts  bool
+	ImportPages  bool
 	ImportUsers  bool
 	SkipExisting bool
 }
@@ -62,22 +63,24 @@ type ImportResult struct {
 	TagsImported  int
 	MediaImported int
 	PostsImported int
+	PagesImported int
 	UsersImported int
 	TagsSkipped   int
 	MediaSkipped  int
 	PostsSkipped  int
+	PagesSkipped  int
 	UsersSkipped  int
 	Errors        []string
 }
 
 // TotalImported returns the total number of items imported.
 func (r *ImportResult) TotalImported() int {
-	return r.TagsImported + r.MediaImported + r.PostsImported + r.UsersImported
+	return r.TagsImported + r.MediaImported + r.PostsImported + r.PagesImported + r.UsersImported
 }
 
 // TotalSkipped returns the total number of items skipped.
 func (r *ImportResult) TotalSkipped() int {
-	return r.TagsSkipped + r.MediaSkipped + r.PostsSkipped + r.UsersSkipped
+	return r.TagsSkipped + r.MediaSkipped + r.PostsSkipped + r.PagesSkipped + r.UsersSkipped
 }
 
 // HasErrors returns true if there were any errors during import.

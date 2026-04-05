@@ -68,8 +68,8 @@ func TestModuleProperties(t *testing.T) {
 	if m.AdminURL() != "/admin/migrator" {
 		t.Errorf("AdminURL() = %q, want %q", m.AdminURL(), "/admin/migrator")
 	}
-	if m.SidebarLabel() != "Content Migrator" {
-		t.Errorf("SidebarLabel() = %q, want %q", m.SidebarLabel(), "Content Migrator")
+	if m.SidebarLabel() != "nav.migrator" {
+		t.Errorf("SidebarLabel() = %q, want %q", m.SidebarLabel(), "nav.migrator")
 	}
 	funcs := m.TemplateFuncs()
 	if funcs == nil {

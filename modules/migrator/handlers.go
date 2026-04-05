@@ -183,6 +183,7 @@ func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
 		ImportTags:   r.FormValue("import_tags") == "on",
 		ImportMedia:  r.FormValue("import_media") == "on",
 		ImportPosts:  r.FormValue("import_posts") == "on",
+		ImportPages:  r.FormValue("import_pages") == "on",
 		ImportUsers:  r.FormValue("import_users") == "on",
 		SkipExisting: r.FormValue("skip_existing") == "on",
 	}
@@ -193,6 +194,7 @@ func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
 		"import_tags", opts.ImportTags,
 		"import_media", opts.ImportMedia,
 		"import_posts", opts.ImportPosts,
+		"import_pages", opts.ImportPages,
 		"import_users", opts.ImportUsers,
 		"skip_existing", opts.SkipExisting,
 	)
@@ -214,10 +216,12 @@ func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
 		"tags_imported", result.TagsImported,
 		"media_imported", result.MediaImported,
 		"posts_imported", result.PostsImported,
+		"pages_imported", result.PagesImported,
 		"users_imported", result.UsersImported,
 		"tags_skipped", result.TagsSkipped,
 		"media_skipped", result.MediaSkipped,
 		"posts_skipped", result.PostsSkipped,
+		"pages_skipped", result.PagesSkipped,
 		"users_skipped", result.UsersSkipped,
 		"errors", len(result.Errors),
 	)
@@ -233,10 +237,12 @@ func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
 		_ = m.ctx.Events.LogMigratorEvent(r.Context(), "info", "Content imported from "+ctx.SourceName, &ctx.User.ID, clientIP, middleware.GetRequestURL(r), map[string]any{
 			"source":         ctx.SourceName,
 			"posts_imported": result.PostsImported,
+			"pages_imported": result.PagesImported,
 			"tags_imported":  result.TagsImported,
 			"media_imported": result.MediaImported,
 			"users_imported": result.UsersImported,
 			"posts_skipped":  result.PostsSkipped,
+			"pages_skipped":  result.PagesSkipped,
 			"tags_skipped":   result.TagsSkipped,
 			"media_skipped":  result.MediaSkipped,
 			"users_skipped":  result.UsersSkipped,
@@ -246,7 +252,7 @@ func (m *Module) handleImport(w http.ResponseWriter, r *http.Request) {
 
 	// Build success message
 	msg := i18n.T(ctx.Lang, "migrator.success_import",
-		result.PostsImported, result.TagsImported, result.MediaImported)
+		result.PostsImported, result.PagesImported, result.TagsImported, result.MediaImported)
 
 	if result.TotalSkipped() > 0 {
 		msg += " " + i18n.T(ctx.Lang, "migrator.skipped_count", result.TotalSkipped())
@@ -280,6 +286,7 @@ func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
 
 	m.ctx.Logger.Info("deleted imported content",
 		"source", ctx.SourceName,
+		"posts", deleted["post"],
 		"pages", deleted["page"],
 		"tags", deleted["tag"],
 		"media", deleted["media"],
@@ -291,6 +298,7 @@ func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
 		clientIP := middleware.GetClientIP(r)
 		_ = m.ctx.Events.LogMigratorEvent(r.Context(), "info", "Imported content deleted from "+ctx.SourceName, &ctx.User.ID, clientIP, middleware.GetRequestURL(r), map[string]any{
 			"source":        ctx.SourceName,
+			"posts_deleted": deleted["post"],
 			"pages_deleted": deleted["page"],
 			"tags_deleted":  deleted["tag"],
 			"media_deleted": deleted["media"],
@@ -298,7 +306,7 @@ func (m *Module) handleDeleteImported(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	msg := i18n.T(ctx.Lang, "migrator.success_delete", deleted["page"], deleted["tag"], deleted["media"], deleted["user"])
+	msg := i18n.T(ctx.Lang, "migrator.success_delete", deleted["post"], deleted["page"], deleted["tag"], deleted["media"], deleted["user"])
 	m.ctx.Render.SetFlash(r, msg, "success")
 	http.Redirect(w, r, "/admin/migrator/"+ctx.SourceName, http.StatusSeeOther)
 }
@@ -372,19 +380,20 @@ func (m *Module) deleteImportedItems(ctx context.Context, source string) (map[st
 	queries := store.New(m.ctx.DB)
 	deleted := make(map[string]int)
 
-	// Delete pages first (they reference tags)
-	pageIDs, err := m.getImportedItems(ctx, source, "page")
-	if err != nil {
-		return nil, err
-	}
-	for _, id := range pageIDs {
-		// Clear page associations
-		_ = queries.ClearPageTags(ctx, id)
-		_ = queries.ClearPageCategories(ctx, id)
-		if err := queries.DeletePage(ctx, id); err != nil {
-			m.ctx.Logger.Warn("failed to delete page", "id", id, "error", err)
-		} else {
-			deleted["page"]++
+	// Delete posts and pages first (they reference tags)
+	for _, entityType := range []string{"post", "page"} {
+		ids, err := m.getImportedItems(ctx, source, entityType)
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range ids {
+			_ = queries.ClearPageTags(ctx, id)
+			_ = queries.ClearPageCategories(ctx, id)
+			if err := queries.DeletePage(ctx, id); err != nil {
+				m.ctx.Logger.Warn("failed to delete page", "id", id, "type", entityType, "error", err)
+			} else {
+				deleted[entityType]++
+			}
 		}
 	}
 
