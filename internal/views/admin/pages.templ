@@ -106,6 +106,13 @@ type PageFormViewData struct {
 	ScheduledAt    string
 	HasScheduledAt bool
 	ScheduledAtFmt string
+	// Creation date
+	CreatedAt    string
+	CreatedAtFmt string
+	// Publication date
+	PublishedAt    string
+	HasPublishedAt bool
+	PublishedAtFmt string
 	// Video
 	VideoURL   string
 	VideoTitle string
@@ -1555,6 +1562,34 @@ templ schedulingSection(pc *PageContext, data PageFormViewData) {
 					}
 				</span>
 			</div>
+			<div class="form-group">
+				@label.Label(label.Props{For: "created_at", Class: "block mb-1"}) { { pc.T("pages.created_at") } }
+				@input.Input(input.Props{
+					ID:    "created_at",
+					Name:  "created_at",
+					Type:  input.TypeDateTime,
+					Value: formVal(data.FormValues, "created_at", data.CreatedAt),
+				})
+				<span class="form-hint">
+					{ pc.T("pages.created_at_hint") }
+					if data.CreatedAtFmt != "" {
+						<br/>
+						<strong>{ pc.T("pages.created_at") }:</strong> { data.CreatedAtFmt }
+					}
+				</span>
+			</div>
+			if data.HasPublishedAt {
+				<div class="form-group">
+					@label.Label(label.Props{For: "published_at", Class: "block mb-1"}) { { pc.T("pages.published_at") } }
+					@input.Input(input.Props{
+						ID:    "published_at",
+						Name:  "published_at",
+						Type:  input.TypeDateTime,
+						Value: formVal(data.FormValues, "published_at", data.PublishedAt),
+					})
+					<span class="form-hint">{ pc.T("pages.published_at_hint") }</span>
+				</div>
+			}
 			@alert.Alert(alert.Props{Class: "alert-info mt-3"}) {
 				@icon.Info(icon.Props{Size: 16})
 				<div>

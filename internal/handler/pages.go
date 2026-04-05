@@ -828,14 +828,19 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Update page
 	now := time.Now()
 
-	// Determine published_at: set if becoming published, preserve if already published, clear if unpublishing
-	publishedAt := existingPage.PublishedAt
-	if status == PageStatusPublished && existingPage.Status != PageStatusPublished {
+	// Determine published_at: use user-provided value if present, otherwise auto-manage
+	var publishedAt sql.NullTime
+	if input.HasPublishedAt {
+		publishedAt = input.PublishedAt
+	} else if status == PageStatusPublished && existingPage.Status != PageStatusPublished {
 		// Transitioning to published - set published_at
 		publishedAt = sql.NullTime{Time: now, Valid: true}
 	} else if status != PageStatusPublished {
 		// Unpublishing - clear published_at
 		publishedAt = sql.NullTime{Valid: false}
+	} else {
+		// Preserve existing
+		publishedAt = existingPage.PublishedAt
 	}
 	normalizedBody := h.normalizePageBodyForStorage(rawBody)
 
@@ -860,6 +865,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		PageType:          input.PageType,
 		ExcludeFromLists:  input.ExcludeFromLists,
 		PublishedAt:       publishedAt,
+		CreatedAt:         input.CreatedAt,
 		UpdatedAt:         now,
 		VideoUrl:          input.VideoURL,
 		VideoTitle:        input.VideoTitle,
@@ -1391,6 +1397,9 @@ type pageFormInput struct {
 	ExcludeFromLists  int64
 	VideoURL          string
 	VideoTitle        string
+	CreatedAt         time.Time
+	PublishedAt       sql.NullTime
+	HasPublishedAt    bool
 	FormValues        map[string]string
 }
 
@@ -1412,6 +1421,8 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 	noFollowStr := r.FormValue("no_follow")
 	canonicalURL := strings.TrimSpace(r.FormValue("canonical_url"))
 	scheduledAtStr := strings.TrimSpace(r.FormValue("scheduled_at"))
+	createdAtStr := strings.TrimSpace(r.FormValue("created_at"))
+	publishedAtStr := strings.TrimSpace(r.FormValue("published_at"))
 	languageCode := strings.TrimSpace(r.FormValue("language_code"))
 	hideFeaturedImageStr := r.FormValue("hide_featured_image")
 	pageType := strings.TrimSpace(r.FormValue("page_type"))
@@ -1456,6 +1467,24 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 		}
 	}
 
+	// Parse created_at (required field, fall back to now)
+	createdAt := time.Now()
+	if createdAtStr != "" {
+		if t, err := time.Parse("2006-01-02T15:04", createdAtStr); err == nil {
+			createdAt = t
+		}
+	}
+
+	// Parse published_at (optional, only present for published pages)
+	var parsedPublishedAt sql.NullTime
+	hasPublishedAt := false
+	if publishedAtStr != "" {
+		if t, err := time.Parse("2006-01-02T15:04", publishedAtStr); err == nil {
+			parsedPublishedAt = sql.NullTime{Time: t, Valid: true}
+			hasPublishedAt = true
+		}
+	}
+
 	formValues := map[string]string{
 		"title":               title,
 		"slug":                slug,
@@ -1471,6 +1500,8 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 		"no_follow":           noFollowStr,
 		"canonical_url":       canonicalURL,
 		"scheduled_at":        scheduledAtStr,
+		"created_at":          createdAtStr,
+		"published_at":        publishedAtStr,
 		"language_code":       languageCode,
 		"hide_featured_image": hideFeaturedImageStr,
 		"page_type":           pageType,
@@ -1500,6 +1531,9 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 		ExcludeFromLists:  excludeFromLists,
 		VideoURL:          videoURL,
 		VideoTitle:        videoTitle,
+		CreatedAt:         createdAt,
+		PublishedAt:       parsedPublishedAt,
+		HasPublishedAt:    hasPublishedAt,
 		FormValues:        formValues,
 	}
 }

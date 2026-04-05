@@ -304,6 +304,7 @@ func (r *Renderer) templateFuncs() template.FuncMap {
 		"analyticsExtHead": func(args ...any) template.HTML { return "" },
 		"analyticsExtBody": func(args ...any) template.HTML { return "" },
 		"embedHead":        func(args ...any) template.HTML { return "" },
+		"embedBody":        func(args ...any) template.HTML { return "" },
 		"deref": func(p *int64) int64 {
 			if p == nil {
 				return 0

@@ -1450,6 +1450,15 @@ func convertPageFormViewData(data PageFormData, renderer *render.Renderer, lang 
 			viewData.ScheduledAt = data.Page.ScheduledAt.Time.Format("2006-01-02T15:04")
 			viewData.ScheduledAtFmt = renderer.FormatDateTimeLocale(data.Page.ScheduledAt.Time, lang)
 		}
+
+		viewData.CreatedAt = data.Page.CreatedAt.Format("2006-01-02T15:04")
+		viewData.CreatedAtFmt = renderer.FormatDateTimeLocale(data.Page.CreatedAt, lang)
+
+		if data.Page.PublishedAt.Valid {
+			viewData.HasPublishedAt = true
+			viewData.PublishedAt = data.Page.PublishedAt.Time.Format("2006-01-02T15:04")
+			viewData.PublishedAtFmt = renderer.FormatDateTimeLocale(data.Page.PublishedAt.Time, lang)
+		}
 	}
 
 	// Featured image

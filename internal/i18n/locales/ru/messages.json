@@ -468,6 +468,26 @@
             "translation": "Записи отображаются в лентах блога и последних публикациях. Страницы — статический контент."
         },
         {
+            "id": "pages.created_at",
+            "message": "Creation date",
+            "translation": "Дата создания"
+        },
+        {
+            "id": "pages.created_at_hint",
+            "message": "Set the creation date shown to visitors",
+            "translation": "Установите дату создания, отображаемую посетителям"
+        },
+        {
+            "id": "pages.published_at",
+            "message": "Publication date",
+            "translation": "Дата публикации"
+        },
+        {
+            "id": "pages.published_at_hint",
+            "message": "Override the date shown as publication date",
+            "translation": "Изменить дату, отображаемую как дата публикации"
+        },
+        {
             "id": "pages.type_post",
             "message": "Post",
             "translation": "Запись"

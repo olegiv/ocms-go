@@ -468,6 +468,26 @@
             "translation": "Posts appear in blog feeds and recent posts. Pages are static content."
         },
         {
+            "id": "pages.created_at",
+            "message": "Creation date",
+            "translation": "Creation date"
+        },
+        {
+            "id": "pages.created_at_hint",
+            "message": "Set the creation date shown to visitors",
+            "translation": "Set the creation date shown to visitors"
+        },
+        {
+            "id": "pages.published_at",
+            "message": "Publication date",
+            "translation": "Publication date"
+        },
+        {
+            "id": "pages.published_at_hint",
+            "message": "Override the date shown as publication date",
+            "translation": "Override the date shown as publication date"
+        },
+        {
             "id": "pages.type_post",
             "message": "Post",
             "translation": "Post"
