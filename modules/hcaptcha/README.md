@@ -44,6 +44,14 @@ OCMS_HCAPTCHA_SECRET_KEY=your-secret-key
 
 Environment variables override database settings for keys.
 
+### Force-Disable via Environment Variable
+
+```bash
+OCMS_HCAPTCHA_DISABLED=true
+```
+
+When set to `true`, hCaptcha is force-disabled regardless of database settings. The admin toggle is ignored (a warning is shown on the settings page). Remove the variable or set to `false` to restore database-driven behavior.
+
 ## Test Keys (Defaults)
 
 hCaptcha's test keys are used as defaults when no keys are configured:
@@ -215,10 +223,12 @@ Note: Even when the module is active, hCaptcha protection only applies when `ena
 
 ### Locked out after enabling
 
-Disable via database:
+Disable via database or environment variable:
 
 ```bash
 sqlite3 ./data/ocms.db "UPDATE hcaptcha_settings SET enabled = 0"
+# Or force-disable via env var:
+OCMS_HCAPTCHA_DISABLED=true
 ```
 
 ### Widget not appearing

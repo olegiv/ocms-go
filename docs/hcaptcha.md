@@ -87,6 +87,16 @@ sqlite3 ./data/ocms.db "UPDATE modules SET is_active = 0 WHERE name = 'hcaptcha'
 
 Restart the application after any database change.
 
+### Option D: Environment Variable
+
+Force-disable hCaptcha regardless of database settings:
+
+```bash
+OCMS_HCAPTCHA_DISABLED=true
+```
+
+This overrides the database `enabled` flag at runtime. The admin UI toggle is ignored while the variable is set (a warning notice is shown on the settings page). Useful for CI/CD pipelines, staging environments, or emergency lockout recovery. Remove the variable (or set to `false`) to restore database-driven behavior.
+
 ## How It Works
 
 1. When enabled, the hCaptcha widget appears on the login form
@@ -225,6 +235,7 @@ For more information, see [hCaptcha Privacy Policy](https://www.hcaptcha.com/pri
 |----------|----------|-------------|
 | `OCMS_HCAPTCHA_SITE_KEY` | No | Override site key from env |
 | `OCMS_HCAPTCHA_SECRET_KEY` | No | Override secret key from env |
+| `OCMS_HCAPTCHA_DISABLED` | No | Force-disable hCaptcha regardless of DB settings |
 
 ## Admin Interface
 

@@ -556,6 +556,46 @@ func TestModuleInit(t *testing.T) {
 	}
 }
 
+func TestModuleInit_EnvDisabled(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := New()
+	moduleutil.RunMigrations(t, db, m.Migrations())
+
+	// Save enabled settings to DB
+	if err := saveSettings(db, &Settings{
+		Enabled:   true,
+		SiteKey:   "site-key",
+		SecretKey: "secret-key",
+	}); err != nil {
+		t.Fatalf("saveSettings: %v", err)
+	}
+
+	// Config with HCaptchaDisabled=true
+	logger := testutil.TestLogger()
+	ctx := &module.Context{
+		DB:     db,
+		Logger: logger,
+		Config: &config.Config{
+			HCaptchaDisabled: true,
+		},
+		Hooks: module.NewHookRegistry(logger),
+	}
+
+	if err := m.Init(ctx); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	// Settings should be forced disabled despite DB having enabled=true
+	if m.settings.Enabled {
+		t.Error("settings.Enabled should be false when HCaptchaDisabled=true")
+	}
+	if m.IsEnabled() {
+		t.Error("IsEnabled() should return false when HCaptchaDisabled=true")
+	}
+}
+
 func TestModuleInit_EnvOverride(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()
@@ -604,6 +644,55 @@ func TestModuleShutdown(t *testing.T) {
 	// Shutdown should not error
 	if err := m.Shutdown(); err != nil {
 		t.Errorf("Shutdown: %v", err)
+	}
+}
+
+func TestReloadSettings_EnvDisabled(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := New()
+	moduleutil.RunMigrations(t, db, m.Migrations())
+
+	// Init with HCaptchaDisabled=true
+	logger := testutil.TestLogger()
+	ctx := &module.Context{
+		DB:     db,
+		Logger: logger,
+		Config: &config.Config{
+			HCaptchaDisabled: true,
+		},
+		Hooks: module.NewHookRegistry(logger),
+	}
+	if err := m.Init(ctx); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	// Save enabled settings directly to DB
+	if err := saveSettings(db, &Settings{
+		Enabled:   true,
+		SiteKey:   "reloaded-site-key",
+		SecretKey: "reloaded-secret-key",
+		Theme:     "dark",
+		Size:      "compact",
+	}); err != nil {
+		t.Fatalf("saveSettings: %v", err)
+	}
+
+	// Reload settings — env override should force disable
+	if err := m.ReloadSettings(); err != nil {
+		t.Fatalf("ReloadSettings: %v", err)
+	}
+
+	if m.settings.Enabled {
+		t.Error("settings.Enabled should be false after reload with HCaptchaDisabled=true")
+	}
+	if m.IsEnabled() {
+		t.Error("IsEnabled() should return false after reload with HCaptchaDisabled=true")
+	}
+	// Keys should still be loaded from DB
+	if m.settings.SiteKey != "reloaded-site-key" {
+		t.Errorf("SiteKey = %q, want reloaded-site-key", m.settings.SiteKey)
 	}
 }
 

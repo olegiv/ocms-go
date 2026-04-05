@@ -4,6 +4,7 @@ import adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 
 type HCaptchaViewData struct {
 	Enabled       bool
+	EnvDisabled   bool
 	SiteKey       string
 	SecretKey     string
 	SecretKeyMask string
@@ -41,6 +42,16 @@ templ HCaptchaPage(pc *adminviews.PageContext, data HCaptchaViewData) {
 					</div>
 				</div>
 				<div class="card-body">
+					if data.EnvDisabled {
+						<div class="info-box info-box-warning">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+								<path d="M12 9v4"></path>
+								<path d="M12 17h.01"></path>
+							</svg>
+							<span>{ pc.T("hcaptcha.env_disabled_notice") }</span>
+						</div>
+					}
 					<div class="form-group">
 						<label for="site_key">{ pc.T("hcaptcha.site_key") }</label>
 						<input
