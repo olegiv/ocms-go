@@ -140,3 +140,19 @@ SELECT pt.page_id, t.name
 FROM page_tags pt
 INNER JOIN tags t ON t.id = pt.tag_id
 ORDER BY pt.page_id, t.name;
+
+-- name: GetTagNamesForPublishedPages :many
+SELECT pt.page_id, t.name
+FROM page_tags pt
+INNER JOIN tags t ON t.id = pt.tag_id
+INNER JOIN pages p ON p.id = pt.page_id AND p.status = 'published'
+ORDER BY pt.page_id, t.name;
+
+-- name: GetPublishedTagUsageCounts :many
+SELECT t.id, t.name, t.slug, t.language_code, t.created_at, t.updated_at, COUNT(p.id) as usage_count
+FROM tags t
+INNER JOIN page_tags pt ON pt.tag_id = t.id
+INNER JOIN pages p ON p.id = pt.page_id AND p.status = 'published'
+GROUP BY t.id, t.name, t.slug, t.language_code, t.created_at, t.updated_at
+ORDER BY usage_count DESC, t.name
+LIMIT ? OFFSET ?;

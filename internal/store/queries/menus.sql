@@ -87,6 +87,16 @@ LEFT JOIN pages p ON mi.page_id = p.id
 WHERE mi.menu_id = ?
 ORDER BY mi.position;
 
+-- name: ListMenuItemsWithPublishedPage :many
+SELECT
+    mi.*,
+    p.title as page_title,
+    p.slug as page_slug
+FROM menu_items mi
+LEFT JOIN pages p ON mi.page_id = p.id AND p.status = 'published'
+WHERE mi.menu_id = ?
+ORDER BY mi.position;
+
 -- Language-specific menu queries (no JOINs needed for most - language_code is directly on the table)
 
 -- name: ListMenusByLanguage :many
