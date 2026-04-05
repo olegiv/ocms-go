@@ -19,6 +19,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/olegiv/ocms-go/internal/imaging"
+	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
@@ -560,6 +561,8 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 		if mediaMap != nil {
 			body = replaceMediaURLs(body, mediaMap)
 		}
+		// Sanitize imported HTML to match the admin UI policy
+		body = security.SanitizePageHTML(body)
 
 		// Create page
 		page, err := queries.CreatePage(ctx, store.CreatePageParams{
@@ -673,6 +676,8 @@ func (s *Source) importPages(ctx context.Context, queries *store.Queries, reader
 		if mediaMap != nil {
 			body = replaceMediaURLs(body, mediaMap)
 		}
+		// Sanitize imported HTML to match the admin UI policy
+		body = security.SanitizePageHTML(body)
 
 		// Use window_title as meta_title, fall back to title
 		metaTitle := wp.WindowTitle

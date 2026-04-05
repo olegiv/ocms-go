@@ -53,6 +53,14 @@ var ValidPageTypes = []string{PageTypePost, PageTypePage}
 // PagesPerPage is the number of pages to display per page.
 const PagesPerPage = 10
 
+// minPageDate is the earliest acceptable date for editable date fields.
+var minPageDate = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+
+// isPageDateInBounds checks whether a date is within acceptable bounds (2000-01-01 to 2 years from now).
+func isPageDateInBounds(t time.Time) bool {
+	return !t.Before(minPageDate) && !t.After(time.Now().AddDate(2, 0, 0))
+}
+
 var suspiciousPageHTMLTokens = []string{
 	"<script",
 	"onerror=",
@@ -911,6 +919,25 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("page updated", "page_id", updatedPage.ID, "slug", updatedPage.Slug, "updated_by", middleware.GetUserID(r))
 	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page updated", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": updatedPage.ID, "slug": updatedPage.Slug})
+
+	// Log audit event when published_at was manually overridden
+	if input.HasPublishedAt && publishedAt.Valid {
+		oldPub := ""
+		if existingPage.PublishedAt.Valid {
+			oldPub = existingPage.PublishedAt.Time.Format(time.RFC3339)
+		}
+		newPub := publishedAt.Time.Format(time.RFC3339)
+		if oldPub != newPub {
+			slog.Info("page published_at manually changed",
+				"page_id", updatedPage.ID, "slug", updatedPage.Slug,
+				"old_published_at", oldPub, "new_published_at", newPub,
+				"changed_by", middleware.GetUserID(r))
+			_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page published_at changed",
+				middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r),
+				map[string]any{"page_id": updatedPage.ID, "slug": updatedPage.Slug, "old_published_at": oldPub, "new_published_at": newPub})
+		}
+	}
+
 	h.logSuspiciousPageContentEvent(r, updatedPage.ID, updatedPage.Slug, rawBody, "updated")
 
 	// Dispatch page.updated webhook event
@@ -1471,7 +1498,10 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 	createdAt := time.Now()
 	if createdAtStr != "" {
 		if t, err := time.Parse("2006-01-02T15:04", createdAtStr); err == nil {
-			createdAt = t
+			if isPageDateInBounds(t) {
+				createdAt = t
+			}
+			// Out-of-bounds dates silently fall back to now
 		}
 	}
 
@@ -1480,8 +1510,11 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 	hasPublishedAt := false
 	if publishedAtStr != "" {
 		if t, err := time.Parse("2006-01-02T15:04", publishedAtStr); err == nil {
-			parsedPublishedAt = sql.NullTime{Time: t, Valid: true}
-			hasPublishedAt = true
+			if isPageDateInBounds(t) {
+				parsedPublishedAt = sql.NullTime{Time: t, Valid: true}
+				hasPublishedAt = true
+			}
+			// Out-of-bounds dates are ignored (treated as not provided)
 		}
 	}
 
