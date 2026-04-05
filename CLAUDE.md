@@ -196,7 +196,7 @@ cmd/ocms/main.go
 | `OCMS_SERVER_PORT` | No | `8080` | Server port |
 | `OCMS_ENV` | No | `development` | Set to `production` for prod |
 | `OCMS_CUSTOM_DIR` | No | `./custom` | Directory for custom themes/modules |
-| `OCMS_ACTIVE_THEME` | No | `default` | Name of active theme |
+| `OCMS_ACTIVE_THEME` | No | `default` | Active theme (overrides DB/admin setting) |
 | `OCMS_API_RATE_LIMIT` | No | `100` | API requests per minute per key |
 | `OCMS_REDIS_URL` | No | - | Redis URL for distributed cache (e.g., `redis://localhost:6379/0`) |
 | `OCMS_CACHE_PREFIX` | No | `ocms:` | Key prefix for Redis cache entries |

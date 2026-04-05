@@ -1082,9 +1082,11 @@ func loadActiveTheme(ctx context.Context, queries *store.Queries, themeManager *
 	}
 
 	activeTheme := cfg.ActiveTheme
-	if dbConfig, err := queries.GetConfigByKey(ctx, "active_theme"); err == nil && dbConfig.Value != "" {
+	if os.Getenv("OCMS_ACTIVE_THEME") != "" {
+		slog.Info("active theme from environment", "theme", activeTheme)
+	} else if dbConfig, err := queries.GetConfigByKey(ctx, "active_theme"); err == nil && dbConfig.Value != "" {
 		activeTheme = dbConfig.Value
-		slog.Info("active theme loaded from database", "theme", activeTheme)
+		slog.Info("active theme from database", "theme", activeTheme)
 	}
 
 	if themeManager.HasTheme(activeTheme) {

@@ -179,7 +179,7 @@ sudo dnf install vips-devel
 | `OCMS_ENV` | Environment mode (`development`/`production`) | `development` | No |
 | `OCMS_LOG_LEVEL` | Log level (`debug`/`info`/`warn`/`error`) | `info` | No |
 | `OCMS_CUSTOM_DIR` | Directory for custom themes and modules | `./custom` | No |
-| `OCMS_ACTIVE_THEME` | Name of the active theme | `default` | No |
+| `OCMS_ACTIVE_THEME` | Active theme (overrides DB/admin setting) | `default` | No |
 | `OCMS_DO_SEED` | Seed database with default admin and config | `false` | No |
 | `OCMS_CACHE_TTL` | Default cache TTL in seconds | `3600` | No |
 | `OCMS_REDIS_URL` | Redis URL for distributed caching | - | No |

@@ -65,13 +65,13 @@ Create `theme.json`:
 
 ### 3. Activate the theme
 
-Set the environment variable:
+Set the environment variable (takes precedence over admin UI setting):
 
 ```env
 OCMS_ACTIVE_THEME=mytheme
 ```
 
-Or activate from **Admin > Themes** in the dashboard.
+Or activate from **Admin > Themes** in the dashboard (used as fallback when the env var is not set).
 
 ## How It Works
 
