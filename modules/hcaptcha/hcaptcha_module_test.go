@@ -412,6 +412,53 @@ func TestHandleSaveSettingsWithUser_EmptyThemeAndSizeDefaults(t *testing.T) {
 	}
 }
 
+func TestHandleSaveSettingsWithUser_EnvDisabled(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := New()
+	ctx, _ := moduleutil.TestModuleContext(t, db)
+	moduleutil.RunMigrations(t, db, m.Migrations())
+	// Set env disabled
+	ctx.Config.HCaptchaDisabled = true
+	if err := m.Init(ctx); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	// Post with enabled=1 and valid keys
+	body := strings.NewReader("enabled=1&site_key=abc-site-key&secret_key=abc-secret-key&theme=light&size=normal")
+	req := requestWithUser(
+		http.MethodPost, "/admin/hcaptcha",
+		body,
+		store.User{ID: 1, Email: "admin@test.com", Role: "admin"},
+	)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	w := httptest.NewRecorder()
+	m.handleSaveSettings(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("handleSaveSettings status = %d, want 303", w.Code)
+	}
+
+	// In-memory settings should be forced disabled
+	if m.settings.Enabled {
+		t.Error("settings.Enabled should be false when HCaptchaDisabled=true")
+	}
+	if m.IsEnabled() {
+		t.Error("IsEnabled() should return false when HCaptchaDisabled=true")
+	}
+
+	// DB should still store enabled=1 (admin's preference)
+	loaded, err := loadSettings(db)
+	if err != nil {
+		t.Fatalf("loadSettings: %v", err)
+	}
+	if !loaded.Enabled {
+		t.Error("DB settings.Enabled should be true (admin's preference is preserved)")
+	}
+}
+
 func TestHandleSaveSettingsWithUser_EnvOverride(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()

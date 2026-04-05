@@ -204,6 +204,7 @@ cmd/ocms/main.go
 | `OCMS_CACHE_MAX_SIZE` | No | `10000` | Max entries for in-memory cache |
 | `OCMS_HCAPTCHA_SITE_KEY` | No | - | hCaptcha site key (overrides database setting) |
 | `OCMS_HCAPTCHA_SECRET_KEY` | No | - | hCaptcha secret key (overrides database setting) |
+| `OCMS_HCAPTCHA_DISABLED` | No | `false` | Force-disable hCaptcha regardless of database settings |
 | `OCMS_GEOIP_DB_PATH` | No | - | Path to GeoLite2-Country.mmdb for country detection |
 | `OCMS_DO_SEED` | No | `false` | Enable database seeding (admin user, config, menus) |
 | `OCMS_UPLOADS_DIR` | No | `./uploads` | Directory for uploaded media files |

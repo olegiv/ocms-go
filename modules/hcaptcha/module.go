@@ -68,6 +68,11 @@ func (m *Module) Init(ctx *module.Context) error {
 		settings.SecretKey = ctx.Config.HCaptchaSecretKey
 	}
 
+	// Force-disable when OCMS_HCAPTCHA_DISABLED=true
+	if ctx.Config.HCaptchaDisabled {
+		settings.Enabled = false
+	}
+
 	m.settings = settings
 
 	// Register hooks for login form integration
@@ -75,6 +80,7 @@ func (m *Module) Init(ctx *module.Context) error {
 
 	m.ctx.Logger.Info("hCaptcha module initialized",
 		"enabled", settings.Enabled,
+		"env_disabled", ctx.Config.HCaptchaDisabled,
 		"has_site_key", settings.SiteKey != "",
 		"has_secret_key", settings.SecretKey != "",
 	)
@@ -223,6 +229,11 @@ func (m *Module) ReloadSettings() error {
 	}
 	if m.ctx.Config.HCaptchaSecretKey != "" {
 		settings.SecretKey = m.ctx.Config.HCaptchaSecretKey
+	}
+
+	// Force-disable when OCMS_HCAPTCHA_DISABLED=true
+	if m.ctx.Config.HCaptchaDisabled {
+		settings.Enabled = false
 	}
 
 	m.settings = settings

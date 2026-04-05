@@ -39,6 +39,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.LogLevel != "info" {
 		t.Errorf("LogLevel = %q, want %q", cfg.LogLevel, "info")
 	}
+	if cfg.HCaptchaDisabled {
+		t.Error("HCaptchaDisabled = true, want false")
+	}
 	if cfg.RequireFormCaptcha {
 		t.Error("RequireFormCaptcha = true, want false")
 	}
@@ -238,6 +241,21 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 	if !cfg.RequireBlockSuspiciousPageHTML {
 		t.Error("RequireBlockSuspiciousPageHTML = false, want true")
+	}
+}
+
+func TestLoad_HCaptchaDisabled(t *testing.T) {
+	os.Clearenv()
+	setEnv(t, "OCMS_SESSION_SECRET", "test-secret-key-32-bytes-long!!!")
+	setEnv(t, "OCMS_HCAPTCHA_DISABLED", "true")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	if !cfg.HCaptchaDisabled {
+		t.Error("HCaptchaDisabled = false, want true")
 	}
 }
 

@@ -18,6 +18,7 @@ func (m *Module) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	displaySettings := HCaptchaViewData{
 		Enabled:       m.settings.Enabled,
+		EnvDisabled:   m.ctx.Config.HCaptchaDisabled,
 		SiteKey:       m.settings.SiteKey,
 		SecretKey:     m.settings.SecretKey,
 		SecretKeyMask: maskSecretKey(m.settings.SecretKey),
@@ -113,6 +114,10 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if m.ctx.Config.HCaptchaSecretKey != "" {
 		newSettings.SecretKey = m.ctx.Config.HCaptchaSecretKey
+	}
+	// Force-disable when OCMS_HCAPTCHA_DISABLED=true
+	if m.ctx.Config.HCaptchaDisabled {
+		newSettings.Enabled = false
 	}
 	m.settings = newSettings
 
