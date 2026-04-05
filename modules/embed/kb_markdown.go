@@ -379,6 +379,13 @@ func writeMenuSection(b *strings.Builder, ctx context.Context, q *store.Queries,
 			if !item.IsActive {
 				continue
 			}
+			// Skip menu items that reference an unpublished page.
+			// The LEFT JOIN nullifies page_slug for drafts, so if
+			// page_id is set but page_slug is empty the page is not
+			// published and the item should be hidden from the KB.
+			if item.PageID.Valid && (!item.PageSlug.Valid || item.PageSlug.String == "") {
+				continue
+			}
 			b.WriteString("- ")
 			b.WriteString(item.Title)
 			itemURL := ""

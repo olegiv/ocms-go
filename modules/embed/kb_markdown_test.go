@@ -911,3 +911,68 @@ func TestGenerateUserGuideMarkdown_ExcludesDraftTagUsage(t *testing.T) {
 		t.Errorf("draft-only tag 'Hidden Tag' must not appear in user guide")
 	}
 }
+
+func TestGenerateUserGuideMarkdown_MenuHidesDraftPageItem(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	q := store.New(db)
+	authorID := seedTestUser(t, q)
+	ctx := context.Background()
+	now := time.Now()
+
+	pubPage := seedPublishedPage(t, q, authorID, "Public Page", "public-page", "", "page")
+	draftPage := seedDraftPage(t, q, authorID, "Draft Page", "draft-page", "", "page")
+
+	menu, err := q.CreateMenu(ctx, store.CreateMenuParams{
+		Name:         "Main",
+		Slug:         "main",
+		LanguageCode: "en",
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+	if err != nil {
+		t.Fatalf("CreateMenu: %v", err)
+	}
+
+	// Menu item linked to a published page
+	if _, err := q.CreateMenuItem(ctx, store.CreateMenuItemParams{
+		MenuID:    menu.ID,
+		Title:     "Visible Link",
+		PageID:    sql.NullInt64{Int64: pubPage.ID, Valid: true},
+		Position:  0,
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateMenuItem (pub): %v", err)
+	}
+
+	// Menu item linked to a draft page (no fallback url)
+	if _, err := q.CreateMenuItem(ctx, store.CreateMenuItemParams{
+		MenuID:    menu.ID,
+		Title:     "Secret Link",
+		PageID:    sql.NullInt64{Int64: draftPage.ID, Valid: true},
+		Position:  1,
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateMenuItem (draft): %v", err)
+	}
+
+	out, err := GenerateUserGuideMarkdown(ctx, q)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(out, "Visible Link") {
+		t.Errorf("expected 'Visible Link' in user guide menu section")
+	}
+	if strings.Contains(out, "Secret Link") {
+		t.Errorf("menu item 'Secret Link' referencing draft page must not appear in user guide")
+	}
+	if strings.Contains(out, "draft-page") {
+		t.Errorf("draft page slug must not appear in user guide")
+	}
+}
