@@ -27,7 +27,7 @@
         {"id": "embed.error_not_configured", "message": "Provider is not configured", "translation": "Provider is not configured"},
         {"id": "embed.error_configure_first", "message": "Please configure the provider settings first", "translation": "Please configure the provider settings first"},
         {"id": "embed.kb_title", "message": "Knowledge Base Files", "translation": "Knowledge Base Files"},
-        {"id": "embed.kb_description", "message": "Generate markdown files for your Dify knowledge base. Upload these to your dataset to teach the chatbot about your site.", "translation": "Generate markdown files for your Dify knowledge base. Upload these to your dataset to teach the chatbot about your site."},
+        {"id": "embed.kb_description", "message": "Generate markdown files from your published content for your Dify knowledge base. Upload these to your dataset to teach the chatbot about your site. Draft and unpublished pages are excluded.", "translation": "Generate markdown files from your published content for your Dify knowledge base. Upload these to your dataset to teach the chatbot about your site. Draft and unpublished pages are excluded."},
         {"id": "embed.kb_download_content", "message": "Download Site Content", "translation": "Download Site Content"},
         {"id": "embed.kb_download_guide", "message": "Download User Guide", "translation": "Download User Guide"},
         {"id": "embed.kb_tip", "message": "Re-download after content changes to keep your knowledge base up to date.", "translation": "Re-download after content changes to keep your knowledge base up to date."},

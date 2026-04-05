@@ -27,7 +27,7 @@
         {"id": "embed.error_not_configured", "message": "Provider is not configured", "translation": "Провайдер не настроен"},
         {"id": "embed.error_configure_first", "message": "Please configure the provider settings first", "translation": "Сначала настройте параметры провайдера"},
         {"id": "embed.kb_title", "message": "Knowledge Base Files", "translation": "Файлы базы знаний"},
-        {"id": "embed.kb_description", "message": "Generate markdown files for your Dify knowledge base. Upload these to your dataset to teach the chatbot about your site.", "translation": "Создайте markdown-файлы для базы знаний Dify. Загрузите их в датасет, чтобы обучить чат-бота информации о вашем сайте."},
+        {"id": "embed.kb_description", "message": "Generate markdown files from your published content for your Dify knowledge base. Upload these to your dataset to teach the chatbot about your site. Draft and unpublished pages are excluded.", "translation": "Создайте markdown-файлы из опубликованного контента для базы знаний Dify. Загрузите их в датасет, чтобы обучить чат-бота информации о вашем сайте. Черновики и неопубликованные страницы исключены."},
         {"id": "embed.kb_download_content", "message": "Download Site Content", "translation": "Скачать контент сайта"},
         {"id": "embed.kb_download_guide", "message": "Download User Guide", "translation": "Скачать руководство"},
         {"id": "embed.kb_tip", "message": "Re-download after content changes to keep your knowledge base up to date.", "translation": "Скачайте файлы повторно после изменения контента, чтобы база знаний была актуальной."},

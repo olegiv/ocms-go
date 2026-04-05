@@ -53,15 +53,15 @@ func GenerateSiteContentMarkdown(ctx context.Context, q *store.Queries) (string,
 		}
 	}
 
-	// Pre-fetch all category and tag names per page in two queries (avoids N+1).
+	// Pre-fetch all category and tag names per published page (avoids N+1).
 	pageCats := make(map[int64][]string)
-	if catRows, err := q.GetCategoryNamesForAllPages(ctx); err == nil {
+	if catRows, err := q.GetCategoryNamesForPublishedPages(ctx); err == nil {
 		for _, r := range catRows {
 			pageCats[r.PageID] = append(pageCats[r.PageID], r.Name)
 		}
 	}
 	pageTags := make(map[int64][]string)
-	if tagRows, err := q.GetTagNamesForAllPages(ctx); err == nil {
+	if tagRows, err := q.GetTagNamesForPublishedPages(ctx); err == nil {
 		for _, r := range tagRows {
 			pageTags[r.PageID] = append(pageTags[r.PageID], r.Name)
 		}
@@ -98,8 +98,8 @@ func GenerateSiteContentMarkdown(ctx context.Context, q *store.Queries) (string,
 		}
 	}
 
-	// Categories section
-	categories, err := q.GetCategoryUsageCounts(ctx)
+	// Categories section (published pages only)
+	categories, err := q.GetPublishedCategoryUsageCounts(ctx)
 	if err == nil && len(categories) > 0 {
 		b.WriteString("## Categories\n\n")
 		catNameByID := make(map[int64]string, len(categories))
@@ -133,8 +133,8 @@ func GenerateSiteContentMarkdown(ctx context.Context, q *store.Queries) (string,
 		}
 	}
 
-	// Tags section
-	tags, err := q.GetTagUsageCounts(ctx, store.GetTagUsageCountsParams{
+	// Tags section (published pages only)
+	tags, err := q.GetPublishedTagUsageCounts(ctx, store.GetPublishedTagUsageCountsParams{
 		Limit:  kbMaxPages,
 		Offset: 0,
 	})
@@ -184,8 +184,8 @@ func GenerateUserGuideMarkdown(ctx context.Context, q *store.Queries) (string, e
 
 	writeMenuSection(&b, ctx, q, siteURL)
 
-	// Categories
-	categories, err := q.GetCategoryUsageCounts(ctx)
+	// Categories (published pages only)
+	categories, err := q.GetPublishedCategoryUsageCounts(ctx)
 	if err == nil && len(categories) > 0 {
 		b.WriteString("### Browsing by Category\n\n")
 		b.WriteString("Categories organize content by topic. Available categories:\n\n")
@@ -206,8 +206,8 @@ func GenerateUserGuideMarkdown(ctx context.Context, q *store.Queries) (string, e
 		b.WriteString("\n")
 	}
 
-	// Tags
-	tags, err := q.GetTagUsageCounts(ctx, store.GetTagUsageCountsParams{
+	// Tags (published pages only)
+	tags, err := q.GetPublishedTagUsageCounts(ctx, store.GetPublishedTagUsageCountsParams{
 		Limit:  kbMaxPages,
 		Offset: 0,
 	})
@@ -367,7 +367,7 @@ func writeMenuSection(b *strings.Builder, ctx context.Context, q *store.Queries,
 	}
 
 	for _, menu := range menus {
-		items, err := q.ListMenuItemsWithPage(ctx, menu.ID)
+		items, err := q.ListMenuItemsWithPublishedPage(ctx, menu.ID)
 		if err != nil || len(items) == 0 {
 			continue
 		}
@@ -377,6 +377,13 @@ func writeMenuSection(b *strings.Builder, ctx context.Context, q *store.Queries,
 		b.WriteString(" menu:**\n\n")
 		for _, item := range items {
 			if !item.IsActive {
+				continue
+			}
+			// Skip menu items that reference an unpublished page.
+			// The LEFT JOIN nullifies page_slug for drafts, so if
+			// page_id is set but page_slug is empty the page is not
+			// published and the item should be hidden from the KB.
+			if item.PageID.Valid && (!item.PageSlug.Valid || item.PageSlug.String == "") {
 				continue
 			}
 			b.WriteString("- ")

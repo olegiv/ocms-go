@@ -193,6 +193,61 @@ func seedConfig(t *testing.T, q *store.Queries, key, value string) {
 	}
 }
 
+// seedDraftPage inserts a draft page and returns it.
+func seedDraftPage(t *testing.T, q *store.Queries, authorID int64, title, slug, body, pageType string) store.Page {
+	t.Helper()
+	now := time.Now()
+	p, err := q.CreatePage(context.Background(), store.CreatePageParams{
+		Title:        title,
+		Slug:         slug,
+		Body:         body,
+		Status:       "draft",
+		AuthorID:     authorID,
+		LanguageCode: "en",
+		PageType:     pageType,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+	if err != nil {
+		t.Fatalf("seedDraftPage %q: %v", slug, err)
+	}
+	return p
+}
+
+// seedCategory inserts a category and returns it.
+func seedCategory(t *testing.T, q *store.Queries, name, slug string) store.Category {
+	t.Helper()
+	now := time.Now()
+	c, err := q.CreateCategory(context.Background(), store.CreateCategoryParams{
+		Name:         name,
+		Slug:         slug,
+		LanguageCode: "en",
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+	if err != nil {
+		t.Fatalf("seedCategory %q: %v", slug, err)
+	}
+	return c
+}
+
+// seedTag inserts a tag and returns it.
+func seedTag(t *testing.T, q *store.Queries, name, slug string) store.Tag {
+	t.Helper()
+	now := time.Now()
+	tag, err := q.CreateTag(context.Background(), store.CreateTagParams{
+		Name:         name,
+		Slug:         slug,
+		LanguageCode: "en",
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+	if err != nil {
+		t.Fatalf("seedTag %q: %v", slug, err)
+	}
+	return tag
+}
+
 // seedPublishedPage inserts a published page and returns it.
 func seedPublishedPage(t *testing.T, q *store.Queries, authorID int64, title, slug, body, pageType string) store.Page {
 	t.Helper()
@@ -683,5 +738,241 @@ func TestHandleDownloadUserGuide_WithSeededData(t *testing.T) {
 	}
 	if !strings.Contains(body, "https://guide.example/login") {
 		t.Errorf("expected login URL in guide body")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Draft content exclusion tests
+// ---------------------------------------------------------------------------
+
+func TestGenerateSiteContentMarkdown_ExcludesDraftPages(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	q := store.New(db)
+	authorID := seedTestUser(t, q)
+
+	seedPublishedPage(t, q, authorID, "Visible Page", "visible", "<p>Public content.</p>", "page")
+	seedDraftPage(t, q, authorID, "Secret Draft", "secret-draft", "<p>Hidden content.</p>", "page")
+
+	out, err := GenerateSiteContentMarkdown(context.Background(), q)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(out, "Visible Page") {
+		t.Errorf("expected published page 'Visible Page' in output")
+	}
+	if strings.Contains(out, "Secret Draft") {
+		t.Errorf("draft page title 'Secret Draft' must not appear in output")
+	}
+	if strings.Contains(out, "secret-draft") {
+		t.Errorf("draft page slug 'secret-draft' must not appear in output")
+	}
+	if strings.Contains(out, "Hidden content") {
+		t.Errorf("draft page body must not appear in output")
+	}
+}
+
+func TestGenerateSiteContentMarkdown_ExcludesDraftCategoryUsage(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	q := store.New(db)
+	authorID := seedTestUser(t, q)
+	ctx := context.Background()
+
+	pubPage := seedPublishedPage(t, q, authorID, "Pub Page", "pub-page", "", "page")
+	draftPage := seedDraftPage(t, q, authorID, "Draft Page", "draft-page", "", "page")
+
+	pubCat := seedCategory(t, q, "Public Category", "public-cat")
+	draftCat := seedCategory(t, q, "Draft Only Category", "draft-only-cat")
+
+	// Associate published page with pubCat
+	if err := q.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: pubPage.ID, CategoryID: pubCat.ID}); err != nil {
+		t.Fatalf("AddCategoryToPage: %v", err)
+	}
+	// Associate draft page with draftCat
+	if err := q.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: draftPage.ID, CategoryID: draftCat.ID}); err != nil {
+		t.Fatalf("AddCategoryToPage: %v", err)
+	}
+
+	out, err := GenerateSiteContentMarkdown(ctx, q)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(out, "Public Category") {
+		t.Errorf("expected 'Public Category' in output")
+	}
+	if strings.Contains(out, "Draft Only Category") {
+		t.Errorf("draft-only category must not appear in output")
+	}
+}
+
+func TestGenerateSiteContentMarkdown_ExcludesDraftTagUsage(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	q := store.New(db)
+	authorID := seedTestUser(t, q)
+	ctx := context.Background()
+
+	pubPage := seedPublishedPage(t, q, authorID, "Pub Page", "pub-page", "", "post")
+	draftPage := seedDraftPage(t, q, authorID, "Draft Page", "draft-page", "", "post")
+
+	pubTag := seedTag(t, q, "Public Tag", "public-tag")
+	draftTag := seedTag(t, q, "Draft Only Tag", "draft-only-tag")
+
+	if err := q.AddTagToPage(ctx, store.AddTagToPageParams{PageID: pubPage.ID, TagID: pubTag.ID}); err != nil {
+		t.Fatalf("AddTagToPage: %v", err)
+	}
+	if err := q.AddTagToPage(ctx, store.AddTagToPageParams{PageID: draftPage.ID, TagID: draftTag.ID}); err != nil {
+		t.Fatalf("AddTagToPage: %v", err)
+	}
+
+	out, err := GenerateSiteContentMarkdown(ctx, q)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(out, "Public Tag") {
+		t.Errorf("expected 'Public Tag' in output")
+	}
+	if strings.Contains(out, "Draft Only Tag") {
+		t.Errorf("draft-only tag must not appear in output")
+	}
+}
+
+func TestGenerateUserGuideMarkdown_ExcludesDraftCategoryUsage(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	q := store.New(db)
+	authorID := seedTestUser(t, q)
+	ctx := context.Background()
+
+	pubPage := seedPublishedPage(t, q, authorID, "Pub", "pub", "", "page")
+	draftPage := seedDraftPage(t, q, authorID, "Draft", "draft", "", "page")
+
+	pubCat := seedCategory(t, q, "Visible Cat", "visible-cat")
+	draftCat := seedCategory(t, q, "Hidden Cat", "hidden-cat")
+
+	if err := q.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: pubPage.ID, CategoryID: pubCat.ID}); err != nil {
+		t.Fatalf("AddCategoryToPage: %v", err)
+	}
+	if err := q.AddCategoryToPage(ctx, store.AddCategoryToPageParams{PageID: draftPage.ID, CategoryID: draftCat.ID}); err != nil {
+		t.Fatalf("AddCategoryToPage: %v", err)
+	}
+
+	out, err := GenerateUserGuideMarkdown(ctx, q)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(out, "Visible Cat") {
+		t.Errorf("expected 'Visible Cat' in user guide")
+	}
+	if strings.Contains(out, "Hidden Cat") {
+		t.Errorf("draft-only category 'Hidden Cat' must not appear in user guide")
+	}
+}
+
+func TestGenerateUserGuideMarkdown_ExcludesDraftTagUsage(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	q := store.New(db)
+	authorID := seedTestUser(t, q)
+	ctx := context.Background()
+
+	pubPage := seedPublishedPage(t, q, authorID, "Pub", "pub", "", "post")
+	draftPage := seedDraftPage(t, q, authorID, "Draft", "draft", "", "post")
+
+	pubTag := seedTag(t, q, "Visible Tag", "visible-tag")
+	draftTag := seedTag(t, q, "Hidden Tag", "hidden-tag")
+
+	if err := q.AddTagToPage(ctx, store.AddTagToPageParams{PageID: pubPage.ID, TagID: pubTag.ID}); err != nil {
+		t.Fatalf("AddTagToPage: %v", err)
+	}
+	if err := q.AddTagToPage(ctx, store.AddTagToPageParams{PageID: draftPage.ID, TagID: draftTag.ID}); err != nil {
+		t.Fatalf("AddTagToPage: %v", err)
+	}
+
+	out, err := GenerateUserGuideMarkdown(ctx, q)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(out, "Visible Tag") {
+		t.Errorf("expected 'Visible Tag' in user guide")
+	}
+	if strings.Contains(out, "Hidden Tag") {
+		t.Errorf("draft-only tag 'Hidden Tag' must not appear in user guide")
+	}
+}
+
+func TestGenerateUserGuideMarkdown_MenuHidesDraftPageItem(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	q := store.New(db)
+	authorID := seedTestUser(t, q)
+	ctx := context.Background()
+	now := time.Now()
+
+	pubPage := seedPublishedPage(t, q, authorID, "Public Page", "public-page", "", "page")
+	draftPage := seedDraftPage(t, q, authorID, "Draft Page", "draft-page", "", "page")
+
+	menu, err := q.CreateMenu(ctx, store.CreateMenuParams{
+		Name:         "Main",
+		Slug:         "main",
+		LanguageCode: "en",
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+	if err != nil {
+		t.Fatalf("CreateMenu: %v", err)
+	}
+
+	// Menu item linked to a published page
+	if _, err := q.CreateMenuItem(ctx, store.CreateMenuItemParams{
+		MenuID:    menu.ID,
+		Title:     "Visible Link",
+		PageID:    sql.NullInt64{Int64: pubPage.ID, Valid: true},
+		Position:  0,
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateMenuItem (pub): %v", err)
+	}
+
+	// Menu item linked to a draft page (no fallback url)
+	if _, err := q.CreateMenuItem(ctx, store.CreateMenuItemParams{
+		MenuID:    menu.ID,
+		Title:     "Secret Link",
+		PageID:    sql.NullInt64{Int64: draftPage.ID, Valid: true},
+		Position:  1,
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateMenuItem (draft): %v", err)
+	}
+
+	out, err := GenerateUserGuideMarkdown(ctx, q)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(out, "Visible Link") {
+		t.Errorf("expected 'Visible Link' in user guide menu section")
+	}
+	if strings.Contains(out, "Secret Link") {
+		t.Errorf("menu item 'Secret Link' referencing draft page must not appear in user guide")
+	}
+	if strings.Contains(out, "draft-page") {
+		t.Errorf("draft page slug must not appear in user guide")
 	}
 }
