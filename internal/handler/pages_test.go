@@ -552,20 +552,24 @@ func TestPageVideoURL(t *testing.T) {
 	user := createTestAdminUser(t, db)
 	queries := store.New(db)
 
-	t.Run("create page with video URL", func(t *testing.T) {
+	t.Run("create page with video URL and title", func(t *testing.T) {
 		page, err := queries.CreatePage(context.Background(), store.CreatePageParams{
-			Title:    "Video Page",
-			Slug:     "video-page",
-			Body:     "Content with video",
-			Status:   "draft",
-			AuthorID: user.ID,
-			VideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+			Title:      "Video Page",
+			Slug:       "video-page",
+			Body:       "Content with video",
+			Status:     "draft",
+			AuthorID:   user.ID,
+			VideoUrl:   "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+			VideoTitle: "My Video",
 		})
 		if err != nil {
 			t.Fatalf("CreatePage failed: %v", err)
 		}
 		if page.VideoUrl != "https://www.youtube.com/watch?v=dQw4w9WgXcQ" {
 			t.Errorf("VideoUrl = %q, want YouTube URL", page.VideoUrl)
+		}
+		if page.VideoTitle != "My Video" {
+			t.Errorf("VideoTitle = %q, want %q", page.VideoTitle, "My Video")
 		}
 	})
 
@@ -582,6 +586,9 @@ func TestPageVideoURL(t *testing.T) {
 		}
 		if page.VideoUrl != "" {
 			t.Errorf("VideoUrl = %q, want empty string", page.VideoUrl)
+		}
+		if page.VideoTitle != "" {
+			t.Errorf("VideoTitle = %q, want empty string", page.VideoTitle)
 		}
 	})
 
@@ -603,13 +610,17 @@ func TestPageVideoURL(t *testing.T) {
 			Slug:     page.Slug,
 			Body:     page.Body,
 			Status:   page.Status,
-			VideoUrl: "https://youtu.be/dQw4w9WgXcQ",
+			VideoUrl:   "https://youtu.be/dQw4w9WgXcQ",
+			VideoTitle: "Updated Video Title",
 		})
 		if err != nil {
 			t.Fatalf("UpdatePage failed: %v", err)
 		}
 		if updated.VideoUrl != "https://youtu.be/dQw4w9WgXcQ" {
 			t.Errorf("VideoUrl = %q, want youtu.be URL", updated.VideoUrl)
+		}
+		if updated.VideoTitle != "Updated Video Title" {
+			t.Errorf("VideoTitle = %q, want %q", updated.VideoTitle, "Updated Video Title")
 		}
 	})
 }

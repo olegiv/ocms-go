@@ -70,6 +70,7 @@ type ExportPage struct {
 	PublishedAt   *time.Time       `json:"published_at,omitempty"`
 	ScheduledAt   *time.Time       `json:"scheduled_at,omitempty"`
 	VideoURL      string           `json:"video_url,omitempty"`
+	VideoTitle    string           `json:"video_title,omitempty"`
 }
 
 // ExportPageSEO contains SEO metadata for a page.

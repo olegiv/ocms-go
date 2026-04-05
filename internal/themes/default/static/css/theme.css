@@ -2061,6 +2061,11 @@ select.form-control {
     border-radius: 8px;
     overflow: hidden;
 }
+.page-video-title {
+    margin: 0 0 0.75rem;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
 .page-video iframe {
     position: absolute;
     top: 0;

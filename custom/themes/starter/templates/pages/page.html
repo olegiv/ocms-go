@@ -43,6 +43,7 @@
 
     {{if .Page.VideoEmbedHTML}}
     <div class="st-article__video">
+        {{if .Page.VideoTitle}}<h3 class="st-article__video-title">{{.Page.VideoTitle}}</h3>{{end}}
         {{.Page.VideoEmbedHTML}}
     </div>
     {{end}}

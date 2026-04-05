@@ -12,7 +12,8 @@ oCMS supports embedding videos on pages as an optional field, rendered between t
 ## How It Works
 
 1. In the admin page editor, expand the **Video** section and paste a video URL
-2. The URL is validated server-side against registered providers
+2. Optionally add a **Video Title** (max 255 characters) displayed above the embed
+3. The URL is validated server-side against registered providers
 3. On the frontend, the video is rendered as a responsive iframe embed between the page header and body content
 4. All three core themes (Default, Developer, Starter) include responsive video styling (16:9 aspect ratio)
 
@@ -26,20 +27,20 @@ oCMS supports embedding videos on pages as an optional field, rendered between t
 
 ## REST API
 
-The `video_url` field is available in the pages API:
+The `video_url` and `video_title` fields are available in the pages API:
 
 ```bash
-# Create page with video
+# Create page with video and title
 curl -X POST /api/v1/pages \
   -H "Authorization: Bearer API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"title": "My Video Post", "slug": "video-post", "body": "...", "status": "draft", "video_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}'
+  -d '{"title": "My Video Post", "slug": "video-post", "body": "...", "status": "draft", "video_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "video_title": "Introduction Video"}'
 
 # Update page video
 curl -X PUT /api/v1/pages/1 \
   -H "Authorization: Bearer API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"video_url": "https://youtu.be/dQw4w9WgXcQ"}'
+  -d '{"video_url": "https://youtu.be/dQw4w9WgXcQ", "video_title": "Updated Title"}'
 
 # Remove video (set to empty string)
 curl -X PUT /api/v1/pages/1 \
@@ -50,15 +51,16 @@ curl -X PUT /api/v1/pages/1 \
 
 ## Import/Export
 
-The `video_url` field is included in page exports and can be imported from JSON/ZIP files.
+The `video_url` and `video_title` fields are included in page exports and can be imported from JSON/ZIP files.
 
 ## Theme Integration
 
-All core themes render the video embed using:
+All core themes render the video embed with an optional title:
 
 ```html
 {{if .Page.VideoEmbedHTML}}
 <div class="page-video">
+    {{if .Page.VideoTitle}}<h3 class="page-video-title">{{.Page.VideoTitle}}</h3>{{end}}
     {{.Page.VideoEmbedHTML}}
 </div>
 {{end}}

@@ -498,6 +498,16 @@
             "translation": "Paste a YouTube video URL. More providers coming soon."
         },
         {
+            "id": "pages.video_title",
+            "message": "Video Title",
+            "translation": "Video Title"
+        },
+        {
+            "id": "pages.video_title_hint",
+            "message": "Optional title displayed above the video (max 255 characters)",
+            "translation": "Optional title displayed above the video (max 255 characters)"
+        },
+        {
             "id": "pages.video_url_invalid",
             "message": "Invalid or unsupported video URL",
             "translation": "Invalid or unsupported video URL"

@@ -2354,6 +2354,13 @@ select.form-control {
     border-radius: 4px;
     overflow: hidden;
 }
+.dev-page-video-title {
+    margin: 0 0 0.75rem;
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--dev-text-secondary, #a0a0c0);
+    font-family: monospace;
+}
 .dev-page-video iframe {
     position: absolute;
     top: 0;

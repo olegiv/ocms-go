@@ -106,7 +106,8 @@ type PageFormViewData struct {
 	HasScheduledAt bool
 	ScheduledAtFmt string
 	// Video
-	VideoURL string
+	VideoURL   string
+	VideoTitle string
 	// Checkboxes
 	HideFeaturedImage bool
 	ExcludeFromLists  bool
@@ -1307,7 +1308,7 @@ func aliasManagerXData(aliases []PageFormAliasView) string {
 }
 
 templ videoSection(pc *PageContext, data PageFormViewData) {
-	<details class="collapsible-section" x-data={ fmt.Sprintf("{ open: %t }", data.VideoURL != "") } :open="open">
+	<details class="collapsible-section" x-data={ fmt.Sprintf("{ open: %t }", data.VideoURL != "" || data.VideoTitle != "") } :open="open">
 		<summary class="collapsible-header" @click.prevent="open = !open">
 			@iconChevronRight()
 			<span>{ pc.T("pages.video_section") }</span>
@@ -1328,6 +1329,21 @@ templ videoSection(pc *PageContext, data PageFormViewData) {
 					<span class="form-error">{ data.Errors["video_url"] }</span>
 				}
 				<span class="form-hint">{ pc.T("pages.video_url_hint") }</span>
+			</div>
+			<div class="form-group">
+				@label.Label(label.Props{For: "video_title", Class: "block mb-1"}) { { pc.T("pages.video_title") } }
+				@input.Input(input.Props{
+					ID:          "video_title",
+					Name:        "video_title",
+					Type:        input.TypeText,
+					Value:       formVal(data.FormValues, "video_title", data.VideoTitle),
+					HasError:    data.Errors["video_title"] != "",
+					Attributes:  templ.Attributes{"maxlength": "255"},
+				})
+				if data.Errors["video_title"] != "" {
+					<span class="form-error">{ data.Errors["video_title"] }</span>
+				}
+				<span class="form-hint">{ pc.T("pages.video_title_hint") }</span>
 			</div>
 		</div>
 	</details>

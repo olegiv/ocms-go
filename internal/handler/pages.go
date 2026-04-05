@@ -571,6 +571,9 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if errMsg := h.videoRegistry.ValidateURL(input.VideoURL); errMsg != "" {
 		validationErrors["video_url"] = errMsg
 	}
+	if len(input.VideoTitle) > 255 {
+		validationErrors["video_title"] = "Video title must be at most 255 characters"
+	}
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
@@ -629,6 +632,7 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:         now,
 		UpdatedAt:         now,
 		VideoUrl:          input.VideoURL,
+		VideoTitle:        input.VideoTitle,
 	})
 	if err != nil {
 		slog.Error("failed to create page", "error", err)
@@ -830,6 +834,9 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if errMsg := h.videoRegistry.ValidateURL(input.VideoURL); errMsg != "" {
 		validationErrors["video_url"] = errMsg
 	}
+	if len(input.VideoTitle) > 255 {
+		validationErrors["video_title"] = "Video title must be at most 255 characters"
+	}
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
@@ -887,6 +894,7 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		PublishedAt:       publishedAt,
 		UpdatedAt:         now,
 		VideoUrl:          input.VideoURL,
+		VideoTitle:        input.VideoTitle,
 	})
 	if err != nil {
 		slog.Error("failed to update page", "error", err, "page_id", id)
@@ -1240,6 +1248,7 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		LanguageCode:      page.LanguageCode,      // Keep language intact
 		HideFeaturedImage: page.HideFeaturedImage, // Keep setting intact
 		VideoUrl:          page.VideoUrl,          // Keep video intact
+		VideoTitle:        page.VideoTitle,        // Keep video title intact
 		UpdatedAt:         now,
 	})
 	if err != nil {
@@ -1333,7 +1342,8 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		PublishedAt:       sql.NullTime{},              // Not published yet
 		CreatedAt:         now,
 		UpdatedAt:         now,
-		VideoUrl:          sourcePage.VideoUrl, // Inherit video from source
+		VideoUrl:          sourcePage.VideoUrl,   // Inherit video from source
+		VideoTitle:        sourcePage.VideoTitle, // Inherit video title from source
 	})
 	if err != nil {
 		slog.Error("failed to create translated page", "error", err)
@@ -1412,6 +1422,7 @@ type pageFormInput struct {
 	PageType          string
 	ExcludeFromLists  int64
 	VideoURL          string
+	VideoTitle        string
 	FormValues        map[string]string
 }
 
@@ -1438,6 +1449,7 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 	pageType := strings.TrimSpace(r.FormValue("page_type"))
 	excludeFromListsStr := r.FormValue("exclude_from_lists")
 	videoURL := strings.TrimSpace(r.FormValue("video_url"))
+	videoTitle := strings.TrimSpace(r.FormValue("video_title"))
 
 	// Default page_type to "post" if empty
 	if pageType == "" {
@@ -1496,6 +1508,7 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 		"page_type":           pageType,
 		"exclude_from_lists":  excludeFromListsStr,
 		"video_url":           videoURL,
+		"video_title":         videoTitle,
 	}
 
 	return pageFormInput{
@@ -1518,6 +1531,7 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 		PageType:          pageType,
 		ExcludeFromLists:  excludeFromLists,
 		VideoURL:          videoURL,
+		VideoTitle:        videoTitle,
 		FormValues:        formValues,
 	}
 }

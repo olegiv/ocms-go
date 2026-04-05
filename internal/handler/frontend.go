@@ -58,6 +58,7 @@ type PageView struct {
 	FeaturedImageAlt     string // Alt text (default language)
 	HideFeaturedImage    bool          // Show image below title instead of hero banner
 	VideoURL             string        // Original video URL
+	VideoTitle           string        // Optional video title/caption
 	VideoEmbedHTML       template.HTML // Server-generated safe iframe embed
 	ReadingTime          int           // Estimated reading time in minutes
 	Highlight            string // Search result highlight
@@ -1465,6 +1466,7 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 	// Set video embed if URL is present
 	if p.VideoUrl != "" {
 		pv.VideoURL = p.VideoUrl
+		pv.VideoTitle = p.VideoTitle
 		if embedHTML, err := h.videoRegistry.EmbedHTML(p.VideoUrl); err == nil {
 			pv.VideoEmbedHTML = embedHTML
 		}

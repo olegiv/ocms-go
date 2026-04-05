@@ -1765,6 +1765,11 @@ select.st-form__input {
     border-radius: 8px;
     overflow: hidden;
 }
+.st-article__video-title {
+    margin: 0 0 0.75rem;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
 .st-article__video iframe {
     position: absolute;
     top: 0;

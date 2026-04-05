@@ -542,6 +542,7 @@ func (e *Exporter) exportPages(
 
 		// Handle video URL
 		exportPage.VideoURL = page.VideoUrl
+		exportPage.VideoTitle = page.VideoTitle
 
 		// Handle language
 		exportPage.LanguageCode = page.LanguageCode

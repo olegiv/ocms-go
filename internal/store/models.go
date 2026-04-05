@@ -242,6 +242,7 @@ type Page struct {
 	ExcludeFromLists  int64         `json:"exclude_from_lists"`
 	Summary           string        `json:"summary"`
 	VideoUrl          string        `json:"video_url"`
+	VideoTitle        string        `json:"video_title"`
 }
 
 type PageAlias struct {
