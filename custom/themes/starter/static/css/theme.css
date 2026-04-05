@@ -909,6 +909,31 @@ h1, h2, h3, h4, h5, h6 {
     margin-right: 0.5rem;
 }
 
+.st-article__category {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.st-category {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--st-accent);
+    background: color-mix(in srgb, var(--st-accent) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--st-accent) 25%, transparent);
+    border-radius: 2rem;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.st-category:hover {
+    background: var(--st-accent);
+    color: #fff;
+}
+
 .st-article__tags {
     display: flex;
     align-items: center;
