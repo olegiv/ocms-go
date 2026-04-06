@@ -75,15 +75,11 @@
 
             <div class="footer-bottom">
                 <div class="footer-copyright">
-                    {{if .CopyrightText}}
-                    <p>{{safeHTML .CopyrightText}}</p>
-                    {{else}}
-                    <p>&copy; {{.Year}} {{.SiteName}}. {{TTheme .LangCode "frontend.all_rights_reserved"}}</p>
-                    {{end}}
-                    {{if .FooterText}}
-                    <p>{{safeHTML .FooterText}}</p>
-                    {{end}}
-                    {{with privacyFooterLink $.LangCode}}<p class="footer-privacy-link">{{.}}</p>{{end}}
+                    <p>
+                        {{if .CopyrightText}}{{safeHTML .CopyrightText}}{{else}}&copy; {{.Year}} {{.SiteName}}{{end -}}
+                        {{if .FooterText}}<span class="footer-sep"> &bull; </span>{{safeHTML .FooterText}}{{end -}}
+                        {{with privacyFooterLink $.LangCode}}<span class="footer-sep"> &bull; </span>{{.}}{{end}}
+                    </p>
                 </div>
 
                 {{if .SocialLinks}}

@@ -1255,19 +1255,9 @@ a.tag:hover {
     margin-bottom: 0;
 }
 
-.footer-privacy-link {
-    margin-top: var(--spacing-xs);
-    font-size: 0.875rem;
-}
-
-.footer-privacy-link a {
+.footer-sep {
     color: var(--text-muted);
-    text-decoration: none;
-}
-
-.footer-privacy-link a:hover {
-    color: var(--primary-color);
-    text-decoration: underline;
+    opacity: 0.5;
 }
 
 /* Footer Navigation - Column Layout */

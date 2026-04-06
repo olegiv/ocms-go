@@ -56,15 +56,11 @@
 
         <div class="st-footer__bottom">
             <div class="st-footer__copy">
-                {{if .CopyrightText}}
-                <p>{{safeHTML .CopyrightText}}</p>
-                {{else}}
-                <p>&copy; {{.Year}} {{.SiteName}}. {{TTheme .LangCode "frontend.all_rights_reserved"}}</p>
-                {{end}}
-                {{if .FooterText}}
-                <p>{{safeHTML .FooterText}}</p>
-                {{end}}
-                {{with privacyFooterLink $.LangCode}}<p class="st-footer__privacy">{{.}}</p>{{end}}
+                <p>
+                    {{if .CopyrightText}}{{safeHTML .CopyrightText}}{{else}}&copy; {{.Year}} {{.SiteName}}. {{TTheme .LangCode "frontend.all_rights_reserved"}}{{end -}}
+                    {{if .FooterText}}<span class="st-footer__sep"> &bull; </span>{{safeHTML .FooterText}}{{end -}}
+                    {{with privacyFooterLink $.LangCode}}<span class="st-footer__sep"> &bull; </span>{{.}}{{end}}
+                </p>
             </div>
 
             {{if .SocialLinks}}

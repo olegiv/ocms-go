@@ -1486,12 +1486,12 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .st-footer__copy p {
-    margin-bottom: 0.2rem;
+    margin-bottom: 0;
 }
 
-.st-footer__privacy a {
+.st-footer__sep {
     color: var(--st-text-muted);
-    text-decoration: underline;
+    opacity: 0.5;
 }
 
 .st-footer__social {
