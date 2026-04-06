@@ -7,6 +7,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-04-06
+
+### ⚠️ Breaking Changes
+
+#### Deployment
+- **sites.conf format changed**: column 2 is now the full instance directory instead of the vhost path; deploy scripts no longer append `/ocms` automatically
+- Existing deployments must migrate sites.conf before updating scripts (see `scripts/deploy/README.md`)
+
+### Added
+
+#### Video Embedding
+- Add video embedding widget for pages with YouTube, Vimeo, and Dailymotion support
+- Add optional `video_title` field displayed above embedded video
+- Add `video_url` and `video_title` to REST API page responses and import/export schema
+
+#### Admin UI
+- Add collapsible admin sidebar with persistent state
+- Add page type filter to admin page list
+- Add column sorting to admin page and tag lists
+- Add editable created_at and published_at dates in page editor
+
+#### Migrator
+- Add webpage import source for importing pages from external URLs
+- Add `OCMS_UPLOADS_DIR` support in migrator module
+
+#### Deployment
+- Add `--path` flag in setup-site.sh for configurable instance paths
+- Add generate-logrotate.sh for dynamic logrotate config from sites.conf
+- Add upgrade sequence with migration and rollback steps to deploy docs
+
+#### Configuration
+- Add `OCMS_HCAPTCHA_DISABLED` env var to force-disable hCaptcha
+- `OCMS_ACTIVE_THEME` env var now overrides DB/admin setting
+
+#### Theme
+- Add hero image and style settings to starter theme
+- Style category badges in starter theme
+
+#### Developer Tooling
+- Add `/create-page` CLI command for page creation via API or direct DB
+
+### Changed
+
+#### Theme
+- Consolidate footer into single line with bullet separators (default, starter)
+
+#### Code Quality
+- Deduplicate form page template data (delegate to FrontendHandler)
+- Fix 28 code quality issues across 20 files (import shadowing, unused params, cyclomatic complexity, if-else chains, unkeyed struct literals)
+
+### Fixed
+
+#### Pages
+- Fix created_at mutation in generic UpdatePage query (now a separate dedicated query)
+- Fix published_at not clearing when unpublishing via edit form
+- Fix TinyMCE external link prompt for internal paths
+- Fix embedBody placeholder
+
+#### Configuration
+- Fix .env loading and blog title translation
+- Fix search snippet cleanup
+
+### Security
+- Sanitize Klaro cookie patterns against safe character allowlist (PRIV-001)
+- Validate GCM consent types against known Google Consent Mode v2 allowlist (PRIV-002)
+- Fix CSP and security audit findings since v0.14.0
+- Filter unpublished content from Dify KB generation
+- Skip menu items referencing unpublished pages in KB generation
+
 ## [0.15.0] - 2026-04-04
 
 ### Added
@@ -686,7 +755,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/olegiv/ocms-go/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/olegiv/ocms-go/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/olegiv/ocms-go/compare/v0.12.0...v0.14.0
 [0.12.0]: https://github.com/olegiv/ocms-go/compare/v0.11.0...v0.12.0
