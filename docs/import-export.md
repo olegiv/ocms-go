@@ -113,6 +113,8 @@ Best for:
         "ru": 456
     },
     "language_code": "en",
+    "video_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "video_title": "Optional video title",
     "created_at": "2024-01-01T00:00:00Z",
     "updated_at": "2024-01-15T10:30:00Z",
     "published_at": "2024-01-10T12:00:00Z"

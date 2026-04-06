@@ -10,6 +10,7 @@ A lightweight content management system built with Go, featuring a modern admin 
 
 ### Content Management
 - **Page Management**: Create, edit, publish, and version pages with a rich content editor
+- **Video Embedding**: Embed YouTube, Vimeo, and Dailymotion videos in pages with responsive rendering
 - **Scheduled Publishing**: Schedule pages to publish at a future date/time
 - **Media Library**: Upload and manage images, documents, and videos with automatic image processing
   - Automatic thumbnail and variant generation
@@ -69,6 +70,7 @@ A lightweight content management system built with Go, featuring a modern admin 
   - Statistics overview
   - Recent submissions widget
   - Quick actions
+  - Collapsible sidebar with persistent state
 - **Cache Management**: View cache stats and clear cache
 - **API Key Management**: Create and manage API keys
 - **Bulk List Actions**: Multi-select and bulk delete/revoke on paged admin lists (pages, tags, users, API keys, media, and form submissions)
