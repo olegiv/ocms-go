@@ -357,7 +357,7 @@ func TestRenderFooterLinkDisabled(t *testing.T) {
 		},
 	}
 
-	output := m.renderFooterLink()
+	output := m.renderFooterLink("en")
 	if output != "" {
 		t.Error("expected empty output when module is disabled")
 	}
@@ -370,7 +370,7 @@ func TestRenderFooterLinkEnabled(t *testing.T) {
 		},
 	}
 
-	output := string(m.renderFooterLink())
+	output := string(m.renderFooterLink("en"))
 
 	if strings.Contains(output, "onclick=") {
 		t.Error("output should not use inline onclick handlers")
@@ -384,8 +384,8 @@ func TestRenderFooterLinkEnabled(t *testing.T) {
 		t.Error("output should contain privacy trigger data attribute")
 	}
 
-	if !strings.Contains(output, "Cookie Settings") {
-		t.Error("output should contain 'Cookie Settings' text")
+	if !strings.Contains(output, "privacy.cookie_settings") && !strings.Contains(output, "Cookie Settings") {
+		t.Error("output should contain cookie settings text or i18n key")
 	}
 }
 

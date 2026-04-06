@@ -1105,9 +1105,13 @@ func loadActiveTheme(ctx context.Context, queries *store.Queries, themeManager *
 }
 
 func run() error {
-	// Load .env files if present (development)
-	_ = godotenv.Load()
-	_ = godotenv.Load("modules/migrator/.env") // Migrator module config
+	// Load .env: use OCMS_ENV_FILE if set (site instance mode),
+	// otherwise fall back to .env in CWD (standalone mode).
+	if envFile := os.Getenv("OCMS_ENV_FILE"); envFile != "" {
+		_ = godotenv.Load(envFile)
+	} else {
+		_ = godotenv.Load()
+	}
 
 	// Load configuration
 	cfg, err := config.Load()

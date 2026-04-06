@@ -103,6 +103,11 @@
             "translation": "Выход"
         },
         {
+            "id": "nav.collapse_sidebar",
+            "message": "Collapse sidebar",
+            "translation": "Свернуть меню"
+        },
+        {
             "id": "nav.profile",
             "message": "Profile",
             "translation": "Профиль"
@@ -463,6 +468,26 @@
             "translation": "Записи отображаются в лентах блога и последних публикациях. Страницы — статический контент."
         },
         {
+            "id": "pages.created_at",
+            "message": "Creation date",
+            "translation": "Дата создания"
+        },
+        {
+            "id": "pages.created_at_hint",
+            "message": "Set the creation date shown to visitors",
+            "translation": "Установите дату создания, отображаемую посетителям"
+        },
+        {
+            "id": "pages.published_at",
+            "message": "Publication date",
+            "translation": "Дата публикации"
+        },
+        {
+            "id": "pages.published_at_hint",
+            "message": "Override the date shown as publication date",
+            "translation": "Изменить дату, отображаемую как дата публикации"
+        },
+        {
             "id": "pages.type_post",
             "message": "Post",
             "translation": "Запись"
@@ -481,6 +506,36 @@
             "id": "pages.exclude_from_lists_hint",
             "message": "Hide this page from recent posts and blog listings while keeping it published",
             "translation": "Скрыть из списка последних записей и блога, оставив опубликованной"
+        },
+        {
+            "id": "pages.video_section",
+            "message": "Video",
+            "translation": "Видео"
+        },
+        {
+            "id": "pages.video_url",
+            "message": "Video URL",
+            "translation": "URL видео"
+        },
+        {
+            "id": "pages.video_url_hint",
+            "message": "Paste a YouTube video URL. More providers coming soon.",
+            "translation": "Вставьте ссылку на видео YouTube. Поддержка других сервисов появится позже."
+        },
+        {
+            "id": "pages.video_title",
+            "message": "Video Title",
+            "translation": "Заголовок видео"
+        },
+        {
+            "id": "pages.video_title_hint",
+            "message": "Optional title displayed above the video (max 255 characters)",
+            "translation": "Необязательный заголовок, отображаемый над видео (макс. 255 символов)"
+        },
+        {
+            "id": "pages.video_url_invalid",
+            "message": "Invalid or unsupported video URL",
+            "translation": "Недопустимый или неподдерживаемый URL видео"
         },
         {
             "id": "pages.aliases",
@@ -829,8 +884,8 @@
         },
         {
             "id": "tags.search_placeholder",
-            "message": "Search or create tags...",
-            "translation": "Поиск или создание тегов..."
+            "message": "Search tags...",
+            "translation": "Поиск тегов..."
         },
         {
             "id": "tags.create_new",

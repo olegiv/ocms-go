@@ -11,12 +11,11 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/olegiv/ocms-go/internal/config"
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/testutil"
 	"github.com/olegiv/ocms-go/internal/testutil/moduleutil"
-
-	_ "github.com/mattn/go-sqlite3"
 )
 
 // newTestRouter returns a chi router suitable for route registration tests.
@@ -468,9 +467,9 @@ func TestMigrationV3SkipsEmptyServices(t *testing.T) {
 
 func TestBuildKlaroConfigNilSettings(t *testing.T) {
 	m := &Module{settings: nil}
-	config := m.buildKlaroConfig()
-	if config != "var klaroConfig = {};" {
-		t.Errorf("expected empty config for nil settings, got %q", config)
+	klaroConfig := m.buildKlaroConfig()
+	if klaroConfig != "var klaroConfig = {};" {
+		t.Errorf("expected empty config for nil settings, got %q", klaroConfig)
 	}
 }
 
@@ -684,17 +683,14 @@ func TestTemplateFuncPrivacyHeadInvoke(t *testing.T) {
 func TestTemplateFuncPrivacyFooterLinkInvoke(t *testing.T) {
 	m := &Module{settings: &Settings{Enabled: true}}
 	funcs := m.TemplateFuncs()
-	fn, ok := funcs["privacyFooterLink"].(func() interface{ String() string })
+	_, ok := funcs["privacyFooterLink"]
 	if !ok {
-		out := m.renderFooterLink()
-		if string(out) == "" {
-			t.Error("renderFooterLink should return non-empty HTML when enabled")
-		}
+		t.Error("privacyFooterLink not found in TemplateFuncs")
 		return
 	}
-	result := fn()
-	if result.String() == "" {
-		t.Error("privacyFooterLink should return non-empty HTML when enabled")
+	out := m.renderFooterLink("en")
+	if string(out) == "" {
+		t.Error("renderFooterLink should return non-empty HTML when enabled")
 	}
 }
 

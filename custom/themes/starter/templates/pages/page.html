@@ -41,6 +41,13 @@
     </div>
     {{end}}
 
+    {{if .Page.VideoEmbedHTML}}
+    <div class="st-article__video">
+        {{if .Page.VideoTitle}}<h3 class="st-article__video-title">{{.Page.VideoTitle}}</h3>{{end}}
+        {{.Page.VideoEmbedHTML}}
+    </div>
+    {{end}}
+
     <div class="st-article__body st-prose">
         {{.Page.Body}}
     </div>
@@ -52,7 +59,7 @@
         <div class="st-article__category">
             <span class="st-label">{{if gt (len .Page.Categories) 1}}{{TTheme $.LangCode "frontend.categories_label"}}{{else}}{{TTheme $.LangCode "frontend.category_label"}}{{end}}</span>
             {{range .Page.Categories}}
-            <a href="{{$.LangPrefix}}/category/{{.Slug}}">{{.Name}}</a>
+            <a href="{{$.LangPrefix}}/category/{{.Slug}}" class="st-category">{{.Name}}</a>
             {{end}}
         </div>
         {{end}}

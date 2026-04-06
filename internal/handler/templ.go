@@ -1326,6 +1326,7 @@ func convertPagesListViewData(data PagesListData, renderer *render.Renderer, lan
 			Title:     p.Title,
 			Slug:      p.Slug,
 			Status:    p.Status,
+			PageType:  p.PageType,
 			UpdatedAt: renderer.FormatDateTimeLocale(p.UpdatedAt, lang),
 		}
 
@@ -1375,12 +1376,14 @@ func convertPagesListViewData(data PagesListData, renderer *render.Renderer, lan
 		Pages:          pages,
 		TotalCount:     data.TotalCount,
 		StatusFilter:   data.StatusFilter,
+		PageTypeFilter: data.PageTypeFilter,
 		CategoryFilter: data.CategoryFilter,
 		LanguageFilter: data.LanguageFilter,
 		SearchFilter:   data.SearchFilter,
 		AllCategories:  convertPageCategoryNodes(data.AllCategories),
 		AllLanguages:   convertLanguageOptions(data.AllLanguages),
 		Statuses:       data.Statuses,
+		PageTypes:      data.PageTypes,
 		Pagination:     pagination,
 		IsDemoMode:     middleware.IsDemoMode(),
 	}
@@ -1435,6 +1438,8 @@ func convertPageFormViewData(data PageFormData, renderer *render.Renderer, lang 
 		viewData.NoFollow = data.Page.NoFollow == 1
 		viewData.HideFeaturedImage = data.Page.HideFeaturedImage == 1
 		viewData.ExcludeFromLists = data.Page.ExcludeFromLists == 1
+		viewData.VideoURL = data.Page.VideoUrl
+		viewData.VideoTitle = data.Page.VideoTitle
 
 		if data.Page.OgImageID.Valid {
 			viewData.OgImageID = fmt.Sprintf("%d", data.Page.OgImageID.Int64)
@@ -1444,6 +1449,15 @@ func convertPageFormViewData(data PageFormData, renderer *render.Renderer, lang 
 			viewData.HasScheduledAt = true
 			viewData.ScheduledAt = data.Page.ScheduledAt.Time.Format("2006-01-02T15:04")
 			viewData.ScheduledAtFmt = renderer.FormatDateTimeLocale(data.Page.ScheduledAt.Time, lang)
+		}
+
+		viewData.CreatedAt = data.Page.CreatedAt.Format("2006-01-02T15:04")
+		viewData.CreatedAtFmt = renderer.FormatDateTimeLocale(data.Page.CreatedAt, lang)
+
+		if data.Page.PublishedAt.Valid {
+			viewData.HasPublishedAt = true
+			viewData.PublishedAt = data.Page.PublishedAt.Time.Format("2006-01-02T15:04")
+			viewData.PublishedAtFmt = renderer.FormatDateTimeLocale(data.Page.PublishedAt.Time, lang)
 		}
 	}
 
@@ -1506,6 +1520,14 @@ func convertPageFormViewData(data PageFormData, renderer *render.Renderer, lang 
 	// Missing languages
 	for _, l := range data.MissingLanguages {
 		viewData.MissingLanguages = append(viewData.MissingLanguages, convertLanguageOption(l))
+	}
+
+	// Override from form values (when re-rendering after validation error)
+	if v, ok := data.FormValues["video_url"]; ok && v != "" {
+		viewData.VideoURL = v
+	}
+	if v, ok := data.FormValues["video_title"]; ok && v != "" {
+		viewData.VideoTitle = v
 	}
 
 	return viewData

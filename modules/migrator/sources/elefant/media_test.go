@@ -390,7 +390,9 @@ func TestMakeUniqueSlug(t *testing.T) {
 			hide_featured_image INTEGER NOT NULL DEFAULT 0,
 			page_type TEXT NOT NULL DEFAULT 'page',
 			exclude_from_lists INTEGER NOT NULL DEFAULT 0,
-			summary TEXT NOT NULL DEFAULT ''
+			summary TEXT NOT NULL DEFAULT '',
+			video_url TEXT NOT NULL DEFAULT '',
+			video_title TEXT NOT NULL DEFAULT ''
 		)
 	`)
 	if err != nil {

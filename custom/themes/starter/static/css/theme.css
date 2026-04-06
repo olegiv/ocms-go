@@ -514,7 +514,7 @@ h1, h2, h3, h4, h5, h6 {
 .st-hero {
     position: relative;
     background: linear-gradient(135deg, var(--st-accent) 0%, #1b4332 100%);
-    color: #fff;
+    color: var(--st-hero-text, #fff);
     border-radius: var(--st-radius-lg);
     overflow: hidden;
     margin-bottom: 2.5rem;
@@ -544,16 +544,34 @@ h1, h2, h3, h4, h5, h6 {
 .st-hero__title {
     font-size: 2.5rem;
     font-weight: 700;
-    color: #fff;
+    color: var(--st-hero-text, #fff);
     margin-bottom: 0.75rem;
     line-height: 1.2;
 }
 
 .st-hero__subtitle {
-    font-size: 1.15rem;
-    opacity: 0.9;
+    font-weight: 700;
     margin-bottom: 1.5rem;
     line-height: 1.6;
+}
+
+/* Minimal hero variant */
+.st-hero--minimal {
+    background: var(--st-bg-alt);
+    color: var(--st-hero-text, var(--st-text));
+    min-height: 200px;
+}
+
+.st-hero--minimal .st-hero__bg img {
+    opacity: 1;
+}
+
+.st-hero--minimal .st-hero__title {
+    color: var(--st-hero-text, var(--st-text));
+}
+
+.st-hero--minimal .st-hero__subtitle {
+    color: var(--st-hero-text, var(--st-text));
 }
 
 /* --------------------------------------------------------------------------
@@ -909,6 +927,31 @@ h1, h2, h3, h4, h5, h6 {
     margin-right: 0.5rem;
 }
 
+.st-article__category {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.st-category {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--st-accent);
+    background: color-mix(in srgb, var(--st-accent) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--st-accent) 25%, transparent);
+    border-radius: 2rem;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.st-category:hover {
+    background: var(--st-accent);
+    color: #fff;
+}
+
 .st-article__tags {
     display: flex;
     align-items: center;
@@ -1162,6 +1205,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .st-search__suggestions ul {
+    display: inline-block;
+    text-align: left;
     list-style: disc;
     padding-left: 1.5rem;
     color: var(--st-text-light);
@@ -1753,4 +1798,28 @@ select.st-form__input {
     .st-article__hero-overlay {
         padding: 1.5rem;
     }
+}
+
+/* Video Embed */
+.st-article__video {
+    position: relative;
+    width: 100%;
+    padding-bottom: 56.25%;
+    margin-bottom: 2rem;
+    background: var(--st-bg-secondary, #f0f0f0);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.st-article__video-title {
+    margin: 0 0 0.75rem;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+.st-article__video iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
 }

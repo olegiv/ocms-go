@@ -49,6 +49,8 @@ type PageResponse struct {
 	NoFollow          bool               `json:"no_follow"`
 	CanonicalURL      string             `json:"canonical_url,omitempty"`
 	ScheduledAt       *time.Time         `json:"scheduled_at,omitempty"`
+	VideoURL          string             `json:"video_url,omitempty"`
+	VideoTitle        string             `json:"video_title,omitempty"`
 	Author            *AuthorResponse    `json:"author,omitempty"`
 	Categories        []CategoryResponse `json:"categories,omitempty"`
 	Tags              []TagResponse      `json:"tags,omitempty"`
@@ -98,6 +100,8 @@ type CreatePageRequest struct {
 	CategoryIDs       []int64  `json:"category_ids,omitempty"`
 	TagIDs            []int64  `json:"tag_ids,omitempty"`
 	Tags              []string `json:"tags,omitempty"`
+	VideoURL          string   `json:"video_url,omitempty"`
+	VideoTitle        string   `json:"video_title,omitempty"`
 }
 
 // UpdatePageRequest represents the request body for updating a page.
@@ -121,6 +125,8 @@ type UpdatePageRequest struct {
 	CategoryIDs       *[]int64  `json:"category_ids,omitempty"`
 	TagIDs            *[]int64  `json:"tag_ids,omitempty"`
 	Tags              *[]string `json:"tags,omitempty"`
+	VideoURL          *string   `json:"video_url,omitempty"`
+	VideoTitle        *string   `json:"video_title,omitempty"`
 }
 
 // storeCategoryToResponse converts a store.Category to CategoryResponse.
@@ -221,6 +227,8 @@ func storePageToResponse(p store.Page) PageResponse {
 		NoIndex:           p.NoIndex != 0,
 		NoFollow:          p.NoFollow != 0,
 		CanonicalURL:      p.CanonicalUrl,
+		VideoURL:          p.VideoUrl,
+		VideoTitle:        p.VideoTitle,
 	}
 
 	if p.PublishedAt.Valid {
@@ -546,6 +554,9 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 		params.PageType = "post"
 	}
 
+	params.VideoUrl = req.VideoURL
+	params.VideoTitle = req.VideoTitle
+
 	// Set published_at if status is published
 	if req.Status == model.PageStatusPublished {
 		params.PublishedAt = sql.NullTime{Time: now, Valid: true}
@@ -678,109 +689,14 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		HideFeaturedImage: existing.HideFeaturedImage,
 		ExcludeFromLists:  existing.ExcludeFromLists,
 		PublishedAt:       existing.PublishedAt,
+		VideoUrl:          existing.VideoUrl,
+		VideoTitle:        existing.VideoTitle,
 		UpdatedAt:         time.Now(),
 	}
 
-	// Apply updates
-	if req.Title != nil {
-		params.Title = *req.Title
-	}
-	if req.Slug != nil {
-		// Check slug uniqueness
-		if !h.checkPageSlugUniqueExcluding(w, ctx, *req.Slug, existing.ID) {
-			return
-		}
-		params.Slug = *req.Slug
-	}
-	if req.Body != nil {
-		if bodyErr := validatePageBodyMarkupPolicy(*req.Body, h.blockSuspiciousPageMarkup); bodyErr != "" {
-			WriteValidationError(w, map[string]string{"body": bodyErr})
-			return
-		}
-		params.Body = sanitizePageBodyForStorage(*req.Body, h.sanitizePageHTML)
-	}
-	if req.Status != nil {
-		if *req.Status != model.PageStatusDraft && *req.Status != model.PageStatusPublished {
-			WriteValidationError(w, map[string]string{"status": "Status must be 'draft' or 'published'"})
-			return
-		}
-		// Block unpublishing in demo mode
-		if middleware.IsDemoMode() && existing.Status == model.PageStatusPublished && *req.Status != model.PageStatusPublished {
-			WriteForbidden(w, middleware.DemoModeMessageDetailed(middleware.RestrictionUnpublishContent))
-			return
-		}
-		params.Status = *req.Status
-	}
-	if req.FeaturedImageID != nil {
-		params.FeaturedImageID = util.NullInt64FromPtr(req.FeaturedImageID)
-	}
-	if req.OGImageID != nil {
-		params.OgImageID = util.NullInt64FromPtr(req.OGImageID)
-	}
-	if req.MetaTitle != nil {
-		params.MetaTitle = *req.MetaTitle
-	}
-	if req.MetaDescription != nil {
-		params.MetaDescription = *req.MetaDescription
-	}
-	if req.MetaKeywords != nil {
-		params.MetaKeywords = *req.MetaKeywords
-	}
-	if req.CanonicalURL != nil {
-		params.CanonicalUrl = *req.CanonicalURL
-	}
-	if req.NoIndex != nil {
-		if *req.NoIndex {
-			params.NoIndex = 1
-		} else {
-			params.NoIndex = 0
-		}
-	}
-	if req.NoFollow != nil {
-		if *req.NoFollow {
-			params.NoFollow = 1
-		} else {
-			params.NoFollow = 0
-		}
-	}
-	if req.HideFeaturedImage != nil {
-		if *req.HideFeaturedImage {
-			params.HideFeaturedImage = 1
-		} else {
-			params.HideFeaturedImage = 0
-		}
-	}
-	if req.ExcludeFromLists != nil {
-		if *req.ExcludeFromLists {
-			params.ExcludeFromLists = 1
-		} else {
-			params.ExcludeFromLists = 0
-		}
-	}
-	if req.PageType != nil {
-		if *req.PageType != "post" && *req.PageType != "page" {
-			WriteValidationError(w, map[string]string{"page_type": "Page type must be 'post' or 'page'"})
-			return
-		}
-		params.PageType = *req.PageType
-	}
-	// Handle published_at when status changes to published
-	if req.Status != nil && *req.Status == model.PageStatusPublished && existing.Status != model.PageStatusPublished {
-		params.PublishedAt = sql.NullTime{Time: time.Now(), Valid: true}
-	} else if req.Status != nil && *req.Status != model.PageStatusPublished {
-		params.PublishedAt = sql.NullTime{Valid: false}
-	}
-	if req.ScheduledAt != nil {
-		if *req.ScheduledAt == "" {
-			params.ScheduledAt = sql.NullTime{Valid: false}
-		} else {
-			t, parseErr := time.Parse(time.RFC3339, *req.ScheduledAt)
-			if parseErr != nil {
-				WriteValidationError(w, map[string]string{"scheduled_at": "Invalid date format. Use RFC3339"})
-				return
-			}
-			params.ScheduledAt = sql.NullTime{Time: t, Valid: true}
-		}
+	// Apply updates from request to params (validates and writes errors on failure)
+	if !h.applyUpdatePageFields(w, ctx, &req, &params, existing) {
+		return
 	}
 
 	// Pre-validate category IDs if provided
@@ -891,6 +807,108 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	h.populatePageTags(ctx, &resp, page.ID)
 
 	WriteSuccess(w, resp, nil)
+}
+
+// boolToInt64 converts a bool pointer to an int64 (1 for true, 0 for false).
+func boolToInt64(b *bool) int64 {
+	if *b {
+		return 1
+	}
+	return 0
+}
+
+// applyUpdatePageFields applies validated fields from an UpdatePageRequest to store.UpdatePageParams.
+// Returns false if a validation error was written to w (caller should return).
+func (h *Handler) applyUpdatePageFields(w http.ResponseWriter, ctx context.Context, req *UpdatePageRequest, params *store.UpdatePageParams, existing store.Page) bool {
+	if req.Title != nil {
+		params.Title = *req.Title
+	}
+	if req.Slug != nil {
+		if !h.checkPageSlugUniqueExcluding(w, ctx, *req.Slug, existing.ID) {
+			return false
+		}
+		params.Slug = *req.Slug
+	}
+	if req.Body != nil {
+		if bodyErr := validatePageBodyMarkupPolicy(*req.Body, h.blockSuspiciousPageMarkup); bodyErr != "" {
+			WriteValidationError(w, map[string]string{"body": bodyErr})
+			return false
+		}
+		params.Body = sanitizePageBodyForStorage(*req.Body, h.sanitizePageHTML)
+	}
+	if req.Status != nil {
+		if *req.Status != model.PageStatusDraft && *req.Status != model.PageStatusPublished {
+			WriteValidationError(w, map[string]string{"status": "Status must be 'draft' or 'published'"})
+			return false
+		}
+		if middleware.IsDemoMode() && existing.Status == model.PageStatusPublished && *req.Status != model.PageStatusPublished {
+			WriteForbidden(w, middleware.DemoModeMessageDetailed(middleware.RestrictionUnpublishContent))
+			return false
+		}
+		params.Status = *req.Status
+	}
+	if req.FeaturedImageID != nil {
+		params.FeaturedImageID = util.NullInt64FromPtr(req.FeaturedImageID)
+	}
+	if req.OGImageID != nil {
+		params.OgImageID = util.NullInt64FromPtr(req.OGImageID)
+	}
+	if req.MetaTitle != nil {
+		params.MetaTitle = *req.MetaTitle
+	}
+	if req.MetaDescription != nil {
+		params.MetaDescription = *req.MetaDescription
+	}
+	if req.MetaKeywords != nil {
+		params.MetaKeywords = *req.MetaKeywords
+	}
+	if req.CanonicalURL != nil {
+		params.CanonicalUrl = *req.CanonicalURL
+	}
+	if req.NoIndex != nil {
+		params.NoIndex = boolToInt64(req.NoIndex)
+	}
+	if req.NoFollow != nil {
+		params.NoFollow = boolToInt64(req.NoFollow)
+	}
+	if req.HideFeaturedImage != nil {
+		params.HideFeaturedImage = boolToInt64(req.HideFeaturedImage)
+	}
+	if req.ExcludeFromLists != nil {
+		params.ExcludeFromLists = boolToInt64(req.ExcludeFromLists)
+	}
+	if req.PageType != nil {
+		if *req.PageType != "post" && *req.PageType != "page" {
+			WriteValidationError(w, map[string]string{"page_type": "Page type must be 'post' or 'page'"})
+			return false
+		}
+		params.PageType = *req.PageType
+	}
+	if req.VideoURL != nil {
+		params.VideoUrl = *req.VideoURL
+	}
+	if req.VideoTitle != nil {
+		params.VideoTitle = *req.VideoTitle
+	}
+	// Handle published_at when status changes to published
+	if req.Status != nil && *req.Status == model.PageStatusPublished && existing.Status != model.PageStatusPublished {
+		params.PublishedAt = sql.NullTime{Time: time.Now(), Valid: true}
+	} else if req.Status != nil && *req.Status != model.PageStatusPublished {
+		params.PublishedAt = sql.NullTime{Valid: false}
+	}
+	if req.ScheduledAt != nil {
+		if *req.ScheduledAt == "" {
+			params.ScheduledAt = sql.NullTime{Valid: false}
+		} else {
+			t, parseErr := time.Parse(time.RFC3339, *req.ScheduledAt)
+			if parseErr != nil {
+				WriteValidationError(w, map[string]string{"scheduled_at": "Invalid date format. Use RFC3339"})
+				return false
+			}
+			params.ScheduledAt = sql.NullTime{Time: t, Valid: true}
+		}
+	}
+	return true
 }
 
 // DeletePage handles DELETE /api/v1/pages/{id}

@@ -162,7 +162,7 @@ func TestAssignRandomTaxonomySingle(t *testing.T) {
 		return nil
 	})
 	if len(assigned) != 1 {
-		t.Errorf("len(assigned) = %d, want 1", len(assigned))
+		t.Fatalf("len(assigned) = %d, want 1", len(assigned))
 	}
 	if assigned[0] != 42 {
 		t.Errorf("assigned[0] = %d, want 42", assigned[0])

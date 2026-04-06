@@ -18,19 +18,19 @@ import (
 
 // flashAndRedirect sets a flash message and redirects to the given URL.
 // Uses http.StatusSeeOther (303) for POST/PUT/DELETE redirects.
-func flashAndRedirect(w http.ResponseWriter, r *http.Request, renderer *render.Renderer, url, message, messageType string) {
+func flashAndRedirect(w http.ResponseWriter, r *http.Request, renderer *render.Renderer, redirectURL, message, messageType string) {
 	renderer.SetFlash(r, message, messageType)
-	http.Redirect(w, r, url, http.StatusSeeOther)
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 }
 
 // flashError sets an error flash message and redirects to the given URL.
-func flashError(w http.ResponseWriter, r *http.Request, renderer *render.Renderer, url, message string) {
-	flashAndRedirect(w, r, renderer, url, message, "error")
+func flashError(w http.ResponseWriter, r *http.Request, renderer *render.Renderer, redirectURL, message string) {
+	flashAndRedirect(w, r, renderer, redirectURL, message, "error")
 }
 
 // flashSuccess sets a success flash message and redirects to the given URL.
-func flashSuccess(w http.ResponseWriter, r *http.Request, renderer *render.Renderer, url, message string) {
-	flashAndRedirect(w, r, renderer, url, message, "success")
+func flashSuccess(w http.ResponseWriter, r *http.Request, renderer *render.Renderer, redirectURL, message string) {
+	flashAndRedirect(w, r, renderer, redirectURL, message, "success")
 }
 
 // parseFormOrRedirect parses the request form and redirects with an error message on failure.

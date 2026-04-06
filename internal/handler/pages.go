@@ -27,6 +27,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
+	"github.com/olegiv/ocms-go/internal/video"
 	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 	"github.com/olegiv/ocms-go/internal/webhook"
 )
@@ -52,6 +53,14 @@ var ValidPageTypes = []string{PageTypePost, PageTypePage}
 // PagesPerPage is the number of pages to display per page.
 const PagesPerPage = 10
 
+// minPageDate is the earliest acceptable date for editable date fields.
+var minPageDate = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+
+// isPageDateInBounds checks whether a date is within acceptable bounds (2000-01-01 to 2 years from now).
+func isPageDateInBounds(t time.Time) bool {
+	return !t.Before(minPageDate) && !t.After(time.Now().AddDate(2, 0, 0))
+}
+
 var suspiciousPageHTMLTokens = []string{
 	"<script",
 	"onerror=",
@@ -65,7 +74,9 @@ var javascriptURIPattern = regexp.MustCompile(`(?i)=\s*["']?\s*javascript:`)
 
 var pagesSortableFields = map[string]SortConfig{
 	"title":        {DefaultDir: sortDirAsc},
-	"status":       {DefaultDir: sortDirAsc},
+	"page_type":      {DefaultDir: sortDirAsc},
+	"language_code":  {DefaultDir: sortDirAsc},
+	"status":         {DefaultDir: sortDirAsc},
 	"updated_at":   {DefaultDir: sortDirDesc},
 	"created_at":   {DefaultDir: sortDirDesc},
 	"scheduled_at": {DefaultDir: sortDirAsc},
@@ -85,6 +96,7 @@ type PagesHandler struct {
 	cacheManager          *cache.Manager
 	blockSuspiciousMarkup bool
 	sanitizePageHTML      bool
+	videoRegistry         *video.Registry
 }
 
 // NewPagesHandler creates a new PagesHandler.
@@ -94,6 +106,7 @@ func NewPagesHandler(db *sql.DB, renderer *render.Renderer, sm *scs.SessionManag
 		renderer:       renderer,
 		sessionManager: sm,
 		eventService:   service.NewEventService(db),
+		videoRegistry:  video.NewRegistry(),
 	}
 }
 
@@ -169,12 +182,14 @@ type PagesListData struct {
 	PageLanguages      map[int64]*store.Language    // Map of page ID to language
 	TotalCount         int64
 	StatusFilter       string
+	PageTypeFilter     string
 	CategoryFilter     int64
 	LanguageFilter     string             // Language code filter
 	SearchFilter       string             // Search query filter
 	AllCategories      []PageCategoryNode // For category filter dropdown
 	AllLanguages       []store.Language   // All active languages for filter dropdown
 	Statuses           []string
+	PageTypes          []string
 	Pagination         AdminPagination
 }
 
@@ -192,6 +207,12 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		statusFilter = ""
 	}
 
+	// Get page type filter from query string
+	pageTypeFilter := r.URL.Query().Get("page_type")
+	if pageTypeFilter != "" && !isValidPageType(pageTypeFilter) {
+		pageTypeFilter = ""
+	}
+
 	// Get category filter from query string
 	categoryFilter := ParseQueryInt64(r, "category")
 
@@ -203,82 +224,23 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	defaultSortField, defaultSortDir := defaultPagesSort(statusFilter, searchFilter)
 	sortField, sortDir := parseSortParams(r, defaultSortField, defaultSortDir, pagesSortableFields)
 
-	var totalCount int64
-	var pages []store.Page
-	var err error
-
-	// Create search pattern for LIKE queries
-	searchPattern := "%" + searchFilter + "%"
-
-	// Get total count based on filters
-	// Priority: search > language > category > status > all
-	switch {
-	case searchFilter != "":
-		switch {
-		case languageFilter != "":
-			totalCount, err = h.queries.CountSearchPagesByLanguage(r.Context(), store.CountSearchPagesByLanguageParams{
-				LanguageCode: languageFilter,
-				Title:        searchPattern,
-				Body:         searchPattern,
-				Slug:         searchPattern,
-			})
-		case statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled":
-			totalCount, err = h.queries.CountSearchPagesByStatus(r.Context(), store.CountSearchPagesByStatusParams{
-				Status: statusFilter,
-				Title:  searchPattern,
-				Body:   searchPattern,
-				Slug:   searchPattern,
-			})
-		default:
-			totalCount, err = h.queries.CountSearchPages(r.Context(), store.CountSearchPagesParams{
-				Title: searchPattern,
-				Body:  searchPattern,
-				Slug:  searchPattern,
-			})
-		}
-	case languageFilter != "":
-		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
-			totalCount, err = h.queries.CountPagesByLanguageAndStatus(r.Context(), store.CountPagesByLanguageAndStatusParams{
-				LanguageCode: languageFilter,
-				Status:       statusFilter,
-			})
-		} else {
-			totalCount, err = h.queries.CountPagesByLanguage(r.Context(), languageFilter)
-		}
-	case categoryFilter > 0:
-		totalCount, err = h.queries.CountPagesByCategory(r.Context(), categoryFilter)
-	case statusFilter == "scheduled":
-		totalCount, err = h.queries.CountScheduledPages(r.Context())
-	case statusFilter != "" && statusFilter != "all":
-		totalCount, err = h.queries.CountPagesByStatus(r.Context(), statusFilter)
-	default:
-		totalCount, err = h.queries.CountPages(r.Context())
-	}
-	if err != nil {
-		slog.Error("failed to count pages", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	// Normalize page to valid range
-	page, _ = NormalizePagination(page, int(totalCount), perPage)
-	offset := int64((page - 1) * perPage)
-
-	// Fetch pages for current page (priority: search > language > category > status > all)
+	// Build filter params used for both count and list
 	listParams := store.ListPagesSortedParams{
-		Limit:     int64(perPage),
-		Offset:    offset,
 		SortField: sortField,
 		SortDir:   sortDir,
 	}
 
+	if pageTypeFilter != "" {
+		listParams.PageType = util.NullStringFromValue(pageTypeFilter)
+	}
+
 	switch {
 	case searchFilter != "":
-		listParams.SearchPattern = util.NullStringFromValue(searchPattern)
-		switch {
-		case languageFilter != "":
+		listParams.SearchPattern = util.NullStringFromValue("%" + searchFilter + "%")
+		if languageFilter != "" {
 			listParams.LanguageCode = util.NullStringFromValue(languageFilter)
-		case statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled":
+		}
+		if statusFilter != "" && statusFilter != "all" && statusFilter != "scheduled" {
 			listParams.Status = util.NullStringFromValue(statusFilter)
 		}
 	case languageFilter != "":
@@ -294,6 +256,21 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		listParams.Status = util.NullStringFromValue(statusFilter)
 	}
 
+	totalCount, err := h.queries.CountPagesSorted(r.Context(), listParams)
+	if err != nil {
+		slog.Error("failed to count pages", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Normalize page to valid range
+	page, _ = NormalizePagination(page, int(totalCount), perPage)
+	offset := int64((page - 1) * perPage)
+
+	listParams.Limit = int64(perPage)
+	listParams.Offset = offset
+
+	var pages []store.Page
 	pages, err = h.queries.ListPagesSorted(r.Context(), listParams)
 	if err != nil {
 		slog.Error("failed to list pages", "error", err)
@@ -374,12 +351,14 @@ func (h *PagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		PageLanguages:      pageLanguages,
 		TotalCount:         totalCount,
 		StatusFilter:       statusFilter,
+		PageTypeFilter:     pageTypeFilter,
 		CategoryFilter:     categoryFilter,
 		LanguageFilter:     languageFilter,
 		SearchFilter:       searchFilter,
 		AllCategories:      categoryTree,
 		AllLanguages:       allLanguages,
 		Statuses:           ValidPageStatuses,
+		PageTypes:          ValidPageTypes,
 		Pagination:         pagination,
 	}
 
@@ -565,6 +544,12 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if bodyErr := validatePageBodySecurityPolicy(rawBody, h.blockSuspiciousMarkup); bodyErr != "" {
 		validationErrors["body"] = bodyErr
 	}
+	if errMsg := h.videoRegistry.ValidateURL(input.VideoURL); errMsg != "" {
+		validationErrors["video_url"] = errMsg
+	}
+	if len(input.VideoTitle) > 255 {
+		validationErrors["video_title"] = "Video title must be at most 255 characters"
+	}
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
@@ -622,6 +607,8 @@ func (h *PagesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		PublishedAt:       publishedAt,
 		CreatedAt:         now,
 		UpdatedAt:         now,
+		VideoUrl:          input.VideoURL,
+		VideoTitle:        input.VideoTitle,
 	})
 	if err != nil {
 		slog.Error("failed to create page", "error", err)
@@ -820,6 +807,12 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if bodyErr := validatePageBodySecurityPolicy(rawBody, h.blockSuspiciousMarkup); bodyErr != "" {
 		validationErrors["body"] = bodyErr
 	}
+	if errMsg := h.videoRegistry.ValidateURL(input.VideoURL); errMsg != "" {
+		validationErrors["video_url"] = errMsg
+	}
+	if len(input.VideoTitle) > 255 {
+		validationErrors["video_title"] = "Video title must be at most 255 characters"
+	}
 
 	// If there are validation errors, re-render the form
 	if len(validationErrors) > 0 {
@@ -843,14 +836,21 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Update page
 	now := time.Now()
 
-	// Determine published_at: set if becoming published, preserve if already published, clear if unpublishing
-	publishedAt := existingPage.PublishedAt
-	if status == PageStatusPublished && existingPage.Status != PageStatusPublished {
-		// Transitioning to published - set published_at
-		publishedAt = sql.NullTime{Time: now, Valid: true}
-	} else if status != PageStatusPublished {
-		// Unpublishing - clear published_at
+	// Determine published_at: unpublishing always clears it, then respect user input
+	var publishedAt sql.NullTime
+	switch {
+	case status != PageStatusPublished:
+		// Unpublishing or staying draft - always clear published_at
 		publishedAt = sql.NullTime{Valid: false}
+	case input.HasPublishedAt:
+		// User explicitly set a published_at value
+		publishedAt = input.PublishedAt
+	case existingPage.Status != PageStatusPublished:
+		// Transitioning to published without explicit date - set now
+		publishedAt = sql.NullTime{Time: now, Valid: true}
+	default:
+		// Preserve existing
+		publishedAt = existingPage.PublishedAt
 	}
 	normalizedBody := h.normalizePageBodyForStorage(rawBody)
 
@@ -876,11 +876,21 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		ExcludeFromLists:  input.ExcludeFromLists,
 		PublishedAt:       publishedAt,
 		UpdatedAt:         now,
+		VideoUrl:          input.VideoURL,
+		VideoTitle:        input.VideoTitle,
 	})
 	if err != nil {
 		slog.Error("failed to update page", "error", err, "page_id", id)
 		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id), "Error updating page")
 		return
+	}
+
+	// Update created_at separately if the user changed it
+	if !input.CreatedAt.IsZero() && !input.CreatedAt.Equal(existingPage.CreatedAt) {
+		_ = h.queries.UpdatePageCreatedAt(r.Context(), store.UpdatePageCreatedAtParams{
+			CreatedAt: input.CreatedAt,
+			ID:        id,
+		})
 	}
 
 	// Create new version (only if title or body changed)
@@ -918,6 +928,25 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("page updated", "page_id", updatedPage.ID, "slug", updatedPage.Slug, "updated_by", middleware.GetUserID(r))
 	_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page updated", middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r), map[string]any{"page_id": updatedPage.ID, "slug": updatedPage.Slug})
+
+	// Log audit event when published_at was manually overridden
+	if input.HasPublishedAt && publishedAt.Valid {
+		oldPub := ""
+		if existingPage.PublishedAt.Valid {
+			oldPub = existingPage.PublishedAt.Time.Format(time.RFC3339)
+		}
+		newPub := publishedAt.Time.Format(time.RFC3339)
+		if oldPub != newPub {
+			slog.Info("page published_at manually changed",
+				"page_id", updatedPage.ID, "slug", updatedPage.Slug,
+				"old_published_at", oldPub, "new_published_at", newPub,
+				"changed_by", middleware.GetUserID(r))
+			_ = h.eventService.LogPageEvent(r.Context(), model.EventLevelInfo, "Page published_at changed",
+				middleware.GetUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r),
+				map[string]any{"page_id": updatedPage.ID, "slug": updatedPage.Slug, "old_published_at": oldPub, "new_published_at": newPub})
+		}
+	}
+
 	h.logSuspiciousPageContentEvent(r, updatedPage.ID, updatedPage.Slug, rawBody, "updated")
 
 	// Dispatch page.updated webhook event
@@ -1228,6 +1257,8 @@ func (h *PagesHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		ScheduledAt:       page.ScheduledAt,       // Keep scheduling intact
 		LanguageCode:      page.LanguageCode,      // Keep language intact
 		HideFeaturedImage: page.HideFeaturedImage, // Keep setting intact
+		VideoUrl:          page.VideoUrl,          // Keep video intact
+		VideoTitle:        page.VideoTitle,        // Keep video title intact
 		UpdatedAt:         now,
 	})
 	if err != nil {
@@ -1321,6 +1352,8 @@ func (h *PagesHandler) Translate(w http.ResponseWriter, r *http.Request) {
 		PublishedAt:       sql.NullTime{},              // Not published yet
 		CreatedAt:         now,
 		UpdatedAt:         now,
+		VideoUrl:          sourcePage.VideoUrl,   // Inherit video from source
+		VideoTitle:        sourcePage.VideoTitle, // Inherit video title from source
 	})
 	if err != nil {
 		slog.Error("failed to create translated page", "error", err)
@@ -1398,6 +1431,11 @@ type pageFormInput struct {
 	HideFeaturedImage int64
 	PageType          string
 	ExcludeFromLists  int64
+	VideoURL          string
+	VideoTitle        string
+	CreatedAt         time.Time
+	PublishedAt       sql.NullTime
+	HasPublishedAt    bool
 	FormValues        map[string]string
 }
 
@@ -1419,10 +1457,14 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 	noFollowStr := r.FormValue("no_follow")
 	canonicalURL := strings.TrimSpace(r.FormValue("canonical_url"))
 	scheduledAtStr := strings.TrimSpace(r.FormValue("scheduled_at"))
+	createdAtStr := strings.TrimSpace(r.FormValue("created_at"))
+	publishedAtStr := strings.TrimSpace(r.FormValue("published_at"))
 	languageCode := strings.TrimSpace(r.FormValue("language_code"))
 	hideFeaturedImageStr := r.FormValue("hide_featured_image")
 	pageType := strings.TrimSpace(r.FormValue("page_type"))
 	excludeFromListsStr := r.FormValue("exclude_from_lists")
+	videoURL := strings.TrimSpace(r.FormValue("video_url"))
+	videoTitle := strings.TrimSpace(r.FormValue("video_title"))
 
 	// Default page_type to "post" if empty
 	if pageType == "" {
@@ -1461,6 +1503,30 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 		}
 	}
 
+	// Parse created_at (required field, fall back to now)
+	createdAt := time.Now()
+	if createdAtStr != "" {
+		if t, err := time.Parse("2006-01-02T15:04", createdAtStr); err == nil {
+			if isPageDateInBounds(t) {
+				createdAt = t
+			}
+			// Out-of-bounds dates silently fall back to now
+		}
+	}
+
+	// Parse published_at (optional, only present for published pages)
+	var parsedPublishedAt sql.NullTime
+	hasPublishedAt := false
+	if publishedAtStr != "" {
+		if t, err := time.Parse("2006-01-02T15:04", publishedAtStr); err == nil {
+			if isPageDateInBounds(t) {
+				parsedPublishedAt = sql.NullTime{Time: t, Valid: true}
+				hasPublishedAt = true
+			}
+			// Out-of-bounds dates are ignored (treated as not provided)
+		}
+	}
+
 	formValues := map[string]string{
 		"title":               title,
 		"slug":                slug,
@@ -1476,10 +1542,14 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 		"no_follow":           noFollowStr,
 		"canonical_url":       canonicalURL,
 		"scheduled_at":        scheduledAtStr,
+		"created_at":          createdAtStr,
+		"published_at":        publishedAtStr,
 		"language_code":       languageCode,
 		"hide_featured_image": hideFeaturedImageStr,
 		"page_type":           pageType,
 		"exclude_from_lists":  excludeFromListsStr,
+		"video_url":           videoURL,
+		"video_title":         videoTitle,
 	}
 
 	return pageFormInput{
@@ -1501,6 +1571,11 @@ func parsePageFormInput(r *http.Request) pageFormInput {
 		HideFeaturedImage: hideFeaturedImage,
 		PageType:          pageType,
 		ExcludeFromLists:  excludeFromLists,
+		VideoURL:          videoURL,
+		VideoTitle:        videoTitle,
+		CreatedAt:         createdAt,
+		PublishedAt:       parsedPublishedAt,
+		HasPublishedAt:    hasPublishedAt,
 		FormValues:        formValues,
 	}
 }

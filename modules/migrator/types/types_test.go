@@ -16,8 +16,8 @@ func TestImportResult_TotalImported(t *testing.T) {
 		{"posts only", ImportResult{PostsImported: 10}, 10},
 		{"users only", ImportResult{UsersImported: 15}, 15},
 		{"media only", ImportResult{MediaImported: 20}, 20},
-		{"all types", ImportResult{TagsImported: 5, MediaImported: 10, PostsImported: 15, UsersImported: 20}, 50},
-		{"with skipped (not counted)", ImportResult{TagsImported: 5, PostsImported: 10, UsersImported: 3, TagsSkipped: 2, PostsSkipped: 5, UsersSkipped: 7}, 18},
+		{"all types", ImportResult{TagsImported: 5, MediaImported: 10, PostsImported: 15, PagesImported: 3, UsersImported: 20}, 53},
+		{"with skipped (not counted)", ImportResult{TagsImported: 5, PostsImported: 10, PagesImported: 2, UsersImported: 3, TagsSkipped: 2, PostsSkipped: 5, PagesSkipped: 1, UsersSkipped: 7}, 20},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -49,13 +49,17 @@ func TestImportResult_TotalSkipped(t *testing.T) {
 	if got := r.TotalSkipped(); got != 20 {
 		t.Errorf("media skipped only: TotalSkipped() = %d, want 20", got)
 	}
-	r = &ImportResult{TagsSkipped: 5, MediaSkipped: 10, PostsSkipped: 15, UsersSkipped: 20}
-	if got := r.TotalSkipped(); got != 50 {
-		t.Errorf("all types skipped: TotalSkipped() = %d, want 50", got)
+	r = &ImportResult{PagesSkipped: 4}
+	if got := r.TotalSkipped(); got != 4 {
+		t.Errorf("pages skipped only: TotalSkipped() = %d, want 4", got)
 	}
-	r = &ImportResult{TagsImported: 5, PostsImported: 10, UsersImported: 3, TagsSkipped: 2, PostsSkipped: 5, UsersSkipped: 7}
-	if got := r.TotalSkipped(); got != 14 {
-		t.Errorf("with imported (not counted): TotalSkipped() = %d, want 14", got)
+	r = &ImportResult{TagsSkipped: 5, MediaSkipped: 10, PostsSkipped: 15, PagesSkipped: 3, UsersSkipped: 20}
+	if got := r.TotalSkipped(); got != 53 {
+		t.Errorf("all types skipped: TotalSkipped() = %d, want 53", got)
+	}
+	r = &ImportResult{TagsImported: 5, PostsImported: 10, PagesImported: 2, UsersImported: 3, TagsSkipped: 2, PostsSkipped: 5, PagesSkipped: 1, UsersSkipped: 7}
+	if got := r.TotalSkipped(); got != 15 {
+		t.Errorf("with imported (not counted): TotalSkipped() = %d, want 15", got)
 	}
 }
 
@@ -119,6 +123,7 @@ func TestImportOptions_Fields(t *testing.T) {
 		ImportTags:   true,
 		ImportMedia:  false,
 		ImportPosts:  true,
+		ImportPages:  true,
 		ImportUsers:  true,
 		SkipExisting: false,
 	}
@@ -131,6 +136,9 @@ func TestImportOptions_Fields(t *testing.T) {
 	}
 	if !opts.ImportPosts {
 		t.Error("ImportPosts should be true")
+	}
+	if !opts.ImportPages {
+		t.Error("ImportPages should be true")
 	}
 	if !opts.ImportUsers {
 		t.Error("ImportUsers should be true")
@@ -145,10 +153,12 @@ func TestImportResult_CombinedScenarios(t *testing.T) {
 	result := ImportResult{
 		TagsImported:  10,
 		PostsImported: 50,
+		PagesImported: 8,
 		UsersImported: 25,
 		MediaImported: 100,
 		TagsSkipped:   2,
 		PostsSkipped:  5,
+		PagesSkipped:  1,
 		UsersSkipped:  10,
 		MediaSkipped:  15,
 		Errors: []string{
@@ -158,12 +168,12 @@ func TestImportResult_CombinedScenarios(t *testing.T) {
 	}
 
 	// Verify totals
-	expectedImported := 10 + 50 + 25 + 100
+	expectedImported := 10 + 50 + 8 + 25 + 100
 	if got := result.TotalImported(); got != expectedImported {
 		t.Errorf("TotalImported() = %d, want %d", got, expectedImported)
 	}
 
-	expectedSkipped := 2 + 5 + 10 + 15
+	expectedSkipped := 2 + 5 + 1 + 10 + 15
 	if got := result.TotalSkipped(); got != expectedSkipped {
 		t.Errorf("TotalSkipped() = %d, want %d", got, expectedSkipped)
 	}

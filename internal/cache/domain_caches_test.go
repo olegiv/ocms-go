@@ -16,7 +16,7 @@ import (
 // ----------------------------------------------------------------------------
 
 func TestConfigCache_NewConfigCache(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewConfigCache(q)
 	if c == nil {
 		t.Fatal("NewConfigCache returned nil")
@@ -24,7 +24,7 @@ func TestConfigCache_NewConfigCache(t *testing.T) {
 }
 
 func TestConfigCache_GetMissingKey(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewConfigCache(q)
 	ctx := context.Background()
 
@@ -38,7 +38,7 @@ func TestConfigCache_GetMissingKey(t *testing.T) {
 }
 
 func TestConfigCache_GetMultiple(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewConfigCache(q)
 	ctx := context.Background()
 
@@ -53,7 +53,7 @@ func TestConfigCache_GetMultiple(t *testing.T) {
 }
 
 func TestConfigCache_All(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewConfigCache(q)
 	ctx := context.Background()
 
@@ -67,7 +67,7 @@ func TestConfigCache_All(t *testing.T) {
 }
 
 func TestConfigCache_GetConfig(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewConfigCache(q)
 	ctx := context.Background()
 
@@ -84,7 +84,7 @@ func TestConfigCache_GetConfig(t *testing.T) {
 }
 
 func TestConfigCache_Stats(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewConfigCache(q)
 	ctx := context.Background()
 
@@ -98,7 +98,7 @@ func TestConfigCache_Stats(t *testing.T) {
 }
 
 func TestConfigCache_Invalidate(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewConfigCache(q)
 	ctx := context.Background()
 
@@ -116,7 +116,7 @@ func TestConfigCache_Invalidate(t *testing.T) {
 }
 
 func TestConfigCache_InvalidateKey(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewConfigCache(q)
 	ctx := context.Background()
 
@@ -131,7 +131,7 @@ func TestConfigCache_InvalidateKey(t *testing.T) {
 }
 
 func TestConfigCache_ResetStats(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewConfigCache(q)
 	ctx := context.Background()
 
@@ -145,7 +145,7 @@ func TestConfigCache_ResetStats(t *testing.T) {
 }
 
 func TestConfigCache_Preload(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewConfigCache(q)
 	ctx := context.Background()
 
@@ -155,7 +155,7 @@ func TestConfigCache_Preload(t *testing.T) {
 }
 
 func TestConfigCache_CachedAfterFirstGet(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewConfigCache(q)
 	ctx := context.Background()
 
@@ -179,7 +179,7 @@ func TestConfigCache_CachedAfterFirstGet(t *testing.T) {
 // ----------------------------------------------------------------------------
 
 func TestLanguageCache_NewLanguageCache(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewLanguageCache(q)
 	if c == nil {
 		t.Fatal("NewLanguageCache returned nil")
@@ -187,7 +187,7 @@ func TestLanguageCache_NewLanguageCache(t *testing.T) {
 }
 
 func TestLanguageCache_GetAll_EmptyDB(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewLanguageCache(q)
 	ctx := context.Background()
 
@@ -203,7 +203,7 @@ func TestLanguageCache_GetAll_EmptyDB(t *testing.T) {
 }
 
 func TestLanguageCache_GetActive_EmptyDB(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewLanguageCache(q)
 	ctx := context.Background()
 
@@ -217,7 +217,7 @@ func TestLanguageCache_GetActive_EmptyDB(t *testing.T) {
 }
 
 func TestLanguageCache_GetByCode_Missing(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewLanguageCache(q)
 	ctx := context.Background()
 
@@ -231,7 +231,7 @@ func TestLanguageCache_GetByCode_Missing(t *testing.T) {
 }
 
 func TestLanguageCache_GetDefault_EmptyDB(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewLanguageCache(q)
 	ctx := context.Background()
 
@@ -244,7 +244,7 @@ func TestLanguageCache_GetDefault_EmptyDB(t *testing.T) {
 }
 
 func TestLanguageCache_IsActiveCode_Unknown(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewLanguageCache(q)
 	ctx := context.Background()
 
@@ -258,7 +258,7 @@ func TestLanguageCache_IsActiveCode_Unknown(t *testing.T) {
 }
 
 func TestLanguageCache_Invalidate(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewLanguageCache(q)
 	ctx := context.Background()
 
@@ -272,7 +272,7 @@ func TestLanguageCache_Invalidate(t *testing.T) {
 }
 
 func TestLanguageCache_ResetStats(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewLanguageCache(q)
 	ctx := context.Background()
 
@@ -286,7 +286,7 @@ func TestLanguageCache_ResetStats(t *testing.T) {
 }
 
 func TestLanguageCache_Preload(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewLanguageCache(q)
 	ctx := context.Background()
 
@@ -296,7 +296,7 @@ func TestLanguageCache_Preload(t *testing.T) {
 }
 
 func TestLanguageCache_Stats_AfterLoad(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewLanguageCache(q)
 	ctx := context.Background()
 
@@ -312,7 +312,7 @@ func TestLanguageCache_Stats_AfterLoad(t *testing.T) {
 // TestLanguageCache_WithData verifies retrieval after inserting an additional language.
 // Migrations already seed "en", so we insert "fr" to test with a known-added entry.
 func TestLanguageCache_WithData(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	ctx := context.Background()
 
 	// Insert a French language (en is already seeded by migration).
@@ -400,7 +400,7 @@ func TestLanguageCache_WithData(t *testing.T) {
 // ----------------------------------------------------------------------------
 
 func TestMenuCache_NewMenuCache(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewMenuCache(q)
 	if c == nil {
 		t.Fatal("NewMenuCache returned nil")
@@ -408,7 +408,7 @@ func TestMenuCache_NewMenuCache(t *testing.T) {
 }
 
 func TestMenuCache_Get_Missing(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewMenuCache(q)
 	ctx := context.Background()
 
@@ -422,7 +422,7 @@ func TestMenuCache_Get_Missing(t *testing.T) {
 }
 
 func TestMenuCache_GetByID_Missing(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewMenuCache(q)
 	ctx := context.Background()
 
@@ -436,7 +436,7 @@ func TestMenuCache_GetByID_Missing(t *testing.T) {
 }
 
 func TestMenuCache_All_EmptyDB(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewMenuCache(q)
 	ctx := context.Background()
 
@@ -453,7 +453,7 @@ func TestMenuCache_All_EmptyDB(t *testing.T) {
 }
 
 func TestMenuCache_Invalidate(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewMenuCache(q)
 	ctx := context.Background()
 
@@ -467,7 +467,7 @@ func TestMenuCache_Invalidate(t *testing.T) {
 }
 
 func TestMenuCache_InvalidateBySlug(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewMenuCache(q)
 	ctx := context.Background()
 
@@ -482,7 +482,7 @@ func TestMenuCache_InvalidateBySlug(t *testing.T) {
 }
 
 func TestMenuCache_ResetStats(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewMenuCache(q)
 	ctx := context.Background()
 
@@ -496,7 +496,7 @@ func TestMenuCache_ResetStats(t *testing.T) {
 }
 
 func TestMenuCache_Preload(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewMenuCache(q)
 	ctx := context.Background()
 
@@ -507,7 +507,7 @@ func TestMenuCache_Preload(t *testing.T) {
 
 // TestMenuCache_WithData verifies retrieval after inserting a menu.
 func TestMenuCache_WithData(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	ctx := context.Background()
 
 	menu, err := q.CreateMenu(ctx, store.CreateMenuParams{
@@ -571,7 +571,7 @@ func TestMenuCache_WithData(t *testing.T) {
 // ----------------------------------------------------------------------------
 
 func TestTranslationCache_NewTranslationCache(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewTranslationCache(q)
 	if c == nil {
 		t.Fatal("NewTranslationCache returned nil")
@@ -579,7 +579,7 @@ func TestTranslationCache_NewTranslationCache(t *testing.T) {
 }
 
 func TestTranslationCache_Get_NoTranslations(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewTranslationCache(q)
 	ctx := context.Background()
 
@@ -593,7 +593,7 @@ func TestTranslationCache_Get_NoTranslations(t *testing.T) {
 }
 
 func TestTranslationCache_GetForLanguage_Missing(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewTranslationCache(q)
 	ctx := context.Background()
 
@@ -610,7 +610,7 @@ func TestTranslationCache_GetForLanguage_Missing(t *testing.T) {
 }
 
 func TestTranslationCache_GetBatch(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewTranslationCache(q)
 	ctx := context.Background()
 
@@ -624,7 +624,7 @@ func TestTranslationCache_GetBatch(t *testing.T) {
 }
 
 func TestTranslationCache_GetBatch_Empty(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewTranslationCache(q)
 	ctx := context.Background()
 
@@ -638,7 +638,7 @@ func TestTranslationCache_GetBatch_Empty(t *testing.T) {
 }
 
 func TestTranslationCache_CacheHitOnSecondGet(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewTranslationCache(q)
 	ctx := context.Background()
 
@@ -658,7 +658,7 @@ func TestTranslationCache_CacheHitOnSecondGet(t *testing.T) {
 }
 
 func TestTranslationCache_InvalidateEntity(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewTranslationCache(q)
 	ctx := context.Background()
 
@@ -677,7 +677,7 @@ func TestTranslationCache_InvalidateEntity(t *testing.T) {
 }
 
 func TestTranslationCache_InvalidateType(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewTranslationCache(q)
 	ctx := context.Background()
 
@@ -693,7 +693,7 @@ func TestTranslationCache_InvalidateType(t *testing.T) {
 }
 
 func TestTranslationCache_Invalidate(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewTranslationCache(q)
 	ctx := context.Background()
 
@@ -709,7 +709,7 @@ func TestTranslationCache_Invalidate(t *testing.T) {
 }
 
 func TestTranslationCache_Stats(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewTranslationCache(q)
 	ctx := context.Background()
 
@@ -730,7 +730,7 @@ func TestTranslationCache_Stats(t *testing.T) {
 }
 
 func TestTranslationCache_ResetStats(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewTranslationCache(q)
 	ctx := context.Background()
 
@@ -748,7 +748,7 @@ func TestTranslationCache_ResetStats(t *testing.T) {
 // ----------------------------------------------------------------------------
 
 func TestSitemapCache_NewSitemapCache(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewSitemapCache(q, time.Hour)
 	if c == nil {
 		t.Fatal("NewSitemapCache returned nil")
@@ -756,7 +756,7 @@ func TestSitemapCache_NewSitemapCache(t *testing.T) {
 }
 
 func TestSitemapCache_NewSitemapCache_ZeroTTL(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	// Zero TTL should default to 1 hour (no panic).
 	c := NewSitemapCache(q, 0)
 	if c == nil {
@@ -765,7 +765,7 @@ func TestSitemapCache_NewSitemapCache_ZeroTTL(t *testing.T) {
 }
 
 func TestSitemapCache_IsCached_Initially(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewSitemapCache(q, time.Hour)
 
 	if c.IsCached() {
@@ -774,7 +774,7 @@ func TestSitemapCache_IsCached_Initially(t *testing.T) {
 }
 
 func TestSitemapCache_Get(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewSitemapCache(q, time.Hour)
 	ctx := context.Background()
 
@@ -796,7 +796,7 @@ func TestSitemapCache_Get(t *testing.T) {
 }
 
 func TestSitemapCache_CachedAt(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewSitemapCache(q, time.Hour)
 	ctx := context.Background()
 
@@ -811,7 +811,7 @@ func TestSitemapCache_CachedAt(t *testing.T) {
 }
 
 func TestSitemapCache_Get_CacheHit(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewSitemapCache(q, time.Hour)
 	ctx := context.Background()
 
@@ -829,7 +829,7 @@ func TestSitemapCache_Get_CacheHit(t *testing.T) {
 }
 
 func TestSitemapCache_Invalidate(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewSitemapCache(q, time.Hour)
 	ctx := context.Background()
 
@@ -845,7 +845,7 @@ func TestSitemapCache_Invalidate(t *testing.T) {
 }
 
 func TestSitemapCache_Stats(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewSitemapCache(q, time.Hour)
 	ctx := context.Background()
 
@@ -858,7 +858,7 @@ func TestSitemapCache_Stats(t *testing.T) {
 }
 
 func TestSitemapCache_ResetStats(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewSitemapCache(q, time.Hour)
 	ctx := context.Background()
 
@@ -876,7 +876,7 @@ func TestSitemapCache_ResetStats(t *testing.T) {
 // ----------------------------------------------------------------------------
 
 func TestPageCache_NewPageCache(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewPageCache(q)
 	if c == nil {
 		t.Fatal("NewPageCache returned nil")
@@ -884,7 +884,7 @@ func TestPageCache_NewPageCache(t *testing.T) {
 }
 
 func TestPageCache_Count_Initially(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewPageCache(q)
 
 	if c.Count() != 0 {
@@ -896,7 +896,7 @@ func TestPageCache_Count_Initially(t *testing.T) {
 }
 
 func TestPageCache_Stats_Initially(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewPageCache(q)
 
 	stats := c.Stats()
@@ -906,7 +906,7 @@ func TestPageCache_Stats_Initially(t *testing.T) {
 }
 
 func TestPageCache_Invalidate(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewPageCache(q)
 
 	c.Invalidate()
@@ -917,7 +917,7 @@ func TestPageCache_Invalidate(t *testing.T) {
 }
 
 func TestPageCache_InvalidatePage_NoEntry(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewPageCache(q)
 
 	// Invalidating a page that doesn't exist should not panic.
@@ -925,7 +925,7 @@ func TestPageCache_InvalidatePage_NoEntry(t *testing.T) {
 }
 
 func TestPageCache_InvalidateBySlug_NoEntry(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewPageCache(q)
 
 	// Invalidating a slug that doesn't exist should not panic.
@@ -933,7 +933,7 @@ func TestPageCache_InvalidateBySlug_NoEntry(t *testing.T) {
 }
 
 func TestPageCache_ResetStats(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewPageCache(q)
 
 	c.ResetStats()
@@ -945,7 +945,7 @@ func TestPageCache_ResetStats(t *testing.T) {
 }
 
 func TestPageCache_store_and_Invalidate(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewPageCache(q)
 
 	// Manually store a fake page through the internal store method.
@@ -969,7 +969,7 @@ func TestPageCache_store_and_Invalidate(t *testing.T) {
 }
 
 func TestPageCache_store_and_InvalidateBySlug(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewPageCache(q)
 
 	page := &store.Page{ID: 2, Slug: "contact"}
@@ -990,7 +990,7 @@ func TestPageCache_store_and_InvalidateBySlug(t *testing.T) {
 }
 
 func TestPageCache_Invalidate_ClearsAll(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	c := NewPageCache(q)
 
 	for i := int64(1); i <= 5; i++ {

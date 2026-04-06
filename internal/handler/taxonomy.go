@@ -31,9 +31,10 @@ import (
 const TagsPerPage = 20
 
 var tagsSortableFields = map[string]SortConfig{
-	"name":        {DefaultDir: sortDirAsc},
-	"usage_count": {DefaultDir: sortDirDesc},
-	"created_at":  {DefaultDir: sortDirDesc},
+	"name":          {DefaultDir: sortDirAsc},
+	"language_code": {DefaultDir: sortDirAsc},
+	"usage_count":   {DefaultDir: sortDirDesc},
+	"created_at":    {DefaultDir: sortDirDesc},
 }
 
 // TaxonomyHandler handles tag and category management routes.

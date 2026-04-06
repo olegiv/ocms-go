@@ -145,7 +145,7 @@ func TestIsBlockElement(t *testing.T) {
 }
 
 func containsSubstring(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || findSubstring(s, substr))
+	return len(s) >= len(substr) && (s == substr || substr == "" || findSubstring(s, substr))
 }
 
 func findSubstring(s, substr string) bool {

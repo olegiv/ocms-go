@@ -107,9 +107,31 @@
   flex-shrink: 0;
 }
 
-.sidebar-footer {
-  padding: $spacing-4;
-  border-top: 1px solid $gray-800;
+
+.sidebar-collapse-btn {
+  display: none;
+  padding: $spacing-2;
+  color: $gray-400;
+  background: none;
+  border: none;
+  cursor: pointer;
+
+  @media (min-width: $breakpoint-lg) {
+    display: block;
+  }
+
+  &:hover {
+    color: $white;
+  }
+
+  .collapse-icon {
+    flex-shrink: 0;
+    transition: transform $transition-normal;
+
+    &.rotate-180 {
+      transform: rotate(180deg);
+    }
+  }
 }
 
 // Main content area
@@ -120,6 +142,45 @@
 
   @media (min-width: $breakpoint-lg) {
     margin-left: $sidebar-width;
+  }
+}
+
+// Collapsed sidebar (desktop only)
+@media (min-width: $breakpoint-lg) {
+  .sidebar-collapsed {
+    .admin-sidebar {
+      width: $sidebar-collapsed-width;
+
+      .sidebar-brand {
+        font-size: 0;
+
+        &::first-letter {
+          font-size: $font-size-xl;
+        }
+      }
+
+      .sidebar-nav span,
+      .nav-section-title {
+        display: none;
+      }
+
+      .nav-link {
+        justify-content: center;
+        padding: $spacing-2;
+        gap: 0;
+      }
+
+      .sidebar-header {
+        justify-content: center;
+        padding: $spacing-4 $spacing-2;
+      }
+
+
+    }
+
+    .admin-wrapper {
+      margin-left: $sidebar-collapsed-width;
+    }
   }
 }
 

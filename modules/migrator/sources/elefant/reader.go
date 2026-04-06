@@ -238,6 +238,60 @@ func (r *Reader) GetPublishedBlogPosts() ([]BlogPost, error) {
 	return r.queryBlogPosts(" WHERE published = 'yes'")
 }
 
+// GetWebpages retrieves all webpages from the database.
+func (r *Reader) GetWebpages() ([]Webpage, error) {
+	safePrefix, err := sanitizeTablePrefix(r.prefix)
+	if err != nil {
+		return nil, fmt.Errorf("invalid table prefix: %w", err)
+	}
+
+	query := fmt.Sprintf(
+		"SELECT id, title, menu_title, window_title, access, layout, description, keywords, body, extra FROM `%swebpage` ORDER BY id",
+		safePrefix,
+	)
+
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query webpages: %w", err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			slog.Error("failed to close rows", "error", err)
+		}
+	}()
+
+	var pages []Webpage
+	for rows.Next() {
+		var p Webpage
+		if err := rows.Scan(&p.ID, &p.Title, &p.MenuTitle, &p.WindowTitle, &p.Access, &p.Layout, &p.Description, &p.Keywords, &p.Body, &p.Extra); err != nil {
+			return nil, fmt.Errorf("failed to scan webpage: %w", err)
+		}
+		pages = append(pages, p)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating webpages: %w", err)
+	}
+
+	return pages, nil
+}
+
+// GetWebpageCount returns the total number of webpages.
+func (r *Reader) GetWebpageCount() (int, error) {
+	safePrefix, err := sanitizeTablePrefix(r.prefix)
+	if err != nil {
+		return 0, fmt.Errorf("invalid table prefix: %w", err)
+	}
+
+	var count int
+	query := fmt.Sprintf("SELECT COUNT(*) FROM `%swebpage`", safePrefix)
+	err = r.db.QueryRow(query).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count webpages: %w", err)
+	}
+	return count, nil
+}
+
 // GetTags retrieves all unique tags from the blog_tag table.
 func (r *Reader) GetTags() ([]BlogTag, error) {
 	// Sanitize prefix for SQL injection protection (CodeQL requires returned value)

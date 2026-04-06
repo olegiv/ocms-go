@@ -19,6 +19,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/olegiv/ocms-go/internal/imaging"
+	"github.com/olegiv/ocms-go/internal/security"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
@@ -46,20 +47,20 @@ func (s *Source) DisplayName() string {
 
 // Description returns a brief description of the source.
 func (s *Source) Description() string {
-	return "Import blog posts and tags from Elefant CMS MySQL database"
+	return "elefant.description"
 }
 
 // ConfigFields returns the configuration fields needed for this source.
 // Defaults are read from environment variables (ELEFANT_HOST, ELEFANT_PORT, etc.)
 func (s *Source) ConfigFields() []types.ConfigField {
 	return []types.ConfigField{
-		{Name: "mysql_host", Label: "MySQL Host", Type: "text", Required: true, Default: envOrDefault("ELEFANT_HOST", "localhost")},
-		{Name: "mysql_port", Label: "MySQL Port", Type: "number", Required: true, Default: envOrDefault("ELEFANT_PORT", "3306")},
-		{Name: "mysql_user", Label: "MySQL User", Type: "text", Required: true, Default: os.Getenv("ELEFANT_USER")},
-		{Name: "mysql_password", Label: "MySQL Password", Type: "password", Required: true, Default: os.Getenv("ELEFANT_PASSWORD")},
-		{Name: "mysql_database", Label: "Database Name", Type: "text", Required: true, Default: os.Getenv("ELEFANT_DB")},
-		{Name: "table_prefix", Label: "Table Prefix", Type: "text", Required: false, Default: os.Getenv("ELEFANT_PREFIX"), Placeholder: "e.g. elefant_"},
-		{Name: "files_path", Label: "Elefant Files Path", Type: "text", Required: false, Default: os.Getenv("ELEFANT_FILES"), Placeholder: "/path/to/elefant/files"},
+		{Name: "mysql_host", Label: "elefant.field_mysql_host", Type: "text", Required: true, Default: envOrDefault("ELEFANT_HOST", "localhost")},
+		{Name: "mysql_port", Label: "elefant.field_mysql_port", Type: "number", Required: true, Default: envOrDefault("ELEFANT_PORT", "3306")},
+		{Name: "mysql_user", Label: "elefant.field_mysql_user", Type: "text", Required: true, Default: os.Getenv("ELEFANT_USER")},
+		{Name: "mysql_password", Label: "elefant.field_mysql_password", Type: "password", Required: true, Default: os.Getenv("ELEFANT_PASSWORD")},
+		{Name: "mysql_database", Label: "elefant.field_mysql_database", Type: "text", Required: true, Default: os.Getenv("ELEFANT_DB")},
+		{Name: "table_prefix", Label: "elefant.field_table_prefix", Type: "text", Required: false, Default: os.Getenv("ELEFANT_PREFIX"), Placeholder: "elefant.placeholder_table_prefix"},
+		{Name: "files_path", Label: "elefant.field_files_path", Type: "text", Required: false, Default: os.Getenv("ELEFANT_FILES"), Placeholder: "elefant.placeholder_files_path"},
 	}
 }
 
@@ -113,8 +114,13 @@ func (s *Source) TestConnection(cfg map[string]string) error {
 	return nil
 }
 
-// defaultUploadDir is the default oCMS uploads directory.
-const defaultUploadDir = "./uploads"
+// getUploadDir returns the oCMS uploads directory from env or default.
+func getUploadDir() string {
+	if dir := os.Getenv("OCMS_UPLOADS_DIR"); dir != "" {
+		return dir
+	}
+	return "./uploads"
+}
 
 // Import imports content from Elefant CMS into oCMS.
 func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, opts types.ImportOptions, tracker types.ImportTracker) (*types.ImportResult, error) {
@@ -168,10 +174,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	if opts.ImportMedia {
 		filesPath := cfg["files_path"]
 		if filesPath != "" {
-			uploadDir := cfg["upload_dir"]
-			if uploadDir == "" {
-				uploadDir = defaultUploadDir
-			}
+			uploadDir := getUploadDir()
 			mediaMap, err = s.importMedia(ctx, queries, filesPath, uploadDir, authorID, result, tracker)
 			if err != nil {
 				result.Errors = append(result.Errors, fmt.Sprintf("Media import error: %v", err))
@@ -186,6 +189,13 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 		}
 	}
 
+	// Import pages (static webpages)
+	if opts.ImportPages {
+		if err := s.importPages(ctx, queries, reader, authorID, defaultLang.Code, mediaMap, opts, result, tracker); err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("Pages import error: %v", err))
+		}
+	}
+
 	// Import users (as public users only)
 	if opts.ImportUsers {
 		if err := s.importUsers(ctx, queries, reader, opts, result, tracker); err != nil {
@@ -194,7 +204,7 @@ func (s *Source) Import(ctx context.Context, db *sql.DB, cfg map[string]string, 
 	}
 
 	// Rebuild FTS index to ensure imported pages are searchable
-	if opts.ImportPosts {
+	if opts.ImportPosts || opts.ImportPages {
 		searchService := service.NewSearchService(db)
 		if err := searchService.RebuildIndex(ctx); err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("FTS index rebuild error: %v", err))
@@ -551,6 +561,8 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 		if mediaMap != nil {
 			body = replaceMediaURLs(body, mediaMap)
 		}
+		// Sanitize imported HTML to match the admin UI policy
+		body = security.SanitizePageHTML(body)
 
 		// Create page
 		page, err := queries.CreatePage(ctx, store.CreatePageParams{
@@ -560,6 +572,7 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 			Status:          status,
 			AuthorID:        authorID,
 			LanguageCode:    defaultLangCode,
+			PageType:        "post",
 			MetaTitle:       post.Title,
 			MetaDescription: nullStringToString(post.Description),
 			MetaKeywords:    nullStringToString(post.Keywords),
@@ -571,9 +584,9 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 			continue
 		}
 
-		// Track imported page for later deletion
+		// Track imported post for later deletion
 		if tracker != nil {
-			_ = tracker.TrackImportedItem(ctx, s.Name(), "page", page.ID)
+			_ = tracker.TrackImportedItem(ctx, s.Name(), "post", page.ID)
 		}
 
 		// Create page alias for old Elefant URL (blog/post/{id})
@@ -619,6 +632,110 @@ func (s *Source) importPosts(ctx context.Context, queries *store.Queries, reader
 		}
 
 		result.PostsImported++
+	}
+
+	return nil
+}
+
+// importPages imports static webpages from Elefant.
+func (s *Source) importPages(ctx context.Context, queries *store.Queries, reader *Reader, authorID int64, defaultLangCode string, mediaMap map[string]string, opts types.ImportOptions, result *types.ImportResult, tracker types.ImportTracker) error {
+	pages, err := reader.GetWebpages()
+	if err != nil {
+		return fmt.Errorf("failed to get webpages from Elefant: %w", err)
+	}
+
+	now := time.Now()
+
+	for _, wp := range pages {
+		// Convert Elefant page ID (path like "about/team") to slug
+		baseSlug := util.Slugify(wp.ID)
+		if baseSlug == "" {
+			baseSlug = util.Slugify(wp.Title)
+		}
+
+		// Check if page already exists by slug
+		if opts.SkipExisting {
+			_, err := queries.GetPageBySlug(ctx, baseSlug)
+			if err == nil {
+				result.PagesSkipped++
+				continue
+			}
+		}
+
+		// Make slug unique if it already exists
+		slug := makeUniqueSlug(ctx, queries, baseSlug)
+
+		// Map Elefant access to oCMS status
+		status := "draft"
+		if wp.IsPublic() {
+			status = "published"
+		}
+
+		// Replace Elefant file paths with oCMS media URLs in body
+		body := nullStringToString(wp.Body)
+		if mediaMap != nil {
+			body = replaceMediaURLs(body, mediaMap)
+		}
+		// Sanitize imported HTML to match the admin UI policy
+		body = security.SanitizePageHTML(body)
+
+		// Use window_title as meta_title, fall back to title
+		metaTitle := wp.WindowTitle
+		if metaTitle == "" {
+			metaTitle = wp.Title
+		}
+
+		page, err := queries.CreatePage(ctx, store.CreatePageParams{
+			Title:           wp.Title,
+			Slug:            slug,
+			Body:            body,
+			Status:          status,
+			AuthorID:        authorID,
+			LanguageCode:    defaultLangCode,
+			PageType:        "page",
+			MetaTitle:       metaTitle,
+			MetaDescription: nullStringToString(wp.Description),
+			MetaKeywords:    nullStringToString(wp.Keywords),
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		})
+		if err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("Failed to create page '%s': %v", wp.Title, err))
+			continue
+		}
+
+		// Track imported page for later deletion
+		if tracker != nil {
+			_ = tracker.TrackImportedItem(ctx, s.Name(), "page", page.ID)
+		}
+
+		// Create page alias for old Elefant URL path
+		if wp.ID != slug {
+			_, aliasErr := queries.CreatePageAlias(ctx, store.CreatePageAliasParams{
+				PageID:    page.ID,
+				Alias:     wp.ID,
+				CreatedAt: now,
+			})
+			if aliasErr != nil {
+				slog.Warn("failed to create page alias",
+					"page_id", page.ID,
+					"alias", wp.ID,
+					"error", aliasErr)
+			}
+		}
+
+		// Set published_at if published
+		if status == "published" {
+			if _, err := queries.PublishPage(ctx, store.PublishPageParams{
+				PublishedAt: sql.NullTime{Time: now, Valid: true},
+				UpdatedAt:   now,
+				ID:          page.ID,
+			}); err != nil {
+				result.Errors = append(result.Errors, fmt.Sprintf("Failed to set published_at for page '%s': %v", wp.Title, err))
+			}
+		}
+
+		result.PagesImported++
 	}
 
 	return nil

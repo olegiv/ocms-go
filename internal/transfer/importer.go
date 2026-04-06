@@ -1513,6 +1513,8 @@ func (i *Importer) createNewPage(
 		CanonicalUrl:    f.CanonicalURL,
 		ScheduledAt:     f.ScheduledAt,
 		LanguageCode:    f.LanguageCode,
+		VideoUrl:        page.VideoURL,
+		VideoTitle:      page.VideoTitle,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	})

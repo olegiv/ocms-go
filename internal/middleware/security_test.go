@@ -240,6 +240,15 @@ func TestSecurityHeadersSetsCSPNonceInContext(t *testing.T) {
 	}
 }
 
+func TestCSPAllowsYouTubeNoCookieFrames(t *testing.T) {
+	for _, isDev := range []bool{true, false} {
+		cfg := DefaultSecurityHeadersConfig(isDev)
+		if !strings.Contains(cfg.ContentSecurityPolicy, "https://www.youtube-nocookie.com") {
+			t.Errorf("CSP (dev=%t) should allow youtube-nocookie.com in frame-src", isDev)
+		}
+	}
+}
+
 func TestIntToStr(t *testing.T) {
 	tests := []struct {
 		input    int

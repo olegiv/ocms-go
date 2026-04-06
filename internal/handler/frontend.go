@@ -30,6 +30,7 @@ import (
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/theme"
+	"github.com/olegiv/ocms-go/internal/video"
 )
 
 // PageView represents a page with computed fields for template rendering.
@@ -55,8 +56,11 @@ type PageView struct {
 	FeaturedImageLarge   string // Large variant for single page views
 	FeaturedImageID      int64  // Media ID for translation lookup
 	FeaturedImageAlt     string // Alt text (default language)
-	HideFeaturedImage    bool   // Show image below title instead of hero banner
-	ReadingTime          int    // Estimated reading time in minutes
+	HideFeaturedImage    bool          // Show image below title instead of hero banner
+	VideoURL             string        // Original video URL
+	VideoTitle           string        // Optional video title/caption
+	VideoEmbedHTML       template.HTML // Server-generated safe iframe embed
+	ReadingTime          int           // Estimated reading time in minutes
 	Highlight            string // Search result highlight
 	Author               *AuthorView
 	Category             *CategoryView
@@ -392,7 +396,8 @@ type FrontendHandler struct {
 	cacheManager    *cache.Manager
 	eventService    *service.EventService
 	logger          *slog.Logger
-	sanitizePages   bool
+	sanitizePages       bool
+	videoRegistry       *video.Registry
 	moduleFuncsProvider ModuleTemplateFuncsProvider
 }
 
@@ -417,6 +422,7 @@ func NewFrontendHandler(db *sql.DB, themeManager *theme.Manager, cacheManager *c
 		cacheManager:  cacheManager,
 		eventService:  eventService,
 		logger:        logger,
+		videoRegistry: video.NewRegistry(),
 	}
 }
 
@@ -1051,7 +1057,7 @@ func (h *FrontendHandler) Blog(w http.ResponseWriter, r *http.Request) {
 	offset := (page - 1) * defaultPerPage
 
 	// Get base template data first to access LangPrefix
-	base := h.getBaseTemplateData(r, "Blog", "")
+	base := h.getBaseTemplateData(r, "", "")
 
 	// Get published posts (not pages) filtered by language
 	var pages []store.Page
@@ -1457,6 +1463,15 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 	// Set hide featured image option
 	pv.HideFeaturedImage = p.HideFeaturedImage == 1
 
+	// Set video embed if URL is present
+	if p.VideoUrl != "" {
+		pv.VideoURL = p.VideoUrl
+		pv.VideoTitle = p.VideoTitle
+		if embedHTML, err := h.videoRegistry.EmbedHTML(p.VideoUrl); err == nil {
+			pv.VideoEmbedHTML = embedHTML
+		}
+	}
+
 	// Get author
 	author, err := h.queries.GetPageAuthor(ctx, p.ID)
 	if err == nil {
@@ -1700,6 +1715,11 @@ func (h *FrontendHandler) getSidebarData(ctx context.Context, languageCode, lang
 // Block-level elements (h1-h6, p, div, br, li) produce newlines when stripped.
 // This is used for search result highlights where we want plain text with highlighted terms.
 func (h *FrontendHandler) stripHTMLPreserveMark(s string) string {
+	// Strip leading broken tag fragment (snippet may start mid-tag)
+	if idx := strings.Index(s, ">"); idx != -1 && !strings.Contains(s[:idx], "<") {
+		s = s[idx+1:]
+	}
+
 	// Block-level tags that should produce newlines
 	blockTags := []string{"</h1>", "</h2>", "</h3>", "</h4>", "</h5>", "</h6>", "</p>", "</div>", "</li>", "</tr>", "<br>", "<br/>", "<br />"}
 

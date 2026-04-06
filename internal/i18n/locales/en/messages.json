@@ -103,6 +103,11 @@
             "translation": "Logout"
         },
         {
+            "id": "nav.collapse_sidebar",
+            "message": "Collapse sidebar",
+            "translation": "Collapse sidebar"
+        },
+        {
             "id": "nav.profile",
             "message": "Profile",
             "translation": "Profile"
@@ -463,6 +468,26 @@
             "translation": "Posts appear in blog feeds and recent posts. Pages are static content."
         },
         {
+            "id": "pages.created_at",
+            "message": "Creation date",
+            "translation": "Creation date"
+        },
+        {
+            "id": "pages.created_at_hint",
+            "message": "Set the creation date shown to visitors",
+            "translation": "Set the creation date shown to visitors"
+        },
+        {
+            "id": "pages.published_at",
+            "message": "Publication date",
+            "translation": "Publication date"
+        },
+        {
+            "id": "pages.published_at_hint",
+            "message": "Override the date shown as publication date",
+            "translation": "Override the date shown as publication date"
+        },
+        {
             "id": "pages.type_post",
             "message": "Post",
             "translation": "Post"
@@ -481,6 +506,36 @@
             "id": "pages.exclude_from_lists_hint",
             "message": "Hide this page from recent posts and blog listings while keeping it published",
             "translation": "Hide this page from recent posts and blog listings while keeping it published"
+        },
+        {
+            "id": "pages.video_section",
+            "message": "Video",
+            "translation": "Video"
+        },
+        {
+            "id": "pages.video_url",
+            "message": "Video URL",
+            "translation": "Video URL"
+        },
+        {
+            "id": "pages.video_url_hint",
+            "message": "Paste a YouTube video URL. More providers coming soon.",
+            "translation": "Paste a YouTube video URL. More providers coming soon."
+        },
+        {
+            "id": "pages.video_title",
+            "message": "Video Title",
+            "translation": "Video Title"
+        },
+        {
+            "id": "pages.video_title_hint",
+            "message": "Optional title displayed above the video (max 255 characters)",
+            "translation": "Optional title displayed above the video (max 255 characters)"
+        },
+        {
+            "id": "pages.video_url_invalid",
+            "message": "Invalid or unsupported video URL",
+            "translation": "Invalid or unsupported video URL"
         },
         {
             "id": "pages.aliases",
@@ -829,8 +884,8 @@
         },
         {
             "id": "tags.search_placeholder",
-            "message": "Search or create tags...",
-            "translation": "Search or create tags..."
+            "message": "Search tags...",
+            "translation": "Search tags..."
         },
         {
             "id": "tags.create_new",

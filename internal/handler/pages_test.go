@@ -546,6 +546,85 @@ func TestPageUpdateQuery(t *testing.T) {
 	})
 }
 
+// TestPageVideoURL tests creating and updating pages with video URLs.
+func TestPageVideoURL(t *testing.T) {
+	db, _ := testHandlerSetup(t)
+	user := createTestAdminUser(t, db)
+	queries := store.New(db)
+
+	t.Run("create page with video URL and title", func(t *testing.T) {
+		page, err := queries.CreatePage(context.Background(), store.CreatePageParams{
+			Title:      "Video Page",
+			Slug:       "video-page",
+			Body:       "Content with video",
+			Status:     "draft",
+			AuthorID:   user.ID,
+			VideoUrl:   "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+			VideoTitle: "My Video",
+		})
+		if err != nil {
+			t.Fatalf("CreatePage failed: %v", err)
+		}
+		if page.VideoUrl != "https://www.youtube.com/watch?v=dQw4w9WgXcQ" {
+			t.Errorf("VideoUrl = %q, want YouTube URL", page.VideoUrl)
+		}
+		if page.VideoTitle != "My Video" {
+			t.Errorf("VideoTitle = %q, want %q", page.VideoTitle, "My Video")
+		}
+	})
+
+	t.Run("create page without video URL defaults to empty", func(t *testing.T) {
+		page, err := queries.CreatePage(context.Background(), store.CreatePageParams{
+			Title:    "No Video Page",
+			Slug:     "no-video-page",
+			Body:     "Content without video",
+			Status:   "draft",
+			AuthorID: user.ID,
+		})
+		if err != nil {
+			t.Fatalf("CreatePage failed: %v", err)
+		}
+		if page.VideoUrl != "" {
+			t.Errorf("VideoUrl = %q, want empty string", page.VideoUrl)
+		}
+		if page.VideoTitle != "" {
+			t.Errorf("VideoTitle = %q, want empty string", page.VideoTitle)
+		}
+	})
+
+	t.Run("update page video URL", func(t *testing.T) {
+		page, err := queries.CreatePage(context.Background(), store.CreatePageParams{
+			Title:    "Update Video Page",
+			Slug:     "update-video-page",
+			Body:     "Content",
+			Status:   "draft",
+			AuthorID: user.ID,
+		})
+		if err != nil {
+			t.Fatalf("CreatePage failed: %v", err)
+		}
+
+		updated, err := queries.UpdatePage(context.Background(), store.UpdatePageParams{
+			ID:       page.ID,
+			Title:    page.Title,
+			Slug:     page.Slug,
+			Body:     page.Body,
+			Status:   page.Status,
+			VideoUrl:   "https://youtu.be/dQw4w9WgXcQ",
+			VideoTitle: "Updated Video Title",
+		})
+		if err != nil {
+			t.Fatalf("UpdatePage failed: %v", err)
+		}
+		if updated.VideoUrl != "https://youtu.be/dQw4w9WgXcQ" {
+			t.Errorf("VideoUrl = %q, want youtu.be URL", updated.VideoUrl)
+		}
+		if updated.VideoTitle != "Updated Video Title" {
+			t.Errorf("VideoTitle = %q, want %q", updated.VideoTitle, "Updated Video Title")
+		}
+	})
+}
+
 // TestPageDeleteQuery tests deleting a page
 func TestPageDeleteQuery(t *testing.T) {
 	db, _ := testHandlerSetup(t)

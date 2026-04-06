@@ -33,7 +33,7 @@ templ AdminLayout(pc *PageContext) {
 		<link rel="stylesheet" href="/static/dist/admin-tw.css"/>
 	</head>
 	<body>
-		<div class="admin-layout" x-data="{ sidebarOpen: false }">
+		<div class="admin-layout" x-data="{ sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true' }" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
 			<!-- Sidebar overlay for mobile -->
 			<div class="sidebar-overlay" :class="{ 'show': sidebarOpen }" @click="sidebarOpen = false"></div>
 			@Sidebar(pc)

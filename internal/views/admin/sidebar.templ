@@ -5,7 +5,7 @@ package admin
 
 // Sidebar renders the admin sidebar navigation.
 templ Sidebar(pc *PageContext) {
-	<aside class="admin-sidebar" :class="{ 'open': sidebarOpen }">
+	<aside class="admin-sidebar" :class="{ 'open': sidebarOpen, 'collapsed': sidebarCollapsed }">
 		<div class="sidebar-header">
 			<a href="/admin" class="sidebar-brand">
 				if pc.SiteName != "" {
@@ -16,6 +16,16 @@ templ Sidebar(pc *PageContext) {
 			</a>
 			<button class="sidebar-close" @click="sidebarOpen = false" aria-label={ pc.T("btn.close") }>
 				@iconX()
+			</button>
+			<button
+				class="sidebar-collapse-btn"
+				@click="sidebarCollapsed = !sidebarCollapsed; localStorage.setItem('sidebarCollapsed', sidebarCollapsed)"
+				title={ pc.T("nav.collapse_sidebar") }
+			>
+				<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="collapse-icon" :class="{ 'rotate-180': sidebarCollapsed }">
+					<polyline points="11 17 6 12 11 7"></polyline>
+					<polyline points="18 17 13 12 18 7"></polyline>
+				</svg>
 			</button>
 		</div>
 		<nav class="sidebar-nav">
@@ -71,20 +81,20 @@ templ Sidebar(pc *PageContext) {
 					<div class="nav-section-title">{ pc.T("nav.modules") }</div>
 					@navLink(pc, "/admin/modules", pc.T("nav.all_modules"), pc.IsActive("/admin/modules"), iconModules())
 					for _, mod := range pc.SidebarModules {
-						@navLinkPrefix(pc, mod.AdminURL, mod.Label, pc.HasPrefix(mod.AdminURL), iconModule())
+						@navLinkPrefix(pc, mod.AdminURL, pc.T(mod.Label), pc.HasPrefix(mod.AdminURL), iconModule())
 					}
 				</div>
 			}
+			<div class="nav-section">
+				<form action="/logout" method="POST">
+					@csrfField()
+					<button type="submit" class="nav-link" style="width: 100%; background: none; border: none; cursor: pointer;">
+						@iconLogout()
+						<span>{ pc.T("nav.logout") }</span>
+					</button>
+				</form>
+			</div>
 		</nav>
-		<div class="sidebar-footer">
-			<form action="/logout" method="POST">
-				@csrfField()
-				<button type="submit" class="nav-link" style="width: 100%; background: none; border: none; cursor: pointer;">
-					@iconLogout()
-					<span>{ pc.T("nav.logout") }</span>
-				</button>
-			</form>
-		</div>
 	</aside>
 }
 

@@ -41,6 +41,25 @@ type User struct {
 	Name  string // Display name
 }
 
+// Webpage represents a static page from Elefant CMS.
+type Webpage struct {
+	ID          string         // Page path/slug (e.g., "about", "contact")
+	Title       string         // Page title
+	MenuTitle   string         // Menu display title
+	WindowTitle string         // Browser window title
+	Access      string         // "public", "member", or "private"
+	Layout      string         // Template layout name
+	Description sql.NullString // Meta description (nullable)
+	Keywords    sql.NullString // Meta keywords (nullable)
+	Body        sql.NullString // HTML body content (nullable)
+	Extra       sql.NullString // JSON extended fields (nullable)
+}
+
+// IsPublic returns true if the page has public access.
+func (w *Webpage) IsPublic() bool {
+	return w.Access == "public"
+}
+
 // MediaFile represents a file found in Elefant's files directory.
 type MediaFile struct {
 	Path     string // Relative path from files_path (e.g., "images/photo.jpg")

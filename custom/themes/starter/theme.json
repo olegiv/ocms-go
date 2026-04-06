@@ -41,6 +41,24 @@
             "type": "select",
             "default": "gradient",
             "options": ["gradient", "minimal", "none"]
+        },
+        {
+            "key": "hero_text_color",
+            "label": "Hero Text Color",
+            "type": "color",
+            "default": "#ffffff"
+        },
+        {
+            "key": "hero_image",
+            "label": "Hero Image",
+            "type": "image",
+            "default": ""
+        },
+        {
+            "key": "hero_image_alt",
+            "label": "Hero Image Alt Text",
+            "type": "text",
+            "default": ""
         }
     ],
     "widget_areas": [

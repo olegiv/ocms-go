@@ -310,21 +310,22 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 		value := r.FormValue(cfg.Key)
 
 		// Validate based on type
-		if cfg.Type == model.ConfigTypeInt {
+		switch cfg.Type {
+		case model.ConfigTypeInt:
 			if value != "" {
 				if _, err := strconv.Atoi(value); err != nil {
 					validationErrors[cfg.Key] = i18n.T(lang, "error.invalid_number")
 					continue
 				}
 			}
-		} else if cfg.Type == model.ConfigTypeBool {
+		case model.ConfigTypeBool:
 			// Checkbox: if not present, it's false
 			if value == "" || value == "false" {
 				value = "false"
 			} else {
 				value = "true"
 			}
-		} else if cfg.Type == model.ConfigTypeText {
+		case model.ConfigTypeText:
 			const maxTextSize = 64 * 1024 // 64 KB
 			if len(value) > maxTextSize {
 				validationErrors[cfg.Key] = i18n.T(lang, "error.text_too_long")

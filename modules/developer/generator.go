@@ -603,11 +603,11 @@ func (m *Module) generateMedia(ctx context.Context, uploaderID int64) ([]int64, 
 			height int
 			crop   bool
 		}{
-			{"thumbnail", 150, 150, true},
-			{"grid", 256, 256, true},
-			{"small", 400, 300, false},
-			{"medium", 800, 600, false},
-			{"large", 1920, 1080, false},
+			{name: "thumbnail", width: 150, height: 150, crop: true},
+			{name: "grid", width: 256, height: 256, crop: true},
+			{name: "small", width: 400, height: 300, crop: false},
+			{name: "medium", width: 800, height: 600, crop: false},
+			{name: "large", width: 1920, height: 1080, crop: false},
 		}
 
 		for _, v := range variants {

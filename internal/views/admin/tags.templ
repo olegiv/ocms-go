@@ -226,7 +226,17 @@ templ TagsListPage(pc *PageContext, data TagsListData) {
 									</a>
 								}
 								@table.Head() { { pc.T("label.slug") } }
-								@table.Head() { { pc.T("label.language") } }
+								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("language_code"))}}) {
+									<a
+										href={ data.Pagination.SortURL("language_code", sortDirAsc) }
+										class={ sortLinkClass(data.Pagination.SortState("language_code")) }
+										data-sort-state={ sortStateValue(data.Pagination.SortState("language_code")) }
+									>
+										<span>{ pc.T("label.language") }</span>
+										@SortIndicator(data.Pagination.SortState("language_code"))
+										<span class="sr-only">{ pc.T(sortStateLabelKey(data.Pagination.SortState("language_code"))) }</span>
+									</a>
+								}
 								@table.Head(table.HeadProps{Attributes: templ.Attributes{"aria-sort": sortAriaValue(data.Pagination.SortState("usage_count"))}}) {
 									<a
 										href={ data.Pagination.SortURL("usage_count", sortDirDesc) }

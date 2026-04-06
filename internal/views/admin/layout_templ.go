@@ -68,7 +68,7 @@ func AdminLayout(pc *PageContext) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</title><link rel=\"icon\" type=\"image/x-icon\" href=\"/favicon.ico\"><link rel=\"stylesheet\" href=\"/static/dist/main.css\"><link rel=\"stylesheet\" href=\"/static/dist/admin-tw.css\"></head><body><div class=\"admin-layout\" x-data=\"{ sidebarOpen: false }\"><!-- Sidebar overlay for mobile --><div class=\"sidebar-overlay\" :class=\"{ 'show': sidebarOpen }\" @click=\"sidebarOpen = false\"></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</title><link rel=\"icon\" type=\"image/x-icon\" href=\"/favicon.ico\"><link rel=\"stylesheet\" href=\"/static/dist/main.css\"><link rel=\"stylesheet\" href=\"/static/dist/admin-tw.css\"></head><body><div class=\"admin-layout\" x-data=\"{ sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true' }\" :class=\"{ 'sidebar-collapsed': sidebarCollapsed }\"><!-- Sidebar overlay for mobile --><div class=\"sidebar-overlay\" :class=\"{ 'show': sidebarOpen }\" @click=\"sidebarOpen = false\"></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

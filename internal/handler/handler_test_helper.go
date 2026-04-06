@@ -79,6 +79,8 @@ func testDB(t *testing.T) *sql.DB {
 			published_at DATETIME,
 			page_type TEXT NOT NULL DEFAULT 'post',
 			exclude_from_lists INTEGER NOT NULL DEFAULT 0,
+			video_url TEXT NOT NULL DEFAULT '',
+			video_title TEXT NOT NULL DEFAULT '',
 			FOREIGN KEY (author_id) REFERENCES users(id)
 		);
 		CREATE INDEX idx_pages_slug ON pages(slug);

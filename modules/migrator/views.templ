@@ -58,7 +58,7 @@ templ MigratorListPage(pc *adminviews.PageContext, data MigratorListViewData) {
 									</div>
 									<div class="source-title">
 										<h3>{ src.DisplayName }</h3>
-										<p>{ src.Description }</p>
+										<p>{ pc.T(src.Description) }</p>
 									</div>
 								</div>
 								<div class="source-actions">
@@ -151,7 +151,7 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 		<div class="page-header">
 			<div>
 				<h1 class="page-title">{ pc.Title }</h1>
-				<p class="page-description">{ data.Description }</p>
+				<p class="page-description">{ pc.T(data.Description) }</p>
 			</div>
 			<div class="page-actions">
 				<a href="/admin/migrator" class="btn btn-secondary">
@@ -175,17 +175,17 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 							for _, field := range data.ConfigFields {
 								<div class={ "form-group", templ.KV("form-group-password", field.Type == "password") }>
 									<label for={ field.Name }>
-										{ field.Label }
+										{ pc.T(field.Label) }
 										if field.Required {
 											<span class="required">*</span>
 										}
 									</label>
 									if field.Type == "password" {
-										<input type="password" id={ field.Name } name={ field.Name } value={ data.Config[field.Name] } required?={ field.Required } placeholder={ field.Placeholder } class="form-control"/>
+										<input type="password" id={ field.Name } name={ field.Name } value={ data.Config[field.Name] } required?={ field.Required } placeholder={ pc.T(field.Placeholder) } class="form-control"/>
 									} else if field.Type == "number" {
-										<input type="number" id={ field.Name } name={ field.Name } value={ data.Config[field.Name] } required?={ field.Required } placeholder={ field.Placeholder } class="form-control"/>
+										<input type="number" id={ field.Name } name={ field.Name } value={ data.Config[field.Name] } required?={ field.Required } placeholder={ pc.T(field.Placeholder) } class="form-control"/>
 									} else {
-										<input type="text" id={ field.Name } name={ field.Name } value={ data.Config[field.Name] } required?={ field.Required } placeholder={ field.Placeholder } class="form-control" maxlength="255"/>
+										<input type="text" id={ field.Name } name={ field.Name } value={ data.Config[field.Name] } required?={ field.Required } placeholder={ pc.T(field.Placeholder) } class="form-control" maxlength="255"/>
 									}
 								</div>
 							}
@@ -220,6 +220,10 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 								<span>{ pc.T("migrator.option_import_posts") }</span>
 							</label>
 							<label class="checkbox-label">
+								<input type="checkbox" name="import_pages" checked/>
+								<span>{ pc.T("migrator.option_import_pages") }</span>
+							</label>
+							<label class="checkbox-label">
 								<input type="checkbox" name="import_users"/>
 								<span>{ pc.T("migrator.option_import_users") }</span>
 							</label>
@@ -247,8 +251,12 @@ templ MigratorSourceFormPage(pc *adminviews.PageContext, data MigratorSourceForm
 				</div>
 				<div class="card-body">
 					if data.ImportedCounts != nil {
-						if data.ImportedCounts["page"] > 0 || data.ImportedCounts["tag"] > 0 || data.ImportedCounts["media"] > 0 || data.ImportedCounts["user"] > 0 {
+						if data.ImportedCounts["post"] > 0 || data.ImportedCounts["page"] > 0 || data.ImportedCounts["tag"] > 0 || data.ImportedCounts["media"] > 0 || data.ImportedCounts["user"] > 0 {
 							<div class="imported-stats">
+								<div class="stat-item">
+									<span class="migrator-stat-label">{ pc.T("migrator.imported_posts") }:</span>
+									<span class="migrator-stat-value">{ fmt.Sprintf("%d", data.ImportedCounts["post"]) }</span>
+								</div>
 								<div class="stat-item">
 									<span class="migrator-stat-label">{ pc.T("migrator.imported_pages") }:</span>
 									<span class="migrator-stat-value">{ fmt.Sprintf("%d", data.ImportedCounts["page"]) }</span>

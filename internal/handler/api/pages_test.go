@@ -294,6 +294,34 @@ func TestResolveTagNames(t *testing.T) {
 	})
 }
 
+func TestStorePageToResponseVideoURL(t *testing.T) {
+	page := store.Page{
+		ID:         1,
+		Title:      "Test Page",
+		Slug:       "test-page",
+		VideoUrl:   "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+		VideoTitle: "My YouTube Video",
+	}
+	resp := storePageToResponse(page)
+	if resp.VideoURL != "https://www.youtube.com/watch?v=dQw4w9WgXcQ" {
+		t.Errorf("VideoURL = %q, want YouTube URL", resp.VideoURL)
+	}
+	if resp.VideoTitle != "My YouTube Video" {
+		t.Errorf("VideoTitle = %q, want %q", resp.VideoTitle, "My YouTube Video")
+	}
+
+	// Empty fields should be omitted (empty string)
+	page.VideoUrl = ""
+	page.VideoTitle = ""
+	resp = storePageToResponse(page)
+	if resp.VideoURL != "" {
+		t.Errorf("VideoURL = %q, want empty for omitempty", resp.VideoURL)
+	}
+	if resp.VideoTitle != "" {
+		t.Errorf("VideoTitle = %q, want empty for omitempty", resp.VideoTitle)
+	}
+}
+
 func TestDeduplicateInt64(t *testing.T) {
 	tests := []struct {
 		name  string
