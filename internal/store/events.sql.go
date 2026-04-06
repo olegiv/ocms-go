@@ -149,7 +149,7 @@ func (q *Queries) ListEvents(ctx context.Context, arg ListEventsParams) ([]Event
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Event{}
 	for rows.Next() {
 		var i Event
@@ -195,7 +195,7 @@ func (q *Queries) ListEventsByCategory(ctx context.Context, arg ListEventsByCate
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Event{}
 	for rows.Next() {
 		var i Event
@@ -241,7 +241,7 @@ func (q *Queries) ListEventsByLevel(ctx context.Context, arg ListEventsByLevelPa
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Event{}
 	for rows.Next() {
 		var i Event
@@ -293,7 +293,7 @@ func (q *Queries) ListEventsByLevelAndCategory(ctx context.Context, arg ListEven
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Event{}
 	for rows.Next() {
 		var i Event
@@ -354,7 +354,7 @@ func (q *Queries) ListEventsWithUser(ctx context.Context, arg ListEventsWithUser
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ListEventsWithUserRow{}
 	for rows.Next() {
 		var i ListEventsWithUserRow
@@ -419,7 +419,7 @@ func (q *Queries) ListEventsWithUserByCategory(ctx context.Context, arg ListEven
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ListEventsWithUserByCategoryRow{}
 	for rows.Next() {
 		var i ListEventsWithUserByCategoryRow
@@ -484,7 +484,7 @@ func (q *Queries) ListEventsWithUserByLevel(ctx context.Context, arg ListEventsW
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ListEventsWithUserByLevelRow{}
 	for rows.Next() {
 		var i ListEventsWithUserByLevelRow
@@ -555,7 +555,7 @@ func (q *Queries) ListEventsWithUserByLevelAndCategory(ctx context.Context, arg 
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ListEventsWithUserByLevelAndCategoryRow{}
 	for rows.Next() {
 		var i ListEventsWithUserByLevelAndCategoryRow

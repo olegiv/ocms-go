@@ -159,7 +159,7 @@ func (q *Queries) ListActiveScheduledTasks(ctx context.Context) ([]ScheduledTask
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ScheduledTask{}
 	for rows.Next() {
 		var i ScheduledTask
@@ -205,7 +205,7 @@ func (q *Queries) ListScheduledTaskRuns(ctx context.Context, arg ListScheduledTa
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ScheduledTaskRun{}
 	for rows.Next() {
 		var i ScheduledTaskRun
@@ -242,7 +242,7 @@ func (q *Queries) ListScheduledTasks(ctx context.Context) ([]ScheduledTask, erro
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ScheduledTask{}
 	for rows.Next() {
 		var i ScheduledTask

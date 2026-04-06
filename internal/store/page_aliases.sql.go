@@ -81,7 +81,7 @@ func (q *Queries) GetAliasesForPage(ctx context.Context, pageID int64) ([]PageAl
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []PageAlias{}
 	for rows.Next() {
 		var i PageAlias

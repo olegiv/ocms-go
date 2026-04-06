@@ -124,7 +124,7 @@ func (q *Queries) ListEnabledRedirects(ctx context.Context) ([]Redirect, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Redirect{}
 	for rows.Next() {
 		var i Redirect
@@ -161,7 +161,7 @@ func (q *Queries) ListRedirects(ctx context.Context) ([]Redirect, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Redirect{}
 	for rows.Next() {
 		var i Redirect
@@ -205,7 +205,7 @@ func (q *Queries) ListRedirectsPaginated(ctx context.Context, arg ListRedirectsP
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Redirect{}
 	for rows.Next() {
 		var i Redirect

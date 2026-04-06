@@ -836,17 +836,18 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Update page
 	now := time.Now()
 
-	// Determine published_at: use user-provided value if present, otherwise auto-manage
+	// Determine published_at: unpublishing always clears it, then respect user input
 	var publishedAt sql.NullTime
 	switch {
-	case input.HasPublishedAt:
-		publishedAt = input.PublishedAt
-	case status == PageStatusPublished && existingPage.Status != PageStatusPublished:
-		// Transitioning to published - set published_at
-		publishedAt = sql.NullTime{Time: now, Valid: true}
 	case status != PageStatusPublished:
-		// Unpublishing - clear published_at
+		// Unpublishing or staying draft - always clear published_at
 		publishedAt = sql.NullTime{Valid: false}
+	case input.HasPublishedAt:
+		// User explicitly set a published_at value
+		publishedAt = input.PublishedAt
+	case existingPage.Status != PageStatusPublished:
+		// Transitioning to published without explicit date - set now
+		publishedAt = sql.NullTime{Time: now, Valid: true}
 	default:
 		// Preserve existing
 		publishedAt = existingPage.PublishedAt
@@ -874,7 +875,6 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		PageType:          input.PageType,
 		ExcludeFromLists:  input.ExcludeFromLists,
 		PublishedAt:       publishedAt,
-		CreatedAt:         input.CreatedAt,
 		UpdatedAt:         now,
 		VideoUrl:          input.VideoURL,
 		VideoTitle:        input.VideoTitle,
@@ -883,6 +883,14 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		slog.Error("failed to update page", "error", err, "page_id", id)
 		flashError(w, r, h.renderer, fmt.Sprintf(redirectAdminPagesID, id), "Error updating page")
 		return
+	}
+
+	// Update created_at separately if the user changed it
+	if !input.CreatedAt.IsZero() && !input.CreatedAt.Equal(existingPage.CreatedAt) {
+		_ = h.queries.UpdatePageCreatedAt(r.Context(), store.UpdatePageCreatedAtParams{
+			CreatedAt: input.CreatedAt,
+			ID:        id,
+		})
 	}
 
 	// Create new version (only if title or body changed)

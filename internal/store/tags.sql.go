@@ -119,7 +119,7 @@ func (q *Queries) GetPagesForTag(ctx context.Context, arg GetPagesForTagParams) 
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Page{}
 	for rows.Next() {
 		var i Page
@@ -193,7 +193,7 @@ func (q *Queries) GetPublishedTagUsageCounts(ctx context.Context, arg GetPublish
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetPublishedTagUsageCountsRow{}
 	for rows.Next() {
 		var i GetPublishedTagUsageCountsRow
@@ -285,7 +285,7 @@ func (q *Queries) GetTagAvailableTranslations(ctx context.Context, arg GetTagAva
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetTagAvailableTranslationsRow{}
 	for rows.Next() {
 		var i GetTagAvailableTranslationsRow
@@ -366,7 +366,7 @@ func (q *Queries) GetTagNamesForAllPages(ctx context.Context) ([]GetTagNamesForA
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetTagNamesForAllPagesRow{}
 	for rows.Next() {
 		var i GetTagNamesForAllPagesRow
@@ -402,7 +402,7 @@ func (q *Queries) GetTagNamesForPublishedPages(ctx context.Context) ([]GetTagNam
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetTagNamesForPublishedPagesRow{}
 	for rows.Next() {
 		var i GetTagNamesForPublishedPagesRow
@@ -449,7 +449,7 @@ func (q *Queries) GetTagUsageCounts(ctx context.Context, arg GetTagUsageCountsPa
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetTagUsageCountsRow{}
 	for rows.Next() {
 		var i GetTagUsageCountsRow
@@ -506,7 +506,7 @@ func (q *Queries) GetTagUsageCountsByLanguage(ctx context.Context, arg GetTagUsa
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []GetTagUsageCountsByLanguageRow{}
 	for rows.Next() {
 		var i GetTagUsageCountsByLanguageRow
@@ -543,7 +543,7 @@ func (q *Queries) GetTagsForPage(ctx context.Context, pageID int64) ([]Tag, erro
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Tag{}
 	for rows.Next() {
 		var i Tag
@@ -577,7 +577,7 @@ func (q *Queries) ListAllTags(ctx context.Context) ([]Tag, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Tag{}
 	for rows.Next() {
 		var i Tag
@@ -616,7 +616,7 @@ func (q *Queries) ListTags(ctx context.Context, arg ListTagsParams) ([]Tag, erro
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Tag{}
 	for rows.Next() {
 		var i Tag
@@ -654,7 +654,7 @@ func (q *Queries) ListTagsByLanguage(ctx context.Context, languageCode string) (
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Tag{}
 	for rows.Next() {
 		var i Tag
@@ -694,7 +694,7 @@ func (q *Queries) ListTagsForSitemap(ctx context.Context) ([]ListTagsForSitemapR
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ListTagsForSitemapRow{}
 	for rows.Next() {
 		var i ListTagsForSitemapRow
@@ -740,7 +740,7 @@ func (q *Queries) SearchTags(ctx context.Context, arg SearchTagsParams) ([]Tag, 
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Tag{}
 	for rows.Next() {
 		var i Tag

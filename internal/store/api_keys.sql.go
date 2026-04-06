@@ -181,7 +181,7 @@ func (q *Queries) GetAPIKeysByPrefix(ctx context.Context, keyPrefix string) ([]A
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ApiKey{}
 	for rows.Next() {
 		var i ApiKey
@@ -225,7 +225,7 @@ func (q *Queries) ListAPIKeys(ctx context.Context, arg ListAPIKeysParams) ([]Api
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ApiKey{}
 	for rows.Next() {
 		var i ApiKey
@@ -270,7 +270,7 @@ func (q *Queries) ListAPIKeysByUser(ctx context.Context, arg ListAPIKeysByUserPa
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ApiKey{}
 	for rows.Next() {
 		var i ApiKey

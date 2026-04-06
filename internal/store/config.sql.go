@@ -195,7 +195,7 @@ func (q *Queries) ListAllConfigTranslations(ctx context.Context) ([]ListAllConfi
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ListAllConfigTranslationsRow{}
 	for rows.Next() {
 		var i ListAllConfigTranslationsRow
@@ -231,7 +231,7 @@ func (q *Queries) ListConfig(ctx context.Context) ([]Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []Config{}
 	for rows.Next() {
 		var i Config
@@ -281,7 +281,7 @@ func (q *Queries) ListConfigTranslations(ctx context.Context, configKey string) 
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	items := []ListConfigTranslationsRow{}
 	for rows.Next() {
 		var i ListConfigTranslationsRow
