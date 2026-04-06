@@ -65,7 +65,7 @@ sudo apt install libvips-dev
 ## Project Structure (Additions)
 
 ```
-opossum/
+ocms/
 ├── internal/
 │   ├── handler/
 │   │   ├── ...existing...

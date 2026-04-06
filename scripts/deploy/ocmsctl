@@ -56,10 +56,9 @@ resolve_site() {
         exit 1
     fi
 
-    SITE_VHOST=$(echo "$line" | awk '{print $2}')
+    SITE_DIR=$(echo "$line" | awk '{print $2}')
     SITE_USER=$(echo "$line" | awk '{print $3}')
     SITE_PORT=$(echo "$line" | awk '{print $4}')
-    SITE_DIR="$SITE_VHOST/ocms"
     SITE_PID="$SITE_DIR/ocms.pid"
     SITE_LOG="$SITE_DIR/logs/ocms.log"
     SITE_ENV="$SITE_DIR/.env"
@@ -227,7 +226,6 @@ cmd_status() {
 
     echo ""
     echo -e "${BOLD}Site:${NC}      $site_id"
-    echo -e "${BOLD}Domain:${NC}    $(basename "$SITE_VHOST")"
     echo -e "${BOLD}User:${NC}      $SITE_USER"
     echo -e "${BOLD}Port:${NC}      $SITE_PORT"
     echo -e "${BOLD}Directory:${NC} $SITE_DIR"
@@ -303,7 +301,7 @@ cmd_list() {
     printf "${BOLD}%-28s %-18s %-8s %-18s${NC}\n" "SITE ID" "USER" "PORT" "STATUS"
     printf "%-28s %-18s %-8s %-18s\n" "---" "---" "---" "---"
 
-    while IFS=' ' read -r site_id vhost_path user port; do
+    while IFS=' ' read -r site_id instance_dir user port; do
         # Skip comments and empty lines
         [[ "$site_id" =~ ^#.*$ ]] && continue
         [ -z "$site_id" ] && continue
@@ -315,7 +313,7 @@ cmd_list() {
             status="running (systemd)"
             status_color="$GREEN"
         else
-            local pid_file="$vhost_path/ocms/ocms.pid"
+            local pid_file="$instance_dir/ocms.pid"
             local pid=""
             [ -f "$pid_file" ] && pid=$(cat "$pid_file")
             if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then

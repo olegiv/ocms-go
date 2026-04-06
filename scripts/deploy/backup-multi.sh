@@ -37,10 +37,8 @@ FILTER_SITE="${1:-}"
 
 backup_site() {
     local site_id="$1"
-    local vhost_path="$2"
+    local instance_dir="$2"
     local user="$3"
-
-    local instance_dir="$vhost_path/ocms"
     local backup_dir="$instance_dir/backups"
     local db_path="$instance_dir/data/ocms.db"
     local uploads_path="$instance_dir/uploads"
@@ -119,7 +117,7 @@ TOTAL=0
 SUCCESS=0
 FAILED=0
 
-while IFS=' ' read -r site_id vhost_path user port; do
+while IFS=' ' read -r site_id instance_dir user port; do
     [[ "$site_id" =~ ^#.*$ ]] && continue
     [ -z "$site_id" ] && continue
 
@@ -131,7 +129,7 @@ while IFS=' ' read -r site_id vhost_path user port; do
     TOTAL=$((TOTAL + 1))
     echo ""
 
-    if backup_site "$site_id" "$vhost_path" "$user"; then
+    if backup_site "$site_id" "$instance_dir" "$user"; then
         SUCCESS=$((SUCCESS + 1))
     else
         FAILED=$((FAILED + 1))

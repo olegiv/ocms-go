@@ -77,7 +77,7 @@ fi
 declare -a SITE_IDS
 declare -a SITE_PORTS
 
-while IFS=' ' read -r site_id vhost_path user port; do
+while IFS=' ' read -r site_id instance_dir user port; do
     [[ "$site_id" =~ ^#.*$ ]] && continue
     [ -z "$site_id" ] && continue
     SITE_IDS+=("$site_id")

@@ -7,7 +7,7 @@ Create one or more pages in the oCMS system. Supports two methods: API (with Bea
 
 **Parameters:** $ARGUMENTS — Two optional parameters:
 
-1. **`--site-url=<URL>`** — Remote site URL (e.g., `--site-url=https://opossum.su`). If set, pages are created via the REST API using an API key. If not set (default), pages are created via direct SQLite database access.
+1. **`--site-url=<URL>`** — Remote site URL (e.g., `--site-url=https://example.com`). If set, pages are created via the REST API using an API key. If not set (default), pages are created via direct SQLite database access.
 
 2. **Page specification** (everything else in $ARGUMENTS) — Can be:
    - A natural language description of the page(s) to create (title, content, tone, language)
@@ -17,7 +17,7 @@ Create one or more pages in the oCMS system. Supports two methods: API (with Bea
 **Examples:**
 ```
 /create-page About Us page in Russian, formal tone
-/create-page --site-url=https://opossum.su 3 blog posts about opossums
+/create-page --site-url=https://example.com 3 blog posts about opossums
 /create-page {"title": "Test", "slug": "test", "status": "published"}
 ```
 
@@ -34,7 +34,7 @@ Create one or more pages in the oCMS system. Supports two methods: API (with Bea
 
 ### `--site-url` is set → API only
 
-1. The site URL is the base URL for API requests (e.g., `https://opossum.su/api/v1/pages`)
+1. The site URL is the base URL for API requests (e.g., `https://example.com/api/v1/pages`)
 2. **API key is required.** Ask the user for the API key if not provided. The key must have `pages:write` permission.
 3. Test connectivity: `curl -sf "${site_url}/health"` — if unreachable, report error and stop.
 4. Create pages via POST requests:

@@ -70,7 +70,7 @@ Create a generic CMS called **Opossum CMS (oCMS)** in Go. This is a hobby projec
 ## Project Structure
 
 ```
-opossum/
+ocms/
 ├── cmd/
 │   └── ocms/
 │       └── main.go                 # Entry point, wire dependencies
@@ -236,7 +236,7 @@ type Event struct {
 **Goal:** Skeleton project that compiles and runs
 
 **Tasks:**
-1. Initialize Go module: `go mod init github.com/user/opossum`
+1. Initialize Go module: `go mod init github.com/user/ocms`
 2. Create directory structure (all folders)
 3. Create `.gitignore`:
    ```

@@ -53,7 +53,7 @@
 ## Project Structure (Additions)
 
 ```
-opossum/
+ocms/
 ├── internal/
 │   ├── handler/
 │   │   ├── ...existing...
@@ -868,7 +868,7 @@ type Module interface {
 2. Create handlers in `modules/example/handlers.go`
 3. Register example module in main.go:
    ```go
-   import "github.com/user/opossum/modules/example"
+   import "github.com/user/ocms/modules/example"
    
    // In main():
    moduleRegistry.Register(example.New())

@@ -46,12 +46,10 @@ sudo chmod 755 /opt/ocms/bin/ocms
 sudo cp /tmp/ocms-setup/ocmsctl /opt/ocms/bin/
 sudo chmod 755 /opt/ocms/bin/ocmsctl
 sudo cp /tmp/ocms-setup/ocms@.service /etc/systemd/system/
-for script in setup-site.sh deploy-multi.sh backup-multi.sh healthcheck-multi.sh helper.sh; do
+for script in setup-site.sh deploy-multi.sh backup-multi.sh healthcheck-multi.sh generate-logrotate.sh helper.sh; do
     sudo cp /tmp/ocms-setup/$script /opt/ocms/
     sudo chmod 755 /opt/ocms/$script
 done
-sudo cp /tmp/ocms-setup/ocms-logrotate.conf /opt/ocms/
-sudo cp /opt/ocms/ocms-logrotate.conf /etc/logrotate.d/ocms
 sudo systemctl daemon-reload
 ```
 
@@ -70,6 +68,15 @@ Arguments:
 - `system-user` — the Plesk vhost system user
 - `port` (optional) — auto-assigned from 8081 if omitted
 - `group` (optional) — defaults to `psaserv`
+
+Options:
+- `--path PATH` — full path to instance root directory (default: `/var/www/vhosts/<domain>/ocms`)
+
+Use `--path` when the default path doesn't match your setup:
+
+```bash
+sudo /opt/ocms/setup-site.sh app.example.com hosting --path /var/www/vhosts/example.com/ocms
+```
 
 ### 2.1 Review generated `.env` (embed hardening)
 
@@ -378,11 +385,10 @@ SHELL=/bin/bash
 
 ## Log Rotation
 
-Install the logrotate configuration to automatically rotate oCMS logs:
+Generate logrotate configuration from `sites.conf` (re-run after adding/removing sites):
 
 ```bash
-# Copy configuration
-sudo cp /opt/ocms/ocms-logrotate.conf /etc/logrotate.d/ocms
+sudo /opt/ocms/generate-logrotate.sh
 
 # Test configuration (dry-run)
 sudo logrotate -d /etc/logrotate.d/ocms
@@ -391,14 +397,10 @@ sudo logrotate -d /etc/logrotate.d/ocms
 sudo logrotate -f /etc/logrotate.d/ocms
 ```
 
-The configuration:
-- Rotates logs daily
-- Keeps 30 days of history
-- Compresses old logs (gzip)
-- Creates new log files with proper permissions
-- Handles all instances via wildcard pattern
-
-Log files are stored at `{vhost}/ocms/logs/ocms.log`.
+The generated configuration:
+- Per-instance entries with correct paths and ownership
+- Rotates logs daily, keeps 30 days, compresses with gzip
+- Uses `copytruncate` to avoid restarting the service
 
 ## File Permissions
 
@@ -417,9 +419,21 @@ Log files are stored at `{vhost}/ocms/logs/ocms.log`.
 All sites are tracked in `/etc/ocms/sites.conf`:
 
 ```
-# Format: SITE_ID VHOST_PATH SYSTEM_USER PORT
-example_com /var/www/vhosts/example.com example_com 8081
-blog_example_com /var/www/vhosts/blog.example.com bloguser 8082
+# oCMS Multi-Instance Site Registry
+# Format: SITE_ID INSTANCE_DIR SYSTEM_USER PORT
+# Managed by setup-site.sh — do not edit while services are running
+
+# Standard setup (default path)
+example_com /var/www/vhosts/example.com/ocms example_com 8081
+
+# Custom path (--path override)
+app_example_com /var/www/vhosts/example.com/ocms/app hosting 8082
+
+# Another server vhost
+blog_example_com /var/www/vhosts/blog.example.com/ocms bloguser 8083
+
+# Disabled site (commented out, skipped by all scripts)
+#old_site_com /var/www/vhosts/old-site.com/ocms olduser 8084
 ```
 
 ## Disabling a Site
@@ -558,3 +572,69 @@ If you're upgrading from a version that used a separate `themes/` directory:
    ```bash
    sudo rm -rf /opt/ocms/themes
    ```
+
+## Migration from vhost_path to instance_dir in sites.conf
+
+> **⚠️ Breaking change** — `sites.conf` format changed in this release. Existing deployments must run the migration below before updating the deploy scripts.
+
+The `sites.conf` format changed: column 2 is now the full instance directory
+instead of the vhost path (the scripts no longer append `/ocms` automatically).
+
+Old format:
+```
+example_com /var/www/vhosts/example.com example_com 8081
+```
+
+New format:
+```
+example_com /var/www/vhosts/example.com/ocms example_com 8081
+```
+
+### Upgrade sequence
+
+**All steps run on the server.** Steps 3 and 4 must happen together — old scripts expect old format, new scripts expect new format. Never mix them.
+
+```bash
+# 1. Stop all instances
+sudo /opt/ocms/bin/ocmsctl list
+sudo /opt/ocms/bin/ocmsctl stop <site> # for each site
+# Or if using systemd: sudo systemctl stop ocms@<site_id>
+
+# 2. Backup sites.conf
+sudo cp /etc/ocms/sites.conf /etc/ocms/sites.conf.backup
+
+# 3. Migrate sites.conf (append /ocms to column 2)
+sudo awk '{
+    if (/^#/ || /^$/ || NF < 4) { print; next }
+    if ($2 !~ /\/ocms$/) $2 = $2 "/ocms"
+    print
+}' /etc/ocms/sites.conf > /tmp/sites.conf.new
+sudo mv /tmp/sites.conf.new /etc/ocms/sites.conf
+
+# 4. Update deploy scripts
+sudo cp /tmp/ocms-setup/ocmsctl /opt/ocms/bin/ocmsctl
+sudo chmod 755 /opt/ocms/bin/ocmsctl
+for script in setup-site.sh backup-multi.sh deploy-multi.sh healthcheck-multi.sh generate-logrotate.sh helper.sh; do
+    sudo cp /tmp/ocms-setup/$script /opt/ocms/
+    sudo chmod 755 /opt/ocms/$script
+done
+
+# 5. Update binary
+sudo cp /tmp/ocms /opt/ocms/bin/ocms
+sudo chmod 755 /opt/ocms/bin/ocms
+
+# 6. Start all instances
+sudo /opt/ocms/bin/ocmsctl start <site> # for each site
+# Or if using systemd: sudo systemctl start ocms@<site_id>
+
+# 7. Verify
+sudo ocmsctl list
+sudo /opt/ocms/healthcheck-multi.sh
+```
+
+If something goes wrong, rollback:
+```bash
+sudo cp /etc/ocms/sites.conf.backup /etc/ocms/sites.conf
+# Restore old scripts and binary from backup
+sudo /opt/ocms/bin/ocmsctl start <site> # for each site
+```

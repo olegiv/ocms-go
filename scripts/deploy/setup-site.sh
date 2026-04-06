@@ -33,6 +33,7 @@ fi
 
 # Configuration
 VHOSTS_BASE="/var/www/vhosts"
+INSTANCE_DIR_OVERRIDE=""
 SITES_CONF="/etc/ocms/sites.conf"
 BINARY_PATH="/opt/ocms/bin/ocms"
 BASE_PORT=8081
@@ -40,7 +41,7 @@ BASE_PORT=8081
 # --- Functions ---
 
 usage() {
-    echo "Usage: sudo $0 <domain> <system-user> [port] [group]"
+    echo "Usage: sudo $0 <domain> <system-user> [port] [group] [options]"
     echo ""
     echo "Arguments:"
     echo "  domain       Domain name (e.g., example.com)"
@@ -48,9 +49,14 @@ usage() {
     echo "  port         Port number (auto-assigned from $BASE_PORT if omitted)"
     echo "  group        System group (default: psaserv)"
     echo ""
+    echo "Options:"
+    echo "  --path PATH  Full path to instance root directory"
+    echo "               (default: /var/www/vhosts/<domain>/ocms)"
+    echo ""
     echo "Examples:"
     echo "  sudo $0 example.com example_com"
     echo "  sudo $0 blog.example.com bloguser 8085"
+    echo "  sudo $0 app.example.com hosting --path /var/www/vhosts/example.com/ocms"
     exit 1
 }
 
@@ -116,23 +122,45 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-DOMAIN="${1:-}"
-SYSTEM_USER="${2:-}"
-PORT="${3:-}"
-GROUP="${4:-psaserv}"
+# Parse arguments (positional + optional flags)
+POSITIONAL=()
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --path)
+            INSTANCE_DIR_OVERRIDE="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            ;;
+        *)
+            POSITIONAL+=("$1")
+            shift
+            ;;
+    esac
+done
+
+DOMAIN="${POSITIONAL[0]:-}"
+SYSTEM_USER="${POSITIONAL[1]:-}"
+PORT="${POSITIONAL[2]:-}"
+GROUP="${POSITIONAL[3]:-psaserv}"
 
 if [ -z "$DOMAIN" ] || [ -z "$SYSTEM_USER" ]; then
     usage
 fi
 
 SITE_ID=$(domain_to_site_id "$DOMAIN")
-VHOST_PATH="$VHOSTS_BASE/$DOMAIN"
-INSTANCE_DIR="$VHOST_PATH/ocms"
+if [ -n "$INSTANCE_DIR_OVERRIDE" ]; then
+    INSTANCE_DIR="$INSTANCE_DIR_OVERRIDE"
+else
+    INSTANCE_DIR="$VHOSTS_BASE/$DOMAIN/ocms"
+fi
 
-# Validate vhost directory
-if [ ! -d "$VHOST_PATH" ]; then
-    echo_error "Vhost directory not found: $VHOST_PATH"
-    echo "       Make sure the domain is configured in Plesk first."
+# Validate parent directory exists
+PARENT_DIR="$(dirname "$INSTANCE_DIR")"
+if [ ! -d "$PARENT_DIR" ]; then
+    echo_error "Parent directory not found: $PARENT_DIR"
+    echo "       Make sure the path exists before running setup."
     exit 1
 fi
 
@@ -272,11 +300,11 @@ mkdir -p "$(dirname "$SITES_CONF")"
 if [ ! -f "$SITES_CONF" ]; then
     cat > "$SITES_CONF" << 'HEADER'
 # oCMS Multi-Instance Site Registry
-# Format: SITE_ID VHOST_PATH SYSTEM_USER PORT
+# Format: SITE_ID INSTANCE_DIR SYSTEM_USER PORT
 # Managed by setup-site.sh — do not edit while services are running
 HEADER
 fi
-echo "$SITE_ID $VHOST_PATH $SYSTEM_USER $PORT" >> "$SITES_CONF"
+echo "$SITE_ID $INSTANCE_DIR $SYSTEM_USER $PORT" >> "$SITES_CONF"
 
 # --- Summary ---
 

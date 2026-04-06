@@ -53,7 +53,7 @@
 ## Project Structure (Additions)
 
 ```
-opossum/
+ocms/
 ├── internal/
 │   ├── handler/
 │   │   ├── ...existing...

@@ -159,7 +159,7 @@ fi
 
 FAILURES=0
 
-while IFS=' ' read -r site_id vhost_path user port; do
+while IFS=' ' read -r site_id instance_dir user port; do
     [[ "$site_id" =~ ^#.*$ ]] && continue
     [ -z "$site_id" ] && continue
 
