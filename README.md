@@ -187,6 +187,7 @@ sudo dnf install vips-devel
 | `OCMS_CACHE_MAX_SIZE` | Max entries for in-memory cache | `10000` | No |
 | `OCMS_HCAPTCHA_SITE_KEY` | hCaptcha site key for login protection | - | No |
 | `OCMS_HCAPTCHA_SECRET_KEY` | hCaptcha secret key for login protection | - | No |
+| `OCMS_HCAPTCHA_DISABLED` | Force-disable hCaptcha regardless of database settings | `false` | No |
 | `OCMS_GEOIP_DB_PATH` | Path to GeoLite2-Country.mmdb for country detection | - | No |
 | `OCMS_UPLOADS_DIR` | Directory for uploaded media files | `./uploads` | No |
 | `OCMS_TRUSTED_PROXIES` | Trusted reverse-proxy CIDRs/IPs; forwarding headers are ignored unless peer is trusted | - | No |

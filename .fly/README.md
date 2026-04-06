@@ -47,6 +47,7 @@ Configured in `fly.toml`:
 
 | Variable | Value | Description |
 |----------|-------|-------------|
+| `OCMS_HCAPTCHA_DISABLED` | `true` | Disable hCaptcha (no keys needed) |
 | `OCMS_ENV` | `production` | Production mode |
 | `OCMS_DO_SEED` | `true` | Enable demo seeding |
 | `OCMS_DEMO_MODE` | `true` | Demo mode indicator |
