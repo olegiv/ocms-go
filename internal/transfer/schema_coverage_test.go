@@ -503,7 +503,10 @@ func TestValidateZip_TooManyMediaFiles(t *testing.T) {
 	// Add export.json first
 	exportData := ExportData{Version: ExportVersion, ExportedAt: time.Now()}
 	jsonData, _ := json.Marshal(exportData)
-	jw, _ := zw.Create("export.json")
+	jw, err := zw.Create("export.json")
+	if err != nil {
+		t.Fatalf("zw.Create: %v", err)
+	}
 	_, _ = jw.Write(jsonData)
 
 	// Add maxZipMediaFiles+1 media entries with valid paths

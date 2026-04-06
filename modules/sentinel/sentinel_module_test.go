@@ -371,11 +371,6 @@ func TestSetActiveChecker(t *testing.T) {
 	}
 }
 
-// fakeEventLogger records LogEvent calls.
-type fakeEventLogger struct {
-	called bool
-}
-
 func TestSetEventLogger(t *testing.T) {
 	m := New()
 	if m.eventLogger != nil {

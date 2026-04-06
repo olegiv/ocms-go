@@ -124,7 +124,7 @@ var PredefinedServices = []Service{
 // loadSettings loads privacy settings from the database.
 func loadSettings(db *sql.DB) (*Settings, error) {
 	row := db.QueryRow(`
-		SELECT enabled, COALESCE(debug, 0), privacy_policy_url, cookie_name, cookie_expires_days,
+		SELECT enabled, debug, privacy_policy_url, cookie_name, cookie_expires_days,
 		       theme, position,
 		       gcm_enabled, gcm_default_analytics, gcm_default_ad_storage,
 		       gcm_default_ad_user_data, gcm_default_ad_personalization, gcm_wait_for_update,

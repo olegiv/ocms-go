@@ -96,7 +96,7 @@ func TestTemplateFuncs_InvokeClosures(t *testing.T) {
 		rv := reflect.ValueOf(fn)
 		result := rv.Call([]reflect.Value{reflect.ValueOf(nonce)})
 		if len(result) == 0 {
-			t.Errorf("%s: no return value", name)
+			t.Fatalf("%s: no return value", name)
 		}
 		// Result is template.HTML; zero value is fine (no scripts for body with GA4-only).
 		_ = result[0].Interface().(template.HTML)
@@ -171,7 +171,7 @@ func TestRenderHeadScripts_WithNonce(t *testing.T) {
 	}
 	// The nonce should be injected into the script tag.
 	// util.AddNonceToScriptTags appends nonce="<value>" to <script ...>
-	if len(result) == 0 {
+	if result == "" {
 		t.Error("expected nonce to be injected into script tag")
 	}
 }

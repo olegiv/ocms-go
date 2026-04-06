@@ -11,12 +11,11 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/olegiv/ocms-go/internal/config"
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/testutil"
 	"github.com/olegiv/ocms-go/internal/testutil/moduleutil"
-
-	_ "github.com/mattn/go-sqlite3"
 )
 
 // newTestRouter returns a chi router suitable for route registration tests.
@@ -468,9 +467,9 @@ func TestMigrationV3SkipsEmptyServices(t *testing.T) {
 
 func TestBuildKlaroConfigNilSettings(t *testing.T) {
 	m := &Module{settings: nil}
-	config := m.buildKlaroConfig()
-	if config != "var klaroConfig = {};" {
-		t.Errorf("expected empty config for nil settings, got %q", config)
+	klaroConfig := m.buildKlaroConfig()
+	if klaroConfig != "var klaroConfig = {};" {
+		t.Errorf("expected empty config for nil settings, got %q", klaroConfig)
 	}
 }
 

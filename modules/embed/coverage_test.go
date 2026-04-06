@@ -18,12 +18,6 @@ import (
 // Module helpers
 // ---------------------------------------------------------------------------
 
-// testModule creates a fully initialized embed Module backed by a test DB.
-func testModule(t *testing.T, db interface{ Exec(string, ...any) (interface{}, error) }) *Module {
-	t.Helper()
-	return nil // unused; use testModuleDB below
-}
-
 // testModuleDB creates a fully initialized embed Module backed by a test DB.
 func testModuleDB(t *testing.T) (*Module, func()) {
 	t.Helper()
@@ -519,12 +513,15 @@ func TestTemplateFuncs_Invoke(t *testing.T) {
 		rv := reflect.ValueOf(fn)
 		result := rv.Call([]reflect.Value{reflect.ValueOf("nonce-test")})
 		if len(result) == 0 {
-			t.Errorf("%s: no return value", name)
+			t.Fatalf("%s: no return value", name)
 		}
 		_ = result[0].Interface().(template.HTML)
 
 		// Also invoke without args (exercises len(args)==0 in firstStringArg).
 		result2 := rv.Call(nil)
+		if len(result2) == 0 {
+			t.Fatalf("%s: no return value (no-args call)", name)
+		}
 		_ = result2[0].Interface().(template.HTML)
 	}
 }

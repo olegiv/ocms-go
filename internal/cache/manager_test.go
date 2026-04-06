@@ -5,7 +5,6 @@ package cache
 
 import (
 	"context"
-	"database/sql"
 	"os"
 	"testing"
 	"time"
@@ -14,7 +13,7 @@ import (
 )
 
 // newTestDB creates a temporary SQLite test database with migrations applied.
-func newTestDB(t *testing.T) (*sql.DB, *store.Queries) {
+func newTestDB(t *testing.T) *store.Queries {
 	t.Helper()
 
 	f, err := os.CreateTemp(t.TempDir(), "ocms-cache-test-*.db")
@@ -41,12 +40,12 @@ func newTestDB(t *testing.T) (*sql.DB, *store.Queries) {
 		_ = os.Remove(dbPath)
 	})
 
-	return db, store.New(db)
+	return store.New(db)
 }
 
 // TestNewManager verifies that NewManager initialises all sub-caches.
 func TestNewManager(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	m := NewManager(q)
 
 	if m.Config == nil {
@@ -77,7 +76,7 @@ func TestNewManager(t *testing.T) {
 
 // TestManager_Info verifies that Info returns correct backend type.
 func TestManager_Info(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	m := NewManager(q)
 
 	info := m.Info()
@@ -91,7 +90,7 @@ func TestManager_Info(t *testing.T) {
 
 // TestManager_IsRedis verifies IsRedis returns false for memory-only manager.
 func TestManager_IsRedis(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	m := NewManager(q)
 
 	if m.IsRedis() {
@@ -101,7 +100,7 @@ func TestManager_IsRedis(t *testing.T) {
 
 // TestManager_StartStop verifies Start and Stop do not panic.
 func TestManager_StartStop(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	m := NewManager(q)
 	m.Start()
 	m.Stop()
@@ -111,7 +110,7 @@ func TestManager_StartStop(t *testing.T) {
 
 // TestManager_HealthCheck verifies HealthCheck returns nil for memory-only manager.
 func TestManager_HealthCheck(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	m := NewManager(q)
 
 	if err := m.HealthCheck(context.Background()); err != nil {
@@ -121,7 +120,7 @@ func TestManager_HealthCheck(t *testing.T) {
 
 // TestManager_AllStats verifies AllStats returns one entry per cache kind.
 func TestManager_AllStats(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	m := NewManager(q)
 
 	stats := m.AllStats()
@@ -143,7 +142,7 @@ func TestManager_AllStats(t *testing.T) {
 
 // TestManager_TotalStats verifies TotalStats aggregates zeros by default.
 func TestManager_TotalStats(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	m := NewManager(q)
 
 	total := m.TotalStats()
@@ -160,7 +159,7 @@ func TestManager_TotalStats(t *testing.T) {
 
 // TestManager_ClearAll verifies that ClearAll does not panic on an empty manager.
 func TestManager_ClearAll(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	m := NewManager(q)
 	// Should not panic.
 	m.ClearAll()
@@ -169,7 +168,7 @@ func TestManager_ClearAll(t *testing.T) {
 // TestManager_InvalidateMethods verifies all Invalidate* convenience methods execute
 // without panicking.
 func TestManager_InvalidateMethods(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	m := NewManager(q)
 
 	m.InvalidateConfig()
@@ -186,7 +185,7 @@ func TestManager_InvalidateMethods(t *testing.T) {
 
 // TestManager_NewManagerWithConfig_Memory verifies memory config path.
 func TestManager_NewManagerWithConfig_Memory(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	m := NewManagerWithConfig(q, Config{
 		Type:       "memory",
 		DefaultTTL: time.Minute,
@@ -203,7 +202,7 @@ func TestManager_NewManagerWithConfig_Memory(t *testing.T) {
 // TestManager_NewManagerWithConfig_RedisNoURL verifies that missing Redis URL falls
 // back to memory.
 func TestManager_NewManagerWithConfig_RedisNoURL(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	m := NewManagerWithConfig(q, Config{
 		Type:       "redis",
 		RedisURL:   "", // empty URL — should not attempt connection
@@ -219,7 +218,7 @@ func TestManager_NewManagerWithConfig_RedisNoURL(t *testing.T) {
 
 // TestManager_GetConfig verifies GetConfig returns empty string for missing key.
 func TestManager_GetConfig(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	m := NewManager(q)
 
 	// The DB is empty — any key should return empty string (not an error).
@@ -235,7 +234,7 @@ func TestManager_GetConfig(t *testing.T) {
 // TestManager_GetActiveLanguages verifies GetActiveLanguages returns empty slice for
 // a fresh database.
 func TestManager_GetActiveLanguages(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	m := NewManager(q)
 
 	langs, err := m.GetActiveLanguages(context.Background())
@@ -251,7 +250,7 @@ func TestManager_GetActiveLanguages(t *testing.T) {
 // TestManager_GetDefaultLanguage verifies GetDefaultLanguage returns without error.
 // The migrated DB seeds an English default language, so a non-nil result is valid.
 func TestManager_GetDefaultLanguage(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	m := NewManager(q)
 
 	lang, err := m.GetDefaultLanguage(context.Background())
@@ -266,7 +265,7 @@ func TestManager_GetDefaultLanguage(t *testing.T) {
 // TestManager_GetLanguageByCode verifies GetLanguageByCode returns without error for
 // a known code seeded by migrations.
 func TestManager_GetLanguageByCode(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	m := NewManager(q)
 
 	// "zz" is definitely not seeded by any migration.
@@ -281,7 +280,7 @@ func TestManager_GetLanguageByCode(t *testing.T) {
 
 // TestManager_GetMenu verifies GetMenu returns nil for missing slug.
 func TestManager_GetMenu(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	m := NewManager(q)
 
 	menu, err := m.GetMenu(context.Background(), "main")
@@ -296,7 +295,7 @@ func TestManager_GetMenu(t *testing.T) {
 // TestManager_GetTranslations verifies GetTranslations returns empty map for entity
 // with no translations.
 func TestManager_GetTranslations(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	m := NewManager(q)
 
 	tmap, err := m.GetTranslations(context.Background(), "page", 999)
@@ -311,7 +310,7 @@ func TestManager_GetTranslations(t *testing.T) {
 // TestManager_GetTranslationsBatch verifies GetTranslationsBatch returns a map with
 // entries for all requested IDs.
 func TestManager_GetTranslationsBatch(t *testing.T) {
-	_, q := newTestDB(t)
+	q := newTestDB(t)
 	m := NewManager(q)
 
 	result, err := m.GetTranslationsBatch(context.Background(), "page", []int64{1, 2, 3})

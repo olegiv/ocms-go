@@ -8,10 +8,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/olegiv/ocms-go/internal/store"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
-
-	"github.com/olegiv/ocms-go/internal/store"
 )
 
 const kbMaxPages = 10000
@@ -543,11 +542,10 @@ func htmlToText(rawHTML string) string {
 				continue
 			}
 
-			if isBlockElement(a) {
+			switch {
+			case isBlockElement(a), a == atom.Br:
 				b.WriteString("\n")
-			} else if a == atom.Br {
-				b.WriteString("\n")
-			} else if a == atom.Li {
+			case a == atom.Li:
 				b.WriteString("\n- ")
 			}
 

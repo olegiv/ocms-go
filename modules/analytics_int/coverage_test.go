@@ -279,7 +279,7 @@ func TestGetCurrentSalt_RotatesWhenExpired(t *testing.T) {
 	if newSalt == oldSalt {
 		t.Error("getCurrentSalt() should have rotated the salt")
 	}
-	if len(newSalt) == 0 {
+	if newSalt == "" {
 		t.Error("rotated salt should not be empty")
 	}
 }

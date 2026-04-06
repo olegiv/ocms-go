@@ -252,11 +252,11 @@ func TestFrontendHandler_TrustedPageBody_SanitizesWhenEnabled(t *testing.T) {
 }
 
 // createDraftPage inserts a draft page into the test database.
-func createDraftPage(t *testing.T, db *sql.DB, slug string, authorID int64) {
+func createDraftPage(t *testing.T, db *sql.DB, authorID int64) {
 	t.Helper()
 	_, err := db.Exec(
 		`INSERT INTO pages (title, slug, body, status, author_id, page_type) VALUES (?, ?, ?, ?, ?, ?)`,
-		"Draft Page", slug, "<p>Draft content</p>", "draft", authorID, "post",
+		"Draft Page", "draft-page", "<p>Draft content</p>", "draft", authorID, "post",
 	)
 	if err != nil {
 		t.Fatalf("failed to create draft page: %v", err)
@@ -297,7 +297,7 @@ func testThemeManager() *theme.Manager {
 func TestFrontendHandler_Page_DraftPreview_AnonymousGets404(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 	admin := createTestAdminUser(t, db)
-	createDraftPage(t, db, "draft-page", admin.ID)
+	createDraftPage(t, db, admin.ID)
 
 	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil)
 	req := newFrontendPageRequest("draft-page")
@@ -313,7 +313,7 @@ func TestFrontendHandler_Page_DraftPreview_AnonymousGets404(t *testing.T) {
 func TestFrontendHandler_Page_DraftPreview_PublicUserGets404(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 	admin := createTestAdminUser(t, db)
-	createDraftPage(t, db, "draft-page", admin.ID)
+	createDraftPage(t, db, admin.ID)
 	publicUser := createTestUser(t, db, testUser{
 		Email: "public@example.com",
 		Name:  "Public",
@@ -334,7 +334,7 @@ func TestFrontendHandler_Page_DraftPreview_PublicUserGets404(t *testing.T) {
 func TestFrontendHandler_Page_DraftPreview_EditorSeesPage(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 	admin := createTestAdminUser(t, db)
-	createDraftPage(t, db, "draft-page", admin.ID)
+	createDraftPage(t, db, admin.ID)
 	editor := createTestUser(t, db, testUser{
 		Email: "editor@example.com",
 		Name:  "Editor",
@@ -355,7 +355,7 @@ func TestFrontendHandler_Page_DraftPreview_EditorSeesPage(t *testing.T) {
 func TestFrontendHandler_Page_DraftPreview_AdminSeesPage(t *testing.T) {
 	db, _ := testHandlerSetup(t)
 	admin := createTestAdminUser(t, db)
-	createDraftPage(t, db, "draft-page", admin.ID)
+	createDraftPage(t, db, admin.ID)
 
 	h := NewFrontendHandler(db, testThemeManager(), nil, slog.Default(), nil, nil)
 	req := withUser(newFrontendPageRequest("draft-page"), admin)

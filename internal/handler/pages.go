@@ -838,15 +838,16 @@ func (h *PagesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Determine published_at: use user-provided value if present, otherwise auto-manage
 	var publishedAt sql.NullTime
-	if input.HasPublishedAt {
+	switch {
+	case input.HasPublishedAt:
 		publishedAt = input.PublishedAt
-	} else if status == PageStatusPublished && existingPage.Status != PageStatusPublished {
+	case status == PageStatusPublished && existingPage.Status != PageStatusPublished:
 		// Transitioning to published - set published_at
 		publishedAt = sql.NullTime{Time: now, Valid: true}
-	} else if status != PageStatusPublished {
+	case status != PageStatusPublished:
 		// Unpublishing - clear published_at
 		publishedAt = sql.NullTime{Valid: false}
-	} else {
+	default:
 		// Preserve existing
 		publishedAt = existingPage.PublishedAt
 	}

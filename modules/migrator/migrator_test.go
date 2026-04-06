@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-
 	"github.com/olegiv/ocms-go/internal/testutil"
 	"github.com/olegiv/ocms-go/internal/testutil/moduleutil"
 	"github.com/olegiv/ocms-go/modules/migrator/types"
@@ -37,7 +36,7 @@ func (s *mockSource) Import(_ context.Context, _ *sql.DB, _ map[string]string, _
 	return &types.ImportResult{}, nil
 }
 
-func testModule(t *testing.T) (*Module, *sql.DB) {
+func testModule(t *testing.T) *Module {
 	t.Helper()
 	db, cleanup := testutil.TestDB(t)
 	t.Cleanup(cleanup)
@@ -49,7 +48,7 @@ func testModule(t *testing.T) (*Module, *sql.DB) {
 	if err := m.Init(mctx); err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
-	return m, db
+	return m
 }
 
 // --- Module properties ---
@@ -123,14 +122,14 @@ func TestMigrationDown(t *testing.T) {
 // --- Init / Shutdown ---
 
 func TestInit(t *testing.T) {
-	m, _ := testModule(t)
+	m := testModule(t)
 	if m.ctx == nil {
 		t.Error("ctx should be set after Init")
 	}
 }
 
 func TestShutdown(t *testing.T) {
-	m, _ := testModule(t)
+	m := testModule(t)
 	if err := m.Shutdown(); err != nil {
 		t.Errorf("Shutdown() error = %v", err)
 	}
@@ -226,7 +225,7 @@ func TestRegisterRoutes(t *testing.T) {
 }
 
 func TestRegisterAdminRoutes(t *testing.T) {
-	m, _ := testModule(t)
+	m := testModule(t)
 	r := chi.NewRouter()
 	m.RegisterAdminRoutes(r)
 	// No panic = success
@@ -235,7 +234,7 @@ func TestRegisterAdminRoutes(t *testing.T) {
 // --- DB helpers ---
 
 func TestTrackImportedItem_And_GetImportedCounts(t *testing.T) {
-	m, _ := testModule(t)
+	m := testModule(t)
 	ctx := context.Background()
 
 	// Track items
@@ -262,7 +261,7 @@ func TestTrackImportedItem_And_GetImportedCounts(t *testing.T) {
 }
 
 func TestGetImportedItems(t *testing.T) {
-	m, _ := testModule(t)
+	m := testModule(t)
 	ctx := context.Background()
 
 	_ = m.TrackImportedItem(ctx, "test-src2", "media", 100)
@@ -278,7 +277,7 @@ func TestGetImportedItems(t *testing.T) {
 }
 
 func TestGetImportedItems_Empty(t *testing.T) {
-	m, _ := testModule(t)
+	m := testModule(t)
 	ids, err := m.getImportedItems(context.Background(), "nonexistent", "page")
 	if err != nil {
 		t.Fatalf("getImportedItems error: %v", err)
@@ -289,7 +288,7 @@ func TestGetImportedItems_Empty(t *testing.T) {
 }
 
 func TestGetImportedCounts_Empty(t *testing.T) {
-	m, _ := testModule(t)
+	m := testModule(t)
 	counts, err := m.getImportedCounts(context.Background(), "nonexistent")
 	if err != nil {
 		t.Fatalf("getImportedCounts error: %v", err)
@@ -322,7 +321,7 @@ func TestCollectSourceConfig(t *testing.T) {
 // --- Handler unauthenticated paths ---
 
 func TestHandlerUnauthenticated_TestConnection(t *testing.T) {
-	m, _ := testModule(t)
+	m := testModule(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/admin/migrator/elefant/test", nil)
 	rctx := chi.NewRouteContext()
@@ -337,7 +336,7 @@ func TestHandlerUnauthenticated_TestConnection(t *testing.T) {
 }
 
 func TestHandlerUnauthenticated_Import(t *testing.T) {
-	m, _ := testModule(t)
+	m := testModule(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/admin/migrator/elefant/import", nil)
 	rctx := chi.NewRouteContext()
@@ -352,7 +351,7 @@ func TestHandlerUnauthenticated_Import(t *testing.T) {
 }
 
 func TestHandlerUnauthenticated_Delete(t *testing.T) {
-	m, _ := testModule(t)
+	m := testModule(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/admin/migrator/elefant/delete", nil)
 	rctx := chi.NewRouteContext()
@@ -369,7 +368,7 @@ func TestHandlerUnauthenticated_Delete(t *testing.T) {
 // --- deleteMediaFiles ---
 
 func TestDeleteMediaFiles_NoPanic(t *testing.T) {
-	m, _ := testModule(t)
+	m := testModule(t)
 	// Random UUID that doesn't exist on disk — os.RemoveAll on missing dirs is a no-op.
 	m.deleteMediaFiles("00000000-0000-0000-0000-000000000000")
 }
