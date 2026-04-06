@@ -7,8 +7,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"regexp"
 	"strings"
 )
+
+// safeCookiePattern matches characters safe for use inside a JS regex literal.
+var safeCookiePattern = regexp.MustCompile(`^[a-zA-Z0-9_\-^$.*+?{}()\[\]|]+$`)
+
+// validGCMConsentTypes is the allowlist of Google Consent Mode v2 consent types.
+var validGCMConsentTypes = map[string]bool{
+	"analytics_storage":       true,
+	"ad_storage":              true,
+	"ad_user_data":            true,
+	"ad_personalization":      true,
+	"functionality_storage":   true,
+	"personalization_storage": true,
+	"security_storage":        true,
+}
 
 // buildKlaroConfig generates the Klaro configuration JavaScript.
 func (m *Module) buildKlaroConfig() string {
@@ -143,14 +158,19 @@ func (m *Module) buildServiceConfig(svc Service) string {
 		config.WriteString("            default: false,\n")
 	}
 
-	// Cookies (as regex patterns)
+	// Cookies (as regex patterns — only safe characters allowed)
 	if len(svc.Cookies) > 0 {
 		config.WriteString("            cookies: [")
-		for i, cookie := range svc.Cookies {
-			config.WriteString(fmt.Sprintf("/%s/", cookie.Pattern))
-			if i < len(svc.Cookies)-1 {
+		first := true
+		for _, cookie := range svc.Cookies {
+			if !safeCookiePattern.MatchString(cookie.Pattern) {
+				continue // skip invalid patterns
+			}
+			if !first {
 				config.WriteString(", ")
 			}
+			config.WriteString(fmt.Sprintf("/%s/", cookie.Pattern))
+			first = false
 		}
 		config.WriteString("],\n")
 	}
@@ -172,8 +192,8 @@ func (m *Module) buildGCMCallback(gcmConsentType string) string {
 
 	for _, ct := range consentTypes {
 		ct = strings.TrimSpace(ct)
-		if ct == "" {
-			continue
+		if ct == "" || !validGCMConsentTypes[ct] {
+			continue // skip empty or unrecognized consent types
 		}
 		updates.WriteString(fmt.Sprintf("                    '%s': consent ? 'granted' : 'denied',\n", ct))
 	}
