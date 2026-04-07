@@ -483,7 +483,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	normalizedBody := sanitizePageBodyForStorage(req.Body, h.sanitizePageHTML)
 
 	// Check slug uniqueness
-	if !h.checkPageSlugUnique(w, ctx, req.Slug) {
+	if !h.checkPageSlugUnique(w, r, ctx, req.Slug) {
 		return
 	}
 
@@ -588,7 +588,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	if len(req.Tags) > 0 {
 		resolvedIDs, err := resolveTagNames(ctx, txq, req.Tags, langCode)
 		if err != nil {
-			writeResolveTagError(w, err)
+			h.writeResolveTagError(w, r, err)
 			return
 		}
 		req.TagIDs = append(req.TagIDs, resolvedIDs...)
@@ -698,7 +698,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Apply updates from request to params (validates and writes errors on failure)
-	if !h.applyUpdatePageFields(w, ctx, &req, &params, existing) {
+	if !h.applyUpdatePageFields(w, r, ctx, &req, &params, existing) {
 		return
 	}
 
@@ -737,7 +737,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		if req.Tags != nil {
 			resolvedIDs, err := resolveTagNames(ctx, txq, *req.Tags, existing.LanguageCode)
 			if err != nil {
-				writeResolveTagError(w, err)
+				h.writeResolveTagError(w, r, err)
 				return
 			}
 			tagIDs = append(tagIDs, resolvedIDs...)
@@ -825,12 +825,12 @@ func boolToInt64(b *bool) int64 {
 
 // applyUpdatePageFields applies validated fields from an UpdatePageRequest to store.UpdatePageParams.
 // Returns false if a validation error was written to w (caller should return).
-func (h *Handler) applyUpdatePageFields(w http.ResponseWriter, ctx context.Context, req *UpdatePageRequest, params *store.UpdatePageParams, existing store.Page) bool {
+func (h *Handler) applyUpdatePageFields(w http.ResponseWriter, r *http.Request, ctx context.Context, req *UpdatePageRequest, params *store.UpdatePageParams, existing store.Page) bool {
 	if req.Title != nil {
 		params.Title = *req.Title
 	}
 	if req.Slug != nil {
-		if !h.checkPageSlugUniqueExcluding(w, ctx, *req.Slug, existing.ID) {
+		if !h.checkPageSlugUniqueExcluding(w, r, ctx, *req.Slug, existing.ID) {
 			return false
 		}
 		params.Slug = *req.Slug
@@ -982,12 +982,12 @@ type tagValidationError struct {
 func (e *tagValidationError) Error() string { return e.Message }
 
 // writeResolveTagError writes 422 for validation errors, 500 for internal errors.
-func writeResolveTagError(w http.ResponseWriter, err error) {
+func (h *Handler) writeResolveTagError(w http.ResponseWriter, r *http.Request, err error) {
 	var ve *tagValidationError
 	if errors.As(err, &ve) {
 		WriteValidationError(w, map[string]string{ve.Field: ve.Message})
 	} else {
-		LogAndWriteInternalError(w, "Failed to resolve tag names", "error", err)
+		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to resolve tag names", "error", err)
 	}
 }
 
@@ -1111,26 +1111,26 @@ func (h *Handler) populatePageIncludes(ctx context.Context, resp *PageResponse, 
 func (h *Handler) requirePageForAPI(w http.ResponseWriter, r *http.Request) (store.Page, bool) {
 	return requireEntityByID(w, r, "page", func(id int64) (store.Page, error) {
 		return h.queries.GetPageByID(r.Context(), id)
-	})
+	}, h.errLoggerForCategory(model.EventCategoryPage))
 }
 
 // checkPageSlugUnique checks if a page slug is unique for creation.
 // Returns true if unique, false if duplicate or error (response already written).
-func (h *Handler) checkPageSlugUnique(w http.ResponseWriter, ctx context.Context, slug string) bool {
-	return checkSlugUnique(w, func() (int64, error) {
+func (h *Handler) checkPageSlugUnique(w http.ResponseWriter, r *http.Request, ctx context.Context, slug string) bool {
+	return checkSlugUnique(w, r, func() (int64, error) {
 		return h.queries.SlugExists(ctx, slug)
-	})
+	}, h.errLoggerForCategory(model.EventCategoryPage))
 }
 
 // checkPageSlugUniqueExcluding checks if a page slug is unique for update (excluding current page).
 // Returns true if unique, false if duplicate or error (response already written).
-func (h *Handler) checkPageSlugUniqueExcluding(w http.ResponseWriter, ctx context.Context, slug string, pageID int64) bool {
-	return checkSlugUnique(w, func() (int64, error) {
+func (h *Handler) checkPageSlugUniqueExcluding(w http.ResponseWriter, r *http.Request, ctx context.Context, slug string, pageID int64) bool {
+	return checkSlugUnique(w, r, func() (int64, error) {
 		return h.queries.SlugExistsExcluding(ctx, store.SlugExistsExcludingParams{
 			Slug: slug,
 			ID:   pageID,
 		})
-	})
+	}, h.errLoggerForCategory(model.EventCategoryPage))
 }
 
 func validatePageBodyMarkupPolicy(body string, blockSuspicious bool) string {

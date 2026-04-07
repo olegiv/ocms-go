@@ -180,7 +180,7 @@ func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check slug uniqueness
-	if !h.checkTagSlugUnique(w, ctx, req.Slug) {
+	if !h.checkTagSlugUnique(w, r, ctx, req.Slug) {
 		return
 	}
 
@@ -247,7 +247,7 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	// Apply updates
 	applyOptionalNameUpdate(req.Name, &params.Name)
 	if !applyOptionalSlugUpdate(req.Slug, &params.Slug, func() bool {
-		return h.checkTagSlugUniqueExcluding(w, ctx, *req.Slug, existing.ID)
+		return h.checkTagSlugUniqueExcluding(w, r, ctx, *req.Slug, existing.ID)
 	}) {
 		return
 	}
@@ -391,7 +391,7 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check slug uniqueness
-	if !h.checkCategorySlugUnique(w, ctx, req.Slug) {
+	if !h.checkCategorySlugUnique(w, r, ctx, req.Slug) {
 		return
 	}
 
@@ -476,7 +476,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	// Apply updates
 	applyOptionalNameUpdate(req.Name, &params.Name)
 	if !applyOptionalSlugUpdate(req.Slug, &params.Slug, func() bool {
-		return h.checkCategorySlugUniqueExcluding(w, ctx, *req.Slug, existing.ID)
+		return h.checkCategorySlugUniqueExcluding(w, r, ctx, *req.Slug, existing.ID)
 	}) {
 		return
 	}
@@ -706,7 +706,7 @@ func buildCategoryTree(categories []store.GetCategoryUsageCountsRow) []*Category
 func (h *Handler) requireTagForAPI(w http.ResponseWriter, r *http.Request) (store.Tag, bool) {
 	return requireEntityByID(w, r, "tag", func(id int64) (store.Tag, error) {
 		return h.queries.GetTagByID(r.Context(), id)
-	})
+	}, h.errLoggerForCategory(model.EventCategoryTag))
 }
 
 // requireCategoryForAPI parses category ID from URL and fetches the category.
@@ -714,43 +714,43 @@ func (h *Handler) requireTagForAPI(w http.ResponseWriter, r *http.Request) (stor
 func (h *Handler) requireCategoryForAPI(w http.ResponseWriter, r *http.Request) (store.Category, bool) {
 	return requireEntityByID(w, r, "category", func(id int64) (store.Category, error) {
 		return h.queries.GetCategoryByID(r.Context(), id)
-	})
+	}, h.errLoggerForCategory(model.EventCategoryCategory))
 }
 
 // checkTagSlugUnique checks if a tag slug is unique for creation.
 // Returns true if unique, false if duplicate or error (response already written).
-func (h *Handler) checkTagSlugUnique(w http.ResponseWriter, ctx context.Context, slug string) bool {
-	return checkSlugUnique(w, func() (int64, error) {
+func (h *Handler) checkTagSlugUnique(w http.ResponseWriter, r *http.Request, ctx context.Context, slug string) bool {
+	return checkSlugUnique(w, r, func() (int64, error) {
 		return h.queries.TagSlugExists(ctx, slug)
-	})
+	}, h.errLoggerForCategory(model.EventCategoryTag))
 }
 
 // checkTagSlugUniqueExcluding checks if a tag slug is unique for update (excluding current tag).
 // Returns true if unique, false if duplicate or error (response already written).
-func (h *Handler) checkTagSlugUniqueExcluding(w http.ResponseWriter, ctx context.Context, slug string, tagID int64) bool {
-	return checkSlugUnique(w, func() (int64, error) {
+func (h *Handler) checkTagSlugUniqueExcluding(w http.ResponseWriter, r *http.Request, ctx context.Context, slug string, tagID int64) bool {
+	return checkSlugUnique(w, r, func() (int64, error) {
 		return h.queries.TagSlugExistsExcluding(ctx, store.TagSlugExistsExcludingParams{
 			Slug: slug,
 			ID:   tagID,
 		})
-	})
+	}, h.errLoggerForCategory(model.EventCategoryTag))
 }
 
 // checkCategorySlugUnique checks if a category slug is unique for creation.
 // Returns true if unique, false if duplicate or error (response already written).
-func (h *Handler) checkCategorySlugUnique(w http.ResponseWriter, ctx context.Context, slug string) bool {
-	return checkSlugUnique(w, func() (int64, error) {
+func (h *Handler) checkCategorySlugUnique(w http.ResponseWriter, r *http.Request, ctx context.Context, slug string) bool {
+	return checkSlugUnique(w, r, func() (int64, error) {
 		return h.queries.CategorySlugExists(ctx, slug)
-	})
+	}, h.errLoggerForCategory(model.EventCategoryCategory))
 }
 
 // checkCategorySlugUniqueExcluding checks if a category slug is unique for update (excluding current category).
 // Returns true if unique, false if duplicate or error (response already written).
-func (h *Handler) checkCategorySlugUniqueExcluding(w http.ResponseWriter, ctx context.Context, slug string, categoryID int64) bool {
-	return checkSlugUnique(w, func() (int64, error) {
+func (h *Handler) checkCategorySlugUniqueExcluding(w http.ResponseWriter, r *http.Request, ctx context.Context, slug string, categoryID int64) bool {
+	return checkSlugUnique(w, r, func() (int64, error) {
 		return h.queries.CategorySlugExistsExcluding(ctx, store.CategorySlugExistsExcludingParams{
 			Slug: slug,
 			ID:   categoryID,
 		})
-	})
+	}, h.errLoggerForCategory(model.EventCategoryCategory))
 }

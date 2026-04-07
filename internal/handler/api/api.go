@@ -278,12 +278,26 @@ func (h *Handler) AuthInfo(w http.ResponseWriter, r *http.Request) {
 // SlugExistsChecker is a function that checks if a slug exists (returns count and error).
 type SlugExistsChecker func() (int64, error)
 
+// internalErrorLogger is a callback for logging 500 errors with request context.
+type internalErrorLogger func(w http.ResponseWriter, r *http.Request, category, message string, args ...any)
+
+// errLoggerForCategory returns an internalErrorLogger bound to a specific event category.
+func (h *Handler) errLoggerForCategory(category string) internalErrorLogger {
+	return func(w http.ResponseWriter, r *http.Request, _ string, message string, args ...any) {
+		h.logAndRespondError(w, r, category, message, args...)
+	}
+}
+
 // checkSlugUnique checks if a slug is unique using the provided checker function.
 // Returns true if unique, false if duplicate or error (response already written).
-func checkSlugUnique(w http.ResponseWriter, slugExists SlugExistsChecker) bool {
+func checkSlugUnique(w http.ResponseWriter, r *http.Request, slugExists SlugExistsChecker, logErr internalErrorLogger) bool {
 	exists, err := slugExists()
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to check slug", "error", err)
+		if logErr != nil {
+			logErr(w, r, "", "Failed to check slug", "error", err)
+		} else {
+			LogAndWriteInternalError(w, "Failed to check slug", "error", err)
+		}
 		return false
 	}
 	if exists != 0 {
@@ -299,7 +313,7 @@ type EntityFetcher[T any] func(id int64) (T, error)
 // requireEntityByID parses an ID from the URL and fetches the entity.
 // Returns the entity and true if successful, or zero value and false if error (response written).
 // The entityName is used for error messages (e.g., "page", "tag", "category", "media").
-func requireEntityByID[T any](w http.ResponseWriter, r *http.Request, entityName string, fetch EntityFetcher[T]) (T, bool) {
+func requireEntityByID[T any](w http.ResponseWriter, r *http.Request, entityName string, fetch EntityFetcher[T], logErr internalErrorLogger) (T, bool) {
 	var zero T
 
 	id, err := handler.ParseIDParam(r)
@@ -312,6 +326,8 @@ func requireEntityByID[T any](w http.ResponseWriter, r *http.Request, entityName
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			WriteNotFound(w, capitalizeFirst(entityName)+" not found")
+		} else if logErr != nil {
+			logErr(w, r, "", "Failed to retrieve "+entityName, "error", err)
 		} else {
 			LogAndWriteInternalError(w, "Failed to retrieve "+entityName, "error", err)
 		}

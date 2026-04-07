@@ -388,6 +388,8 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 				errMsg = clientErr.Message
 			} else {
 				slog.Error("media upload failed", "error", err, "filename", fileHeader.Filename)
+				h.logEvent(r, model.EventCategoryMedia, model.EventLevelError, "API: Media upload failed",
+					map[string]any{"filename": fileHeader.Filename})
 			}
 			uploadErrors = append(uploadErrors, map[string]string{
 				"filename": fileHeader.Filename,
@@ -571,5 +573,5 @@ func (h *Handler) populateMediaIncludes(ctx context.Context, resp *MediaResponse
 func (h *Handler) requireMediaForAPI(w http.ResponseWriter, r *http.Request) (store.Medium, bool) {
 	return requireEntityByID(w, r, "media", func(id int64) (store.Medium, error) {
 		return h.queries.GetMediaByID(r.Context(), id)
-	})
+	}, h.errLoggerForCategory(model.EventCategoryMedia))
 }
