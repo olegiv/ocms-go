@@ -1136,9 +1136,28 @@ func run() error {
 
 	// Setup logger
 	logLevel := parseLogLevel(cfg.LogLevel)
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+	stdoutHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: logLevel,
-	}))
+	})
+
+	// Optional: tee ERROR+ logs to a separate file
+	var primaryHandler slog.Handler = stdoutHandler
+	var errorLogFile *os.File
+	if cfg.ErrorLogPath != "" {
+		var err error
+		errorLogFile, err = os.OpenFile(cfg.ErrorLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			return fmt.Errorf("opening error log file %s: %w", cfg.ErrorLogPath, err)
+		}
+		defer errorLogFile.Close()
+
+		errorHandler := slog.NewTextHandler(errorLogFile, &slog.HandlerOptions{
+			Level: slog.LevelError,
+		})
+		primaryHandler = logging.NewErrorFileHandler(stdoutHandler, errorHandler, slog.LevelError)
+	}
+
+	logger := slog.New(primaryHandler)
 	slog.SetDefault(logger)
 
 	logProductionSecurityWarnings(cfg)
@@ -1186,9 +1205,17 @@ func run() error {
 	}
 	slog.Info("database ready")
 
-	// Upgrade logger to also write WARN and ERROR logs to the Event Log database
-	textHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})
-	eventLogHandler := logging.NewEventLogHandler(textHandler, db)
+	// Upgrade logger to also write WARN and ERROR logs to the Event Log database.
+	// The handler chain is: ErrorFileHandler (optional) → EventLogHandler → stdout.
+	upgradedStdout := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})
+	var upgradedPrimary slog.Handler = upgradedStdout
+	if errorLogFile != nil {
+		errorHandler := slog.NewTextHandler(errorLogFile, &slog.HandlerOptions{
+			Level: slog.LevelError,
+		})
+		upgradedPrimary = logging.NewErrorFileHandler(upgradedStdout, errorHandler, slog.LevelError)
+	}
+	eventLogHandler := logging.NewEventLogHandler(upgradedPrimary, db)
 	logger = slog.New(eventLogHandler)
 	slog.SetDefault(logger)
 	slog.Info("event log integration enabled", "min_level", "warn")

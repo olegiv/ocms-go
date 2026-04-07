@@ -26,6 +26,7 @@ type Config struct {
 	ServerPort    int    `env:"OCMS_SERVER_PORT" envDefault:"8080"`
 	Env           string `env:"OCMS_ENV" envDefault:"development"`
 	LogLevel      string `env:"OCMS_LOG_LEVEL" envDefault:"info"`
+	ErrorLogPath  string `env:"OCMS_ERROR_LOG_PATH"` // Optional path for a separate error log file (5xx/ERROR+)
 	CustomDir     string `env:"OCMS_CUSTOM_DIR" envDefault:"./custom"`
 	UploadsDir    string `env:"OCMS_UPLOADS_DIR" envDefault:"./uploads"`
 	ActiveTheme   string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`

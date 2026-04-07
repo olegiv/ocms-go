@@ -107,6 +107,7 @@ ENV OCMS_DB_PATH=/app/data/ocms.db
 ENV OCMS_CUSTOM_DIR=/app/custom
 ENV OCMS_ENV=production
 ENV OCMS_LOG_LEVEL=info
+# Optional: set OCMS_ERROR_LOG_PATH=/app/data/error.log to tee errors to a file
 
 # Expose the application port
 EXPOSE 8080

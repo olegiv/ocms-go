@@ -232,6 +232,7 @@ OCMS_SERVER_HOST=127.0.0.1
 OCMS_SERVER_PORT=$PORT
 OCMS_ENV=production
 OCMS_LOG_LEVEL=warn
+OCMS_ERROR_LOG_PATH=./logs/error.log
 
 # Production safety
 OCMS_DO_SEED=false

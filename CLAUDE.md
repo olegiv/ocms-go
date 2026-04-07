@@ -195,6 +195,8 @@ cmd/ocms/main.go
 | `OCMS_DB_PATH` | No | `./data/ocms.db` | SQLite database path |
 | `OCMS_SERVER_PORT` | No | `8080` | Server port |
 | `OCMS_ENV` | No | `development` | Set to `production` for prod |
+| `OCMS_LOG_LEVEL` | No | `info` | Log level: `debug`, `info`, `warn`, `error` |
+| `OCMS_ERROR_LOG_PATH` | No | - | Path for separate error log file (errors also go to stdout) |
 | `OCMS_CUSTOM_DIR` | No | `./custom` | Directory for custom themes/modules |
 | `OCMS_ACTIVE_THEME` | No | `default` | Active theme (overrides DB/admin setting) |
 | `OCMS_API_RATE_LIMIT` | No | `100` | API requests per minute per key |
