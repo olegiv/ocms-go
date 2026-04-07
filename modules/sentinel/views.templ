@@ -4,8 +4,9 @@
 package sentinel
 
 import (
-	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 	"fmt"
+
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
 	"github.com/olegiv/ocms-go/internal/geoip"
 )
 
@@ -37,13 +38,14 @@ type SentinelWhitelistEntry struct {
 
 // SentinelViewData holds all data for the sentinel admin page.
 type SentinelViewData struct {
-	Version         string
-	BanCheckEnabled bool
-	AutoBanEnabled  bool
-	Bans            []SentinelBan
-	Paths           []SentinelPath
-	Whitelist       []SentinelWhitelistEntry
-	Pagination      adminviews.PaginationData
+	Version                string
+	BanCheckEnabled        bool
+	AutoBanEnabled         bool
+	HoneypotAutoBanEnabled bool
+	Bans                   []SentinelBan
+	Paths                  []SentinelPath
+	Whitelist              []SentinelWhitelistEntry
+	Pagination             adminviews.PaginationData
 }
 
 templ SentinelPage(pc *adminviews.PageContext, data SentinelViewData) {
@@ -79,6 +81,13 @@ templ SentinelPage(pc *adminviews.PageContext, data SentinelViewData) {
 								<span class="toggle-text">{ pc.T("sentinel.setting_autoban") }</span>
 							</label>
 							<small class="form-text text-muted">{ pc.T("sentinel.setting_autoban_help") }</small>
+						</div>
+						<div class="setting-item">
+							<label class="toggle-label">
+								<input type="checkbox" name="honeypot_autoban_enabled" checked?={ data.HoneypotAutoBanEnabled }/>
+								<span class="toggle-text">{ pc.T("sentinel.setting_honeypot_autoban") }</span>
+							</label>
+							<small class="form-text text-muted">{ pc.T("sentinel.setting_honeypot_autoban_help") }</small>
 						</div>
 						<div class="setting-item setting-button">
 							<button type="submit" class="btn btn-primary">

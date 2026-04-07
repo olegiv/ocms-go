@@ -26,6 +26,7 @@ type Config struct {
 	ServerPort    int    `env:"OCMS_SERVER_PORT" envDefault:"8080"`
 	Env           string `env:"OCMS_ENV" envDefault:"development"`
 	LogLevel      string `env:"OCMS_LOG_LEVEL" envDefault:"info"`
+	ErrorLogPath  string `env:"OCMS_ERROR_LOG_PATH"` // Optional path for a separate error log file (5xx/ERROR+)
 	CustomDir     string `env:"OCMS_CUSTOM_DIR" envDefault:"./custom"`
 	UploadsDir    string `env:"OCMS_UPLOADS_DIR" envDefault:"./uploads"`
 	ActiveTheme   string `env:"OCMS_ACTIVE_THEME" envDefault:"default"`
@@ -37,9 +38,9 @@ type Config struct {
 	CacheMaxSize int    `env:"OCMS_CACHE_MAX_SIZE" envDefault:"10000"` // Max memory cache entries
 
 	// hCaptcha configuration
-	HCaptchaSiteKey   string `env:"OCMS_HCAPTCHA_SITE_KEY"`                       // hCaptcha site key
-	HCaptchaSecretKey string `env:"OCMS_HCAPTCHA_SECRET_KEY"`                     // hCaptcha secret key
-	HCaptchaDisabled  bool   `env:"OCMS_HCAPTCHA_DISABLED" envDefault:"false"`    // Force-disable hCaptcha regardless of DB settings
+	HCaptchaSiteKey   string `env:"OCMS_HCAPTCHA_SITE_KEY"`                    // hCaptcha site key
+	HCaptchaSecretKey string `env:"OCMS_HCAPTCHA_SECRET_KEY"`                  // hCaptcha secret key
+	HCaptchaDisabled  bool   `env:"OCMS_HCAPTCHA_DISABLED" envDefault:"false"` // Force-disable hCaptcha regardless of DB settings
 
 	// GeoIP configuration
 	GeoIPDBPath string `env:"OCMS_GEOIP_DB_PATH"` // Path to GeoLite2-Country.mmdb file

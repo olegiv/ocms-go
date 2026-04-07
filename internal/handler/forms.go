@@ -1131,6 +1131,15 @@ func (h *FormsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 				"form_slug": slug,
 			},
 		)
+		// Fire hook for modules (e.g., Sentinel auto-ban)
+		if h.hookRegistry != nil {
+			_ = h.hookRegistry.CallNoResult(r.Context(), module.HookSecurityHoneypotTriggered, map[string]any{
+				"ip":          clientIP,
+				"form_slug":   slug,
+				"form_id":     form.ID,
+				"request_url": middleware.GetRequestURL(r),
+			})
+		}
 		h.renderFormSuccess(w, r, *form, fields)
 		return
 	}

@@ -12,6 +12,8 @@
         {"id": "sentinel.setting_ban_check_help", "message": "Block requests from banned IP addresses", "translation": "Блокировать запросы от заблокированных IP-адресов"},
         {"id": "sentinel.setting_autoban", "message": "Auto-Ban by Path", "translation": "Автобан по пути"},
         {"id": "sentinel.setting_autoban_help", "message": "Automatically ban IPs accessing forbidden paths", "translation": "Автоматически блокировать IP при доступе к запрещённым путям"},
+        {"id": "sentinel.setting_honeypot_autoban", "message": "Auto-Ban on Honeypot", "translation": "Автобан по ловушке"},
+        {"id": "sentinel.setting_honeypot_autoban_help", "message": "Automatically ban IPs that fill honeypot fields in public forms", "translation": "Автоматически блокировать IP при заполнении скрытых полей-ловушек в публичных формах"},
         {"id": "sentinel.save_settings", "message": "Save Settings", "translation": "Сохранить настройки"},
         {"id": "sentinel.success_settings_updated", "message": "Settings updated successfully", "translation": "Настройки успешно обновлены"},
         {"id": "sentinel.error_settings_failed", "message": "Failed to update settings", "translation": "Не удалось обновить настройки"},

@@ -4,11 +4,13 @@
 package sentinel
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/testutil"
 	"github.com/olegiv/ocms-go/internal/testutil/moduleutil"
 )
@@ -58,7 +60,7 @@ func TestModuleSidebarLabel(t *testing.T) {
 
 func TestModuleMigrations(t *testing.T) {
 	m := New()
-	moduleutil.AssertMigrations(t, m.Migrations(), 6)
+	moduleutil.AssertMigrations(t, m.Migrations(), 7)
 }
 
 func TestModuleTemplateFuncs(t *testing.T) {
@@ -142,6 +144,9 @@ func TestSettingsDefaults(t *testing.T) {
 	if !m.IsAutoBanEnabled() {
 		t.Error("IsAutoBanEnabled() default should be true")
 	}
+	if !m.IsHoneypotAutoBanEnabled() {
+		t.Error("IsHoneypotAutoBanEnabled() default should be true")
+	}
 }
 
 func TestReloadSettingsFromDB(t *testing.T) {
@@ -150,12 +155,15 @@ func TestReloadSettingsFromDB(t *testing.T) {
 
 	m := testModule(t, db)
 
-	// Disable both settings in the database directly
+	// Disable all settings in the database directly
 	if err := m.updateSetting(settingBanCheckEnabled, false); err != nil {
 		t.Fatalf("updateSetting ban_check_enabled: %v", err)
 	}
 	if err := m.updateSetting(settingAutoBanEnabled, false); err != nil {
 		t.Fatalf("updateSetting autoban_enabled: %v", err)
+	}
+	if err := m.updateSetting(settingHoneypotAutoBanEnabled, false); err != nil {
+		t.Fatalf("updateSetting honeypot_autoban_enabled: %v", err)
 	}
 
 	// Reload from DB
@@ -168,6 +176,9 @@ func TestReloadSettingsFromDB(t *testing.T) {
 	}
 	if m.IsAutoBanEnabled() {
 		t.Error("IsAutoBanEnabled() should be false after update to false")
+	}
+	if m.IsHoneypotAutoBanEnabled() {
+		t.Error("IsHoneypotAutoBanEnabled() should be false after update to false")
 	}
 
 	// Re-enable
@@ -1321,5 +1332,117 @@ func TestTranslationsFS(t *testing.T) {
 	}
 	if len(entries) == 0 {
 		t.Error("TranslationsFS should contain at least one locale file")
+	}
+}
+
+// ============================================================================
+// Honeypot auto-ban via hook
+// ============================================================================
+
+func TestHoneypotHookBansIP(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	// Verify hook is registered
+	if !m.ctx.Hooks.HasHandlers(module.HookSecurityHoneypotTriggered) {
+		t.Fatal("HookSecurityHoneypotTriggered should be registered after Init")
+	}
+
+	// Fire the hook with honeypot data
+	err := m.ctx.Hooks.CallNoResult(context.Background(), module.HookSecurityHoneypotTriggered, map[string]any{
+		"ip":          "9.9.9.9",
+		"form_slug":   "contact-us",
+		"form_id":     int64(1),
+		"request_url": "/forms/contact-us",
+	})
+	if err != nil {
+		t.Fatalf("CallNoResult: %v", err)
+	}
+
+	if !m.IsIPBanned("9.9.9.9") {
+		t.Error("IP 9.9.9.9 should be banned after honeypot trigger")
+	}
+}
+
+func TestHoneypotHookSkipsWhenDisabled(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	// Disable honeypot auto-ban
+	if err := m.updateSetting(settingHoneypotAutoBanEnabled, false); err != nil {
+		t.Fatalf("updateSetting: %v", err)
+	}
+	if err := m.reloadSettings(); err != nil {
+		t.Fatalf("reloadSettings: %v", err)
+	}
+
+	err := m.ctx.Hooks.CallNoResult(context.Background(), module.HookSecurityHoneypotTriggered, map[string]any{
+		"ip":          "8.8.8.8",
+		"form_slug":   "contact-us",
+		"form_id":     int64(1),
+		"request_url": "/forms/contact-us",
+	})
+	if err != nil {
+		t.Fatalf("CallNoResult: %v", err)
+	}
+
+	if m.IsIPBanned("8.8.8.8") {
+		t.Error("IP should NOT be banned when honeypot auto-ban is disabled")
+	}
+}
+
+func TestHoneypotHookSkipsWhitelistedIP(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	// Whitelist the IP first
+	if err := m.createWhitelistEntry("7.7.7.7", "test whitelist", 0); err != nil {
+		t.Fatalf("createWhitelistEntry: %v", err)
+	}
+
+	err := m.ctx.Hooks.CallNoResult(context.Background(), module.HookSecurityHoneypotTriggered, map[string]any{
+		"ip":          "7.7.7.7",
+		"form_slug":   "contact-us",
+		"form_id":     int64(1),
+		"request_url": "/forms/contact-us",
+	})
+	if err != nil {
+		t.Fatalf("CallNoResult: %v", err)
+	}
+
+	if m.IsIPBanned("7.7.7.7") {
+		t.Error("whitelisted IP should NOT be banned on honeypot trigger")
+	}
+}
+
+func TestHoneypotHookIdempotent(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+
+	data := map[string]any{
+		"ip":          "6.6.6.6",
+		"form_slug":   "contact-us",
+		"form_id":     int64(1),
+		"request_url": "/forms/contact-us",
+	}
+
+	// Fire twice — should not error on duplicate
+	for i := 0; i < 2; i++ {
+		err := m.ctx.Hooks.CallNoResult(context.Background(), module.HookSecurityHoneypotTriggered, data)
+		if err != nil {
+			t.Fatalf("CallNoResult attempt %d: %v", i+1, err)
+		}
+	}
+
+	if !m.IsIPBanned("6.6.6.6") {
+		t.Error("IP should be banned after honeypot trigger")
 	}
 }

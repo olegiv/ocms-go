@@ -20,6 +20,7 @@ Per site:
 │   └── themes/                 ← custom themes (override embedded)
 ├── backups/                    ← automated backups
 ├── logs/ocms.log               ← app log (ocmsctl mode)
+│   └── error.log               ← error-only log (optional)
 ├── .env                        ← environment config
 └── ocms.pid                    ← PID file (ocmsctl mode)
 
@@ -398,9 +399,23 @@ sudo logrotate -f /etc/logrotate.d/ocms
 ```
 
 The generated configuration:
-- Per-instance entries with correct paths and ownership
+- Per-instance entries with correct paths and ownership (`logs/*.log` glob covers both `ocms.log` and `error.log`)
 - Rotates logs daily, keeps 30 days, compresses with gzip
 - Uses `copytruncate` to avoid restarting the service
+
+### Separate Error Log
+
+Set `OCMS_ERROR_LOG_PATH=./logs/error.log` in the instance `.env` to write ERROR-level
+messages to a dedicated file. Errors are **also** written to stdout (the main log),
+so this is purely additive — it gives operators a focused file for quick triage.
+
+```bash
+# View error-only log
+ocmsctl logs example_com --errors
+
+# Follow error log in real time
+ocmsctl logs example_com --errors --follow
+```
 
 ## File Permissions
 

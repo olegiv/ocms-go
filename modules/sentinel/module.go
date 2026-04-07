@@ -80,8 +80,9 @@ const (
 
 // Settings keys.
 const (
-	settingBanCheckEnabled = "ban_check_enabled"
-	settingAutoBanEnabled  = "autoban_enabled"
+	settingBanCheckEnabled        = "ban_check_enabled"
+	settingAutoBanEnabled         = "autoban_enabled"
+	settingHoneypotAutoBanEnabled = "honeypot_autoban_enabled"
 )
 
 // Module implements the module.Module interface for IP banning.
@@ -102,9 +103,10 @@ type Module struct {
 	geoIP *geoip.Lookup
 
 	// Settings cache
-	banCheckEnabled bool
-	autoBanEnabled  bool
-	settingsMu      sync.RWMutex
+	banCheckEnabled        bool
+	autoBanEnabled         bool
+	honeypotAutoBanEnabled bool
+	settingsMu             sync.RWMutex
 
 	// Cache of banned IPs for fast lookup
 	bannedPatterns []string
@@ -129,8 +131,9 @@ func New() *Module {
 		),
 		geoIP: geoip.NewLookup(),
 		// Default settings (enabled)
-		banCheckEnabled: true,
-		autoBanEnabled:  true,
+		banCheckEnabled:        true,
+		autoBanEnabled:         true,
+		honeypotAutoBanEnabled: true,
 	}
 }
 
@@ -170,15 +173,80 @@ func (m *Module) Init(ctx *module.Context) error {
 		return err
 	}
 
+	m.registerHooks()
+
 	m.ctx.Logger.Info("Sentinel module initialized",
 		"banned_count", len(m.bannedPatterns),
 		"autoban_paths", len(m.autoBanPaths),
 		"whitelisted", len(m.whitelistPatterns),
 		"ban_check_enabled", m.banCheckEnabled,
 		"autoban_enabled", m.autoBanEnabled,
+		"honeypot_autoban_enabled", m.honeypotAutoBanEnabled,
 		"geoip_enabled", m.geoIP.IsEnabled(),
 	)
 	return nil
+}
+
+// registerHooks registers hook handlers for security events.
+func (m *Module) registerHooks() {
+	if m.ctx.Hooks == nil {
+		return
+	}
+	m.ctx.Hooks.Register(module.HookSecurityHoneypotTriggered, module.HookHandler{
+		Name:     "sentinel_honeypot_autoban",
+		Module:   m.Name(),
+		Priority: 0,
+		Fn: func(ctx context.Context, data any) (any, error) {
+			params, ok := data.(map[string]any)
+			if !ok {
+				return data, nil
+			}
+
+			ip, _ := params["ip"].(string)
+			if ip == "" {
+				return data, nil
+			}
+
+			if !m.IsHoneypotAutoBanEnabled() {
+				return data, nil
+			}
+
+			if m.IsIPWhitelisted(ip) {
+				m.ctx.Logger.Debug("skipping honeypot auto-ban for whitelisted IP", "ip", ip)
+				return data, nil
+			}
+
+			if m.IsIPBanned(ip) {
+				return data, nil
+			}
+
+			// Skip auto-ban for authenticated admins/editors to prevent
+			// accidental self-lockout during form testing.
+			if m.isAdminOrEditorCtx(ctx) {
+				m.ctx.Logger.Debug("skipping honeypot auto-ban for admin/editor", "ip", ip)
+				return data, nil
+			}
+
+			formSlug, _ := params["form_slug"].(string)
+			requestURL, _ := params["request_url"].(string)
+
+			triggeredPath := requestURL
+			if triggeredPath == "" {
+				triggeredPath = "form:" + formSlug
+			}
+
+			m.ctx.Logger.Info("auto-banning IP for honeypot trigger",
+				"ip", ip,
+				"form_slug", formSlug,
+			)
+
+			if err := m.autoBanIP(ip, triggeredPath, "honeypot:"+formSlug); err != nil {
+				m.ctx.Logger.Error("failed to auto-ban IP for honeypot", "error", err, "ip", ip)
+			}
+
+			return data, nil
+		},
+	})
 }
 
 // SetSessionManager sets the session manager for checking authenticated users.
@@ -200,35 +268,64 @@ func (m *Module) SetEventLogger(logger EventLogger) {
 
 // isAdminOrEditor checks if the current request is from an authenticated admin or editor user.
 // Returns true if the user should be exempt from auto-banning.
-// Uses named return with recover because the sentinel middleware runs before the session
-// middleware (LoadAndSave), so SCS may panic with "no session data in context" for
-// public requests. In that case, we treat the user as unauthenticated.
+//
+// The sentinel middleware runs before the session middleware (LoadAndSave), so SCS
+// may panic with "no session data in context". We avoid this by first checking
+// whether a session cookie is present — if not, the request cannot be authenticated.
+// A defer/recover is kept as a safety net for edge cases where the cookie exists
+// but session context hasn't been set up.
 func (m *Module) isAdminOrEditor(r *http.Request) (isAdmin bool) {
 	if m.sessionManager == nil || m.ctx == nil {
 		return false
 	}
 
-	// Recover from SCS panic when session middleware hasn't loaded yet.
+	// No session cookie means the request cannot be authenticated.
+	if _, err := r.Cookie(m.sessionManager.Cookie.Name); err != nil {
+		return false
+	}
+
+	// Safety net: recover from SCS panic if session context is missing
+	// despite a cookie being present (e.g. session middleware not yet loaded).
 	defer func() {
 		if rec := recover(); rec != nil {
 			isAdmin = false
 		}
 	}()
 
-	// Get user ID from session
 	userID := m.sessionManager.GetInt64(r.Context(), sessionKeyUserID)
 	if userID == 0 {
 		return false
 	}
 
-	// Query database for user role
 	queries := store.New(m.ctx.DB)
 	user, err := queries.GetUserByID(r.Context(), userID)
 	if err != nil {
 		return false
 	}
 
-	// Check if user is admin or editor
+	return user.Role == roleAdmin || user.Role == roleEditor
+}
+
+// isAdminOrEditorCtx checks if the context belongs to an authenticated admin or editor.
+// Used by hook handlers where the context comes from inside the middleware chain
+// (session data is already loaded), unlike the middleware path where isAdminOrEditor
+// must handle missing session context.
+func (m *Module) isAdminOrEditorCtx(ctx context.Context) bool {
+	if m.sessionManager == nil || m.ctx == nil {
+		return false
+	}
+
+	userID := m.sessionManager.GetInt64(ctx, sessionKeyUserID)
+	if userID == 0 {
+		return false
+	}
+
+	queries := store.New(m.ctx.DB)
+	user, err := queries.GetUserByID(ctx, userID)
+	if err != nil {
+		return false
+	}
+
 	return user.Role == roleAdmin || user.Role == roleEditor
 }
 
@@ -431,13 +528,13 @@ func (m *Module) Migrations() []module.Migration {
 				defaults := []struct {
 					pattern, notes string
 				}{
-					{"/wp-admin*", "WordPress admin - common attack target"},
-					{"/wp-login*", "WordPress login - common attack target"},
-					{"*/.env", "Environment files - sensitive data exposure"},
-					{"*/xmlrpc.php", "WordPress XML-RPC - brute force target"},
-					{"/wp-includes*", "WordPress includes - common probe"},
-					{"*/phpmyadmin*", "phpMyAdmin - database management probe"},
-					{"*/wp-content/plugins*", "WordPress plugins - vulnerability scan"},
+					{pattern: "/wp-admin*", notes: "WordPress admin - common attack target"},
+					{pattern: "/wp-login*", notes: "WordPress login - common attack target"},
+					{pattern: "*/.env", notes: "Environment files - sensitive data exposure"},
+					{pattern: "*/xmlrpc.php", notes: "WordPress XML-RPC - brute force target"},
+					{pattern: "/wp-includes*", notes: "WordPress includes - common probe"},
+					{pattern: "*/phpmyadmin*", notes: "phpMyAdmin - database management probe"},
+					{pattern: "*/wp-content/plugins*", notes: "WordPress plugins - vulnerability scan"},
 				}
 				for _, d := range defaults {
 					_, err := db.Exec(
@@ -452,6 +549,19 @@ func (m *Module) Migrations() []module.Migration {
 			},
 			Down: func(db *sql.DB) error {
 				_, err := db.Exec(`DELETE FROM sentinel_autoban_paths WHERE created_by = 0`)
+				return err
+			},
+		},
+		{
+			Version:     7,
+			Description: "Add honeypot_autoban_enabled setting",
+			Up: func(db *sql.DB) error {
+				_, err := db.Exec(`INSERT OR IGNORE INTO sentinel_settings (key, value) VALUES (?, ?)`,
+					settingHoneypotAutoBanEnabled, "true")
+				return err
+			},
+			Down: func(db *sql.DB) error {
+				_, err := db.Exec(`DELETE FROM sentinel_settings WHERE key = ?`, settingHoneypotAutoBanEnabled)
 				return err
 			},
 		},
@@ -506,6 +616,7 @@ func (m *Module) reloadSettings() error {
 		m.settingsMu.Lock()
 		m.banCheckEnabled = true
 		m.autoBanEnabled = true
+		m.honeypotAutoBanEnabled = true
 		m.settingsMu.Unlock()
 		return nil
 	}
@@ -514,6 +625,7 @@ func (m *Module) reloadSettings() error {
 	// Start with defaults, override from DB rows
 	banCheck := true
 	autoBan := true
+	honeypotAutoBan := true
 
 	for rows.Next() {
 		var key, value string
@@ -525,12 +637,15 @@ func (m *Module) reloadSettings() error {
 			banCheck = value == "true"
 		case settingAutoBanEnabled:
 			autoBan = value == "true"
+		case settingHoneypotAutoBanEnabled:
+			honeypotAutoBan = value == "true"
 		}
 	}
 
 	m.settingsMu.Lock()
 	m.banCheckEnabled = banCheck
 	m.autoBanEnabled = autoBan
+	m.honeypotAutoBanEnabled = honeypotAutoBan
 	m.settingsMu.Unlock()
 
 	return rows.Err()
@@ -548,6 +663,13 @@ func (m *Module) IsAutoBanEnabled() bool {
 	m.settingsMu.RLock()
 	defer m.settingsMu.RUnlock()
 	return m.autoBanEnabled
+}
+
+// IsHoneypotAutoBanEnabled returns whether auto-ban on honeypot trigger is enabled.
+func (m *Module) IsHoneypotAutoBanEnabled() bool {
+	m.settingsMu.RLock()
+	defer m.settingsMu.RUnlock()
+	return m.honeypotAutoBanEnabled
 }
 
 // IsIPWhitelisted checks if the given IP matches any whitelisted pattern.
@@ -696,9 +818,23 @@ func matchPathPattern(pattern, path string) bool {
 	}
 }
 
+// maxBanFieldLen is the maximum length for notes and URL fields stored in the database.
+const maxBanFieldLen = 255
+
+// truncate returns s truncated to maxLen characters.
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen]
+}
+
 // autoBanIP automatically bans an IP that triggered an auto-ban path.
 func (m *Module) autoBanIP(ip, triggeredPath, matchedPattern string) error {
-	notes := "Auto-banned for accessing: " + triggeredPath
+	matchedPattern = truncate(matchedPattern, maxBanFieldLen)
+	const banNotePrefix = "Auto-banned for accessing: "
+	triggeredPath = truncate(triggeredPath, maxBanFieldLen-len(banNotePrefix))
+	notes := banNotePrefix + triggeredPath
 	countryCode := m.geoIP.LookupCountry(ip)
 	_, err := m.ctx.DB.Exec(`
 		INSERT OR IGNORE INTO sentinel_banned_ips (ip_pattern, country_code, notes, url, banned_at, created_by)

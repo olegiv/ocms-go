@@ -13,9 +13,14 @@ import (
 
 // Predefined hook names for common events.
 const (
-	// HookPageAfterSave Page hooks
-	HookPageAfterSave    = "page.after_save"
+	// HookPageAfterSave is fired after a page is saved.
+	HookPageAfterSave = "page.after_save"
+	// HookPageBeforeRender is fired before a page is rendered.
 	HookPageBeforeRender = "page.before_render"
+
+	// HookSecurityHoneypotTriggered is fired when a form honeypot field is filled.
+	// Data: map[string]any with keys "ip", "form_slug", "form_id", "request_url".
+	HookSecurityHoneypotTriggered = "security.honeypot_triggered"
 )
 
 // HookFunc is a function that can be registered as a hook handler.

@@ -14,6 +14,7 @@
 #   restart <site-id>                 Restart the instance
 #   status  <site-id>                 Show instance status
 #   logs    <site-id> [--follow]      View instance logs
+#   logs    <site-id> --errors [--follow]  View error-only log
 #   list                              List all registered sites
 #   health  <site-id>                 Check health endpoint
 
@@ -61,6 +62,7 @@ resolve_site() {
     SITE_PORT=$(echo "$line" | awk '{print $4}')
     SITE_PID="$SITE_DIR/ocms.pid"
     SITE_LOG="$SITE_DIR/logs/ocms.log"
+    SITE_ERROR_LOG="$SITE_DIR/logs/error.log"
     SITE_ENV="$SITE_DIR/.env"
 }
 
@@ -261,14 +263,23 @@ cmd_status() {
 
 cmd_logs() {
     local site_id="$1"
-    local follow="${2:-}"
+    local opt="${2:-}"
 
     resolve_site "$site_id"
 
-    # If running under systemd, use journalctl
-    if is_systemd_active "$site_id"; then
+    # Select log file: --errors shows the separate error log
+    local log_file="$SITE_LOG"
+    local log_label="main"
+    if [ "$opt" = "--errors" ]; then
+        log_file="$SITE_ERROR_LOG"
+        log_label="error"
+        opt="${3:-}"  # shift to pick up --follow after --errors
+    fi
+
+    # If running under systemd, use journalctl (error log is still a file)
+    if is_systemd_active "$site_id" && [ "$log_label" = "main" ]; then
         echo_info "Reading systemd journal for ocms@$site_id..."
-        if [ "$follow" = "--follow" ] || [ "$follow" = "-f" ]; then
+        if [ "$opt" = "--follow" ] || [ "$opt" = "-f" ]; then
             journalctl -u "ocms@${site_id}" -f
         else
             journalctl -u "ocms@${site_id}" -n 100 --no-pager
@@ -277,17 +288,21 @@ cmd_logs() {
     fi
 
     # Otherwise use log file
-    if [ ! -f "$SITE_LOG" ]; then
-        echo_warn "No log file found: $SITE_LOG"
-        echo "       If running under systemd, use: journalctl -u ocms@$site_id"
+    if [ ! -f "$log_file" ]; then
+        echo_warn "No $log_label log file found: $log_file"
+        if [ "$log_label" = "main" ]; then
+            echo "       If running under systemd, use: journalctl -u ocms@$site_id"
+        else
+            echo "       Set OCMS_ERROR_LOG_PATH=./logs/error.log in .env to enable"
+        fi
         return
     fi
 
-    if [ "$follow" = "--follow" ] || [ "$follow" = "-f" ]; then
-        echo_info "Following $SITE_LOG (Ctrl+C to stop)"
-        tail -f "$SITE_LOG"
+    if [ "$opt" = "--follow" ] || [ "$opt" = "-f" ]; then
+        echo_info "Following $log_file (Ctrl+C to stop)"
+        tail -f "$log_file"
     else
-        tail -100 "$SITE_LOG"
+        tail -100 "$log_file"
     fi
 }
 
@@ -365,6 +380,7 @@ print_usage() {
     echo "  restart <site-id>                 Restart the instance"
     echo "  status  <site-id>                 Show instance status"
     echo "  logs    <site-id> [--follow|-f]   View instance logs"
+    echo "  logs    <site-id> --errors [--follow] View error-only log"
     echo "  list                              List all registered sites"
     echo "  health  <site-id>                 Check health endpoint"
     echo ""

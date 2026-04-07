@@ -18,6 +18,8 @@ import (
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/handler"
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -26,6 +28,7 @@ type Handler struct {
 	db                        *sql.DB
 	queries                   *store.Queries
 	cacheManager              *cache.Manager
+	eventService              *service.EventService
 	blockSuspiciousPageMarkup bool
 	sanitizePageHTML          bool
 }
@@ -55,6 +58,86 @@ func (h *Handler) SetBlockSuspiciousPageMarkup(block bool) {
 // HTML body content before persistence.
 func (h *Handler) SetSanitizePageHTML(enabled bool) {
 	h.sanitizePageHTML = enabled
+}
+
+// SetEventService sets the event service for audit logging.
+func (h *Handler) SetEventService(es *service.EventService) {
+	h.eventService = es
+}
+
+// apiLogger provides category-scoped event logging for API handlers.
+// Create one per handler method via h.newAPILogger() to avoid repeating
+// the request and category on every logging call.
+type apiLogger struct {
+	h        *Handler
+	r        *http.Request
+	category string
+}
+
+// newAPILogger creates a logger scoped to a request and event category.
+func (h *Handler) newAPILogger(r *http.Request, category string) *apiLogger {
+	return &apiLogger{h: h, r: r, category: category}
+}
+
+// Info logs a success event to the database event log.
+func (l *apiLogger) Info(message string, meta map[string]any) {
+	l.h.logEvent(l.r, l.category, model.EventLevelInfo, message, meta)
+}
+
+// Error logs an error event to the database event log (without writing an HTTP response).
+func (l *apiLogger) Error(message string, meta map[string]any) {
+	l.h.logEvent(l.r, l.category, model.EventLevelError, message, meta)
+}
+
+// Error500 logs an error via slog and the event service, then writes a 500 response.
+func (l *apiLogger) Error500(w http.ResponseWriter, message string, args ...any) {
+	l.h.logAndRespondError(w, l.r, l.category, message, args...)
+}
+
+// apiUserIDPtr returns the API key creator's user ID pointer.
+func (h *Handler) apiUserIDPtr(r *http.Request) *int64 {
+	if key := middleware.GetAPIKey(r); key != nil {
+		id := key.CreatedBy
+		return &id
+	}
+	return nil
+}
+
+// apiEventMeta returns metadata with API source info merged with extra fields.
+func (h *Handler) apiEventMeta(r *http.Request, extra map[string]any) map[string]any {
+	m := map[string]any{"source": "api"}
+	if key := middleware.GetAPIKey(r); key != nil {
+		m["api_key_id"] = key.ID
+	}
+	for k, v := range extra {
+		m[k] = v
+	}
+	return m
+}
+
+// logEvent logs an event via the event service if available.
+func (h *Handler) logEvent(r *http.Request, category, level, message string, extra map[string]any) {
+	if h.eventService == nil {
+		return
+	}
+	_ = h.eventService.LogEvent(
+		r.Context(), level, category, message,
+		h.apiUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r),
+		h.apiEventMeta(r, extra),
+	)
+}
+
+// logAndRespondError logs the error via slog and the event service, then writes a 500 response.
+func (h *Handler) logAndRespondError(w http.ResponseWriter, r *http.Request, category, message string, args ...any) {
+	slog.Error(message, args...)
+	if h.eventService != nil {
+		_ = h.eventService.LogEvent(
+			r.Context(), model.EventLevelError, category, "API error: "+message,
+			h.apiUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r),
+			h.apiEventMeta(r, map[string]any{"error": message}),
+		)
+	}
+	WriteInternalError(w, message)
 }
 
 // invalidatePageCache invalidates the page cache after a page is modified.
@@ -223,12 +306,19 @@ func (h *Handler) AuthInfo(w http.ResponseWriter, r *http.Request) {
 // SlugExistsChecker is a function that checks if a slug exists (returns count and error).
 type SlugExistsChecker func() (int64, error)
 
+// error500Func is a callback for logging 500 errors and writing the response.
+type error500Func func(w http.ResponseWriter, message string, args ...any)
+
 // checkSlugUnique checks if a slug is unique using the provided checker function.
 // Returns true if unique, false if duplicate or error (response already written).
-func checkSlugUnique(w http.ResponseWriter, slugExists SlugExistsChecker) bool {
+func checkSlugUnique(w http.ResponseWriter, slugExists SlugExistsChecker, logErr error500Func) bool {
 	exists, err := slugExists()
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to check slug", "error", err)
+		if logErr != nil {
+			logErr(w, "Failed to check slug", "error", err)
+		} else {
+			LogAndWriteInternalError(w, "Failed to check slug", "error", err)
+		}
 		return false
 	}
 	if exists != 0 {
@@ -244,7 +334,7 @@ type EntityFetcher[T any] func(id int64) (T, error)
 // requireEntityByID parses an ID from the URL and fetches the entity.
 // Returns the entity and true if successful, or zero value and false if error (response written).
 // The entityName is used for error messages (e.g., "page", "tag", "category", "media").
-func requireEntityByID[T any](w http.ResponseWriter, r *http.Request, entityName string, fetch EntityFetcher[T]) (T, bool) {
+func requireEntityByID[T any](w http.ResponseWriter, r *http.Request, entityName string, fetch EntityFetcher[T], logErr error500Func) (T, bool) {
 	var zero T
 
 	id, err := handler.ParseIDParam(r)
@@ -255,9 +345,12 @@ func requireEntityByID[T any](w http.ResponseWriter, r *http.Request, entityName
 
 	entity, err := fetch(id)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
 			WriteNotFound(w, capitalizeFirst(entityName)+" not found")
-		} else {
+		case logErr != nil:
+			logErr(w, "Failed to retrieve "+entityName, "error", err)
+		default:
 			LogAndWriteInternalError(w, "Failed to retrieve "+entityName, "error", err)
 		}
 		return zero, false

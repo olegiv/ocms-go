@@ -5,11 +5,15 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/store"
 )
 
 // assertStatusCode checks that the response has the expected status code.
@@ -222,4 +226,127 @@ func TestStatusResponse(t *testing.T) {
 	if resp.Version != "v1" {
 		t.Errorf("expected version 'v1', got %s", resp.Version)
 	}
+}
+
+func TestAPIUserIDPtr_WithAPIKey(t *testing.T) {
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/pages", nil)
+
+	apiKey := store.ApiKey{ID: 42, CreatedBy: 7, Name: "test-key"}
+	ctx := context.WithValue(req.Context(), middleware.ContextKeyAPIKey, apiKey)
+	req = req.WithContext(ctx)
+
+	got := h.apiUserIDPtr(req)
+	if got == nil {
+		t.Fatal("expected non-nil user ID")
+	}
+	if *got != 7 {
+		t.Errorf("expected user ID 7, got %d", *got)
+	}
+}
+
+func TestAPIUserIDPtr_NoAPIKey(t *testing.T) {
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/pages", nil)
+
+	got := h.apiUserIDPtr(req)
+	if got != nil {
+		t.Errorf("expected nil user ID, got %d", *got)
+	}
+}
+
+func TestAPIEventMeta_WithAPIKey(t *testing.T) {
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/pages", nil)
+
+	apiKey := store.ApiKey{ID: 42, CreatedBy: 7, Name: "test-key"}
+	ctx := context.WithValue(req.Context(), middleware.ContextKeyAPIKey, apiKey)
+	req = req.WithContext(ctx)
+
+	meta := h.apiEventMeta(req, map[string]any{"page_id": int64(99)})
+
+	if meta["source"] != "api" {
+		t.Errorf("expected source 'api', got %v", meta["source"])
+	}
+	if meta["api_key_id"] != int64(42) {
+		t.Errorf("expected api_key_id 42, got %v", meta["api_key_id"])
+	}
+	if _, exists := meta["api_key_name"]; exists {
+		t.Error("api_key_name should not be present in event metadata")
+	}
+	if meta["page_id"] != int64(99) {
+		t.Errorf("expected page_id 99, got %v", meta["page_id"])
+	}
+}
+
+func TestAPIEventMeta_NoAPIKey(t *testing.T) {
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/pages", nil)
+
+	meta := h.apiEventMeta(req, map[string]any{"slug": "test"})
+
+	if meta["source"] != "api" {
+		t.Errorf("expected source 'api', got %v", meta["source"])
+	}
+	if _, ok := meta["api_key_id"]; ok {
+		t.Error("expected no api_key_id when no API key in context")
+	}
+	if meta["slug"] != "test" {
+		t.Errorf("expected slug 'test', got %v", meta["slug"])
+	}
+}
+
+func TestLogAndRespondError_NilEventService(t *testing.T) {
+	h := &Handler{} // eventService is nil
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/pages", nil)
+
+	h.logAndRespondError(w, req, "page", "Failed to create page", "error", errors.New("db error"))
+
+	assertStatusCode(t, w, http.StatusInternalServerError)
+	resp := assertErrorResponse(t, w, "internal_error")
+	if resp.Error.Message != "Failed to create page" {
+		t.Errorf("expected message 'Failed to create page', got %q", resp.Error.Message)
+	}
+}
+
+func TestAPILogger_Error500_NilEventService(t *testing.T) {
+	h := &Handler{} // eventService is nil
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/pages", nil)
+
+	log := h.newAPILogger(req, "page")
+	log.Error500(w, "Failed to create page", "error", errors.New("db error"))
+
+	assertStatusCode(t, w, http.StatusInternalServerError)
+	resp := assertErrorResponse(t, w, "internal_error")
+	if resp.Error.Message != "Failed to create page" {
+		t.Errorf("expected message 'Failed to create page', got %q", resp.Error.Message)
+	}
+}
+
+func TestAPILogger_Info_NilEventService(t *testing.T) {
+	h := &Handler{} // eventService is nil
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/pages", nil)
+
+	log := h.newAPILogger(req, "page")
+	// Should not panic
+	log.Info("API: Page created", map[string]any{"page_id": int64(1)})
+}
+
+func TestAPILogger_Error_NilEventService(t *testing.T) {
+	h := &Handler{} // eventService is nil
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/media", nil)
+
+	log := h.newAPILogger(req, "media")
+	// Should not panic
+	log.Error("API: Media upload failed", map[string]any{"filename": "test.jpg"})
+}
+
+func TestLogEvent_NilEventService(t *testing.T) {
+	h := &Handler{} // eventService is nil
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/pages", nil)
+
+	// Should not panic
+	h.logEvent(req, "page", "info", "API: Page created", map[string]any{"page_id": int64(1)})
 }

@@ -57,10 +57,11 @@ type PageResponse struct {
 }
 
 // AuthorResponse represents an author in API responses.
+// Email is only populated for authenticated requests to prevent account enumeration.
 type AuthorResponse struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
-	Email string `json:"email"`
+	Email string `json:"email,omitempty"`
 }
 
 // CategoryResponse represents a category in API responses.
@@ -251,6 +252,7 @@ func storePageToResponse(p store.Page) PageResponse {
 // Public: returns only published pages
 // With API key: can filter by status
 func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
+	log := h.pageLogger(r)
 	ctx := r.Context()
 
 	// Parse query parameters
@@ -328,7 +330,7 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to list pages", "error", err)
+		log.Error500(w, "Failed to list pages", "error", err)
 		return
 	}
 
@@ -356,7 +358,7 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 		resp := storePageToResponse(p)
 
 		if includeAuthor {
-			h.populatePageAuthor(ctx, &resp, p.ID)
+			h.populatePageAuthor(ctx, &resp, p.ID, isAuthenticated)
 		}
 
 		if includeCategories {
@@ -398,7 +400,7 @@ func (h *Handler) GetPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := storePageToResponse(page)
-	h.populatePageIncludes(ctx, &resp, page.ID, include)
+	h.populatePageIncludes(ctx, &resp, page.ID, include, apiKey != nil)
 
 	WriteSuccess(w, resp, nil)
 }
@@ -406,6 +408,7 @@ func (h *Handler) GetPage(w http.ResponseWriter, r *http.Request) {
 // GetPageBySlug handles GET /api/v1/pages/slug/{slug}
 // Public: returns only published pages
 func (h *Handler) GetPageBySlug(w http.ResponseWriter, r *http.Request) {
+	log := h.pageLogger(r)
 	ctx := r.Context()
 	slug := chi.URLParam(r, "slug")
 	include := r.URL.Query().Get("include")
@@ -433,13 +436,13 @@ func (h *Handler) GetPageBySlug(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, sql.ErrNoRows) {
 			WriteNotFound(w, "Page not found")
 		} else {
-			LogAndWriteInternalError(w, "Failed to retrieve page", "error", err)
+			log.Error500(w, "Failed to retrieve page", "error", err)
 		}
 		return
 	}
 
 	resp := storePageToResponse(page)
-	h.populatePageIncludes(ctx, &resp, page.ID, include)
+	h.populatePageIncludes(ctx, &resp, page.ID, include, apiKey != nil)
 
 	WriteSuccess(w, resp, nil)
 }
@@ -447,6 +450,7 @@ func (h *Handler) GetPageBySlug(w http.ResponseWriter, r *http.Request) {
 // CreatePage handles POST /api/v1/pages
 // Requires pages:write permission
 func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
+	log := h.pageLogger(r)
 	ctx := r.Context()
 
 	var req CreatePageRequest
@@ -483,7 +487,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	normalizedBody := sanitizePageBodyForStorage(req.Body, h.sanitizePageHTML)
 
 	// Check slug uniqueness
-	if !h.checkPageSlugUnique(w, ctx, req.Slug) {
+	if !h.checkPageSlugUnique(w, r, ctx, req.Slug) {
 		return
 	}
 
@@ -499,7 +503,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	// Resolve language code (default to system default language if not provided)
 	langCode, langErr := h.resolveLanguageCode(ctx, req.LanguageCode)
 	if langErr != nil {
-		LogAndWriteInternalError(w, "Failed to resolve default language", "error", langErr)
+		log.Error500(w, "Failed to resolve default language", "error", langErr)
 		return
 	}
 
@@ -568,7 +572,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(err, sql.ErrNoRows) {
 				WriteValidationError(w, map[string]string{"category_ids": fmt.Sprintf("Category %d not found", catID)})
 			} else {
-				LogAndWriteInternalError(w, "Failed to validate category", "error", err, "category_id", catID)
+				log.Error500(w, "Failed to validate category", "error", err, "category_id", catID)
 			}
 			return
 		}
@@ -577,7 +581,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	// All writes (page, categories, tags, new tag creation) in one transaction
 	tx, err := h.db.BeginTx(ctx, nil)
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to start transaction", "error", err)
+		log.Error500(w, "Failed to start transaction", "error", err)
 		return
 	}
 	defer tx.Rollback() //nolint:errcheck
@@ -588,7 +592,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	if len(req.Tags) > 0 {
 		resolvedIDs, err := resolveTagNames(ctx, txq, req.Tags, langCode)
 		if err != nil {
-			writeResolveTagError(w, err)
+			h.writeResolveTagError(w, r, err)
 			return
 		}
 		req.TagIDs = append(req.TagIDs, resolvedIDs...)
@@ -602,7 +606,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(err, sql.ErrNoRows) {
 				WriteValidationError(w, map[string]string{"tag_ids": fmt.Sprintf("Tag %d not found", tagID)})
 			} else {
-				LogAndWriteInternalError(w, "Failed to validate tag", "error", err, "tag_id", tagID)
+				log.Error500(w, "Failed to validate tag", "error", err, "tag_id", tagID)
 			}
 			return
 		}
@@ -610,7 +614,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 
 	page, err := txq.CreatePage(ctx, params)
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to create page", "error", err)
+		log.Error500(w, "Failed to create page", "error", err)
 		return
 	}
 
@@ -619,7 +623,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 			PageID:     page.ID,
 			CategoryID: catID,
 		}); err != nil {
-			LogAndWriteInternalError(w, "Failed to add category to page", "error", err, "page_id", page.ID, "category_id", catID)
+			log.Error500(w, "Failed to add category to page", "error", err, "page_id", page.ID, "category_id", catID)
 			return
 		}
 	}
@@ -629,18 +633,21 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 			PageID: page.ID,
 			TagID:  tagID,
 		}); err != nil {
-			LogAndWriteInternalError(w, "Failed to add tag to page", "error", err, "page_id", page.ID, "tag_id", tagID)
+			log.Error500(w, "Failed to add tag to page", "error", err, "page_id", page.ID, "tag_id", tagID)
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		LogAndWriteInternalError(w, "Failed to commit page creation", "error", err)
+		log.Error500(w, "Failed to commit page creation", "error", err)
 		return
 	}
 
 	// Invalidate page cache (for sitemap regeneration on next request)
 	h.invalidatePageCache(page.ID)
+
+	log.Info("API: Page created",
+		map[string]any{"page_id": page.ID, "slug": page.Slug})
 
 	resp := storePageToResponse(page)
 
@@ -654,6 +661,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 // UpdatePage handles PUT /api/v1/pages/{id}
 // Requires pages:write permission
 func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
+	log := h.pageLogger(r)
 	ctx := r.Context()
 
 	existing, ok := h.requirePageForAPI(w, r)
@@ -695,7 +703,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Apply updates from request to params (validates and writes errors on failure)
-	if !h.applyUpdatePageFields(w, ctx, &req, &params, existing) {
+	if !h.applyUpdatePageFields(w, r, ctx, &req, &params, existing) {
 		return
 	}
 
@@ -706,7 +714,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 				if errors.Is(err, sql.ErrNoRows) {
 					WriteValidationError(w, map[string]string{"category_ids": fmt.Sprintf("Category %d not found", catID)})
 				} else {
-					LogAndWriteInternalError(w, "Failed to validate category", "error", err, "category_id", catID)
+					log.Error500(w, "Failed to validate category", "error", err, "category_id", catID)
 				}
 				return
 			}
@@ -718,7 +726,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := h.db.BeginTx(ctx, nil)
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to start transaction", "error", err)
+		log.Error500(w, "Failed to start transaction", "error", err)
 		return
 	}
 	defer tx.Rollback() //nolint:errcheck
@@ -734,7 +742,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		if req.Tags != nil {
 			resolvedIDs, err := resolveTagNames(ctx, txq, *req.Tags, existing.LanguageCode)
 			if err != nil {
-				writeResolveTagError(w, err)
+				h.writeResolveTagError(w, r, err)
 				return
 			}
 			tagIDs = append(tagIDs, resolvedIDs...)
@@ -747,7 +755,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 				if errors.Is(err, sql.ErrNoRows) {
 					WriteValidationError(w, map[string]string{"tag_ids": fmt.Sprintf("Tag %d not found", tagID)})
 				} else {
-					LogAndWriteInternalError(w, "Failed to validate tag", "error", err, "tag_id", tagID)
+					log.Error500(w, "Failed to validate tag", "error", err, "tag_id", tagID)
 				}
 				return
 			}
@@ -756,13 +764,13 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 
 	page, err := txq.UpdatePage(ctx, params)
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to update page", "error", err, "page_id", existing.ID)
+		log.Error500(w, "Failed to update page", "error", err, "page_id", existing.ID)
 		return
 	}
 
 	if req.CategoryIDs != nil {
 		if err := txq.ClearPageCategories(ctx, existing.ID); err != nil {
-			LogAndWriteInternalError(w, "Failed to clear page categories", "error", err, "page_id", existing.ID)
+			log.Error500(w, "Failed to clear page categories", "error", err, "page_id", existing.ID)
 			return
 		}
 		for _, catID := range *req.CategoryIDs {
@@ -770,7 +778,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 				PageID:     existing.ID,
 				CategoryID: catID,
 			}); err != nil {
-				LogAndWriteInternalError(w, "Failed to add category to page", "error", err, "page_id", existing.ID, "category_id", catID)
+				log.Error500(w, "Failed to add category to page", "error", err, "page_id", existing.ID, "category_id", catID)
 				return
 			}
 		}
@@ -778,7 +786,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 
 	if hasTags {
 		if err := txq.ClearPageTags(ctx, existing.ID); err != nil {
-			LogAndWriteInternalError(w, "Failed to clear page tags", "error", err, "page_id", existing.ID)
+			log.Error500(w, "Failed to clear page tags", "error", err, "page_id", existing.ID)
 			return
 		}
 		for _, tagID := range tagIDs {
@@ -786,19 +794,22 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 				PageID: existing.ID,
 				TagID:  tagID,
 			}); err != nil {
-				LogAndWriteInternalError(w, "Failed to add tag to page", "error", err, "page_id", existing.ID, "tag_id", tagID)
+				log.Error500(w, "Failed to add tag to page", "error", err, "page_id", existing.ID, "tag_id", tagID)
 				return
 			}
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		LogAndWriteInternalError(w, "Failed to commit page update", "error", err, "page_id", existing.ID)
+		log.Error500(w, "Failed to commit page update", "error", err, "page_id", existing.ID)
 		return
 	}
 
 	// Invalidate page cache
 	h.invalidatePageCache(page.ID)
+
+	log.Info("API: Page updated",
+		map[string]any{"page_id": page.ID, "slug": page.Slug})
 
 	resp := storePageToResponse(page)
 
@@ -819,12 +830,12 @@ func boolToInt64(b *bool) int64 {
 
 // applyUpdatePageFields applies validated fields from an UpdatePageRequest to store.UpdatePageParams.
 // Returns false if a validation error was written to w (caller should return).
-func (h *Handler) applyUpdatePageFields(w http.ResponseWriter, ctx context.Context, req *UpdatePageRequest, params *store.UpdatePageParams, existing store.Page) bool {
+func (h *Handler) applyUpdatePageFields(w http.ResponseWriter, r *http.Request, ctx context.Context, req *UpdatePageRequest, params *store.UpdatePageParams, existing store.Page) bool {
 	if req.Title != nil {
 		params.Title = *req.Title
 	}
 	if req.Slug != nil {
-		if !h.checkPageSlugUniqueExcluding(w, ctx, *req.Slug, existing.ID) {
+		if !h.checkPageSlugUniqueExcluding(w, r, ctx, *req.Slug, existing.ID) {
 			return false
 		}
 		params.Slug = *req.Slug
@@ -914,6 +925,7 @@ func (h *Handler) applyUpdatePageFields(w http.ResponseWriter, ctx context.Conte
 // DeletePage handles DELETE /api/v1/pages/{id}
 // Requires pages:write permission
 func (h *Handler) DeletePage(w http.ResponseWriter, r *http.Request) {
+	log := h.pageLogger(r)
 	ctx := r.Context()
 
 	page, ok := h.requirePageForAPI(w, r)
@@ -924,7 +936,7 @@ func (h *Handler) DeletePage(w http.ResponseWriter, r *http.Request) {
 	// Delete page and associated data in a transaction
 	tx, err := h.db.BeginTx(ctx, nil)
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to start transaction", "error", err)
+		log.Error500(w, "Failed to start transaction", "error", err)
 		return
 	}
 	defer tx.Rollback() //nolint:errcheck
@@ -932,29 +944,32 @@ func (h *Handler) DeletePage(w http.ResponseWriter, r *http.Request) {
 	txq := h.queries.WithTx(tx)
 
 	if err := txq.ClearPageCategories(ctx, page.ID); err != nil {
-		LogAndWriteInternalError(w, "Failed to clear page categories", "error", err, "page_id", page.ID)
+		log.Error500(w, "Failed to clear page categories", "error", err, "page_id", page.ID)
 		return
 	}
 	if err := txq.ClearPageTags(ctx, page.ID); err != nil {
-		LogAndWriteInternalError(w, "Failed to clear page tags", "error", err, "page_id", page.ID)
+		log.Error500(w, "Failed to clear page tags", "error", err, "page_id", page.ID)
 		return
 	}
 	if err := txq.DeletePageVersions(ctx, page.ID); err != nil {
-		LogAndWriteInternalError(w, "Failed to delete page versions", "error", err, "page_id", page.ID)
+		log.Error500(w, "Failed to delete page versions", "error", err, "page_id", page.ID)
 		return
 	}
 	if err := txq.DeletePage(ctx, page.ID); err != nil {
-		LogAndWriteInternalError(w, "Failed to delete page", "error", err, "page_id", page.ID)
+		log.Error500(w, "Failed to delete page", "error", err, "page_id", page.ID)
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		LogAndWriteInternalError(w, "Failed to commit page deletion", "error", err, "page_id", page.ID)
+		log.Error500(w, "Failed to commit page deletion", "error", err, "page_id", page.ID)
 		return
 	}
 
 	// Invalidate page cache
 	h.invalidatePageCache(page.ID)
+
+	log.Info("API: Page deleted",
+		map[string]any{"page_id": page.ID, "slug": page.Slug})
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -973,12 +988,12 @@ type tagValidationError struct {
 func (e *tagValidationError) Error() string { return e.Message }
 
 // writeResolveTagError writes 422 for validation errors, 500 for internal errors.
-func writeResolveTagError(w http.ResponseWriter, err error) {
+func (h *Handler) writeResolveTagError(w http.ResponseWriter, r *http.Request, err error) {
 	var ve *tagValidationError
 	if errors.As(err, &ve) {
 		WriteValidationError(w, map[string]string{ve.Field: ve.Message})
 	} else {
-		LogAndWriteInternalError(w, "Failed to resolve tag names", "error", err)
+		h.pageLogger(r).Error500(w, "Failed to resolve tag names", "error", err)
 	}
 }
 
@@ -1042,16 +1057,20 @@ func resolveTagNames(ctx context.Context, q *store.Queries, names []string, lang
 }
 
 // populatePageAuthor fetches and populates author for a page response.
-func (h *Handler) populatePageAuthor(ctx context.Context, resp *PageResponse, pageID int64) {
+// When authenticated is false, the email is omitted to prevent account enumeration.
+func (h *Handler) populatePageAuthor(ctx context.Context, resp *PageResponse, pageID int64, authenticated bool) {
 	author, err := h.queries.GetPageAuthor(ctx, pageID)
 	if err != nil {
 		return
 	}
-	resp.Author = &AuthorResponse{
-		ID:    author.ID,
-		Name:  author.Name,
-		Email: author.Email,
+	ar := &AuthorResponse{
+		ID:   author.ID,
+		Name: author.Name,
 	}
+	if authenticated {
+		ar.Email = author.Email
+	}
+	resp.Author = ar
 }
 
 // populatePageCategories fetches and populates categories for a page response.
@@ -1079,7 +1098,8 @@ func (h *Handler) populatePageTags(ctx context.Context, resp *PageResponse, page
 }
 
 // populatePageIncludes adds related data to a page response based on include parameter.
-func (h *Handler) populatePageIncludes(ctx context.Context, resp *PageResponse, pageID int64, include string) {
+// When authenticated is false, author email is omitted.
+func (h *Handler) populatePageIncludes(ctx context.Context, resp *PageResponse, pageID int64, include string, authenticated bool) {
 	if include == "" {
 		return
 	}
@@ -1088,7 +1108,7 @@ func (h *Handler) populatePageIncludes(ctx context.Context, resp *PageResponse, 
 	for _, inc := range includes {
 		switch strings.TrimSpace(inc) {
 		case "author":
-			h.populatePageAuthor(ctx, resp, pageID)
+			h.populatePageAuthor(ctx, resp, pageID, authenticated)
 		case "categories":
 			h.populatePageCategories(ctx, resp, pageID)
 		case "tags":
@@ -1097,31 +1117,34 @@ func (h *Handler) populatePageIncludes(ctx context.Context, resp *PageResponse, 
 	}
 }
 
+// pageLogger returns a category-scoped logger for page API handlers.
+func (h *Handler) pageLogger(r *http.Request) *apiLogger {
+	return h.newAPILogger(r, model.EventCategoryPage)
+}
+
 // requirePageForAPI parses page ID from URL and fetches the page.
 // Returns the page and true if successful, or zero value and false if an error occurred (response already written).
 func (h *Handler) requirePageForAPI(w http.ResponseWriter, r *http.Request) (store.Page, bool) {
 	return requireEntityByID(w, r, "page", func(id int64) (store.Page, error) {
 		return h.queries.GetPageByID(r.Context(), id)
-	})
+	}, h.pageLogger(r).Error500)
 }
 
 // checkPageSlugUnique checks if a page slug is unique for creation.
-// Returns true if unique, false if duplicate or error (response already written).
-func (h *Handler) checkPageSlugUnique(w http.ResponseWriter, ctx context.Context, slug string) bool {
+func (h *Handler) checkPageSlugUnique(w http.ResponseWriter, r *http.Request, ctx context.Context, slug string) bool {
 	return checkSlugUnique(w, func() (int64, error) {
 		return h.queries.SlugExists(ctx, slug)
-	})
+	}, h.pageLogger(r).Error500)
 }
 
 // checkPageSlugUniqueExcluding checks if a page slug is unique for update (excluding current page).
-// Returns true if unique, false if duplicate or error (response already written).
-func (h *Handler) checkPageSlugUniqueExcluding(w http.ResponseWriter, ctx context.Context, slug string, pageID int64) bool {
+func (h *Handler) checkPageSlugUniqueExcluding(w http.ResponseWriter, r *http.Request, ctx context.Context, slug string, pageID int64) bool {
 	return checkSlugUnique(w, func() (int64, error) {
 		return h.queries.SlugExistsExcluding(ctx, store.SlugExistsExcludingParams{
 			Slug: slug,
 			ID:   pageID,
 		})
-	})
+	}, h.pageLogger(r).Error500)
 }
 
 func validatePageBodyMarkupPolicy(body string, blockSuspicious bool) string {

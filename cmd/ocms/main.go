@@ -1136,9 +1136,33 @@ func run() error {
 
 	// Setup logger
 	logLevel := parseLogLevel(cfg.LogLevel)
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+	stdoutHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: logLevel,
-	}))
+	})
+
+	// Optional: tee ERROR+ logs to a separate file
+	var primaryHandler slog.Handler = stdoutHandler
+	var errorLogFile *os.File
+	if cfg.ErrorLogPath != "" {
+		var err error
+		errorLogFile, err = os.OpenFile(cfg.ErrorLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+		if err != nil {
+			return fmt.Errorf("opening error log file %s: %w", cfg.ErrorLogPath, err)
+		}
+		// Enforce permissions on pre-existing files (OpenFile only sets mode on create).
+		if err = errorLogFile.Chmod(0600); err != nil {
+			errorLogFile.Close()
+			return fmt.Errorf("setting error log file permissions %s: %w", cfg.ErrorLogPath, err)
+		}
+		defer errorLogFile.Close()
+
+		errorHandler := slog.NewTextHandler(errorLogFile, &slog.HandlerOptions{
+			Level: slog.LevelError,
+		})
+		primaryHandler = logging.NewErrorFileHandler(stdoutHandler, errorHandler, slog.LevelError)
+	}
+
+	logger := slog.New(primaryHandler)
 	slog.SetDefault(logger)
 
 	logProductionSecurityWarnings(cfg)
@@ -1186,9 +1210,17 @@ func run() error {
 	}
 	slog.Info("database ready")
 
-	// Upgrade logger to also write WARN and ERROR logs to the Event Log database
-	textHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})
-	eventLogHandler := logging.NewEventLogHandler(textHandler, db)
+	// Upgrade logger to also write WARN and ERROR logs to the Event Log database.
+	// The handler chain is: ErrorFileHandler (optional) → EventLogHandler → stdout.
+	upgradedStdout := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})
+	var upgradedPrimary slog.Handler = upgradedStdout
+	if errorLogFile != nil {
+		errorHandler := slog.NewTextHandler(errorLogFile, &slog.HandlerOptions{
+			Level: slog.LevelError,
+		})
+		upgradedPrimary = logging.NewErrorFileHandler(upgradedStdout, errorHandler, slog.LevelError)
+	}
+	eventLogHandler := logging.NewEventLogHandler(upgradedPrimary, db)
 	logger = slog.New(eventLogHandler)
 	slog.SetDefault(logger)
 	slog.Info("event log integration enabled", "min_level", "warn")
@@ -1384,7 +1416,17 @@ func run() error {
 
 	// Middleware stack
 	r.Use(chimw.RequestID)
-	r.Use(chimw.RealIP)
+	// Trusted-proxy-aware RealIP: only trusts forwarding headers from
+	// configured OCMS_TRUSTED_PROXIES, preventing True-Client-IP /
+	// X-Forwarded-For spoofing by external clients.
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if ip := middleware.GetClientIP(r); ip != "" {
+				r.RemoteAddr = ip
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
 	// Sentinel IP ban check (always registered, checks active status at runtime)
 	r.Use(sentinelModule.GetMiddleware())
 	slog.Info("sentinel IP ban middleware registered")
@@ -1470,6 +1512,7 @@ func run() error {
 	schedulerHandler := handler.NewSchedulerHandler(db, renderer, sessionManager, schedulerRegistry, taskExecutor, eventService)
 	languagesHandler := handler.NewLanguagesHandler(db, renderer, sessionManager)
 	apiHandler := api.NewHandler(db)
+	apiHandler.SetEventService(eventService)
 	apiHandler.SetBlockSuspiciousPageMarkup(cfg.BlockSuspiciousPageHTML)
 	apiHandler.SetSanitizePageHTML(cfg.SanitizePageHTML)
 	apiDocsHandler, err := api.NewDocsHandler(api.DocsConfig{
