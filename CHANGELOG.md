@@ -7,8 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-04-08
+
+### Added
+
+#### API
+- Add structured event logging to all REST API handlers (pages, media, tags, categories) with category-scoped `apiLogger`
+- Add `OCMS_ERROR_LOG_PATH` env var for separate error log file (5xx/ERROR messages)
+
+#### Sentinel
+- Add honeypot auto-ban: IPs that trigger form honeypot fields are automatically banned via `HookSecurityHoneypotTriggered` hook
+- Add honeypot auto-ban toggle in Sentinel admin settings
+- Add admin/editor exemption from honeypot auto-ban to prevent self-lockout
+
+### Changed
+
+#### Dependencies
+- Update go-sqlite3 1.14.40 → 1.14.41
+
+#### i18n
+- Replace Unicode escape sequences with UTF-8 Cyrillic in locale files
+- Add missing Klaro privacyPolicy translations
+
+### Fixed
+
+#### Database
+- Fix SQLITE_BUSY errors by setting WAL journal mode and busy timeout via DSN parameters
+
 ### Security
 - Replace chi's `RealIP` middleware with trusted-proxy-aware IP resolution; chi's middleware blindly trusts `True-Client-IP` / `X-Forwarded-For` headers from any source, allowing external attackers to spoof `127.0.0.1` and evade IP-based banning
+- Gate author email on API key authentication to prevent account enumeration via `?include=author`
+- Remove API key names from event log metadata to prevent infrastructure topology leakage
+- Truncate Sentinel auto-ban notes/URL fields to 255 chars to prevent unbounded DB storage
+- Restrict error log file permissions to 0600 (owner-only) with fchmod enforcement on pre-existing files
+- Add session cookie pre-check in Sentinel middleware to avoid panic-recovery control flow
+- Add `OCMS_TRUSTED_PROXIES` hint to docker-compose.yml for reverse proxy deployments
 
 ## [0.16.0] - 2026-04-06
 
@@ -758,7 +791,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import/Export**: JSON/ZIP with conflict resolution
 - **Caching**: In-memory + Redis support
 
-[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/olegiv/ocms-go/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/olegiv/ocms-go/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/olegiv/ocms-go/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/olegiv/ocms-go/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/olegiv/ocms-go/compare/v0.12.0...v0.14.0
