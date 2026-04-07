@@ -73,6 +73,9 @@ func (m *Module) buildKlaroConfig() string {
 	}
 	config.WriteString("        },\n")
 	config.WriteString("        en: {\n")
+	if s.PrivacyPolicyURL != "" {
+		config.WriteString("            privacyPolicy: {text: 'Learn more in our {privacyPolicy}.', name: 'Privacy Policy'},\n")
+	}
 	config.WriteString("            consentModal: {\n")
 	config.WriteString("                title: 'Privacy Settings',\n")
 	config.WriteString("                description: 'We use cookies and similar technologies to enhance your experience. You can choose which services you allow below.'\n")
@@ -89,6 +92,9 @@ func (m *Module) buildKlaroConfig() string {
 	config.WriteString("            }\n")
 	config.WriteString("        },\n")
 	config.WriteString("        ru: {\n")
+	if s.PrivacyPolicyURL != "" {
+		config.WriteString("            privacyPolicy: {text: '\\u041F\\u043E\\u0434\\u0440\\u043E\\u0431\\u043D\\u0435\\u0435 \\u0432 \\u043D\\u0430\\u0448\\u0435\\u0439 {privacyPolicy}.', name: '\\u041F\\u043E\\u043B\\u0438\\u0442\\u0438\\u043A\\u0435 \\u043A\\u043E\\u043D\\u0444\\u0438\\u0434\\u0435\\u043D\\u0446\\u0438\\u0430\\u043B\\u044C\\u043D\\u043E\\u0441\\u0442\\u0438'},\n")
+	}
 	config.WriteString("            consentModal: {\n")
 	config.WriteString("                title: '\\u041D\\u0430\\u0441\\u0442\\u0440\\u043E\\u0439\\u043A\\u0438 \\u043A\\u043E\\u043D\\u0444\\u0438\\u0434\\u0435\\u043D\\u0446\\u0438\\u0430\\u043B\\u044C\\u043D\\u043E\\u0441\\u0442\\u0438',\n")
 	config.WriteString("                description: '\\u041C\\u044B \\u0438\\u0441\\u043F\\u043E\\u043B\\u044C\\u0437\\u0443\\u0435\\u043C cookie \\u0438 \\u0430\\u043D\\u0430\\u043B\\u043E\\u0433\\u0438\\u0447\\u043D\\u044B\\u0435 \\u0442\\u0435\\u0445\\u043D\\u043E\\u043B\\u043E\\u0433\\u0438\\u0438. \\u0412\\u044B \\u043C\\u043E\\u0436\\u0435\\u0442\\u0435 \\u0432\\u044B\\u0431\\u0440\\u0430\\u0442\\u044C, \\u043A\\u0430\\u043A\\u0438\\u0435 \\u0441\\u0435\\u0440\\u0432\\u0438\\u0441\\u044B \\u0440\\u0430\\u0437\\u0440\\u0435\\u0448\\u0438\\u0442\\u044C.'\n")
