@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Replace chi's `RealIP` middleware with trusted-proxy-aware IP resolution; chi's middleware blindly trusts `True-Client-IP` / `X-Forwarded-For` headers from any source, allowing external attackers to spoof `127.0.0.1` and evade IP-based banning
+
 ## [0.16.0] - 2026-04-06
 
 ### ⚠️ Breaking Changes

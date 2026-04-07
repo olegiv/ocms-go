@@ -18,7 +18,7 @@ Sentinel is an IP security module for oCMS that provides IP banning, automatic b
 
 ### How It Works
 
-Sentinel registers middleware at position 3 in the global middleware chain (after `RequestID` and `RealIP`). For every request, the middleware:
+Sentinel registers middleware at position 3 in the global middleware chain (after `RequestID` and `TrustedRealIP`). For every request, the middleware:
 
 1. Checks if the module is active (skips if deactivated at runtime)
 2. Checks the IP whitelist (whitelisted IPs bypass all checks)

@@ -91,6 +91,7 @@ oCMS implements defense-in-depth security measures:
 
 ### Trusted Proxy Hardening
 - **Trusted Proxy Configuration**: `OCMS_TRUSTED_PROXIES` for correct client IP detection
+- **No Chi RealIP**: Replaced chi's `RealIP` middleware (which blindly trusts `True-Client-IP`, `X-Real-IP`, and `X-Forwarded-For` from any source) with a trusted-proxy-aware middleware that only reads forwarding headers from configured proxies
 - **Fail-Closed Forwarding**: Reject malformed forwarding headers from untrusted sources
 - **Production Requirement**: Configurable startup failure without trusted proxy configuration
 

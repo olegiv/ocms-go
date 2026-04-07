@@ -1411,7 +1411,17 @@ func run() error {
 
 	// Middleware stack
 	r.Use(chimw.RequestID)
-	r.Use(chimw.RealIP)
+	// Trusted-proxy-aware RealIP: only trusts forwarding headers from
+	// configured OCMS_TRUSTED_PROXIES, preventing True-Client-IP /
+	// X-Forwarded-For spoofing by external clients.
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if ip := middleware.GetClientIP(r); ip != "" {
+				r.RemoteAddr = ip
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
 	// Sentinel IP ban check (always registered, checks active status at runtime)
 	r.Use(sentinelModule.GetMiddleware())
 	slog.Info("sentinel IP ban middleware registered")
