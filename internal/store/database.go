@@ -49,7 +49,22 @@ func NewDB(path string) (*sql.DB, error) {
 
 // NewDBWithConfig opens a SQLite database connection with custom configuration.
 func NewDBWithConfig(path string, cfg DBConfig) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", path)
+	// Pass pragmas via DSN so they apply to every connection in the pool,
+	// not just the first one. Without this, new pooled connections lack
+	// busy_timeout and journal_mode, causing SQLITE_BUSY under load.
+	dsn := path +
+		"?_pragma=busy_timeout(5000)" +
+		"&_pragma=journal_mode(WAL)" +
+		"&_pragma=synchronous(NORMAL)" +
+		"&_pragma=cache_size(-64000)" +
+		"&_pragma=foreign_keys(ON)" +
+		"&_pragma=temp_store(MEMORY)" +
+		"&_pragma=mmap_size(268435456)" +
+		"&_pragma=page_size(4096)" +
+		"&_pragma=wal_autocheckpoint(1000)" +
+		"&_txlock=immediate"
+
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("opening database: %w", err)
 	}
@@ -60,25 +75,10 @@ func NewDBWithConfig(path string, cfg DBConfig) (*sql.DB, error) {
 	db.SetConnMaxLifetime(cfg.ConnMaxLifetime)
 	db.SetConnMaxIdleTime(cfg.ConnMaxIdleTime)
 
-	// Configure SQLite for better performance and concurrency
-	pragmas := []string{
-		"PRAGMA journal_mode=WAL",        // Write-Ahead Logging for better concurrency
-		"PRAGMA busy_timeout=5000",       // Wait 5s when database is locked
-		"PRAGMA synchronous=NORMAL",      // Good balance of safety and speed
-		"PRAGMA cache_size=-64000",       // 64MB cache
-		"PRAGMA foreign_keys=ON",         // Enforce foreign key constraints
-		"PRAGMA temp_store=MEMORY",       // Store temp tables in memory
-		"PRAGMA mmap_size=268435456",     // 256MB memory-mapped I/O
-		"PRAGMA page_size=4096",          // 4KB page size (standard)
-		"PRAGMA wal_autocheckpoint=1000", // Auto checkpoint every 1000 pages
-		"PRAGMA optimize",                // Run query planner optimizations
-	}
-
-	for _, pragma := range pragmas {
-		if _, err := db.Exec(pragma); err != nil {
-			_ = db.Close()
-			return nil, fmt.Errorf("setting pragma %q: %w", pragma, err)
-		}
+	// Run one-time optimizations on the first connection
+	if _, err := db.Exec("PRAGMA optimize"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("running PRAGMA optimize: %w", err)
 	}
 
 	// Verify connection
