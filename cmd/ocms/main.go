@@ -1149,6 +1149,11 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("opening error log file %s: %w", cfg.ErrorLogPath, err)
 		}
+		// Enforce permissions on pre-existing files (OpenFile only sets mode on create).
+		if err = errorLogFile.Chmod(0600); err != nil {
+			errorLogFile.Close()
+			return fmt.Errorf("setting error log file permissions %s: %w", cfg.ErrorLogPath, err)
+		}
 		defer errorLogFile.Close()
 
 		errorHandler := slog.NewTextHandler(errorLogFile, &slog.HandlerOptions{

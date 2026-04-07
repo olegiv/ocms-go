@@ -220,6 +220,13 @@ func (m *Module) registerHooks() {
 				return data, nil
 			}
 
+			// Skip auto-ban for authenticated admins/editors to prevent
+			// accidental self-lockout during form testing.
+			if m.isAdminOrEditorCtx(ctx) {
+				m.ctx.Logger.Debug("skipping honeypot auto-ban for admin/editor", "ip", ip)
+				return data, nil
+			}
+
 			formSlug, _ := params["form_slug"].(string)
 			requestURL, _ := params["request_url"].(string)
 
@@ -292,6 +299,29 @@ func (m *Module) isAdminOrEditor(r *http.Request) (isAdmin bool) {
 
 	queries := store.New(m.ctx.DB)
 	user, err := queries.GetUserByID(r.Context(), userID)
+	if err != nil {
+		return false
+	}
+
+	return user.Role == roleAdmin || user.Role == roleEditor
+}
+
+// isAdminOrEditorCtx checks if the context belongs to an authenticated admin or editor.
+// Used by hook handlers where the context comes from inside the middleware chain
+// (session data is already loaded), unlike the middleware path where isAdminOrEditor
+// must handle missing session context.
+func (m *Module) isAdminOrEditorCtx(ctx context.Context) bool {
+	if m.sessionManager == nil || m.ctx == nil {
+		return false
+	}
+
+	userID := m.sessionManager.GetInt64(ctx, sessionKeyUserID)
+	if userID == 0 {
+		return false
+	}
+
+	queries := store.New(m.ctx.DB)
+	user, err := queries.GetUserByID(ctx, userID)
 	if err != nil {
 		return false
 	}
