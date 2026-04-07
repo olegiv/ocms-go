@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/olegiv/ocms-go/internal/handler"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
 )
@@ -106,14 +107,14 @@ func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
 		Offset: int64(offset),
 	})
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to list tags", "error", err)
+		h.logAndRespondError(w, r, model.EventCategoryTag, "Failed to list tags", "error", err)
 		return
 	}
 
 	// Get total count
 	total, err := h.queries.CountTags(ctx)
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to count tags", "error", err)
+		h.logAndRespondError(w, r, model.EventCategoryTag, "Failed to count tags", "error", err)
 		return
 	}
 
@@ -186,7 +187,7 @@ func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	// Resolve language code
 	langCode, langErr := h.resolveLanguageCode(ctx, req.LanguageCode)
 	if langErr != nil {
-		LogAndWriteInternalError(w, "Failed to resolve default language", "error", langErr)
+		h.logAndRespondError(w, r, model.EventCategoryTag, "Failed to resolve default language", "error", langErr)
 		return
 	}
 
@@ -199,9 +200,12 @@ func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:    now,
 	})
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to create tag", "error", err)
+		h.logAndRespondError(w, r, model.EventCategoryTag, "Failed to create tag", "error", err)
 		return
 	}
+
+	h.logEvent(r, model.EventCategoryTag, model.EventLevelInfo, "API: Tag created",
+		map[string]any{"tag_id": tag.ID, "name": tag.Name, "slug": tag.Slug})
 
 	resp := TagAPIResponse{
 		ID:           tag.ID,
@@ -250,7 +254,7 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 
 	tag, err := h.queries.UpdateTag(ctx, params)
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to update tag", "error", err, "tag_id", existing.ID)
+		h.logAndRespondError(w, r, model.EventCategoryTag, "Failed to update tag", "error", err, "tag_id", existing.ID)
 		return
 	}
 
@@ -259,6 +263,9 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		pageCount = 0
 	}
+
+	h.logEvent(r, model.EventCategoryTag, model.EventLevelInfo, "API: Tag updated",
+		map[string]any{"tag_id": tag.ID, "name": tag.Name, "slug": tag.Slug})
 
 	resp := TagAPIResponse{
 		ID:           tag.ID,
@@ -285,9 +292,12 @@ func (h *Handler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 
 	// Delete tag (page_tags associations are handled by CASCADE or manually)
 	if err := h.queries.DeleteTag(ctx, tag.ID); err != nil {
-		LogAndWriteInternalError(w, "Failed to delete tag", "error", err, "tag_id", tag.ID)
+		h.logAndRespondError(w, r, model.EventCategoryTag, "Failed to delete tag", "error", err, "tag_id", tag.ID)
 		return
 	}
+
+	h.logEvent(r, model.EventCategoryTag, model.EventLevelInfo, "API: Tag deleted",
+		map[string]any{"tag_id": tag.ID, "name": tag.Name, "slug": tag.Slug})
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -307,7 +317,7 @@ func (h *Handler) ListCategories(w http.ResponseWriter, r *http.Request) {
 	// Get all categories with usage counts
 	categories, err := h.queries.GetCategoryUsageCounts(ctx)
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to list categories", "error", err)
+		h.logAndRespondError(w, r, model.EventCategoryCategory, "Failed to list categories", "error", err)
 		return
 	}
 
@@ -392,7 +402,7 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(err, sql.ErrNoRows) {
 				WriteValidationError(w, map[string]string{"parent_id": "Parent category not found"})
 			} else {
-				LogAndWriteInternalError(w, "Failed to validate parent category", "error", err)
+				h.logAndRespondError(w, r, model.EventCategoryCategory, "Failed to validate parent category", "error", err)
 			}
 			return
 		}
@@ -401,7 +411,7 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	// Resolve language code
 	langCode, langErr := h.resolveLanguageCode(ctx, req.LanguageCode)
 	if langErr != nil {
-		LogAndWriteInternalError(w, "Failed to resolve default language", "error", langErr)
+		h.logAndRespondError(w, r, model.EventCategoryCategory, "Failed to resolve default language", "error", langErr)
 		return
 	}
 
@@ -426,9 +436,12 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 
 	category, err := h.queries.CreateCategory(ctx, params)
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to create category", "error", err)
+		h.logAndRespondError(w, r, model.EventCategoryCategory, "Failed to create category", "error", err)
 		return
 	}
+
+	h.logEvent(r, model.EventCategoryCategory, model.EventLevelInfo, "API: Category created",
+		map[string]any{"category_id": category.ID, "name": category.Name, "slug": category.Slug})
 
 	WriteCreated(w, categoryToAPIResponse(category, 0))
 }
@@ -486,7 +499,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 				if errors.Is(err, sql.ErrNoRows) {
 					WriteValidationError(w, map[string]string{"parent_id": "Parent category not found"})
 				} else {
-					LogAndWriteInternalError(w, "Failed to validate parent category", "error", err)
+					h.logAndRespondError(w, r, model.EventCategoryCategory, "Failed to validate parent category", "error", err)
 				}
 				return
 			}
@@ -509,7 +522,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 
 	category, err := h.queries.UpdateCategory(ctx, params)
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to update category", "error", err, "category_id", existing.ID)
+		h.logAndRespondError(w, r, model.EventCategoryCategory, "Failed to update category", "error", err, "category_id", existing.ID)
 		return
 	}
 
@@ -518,6 +531,9 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		pageCount = 0
 	}
+
+	h.logEvent(r, model.EventCategoryCategory, model.EventLevelInfo, "API: Category updated",
+		map[string]any{"category_id": category.ID, "name": category.Name, "slug": category.Slug})
 
 	WriteSuccess(w, categoryToAPIResponse(category, pageCount), nil)
 }
@@ -541,9 +557,12 @@ func (h *Handler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 
 	// Delete category (page_categories associations are handled by CASCADE or manually)
 	if err := h.queries.DeleteCategory(ctx, category.ID); err != nil {
-		LogAndWriteInternalError(w, "Failed to delete category", "error", err, "category_id", category.ID)
+		h.logAndRespondError(w, r, model.EventCategoryCategory, "Failed to delete category", "error", err, "category_id", category.ID)
 		return
 	}
+
+	h.logEvent(r, model.EventCategoryCategory, model.EventLevelInfo, "API: Category deleted",
+		map[string]any{"category_id": category.ID, "name": category.Name, "slug": category.Slug})
 
 	w.WriteHeader(http.StatusNoContent)
 }

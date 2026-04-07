@@ -18,6 +18,8 @@ import (
 	"github.com/olegiv/ocms-go/internal/cache"
 	"github.com/olegiv/ocms-go/internal/handler"
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
+	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 )
 
@@ -26,6 +28,7 @@ type Handler struct {
 	db                        *sql.DB
 	queries                   *store.Queries
 	cacheManager              *cache.Manager
+	eventService              *service.EventService
 	blockSuspiciousPageMarkup bool
 	sanitizePageHTML          bool
 }
@@ -55,6 +58,58 @@ func (h *Handler) SetBlockSuspiciousPageMarkup(block bool) {
 // HTML body content before persistence.
 func (h *Handler) SetSanitizePageHTML(enabled bool) {
 	h.sanitizePageHTML = enabled
+}
+
+// SetEventService sets the event service for audit logging.
+func (h *Handler) SetEventService(es *service.EventService) {
+	h.eventService = es
+}
+
+// apiUserIDPtr returns the API key creator's user ID pointer.
+func (h *Handler) apiUserIDPtr(r *http.Request) *int64 {
+	if key := middleware.GetAPIKey(r); key != nil {
+		id := key.CreatedBy
+		return &id
+	}
+	return nil
+}
+
+// apiEventMeta returns metadata with API source info merged with extra fields.
+func (h *Handler) apiEventMeta(r *http.Request, extra map[string]any) map[string]any {
+	m := map[string]any{"source": "api"}
+	if key := middleware.GetAPIKey(r); key != nil {
+		m["api_key_id"] = key.ID
+		m["api_key_name"] = key.Name
+	}
+	for k, v := range extra {
+		m[k] = v
+	}
+	return m
+}
+
+// logEvent logs an event via the event service if available.
+func (h *Handler) logEvent(r *http.Request, category, level, message string, extra map[string]any) {
+	if h.eventService == nil {
+		return
+	}
+	_ = h.eventService.LogEvent(
+		r.Context(), level, category, message,
+		h.apiUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r),
+		h.apiEventMeta(r, extra),
+	)
+}
+
+// logAndRespondError logs the error via slog and the event service, then writes a 500 response.
+func (h *Handler) logAndRespondError(w http.ResponseWriter, r *http.Request, category, message string, args ...any) {
+	slog.Error(message, args...)
+	if h.eventService != nil {
+		_ = h.eventService.LogEvent(
+			r.Context(), model.EventLevelError, category, "API error: "+message,
+			h.apiUserIDPtr(r), middleware.GetClientIP(r), middleware.GetRequestURL(r),
+			h.apiEventMeta(r, map[string]any{"error": message}),
+		)
+	}
+	WriteInternalError(w, message)
 }
 
 // invalidatePageCache invalidates the page cache after a page is modified.

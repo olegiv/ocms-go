@@ -328,7 +328,7 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to list pages", "error", err)
+		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to list pages", "error", err)
 		return
 	}
 
@@ -433,7 +433,7 @@ func (h *Handler) GetPageBySlug(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, sql.ErrNoRows) {
 			WriteNotFound(w, "Page not found")
 		} else {
-			LogAndWriteInternalError(w, "Failed to retrieve page", "error", err)
+			h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to retrieve page", "error", err)
 		}
 		return
 	}
@@ -499,7 +499,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	// Resolve language code (default to system default language if not provided)
 	langCode, langErr := h.resolveLanguageCode(ctx, req.LanguageCode)
 	if langErr != nil {
-		LogAndWriteInternalError(w, "Failed to resolve default language", "error", langErr)
+		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to resolve default language", "error", langErr)
 		return
 	}
 
@@ -568,7 +568,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(err, sql.ErrNoRows) {
 				WriteValidationError(w, map[string]string{"category_ids": fmt.Sprintf("Category %d not found", catID)})
 			} else {
-				LogAndWriteInternalError(w, "Failed to validate category", "error", err, "category_id", catID)
+				h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to validate category", "error", err, "category_id", catID)
 			}
 			return
 		}
@@ -577,7 +577,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	// All writes (page, categories, tags, new tag creation) in one transaction
 	tx, err := h.db.BeginTx(ctx, nil)
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to start transaction", "error", err)
+		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to start transaction", "error", err)
 		return
 	}
 	defer tx.Rollback() //nolint:errcheck
@@ -602,7 +602,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(err, sql.ErrNoRows) {
 				WriteValidationError(w, map[string]string{"tag_ids": fmt.Sprintf("Tag %d not found", tagID)})
 			} else {
-				LogAndWriteInternalError(w, "Failed to validate tag", "error", err, "tag_id", tagID)
+				h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to validate tag", "error", err, "tag_id", tagID)
 			}
 			return
 		}
@@ -610,7 +610,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 
 	page, err := txq.CreatePage(ctx, params)
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to create page", "error", err)
+		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to create page", "error", err)
 		return
 	}
 
@@ -619,7 +619,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 			PageID:     page.ID,
 			CategoryID: catID,
 		}); err != nil {
-			LogAndWriteInternalError(w, "Failed to add category to page", "error", err, "page_id", page.ID, "category_id", catID)
+			h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to add category to page", "error", err, "page_id", page.ID, "category_id", catID)
 			return
 		}
 	}
@@ -629,18 +629,21 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 			PageID: page.ID,
 			TagID:  tagID,
 		}); err != nil {
-			LogAndWriteInternalError(w, "Failed to add tag to page", "error", err, "page_id", page.ID, "tag_id", tagID)
+			h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to add tag to page", "error", err, "page_id", page.ID, "tag_id", tagID)
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		LogAndWriteInternalError(w, "Failed to commit page creation", "error", err)
+		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to commit page creation", "error", err)
 		return
 	}
 
 	// Invalidate page cache (for sitemap regeneration on next request)
 	h.invalidatePageCache(page.ID)
+
+	h.logEvent(r, model.EventCategoryPage, model.EventLevelInfo, "API: Page created",
+		map[string]any{"page_id": page.ID, "slug": page.Slug})
 
 	resp := storePageToResponse(page)
 
@@ -706,7 +709,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 				if errors.Is(err, sql.ErrNoRows) {
 					WriteValidationError(w, map[string]string{"category_ids": fmt.Sprintf("Category %d not found", catID)})
 				} else {
-					LogAndWriteInternalError(w, "Failed to validate category", "error", err, "category_id", catID)
+					h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to validate category", "error", err, "category_id", catID)
 				}
 				return
 			}
@@ -718,7 +721,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := h.db.BeginTx(ctx, nil)
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to start transaction", "error", err)
+		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to start transaction", "error", err)
 		return
 	}
 	defer tx.Rollback() //nolint:errcheck
@@ -747,7 +750,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 				if errors.Is(err, sql.ErrNoRows) {
 					WriteValidationError(w, map[string]string{"tag_ids": fmt.Sprintf("Tag %d not found", tagID)})
 				} else {
-					LogAndWriteInternalError(w, "Failed to validate tag", "error", err, "tag_id", tagID)
+					h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to validate tag", "error", err, "tag_id", tagID)
 				}
 				return
 			}
@@ -756,13 +759,13 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 
 	page, err := txq.UpdatePage(ctx, params)
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to update page", "error", err, "page_id", existing.ID)
+		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to update page", "error", err, "page_id", existing.ID)
 		return
 	}
 
 	if req.CategoryIDs != nil {
 		if err := txq.ClearPageCategories(ctx, existing.ID); err != nil {
-			LogAndWriteInternalError(w, "Failed to clear page categories", "error", err, "page_id", existing.ID)
+			h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to clear page categories", "error", err, "page_id", existing.ID)
 			return
 		}
 		for _, catID := range *req.CategoryIDs {
@@ -770,7 +773,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 				PageID:     existing.ID,
 				CategoryID: catID,
 			}); err != nil {
-				LogAndWriteInternalError(w, "Failed to add category to page", "error", err, "page_id", existing.ID, "category_id", catID)
+				h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to add category to page", "error", err, "page_id", existing.ID, "category_id", catID)
 				return
 			}
 		}
@@ -778,7 +781,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 
 	if hasTags {
 		if err := txq.ClearPageTags(ctx, existing.ID); err != nil {
-			LogAndWriteInternalError(w, "Failed to clear page tags", "error", err, "page_id", existing.ID)
+			h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to clear page tags", "error", err, "page_id", existing.ID)
 			return
 		}
 		for _, tagID := range tagIDs {
@@ -786,19 +789,22 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 				PageID: existing.ID,
 				TagID:  tagID,
 			}); err != nil {
-				LogAndWriteInternalError(w, "Failed to add tag to page", "error", err, "page_id", existing.ID, "tag_id", tagID)
+				h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to add tag to page", "error", err, "page_id", existing.ID, "tag_id", tagID)
 				return
 			}
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		LogAndWriteInternalError(w, "Failed to commit page update", "error", err, "page_id", existing.ID)
+		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to commit page update", "error", err, "page_id", existing.ID)
 		return
 	}
 
 	// Invalidate page cache
 	h.invalidatePageCache(page.ID)
+
+	h.logEvent(r, model.EventCategoryPage, model.EventLevelInfo, "API: Page updated",
+		map[string]any{"page_id": page.ID, "slug": page.Slug})
 
 	resp := storePageToResponse(page)
 
@@ -924,7 +930,7 @@ func (h *Handler) DeletePage(w http.ResponseWriter, r *http.Request) {
 	// Delete page and associated data in a transaction
 	tx, err := h.db.BeginTx(ctx, nil)
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to start transaction", "error", err)
+		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to start transaction", "error", err)
 		return
 	}
 	defer tx.Rollback() //nolint:errcheck
@@ -932,29 +938,32 @@ func (h *Handler) DeletePage(w http.ResponseWriter, r *http.Request) {
 	txq := h.queries.WithTx(tx)
 
 	if err := txq.ClearPageCategories(ctx, page.ID); err != nil {
-		LogAndWriteInternalError(w, "Failed to clear page categories", "error", err, "page_id", page.ID)
+		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to clear page categories", "error", err, "page_id", page.ID)
 		return
 	}
 	if err := txq.ClearPageTags(ctx, page.ID); err != nil {
-		LogAndWriteInternalError(w, "Failed to clear page tags", "error", err, "page_id", page.ID)
+		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to clear page tags", "error", err, "page_id", page.ID)
 		return
 	}
 	if err := txq.DeletePageVersions(ctx, page.ID); err != nil {
-		LogAndWriteInternalError(w, "Failed to delete page versions", "error", err, "page_id", page.ID)
+		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to delete page versions", "error", err, "page_id", page.ID)
 		return
 	}
 	if err := txq.DeletePage(ctx, page.ID); err != nil {
-		LogAndWriteInternalError(w, "Failed to delete page", "error", err, "page_id", page.ID)
+		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to delete page", "error", err, "page_id", page.ID)
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		LogAndWriteInternalError(w, "Failed to commit page deletion", "error", err, "page_id", page.ID)
+		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to commit page deletion", "error", err, "page_id", page.ID)
 		return
 	}
 
 	// Invalidate page cache
 	h.invalidatePageCache(page.ID)
+
+	h.logEvent(r, model.EventCategoryPage, model.EventLevelInfo, "API: Page deleted",
+		map[string]any{"page_id": page.ID, "slug": page.Slug})
 
 	w.WriteHeader(http.StatusNoContent)
 }

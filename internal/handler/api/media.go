@@ -16,6 +16,7 @@ import (
 
 	"github.com/olegiv/ocms-go/internal/handler"
 	"github.com/olegiv/ocms-go/internal/middleware"
+	"github.com/olegiv/ocms-go/internal/model"
 	"github.com/olegiv/ocms-go/internal/service"
 	"github.com/olegiv/ocms-go/internal/store"
 	"github.com/olegiv/ocms-go/internal/util"
@@ -266,7 +267,7 @@ func (h *Handler) ListMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to list media", "error", err)
+		h.logAndRespondError(w, r, model.EventCategoryMedia, "Failed to list media", "error", err)
 		return
 	}
 
@@ -345,7 +346,7 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 	queries := store.New(h.db)
 	defaultLang, err := queries.GetDefaultLanguage(ctx)
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to get default language", "error", err)
+		h.logAndRespondError(w, r, model.EventCategoryMedia, "Failed to get default language", "error", err)
 		return
 	}
 
@@ -399,6 +400,9 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 
 		// Add variants to response
 		populateMediaVariants(&resp, result.Variants)
+
+		h.logEvent(r, model.EventCategoryMedia, model.EventLevelInfo, "API: Media uploaded",
+			map[string]any{"media_id": result.Media.ID, "filename": result.Media.Filename})
 
 		responses = append(responses, resp)
 	}
@@ -481,9 +485,12 @@ func (h *Handler) UpdateMedia(w http.ResponseWriter, r *http.Request) {
 	// Update media
 	media, err := h.queries.UpdateMedia(ctx, params)
 	if err != nil {
-		LogAndWriteInternalError(w, "Failed to update media", "error", err, "media_id", existing.ID)
+		h.logAndRespondError(w, r, model.EventCategoryMedia, "Failed to update media", "error", err, "media_id", existing.ID)
 		return
 	}
+
+	h.logEvent(r, model.EventCategoryMedia, model.EventLevelInfo, "API: Media updated",
+		map[string]any{"media_id": media.ID, "filename": media.Filename})
 
 	resp := storeMediaToResponse(media)
 
@@ -507,9 +514,12 @@ func (h *Handler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
 	// Create media service and delete
 	mediaService := service.NewMediaService(h.db, "./uploads")
 	if err := mediaService.Delete(ctx, media.ID); err != nil {
-		LogAndWriteInternalError(w, "Failed to delete media", "error", err, "media_id", media.ID)
+		h.logAndRespondError(w, r, model.EventCategoryMedia, "Failed to delete media", "error", err, "media_id", media.ID)
 		return
 	}
+
+	h.logEvent(r, model.EventCategoryMedia, model.EventLevelInfo, "API: Media deleted",
+		map[string]any{"media_id": media.ID, "filename": media.Filename})
 
 	w.WriteHeader(http.StatusNoContent)
 }
