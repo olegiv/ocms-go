@@ -310,6 +310,39 @@ func TestLogAndRespondError_NilEventService(t *testing.T) {
 	}
 }
 
+func TestAPILogger_Error500_NilEventService(t *testing.T) {
+	h := &Handler{} // eventService is nil
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/pages", nil)
+
+	log := h.newAPILogger(req, "page")
+	log.Error500(w, "Failed to create page", "error", errors.New("db error"))
+
+	assertStatusCode(t, w, http.StatusInternalServerError)
+	resp := assertErrorResponse(t, w, "internal_error")
+	if resp.Error.Message != "Failed to create page" {
+		t.Errorf("expected message 'Failed to create page', got %q", resp.Error.Message)
+	}
+}
+
+func TestAPILogger_Info_NilEventService(t *testing.T) {
+	h := &Handler{} // eventService is nil
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/pages", nil)
+
+	log := h.newAPILogger(req, "page")
+	// Should not panic
+	log.Info("API: Page created", map[string]any{"page_id": int64(1)})
+}
+
+func TestAPILogger_Error_NilEventService(t *testing.T) {
+	h := &Handler{} // eventService is nil
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/media", nil)
+
+	log := h.newAPILogger(req, "media")
+	// Should not panic
+	log.Error("API: Media upload failed", map[string]any{"filename": "test.jpg"})
+}
+
 func TestLogEvent_NilEventService(t *testing.T) {
 	h := &Handler{} // eventService is nil
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/pages", nil)

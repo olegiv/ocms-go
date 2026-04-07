@@ -182,6 +182,7 @@ func populateMediaVariants(resp *MediaResponse, variants []store.MediaVariant) {
 // Public: returns all media
 // With API key: enhanced access (same for now, could add private media later)
 func (h *Handler) ListMedia(w http.ResponseWriter, r *http.Request) {
+	log := h.newAPILogger(r, model.EventCategoryMedia)
 	ctx := r.Context()
 
 	// Parse query parameters
@@ -267,7 +268,7 @@ func (h *Handler) ListMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryMedia, "Failed to list media", "error", err)
+		log.Error500(w, "Failed to list media", "error", err)
 		return
 	}
 
@@ -313,6 +314,7 @@ func (h *Handler) GetMedia(w http.ResponseWriter, r *http.Request) {
 // Requires media:write permission
 // Accepts multipart/form-data with file(s)
 func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
+	log := h.newAPILogger(r, model.EventCategoryMedia)
 	ctx := r.Context()
 
 	// Hard cap request body size before multipart parsing.
@@ -346,7 +348,7 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 	queries := store.New(h.db)
 	defaultLang, err := queries.GetDefaultLanguage(ctx)
 	if err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryMedia, "Failed to get default language", "error", err)
+		log.Error500(w, "Failed to get default language", "error", err)
 		return
 	}
 
@@ -388,8 +390,7 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 				errMsg = clientErr.Message
 			} else {
 				slog.Error("media upload failed", "error", err, "filename", fileHeader.Filename)
-				h.logEvent(r, model.EventCategoryMedia, model.EventLevelError, "API: Media upload failed",
-					map[string]any{"filename": fileHeader.Filename})
+				log.Error("API: Media upload failed", map[string]any{"filename": fileHeader.Filename})
 			}
 			uploadErrors = append(uploadErrors, map[string]string{
 				"filename": fileHeader.Filename,
@@ -403,7 +404,7 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		// Add variants to response
 		populateMediaVariants(&resp, result.Variants)
 
-		h.logEvent(r, model.EventCategoryMedia, model.EventLevelInfo, "API: Media uploaded",
+		log.Info( "API: Media uploaded",
 			map[string]any{"media_id": result.Media.ID, "filename": result.Media.Filename})
 
 		responses = append(responses, resp)
@@ -442,6 +443,7 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 // UpdateMedia handles PUT /api/v1/media/{id}
 // Requires media:write permission
 func (h *Handler) UpdateMedia(w http.ResponseWriter, r *http.Request) {
+	log := h.newAPILogger(r, model.EventCategoryMedia)
 	ctx := r.Context()
 
 	existing, ok := h.requireMediaForAPI(w, r)
@@ -487,11 +489,11 @@ func (h *Handler) UpdateMedia(w http.ResponseWriter, r *http.Request) {
 	// Update media
 	media, err := h.queries.UpdateMedia(ctx, params)
 	if err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryMedia, "Failed to update media", "error", err, "media_id", existing.ID)
+		log.Error500(w, "Failed to update media", "error", err, "media_id", existing.ID)
 		return
 	}
 
-	h.logEvent(r, model.EventCategoryMedia, model.EventLevelInfo, "API: Media updated",
+	log.Info( "API: Media updated",
 		map[string]any{"media_id": media.ID, "filename": media.Filename})
 
 	resp := storeMediaToResponse(media)
@@ -506,6 +508,7 @@ func (h *Handler) UpdateMedia(w http.ResponseWriter, r *http.Request) {
 // DeleteMedia handles DELETE /api/v1/media/{id}
 // Requires media:write permission
 func (h *Handler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
+	log := h.newAPILogger(r, model.EventCategoryMedia)
 	ctx := r.Context()
 
 	media, ok := h.requireMediaForAPI(w, r)
@@ -516,11 +519,11 @@ func (h *Handler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
 	// Create media service and delete
 	mediaService := service.NewMediaService(h.db, "./uploads")
 	if err := mediaService.Delete(ctx, media.ID); err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryMedia, "Failed to delete media", "error", err, "media_id", media.ID)
+		log.Error500(w, "Failed to delete media", "error", err, "media_id", media.ID)
 		return
 	}
 
-	h.logEvent(r, model.EventCategoryMedia, model.EventLevelInfo, "API: Media deleted",
+	log.Info( "API: Media deleted",
 		map[string]any{"media_id": media.ID, "filename": media.Filename})
 
 	w.WriteHeader(http.StatusNoContent)
@@ -573,5 +576,5 @@ func (h *Handler) populateMediaIncludes(ctx context.Context, resp *MediaResponse
 func (h *Handler) requireMediaForAPI(w http.ResponseWriter, r *http.Request) (store.Medium, bool) {
 	return requireEntityByID(w, r, "media", func(id int64) (store.Medium, error) {
 		return h.queries.GetMediaByID(r.Context(), id)
-	}, h.errLoggerForCategory(model.EventCategoryMedia))
+	}, h.newAPILogger(r, model.EventCategoryMedia).Error500)
 }

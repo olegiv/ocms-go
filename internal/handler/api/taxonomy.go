@@ -94,6 +94,7 @@ type UpdateCategoryRequest struct {
 // ListTags handles GET /api/v1/tags
 // Public: returns all tags with page counts
 func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
+	log := h.newAPILogger(r, model.EventCategoryTag)
 	ctx := r.Context()
 
 	// Parse pagination
@@ -107,14 +108,14 @@ func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
 		Offset: int64(offset),
 	})
 	if err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryTag, "Failed to list tags", "error", err)
+		log.Error500(w, "Failed to list tags", "error", err)
 		return
 	}
 
 	// Get total count
 	total, err := h.queries.CountTags(ctx)
 	if err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryTag, "Failed to count tags", "error", err)
+		log.Error500(w, "Failed to count tags", "error", err)
 		return
 	}
 
@@ -172,6 +173,7 @@ func (h *Handler) GetTag(w http.ResponseWriter, r *http.Request) {
 // CreateTag handles POST /api/v1/tags
 // Requires taxonomy:write permission
 func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
+	log := h.newAPILogger(r, model.EventCategoryTag)
 	ctx := r.Context()
 
 	req, ok := decodeAndValidateNameSlug[CreateTagRequest](w, r)
@@ -187,7 +189,7 @@ func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	// Resolve language code
 	langCode, langErr := h.resolveLanguageCode(ctx, req.LanguageCode)
 	if langErr != nil {
-		h.logAndRespondError(w, r, model.EventCategoryTag, "Failed to resolve default language", "error", langErr)
+		log.Error500(w, "Failed to resolve default language", "error", langErr)
 		return
 	}
 
@@ -200,11 +202,11 @@ func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:    now,
 	})
 	if err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryTag, "Failed to create tag", "error", err)
+		log.Error500(w, "Failed to create tag", "error", err)
 		return
 	}
 
-	h.logEvent(r, model.EventCategoryTag, model.EventLevelInfo, "API: Tag created",
+	log.Info( "API: Tag created",
 		map[string]any{"tag_id": tag.ID, "name": tag.Name, "slug": tag.Slug})
 
 	resp := TagAPIResponse{
@@ -223,6 +225,7 @@ func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 // UpdateTag handles PUT /api/v1/tags/{id}
 // Requires taxonomy:write permission
 func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
+	log := h.newAPILogger(r, model.EventCategoryTag)
 	ctx := r.Context()
 
 	existing, ok := h.requireTagForAPI(w, r)
@@ -254,7 +257,7 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 
 	tag, err := h.queries.UpdateTag(ctx, params)
 	if err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryTag, "Failed to update tag", "error", err, "tag_id", existing.ID)
+		log.Error500(w, "Failed to update tag", "error", err, "tag_id", existing.ID)
 		return
 	}
 
@@ -264,7 +267,7 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 		pageCount = 0
 	}
 
-	h.logEvent(r, model.EventCategoryTag, model.EventLevelInfo, "API: Tag updated",
+	log.Info( "API: Tag updated",
 		map[string]any{"tag_id": tag.ID, "name": tag.Name, "slug": tag.Slug})
 
 	resp := TagAPIResponse{
@@ -283,6 +286,7 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 // DeleteTag handles DELETE /api/v1/tags/{id}
 // Requires taxonomy:write permission
 func (h *Handler) DeleteTag(w http.ResponseWriter, r *http.Request) {
+	log := h.newAPILogger(r, model.EventCategoryTag)
 	ctx := r.Context()
 
 	tag, ok := h.requireTagForAPI(w, r)
@@ -292,11 +296,11 @@ func (h *Handler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 
 	// Delete tag (page_tags associations are handled by CASCADE or manually)
 	if err := h.queries.DeleteTag(ctx, tag.ID); err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryTag, "Failed to delete tag", "error", err, "tag_id", tag.ID)
+		log.Error500(w, "Failed to delete tag", "error", err, "tag_id", tag.ID)
 		return
 	}
 
-	h.logEvent(r, model.EventCategoryTag, model.EventLevelInfo, "API: Tag deleted",
+	log.Info( "API: Tag deleted",
 		map[string]any{"tag_id": tag.ID, "name": tag.Name, "slug": tag.Slug})
 
 	w.WriteHeader(http.StatusNoContent)
@@ -309,6 +313,7 @@ func (h *Handler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 // ListCategories handles GET /api/v1/categories
 // Public: returns all categories as a nested tree structure
 func (h *Handler) ListCategories(w http.ResponseWriter, r *http.Request) {
+	log := h.newAPILogger(r, model.EventCategoryCategory)
 	ctx := r.Context()
 
 	// Check if flat list is requested
@@ -317,7 +322,7 @@ func (h *Handler) ListCategories(w http.ResponseWriter, r *http.Request) {
 	// Get all categories with usage counts
 	categories, err := h.queries.GetCategoryUsageCounts(ctx)
 	if err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryCategory, "Failed to list categories", "error", err)
+		log.Error500(w, "Failed to list categories", "error", err)
 		return
 	}
 
@@ -383,6 +388,7 @@ func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
 // CreateCategory handles POST /api/v1/categories
 // Requires taxonomy:write permission
 func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
+	log := h.newAPILogger(r, model.EventCategoryCategory)
 	ctx := r.Context()
 
 	req, ok := decodeAndValidateNameSlug[CreateCategoryRequest](w, r)
@@ -402,7 +408,7 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(err, sql.ErrNoRows) {
 				WriteValidationError(w, map[string]string{"parent_id": "Parent category not found"})
 			} else {
-				h.logAndRespondError(w, r, model.EventCategoryCategory, "Failed to validate parent category", "error", err)
+				log.Error500(w, "Failed to validate parent category", "error", err)
 			}
 			return
 		}
@@ -411,7 +417,7 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	// Resolve language code
 	langCode, langErr := h.resolveLanguageCode(ctx, req.LanguageCode)
 	if langErr != nil {
-		h.logAndRespondError(w, r, model.EventCategoryCategory, "Failed to resolve default language", "error", langErr)
+		log.Error500(w, "Failed to resolve default language", "error", langErr)
 		return
 	}
 
@@ -436,11 +442,11 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 
 	category, err := h.queries.CreateCategory(ctx, params)
 	if err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryCategory, "Failed to create category", "error", err)
+		log.Error500(w, "Failed to create category", "error", err)
 		return
 	}
 
-	h.logEvent(r, model.EventCategoryCategory, model.EventLevelInfo, "API: Category created",
+	log.Info( "API: Category created",
 		map[string]any{"category_id": category.ID, "name": category.Name, "slug": category.Slug})
 
 	WriteCreated(w, categoryToAPIResponse(category, 0))
@@ -449,6 +455,7 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 // UpdateCategory handles PUT /api/v1/categories/{id}
 // Requires taxonomy:write permission
 func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
+	log := h.newAPILogger(r, model.EventCategoryCategory)
 	ctx := r.Context()
 
 	existing, ok := h.requireCategoryForAPI(w, r)
@@ -499,7 +506,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 				if errors.Is(err, sql.ErrNoRows) {
 					WriteValidationError(w, map[string]string{"parent_id": "Parent category not found"})
 				} else {
-					h.logAndRespondError(w, r, model.EventCategoryCategory, "Failed to validate parent category", "error", err)
+					log.Error500(w, "Failed to validate parent category", "error", err)
 				}
 				return
 			}
@@ -522,7 +529,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 
 	category, err := h.queries.UpdateCategory(ctx, params)
 	if err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryCategory, "Failed to update category", "error", err, "category_id", existing.ID)
+		log.Error500(w, "Failed to update category", "error", err, "category_id", existing.ID)
 		return
 	}
 
@@ -532,7 +539,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 		pageCount = 0
 	}
 
-	h.logEvent(r, model.EventCategoryCategory, model.EventLevelInfo, "API: Category updated",
+	log.Info( "API: Category updated",
 		map[string]any{"category_id": category.ID, "name": category.Name, "slug": category.Slug})
 
 	WriteSuccess(w, categoryToAPIResponse(category, pageCount), nil)
@@ -541,6 +548,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 // DeleteCategory handles DELETE /api/v1/categories/{id}
 // Requires taxonomy:write permission
 func (h *Handler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
+	log := h.newAPILogger(r, model.EventCategoryCategory)
 	ctx := r.Context()
 
 	category, ok := h.requireCategoryForAPI(w, r)
@@ -557,11 +565,11 @@ func (h *Handler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 
 	// Delete category (page_categories associations are handled by CASCADE or manually)
 	if err := h.queries.DeleteCategory(ctx, category.ID); err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryCategory, "Failed to delete category", "error", err, "category_id", category.ID)
+		log.Error500(w, "Failed to delete category", "error", err, "category_id", category.ID)
 		return
 	}
 
-	h.logEvent(r, model.EventCategoryCategory, model.EventLevelInfo, "API: Category deleted",
+	log.Info( "API: Category deleted",
 		map[string]any{"category_id": category.ID, "name": category.Name, "slug": category.Slug})
 
 	w.WriteHeader(http.StatusNoContent)
@@ -706,7 +714,7 @@ func buildCategoryTree(categories []store.GetCategoryUsageCountsRow) []*Category
 func (h *Handler) requireTagForAPI(w http.ResponseWriter, r *http.Request) (store.Tag, bool) {
 	return requireEntityByID(w, r, "tag", func(id int64) (store.Tag, error) {
 		return h.queries.GetTagByID(r.Context(), id)
-	}, h.errLoggerForCategory(model.EventCategoryTag))
+	}, h.newAPILogger(r, model.EventCategoryTag).Error500)
 }
 
 // requireCategoryForAPI parses category ID from URL and fetches the category.
@@ -714,43 +722,43 @@ func (h *Handler) requireTagForAPI(w http.ResponseWriter, r *http.Request) (stor
 func (h *Handler) requireCategoryForAPI(w http.ResponseWriter, r *http.Request) (store.Category, bool) {
 	return requireEntityByID(w, r, "category", func(id int64) (store.Category, error) {
 		return h.queries.GetCategoryByID(r.Context(), id)
-	}, h.errLoggerForCategory(model.EventCategoryCategory))
+	}, h.newAPILogger(r, model.EventCategoryCategory).Error500)
 }
 
 // checkTagSlugUnique checks if a tag slug is unique for creation.
 // Returns true if unique, false if duplicate or error (response already written).
 func (h *Handler) checkTagSlugUnique(w http.ResponseWriter, r *http.Request, ctx context.Context, slug string) bool {
-	return checkSlugUnique(w, r, func() (int64, error) {
+	return checkSlugUnique(w, func() (int64, error) {
 		return h.queries.TagSlugExists(ctx, slug)
-	}, h.errLoggerForCategory(model.EventCategoryTag))
+	}, h.newAPILogger(r, model.EventCategoryTag).Error500)
 }
 
 // checkTagSlugUniqueExcluding checks if a tag slug is unique for update (excluding current tag).
 // Returns true if unique, false if duplicate or error (response already written).
 func (h *Handler) checkTagSlugUniqueExcluding(w http.ResponseWriter, r *http.Request, ctx context.Context, slug string, tagID int64) bool {
-	return checkSlugUnique(w, r, func() (int64, error) {
+	return checkSlugUnique(w, func() (int64, error) {
 		return h.queries.TagSlugExistsExcluding(ctx, store.TagSlugExistsExcludingParams{
 			Slug: slug,
 			ID:   tagID,
 		})
-	}, h.errLoggerForCategory(model.EventCategoryTag))
+	}, h.newAPILogger(r, model.EventCategoryTag).Error500)
 }
 
 // checkCategorySlugUnique checks if a category slug is unique for creation.
 // Returns true if unique, false if duplicate or error (response already written).
 func (h *Handler) checkCategorySlugUnique(w http.ResponseWriter, r *http.Request, ctx context.Context, slug string) bool {
-	return checkSlugUnique(w, r, func() (int64, error) {
+	return checkSlugUnique(w, func() (int64, error) {
 		return h.queries.CategorySlugExists(ctx, slug)
-	}, h.errLoggerForCategory(model.EventCategoryCategory))
+	}, h.newAPILogger(r, model.EventCategoryCategory).Error500)
 }
 
 // checkCategorySlugUniqueExcluding checks if a category slug is unique for update (excluding current category).
 // Returns true if unique, false if duplicate or error (response already written).
 func (h *Handler) checkCategorySlugUniqueExcluding(w http.ResponseWriter, r *http.Request, ctx context.Context, slug string, categoryID int64) bool {
-	return checkSlugUnique(w, r, func() (int64, error) {
+	return checkSlugUnique(w, func() (int64, error) {
 		return h.queries.CategorySlugExistsExcluding(ctx, store.CategorySlugExistsExcludingParams{
 			Slug: slug,
 			ID:   categoryID,
 		})
-	}, h.errLoggerForCategory(model.EventCategoryCategory))
+	}, h.newAPILogger(r, model.EventCategoryCategory).Error500)
 }

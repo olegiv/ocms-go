@@ -65,6 +65,35 @@ func (h *Handler) SetEventService(es *service.EventService) {
 	h.eventService = es
 }
 
+// apiLogger provides category-scoped event logging for API handlers.
+// Create one per handler method via h.newAPILogger() to avoid repeating
+// the request and category on every logging call.
+type apiLogger struct {
+	h        *Handler
+	r        *http.Request
+	category string
+}
+
+// newAPILogger creates a logger scoped to a request and event category.
+func (h *Handler) newAPILogger(r *http.Request, category string) *apiLogger {
+	return &apiLogger{h: h, r: r, category: category}
+}
+
+// Info logs a success event to the database event log.
+func (l *apiLogger) Info(message string, meta map[string]any) {
+	l.h.logEvent(l.r, l.category, model.EventLevelInfo, message, meta)
+}
+
+// Error logs an error event to the database event log (without writing an HTTP response).
+func (l *apiLogger) Error(message string, meta map[string]any) {
+	l.h.logEvent(l.r, l.category, model.EventLevelError, message, meta)
+}
+
+// Error500 logs an error via slog and the event service, then writes a 500 response.
+func (l *apiLogger) Error500(w http.ResponseWriter, message string, args ...any) {
+	l.h.logAndRespondError(w, l.r, l.category, message, args...)
+}
+
 // apiUserIDPtr returns the API key creator's user ID pointer.
 func (h *Handler) apiUserIDPtr(r *http.Request) *int64 {
 	if key := middleware.GetAPIKey(r); key != nil {
@@ -278,23 +307,16 @@ func (h *Handler) AuthInfo(w http.ResponseWriter, r *http.Request) {
 // SlugExistsChecker is a function that checks if a slug exists (returns count and error).
 type SlugExistsChecker func() (int64, error)
 
-// internalErrorLogger is a callback for logging 500 errors with request context.
-type internalErrorLogger func(w http.ResponseWriter, r *http.Request, category, message string, args ...any)
-
-// errLoggerForCategory returns an internalErrorLogger bound to a specific event category.
-func (h *Handler) errLoggerForCategory(category string) internalErrorLogger {
-	return func(w http.ResponseWriter, r *http.Request, _ string, message string, args ...any) {
-		h.logAndRespondError(w, r, category, message, args...)
-	}
-}
+// error500Func is a callback for logging 500 errors and writing the response.
+type error500Func func(w http.ResponseWriter, message string, args ...any)
 
 // checkSlugUnique checks if a slug is unique using the provided checker function.
 // Returns true if unique, false if duplicate or error (response already written).
-func checkSlugUnique(w http.ResponseWriter, r *http.Request, slugExists SlugExistsChecker, logErr internalErrorLogger) bool {
+func checkSlugUnique(w http.ResponseWriter, slugExists SlugExistsChecker, logErr error500Func) bool {
 	exists, err := slugExists()
 	if err != nil {
 		if logErr != nil {
-			logErr(w, r, "", "Failed to check slug", "error", err)
+			logErr(w, "Failed to check slug", "error", err)
 		} else {
 			LogAndWriteInternalError(w, "Failed to check slug", "error", err)
 		}
@@ -313,7 +335,7 @@ type EntityFetcher[T any] func(id int64) (T, error)
 // requireEntityByID parses an ID from the URL and fetches the entity.
 // Returns the entity and true if successful, or zero value and false if error (response written).
 // The entityName is used for error messages (e.g., "page", "tag", "category", "media").
-func requireEntityByID[T any](w http.ResponseWriter, r *http.Request, entityName string, fetch EntityFetcher[T], logErr internalErrorLogger) (T, bool) {
+func requireEntityByID[T any](w http.ResponseWriter, r *http.Request, entityName string, fetch EntityFetcher[T], logErr error500Func) (T, bool) {
 	var zero T
 
 	id, err := handler.ParseIDParam(r)
@@ -327,7 +349,7 @@ func requireEntityByID[T any](w http.ResponseWriter, r *http.Request, entityName
 		if errors.Is(err, sql.ErrNoRows) {
 			WriteNotFound(w, capitalizeFirst(entityName)+" not found")
 		} else if logErr != nil {
-			logErr(w, r, "", "Failed to retrieve "+entityName, "error", err)
+			logErr(w, "Failed to retrieve "+entityName, "error", err)
 		} else {
 			LogAndWriteInternalError(w, "Failed to retrieve "+entityName, "error", err)
 		}

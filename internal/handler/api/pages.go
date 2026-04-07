@@ -251,6 +251,7 @@ func storePageToResponse(p store.Page) PageResponse {
 // Public: returns only published pages
 // With API key: can filter by status
 func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
+	log := h.pageLogger(r)
 	ctx := r.Context()
 
 	// Parse query parameters
@@ -328,7 +329,7 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to list pages", "error", err)
+		log.Error500(w, "Failed to list pages", "error", err)
 		return
 	}
 
@@ -406,6 +407,7 @@ func (h *Handler) GetPage(w http.ResponseWriter, r *http.Request) {
 // GetPageBySlug handles GET /api/v1/pages/slug/{slug}
 // Public: returns only published pages
 func (h *Handler) GetPageBySlug(w http.ResponseWriter, r *http.Request) {
+	log := h.pageLogger(r)
 	ctx := r.Context()
 	slug := chi.URLParam(r, "slug")
 	include := r.URL.Query().Get("include")
@@ -433,7 +435,7 @@ func (h *Handler) GetPageBySlug(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, sql.ErrNoRows) {
 			WriteNotFound(w, "Page not found")
 		} else {
-			h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to retrieve page", "error", err)
+			log.Error500(w, "Failed to retrieve page", "error", err)
 		}
 		return
 	}
@@ -447,6 +449,7 @@ func (h *Handler) GetPageBySlug(w http.ResponseWriter, r *http.Request) {
 // CreatePage handles POST /api/v1/pages
 // Requires pages:write permission
 func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
+	log := h.pageLogger(r)
 	ctx := r.Context()
 
 	var req CreatePageRequest
@@ -499,7 +502,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	// Resolve language code (default to system default language if not provided)
 	langCode, langErr := h.resolveLanguageCode(ctx, req.LanguageCode)
 	if langErr != nil {
-		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to resolve default language", "error", langErr)
+		log.Error500(w, "Failed to resolve default language", "error", langErr)
 		return
 	}
 
@@ -568,7 +571,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(err, sql.ErrNoRows) {
 				WriteValidationError(w, map[string]string{"category_ids": fmt.Sprintf("Category %d not found", catID)})
 			} else {
-				h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to validate category", "error", err, "category_id", catID)
+				log.Error500(w, "Failed to validate category", "error", err, "category_id", catID)
 			}
 			return
 		}
@@ -577,7 +580,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	// All writes (page, categories, tags, new tag creation) in one transaction
 	tx, err := h.db.BeginTx(ctx, nil)
 	if err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to start transaction", "error", err)
+		log.Error500(w, "Failed to start transaction", "error", err)
 		return
 	}
 	defer tx.Rollback() //nolint:errcheck
@@ -602,7 +605,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(err, sql.ErrNoRows) {
 				WriteValidationError(w, map[string]string{"tag_ids": fmt.Sprintf("Tag %d not found", tagID)})
 			} else {
-				h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to validate tag", "error", err, "tag_id", tagID)
+				log.Error500(w, "Failed to validate tag", "error", err, "tag_id", tagID)
 			}
 			return
 		}
@@ -610,7 +613,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 
 	page, err := txq.CreatePage(ctx, params)
 	if err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to create page", "error", err)
+		log.Error500(w, "Failed to create page", "error", err)
 		return
 	}
 
@@ -619,7 +622,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 			PageID:     page.ID,
 			CategoryID: catID,
 		}); err != nil {
-			h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to add category to page", "error", err, "page_id", page.ID, "category_id", catID)
+			log.Error500(w, "Failed to add category to page", "error", err, "page_id", page.ID, "category_id", catID)
 			return
 		}
 	}
@@ -629,20 +632,20 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 			PageID: page.ID,
 			TagID:  tagID,
 		}); err != nil {
-			h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to add tag to page", "error", err, "page_id", page.ID, "tag_id", tagID)
+			log.Error500(w, "Failed to add tag to page", "error", err, "page_id", page.ID, "tag_id", tagID)
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to commit page creation", "error", err)
+		log.Error500(w, "Failed to commit page creation", "error", err)
 		return
 	}
 
 	// Invalidate page cache (for sitemap regeneration on next request)
 	h.invalidatePageCache(page.ID)
 
-	h.logEvent(r, model.EventCategoryPage, model.EventLevelInfo, "API: Page created",
+	log.Info( "API: Page created",
 		map[string]any{"page_id": page.ID, "slug": page.Slug})
 
 	resp := storePageToResponse(page)
@@ -657,6 +660,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 // UpdatePage handles PUT /api/v1/pages/{id}
 // Requires pages:write permission
 func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
+	log := h.pageLogger(r)
 	ctx := r.Context()
 
 	existing, ok := h.requirePageForAPI(w, r)
@@ -709,7 +713,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 				if errors.Is(err, sql.ErrNoRows) {
 					WriteValidationError(w, map[string]string{"category_ids": fmt.Sprintf("Category %d not found", catID)})
 				} else {
-					h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to validate category", "error", err, "category_id", catID)
+					log.Error500(w, "Failed to validate category", "error", err, "category_id", catID)
 				}
 				return
 			}
@@ -721,7 +725,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := h.db.BeginTx(ctx, nil)
 	if err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to start transaction", "error", err)
+		log.Error500(w, "Failed to start transaction", "error", err)
 		return
 	}
 	defer tx.Rollback() //nolint:errcheck
@@ -750,7 +754,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 				if errors.Is(err, sql.ErrNoRows) {
 					WriteValidationError(w, map[string]string{"tag_ids": fmt.Sprintf("Tag %d not found", tagID)})
 				} else {
-					h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to validate tag", "error", err, "tag_id", tagID)
+					log.Error500(w, "Failed to validate tag", "error", err, "tag_id", tagID)
 				}
 				return
 			}
@@ -759,13 +763,13 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 
 	page, err := txq.UpdatePage(ctx, params)
 	if err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to update page", "error", err, "page_id", existing.ID)
+		log.Error500(w, "Failed to update page", "error", err, "page_id", existing.ID)
 		return
 	}
 
 	if req.CategoryIDs != nil {
 		if err := txq.ClearPageCategories(ctx, existing.ID); err != nil {
-			h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to clear page categories", "error", err, "page_id", existing.ID)
+			log.Error500(w, "Failed to clear page categories", "error", err, "page_id", existing.ID)
 			return
 		}
 		for _, catID := range *req.CategoryIDs {
@@ -773,7 +777,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 				PageID:     existing.ID,
 				CategoryID: catID,
 			}); err != nil {
-				h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to add category to page", "error", err, "page_id", existing.ID, "category_id", catID)
+				log.Error500(w, "Failed to add category to page", "error", err, "page_id", existing.ID, "category_id", catID)
 				return
 			}
 		}
@@ -781,7 +785,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 
 	if hasTags {
 		if err := txq.ClearPageTags(ctx, existing.ID); err != nil {
-			h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to clear page tags", "error", err, "page_id", existing.ID)
+			log.Error500(w, "Failed to clear page tags", "error", err, "page_id", existing.ID)
 			return
 		}
 		for _, tagID := range tagIDs {
@@ -789,21 +793,21 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 				PageID: existing.ID,
 				TagID:  tagID,
 			}); err != nil {
-				h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to add tag to page", "error", err, "page_id", existing.ID, "tag_id", tagID)
+				log.Error500(w, "Failed to add tag to page", "error", err, "page_id", existing.ID, "tag_id", tagID)
 				return
 			}
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to commit page update", "error", err, "page_id", existing.ID)
+		log.Error500(w, "Failed to commit page update", "error", err, "page_id", existing.ID)
 		return
 	}
 
 	// Invalidate page cache
 	h.invalidatePageCache(page.ID)
 
-	h.logEvent(r, model.EventCategoryPage, model.EventLevelInfo, "API: Page updated",
+	log.Info( "API: Page updated",
 		map[string]any{"page_id": page.ID, "slug": page.Slug})
 
 	resp := storePageToResponse(page)
@@ -920,6 +924,7 @@ func (h *Handler) applyUpdatePageFields(w http.ResponseWriter, r *http.Request, 
 // DeletePage handles DELETE /api/v1/pages/{id}
 // Requires pages:write permission
 func (h *Handler) DeletePage(w http.ResponseWriter, r *http.Request) {
+	log := h.pageLogger(r)
 	ctx := r.Context()
 
 	page, ok := h.requirePageForAPI(w, r)
@@ -930,7 +935,7 @@ func (h *Handler) DeletePage(w http.ResponseWriter, r *http.Request) {
 	// Delete page and associated data in a transaction
 	tx, err := h.db.BeginTx(ctx, nil)
 	if err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to start transaction", "error", err)
+		log.Error500(w, "Failed to start transaction", "error", err)
 		return
 	}
 	defer tx.Rollback() //nolint:errcheck
@@ -938,31 +943,31 @@ func (h *Handler) DeletePage(w http.ResponseWriter, r *http.Request) {
 	txq := h.queries.WithTx(tx)
 
 	if err := txq.ClearPageCategories(ctx, page.ID); err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to clear page categories", "error", err, "page_id", page.ID)
+		log.Error500(w, "Failed to clear page categories", "error", err, "page_id", page.ID)
 		return
 	}
 	if err := txq.ClearPageTags(ctx, page.ID); err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to clear page tags", "error", err, "page_id", page.ID)
+		log.Error500(w, "Failed to clear page tags", "error", err, "page_id", page.ID)
 		return
 	}
 	if err := txq.DeletePageVersions(ctx, page.ID); err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to delete page versions", "error", err, "page_id", page.ID)
+		log.Error500(w, "Failed to delete page versions", "error", err, "page_id", page.ID)
 		return
 	}
 	if err := txq.DeletePage(ctx, page.ID); err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to delete page", "error", err, "page_id", page.ID)
+		log.Error500(w, "Failed to delete page", "error", err, "page_id", page.ID)
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to commit page deletion", "error", err, "page_id", page.ID)
+		log.Error500(w, "Failed to commit page deletion", "error", err, "page_id", page.ID)
 		return
 	}
 
 	// Invalidate page cache
 	h.invalidatePageCache(page.ID)
 
-	h.logEvent(r, model.EventCategoryPage, model.EventLevelInfo, "API: Page deleted",
+	log.Info( "API: Page deleted",
 		map[string]any{"page_id": page.ID, "slug": page.Slug})
 
 	w.WriteHeader(http.StatusNoContent)
@@ -987,7 +992,7 @@ func (h *Handler) writeResolveTagError(w http.ResponseWriter, r *http.Request, e
 	if errors.As(err, &ve) {
 		WriteValidationError(w, map[string]string{ve.Field: ve.Message})
 	} else {
-		h.logAndRespondError(w, r, model.EventCategoryPage, "Failed to resolve tag names", "error", err)
+		h.pageLogger(r).Error500(w, "Failed to resolve tag names", "error", err)
 	}
 }
 
@@ -1106,31 +1111,34 @@ func (h *Handler) populatePageIncludes(ctx context.Context, resp *PageResponse, 
 	}
 }
 
+// pageLogger returns a category-scoped logger for page API handlers.
+func (h *Handler) pageLogger(r *http.Request) *apiLogger {
+	return h.newAPILogger(r, model.EventCategoryPage)
+}
+
 // requirePageForAPI parses page ID from URL and fetches the page.
 // Returns the page and true if successful, or zero value and false if an error occurred (response already written).
 func (h *Handler) requirePageForAPI(w http.ResponseWriter, r *http.Request) (store.Page, bool) {
 	return requireEntityByID(w, r, "page", func(id int64) (store.Page, error) {
 		return h.queries.GetPageByID(r.Context(), id)
-	}, h.errLoggerForCategory(model.EventCategoryPage))
+	}, h.pageLogger(r).Error500)
 }
 
 // checkPageSlugUnique checks if a page slug is unique for creation.
-// Returns true if unique, false if duplicate or error (response already written).
 func (h *Handler) checkPageSlugUnique(w http.ResponseWriter, r *http.Request, ctx context.Context, slug string) bool {
-	return checkSlugUnique(w, r, func() (int64, error) {
+	return checkSlugUnique(w, func() (int64, error) {
 		return h.queries.SlugExists(ctx, slug)
-	}, h.errLoggerForCategory(model.EventCategoryPage))
+	}, h.pageLogger(r).Error500)
 }
 
 // checkPageSlugUniqueExcluding checks if a page slug is unique for update (excluding current page).
-// Returns true if unique, false if duplicate or error (response already written).
 func (h *Handler) checkPageSlugUniqueExcluding(w http.ResponseWriter, r *http.Request, ctx context.Context, slug string, pageID int64) bool {
-	return checkSlugUnique(w, r, func() (int64, error) {
+	return checkSlugUnique(w, func() (int64, error) {
 		return h.queries.SlugExistsExcluding(ctx, store.SlugExistsExcludingParams{
 			Slug: slug,
 			ID:   pageID,
 		})
-	}, h.errLoggerForCategory(model.EventCategoryPage))
+	}, h.pageLogger(r).Error500)
 }
 
 func validatePageBodyMarkupPolicy(body string, blockSuspicious bool) string {
