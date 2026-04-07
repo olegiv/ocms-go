@@ -108,7 +108,6 @@ func (h *Handler) apiEventMeta(r *http.Request, extra map[string]any) map[string
 	m := map[string]any{"source": "api"}
 	if key := middleware.GetAPIKey(r); key != nil {
 		m["api_key_id"] = key.ID
-		m["api_key_name"] = key.Name
 	}
 	for k, v := range extra {
 		m[k] = v

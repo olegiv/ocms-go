@@ -271,8 +271,8 @@ func TestAPIEventMeta_WithAPIKey(t *testing.T) {
 	if meta["api_key_id"] != int64(42) {
 		t.Errorf("expected api_key_id 42, got %v", meta["api_key_id"])
 	}
-	if meta["api_key_name"] != "test-key" {
-		t.Errorf("expected api_key_name 'test-key', got %v", meta["api_key_name"])
+	if _, exists := meta["api_key_name"]; exists {
+		t.Error("api_key_name should not be present in event metadata")
 	}
 	if meta["page_id"] != int64(99) {
 		t.Errorf("expected page_id 99, got %v", meta["page_id"])

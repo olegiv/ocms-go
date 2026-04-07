@@ -1145,7 +1145,7 @@ func run() error {
 	var errorLogFile *os.File
 	if cfg.ErrorLogPath != "" {
 		var err error
-		errorLogFile, err = os.OpenFile(cfg.ErrorLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		errorLogFile, err = os.OpenFile(cfg.ErrorLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 		if err != nil {
 			return fmt.Errorf("opening error log file %s: %w", cfg.ErrorLogPath, err)
 		}

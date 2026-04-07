@@ -57,10 +57,11 @@ type PageResponse struct {
 }
 
 // AuthorResponse represents an author in API responses.
+// Email is only populated for authenticated requests to prevent account enumeration.
 type AuthorResponse struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
-	Email string `json:"email"`
+	Email string `json:"email,omitempty"`
 }
 
 // CategoryResponse represents a category in API responses.
@@ -357,7 +358,7 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 		resp := storePageToResponse(p)
 
 		if includeAuthor {
-			h.populatePageAuthor(ctx, &resp, p.ID)
+			h.populatePageAuthor(ctx, &resp, p.ID, isAuthenticated)
 		}
 
 		if includeCategories {
@@ -399,7 +400,7 @@ func (h *Handler) GetPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := storePageToResponse(page)
-	h.populatePageIncludes(ctx, &resp, page.ID, include)
+	h.populatePageIncludes(ctx, &resp, page.ID, include, apiKey != nil)
 
 	WriteSuccess(w, resp, nil)
 }
@@ -441,7 +442,7 @@ func (h *Handler) GetPageBySlug(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := storePageToResponse(page)
-	h.populatePageIncludes(ctx, &resp, page.ID, include)
+	h.populatePageIncludes(ctx, &resp, page.ID, include, apiKey != nil)
 
 	WriteSuccess(w, resp, nil)
 }
@@ -1056,16 +1057,20 @@ func resolveTagNames(ctx context.Context, q *store.Queries, names []string, lang
 }
 
 // populatePageAuthor fetches and populates author for a page response.
-func (h *Handler) populatePageAuthor(ctx context.Context, resp *PageResponse, pageID int64) {
+// When authenticated is false, the email is omitted to prevent account enumeration.
+func (h *Handler) populatePageAuthor(ctx context.Context, resp *PageResponse, pageID int64, authenticated bool) {
 	author, err := h.queries.GetPageAuthor(ctx, pageID)
 	if err != nil {
 		return
 	}
-	resp.Author = &AuthorResponse{
-		ID:    author.ID,
-		Name:  author.Name,
-		Email: author.Email,
+	ar := &AuthorResponse{
+		ID:   author.ID,
+		Name: author.Name,
 	}
+	if authenticated {
+		ar.Email = author.Email
+	}
+	resp.Author = ar
 }
 
 // populatePageCategories fetches and populates categories for a page response.
@@ -1093,7 +1098,8 @@ func (h *Handler) populatePageTags(ctx context.Context, resp *PageResponse, page
 }
 
 // populatePageIncludes adds related data to a page response based on include parameter.
-func (h *Handler) populatePageIncludes(ctx context.Context, resp *PageResponse, pageID int64, include string) {
+// When authenticated is false, author email is omitted.
+func (h *Handler) populatePageIncludes(ctx context.Context, resp *PageResponse, pageID int64, include string, authenticated bool) {
 	if include == "" {
 		return
 	}
@@ -1102,7 +1108,7 @@ func (h *Handler) populatePageIncludes(ctx context.Context, resp *PageResponse, 
 	for _, inc := range includes {
 		switch strings.TrimSpace(inc) {
 		case "author":
-			h.populatePageAuthor(ctx, resp, pageID)
+			h.populatePageAuthor(ctx, resp, pageID, authenticated)
 		case "categories":
 			h.populatePageCategories(ctx, resp, pageID)
 		case "tags":

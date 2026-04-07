@@ -261,35 +261,41 @@ func (m *Module) SetEventLogger(logger EventLogger) {
 
 // isAdminOrEditor checks if the current request is from an authenticated admin or editor user.
 // Returns true if the user should be exempt from auto-banning.
-// Uses named return with recover because the sentinel middleware runs before the session
-// middleware (LoadAndSave), so SCS may panic with "no session data in context" for
-// public requests. In that case, we treat the user as unauthenticated.
+//
+// The sentinel middleware runs before the session middleware (LoadAndSave), so SCS
+// may panic with "no session data in context". We avoid this by first checking
+// whether a session cookie is present — if not, the request cannot be authenticated.
+// A defer/recover is kept as a safety net for edge cases where the cookie exists
+// but session context hasn't been set up.
 func (m *Module) isAdminOrEditor(r *http.Request) (isAdmin bool) {
 	if m.sessionManager == nil || m.ctx == nil {
 		return false
 	}
 
-	// Recover from SCS panic when session middleware hasn't loaded yet.
+	// No session cookie means the request cannot be authenticated.
+	if _, err := r.Cookie(m.sessionManager.Cookie.Name); err != nil {
+		return false
+	}
+
+	// Safety net: recover from SCS panic if session context is missing
+	// despite a cookie being present (e.g. session middleware not yet loaded).
 	defer func() {
 		if rec := recover(); rec != nil {
 			isAdmin = false
 		}
 	}()
 
-	// Get user ID from session
 	userID := m.sessionManager.GetInt64(r.Context(), sessionKeyUserID)
 	if userID == 0 {
 		return false
 	}
 
-	// Query database for user role
 	queries := store.New(m.ctx.DB)
 	user, err := queries.GetUserByID(r.Context(), userID)
 	if err != nil {
 		return false
 	}
 
-	// Check if user is admin or editor
 	return user.Role == roleAdmin || user.Role == roleEditor
 }
 
@@ -782,9 +788,23 @@ func matchPathPattern(pattern, path string) bool {
 	}
 }
 
+// maxBanFieldLen is the maximum length for notes and URL fields stored in the database.
+const maxBanFieldLen = 255
+
+// truncate returns s truncated to maxLen characters.
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen]
+}
+
 // autoBanIP automatically bans an IP that triggered an auto-ban path.
 func (m *Module) autoBanIP(ip, triggeredPath, matchedPattern string) error {
-	notes := "Auto-banned for accessing: " + triggeredPath
+	matchedPattern = truncate(matchedPattern, maxBanFieldLen)
+	const banNotePrefix = "Auto-banned for accessing: "
+	triggeredPath = truncate(triggeredPath, maxBanFieldLen-len(banNotePrefix))
+	notes := banNotePrefix + triggeredPath
 	countryCode := m.geoIP.LookupCountry(ip)
 	_, err := m.ctx.DB.Exec(`
 		INSERT OR IGNORE INTO sentinel_banned_ips (ip_pattern, country_code, notes, url, banned_at, created_by)
