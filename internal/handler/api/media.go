@@ -404,7 +404,7 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		// Add variants to response
 		populateMediaVariants(&resp, result.Variants)
 
-		log.Info( "API: Media uploaded",
+		log.Info("API: Media uploaded",
 			map[string]any{"media_id": result.Media.ID, "filename": result.Media.Filename})
 
 		responses = append(responses, resp)
@@ -493,7 +493,7 @@ func (h *Handler) UpdateMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Info( "API: Media updated",
+	log.Info("API: Media updated",
 		map[string]any{"media_id": media.ID, "filename": media.Filename})
 
 	resp := storeMediaToResponse(media)
@@ -523,7 +523,7 @@ func (h *Handler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Info( "API: Media deleted",
+	log.Info("API: Media deleted",
 		map[string]any{"media_id": media.ID, "filename": media.Filename})
 
 	w.WriteHeader(http.StatusNoContent)

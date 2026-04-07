@@ -119,13 +119,14 @@ func (m *Module) handleAdminList(w http.ResponseWriter, r *http.Request) {
 	pagination.PerPageSelector = handler.PerPageSelector(perPage, handler.PerPageOptionsStandard)
 
 	viewData := SentinelViewData{
-		Version:         m.Version(),
-		BanCheckEnabled: m.IsBanCheckEnabled(),
-		AutoBanEnabled:  m.IsAutoBanEnabled(),
-		Bans:            viewBans,
-		Paths:           viewPaths,
-		Whitelist:       viewWhitelist,
-		Pagination:      pagination,
+		Version:                m.Version(),
+		BanCheckEnabled:        m.IsBanCheckEnabled(),
+		AutoBanEnabled:         m.IsAutoBanEnabled(),
+		HoneypotAutoBanEnabled: m.IsHoneypotAutoBanEnabled(),
+		Bans:                   viewBans,
+		Paths:                  viewPaths,
+		Whitelist:              viewWhitelist,
+		Pagination:             pagination,
 	}
 
 	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "sentinel.title"), []render.Breadcrumb{
@@ -699,6 +700,7 @@ func (m *Module) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	// Get form values - checkboxes return empty string if unchecked
 	banCheckEnabled := r.FormValue("ban_check_enabled") == "on"
 	autoBanEnabled := r.FormValue("autoban_enabled") == "on"
+	honeypotAutoBanEnabled := r.FormValue("honeypot_autoban_enabled") == "on"
 
 	// Update settings in database
 	if err := m.updateSetting(settingBanCheckEnabled, banCheckEnabled); err != nil {
@@ -715,6 +717,13 @@ func (m *Module) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := m.updateSetting(settingHoneypotAutoBanEnabled, honeypotAutoBanEnabled); err != nil {
+		m.ctx.Logger.Error("failed to update honeypot_autoban_enabled setting", "error", err)
+		m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.error_settings_failed"), "error")
+		http.Redirect(w, r, "/admin/sentinel", http.StatusSeeOther)
+		return
+	}
+
 	// Reload settings into cache
 	if err := m.reloadSettings(); err != nil {
 		m.ctx.Logger.Error("failed to reload settings", "error", err)
@@ -723,6 +732,7 @@ func (m *Module) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	m.ctx.Logger.Info("sentinel settings updated",
 		"ban_check_enabled", banCheckEnabled,
 		"autoban_enabled", autoBanEnabled,
+		"honeypot_autoban_enabled", honeypotAutoBanEnabled,
 		"updated_by", user.ID,
 	)
 	m.ctx.Render.SetFlash(r, i18n.T(lang, "sentinel.success_settings_updated"), "success")

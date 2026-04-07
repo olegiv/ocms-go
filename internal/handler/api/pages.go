@@ -645,7 +645,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	// Invalidate page cache (for sitemap regeneration on next request)
 	h.invalidatePageCache(page.ID)
 
-	log.Info( "API: Page created",
+	log.Info("API: Page created",
 		map[string]any{"page_id": page.ID, "slug": page.Slug})
 
 	resp := storePageToResponse(page)
@@ -807,7 +807,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	// Invalidate page cache
 	h.invalidatePageCache(page.ID)
 
-	log.Info( "API: Page updated",
+	log.Info("API: Page updated",
 		map[string]any{"page_id": page.ID, "slug": page.Slug})
 
 	resp := storePageToResponse(page)
@@ -967,7 +967,7 @@ func (h *Handler) DeletePage(w http.ResponseWriter, r *http.Request) {
 	// Invalidate page cache
 	h.invalidatePageCache(page.ID)
 
-	log.Info( "API: Page deleted",
+	log.Info("API: Page deleted",
 		map[string]any{"page_id": page.ID, "slug": page.Slug})
 
 	w.WriteHeader(http.StatusNoContent)

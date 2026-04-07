@@ -346,11 +346,12 @@ func requireEntityByID[T any](w http.ResponseWriter, r *http.Request, entityName
 
 	entity, err := fetch(id)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
 			WriteNotFound(w, capitalizeFirst(entityName)+" not found")
-		} else if logErr != nil {
+		case logErr != nil:
 			logErr(w, "Failed to retrieve "+entityName, "error", err)
-		} else {
+		default:
 			LogAndWriteInternalError(w, "Failed to retrieve "+entityName, "error", err)
 		}
 		return zero, false

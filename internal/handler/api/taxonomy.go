@@ -206,7 +206,7 @@ func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Info( "API: Tag created",
+	log.Info("API: Tag created",
 		map[string]any{"tag_id": tag.ID, "name": tag.Name, "slug": tag.Slug})
 
 	resp := TagAPIResponse{
@@ -267,7 +267,7 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 		pageCount = 0
 	}
 
-	log.Info( "API: Tag updated",
+	log.Info("API: Tag updated",
 		map[string]any{"tag_id": tag.ID, "name": tag.Name, "slug": tag.Slug})
 
 	resp := TagAPIResponse{
@@ -300,7 +300,7 @@ func (h *Handler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Info( "API: Tag deleted",
+	log.Info("API: Tag deleted",
 		map[string]any{"tag_id": tag.ID, "name": tag.Name, "slug": tag.Slug})
 
 	w.WriteHeader(http.StatusNoContent)
@@ -446,7 +446,7 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Info( "API: Category created",
+	log.Info("API: Category created",
 		map[string]any{"category_id": category.ID, "name": category.Name, "slug": category.Slug})
 
 	WriteCreated(w, categoryToAPIResponse(category, 0))
@@ -539,7 +539,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 		pageCount = 0
 	}
 
-	log.Info( "API: Category updated",
+	log.Info("API: Category updated",
 		map[string]any{"category_id": category.ID, "name": category.Name, "slug": category.Slug})
 
 	WriteSuccess(w, categoryToAPIResponse(category, pageCount), nil)
@@ -569,7 +569,7 @@ func (h *Handler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Info( "API: Category deleted",
+	log.Info("API: Category deleted",
 		map[string]any{"category_id": category.ID, "name": category.Name, "slug": category.Slug})
 
 	w.WriteHeader(http.StatusNoContent)

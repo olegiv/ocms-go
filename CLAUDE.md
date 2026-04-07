@@ -554,6 +554,8 @@ Additional documentation is available in the `docs/` directory:
 - `docs/login-security.md` - Login protection, rate limiting, and account lockout
 - `docs/developer-module.md` - Developer module for test data generation and i18n
 - `docs/dbmanager-module.md` - DB Manager module for direct SQL query execution
+- `docs/forms.md` - Form builder, public forms, submissions, webhooks, captcha, multi-language
+- `docs/sentinel-module.md` - Sentinel module: IP banning, auto-ban paths, honeypot auto-ban, whitelist
 - `docs/hcaptcha.md` - hCaptcha integration for bot protection on login
 - `docs/i18n.md` - Internationalization, translation file format, theme translations, and `TTheme` usage
 - `docs/csrf.md` - CSRF protection configuration, TrustedOrigins format, and troubleshooting
