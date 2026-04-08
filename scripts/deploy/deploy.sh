@@ -145,12 +145,32 @@ fi
 # Check if custom directory has content
 has_custom_content() {
     if [[ -d "$LOCAL_CUSTOM_DIR" ]]; then
-        # Check for any non-empty subdirectories (themes, modules, etc.)
-        local content_count
-        content_count=$(find "$LOCAL_CUSTOM_DIR" -mindepth 1 -type f 2>/dev/null | head -1 | wc -l)
-        [[ "$content_count" -gt 0 ]]
+        # Follow symlinked theme/module directories and look for at least one file.
+        local first_file
+        first_file=$(find -L "$LOCAL_CUSTOM_DIR" -mindepth 1 -type f -print -quit 2>/dev/null || true)
+        [[ -n "$first_file" ]]
     else
         return 1
+    fi
+}
+
+validate_custom_symlinks() {
+    if [[ ! -d "$LOCAL_CUSTOM_DIR" ]]; then
+        return 0
+    fi
+
+    local broken_symlinks
+    broken_symlinks=$(find "$LOCAL_CUSTOM_DIR" -type l ! -exec test -e {} \; -print 2>/dev/null || true)
+
+    if [[ -n "$broken_symlinks" ]]; then
+        echo_error "Broken symlinks found in ${LOCAL_CUSTOM_DIR}; fix them before deploying"
+        while IFS= read -r symlink; do
+            [[ -n "$symlink" ]] || continue
+            local target
+            target=$(readlink "$symlink" 2>/dev/null || echo "<unreadable>")
+            echo "  - ${symlink} -> ${target}"
+        done <<< "$broken_symlinks"
+        exit 1
     fi
 }
 
@@ -209,6 +229,11 @@ else
 fi
 echo ""
 
+# Preflight custom content validation before any remote actions.
+if [[ -n "$VHOST" ]]; then
+    validate_custom_symlinks
+fi
+
 # Step 1: Build binary
 if [[ "$SKIP_BUILD" == true ]]; then
     echo_warn "Skipping build (--skip-build)"
@@ -245,15 +270,15 @@ if [[ "$SKIP_BINARY" != true ]]; then
     echo_ok "Binary transferred"
 fi
 
-# Step 5: Sync custom content (if configured and has content)
+# Step 5: Sync custom content (if configured and enabled)
 if should_sync_custom && [[ -n "$VHOST" ]]; then
     echo_step "Syncing custom content directory..."
 
     # Create remote custom directory if it doesn't exist
     ssh_cmd "mkdir -p ${REMOTE_CUSTOM_DIR}"
 
-    # Sync custom directory
-    rsync_cmd -avz --delete "${LOCAL_CUSTOM_DIR}" "${SSH_USER}@${SERVER}:${REMOTE_CUSTOM_DIR}/"
+    # Dereference local symlinks so the server receives real theme/module files.
+    rsync_cmd -aLz --delete "${LOCAL_CUSTOM_DIR}" "${SSH_USER}@${SERVER}:${REMOTE_CUSTOM_DIR}/"
     echo_ok "Custom content synced"
 
     # Step 6: Fix custom content ownership
