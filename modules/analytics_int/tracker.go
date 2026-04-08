@@ -143,30 +143,46 @@ func (m *Module) shouldTrack(r *http.Request) bool {
 	return true
 }
 
-// trackPageView records a page view.
-func (m *Module) trackPageView(r *http.Request) {
-	// Get client IP using shared trusted-proxy policy.
+// requestIdentity holds anonymized visitor identification extracted from a request.
+type requestIdentity struct {
+	IP          string
+	UA          ParsedUA
+	VisitorHash string
+	SessionHash string
+}
+
+// extractIdentity extracts anonymized visitor identity from a request.
+// Returns nil if the request should be skipped (excluded IP or bot).
+func (m *Module) extractIdentity(r *http.Request) *requestIdentity {
 	ip := getRealIP(r)
 
-	// Skip excluded IPs (from global config)
 	if excludedIPs := m.getExcludedIPs(); len(excludedIPs) > 0 && util.MatchesIPList(ip, excludedIPs) {
-		return
+		return nil
 	}
 
 	userAgent := r.UserAgent()
-
-	// Skip bots (basic detection)
 	ua := parseUserAgent(userAgent)
 	if ua.DeviceType == "bot" {
+		return nil
+	}
+
+	return &requestIdentity{
+		IP:          ip,
+		UA:          ua,
+		VisitorHash: m.CreateVisitorHash(ip, userAgent),
+		SessionHash: m.CreateSessionHash(ip, userAgent),
+	}
+}
+
+// trackPageView records a page view.
+func (m *Module) trackPageView(r *http.Request) {
+	id := m.extractIdentity(r)
+	if id == nil {
 		return
 	}
 
-	// Create anonymized hashes
-	visitorHash := m.CreateVisitorHash(ip, userAgent)
-	sessionHash := m.CreateSessionHash(ip, userAgent)
-
 	// Get country from IP (before we lose the IP)
-	countryCode := m.geoIP.LookupCountry(ip)
+	countryCode := m.geoIP.LookupCountry(id.IP)
 
 	// Extract referrer domain
 	referrerDomain := extractReferrerDomain(r.Referer())
@@ -181,15 +197,15 @@ func (m *Module) trackPageView(r *http.Request) {
 
 	// Build page view record
 	view := &PageView{
-		VisitorHash:    visitorHash,
+		VisitorHash:    id.VisitorHash,
 		Path:           r.URL.Path,
 		ReferrerDomain: referrerDomain,
 		CountryCode:    countryCode,
-		Browser:        ua.Browser,
-		OS:             ua.OS,
-		DeviceType:     ua.DeviceType,
+		Browser:        id.UA.Browser,
+		OS:             id.UA.OS,
+		DeviceType:     id.UA.DeviceType,
 		Language:       language,
-		SessionHash:    sessionHash,
+		SessionHash:    id.SessionHash,
 		CreatedAt:      timeNow(),
 	}
 
@@ -293,28 +309,15 @@ type ReadRequest struct {
 // recordRead processes a read beacon request and inserts a read event.
 // Returns true if the read was recorded, false if it was a duplicate or invalid.
 func (m *Module) recordRead(r *http.Request, req *ReadRequest) bool {
-	ip := getRealIP(r)
-
-	// Skip excluded IPs
-	if excludedIPs := m.getExcludedIPs(); len(excludedIPs) > 0 && util.MatchesIPList(ip, excludedIPs) {
+	id := m.extractIdentity(r)
+	if id == nil {
 		return false
 	}
-
-	userAgent := r.UserAgent()
-
-	// Skip bots
-	ua := parseUserAgent(userAgent)
-	if ua.DeviceType == "bot" {
-		return false
-	}
-
-	visitorHash := m.CreateVisitorHash(ip, userAgent)
-	sessionHash := m.CreateSessionHash(ip, userAgent)
 
 	read := &PageRead{
-		VisitorHash: visitorHash,
+		VisitorHash: id.VisitorHash,
 		Path:        req.Path,
-		SessionHash: sessionHash,
+		SessionHash: id.SessionHash,
 		ScrollDepth: req.ScrollDepth,
 		TimeOnPage:  req.TimeOnPage,
 		CreatedAt:   timeNow(),
