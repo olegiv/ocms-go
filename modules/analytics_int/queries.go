@@ -385,6 +385,9 @@ func (m *Module) getPageStatsReport(ctx context.Context, startDate, endDate time
 		}
 		result = append(result, row)
 	}
+	if err := rows.Err(); err != nil {
+		m.ctx.Logger.Error("page stats report iteration error", "error", err)
+	}
 	return result
 }
 

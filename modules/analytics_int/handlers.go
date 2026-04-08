@@ -127,6 +127,12 @@ func (m *Module) handleRecordRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate path format: must start with /, no traversal, reasonable length
+	if req.Path[0] != '/' || len(req.Path) > 512 || strings.Contains(req.Path, "..") {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+
 	// Cap scroll depth to 100
 	if req.ScrollDepth > 100 {
 		req.ScrollDepth = 100

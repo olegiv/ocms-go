@@ -1127,8 +1127,8 @@ func TestReadTrackerScript_WithNonce(t *testing.T) {
 	m := New()
 	m.settings = &Settings{Enabled: true}
 
-	script := m.readTrackerScript("test-nonce-123")
-	if !strings.Contains(script, `nonce="test-nonce-123"`) {
+	script := m.readTrackerScript("abcdefghijklmnop")
+	if !strings.Contains(script, `nonce="abcdefghijklmnop"`) {
 		t.Error("script should contain nonce attribute")
 	}
 	if !strings.Contains(script, "/analytics/read") {
@@ -1146,6 +1146,50 @@ func TestReadTrackerScript_WithoutNonce(t *testing.T) {
 	script := m.readTrackerScript("")
 	if strings.Contains(script, "nonce") {
 		t.Error("script should not contain nonce attribute when empty")
+	}
+}
+
+func TestReadTrackerScript_MaliciousNonce(t *testing.T) {
+	m := New()
+	m.settings = &Settings{Enabled: true}
+
+	// A nonce with injection characters should be rejected
+	script := m.readTrackerScript(`x" onload="alert(1)`)
+	if strings.Contains(script, "onload") {
+		t.Error("malicious nonce should be rejected, not included in script")
+	}
+	if strings.Contains(script, "nonce") {
+		t.Error("invalid nonce should not produce a nonce attribute")
+	}
+}
+
+func TestHandleRecordRead_InvalidPath(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	tests := []struct {
+		name string
+		body string
+	}{
+		{"path_traversal", `{"path":"/../etc/passwd","scroll_depth":70,"time_on_page":45}`},
+		{"no_leading_slash", `{"path":"no-slash","scroll_depth":70,"time_on_page":45}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/analytics/read", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			m.handleRecordRead(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want %d for %s", w.Code, http.StatusBadRequest, tt.name)
+			}
+		})
 	}
 }
 

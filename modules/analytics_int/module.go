@@ -7,10 +7,12 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"html"
 	"html/template"
 	"log/slog"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -155,6 +157,9 @@ func (m *Module) scheduleGeoIPReload() {
 }
 
 // RegisterRoutes registers public routes.
+// POST /analytics/read is an analytics beacon endpoint — intentionally CSRF-exempt
+// because it only records anonymous engagement data (no session state changed,
+// no user data modified). Frontend JS sends beacons via navigator.sendBeacon.
 func (m *Module) RegisterRoutes(r chi.Router) {
 	r.Post("/analytics/read", m.handleRecordRead)
 }
@@ -184,6 +189,8 @@ func (m *Module) TemplateFuncs() template.FuncMap {
 			}
 			return m.settings.Enabled && m.settings.ShowPostStats
 		},
+		// analyticsIntReadTracker returns static JS with a server-generated nonce.
+		// IMPORTANT: never interpolate user-controlled data — template.HTML bypasses auto-escape.
 		"analyticsIntReadTracker": func(args ...any) template.HTML {
 			if m.settings == nil || !m.settings.Enabled {
 				return ""
@@ -194,16 +201,20 @@ func (m *Module) TemplateFuncs() template.FuncMap {
 					nonce = n
 				}
 			}
-			return template.HTML(m.readTrackerScript(nonce))
+			return template.HTML(m.readTrackerScript(nonce)) //nolint:gosec // static JS with sanitized nonce
 		},
 	}
 }
 
+// validNonceRe matches base64-encoded CSP nonce values (safe for HTML attributes).
+var validNonceRe = regexp.MustCompile(`^[A-Za-z0-9+/=_-]{8,64}$`)
+
 // readTrackerScript returns the inline JavaScript for read tracking.
+// The nonce must be a server-generated CSP nonce; never pass user-controlled data.
 func (m *Module) readTrackerScript(nonce string) string {
 	nonceAttr := ""
-	if nonce != "" {
-		nonceAttr = ` nonce="` + nonce + `"`
+	if nonce != "" && validNonceRe.MatchString(nonce) {
+		nonceAttr = ` nonce="` + html.EscapeString(nonce) + `"`
 	}
 	return `<script` + nonceAttr + `>
 (function(){
