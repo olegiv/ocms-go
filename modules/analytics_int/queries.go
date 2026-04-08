@@ -320,9 +320,14 @@ func (m *Module) getTimeSeries(ctx context.Context, startDate, endDate time.Time
 	})
 }
 
-// getPageStats returns all-time view and read counts for a given path.
+// getPageStats returns view and read counts for a given path, aggregating
+// across language prefixes (e.g., /my-post + /ru/my-post + /en/my-post).
+// Reads are bounded by the configured retention window to stay consistent with views.
 func (m *Module) getPageStats(ctx context.Context, path string) PageStats {
 	var stats PageStats
+
+	// Build LIKE pattern for language-prefixed paths (e.g., "%/my-post" matches "/ru/my-post")
+	langPattern := "%/" + path[1:] // path starts with "/", strip it for the LIKE pattern
 
 	// Count views from daily aggregates + today's raw views
 	today := time.Now().Format(dateFormat)
@@ -330,24 +335,25 @@ func (m *Module) getPageStats(ctx context.Context, path string) PageStats {
 	_ = m.ctx.DB.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(views), 0)
 		FROM page_analytics_daily
-		WHERE path = ?
-	`, path).Scan(&aggregatedViews)
+		WHERE path = ? OR path LIKE ?
+	`, path, langPattern).Scan(&aggregatedViews)
 
 	var todayViews int64
 	_ = m.ctx.DB.QueryRowContext(ctx, `
 		SELECT COUNT(*)
 		FROM page_analytics_views
-		WHERE path = ? AND DATE(created_at) = ?
-	`, path, today).Scan(&todayViews)
+		WHERE (path = ? OR path LIKE ?) AND DATE(created_at) = ?
+	`, path, langPattern, today).Scan(&todayViews)
 
 	stats.Views = aggregatedViews + todayViews
 
-	// Count reads (all time from raw table — reads are low volume)
+	// Count reads within retention window to stay consistent with view counts
+	retentionCutoff := time.Now().AddDate(0, 0, -m.settings.RetentionDays).Format(dateFormat)
 	_ = m.ctx.DB.QueryRowContext(ctx, `
 		SELECT COUNT(*)
 		FROM page_analytics_reads
-		WHERE path = ?
-	`, path).Scan(&stats.Reads)
+		WHERE (path = ? OR path LIKE ?) AND created_at >= ?
+	`, path, langPattern, retentionCutoff).Scan(&stats.Reads)
 
 	return stats
 }
