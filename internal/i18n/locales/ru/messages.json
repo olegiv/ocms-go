@@ -1128,6 +1128,11 @@
             "translation": "Сетка"
         },
         {
+            "id": "media.variant_small",
+            "message": "Small",
+            "translation": "Маленький"
+        },
+        {
             "id": "media.variant_medium",
             "message": "Medium",
             "translation": "Средний"
@@ -1136,6 +1141,11 @@
             "id": "media.variant_large",
             "message": "Large",
             "translation": "Большой"
+        },
+        {
+            "id": "media.variant_og",
+            "message": "Social Share",
+            "translation": "Соцсети"
         },
         {
             "id": "media.download_original",
@@ -7031,6 +7041,16 @@
             "id": "scheduler.no_runs",
             "message": "No runs yet. Trigger the task manually or wait for the next scheduled run.",
             "translation": "Запусков пока нет. Запустите задачу вручную или дождитесь следующего запланированного запуска."
+        },
+        {
+            "id": "frontend.views",
+            "message": "views",
+            "translation": "просмотров"
+        },
+        {
+            "id": "frontend.reads",
+            "message": "reads",
+            "translation": "прочтений"
         }
     ]
 }

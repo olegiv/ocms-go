@@ -1128,6 +1128,11 @@
             "translation": "Grid"
         },
         {
+            "id": "media.variant_small",
+            "message": "Small",
+            "translation": "Small"
+        },
+        {
             "id": "media.variant_medium",
             "message": "Medium",
             "translation": "Medium"
@@ -1136,6 +1141,11 @@
             "id": "media.variant_large",
             "message": "Large",
             "translation": "Large"
+        },
+        {
+            "id": "media.variant_og",
+            "message": "Social Share",
+            "translation": "Social Share"
         },
         {
             "id": "media.download_original",
@@ -7031,6 +7041,16 @@
             "id": "scheduler.no_runs",
             "message": "No runs yet. Trigger the task manually or wait for the next scheduled run.",
             "translation": "No runs yet. Trigger the task manually or wait for the next scheduled run."
+        },
+        {
+            "id": "frontend.views",
+            "message": "views",
+            "translation": "views"
+        },
+        {
+            "id": "frontend.reads",
+            "message": "reads",
+            "translation": "reads"
         }
     ]
 }

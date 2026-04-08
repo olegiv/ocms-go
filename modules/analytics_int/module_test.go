@@ -4,6 +4,7 @@
 package analytics_int
 
 import (
+	"context"
 	"database/sql"
 	"testing"
 	"time"
@@ -45,8 +46,8 @@ func TestModuleMigrations(t *testing.T) {
 	m := New()
 	migrations := m.Migrations()
 
-	if len(migrations) != 9 {
-		t.Errorf("expected 9 migrations, got %d", len(migrations))
+	if len(migrations) != 11 {
+		t.Errorf("expected 11 migrations, got %d", len(migrations))
 	}
 
 	// Verify migration versions are sequential
@@ -74,6 +75,7 @@ func TestModuleMigrationUp(t *testing.T) {
 		"page_analytics_tech",
 		"page_analytics_geo",
 		"page_analytics_settings",
+		"page_analytics_reads",
 	}
 
 	for _, table := range tables {
@@ -397,6 +399,251 @@ func TestSettingsSaveLoad(t *testing.T) {
 	}
 	if len(loaded.ExcludePaths) != 2 {
 		t.Errorf("ExcludePaths length = %d, want 2", len(loaded.ExcludePaths))
+	}
+}
+
+func TestInsertPageRead(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	read := &PageRead{
+		VisitorHash: "visitor123",
+		Path:        "/test-post",
+		SessionHash: "session123",
+		ScrollDepth: 75,
+		TimeOnPage:  45,
+		CreatedAt:   time.Now(),
+	}
+
+	if err := m.insertPageRead(read); err != nil {
+		t.Fatalf("insertPageRead failed: %v", err)
+	}
+
+	// Verify it was inserted
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM page_analytics_reads WHERE path = ?", "/test-post").Scan(&count)
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 row, got %d", count)
+	}
+
+	// Verify data
+	var scrollDepth, timeOnPage int
+	err = db.QueryRow(`
+		SELECT scroll_depth, time_on_page
+		FROM page_analytics_reads WHERE path = ?
+	`, "/test-post").Scan(&scrollDepth, &timeOnPage)
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+	if scrollDepth != 75 {
+		t.Errorf("scroll_depth = %d, want 75", scrollDepth)
+	}
+	if timeOnPage != 45 {
+		t.Errorf("time_on_page = %d, want 45", timeOnPage)
+	}
+}
+
+func TestInsertPageRead_Deduplication(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	read := &PageRead{
+		VisitorHash: "visitor123",
+		Path:        "/dedup-post",
+		SessionHash: "session-dedup",
+		ScrollDepth: 70,
+		TimeOnPage:  35,
+		CreatedAt:   time.Now(),
+	}
+
+	// First insert should succeed
+	if err := m.insertPageRead(read); err != nil {
+		t.Fatalf("first insertPageRead failed: %v", err)
+	}
+
+	// Second insert with same session_hash + path should fail (UNIQUE constraint)
+	err := m.insertPageRead(read)
+	if err == nil {
+		t.Error("expected UNIQUE constraint error for duplicate session+path, got nil")
+	}
+
+	// Verify only 1 row exists
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM page_analytics_reads WHERE path = ?", "/dedup-post").Scan(&count); err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 row after dedup, got %d", count)
+	}
+}
+
+func TestGetPageStats(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	now := time.Now()
+
+	// Insert views
+	views := []*PageView{
+		{VisitorHash: "v1", Path: "/stats-post", SessionHash: "s1", CreatedAt: now},
+		{VisitorHash: "v2", Path: "/stats-post", SessionHash: "s2", CreatedAt: now},
+		{VisitorHash: "v3", Path: "/stats-post", SessionHash: "s3", CreatedAt: now},
+	}
+	for _, v := range views {
+		if err := m.insertPageView(v); err != nil {
+			t.Fatalf("insertPageView failed: %v", err)
+		}
+	}
+
+	// Insert reads
+	reads := []*PageRead{
+		{VisitorHash: "v1", Path: "/stats-post", SessionHash: "s1", ScrollDepth: 80, TimeOnPage: 60, CreatedAt: now},
+		{VisitorHash: "v2", Path: "/stats-post", SessionHash: "s2", ScrollDepth: 65, TimeOnPage: 40, CreatedAt: now},
+	}
+	for _, r := range reads {
+		if err := m.insertPageRead(r); err != nil {
+			t.Fatalf("insertPageRead failed: %v", err)
+		}
+	}
+
+	stats := m.getPageStats(context.Background(), "/stats-post")
+	if stats.Views != 3 {
+		t.Errorf("Views = %d, want 3", stats.Views)
+	}
+	if stats.Reads != 2 {
+		t.Errorf("Reads = %d, want 2", stats.Reads)
+	}
+}
+
+func TestGetPageStats_Empty(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	stats := m.getPageStats(context.Background(), "/nonexistent")
+	if stats.Views != 0 {
+		t.Errorf("Views = %d, want 0", stats.Views)
+	}
+	if stats.Reads != 0 {
+		t.Errorf("Reads = %d, want 0", stats.Reads)
+	}
+}
+
+func TestGetPageStatsReport(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	now := time.Now()
+
+	// Insert views for two paths
+	viewData := []*PageView{
+		{VisitorHash: "v1", Path: "/post-a", SessionHash: "s1", CreatedAt: now},
+		{VisitorHash: "v2", Path: "/post-a", SessionHash: "s2", CreatedAt: now},
+		{VisitorHash: "v3", Path: "/post-b", SessionHash: "s3", CreatedAt: now},
+	}
+	for _, v := range viewData {
+		if err := m.insertPageView(v); err != nil {
+			t.Fatalf("insertPageView failed: %v", err)
+		}
+	}
+
+	// Insert a read
+	read := &PageRead{
+		VisitorHash: "v1", Path: "/post-a", SessionHash: "s1",
+		ScrollDepth: 80, TimeOnPage: 60, CreatedAt: now,
+	}
+	if err := m.insertPageRead(read); err != nil {
+		t.Fatalf("insertPageRead failed: %v", err)
+	}
+
+	// Use parseDateRange("30d") to match real handler behavior.
+	start, end := parseDateRange("30d")
+	rows := m.getPageStatsReport(context.Background(), start, end, 10, 0)
+	if len(rows) < 2 {
+		t.Fatalf("expected at least 2 report rows, got %d", len(rows))
+	}
+
+	// First row should be /post-a (most views)
+	if rows[0].Path != "/post-a" {
+		t.Errorf("first row path = %q, want /post-a", rows[0].Path)
+	}
+	if rows[0].Views != 2 {
+		t.Errorf("first row views = %d, want 2", rows[0].Views)
+	}
+	if rows[0].Reads != 1 {
+		t.Errorf("first row reads = %d, want 1", rows[0].Reads)
+	}
+	if rows[0].ReadRate < 49 || rows[0].ReadRate > 51 {
+		t.Errorf("first row read rate = %.1f%%, want ~50%%", rows[0].ReadRate)
+	}
+}
+
+func TestGetPageStatsReportCount(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	now := time.Now()
+
+	// Insert views for 3 distinct paths
+	for _, path := range []string{"/a", "/b", "/c"} {
+		v := &PageView{VisitorHash: "v1", Path: path, SessionHash: "s" + path, CreatedAt: now}
+		if err := m.insertPageView(v); err != nil {
+			t.Fatalf("insertPageView failed: %v", err)
+		}
+	}
+
+	start, end := parseDateRange("30d")
+	count := m.getPageStatsReportCount(context.Background(), start, end)
+	if count != 3 {
+		t.Errorf("report count = %d, want 3", count)
+	}
+}
+
+func TestSettingsShowPostStats(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	// Default should be true
+	if !m.settings.ShowPostStats {
+		t.Error("ShowPostStats should default to true")
+	}
+
+	// Disable and save
+	m.settings.ShowPostStats = false
+	if err := m.saveSettings(); err != nil {
+		t.Fatalf("saveSettings failed: %v", err)
+	}
+
+	// Reload and verify
+	loaded, err := m.loadSettings()
+	if err != nil {
+		t.Fatalf("loadSettings failed: %v", err)
+	}
+	if loaded.ShowPostStats {
+		t.Error("ShowPostStats should be false after save")
 	}
 }
 

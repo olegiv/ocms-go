@@ -7,9 +7,11 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/olegiv/ocms-go/internal/module"
 	"github.com/olegiv/ocms-go/internal/testutil"
@@ -40,13 +42,19 @@ func TestModuleTranslationsFS(t *testing.T) {
 
 func TestModuleTemplateFuncs(t *testing.T) {
 	m := New()
+	m.settings = &Settings{Enabled: true, ShowPostStats: true}
 	funcs := m.TemplateFuncs()
 	if funcs == nil {
 		t.Fatal("TemplateFuncs() returned nil")
 	}
-	// analytics_int returns an empty FuncMap.
-	if len(funcs) != 0 {
-		t.Errorf("expected empty FuncMap, got %d entries", len(funcs))
+	expectedFuncs := []string{"analyticsPostStats", "analyticsShowPostStats", "analyticsIntReadTracker"}
+	if len(funcs) != len(expectedFuncs) {
+		t.Errorf("expected %d funcs, got %d", len(expectedFuncs), len(funcs))
+	}
+	for _, name := range expectedFuncs {
+		if _, ok := funcs[name]; !ok {
+			t.Errorf("missing template func %q", name)
+		}
 	}
 }
 
@@ -57,7 +65,8 @@ func TestModuleRegisterRoutes(t *testing.T) {
 		}
 	}()
 	m := New()
-	m.RegisterRoutes(nil)
+	r := chi.NewRouter()
+	m.RegisterRoutes(r)
 }
 
 func TestIsEnabled_NilSettings(t *testing.T) {
@@ -890,13 +899,16 @@ func TestShutdown_NilCron(t *testing.T) {
 // Ensure TemplateFuncs closures are registered and callable via reflect
 // ---------------------------------------------------------------------------
 
-func TestAnalyticsIntTemplateFuncs_Empty(t *testing.T) {
+func TestAnalyticsIntTemplateFuncs_WithNilSettings(t *testing.T) {
 	m := New()
+	// settings is nil — funcs should return safe defaults
 	funcs := m.TemplateFuncs()
-	// analytics_int returns an empty map — exercise the return path.
-	rv := reflect.ValueOf(funcs)
-	if rv.Len() != 0 {
-		t.Errorf("expected empty FuncMap, got %d entries", rv.Len())
+	if funcs == nil {
+		t.Fatal("TemplateFuncs() returned nil")
+	}
+	// Even with nil settings, the 3 template funcs should be registered
+	if len(funcs) != 3 {
+		t.Errorf("expected 3 funcs, got %d entries", len(funcs))
 	}
 }
 
@@ -906,5 +918,379 @@ func TestAnalyticsIntTemplateFuncs_Empty(t *testing.T) {
 
 func TestModuleMigrationsAssert(t *testing.T) {
 	m := New()
-	moduleutil.AssertMigrations(t, m.Migrations(), 9)
+	moduleutil.AssertMigrations(t, m.Migrations(), 11)
+}
+
+// ---------------------------------------------------------------------------
+// handleRecordRead HTTP endpoint
+// ---------------------------------------------------------------------------
+
+func TestRegisterRoutes_RateLimited(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	r := chi.NewRouter()
+	m.RegisterRoutes(r)
+
+	// Send many requests rapidly — rate limiter should kick in
+	body := `{"path":"/test","scroll_depth":75,"time_on_page":45}`
+	rateLimited := false
+	for i := 0; i < 20; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/analytics/read", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.RemoteAddr = "10.0.0.1:5678"
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code == http.StatusTooManyRequests {
+			rateLimited = true
+			break
+		}
+	}
+	if !rateLimited {
+		t.Error("expected rate limiting to trigger after rapid requests")
+	}
+}
+
+func TestHandleRecordRead_ValidRequest(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	body := `{"path":"/test-post","scroll_depth":75,"time_on_page":45}`
+	req := httptest.NewRequest(http.MethodPost, "/analytics/read", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "1.2.3.4:5678"
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	w := httptest.NewRecorder()
+
+	m.handleRecordRead(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusNoContent)
+	}
+}
+
+func TestHandleRecordRead_DisabledTracking(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	m.settings.Enabled = false
+
+	body := `{"path":"/test","scroll_depth":75,"time_on_page":45}`
+	req := httptest.NewRequest(http.MethodPost, "/analytics/read", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	m.handleRecordRead(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d (disabled)", w.Code, http.StatusNoContent)
+	}
+}
+
+func TestHandleRecordRead_EmptyPath(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	body := `{"path":"","scroll_depth":75,"time_on_page":45}`
+	req := httptest.NewRequest(http.MethodPost, "/analytics/read", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	m.handleRecordRead(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d (empty path)", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestHandleRecordRead_LowScrollDepth(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	body := `{"path":"/test","scroll_depth":50,"time_on_page":45}`
+	req := httptest.NewRequest(http.MethodPost, "/analytics/read", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	m.handleRecordRead(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d (low scroll)", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestHandleRecordRead_LowTimeOnPage(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	body := `{"path":"/test","scroll_depth":75,"time_on_page":3}`
+	req := httptest.NewRequest(http.MethodPost, "/analytics/read", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	m.handleRecordRead(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d (low time)", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestHandleRecordRead_InvalidJSON(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	req := httptest.NewRequest(http.MethodPost, "/analytics/read", strings.NewReader("not-json"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	m.handleRecordRead(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d (invalid JSON)", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestHandleRecordRead_NilSettings(t *testing.T) {
+	m := New()
+	m.settings = nil
+
+	body := `{"path":"/test","scroll_depth":75,"time_on_page":45}`
+	req := httptest.NewRequest(http.MethodPost, "/analytics/read", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	m.handleRecordRead(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d (nil settings)", w.Code, http.StatusNoContent)
+	}
+}
+
+func TestHandleRecordRead_ScrollDepthCapped(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	// scroll_depth > 100 should be capped, not rejected
+	body := `{"path":"/test","scroll_depth":150,"time_on_page":45}`
+	req := httptest.NewRequest(http.MethodPost, "/analytics/read", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "1.2.3.4:5678"
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	w := httptest.NewRecorder()
+
+	m.handleRecordRead(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d (capped scroll)", w.Code, http.StatusNoContent)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// recordRead deduplication
+// ---------------------------------------------------------------------------
+
+func TestRecordRead_Deduplication(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	req := httptest.NewRequest(http.MethodPost, "/analytics/read", nil)
+	req.RemoteAddr = "1.2.3.4:5678"
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+	readReq := &ReadRequest{Path: "/dedup-test", ScrollDepth: 80, TimeOnPage: 60}
+
+	// First call should record
+	result1 := m.recordRead(req, readReq)
+	if !result1 {
+		t.Error("first recordRead should return true")
+	}
+
+	// Second call with same IP+UA (same session hash) should be deduplicated
+	result2 := m.recordRead(req, readReq)
+	if result2 {
+		t.Error("second recordRead should return false (duplicate)")
+	}
+
+	// Verify only 1 row in DB
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM page_analytics_reads WHERE path = ?", "/dedup-test").Scan(&count); err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 row, got %d", count)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// readTrackerScript
+// ---------------------------------------------------------------------------
+
+func TestReadTrackerScript_WithNonce(t *testing.T) {
+	m := New()
+	m.settings = &Settings{Enabled: true}
+
+	script := m.readTrackerScript("abcdefghijklmnop")
+	if !strings.Contains(script, `nonce="abcdefghijklmnop"`) {
+		t.Error("script should contain nonce attribute")
+	}
+	if !strings.Contains(script, "/analytics/read") {
+		t.Error("script should contain read beacon URL")
+	}
+	if !strings.Contains(script, "sendBeacon") {
+		t.Error("script should use sendBeacon API")
+	}
+}
+
+func TestReadTrackerScript_WithoutNonce(t *testing.T) {
+	m := New()
+	m.settings = &Settings{Enabled: true}
+
+	script := m.readTrackerScript("")
+	if strings.Contains(script, "nonce") {
+		t.Error("script should not contain nonce attribute when empty")
+	}
+}
+
+func TestReadTrackerScript_MaliciousNonce(t *testing.T) {
+	m := New()
+	m.settings = &Settings{Enabled: true}
+
+	// A nonce with injection characters should be rejected
+	script := m.readTrackerScript(`x" onload="alert(1)`)
+	if strings.Contains(script, "onload") {
+		t.Error("malicious nonce should be rejected, not included in script")
+	}
+	if strings.Contains(script, "nonce") {
+		t.Error("invalid nonce should not produce a nonce attribute")
+	}
+}
+
+func TestHandleRecordRead_InvalidPath(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	tests := []struct {
+		name string
+		body string
+	}{
+		{"path_traversal", `{"path":"/../etc/passwd","scroll_depth":70,"time_on_page":45}`},
+		{"no_leading_slash", `{"path":"no-slash","scroll_depth":70,"time_on_page":45}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/analytics/read", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			m.handleRecordRead(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want %d for %s", w.Code, http.StatusBadRequest, tt.name)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TemplateFuncs behavior with live DB
+// ---------------------------------------------------------------------------
+
+func TestTemplateFuncs_AnalyticsPostStats(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	// Insert views and reads for a slug
+	now := time.Now()
+	for i := 0; i < 5; i++ {
+		v := &PageView{
+			VisitorHash: "v" + string(rune('a'+i)),
+			Path:        "/my-post",
+			SessionHash: "s" + string(rune('a'+i)),
+			CreatedAt:   now,
+		}
+		if err := m.insertPageView(v); err != nil {
+			t.Fatalf("insertPageView: %v", err)
+		}
+	}
+	read := &PageRead{
+		VisitorHash: "va", Path: "/my-post", SessionHash: "sa",
+		ScrollDepth: 90, TimeOnPage: 120, CreatedAt: now,
+	}
+	if err := m.insertPageRead(read); err != nil {
+		t.Fatalf("insertPageRead: %v", err)
+	}
+
+	funcs := m.TemplateFuncs()
+	statsFn := funcs["analyticsPostStats"].(func(string) PageStats)
+	stats := statsFn("my-post")
+
+	if stats.Views != 5 {
+		t.Errorf("analyticsPostStats Views = %d, want 5", stats.Views)
+	}
+	if stats.Reads != 1 {
+		t.Errorf("analyticsPostStats Reads = %d, want 1", stats.Reads)
+	}
+}
+
+func TestTemplateFuncs_AnalyticsShowPostStats(t *testing.T) {
+	m := New()
+
+	// With enabled + ShowPostStats
+	m.settings = &Settings{Enabled: true, ShowPostStats: true}
+	funcs := m.TemplateFuncs()
+	showFn := funcs["analyticsShowPostStats"].(func() bool)
+	if !showFn() {
+		t.Error("analyticsShowPostStats should return true when enabled")
+	}
+
+	// With disabled module
+	m.settings = &Settings{Enabled: false, ShowPostStats: true}
+	funcs = m.TemplateFuncs()
+	showFn = funcs["analyticsShowPostStats"].(func() bool)
+	if showFn() {
+		t.Error("analyticsShowPostStats should return false when module disabled")
+	}
+
+	// With ShowPostStats false
+	m.settings = &Settings{Enabled: true, ShowPostStats: false}
+	funcs = m.TemplateFuncs()
+	showFn = funcs["analyticsShowPostStats"].(func() bool)
+	if showFn() {
+		t.Error("analyticsShowPostStats should return false when ShowPostStats is false")
+	}
 }

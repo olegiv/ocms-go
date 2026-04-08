@@ -187,6 +187,20 @@ func TestStoreVariantToResponse(t *testing.T) {
 			filename: "banner.webp",
 			wantURL:  "/uploads/large/ghi-789/banner.webp",
 		},
+		{
+			name: "og variant",
+			variant: store.MediaVariant{
+				ID:        4,
+				Type:      "og",
+				Width:     1200,
+				Height:    630,
+				Size:      120000,
+				CreatedAt: now,
+			},
+			uuid:     "jkl-012",
+			filename: "social.jpg",
+			wantURL:  "/uploads/og/jkl-012/social.jpg",
+		},
 	}
 
 	for _, tt := range tests {
@@ -257,12 +271,13 @@ func TestPopulateMediaVariants(t *testing.T) {
 			{ID: 1, Type: "thumbnail", Width: 150, Height: 150, Size: 5000, CreatedAt: now},
 			{ID: 2, Type: "medium", Width: 800, Height: 600, Size: 50000, CreatedAt: now},
 			{ID: 3, Type: "large", Width: 1920, Height: 1080, Size: 200000, CreatedAt: now},
+			{ID: 4, Type: "og", Width: 1200, Height: 630, Size: 120000, CreatedAt: now},
 		}
 
 		populateMediaVariants(resp, variants)
 
-		if len(resp.Variants) != 3 {
-			t.Fatalf("expected 3 variants, got %d", len(resp.Variants))
+		if len(resp.Variants) != 4 {
+			t.Fatalf("expected 4 variants, got %d", len(resp.Variants))
 		}
 
 		// Verify first variant
@@ -281,6 +296,14 @@ func TestPopulateMediaVariants(t *testing.T) {
 		// Verify third variant
 		if resp.Variants[2].Type != "large" {
 			t.Errorf("third variant type = %q, want %q", resp.Variants[2].Type, "large")
+		}
+
+		// Verify fourth variant (og)
+		if resp.Variants[3].Type != "og" {
+			t.Errorf("fourth variant type = %q, want %q", resp.Variants[3].Type, "og")
+		}
+		if resp.Variants[3].URL != "/uploads/og/abc-123/image.jpg" {
+			t.Errorf("fourth variant URL = %q, want %q", resp.Variants[3].URL, "/uploads/og/abc-123/image.jpg")
 		}
 	})
 }

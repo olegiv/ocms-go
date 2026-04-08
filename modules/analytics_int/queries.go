@@ -95,23 +95,34 @@ func (m *Module) getTopPages(ctx context.Context, startDate, endDate time.Time, 
 
 	// Combine aggregated daily data with today's raw views (with proper unique visitor count)
 	rows, err := m.ctx.DB.QueryContext(ctx, `
-		SELECT path, SUM(views) as total_views, SUM(unique_visitors) as total_unique, SUM(bounces) as total_bounces
+		SELECT v.path, v.total_views, v.total_unique, v.total_bounces, COALESCE(r.reads, 0) as reads
 		FROM (
-			-- Aggregated daily data (excluding end date)
-			SELECT path, views, unique_visitors, bounces
-			FROM page_analytics_daily
-			WHERE date >= ? AND date < ?
-			UNION ALL
-			-- End date's raw views with unique visitor count per path
-			SELECT path, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as unique_visitors, 0 as bounces
-			FROM page_analytics_views
-			WHERE DATE(created_at) = ?
+			SELECT path, SUM(views) as total_views, SUM(unique_visitors) as total_unique, SUM(bounces) as total_bounces
+			FROM (
+				-- Aggregated daily data (excluding end date)
+				SELECT path, views, unique_visitors, bounces
+				FROM page_analytics_daily
+				WHERE date >= ? AND date < ?
+				UNION ALL
+				-- End date's raw views with unique visitor count per path
+				SELECT path, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as unique_visitors, 0 as bounces
+				FROM page_analytics_views
+				WHERE DATE(created_at) = ?
+				GROUP BY path
+			)
 			GROUP BY path
-		)
-		GROUP BY path
-		ORDER BY total_views DESC
+		) v
+		LEFT JOIN (
+			SELECT path, COUNT(*) as reads
+			FROM page_analytics_reads
+			WHERE created_at >= ? AND created_at < ?
+			GROUP BY path
+		) r ON v.path = r.path
+		ORDER BY v.total_views DESC
 		LIMIT ?
-	`, startDate.Format(dateFormat), endDateStr, endDateStr, limit)
+	`, startDate.Format(dateFormat), endDateStr, endDateStr,
+		startDate.Format(dateFormat), endDate.Add(24*time.Hour).Format(dateFormat),
+		limit)
 	if err != nil {
 		return nil
 	}
@@ -121,7 +132,7 @@ func (m *Module) getTopPages(ctx context.Context, startDate, endDate time.Time, 
 	for rows.Next() {
 		var p TopPage
 		var bounces int64
-		if err := rows.Scan(&p.Path, &p.Views, &p.UniqueVisitors, &bounces); err != nil {
+		if err := rows.Scan(&p.Path, &p.Views, &p.UniqueVisitors, &bounces, &p.Reads); err != nil {
 			continue
 		}
 		if p.Views > 0 {
@@ -202,6 +213,12 @@ func getTechStats[T any, PT interface {
 	*T
 	viewStat
 }](m *Module, ctx context.Context, startDate, endDate time.Time, column string, limit int, scanFunc func(*T) []any) []T {
+	// Whitelist allowed column names to prevent SQL injection
+	allowedColumns := map[string]bool{"browser": true, "device_type": true}
+	if !allowedColumns[column] {
+		return nil
+	}
+
 	startDateStr := startDate.Format(dateFormat)
 	endDateStr := endDate.Format(dateFormat)
 
@@ -301,6 +318,117 @@ func (m *Module) getTimeSeries(ctx context.Context, startDate, endDate time.Time
 	return scanRows(rows, func(p *TimeSeriesPoint) []any {
 		return []any{&p.Date, &p.Views, &p.Unique}
 	})
+}
+
+// getPageStats returns view and read counts for a given path, aggregating
+// across language prefixes (e.g., /my-post + /ru/my-post + /en/my-post).
+// Reads are bounded by the configured retention window to stay consistent with views.
+func (m *Module) getPageStats(ctx context.Context, path string) PageStats {
+	var stats PageStats
+
+	// Build LIKE pattern for language-prefixed paths (e.g., "%/my-post" matches "/ru/my-post")
+	langPattern := "%/" + path[1:] // path starts with "/", strip it for the LIKE pattern
+
+	// Count views from daily aggregates + today's raw views
+	today := time.Now().Format(dateFormat)
+	var aggregatedViews int64
+	_ = m.ctx.DB.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(views), 0)
+		FROM page_analytics_daily
+		WHERE path = ? OR path LIKE ?
+	`, path, langPattern).Scan(&aggregatedViews)
+
+	var todayViews int64
+	_ = m.ctx.DB.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM page_analytics_views
+		WHERE (path = ? OR path LIKE ?) AND DATE(created_at) = ?
+	`, path, langPattern, today).Scan(&todayViews)
+
+	stats.Views = aggregatedViews + todayViews
+
+	// Count reads within retention window to stay consistent with view counts
+	retentionCutoff := time.Now().AddDate(0, 0, -m.settings.RetentionDays).Format(dateFormat)
+	_ = m.ctx.DB.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM page_analytics_reads
+		WHERE (path = ? OR path LIKE ?) AND created_at >= ?
+	`, path, langPattern, retentionCutoff).Scan(&stats.Reads)
+
+	return stats
+}
+
+// getPageStatsReport returns view/read stats for all pages, for the admin report.
+func (m *Module) getPageStatsReport(ctx context.Context, startDate, endDate time.Time, limit, offset int) []PageStatsRow {
+	startDateStr := startDate.Format(dateFormat)
+	endDateStr := endDate.Format(dateFormat)
+
+	rows, err := m.ctx.DB.QueryContext(ctx, `
+		SELECT
+			v.path,
+			COALESCE(p.title, v.path) AS page_title,
+			COALESCE(p.page_type, '') AS page_type,
+			v.total_views,
+			COALESCE(r.total_reads, 0) AS total_reads
+		FROM (
+			SELECT path, SUM(views) AS total_views
+			FROM (
+				SELECT path, views FROM page_analytics_daily
+				WHERE date >= ? AND date < ?
+				UNION ALL
+				SELECT path, COUNT(*) AS views FROM page_analytics_views
+				WHERE DATE(created_at) = ?
+				GROUP BY path
+			)
+			GROUP BY path
+		) v
+		LEFT JOIN (
+			SELECT path, COUNT(*) AS total_reads
+			FROM page_analytics_reads
+			WHERE DATE(created_at) >= ? AND DATE(created_at) <= ?
+			GROUP BY path
+		) r ON r.path = v.path
+		LEFT JOIN pages p ON p.slug = LTRIM(v.path, '/')
+		ORDER BY v.total_views DESC
+		LIMIT ? OFFSET ?
+	`, startDateStr, endDateStr, endDateStr, startDateStr, endDateStr, limit, offset)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+
+	var result []PageStatsRow
+	for rows.Next() {
+		var row PageStatsRow
+		if err := rows.Scan(&row.Path, &row.PageTitle, &row.PageType, &row.Views, &row.Reads); err != nil {
+			continue
+		}
+		if row.Views > 0 {
+			row.ReadRate = float64(row.Reads) / float64(row.Views) * 100
+		}
+		result = append(result, row)
+	}
+	if err := rows.Err(); err != nil {
+		m.ctx.Logger.Error("page stats report iteration error", "error", err)
+	}
+	return result
+}
+
+// getPageStatsReportCount returns the total number of distinct paths for pagination.
+func (m *Module) getPageStatsReportCount(ctx context.Context, startDate, endDate time.Time) int {
+	startDateStr := startDate.Format(dateFormat)
+	endDateStr := endDate.Format(dateFormat)
+
+	var count int
+	_ = m.ctx.DB.QueryRowContext(ctx, `
+		SELECT COUNT(DISTINCT path)
+		FROM (
+			SELECT path FROM page_analytics_daily WHERE date >= ? AND date < ?
+			UNION
+			SELECT path FROM page_analytics_views WHERE DATE(created_at) = ?
+		)
+	`, startDateStr, endDateStr, endDateStr).Scan(&count)
+	return count
 }
 
 // parseDateRange converts a date range string to start and end times.

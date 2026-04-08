@@ -178,9 +178,9 @@ func TestCreateAllVariants(t *testing.T) {
 		t.Fatal("CreateAllVariants returned no variants")
 	}
 
-	// All 5 variants should be created for a 2400x1600 image
-	if len(variants) != 5 {
-		t.Errorf("variant count = %d, want 5", len(variants))
+	// All 6 variants should be created for a 2400x1600 image (including og)
+	if len(variants) != 6 {
+		t.Errorf("variant count = %d, want 6", len(variants))
 	}
 
 	// Verify each variant has valid dimensions

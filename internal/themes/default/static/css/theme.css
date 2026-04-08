@@ -569,6 +569,26 @@ p {
     overflow-wrap: break-word;
 }
 
+.post-stats {
+    display: flex;
+    gap: var(--spacing-md);
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-bottom: var(--spacing-lg);
+}
+
+.post-stat {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.post-stat svg {
+    width: 16px;
+    height: 16px;
+    opacity: 0.7;
+}
+
 .page-excerpt {
     font-size: 1.125rem;
     color: var(--text-muted);

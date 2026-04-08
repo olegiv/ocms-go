@@ -23,6 +23,9 @@
     {{if .MetaDescription}}<meta property="og:description" content="{{.MetaDescription}}">{{end}}
     {{if .SiteURL}}<meta property="og:url" content="{{.SiteURL}}{{.RequestURI}}">{{end}}
     {{if .OGImage}}<meta property="og:image" content="{{.OGImage}}">{{else if .FeaturedImage}}<meta property="og:image" content="{{.FeaturedImage}}">{{end}}
+    {{if .OGImageWidth}}<meta property="og:image:width" content="{{.OGImageWidth}}">{{end}}
+    {{if .OGImageHeight}}<meta property="og:image:height" content="{{.OGImageHeight}}">{{end}}
+    {{if .OGImageType}}<meta property="og:image:type" content="{{.OGImageType}}">{{end}}
     <meta property="og:site_name" content="{{.SiteName}}">
 
     {{/* Twitter Card */}}

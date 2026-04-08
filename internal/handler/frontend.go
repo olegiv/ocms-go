@@ -53,8 +53,11 @@ type PageView struct {
 	FeaturedImage        string
 	FeaturedImageSmall   string // Small variant for grid views (~400px)
 	FeaturedImageMedium  string // Medium variant for mobile grid views
-	FeaturedImageLarge   string // Large variant for single page views
-	FeaturedImageID      int64  // Media ID for translation lookup
+	FeaturedImageLarge    string // Large variant for single page views
+	FeaturedImageOG       string // OG variant optimized for social sharing (1200x630)
+	FeaturedImageOGWidth  int
+	FeaturedImageOGHeight int
+	FeaturedImageID       int64  // Media ID for translation lookup
 	FeaturedImageAlt     string // Alt text (default language)
 	HideFeaturedImage    bool          // Show image below title instead of hero banner
 	VideoURL             string        // Original video URL
@@ -74,6 +77,9 @@ type PageView struct {
 	MetaDescription string
 	MetaKeywords    string
 	OGImage         string
+	OGImageWidth    int
+	OGImageHeight   int
+	OGImageType     string
 	NoIndex         bool
 	NoFollow        bool
 	CanonicalURL    string
@@ -157,6 +163,9 @@ type BaseTemplateData struct {
 	FeaturedImage   string
 	Robots          string      // Robots directive (index,follow / noindex,nofollow)
 	OGImage              string      // Open Graph image (absolute URL)
+	OGImageWidth         int         // Open Graph image width
+	OGImageHeight        int         // Open Graph image height
+	OGImageType          string      // Open Graph image MIME type (e.g. image/jpeg)
 	OGType               string      // Open Graph type (website, article)
 	ArticlePublishedTime string      // article:published_time (ISO 8601)
 	ArticleModifiedTime  string      // article:modified_time (ISO 8601)
@@ -798,6 +807,9 @@ func (h *FrontendHandler) Page(w http.ResponseWriter, r *http.Request) {
 	base.FeaturedImage = pageView.FeaturedImage
 	base.Robots = meta.Robots
 	base.OGImage = meta.OGImage
+	base.OGImageWidth = pageView.OGImageWidth
+	base.OGImageHeight = pageView.OGImageHeight
+	base.OGImageType = pageView.OGImageType
 	base.OGType = meta.OGType
 	base.ArticlePublishedTime = meta.ArticlePublishedTime
 	base.ArticleModifiedTime = meta.ArticleModifiedTime
@@ -1436,9 +1448,14 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 	}
 
 	// Get featured image (thumbnail for listings - single page handlers can override to large)
+	var featuredMediaUUID, featuredMediaFilename, featuredMediaMimeType string
+	var featuredVariants []store.MediaVariant
 	if p.FeaturedImageID.Valid {
 		media, err := h.queries.GetMediaByID(ctx, p.FeaturedImageID.Int64)
 		if err == nil {
+			featuredMediaUUID = media.Uuid
+			featuredMediaFilename = media.Filename
+			featuredMediaMimeType = media.MimeType
 			pv.FeaturedImage = fmt.Sprintf("/uploads/thumbnail/%s/%s", media.Uuid, media.Filename)
 			pv.FeaturedImageID = media.ID
 			pv.FeaturedImageAlt = media.Alt.String
@@ -1446,6 +1463,7 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 			// Only set variant URLs for variants that were actually generated
 			variants, varErr := h.queries.GetMediaVariants(ctx, media.ID)
 			if varErr == nil {
+				featuredVariants = variants
 				for _, v := range variants {
 					switch v.Type {
 					case "small":
@@ -1454,6 +1472,10 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 						pv.FeaturedImageMedium = fmt.Sprintf("/uploads/medium/%s/%s", media.Uuid, media.Filename)
 					case "large":
 						pv.FeaturedImageLarge = fmt.Sprintf("/uploads/large/%s/%s", media.Uuid, media.Filename)
+					case "og":
+						pv.FeaturedImageOG = fmt.Sprintf("/uploads/og/%s/%s", media.Uuid, media.Filename)
+						pv.FeaturedImageOGWidth = int(v.Width)
+						pv.FeaturedImageOGHeight = int(v.Height)
 					}
 				}
 			}
@@ -1526,39 +1548,54 @@ func (h *FrontendHandler) pageToView(ctx context.Context, p store.Page, langCode
 	pv.NoFollow = p.NoFollow != 0
 	pv.CanonicalURL = p.CanonicalUrl
 
-	// Get OG image (from og_image_id or fall back to best featured image variant)
+	// Get OG image (from og_image_id or fall back to best featured image variant).
+	// Variant priority: og > large > medium > original.
 	if p.OgImageID.Valid {
 		ogMedia, err := h.queries.GetMediaByID(ctx, p.OgImageID.Int64)
 		if err == nil {
-			// Use the best available variant for OG image
 			ogBase := fmt.Sprintf("/uploads/%%s/%s/%s", ogMedia.Uuid, ogMedia.Filename)
-			pv.OGImage = fmt.Sprintf(ogBase, "originals") // default to original
+			pv.OGImage = fmt.Sprintf(ogBase, "originals")
+			pv.OGImageType = ogMedia.MimeType
 			variants, varErr := h.queries.GetMediaVariants(ctx, ogMedia.ID)
 			if varErr == nil {
-				for _, v := range variants {
-					if v.Type == "large" {
-						pv.OGImage = fmt.Sprintf(ogBase, "large")
-						break
-					}
-					if v.Type == "medium" {
-						pv.OGImage = fmt.Sprintf(ogBase, "medium")
-					}
+				bestOG := pickOGVariant(variants)
+				if bestOG != nil {
+					pv.OGImage = fmt.Sprintf(ogBase, bestOG.Type)
+					pv.OGImageWidth = int(bestOG.Width)
+					pv.OGImageHeight = int(bestOG.Height)
 				}
 			}
 		}
-	} else {
-		// Fall back to best available featured image variant
-		switch {
-		case pv.FeaturedImageLarge != "":
-			pv.OGImage = pv.FeaturedImageLarge
-		case pv.FeaturedImageMedium != "":
-			pv.OGImage = pv.FeaturedImageMedium
-		case pv.FeaturedImage != "":
-			pv.OGImage = pv.FeaturedImage
+	} else if len(featuredVariants) > 0 {
+		// Fall back to featured image — pick best variant for OG
+		pv.OGImageType = featuredMediaMimeType
+		if bestOG := pickOGVariant(featuredVariants); bestOG != nil {
+			pv.OGImage = fmt.Sprintf("/uploads/%s/%s/%s", bestOG.Type, featuredMediaUUID, featuredMediaFilename)
+			pv.OGImageWidth = int(bestOG.Width)
+			pv.OGImageHeight = int(bestOG.Height)
+		} else {
+			pv.OGImage = pv.FeaturedImage // thumbnail as last resort
 		}
+	} else if pv.FeaturedImage != "" {
+		pv.OGImage = pv.FeaturedImage
 	}
 
 	return pv
+}
+
+// pickOGVariant selects the best image variant for Open Graph tags.
+// Priority: og > large > medium.
+func pickOGVariant(variants []store.MediaVariant) *store.MediaVariant {
+	ogPriority := map[string]int{"og": 3, "large": 2, "medium": 1}
+	var best *store.MediaVariant
+	bestPri := 0
+	for i := range variants {
+		if pri, ok := ogPriority[variants[i].Type]; ok && pri > bestPri {
+			best = &variants[i]
+			bestPri = pri
+		}
+	}
+	return best
 }
 
 // generateExcerpt creates a text excerpt from HTML content.
@@ -1875,7 +1912,7 @@ func (h *FrontendHandler) getBaseTemplateData(r *http.Request, title, metaDesc s
 		funcs := h.moduleFuncsProvider.AllTemplateFuncs()
 		data.ModuleHeadHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, "privacyHead", "analyticsExtHead", "embedHead")
 		data.ModuleBodyTopHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, "informerBar", "analyticsExtBody")
-		data.ModuleBodyEndHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, "embedBody")
+		data.ModuleBodyEndHTML = h.callModuleHTMLFuncs(funcs, data.CSPNonce, "embedBody", "analyticsIntReadTracker")
 	}
 
 	// Get site logo and custom CSS from cache

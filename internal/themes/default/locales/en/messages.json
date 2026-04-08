@@ -3,6 +3,8 @@
     "language": "en",
     "messages": [
         {"id": "frontend.read_more", "message": "Read more", "translation": "Continue reading →"},
-        {"id": "frontend.all_posts", "message": "All Posts", "translation": "Browse All Articles"}
+        {"id": "frontend.all_posts", "message": "All Posts", "translation": "Browse All Articles"},
+        {"id": "frontend.views", "message": "views", "translation": "views"},
+        {"id": "frontend.reads", "message": "reads", "translation": "reads"}
     ]
 }

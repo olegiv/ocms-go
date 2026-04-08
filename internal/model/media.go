@@ -15,6 +15,7 @@ const (
 	VariantSmall     = "small"
 	VariantMedium    = "medium"
 	VariantLarge     = "large"
+	VariantOG        = "og"
 )
 
 // Minimum dimensions for featured images
@@ -50,6 +51,7 @@ var ImageVariants = map[string]ImageVariantConfig{
 	VariantSmall:     {Width: 400, Height: 300, Quality: 85, Crop: false},
 	VariantMedium:    {Width: 800, Height: 600, Quality: 85, Crop: false},
 	VariantLarge:     {Width: 1920, Height: 1080, Quality: 90, Crop: false},
+	VariantOG:        {Width: 1200, Height: 630, Quality: 85, Crop: false},
 }
 
 // Media represents an uploaded file in the media library.

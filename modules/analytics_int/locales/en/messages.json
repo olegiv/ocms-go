@@ -35,6 +35,13 @@
         {"id": "analytics_int.run_aggregation", "message": "Run Aggregation", "translation": "Run Aggregation"},
         {"id": "analytics_int.run_aggregation_hint", "message": "Manually aggregate all historical raw data into daily statistics", "translation": "Manually aggregate all historical raw data into daily statistics"},
         {"id": "analytics_int.success_aggregation", "message": "Aggregation complete. Processed %d date(s).", "translation": "Aggregation complete. Processed %d date(s)."},
-        {"id": "analytics_int.error_aggregation", "message": "Failed to run aggregation", "translation": "Failed to run aggregation"}
+        {"id": "analytics_int.error_aggregation", "message": "Failed to run aggregation", "translation": "Failed to run aggregation"},
+        {"id": "analytics_int.show_post_stats", "message": "Show view & read counts on posts", "translation": "Show view & read counts on posts"},
+        {"id": "analytics_int.show_post_stats_hint", "message": "Display view and read statistics on public post pages", "translation": "Display view and read statistics on public post pages"},
+        {"id": "analytics_int.views_reads_report", "message": "Views & Reads", "translation": "Views & Reads"},
+        {"id": "analytics_int.report_description", "message": "View and read counts per page", "translation": "View and read counts per page"},
+        {"id": "analytics_int.reads", "message": "Reads", "translation": "Reads"},
+        {"id": "analytics_int.read_rate", "message": "Read Rate", "translation": "Read Rate"},
+        {"id": "analytics_int.page_type", "message": "Type", "translation": "Type"}
     ]
 }

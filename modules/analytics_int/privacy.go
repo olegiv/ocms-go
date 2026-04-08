@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"log/slog"
 	"net"
 	"time"
 )
@@ -15,11 +16,13 @@ import (
 var timeNow = time.Now
 
 // generateRandomSalt generates a random salt for hashing.
+// Returns empty string if crypto/rand fails — caller must handle this
+// by skipping tracking rather than using an insecure hash.
 func generateRandomSalt() string {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		// Fallback to timestamp-based salt if crypto/rand fails
-		return hex.EncodeToString([]byte(time.Now().String()))
+		slog.Error("failed to generate secure salt for analytics", "error", err)
+		return ""
 	}
 	return hex.EncodeToString(b)
 }
@@ -73,6 +76,10 @@ func (m *Module) getCurrentSalt() string {
 
 	// Generate new salt
 	newSalt := generateRandomSalt()
+	if newSalt == "" {
+		// crypto/rand failed — keep using the old salt rather than storing empty
+		return m.settings.CurrentSalt
+	}
 	m.settings.CurrentSalt = newSalt
 	m.settings.SaltCreatedAt = timeNow()
 

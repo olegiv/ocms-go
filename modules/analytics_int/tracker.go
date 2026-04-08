@@ -143,30 +143,46 @@ func (m *Module) shouldTrack(r *http.Request) bool {
 	return true
 }
 
-// trackPageView records a page view.
-func (m *Module) trackPageView(r *http.Request) {
-	// Get client IP using shared trusted-proxy policy.
+// requestIdentity holds anonymized visitor identification extracted from a request.
+type requestIdentity struct {
+	IP          string
+	UA          ParsedUA
+	VisitorHash string
+	SessionHash string
+}
+
+// extractIdentity extracts anonymized visitor identity from a request.
+// Returns nil if the request should be skipped (excluded IP or bot).
+func (m *Module) extractIdentity(r *http.Request) *requestIdentity {
 	ip := getRealIP(r)
 
-	// Skip excluded IPs (from global config)
 	if excludedIPs := m.getExcludedIPs(); len(excludedIPs) > 0 && util.MatchesIPList(ip, excludedIPs) {
-		return
+		return nil
 	}
 
 	userAgent := r.UserAgent()
-
-	// Skip bots (basic detection)
 	ua := parseUserAgent(userAgent)
 	if ua.DeviceType == "bot" {
+		return nil
+	}
+
+	return &requestIdentity{
+		IP:          ip,
+		UA:          ua,
+		VisitorHash: m.CreateVisitorHash(ip, userAgent),
+		SessionHash: m.CreateSessionHash(ip, userAgent),
+	}
+}
+
+// trackPageView records a page view.
+func (m *Module) trackPageView(r *http.Request) {
+	id := m.extractIdentity(r)
+	if id == nil {
 		return
 	}
 
-	// Create anonymized hashes
-	visitorHash := m.CreateVisitorHash(ip, userAgent)
-	sessionHash := m.CreateSessionHash(ip, userAgent)
-
 	// Get country from IP (before we lose the IP)
-	countryCode := m.geoIP.LookupCountry(ip)
+	countryCode := m.geoIP.LookupCountry(id.IP)
 
 	// Extract referrer domain
 	referrerDomain := extractReferrerDomain(r.Referer())
@@ -181,15 +197,15 @@ func (m *Module) trackPageView(r *http.Request) {
 
 	// Build page view record
 	view := &PageView{
-		VisitorHash:    visitorHash,
+		VisitorHash:    id.VisitorHash,
 		Path:           r.URL.Path,
 		ReferrerDomain: referrerDomain,
 		CountryCode:    countryCode,
-		Browser:        ua.Browser,
-		OS:             ua.OS,
-		DeviceType:     ua.DeviceType,
+		Browser:        id.UA.Browser,
+		OS:             id.UA.OS,
+		DeviceType:     id.UA.DeviceType,
 		Language:       language,
-		SessionHash:    sessionHash,
+		SessionHash:    id.SessionHash,
 		CreatedAt:      timeNow(),
 	}
 
@@ -281,6 +297,60 @@ func parseAcceptLanguage(header string) string {
 	}
 
 	return strings.ToLower(first)
+}
+
+// ReadRequest represents a read tracking beacon request from the frontend.
+type ReadRequest struct {
+	Path        string `json:"path"`
+	ScrollDepth int    `json:"scroll_depth"`
+	TimeOnPage  int    `json:"time_on_page"`
+}
+
+// recordRead processes a read beacon request and inserts a read event.
+// Returns true if the read was recorded, false if it was a duplicate or invalid.
+func (m *Module) recordRead(r *http.Request, req *ReadRequest) bool {
+	id := m.extractIdentity(r)
+	if id == nil {
+		return false
+	}
+	return m.recordReadWithIdentity(id, req)
+}
+
+// recordReadWithIdentity inserts a read event using pre-extracted identity.
+// This avoids capturing *http.Request in goroutines after the response completes.
+func (m *Module) recordReadWithIdentity(id *requestIdentity, req *ReadRequest) bool {
+	read := &PageRead{
+		VisitorHash: id.VisitorHash,
+		Path:        req.Path,
+		SessionHash: id.SessionHash,
+		ScrollDepth: req.ScrollDepth,
+		TimeOnPage:  req.TimeOnPage,
+		CreatedAt:   timeNow(),
+	}
+
+	if err := m.insertPageRead(read); err != nil {
+		// Unique constraint violation means duplicate — not an error
+		if strings.Contains(err.Error(), "UNIQUE constraint") {
+			return false
+		}
+		m.ctx.Logger.Error("failed to insert page read", "error", err, "path", read.Path)
+		return false
+	}
+	return true
+}
+
+// insertPageRead inserts a read event into the database.
+// The unique index on (session_hash, path) prevents duplicate reads.
+func (m *Module) insertPageRead(read *PageRead) error {
+	createdAtStr := read.CreatedAt.Format("2006-01-02 15:04:05")
+	_, err := m.ctx.DB.Exec(`
+		INSERT INTO page_analytics_reads (
+			visitor_hash, path, page_id, session_hash,
+			scroll_depth, time_on_page, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, read.VisitorHash, read.Path, read.PageID,
+		read.SessionHash, read.ScrollDepth, read.TimeOnPage, createdAtStr)
+	return err
 }
 
 // GetRealTimeVisitorCount returns the number of unique visitors in the last N minutes.

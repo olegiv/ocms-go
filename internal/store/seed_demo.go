@@ -625,6 +625,7 @@ var demoImageVariants = []imageVariant{
 	{name: "small", width: 400, height: 300, crop: false},
 	{name: "medium", width: 800, height: 600, crop: false},
 	{name: "large", width: 1920, height: 1080, crop: false},
+	{name: "og", width: 1200, height: 630, crop: false},
 }
 
 func createDemoImage(ctx context.Context, queries *Queries, userID int64, langCode, uploadsDir string, img demoImage, now time.Time) (int64, error) {

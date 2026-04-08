@@ -6,7 +6,11 @@
 // and geographic data with privacy-focused anonymization.
 package analytics_int
 
-import "time"
+import (
+	"time"
+
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+)
 
 // PageView represents a single page view event stored in the database.
 type PageView struct {
@@ -71,6 +75,36 @@ type GeoStat struct {
 	UniqueVisitors int
 }
 
+// PageRead represents a single read event stored in the database.
+// A "read" occurs when a visitor scrolls through ≥60% of the content
+// and spends ≥30 seconds on the page (Medium.com-style engagement).
+type PageRead struct {
+	ID          int64
+	VisitorHash string
+	Path        string
+	PageID      *int64
+	SessionHash string
+	ScrollDepth int       // Percentage of content scrolled (0-100)
+	TimeOnPage  int       // Seconds spent on page
+	CreatedAt   time.Time
+}
+
+// PageStats holds combined view and read counts for a page (used in templates).
+type PageStats struct {
+	Views int64
+	Reads int64
+}
+
+// PageStatsRow represents a row in the views/reads admin report.
+type PageStatsRow struct {
+	Path      string
+	PageTitle string
+	PageType  string
+	Views     int64
+	Reads     int64
+	ReadRate  float64 // reads/views percentage
+}
+
 // Settings holds module configuration.
 type Settings struct {
 	Enabled           bool
@@ -79,6 +113,7 @@ type Settings struct {
 	CurrentSalt       string
 	SaltCreatedAt     time.Time
 	SaltRotationHours int
+	ShowPostStats     bool
 }
 
 // OverviewStats contains summary statistics for the dashboard.
@@ -99,6 +134,7 @@ type TopPage struct {
 	PageTitle      string
 	Views          int64
 	UniqueVisitors int64
+	Reads          int64
 	BounceRate     float64
 }
 
@@ -149,6 +185,13 @@ type DashboardData struct {
 	TimeSeries   []TimeSeriesPoint
 	DateRange    string // "7d", "30d", "90d", "1y"
 	Settings     Settings
+}
+
+// ReportViewData holds data for the views/reads admin report page.
+type ReportViewData struct {
+	Rows       []PageStatsRow
+	DateRange  string
+	Pagination adminviews.PaginationData
 }
 
 // ParsedUA holds parsed user agent information.

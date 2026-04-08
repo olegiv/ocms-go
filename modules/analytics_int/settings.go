@@ -14,7 +14,7 @@ import (
 func (m *Module) loadSettings() (*Settings, error) {
 	row := m.ctx.DB.QueryRow(`
 		SELECT enabled, retention_days, exclude_paths, current_salt,
-		       salt_created_at, salt_rotation_hours
+		       salt_created_at, salt_rotation_hours, show_post_stats
 		FROM page_analytics_settings
 		WHERE id = 1
 	`)
@@ -26,10 +26,11 @@ func (m *Module) loadSettings() (*Settings, error) {
 		currentSalt       string
 		saltCreatedAt     time.Time
 		saltRotationHours int
+		showPostStats     int
 	)
 
 	err := row.Scan(&enabled, &retentionDays, &excludePathsJSON,
-		&currentSalt, &saltCreatedAt, &saltRotationHours)
+		&currentSalt, &saltCreatedAt, &saltRotationHours, &showPostStats)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// Return defaults
@@ -38,6 +39,7 @@ func (m *Module) loadSettings() (*Settings, error) {
 				RetentionDays:     365,
 				ExcludePaths:      []string{},
 				SaltRotationHours: 24,
+				ShowPostStats:     true,
 			}, nil
 		}
 		return nil, err
@@ -57,6 +59,7 @@ func (m *Module) loadSettings() (*Settings, error) {
 		CurrentSalt:       currentSalt,
 		SaltCreatedAt:     saltCreatedAt,
 		SaltRotationHours: saltRotationHours,
+		ShowPostStats:     showPostStats == 1,
 	}, nil
 }
 
@@ -71,15 +74,20 @@ func (m *Module) saveSettings() error {
 	if m.settings.Enabled {
 		enabled = 1
 	}
+	showPostStats := 0
+	if m.settings.ShowPostStats {
+		showPostStats = 1
+	}
 
 	_, err = m.ctx.DB.Exec(`
 		UPDATE page_analytics_settings
 		SET enabled = ?, retention_days = ?, exclude_paths = ?,
 		    current_salt = ?, salt_created_at = ?, salt_rotation_hours = ?,
-		    updated_at = CURRENT_TIMESTAMP
+		    show_post_stats = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = 1
 	`, enabled, m.settings.RetentionDays, string(excludePathsJSON),
-		m.settings.CurrentSalt, m.settings.SaltCreatedAt, m.settings.SaltRotationHours)
+		m.settings.CurrentSalt, m.settings.SaltCreatedAt, m.settings.SaltRotationHours,
+		showPostStats)
 
 	return err
 }
