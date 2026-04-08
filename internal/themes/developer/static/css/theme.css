@@ -1372,6 +1372,27 @@ img {
     color: var(--dev-text-muted);
 }
 
+.dev-post-stats {
+    display: flex;
+    gap: var(--dev-space-lg);
+    font-family: var(--dev-font-mono), monospace;
+    font-size: 0.8125rem;
+    color: var(--dev-text-muted);
+    margin-bottom: var(--dev-space-lg);
+    padding-bottom: var(--dev-space-md);
+    border-bottom: 1px solid var(--dev-border);
+}
+
+.dev-post-stat {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.dev-post-stat svg {
+    opacity: 0.6;
+}
+
 .dev-article-image {
     margin-bottom: var(--dev-space-xl);
     border-radius: var(--dev-radius-lg);

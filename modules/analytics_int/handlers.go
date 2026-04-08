@@ -122,7 +122,7 @@ func (m *Module) handleRecordRead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate required fields
-	if req.Path == "" || req.ScrollDepth < 60 || req.TimeOnPage < 30 {
+	if req.Path == "" || req.ScrollDepth < 60 || req.TimeOnPage < 5 {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
 	}

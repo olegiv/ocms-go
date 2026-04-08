@@ -223,8 +223,10 @@ func (m *Module) readTrackerScript(nonce string) string {
 (function(){
   if(document.body&&!document.body.classList.contains('single-page'))return;
   var sent=false,startTime=Date.now();
-  var content=document.querySelector('.page-content,.st-article__body');
+  var content=document.querySelector('.page-content,.st-article__body,.dev-article-body');
   if(!content)return;
+  var words=content.textContent.split(/\s+/).length;
+  var minTime=Math.max(5,Math.min(20,Math.round(words/200*60*0.1)));
   function getScrollPercent(){
     var rect=content.getBoundingClientRect();
     var contentTop=rect.top+window.pageYOffset;
@@ -238,7 +240,7 @@ func (m *Module) readTrackerScript(nonce string) string {
     if(sent)return;
     var elapsed=Math.round((Date.now()-startTime)/1000);
     var depth=getScrollPercent();
-    if(depth>=60&&elapsed>=30){
+    if(depth>=60&&elapsed>=minTime){
       sent=true;
       clearInterval(intervalId);
       var data=JSON.stringify({path:location.pathname,scroll_depth:depth,time_on_page:elapsed});

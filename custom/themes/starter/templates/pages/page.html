@@ -41,7 +41,9 @@
         {{if analyticsShowPostStats}}
         {{$stats := analyticsPostStats .Page.Slug}}
         <span class="st-article__views">{{$stats.Views}} {{TTheme $.LangCode "frontend.views"}}</span>
+        {{if gt $stats.Reads 0}}
         <span class="st-article__reads">{{$stats.Reads}} {{TTheme $.LangCode "frontend.reads"}}</span>
+        {{end}}
         {{end}}
     </div>
     {{end}}

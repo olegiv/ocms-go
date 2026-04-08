@@ -1042,7 +1042,7 @@ func TestHandleRecordRead_LowTimeOnPage(t *testing.T) {
 	m := testModule(t, db)
 	defer func() { _ = m.Shutdown() }()
 
-	body := `{"path":"/test","scroll_depth":75,"time_on_page":20}`
+	body := `{"path":"/test","scroll_depth":75,"time_on_page":3}`
 	req := httptest.NewRequest(http.MethodPost, "/analytics/read", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
