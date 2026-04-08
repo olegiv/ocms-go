@@ -95,23 +95,34 @@ func (m *Module) getTopPages(ctx context.Context, startDate, endDate time.Time, 
 
 	// Combine aggregated daily data with today's raw views (with proper unique visitor count)
 	rows, err := m.ctx.DB.QueryContext(ctx, `
-		SELECT path, SUM(views) as total_views, SUM(unique_visitors) as total_unique, SUM(bounces) as total_bounces
+		SELECT v.path, v.total_views, v.total_unique, v.total_bounces, COALESCE(r.reads, 0) as reads
 		FROM (
-			-- Aggregated daily data (excluding end date)
-			SELECT path, views, unique_visitors, bounces
-			FROM page_analytics_daily
-			WHERE date >= ? AND date < ?
-			UNION ALL
-			-- End date's raw views with unique visitor count per path
-			SELECT path, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as unique_visitors, 0 as bounces
-			FROM page_analytics_views
-			WHERE DATE(created_at) = ?
+			SELECT path, SUM(views) as total_views, SUM(unique_visitors) as total_unique, SUM(bounces) as total_bounces
+			FROM (
+				-- Aggregated daily data (excluding end date)
+				SELECT path, views, unique_visitors, bounces
+				FROM page_analytics_daily
+				WHERE date >= ? AND date < ?
+				UNION ALL
+				-- End date's raw views with unique visitor count per path
+				SELECT path, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as unique_visitors, 0 as bounces
+				FROM page_analytics_views
+				WHERE DATE(created_at) = ?
+				GROUP BY path
+			)
 			GROUP BY path
-		)
-		GROUP BY path
-		ORDER BY total_views DESC
+		) v
+		LEFT JOIN (
+			SELECT path, COUNT(*) as reads
+			FROM page_analytics_reads
+			WHERE created_at >= ? AND created_at < ?
+			GROUP BY path
+		) r ON v.path = r.path
+		ORDER BY v.total_views DESC
 		LIMIT ?
-	`, startDate.Format(dateFormat), endDateStr, endDateStr, limit)
+	`, startDate.Format(dateFormat), endDateStr, endDateStr,
+		startDate.Format(dateFormat), endDate.Add(24*time.Hour).Format(dateFormat),
+		limit)
 	if err != nil {
 		return nil
 	}
@@ -121,7 +132,7 @@ func (m *Module) getTopPages(ctx context.Context, startDate, endDate time.Time, 
 	for rows.Next() {
 		var p TopPage
 		var bounces int64
-		if err := rows.Scan(&p.Path, &p.Views, &p.UniqueVisitors, &bounces); err != nil {
+		if err := rows.Scan(&p.Path, &p.Views, &p.UniqueVisitors, &bounces, &p.Reads); err != nil {
 			continue
 		}
 		if p.Views > 0 {

@@ -6,7 +6,11 @@
 // and geographic data with privacy-focused anonymization.
 package analytics_int
 
-import "time"
+import (
+	"time"
+
+	adminviews "github.com/olegiv/ocms-go/internal/views/admin"
+)
 
 // PageView represents a single page view event stored in the database.
 type PageView struct {
@@ -130,6 +134,7 @@ type TopPage struct {
 	PageTitle      string
 	Views          int64
 	UniqueVisitors int64
+	Reads          int64
 	BounceRate     float64
 }
 
@@ -186,9 +191,7 @@ type DashboardData struct {
 type ReportViewData struct {
 	Rows       []PageStatsRow
 	DateRange  string
-	Page       int
-	TotalPages int
-	TotalCount int
+	Pagination adminviews.PaginationData
 }
 
 // ParsedUA holds parsed user agent information.

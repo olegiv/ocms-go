@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olegiv/ocms-go/internal/handler"
 	"github.com/olegiv/ocms-go/internal/i18n"
 	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/render"
@@ -166,24 +167,20 @@ func (m *Module) handleViewsReadsReport(w http.ResponseWriter, r *http.Request) 
 	dateRange, startDate, endDate := parseDateRangeParam(r)
 
 	// Parse pagination
-	page := 1
-	if p := r.URL.Query().Get("page"); p != "" {
-		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
-			page = parsed
-		}
-	}
+	page := handler.ParsePageParam(r)
+	totalCount := m.getPageStatsReportCount(r.Context(), startDate, endDate)
+	page, _ = handler.NormalizePagination(page, totalCount, reportPerPage)
 	offset := (page - 1) * reportPerPage
 
 	rows := m.getPageStatsReport(r.Context(), startDate, endDate, reportPerPage, offset)
-	totalCount := m.getPageStatsReportCount(r.Context(), startDate, endDate)
-	totalPages := (totalCount + reportPerPage - 1) / reportPerPage
+	pagination := handler.ConvertPagination(
+		handler.BuildAdminPagination(page, totalCount, reportPerPage, "/admin/internal-analytics/report", r.URL.Query()),
+	)
 
 	viewData := ReportViewData{
 		Rows:       rows,
 		DateRange:  dateRange,
-		Page:       page,
-		TotalPages: totalPages,
-		TotalCount: totalCount,
+		Pagination: pagination,
 	}
 
 	pc := m.ctx.Render.BuildPageContext(r, i18n.T(lang, "analytics_int.views_reads_report"), []render.Breadcrumb{

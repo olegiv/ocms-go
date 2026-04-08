@@ -230,6 +230,7 @@ templ AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) {
 								<tr>
 									<th>{ pc.T("analytics_int.page") }</th>
 									<th class="text-right">{ pc.T("analytics_int.views") }</th>
+									<th class="text-right">{ pc.T("analytics_int.reads") }</th>
 									<th class="text-right">{ pc.T("analytics_int.visitors") }</th>
 								</tr>
 							</thead>
@@ -238,6 +239,7 @@ templ AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) {
 									<tr>
 										<td class="page-path" title={ page.Path }>{ page.PageTitle }</td>
 										<td class="text-right">{ fmt.Sprintf("%d", page.Views) }</td>
+										<td class="text-right">{ fmt.Sprintf("%d", page.Reads) }</td>
 										<td class="text-right">{ fmt.Sprintf("%d", page.UniqueVisitors) }</td>
 									</tr>
 								}
@@ -409,12 +411,16 @@ templ AnalyticsIntPage(pc *adminviews.PageContext, data AnalyticsIntViewData) {
 						</div>
 						<button type="submit" class="btn btn-primary">{ pc.T("analytics_int.save_settings") }</button>
 					</form>
-					<hr class="mt-4 mb-4"/>
+				</div>
+			</div>
+			<div class="card mt-4">
+				<div class="card-header">
+					<h3>{ pc.T("analytics_int.run_aggregation") }</h3>
+				</div>
+				<div class="card-body">
 					<form method="POST" action="/admin/internal-analytics/aggregate">
-						<div class="form-group">
-							<p class="form-hint mb-2">{ pc.T("analytics_int.run_aggregation_hint") }</p>
-							<button type="submit" class="btn btn-outline">{ pc.T("analytics_int.run_aggregation") }</button>
-						</div>
+						<p class="form-hint mb-2">{ pc.T("analytics_int.run_aggregation_hint") }</p>
+						<button type="submit" class="btn btn-primary">{ pc.T("analytics_int.run_aggregation") }</button>
 					</form>
 				</div>
 			</div>
@@ -483,21 +489,7 @@ templ AnalyticsIntReportPage(pc *adminviews.PageContext, data ReportViewData) {
 							}
 						</tbody>
 					</table>
-					if data.TotalPages > 1 {
-						<div class="pagination-wrapper mt-4">
-							<nav class="pagination">
-								if data.Page > 1 {
-									<a href={ templ.SafeURL(fmt.Sprintf("?range=%s&page=%d", data.DateRange, data.Page-1)) } class="btn btn-sm btn-outline">&laquo;</a>
-								}
-								<span class="pagination-info">
-									{ fmt.Sprintf("%d / %d", data.Page, data.TotalPages) }
-								</span>
-								if data.Page < data.TotalPages {
-									<a href={ templ.SafeURL(fmt.Sprintf("?range=%s&page=%d", data.DateRange, data.Page+1)) } class="btn btn-sm btn-outline">&raquo;</a>
-								}
-							</nav>
-						</div>
-					}
+					@adminviews.Pagination(pc, data.Pagination)
 				} else {
 					<div class="empty-state">
 						<p>{ pc.T("analytics_int.no_data") }</p>
