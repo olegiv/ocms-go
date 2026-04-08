@@ -40,12 +40,24 @@ for arg in "$@"; do
     esac
 done
 
-echo "==> Building Docker image..."
+# Derive version info from git
+GIT_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+echo "==> Building Docker image (version: ${GIT_VERSION})..."
+BUILD_ARGS=(
+    --build-arg "VERSION=${GIT_VERSION}"
+    --build-arg "GIT_COMMIT=${GIT_COMMIT}"
+    --build-arg "BUILD_TIME=${BUILD_TIME}"
+    --platform linux/amd64
+    -t "$IMAGE_NAME"
+)
 if [[ "$DO_RESET" == true ]]; then
     # Force rebuild without cache when resetting to ensure latest code
-    docker build --no-cache --platform linux/amd64 -t "$IMAGE_NAME" .
+    docker build --no-cache "${BUILD_ARGS[@]}" .
 else
-    docker build --platform linux/amd64 -t "$IMAGE_NAME" .
+    docker build "${BUILD_ARGS[@]}" .
 fi
 
 echo "==> Deploying to Fly.io..."

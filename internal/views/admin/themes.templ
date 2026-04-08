@@ -148,7 +148,8 @@ templ ThemeSettingsPage(pc *PageContext, data ThemeSettingsViewData) {
 				<input type="hidden" name="_method" value="PUT"/>
 				if data.IsDemoMode {
 					@alert.Alert(alert.Props{Class: "alert-warning mb-6"}) {
-						{ pc.T("themes.demo_readonly") }
+						@icon.TriangleAlert(icon.Props{Size: 16})
+						<span>{ pc.T("themes.demo_readonly") }</span>
 					}
 				}
 				if len(data.Settings) > 0 {
