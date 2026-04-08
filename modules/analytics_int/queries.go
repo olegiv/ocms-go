@@ -213,6 +213,12 @@ func getTechStats[T any, PT interface {
 	*T
 	viewStat
 }](m *Module, ctx context.Context, startDate, endDate time.Time, column string, limit int, scanFunc func(*T) []any) []T {
+	// Whitelist allowed column names to prevent SQL injection
+	allowedColumns := map[string]bool{"browser": true, "device_type": true}
+	if !allowedColumns[column] {
+		return nil
+	}
+
 	startDateStr := startDate.Format(dateFormat)
 	endDateStr := endDate.Format(dateFormat)
 

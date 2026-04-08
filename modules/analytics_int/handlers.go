@@ -139,6 +139,11 @@ func (m *Module) handleRecordRead(w http.ResponseWriter, r *http.Request) {
 		req.ScrollDepth = 100
 	}
 
+	// Cap time_on_page to 24 hours to prevent data pollution
+	if req.TimeOnPage > 86400 {
+		req.TimeOnPage = 86400
+	}
+
 	// Extract identity before spawning goroutine to avoid capturing *http.Request
 	id := m.extractIdentity(r)
 	if id == nil {
@@ -221,18 +226,21 @@ func (m *Module) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 
 	// Parse retention days
 	if retentionStr := r.FormValue("retention_days"); retentionStr != "" {
-		if retention, err := strconv.Atoi(retentionStr); err == nil && retention > 0 {
+		if retention, err := strconv.Atoi(retentionStr); err == nil && retention >= 30 && retention <= 730 {
 			m.settings.RetentionDays = retention
 		}
 	}
 
-	// Parse excluded paths (newline-separated)
+	// Parse excluded paths (newline-separated, max 100 entries, max 512 chars each)
 	excludePathsStr := r.FormValue("exclude_paths")
 	var excludePaths []string
 	for _, path := range strings.Split(excludePathsStr, "\n") {
 		path = strings.TrimSpace(path)
-		if path != "" {
+		if path != "" && len(path) <= 512 {
 			excludePaths = append(excludePaths, path)
+			if len(excludePaths) >= 100 {
+				break
+			}
 		}
 	}
 	m.settings.ExcludePaths = excludePaths

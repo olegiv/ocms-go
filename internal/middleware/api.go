@@ -975,6 +975,7 @@ func (rl *GlobalRateLimiter) Middleware() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := GetClientIP(r)
 			if !rl.cache.get(ip).Allow() {
+				slog.Debug("API rate limit exceeded", "ip", ip, "path", r.URL.Path)
 				WriteAPIError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "Rate limit exceeded. Please slow down.", nil)
 				return
 			}
