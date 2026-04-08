@@ -925,6 +925,36 @@ func TestModuleMigrationsAssert(t *testing.T) {
 // handleRecordRead HTTP endpoint
 // ---------------------------------------------------------------------------
 
+func TestRegisterRoutes_RateLimited(t *testing.T) {
+	db, cleanup := testutil.TestDB(t)
+	defer cleanup()
+
+	m := testModule(t, db)
+	defer func() { _ = m.Shutdown() }()
+
+	r := chi.NewRouter()
+	m.RegisterRoutes(r)
+
+	// Send many requests rapidly — rate limiter should kick in
+	body := `{"path":"/test","scroll_depth":75,"time_on_page":45}`
+	rateLimited := false
+	for i := 0; i < 20; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/analytics/read", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.RemoteAddr = "10.0.0.1:5678"
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code == http.StatusTooManyRequests {
+			rateLimited = true
+			break
+		}
+	}
+	if !rateLimited {
+		t.Error("expected rate limiting to trigger after rapid requests")
+	}
+}
+
 func TestHandleRecordRead_ValidRequest(t *testing.T) {
 	db, cleanup := testutil.TestDB(t)
 	defer cleanup()

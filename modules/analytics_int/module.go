@@ -20,6 +20,7 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"github.com/olegiv/ocms-go/internal/geoip"
+	"github.com/olegiv/ocms-go/internal/middleware"
 	"github.com/olegiv/ocms-go/internal/module"
 )
 
@@ -160,8 +161,10 @@ func (m *Module) scheduleGeoIPReload() {
 // POST /analytics/read is an analytics beacon endpoint — intentionally CSRF-exempt
 // because it only records anonymous engagement data (no session state changed,
 // no user data modified). Frontend JS sends beacons via navigator.sendBeacon.
+// Rate limited to 2 req/s per IP with burst of 5 to prevent abuse.
 func (m *Module) RegisterRoutes(r chi.Router) {
-	r.Post("/analytics/read", m.handleRecordRead)
+	readLimiter := middleware.NewGlobalRateLimiter(2.0, 5)
+	r.With(readLimiter.Middleware()).Post("/analytics/read", m.handleRecordRead)
 }
 
 // RegisterAdminRoutes registers admin routes.
